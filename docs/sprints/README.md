@@ -8,7 +8,7 @@ Implementation work should be scoped and recorded as discrete sprints, each tied
 
 ## Status
 
-No sprints have been defined yet. No implementation work has started.
+- [0000-application-bootstrap](0000-application-bootstrap.md) — application bootstrap and development foundation (Complete)
 
 ## Format
 
