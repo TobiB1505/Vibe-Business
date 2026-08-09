@@ -14,11 +14,8 @@ Email+password can be added later as an additional method if a concrete need ari
 
 ## What exists
 
-- `session.ts` — `getSession()`: reads the current session server-side (Server Components, Route Handlers).
+- `session.ts` — `getSession()`: reads the current session server-side (Server Components, Route Handlers). `requireSession()`: the shared auth-gate helper — redirects to `/login` when signed out, otherwise returns the session.
 - `actions.ts` — `signInWithMagicLink()`: Server Action that sends the sign-in email.
 - `src/app/login/` — the sign-in screen.
 - `src/app/auth/callback/route.ts` — exchanges the magic-link code for a session, then redirects to `/app`.
-
-## What does not exist yet
-
-`/app` does **not** enforce the session — it renders regardless of auth state. Gating `/app` behind a real session check is intentionally deferred past Sprint 0 (see the sprint document), so the shell stays viewable and testable without a configured Supabase project. `getSession()` exists and works; wiring it into a redirect/guard is future work.
+- `src/app/app/layout.tsx` — calls `requireSession()`, gating every page under `/app` (Sprint 1). Route Handlers and Server Actions under the same path do not inherit a layout's checks in Next.js — each of those calls `requireSession()` itself; see the GitHub connect routes and project actions.

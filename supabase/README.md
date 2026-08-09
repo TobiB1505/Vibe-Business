@@ -2,9 +2,11 @@
 
 Migration structure for the Supabase Postgres database ([ADR 0002](../docs/decisions/0002-supabase-postgres-and-auth.md)).
 
-## Sprint 0 status
+## Status
 
-No migrations exist yet. Sprint 0 introduces no business tables ([ARCHITECTURE.md §7](../ARCHITECTURE.md#7-deferred--open-decisions) item 4) — auth (users, sessions) is fully managed by Supabase Auth's built-in schema, which requires no migration of ours. This directory exists so future schema changes are versioned from the start rather than applied ad hoc.
+- `20260809210125_github_connection_and_projects.sql` (Sprint 1) — `github_connections`, `github_installations`, `projects`, `repository_connections`, `audit_events`. RLS enabled on every table with explicit policies; see [docs/sprints/0001-github-app-connection.md](../docs/sprints/0001-github-app-connection.md) for what each table is for and the manual steps to apply this migration to a real project.
+
+Sprint 0 introduced no business tables ([ARCHITECTURE.md §7](../ARCHITECTURE.md#7-deferred--open-decisions) item 4) — auth (users, sessions) is fully managed by Supabase Auth's built-in schema, which needed no migration of ours.
 
 ## Convention
 

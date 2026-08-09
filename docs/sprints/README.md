@@ -9,6 +9,7 @@ Implementation work should be scoped and recorded as discrete sprints, each tied
 ## Status
 
 - [0000-application-bootstrap](0000-application-bootstrap.md) — application bootstrap and development foundation (Complete)
+- [0001-github-app-connection](0001-github-app-connection.md) — GitHub App connection and repository selection (Complete; live GitHub verification pending manual setup)
 
 ## Format
 
