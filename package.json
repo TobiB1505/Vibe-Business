@@ -13,7 +13,10 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "next typegen && tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "db:status": "supabase migration list",
+    "db:push": "supabase db push",
+    "db:lint": "supabase db lint --linked"
   },
   "dependencies": {
     "@octokit/auth-app": "8.3.0",
@@ -34,6 +37,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.3.0",
+    "supabase": "2.111.0",
     "tailwindcss": "^4",
     "typescript": "^5",
     "vitest": "4.1.10"

@@ -12,6 +12,21 @@ Sprint 0 introduced no business tables ([ARCHITECTURE.md §7](../ARCHITECTURE.md
 ## Convention
 
 - Migrations live in `supabase/migrations/` as timestamped SQL files: `YYYYMMDDHHMMSS_short_description.sql`.
-- Create one with the [Supabase CLI](https://supabase.com/docs/guides/local-development) (`supabase migration new <description>`) once it's installed locally, or add a correctly named file by hand — either way, one migration per meaningful schema change, committed to this repo.
+- Create one with the Supabase CLI (`pnpm supabase migration new <description>`), or add a correctly named file by hand — either way, one migration per meaningful schema change, committed to this repo.
 - Row Level Security is enabled and policies are added in the same migration that creates a user-/project-scoped table, per ADR 0002 — never retrofitted later.
-- The Supabase CLI itself is not a project dependency (not in `package.json`) — install it separately if you need local migration tooling. See [README.md](../README.md) for local development setup.
+- Migration files are the source of truth for schema. The remote database must converge to match them, never the other way around.
+
+## Deployment: the Supabase CLI workflow
+
+**The normal way to deploy a migration is the linked Supabase CLI**, not the Supabase Dashboard's SQL Editor. See [docs/sprints/0002a-supabase-cli-workflow.md](../docs/sprints/0002a-supabase-cli-workflow.md) for the full write-up, safety rules, and manual project-linking setup. Short version:
+
+```bash
+pnpm db:status   # inspect local vs. remote migration history first — always
+pnpm db:push     # deploy any genuinely pending migrations
+pnpm db:status   # confirm local/remote agree
+pnpm db:lint     # lint the linked remote schema
+```
+
+Manual SQL Editor copy/paste is an **emergency/exceptional fallback only** — for example if the CLI genuinely cannot reach the project. It must never be the routine path, because it silently diverges the Dashboard's applied-migrations record from what's in this repository (exactly what happened with the Sprint 1/2 migrations before this workflow existed).
+
+The Supabase CLI is a pinned dev dependency (`package.json`) — no separate/global install needed. Project linking is a one-time local setup per machine; see the sprint document for exact commands and why the project ref is safe to derive from `NEXT_PUBLIC_SUPABASE_URL` rather than guessed.

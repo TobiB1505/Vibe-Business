@@ -30,6 +30,12 @@ This file governs how Claude Code (and any AI-assisted session) works in this re
 26. Never persist a copy of a customer's repository. Store only derived intelligence plus the evidence paths that justify it — never source files, README bodies, raw manifests, lockfiles, or configs.
 27. Repository reads must be bounded by explicit budgets (files, bytes, duration, tree size). Exceeding a budget degrades a result to partial with a machine-readable reason; it must never trigger an unbounded crawl or fail an otherwise useful analysis.
 28. Never fetch the contents of sensitive paths (`.env*`, keys, certificates, credential files). Their existence may be observed; their contents must not be read.
+29. Never deploy Vibe Business database migrations by manual SQL Editor copy/paste when the linked Supabase CLI workflow is available. Manual SQL Editor use is an emergency/exceptional fallback only — see [docs/sprints/0002a-supabase-cli-workflow.md](docs/sprints/0002a-supabase-cli-workflow.md).
+30. Always inspect migration history (`pnpm db:status`) before `pnpm db:push`. Manually-applied migrations may already exist on the remote database without matching local history — never assume table absence or presence, and never blindly rerun a migration.
+31. Never run a destructive remote database reset (`db reset` against a linked/remote project) or any other irreversible remote command as part of normal workflow.
+32. Never guess a Supabase project ref. Derive it from existing safe local configuration (e.g. the `NEXT_PUBLIC_SUPABASE_URL` hostname) or ask; do not link an unverified project.
+33. Never link or deploy to the `Planner-Agent` Supabase project (or any Supabase project/tool not explicitly confirmed as Vibe Business's own). It is unrelated infrastructure that happens to be reachable from this environment.
+34. Migration files in `supabase/migrations/` remain the source of truth for schema. The remote database must converge to match them, not the other way around.
 
 ## Related Documents
 
