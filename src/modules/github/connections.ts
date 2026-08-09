@@ -1,7 +1,79 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { GithubIdentity, VerifiedInstallation } from "./types";
+import type { GithubIdentity, InstallationAccountType, VerifiedInstallation } from "./types";
+
+/**
+ * A verified installation as stored by Vibe Business. `id` is our own
+ * row id; `installationId` is GitHub's. Only `id` is ever accepted from
+ * a client, and only after re-checking ownership against the session
+ * user — a raw GitHub installation id from a client is never trusted
+ * (ADR 0009).
+ */
+export type VerifiedInstallationRecord = {
+  id: string;
+  installationId: number;
+  accountLogin: string;
+  accountType: InstallationAccountType;
+};
+
+type InstallationRow = {
+  id: string;
+  installation_id: number;
+  github_account_login: string;
+  account_type: InstallationAccountType;
+};
+
+function mapInstallationRow(row: InstallationRow): VerifiedInstallationRecord {
+  return {
+    id: row.id,
+    installationId: row.installation_id,
+    accountLogin: row.github_account_login,
+    accountType: row.account_type,
+  };
+}
+
+const INSTALLATION_COLUMNS = "id, installation_id, github_account_login, account_type";
+
+/**
+ * Every verified installation belonging to `userId`. RLS already scopes
+ * this; the explicit filter documents the intent and keeps the guarantee
+ * visible at the call site.
+ */
+export async function listVerifiedInstallations(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<VerifiedInstallationRecord[]> {
+  const { data, error } = await supabase
+    .from("github_installations")
+    .select(INSTALLATION_COLUMNS)
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true });
+
+  if (error) throw error;
+  return (data ?? []).map((row) => mapInstallationRow(row as InstallationRow));
+}
+
+/**
+ * One installation, but only if it belongs to `userId`. Returns null for
+ * another user's installation, so a guessed or copied row id cannot be
+ * used to reach a repository list.
+ */
+export async function getVerifiedInstallation(
+  supabase: SupabaseClient,
+  userId: string,
+  installationRowId: string,
+): Promise<VerifiedInstallationRecord | null> {
+  const { data, error } = await supabase
+    .from("github_installations")
+    .select(INSTALLATION_COLUMNS)
+    .eq("id", installationRowId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? mapInstallationRow(data as InstallationRow) : null;
+}
 
 /**
  * Persists the verified GitHub identity/installation from a successful

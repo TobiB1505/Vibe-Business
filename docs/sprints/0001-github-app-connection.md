@@ -69,6 +69,8 @@ Tokens: the GitHub user access token is used immediately for step 3 and then goe
         disabled "Analyze business" CTA, "Disconnect project"
 ```
 
+> **Superseded for returning users.** The flow above describes the *first* installation, which is unchanged. `GET /app/connect/github` no longer restarts the GitHub installation flow when the user already has a verified installation — it routes straight to the repository picker (or an account chooser for multiple installations). See [docs/sprints/0003-connect-flow-installation-reuse.md](0003-connect-flow-installation-reuse.md).
+
 ## Acceptance Criteria
 
 All met by this implementation:

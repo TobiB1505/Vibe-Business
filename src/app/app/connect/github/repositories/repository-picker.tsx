@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { Button } from "@/components/ui/button";
-import type { RepositorySummary } from "@/modules/github/types";
+import type { PickableRepository } from "@/modules/projects/connected-repositories";
 import { selectRepository, type SelectRepositoryResult } from "./actions";
 
 const initialState: SelectRepositoryResult | null = null;
@@ -10,9 +10,11 @@ const initialState: SelectRepositoryResult | null = null;
 export function RepositoryPicker({
   repositories,
   installationRowId,
+  canSelect,
 }: {
-  repositories: RepositorySummary[];
+  repositories: PickableRepository[];
   installationRowId: string;
+  canSelect: boolean;
 }) {
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -39,13 +41,23 @@ export function RepositoryPicker({
       <ul className="divide-y divide-zinc-800 overflow-hidden rounded-md border border-zinc-800">
         {filtered.map((repo) => (
           <li key={repo.githubRepositoryId}>
-            <label className="flex cursor-pointer items-center gap-3 px-4 py-3 hover:bg-zinc-900">
+            {/* Already-connected repositories stay visible but
+                unselectable, so it is obvious why they cannot be picked
+                again rather than them silently disappearing. */}
+            <label
+              className={
+                repo.alreadyConnected
+                  ? "flex items-center gap-3 px-4 py-3 opacity-50"
+                  : "flex cursor-pointer items-center gap-3 px-4 py-3 hover:bg-zinc-900"
+              }
+            >
               <input
                 type="radio"
                 name="githubRepositoryId"
                 value={repo.githubRepositoryId}
                 checked={selectedId === repo.githubRepositoryId}
                 onChange={() => setSelectedId(repo.githubRepositoryId)}
+                disabled={repo.alreadyConnected}
                 className="shrink-0"
               />
               <span className="min-w-0 flex-1">
@@ -54,6 +66,9 @@ export function RepositoryPicker({
                   {repo.private ? "Private" : "Public"} · default branch {repo.defaultBranch}
                 </span>
               </span>
+              {repo.alreadyConnected && (
+                <span className="shrink-0 text-xs text-zinc-500">Already connected</span>
+              )}
             </label>
           </li>
         ))}
@@ -64,7 +79,7 @@ export function RepositoryPicker({
       {state && !state.ok && <p className="text-sm text-red-400">{state.error}</p>}
 
       <div>
-        <Button type="submit" disabled={pending || selectedId === null}>
+        <Button type="submit" disabled={pending || selectedId === null || !canSelect}>
           {pending ? "Connecting…" : "Connect repository"}
         </Button>
       </div>

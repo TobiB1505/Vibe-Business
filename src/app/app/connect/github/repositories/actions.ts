@@ -5,6 +5,7 @@ import { requireSession } from "@/modules/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import { listInstallationRepositories } from "@/modules/github/repositories";
+import { getVerifiedInstallation } from "@/modules/github/connections";
 import { createProjectWithRepository } from "@/modules/projects/connect";
 
 export type SelectRepositoryResult = { ok: true } | { ok: false; error: string };
@@ -37,12 +38,9 @@ export async function selectRepository(
 
   const supabase = await createClient();
 
-  const { data: installationRow } = await supabase
-    .from("github_installations")
-    .select("id, installation_id")
-    .eq("id", installationRowId)
-    .eq("user_id", session.userId)
-    .maybeSingle();
+  // Re-verifies ownership server-side: the installation row id came from
+  // a form field and is untrusted until this resolves.
+  const installationRow = await getVerifiedInstallation(supabase, session.userId, installationRowId);
 
   if (!installationRow) {
     return {
@@ -53,7 +51,7 @@ export async function selectRepository(
 
   let repositories;
   try {
-    repositories = await listInstallationRepositories(installationRow.installation_id);
+    repositories = await listInstallationRepositories(installationRow.installationId);
   } catch {
     return { ok: false, error: "GitHub access unavailable. Try again in a moment." };
   }
