@@ -5,9 +5,12 @@ import { createClient } from "@/lib/supabase/server";
 import { requireSession } from "@/modules/auth/session";
 import { getProjectWithRepository } from "@/modules/projects/queries";
 import { checkInstallationStillAccessible } from "@/modules/github/repositories";
+import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import { DisconnectButton } from "./disconnect-button";
+import { InspectButton } from "./inspect-button";
+import { IntelligenceSummary } from "./intelligence-summary";
 
-/** Sprint 1 §9: the minimal project screen. */
+/** Project screen: connection status (Sprint 1) plus repository intelligence (Sprint 2). */
 export default async function ProjectPage({ params }: { params: Promise<{ projectId: string }> }) {
   const session = await requireSession();
   const { projectId } = await params;
@@ -23,6 +26,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
   // Live probe (Sprint 1 §11): degrade gracefully — never crash — if the
   // installation was revoked/suspended on GitHub's side since connection.
   const accessible = repository ? await checkInstallationStillAccessible(repository.installationId) : false;
+  const latestSnapshot = await getLatestSuccessfulSnapshot(supabase, projectId);
 
   return (
     <PageShell>
@@ -62,11 +66,27 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
           <p className="text-sm text-zinc-400">No repository connected.</p>
         )}
 
+        {repository && (
+          <section className="space-y-3">
+            {latestSnapshot?.result ? (
+              <IntelligenceSummary snapshot={latestSnapshot.result} analyzedAt={latestSnapshot.createdAt} />
+            ) : (
+              <div className="space-y-1">
+                <h2 className="text-sm font-medium text-zinc-200">Repository intelligence</h2>
+                <p className="text-sm text-zinc-500">Not analyzed yet</p>
+              </div>
+            )}
+            <InspectButton projectId={project.id} hasSnapshot={Boolean(latestSnapshot?.result)} />
+          </section>
+        )}
+
         <div>
-          <Button disabled title="Not implemented yet — see docs/sprints/0001-github-app-connection.md">
+          <Button disabled title="Not implemented yet — see docs/sprints/0002-repository-intelligence.md">
             Analyze business
           </Button>
-          <p className="mt-2 text-xs text-zinc-500">Business analysis is not available yet.</p>
+          <p className="mt-2 text-xs text-zinc-500">
+            Business analysis will use your repository intelligence in a later step.
+          </p>
         </div>
 
         <div>
