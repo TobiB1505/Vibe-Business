@@ -1,13 +1,21 @@
 "use client";
 
 import { useActionState } from "react";
-import { signInWithPassword, type SignInResult } from "@/modules/auth/actions";
+import { signUp, type SignUpResult } from "@/modules/auth/actions";
 import { Button } from "@/components/ui/button";
 
-const initialState: SignInResult | null = null;
+const initialState: SignUpResult | null = null;
 
-export function LoginForm() {
-  const [state, formAction, pending] = useActionState(signInWithPassword, initialState);
+export function SignupForm() {
+  const [state, formAction, pending] = useActionState(signUp, initialState);
+
+  if (state?.ok && state.needsConfirmation) {
+    return (
+      <p className="text-zinc-300">
+        Account created. Check your email to confirm it, then sign in.
+      </p>
+    );
+  }
 
   return (
     <form action={formAction} className="flex flex-col gap-3">
@@ -31,13 +39,14 @@ export function LoginForm() {
         name="password"
         type="password"
         required
-        autoComplete="current-password"
-        placeholder="••••••••"
+        minLength={6}
+        autoComplete="new-password"
+        placeholder="At least 6 characters"
         className="rounded-md border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-50 placeholder:text-zinc-600 focus:border-zinc-600 focus:outline-none"
       />
       {state && !state.ok && <p className="text-sm text-red-400">{state.error}</p>}
       <Button type="submit" disabled={pending}>
-        {pending ? "Signing in…" : "Sign in"}
+        {pending ? "Creating account…" : "Create account"}
       </Button>
     </form>
   );

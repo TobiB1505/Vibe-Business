@@ -3,6 +3,7 @@ import { PageShell } from "@/components/layout/page-shell";
 import { buttonClassName } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/server";
 import { requireSession } from "@/modules/auth/session";
+import { signOut } from "@/modules/auth/actions";
 import { listProjectsForUser } from "@/modules/projects/queries";
 
 const CONNECT_ERROR_MESSAGES: Record<string, string> = {
@@ -27,8 +28,13 @@ export default async function AppHomePage({
 
   return (
     <PageShell>
-      <header>
+      <header className="flex items-center justify-between">
         <p className="text-sm font-medium tracking-wide text-zinc-500 uppercase">Vibe Business</p>
+        <form action={signOut}>
+          <button type="submit" className="text-sm text-zinc-500 underline underline-offset-2 hover:text-zinc-300">
+            Sign out
+          </button>
+        </form>
       </header>
       <main className="flex flex-1 flex-col justify-center gap-4">
         {connectError && (
