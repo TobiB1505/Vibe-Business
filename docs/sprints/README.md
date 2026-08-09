@@ -11,6 +11,7 @@ Implementation work should be scoped and recorded as discrete sprints, each tied
 - [0000-application-bootstrap](0000-application-bootstrap.md) — application bootstrap and development foundation (Complete)
 - [0001-github-app-connection](0001-github-app-connection.md) — GitHub App connection and repository selection (Complete)
 - [0002-repository-intelligence](0002-repository-intelligence.md) — deterministic repository intelligence snapshots (Implemented; live validation pending manual permission upgrade + migration)
+- [0003-connect-flow-installation-reuse](0003-connect-flow-installation-reuse.md) — fix: reuse an existing GitHub installation when connecting further projects (Complete)
 
 ## Format
 
