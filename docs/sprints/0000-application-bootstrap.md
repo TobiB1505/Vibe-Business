@@ -17,7 +17,7 @@ Establish the technical foundation of Vibe Business V0.1: a running Next.js appl
 - pnpm as package manager, `pnpm-lock.yaml` committed, expected Node version documented (`.nvmrc`, `engines.node`).
 - Modular `src/` structure: `app/`, `components/{ui,layout}`, `modules/{auth,projects,github,audits,opportunities,execution,previews,approvals,usage,credits,audit-log}`, `lib/{supabase,env,utils}`, `types/` — modules populated only where Sprint 0 has real content; otherwise left as documented boundaries (`README.md`), not fake code.
 - Minimal landing page (`/`) and application shell (`/app`), per the Sprint 0 spec's exact copy.
-- Supabase server/browser client helpers (`src/lib/supabase/`) per current `@supabase/ssr` conventions, plus a session-refresh `middleware.ts`.
+- Supabase server/browser client helpers (`src/lib/supabase/`) per current `@supabase/ssr` conventions, plus a session-refresh `src/proxy.ts` (Next.js 16 Proxy convention, formerly Middleware — see Risks/Notes for why it lives inside `src/` rather than at the repo root).
 - Central, validated environment access (`src/lib/env/env.ts`, zod-based), `.env.example`.
 - Minimal auth foundation: Supabase Auth email magic link, via a Server Action + `/auth/callback` Route Handler — no browser Supabase client needed for this flow.
 - Migration directory structure (`supabase/migrations/`) with no tables yet.
@@ -46,7 +46,7 @@ Everything PRODUCT.md and ARCHITECTURE.md defer past Sprint 0, explicitly includ
 - [x] Modular monolith structure is recognizable and matches ARCHITECTURE.md's module boundaries.
 - [x] `/` renders the landing screen (verified in-browser).
 - [x] `/app` shell exists and renders (verified in-browser).
-- [x] Supabase foundation exists (server client, browser client, middleware).
+- [x] Supabase foundation exists (server client, browser client, proxy).
 - [x] Auth foundation exists (magic-link Server Action, callback route, `getSession()`).
 - [x] Secure env structure exists (zod validation, clear errors, no server-only vars importable client-side).
 - [x] No secrets committed.
@@ -78,3 +78,4 @@ Everything PRODUCT.md and ARCHITECTURE.md defer past Sprint 0, explicitly includ
 - **No React Testing Library / component tests.** The two Vitest tests cover the only non-trivial pure logic that exists (`env.ts` validation, `cn.ts`). UI rendering was verified manually in-browser instead of adding a DOM-testing dependency for two static screens — revisit once components carry real logic.
 - **Node 24.13.0 pinned in `.nvmrc`** as the actual version this sprint was built and tested against; `engines.node` in `package.json` uses Next.js's own stated minimum (`>=20.9.0`) rather than pinning to 24 there, so the package doesn't falsely claim a hard requirement it doesn't have.
 - **Turbopack is Next 16's default build/dev engine** — no explicit opt-in was made or needed; this is an unmodified Next.js default, not a Sprint 0 decision.
+- **`proxy.ts` must live inside `src/`, not at the repo root, for this project.** Next.js 16.3.0 replaced the `middleware.ts` file convention with `proxy.ts` (same `matcher` config, function renamed from `middleware` to `proxy`). With a `src/` layout, a `src/proxy.ts` (sibling of `src/app/`) is picked up correctly, but a repo-root `proxy.ts` is silently ignored — no build warning, no error, `next build` succeeds, but the file never runs. This was caught by empirically testing both locations (a build with a header-injecting test proxy, run via `next start` and checked with `curl`): root-level `proxy.ts` produced no `ƒ Proxy (Middleware)` build-summary line and never set the test header; `src/proxy.ts` did both. `middleware.ts` at the repo root, by contrast, did work in this same layout — the gap is specific to the new `proxy.ts` convention's src-dir support in this Next.js version. Filed as a compatibility finding, not a Vibe Business architecture decision.

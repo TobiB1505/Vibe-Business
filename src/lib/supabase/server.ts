@@ -25,8 +25,8 @@ export async function createClient() {
           });
         } catch {
           // Called from a Server Component during render, where cookies
-          // cannot be written. Safe to ignore: middleware refreshes the
-          // session on every request (see src/lib/supabase/middleware.ts).
+          // cannot be written. Safe to ignore: src/proxy.ts refreshes the
+          // session on every request (see src/lib/supabase/proxy.ts).
         }
       },
     },
