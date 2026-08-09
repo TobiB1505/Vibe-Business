@@ -1,5 +1,11 @@
 # modules/projects
 
-Owns the user's connected projects (conceptually `Project`, `RepositoryConnection` — see [ARCHITECTURE.md §6](../../../ARCHITECTURE.md#6-domain-model-conceptual-only)). The `/app` shell's "Your projects" list and "Connect your first project" action will eventually live here.
+Owns the user's connected projects (`Project`, `RepositoryConnection` — see [ARCHITECTURE.md §6](../../../ARCHITECTURE.md#6-domain-model-conceptual-only)).
 
-**Sprint 0 status:** boundary reserved only. No project entity, no persistence, no real GitHub connection — the `/app` shell renders its empty state directly, per the Sprint 0 scope. See [docs/sprints/0000-application-bootstrap.md](../../../docs/sprints/0000-application-bootstrap.md).
+## What exists (Sprint 1)
+
+- `connect.ts` — `createProjectWithRepository()`: creates a Project + its one RepositoryConnection, with duplicate-repository protection (unique constraint on `repository_connections.github_repository_id`) and best-effort rollback if the second insert fails.
+- `disconnect.ts` — `disconnectProject()`: removes a Project (and, via cascade, its RepositoryConnection) — never touches GitHub itself.
+- `queries.ts` — `listProjectsForUser()` (dashboard), `getProjectWithRepository()` (project detail page).
+
+A project holds exactly one repository connection in Sprint 1 — no multi-repo projects yet.
