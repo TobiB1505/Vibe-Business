@@ -14,7 +14,11 @@ export type AuditEventType =
   | "repository.selected"
   | "project.created"
   | "project.disconnected"
-  | "github.access.failed";
+  | "github.access.failed"
+  | "repository.intelligence.started"
+  | "repository.intelligence.completed"
+  | "repository.intelligence.failed"
+  | "repository.intelligence.reused";
 
 export type RecordAuditEventParams = {
   userId: string;

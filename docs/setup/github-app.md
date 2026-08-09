@@ -34,18 +34,44 @@ Under **"Identifying and authorizing users"**:
 
 - **Only on this account** is simplest for local development. Switch to **Any account** only if you specifically need to test installing on other accounts/orgs.
 
-## 2. Repository permissions — least privilege (Sprint 1 §13)
+## 2. Repository permissions — least privilege
 
 Under **Permissions & events → Repository permissions**, set exactly:
 
-- **Metadata: Read-only** — and nothing else.
+- **Metadata: Read-only**
+- **Contents: Read-only**
+
+…and nothing else.
 
 Do **not** set:
-- Contents (not needed until a later sprint reads/writes repository files)
+- **Contents: Read and write** — Sprint 2 only *reads* repository files. Write access is not needed until a sprint actually creates branches or commits.
 - Pull requests (not needed until a later sprint opens PRs)
+- Actions, Administration, Issues, Workflows
 - Any Organization or Account permission
 
-Metadata: Read-only is the minimum permission that lets the App list installation repositories and read their basic metadata (name, owner, default branch, visibility, URL) — exactly what `src/modules/github/repositories.ts` uses and nothing more.
+Why each one:
+
+| Permission | Needed for |
+|---|---|
+| Metadata: Read-only | Listing the repositories an installation can access, and their basic facts (name, owner, default branch, visibility, URL) — `src/modules/github/repositories.ts` |
+| Contents: Read-only | Reading the Git tree and a small number of manifest files to build repository intelligence — `src/modules/github/repository-reader.ts` |
+
+### ⚠️ Existing installations must approve the added permission
+
+**Contents: Read-only was added in Sprint 2.** GitHub does not grant a newly requested permission to an existing installation automatically — repository intelligence will fail with a "needs read-only access to repository contents" message until the update is approved.
+
+To update an App you already created:
+
+1. GitHub → **Settings** → **Developer settings** → **GitHub Apps** → *your app*
+2. **Permissions & events** → **Repository permissions**
+3. Set **Contents** to **Read-only**
+4. **Save changes**
+
+GitHub then emails the account/organisation owner a request to approve the updated permissions. Until that approval happens:
+
+5. Go to **Settings** → **Applications** → **Installed GitHub Apps** → *your app* → **Review request** → approve.
+
+Alternatively, visit `https://github.com/settings/installations`, open the installation, and accept the pending permission request. The in-app error state links here directly.
 
 ## 3. Create the App, then collect credentials
 

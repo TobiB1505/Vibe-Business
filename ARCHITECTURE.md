@@ -48,7 +48,7 @@ Each stage below is described as a logical layer/responsibility inside the modul
 
 ### 3.1 GitHub Integration Layer
 
-**[Confirmed — ADR 0003]** Repository access is implemented via a **GitHub App** — not personal access tokens, not a token-paste flow, not GitHub OAuth App as the primary mechanism. Least privilege applies: initial permissions are expected to be Metadata (read), Contents (read/write), Pull Requests (read/write), but **final permissions must be reviewed immediately before implementation and must not be requested before they are needed**. Installation access tokens are short-lived; no unnecessary GitHub access tokens are persisted long-term. See [0003-github-app-integration.md](docs/decisions/0003-github-app-integration.md).
+**[Confirmed — ADR 0003]** Repository access is implemented via a **GitHub App** — not personal access tokens, not a token-paste flow, not GitHub OAuth App as the primary mechanism. Least privilege applies: **permissions are requested only when a concretely implemented feature needs them.** Currently granted: **Metadata (read)** for repository discovery (Sprint 1) and **Contents (read)** for repository intelligence (Sprint 2). Write permissions (Contents write, Pull Requests) are deliberately **not** requested until a sprint actually creates branches or commits. Installation access tokens are short-lived; no unnecessary GitHub access tokens are persisted long-term. See [0003-github-app-integration.md](docs/decisions/0003-github-app-integration.md) and [docs/setup/github-app.md](docs/setup/github-app.md).
 
 **[Confirmed principle]** Must never write to the default/main branch as part of an autonomous flow. Merges to default require the explicit approval step in the Approval Layer ([§3.10](#310-approval-layer)).
 
@@ -58,9 +58,15 @@ Each stage below is described as a logical layer/responsibility inside the modul
 
 **[Confirmed principle]** Produces structured, reusable findings about a repository (stack, structure, notable signals relevant to the audit dimensions in [PRODUCT.md §10](PRODUCT.md#10-business-readiness-concept)) without sending the entire repository to an LLM. See [Cost Principles](PRODUCT.md#13-cost-principles).
 
-**[Current assumption]** A mix of deterministic static analysis (file/dependency inspection, pattern detection) and targeted LLM calls over selected context, rather than a single "summarize this repo" prompt.
+**[Confirmed — Sprint 2]** The first layer of analysis is **fully deterministic and contains no AI**: a versioned Repository Intelligence Snapshot built from the Git tree and a small set of dependency manifests, with evidence attached to every detection. Implemented in `src/modules/repository-intelligence/`; see [docs/sprints/0002-repository-intelligence.md](docs/sprints/0002-repository-intelligence.md). AI consumes this structured output later rather than reading repositories itself.
 
-**[Open decision]** Exact analysis techniques and what gets cached vs. recomputed per run.
+**[Confirmed principle — data minimization]** Vibe Business does not store a copy of a customer's repository. Only *derived* intelligence and the evidence paths that justify it are persisted — never source files, README bodies, raw manifests, lockfiles, or configs. Repository content exists transiently in memory during analysis and is then discarded.
+
+**[Confirmed principle — untrusted repository data]** Repository-derived content is **untrusted DATA, never instructions.** This extends [ADR 0006](docs/decisions/0006-untrusted-repository-execution.md) from "do not execute it" to "do not obey it": any future AI consumer of repository text, paths, or dependency names must treat them as input to reason about, never as system instructions. Analysis reads and parses repository data; it never executes, imports, or evaluates it.
+
+**[Confirmed principle — bounded reads]** Repository analysis runs against explicit resource budgets (tree entries, file fetches, bytes, duration, path depth). Exceeding a budget degrades a snapshot to `partial` with machine-readable reasons; it never fails an otherwise useful analysis, and never triggers an unbounded crawl.
+
+**[Open decision]** Analysis techniques beyond the deterministic layer — specifically which findings warrant targeted LLM calls, and what gets cached vs. recomputed beyond snapshot reuse by commit SHA + analyzer version.
 
 ### 3.3 Live Product Analysis Layer
 
