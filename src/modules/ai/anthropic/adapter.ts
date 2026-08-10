@@ -3,6 +3,7 @@ import type {
   AIFailureCode,
   AIProvider,
   AIUsage,
+  ProviderErrorDiagnostic,
   StructuredRequest,
   StructuredResult,
   TokenCountResult,
@@ -82,8 +83,30 @@ type ProviderStateFailure = Extract<
  */
 type ClassifiedError =
   | { kind: "provider_state"; code: ProviderStateFailure }
-  | { kind: "request_rejected" }
+  | { kind: "request_rejected"; diagnostic: ProviderErrorDiagnostic }
   | { kind: "unclassified" };
+
+/**
+ * Allow-lists the two provider-controlled strings the diagnostic carries.
+ *
+ * `error.type` and `request-id` are documented as low-cardinality
+ * identifiers, but they arrive from outside the application, so they are
+ * validated rather than trusted: anything that is not a short identifier is
+ * dropped entirely. This is what stops a message, a body fragment, or an
+ * echoed prompt from reaching a log line through the diagnostic channel
+ * (Sprint 4 §27).
+ */
+function safeIdentifier(value: unknown, pattern: RegExp): string | null {
+  return typeof value === "string" && pattern.test(value) ? value : null;
+}
+
+function toDiagnostic(error: InstanceType<typeof Anthropic.APIError>): ProviderErrorDiagnostic {
+  return {
+    httpStatus: typeof error.status === "number" ? error.status : null,
+    providerErrorType: safeIdentifier(error.type, /^[a-z][a-z0-9_]{0,63}$/),
+    requestId: safeIdentifier(error.requestID, /^[A-Za-z0-9_-]{1,64}$/),
+  };
+}
 
 /**
  * Maps an SDK error onto domain vocabulary.
@@ -117,8 +140,10 @@ function classifyError(error: unknown): ClassifiedError {
     if (status === 529) return state("provider_overloaded");
     if (typeof status === "number" && status >= 500) return state("provider_unavailable");
     // Any other 4xx means we built a request the API rejected — a bug on our
-    // side rather than the provider being down or unpaid.
-    if (typeof status === "number") return { kind: "request_rejected" };
+    // side rather than the provider being down or unpaid. The status and the
+    // typed error discriminator are kept so the bug is diagnosable without a
+    // second paid call.
+    if (typeof status === "number") return { kind: "request_rejected", diagnostic: toDiagnostic(error) };
   }
 
   return { kind: "unclassified" };
@@ -191,20 +216,30 @@ export class AnthropicProvider implements AIProvider {
       response = await this.messages.create(this.buildParams(request));
     } catch (error) {
       const classified = classifyError(error);
+      const latencyMs = Date.now() - startedAt;
+
+      // A rejected request is reported as exactly that, with the safe
+      // signals needed to fix it. It used to be reported as invalid
+      // structured output, which was actively misleading: nothing was
+      // generated, so the output was never the problem.
+      if (classified.kind === "request_rejected") {
+        return {
+          ok: false,
+          error: "provider_request_rejected",
+          diagnostic: classified.diagnostic,
+          model: request.model,
+          latencyMs,
+        };
+      }
+
       return {
         ok: false,
-        // A rejected request means the payload we built was invalid, which
-        // is reported as an unusable output. An unattributable error is
-        // treated as the provider being unreachable, because that is the
-        // only thing the failure of a single non-streaming call can imply.
-        error:
-          classified.kind === "provider_state"
-            ? classified.code
-            : classified.kind === "request_rejected"
-              ? "structured_output_invalid"
-              : "provider_unavailable",
+        // An unattributable error is treated as the provider being
+        // unreachable, because that is the only thing the failure of a
+        // single non-streaming call can imply.
+        error: classified.kind === "provider_state" ? classified.code : "provider_unavailable",
         model: request.model,
-        latencyMs: Date.now() - startedAt,
+        latencyMs,
       };
     }
 
@@ -232,15 +267,23 @@ export class AnthropicProvider implements AIProvider {
       .map((block) => block.text)
       .join("");
 
+    // A 200 with no text block at all. Separated from a parse failure
+    // because the causes differ: nothing was returned to parse, which points
+    // at the request shape or a response consumed entirely by reasoning —
+    // not at malformed JSON. Usage is reported either way: the call was paid
+    // for.
     if (text.trim() === "") {
-      return { ok: false, error: "structured_output_invalid", usage, model: response.model, latencyMs };
+      return { ok: false, error: "structured_output_empty", usage, model: response.model, latencyMs };
     }
 
     let data: unknown;
     try {
       data = JSON.parse(text);
     } catch {
-      return { ok: false, error: "structured_output_invalid", usage, model: response.model, latencyMs };
+      // Text was returned but is not JSON — with structured outputs active
+      // this should be unreachable, which is precisely why it is worth
+      // being able to tell apart from an empty response.
+      return { ok: false, error: "structured_output_json_invalid", usage, model: response.model, latencyMs };
     }
 
     return { ok: true, data, usage, model: response.model, latencyMs };

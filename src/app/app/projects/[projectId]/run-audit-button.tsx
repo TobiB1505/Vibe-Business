@@ -27,7 +27,14 @@ const ERROR_MESSAGES: Record<RunAuditFailureCode, string> = {
   provider_unavailable: "The AI provider could not be reached. Try again in a moment.",
   provider_overloaded: "The AI provider is overloaded right now. Try again in a few minutes.",
   provider_refusal: "The AI provider declined to analyze this input. Nothing was saved.",
-  structured_output_invalid: "The audit result was not usable. Nothing was saved.",
+  // Four distinct stages, four distinct messages. They used to share one
+  // line ("the audit result was not usable"), which told neither the user
+  // nor us which stage had actually failed. None of them exposes a provider
+  // detail; the diagnosable specifics stay server-side.
+  provider_request_rejected: "The AI provider rejected the audit request. The integration needs adjustment.",
+  structured_output_empty: "The AI provider returned no usable audit output.",
+  structured_output_json_invalid: "The AI provider returned an invalid audit format.",
+  structured_output_schema_invalid: "The audit response did not pass Vibe's validation.",
   output_truncated: "The audit result was cut short. Nothing was saved.",
   audit_failed: "The business audit could not be completed.",
 };

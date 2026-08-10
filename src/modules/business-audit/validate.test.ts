@@ -27,17 +27,27 @@ describe("validateAuditOutput — well-formed output", () => {
   });
 
   it("rejects a response that is not an object", () => {
-    expect(validate("nope").ok).toBe(false);
-    expect(validate(null).ok).toBe(false);
-    expect(validate([]).ok).toBe(false);
+    for (const value of ["nope", null, []]) {
+      const result = validate(value);
+      expect(result.ok).toBe(false);
+      // A bounded code rather than a sentence: the value is persisted, and
+      // prose would eventually carry a fragment of the model's output.
+      expect(result.ok === false && result.reason).toBe("response_not_object");
+    }
   });
 
-  it("rejects a response missing a dimension", () => {
+  it("rejects a response with no dimensions object", () => {
+    const result = validate({ keyFindings: [], limitations: [] });
+    expect(result.ok === false && result.reason).toBe("dimensions_missing");
+  });
+
+  it("names which dimension was missing", () => {
     const output = buildModelOutput();
     delete (output.dimensions as Record<string, unknown>).retention;
     const result = validate(output);
     expect(result.ok).toBe(false);
-    expect(result.ok === false && result.reason).toContain("retention");
+    expect(result.ok === false && result.error).toBe("structured_output_schema_invalid");
+    expect(result.ok === false && result.reason).toBe("dimension_missing_retention");
   });
 });
 

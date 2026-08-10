@@ -20,7 +20,21 @@ import { AUDIT_DIMENSIONS, DIMENSION_LABELS, type AssessmentStatus, type AuditDi
  *     cannot express either.
  */
 
-export type ValidationFailure = "structured_output_invalid";
+export type ValidationFailure = "structured_output_schema_invalid";
+
+/**
+ * Why our post-validation rejected the model's JSON, as a bounded code.
+ *
+ * These name only schema field names — never model content — so they are
+ * safe to persist and log. A bounded enum rather than a free-text sentence
+ * because the value is stored: prose would eventually carry a fragment of
+ * whatever the model returned, and the dimension codes are derived from
+ * `AUDIT_DIMENSIONS` so a new dimension cannot be forgotten here.
+ */
+export type ValidationReason =
+  | "response_not_object"
+  | "dimensions_missing"
+  | `dimension_missing_${AuditDimensionId}`;
 
 export type ValidatedAudit = {
   dimensions: DimensionAssessment[];
@@ -32,7 +46,7 @@ export type ValidatedAudit = {
 
 export type ValidateResult =
   | { ok: true; audit: ValidatedAudit }
-  | { ok: false; error: ValidationFailure; reason: string };
+  | { ok: false; error: ValidationFailure; reason: ValidationReason };
 
 const MAX_LIST_ITEMS = 4;
 const MAX_KEY_FINDINGS = 5;
@@ -93,10 +107,10 @@ function normalizeScore(value: unknown): number | null {
 
 export function validateAuditOutput(data: unknown, knownEvidenceIds: Set<string>): ValidateResult {
   if (!isRecord(data)) {
-    return { ok: false, error: "structured_output_invalid", reason: "response was not an object" };
+    return { ok: false, error: "structured_output_schema_invalid", reason: "response_not_object" };
   }
   if (!isRecord(data.dimensions)) {
-    return { ok: false, error: "structured_output_invalid", reason: "dimensions missing" };
+    return { ok: false, error: "structured_output_schema_invalid", reason: "dimensions_missing" };
   }
 
   const dropped = new Set<string>();
@@ -108,8 +122,8 @@ export function validateAuditOutput(data: unknown, knownEvidenceIds: Set<string>
     if (!isRecord(raw)) {
       return {
         ok: false,
-        error: "structured_output_invalid",
-        reason: `dimension "${id}" missing`,
+        error: "structured_output_schema_invalid",
+        reason: `dimension_missing_${id}`,
       };
     }
 
