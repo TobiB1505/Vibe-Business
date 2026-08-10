@@ -8,6 +8,7 @@ import type {
   StructuredResult,
   TokenCountResult,
 } from "../provider";
+import { logRejectedProviderRequest } from "./provider-error-log";
 
 /**
  * Anthropic adapter — the only file in the application allowed to import
@@ -223,6 +224,11 @@ export class AnthropicProvider implements AIProvider {
       // structured output, which was actively misleading: nothing was
       // generated, so the output was never the problem.
       if (classified.kind === "request_rejected") {
+        // The status and typed error type identify the *class* of bug; only
+        // the provider's message names the rejected field. It is written to
+        // the process log, never persisted or returned — see
+        // ./provider-error-log.ts. The returned value below is unchanged.
+        logRejectedProviderRequest(error, classified.diagnostic);
         return {
           ok: false,
           error: "provider_request_rejected",
