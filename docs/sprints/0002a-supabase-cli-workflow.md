@@ -1,6 +1,6 @@
 # Infrastructure — Supabase CLI Migration Workflow
 
-Status: CLI tooling and documentation complete; **project linking and remote verification blocked on manual authentication** (see Manual setup)
+Status: Complete. CLI installed, project linked, migration history reconciled and verified against the linked remote project, `db push` run (no pending migrations), `db lint --linked` clean.
 Branch: `chore/supabase-cli-workflow`
 
 ## Goal
@@ -43,9 +43,18 @@ Full sequence for a new migration, from [supabase/README.md](../../supabase/READ
 
 ## Migration history reconciliation
 
-**Not performed.** This step requires an authenticated, linked Supabase CLI session, which requires interactive human action (see Manual setup below) that could not be completed in this session. No `migration list`, `db push`, `migration repair`, or `db lint --linked` command was run against the real project — none of their output is fabricated or assumed.
+**Performed and verified.** The CLI was authenticated with a user-supplied personal access token (`supabase login --token ... `; the token was never written to any file in this repository — see [Security](#security-note)). `supabase projects list` was used to confirm both reachable projects by name before linking anything: `dcbwlctscooefwnivxzv` = "Vibe-Business" (this project) and `aoakudtnyyvxmxzlngsb` = "Planner-Agent" (explicitly unrelated — never linked, per rule 33). Only the Vibe-Business ref was linked (`supabase link --project-ref dcbwlctscooefwnivxzv`), which succeeded without requiring the database password.
 
-Per the sprint brief's own explicit instruction ("If CLI authentication requires interactive login that cannot be completed autonomously: stop at that point and provide the exact command"), this is reported as a blocker, not glossed over. See [Manual setup](#manual-setup) for exactly what unblocks it, and the final report for the precise commands to run once unblocked.
+`supabase migration list` then showed the expected gap: both local migrations (`20260809210125`, `20260809225438`) present locally, but **no remote migration-history rows** — exactly the anticipated state, since Sprint 1 and Sprint 2 were applied manually via the SQL Editor and never went through the CLI.
+
+Per the safety rule above, this was **not** treated as "therefore the tables don't exist" or "therefore it's safe to just push." Before running `migration repair`, the following was independently verified against the linked remote database via `supabase db query --linked`, to confirm the schema was genuinely already applied and not just assumed from table names:
+
+- All 6 expected tables present (`information_schema.tables`): `github_connections`, `github_installations`, `projects`, `repository_connections`, `audit_events`, `repository_intelligence_snapshots`.
+- Row Level Security enabled on all 6 (`pg_tables.rowsecurity = true`).
+- Sprint 2's partial unique index `repository_intelligence_single_in_flight_idx` present with a byte-for-byte matching definition (`pg_indexes`).
+- 5 specific named constraints from both migrations present exactly (`pg_constraint`): `github_connections_user_id_key`, `github_connections_github_user_id_key`, `github_installations_user_installation_key`, `repository_connections_github_repository_id_key`, `repository_intelligence_completed_has_result`.
+
+Only after that evidence did `supabase migration repair --status applied --linked 20260809210125 20260809225438` run, marking both migrations as applied in the remote history without re-executing any SQL. A follow-up `migration list` confirmed local and remote timestamps now fully agree.
 
 ## Safety rules
 
@@ -77,23 +86,27 @@ The project ref (`dcbwlctscooefwnivxzv`) is not a secret — it's the subdomain 
 
 ## Validation
 
-- `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build` — see the final report for results. Adding a dev-only CLI dependency and doc/config changes should not affect application behavior.
-- `pnpm db:status`, `pnpm db:push`, `pnpm db:lint` — **not run**; blocked on the authentication step above. Explicitly not claimed as passing.
+- `pnpm lint`, `pnpm typecheck`, `pnpm test`, `pnpm build` — pass. Adding a dev-only CLI dependency and doc/config changes did not affect application behavior.
+- `pnpm db:status` (`supabase migration list`) — ran before and after reconciliation; confirmed the pre-repair gap and the post-repair alignment.
+- `pnpm db:push` (`supabase db push --linked`) — ran; result: `upToDate: true`, "Remote database is up to date." (a valid, expected outcome once history was repaired — there was nothing pending to deploy).
+- `pnpm db:lint` (`supabase db lint --linked`) — ran; **no schema errors found**.
+- Post-reconciliation schema sanity checks (all via `supabase db query --linked`, read-only): RLS policy counts per table match the migration files exactly (`audit_events` = 2, append-only design; the other 5 tables = 4, full CRUD RLS pattern). All 8 expected foreign keys present with the correct delete behavior (`SET NULL` from `audit_events` to `auth.users`; `CASCADE` from user-owned tables to `auth.users` and from project-owned children to `projects`; `RESTRICT` on the two installation/connection-dependent FKs) — confirms `auth.users` is referenced, never modified. All 19 expected indexes present across the 6 tables, matching both migration files exactly (primary keys plus every named unique/regular index). A row-count-only check (no row contents inspected, per the brief's instruction not to expose user data unnecessarily) on `auth.users` (3), `public.projects` (2), and `public.github_installations` (1) confirmed real data intact — nothing was dropped or reset.
 
 ## Manual setup
 
-**Required before the CLI workflow can be used for real:**
+Authentication and linking were completed during this session using a user-supplied personal access token, and do not need to be repeated on this machine. Recorded here for any other machine or future session that needs to reproduce it:
 
 1. Authenticate the CLI. Either:
    - Run `pnpm supabase login` in an interactive terminal (opens a browser to approve), or
    - Create a personal access token at <https://supabase.com/dashboard/account/tokens> and either run `pnpm supabase login --token <token>` or set `SUPABASE_ACCESS_TOKEN` in your shell before running CLI commands.
-2. Link the project: `pnpm supabase link --project-ref dcbwlctscooefwnivxzv`. It will prompt for the database password (from the Supabase Dashboard → Project Settings → Database).
+2. Link the project: `pnpm supabase link --project-ref dcbwlctscooefwnivxzv`. In this session this succeeded without a database password prompt; if prompted, it comes from the Supabase Dashboard → Project Settings → Database.
 3. Run the reconciliation sequence from [Commands](#commands) above, in order, reading the output of each `db:status` before proceeding to `db:push`.
 
-Do this once per machine (or once in CI if a future sprint decides to automate deployment — deliberately not done here, see Risks).
+## Security note
+
+The personal access token used to authenticate this session was provided directly in chat by the user and used only in-memory via CLI flags/environment for the `login` step. It was never written to any file in this repository, any log file, or this document — confirmed via `git grep` across tracked files before committing. The CLI's own local session state (including `supabase/.temp/`) is gitignored and was confirmed untracked before this commit.
 
 ## Risks
 
-- **Reconciliation is unverified.** Until the manual steps above are completed, it remains unconfirmed whether the remote database's migration-history tracking already lists the Sprint 1/2 migrations (applied manually, so plausibly untracked) or whether `migration repair` will be needed. Both are anticipated and documented, but neither has been observed.
 - **CI still has no production Supabase access**, by design (CLAUDE.md rule already in effect, reaffirmed here). `pnpm db:push`/`db:lint` are developer/deployment-time commands, not part of the GitHub Actions workflow. If a future sprint wants automated deployment, that's a new, explicit decision — not something this infrastructure sprint introduces silently.
 - **`supabase/config.toml`** was generated with `supabase init`'s defaults (unmodified) — it configures a full local Docker-based Supabase stack (Studio, local Postgres, Storage, Auth email testing, etc.) that this project does not currently use; only the CLI's remote-linking and migration commands are used. Keeping the untouched default is intentional: it's the standard, well-tested CLI output, and trimming it risks subtly breaking commands that read it. No secrets live in it — sensitive fields use `env(...)` placeholders per the CLI's own convention.
