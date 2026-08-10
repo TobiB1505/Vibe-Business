@@ -58,28 +58,70 @@ function toUsage(usage: {
 }
 
 /**
+ * Provider states that mean "the provider could not serve this request",
+ * independent of which endpoint was called. Token counting and generation
+ * share them because they share an account, a key, and a rate limit.
+ */
+type ProviderStateFailure = Extract<
+  AIFailureCode,
+  | "provider_auth_error"
+  | "provider_billing_error"
+  | "provider_rate_limited"
+  | "provider_timeout"
+  | "provider_unavailable"
+  | "provider_overloaded"
+>;
+
+/**
+ * What an SDK error tells us, before deciding how to describe it.
+ *
+ * `request_rejected` and `unclassified` are kept apart from each other
+ * because the two call sites answer them differently: a rejected request is
+ * a bug in the payload we built, while an unclassified error is simply
+ * something we cannot attribute.
+ */
+type ClassifiedError =
+  | { kind: "provider_state"; code: ProviderStateFailure }
+  | { kind: "request_rejected" }
+  | { kind: "unclassified" };
+
+/**
  * Maps an SDK error onto domain vocabulary.
  *
- * Status codes are used rather than message text: messages are not a stable
- * contract, and matching on them would silently reclassify failures when
- * the provider rewords something.
+ * Classification uses the HTTP status and the API's own typed `error.type`
+ * discriminator — never message text. Messages are not a stable contract,
+ * and matching on them would silently reclassify failures the day the
+ * provider rewords something.
+ *
+ * Connection errors are tested before the general `APIError` branch on
+ * purpose: `APIConnectionError` extends `APIError` with an undefined status,
+ * so checking the base class first would swallow every timeout and network
+ * failure into the statusless fallback.
  */
-function classifyError(error: unknown): AIFailureCode {
+function classifyError(error: unknown): ClassifiedError {
+  const state = (code: ProviderStateFailure): ClassifiedError => ({ kind: "provider_state", code });
+
+  if (error instanceof Anthropic.APIConnectionTimeoutError) return state("provider_timeout");
+  if (error instanceof Anthropic.APIConnectionError) return state("provider_unavailable");
+
   if (error instanceof Anthropic.APIError) {
     const status = error.status;
-    if (status === 401 || status === 403) return "provider_auth_error";
-    if (status === 429) return "provider_rate_limited";
-    if (status === 408) return "provider_timeout";
-    if (status === 529) return "provider_overloaded";
-    if (typeof status === "number" && status >= 500) return "provider_unavailable";
-    // A 4xx that is not auth or rate limiting means we built a request the
-    // API rejected — a bug on our side, surfaced as an invalid output
-    // rather than blamed on the provider being down.
-    return "structured_output_invalid";
+    if (status === 401 || status === 403) return state("provider_auth_error");
+    // 402 is the documented billing status, and `billing_error` is a typed
+    // member of the SDK's `ErrorType` union — the provider may report a
+    // credit problem under another status, so the typed field is honoured
+    // too. Both are structured fields, not prose.
+    if (status === 402 || error.type === "billing_error") return state("provider_billing_error");
+    if (status === 429) return state("provider_rate_limited");
+    if (status === 408) return state("provider_timeout");
+    if (status === 529) return state("provider_overloaded");
+    if (typeof status === "number" && status >= 500) return state("provider_unavailable");
+    // Any other 4xx means we built a request the API rejected — a bug on our
+    // side rather than the provider being down or unpaid.
+    if (typeof status === "number") return { kind: "request_rejected" };
   }
-  if (error instanceof Anthropic.APIConnectionTimeoutError) return "provider_timeout";
-  if (error instanceof Anthropic.APIConnectionError) return "provider_unavailable";
-  return "provider_unavailable";
+
+  return { kind: "unclassified" };
 }
 
 export class AnthropicProvider implements AIProvider {
@@ -126,10 +168,17 @@ export class AnthropicProvider implements AIProvider {
         output_config: params.output_config,
       });
       return { ok: true, inputTokens: result.input_tokens };
-    } catch {
-      // The count is a cost guard, not the product. Its failure is reported
-      // as its own code so the caller can decide, rather than being
-      // conflated with a failed audit.
+    } catch (error) {
+      // The count is free, but it reaches the same account and key as the
+      // billable call, so it surfaces the same provider states. Preserving
+      // them is what tells an operator "the account has no credit" instead
+      // of "try again in a moment" (Sprint 4 §27).
+      const classified = classifyError(error);
+      if (classified.kind === "provider_state") {
+        return { ok: false, error: classified.code };
+      }
+      // A rejected payload or an error we cannot attribute: all that is
+      // honestly known is that counting failed.
       return { ok: false, error: "token_count_failed" };
     }
   }
@@ -141,9 +190,19 @@ export class AnthropicProvider implements AIProvider {
     try {
       response = await this.messages.create(this.buildParams(request));
     } catch (error) {
+      const classified = classifyError(error);
       return {
         ok: false,
-        error: classifyError(error),
+        // A rejected request means the payload we built was invalid, which
+        // is reported as an unusable output. An unattributable error is
+        // treated as the provider being unreachable, because that is the
+        // only thing the failure of a single non-streaming call can imply.
+        error:
+          classified.kind === "provider_state"
+            ? classified.code
+            : classified.kind === "request_rejected"
+              ? "structured_output_invalid"
+              : "provider_unavailable",
         model: request.model,
         latencyMs: Date.now() - startedAt,
       };

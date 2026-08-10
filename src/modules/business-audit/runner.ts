@@ -29,6 +29,7 @@ export type AuditRunFailure =
   | "token_count_failed"
   | "provider_rate_limited"
   | "provider_auth_error"
+  | "provider_billing_error"
   | "provider_timeout"
   | "provider_unavailable"
   | "provider_overloaded"
@@ -79,10 +80,13 @@ export async function runBusinessReadinessAudit(input: RunAuditInput): Promise<A
   let pack = buildEvidencePack(input);
   let request = buildRequest(pack, config);
 
-  // Cost gate: count before spending (Sprint 4 §14).
+  // Cost gate: count before spending (Sprint 4 §14). The provider's own
+  // classification is passed through rather than flattened: a count that
+  // failed because the account has no credit is not the same operational
+  // problem as one that failed for an unknown reason.
   const firstCount = await provider.countInputTokens(request);
   if (!firstCount.ok) {
-    return { ok: false, error: "token_count_failed", estimatedInputTokens: null, latencyMs: 0 };
+    return { ok: false, error: firstCount.error, estimatedInputTokens: null, latencyMs: 0 };
   }
 
   let estimatedInputTokens = firstCount.inputTokens;
@@ -101,7 +105,7 @@ export async function runBusinessReadinessAudit(input: RunAuditInput): Promise<A
 
     const recount = await provider.countInputTokens(request);
     if (!recount.ok) {
-      return { ok: false, error: "token_count_failed", estimatedInputTokens: null, latencyMs: 0 };
+      return { ok: false, error: recount.error, estimatedInputTokens: null, latencyMs: 0 };
     }
     estimatedInputTokens = recount.inputTokens;
   }

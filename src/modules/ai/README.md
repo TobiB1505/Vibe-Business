@@ -15,6 +15,7 @@ anthropic/client.ts    key loading + client construction (server-only)
 
 - **No tools, ever.** `StructuredRequest` has no field for tools, web search, URL fetching, or code execution, and the adapter must never add one. A model that receives untrusted evidence and cannot act is why prompt injection is a wrong sentence rather than an incident.
 - **The SDK stops at the adapter.** Nothing outside `anthropic/` may import `@anthropic-ai/sdk`. Callers switch on `AIFailureCode`; a raw provider error must never reach a log line or a browser.
+- **Translate provider failures, never flatten them.** Both call paths — free token counting and the billable call — classify errors from the HTTP status and the API's typed `error.type` field, never from message text. A catch-all that reports one generic code hides operator-actionable states such as an unpaid account; the generic codes (`token_count_failed`, `provider_unavailable`) are last resorts for failures that map onto no known state.
 - **No reasoning leaves the adapter.** Only `text` blocks are read. Thinking token *counts* are read because they are billed; thinking *text* is never returned, stored, or displayed.
 - **Every model identifier lives in `operations.ts`.** No route handler, action, or component may name a model, and nothing user-supplied may select one.
 - **Every price lives in `pricing.ts`**, effective-dated, in integer nanodollars. No dollar constant belongs anywhere else, and floats have no place in a ledger.

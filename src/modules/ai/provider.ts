@@ -73,6 +73,7 @@ export type AIFailureCode =
   | "token_count_failed"
   | "provider_rate_limited"
   | "provider_auth_error"
+  | "provider_billing_error"
   | "provider_timeout"
   | "provider_unavailable"
   | "provider_refusal"
@@ -96,7 +97,39 @@ export type StructuredFailure = {
 
 export type StructuredResult = StructuredSuccess | StructuredFailure;
 
-export type TokenCountResult = { ok: true; inputTokens: number } | { ok: false; error: "token_count_failed" };
+/**
+ * How a token count can fail.
+ *
+ * Token counting is free, but it talks to the same API as the billable call
+ * and therefore hits the same provider states — no credit, a bad key, a rate
+ * limit. Collapsing all of them into `token_count_failed` was a real
+ * production defect: an account with no usage credit reported "the audit
+ * could not be prepared", which reads as a transient glitch and hides an
+ * operator-actionable billing problem.
+ *
+ * A subset of `AIFailureCode` rather than the whole union: a count cannot be
+ * refused, truncated, or return malformed structured output, so those codes
+ * are not representable here.
+ */
+export type TokenCountFailureCode = Extract<
+  AIFailureCode,
+  | "token_count_failed"
+  | "provider_rate_limited"
+  | "provider_auth_error"
+  | "provider_billing_error"
+  | "provider_timeout"
+  | "provider_unavailable"
+  | "provider_overloaded"
+>;
+
+export type TokenCountResult =
+  | { ok: true; inputTokens: number }
+  /**
+   * `token_count_failed` is the last resort — it means counting failed for a
+   * reason that maps onto no known provider state, not merely that counting
+   * is what failed.
+   */
+  | { ok: false; error: TokenCountFailureCode };
 
 export interface AIProvider {
   /** Stable identifier persisted with every usage event, e.g. "anthropic". */
