@@ -84,9 +84,15 @@ Each stage below is described as a logical layer/responsibility inside the modul
 
 **[Confirmed principle]** Consumes output from the Repository and Live Product Analysis layers and produces a Business Readiness Audit structured around the dimensions in [PRODUCT.md §10](PRODUCT.md#10-business-readiness-concept) (Product, Monetization, Distribution, Conversion, Retention).
 
-**[Confirmed principle]** The data model must not hard-code only the V0.1 dimensions in a way that blocks adding more dimensions later.
+**[Confirmed — Sprint 4]** The audit is **diagnostic**. It describes the current state and does not emit actions, recommendations, or Opportunities; converting diagnosed gaps into prioritized Opportunities belongs to the Opportunity Engine ([§3.5](#35-opportunity-engine)). Implemented in `src/modules/business-audit/`; see [docs/sprints/0004-business-readiness-audit.md](docs/sprints/0004-business-readiness-audit.md).
 
-**[Open decision]** Exact audit data schema (see [§6 Domain Model](#6-domain-model-conceptual-only) — conceptual only, no fields defined yet).
+**[Confirmed — Sprint 4]** A third evidence source, **Business Context**, is supplied by the user (product summary, target customer, stage, monetization model, primary goal). Repository and website evidence cannot establish intent, and an audit that guesses it is worse than one that asks.
+
+**[Confirmed — ADR 0011, trust boundary]** All three evidence sources are **untrusted data, never instructions**. Instructions to a model come only from prompts we author; third-party content is passed in a fenced, untrusted-labelled user message. The model is given **no tools, no web access, and no data access**, which is what bounds the consequences of prompt injection. Model reasoning is never requested, stored, or displayed. See [0011-ai-inference-and-evidence-trust-boundary.md](docs/decisions/0011-ai-inference-and-evidence-trust-boundary.md).
+
+**[Confirmed — Sprint 4, unknown ≠ bad]** A dimension the evidence cannot support returns `insufficient_evidence` with a **null** score. Unscored dimensions are excluded from the overall figure and never counted as zero, and the overall score itself is computed **deterministically by the application**, never produced by the model. Below a minimum coverage threshold the overall score is null rather than misleadingly precise.
+
+**[Confirmed principle]** The data model must not hard-code only the V0.1 dimensions in a way that blocks adding more dimensions later. The audit payload is a versioned JSONB document (`business-readiness-audit.v1`) carrying its prompt, rubric, model, and evidence-pack versions, so results stay reproducible and comparable across changes.
 
 ### 3.5 Opportunity Engine
 
@@ -96,9 +102,11 @@ Each stage below is described as a logical layer/responsibility inside the modul
 
 ### 3.6 AI Execution Layer
 
-**[Confirmed — ADR 0005]** **Anthropic** is the AI provider for V0.1. Provider-specific logic (API calls, request/response shaping, model identifiers) is isolated behind a conceptual **`AIProvider`** boundary covering analysis, structured generation, code execution request preparation, and usage reporting. The concrete interface signature is not implemented ahead of need. No multi-provider routing and no agent orchestration beyond a single provider call in V0.1. See [0005-ai-provider-abstraction.md](docs/decisions/0005-ai-provider-abstraction.md).
+**[Confirmed — ADR 0005]** **Anthropic** is the AI provider for V0.1. Provider-specific logic (API calls, request/response shaping, model identifiers) is isolated behind an **`AIProvider`** boundary. No multi-provider routing and no agent orchestration beyond a single provider call in V0.1. See [0005-ai-provider-abstraction.md](docs/decisions/0005-ai-provider-abstraction.md).
 
-**[Confirmed principle]** Every AI job runs against a hard budget and is logged for usage/cost (see [§3.11](#311-usagecredit-layer)).
+**[Confirmed — Sprint 4]** The interface is now implemented in `src/modules/ai/provider.ts` as **generic structured generation** (`countInputTokens`, `generateStructured`) rather than per-domain methods, so a new AI operation is a new caller rather than a change to every adapter. Only `src/modules/ai/anthropic/` may import a provider SDK. Model identifiers and effort levels live solely in `src/modules/ai/operations.ts`; nothing user-supplied may select a model.
+
+**[Confirmed principle]** Every AI job runs against a hard budget and is logged for usage/cost (see [§3.11](#311-usagecredit-layer)). **[Confirmed — Sprint 4]** Input tokens are counted *before* every paid call and gated against an explicit budget; actual usage is recorded afterwards for successes and failures alike, and only when tokens were genuinely billed.
 
 ### 3.7 Git Branch / Change Layer
 
@@ -127,6 +135,10 @@ Each stage below is described as a logical layer/responsibility inside the modul
 ### 3.11 Usage/Credit Layer
 
 **[Confirmed principle]** Records the per-job usage schema defined in [PRODUCT.md §12](PRODUCT.md#12-credit-model) (`provider`, `model`, `input_tokens`, `output_tokens`, `provider_cost`, `tool_cost`, `vibe_credits_charged`, `job_id`, `user_id`, `timestamp`) for every AI job. Vibe Credits charged to the user are decoupled from raw provider cost in the data model, even if V0.1 uses a simple conversion.
+
+**[Confirmed — Sprint 4]** The **internal provider-cost half** of this layer exists as `ai_usage_events`: provider, model, operation, token counts, latency, status, failure code, and a cost derived from **effective-dated** model pricing using integer arithmetic (floats cannot represent sub-cent amounts exactly). It is insert-only under RLS and not readable through the public API — provider billing detail is not customer-facing. The customer-facing Vibe Credit ledger is **not** implemented; no margin, credits, or billing exist yet.
+
+**[Confirmed principle — no secrets in the ledger]** Usage events never contain prompt text, model responses, reasoning, or API keys.
 
 **[Open decision]** Credit pricing / credit-to-cost conversion rate is not decided.
 

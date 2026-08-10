@@ -14,6 +14,7 @@ Implementation work should be scoped and recorded as discrete sprints, each tied
 - [0003-connect-flow-installation-reuse](0003-connect-flow-installation-reuse.md) — fix: reuse an existing GitHub installation when connecting further projects (Complete)
 - [0002a-supabase-cli-workflow](0002a-supabase-cli-workflow.md) — infrastructure: linked Supabase CLI migration workflow (Complete — migration history reconciled and verified against the linked remote project)
 - [0003-live-product-intelligence](0003-live-product-intelligence.md) — deterministic live product intelligence from the public production website (Complete — migration deployed, dogfooded against the real deployment)
+- [0004-business-readiness-audit](0004-business-readiness-audit.md) — diagnostic AI Business Readiness Audit, first paid inference (Implemented; real dogfood audit blocked on ANTHROPIC_API_KEY)
 
 ## Format
 

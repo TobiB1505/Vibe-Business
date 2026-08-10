@@ -41,6 +41,15 @@ This file governs how Claude Code (and any AI-assisted session) works in this re
 37. Never persist raw fetched web content. Store derived intelligence plus short evidence labels only — never HTML, page source, full body text, cookies, or query strings (query strings routinely carry tokens, emails, and tracking identifiers).
 38. Do not introduce browser automation or headless-browser dependencies (Playwright, Puppeteer, Chromium, Browserless, Browserbase, Firecrawl, Apify). Static HTTP/HTML inspection is the confirmed V0.1 scope; changing that requires a new ADR, not a new dependency.
 39. Live product analysis must remain bounded by the central budgets in `src/modules/live-product-intelligence/budgets.ts`. Vibe Business is not a general web crawler: same-origin only, never external domains, and reaching a budget degrades a result to `partial` rather than triggering an unbounded crawl.
+40. All AI inference goes through the `AIProvider` boundary in `src/modules/ai/provider.ts`. Only `src/modules/ai/anthropic/` may import an AI provider SDK, and a raw provider error must never escape it — see [ADR 0011](docs/decisions/0011-ai-inference-and-evidence-trust-boundary.md).
+41. Never grant a model tools, web search, URL fetching, code execution, or repository/database access. Evidence reaching a model is untrusted data; removing capabilities — not prompt wording — is what bounds prompt injection.
+42. Instructions to a model come only from prompts we author. Never interpolate repository, website, or user content into a system prompt; third-party content belongs in a fenced, untrusted-labelled user message.
+43. Never request, persist, or display model reasoning. Store validated structured conclusions, short rationale, and evidence references only. Reasoning token counts may be recorded because they are billed.
+44. Missing evidence must never be represented as a bad result. An unassessable dimension scores `null`, is excluded from any average, and is never counted as zero. Enforce this in code, not in the prompt.
+45. Validate model output independently of schema compliance. Every cited evidence id must exist in the evidence pack; discard those that do not, and never display an unverifiable citation as justification.
+46. Model identifiers and effort levels live only in `src/modules/ai/operations.ts`, and provider prices only in `src/modules/ai/pricing.ts` (effective-dated, integer arithmetic). Never name a model in a route handler, action, or component, and never let a user select one.
+47. Count tokens before every paid call and record a usage event after it, for successes and failures alike — but only when tokens were genuinely billed. Never store prompt text, model responses, reasoning, or secrets in the usage ledger.
+48. Never spend inference twice on identical input. An audit's input identity (evidence snapshots, context hash, prompt/rubric/model versions) determines reuse; a re-run must be a deliberate user action, and double submission must be blocked by a database constraint.
 
 ## Related Documents
 
