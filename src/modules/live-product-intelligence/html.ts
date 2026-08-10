@@ -1,0 +1,379 @@
+/**
+ * HTML extraction (Sprint 3 §12).
+ *
+ * HTML is treated strictly as DATA. Nothing here executes, evaluates, or
+ * interprets page content: `<script>` and `<style>` bodies are cut out
+ * before any text is read, inline handlers are never looked at, and no
+ * DOM or browser engine is involved (Sprint 3 §37).
+ *
+ * The parser is a bounded tag scanner rather than a full HTML5 parser.
+ * That is a deliberate trade: we need a dozen well-known fields, not a
+ * spec-accurate tree, and every regex here uses a bounded quantifier so a
+ * hostile page cannot trigger catastrophic backtracking. Malformed markup
+ * degrades to "field not found", never to a crash.
+ *
+ * Extracted strings are short labels only — titles, headings, link text.
+ * The full body is never returned, so it can never be persisted
+ * (Sprint 3 §13).
+ */
+
+const MAX_TITLE_LENGTH = 200;
+const MAX_DESCRIPTION_LENGTH = 400;
+const MAX_LABEL_LENGTH = 120;
+const MAX_HEADINGS = 40;
+const MAX_LINKS = 400;
+const MAX_BUTTONS = 60;
+const MAX_FORMS = 20;
+
+export type ParsedLink = {
+  href: string;
+  text: string;
+  rel: string | null;
+  /** Inside a <nav> or <header> region. */
+  inNav: boolean;
+  inFooter: boolean;
+};
+
+export type ParsedForm = {
+  /** Structural only — input *types*, never names or values (Sprint 3 §18). */
+  fieldTypes: string[];
+  fieldCount: number;
+  hasPassword: boolean;
+  passwordCount: number;
+  hasEmailField: boolean;
+  hasTextarea: boolean;
+  submitLabel: string | null;
+  /** Lowercased action path, query stripped; null when absent or off-origin. */
+  actionPath: string | null;
+};
+
+export type ParsedHeading = { level: 1 | 2 | 3; text: string };
+
+export type ParsedHtml = {
+  title: string | null;
+  metaDescription: string | null;
+  canonical: string | null;
+  language: string | null;
+  robotsMeta: string | null;
+  hasViewportMeta: boolean;
+  openGraph: Record<string, string>;
+  structuredDataTypes: string[];
+  hasStructuredData: boolean;
+  headings: ParsedHeading[];
+  links: ParsedLink[];
+  buttons: string[];
+  forms: ParsedForm[];
+};
+
+const ENTITIES: Record<string, string> = {
+  amp: "&",
+  lt: "<",
+  gt: ">",
+  quot: '"',
+  apos: "'",
+  nbsp: " ",
+  "#39": "'",
+  "#x27": "'",
+  "#34": '"',
+};
+
+function decodeEntities(value: string): string {
+  return value.replace(/&(#x?[0-9a-fA-F]+|[a-zA-Z]+);/g, (match, entity: string) => {
+    const key = entity.toLowerCase();
+    if (key in ENTITIES) return ENTITIES[key];
+    if (key.startsWith("#x")) {
+      const code = Number.parseInt(key.slice(2), 16);
+      return Number.isFinite(code) && code < 0x10000 ? String.fromCodePoint(code) : match;
+    }
+    if (key.startsWith("#")) {
+      const code = Number.parseInt(key.slice(1), 10);
+      return Number.isFinite(code) && code < 0x10000 ? String.fromCodePoint(code) : match;
+    }
+    return match;
+  });
+}
+
+/** Strips nested tags, decodes entities, collapses whitespace and truncates. */
+function toText(html: string, maxLength: number): string {
+  const withoutTags = html.replace(/<[^>]{0,2000}>/g, " ");
+  const decoded = decodeEntities(withoutTags);
+  const collapsed = decoded.replace(/\s+/g, " ").trim();
+  return collapsed.length > maxLength ? collapsed.slice(0, maxLength) : collapsed;
+}
+
+const ATTRIBUTE_PATTERN =
+  /([a-zA-Z_:][-a-zA-Z0-9_:.]{0,60})(?:\s*=\s*(?:"([^"]{0,2000})"|'([^']{0,2000})'|([^\s"'>]{0,500})))?/g;
+
+/** Parses a tag's attribute string into a lowercased-name map. */
+export function parseAttributes(source: string): Record<string, string> {
+  const attributes: Record<string, string> = {};
+  ATTRIBUTE_PATTERN.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = ATTRIBUTE_PATTERN.exec(source)) !== null) {
+    if (match[0].trim() === "") {
+      ATTRIBUTE_PATTERN.lastIndex += 1;
+      continue;
+    }
+    const name = match[1].toLowerCase();
+    const value = match[2] ?? match[3] ?? match[4] ?? "";
+    if (!(name in attributes)) attributes[name] = decodeEntities(value);
+  }
+  return attributes;
+}
+
+type Region = { start: number; end: number };
+
+function findRegions(html: string, tag: string): Region[] {
+  const regions: Region[] = [];
+  const pattern = new RegExp(`<${tag}\\b[^>]{0,1000}>([\\s\\S]{0,60000}?)</${tag}>`, "gi");
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(html)) !== null && regions.length < 20) {
+    regions.push({ start: match.index, end: match.index + match[0].length });
+  }
+  return regions;
+}
+
+function inAnyRegion(index: number, regions: Region[]): boolean {
+  return regions.some((region) => index >= region.start && index < region.end);
+}
+
+/**
+ * Extracts JSON-LD `@type` values. `JSON.parse` is data-only — it cannot
+ * execute the script block, which is exactly why structured data is read
+ * this way and not by evaluating the tag.
+ */
+function extractStructuredDataTypes(html: string): string[] {
+  const types = new Set<string>();
+  const pattern =
+    /<script\b[^>]{0,500}type\s*=\s*["']application\/ld\+json["'][^>]{0,500}>([\s\S]{0,100000}?)<\/script>/gi;
+
+  let match: RegExpExecArray | null;
+  let blocks = 0;
+  while ((match = pattern.exec(html)) !== null && blocks < 10) {
+    blocks += 1;
+    try {
+      const parsed: unknown = JSON.parse(match[1].trim());
+      const visit = (node: unknown, depth: number) => {
+        if (depth > 4 || types.size >= 12) return;
+        if (Array.isArray(node)) {
+          for (const item of node.slice(0, 20)) visit(item, depth + 1);
+          return;
+        }
+        if (node === null || typeof node !== "object") return;
+        const record = node as Record<string, unknown>;
+        const type = record["@type"];
+        if (typeof type === "string") types.add(type.slice(0, 60));
+        if (Array.isArray(type)) {
+          for (const item of type) if (typeof item === "string") types.add(item.slice(0, 60));
+        }
+        const graph = record["@graph"];
+        if (graph !== undefined) visit(graph, depth + 1);
+      };
+      visit(parsed, 0);
+    } catch {
+      // Invalid JSON-LD is a fact about the page, not an error worth
+      // failing an otherwise useful analysis over.
+    }
+  }
+  return [...types];
+}
+
+function normalizeActionPath(action: string): string | null {
+  const value = action.trim();
+  if (value === "") return null;
+  if (/^(?:javascript|data|mailto|tel):/i.test(value)) return null;
+  try {
+    // A relative action resolves against a placeholder; only the path is kept.
+    const url = new URL(value, "https://placeholder.invalid/");
+    return url.pathname.toLowerCase();
+  } catch {
+    return null;
+  }
+}
+
+function parseForm(attributesSource: string, inner: string): ParsedForm {
+  const fieldTypes: string[] = [];
+  let passwordCount = 0;
+  let hasEmailField = false;
+  let submitLabel: string | null = null;
+
+  const inputPattern = /<input\b([^>]{0,1500})>/gi;
+  let match: RegExpExecArray | null;
+  let fields = 0;
+  while ((match = inputPattern.exec(inner)) !== null && fields < 60) {
+    fields += 1;
+    const attributes = parseAttributes(match[1]);
+    const type = (attributes["type"] ?? "text").toLowerCase();
+
+    // Hidden fields are structural noise and the most likely place for
+    // tokens; counted nowhere, read never.
+    if (type === "hidden") continue;
+
+    fieldTypes.push(type);
+    if (type === "password") passwordCount += 1;
+    if (type === "email") hasEmailField = true;
+
+    // A field's *purpose* is inferred from type and autocomplete only —
+    // never from any value or placeholder the page supplies.
+    const autocomplete = (attributes["autocomplete"] ?? "").toLowerCase();
+    if (autocomplete.includes("email")) hasEmailField = true;
+
+    if ((type === "submit" || type === "button") && attributes["value"] !== undefined) {
+      submitLabel ??= attributes["value"].slice(0, MAX_LABEL_LENGTH);
+    }
+  }
+
+  const hasTextarea = /<textarea\b/i.test(inner);
+  if (hasTextarea) fieldTypes.push("textarea");
+
+  const selectCount = (inner.match(/<select\b/gi) ?? []).length;
+  for (let index = 0; index < Math.min(selectCount, 10); index += 1) fieldTypes.push("select");
+
+  if (submitLabel === null) {
+    const buttonMatch = /<button\b[^>]{0,500}>([\s\S]{0,200}?)<\/button>/i.exec(inner);
+    if (buttonMatch) {
+      const text = toText(buttonMatch[1], MAX_LABEL_LENGTH);
+      if (text !== "") submitLabel = text;
+    }
+  }
+
+  const attributes = parseAttributes(attributesSource);
+
+  return {
+    fieldTypes,
+    fieldCount: fieldTypes.length,
+    hasPassword: passwordCount > 0,
+    passwordCount,
+    hasEmailField,
+    hasTextarea,
+    submitLabel,
+    actionPath: normalizeActionPath(attributes["action"] ?? ""),
+  };
+}
+
+export function parseHtml(html: string): ParsedHtml {
+  // Comments first: they can contain markup that would otherwise be read
+  // as real tags.
+  const withoutComments = html.replace(/<!--[\s\S]{0,50000}?-->/g, " ");
+
+  const structuredDataTypes = extractStructuredDataTypes(withoutComments);
+  // Present counts as: parseable JSON-LD, an unparseable JSON-LD block
+  // (the page still declares structured data), or Microdata markup.
+  const hasStructuredData =
+    structuredDataTypes.length > 0 ||
+    /<script\b[^>]{0,500}type\s*=\s*["']application\/ld\+json["']/i.test(withoutComments) ||
+    /\bitemscope\b/i.test(withoutComments);
+
+  // Script and style bodies are removed before any text extraction, so no
+  // JavaScript source can be mistaken for page copy.
+  const content = withoutComments
+    .replace(/<script\b[^>]{0,1000}>[\s\S]{0,200000}?<\/script>/gi, " ")
+    .replace(/<style\b[^>]{0,1000}>[\s\S]{0,200000}?<\/style>/gi, " ")
+    .replace(/<noscript\b[^>]{0,1000}>[\s\S]{0,50000}?<\/noscript>/gi, " ");
+
+  const titleMatch = /<title\b[^>]{0,500}>([\s\S]{0,500}?)<\/title>/i.exec(content);
+  const title = titleMatch ? toText(titleMatch[1], MAX_TITLE_LENGTH) || null : null;
+
+  const htmlTagMatch = /<html\b([^>]{0,1000})>/i.exec(content);
+  const language = htmlTagMatch
+    ? (parseAttributes(htmlTagMatch[1])["lang"] ?? "").trim().slice(0, 20) || null
+    : null;
+
+  let metaDescription: string | null = null;
+  let robotsMeta: string | null = null;
+  let hasViewportMeta = false;
+  const openGraph: Record<string, string> = {};
+
+  const metaPattern = /<meta\b([^>]{0,2000})>/gi;
+  let metaMatch: RegExpExecArray | null;
+  let metaCount = 0;
+  while ((metaMatch = metaPattern.exec(content)) !== null && metaCount < 200) {
+    metaCount += 1;
+    const attributes = parseAttributes(metaMatch[1]);
+    const name = (attributes["name"] ?? "").toLowerCase();
+    const property = (attributes["property"] ?? "").toLowerCase();
+    const contentValue = attributes["content"] ?? "";
+
+    if (name === "description" && metaDescription === null) {
+      metaDescription = toText(contentValue, MAX_DESCRIPTION_LENGTH) || null;
+    }
+    if (name === "robots" && robotsMeta === null) {
+      robotsMeta = contentValue.trim().slice(0, 120) || null;
+    }
+    if (name === "viewport") hasViewportMeta = true;
+    if (property.startsWith("og:") && Object.keys(openGraph).length < 12) {
+      openGraph[property] = toText(contentValue, MAX_DESCRIPTION_LENGTH);
+    }
+  }
+
+  let canonical: string | null = null;
+  const linkTagPattern = /<link\b([^>]{0,2000})>/gi;
+  let linkTagMatch: RegExpExecArray | null;
+  let linkTagCount = 0;
+  while ((linkTagMatch = linkTagPattern.exec(content)) !== null && linkTagCount < 200) {
+    linkTagCount += 1;
+    const attributes = parseAttributes(linkTagMatch[1]);
+    if ((attributes["rel"] ?? "").toLowerCase() === "canonical" && canonical === null) {
+      canonical = (attributes["href"] ?? "").trim().slice(0, 500) || null;
+    }
+  }
+
+  const navRegions = [...findRegions(content, "nav"), ...findRegions(content, "header")];
+  const footerRegions = findRegions(content, "footer");
+
+  const headings: ParsedHeading[] = [];
+  const headingPattern = /<h([1-3])\b[^>]{0,500}>([\s\S]{0,400}?)<\/h\1>/gi;
+  let headingMatch: RegExpExecArray | null;
+  while ((headingMatch = headingPattern.exec(content)) !== null && headings.length < MAX_HEADINGS) {
+    const text = toText(headingMatch[2], MAX_LABEL_LENGTH);
+    if (text === "") continue;
+    headings.push({ level: Number(headingMatch[1]) as 1 | 2 | 3, text });
+  }
+
+  const links: ParsedLink[] = [];
+  const anchorPattern = /<a\b([^>]{0,2000})>([\s\S]{0,600}?)<\/a>/gi;
+  let anchorMatch: RegExpExecArray | null;
+  while ((anchorMatch = anchorPattern.exec(content)) !== null && links.length < MAX_LINKS) {
+    const attributes = parseAttributes(anchorMatch[1]);
+    const href = attributes["href"];
+    if (href === undefined || href.trim() === "") continue;
+    links.push({
+      href: href.trim().slice(0, 1000),
+      text: toText(anchorMatch[2], MAX_LABEL_LENGTH),
+      rel: (attributes["rel"] ?? "").trim().toLowerCase() || null,
+      inNav: inAnyRegion(anchorMatch.index, navRegions),
+      inFooter: inAnyRegion(anchorMatch.index, footerRegions),
+    });
+  }
+
+  const buttons: string[] = [];
+  const buttonPattern = /<button\b[^>]{0,1000}>([\s\S]{0,300}?)<\/button>/gi;
+  let buttonMatch: RegExpExecArray | null;
+  while ((buttonMatch = buttonPattern.exec(content)) !== null && buttons.length < MAX_BUTTONS) {
+    const text = toText(buttonMatch[1], MAX_LABEL_LENGTH);
+    if (text !== "") buttons.push(text);
+  }
+
+  const forms: ParsedForm[] = [];
+  const formPattern = /<form\b([^>]{0,2000})>([\s\S]{0,40000}?)<\/form>/gi;
+  let formMatch: RegExpExecArray | null;
+  while ((formMatch = formPattern.exec(content)) !== null && forms.length < MAX_FORMS) {
+    forms.push(parseForm(formMatch[1], formMatch[2]));
+  }
+
+  return {
+    title,
+    metaDescription,
+    canonical,
+    language,
+    robotsMeta,
+    hasViewportMeta,
+    openGraph,
+    structuredDataTypes,
+    hasStructuredData,
+    headings,
+    links,
+    buttons,
+    forms,
+  };
+}
