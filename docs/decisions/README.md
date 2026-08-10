@@ -39,6 +39,7 @@ V0.1 foundational architecture decisions have been recorded:
 - [0007](0007-audit-log.md) — Postgres Append-Only Audit Log (Accepted)
 - [0008](0008-secrets-management.md) — Secrets Management (Accepted)
 - [0009](0009-github-installation-ownership-verification.md) — GitHub Installation Ownership Verification (Accepted)
+- [0010](0010-safe-outbound-http-inspection.md) — Safe Outbound HTTP Inspection (Accepted)
 
 Several architecture questions remain intentionally open — see [ARCHITECTURE.md §7](../../ARCHITECTURE.md#7-deferred--open-decisions).
 

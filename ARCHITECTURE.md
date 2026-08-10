@@ -72,7 +72,13 @@ Each stage below is described as a logical layer/responsibility inside the modul
 
 **[Confirmed principle]** Analyzes the optional production URL as a complementary signal to repository analysis (e.g., what is actually live and reachable, vs. what exists in code).
 
-**[Open decision]** Scope of live analysis for V0.1 (e.g., fetching and inspecting rendered pages vs. deeper interaction/crawling). Not yet decided; should stay minimal enough to be cost-predictable.
+**[Confirmed — Sprint 3]** Scope for V0.1 is **static HTTP/HTML inspection of public pages only** — no browser automation, no JavaScript execution, no authenticated crawling, no form submission. A versioned Live Product Intelligence Snapshot is built from a bounded, same-origin crawl with evidence attached to every detection. Fully deterministic, no AI. Implemented in `src/modules/live-product-intelligence/`; see [docs/sprints/0003-live-product-intelligence.md](docs/sprints/0003-live-product-intelligence.md).
+
+**[Confirmed — ADR 0010]** All outbound HTTP to a **user-supplied destination** passes through a single safe-fetch boundary that resolves DNS, rejects any non-publicly-routable address, pins the connection to the validated address (DNS-rebinding defence), and revalidates every redirect hop independently. No other code path may open an outbound connection to a user-controlled address. See [0010-safe-outbound-http-inspection.md](docs/decisions/0010-safe-outbound-http-inspection.md).
+
+**[Confirmed principle — separate evidence sources]** Repository intelligence and live product intelligence are stored and versioned **separately**, never merged into one payload. The distinction is itself signal: a pricing route present in code but not served live is exactly the kind of finding the Business Audit layer exists to make.
+
+**[Confirmed principle — bounded and minimized]** Live analysis runs against explicit budgets (pages, bytes, depth, redirects, duration); exceeding one degrades a snapshot to `partial` with machine-readable reasons rather than failing it. Nothing raw is persisted — no HTML, body text, cookies, or query strings, only derived facts and short evidence labels.
 
 ### 3.4 Business Audit Layer
 

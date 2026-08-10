@@ -54,6 +54,8 @@ export type ProjectDetail = {
   id: string;
   name: string;
   userId: string;
+  /** Normalized public production URL, or null when not configured (Sprint 3 §3). */
+  productionUrl: string | null;
   repository: (RepositorySummary & { installationId: number }) | null;
 };
 
@@ -64,7 +66,7 @@ export async function getProjectWithRepository(
 ): Promise<ProjectDetail | null> {
   const { data: project, error: projectError } = await supabase
     .from("projects")
-    .select("id, name, user_id")
+    .select("id, name, user_id, production_url")
     .eq("id", projectId)
     .maybeSingle();
 
@@ -101,5 +103,11 @@ export async function getProjectWithRepository(
     };
   }
 
-  return { id: project.id, name: project.name, userId: project.user_id, repository };
+  return {
+    id: project.id,
+    name: project.name,
+    userId: project.user_id,
+    productionUrl: project.production_url ?? null,
+    repository,
+  };
 }

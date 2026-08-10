@@ -18,7 +18,12 @@ export type AuditEventType =
   | "repository.intelligence.started"
   | "repository.intelligence.completed"
   | "repository.intelligence.failed"
-  | "repository.intelligence.reused";
+  | "repository.intelligence.reused"
+  | "project.production_url.updated"
+  | "live_product.intelligence.started"
+  | "live_product.intelligence.completed"
+  | "live_product.intelligence.failed"
+  | "live_product.intelligence.reused";
 
 export type RecordAuditEventParams = {
   userId: string;
