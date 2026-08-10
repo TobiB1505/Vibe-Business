@@ -1,11 +1,11 @@
-import type { AIProvider, AIUsage, StructuredRequest } from "@/modules/ai/provider";
+import type { AIProvider, AIUsage, ProviderErrorDiagnostic, StructuredRequest } from "@/modules/ai/provider";
 import type { OperationConfig } from "@/modules/ai/operations";
 import { buildEvidencePack, evidenceIdSet, renderEvidencePack, trimEvidencePack, type BuildEvidencePackInput, type EvidencePack } from "./evidence";
 import { AUDIT_OUTPUT_SCHEMA, PROMPT_VERSION, buildSystemPrompt } from "./prompt";
 import { RUBRIC_VERSION } from "./rubric";
 import { computeOverallReadiness } from "./scoring";
 import { BUSINESS_AUDIT_SCHEMA_VERSION, BUSINESS_AUDIT_VERSION, type BusinessReadinessAudit } from "./schema";
-import { validateAuditOutput } from "./validate";
+import { validateAuditOutput, type ValidationReason } from "./validate";
 
 /**
  * The audit inference pipeline (Sprint 4 §16).
@@ -34,9 +34,29 @@ export type AuditRunFailure =
   | "provider_unavailable"
   | "provider_overloaded"
   | "provider_refusal"
-  | "structured_output_invalid"
+  | "provider_request_rejected"
+  | "structured_output_empty"
+  | "structured_output_json_invalid"
+  | "structured_output_schema_invalid"
   | "output_truncated"
   | "audit_failed";
+
+/**
+ * Safe, bounded diagnosis of a failed run, for internal use only.
+ *
+ * The four ways an audit can fail after a request is built look identical to
+ * a user — "the result was not usable" — but need completely different
+ * responses from us: fix the request, raise the output budget, fix the
+ * prompt, or fix the validator. This carries just enough to tell them apart,
+ * and structurally cannot carry model output, provider prose, prompts, or
+ * evidence: every field is either a number or a code from a closed set.
+ */
+export type AuditRunDiagnostic = {
+  /** Which post-validation rule rejected the model's JSON. */
+  validationReason?: ValidationReason;
+  /** Safe provider signals, when the API rejected the request. */
+  provider?: ProviderErrorDiagnostic;
+};
 
 export type AuditRunOutcome =
   | {
@@ -51,6 +71,8 @@ export type AuditRunOutcome =
       error: AuditRunFailure;
       /** Usage genuinely billed before the failure, when any. */
       usage?: AIUsage;
+      /** Internal diagnosis. Never rendered in the browser. */
+      diagnostic?: AuditRunDiagnostic;
       estimatedInputTokens: number | null;
       latencyMs: number;
     };
@@ -122,6 +144,9 @@ export async function runBusinessReadinessAudit(input: RunAuditInput): Promise<A
       ok: false,
       error: result.error,
       usage: result.usage,
+      // Present only for a rejected request; absent for every other
+      // provider failure, which the code already fully describes.
+      diagnostic: result.diagnostic ? { provider: result.diagnostic } : undefined,
       estimatedInputTokens,
       latencyMs: result.latencyMs,
     };
@@ -130,11 +155,14 @@ export async function runBusinessReadinessAudit(input: RunAuditInput): Promise<A
   const validation = validateAuditOutput(result.data, evidenceIdSet(pack));
   if (!validation.ok) {
     // The tokens were still billed even though the output is unusable —
-    // recording that honestly is the point of the usage ledger.
+    // recording that honestly is the point of the usage ledger. The reason
+    // is carried through so a schema mismatch is diagnosable from the
+    // failure record alone, without replaying a paid call.
     return {
       ok: false,
-      error: "structured_output_invalid",
+      error: validation.error,
       usage: result.usage,
+      diagnostic: { validationReason: validation.reason },
       estimatedInputTokens,
       latencyMs: result.latencyMs,
     };

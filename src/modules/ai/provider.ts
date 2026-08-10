@@ -78,8 +78,38 @@ export type AIFailureCode =
   | "provider_unavailable"
   | "provider_refusal"
   | "provider_overloaded"
-  | "structured_output_invalid"
+  /**
+   * The API rejected the request before producing any output — a payload we
+   * built wrong. Deliberately distinct from the output-handling codes below:
+   * a rejected request is our bug and nothing was generated or billed, while
+   * a malformed output means a generation happened and was paid for.
+   */
+  | "provider_request_rejected"
+  /** 200 response, but the expected text block was absent or empty. */
+  | "structured_output_empty"
+  /** 200 response with text that would not parse as JSON. */
+  | "structured_output_json_invalid"
   | "output_truncated";
+
+/**
+ * Safe provider signals kept for internal diagnosis of a rejected request
+ * (ADR 0011, Sprint 4 §27).
+ *
+ * Deliberately a fixed set of low-cardinality, non-sensitive fields. The raw
+ * error message, the response body, the request payload, the prompt, the
+ * evidence pack, and the API key are never represented here — there is no
+ * field they could occupy. Values are validated against strict character
+ * patterns in the adapter rather than trusted, so a provider that returns
+ * something unexpected cannot smuggle prose through this channel.
+ */
+export type ProviderErrorDiagnostic = {
+  /** HTTP status, when the failure carried one. */
+  httpStatus: number | null;
+  /** The API's own typed error discriminator, e.g. "invalid_request_error". */
+  providerErrorType: string | null;
+  /** Opaque provider request id, for support escalation. Not a secret. */
+  requestId: string | null;
+};
 
 export type StructuredFailure = {
   ok: false;
@@ -91,6 +121,12 @@ export type StructuredFailure = {
    * (Sprint 4 §27).
    */
   usage?: AIUsage;
+  /**
+   * Safe provider signals, present only for `provider_request_rejected`.
+   * Absent means there was nothing safe to report — never that the failure
+   * was unremarkable.
+   */
+  diagnostic?: ProviderErrorDiagnostic;
   model: string;
   latencyMs: number;
 };

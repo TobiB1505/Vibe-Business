@@ -254,7 +254,11 @@ describe("AnthropicProvider — failure mapping", () => {
     [500, "provider_unavailable"],
     [503, "provider_unavailable"],
     [529, "provider_overloaded"],
-    [400, "structured_output_invalid"],
+    // A rejected request, not malformed output — nothing was generated.
+    [400, "provider_request_rejected"],
+    [404, "provider_request_rejected"],
+    [413, "provider_request_rejected"],
+    [422, "provider_request_rejected"],
   ])("maps HTTP %i to %s", async (status, expected) => {
     const provider = new AnthropicProvider(
       clientWith({
@@ -295,7 +299,7 @@ describe("AnthropicProvider — failure mapping", () => {
     expect(result.ok === false && result.error).toBe("output_truncated");
   });
 
-  it("reports unparseable output as invalid", async () => {
+  it("reports unparseable output as a JSON failure, not an empty one", async () => {
     const provider = new AnthropicProvider(
       clientWith({
         create: vi.fn(async () =>
@@ -305,15 +309,118 @@ describe("AnthropicProvider — failure mapping", () => {
     );
 
     const result = await provider.generateStructured(request);
-    expect(result.ok === false && result.error).toBe("structured_output_invalid");
+    expect(result.ok === false && result.error).toBe("structured_output_json_invalid");
+    // The generation happened and was billed, whatever its content.
+    expect(result.ok === false && result.usage?.inputTokens).toBe(2_500);
   });
 
-  it("reports an empty response as invalid", async () => {
+  it("reports a response with no text block as empty, not unparseable", async () => {
     const provider = new AnthropicProvider(
       clientWith({ create: vi.fn(async () => messageWith({ content: [] })) }),
     );
     const result = await provider.generateStructured(request);
-    expect(result.ok === false && result.error).toBe("structured_output_invalid");
+    expect(result.ok === false && result.error).toBe("structured_output_empty");
+    expect(result.ok === false && result.usage?.inputTokens).toBe(2_500);
+  });
+
+  it("reports a response of only thinking blocks as empty", async () => {
+    const provider = new AnthropicProvider(
+      clientWith({
+        create: vi.fn(async () =>
+          messageWith({
+            content: [{ type: "thinking", thinking: "SECRET_REASONING_TRACE", signature: "sig" }] as Anthropic.ContentBlock[],
+          }),
+        ),
+      }),
+    );
+
+    const result = await provider.generateStructured(request);
+    expect(result.ok === false && result.error).toBe("structured_output_empty");
+    // Reasoning is never surfaced, not even on the failure path.
+    expect(JSON.stringify(result)).not.toContain("SECRET_REASONING_TRACE");
+  });
+
+  it("keeps only safe signals when the API rejects the request", async () => {
+    const headers = new Headers({ "request-id": "req_011CSHoEeqs5C35K2UUqR7Fy" });
+    const provider = new AnthropicProvider(
+      clientWith({
+        create: vi.fn(async () => {
+          throw Anthropic.APIError.generate(
+            400,
+            {
+              type: "error",
+              error: {
+                type: "invalid_request_error",
+                // A real 400 body echoes part of what we sent. None of it
+                // may survive into the diagnostic.
+                message: "output_config.format.schema: Unsupported keyword at PROMPT_FRAGMENT_MARKER",
+              },
+            },
+            undefined,
+            headers,
+          );
+        }),
+      }),
+    );
+
+    const result = await provider.generateStructured(request);
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.error).toBe("provider_request_rejected");
+    expect(result.diagnostic).toEqual({
+      httpStatus: 400,
+      providerErrorType: "invalid_request_error",
+      requestId: "req_011CSHoEeqs5C35K2UUqR7Fy",
+    });
+    // The diagnostic has no field a message could occupy, and nothing
+    // stringifies into one.
+    expect(JSON.stringify(result)).not.toContain("PROMPT_FRAGMENT_MARKER");
+    expect(JSON.stringify(result)).not.toContain("Unsupported keyword");
+    // No usage: the request never reached inference, so nothing was billed.
+    expect(result.usage).toBeUndefined();
+  });
+
+  it("drops provider-supplied identifiers that are not short identifiers", async () => {
+    const provider = new AnthropicProvider(
+      clientWith({
+        create: vi.fn(async () => {
+          // A provider (or a proxy) returning prose where an error type
+          // belongs must not turn the diagnostic into a message channel.
+          throw new Anthropic.APIError(
+            400,
+            { type: "error", error: { type: "x", message: "m" } },
+            "m",
+            new Headers({ "request-id": "not an id: contains PROSE and spaces" }),
+            "Request failed: the model returned SENSITIVE_TEXT" as never,
+          );
+        }),
+      }),
+    );
+
+    const result = await provider.generateStructured(request);
+
+    expect(result.ok === false && result.diagnostic).toEqual({
+      httpStatus: 400,
+      providerErrorType: null,
+      requestId: null,
+    });
+    expect(JSON.stringify(result)).not.toContain("SENSITIVE_TEXT");
+    expect(JSON.stringify(result)).not.toContain("PROSE");
+  });
+
+  it("carries no diagnostic for failures the code already explains", async () => {
+    const provider = new AnthropicProvider(
+      clientWith({
+        create: vi.fn(async () => {
+          throw apiError(500);
+        }),
+      }),
+    );
+
+    const result = await provider.generateStructured(request);
+    expect(result.ok === false && result.error).toBe("provider_unavailable");
+    expect(result.ok === false && result.diagnostic).toBeUndefined();
   });
 
   it("never leaks a raw provider message into the domain result", async () => {

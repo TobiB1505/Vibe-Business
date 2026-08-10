@@ -201,11 +201,36 @@ export async function runProjectBusinessAudit(
 
   if (!outcome.ok) {
     await failAuditRun(supabase, run.auditId, outcome.error);
+
+    // The typed failure code is persisted on the run and in the usage
+    // ledger; the bounded diagnostic goes to the audit log, which already
+    // has a JSON metadata channel for exactly this. Nothing here is model
+    // output, provider prose, prompt text, or evidence — see
+    // `AuditRunDiagnostic`.
     await recordAuditEvent(supabase, {
       userId: params.userId,
       eventType: "business_audit.failed",
-      metadata: { projectId: params.projectId, auditId: run.auditId, reason: outcome.error },
+      metadata: {
+        projectId: params.projectId,
+        auditId: run.auditId,
+        reason: outcome.error,
+        ...(outcome.diagnostic ? { diagnostic: outcome.diagnostic } : {}),
+      },
     });
+
+    // Also logged server-side so an operator investigating a failed dogfood
+    // run does not have to query the database to see which stage failed.
+    console.error("[business-audit] run failed", {
+      auditId: run.auditId,
+      operation: config.operation,
+      model: config.model,
+      failureCode: outcome.error,
+      diagnostic: outcome.diagnostic ?? null,
+      billedTokens: outcome.usage
+        ? { input: outcome.usage.inputTokens, output: outcome.usage.outputTokens }
+        : null,
+    });
+
     return { ok: false, error: outcome.error };
   }
 

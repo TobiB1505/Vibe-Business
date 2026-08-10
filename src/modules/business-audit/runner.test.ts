@@ -241,9 +241,106 @@ describe("runBusinessReadinessAudit — provider failures", () => {
     });
 
     const outcome = await runBusinessReadinessAudit(inputFor(provider));
-    expect(outcome.ok === false && outcome.error).toBe("structured_output_invalid");
+    expect(outcome.ok === false && outcome.error).toBe("structured_output_schema_invalid");
     // The call was still paid for, so its usage is still reported.
     expect(outcome.ok === false && outcome.usage?.outputTokens).toBe(100);
+  });
+});
+
+/**
+ * Regression tests for the second production defect: four different stages
+ * all reported `structured_output_invalid`, so a real failed dogfood run
+ * could not be attributed to a stage without spending another paid call.
+ *
+ * Each case below is a stage that used to be indistinguishable.
+ */
+describe("runBusinessReadinessAudit — output failure attribution", () => {
+  const generation = (usage = { inputTokens: 2_500, outputTokens: 100, thinkingTokens: 0 }) => ({
+    usage,
+    model: "claude-sonnet-5",
+    latencyMs: 800,
+  });
+
+  it("attributes a rejected request to the request, and invents no usage for it", async () => {
+    const provider = new FakeProvider({
+      result: {
+        ok: false,
+        error: "provider_request_rejected",
+        diagnostic: { httpStatus: 400, providerErrorType: "invalid_request_error", requestId: "req_01" },
+        model: "claude-sonnet-5",
+        latencyMs: 120,
+      },
+    });
+
+    const outcome = await runBusinessReadinessAudit(inputFor(provider));
+
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    expect(outcome.error).toBe("provider_request_rejected");
+    expect(outcome.diagnostic?.provider).toEqual({
+      httpStatus: 400,
+      providerErrorType: "invalid_request_error",
+      requestId: "req_01",
+    });
+    // Nothing was generated, so nothing may be reported as billed.
+    expect(outcome.usage).toBeUndefined();
+  });
+
+  it.each(["structured_output_empty", "structured_output_json_invalid"] as const)(
+    "passes %s through and preserves the usage that was billed for it",
+    async (code) => {
+      const provider = new FakeProvider({
+        result: { ok: false, error: code, ...generation() },
+      });
+
+      const outcome = await runBusinessReadinessAudit(inputFor(provider));
+
+      expect(outcome.ok === false && outcome.error).toBe(code);
+      // A generation happened before the failure — the ledger must know.
+      expect(outcome.ok === false && outcome.usage?.outputTokens).toBe(100);
+      expect(outcome.ok === false && outcome.diagnostic).toBeUndefined();
+    },
+  );
+
+  it.each([
+    ["a non-object response", "not an object at all", "response_not_object"],
+    ["a response with no dimensions", { keyFindings: [] }, "dimensions_missing"],
+    ["a response with an empty dimensions object", { dimensions: {} }, "dimension_missing_product"],
+  ])("names the failed validation rule for %s", async (_label, data, reason) => {
+    const provider = new FakeProvider({ result: { ok: true, data, ...generation() } });
+
+    const outcome = await runBusinessReadinessAudit(inputFor(provider));
+
+    expect(outcome.ok === false && outcome.error).toBe("structured_output_schema_invalid");
+    expect(outcome.ok === false && outcome.diagnostic?.validationReason).toBe(reason);
+  });
+
+  it("carries no model content in the diagnostic", async () => {
+    const provider = new FakeProvider({
+      result: {
+        ok: true,
+        data: { dimensions: { product: { summary: "MODEL_AUTHORED_SENTENCE" } } },
+        ...generation(),
+      },
+    });
+
+    const outcome = await runBusinessReadinessAudit(inputFor(provider));
+
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    // The reason names a schema field, never what the model wrote.
+    expect(JSON.stringify(outcome.diagnostic)).not.toContain("MODEL_AUTHORED_SENTENCE");
+    expect(outcome.diagnostic?.validationReason).toBe("dimension_missing_monetization");
+  });
+
+  it("still completes a valid audit", async () => {
+    const provider = new FakeProvider();
+    const outcome = await runBusinessReadinessAudit(inputFor(provider));
+
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    expect(outcome.audit.dimensions).toHaveLength(5);
+    expect(outcome.audit.overall.score).toBe(58);
   });
 });
 
