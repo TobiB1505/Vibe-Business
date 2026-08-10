@@ -1,18 +1,22 @@
 import { notFound } from "next/navigation";
 import { PageShell } from "@/components/layout/page-shell";
-import { Button } from "@/components/ui/button";
 import { createClient } from "@/lib/supabase/server";
 import { requireSession } from "@/modules/auth/session";
 import { getProjectWithRepository } from "@/modules/projects/queries";
+import { getBusinessContext } from "@/modules/projects/business-context-store";
 import { checkInstallationStillAccessible } from "@/modules/github/repositories";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intelligence/store";
+import { getLatestSuccessfulAudit } from "@/modules/business-audit/store";
+import { BusinessAuditSummary } from "./business-audit-summary";
+import { BusinessContextForm } from "./business-context-form";
 import { DisconnectButton } from "./disconnect-button";
 import { InspectButton } from "./inspect-button";
 import { InspectLiveButton } from "./inspect-live-button";
 import { IntelligenceSummary } from "./intelligence-summary";
 import { LiveIntelligenceSummary } from "./live-intelligence-summary";
 import { ProductionUrlForm } from "./production-url-form";
+import { RunAuditButton } from "./run-audit-button";
 
 /**
  * Project screen: connection status (Sprint 1), repository intelligence
@@ -37,10 +41,25 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
   // Live probe (Sprint 1 §11): degrade gracefully — never crash — if the
   // installation was revoked/suspended on GitHub's side since connection.
   const accessible = repository ? await checkInstallationStillAccessible(repository.installationId) : false;
-  const [latestSnapshot, latestLiveSnapshot] = await Promise.all([
+  const [latestSnapshot, latestLiveSnapshot, businessContext, latestAudit] = await Promise.all([
     getLatestSuccessfulSnapshot(supabase, projectId),
     getLatestSuccessfulLiveSnapshot(supabase, projectId),
+    getBusinessContext(supabase, projectId),
+    getLatestSuccessfulAudit(supabase, projectId),
   ]);
+
+  // All three evidence sources are required before a first audit
+  // (Sprint 4 §29), so the UI can say exactly what is still missing rather
+  // than failing after the click.
+  const hasRepositoryIntelligence = Boolean(latestSnapshot?.result);
+  const hasLiveProductIntelligence = Boolean(latestLiveSnapshot?.result);
+  const auditReady = hasRepositoryIntelligence && hasLiveProductIntelligence && businessContext !== null;
+
+  const missingPrerequisites = [
+    hasRepositoryIntelligence ? null : "repository intelligence",
+    hasLiveProductIntelligence ? null : "live product intelligence",
+    businessContext === null ? "business context" : null,
+  ].filter((item): item is string => item !== null);
 
   return (
     <PageShell>
@@ -97,10 +116,55 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
               </dd>
             </div>
             <div className="flex items-baseline justify-between gap-3">
-              <dt className="text-zinc-500">Business analysis</dt>
-              <dd className="text-zinc-600">Not available yet</dd>
+              <dt className="text-zinc-500">Business context</dt>
+              <dd className={businessContext ? "text-emerald-400" : "text-zinc-600"}>
+                {businessContext ? "Ready" : "Missing"}
+              </dd>
+            </div>
+            <div className="flex items-baseline justify-between gap-3">
+              <dt className="text-zinc-500">Business readiness</dt>
+              <dd className={latestAudit?.result ? "text-emerald-400" : "text-zinc-600"}>
+                {latestAudit?.result ? "Ready" : "Not analyzed yet"}
+              </dd>
             </div>
           </dl>
+        </section>
+
+        <section className="space-y-2">
+          <h2 className="text-sm font-medium text-zinc-200">Business context</h2>
+          {businessContext === null && (
+            <p className="text-sm text-zinc-500">
+              Repository and website evidence cannot tell us who your product is for or what you are
+              trying to do next.
+            </p>
+          )}
+          <BusinessContextForm projectId={project.id} context={businessContext?.context ?? null} />
+        </section>
+
+        <section className="space-y-3">
+          {latestAudit?.result ? (
+            <BusinessAuditSummary
+              audit={latestAudit.result}
+              analyzedAt={latestAudit.completedAt ?? latestAudit.createdAt}
+            />
+          ) : (
+            <div className="space-y-1">
+              <h2 className="text-sm font-medium text-zinc-200">Business readiness</h2>
+              <p className="text-sm text-zinc-500">Not analyzed yet</p>
+            </div>
+          )}
+
+          {!auditReady && (
+            <p className="text-sm text-zinc-500">
+              A business audit needs {missingPrerequisites.join(", ")} first.
+            </p>
+          )}
+
+          <RunAuditButton
+            projectId={project.id}
+            hasAudit={Boolean(latestAudit?.result)}
+            disabled={!auditReady}
+          />
         </section>
 
         <section className="space-y-2">
@@ -144,15 +208,6 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
             <InspectButton projectId={project.id} hasSnapshot={Boolean(latestSnapshot?.result)} />
           </section>
         )}
-
-        <div>
-          <Button disabled title="Not implemented yet — see docs/sprints/0003-live-product-intelligence.md">
-            Analyze business
-          </Button>
-          <p className="mt-2 text-xs text-zinc-500">
-            Business analysis will use your repository and live product intelligence in a later step.
-          </p>
-        </div>
 
         <div>
           <DisconnectButton projectId={project.id} />

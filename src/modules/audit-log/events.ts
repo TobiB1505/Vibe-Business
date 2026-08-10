@@ -23,7 +23,12 @@ export type AuditEventType =
   | "live_product.intelligence.started"
   | "live_product.intelligence.completed"
   | "live_product.intelligence.failed"
-  | "live_product.intelligence.reused";
+  | "live_product.intelligence.reused"
+  | "business_context.updated"
+  | "business_audit.started"
+  | "business_audit.completed"
+  | "business_audit.failed"
+  | "business_audit.reused";
 
 export type RecordAuditEventParams = {
   userId: string;

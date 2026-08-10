@@ -19,6 +19,7 @@
     "db:lint": "supabase db lint --linked"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "0.115.0",
     "@octokit/auth-app": "8.3.0",
     "@octokit/oauth-methods": "6.0.2",
     "@supabase/ssr": "0.12.4",

@@ -1,0 +1,28 @@
+# ai
+
+The AI provider boundary ([ADR 0005](../../../docs/decisions/0005-ai-provider-abstraction.md), [ADR 0011](../../../docs/decisions/0011-ai-inference-and-evidence-trust-boundary.md)) and everything that costs money.
+
+```
+provider.ts            AIProvider — domain-owned, no Anthropic types
+operations.ts          model / effort / token budgets, per operation
+pricing.ts             effective-dated pricing + integer-exact cost
+usage.ts               internal provider-cost ledger (server-only)
+anthropic/adapter.ts   the ONLY file that imports the Anthropic SDK
+anthropic/client.ts    key loading + client construction (server-only)
+```
+
+## Non-negotiables
+
+- **No tools, ever.** `StructuredRequest` has no field for tools, web search, URL fetching, or code execution, and the adapter must never add one. A model that receives untrusted evidence and cannot act is why prompt injection is a wrong sentence rather than an incident.
+- **The SDK stops at the adapter.** Nothing outside `anthropic/` may import `@anthropic-ai/sdk`. Callers switch on `AIFailureCode`; a raw provider error must never reach a log line or a browser.
+- **No reasoning leaves the adapter.** Only `text` blocks are read. Thinking token *counts* are read because they are billed; thinking *text* is never returned, stored, or displayed.
+- **Every model identifier lives in `operations.ts`.** No route handler, action, or component may name a model, and nothing user-supplied may select one.
+- **Every price lives in `pricing.ts`**, effective-dated, in integer nanodollars. No dollar constant belongs anywhere else, and floats have no place in a ledger.
+- **The key is server-only.** `ANTHROPIC_API_KEY` is parsed lazily so build, tests and CI never need it.
+
+## Adding an AI operation
+
+1. Add an `AIOperation` and its `OperationConfig` (model, effort, budgets).
+2. Build the request in the *domain* module that owns the task, not here.
+3. Count tokens before calling; record usage after, success or failure.
+4. Validate the response independently — schema compliance is not truthfulness.
