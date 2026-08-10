@@ -12,6 +12,7 @@ Implementation work should be scoped and recorded as discrete sprints, each tied
 - [0001-github-app-connection](0001-github-app-connection.md) — GitHub App connection and repository selection (Complete)
 - [0002-repository-intelligence](0002-repository-intelligence.md) — deterministic repository intelligence snapshots (Implemented; live validation pending manual permission upgrade + migration)
 - [0003-connect-flow-installation-reuse](0003-connect-flow-installation-reuse.md) — fix: reuse an existing GitHub installation when connecting further projects (Complete)
+- [0002a-supabase-cli-workflow](0002a-supabase-cli-workflow.md) — infrastructure: linked Supabase CLI migration workflow (Complete — migration history reconciled and verified against the linked remote project)
 
 ## Format
 
