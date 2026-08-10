@@ -151,6 +151,50 @@ describe("runBusinessReadinessAudit — input budget", () => {
     expect(outcome.ok === false && outcome.error).toBe("token_count_failed");
     expect(provider.requests).toHaveLength(0);
   });
+
+  it.each([
+    "provider_billing_error",
+    "provider_auth_error",
+    "provider_rate_limited",
+    "provider_overloaded",
+    "provider_timeout",
+    "provider_unavailable",
+  ] as const)("preserves %s from the token count instead of flattening it", async (code) => {
+    const provider = new FakeProvider({ tokenCount: { ok: false, error: code } });
+    const outcome = await runBusinessReadinessAudit(inputFor(provider));
+
+    expect(outcome.ok === false && outcome.error).toBe(code);
+    // The cost gate held: nothing was sent to the billable endpoint.
+    expect(provider.requests).toHaveLength(0);
+  });
+
+  it("preserves the provider state when a re-count after trimming fails", async () => {
+    const provider = new FakeProvider();
+    let call = 0;
+    provider.countInputTokens = async (request) => {
+      provider.countRequests.push(request);
+      call += 1;
+      return call === 1 ? { ok: true, inputTokens: 500_000 } : { ok: false, error: "provider_billing_error" };
+    };
+
+    const outcome = await runBusinessReadinessAudit(inputFor(provider));
+
+    expect(outcome.ok === false && outcome.error).toBe("provider_billing_error");
+    expect(provider.requests).toHaveLength(0);
+  });
+
+  it("reports no usage for a failed token count, so no cost can be recorded", async () => {
+    const provider = new FakeProvider({ tokenCount: { ok: false, error: "provider_billing_error" } });
+    const outcome = await runBusinessReadinessAudit(inputFor(provider));
+
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    // Token counting is free and no generation happened, so there is nothing
+    // to bill. Reporting usage here would invent a charge (Sprint 4 §27).
+    expect(outcome.usage).toBeUndefined();
+    expect(outcome.estimatedInputTokens).toBeNull();
+    expect(outcome.latencyMs).toBe(0);
+  });
 });
 
 describe("runBusinessReadinessAudit — provider failures", () => {
@@ -175,6 +219,7 @@ describe("runBusinessReadinessAudit — provider failures", () => {
   it.each([
     "provider_rate_limited",
     "provider_auth_error",
+    "provider_billing_error",
     "provider_timeout",
     "provider_unavailable",
     "output_truncated",

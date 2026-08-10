@@ -36,6 +36,15 @@ function messageWith(overrides: Partial<Anthropic.Message> = {}): Anthropic.Mess
   } as Anthropic.Message;
 }
 
+/**
+ * An SDK error shaped the way the SDK shapes one: the typed `error.type`
+ * discriminator is passed as its own constructor argument, exactly as
+ * `APIError.generate` does when parsing a real response body.
+ */
+function apiError(status: number, type: Anthropic.ErrorType = "api_error") {
+  return new Anthropic.APIError(status, { type: "error", error: { type, message: "m" } }, "m", undefined, type);
+}
+
 function clientWith(overrides: Partial<AnthropicMessagesClient>): AnthropicMessagesClient {
   return {
     create: vi.fn(async () => messageWith()),
@@ -103,6 +112,95 @@ describe("AnthropicProvider — request shape", () => {
   });
 });
 
+/**
+ * Regression tests for the production defect where every token-count failure
+ * collapsed into `token_count_failed`. An account with no usage credit
+ * reported "the audit could not be prepared", hiding an operator-actionable
+ * billing problem behind copy that reads as a transient glitch.
+ *
+ * Token counting is free but shares an account, key and rate limit with the
+ * billable call, so it must classify provider states the same way.
+ */
+describe("AnthropicProvider — token count failure classification", () => {
+  const countFailing = (error: unknown) =>
+    new AnthropicProvider(
+      clientWith({
+        countTokens: vi.fn(async () => {
+          throw error;
+        }),
+      }),
+    );
+
+  it.each([
+    [401, "provider_auth_error"],
+    [403, "provider_auth_error"],
+    [402, "provider_billing_error"],
+    [429, "provider_rate_limited"],
+    [408, "provider_timeout"],
+    [529, "provider_overloaded"],
+    [500, "provider_unavailable"],
+    [503, "provider_unavailable"],
+  ])("maps a count failure with HTTP %i to %s", async (status, expected) => {
+    const result = await countFailing(apiError(status)).countInputTokens(request);
+    expect(result).toEqual({ ok: false, error: expected });
+  });
+
+  it("maps a connection timeout during counting to a provider timeout", async () => {
+    const result = await countFailing(new Anthropic.APIConnectionTimeoutError({})).countInputTokens(request);
+    expect(result).toEqual({ ok: false, error: "provider_timeout" });
+  });
+
+  it("maps a network failure during counting to the provider being unavailable", async () => {
+    const result = await countFailing(new Anthropic.APIConnectionError({ message: "socket hang up" })).countInputTokens(
+      request,
+    );
+    expect(result).toEqual({ ok: false, error: "provider_unavailable" });
+  });
+
+  it("recognises a billing error reported under another status via its typed error field", async () => {
+    // The credit-balance failure is identified by the API's own typed
+    // discriminator, not by matching message prose.
+    const result = await countFailing(apiError(400, "billing_error")).countInputTokens(request);
+    expect(result).toEqual({ ok: false, error: "provider_billing_error" });
+  });
+
+  it("classifies a billing error built the way the SDK builds it", async () => {
+    const sdkError = Anthropic.APIError.generate(
+      402,
+      { type: "error", error: { type: "billing_error", message: "credit balance is too low" } },
+      undefined,
+      new Headers(),
+    );
+
+    const result = await countFailing(sdkError).countInputTokens(request);
+    expect(result).toEqual({ ok: false, error: "provider_billing_error" });
+  });
+
+  it.each([
+    ["a request the API rejected", apiError(400, "invalid_request_error")],
+    ["an error with no provider attribution", new Error("boom")],
+    ["a thrown non-error value", "just a string"],
+  ])("falls back to token_count_failed for %s", async (_label, error) => {
+    const result = await countFailing(error).countInputTokens(request);
+    expect(result).toEqual({ ok: false, error: "token_count_failed" });
+  });
+
+  it("never leaks a raw provider message out of a failed token count", async () => {
+    const result = await countFailing(
+      new Anthropic.APIError(
+        402,
+        { type: "error", error: { type: "billing_error", message: "ORG_ID_9f3a credit balance too low" } },
+        "ORG_ID_9f3a credit balance too low",
+        undefined,
+        "billing_error",
+      ),
+    ).countInputTokens(request);
+
+    expect(result).toEqual({ ok: false, error: "provider_billing_error" });
+    expect(JSON.stringify(result)).not.toContain("ORG_ID_9f3a");
+  });
+});
+
 describe("AnthropicProvider — successful response", () => {
   it("parses structured output and extracts usage", async () => {
     const provider = new AnthropicProvider(clientWith({}));
@@ -146,12 +244,11 @@ describe("AnthropicProvider — successful response", () => {
 });
 
 describe("AnthropicProvider — failure mapping", () => {
-  const apiError = (status: number) =>
-    new Anthropic.APIError(status, { type: "error", error: { type: "x", message: "m" } }, "m", undefined);
-
   it.each([
     [401, "provider_auth_error"],
     [403, "provider_auth_error"],
+    // A billing problem is not malformed structured output.
+    [402, "provider_billing_error"],
     [429, "provider_rate_limited"],
     [408, "provider_timeout"],
     [500, "provider_unavailable"],

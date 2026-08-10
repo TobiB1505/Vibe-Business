@@ -22,6 +22,7 @@ const ERROR_MESSAGES: Record<RunAuditFailureCode, string> = {
   token_count_failed: "The audit could not be prepared. Try again in a moment.",
   provider_rate_limited: "The AI provider is rate limiting requests. Try again in a few minutes.",
   provider_auth_error: "Vibe Business is not correctly configured to reach the AI provider.",
+  provider_billing_error: "The AI provider account has no available usage credit or has a billing issue.",
   provider_timeout: "The audit took too long to complete. Try again.",
   provider_unavailable: "The AI provider could not be reached. Try again in a moment.",
   provider_overloaded: "The AI provider is overloaded right now. Try again in a few minutes.",
