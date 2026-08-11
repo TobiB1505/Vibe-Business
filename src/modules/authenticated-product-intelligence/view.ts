@@ -40,6 +40,13 @@ export type DeepScanUiState =
   /** The last attempt ended without a snapshot; the included scan survives. */
   | "last_attempt_failed";
 
+/** Why no Deep Scan can be offered, when that is the case. */
+export type DeepScanUnavailableReason =
+  /** No production URL configured — there is nothing to sign in to. */
+  | "production_url_missing"
+  /** This deployment has no browser provider configured. */
+  | "provider_not_configured";
+
 export type DeepScanSurface = { id: string; name: string };
 
 export type DeepScanResultSummary = {
@@ -75,6 +82,13 @@ export type DeepScanViewModel = {
   lastFailure: DeepScanLastFailure | null;
   /** False when the server has no browser provider configured. */
   providerConfigured: boolean;
+  /**
+   * Set whenever the panel cannot offer a scan for a reason the user cannot
+   * act on from here. The UI must always render an explanation for it — a
+   * heading with no action and no reason is a dead end, which is exactly what
+   * this field exists to prevent.
+   */
+  unavailableReason: DeepScanUnavailableReason | null;
 };
 
 /**
@@ -152,8 +166,18 @@ export function buildDeepScanViewModel(input: BuildViewModelInput): DeepScanView
 
   const showRecommendation = surfaceDetection.likely && accessStatus.includedScanAvailable && canStart;
 
+  const unavailableReason: DeepScanUnavailableReason | null =
+    accessStatus.blockedReason === "production_origin_missing"
+      ? "production_url_missing"
+      : !input.providerConfigured
+        ? "provider_not_configured"
+        : null;
+
   const state: DeepScanUiState = (() => {
     if (accessStatus.blockedReason === "production_origin_missing") return "unavailable";
+    // A missing provider is reported rather than silently hidden. It ranks
+    // below an in-flight session so a running scan is never masked by it.
+    if (!input.providerConfigured && !active && !lastResult) return "unavailable";
     if (active?.status === "created" || active?.status === "waiting_for_login") return "waiting_for_login";
     if (active?.status === "analyzing") return "analyzing";
     // A successful result outranks everything below it: once a Deep Scan
@@ -177,5 +201,6 @@ export function buildDeepScanViewModel(input: BuildViewModelInput): DeepScanView
     lastResult,
     lastFailure,
     providerConfigured: input.providerConfigured,
+    unavailableReason,
   };
 }
