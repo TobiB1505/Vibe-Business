@@ -28,6 +28,18 @@ import { ProductionUrlForm } from "./production-url-form";
 import { RunAuditButton } from "./run-audit-button";
 
 /**
+ * The Deep Scan analysis runs inside this route segment's function, and its
+ * own budget is 90 seconds (`DEFAULT_AUTHENTICATED_BUDGETS.maxDurationMs`).
+ * Without this the platform default (15s on Pro) would kill the function
+ * mid-analysis — the user would have signed in, been charged for a browser
+ * session, and got nothing back.
+ *
+ * Set above the analysis budget so the budget stays the thing that ends a
+ * scan, rather than the platform.
+ */
+export const maxDuration = 120;
+
+/**
  * Project screen: connection status (Sprint 1), repository intelligence
  * (Sprint 2), and live product intelligence (Sprint 3).
  *

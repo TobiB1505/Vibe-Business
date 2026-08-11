@@ -226,6 +226,46 @@ session status — so a session that timed out or was released is discovered
 *before* connecting rather than as a hung socket. The capability URL is fetched
 per use and dropped, exactly as before.
 
+### Packaging Playwright for a serverless function
+
+Two production-only failures came from the same dependency, and neither was
+catchable by a test.
+
+`playwright-core` reads its own `browsers.json` during module init via
+`require(path.join(packageRoot, "browsers.json"))`. That path is computed at
+runtime, so Vercel's file tracer never sees it and leaves the file out of the
+deployed function. First it took the whole project page down (the import was
+top-level); once the import was made lazy, it would still have broken the
+analysis step.
+
+`outputFileTracingIncludes` is **not** a way out: it is ignored entirely under
+Turbopack builds. That was verified rather than assumed — an include for an
+unmistakable file (`ARCHITECTURE.md`) produced no trace entry, so the option is
+inert here regardless of key format. `next build --webpack` does honour it, but
+switching bundlers for one data file is disproportionate and the webpack build
+currently fails on an unrelated pre-existing issue.
+
+The tracer itself *does* run under Turbopack — it already traced 85 Playwright
+files. The fix is therefore to give it something static to follow:
+
+1. A one-line pnpm patch adds `"./browsers.json"` to the package's `exports`,
+   exposing a file the package already ships.
+2. `require.resolve("playwright-core/browsers.json")` in the connector is a
+   static specifier the tracer resolves, so the file is included.
+
+Verified locally with a positive and a negative control: the traced file set was
+reconstructed into a clean tree and `playwright-core` loaded from it with
+`chromium.connectOverCDP` available; removing `browsers.json` from that same
+tree reproduced the exact production error.
+
+**Function duration.** The analysis budget is 90 seconds
+(`DEFAULT_AUTHENTICATED_BUDGETS.maxDurationMs`) against a 15-second platform
+default on Pro, so packaging alone would not have produced a working scan — the
+function would have been killed mid-analysis after the user had signed in and a
+browser session had been paid for. The route segment now declares
+`maxDuration = 120`, keeping the analysis budget the thing that ends a scan
+rather than the platform.
+
 **Outstanding — PR #12 is not mergeable until these are done:**
 
 - Project-page UI: activation prompt, Live View modal, status section, second-scan credits state, user copy
