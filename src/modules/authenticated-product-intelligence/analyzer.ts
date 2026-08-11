@@ -222,6 +222,20 @@ export async function analyzeAuthenticatedProduct(input: AnalyzeInput): Promise<
       continue;
     }
 
+    // `visited` was keyed on the *candidate* path, but a navigation can land
+    // somewhere else — and the summary below records where we landed. Without
+    // this, a redirect leaves the landed path unmarked, so a later candidate
+    // for that same path is inspected a second time: a duplicate entry, a
+    // wasted page from the budget, and the same evidence counted twice.
+    //
+    // Found on the first real Deep Scan, which inspected
+    // /app/connect/github/repositories twice — once via a link (200) and once
+    // as a repository route (404).
+    if (landedPath !== candidate.path) {
+      if (visited.has(landedPath)) continue;
+      visited.add(landedPath);
+    }
+
     let raw: RawPageExtraction;
     try {
       raw = await page.extract();

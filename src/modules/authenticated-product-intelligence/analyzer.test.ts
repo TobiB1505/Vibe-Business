@@ -337,3 +337,74 @@ describe("analyzeAuthenticatedProduct", () => {
     expect(result.snapshot.pages[0]).not.toHaveProperty("rows");
   });
 });
+
+/**
+ * Regression from the first real Deep Scan.
+ *
+ * `/app/connect/github/repositories` was inspected twice — once reached via an
+ * authenticated link (200) and once as a repository-route candidate (404) —
+ * producing a duplicate page entry, a wasted page from the budget, and the same
+ * surface evidence counted twice.
+ *
+ * Cause: `visited` was keyed on the candidate path, while the page summary
+ * records the path actually landed on. A redirect therefore left the landed
+ * path unmarked, so a later candidate for it looked fresh.
+ */
+describe("analyzeAuthenticatedProduct — a redirect must not cause a second visit", () => {
+  /** A tab that honours a redirect map, so landed path can differ from requested. */
+  function redirectingBrowser(redirects: Record<string, string>, links: string[]) {
+    let current = `${ORIGIN}/app`;
+    const requested: string[] = [];
+
+    const page: AnalysisPagePort = {
+      url: () => current,
+      goto: async (url: string) => {
+        requested.push(new URL(url).pathname);
+        const path = new URL(url).pathname;
+        current = `${ORIGIN}${redirects[path] ?? path}`;
+        return { status: 200 };
+      },
+      extract: async () => extraction({ sameOriginLinks: links }),
+    };
+
+    const browser: AnalysisBrowserPort = {
+      pages: async () => [page],
+      blocked: { mutatingRequests: 0, downloads: 0, externalNavigations: 0 },
+    };
+
+    return { browser, requested };
+  }
+
+  it("does not record a path twice when a candidate redirects onto another candidate", async () => {
+    const { browser } = redirectingBrowser(
+      { "/app/profile": "/app/settings" },
+      [`${ORIGIN}/app/profile`, `${ORIGIN}/app/settings`],
+    );
+
+    const result = await analyzeAuthenticatedProduct({ ...baseInput, browser });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const paths = result.snapshot.pages.map((page) => page.path);
+    expect(new Set(paths).size).toBe(paths.length);
+    expect(paths.filter((path) => path === "/app/settings")).toHaveLength(1);
+  });
+
+  it("inspects a path once when two independent sources offer it", async () => {
+    const { browser } = redirectingBrowser({}, [`${ORIGIN}/app/billing`]);
+
+    const result = await analyzeAuthenticatedProduct({
+      ...baseInput,
+      browser,
+      // Offered as a repository route *and* discovered as a link.
+      repository: repositoryWith(["/app/billing"]),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const paths = result.snapshot.pages.map((page) => page.path);
+    expect(new Set(paths).size).toBe(paths.length);
+  });
+});
