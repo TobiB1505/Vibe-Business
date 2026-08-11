@@ -18,14 +18,17 @@ import { z } from "zod";
  */
 
 const browserbaseEnvSchema = z.object({
-  BROWSERBASE_API_KEY: z
-    .string()
-    .min(1, "BROWSERBASE_API_KEY is required.")
-    // A cheap shape check that catches a pasted placeholder before it becomes
-    // a confusing 401 from the provider.
-    .refine((key) => key.startsWith("bb_"), {
-      message: 'BROWSERBASE_API_KEY does not look like a Browserbase key (expected a "bb_" prefix).',
-    }),
+  // Presence only, deliberately.
+  //
+  // This previously required a `bb_` prefix as a "cheap shape check". That was
+  // a guess about a format we do not control, and it failed the worst possible
+  // way: `hasBrowserbaseApiKey()` gates the UI, so a key in any other shape
+  // silently removed the Deep Scan button with no message anywhere. A guess
+  // about formatting must never be able to disable a feature.
+  //
+  // A genuinely wrong key now fails loudly at the provider as a typed auth
+  // error, which is both accurate and actionable.
+  BROWSERBASE_API_KEY: z.string().min(1, "BROWSERBASE_API_KEY is required."),
   BROWSERBASE_PROJECT_ID: z.string().min(1).optional(),
 });
 

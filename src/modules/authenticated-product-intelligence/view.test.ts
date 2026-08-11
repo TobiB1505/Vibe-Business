@@ -297,3 +297,83 @@ describe("buildDeepScanViewModel — safety of the DTO", () => {
     expect(Object.keys(model.activeSession!)).toEqual(["id", "status"]);
   });
 });
+
+/**
+ * Regression: the panel rendered a heading and one sentence with no action and
+ * no reason when the browser provider was not configured. On the deployed app
+ * that is indistinguishable from a broken page — the user reported "Deep Scan
+ * isn't clickable, it's just text".
+ *
+ * The cause was a silent gate: `hasBrowserbaseApiKey()` required a `bb_`
+ * prefix, so a key in any other shape removed the button with no message
+ * anywhere. Both halves are covered here — the state must be reported, and the
+ * reason must travel with it.
+ */
+describe("buildDeepScanViewModel — unavailability is always explained", () => {
+  it("reports an unconfigured provider as unavailable, with a reason", () => {
+    const model = build({ providerConfigured: false });
+
+    expect(model.state).toBe("unavailable");
+    expect(model.unavailableReason).toBe("provider_not_configured");
+    expect(model.canStart).toBe(false);
+  });
+
+  it("distinguishes a missing production URL from a missing provider", () => {
+    const noUrl = build({ accessStatus: accessStatus({ blockedReason: "production_origin_missing" }) });
+    expect(noUrl.unavailableReason).toBe("production_url_missing");
+
+    const noProvider = build({ providerConfigured: false });
+    expect(noProvider.unavailableReason).toBe("provider_not_configured");
+  });
+
+  it("carries no unavailable reason when a scan can actually be started", () => {
+    const model = build();
+    expect(model.unavailableReason).toBeNull();
+    expect(model.canStart).toBe(true);
+  });
+
+  it("never hides an in-flight session behind an unconfigured provider", () => {
+    // The session is real and still billing; reporting "unavailable" would
+    // strand the user with a browser they cannot cancel.
+    const model = build({
+      providerConfigured: false,
+      accessStatus: accessStatus({ activeSession: { id: "s", status: "waiting_for_login" } }),
+    });
+
+    expect(model.state).toBe("waiting_for_login");
+  });
+
+  it("never hides a completed result behind an unconfigured provider", () => {
+    const model = build({
+      providerConfigured: false,
+      latestSnapshot: {
+        result: snapshotResult(),
+        accessMode: "included_first_scan",
+        completedAt: "2026-08-11T10:00:00.000Z",
+        createdAt: "2026-08-11T09:00:00.000Z",
+        pagesInspected: 7,
+      },
+      accessStatus: accessStatus({ includedScanAvailable: false, blockedReason: "credits_required" }),
+    });
+
+    expect(model.state).toBe("completed");
+  });
+
+  it("every state either allows starting or carries something to explain itself", () => {
+    // The invariant the regression violated: no dead ends.
+    const cases = [
+      build(),
+      build({ providerConfigured: false }),
+      build({ accessStatus: accessStatus({ blockedReason: "production_origin_missing" }) }),
+      build({ accessStatus: accessStatus({ blockedReason: "cooldown_active" }) }),
+      build({ accessStatus: accessStatus({ includedScanAvailable: false, blockedReason: "credits_required" }) }),
+      build({ latestSession: { status: "expired", failureCode: null } }),
+    ];
+
+    for (const model of cases) {
+      const explainable =
+        model.canStart || model.unavailableReason !== null || model.blockedReason !== null || model.lastFailure !== null;
+      expect(explainable).toBe(true);
+    }
+  });
+});

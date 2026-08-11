@@ -345,10 +345,17 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
           </>
         ) : model.state === "unavailable" ? (
           <>
-            <Heading title="Deep Scan" />
-            <p className="text-sm text-zinc-500">
-              Add your production website URL to enable Deep Scan.
-            </p>
+            <Heading title="Deep Scan" status="Unavailable" />
+            {model.unavailableReason === "provider_not_configured" ? (
+              <p className="text-sm text-zinc-500">
+                Deep Scan isn&apos;t available on this deployment yet. It needs a browser provider
+                to be configured on the server.
+              </p>
+            ) : (
+              <p className="text-sm text-zinc-500">
+                Add your production website URL above to enable Deep Scan.
+              </p>
+            )}
           </>
         ) : model.state === "analyzing" ? (
           <>
@@ -437,10 +444,18 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
             <p className="text-sm text-zinc-500">
               Optional deeper analysis of what users experience after signing in.
             </p>
-            {model.canStart && (
+            {model.canStart ? (
               <Button type="button" onClick={handleStart} disabled={disabled}>
                 {disabled ? "Starting…" : "Run Deep Scan"}
               </Button>
+            ) : (
+              // Never a heading and a sentence with no action and no reason:
+              // that state is indistinguishable from a broken page.
+              <p className="text-sm text-zinc-500">
+                {model.blockedReason
+                  ? messageFor(model.blockedReason)
+                  : "Deep Scan isn't available on this deployment yet."}
+              </p>
             )}
           </>
         )}
