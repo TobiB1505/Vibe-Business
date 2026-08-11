@@ -28,7 +28,11 @@ export type AuditEventType =
   | "business_audit.started"
   | "business_audit.completed"
   | "business_audit.failed"
-  | "business_audit.reused";
+  | "business_audit.reused"
+  | "deep_scan.started"
+  | "deep_scan.completed"
+  | "deep_scan.failed"
+  | "deep_scan.cancelled";
 
 export type RecordAuditEventParams = {
   userId: string;

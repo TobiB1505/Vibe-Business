@@ -260,6 +260,34 @@ Credits must **not** be directly equated with underlying provider tokens. Actual
 
 This separation allows models and providers to change later without redesigning the user-facing credit system.
 
+### 12.1 Deep Scan entitlement
+
+**Deep Scan** is the user-facing name for authenticated product analysis: Vibe inspects what users experience *after signing in*. Internally it is Authenticated Product Intelligence.
+
+**Each project receives one included successful Deep Scan. Additional Deep Scans are credit-gated.**
+
+The first one is included because many seriously-built products keep most of their value behind a login. If Vibe reports on a repository and a marketing page and stops there, a new user reasonably concludes that Vibe does not understand their product — before Vibe was ever allowed to look at the part that matters. The included scan is part of product activation and understanding, not a discount.
+
+What **consumes** the entitlement:
+
+- A Deep Scan whose derived snapshot was successfully persisted, and whose run completed.
+
+What **does not** consume it — in every one of these cases the included scan remains available:
+
+- Creating a browser session (a session is not a scan)
+- A failed analysis
+- A cancelled session
+- A session that expired before analysis
+- Never reaching the authenticated origin
+- The browser provider being unavailable
+- Our own persistence failing
+
+The invariant, enforced by derivation rather than a flag: a completed snapshot marked `included_first_scan` *is* the proof of consumption, and a partial unique index makes a second one impossible. There is deliberately no boolean that could claim the free scan was used while no usable snapshot exists.
+
+**Cost is separate from AI cost.** A Deep Scan bills browser wall-clock seconds, not tokens, so provider usage is recorded in its own place and never merged into the token ledger above. Provider cost is left null rather than derived from an assumed rate.
+
+Until Vibe Credits exist, a request for an additional Deep Scan returns a typed refusal and the UI explains that additional scans are coming with Credits. No price is shown, no balance is invented, and the user is never sent into a checkout that does not exist.
+
 ---
 
 ## 13. Cost Principles
