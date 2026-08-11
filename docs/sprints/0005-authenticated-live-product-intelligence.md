@@ -1,6 +1,6 @@
 # Sprint 5 — Authenticated Live Product Intelligence
 
-**Status:** in progress — analysis engine complete and tested; session lifecycle, UI, and audit integration outstanding (see [Delivery status](#delivery-status)).
+**Status:** in progress — analysis engine, entitlement policy and schema complete and tested; session lifecycle, UI, and audit integration outstanding (see [Delivery status](#delivery-status)).
 **Branch:** `feat/authenticated-live-product-intelligence`
 **Decision record:** [ADR 0012](../decisions/0012-authenticated-browser-analysis.md)
 
@@ -31,6 +31,29 @@ Two separate problems:
 2. **`/app` was not analysable.** Anonymously it serves a redirect, so there was nothing to inspect.
 
 This sprint fixes (2) and reuses the answer to (1) rather than papering over it: **the public crawler's behaviour is unchanged.** It still reports `/app → /login`, which is the truthful anonymous result, and that redirect is now itself treated as *evidence that a protected surface exists*.
+
+## Deep Scan — product policy
+
+User-facing name: **Deep Scan** ("Vibe can analyze what users experience after they sign in"). Internal name stays Authenticated Product Intelligence. The provider is never the feature name — no "Browserbase Scan", no "Authenticated Crawler Session".
+
+**Each project receives one included successful Deep Scan. Additional Deep Scans are credit-gated** (PRODUCT.md §12.1).
+
+| | Consumes the included scan? |
+|---|---|
+| Snapshot successfully persisted, run completed | **yes** |
+| Browser session merely created | no |
+| Analysis failed | no |
+| Session cancelled | no |
+| Session expired before analysis | no |
+| Authenticated origin never reached | no |
+| Browserbase unavailable | no |
+| Our own persistence failed | no |
+
+Consumption is **derived, not flagged**: a completed snapshot with `access_mode = 'included_first_scan'` is the proof, and a partial unique index makes a second one impossible. There is no boolean that could drift into claiming the free scan was used while no usable snapshot exists.
+
+`authorizeDeepScan()` is a pure decision function holding no Browserbase knowledge, and the browser service holds no pricing knowledge — so Credits can later add an access mode without touching orchestration. **`credits_required` is evaluated before any provider work begins**, so we never pay for a session and only then discover the user could not run the scan.
+
+Abuse limits are centralized in `START_ATTEMPT_LIMITS`: one live session per project, 5 starts per hour, a 2-minute cooldown after an abandoned attempt — and provider failures deliberately do **not** count toward the limit, because an outage is our problem, not the user's quota.
 
 ## Threat model
 
@@ -87,6 +110,8 @@ created → waiting_for_login → analyzing → completed
 
 Every session belongs to a user (via project ownership) and a project. Termination is attempted on **completion, failure, cancellation and expiry**; the provider's own `timeout` is set on every session as an independent backstop, so an abandoned browser ends even if our cleanup never runs. There is no background queue — cleanup is opportunistic plus provider-side timeout, by design.
 
+**`keepAlive: true` is required, and the first version of this adapter had it wrong.** The manual-login flow spans two server requests with a human in between: create the session, then reconnect after the user has signed in through the Live View. With `keepAlive: false` the provider may end the session when the first request's connection drops, so the reconnect finds nothing and every scan fails. `keepAlive` is *session continuity, not persistent authentication* — it stores nothing, and it makes the explicit short `timeout` and `REQUEST_RELEASE` on every terminal path load-bearing rather than incidental.
+
 A partial unique index allows at most one live session per project, so a double-click cannot start two remote browsers.
 
 ## No-persistent-auth decision
@@ -95,7 +120,7 @@ See [ADR 0012](../decisions/0012-authenticated-browser-analysis.md). Summary: **
 
 ## Recording policy
 
-`recordSession: false`, `logSession: false`, `solveCaptchas: false`, no `context`, `keepAlive: false`, explicit `timeout`. Live View remains available — it is a live interactive stream, not a stored artefact. Recording is never enabled for debugging, and no screenshot of any authenticated page is captured or stored.
+`recordSession: false`, `logSession: false`, `solveCaptchas: false`, no `context`, **`keepAlive: true`**, explicit short `timeout`. Live View remains available — it is a live interactive stream, not a stored artefact. Recording is never enabled for debugging, and no screenshot of any authenticated page is captured or stored.
 
 ## Read-only analysis policy
 
@@ -149,15 +174,19 @@ Evidence ids follow `auth.surface.*`, `auth.navigation.*`, `auth.feature.*`. Con
 
 ## Business Audit integration
 
-Planned, not yet implemented (see [Delivery status](#delivery-status)). The audit **must keep working without** an authenticated snapshot; when one exists, the latest successful snapshot becomes additional evidence, which requires a new evidence-pack version (`business-evidence.v2`) rather than a silent change to `v1`, and a new authenticated snapshot must produce a new audit input identity.
+Planned, not yet implemented (see [Delivery status](#delivery-status)).
+
+The audit **must keep working without** a Deep Scan — Repository Intelligence + Public Product Intelligence + Business Context remain sufficient. When an authenticated snapshot exists, it becomes additional evidence, which requires a new evidence-pack version (`business-evidence.v2`) rather than a silent change to `v1`, and a new successful Deep Scan must produce a new audit input identity.
+
+When authenticated surfaces are detected and no Deep Scan exists, the audit shows a quality notice — *"Vibe has not analyzed your signed-in product experience yet. Your audit can still run, but a Deep Scan may provide better product evidence."* — with both actions available. It must not claim the audit will score higher, and must not call the existing audit invalid: a Deep Scan improves **evidence coverage**, and coverage is not a score. Running a Deep Scan never triggers a paid audit automatically; the user decides when to re-run.
 
 ## Costs
 
-Browser sessions cost provider **wall-clock seconds**, not tokens. This is a different cost concept from Anthropic inference and is deliberately not merged into the token ledger. `metrics.browserSessionDurationMs` records session duration; exact provider cost is not fabricated when the provider does not return it synchronously. Vibe Credits are not implemented.
+The first Deep Scan is free to the **user**, not to Vibe. Browser sessions cost provider **wall-clock seconds**, not tokens. This is a different cost concept from Anthropic inference and is deliberately not merged into the token ledger. `metrics.browserSessionDurationMs` records session duration; exact provider cost is not fabricated when the provider does not return it synchronously. Vibe Credits are not implemented.
 
 ## Delivery status
 
-**Complete and tested (280 tests in this sprint's modules):**
+**Complete and tested (114 tests in this sprint's modules):**
 
 - `BrowserSessionProvider` port + Browserbase adapter, including the recording/context/captcha invariants
 - Typed error and warning model
@@ -171,13 +200,20 @@ Browser sessions cost provider **wall-clock seconds**, not tokens. This is a dif
 - Server-only Browserbase env module
 - Database migration (both tables, RLS, concurrency guards)
 - ADR 0012 and this document
+- **Deep Scan entitlement policy** (`authorizeDeepScan`, consumption rule, abuse limits, safe access status)
+- **Authenticated surface detection** for the activation prompt
+- **Provider usage record** shape, kept separate from token accounting
+- **Entitlement + usage schema** (`access_mode`, one-included-scan unique index, `deep_scan_provider_usage`)
+- `keepAlive: true` correction for the two-request manual-login flow
 
-**Outstanding:**
+**Outstanding — PR #12 is not mergeable until these are done:**
 
-- `store.ts` / `service.ts` — session lifecycle orchestration and snapshot persistence
-- Project-page UI: start button, Live View modal, status section, user copy
-- Audit-log events (`authenticated_product.*`)
+- `store.ts` / `service.ts` — session lifecycle orchestration, snapshot persistence, entitlement consumption at completion, provider-usage write, termination on every terminal path
+- Ownership checks and Live View authorization at the request boundary
+- Project-page UI: activation prompt, Live View modal, status section, second-scan credits state, user copy
+- Audit-log events (`deep_scan.*`)
 - Evidence pack `v2` and audit input identity
+- Business Audit quality notice
 - Migration deployment (`db:push`)
 - Dogfood run and its security verification
 

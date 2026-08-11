@@ -30,9 +30,18 @@ import type {
  * solving is out of scope (Sprint 5 §4). The human is present and solves their
  * own challenges.
  *
- * `keepAlive` is left at its default (`false`) so a dropped connection does not
- * leave a browser running, and `timeout` is always sent so the provider ends an
- * abandoned session even if our cleanup never runs.
+ * `keepAlive: true` is **required by the manual-login flow**, and this was wrong
+ * in the first version of this adapter. The flow spans two separate server
+ * requests — create the session, then reconnect after the user has signed in
+ * through the Live View — with a human in between. With `keepAlive: false` the
+ * provider is free to end the session when the first request's connection
+ * drops, so the reconnect would find nothing and every scan would fail.
+ *
+ * `keepAlive` is **session continuity, not persistent authentication**: it keeps
+ * one temporary browser alive across a login the user performs by hand. It adds
+ * no stored state, and it makes the other two guarantees load-bearing rather
+ * than incidental — an explicit short `timeout` so an abandoned browser cannot
+ * live indefinitely, and `REQUEST_RELEASE` on every terminal path (Sprint 5 §14).
  */
 
 /** The slice of the SDK this adapter uses, declared structurally so tests need no SDK. */
@@ -98,7 +107,10 @@ export class BrowserbaseSessionProvider implements BrowserSessionProvider {
           // `context` is deliberately absent, not undefined-by-omission-by-
           // accident: there is no code path that can add one.
         },
-        keepAlive: false,
+        // See the note above: the login happens between two requests, so the
+        // session must survive the first connection closing. The `timeout`
+        // below is what bounds it.
+        keepAlive: true,
         timeout: options.timeoutSeconds,
       });
 

@@ -71,13 +71,17 @@ describe("BrowserbaseSessionProvider — security invariants", () => {
     expect(sessions.create.mock.calls[0]![0]!.browserSettings?.solveCaptchas).toBe(false);
   });
 
-  it("sends an explicit provider-side timeout and does not keep sessions alive", async () => {
+  it("keeps the session alive across the manual login, bounded by an explicit timeout", async () => {
     const sessions = fakeSessions();
     await new BrowserbaseSessionProvider(sessions).createSession({ timeoutSeconds: 420 });
 
     const params = sessions.create.mock.calls[0]![0]!;
+    // The login happens between two server requests; without keepAlive the
+    // reconnect finds a dead session and every scan fails.
+    expect(params.keepAlive).toBe(true);
+    // Which is exactly why the timeout must be explicit and short: keepAlive
+    // removes the connection-drop backstop, so this is the only one left.
     expect(params.timeout).toBe(420);
-    expect(params.keepAlive).toBe(false);
   });
 });
 

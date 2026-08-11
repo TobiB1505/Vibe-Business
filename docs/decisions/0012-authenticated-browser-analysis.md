@@ -32,6 +32,7 @@ Concretely:
 - No password fields, no credential vault, no password column, no automatic login, no password replay, no OAuth token extraction, no cookie paste UI.
 - No Browserbase persistent Context; no `storageState()`; no `context.cookies()`; no cookie, token, or header persistence anywhere.
 - Sessions are created with `recordSession: false` and `logSession: false`, both **explicitly** — the SDK defaults are `true`.
+- Sessions are created with `keepAlive: true`, bounded by an explicit short `timeout` and released with `REQUEST_RELEASE` on every terminal path. This is *session continuity*, not persistent authentication: the manual login spans two server requests with a human in between, so the browser must survive the first connection closing. It stores nothing.
 - The analysis phase is read-only: mutating HTTP methods are refused, downloads are cancelled, off-origin top-level navigation is blocked, and the analyzer never clicks, types, or submits anything.
 - Browserbase sits behind a four-verb `BrowserSessionProvider` port so the provider does not become domain logic.
 
@@ -69,6 +70,16 @@ It would be simpler to have one crawler. We deliberately keep two:
 
 Routing the public crawl through Browserbase would make a cheap deterministic feature expensive and would put JavaScript execution in the path of every project. The public path must stay anonymous, static, and SSRF-guarded.
 
+## Entitlement
+
+Deep Scan (the user-facing name for this capability) is an optional premium feature, but **each project's first successful Deep Scan is included** — see PRODUCT.md §12.1 for the product reasoning.
+
+The architectural consequence is that the entitlement decision must not live in the browser orchestration. `authorizeDeepScan()` is a pure function over facts; the Browserbase service knows nothing about entitlements, and the entitlement policy knows nothing about Browserbase. Credits can later add an access mode without touching either.
+
+Consumption is derived from a persisted snapshot rather than stored as a flag, because a flag is a second source of truth that can drift — and the specific drift that matters is the one where the UI says the free scan was used while no usable snapshot exists. A partial unique index on completed included scans makes double consumption impossible even if the application check were bypassed.
+
+`credits_required` is evaluated before any provider work begins: paying for a browser session and only then discovering the user cannot run the scan would be both a cost leak and a poor experience.
+
 ## Consequences
 
 **Accepted:**
@@ -77,7 +88,8 @@ Routing the public crawl through Browserbase would make a cheap deterministic fe
 - Re-analysis requires a fresh login.
 - Blocking mutating requests can leave applications that hydrate over POST partially rendered. The snapshot says so (`application_requires_mutating_method_for_render`) instead of pretending completeness.
 - Some authenticated routes will remain undiscovered, because we refuse to guess paths.
-- Provider cost is variable and per-second, unlike token cost. It is measured separately and never merged into Anthropic token accounting.
+- Provider cost is variable and per-second, unlike token cost. It is measured separately in `deep_scan_provider_usage` and never merged into Anthropic token accounting. Cost is left null rather than derived from an assumed rate.
+- The included first scan means Vibe absorbs provider cost for every project's first Deep Scan, including scans that fail — failures do not consume the entitlement, so a user may legitimately retry. Bounded start limits keep that cost finite without punishing genuine infrastructure failures.
 
 **Required by this decision:**
 

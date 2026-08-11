@@ -226,3 +226,112 @@ create policy "update own authenticated_product_intelligence_snapshots"
         and p.user_id = auth.uid()
     )
   );
+
+-- ---------------------------------------------------------------------
+-- Deep Scan entitlement and provider usage (Sprint 5 §4, §5, §11, §19).
+--
+-- The product rule: each project receives ONE included successful Deep Scan;
+-- additional scans are credit-gated. Deliberately NOT a billing schema —
+-- there are no prices, balances, purchases, plans, or invoices here, and
+-- Vibe Credits do not exist yet.
+--
+-- The consumption invariant is enforced by *derivation*, not by a flag:
+--
+--   a completed snapshot with access_mode = 'included_first_scan'
+--     -> the included entitlement is consumed
+--   no such snapshot
+--     -> it remains available
+--
+-- A boolean on projects would be a second source of truth that could drift
+-- from the snapshots, producing the one state §5 forbids: the UI claiming the
+-- free scan was used while no usable snapshot exists.
+-- ---------------------------------------------------------------------
+
+-- How a run was funded. 'credits' is reserved: no code path produces it yet.
+alter table public.authenticated_browser_sessions
+  add column access_mode text not null default 'included_first_scan'
+    check (access_mode in ('included_first_scan', 'credits'));
+
+comment on column public.authenticated_browser_sessions.access_mode is
+  'Which entitlement funded this run. ''credits'' is reserved for a future Vibe Credits system and is not yet produced by any code path.';
+
+alter table public.authenticated_product_intelligence_snapshots
+  add column access_mode text not null default 'included_first_scan'
+    check (access_mode in ('included_first_scan', 'credits'));
+
+comment on column public.authenticated_product_intelligence_snapshots.access_mode is
+  'Entitlement that funded the scan. A completed row with ''included_first_scan'' IS the proof that the project''s included scan was consumed (Sprint 5 §5).';
+
+-- The entitlement invariant as a database guarantee: at most one *completed*
+-- included Deep Scan per project. A second successful included scan cannot be
+-- inserted even if the application's authorization check were bypassed or
+-- raced, so the free scan cannot be consumed twice.
+create unique index authenticated_product_intelligence_one_included_scan_idx
+  on public.authenticated_product_intelligence_snapshots (project_id)
+  where status = 'completed' and access_mode = 'included_first_scan';
+
+-- Cheap "has the included scan been consumed?" and attempt-window lookups.
+create index authenticated_browser_sessions_project_started_idx
+  on public.authenticated_browser_sessions (project_id, created_at desc, status);
+
+-- ---------------------------------------------------------------------
+-- deep_scan_provider_usage
+--
+-- Browser-provider consumption, kept OUT of ai_usage_events on purpose: that
+-- table measures inference tokens against effective-dated per-token prices,
+-- and a browser session has neither. Merging them would make every future
+-- cost question ambiguous.
+--
+-- provider_cost_usd is nullable and stays null unless the provider reports a
+-- real figure. A cost derived from a rate we assumed would look like a
+-- measurement while being a guess.
+-- ---------------------------------------------------------------------
+create table public.deep_scan_provider_usage (
+  id uuid primary key default gen_random_uuid(),
+  project_id uuid not null references public.projects (id) on delete cascade,
+  session_id uuid references public.authenticated_browser_sessions (id) on delete set null,
+
+  provider text not null check (provider in ('browserbase')),
+  operation text not null check (operation = 'authenticated_product_analysis'),
+  access_mode text not null check (access_mode in ('included_first_scan', 'credits')),
+
+  status text not null check (status in ('completed', 'failed', 'cancelled', 'expired')),
+
+  started_at timestamptz not null,
+  ended_at timestamptz not null,
+  duration_ms integer not null check (duration_ms >= 0),
+  pages_inspected integer check (pages_inspected >= 0),
+
+  -- Null until a provider reports real usage cost. Never computed from an
+  -- assumed rate.
+  provider_cost_usd numeric(12, 9),
+
+  created_at timestamptz not null default now(),
+
+  constraint deep_scan_provider_usage_ends_after_start check (ended_at >= started_at)
+);
+
+comment on table public.deep_scan_provider_usage is
+  'Browser-provider (infrastructure) consumption for Deep Scans. Separate from ai_usage_events by design: browser-seconds are not tokens. Never contains credentials, capability URLs, or page content.';
+
+create index deep_scan_provider_usage_project_created_idx
+  on public.deep_scan_provider_usage (project_id, created_at desc);
+
+-- Cost-per-access-mode reporting: what an included scan costs vs a paid one.
+create index deep_scan_provider_usage_access_mode_idx
+  on public.deep_scan_provider_usage (access_mode, created_at desc);
+
+alter table public.deep_scan_provider_usage enable row level security;
+
+-- Insert-only from the owner's perspective, and with NO select policy: provider
+-- billing detail is internal operational data, unreadable through the public
+-- API. Same posture as ai_usage_events.
+create policy "insert own deep_scan_provider_usage"
+  on public.deep_scan_provider_usage
+  for insert with check (
+    exists (
+      select 1 from public.projects p
+      where p.id = project_id
+        and p.user_id = auth.uid()
+    )
+  );
