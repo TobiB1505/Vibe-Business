@@ -18,6 +18,7 @@ function accessStatus(overrides: Partial<DeepScanAccessStatus> = {}): DeepScanAc
     additionalScansRequireCredits: true,
     activeSession: null,
     blockedReason: null,
+    retryAvailableAt: null,
     ...overrides,
   };
 }

@@ -89,6 +89,8 @@ export type DeepScanViewModel = {
    * this field exists to prevent.
    */
   unavailableReason: DeepScanUnavailableReason | null;
+  /** When a cooldown lifts, so a blocked state can say when, not just no. */
+  retryAvailableAt: string | null;
 };
 
 /**
@@ -202,5 +204,6 @@ export function buildDeepScanViewModel(input: BuildViewModelInput): DeepScanView
     lastFailure,
     providerConfigured: input.providerConfigured,
     unavailableReason,
+    retryAvailableAt: accessStatus.retryAvailableAt,
   };
 }

@@ -128,6 +128,51 @@ export async function attachReadOnlyGuards(
  * `connectUrl` is a capability URL: it is passed in per call, used, and never
  * stored, logged, or returned.
  */
+/**
+ * Points a freshly created session at the project's own origin.
+ *
+ * Without this the user is handed a blank browser and has to type their own
+ * URL — which is both a poor first impression and an easy way to end up signed
+ * into the wrong site, producing `authenticated_origin_not_reached` later.
+ *
+ * Deliberately **no read-only guards**. Signing in is a POST, and the guards
+ * exist to keep the *analysis* read-only; attaching them here would block the
+ * login this whole flow is built around. Analysis connects separately, through
+ * `connectReadOnly`, and that is where the guards belong.
+ *
+ * Best effort: a site that is slow or down must not fail session creation,
+ * because the user can still drive the browser by hand.
+ */
+export async function openSessionAtOrigin(
+  connectUrl: string,
+  origin: string,
+  options: { timeoutMs?: number } = {},
+): Promise<{ navigated: boolean }> {
+  const { chromium } = await import("playwright-core");
+
+  let browser: Browser | undefined;
+  try {
+    browser = await chromium.connectOverCDP(connectUrl, { timeout: options.timeoutMs ?? 20_000 });
+    const context = browser.contexts()[0];
+    if (!context) return { navigated: false };
+
+    // A brand-new session already has one blank page; reuse it rather than
+    // leaving a stray tab the analyzer would later have to ignore.
+    const page = context.pages()[0] ?? (await context.newPage());
+    await page.goto(new URL(origin).origin, {
+      waitUntil: "domcontentloaded",
+      timeout: options.timeoutMs ?? 20_000,
+    });
+    return { navigated: true };
+  } catch {
+    return { navigated: false };
+  } finally {
+    // Closes our CDP connection only. The remote session, and the page we just
+    // navigated, stay exactly where they are for the user.
+    await browser?.close().catch(() => undefined);
+  }
+}
+
 export async function connectReadOnly(
   connectUrl: string,
   origin: string,

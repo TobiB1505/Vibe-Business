@@ -61,6 +61,15 @@ function messageFor(code: string): string {
   return ERROR_MESSAGES[code] ?? "Deep Scan couldn't be completed.";
 }
 
+/** "in about 2 minutes" — coarse on purpose; a live countdown would be noise. */
+function waitHint(retryAvailableAt: string | null): string | null {
+  if (!retryAvailableAt) return null;
+  const remainingMs = Date.parse(retryAvailableAt) - Date.now();
+  if (!Number.isFinite(remainingMs) || remainingMs <= 0) return null;
+  const minutes = Math.ceil(remainingMs / 60_000);
+  return minutes <= 1 ? "You can try again in about a minute." : `You can try again in about ${minutes} minutes.`;
+}
+
 function Section({ children }: { children: React.ReactNode }) {
   return <section className="space-y-3 rounded-md border border-zinc-800 p-4">{children}</section>;
 }
@@ -408,10 +417,18 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
                 Your included Deep Scan for this project is still available.
               </p>
             )}
-            {model.canStart && (
+            {model.canStart ? (
               <Button type="button" onClick={handleStart} disabled={disabled}>
                 {disabled ? "Starting…" : "Try Deep Scan again"}
               </Button>
+            ) : (
+              // Retrying is blocked by policy (usually the short cooldown after
+              // an abandoned attempt). Saying nothing here reads as "retry is
+              // broken", which is exactly how it was reported.
+              <p className="text-sm text-zinc-500">
+                {waitHint(model.retryAvailableAt) ??
+                  (model.blockedReason ? messageFor(model.blockedReason) : "Deep Scan can't be started right now.")}
+              </p>
             )}
           </>
         ) : model.state === "recommended" ? (
