@@ -262,3 +262,40 @@ describe("BrowserbaseSessionProvider — reconnecting after login", () => {
     expect(JSON.stringify(result)).not.toContain("wss://");
   });
 });
+
+/**
+ * Regression: the Live View embed showed the browser as a small panel adrift in
+ * empty space — reported as "viel zu klein, sieht extrem unprofessionell aus".
+ *
+ * Cause: no viewport was requested, so the provider chose its own and the Live
+ * View letterboxed it inside an embed of a different shape. The viewport and
+ * the embed's aspect ratio have to agree, so the size is pinned here rather
+ * than left to a provider default.
+ */
+describe("BrowserbaseSessionProvider — live view presentation", () => {
+  it("requests an explicit desktop viewport rather than accepting a default", async () => {
+    const sessions = fakeSessions();
+    await new BrowserbaseSessionProvider(sessions).createSession({ timeoutSeconds: 600 });
+
+    const settings = sessions.create.mock.calls[0]![0]!.browserSettings!;
+    expect(settings.viewport).toEqual({ width: 1280, height: 720 });
+  });
+
+  it("keeps the viewport at 16:9 so the embed can match it without letterboxing", () => {
+    // The dialog renders the iframe with `aspect-video`. If this ratio changes,
+    // that class has to change with it or the letterboxing returns.
+    const { width, height } = { width: 1280, height: 720 };
+    expect(width / height).toBeCloseTo(16 / 9, 5);
+  });
+
+  it("still sets every security invariant alongside the viewport", async () => {
+    const sessions = fakeSessions();
+    await new BrowserbaseSessionProvider(sessions).createSession({ timeoutSeconds: 600 });
+
+    const settings = sessions.create.mock.calls[0]![0]!.browserSettings!;
+    expect(settings.recordSession).toBe(false);
+    expect(settings.logSession).toBe(false);
+    expect(settings.solveCaptchas).toBe(false);
+    expect(Object.hasOwn(settings, "context")).toBe(false);
+  });
+});

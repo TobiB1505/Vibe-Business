@@ -53,6 +53,7 @@ export type BrowserbaseSessionsClient = {
       recordSession?: boolean;
       logSession?: boolean;
       solveCaptchas?: boolean;
+      viewport?: { width: number; height: number };
       context?: { id: string; persist?: boolean };
     };
     keepAlive?: boolean;
@@ -109,6 +110,12 @@ export class BrowserbaseSessionProvider implements BrowserSessionProvider {
           recordSession: false,
           logSession: false,
           solveCaptchas: false,
+          // Without an explicit viewport the provider picks its own, and the
+          // Live View then letterboxes it inside our iframe — the browser
+          // renders as a small panel floating in empty space, which reads as
+          // broken rather than as a browser. 16:9 so the embed can match it
+          // exactly — the dialog's iframe uses `aspect-video` for this reason.
+          viewport: { width: 1280, height: 720 },
           // `context` is deliberately absent, not undefined-by-omission-by-
           // accident: there is no code path that can add one.
         },

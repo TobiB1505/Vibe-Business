@@ -129,7 +129,7 @@ function LiveViewDialog({
         aria-labelledby="deep-scan-dialog-title"
         aria-describedby="deep-scan-dialog-description"
         tabIndex={-1}
-        className="flex max-h-full w-full max-w-5xl flex-col gap-3 rounded-lg border border-zinc-800 bg-zinc-950 p-4 focus:outline-none"
+        className="flex max-h-[94vh] w-full max-w-6xl flex-col gap-3 overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950 p-4 focus:outline-none"
       >
         <div className="space-y-1">
           <h3 id="deep-scan-dialog-title" className="text-sm font-medium text-zinc-100">
@@ -141,7 +141,10 @@ function LiveViewDialog({
           </p>
         </div>
 
-        <div className="min-h-96 flex-1 overflow-hidden rounded-md border border-zinc-800 bg-zinc-900">
+        {/* aspect-video matches the 1280x720 viewport requested in the
+            Browserbase adapter. Any other ratio makes the provider letterbox
+            the browser, which is what made this look broken. */}
+        <div className="aspect-video w-full overflow-hidden rounded-md border border-zinc-800 bg-zinc-900">
           {loading && (
             <p role="status" className="p-4 text-sm text-zinc-400">
               Opening a temporary browser…
@@ -157,7 +160,7 @@ function LiveViewDialog({
               // The URL comes only from the authorized server action.
               src={liveViewUrl}
               title="Temporary browser for signing in to your product"
-              className="h-full min-h-96 w-full"
+              className="block h-full w-full"
               // Deliberately minimal. No camera, microphone, geolocation, or
               // clipboard — none has been shown necessary for a login (§7).
               sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
