@@ -1,6 +1,9 @@
 import "server-only";
 
-import { chromium, type Browser, type BrowserContext, type Page } from "playwright-core";
+// Types only — erased at compile time, so this import contributes nothing to
+// the runtime module graph. The runtime binding is loaded inside
+// `connectReadOnly` instead; see the note there.
+import type { Browser, BrowserContext, Page } from "playwright-core";
 import type { AnalysisBrowserPort, AnalysisPagePort } from "../analyzer";
 import { pageExtractionScript, type RawPageExtraction } from "../extract";
 import { decideRequest } from "../read-only-policy";
@@ -130,6 +133,21 @@ export async function connectReadOnly(
   origin: string,
   options: { timeoutMs?: number } = {},
 ): Promise<ReadOnlyBrowserSession> {
+  // Imported here rather than at module scope, and this placement is
+  // load-bearing rather than stylistic.
+  //
+  // Turbopack compiles a top-level `import` of an external package into a
+  // top-level `await externalImport(...)` in the emitted chunk, so the package
+  // is resolved the instant the chunk initialises. `playwright-core` reads its
+  // own `browsers.json` on load, that file is not traced into the serverless
+  // bundle, and the result was that merely *rendering the project page* threw
+  // `Cannot find module .../browsers.json` — a 500 on a page that was not
+  // running a scan at all.
+  //
+  // Keeping the import inside the function means the package is resolved only
+  // when a Deep Scan actually connects to a browser.
+  const { chromium } = await import("playwright-core");
+
   const browser: Browser = await chromium.connectOverCDP(connectUrl, {
     timeout: options.timeoutMs ?? 30_000,
   });
