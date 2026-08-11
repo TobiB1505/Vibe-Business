@@ -8,6 +8,8 @@ import { checkInstallationStillAccessible } from "@/modules/github/repositories"
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intelligence/store";
 import { getLatestSuccessfulAudit } from "@/modules/business-audit/store";
+import { getAuditCurrency } from "@/modules/business-audit/service";
+import { buildAuditEvidenceNotice } from "@/modules/business-audit/evidence-notice";
 import { isBrowserProviderConfigured } from "@/modules/authenticated-product-intelligence/browserbase/client";
 import { getDeepScanAccessStatus } from "@/modules/authenticated-product-intelligence/service";
 import {
@@ -16,6 +18,7 @@ import {
 } from "@/modules/authenticated-product-intelligence/store";
 import { detectAuthenticatedSurfaces } from "@/modules/authenticated-product-intelligence/surface-detection";
 import { buildDeepScanViewModel } from "@/modules/authenticated-product-intelligence/view";
+import { AuditEvidenceNotice } from "./audit-evidence-notice";
 import { BusinessAuditSummary } from "./business-audit-summary";
 import { DeepScanPanel } from "./deep-scan-panel";
 import { BusinessContextForm } from "./business-context-form";
@@ -70,6 +73,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
     deepScanAccess,
     latestDeepScanSnapshot,
     latestDeepScanSession,
+    auditCurrency,
   ] = await Promise.all([
     getLatestSuccessfulSnapshot(supabase, projectId),
     getLatestSuccessfulLiveSnapshot(supabase, projectId),
@@ -78,6 +82,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
     getDeepScanAccessStatus(supabase, { projectId, userId: session.userId }),
     getLatestSuccessfulAuthenticatedSnapshot(supabase, projectId),
     getLatestSession(supabase, projectId),
+    getAuditCurrency(supabase, projectId),
   ]);
 
   // Deep Scan state is derived on the server (Sprint 5 §13): entitlement,
@@ -111,6 +116,15 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
   const hasRepositoryIntelligence = Boolean(latestSnapshot?.result);
   const hasLiveProductIntelligence = Boolean(latestLiveSnapshot?.result);
   const auditReady = hasRepositoryIntelligence && hasLiveProductIntelligence && businessContext !== null;
+
+  // Deep Scan evidence notice (Sprint 6 §11, §14). Informational: it never
+  // gates the audit, and a new Deep Scan never triggers an automatic AI call.
+  const auditEvidenceNotice = buildAuditEvidenceNotice({
+    hasSuccessfulDeepScan: Boolean(latestDeepScanSnapshot?.result),
+    authenticatedSurfacesLikely: deepScanModel?.showRecommendation ?? false,
+    canStartDeepScan: deepScanModel?.canStart ?? false,
+    auditPredatesDeepScan: auditCurrency.newDeepScanEvidence,
+  });
 
   const missingPrerequisites = [
     hasRepositoryIntelligence ? null : "repository intelligence",
@@ -205,6 +219,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
         </section>
 
         <section className="space-y-3">
+          <AuditEvidenceNotice notice={auditEvidenceNotice} />
+
           {latestAudit?.result ? (
             <BusinessAuditSummary
               audit={latestAudit.result}

@@ -288,3 +288,94 @@ describe("extendCandidates", () => {
     expect(added.length).toBeLessThanOrEqual(5);
   });
 });
+
+describe("route priority refinement (Sprint 6 §5)", () => {
+  function candidates(input: {
+    landingPath?: string;
+    repositoryRoutes?: { path: string; kind: "page" | "api" | "layout"; dynamic: boolean }[];
+    publicPages?: { path: string; redirectedTo: string | null }[];
+  }) {
+    return buildRouteCandidates({
+      origin: ORIGIN,
+      landingPath: input.landingPath ?? "/app",
+      repository: repositoryWith(input.repositoryRoutes ?? []),
+      publicProduct: publicWith(input.publicPages ?? []),
+      budgets: DEFAULT_AUTHENTICATED_BUDGETS,
+    });
+  }
+
+  it("ranks a path proven to be protected above the same path merely declared in code", () => {
+    const protectedFirst = candidates({
+      repositoryRoutes: [{ path: "/reports", kind: "page", dynamic: false }],
+      publicPages: [{ path: "/insights", redirectedTo: "/login" }],
+    });
+
+    const insights = protectedFirst.find((candidate) => candidate.path === "/insights");
+    const reports = protectedFirst.find((candidate) => candidate.path === "/reports");
+
+    // Both match the same analytics hint, so only the evidence separates them.
+    expect(insights).toBeDefined();
+    expect(reports).toBeDefined();
+    expect(insights!.priority).toBeGreaterThan(reports!.priority);
+    expect(protectedFirst.indexOf(insights!)).toBeLessThan(protectedFirst.indexOf(reports!));
+  });
+
+  it("demotes a repository route the public crawler already rendered", () => {
+    const overlapping = candidates({
+      repositoryRoutes: [{ path: "/pricing", kind: "page", dynamic: false }],
+      publicPages: [{ path: "/pricing", redirectedTo: null }],
+    });
+    const fresh = candidates({
+      repositoryRoutes: [{ path: "/pricing", kind: "page", dynamic: false }],
+    });
+
+    const demoted = overlapping.find((candidate) => candidate.path === "/pricing");
+    const undemoted = fresh.find((candidate) => candidate.path === "/pricing");
+
+    expect(demoted!.priority).toBeLessThan(undemoted!.priority);
+  });
+
+  it("keeps public-overlap routes as candidates rather than removing them", () => {
+    // The signed-in view of `/` is frequently a different page entirely, so a
+    // blanket removal would throw away real evidence (Sprint 6 §5).
+    const result = candidates({
+      landingPath: "/app",
+      repositoryRoutes: [
+        { path: "/", kind: "page", dynamic: false },
+        { path: "/pricing", kind: "page", dynamic: false },
+      ],
+      publicPages: [
+        { path: "/", redirectedTo: null },
+        { path: "/pricing", redirectedTo: null },
+      ],
+    });
+
+    expect(result.map((candidate) => candidate.path)).toContain("/");
+    expect(result.map((candidate) => candidate.path)).toContain("/pricing");
+    expect(result.every((candidate) => candidate.priority >= 1)).toBe(true);
+  });
+
+  it("never demotes the landing page the user is already on", () => {
+    const result = candidates({
+      landingPath: "/",
+      publicPages: [{ path: "/", redirectedTo: null }],
+    });
+
+    const landing = result.find((candidate) => candidate.path === "/");
+    expect(landing?.source).toBe("landing");
+    expect(landing?.priority).toBe(10);
+  });
+
+  it("ranks a link found in the signed-in UI above an unremarkable seeded route", () => {
+    const [link] = extendCandidates([], ["/reports"], {
+      origin: ORIGIN,
+      depth: 1,
+      budgets: DEFAULT_AUTHENTICATED_BUDGETS,
+    });
+    const seeded = candidates({ repositoryRoutes: [{ path: "/reports", kind: "page", dynamic: false }] }).find(
+      (candidate) => candidate.path === "/reports",
+    );
+
+    expect(link.priority).toBeGreaterThan(seeded!.priority);
+  });
+});

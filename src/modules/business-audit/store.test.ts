@@ -13,6 +13,7 @@ const base = {
   repositorySnapshotId: "11111111-1111-1111-1111-111111111111",
   liveSnapshotId: "22222222-2222-2222-2222-222222222222",
   businessContextHash: "a".repeat(64),
+  authenticatedSnapshotId: null as string | null,
   schemaVersion: "business-readiness-audit.v1",
   auditVersion: "business-audit-v1",
   evidencePackVersion: "business-evidence.v1",
@@ -42,6 +43,9 @@ describe("computeAuditInputHash", () => {
     ["a new schema version", { schemaVersion: "business-readiness-audit.v2" }],
     ["a different model", { model: "claude-opus-5" }],
     ["a different provider", { provider: "someone-else" }],
+    // Sprint 6 §7: an audit run before a Deep Scan and one run after it saw
+    // different evidence, so they must never share an identity.
+    ["a first Deep Scan", { authenticatedSnapshotId: "55555555-5555-5555-5555-555555555555" }],
   ])("changes when %s invalidates the result", (_label, override) => {
     expect(computeAuditInputHash({ ...base, ...override })).not.toBe(computeAuditInputHash(base));
   });
@@ -56,10 +60,24 @@ describe("computeAuditInputHash", () => {
       auditVersion: base.auditVersion,
       schemaVersion: base.schemaVersion,
       businessContextHash: base.businessContextHash,
+      authenticatedSnapshotId: base.authenticatedSnapshotId,
       liveSnapshotId: base.liveSnapshotId,
       repositorySnapshotId: base.repositorySnapshotId,
     };
     expect(computeAuditInputHash(reordered)).toBe(computeAuditInputHash(base));
+  });
+
+  it("distinguishes a re-scanned Deep Scan from the original one", () => {
+    // A second Deep Scan is new evidence even though "a Deep Scan exists" is
+    // unchanged — a boolean here would have wrongly reused the old audit.
+    const first = { ...base, authenticatedSnapshotId: "55555555-5555-5555-5555-555555555555" };
+    const second = { ...base, authenticatedSnapshotId: "66666666-6666-6666-6666-666666666666" };
+    expect(computeAuditInputHash(first)).not.toBe(computeAuditInputHash(second));
+  });
+
+  it("keeps 'no Deep Scan' distinct from any string an id could take", () => {
+    const literal = { ...base, authenticatedSnapshotId: "authenticated:none" };
+    expect(computeAuditInputHash(literal)).not.toBe(computeAuditInputHash(base));
   });
 
   it("does not collide when two fields swap values", () => {

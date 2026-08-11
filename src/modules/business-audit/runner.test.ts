@@ -5,6 +5,7 @@ import { PROMPT_VERSION } from "./prompt";
 import { RUBRIC_VERSION } from "./rubric";
 import {
   FakeProvider,
+  fakeAuthenticatedSnapshot,
   buildModelOutput,
   fakeBusinessContext,
   fakeLiveSnapshot,
@@ -18,6 +19,8 @@ function inputFor(provider: FakeProvider) {
     repository: fakeRepositorySnapshot(),
     liveProduct: fakeLiveSnapshot(),
     businessContext: fakeBusinessContext(),
+    // The common case: no Deep Scan has been run. The audit must work anyway.
+    authenticatedProduct: null,
   };
 }
 
@@ -31,7 +34,7 @@ describe("runBusinessReadinessAudit — happy path", () => {
 
     expect(outcome.audit.schemaVersion).toBe("business-readiness-audit.v1");
     expect(outcome.audit.auditVersion).toBe("business-audit-v1");
-    expect(outcome.audit.evidencePackVersion).toBe("business-evidence.v1");
+    expect(outcome.audit.evidencePackVersion).toBe("business-evidence.v2");
     expect(outcome.audit.promptVersion).toBe(PROMPT_VERSION);
     expect(outcome.audit.rubricVersion).toBe(RUBRIC_VERSION);
     expect(outcome.audit.provider).toBe("fake");
@@ -429,5 +432,74 @@ describe("runBusinessReadinessAudit — evidence integrity end to end", () => {
     expect(request.system).not.toContain("pirate");
     expect(request.userContent).toContain("pirate");
     expect(request.userContent).toContain("<evidence>");
+  });
+});
+
+describe("runBusinessReadinessAudit — Deep Scan evidence (Sprint 6)", () => {
+  function withDeepScan(provider: FakeProvider) {
+    return { ...inputFor(provider), authenticatedProduct: fakeAuthenticatedSnapshot() };
+  }
+
+  it("puts authenticated evidence in front of the model as untrusted data", async () => {
+    const provider = new FakeProvider();
+    await runBusinessReadinessAudit(withDeepScan(provider));
+
+    const sent = provider.requests[0].userContent;
+    expect(sent).toContain("auth.surface.dashboard");
+    expect(sent).toContain("UNTRUSTED DATA");
+  });
+
+  it("accepts a cited auth id that exists and rejects one that does not", async () => {
+    const provider = new FakeProvider({
+      result: {
+        ok: true,
+        data: buildModelOutput({
+          retention: {
+            assessmentStatus: "partial",
+            score: 55,
+            evidenceIds: ["auth.surface.dashboard", "auth.surface.invented_surface"],
+          },
+        }),
+        usage: { inputTokens: 2_500, outputTokens: 800, thinkingTokens: 200 },
+        model: "claude-sonnet-5",
+        latencyMs: 3_000,
+      },
+    });
+
+    const outcome = await runBusinessReadinessAudit(withDeepScan(provider));
+
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+
+    const retention = outcome.audit.dimensions.find((dimension) => dimension.id === "retention");
+    expect(retention?.evidenceIds).toEqual(["auth.surface.dashboard"]);
+  });
+
+  it("does not raise the score merely because a Deep Scan exists", async () => {
+    // Same model verdict, with and without authenticated evidence. Scoring is
+    // deterministic and reads only the dimensions, so the presence of a Deep
+    // Scan cannot move the number on its own (Sprint 6 §10).
+    const withScan = await runBusinessReadinessAudit(withDeepScan(new FakeProvider()));
+    const withoutScan = await runBusinessReadinessAudit(inputFor(new FakeProvider()));
+
+    expect(withScan.ok && withoutScan.ok).toBe(true);
+    if (!withScan.ok || !withoutScan.ok) return;
+    expect(withScan.audit.overall).toEqual(withoutScan.audit.overall);
+  });
+
+  it("does not score an absent Deep Scan as zero", async () => {
+    const outcome = await runBusinessReadinessAudit(inputFor(new FakeProvider()));
+
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+
+    // Unassessable dimensions stay null and are excluded from the average —
+    // never counted as a zero (Sprint 4 §7, Sprint 6 §10).
+    const unassessed = outcome.audit.dimensions.filter(
+      (dimension) => dimension.assessmentStatus === "insufficient_evidence",
+    );
+    expect(unassessed.length).toBeGreaterThan(0);
+    expect(unassessed.every((dimension) => dimension.score === null)).toBe(true);
+    expect(outcome.audit.overall.score).toBeGreaterThan(0);
   });
 });
