@@ -42,7 +42,13 @@ export class FakeProvider implements AIProvider {
   }
 }
 
-/** A well-formed model response citing evidence ids that exist in the default pack. */
+/**
+ * A well-formed model response citing evidence ids that exist in the default
+ * pack, in the **provider wire form**: `dimensions` is an array whose entries
+ * each name their own `dimension` (see `wire-schema.ts`). Fixtures speak the
+ * transport format because that is what the provider actually returns; the
+ * runner normalizes it before any domain rule runs.
+ */
 export function buildModelOutput(
   overrides: Partial<Record<(typeof AUDIT_DIMENSIONS)[number], Record<string, unknown>>> = {},
   extras: { keyFindings?: unknown; limitations?: unknown } = {},
@@ -71,7 +77,10 @@ export function buildModelOutput(
   }
 
   return {
-    dimensions,
+    dimensions: AUDIT_DIMENSIONS.map((dimension) => ({
+      dimension,
+      ...(dimensions[dimension] as Record<string, unknown>),
+    })),
     keyFindings: extras.keyFindings ?? [
       { finding: "The product is understandable but not monetized.", evidenceIds: ["business.product_summary"] },
     ],

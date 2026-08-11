@@ -54,16 +54,57 @@ describe("isProviderErrorLoggingEnabled", () => {
   });
 });
 
+/**
+ * The shape the SDK actually produced on the 2026-08-11 rejection: `.error`
+ * is the parsed *body*, so the provider message is one level deeper than a
+ * naive lookup expects, and `.message` is the composite `"400 {...}"` form.
+ */
+function sdkCompositeError(providerMessage: string) {
+  const body = {
+    type: "error",
+    error: { type: "invalid_request_error", message: providerMessage },
+    request_id: "req_011CdwEyahFVgLpqzLEDPgW3",
+  };
+  return {
+    status: 400,
+    type: "invalid_request_error",
+    requestID: "req_011CdwEyahFVgLpqzLEDPgW3",
+    // What the SDK puts on Error.message: status prefix + whole body.
+    message: `400 ${JSON.stringify(body)}`,
+    error: body,
+  };
+}
+
 describe("extractProviderMessage", () => {
-  it("prefers the provider's structured message over the SDK's composite one", () => {
+  it("reads the provider message out of the SDK's real nesting, without the body", () => {
+    const error = sdkCompositeError("The compiled grammar is too large.");
+    const message = extractProviderMessage(error);
+
+    expect(message).toBe("The compiled grammar is too large.");
+    // The regression: the body reached the log because the fallback took over.
+    expect(message).not.toContain('{"type":"error"');
+    expect(message).not.toContain("request_id");
+    expect(message).not.toMatch(/^400 /);
+  });
+
+  it("reads a message nested only one level deep too", () => {
     const message = extractProviderMessage(
-      apiError("output_config.format.schema: unsupported keyword", '400 {"type":"error",...}'),
+      apiError("output_config.format.schema: unsupported keyword"),
     );
     expect(message).toBe("output_config.format.schema: unsupported keyword");
   });
 
-  it("falls back to the error message when no structured body is present", () => {
-    expect(extractProviderMessage(apiError(null, "Connection error"))).toBe("Connection error");
+  it("returns null rather than falling back to a composite message", () => {
+    // No structured body at all: the composite message is the only thing
+    // present, and it must not be used — that is the leak being regressed.
+    expect(extractProviderMessage(apiError(null, '400 {"type":"error","error":{}}'))).toBeNull();
+    expect(extractProviderMessage(apiError(null, "Connection error"))).toBeNull();
+  });
+
+  it("rejects a body-shaped string even when it arrives via the structured field", () => {
+    expect(extractProviderMessage(apiError('{"type":"error","error":{"message":"x"}}'))).toBeNull();
+    expect(extractProviderMessage(apiError('400 {"type":"error"}'))).toBeNull();
+    expect(extractProviderMessage(apiError('[{"role":"user"}]'))).toBeNull();
   });
 
   it("collapses newlines so one rejection is one log line", () => {
@@ -138,6 +179,27 @@ describe("logRejectedProviderRequest", () => {
     expect(serialized).not.toContain("EVIDENCE PACK BODY");
     expect(serialized).not.toContain("sk-ant-secret");
     expect(serialized).not.toContain("authorization");
+  });
+
+  it("cannot leak a composite SDK error's raw body, even one echoing the prompt", () => {
+    const sink = vi.fn();
+    const body = {
+      type: "error",
+      error: { type: "invalid_request_error", message: "messages.0.content: too long" },
+      // A body that echoes what we sent is the worst case for this channel.
+      request_echo: { messages: [{ role: "user", content: "EVIDENCE PACK BODY" }] },
+    };
+    const error = { status: 400, message: `400 ${JSON.stringify(body)}`, error: body };
+
+    logRejectedProviderRequest(error, diagnostic, { env: { NODE_ENV: "development" }, sink });
+
+    const detail = sink.mock.calls[0]![1] as RejectedRequestLogDetail;
+    expect(detail.providerMessage).toBe("messages.0.content: too long");
+
+    const serialized = JSON.stringify(sink.mock.calls[0]);
+    expect(serialized).not.toContain("EVIDENCE PACK BODY");
+    expect(serialized).not.toContain("request_echo");
+    expect(serialized).not.toContain('{"type":"error"');
   });
 
   it("does not throw when the sink fails: a diagnostic cannot break an audit", () => {

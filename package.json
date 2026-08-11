@@ -14,6 +14,7 @@
     "lint": "eslint .",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
+    "ai:probe-audit-schema": "vitest run --config vitest.probe.config.mts",
     "db:status": "supabase migration list",
     "db:push": "supabase db push",
     "db:lint": "supabase db lint --linked"
