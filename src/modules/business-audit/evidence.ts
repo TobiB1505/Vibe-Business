@@ -97,7 +97,7 @@ const GOAL_LABELS: Record<string, string> = {
   grow_revenue: "Grow revenue",
 };
 
-function buildRepositoryEvidence(snapshot: RepositoryIntelligenceSnapshot): EvidenceItem[] {
+export function buildRepositoryEvidence(snapshot: RepositoryIntelligenceSnapshot): EvidenceItem[] {
   const items: EvidenceItem[] = [];
 
   for (const framework of snapshot.frameworks) {
@@ -185,7 +185,7 @@ function buildRepositoryEvidence(snapshot: RepositoryIntelligenceSnapshot): Evid
   return items;
 }
 
-function buildLiveEvidence(snapshot: LiveProductIntelligenceSnapshot): EvidenceItem[] {
+export function buildLiveEvidence(snapshot: LiveProductIntelligenceSnapshot): EvidenceItem[] {
   const items: EvidenceItem[] = [];
 
   items.push(
@@ -324,7 +324,7 @@ function buildLiveEvidence(snapshot: LiveProductIntelligenceSnapshot): EvidenceI
   return items;
 }
 
-function buildBusinessContextEvidence(context: BusinessContext): EvidenceItem[] {
+export function buildBusinessContextEvidence(context: BusinessContext): EvidenceItem[] {
   const items: EvidenceItem[] = [
     item(
       "business.product_summary",

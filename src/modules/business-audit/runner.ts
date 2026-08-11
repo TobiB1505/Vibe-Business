@@ -1,6 +1,13 @@
 import type { AIProvider, AIUsage, ProviderErrorDiagnostic, StructuredRequest } from "@/modules/ai/provider";
 import type { OperationConfig } from "@/modules/ai/operations";
-import { buildEvidencePack, evidenceIdSet, renderEvidencePack, trimEvidencePack, type BuildEvidencePackInput, type EvidencePack } from "./evidence";
+import {
+  buildEvidencePackV2,
+  evidenceIdSetV2,
+  renderEvidencePackV2,
+  trimEvidencePackV2,
+  type BuildEvidencePackV2Input,
+  type EvidencePackV2,
+} from "./evidence-v2";
 import { PROMPT_VERSION, buildSystemPrompt } from "./prompt";
 import { RUBRIC_VERSION } from "./rubric";
 import { computeOverallReadiness } from "./scoring";
@@ -85,19 +92,19 @@ export type AuditRunOutcome =
       latencyMs: number;
     };
 
-export type RunAuditInput = BuildEvidencePackInput & {
+export type RunAuditInput = BuildEvidencePackV2Input & {
   provider: AIProvider;
   config: OperationConfig;
 };
 
-function buildRequest(pack: EvidencePack, config: OperationConfig): StructuredRequest {
+function buildRequest(pack: EvidencePackV2, config: OperationConfig): StructuredRequest {
   return {
     operation: config.operation,
     model: config.model,
     // Authored entirely by us. No customer content is ever interpolated
     // into the system prompt (ADR 0011).
     system: buildSystemPrompt(),
-    userContent: renderEvidencePack(pack),
+    userContent: renderEvidencePackV2(pack),
     outputSchema: ANTHROPIC_AUDIT_OUTPUT_SCHEMA,
     maxOutputTokens: config.maxOutputTokens,
     effort: config.effort,
@@ -107,7 +114,7 @@ function buildRequest(pack: EvidencePack, config: OperationConfig): StructuredRe
 export async function runBusinessReadinessAudit(input: RunAuditInput): Promise<AuditRunOutcome> {
   const { provider, config } = input;
 
-  let pack = buildEvidencePack(input);
+  let pack = buildEvidencePackV2(input);
   let request = buildRequest(pack, config);
 
   // Cost gate: count before spending (Sprint 4 §14). The provider's own
@@ -127,7 +134,7 @@ export async function runBusinessReadinessAudit(input: RunAuditInput): Promise<A
   for (const maxPriority of [2, 1] as const) {
     if (estimatedInputTokens <= config.maxInputTokens) break;
 
-    const trimmed = trimEvidencePack(pack, maxPriority);
+    const trimmed = trimEvidencePackV2(pack, maxPriority);
     if (trimmed === pack) continue;
 
     pack = trimmed;
@@ -176,7 +183,7 @@ export async function runBusinessReadinessAudit(input: RunAuditInput): Promise<A
     };
   }
 
-  const validation = validateAuditOutput(normalized.data, evidenceIdSet(pack));
+  const validation = validateAuditOutput(normalized.data, evidenceIdSetV2(pack));
   if (!validation.ok) {
     // The tokens were still billed even though the output is unusable —
     // recording that honestly is the point of the usage ledger. The reason

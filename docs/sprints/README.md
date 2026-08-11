@@ -15,6 +15,8 @@ Implementation work should be scoped and recorded as discrete sprints, each tied
 - [0002a-supabase-cli-workflow](0002a-supabase-cli-workflow.md) — infrastructure: linked Supabase CLI migration workflow (Complete — migration history reconciled and verified against the linked remote project)
 - [0003-live-product-intelligence](0003-live-product-intelligence.md) — deterministic live product intelligence from the public production website (Complete — migration deployed, dogfooded against the real deployment)
 - [0004-business-readiness-audit](0004-business-readiness-audit.md) — diagnostic AI Business Readiness Audit, first paid inference (Implemented; real dogfood audit blocked on ANTHROPIC_API_KEY)
+- [0005-authenticated-live-product-intelligence](0005-authenticated-live-product-intelligence.md) — human-in-the-loop Deep Scan of the signed-in product (Complete — dogfooded against the real deployment)
+- [0006-deep-scan-audit-evidence](0006-deep-scan-audit-evidence.md) — Deep Scan evidence in the Business Audit, evidence pack v2 (Implemented; updated real audit awaiting approval)
 
 ## Format
 

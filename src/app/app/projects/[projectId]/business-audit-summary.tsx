@@ -1,3 +1,4 @@
+import { describeEvidenceId } from "@/modules/business-audit/evidence-labels";
 import type {
   BusinessReadinessAudit,
   DimensionAssessment,
@@ -32,11 +33,16 @@ function EvidenceDisclosure({ evidenceIds }: { evidenceIds: string[] }) {
     <details className="mt-1">
       <summary className="cursor-pointer text-xs text-zinc-500 hover:text-zinc-400">Why?</summary>
       <ul className="mt-1 space-y-0.5 pl-3">
-        {evidenceIds.map((id) => (
-          <li key={id} className="text-xs text-zinc-500">
-            <code className="text-zinc-400">{id}</code>
-          </li>
-        ))}
+        {evidenceIds.map((id) => {
+          // Resolved to the product's own language (Sprint 6 §12). The id stays
+          // available on hover for support, but is not the thing on screen.
+          const { source, detail } = describeEvidenceId(id);
+          return (
+            <li key={id} className="text-xs text-zinc-500" title={id}>
+              <span className="text-zinc-400">{source}:</span> {detail}
+            </li>
+          );
+        })}
       </ul>
     </details>
   );

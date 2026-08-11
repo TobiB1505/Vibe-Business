@@ -1,6 +1,10 @@
 import type { AIProvider, StructuredRequest, StructuredResult, TokenCountResult } from "@/modules/ai/provider";
 import type { RepositoryIntelligenceSnapshot } from "@/modules/repository-intelligence/schema";
 import type { LiveProductIntelligenceSnapshot } from "@/modules/live-product-intelligence/schema";
+import type {
+  AuthenticatedPageSummary,
+  AuthenticatedProductIntelligenceSnapshot,
+} from "@/modules/authenticated-product-intelligence/schema";
 import type { BusinessContext } from "@/modules/projects/business-context";
 import { AUDIT_DIMENSIONS } from "./schema";
 
@@ -240,4 +244,75 @@ export function fakeLiveSnapshot(
     warnings: [],
     ...overrides,
   };
+}
+
+/**
+ * A Deep Scan snapshot fixture. Deliberately shaped like the first real one:
+ * an app shell, one detected surface and one undetected surface.
+ */
+export function fakeAuthenticatedPage(overrides: Partial<AuthenticatedPageSummary> = {}): AuthenticatedPageSummary {
+  return {
+    path: "/app",
+    source: "landing",
+    status: 200,
+    title: "Vibe Business",
+    mainHeading: null,
+    headingCount: 2,
+    navLabels: [],
+    actionLabels: [],
+    formCount: 0,
+    formFieldTypes: [],
+    tableCount: 0,
+    emptyStatePresent: false,
+    emptyStateLabels: [],
+    surfaces: [],
+    depth: 0,
+    ...overrides,
+  };
+}
+
+export function fakeAuthenticatedSnapshot(
+  overrides: Partial<AuthenticatedProductIntelligenceSnapshot> = {},
+): AuthenticatedProductIntelligenceSnapshot {
+  return {
+    schemaVersion: "authenticated-product-intelligence.v1",
+    source: {
+      origin: "https://app.example.com",
+      analyzerVersion: "v1",
+      browserProvider: "browserbase",
+      analyzedAt: "2026-08-11T00:00:00.000Z",
+    },
+    session: { sessionId: "s", landingPath: "/app", ignoredTabCount: 0 },
+    crawl: {
+      pagesInspected: 4,
+      candidatesConsidered: 9,
+      maxDepthReached: 1,
+      candidateSources: {
+        landing: 1,
+        repository_route: 2,
+        public_protected_redirect: 1,
+        authenticated_link: 5,
+      },
+    },
+    pages: [fakeAuthenticatedPage()],
+    productSurfaces: [
+      { id: "dashboard", name: "Dashboard", detected: true, confidence: "high", evidence: [] },
+      { id: "billing", name: "Billing", detected: false, confidence: "low", evidence: [] },
+    ],
+    navigation: { labels: ["Dashboard", "Settings"], paths: ["/app", "/app/settings"] },
+    applicationSignals: {
+      appShellPresent: true,
+      authenticatedAreaReached: true,
+      reachableSurfaceCount: 4,
+      dataTablePresent: true,
+      emptyStatePresent: false,
+      settingsPresent: true,
+      billingPresent: false,
+      onboardingPresent: false,
+    },
+    metrics: { pagesInspected: 4, navigationCount: 4, durationMs: 100, browserSessionDurationMs: 200 },
+    completeness: { status: "complete", reasons: [] },
+    warnings: [],
+    ...overrides,
+  } as AuthenticatedProductIntelligenceSnapshot;
 }

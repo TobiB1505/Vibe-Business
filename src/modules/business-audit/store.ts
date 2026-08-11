@@ -63,11 +63,17 @@ function mapRow(row: AuditRow): StoredAudit {
 /**
  * The identity of an audit's inputs (Sprint 4 §23).
  *
- * Every input that can change the answer is included: the two evidence
+ * Every input that can change the answer is included: the evidence
  * snapshots, the founder's context, and the full reproducibility set
  * (prompt, rubric, model, versions). Change any one and the hash changes,
  * which correctly invalidates reuse and buys a fresh audit. Change nothing
  * and the existing audit is returned for free.
+ *
+ * `authenticatedSnapshotId` is part of that identity and `null` is a real
+ * value, not a missing one (Sprint 6 §7). An audit run before any Deep Scan
+ * and an audit run after one saw different evidence, so they must not share a
+ * hash — otherwise the first Deep Scan would silently return the stale
+ * pre-Deep-Scan audit and the user would never see their new evidence used.
  *
  * Field order is fixed rather than derived from object keys, so the hash is
  * stable across refactors.
@@ -76,6 +82,8 @@ export function computeAuditInputHash(params: {
   repositorySnapshotId: string;
   liveSnapshotId: string;
   businessContextHash: string;
+  /** The latest successful Deep Scan snapshot, or null when none exists. */
+  authenticatedSnapshotId: string | null;
   schemaVersion: string;
   auditVersion: string;
   evidencePackVersion: string;
@@ -88,6 +96,10 @@ export function computeAuditInputHash(params: {
     params.repositorySnapshotId,
     params.liveSnapshotId,
     params.businessContextHash,
+    // `null` is carried through as JSON null rather than mapped to a sentinel
+    // string: JSON keeps null distinct from every possible id, so "no Deep
+    // Scan" can never be forged by a snapshot whose id happens to match.
+    params.authenticatedSnapshotId,
     params.schemaVersion,
     params.auditVersion,
     params.evidencePackVersion,

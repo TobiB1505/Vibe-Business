@@ -74,6 +74,50 @@ function priorityFor(path: string): number {
   return 10;
 }
 
+/**
+ * Evidence-strength adjustments on top of the path hints (Sprint 6 §5).
+ *
+ * A Deep Scan gets a handful of page visits, so the ordering decides what the
+ * audit actually learns. Two facts we already hold are better signals than the
+ * path alone:
+ *
+ *  - A path the public crawl watched bounce to a login page is *proven* to be
+ *    protected. That is the strongest evidence a route is part of the signed-in
+ *    product, so it outranks a same-named route merely declared in the file
+ *    tree.
+ *  - A path the public crawl already fetched successfully has, by definition,
+ *    already been described by Public Product Intelligence.
+ *
+ * The second is a **demotion, never a removal**. A marketing page and `/` often
+ * render differently once signed in — a logged-in `/` that shows a dashboard is
+ * exactly the kind of thing worth seeing — so these stay on the list, just
+ * behind routes that can only be reached with a session. Priorities are floored
+ * at 1 so no adjustment can push a candidate to the bottom by accident.
+ */
+const PROTECTED_ROUTE_BONUS = 15;
+const AUTHENTICATED_LINK_BONUS = 5;
+const PUBLIC_OVERLAP_PENALTY = 8;
+const MIN_PRIORITY = 1;
+
+export function candidatePriority(
+  path: string,
+  source: RouteCandidateSource,
+  publiclyRendered: ReadonlySet<string> = new Set(),
+): number {
+  let priority = priorityFor(path);
+
+  if (source === "public_protected_redirect") {
+    priority += PROTECTED_ROUTE_BONUS;
+  } else if (source === "authenticated_link") {
+    priority += AUTHENTICATED_LINK_BONUS;
+  } else if (source === "repository_route" && publiclyRendered.has(path)) {
+    priority -= PUBLIC_OVERLAP_PENALTY;
+  }
+  // The landing page is never adjusted: it is where the browser already is.
+
+  return Math.max(priority, MIN_PRIORITY);
+}
+
 export function isNeverVisit(path: string): boolean {
   return NEVER_VISIT.some((pattern) => pattern.test(path));
 }
@@ -139,13 +183,23 @@ export function buildRouteCandidates(input: RouteSeedInput): RouteCandidate[] {
   const { origin, landingPath, repository, publicProduct, budgets } = input;
   const byPath = new Map<string, RouteCandidate>();
 
+  // Paths the public crawl already fetched and rendered anonymously. Used only
+  // to demote overlapping repository routes — see `candidatePriority`.
+  const publiclyRendered = new Set<string>();
+  for (const page of publicProduct?.pages ?? []) {
+    if (page.redirectedTo !== null) continue;
+    if (page.status < 200 || page.status >= 300) continue;
+    const path = toSameOriginPath(page.path, origin);
+    if (path !== null) publiclyRendered.add(path);
+  }
+
   const add = (raw: string, source: RouteCandidateSource, depth: number): void => {
     if (byPath.size >= budgets.maxCandidates) return;
     const path = toSameOriginPath(raw, origin);
     if (path === null || isNeverVisit(path)) return;
     const existing = byPath.get(path);
     if (existing && existing.depth <= depth) return;
-    byPath.set(path, { path, source, depth, priority: priorityFor(path) });
+    byPath.set(path, { path, source, depth, priority: candidatePriority(path, source, publiclyRendered) });
   };
 
   // 1. Where the user already is. Always first, always depth 0.
@@ -200,7 +254,12 @@ export function extendCandidates(
     if (path === null || isNeverVisit(path) || seen.has(path)) continue;
 
     seen.add(path);
-    added.push({ path, source: "authenticated_link", depth: options.depth, priority: priorityFor(path) });
+    added.push({
+      path,
+      source: "authenticated_link",
+      depth: options.depth,
+      priority: candidatePriority(path, "authenticated_link"),
+    });
   }
 
   return sortCandidates(added);

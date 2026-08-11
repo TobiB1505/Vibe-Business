@@ -71,7 +71,12 @@ function waitHint(retryAvailableAt: string | null): string | null {
 }
 
 function Section({ children }: { children: React.ReactNode }) {
-  return <section className="space-y-3 rounded-md border border-zinc-800 p-4">{children}</section>;
+  // `id` is the jump target for the audit section's "Run included Deep Scan".
+  return (
+    <section id="deep-scan" className="space-y-3 rounded-md border border-zinc-800 p-4">
+      {children}
+    </section>
+  );
 }
 
 function Heading({ title, status }: { title: string; status?: string }) {
