@@ -14,7 +14,6 @@ import {
   type DeepScanDenialReason,
 } from "./entitlement";
 import type { AuthenticatedAnalysisFailure } from "./errors";
-import { connectReadOnly } from "./playwright/connector";
 import type { BrowserSessionProvider } from "./provider";
 import { buildDeepScanUsage, type DeepScanUsageStatus } from "./provider-usage";
 import {
@@ -358,6 +357,16 @@ export async function analyzeDeepScan(
 
   let readOnly;
   try {
+    // Loaded here, not at module scope, on purpose.
+    //
+    // `playwright-core` is a heavyweight native-ish dependency that a
+    // serverless runtime only resolves correctly when it is actually needed.
+    // A top-level import made *rendering the project page* pull it in — the
+    // read path (`getDeepScanAccessStatus`) depended on the drive path — and
+    // the whole page 500'd in production even though no scan was running.
+    // Keeping it dynamic means the browser stack is loaded only by the one
+    // code path that drives a browser.
+    const { connectReadOnly } = await import("./playwright/connector");
     readOnly = await connectReadOnly(connection.value.connectUrl, session.origin);
   } catch {
     // Never surface the underlying transport error: it can carry the
