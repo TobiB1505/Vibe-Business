@@ -148,6 +148,7 @@ describe("toDeepScanAccessStatus", () => {
     expect(toDeepScanAccessStatus(facts(), null)).toEqual({
       includedScanAvailable: true,
       additionalScansRequireCredits: true,
+      retryAvailableAt: null,
       activeSession: null,
       blockedReason: null,
     });
@@ -177,5 +178,49 @@ describe("toDeepScanAccessStatus", () => {
 
     expect(projectA.includedScanAvailable).toBe(false);
     expect(projectB.includedScanAvailable).toBe(true);
+  });
+});
+
+/**
+ * Regression: after cancelling a scan the panel offered no retry and said
+ * nothing about why. The cooldown was doing its job, but silently — reported
+ * as "after a failed test I can't retry it".
+ *
+ * The denial is correct and stays; what was missing is the information needed
+ * to wait it out knowingly.
+ */
+describe("toDeepScanAccessStatus — a cooldown says when, not just no", () => {
+  const abandonedAt = new Date("2026-08-11T22:00:00.000Z");
+  const duringCooldown = new Date(abandonedAt.getTime() + 30_000);
+
+  it("reports when the cooldown lifts", () => {
+    const status = toDeepScanAccessStatus(
+      facts({ lastAbandonedAt: abandonedAt, now: duringCooldown }),
+      null,
+    );
+
+    expect(status.blockedReason).toBe("cooldown_active");
+    expect(status.retryAvailableAt).toBe(
+      new Date(abandonedAt.getTime() + START_ATTEMPT_LIMITS.cooldownAfterAbandonedMs).toISOString(),
+    );
+  });
+
+  it("carries no retry time once the cooldown has passed", () => {
+    const after = new Date(abandonedAt.getTime() + START_ATTEMPT_LIMITS.cooldownAfterAbandonedMs + 1_000);
+    const status = toDeepScanAccessStatus(facts({ lastAbandonedAt: abandonedAt, now: after }), null);
+
+    expect(status.blockedReason).toBeNull();
+    expect(status.retryAvailableAt).toBeNull();
+  });
+
+  it("does not offer a retry time for denials waiting cannot fix", () => {
+    // Credits and a missing origin are not outlastable; implying otherwise
+    // would be a lie the UI would faithfully repeat.
+    const credits = toDeepScanAccessStatus(facts({ hasSuccessfulIncludedScan: true }), null);
+    expect(credits.blockedReason).toBe("credits_required");
+    expect(credits.retryAvailableAt).toBeNull();
+
+    const noOrigin = toDeepScanAccessStatus(facts({ productionOrigin: null }), null);
+    expect(noOrigin.retryAvailableAt).toBeNull();
   });
 });

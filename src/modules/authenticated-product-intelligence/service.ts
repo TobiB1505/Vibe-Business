@@ -212,6 +212,21 @@ export async function startDeepScan(
 
   const session = record.session;
 
+  // Land the browser on the user's own site before they ever see it. Best
+  // effort by design: if their site is slow or down, they still get a working
+  // browser and can navigate by hand — a failed navigation must not cost them
+  // a session that was already created and paid for.
+  //
+  // Loaded here, not at module scope, for the same reason as in
+  // `analyzeDeepScan`: this pulls in the browser stack, and rendering the
+  // project page must never do that.
+  try {
+    const { openSessionAtOrigin } = await import("./playwright/connector");
+    await openSessionAtOrigin(handle.connectUrl, origin);
+  } catch {
+    // The user can still navigate manually; nothing here is worth failing on.
+  }
+
   const liveView = await provider.getLiveView(handle.providerSessionId);
   if (!liveView.ok) {
     await updateSessionStatus(supabase, session.id, "failed", "browser_session_create_failed");

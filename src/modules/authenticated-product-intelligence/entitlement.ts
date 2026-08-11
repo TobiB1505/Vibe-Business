@@ -150,6 +150,14 @@ export type DeepScanAccessStatus = {
   activeSession: { id: string; status: string } | null;
   /** Present when a scan cannot start right now, so the UI can explain why. */
   blockedReason: DeepScanDenialReason | null;
+  /**
+   * When a cooldown lifts, as an ISO instant.
+   *
+   * A blocked state the user cannot act on and cannot wait out knowingly is a
+   * dead end; this is what lets the UI say "in about two minutes" instead of
+   * silently offering nothing.
+   */
+  retryAvailableAt: string | null;
 };
 
 export function toDeepScanAccessStatus(
@@ -158,11 +166,18 @@ export function toDeepScanAccessStatus(
 ): DeepScanAccessStatus {
   const decision = authorizeDeepScan(facts);
 
+  // Only meaningful for the one denial the user can simply outlast.
+  const retryAvailableAt =
+    !decision.allowed && decision.reason === "cooldown_active" && facts.lastAbandonedAt
+      ? new Date(facts.lastAbandonedAt.getTime() + START_ATTEMPT_LIMITS.cooldownAfterAbandonedMs).toISOString()
+      : null;
+
   return {
     includedScanAvailable: !facts.hasSuccessfulIncludedScan,
     additionalScansRequireCredits: true,
     activeSession,
     blockedReason: decision.allowed ? null : decision.reason,
+    retryAvailableAt,
   };
 }
 
