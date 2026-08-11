@@ -1,11 +1,16 @@
 import type { AIProvider, AIUsage, ProviderErrorDiagnostic, StructuredRequest } from "@/modules/ai/provider";
 import type { OperationConfig } from "@/modules/ai/operations";
 import { buildEvidencePack, evidenceIdSet, renderEvidencePack, trimEvidencePack, type BuildEvidencePackInput, type EvidencePack } from "./evidence";
-import { AUDIT_OUTPUT_SCHEMA, PROMPT_VERSION, buildSystemPrompt } from "./prompt";
+import { PROMPT_VERSION, buildSystemPrompt } from "./prompt";
 import { RUBRIC_VERSION } from "./rubric";
 import { computeOverallReadiness } from "./scoring";
 import { BUSINESS_AUDIT_SCHEMA_VERSION, BUSINESS_AUDIT_VERSION, type BusinessReadinessAudit } from "./schema";
 import { validateAuditOutput, type ValidationReason } from "./validate";
+import {
+  ANTHROPIC_AUDIT_OUTPUT_SCHEMA,
+  normalizeAnthropicAuditOutput,
+  type WireNormalizationReason,
+} from "./wire-schema";
 
 /**
  * The audit inference pipeline (Sprint 4 §16).
@@ -52,8 +57,11 @@ export type AuditRunFailure =
  * evidence: every field is either a number or a code from a closed set.
  */
 export type AuditRunDiagnostic = {
-  /** Which post-validation rule rejected the model's JSON. */
-  validationReason?: ValidationReason;
+  /**
+   * Which post-generation rule rejected the model's JSON — either transport
+   * normalization (wrong dimension set) or domain validation.
+   */
+  validationReason?: ValidationReason | WireNormalizationReason;
   /** Safe provider signals, when the API rejected the request. */
   provider?: ProviderErrorDiagnostic;
 };
@@ -90,7 +98,7 @@ function buildRequest(pack: EvidencePack, config: OperationConfig): StructuredRe
     // into the system prompt (ADR 0011).
     system: buildSystemPrompt(),
     userContent: renderEvidencePack(pack),
-    outputSchema: AUDIT_OUTPUT_SCHEMA,
+    outputSchema: ANTHROPIC_AUDIT_OUTPUT_SCHEMA,
     maxOutputTokens: config.maxOutputTokens,
     effort: config.effort,
   };
@@ -152,7 +160,23 @@ export async function runBusinessReadinessAudit(input: RunAuditInput): Promise<A
     };
   }
 
-  const validation = validateAuditOutput(result.data, evidenceIdSet(pack));
+  // Transport → domain, before any business rule runs. The provider's array
+  // form is converted to the dimension-keyed shape and the guarantees the
+  // array gave up (exactly five, each once, none unknown) are enforced here.
+  // Tokens were billed either way, so a failure is reported with its usage.
+  const normalized = normalizeAnthropicAuditOutput(result.data);
+  if (!normalized.ok) {
+    return {
+      ok: false,
+      error: "structured_output_schema_invalid",
+      usage: result.usage,
+      diagnostic: { validationReason: normalized.reason },
+      estimatedInputTokens,
+      latencyMs: result.latencyMs,
+    };
+  }
+
+  const validation = validateAuditOutput(normalized.data, evidenceIdSet(pack));
   if (!validation.ok) {
     // The tokens were still billed even though the output is unusable —
     // recording that honestly is the point of the usage ledger. The reason

@@ -233,7 +233,8 @@ describe("runBusinessReadinessAudit — provider failures", () => {
     const provider = new FakeProvider({
       result: {
         ok: true,
-        data: { dimensions: { product: {} } },
+        // Wire form: one dimension entry, four missing.
+        data: { dimensions: [{ dimension: "product" }] },
         usage: { inputTokens: 2_500, outputTokens: 100, thinkingTokens: 0 },
         model: "claude-sonnet-5",
         latencyMs: 800,
@@ -304,8 +305,18 @@ describe("runBusinessReadinessAudit — output failure attribution", () => {
 
   it.each([
     ["a non-object response", "not an object at all", "response_not_object"],
-    ["a response with no dimensions", { keyFindings: [] }, "dimensions_missing"],
-    ["a response with an empty dimensions object", { dimensions: {} }, "dimension_missing_product"],
+    ["a response with no dimensions", { keyFindings: [] }, "dimensions_not_array"],
+    ["a response with an empty dimensions array", { dimensions: [] }, "dimension_missing_product"],
+    [
+      "a response naming an unknown dimension",
+      { dimensions: [{ dimension: "growth" }] },
+      "dimension_unknown",
+    ],
+    [
+      "a response repeating a dimension",
+      { dimensions: [{ dimension: "product" }, { dimension: "product" }] },
+      "dimension_duplicate",
+    ],
   ])("names the failed validation rule for %s", async (_label, data, reason) => {
     const provider = new FakeProvider({ result: { ok: true, data, ...generation() } });
 
@@ -319,7 +330,7 @@ describe("runBusinessReadinessAudit — output failure attribution", () => {
     const provider = new FakeProvider({
       result: {
         ok: true,
-        data: { dimensions: { product: { summary: "MODEL_AUTHORED_SENTENCE" } } },
+        data: { dimensions: [{ dimension: "product", summary: "MODEL_AUTHORED_SENTENCE" }] },
         ...generation(),
       },
     });
@@ -331,6 +342,35 @@ describe("runBusinessReadinessAudit — output failure attribution", () => {
     // The reason names a schema field, never what the model wrote.
     expect(JSON.stringify(outcome.diagnostic)).not.toContain("MODEL_AUTHORED_SENTENCE");
     expect(outcome.diagnostic?.validationReason).toBe("dimension_missing_monetization");
+  });
+
+  it("persists the domain contract, never the provider transport shape", async () => {
+    const provider = new FakeProvider();
+    const outcome = await runBusinessReadinessAudit(inputFor(provider));
+
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+
+    // The domain contract is unchanged by the transport reduction.
+    expect(outcome.audit.schemaVersion).toBe("business-readiness-audit.v1");
+    expect(outcome.audit.dimensions.map((dimension) => dimension.id)).toEqual([
+      "product",
+      "monetization",
+      "distribution",
+      "conversion",
+      "retention",
+    ]);
+
+    // `dimension` is the wire form's routing key. Its absence is what proves
+    // the provider-shaped payload stopped at normalization rather than being
+    // carried into the persisted audit.
+    const serialized = JSON.stringify(outcome.audit);
+    expect(serialized).not.toContain('"dimension"');
+    for (const dimension of outcome.audit.dimensions) {
+      expect(dimension).not.toHaveProperty("dimension");
+      // The domain identity fields are set by us, not taken from the payload.
+      expect(dimension.label).toBeTruthy();
+    }
   });
 
   it("still completes a valid audit", async () => {

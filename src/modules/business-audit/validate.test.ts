@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { validateAuditOutput } from "./validate";
 import { buildModelOutput } from "./test-support";
+import { normalizeAnthropicAuditOutput } from "./wire-schema";
 
 const KNOWN = new Set([
   "business.product_summary",
@@ -10,8 +11,21 @@ const KNOWN = new Set([
   "live.conversion.primary_cta",
 ]);
 
+/**
+ * Validates a fixture, normalizing the provider wire form first.
+ *
+ * Fixtures speak the transport format (`dimensions` as an array) because that
+ * is what the provider returns; `validateAuditOutput` consumes the normalized
+ * domain shape. Running both here keeps these cases exercising the real path
+ * from provider JSON to validated audit. Cases that hand-build a malformed
+ * domain payload call `validateAuditOutput` directly instead.
+ */
 function validate(data: unknown) {
-  return validateAuditOutput(data, KNOWN);
+  const normalized = normalizeAnthropicAuditOutput(data);
+  if (!normalized.ok) {
+    throw new Error(`fixture failed transport normalization: ${normalized.reason}`);
+  }
+  return validateAuditOutput(normalized.data, KNOWN);
 }
 
 describe("validateAuditOutput — well-formed output", () => {
@@ -26,9 +40,12 @@ describe("validateAuditOutput — well-formed output", () => {
     expect(result.audit.dimensions).toHaveLength(5);
   });
 
+  // These three bypass normalization deliberately: they check that the domain
+  // validator defends its own invariants, rather than trusting the transport
+  // layer to have already rejected a malformed payload.
   it("rejects a response that is not an object", () => {
     for (const value of ["nope", null, []]) {
-      const result = validate(value);
+      const result = validateAuditOutput(value, KNOWN);
       expect(result.ok).toBe(false);
       // A bounded code rather than a sentence: the value is persisted, and
       // prose would eventually carry a fragment of the model's output.
@@ -37,14 +54,21 @@ describe("validateAuditOutput — well-formed output", () => {
   });
 
   it("rejects a response with no dimensions object", () => {
-    const result = validate({ keyFindings: [], limitations: [] });
+    const result = validateAuditOutput({ keyFindings: [], limitations: [] }, KNOWN);
     expect(result.ok === false && result.reason).toBe("dimensions_missing");
   });
 
   it("names which dimension was missing", () => {
-    const output = buildModelOutput();
-    delete (output.dimensions as Record<string, unknown>).retention;
-    const result = validate(output);
+    // Normalize a full response, then remove a dimension from the domain
+    // payload: the validator must name it even though the transport layer
+    // would also have caught it (see wire-schema.test.ts).
+    const normalized = normalizeAnthropicAuditOutput(buildModelOutput());
+    expect(normalized.ok).toBe(true);
+    if (!normalized.ok) return;
+
+    delete (normalized.data.dimensions as Record<string, unknown>).retention;
+
+    const result = validateAuditOutput(normalized.data, KNOWN);
     expect(result.ok).toBe(false);
     expect(result.ok === false && result.error).toBe("structured_output_schema_invalid");
     expect(result.ok === false && result.reason).toBe("dimension_missing_retention");

@@ -54,20 +54,27 @@ export function isProviderErrorLoggingEnabled(
 }
 
 /**
- * Reduces an unknown thrown value to a short, single-line message.
+ * Reduces an unknown thrown value to the provider's own short message.
  *
- * The provider's structured `error.message` is preferred over the SDK's
- * composite `Error.message`, which prefixes the status and embeds the whole
- * JSON body — logging that would be logging a raw response body. The fallback
- * is length-capped for the same reason.
+ * **Only the structured `error.message` field is read.** The SDK's composite
+ * `Error.message` is deliberately *not* used as a fallback: it prefixes the
+ * status and embeds the entire serialized JSON body, so logging it is logging
+ * a raw response body. The first diagnostic run proved this is not
+ * theoretical — the nested lookup was one level too shallow for the SDK's
+ * actual shape, the composite fallback took over, and the whole body reached
+ * the log. Both halves of that are fixed here: the nesting is handled, and
+ * the fallback is gone.
+ *
+ * A body-shaped string is rejected even if it does arrive through the
+ * structured field, so no future provider shape can reintroduce the leak.
  *
  * A 400 message may quote the offending field path, and a field path can
  * echo a fragment of what we sent. That is the entire diagnostic value, and
  * it is why this is opt-in and bounded rather than always on.
  */
 export function extractProviderMessage(error: unknown): string | null {
-  const raw = readStructuredMessage(error) ?? readErrorMessage(error);
-  if (raw === null) return null;
+  const raw = readStructuredMessage(error);
+  if (raw === null || looksLikeSerializedBody(raw)) return null;
 
   const collapsed = raw.replace(/\s+/g, " ").trim();
   if (collapsed === "") return null;
@@ -81,19 +88,41 @@ export function extractProviderMessage(error: unknown): string | null {
     : redacted;
 }
 
-/** The provider's own `{ type, message }` body, when the SDK exposes it. */
+/**
+ * Reads the provider's `message` field out of the SDK's parsed body.
+ *
+ * Two nestings are accepted because the SDK sets `error.error` to the parsed
+ * response body, which is itself `{ type: "error", error: { type, message } }`
+ * — so the message sits at `error.error.error.message`. Looking only one level
+ * deep is what silently disabled this extraction the first time.
+ */
 function readStructuredMessage(error: unknown): string | null {
-  if (typeof error !== "object" || error === null) return null;
-  const body = (error as { error?: unknown }).error;
-  if (typeof body !== "object" || body === null) return null;
-  const message = (body as { message?: unknown }).message;
+  const body = readProperty(error, "error");
+  return readMessage(body) ?? readMessage(readProperty(body, "error"));
+}
+
+function readProperty(value: unknown, key: string): unknown {
+  if (typeof value !== "object" || value === null) return undefined;
+  return (value as Record<string, unknown>)[key];
+}
+
+function readMessage(value: unknown): string | null {
+  const message = readProperty(value, "message");
   return typeof message === "string" ? message : null;
 }
 
-function readErrorMessage(error: unknown): string | null {
-  if (typeof error !== "object" || error === null) return null;
-  const message = (error as { message?: unknown }).message;
-  return typeof message === "string" ? message : null;
+/**
+ * Rejects anything that looks like a serialized envelope rather than a
+ * sentence — a JSON object/array, or the SDK's `"400 {...}"` composite form.
+ */
+function looksLikeSerializedBody(value: string): boolean {
+  const trimmed = value.trimStart();
+  return (
+    trimmed.startsWith("{") ||
+    trimmed.startsWith("[") ||
+    /^\d{3}\s*[{[]/.test(trimmed) ||
+    trimmed.includes('{"type":"error"')
+  );
 }
 
 /**

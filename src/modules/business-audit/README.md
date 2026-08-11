@@ -23,6 +23,36 @@ service.ts    prerequisites, orchestration, audit events, usage accounting
 - **Changing `prompt.ts` or `rubric.ts` requires incrementing its version.** Two audits carrying the same version have to mean the same thing, or reproducibility is gone.
 - **One paid call per audit.** No agent loop, no self-critique, no second opinion.
 
+## Transport vs domain
+
+`business-readiness-audit.v1` is the **domain contract**. `wire-schema.ts` holds a
+separate, more compact **provider representation**, because Anthropic rejects an
+oversized compiled grammar (`400` — "the compiled grammar is too large") and the
+previous schema declared the dimension assessment shape five times, once per
+dimension key.
+
+    provider JSON → normalizeAnthropicAuditOutput → validateAuditOutput
+                  → deterministic scoring → business-readiness-audit.v1
+
+- The wire form carries `dimensions` as an **array**, with the item shape declared
+  once and `dimension` as an enum inside the item.
+- Normalization rejects a response that omits, repeats, or invents a dimension —
+  the guarantee a keyed object used to get from the grammar for free.
+- **Nothing provider-shaped is persisted.** Transport data stops at
+  normalization so a provider constraint cannot leak into the product's domain
+  model, and the audit's `schemaVersion` is unaffected by it.
+
+Structured outputs are one validation layer; `validate.ts` remains the
+authoritative business-rule layer and is unchanged by the transport reduction.
+
 ## Testing
 
-`test-support.ts` provides a `FakeProvider` and snapshot fixtures. No test may reach the Anthropic API, need a key, or cost money.
+`test-support.ts` provides a `FakeProvider` and snapshot fixtures — `buildModelOutput`
+returns the **wire form**, because that is what the provider actually returns. No test
+may reach the Anthropic API, need a key, or cost money.
+
+The grammar compile probe (`pnpm ai:probe-audit-schema`) is the one exception, and it
+is deliberately not a test: it lives in `src/modules/ai/probe/` as a `*.probe.ts` file
+under its own vitest config, so `pnpm test` and CI cannot reach it. Successful probes
+make a real, billable (tiny) request; failed ones are rejected before inference and
+are not billed.
