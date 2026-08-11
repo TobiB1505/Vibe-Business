@@ -8,7 +8,16 @@ import { checkInstallationStillAccessible } from "@/modules/github/repositories"
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intelligence/store";
 import { getLatestSuccessfulAudit } from "@/modules/business-audit/store";
+import { isBrowserProviderConfigured } from "@/modules/authenticated-product-intelligence/browserbase/client";
+import { getDeepScanAccessStatus } from "@/modules/authenticated-product-intelligence/service";
+import {
+  getLatestSession,
+  getLatestSuccessfulAuthenticatedSnapshot,
+} from "@/modules/authenticated-product-intelligence/store";
+import { detectAuthenticatedSurfaces } from "@/modules/authenticated-product-intelligence/surface-detection";
+import { buildDeepScanViewModel } from "@/modules/authenticated-product-intelligence/view";
 import { BusinessAuditSummary } from "./business-audit-summary";
+import { DeepScanPanel } from "./deep-scan-panel";
 import { BusinessContextForm } from "./business-context-form";
 import { DisconnectButton } from "./disconnect-button";
 import { InspectButton } from "./inspect-button";
@@ -41,12 +50,48 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
   // Live probe (Sprint 1 §11): degrade gracefully — never crash — if the
   // installation was revoked/suspended on GitHub's side since connection.
   const accessible = repository ? await checkInstallationStillAccessible(repository.installationId) : false;
-  const [latestSnapshot, latestLiveSnapshot, businessContext, latestAudit] = await Promise.all([
+  const [
+    latestSnapshot,
+    latestLiveSnapshot,
+    businessContext,
+    latestAudit,
+    deepScanAccess,
+    latestDeepScanSnapshot,
+    latestDeepScanSession,
+  ] = await Promise.all([
     getLatestSuccessfulSnapshot(supabase, projectId),
     getLatestSuccessfulLiveSnapshot(supabase, projectId),
     getBusinessContext(supabase, projectId),
     getLatestSuccessfulAudit(supabase, projectId),
+    getDeepScanAccessStatus(supabase, { projectId, userId: session.userId }),
+    getLatestSuccessfulAuthenticatedSnapshot(supabase, projectId),
+    getLatestSession(supabase, projectId),
   ]);
+
+  // Deep Scan state is derived on the server (Sprint 5 §13): entitlement,
+  // cooldown and eligibility are the domain's answers, not React's.
+  const deepScanModel = deepScanAccess
+    ? buildDeepScanViewModel({
+        accessStatus: deepScanAccess,
+        latestSnapshot: latestDeepScanSnapshot
+          ? {
+              result: latestDeepScanSnapshot.result,
+              accessMode: latestDeepScanSnapshot.accessMode,
+              completedAt: latestDeepScanSnapshot.completedAt,
+              createdAt: latestDeepScanSnapshot.createdAt,
+              pagesInspected: latestDeepScanSnapshot.pagesInspected,
+            }
+          : null,
+        latestSession: latestDeepScanSession
+          ? { status: latestDeepScanSession.status, failureCode: latestDeepScanSession.failureCode }
+          : null,
+        surfaceDetection: detectAuthenticatedSurfaces({
+          repository: latestSnapshot?.result ?? null,
+          publicProduct: latestLiveSnapshot?.result ?? null,
+        }),
+        providerConfigured: isBrowserProviderConfigured(),
+      })
+    : null;
 
   // All three evidence sources are required before a first audit
   // (Sprint 4 §29), so the UI can say exactly what is still missing rather
@@ -122,6 +167,12 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
               </dd>
             </div>
             <div className="flex items-baseline justify-between gap-3">
+              <dt className="text-zinc-500">Deep Scan</dt>
+              <dd className={latestDeepScanSnapshot?.result ? "text-emerald-400" : "text-zinc-600"}>
+                {latestDeepScanSnapshot?.result ? "Ready" : "Not run yet"}
+              </dd>
+            </div>
+            <div className="flex items-baseline justify-between gap-3">
               <dt className="text-zinc-500">Business readiness</dt>
               <dd className={latestAudit?.result ? "text-emerald-400" : "text-zinc-600"}>
                 {latestAudit?.result ? "Ready" : "Not analyzed yet"}
@@ -194,6 +245,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
             />
           </section>
         )}
+
+        {deepScanModel && <DeepScanPanel projectId={project.id} model={deepScanModel} />}
 
         {repository && (
           <section className="space-y-3">

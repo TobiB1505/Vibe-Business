@@ -224,6 +224,29 @@ export async function getActiveSession(
   return isExpired(session, now) ? null : session;
 }
 
+/**
+ * The most recent session for a project, whatever its state.
+ *
+ * Used only to explain what happened last ("expired", "cancelled") — the
+ * *eligibility* question is never answered from this row, because that is the
+ * entitlement policy's job (Sprint 5 §13).
+ */
+export async function getLatestSession(
+  supabase: SupabaseClient,
+  projectId: string,
+): Promise<StoredDeepScanSession | null> {
+  const { data, error } = await supabase
+    .from("authenticated_browser_sessions")
+    .select(SESSION_COLUMNS)
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? mapSession(data as SessionRow) : null;
+}
+
 export async function updateSessionStatus(
   supabase: SupabaseClient,
   sessionId: string,
