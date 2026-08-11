@@ -1,0 +1,14 @@
+diff --git a/package.json b/package.json
+index 4a3da3bd12f7adb4873d4bfb58b643f2a1433c1e..9626944c5a4e628e0875177de5235ebf23c599d3 100644
+--- a/package.json
++++ b/package.json
+@@ -25,7 +25,8 @@
+     "./lib/bootstrap": "./lib/bootstrap.js",
+     "./lib/coreBundle": "./lib/coreBundle.js",
+     "./lib/utilsBundle": "./lib/utilsBundle.js",
+-    "./lib/tools/cli-client/program": "./lib/tools/cli-client/program.js"
++    "./lib/tools/cli-client/program": "./lib/tools/cli-client/program.js",
++    "./browsers.json": "./browsers.json"
+   },
+   "bin": {
+     "playwright-core": "cli.js"

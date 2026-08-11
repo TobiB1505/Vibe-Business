@@ -146,6 +146,21 @@ export async function connectReadOnly(
   //
   // Keeping the import inside the function means the package is resolved only
   // when a Deep Scan actually connects to a browser.
+  // Tracing hint, and the reason this line exists at all.
+  //
+  // `playwright-core` reads its own `browsers.json` during module init via
+  // `require(path.join(packageRoot, "browsers.json"))`. That path is computed
+  // at runtime, so Vercel's file tracer cannot see it and leaves the file out
+  // of the deployed function — the package then throws `Cannot find module`
+  // the moment it loads.
+  //
+  // `outputFileTracingIncludes` is not a way out: it is ignored entirely under
+  // Turbopack builds (verified — an include for an unmistakable file produced
+  // no trace entry). The tracer itself does run, so the fix is to give it
+  // something static to follow. A patched subpath export makes this resolve,
+  // and the resolved path is exactly the file the package will read.
+  require.resolve("playwright-core/browsers.json");
+
   const { chromium } = await import("playwright-core");
 
   const browser: Browser = await chromium.connectOverCDP(connectUrl, {

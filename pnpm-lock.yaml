@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  playwright-core@1.62.1: 273a37998becf017ec00905f565c1612d19abc85cb5de2d23489acd4a40c698e
+
 importers:
 
   .:
@@ -34,7 +37,7 @@ importers:
         version: 5.0.5
       playwright-core:
         specifier: 1.62.1
-        version: 1.62.1
+        version: 1.62.1(patch_hash=273a37998becf017ec00905f565c1612d19abc85cb5de2d23489acd4a40c698e)
       react:
         specifier: 19.2.8
         version: 19.2.8
@@ -5049,7 +5052,7 @@ snapshots:
 
   picomatch@4.0.5: {}
 
-  playwright-core@1.62.1: {}
+  playwright-core@1.62.1(patch_hash=273a37998becf017ec00905f565c1612d19abc85cb5de2d23489acd4a40c698e): {}
 
   possible-typed-array-names@1.1.0: {}
 
