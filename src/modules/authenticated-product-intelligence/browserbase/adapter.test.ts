@@ -12,6 +12,7 @@ import { BrowserbaseSessionProvider, type BrowserbaseSessionsClient } from "./ad
 /** The fake exposes vitest mocks so calls can be inspected field by field. */
 type FakeSessions = BrowserbaseSessionsClient & {
   create: Mock;
+  retrieve: Mock;
   debug: Mock;
   update: Mock;
 };
@@ -22,6 +23,10 @@ function fakeSessions(overrides: Partial<Record<keyof FakeSessions, Mock>> = {})
       id: "bb_session_123",
       connectUrl: "wss://connect.browserbase.com/?sessionId=bb_session_123&signingKey=SECRET",
       expiresAt: "2026-08-11T18:30:00.000Z",
+    })),
+    retrieve: vi.fn(async () => ({
+      status: "RUNNING" as const,
+      connectUrl: "wss://connect.browserbase.com/?sessionId=bb_session_123&signingKey=SECRET",
     })),
     debug: vi.fn(async () => ({
       debuggerUrl: "https://live.browserbase.com/devtools/x",
@@ -180,5 +185,80 @@ describe("BrowserbaseSessionProvider — provider errors", () => {
       timeoutSeconds: 600,
     });
     expect(result).toEqual({ ok: false, error: "browser_session_create_failed" });
+  });
+});
+
+/**
+ * The login-then-analyse handoff (Sprint 5 §14).
+ *
+ * `createSession`'s `connectUrl` is a capability URL that is deliberately never
+ * stored, so the second request has to re-fetch it. These tests pin the
+ * behaviour that decides whether a scan can resume at all — and the mapping
+ * that tells a caller "gone" apart from "temporarily unreachable".
+ */
+describe("BrowserbaseSessionProvider — reconnecting after login", () => {
+  it("returns the connect URL for a running session", async () => {
+    const sessions = fakeSessions();
+    const provider = new BrowserbaseSessionProvider(sessions);
+
+    const result = await provider.getConnection("bb_session_123");
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.value.connectUrl).toContain("wss://connect.browserbase.com/");
+    expect(sessions.retrieve).toHaveBeenCalledWith("bb_session_123");
+  });
+
+  it("accepts a session that is still starting", async () => {
+    const sessions = fakeSessions({
+      retrieve: vi.fn(async () => ({ status: "PENDING" as const, connectUrl: "wss://connect/x" })),
+    });
+
+    const result = await new BrowserbaseSessionProvider(sessions).getConnection("bb_session_123");
+    expect(result.ok).toBe(true);
+  });
+
+  it.each([["TIMED_OUT"], ["COMPLETED"]])("reports a %s session as expired", async (status) => {
+    const sessions = fakeSessions({
+      retrieve: vi.fn(async () => ({ status: status as "TIMED_OUT" })),
+    });
+
+    const result = await new BrowserbaseSessionProvider(sessions).getConnection("bb_session_123");
+    expect(result).toEqual({ ok: false, error: "browser_session_expired" });
+  });
+
+  it("reports a session the provider no longer knows about as expired, not unavailable", async () => {
+    // The distinction decides whether retrying could ever help.
+    const sessions = fakeSessions({
+      retrieve: vi.fn(async () => {
+        throw Object.assign(new Error("not found"), { status: 404 });
+      }),
+    });
+
+    const result = await new BrowserbaseSessionProvider(sessions).getConnection("bb_session_123");
+    expect(result).toEqual({ ok: false, error: "browser_session_expired" });
+  });
+
+  it("reports an errored session as a connection failure", async () => {
+    const sessions = fakeSessions({ retrieve: vi.fn(async () => ({ status: "ERROR" as const })) });
+    const result = await new BrowserbaseSessionProvider(sessions).getConnection("bb_session_123");
+    expect(result).toEqual({ ok: false, error: "browser_connection_failed" });
+  });
+
+  it("reports a running session with no endpoint as a connection failure", async () => {
+    const sessions = fakeSessions({ retrieve: vi.fn(async () => ({ status: "RUNNING" as const })) });
+    const result = await new BrowserbaseSessionProvider(sessions).getConnection("bb_session_123");
+    expect(result).toEqual({ ok: false, error: "browser_connection_failed" });
+  });
+
+  it("never leaks a provider message or the connect URL out of a failure", async () => {
+    const sessions = fakeSessions({
+      retrieve: vi.fn(async () => {
+        throw new Error("wss://connect.browserbase.com/?signingKey=LEAKED_SECRET refused");
+      }),
+    });
+
+    const result = await new BrowserbaseSessionProvider(sessions).getConnection("bb_session_123");
+    expect(JSON.stringify(result)).not.toContain("LEAKED_SECRET");
+    expect(JSON.stringify(result)).not.toContain("wss://");
   });
 });

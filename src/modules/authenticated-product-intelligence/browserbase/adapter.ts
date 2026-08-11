@@ -1,5 +1,6 @@
 import type Browserbase from "@browserbasehq/sdk";
 import type {
+  BrowserConnection,
   BrowserLiveView,
   BrowserSessionHandle,
   BrowserSessionProvider,
@@ -57,6 +58,10 @@ export type BrowserbaseSessionsClient = {
     keepAlive?: boolean;
     timeout?: number;
   }): Promise<{ id: string; connectUrl: string; expiresAt?: string | null }>;
+  retrieve(id: string): Promise<{
+    status: "PENDING" | "RUNNING" | "ERROR" | "TIMED_OUT" | "COMPLETED";
+    connectUrl?: string;
+  }>;
   debug(id: string): Promise<{ debuggerFullscreenUrl: string; debuggerUrl: string }>;
   update(id: string, params: { status: "REQUEST_RELEASE"; projectId?: string }): Promise<unknown>;
 };
@@ -128,6 +133,39 @@ export class BrowserbaseSessionProvider implements BrowserSessionProvider {
         ok: false,
         error: code === "browser_session_not_found" ? "browser_session_create_failed" : code,
       };
+    }
+  }
+
+  /**
+   * Re-fetches the CDP endpoint for the login-then-analyse handoff.
+   *
+   * The provider's own session status is the authority on whether the browser
+   * still exists: our `expires_at` bound is conservative, but a session can end
+   * earlier (released, timed out, crashed). Discovering that here means the
+   * caller fails before connecting rather than hanging on a dead socket.
+   */
+  async getConnection(providerSessionId: string): Promise<ProviderResult<BrowserConnection>> {
+    try {
+      const session = await this.sessions.retrieve(providerSessionId);
+
+      if (session.status === "TIMED_OUT" || session.status === "COMPLETED") {
+        return { ok: false, error: "browser_session_expired" };
+      }
+      if (session.status === "ERROR") {
+        return { ok: false, error: "browser_connection_failed" };
+      }
+      if (!session.connectUrl) {
+        // Running but with no endpoint to attach to — nothing useful can
+        // happen, and it is not the caller's fault.
+        return { ok: false, error: "browser_connection_failed" };
+      }
+
+      return { ok: true, value: { connectUrl: session.connectUrl } };
+    } catch (error) {
+      const code = classifyProviderError(error);
+      // A session the provider no longer knows about is gone, not merely
+      // unreachable — the distinction decides whether a retry could help.
+      return { ok: false, error: code === "browser_session_not_found" ? "browser_session_expired" : code };
     }
   }
 

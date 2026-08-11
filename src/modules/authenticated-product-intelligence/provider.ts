@@ -49,9 +49,30 @@ export type CreateBrowserSessionOptions = {
 
 export type ProviderResult<T> = { ok: true; value: T } | { ok: false; error: AuthenticatedAnalysisFailure };
 
+export type BrowserConnection = {
+  /**
+   * CDP endpoint for an existing session. **Capability URL** — fetched per use
+   * and never persisted, logged, or returned to a browser.
+   */
+  connectUrl: string;
+};
+
 export type BrowserSessionProvider = {
   readonly name: string;
   createSession(options: CreateBrowserSessionOptions): Promise<ProviderResult<BrowserSessionHandle>>;
+  /**
+   * Re-fetches the CDP endpoint for a session created earlier.
+   *
+   * Required because the manual-login flow spans two server requests: the
+   * session is created in the first, the user signs in by hand, and the
+   * analysis reconnects in the second. `createSession`'s `connectUrl` is a
+   * capability URL that is deliberately never stored, so the second request
+   * has to ask the provider for it again rather than keep a copy.
+   *
+   * Also the point where a session that has since timed out or been released
+   * is discovered, so the caller learns it cannot analyse before it tries.
+   */
+  getConnection(providerSessionId: string): Promise<ProviderResult<BrowserConnection>>;
   getLiveView(providerSessionId: string): Promise<ProviderResult<BrowserLiveView>>;
   /**
    * Best-effort termination. Called on completion, failure, cancellation and

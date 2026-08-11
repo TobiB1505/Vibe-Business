@@ -205,13 +205,31 @@ The first Deep Scan is free to the **user**, not to Vibe. Browser sessions cost 
 - **Provider usage record** shape, kept separate from token accounting
 - **Entitlement + usage schema** (`access_mode`, one-included-scan unique index, `deep_scan_provider_usage`)
 - `keepAlive: true` correction for the two-request manual-login flow
+- **`store.ts`** — session and snapshot persistence, entitlement-fact gathering, provider-usage write. `provider_session_id` is excluded from the client-safe projection and reachable only through the explicitly named `getSessionWithProviderId`
+- **`service.ts`** — the full lifecycle: `startDeepScan` → `getDeepScanLiveView` → `analyzeDeepScan`, plus `cancelDeepScan` and `getDeepScanAccessStatus`
+- **`getConnection` on the provider port** — the missing verb that made the two-request flow possible at all (see below)
+- **Audit-log events** (`deep_scan.started` / `.completed` / `.failed` / `.cancelled`)
+- **Supabase test double** modelling the migration's three partial unique indexes, so the concurrency and entitlement guarantees are exercised rather than assumed
+
+### A second missing verb, found while wiring the lifecycle
+
+`createSession` returns a `connectUrl`, and that URL is deliberately never
+persisted — it is a capability granting full CDP control. But the manual-login
+flow spans **two** server requests, so the second one had no way to reach the
+browser the first one opened. The port had no verb for it.
+
+This is the same class of defect as the `keepAlive` bug and would have had the
+same effect: every scan failing at the reconnect. Fixed by adding
+`getConnection(providerSessionId)` to `BrowserSessionProvider`, implemented on
+Browserbase via `sessions.retrieve()`, which also reports the provider's own
+session status — so a session that timed out or was released is discovered
+*before* connecting rather than as a hung socket. The capability URL is fetched
+per use and dropped, exactly as before.
 
 **Outstanding — PR #12 is not mergeable until these are done:**
 
-- `store.ts` / `service.ts` — session lifecycle orchestration, snapshot persistence, entitlement consumption at completion, provider-usage write, termination on every terminal path
-- Ownership checks and Live View authorization at the request boundary
 - Project-page UI: activation prompt, Live View modal, status section, second-scan credits state, user copy
-- Audit-log events (`deep_scan.*`)
+- Server Actions / route handlers wiring the service to the UI
 - Evidence pack `v2` and audit input identity
 - Business Audit quality notice
 - Migration deployment (`db:push`)
