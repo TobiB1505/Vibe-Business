@@ -127,6 +127,43 @@ describe("detectBusinessSurfaces", () => {
     expect(isDetected([{ path: "src/app/opengraph-image.png" }], "seo_metadata")).toBe(true);
   });
 
+  it.each([
+    "app/opengraph-image.tsx",
+    "src/app/twitter-image.png",
+    "app/blog/opengraph-image.jpg",
+    "app/(marketing)/apple-icon.png",
+    "src/app/icon.svg",
+    "app/icon1.png",
+    "app/manifest.ts",
+    "public/manifest.json",
+    "public/site.webmanifest",
+    "static/manifest.json",
+    "site.webmanifest",
+    "apps/web/app/opengraph-image.png",
+  ])("detects SEO metadata from %s", (path) => {
+    expect(isDetected([{ path }], "seo_metadata")).toBe(true);
+  });
+
+  // Same class of false positive as robots/sitemap: `icon.tsx` is one of
+  // the most common component names there is, and `manifest.json` names a
+  // browser extension at least as often as a web app manifest.
+  it.each([
+    "src/components/icon.tsx",
+    "src/components/ui/icon.tsx",
+    "src/lib/icons/apple-icon.tsx",
+    // Inside the router but in a `_private` directory, which Next.js opts
+    // out of routing entirely — so nothing there is ever served.
+    "app/_components/icon.tsx",
+    "src/app/_lib/opengraph-image.png",
+    "tests/fixtures/opengraph-image.png",
+    "docs/twitter-image.png",
+    "manifest.json",
+    "src/manifest.json",
+    "extension/manifest.json",
+  ])("does not claim SEO metadata for a same-named file at %s", (path) => {
+    expect(isDetected([{ path }], "seo_metadata")).toBe(false);
+  });
+
   it("reports not-detected rather than omitting absent surfaces", () => {
     const surfaces = surfacesFor([{ path: "src/app/page.tsx" }]);
 
