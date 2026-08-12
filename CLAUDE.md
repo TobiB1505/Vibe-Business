@@ -50,6 +50,11 @@ This file governs how Claude Code (and any AI-assisted session) works in this re
 46. Model identifiers and effort levels live only in `src/modules/ai/operations.ts`, and provider prices only in `src/modules/ai/pricing.ts` (effective-dated, integer arithmetic). Never name a model in a route handler, action, or component, and never let a user select one.
 47. Count tokens before every paid call and record a usage event after it, for successes and failures alike — but only when tokens were genuinely billed. Never store prompt text, model responses, reasoning, or secrets in the usage ledger.
 48. Never spend inference twice on identical input. An audit's input identity (evidence snapshots, context hash, prompt/rubric/model versions) determines reuse; a re-run must be a deliberate user action, and double submission must be blocked by a database constraint.
+49. Long-running customer-facing operations must not depend on the initiating HTTP request staying open. Anything measured in tens of seconds runs as a durable operation — see [ADR 0013](docs/decisions/0013-durable-operation-execution.md).
+50. Paid external side effects require explicit idempotency and retry semantics. Never let a durable system retry a billable call by default: mark the attempt before making it, and resolve ambiguity to a failed operation rather than a second charge.
+51. Supabase remains the canonical store of operation and product state. An execution provider orchestrates; it must never be the only place the application's state exists.
+52. Workflow state is a third-party durable log. Never let secrets, credentials, prompts, model output, or raw untrusted source content cross a step boundary — pass identifiers and rebuild bounded data inside the step.
+53. The service-role Supabase client is for durable execution only. It bypasses RLS, so every query made with it must filter on ownership taken from the persisted operation row, and only `src/modules/operations/` may use it.
 
 ## Related Documents
 

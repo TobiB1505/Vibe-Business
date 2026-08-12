@@ -1,0 +1,238 @@
+import "server-only";
+
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { BUSINESS_READINESS_AUDIT_CONFIG } from "@/modules/ai/operations";
+import { recordAuditEvent } from "@/modules/audit-log/events";
+import { EVIDENCE_PACK_V2_VERSION } from "@/modules/business-audit/evidence-v2";
+import { PROMPT_VERSION } from "@/modules/business-audit/prompt";
+import { RUBRIC_VERSION } from "@/modules/business-audit/rubric";
+import { BUSINESS_AUDIT_SCHEMA_VERSION, BUSINESS_AUDIT_VERSION } from "@/modules/business-audit/schema";
+import { computeAuditInputHash, findReusableAudit } from "@/modules/business-audit/store";
+import { getLatestSuccessfulAuthenticatedSnapshot } from "@/modules/authenticated-product-intelligence/store";
+import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intelligence/store";
+import { getBusinessContext } from "@/modules/projects/business-context-store";
+import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
+import type { OperationExecutor } from "./executor";
+import type { OperationFailureCode } from "./failures";
+import {
+  attachExecutionRun,
+  createOperationRun,
+  failOperationRun,
+  findActiveOperation,
+  findActiveOperationByIdentity,
+  getOperationRun,
+  type StoredOperationRun,
+} from "./store";
+import { buildOperationView, type OperationView } from "./view";
+
+/**
+ * Starting and observing durable operations (Sprint 7 §16, §17).
+ *
+ * The start path is where cost is protected, so it is deliberately a sequence
+ * of refusals before it is a sequence of actions:
+ *
+ *   own the project → resolve evidence → identical audit exists? reuse it
+ *   → identical operation live? return it → claim → enqueue
+ *
+ * Only the last two steps create anything, and the claim is guarded by a
+ * database constraint so two simultaneous clicks cannot both pass (§8).
+ *
+ * Everything here runs on the caller's own RLS-scoped client. The service-role
+ * client belongs to workflow steps alone (ADR 0013).
+ */
+
+export type StartOperationOutcome =
+  /** An identical audit already exists; nothing was started and nothing spent. */
+  | { kind: "reused"; auditId: string }
+  /** A matching operation was already running; the same one is returned. */
+  | { kind: "active"; operation: OperationView }
+  /** New durable work is now enqueued. */
+  | { kind: "started"; operation: OperationView }
+  | { kind: "failed"; error: OperationFailureCode };
+
+export type StartBusinessAuditParams = {
+  projectId: string;
+  userId: string;
+  /** A deliberate re-run: skips audit reuse, never skips the active-run check. */
+  force?: boolean;
+};
+
+/** Resolves the exact identity the audit would run under, or why it cannot. */
+async function resolveAuditIdentity(
+  supabase: SupabaseClient,
+  projectId: string,
+): Promise<{ ok: true; inputHash: string } | { ok: false; error: OperationFailureCode }> {
+  const [repositorySnapshot, liveSnapshot, businessContext, authenticatedSnapshot] = await Promise.all([
+    getLatestSuccessfulSnapshot(supabase, projectId),
+    getLatestSuccessfulLiveSnapshot(supabase, projectId),
+    getBusinessContext(supabase, projectId),
+    getLatestSuccessfulAuthenticatedSnapshot(supabase, projectId),
+  ]);
+
+  if (!repositorySnapshot?.result) return { ok: false, error: "repository_intelligence_missing" };
+  if (!liveSnapshot?.result) return { ok: false, error: "live_product_intelligence_missing" };
+  if (!businessContext) return { ok: false, error: "business_context_missing" };
+
+  const authenticated = authenticatedSnapshot?.result ? authenticatedSnapshot : null;
+
+  return {
+    ok: true,
+    // The Business Audit's own identity, unchanged (§7). A second identity
+    // system would immediately disagree with audit reuse.
+    inputHash: computeAuditInputHash({
+      repositorySnapshotId: repositorySnapshot.id,
+      liveSnapshotId: liveSnapshot.id,
+      businessContextHash: businessContext.contextHash,
+      authenticatedSnapshotId: authenticated?.id ?? null,
+      schemaVersion: BUSINESS_AUDIT_SCHEMA_VERSION,
+      auditVersion: BUSINESS_AUDIT_VERSION,
+      evidencePackVersion: EVIDENCE_PACK_V2_VERSION,
+      promptVersion: PROMPT_VERSION,
+      rubricVersion: RUBRIC_VERSION,
+      provider: "anthropic",
+      model: BUSINESS_READINESS_AUDIT_CONFIG.model,
+    }),
+  };
+}
+
+function view(operation: StoredOperationRun): OperationView {
+  return buildOperationView({
+    operationId: operation.id,
+    status: operation.status,
+    stage: operation.stage,
+    failureCode: operation.failureCode,
+    auditId: operation.auditId,
+    startedAt: operation.startedAt,
+    completedAt: operation.completedAt,
+    createdAt: operation.createdAt,
+  });
+}
+
+export async function startBusinessAuditOperation(
+  supabase: SupabaseClient,
+  executor: OperationExecutor,
+  params: StartBusinessAuditParams,
+): Promise<StartOperationOutcome> {
+  const { data: project } = await supabase
+    .from("projects")
+    .select("id")
+    .eq("id", params.projectId)
+    .eq("user_id", params.userId)
+    .maybeSingle();
+
+  if (!project) return { kind: "failed", error: "project_not_found" };
+
+  const identity = await resolveAuditIdentity(supabase, params.projectId);
+  if (!identity.ok) return { kind: "failed", error: identity.error };
+
+  // Cheapest possible answer first: the work is already done (§9).
+  if (!params.force) {
+    const reusable = await findReusableAudit(supabase, {
+      projectId: params.projectId,
+      inputHash: identity.inputHash,
+    });
+    if (reusable) {
+      await recordAuditEvent(supabase, {
+        userId: params.userId,
+        eventType: "business_audit.reused",
+        metadata: {
+          projectId: params.projectId,
+          auditId: reusable.id,
+          model: BUSINESS_READINESS_AUDIT_CONFIG.model,
+          promptVersion: PROMPT_VERSION,
+          overallScore: reusable.overallScore,
+        },
+      });
+      return { kind: "reused", auditId: reusable.id };
+    }
+  }
+
+  // Second cheapest: the work is already happening. Checked even under
+  // `force`, because a forced re-run must still never start a second
+  // simultaneous inference for the same inputs.
+  const alreadyActive = await findActiveOperationByIdentity(supabase, {
+    projectId: params.projectId,
+    operationType: "business_audit",
+    inputIdentity: identity.inputHash,
+  });
+  if (alreadyActive) return { kind: "active", operation: view(alreadyActive) };
+
+  const created = await createOperationRun(supabase, {
+    projectId: params.projectId,
+    userId: params.userId,
+    operationType: "business_audit",
+    inputIdentity: identity.inputHash,
+  });
+
+  if (!created.ok) {
+    if (created.error === "already_active") {
+      // Lost the race by milliseconds — the other click's operation is the
+      // right answer, not an error. This is the double-click path, and the
+      // reason the unique index exists (§8).
+      const existing = await findActiveOperationByIdentity(supabase, {
+        projectId: params.projectId,
+        operationType: "business_audit",
+        inputIdentity: identity.inputHash,
+      });
+      if (existing) return { kind: "active", operation: view(existing) };
+    }
+    return { kind: "failed", error: "audit_failed" };
+  }
+
+  const operation = created.operation;
+
+  const started = await executor.start({ operationId: operation.id, operationType: "business_audit" });
+
+  if (!started.ok) {
+    // The row exists but nothing is carrying it. Failing it immediately keeps
+    // the identity's unique index free, so the user can simply try again.
+    await failOperationRun(supabase, { operationId: operation.id, failureCode: "execution_start_failed" });
+    return { kind: "failed", error: "execution_start_failed" };
+  }
+
+  await attachExecutionRun(supabase, {
+    operationId: operation.id,
+    workflowRunId: started.runId,
+    executionProvider: executor.name,
+  });
+
+  await recordAuditEvent(supabase, {
+    userId: params.userId,
+    eventType: "operation.started",
+    metadata: {
+      projectId: params.projectId,
+      operationId: operation.id,
+      operationType: "business_audit",
+      executionProvider: executor.name,
+    },
+  });
+
+  return { kind: "started", operation: view(operation) };
+}
+
+/**
+ * Status for polling (§17).
+ *
+ * Ownership is enforced by the query itself: an operation id belonging to
+ * another project simply does not exist for this caller, and RLS makes that
+ * true for another user's project even if the ids were guessed.
+ */
+export async function getOperationStatus(
+  supabase: SupabaseClient,
+  params: { projectId: string; operationId: string },
+): Promise<OperationView | null> {
+  const operation = await getOperationRun(supabase, params);
+  return operation ? view(operation) : null;
+}
+
+/** The live operation a reloaded project page should display (§19). */
+export async function getActiveBusinessAuditOperation(
+  supabase: SupabaseClient,
+  projectId: string,
+): Promise<OperationView | null> {
+  const operation = await findActiveOperation(supabase, {
+    projectId,
+    operationType: "business_audit",
+  });
+  return operation ? view(operation) : null;
+}

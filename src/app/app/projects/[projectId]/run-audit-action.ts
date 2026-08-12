@@ -3,39 +3,97 @@
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/modules/auth/session";
 import { createClient } from "@/lib/supabase/server";
-import { runProjectBusinessAudit, type RunAuditFailureCode } from "@/modules/business-audit/service";
-
-export type RunAuditActionState =
-  | { ok: true; reused: boolean }
-  | { ok: false; error: RunAuditFailureCode }
-  | null;
+import type { OperationFailureCode } from "@/modules/operations/failures";
+import {
+  getOperationStatus,
+  startBusinessAuditOperation,
+} from "@/modules/operations/service";
+import type { OperationView } from "@/modules/operations/view";
+import { VercelWorkflowExecutor } from "@/modules/operations/vercel/executor";
 
 /**
- * Runs the Business Readiness Audit for a project the caller owns.
+ * Starting and observing a durable Business Audit (Sprint 7 §16, §17).
  *
- * The only input accepted is a project id — evidence, model and prompt all
- * come from the server, so this action cannot be used to run inference on
- * arbitrary content or to select an expensive model on our bill.
+ * The start action no longer waits for the audit. It validates, decides
+ * whether anything needs to run at all, enqueues durable work, and returns —
+ * so the browser request is over in well under a second rather than owning a
+ * ~50 second provider call.
  *
- * Synchronous, one paid provider call, guarded against double submission by
- * a database constraint (Sprint 4 §16, §24).
+ * The only input either action accepts is an id the caller must already own.
+ * Evidence, model and prompt all come from the server, so neither can be used
+ * to run inference on arbitrary content or to spend on someone else's project.
  */
-export async function runAuditAction(
+
+export type StartAuditActionState =
+  /** Nothing ran: an identical audit already existed. */
+  | { ok: true; kind: "reused" }
+  /** Durable work is now running — either just started, or already was. */
+  | { ok: true; kind: "running"; operation: OperationView }
+  | { ok: false; error: OperationFailureCode }
+  | null;
+
+export async function startAuditAction(
   projectId: string,
-  _prevState: RunAuditActionState,
+  _prevState: StartAuditActionState,
   formData: FormData,
-): Promise<RunAuditActionState> {
+): Promise<StartAuditActionState> {
   const session = await requireSession();
   const supabase = await createClient();
 
-  // A refresh is a deliberate act that costs money, so it is only ever
-  // triggered by an explicit form value — never defaulted on.
+  // A re-run costs money, so it is only ever requested by an explicit form
+  // value — never defaulted on.
   const force = formData.get("force") === "true";
 
-  const result = await runProjectBusinessAudit(supabase, { projectId, userId: session.userId }, { force });
+  const outcome = await startBusinessAuditOperation(supabase, new VercelWorkflowExecutor(), {
+    projectId,
+    userId: session.userId,
+    force,
+  });
 
-  if (!result.ok) return { ok: false, error: result.error };
+  if (outcome.kind === "failed") return { ok: false, error: outcome.error };
 
-  revalidatePath(`/app/projects/${projectId}`);
-  return { ok: true, reused: result.reused };
+  if (outcome.kind === "reused") {
+    revalidatePath(`/app/projects/${projectId}`);
+    return { ok: true, kind: "reused" };
+  }
+
+  return { ok: true, kind: "running", operation: outcome.operation };
+}
+
+export type OperationStatusActionState =
+  | { ok: true; operation: OperationView }
+  | { ok: false; error: "not_found" };
+
+/**
+ * One poll (§20).
+ *
+ * Reads Supabase, never the execution provider: the application's own state is
+ * canonical, which is what lets a reload answer "is something running?" and
+ * what keeps a future change of provider from being visible here (§15).
+ */
+export async function getOperationStatusAction(
+  projectId: string,
+  operationId: string,
+): Promise<OperationStatusActionState> {
+  const session = await requireSession();
+  const supabase = await createClient();
+
+  // Ownership is the query. RLS scopes the project to this user, and the
+  // project scopes the operation — a guessed id resolves to nothing.
+  const { data: project } = await supabase
+    .from("projects")
+    .select("id")
+    .eq("id", projectId)
+    .eq("user_id", session.userId)
+    .maybeSingle();
+
+  if (!project) return { ok: false, error: "not_found" };
+
+  const operation = await getOperationStatus(supabase, { projectId, operationId });
+  if (!operation) return { ok: false, error: "not_found" };
+
+  // A finished operation means the page's server-rendered audit is stale.
+  if (operation.status === "completed") revalidatePath(`/app/projects/${projectId}`);
+
+  return { ok: true, operation };
 }

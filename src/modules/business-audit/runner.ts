@@ -97,7 +97,12 @@ export type RunAuditInput = BuildEvidencePackV2Input & {
   config: OperationConfig;
 };
 
-function buildRequest(pack: EvidencePackV2, config: OperationConfig): StructuredRequest {
+/**
+ * Exported so durable execution can count tokens for the *same* request this
+ * runner will send. A reconstruction would drift from the real one, and a
+ * budget gate measuring the wrong payload is worse than none.
+ */
+export function buildAuditRequest(pack: EvidencePackV2, config: OperationConfig): StructuredRequest {
   return {
     operation: config.operation,
     model: config.model,
@@ -115,7 +120,7 @@ export async function runBusinessReadinessAudit(input: RunAuditInput): Promise<A
   const { provider, config } = input;
 
   let pack = buildEvidencePackV2(input);
-  let request = buildRequest(pack, config);
+  let request = buildAuditRequest(pack, config);
 
   // Cost gate: count before spending (Sprint 4 §14). The provider's own
   // classification is passed through rather than flattened: a count that
@@ -138,7 +143,7 @@ export async function runBusinessReadinessAudit(input: RunAuditInput): Promise<A
     if (trimmed === pack) continue;
 
     pack = trimmed;
-    request = buildRequest(pack, config);
+    request = buildAuditRequest(pack, config);
 
     const recount = await provider.countInputTokens(request);
     if (!recount.ok) {

@@ -9,6 +9,7 @@ import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/s
 import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intelligence/store";
 import { getLatestSuccessfulAudit } from "@/modules/business-audit/store";
 import { getAuditCurrency } from "@/modules/business-audit/service";
+import { getActiveBusinessAuditOperation } from "@/modules/operations/service";
 import { buildAuditEvidenceNotice } from "@/modules/business-audit/evidence-notice";
 import { isBrowserProviderConfigured } from "@/modules/authenticated-product-intelligence/browserbase/client";
 import { getDeepScanAccessStatus } from "@/modules/authenticated-product-intelligence/service";
@@ -74,6 +75,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
     latestDeepScanSnapshot,
     latestDeepScanSession,
     auditCurrency,
+    activeAuditOperation,
   ] = await Promise.all([
     getLatestSuccessfulSnapshot(supabase, projectId),
     getLatestSuccessfulLiveSnapshot(supabase, projectId),
@@ -83,6 +85,9 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
     getLatestSuccessfulAuthenticatedSnapshot(supabase, projectId),
     getLatestSession(supabase, projectId),
     getAuditCurrency(supabase, projectId),
+    // Discovered on the server so returning to this page shows a running
+    // audit rather than an inviting button (Sprint 7 §19).
+    getActiveBusinessAuditOperation(supabase, projectId),
   ]);
 
   // Deep Scan state is derived on the server (Sprint 5 §13): entitlement,
@@ -243,6 +248,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
             projectId={project.id}
             hasAudit={Boolean(latestAudit?.result)}
             disabled={!auditReady}
+            activeOperation={activeAuditOperation}
           />
         </section>
 

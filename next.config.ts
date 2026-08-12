@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withWorkflow } from "workflow/next";
 
 const nextConfig: NextConfig = {
   /**
@@ -25,4 +26,10 @@ const nextConfig: NextConfig = {
   serverExternalPackages: ["playwright-core"],
 };
 
-export default nextConfig;
+/**
+ * `withWorkflow` compiles every `"use workflow"` / `"use step"` function into
+ * the durable routes served under `/.well-known/workflow/` (Sprint 7 §3).
+ * Without it those directives are inert and an audit would silently run
+ * in-request again.
+ */
+export default withWorkflow(nextConfig);
