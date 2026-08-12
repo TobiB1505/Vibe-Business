@@ -1,0 +1,106 @@
+# 0015 - Untrusted Repository Execution Provider: Vercel Sandbox
+
+Status: Accepted
+Date: 2026-08-12
+Supersedes the deferred half of [0006](0006-untrusted-repository-execution.md)
+
+## Context
+
+[ADR 0006](0006-untrusted-repository-execution.md) fixed the security principle — untrusted repository code executes only in isolated ephemeral environments — and deliberately deferred the provider. It has been deferred for nine sprints, which was correct: nothing needed to execute customer code until now.
+
+Sprint 10A needs it. Sprint 9 established that a prepared change can be verified as *written correctly* (`repository_write_verified`) and said nothing about whether it works. Answering "does this commit install, typecheck, test and build?" requires running the customer's `package.json` scripts, their dependencies' tooling, and their framework's build — none of which Vibe authored or reviewed.
+
+The first real prepared change made the gap concrete: it was byte-perfect, verified by read-back hash, and listed `/login` in a sitemap. Build validation would not have caught that either — but the distance between "we wrote the right bytes" and "this change works" is now the product's main uncertainty.
+
+## Decision
+
+### 1. Customer repository code never executes in the Vibe runtime
+
+Restated from 0006 and now enforceable rather than aspirational. `npm install`, package scripts, postinstall hooks, build tooling and test runners must not execute in:
+
+- the Vibe application process or any Vercel Function serving Vibe
+- the workflow orchestration runtime
+- the database environment
+- a developer machine
+
+### 2. Vercel Sandbox is the initial provider
+
+Each sandbox is a Firecracker microVM with its own filesystem and network, created for one validation and destroyed after it. Chosen for reasons that are specific rather than incidental:
+
+- **Runtime-mutable egress policy.** `Sandbox.create({ networkPolicy })` plus `sandbox.update({ networkPolicy })` allows dependencies to be fetched under a narrow allowlist and the network to be closed *before* repository code runs, in one sandbox. Without live policy updates, this would need either open egress throughout or two sandboxes.
+- **`deny-all` blocks DNS resolution**, not merely traffic. An allowlist that still resolves arbitrary names leaves a covert channel over DNS itself.
+- **Provider-side authenticated `git` clone** at an exact revision, so the credential is handled at creation and never has to be written into the sandbox by us.
+- Already the hosting and workflow provider ([0004](0004-vercel-as-initial-host-and-preview-provider.md), [0013](0013-durable-operation-execution.md)), so this adds no new vendor.
+
+### 3. The provider stays behind an abstraction
+
+`SandboxProvider` / `SandboxHandle` in `src/modules/validation/sandbox-port.ts`. Only `src/modules/validation/vercel/` may import `@vercel/sandbox`.
+
+The purpose is not portability theatre. It is that the orchestrator — where every security decision lives — is testable without an account, a network or a bill, and that the two-phase network transition is expressed in the *domain's* vocabulary so tests can assert its ordering.
+
+### 4. There is no local execution path, ever
+
+The tempting shortcut is a development-convenience branch:
+
+```ts
+if (!process.env.VERCEL) exec("pnpm build");   // never
+```
+
+That is a remote code execution vulnerability wearing a developer-experience costume: any repository a user connects could run arbitrary commands on whatever machine took the shortcut. Tests use fakes that execute nothing. Production uses the sandbox. **If the sandbox is unavailable, validation fails** — it does not degrade to somewhere less isolated.
+
+### 5. No Vibe or customer production secrets enter the sandbox
+
+The environment is exactly `CI`, `NODE_ENV` and `NEXT_TELEMETRY_DISABLED`. None grants anything.
+
+Absent by construction: Supabase service role, Anthropic key, GitHub App private key, Browserbase key, Vercel management tokens, and the customer's own production configuration. A build that needs a secret fails, and that failure is a true statement about the change rather than a reason to hand untrusted code a credential. Preview-safe environment configuration is a later capability, not a gap to route around now.
+
+### 6. The source-acquisition credential is destroyed before repository code runs
+
+A short-lived GitHub installation token is minted immediately before creation and used only as the clone credential. Then, before anything the repository controls executes:
+
+1. `.git` is removed, taking the credential-bearing remote configuration with it;
+2. its absence is **verified**, and a surviving credential store fails the run;
+3. GitHub is dropped from the network allowlist.
+
+"The token is short-lived" is explicitly **not** the boundary. An hour is ample time to exfiltrate a repository.
+
+### 7. Network policy is restrictive and phased
+
+| Phase | Policy | Why |
+| --- | --- | --- |
+| Source acquisition | GitHub domains only | Clone the exact commit |
+| Dependency install | package registry only, `--ignore-scripts` | The one networked step; lifecycle hooks suppressed |
+| Repository execution | `deny-all` | Nothing can phone home |
+
+A repository whose build needs arbitrary network access fails validation in V0.1. The global policy is not widened to make one project pass.
+
+### 8. Validation is not approval
+
+`sandbox_validation_passed` means the profile's commands exited zero in an isolated VM. It does not mean safe, correct, secure, reviewed, or production ready. These remain separate gates:
+
+```
+repository_write_verified → sandbox_validation_passed → human_approved → merged → deployed
+```
+
+Only the first two exist.
+
+## Consequences
+
+### Positive
+
+- ADR 0006's principle becomes testable: the ordering of credential removal and network closure is asserted against a recorded transcript, and mutation-checked.
+- Validation runs as a durable operation, so a five-minute sandbox does not depend on a browser tab.
+- Infrastructure spend is measured (`sandbox_usage_events`) separately from inference spend, so neither corrupts the other's unit economics.
+
+### Negative / Tradeoffs
+
+- **Real per-run cost**, metered on Active CPU, provisioned memory, creations and egress. Vercel exposes no attributable per-sandbox billed amount, so `provider_cost_usd` is null and the measured inputs are stored instead. We do not derive a figure from public rate cards and present it as accounting.
+- **`--ignore-scripts` will fail some legitimate projects.** A repository that genuinely needs a postinstall step to build gets a false negative. Accepted deliberately: a false negative is a bad result, a supply-chain execution window during the networked step is a bad architecture.
+- **Coverage is narrow.** One profile — single-app Next.js on npm or pnpm. Everything else is `validation_not_supported`, which is a statement about Vibe rather than about the customer's repository.
+- **`iad1` only**, and Hobby plans cap runtime at 45 minutes with a monthly Active CPU allowance.
+
+## Revisit when
+
+- A second sandbox provider is genuinely needed (the abstraction exists; a second adapter does not).
+- Preview environments arrive (Sprint 10B) and a validated artifact must actually *run* with an exposed port — a materially different exposure that needs its own decision.
+- Customer environment variables become necessary for realistic builds, which will need a secrets-handling decision of its own and must not be solved by loosening §5.

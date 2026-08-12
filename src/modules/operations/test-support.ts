@@ -22,6 +22,7 @@ type QueryError = { code?: string; message: string } | null;
 const POSTGRES_UNIQUE_VIOLATION = "23505";
 const ACTIVE_OPERATION_STATUSES = ["queued", "running"];
 const IN_FLIGHT_AUDIT_STATUSES = ["pending", "analyzing"];
+const ACTIVE_VALIDATION_STATUSES = ["queued", "running", "passed"];
 
 type Filter =
   | { kind: "eq"; column: string; value: unknown }
@@ -70,6 +71,19 @@ export class FakeDatabase {
           ACTIVE_OPERATION_STATUSES.includes(String(row.status)),
       );
       if (clash) return { code: POSTGRES_UNIQUE_VIOLATION, message: "one active operation per identity" };
+    }
+
+    // validation_runs_single_active_idx (Sprint 10A §21). Modelled so a double
+    // click loses its second insert in tests exactly as it would in Postgres —
+    // otherwise the test would "prove" idempotency the database provides.
+    if (table === "validation_runs" && ACTIVE_VALIDATION_STATUSES.includes(String(candidate.status))) {
+      const clash = others.some(
+        (row) =>
+          row.project_id === candidate.project_id &&
+          row.validation_identity === candidate.validation_identity &&
+          ACTIVE_VALIDATION_STATUSES.includes(String(row.status)),
+      );
+      if (clash) return { code: POSTGRES_UNIQUE_VIOLATION, message: "one live validation per identity" };
     }
 
     if (table === "business_readiness_audits" && IN_FLIGHT_AUDIT_STATUSES.includes(String(candidate.status))) {

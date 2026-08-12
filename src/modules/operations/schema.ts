@@ -18,7 +18,13 @@
  * teaches users to distrust the number.
  */
 
-export const OPERATION_TYPES = ["business_audit", "opportunity_generation", "change_preparation"] as const;
+export const OPERATION_TYPES = [
+  "business_audit",
+  "opportunity_generation",
+  "change_preparation",
+  /** Isolated sandbox validation of a prepared change (Sprint 10A §20). */
+  "change_validation",
+] as const;
 export type OperationType = (typeof OPERATION_TYPES)[number];
 
 export const OPERATION_STATUSES = ["queued", "running", "completed", "failed", "cancelled"] as const;
@@ -39,6 +45,23 @@ export const OPERATION_STAGES = [
   "verifying_repository",
   "validating",
   "persisting",
+  /**
+   * Isolated validation (Sprint 10A §17).
+   *
+   * Granular because a five-minute sandbox run reported as one opaque stage
+   * tells a waiting user nothing — and a percentage would tell them something
+   * false.
+   */
+  "provisioning",
+  "acquiring_source",
+  "verifying_source",
+  "securing_sandbox",
+  "installing",
+  "typechecking",
+  "testing",
+  "building",
+  "collecting_results",
+  "cleaning_up",
   "completed",
 ] as const;
 export type OperationStage = (typeof OPERATION_STAGES)[number];

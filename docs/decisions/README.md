@@ -64,3 +64,4 @@ What was decided.
 ## Consequences
 What this makes easier, harder, or forecloses.
 ```
+- [0015 — Untrusted Repository Execution Provider: Vercel Sandbox](0015-untrusted-repository-execution-provider.md)

@@ -9,6 +9,7 @@ import { OPERATION_STAGE_LABELS, type OperationView } from "@/modules/operations
 import { buildOpportunityBlockNotice } from "@/modules/opportunities/view";
 import type { OpportunityActionState } from "@/modules/execution/view";
 import { PrepareChangePanel } from "./prepare-change-panel";
+import type { ValidationSummary } from "./validation-panel";
 import {
   CONFIDENCE_LABELS,
   EFFORT_LABELS,
@@ -62,12 +63,14 @@ function OpportunityCard({
   opportunity,
   execution,
   branchUrl,
+  validationSummary,
 }: {
   projectId: string;
   opportunity: BusinessOpportunity;
   /** Derived server-side. Null when this project has no execution state yet. */
   execution: OpportunityActionState | null;
   branchUrl: string | null;
+  validationSummary: ValidationSummary | null;
 }) {
   return (
     <li className="space-y-3 rounded-md border border-zinc-800 p-4">
@@ -132,6 +135,7 @@ function OpportunityCard({
           opportunityId={opportunity.id}
           actionState={execution}
           branchUrl={branchUrl}
+          validationSummary={validationSummary}
         />
       )}
     </li>
@@ -145,6 +149,7 @@ export function OpportunitiesPanel({
   opportunities,
   executionStates,
   branchUrls,
+  validationSummaries,
   stale,
   activeOperation,
   blockedReason,
@@ -154,6 +159,7 @@ export function OpportunitiesPanel({
   /** Per-opportunity execution state, resolved on the server (§2). */
   executionStates: Record<string, OpportunityActionState>;
   branchUrls: Record<string, string>;
+  validationSummaries: Record<string, ValidationSummary>;
   /** A newer audit exists than the one these were prioritized from (§35). */
   stale: boolean;
   activeOperation: OperationView | null;
@@ -206,6 +212,7 @@ export function OpportunitiesPanel({
               opportunity={opportunity}
               execution={executionStates[opportunity.id] ?? null}
               branchUrl={branchUrls[opportunity.id] ?? null}
+              validationSummary={validationSummaries[opportunity.id] ?? null}
             />
           ))}
         </ol>

@@ -1,0 +1,181 @@
+/**
+ * The validation domain (Sprint 10A §16, §17, §18).
+ *
+ * Sprint 9 ended with a distinction it could state but not yet act on:
+ *
+ * ```
+ * repository_write_verified  — the bytes on the branch are the bytes we meant
+ * sandbox_validation_passed  — those bytes install, typecheck, test and build
+ * human_approved             — someone looked at it
+ * merged / deployed          — neither exists yet
+ * ```
+ *
+ * This module implements the second line and nothing else. The first real
+ * prepared change was byte-perfect and still listed `/login` in a sitemap; no
+ * amount of build validation would have caught that either. Validation raises
+ * the floor, it does not close the gap.
+ *
+ * ## Why any of this needs a sandbox
+ *
+ * Validation is the first thing Vibe does that runs **code it did not write**.
+ * A repository's `package.json` scripts, its dependencies' lifecycle hooks and
+ * its build tooling are all attacker-controlled from our point of view. ADR
+ * 0006 fixed the principle before there was code to break it; ADR 0015 names
+ * the provider.
+ */
+
+/**
+ * Validation profiles (§5).
+ *
+ * One profile, deliberately. A profile is a promise about which commands run
+ * and in what environment, so "supports everything" would mean "promises
+ * nothing". A repository that does not match a profile is `not_supported`,
+ * never a guessed command sequence.
+ */
+export const VALIDATION_PROFILES = ["nextjs_node_v1"] as const;
+export type ValidationProfile = (typeof VALIDATION_PROFILES)[number];
+
+/** Bumped when the commands a profile runs change meaning (§22). */
+export const VALIDATION_PROFILE_VERSIONS: Record<ValidationProfile, string> = {
+  nextjs_node_v1: "nextjs-node-v1",
+};
+
+/**
+ * The sandbox execution policy version (§22).
+ *
+ * Network policy, command sequence, timeouts, install flags and secret
+ * handling together define what "validated" means. Changing any of them
+ * changes the claim, so the version is part of the validation identity and a
+ * previously passing run is not silently reused under new rules.
+ */
+export const SANDBOX_POLICY_VERSION = "sandbox-policy-v1" as const;
+
+export const SANDBOX_PROVIDERS = ["vercel_sandbox"] as const;
+export type SandboxProviderId = (typeof SANDBOX_PROVIDERS)[number];
+
+export const PACKAGE_MANAGERS = ["pnpm", "npm"] as const;
+export type SupportedPackageManager = (typeof PACKAGE_MANAGERS)[number];
+
+export const VALIDATION_STATUSES = ["queued", "running", "passed", "failed", "cancelled"] as const;
+export type ValidationStatus = (typeof VALIDATION_STATUSES)[number];
+
+/** Where a run has got to. No percentages — see `operations/schema.ts`. */
+export const VALIDATION_STAGES = [
+  "provisioning",
+  "acquiring_source",
+  "verifying_source",
+  "securing_sandbox",
+  "installing",
+  "typechecking",
+  "testing",
+  "building",
+  "collecting_results",
+  "cleaning_up",
+  "completed",
+] as const;
+export type ValidationStage = (typeof VALIDATION_STAGES)[number];
+
+/**
+ * Why a validation could not run, or refused to (§5, §29).
+ *
+ * Separate from "the build failed". A failing build is a *successful*
+ * validation of a broken change; these are the cases where Vibe learned
+ * nothing about the change at all.
+ */
+export const VALIDATION_BLOCK_REASONS = [
+  /** No profile matches this repository. Never a guessed command sequence. */
+  "validation_not_supported",
+  /** The prepared change is not in a state that can be validated. */
+  "prepared_change_not_ready",
+  /** The workspace root could not be resolved unambiguously (§5). */
+  "ambiguous_workspace",
+  /** No lockfile, so a locked install is impossible. */
+  "lockfile_missing",
+  "repository_connection_invalid",
+] as const;
+export type ValidationBlockReason = (typeof VALIDATION_BLOCK_REASONS)[number];
+
+/**
+ * Ways a run ends without a trustworthy verdict.
+ *
+ * `source_integrity_failed` is the important one: the sandbox did not contain
+ * what Vibe prepared, so **zero repository-controlled commands run** (§29).
+ */
+export const VALIDATION_FAILURE_REASONS = [
+  "source_integrity_failed",
+  "sandbox_unavailable",
+  "sandbox_timeout",
+  "source_acquisition_failed",
+  /** Credential scrubbing did not verifiably succeed — refuse rather than run. */
+  "credential_scrub_failed",
+  /** A required check failed. The ordinary outcome of validating a broken change. */
+  "validation_checks_failed",
+  /** Deterministically identifiable missing configuration (§9). */
+  "build_failed_missing_environment",
+  "validation_run_failed",
+] as const;
+export type ValidationFailureReason = (typeof VALIDATION_FAILURE_REASONS)[number];
+
+export type ValidationFailureCode = ValidationBlockReason | ValidationFailureReason;
+
+/** One executed (or deliberately skipped) validation step (§19). */
+export const STEP_STATUSES = ["passed", "failed", "skipped", "timed_out"] as const;
+export type StepStatus = (typeof STEP_STATUSES)[number];
+
+export const STEP_SKIP_REASONS = ["script_not_present", "not_in_profile"] as const;
+export type StepSkipReason = (typeof STEP_SKIP_REASONS)[number];
+
+export type ValidationStepResult = {
+  /** The command Vibe constructed. Never a repository-supplied string (§13). */
+  command: string;
+  status: StepStatus;
+  exitCode: number | null;
+  durationMs: number;
+  /**
+   * Sanitized, bounded tail of combined output (§15).
+   *
+   * A tail rather than a head: the reason a build failed is at the end.
+   */
+  outputTail: string;
+  outputTruncated: boolean;
+  skipReason: StepSkipReason | null;
+};
+
+export const VALIDATION_STEPS = ["install", "typecheck", "test", "build"] as const;
+export type ValidationStepName = (typeof VALIDATION_STEPS)[number];
+
+/**
+ * What a passing run is allowed to claim (§18, §45).
+ *
+ * Named for what was actually observed. `sandbox_validation_passed` means a
+ * profile's commands exited zero inside an isolated VM — not that the change
+ * is safe, correct, secure, or production ready. The vocabulary is the product
+ * guarantee, so it lives in the type system rather than in copy.
+ */
+export type ValidationVerdict = "sandbox_validation_passed";
+
+export type ValidationRun = {
+  id: string;
+  projectId: string;
+  preparedChangeId: string;
+  operationRunId: string;
+  validationProfile: ValidationProfile;
+  validationProfileVersion: string;
+  sandboxPolicyVersion: string;
+  sandboxProvider: SandboxProviderId;
+  sandboxRuntime: string;
+  packageManager: SupportedPackageManager;
+  preparedCommitSha: string;
+  status: ValidationStatus;
+  stage: ValidationStage;
+  steps: Partial<Record<ValidationStepName, ValidationStepResult>>;
+  failureCode: ValidationFailureCode | null;
+  sandboxDurationMs: number | null;
+  createdAt: string;
+  startedAt: string | null;
+  completedAt: string | null;
+};
+
+export function validationProfileVersionFor(profile: ValidationProfile): string {
+  return VALIDATION_PROFILE_VERSIONS[profile];
+}

@@ -13,6 +13,7 @@ import {
 } from "@/modules/execution/view";
 import type { PreparedDiff } from "@/modules/execution/diff";
 import { getOperationStatusAction } from "./run-audit-action";
+import { ValidationPanel, type ValidationSummary } from "./validation-panel";
 import {
   getPreparedDiffAction,
   prepareChangeAction,
@@ -125,6 +126,7 @@ export function PrepareChangePanel({
   opportunityId,
   actionState,
   branchUrl,
+  validationSummary,
 }: {
   projectId: string;
   opportunityId: string;
@@ -132,6 +134,8 @@ export function PrepareChangePanel({
   actionState: OpportunityActionState;
   /** Built from stored linkage, never client-supplied (§15). */
   branchUrl: string | null;
+  /** The latest isolated validation for this artifact (Sprint 10A §44). */
+  validationSummary: ValidationSummary | null;
 }) {
   const action = prepareChangeAction.bind(null, projectId, opportunityId);
   const [state, formAction, pending] = useActionState(action, initialState);
@@ -220,6 +224,15 @@ export function PrepareChangePanel({
 
         {diffError && <p className="text-sm text-amber-400">{diffError}</p>}
         {diff && <DiffView diff={diff} />}
+
+        {/* Isolated validation of this exact commit (Sprint 10A §44). Offered
+            only once a change exists — there is nothing to validate before. */}
+        <ValidationPanel
+          projectId={projectId}
+          preparedChangeId={preparedChangeId}
+          summary={validationSummary}
+          runningOperation={null}
+        />
       </div>
     );
   }
