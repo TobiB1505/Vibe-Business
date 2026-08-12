@@ -240,7 +240,7 @@ wearing an accounting figure's clothes. The measured inputs are stored instead.
 1510 tests pass. 87 new to this sprint, all against fakes — `pnpm test` never
 provisions a real sandbox (§39).
 
-Twenty-five mutations, each verified to break tests:
+Twenty-seven mutations, each verified to break tests:
 
 | Mutation | Tests failed |
 | --- | --- |
@@ -269,6 +269,8 @@ Twenty-five mutations, each verified to break tests:
 | failure detail discarded | 4 |
 | failure detail stored unsanitized | 1 |
 | raw error object stored instead of name+message | 1 |
+| relative working directory restored | 3 |
+| diagnostic directory listing dropped | 1 |
 
 The last five target the **adapter**, and exist because that seam has now cost
 this project twice: a table name in Sprint 9, a CHECK constraint in the 9
@@ -366,8 +368,41 @@ same limits as step output — it is untrusted text either way. The difference i
 between *"we refuse to look"* and *"we cannot find out"*, and only the first is
 a security property.
 
-Defect 2 remains a hypothesis rather than a finding. It is stated as one, and
-the next failure will carry its own explanation.
+### Third attempt: the hypothesis was wrong
+
+With `failure_detail` in place, the next run answered immediately:
+
+```
+git rev-parse HEAD exited 128
+fatal: not a git repository (or any of the parent directories): .git
+```
+
+`git` was present and ran — defect 2's diagnosis was **wrong**. The image was
+never the problem. There is simply no `.git` where the command executed, which
+leaves two possibilities the run still could not separate:
+
+- the platform materializes the tree at the requested revision *without* a
+  `.git` directory, or
+- the command ran somewhere other than where the source landed.
+
+Rather than guess a third time, two changes make the run answer it. Every path
+is now absolute against the documented working directory `/vercel/sandbox`
+instead of a relative `cwd: "."`, removing the second possibility outright; and
+a failed source verification now lists the directory it looked in. `ls` is
+Vibe's own command with bounded output — no repository code runs, and the
+listing is a diagnostic, not a licence.
+
+The fake sandbox models the same working directory, because a fake that accepted
+bare relative paths would pass while production failed. That is the specific
+trap this sprint has now hit twice.
+
+If the tree genuinely arrives without `.git`, §6's independent SHA check cannot
+be satisfied by `git rev-parse` and the design needs revisiting rather than
+patching: pinning an immutable commit SHA at creation already removes the
+"HEAD moved" failure the check exists to catch, and prepared-file hash
+verification (§29) already proves the artifact's own bytes. That would be a
+deliberate change to what verification means, recorded here — not a silent
+fallback triggered by an error string.
 
 ### One product defect too
 

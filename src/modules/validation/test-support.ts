@@ -56,6 +56,22 @@ export type FakeSandboxProvider = SandboxProvider & {
   stopped(): boolean;
 };
 
+/**
+ * The real sandbox's working directory.
+ *
+ * The fake models it because the orchestrator addresses everything absolutely.
+ * A fake that accepted bare relative paths would pass while production failed —
+ * which is precisely the trap that made the first dogfood's `.git` failure
+ * indistinguishable from looking in the wrong place.
+ */
+const SANDBOX_WORKDIR = "/vercel/sandbox";
+
+/** Fixtures stay relative and readable; lookups arrive absolute. */
+function relative(path: string): string {
+  if (path === SANDBOX_WORKDIR) return "";
+  return path.startsWith(`${SANDBOX_WORKDIR}/`) ? path.slice(SANDBOX_WORKDIR.length + 1) : path;
+}
+
 export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandboxProvider {
   const events: FakeEvent[] = [];
   const files = { ...(options.files ?? {}) };
@@ -71,9 +87,9 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
 
       if (options.throwOn === rendered) throw new Error("provider exploded");
 
-      // `rm -rf .git` is a real mutation in the fake too, so the credential
+      // Removing `.git` is a real mutation in the fake too, so the credential
       // scrub is verified against actual state rather than a hardcoded answer.
-      if (rendered === "rm -rf .git") {
+      if (input.command.command === "rm" && relative(input.command.args.at(-1) ?? "") === ".git") {
         for (const path of Object.keys(files)) {
           if (path === ".git" || path.startsWith(".git/")) delete files[path];
         }
@@ -90,7 +106,7 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
 
     async readFile(input) {
       events.push({ kind: "read", path: input.path });
-      return files[input.path] ?? null;
+      return files[relative(input.path)] ?? null;
     },
 
     async applyNetworkPolicy(policy) {

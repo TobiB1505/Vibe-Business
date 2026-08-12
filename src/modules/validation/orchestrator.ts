@@ -140,8 +140,19 @@ function sha256(content: string): string {
   return createHash("sha256").update(content, "utf8").digest("hex");
 }
 
-function joinPath(root: string, path: string): string {
-  return root === "." || root === "" ? path : `${root.replace(/\/+$/, "")}/${path}`;
+/**
+ * The sandbox's working directory, per current Vercel Sandbox documentation.
+ *
+ * Every path is made absolute against it rather than relying on a relative
+ * `cwd: "."`. The first dogfood could not distinguish "there is no `.git`" from
+ * "we looked in the wrong place", and an ambiguity that costs a real run is
+ * worth one constant.
+ */
+const SANDBOX_WORKDIR = "/vercel/sandbox";
+
+function absolute(root: string, path = ""): string {
+  const base = root === "." || root === "" ? SANDBOX_WORKDIR : `${SANDBOX_WORKDIR}/${root.replace(/\/+$/, "")}`;
+  return path === "" ? base : `${base}/${path}`;
 }
 
 function stepResult(
@@ -254,17 +265,28 @@ export async function runValidation(
     // Validation must describe exactly what Vibe prepared. The provider was
     // asked for a revision; this checks it actually delivered it (§6).
     await setStage("verifying_source");
+    const workdir = absolute(target.workspaceRoot);
     const head = await sandbox.run({
       command: { command: "git", args: ["rev-parse", "HEAD"] },
-      cwd: ".",
+      cwd: workdir,
       timeoutMs: SANDBOX_BUDGETS.sourceTimeoutMs,
     });
 
     if (head.exitCode !== 0) {
+      // Describe what is actually on disk. `ls -a` is our own command with
+      // bounded output — no repository code runs — and it is the difference
+      // between another hypothesis and a finding.
+      const listing = await sandbox.run({
+        command: { command: "ls", args: ["-a", workdir] },
+        cwd: workdir,
+        timeoutMs: SANDBOX_BUDGETS.sourceTimeoutMs,
+      });
+
       return finish(
         "failed",
         "source_acquisition_failed",
-        `git rev-parse HEAD exited ${head.exitCode}\n${head.output}`,
+        `git rev-parse HEAD exited ${head.exitCode} in ${workdir}\n${head.output}\n` +
+          `contents of ${workdir}:\n${listing.output}`,
       );
     }
     if (head.output.trim() !== target.preparedCommitSha) {
@@ -279,7 +301,7 @@ export async function runValidation(
     // that was prepared, hash for hash.
     for (const file of target.preparedFiles.slice(0, SANDBOX_BUDGETS.maxIntegrityFiles)) {
       const content = await sandbox.readFile({
-        path: joinPath(target.workspaceRoot, file.path),
+        path: absolute(target.workspaceRoot, file.path),
         maxBytes: SANDBOX_BUDGETS.maxIntegrityFileBytes,
       });
 
@@ -297,14 +319,17 @@ export async function runValidation(
     // filesystem. "The token is short-lived" is not the boundary (§7).
     await setStage("securing_sandbox");
     await sandbox.run({
-      command: { command: "rm", args: ["-rf", ".git"] },
-      cwd: ".",
+      command: { command: "rm", args: ["-rf", absolute(target.workspaceRoot, ".git")] },
+      cwd: workdir,
       timeoutMs: SANDBOX_BUDGETS.sourceTimeoutMs,
     });
 
     // Verified, not assumed. If the credential store still exists, refuse to
     // run repository code at all rather than hope.
-    const gitConfig = await sandbox.readFile({ path: ".git/config", maxBytes: 4096 });
+    const gitConfig = await sandbox.readFile({
+      path: absolute(target.workspaceRoot, ".git/config"),
+      maxBytes: 4096,
+    });
     if (gitConfig !== null) {
       return finish("failed", "credential_scrub_failed", "the git credential store survived removal");
     }
@@ -313,7 +338,7 @@ export async function runValidation(
     // Parsed in *our* process, not executed. This is what decides which steps
     // exist — never an opportunity's prose (§12).
     const manifestRaw = await sandbox.readFile({
-      path: joinPath(target.workspaceRoot, "package.json"),
+      path: absolute(target.workspaceRoot, "package.json"),
       maxBytes: SANDBOX_BUDGETS.maxIntegrityFileBytes,
     });
     if (manifestRaw === null) {
@@ -329,7 +354,7 @@ export async function runValidation(
     }
 
     const lockfile = await sandbox.readFile({
-      path: joinPath(target.workspaceRoot, LOCKFILES[target.packageManager]),
+      path: absolute(target.workspaceRoot, LOCKFILES[target.packageManager]),
       maxBytes: 1024,
     });
     if (lockfile === null) {
@@ -349,7 +374,7 @@ export async function runValidation(
 
     const installResult = await sandbox.run({
       command: install.command,
-      cwd: target.workspaceRoot,
+      cwd: workdir,
       timeoutMs: SANDBOX_BUDGETS.installTimeoutMs,
     });
     steps.install = stepResult(install.command, installResult);
@@ -385,7 +410,7 @@ export async function runValidation(
 
       const result = await sandbox.run({
         command: entry.command,
-        cwd: target.workspaceRoot,
+        cwd: workdir,
         timeoutMs: SANDBOX_BUDGETS.commandTimeoutMs,
       });
       const recorded = stepResult(entry.command, result);

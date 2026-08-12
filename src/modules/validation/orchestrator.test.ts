@@ -67,7 +67,7 @@ describe("the happy path", () => {
 
     expect(provider.commands()).toEqual([
       HEAD,
-      "rm -rf .git",
+      "rm -rf /vercel/sandbox/.git",
       "pnpm install --frozen-lockfile --ignore-scripts",
       "pnpm run typecheck",
       "pnpm run test",
@@ -161,7 +161,7 @@ describe("credential handling (§7, §37)", () => {
     await runValidation(provider, fakeValidationTarget());
 
     const commands = provider.commands();
-    const scrub = commands.indexOf("rm -rf .git");
+    const scrub = commands.findIndex((command) => command.startsWith("rm -rf "));
 
     expect(scrub).toBeGreaterThanOrEqual(0);
     expect(scrub).toBeLessThan(firstRepositoryControlledCommand(commands));
@@ -175,7 +175,7 @@ describe("credential handling (§7, §37)", () => {
       results: {
         [HEAD]: { output: `${FIXTURE_COMMIT_SHA}\n` },
         // The scrub reports success but leaves the file behind.
-        "rm -rf .git": { exitCode: 0 },
+        "rm -rf /vercel/sandbox/.git": { exitCode: 0 },
       },
     });
     // Re-add `.git/config` after the fake's own deletion by making it
@@ -185,7 +185,7 @@ describe("credential handling (§7, §37)", () => {
       const handle = await original(input);
       const readFile = handle.readFile.bind(handle);
       handle.readFile = async (file) =>
-        file.path === ".git/config" ? "[remote]\n" : readFile(file);
+        file.path.endsWith(".git/config") ? "[remote]\n" : readFile(file);
       return handle;
     };
 
@@ -602,5 +602,53 @@ describe("a retry is not doomed by its own name (post-dogfood)", () => {
     expect(name).not.toContain("acme");
     expect(name).not.toContain("product");
     expect(name).not.toContain(FIXTURE_COMMIT_SHA);
+  });
+});
+
+describe("diagnosing a missing checkout (post-dogfood)", () => {
+  /**
+   * The third real run failed with `fatal: not a git repository`. That ruled
+   * out the earlier guess — `git` was present and ran — but left two live
+   * possibilities: the platform materializes the tree without `.git`, or the
+   * command ran somewhere other than where the source landed.
+   *
+   * Guessing a third time would have been the wrong move, so a failed source
+   * verification now describes the directory it looked in. `ls` is Vibe's own
+   * command with bounded output; no repository code runs.
+   */
+  it("addresses the documented working directory absolutely", async () => {
+    const provider = setup();
+    await runValidation(provider, fakeValidationTarget());
+
+    for (const event of provider.events) {
+      if (event.kind === "command") expect(event.cwd).toBe("/vercel/sandbox");
+      if (event.kind === "read") expect(event.path.startsWith("/vercel/sandbox/")).toBe(true);
+    }
+  });
+
+  it("reports what was actually on disk when verification fails", async () => {
+    const provider = setup({
+      results: {
+        [HEAD]: { exitCode: 128, output: "fatal: not a git repository" },
+        "ls -a /vercel/sandbox": { output: ". .. package.json src" },
+      },
+    });
+
+    const outcome = await runValidation(provider, fakeValidationTarget());
+
+    expect(outcome.failureDetail).toContain("/vercel/sandbox");
+    expect(outcome.failureDetail).toContain("package.json");
+    // A listing is a diagnostic, not a licence: still nothing the repo controls.
+    expect(provider.commands().some((command) => command.startsWith("pnpm"))).toBe(false);
+  });
+
+  it("resolves a monorepo workspace root under the working directory", async () => {
+    const provider = setup({ files: {} });
+    await runValidation(provider, fakeValidationTarget({ workspaceRoot: "apps/web" }));
+
+    expect(provider.commands()[0]).toBe("git rev-parse HEAD");
+    expect(provider.events.find((event) => event.kind === "command")?.cwd).toBe(
+      "/vercel/sandbox/apps/web",
+    );
   });
 });
