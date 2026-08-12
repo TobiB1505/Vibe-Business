@@ -3,6 +3,7 @@ import "server-only";
 import { start } from "workflow/api";
 import { businessAuditWorkflow } from "../business-audit/workflow";
 import { opportunityGenerationWorkflow } from "../opportunities/workflow";
+import { changePreparationWorkflow } from "../change-preparation/workflow";
 import type { OperationExecutor, StartOperationInput, StartOperationResult } from "../executor";
 import type { OperationType } from "../schema";
 
@@ -31,6 +32,7 @@ import type { OperationType } from "../schema";
 const WORKFLOWS: Record<OperationType, (operationId: string) => Promise<void>> = {
   business_audit: businessAuditWorkflow,
   opportunity_generation: opportunityGenerationWorkflow,
+  change_preparation: changePreparationWorkflow,
 };
 
 export class VercelWorkflowExecutor implements OperationExecutor {

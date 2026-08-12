@@ -18,7 +18,7 @@
  * teaches users to distrust the number.
  */
 
-export const OPERATION_TYPES = ["business_audit", "opportunity_generation"] as const;
+export const OPERATION_TYPES = ["business_audit", "opportunity_generation", "change_preparation"] as const;
 export type OperationType = (typeof OPERATION_TYPES)[number];
 
 export const OPERATION_STATUSES = ["queued", "running", "completed", "failed", "cancelled"] as const;
@@ -31,6 +31,12 @@ export const OPERATION_STAGES = [
   "running_ai",
   /** The Opportunity Engine's paid step (Sprint 8 §25). */
   "prioritizing",
+  /** Change preparation: revalidating the premise against live state. */
+  "preflight",
+  "generating_change",
+  /** The consequential external write (Sprint 9B §7). */
+  "writing_repository",
+  "verifying_repository",
   "validating",
   "persisting",
   "completed",
@@ -57,5 +63,5 @@ export function isActive(status: OperationStatus): boolean {
  * cancellation cannot be honestly promised.
  */
 export function hasEnteredPaidWork(stage: OperationStage): boolean {
-  return stage === "running_ai" || stage === "prioritizing" || stage === "validating" || stage === "persisting" || stage === "completed";
+  return stage === "running_ai" || stage === "prioritizing" || stage === "writing_repository" || stage === "validating" || stage === "persisting" || stage === "completed";
 }

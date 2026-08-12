@@ -26,6 +26,8 @@ export type StoredOperationRun = {
   inputIdentity: string;
   workflowRunId: string | null;
   executionProvider: string | null;
+  /** The domain object this operation acts on, when it has one. */
+  subjectId: string | null;
   /** The row this operation produced — an audit, an opportunity set, … */
   resultId: string | null;
   inferenceStartedAt: string | null;
@@ -46,6 +48,7 @@ type OperationRow = {
   input_identity: string;
   workflow_run_id: string | null;
   execution_provider: string | null;
+  subject_id: string | null;
   result_id: string | null;
   inference_started_at: string | null;
   failure_code: string | null;
@@ -56,7 +59,7 @@ type OperationRow = {
 };
 
 const OPERATION_COLUMNS =
-  "id, project_id, user_id, operation_type, status, stage, input_identity, workflow_run_id, execution_provider, result_id, inference_started_at, failure_code, started_at, completed_at, created_at, updated_at";
+  "id, project_id, user_id, operation_type, status, stage, input_identity, workflow_run_id, execution_provider, subject_id, result_id, inference_started_at, failure_code, started_at, completed_at, created_at, updated_at";
 
 function mapRow(row: OperationRow): StoredOperationRun {
   return {
@@ -69,6 +72,7 @@ function mapRow(row: OperationRow): StoredOperationRun {
     inputIdentity: row.input_identity,
     workflowRunId: row.workflow_run_id,
     executionProvider: row.execution_provider,
+    subjectId: row.subject_id,
     resultId: row.result_id,
     inferenceStartedAt: row.inference_started_at,
     failureCode: row.failure_code,
@@ -178,6 +182,8 @@ export async function createOperationRun(
     userId: string;
     operationType: OperationType;
     inputIdentity: string;
+    /** The domain object this operation acts on, when it has one. */
+    subjectId?: string;
   },
 ): Promise<CreateOperationResult> {
   const { data, error } = await supabase
@@ -187,6 +193,7 @@ export async function createOperationRun(
       user_id: params.userId,
       operation_type: params.operationType,
       input_identity: params.inputIdentity,
+      ...(params.subjectId ? { subject_id: params.subjectId } : {}),
       status: "queued",
       stage: "preparing",
     })

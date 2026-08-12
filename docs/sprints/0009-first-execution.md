@@ -1,7 +1,13 @@
 # Sprint 9 — First Execution
 
-Status: **Partially implemented.** The execution safety core is built, tested and mutation-validated. The wiring that would let a user trigger it — persistence, durable workflow, service, UI — is **not** built. No repository write is possible from the product yet, and none has been performed.
+Status: **9A complete · 9B complete · 9C pending.** The execution core and its backend wiring are built, tested and mutation-validated. There is **no customer-facing trigger**: no UI, no permission upgrade, no dogfood, and no repository write has ever been performed.
 Branch: `feat/first-execution`
+
+| Phase | Scope | Status |
+| --- | --- | --- |
+| **9A** | Safety core: capability resolution, preflight, premise revalidation, path allowlist, deterministic generator, atomic writer | Complete |
+| **9B** | Backend wiring: `prepared_changes`, execution identity, `change_preparation` operation, durable workflow, application service | Complete |
+| **9C** | UI, GitHub permission upgrade, dogfood | Pending |
 
 ## Goal
 
@@ -103,18 +109,63 @@ Permanently forbidden: `.github/`, `.env*`, manifests, lockfiles, `supabase/`, `
 
 Per §43, these are only called safety coverage because they demonstrably fail under mutation.
 
+## Backend wiring (9B)
+
+### PreparedChange persistence
+
+`prepared_changes` stores references, never content: branch, base sha, commit sha, file paths and hashes. The GitHub branch is the canonical artifact, so Supabase does not become a source-code mirror (§2, §23). No tokens, no API responses, no diffs, no generated source.
+
+A successful prepared change is immutable — the transitions are scoped to `preparing`, so a replayed persistence step reports that it did nothing rather than rewriting a finished result with a second commit.
+
+### Execution identity
+
+`project + opportunity set + opportunity + capability + capability version + repository snapshot + base HEAD sha`.
+
+The base sha earns its place: a prepared change is a commit *on top of a specific parent*. If the default branch moved, the previously prepared change is no longer the same change even though the opportunity is unchanged — reusing it would hand the user a diff against a tree that no longer exists.
+
+Opportunity prose is deliberately absent. It is model output, so a reworded title would otherwise invalidate a perfectly good prepared change and buy a second branch for nothing.
+
+### Durable operation
+
+`change_preparation`, the third type on the Sprint 7 foundation. Stages: `preflight → generating_change → writing_repository → verifying_repository → persisting → completed`. Two durable steps; the write step sets `maxRetries = 0`, because a platform retry could create a second branch and the recovery path — not the platform — is what makes re-entry safe.
+
+`operation_runs` gained `subject_id`: the domain object an operation acts on. A preparation acts on one specific opportunity, and the workflow must re-resolve exactly which one — not "the current top opportunity", which could be a different one by the time the step runs.
+
+### Application service
+
+The caller decides **a project and an opportunity**. That is the complete list.
+
+The repository, installation, branch, base commit, file paths, capability, production origin and generated content are all resolved server-side. Those are not parameters that get validated; they are not parameters at all, which is what stops a scoped capability becoming an arbitrary write primitive.
+
+### Workflow-time revalidation
+
+The service's eligibility check is a *courtesy* — it avoids queueing an obviously doomed run. **The safety boundary is in the workflow**, immediately before the write, because a queued operation can sit while the repository moves, a teammate adds the files, or the site starts serving them.
+
+HEAD and write permission are re-checked in the write step specifically, not only at preflight, and a test proves each: preflight passes, the world changes, the write step refuses with zero mutating calls.
+
+## Tests and mutation validation (9B)
+
+180 tests across the execution and operations modules. Six new mutations, each breaking real tests:
+
+| Mutation | Result |
+| --- | --- |
+| Remove active-operation reuse | 1 test fails |
+| Remove successful PreparedChange reuse | 1 fails |
+| Remove recovery branch inspection | 3 fail |
+| Remove workflow-time HEAD revalidation | 1 fails |
+| Remove the write-permission gate | 1 fails |
+| Let persistence replay create duplicates | 2 fail |
+
+Two of those — active-operation reuse and persistence replay — **survived the first run**. The database constraint covered the first, and the early-return path made the second unreachable. Both got a dedicated test rather than a shrug, which is the entire reason for running mutations against your own suite.
+
+`inspectExistingBranch` was explicitly untested in 9A and now has five cases: absent, exact match, different content, missing file, single-byte difference.
+
 ## What is NOT implemented
 
-Stated plainly, because a partial sprint that reads as complete is worse than one that admits its edges:
-
-- **No `prepared_changes` table or migration.** Nothing is persisted.
-- **No durable operation type.** `opportunity_execution` does not exist; there is no workflow, no steps, no stages.
-- **No service layer.** Nothing resolves owner/repo/installation from project state, runs the live probes, or calls the writer.
-- **No UI.** There is no "Let Vibe prepare this" button, no confirmation dialog, no diff view, no permission-upgrade prompt.
-- **No audit events** for change preparation.
+- **No UI.** No "Let Vibe prepare this" button, no confirmation dialog, no diff view, no permission-upgrade prompt.
+- **No GitHub permission upgrade.** The App still holds `Contents: read`, so a real write would block at the preflight's permission gate.
 - **No dogfood.** No branch, no commit, nothing written to any repository by anything.
-
-`github-writer.ts` is complete and typechecked but is **not reachable from the application** — nothing imports it outside its own module.
+- **No diff retrieval.** `getPreparedChangeView` returns file paths, not content — fetching a bounded diff for review belongs to 9C.
 
 ## Known limitations
 

@@ -27,6 +27,7 @@ export const OPERATION_FAILURE_MESSAGES: Record<OperationFailureCode, string> = 
 
   audit_missing: "Run a business audit first — opportunities are prioritized from it.",
   audit_stale: "Your business audit is older than the evidence Vibe now has. Update it first.",
+  stale_audit: "Your business audit is older than the evidence Vibe now has. Update it first.",
 
   audit_input_budget_exceeded: "There is too much evidence to analyze in one audit. This is a bug — please report it.",
   opportunity_input_budget_exceeded:
@@ -46,4 +47,24 @@ export const OPERATION_FAILURE_MESSAGES: Record<OperationFailureCode, string> = 
   output_truncated: "The result was cut short. Nothing was saved.",
   audit_failed: "The business audit could not be completed.",
   opportunity_generation_failed: "Vibe could not work out your next opportunities.",
+
+  // Change preparation (Sprint 9B §21). Each says what happened and, where it
+  // is true, what the user can do about it.
+  stale_opportunity: "This opportunity is no longer current. Refresh your opportunities first.",
+  stale_repository_intelligence: "Vibe's view of your code is out of date. Refresh repository intelligence first.",
+  repository_changed:
+    "Your code changed since Vibe analyzed it. Refresh product intelligence before preparing this change.",
+  premise_no_longer_true: "This opportunity is no longer current — your product already has this.",
+  unsupported_framework: "Vibe can't prepare this kind of change for your framework yet.",
+  unsupported_repository_layout: "Vibe can't safely determine where this change belongs in your repository.",
+  missing_required_context: "Vibe needs a verified production URL before it can prepare this change.",
+  github_write_permission_required:
+    "Vibe needs permission to create an isolated branch before it can prepare this change.",
+  conflicting_files_exist: "Those files already exist in your repository, so Vibe left them alone.",
+  unsupported_opportunity: "Vibe can't prepare this opportunity automatically yet.",
+  execution_not_available: "Preparing changes isn't available for this project yet.",
+  branch_conflict: "Vibe could not safely create the change branch.",
+  write_verification_failed: "Vibe prepared the change but could not verify it, so nothing was recorded.",
+  github_unavailable: "GitHub could not be reached. Try again in a moment.",
+  change_preparation_failed: "Vibe could not prepare this change.",
 };
