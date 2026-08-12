@@ -1,6 +1,6 @@
 # Sprint 6 — Deep Scan evidence in the Business Audit
 
-Status: Implemented. No migration required. **The updated real audit has not been run — it costs a paid inference call and needs explicit approval.**
+Status: Complete. No migration required. Merged as [#17](https://github.com/TobiB1505/Vibe-Business/pull/17); the updated real audit was run once, by hand, after approval — see [Updated audit](#updated-audit-run-once-after-approval).
 Branch: `feat/deep-scan-audit-evidence`
 
 ## Goal
@@ -98,6 +98,52 @@ Authenticated evidence produced: 3 detected surfaces (dashboard, project workspa
 
 Identity: the stored audit's hash `2fa4c86a…` differs from both the v2-with-Deep-Scan hash `6638e5d4…` and the v2-without hash `aee9d17c…`, so the old audit cannot be silently reused.
 
+## Updated audit (run once, after approval)
+
+One paid inference call, run by hand from the project page after the merge. **34 → 40 / 100**, five dimensions assessed, `business-evidence.v2` / `business-audit-prompt-v2`.
+
+The stored `input_hash` came out as `6638e5d4d6181b49…` — identical to the value computed offline during the dogfood. Production identity and the offline computation agree exactly, which is what had to hold for the pre-Deep-Scan audit not to be silently reused.
+
+| Dimension | Before | After | Status (unchanged) | Cites `auth.*` |
+| --- | --- | --- | --- | --- |
+| Product | 50 | 55 | assessable, medium | yes |
+| Monetization | 8 | 10 | assessable, high | yes |
+| Distribution | 28 | 32 | partial, medium | no |
+| Conversion | 50 | 58 | assessable, medium | no |
+| Retention | 35 | 45 | partial, low | yes |
+
+### Is it more accurate?
+
+Partly, and by less than +6 suggests.
+
+**Retention is the real gain.** The previous audit's stated unknown was *"whether the authenticated app area is reachable and functional post-login"*. That is no longer an unknown — it was observed. The dimension moved from inference about code to direct observation, which is exactly the weight the rubric already gave a protected app area. Product improves for the same reason: its gap *"dashboard/app area not observable on the live site"* is gone.
+
+**Distribution and conversion moved on identical evidence.** Neither cites a single `auth.*` id; their evidence is byte-identical across the two runs, yet they moved +4 and +8. That is run-to-run model variance and accounts for **+2.4 of the +6** — roughly 40% of the improvement is noise, not information. Worth remembering before reading any single-point score movement as signal.
+
+**Monetization +2 is the wrong shape.** It cites `auth.surface.billing_not_observed` as corroboration that no revenue path exists — using *not observed* as support for absence, which is the inference the pack's wording exists to discourage. Two points is noise-level, but the reasoning is not what was intended.
+
+### What held
+
+- **Evidence integrity:** `validationNotes` is empty on both runs, so zero cited ids were discarded. No hallucinated `auth.*` id; all 7 distinct authenticated citations resolve against the 25-item pack.
+- **The not-observed rule propagated.** The model's own limitations now include *"Deep Scan inspected only 6 signed-in pages, so unobserved surfaces are not established to be absent"* — the bounded-crawl caveat reached the output rather than dying in the prompt.
+- **Token counting is exact,** not approximate: estimated input equalled actual on both runs (5,233/5,233 and 6,902/6,902).
+
+### What to watch
+
+The product summary says *"A working authenticated application exists"*. Presence was observed; "working" was not. The caveat did survive into that dimension's unknowns (*"whether the authenticated surfaces are functionally complete beyond being present"*), so the rule half-landed — but the summary sentence is the part a user actually reads. Tightening it means another `PROMPT_VERSION` bump and a re-run, so it is recorded here rather than changed.
+
+### Cost
+
+| | First audit (v1) | Updated audit (v2) |
+| --- | --- | --- |
+| Input tokens | 5,233 | 6,902 (+32%) |
+| Output tokens | 5,218 | 5,684 |
+| Thinking tokens | 2,637 | 3,166 |
+| Provider cost | $0.0626 | $0.0706 (+12.8%) |
+| Latency | 53.8s | 49.4s |
+
+Authenticated evidence costs about **+1,700 input tokens and +$0.008 per audit** at the introductory Sonnet 5 price.
+
 ## Validation
 
 `pnpm lint`, `pnpm typecheck`, `pnpm test` (948 → 1005 tests), `pnpm build` — all green. No real Anthropic call in tests.
@@ -110,5 +156,6 @@ Opportunity Engine, credits, Stripe, async jobs, Browserbase lifecycle changes, 
 
 ## Risks / Notes
 
-- The updated real audit is **not** run automatically. It costs one paid inference call; the first audit scored 34/100.
+- Score movement on evidence that did not change was measurable (+2.4 of +6 across two dimensions with no authenticated citations). Treat single-point differences between runs as noise.
+- The "working authenticated application" phrasing above overstates presence as function; a future prompt version should tighten it.
 - The production snapshot contains a duplicate `/app/connect/github/repositories` page entry (one authenticated link at 200, one repository route at 404). The analyzer's landed-path dedup fix postdates that scan; worth confirming on the next Deep Scan.
