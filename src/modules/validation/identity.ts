@@ -50,13 +50,23 @@ export function computeValidationIdentity(params: {
 }
 
 /**
- * The sandbox name for a given identity.
+ * The sandbox name for one validation **attempt**.
  *
- * Deterministic so a leaked sandbox can be traced back to the run that made
- * it, and prefixed so Vibe's sandboxes are identifiable in a provider console.
- * Carries no project, user or repository information: sandbox names are
- * third-party metadata, and customer identifiers do not belong there.
+ * Derived from the validation run id, deliberately **not** from the validation
+ * identity. That distinction cost a real dogfood run:
+ *
+ * The identity is stable by design — same artifact, same policy, same hash —
+ * which is exactly what makes reuse work. Naming the sandbox after it meant
+ * every retry asked Vercel for a name that already existed, and
+ * `Sandbox.create` refused. A second attempt at the same validation was
+ * therefore *guaranteed* to fail with `sandbox_unavailable`, which is the
+ * opposite of what a retry should do.
+ *
+ * A run id is unique per attempt and still traceable: a sandbox left behind in
+ * a provider console maps back to exactly one row. Carries no project, user or
+ * repository information — sandbox names are third-party metadata, and
+ * customer identifiers do not belong there.
  */
-export function sandboxNameFor(identity: string): string {
-  return `vibe-validate-${identity.slice(0, 16)}`;
+export function sandboxNameFor(validationRunId: string): string {
+  return `vibe-validate-${validationRunId.replace(/-/g, "").slice(0, 20)}`;
 }

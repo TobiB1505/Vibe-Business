@@ -44,6 +44,7 @@ export type StoredValidationRun = {
   stage: ValidationStage;
   steps: Partial<Record<ValidationStepName, ValidationStepResult>>;
   failureCode: ValidationFailureCode | null;
+  failureDetail: string | null;
   sandboxDurationMs: number | null;
   cleanupStatus: CleanupStatus | null;
   validationIdentity: string;
@@ -55,7 +56,7 @@ export type StoredValidationRun = {
 const COLUMNS =
   "id, project_id, prepared_change_id, operation_run_id, validation_profile, validation_profile_version, " +
   "sandbox_policy_version, sandbox_provider, sandbox_runtime, package_manager, prepared_commit_sha, " +
-  "status, stage, steps, failure_code, sandbox_duration_ms, cleanup_status, validation_identity, " +
+  "status, stage, steps, failure_code, failure_detail, sandbox_duration_ms, cleanup_status, validation_identity, " +
   "created_at, started_at, completed_at";
 
 type Row = Record<string, unknown>;
@@ -77,6 +78,7 @@ function mapRow(row: Row): StoredValidationRun {
     stage: row.stage as ValidationStage,
     steps: (row.steps ?? {}) as Partial<Record<ValidationStepName, ValidationStepResult>>,
     failureCode: (row.failure_code as ValidationFailureCode | null) ?? null,
+    failureDetail: (row.failure_detail as string | null) ?? null,
     sandboxDurationMs: (row.sandbox_duration_ms as number | null) ?? null,
     cleanupStatus: (row.cleanup_status as CleanupStatus | null) ?? null,
     validationIdentity: String(row.validation_identity),
@@ -231,6 +233,8 @@ export async function completeValidationRun(
     stage: ValidationStage;
     steps: Partial<Record<ValidationStepName, ValidationStepResult>>;
     failureCode: ValidationFailureCode | null;
+    /** Already sanitized and bounded by the orchestrator. */
+    failureDetail: string | null;
     sandboxRuntime: string | null;
     sandboxDurationMs: number | null;
     cleanupStatus: CleanupStatus;
@@ -243,6 +247,7 @@ export async function completeValidationRun(
       stage: params.stage,
       steps: params.steps,
       failure_code: params.failureCode,
+      failure_detail: params.failureDetail,
       sandbox_runtime: params.sandboxRuntime,
       sandbox_duration_ms: params.sandboxDurationMs,
       cleanup_status: params.cleanupStatus,
@@ -277,6 +282,7 @@ export async function recordSandboxUsage(
     usage: SandboxUsage | null;
     cleanupStatus: CleanupStatus;
     failureCode: ValidationFailureCode | null;
+    failureDetail: string | null;
   },
 ): Promise<void> {
   const { error } = await supabase.from("sandbox_usage_events").insert({
@@ -294,6 +300,7 @@ export async function recordSandboxUsage(
     provider_cost_usd: params.usage?.costUsd ?? null,
     cleanup_status: params.cleanupStatus,
     failure_code: params.failureCode,
+    failure_detail: params.failureDetail,
   });
 
   // A ledger write must never take down the operation that earned it: the run

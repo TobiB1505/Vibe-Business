@@ -1,8 +1,9 @@
 # Sprint 10A — Isolated Change Validation
 
-Status: **Implemented, not yet dogfooded.** The code is complete and the schema
-is deployed. No real Vercel Sandbox has been provisioned — that is blocked on a
-manual checkpoint (see [Manual action required](#manual-action-required)).
+Status: **Implemented; first dogfood attempted and failed, defects fixed, second
+attempt pending.** Two real sandboxes were provisioned. Both runs failed, for
+three reasons that were all mine — see
+[First dogfood attempt](#first-dogfood-attempt--2026-08-12).
 Branch: `feat/isolated-change-validation`
 
 ## Goal
@@ -239,7 +240,7 @@ wearing an accounting figure's clothes. The measured inputs are stored instead.
 1510 tests pass. 87 new to this sprint, all against fakes — `pnpm test` never
 provisions a real sandbox (§39).
 
-Twenty-one mutations, each verified to break tests:
+Twenty-five mutations, each verified to break tests:
 
 | Mutation | Tests failed |
 | --- | --- |
@@ -264,6 +265,10 @@ Twenty-one mutations, each verified to break tests:
 | `deny-all` mapped to `allow-all` | 1 |
 | exact revision replaced by a branch | 1 |
 | a port exposed | 1 |
+| sandbox name back to the identity | 2 |
+| failure detail discarded | 4 |
+| failure detail stored unsanitized | 1 |
+| raw error object stored instead of name+message | 1 |
 
 The last five target the **adapter**, and exist because that seam has now cost
 this project twice: a table name in Sprint 9, a CHECK constraint in the 9
@@ -305,6 +310,71 @@ Nothing else is needed: no environment variable is added to the application, and
 the access-token method (`VERCEL_TOKEN` / `VERCEL_TEAM_ID` / `VERCEL_PROJECT_ID`)
 is deliberately **not** used — it would mean storing a long-lived management
 credential to avoid a setting toggle.
+
+## First dogfood attempt — 2026-08-12
+
+Two runs against the historical prepared change `2f05958`. Both failed. Recorded
+in full because a failed dogfood is a successful dogfood (§42), and because what
+it exposed is more useful than a green tick would have been.
+
+| | Run 1 `a91c73df` | Run 2 `c8f004e9` |
+| --- | --- | --- |
+| Failure | `source_acquisition_failed` | `sandbox_unavailable` |
+| Stage | `verifying_source` | `provisioning` |
+| Sandbox | provisioned, runtime `node22` | never created |
+| Duration | 3.9 s | 0.66 s |
+| Active CPU | 2,129 ms | — |
+| Network in / out | 834 KB / 17.7 KB | — |
+| Cleanup | `stopped` | `not_provisioned` |
+
+Total cost: about two seconds of Active CPU. Zero AI calls, zero GitHub writes,
+`main` and the dogfood branch untouched.
+
+### What held
+
+The security properties did what they were built to do. Cleanup ran on both
+paths, so no paid VM leaked. Run 1 refused at `verifying_source`, which means
+**zero repository-controlled commands executed** — the run stopped before the
+sandbox ran anything the repository chose, exactly as designed. The failures
+were in the plumbing, not the boundary.
+
+### Three defects, all introduced by this sprint
+
+**1. Every retry was guaranteed to fail.** `sandboxNameFor` derived the sandbox
+name from the validation *identity*, which is stable by design — that stability
+is the whole point of reuse. Vercel requires unique sandbox names per project,
+so run 2 collided with run 1's sandbox and `Sandbox.create` threw in 661 ms. The
+name now comes from the validation **run id**: unique per attempt, still
+traceable back to exactly one row.
+
+**2. `git rev-parse HEAD` failed after a clone that transferred 834 KB.** The
+clone is performed by the platform, outside the VM, so it succeeded; the
+verification command did not. The image was pinned to `vercel/sandbox/node:24`,
+a minimal image that may not carry `git` — and the sandbox reported its runtime
+as `node22`, suggesting the pin did not take either. Now pinned to
+`vercel/sandbox/universal`, the documented image that includes common utilities.
+
+**3. The failures could not be diagnosed — the worst of the three.** The adapter
+caught the provider error and returned a generic string; the orchestrator's
+outer catch discarded the value entirely. Nothing reached the database or the
+logs. "Never let raw provider prose escape" (rule 40, ADR 0011) had been applied
+so widely that a production failure explained nothing.
+
+`failure_detail` now records a bounded, ANSI-stripped, secret-redacted
+explanation for failures that occur outside a validation step. Same sanitizer,
+same limits as step output — it is untrusted text either way. The difference is
+between *"we refuse to look"* and *"we cannot find out"*, and only the first is
+a security property.
+
+Defect 2 remains a hypothesis rather than a finding. It is stated as one, and
+the next failure will carry its own explanation.
+
+### One product defect too
+
+The panel flickered and returned to "Not validated" instead of showing the
+failure: `summary` is rendered on the server and never refetched when polling
+ended. From the outside, a run that failed looked like a run that never
+happened. It now refreshes on terminal state.
 
 ## Known limitations
 

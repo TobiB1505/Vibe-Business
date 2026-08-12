@@ -48,8 +48,17 @@ export const SANDBOX_BUDGETS = {
  */
 export const SANDBOX_RESOURCES = {
   vcpus: 2,
-  /** A Vercel Managed Image; pinned so "validated" means a known toolchain. */
-  image: "vercel/sandbox/node:24",
+  /**
+   * The documented default Vercel Managed Image.
+   *
+   * Chosen over a minimal `node:*` image because validation runs `git` inside
+   * the VM to verify the checked-out commit, and `universal` is the image
+   * documented to carry Node plus common utilities. The first real dogfood
+   * failed at `git rev-parse HEAD` on a node image — the clone itself is done
+   * by the platform, outside the VM, so a missing `git` only surfaces at
+   * verification.
+   */
+  image: "vercel/sandbox/universal",
 } as const;
 
 export type SandboxBudgets = typeof SANDBOX_BUDGETS;

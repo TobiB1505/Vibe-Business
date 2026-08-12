@@ -232,7 +232,7 @@ export async function executeValidationStep(
     packageManager: profile.packageManager,
     workspaceRoot: profile.workspaceRoot,
     preparedFiles: prepared.files.map((file) => ({ path: file.path, contentHash: file.contentHash })),
-    validationIdentity: run.validationIdentity,
+    validationRunId: run.id,
   };
 
   const outcome = await runValidation(deps.provider, validationTarget, {
@@ -264,6 +264,7 @@ export async function executeValidationStep(
     usage: outcome.usage,
     cleanupStatus: outcome.cleanup,
     failureCode: outcome.failureCode,
+    failureDetail: outcome.failureDetail,
   });
 
   const persisted = await completeValidationRun(deps.supabase, {
@@ -273,6 +274,7 @@ export async function executeValidationStep(
     stage: outcome.status === "passed" ? "completed" : outcome.stage,
     steps: outcome.steps,
     failureCode: outcome.failureCode,
+    failureDetail: outcome.failureDetail,
     sandboxRuntime: outcome.sandboxRuntime,
     sandboxDurationMs: outcome.sandboxDurationMs,
     cleanupStatus: outcome.cleanup,
@@ -289,6 +291,7 @@ export async function executeValidationStep(
         preparedChangeId: prepared.id,
         failureCode: outcome.failureCode,
         cleanup: outcome.cleanup,
+        failureDetail: outcome.failureDetail,
         sandboxDurationMs: outcome.sandboxDurationMs,
       },
     });
@@ -344,6 +347,7 @@ export async function failValidationStep(
         stage: run.stage,
         steps: run.steps,
         failureCode: (failureCode as ValidationFailureCode) ?? "validation_run_failed",
+        failureDetail: "the validation step ended without recording a result",
         sandboxRuntime: run.sandboxRuntime,
         sandboxDurationMs: run.sandboxDurationMs,
         cleanupStatus: run.cleanupStatus ?? "not_provisioned",

@@ -501,3 +501,106 @@ describe("stage reporting (§17)", () => {
     expect(outcome.cleanup).toBe("stopped");
   });
 });
+
+describe("failures explain themselves (post-dogfood)", () => {
+  /**
+   * The defect the first two real runs exposed. Both failed, both recorded a
+   * code, and neither recorded anything about *why* — the adapter caught the
+   * provider error and returned a generic string, and the outer catch discarded
+   * the value entirely.
+   *
+   * "Never let provider prose escape" was applied too widely. Storing nothing
+   * makes a production failure undiagnosable, which is its own kind of unsafe.
+   * The detail goes through the same sanitizer and bounds as step output.
+   */
+  it("records why source acquisition failed", async () => {
+    const provider = setup({
+      results: { [HEAD]: { exitCode: 127, output: "git: command not found" } },
+    });
+
+    const outcome = await runValidation(provider, fakeValidationTarget());
+
+    expect(outcome.failureCode).toBe("source_acquisition_failed");
+    expect(outcome.failureDetail).toContain("exited 127");
+    expect(outcome.failureDetail).toContain("command not found");
+  });
+
+  it("records why provisioning failed", async () => {
+    const provider = setup({ failCreate: true });
+
+    const outcome = await runValidation(provider, fakeValidationTarget());
+
+    expect(outcome.failureCode).toBe("sandbox_unavailable");
+    expect(outcome.failureDetail).toContain("no capacity");
+  });
+
+  it("names the file behind an integrity failure", async () => {
+    const provider = setup();
+
+    const outcome = await runValidation(
+      provider,
+      fakeValidationTarget({
+        preparedFiles: [{ path: "src/app/robots.ts", contentHash: "0".repeat(64) }],
+      }),
+    );
+
+    expect(outcome.failureDetail).toContain("src/app/robots.ts");
+  });
+
+  it("sanitizes and bounds the detail like any other untrusted output", async () => {
+    const provider = setup({
+      results: {
+        [HEAD]: { exitCode: 1, output: `\u001b[31mfatal\u001b[0m ghp_${"a".repeat(36)}` },
+      },
+    });
+
+    const outcome = await runValidation(provider, fakeValidationTarget());
+
+    expect(outcome.failureDetail).toContain("fatal");
+    // No ANSI, no secret — the same guarantees step output already had.
+    expect(outcome.failureDetail).not.toContain("\u001b");
+    expect(outcome.failureDetail).not.toContain("ghp_aaaa");
+    expect(outcome.failureDetail).toContain("[redacted]");
+  });
+
+  it("leaves the detail null when nothing failed", async () => {
+    const outcome = await runValidation(setup(), fakeValidationTarget());
+
+    expect(outcome).toMatchObject({ status: "passed", failureDetail: null });
+  });
+});
+
+describe("a retry is not doomed by its own name (post-dogfood)", () => {
+  /**
+   * The second real run failed at `provisioning` in 661ms because the sandbox
+   * name was derived from the validation *identity* — which is stable by design
+   * — so it collided with the first run's sandbox. Every retry of the same
+   * validation was therefore guaranteed to fail.
+   */
+  it("names the sandbox after the attempt, not the artifact", async () => {
+    const first = setup();
+    const second = setup();
+
+    await runValidation(first, fakeValidationTarget({ validationRunId: "aaaaaaaa-1111-2222-3333-444444444444" }));
+    await runValidation(second, fakeValidationTarget({ validationRunId: "bbbbbbbb-1111-2222-3333-444444444444" }));
+
+    expect(first.createdWith()?.name).not.toBe(second.createdWith()?.name);
+  });
+
+  it("still produces a traceable vibe-prefixed name", async () => {
+    const provider = setup();
+    await runValidation(provider, fakeValidationTarget());
+
+    expect(provider.createdWith()?.name).toMatch(/^vibe-validate-[0-9a-f]+$/);
+  });
+
+  it("carries no customer identifier into provider metadata", async () => {
+    const provider = setup();
+    await runValidation(provider, fakeValidationTarget());
+
+    const name = provider.createdWith()?.name ?? "";
+    expect(name).not.toContain("acme");
+    expect(name).not.toContain("product");
+    expect(name).not.toContain(FIXTURE_COMMIT_SHA);
+  });
+});

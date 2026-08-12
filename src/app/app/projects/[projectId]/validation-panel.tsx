@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { OPERATION_STAGE_LABELS, type OperationView } from "@/modules/operations/view";
@@ -98,6 +99,7 @@ export function ValidationPanel({
   /** A validation already in flight when the page rendered. */
   runningOperation: OperationView | null;
 }) {
+  const router = useRouter();
   const [state, setState] = useState<ValidateChangeActionState>(null);
   const [pending, startTransition] = useTransition();
   const [polled, setPolled] = useState<OperationView | null>(runningOperation);
@@ -129,6 +131,20 @@ export function ValidationPanel({
       clearInterval(timer);
     };
   }, [projectId, operationId, shouldPoll]);
+
+  /**
+   * Pull the result in once the operation stops.
+   *
+   * `summary` is rendered on the server, so without this the panel fell back to
+   * "Not validated" the moment polling ended — which is exactly what the first
+   * real run looked like from the outside: the button flickered and the failure
+   * was invisible. The verdict lives in the database; this is what fetches it.
+   */
+  useEffect(() => {
+    if (!operation) return;
+    if (operation.status === "queued" || operation.status === "running") return;
+    router.refresh();
+  }, [operation, router]);
 
   const running =
     pending || (operation !== null && (operation.status === "queued" || operation.status === "running"));

@@ -67,7 +67,8 @@ export type ValidationTarget = {
   workspaceRoot: string;
   /** Path + sha256 of every file Vibe prepared, for integrity checking (§29). */
   preparedFiles: readonly { path: string; contentHash: string }[];
-  validationIdentity: string;
+  /** Unique per attempt. Names the sandbox, so a retry cannot collide (§21). */
+  validationRunId: string;
 };
 
 export type CleanupStatus = "stopped" | "stop_failed" | "not_provisioned";
@@ -75,6 +76,15 @@ export type CleanupStatus = "stopped" | "stop_failed" | "not_provisioned";
 export type ValidationOutcome = {
   status: "passed" | "failed";
   failureCode: ValidationFailureCode | null;
+  /**
+   * Bounded, sanitized explanation for failures outside a validation step.
+   *
+   * Step failures already carry their own output tail. This covers the stages
+   * that previously recorded a code and nothing else — provisioning, source
+   * acquisition, credential scrubbing — which is what made the first real
+   * dogfood failures impossible to diagnose.
+   */
+  failureDetail: string | null;
   steps: Partial<Record<ValidationStepName, ValidationStepResult>>;
   stage: ValidationStage;
   sandboxRuntime: string | null;
@@ -112,6 +122,19 @@ const MISSING_ENVIRONMENT_MARKERS: readonly RegExp[] = [
   /environment variable ["'`]?[A-Z][A-Z0-9_]{2,}["'`]? is (?:not set|required|missing)/i,
   /invalid environment variables/i,
 ];
+
+/**
+ * A safe description of an unknown thrown value.
+ *
+ * Provider errors can carry request context, headers and occasionally
+ * credentials, so the object is never stored. Its name and message are, after
+ * the same sanitizer step output goes through — which is the difference
+ * between "we refuse to look" and "we cannot find out".
+ */
+function describeError(error: unknown): string {
+  if (error instanceof Error) return `${error.name}: ${error.message}`;
+  return "non-error value thrown";
+}
 
 function sha256(content: string): string {
   return createHash("sha256").update(content, "utf8").digest("hex");
@@ -175,6 +198,7 @@ export async function runValidation(
   const finish = async (
     status: "passed" | "failed",
     failureCode: ValidationFailureCode | null,
+    failureDetail: string | null = null,
   ): Promise<ValidationOutcome> => {
     let cleanup: CleanupStatus = "not_provisioned";
     let usage: SandboxUsage | null = null;
@@ -193,6 +217,9 @@ export async function runValidation(
     return {
       status,
       failureCode,
+      // Sanitized with the same function and limits as step output: this text
+      // is untrusted either way, and a second code path would be a second bug.
+      failureDetail: failureDetail === null ? null : sanitizeCommandOutput(failureDetail).text,
       steps,
       stage,
       sandboxRuntime: sandbox?.runtime ?? null,
@@ -209,7 +236,7 @@ export async function runValidation(
     await setStage("provisioning");
     try {
       sandbox = await provider.create({
-        name: sandboxNameFor(target.validationIdentity),
+        name: sandboxNameFor(target.validationRunId),
         source: {
           repositoryUrl: target.repositoryUrl,
           revision: target.preparedCommitSha,
@@ -219,8 +246,8 @@ export async function runValidation(
         timeoutMs: SANDBOX_BUDGETS.totalLifetimeMs,
         env: { ...SANDBOX_ENVIRONMENT },
       });
-    } catch {
-      return finish("failed", "sandbox_unavailable");
+    } catch (error) {
+      return finish("failed", "sandbox_unavailable", describeError(error));
     }
 
     // ---- 2. Verify the commit --------------------------------------------
@@ -233,7 +260,13 @@ export async function runValidation(
       timeoutMs: SANDBOX_BUDGETS.sourceTimeoutMs,
     });
 
-    if (head.exitCode !== 0) return finish("failed", "source_acquisition_failed");
+    if (head.exitCode !== 0) {
+      return finish(
+        "failed",
+        "source_acquisition_failed",
+        `git rev-parse HEAD exited ${head.exitCode}\n${head.output}`,
+      );
+    }
     if (head.output.trim() !== target.preparedCommitSha) {
       // Zero repository-controlled commands have run at this point, and none
       // will (§29).
@@ -250,8 +283,11 @@ export async function runValidation(
         maxBytes: SANDBOX_BUDGETS.maxIntegrityFileBytes,
       });
 
-      if (content === null || sha256(content) !== file.contentHash) {
-        return finish("failed", "source_integrity_failed");
+      if (content === null) {
+        return finish("failed", "source_integrity_failed", `prepared file missing: ${file.path}`);
+      }
+      if (sha256(content) !== file.contentHash) {
+        return finish("failed", "source_integrity_failed", `content hash mismatch: ${file.path}`);
       }
     }
 
@@ -269,7 +305,9 @@ export async function runValidation(
     // Verified, not assumed. If the credential store still exists, refuse to
     // run repository code at all rather than hope.
     const gitConfig = await sandbox.readFile({ path: ".git/config", maxBytes: 4096 });
-    if (gitConfig !== null) return finish("failed", "credential_scrub_failed");
+    if (gitConfig !== null) {
+      return finish("failed", "credential_scrub_failed", "the git credential store survived removal");
+    }
 
     // ---- 5. Read the manifest --------------------------------------------
     // Parsed in *our* process, not executed. This is what decides which steps
@@ -278,7 +316,9 @@ export async function runValidation(
       path: joinPath(target.workspaceRoot, "package.json"),
       maxBytes: SANDBOX_BUDGETS.maxIntegrityFileBytes,
     });
-    if (manifestRaw === null) return finish("failed", "validation_not_supported");
+    if (manifestRaw === null) {
+      return finish("failed", "validation_not_supported", `no package.json at ${target.workspaceRoot}`);
+    }
 
     let scripts: string[] = [];
     try {
@@ -292,7 +332,9 @@ export async function runValidation(
       path: joinPath(target.workspaceRoot, LOCKFILES[target.packageManager]),
       maxBytes: 1024,
     });
-    if (lockfile === null) return finish("failed", "lockfile_missing");
+    if (lockfile === null) {
+      return finish("failed", "lockfile_missing", `expected ${LOCKFILES[target.packageManager]}`);
+    }
 
     const plan = planValidationSteps({ packageManager: target.packageManager, scripts });
 
@@ -366,9 +408,10 @@ export async function runValidation(
 
     await setStage("collecting_results");
     return finish("passed", null);
-  } catch {
+  } catch (error) {
     // Provider faults and unexpected errors land here. The value is untyped and
-    // may carry provider prose, so it is never inspected or stored.
-    return finish("failed", "validation_run_failed");
+    // may carry provider prose, so only a sanitized, bounded description is
+    // kept — enough to diagnose, never the raw object.
+    return finish("failed", "validation_run_failed", describeError(error));
   }
 }
