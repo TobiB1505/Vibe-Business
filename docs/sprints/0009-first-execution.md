@@ -1,13 +1,18 @@
 # Sprint 9 — First Execution
 
-Status: **9A complete · 9B complete · 9C built, blocked on a manual GitHub action.** The product flow exists end to end in code, but the GitHub App still holds `Contents: read`, so no preparation can run and **no repository write has ever been performed**. Sprint 9 is not complete until the dogfood runs.
+Status: **Complete.** Vibe has written code to a real repository — one branch, one commit, two files, verified by read-back. The default branch was never touched.
 Branch: `feat/first-execution`
 
 | Phase | Scope | Status |
 | --- | --- | --- |
 | **9A** | Safety core: capability resolution, preflight, premise revalidation, path allowlist, deterministic generator, atomic writer | Complete |
 | **9B** | Backend wiring: `prepared_changes`, execution identity, `change_preparation` operation, durable workflow, application service | Complete |
-| **9C** | Product flow: capability-aware UI, confirmation, durable status, blocked-state UX, bounded diff review | Built — dogfood blocked on the owner enabling `Contents: write` |
+| **9C** | Product flow: capability-aware UI, confirmation, durable status, blocked-state UX, bounded diff review | Complete |
+| **Dogfood** | One real preparation against `TobiB1505/Vibe-Business` | Complete — see below |
+| **Refinement** | Generator v2: conservative sitemap selection, after reviewing what the dogfood produced | Complete |
+
+Sprint 9 does **not** include repository build or test execution, runtime
+validation, preview environments, merge, or deploy. None of those exist.
 
 ## Goal
 
@@ -203,30 +208,188 @@ The branch and paths come from the stored prepared change, so a caller cannot re
 
 The first attempt at the diff mutation was written badly — it kept the same filter through a fallback, so it proved nothing. Rewritten to actually drop the `project_id` predicate, it fails as it should. A mutation that does not mutate is worse than no mutation, because it reports confidence it has not earned.
 
-## What is NOT implemented
+## The dogfood — 2026-08-12
 
-- **No GitHub permission upgrade has been performed.** The App registration still requests `Contents: read`, so every preparation blocks at the permission gate. This is a one-time owner action — see Manual action below.
-- **No dogfood.** No branch, no commit, nothing written to any repository by anything.
-- **No preview, merge or deploy**, by design.
+One preparation, run from the deployed product against this repository.
 
-## Manual action required
+| | |
+| --- | --- |
+| Branch | `vibe/seo-foundations-cc32273131c5` — the only `vibe/` branch in the repository |
+| Commit | `2f05958e3410deaeb97029861abc05889139b4a7`, author `vibe-business[bot]` |
+| Parent | `528d372b81cf28786edcba7d6384f9f74e55ba33` — the analyzed base |
+| Files | `src/app/robots.ts` (+20), `src/app/sitemap.ts` (+32), both `added`, zero deletions |
+| Capability | `nextjs_seo_foundations_v1` / `nextjs-seo-foundations-v1` |
+| Duration | 9.0s write, 15.9s operation total |
+| AI calls | **0** |
+| Cost | **$0** |
+| Default branch | `main` still at `528d372` — never written to |
 
-The GitHub App registration must be changed by its owner:
+Verified independently of the product's own report: both files were downloaded from
+GitHub and hashed, and both matched the `contentHash` values recorded in
+`prepared_changes` byte for byte. That is what makes `repository_write_verified`
+a claim rather than an assertion.
 
-**Settings → Developer settings → GitHub Apps → Vibe Business → Permissions & events → Repository permissions → Contents: Read-only → Read and write.**
+### What the dogfood cost before it worked
 
-Why: creating blobs, trees, commits and refs all require `Contents: write`. It is the minimum for this capability.
+Three preparations failed first, all at `missing_required_context`, all before any
+write. The cause was a plain bug: the workflow's `resolveTarget` queried a table
+named `project_repositories`, which does not exist. No test could catch it, because
+every workflow test injects `resolveTarget` as a fake — the seam that makes the
+workflow testable is exactly the seam the bug lived in. Fixed in #23 by reusing
+`getProjectWithRepository`, the same function the rest of the application uses.
 
-Deliberately **not** requested: Pull Requests, Administration, Actions, Issues, Secrets.
+The second half of #23 was a UI defect the same run exposed: a failed preparation
+re-offered the start button, because the project page passed `failedOperation: null`
+instead of querying for one.
 
-GitHub then notifies each installation's owner, who must approve the updated permission from the installation settings page. Until approval, the app keeps its current permissions — so the product reads the granted permission from the installation token and refuses rather than assuming. A query parameter claiming approval is never trusted.
+Merging #23 then moved `main` past the analyzed snapshot, so the next attempt
+blocked on `repository_changed` — correctly, and at our own expense. Clearing it
+required a repository refresh (free) plus a re-audit and regenerated opportunities
+(~$0.12). Worth recording plainly: **staleness blocking costs real money on a
+repository that moves as fast as its own analyzer.** For a customer product that
+changes weekly this is invisible; for this repository it is not.
+
+### What the regenerated opportunity proved
+
+The SEO opportunity survived regeneration with different wording — "Add missing
+technical SEO foundations", where the earlier set said "Fix missing…" — and still
+resolved to the same capability. Capability resolution reads evidence and
+structure, never prose, so a reworded model output routed identically. That is
+the property `capabilities.ts` exists to guarantee, tested in the unit suite and
+now observed on genuinely regenerated production data.
+
+## Post-dogfood refinement — SEO generator v2
+
+The dogfood result above is unchanged and stands as recorded. What follows
+happened *after* it, in response to reviewing what it produced.
+
+### What review found
+
+The generated sitemap listed `/`, `/login` and `/signup`.
+
+No safety invariant failed. The preflight refused correctly four times, the
+write went to an isolated branch, the read-back matched the recorded hashes byte
+for byte, and the default branch was never touched. Vibe wrote exactly what it
+intended to write.
+
+**The intent was wrong.** A sitemap is a public invitation to index, and
+inviting a crawler to index a login form is not a thing anyone asked for. This
+is the distinction the sprint had claimed in the abstract and now had a concrete
+example of: `repository_write_verified` means the write was correct, not that
+the content was good. Human review is a separate gate, and it earned its keep on
+the first change that ever passed through it.
+
+### What changed
+
+`nextjs_seo_foundations_v2` — a new capability, not an edit to v1.
+
+Sitemap entries are now selected by `generators/route-classification.ts` from
+structured route intelligence: the site root, plus static `page` routes outside
+every known authentication, account, application, API and administrative
+surface. Dynamic routes are omitted because `/blog/[slug]` is a template, not a
+URL, and resolving it would mean reading customer data this capability does not
+touch.
+
+For Vibe Business itself the corrected sitemap contains exactly one entry, `/`.
+That follows from generic classification, not from anything hard-coded: the
+product's other routes are `/login`, `/signup` and `/app/*`.
+
+`/signup` is excluded **as V0.1 policy, not as an SEO law**. Signup pages are
+sometimes indexed deliberately. Vibe does not yet hold the business context to
+make that call, so it declines to make it rather than guessing. A later
+capability can revisit this knowing it was a decision.
+
+### What deliberately did not change
+
+Robots rules. Omitting a route from a sitemap says "we are not asking you to
+index this"; a robots `disallow` says "do not fetch this at all". Those are
+different claims, and conflating them is how a generator quietly breaks a
+customer's site. `robots.ts` still disallows only `/app/` and `/api/` —
+authentication routes are excluded from the sitemap but remain crawlable (§10).
+
+Capability scope is also unchanged: two files, `robots.ts` and `sitemap.ts`, in
+the resolved app root. No metadata, canonical tags, Open Graph, structured data
+or redirects.
+
+### Versioning
+
+v1 remains declared and remains permitted by the database. The `prepared_changes`
+row for `2f05958` carries it, and that row must keep describing what was
+actually written. Old rows were not migrated and history was not relabelled —
+**v2 did not produce the first dogfood commit, and the record says so.**
+
+Capability and generator version both feed the execution identity, so a
+re-preparation of the same opportunity, snapshot and base commit under v2
+computes a different identity and a different branch. Without that, the user
+would be handed the old branch — still containing `/login` — as though it were
+the corrected change. Pinned by `identity.test.ts`.
+
+### A migration was required after all
+
+The task assumed none would be. That was wrong, and the way it was wrong is the
+interesting part.
+
+`prepared_changes.execution_capability` carried
+`CHECK (execution_capability = 'nextjs_seo_foundations_v1')`. The v2 bump passed
+lint, typecheck, build and 1376 unit tests while every real preparation would
+have failed at INSERT. The in-memory test database does not evaluate CHECK
+constraints, so no behavioural test could have seen it — the same shape as the
+`project_repositories` bug that cost three failed dogfood attempts: a TypeScript
+value and a database rule expressing one thing in two places that nothing forced
+to agree.
+
+`20260812150000_prepared_changes_capability_v2.sql` widens the constraint to
+permit both. `schema.test.ts` now parses the migrations and asserts the SQL
+constraint matches `EXECUTION_CAPABILITIES`, so the next capability cannot drift
+the same way.
+
+### No second real write
+
+None was performed. The write path was proven by the dogfood; this refinement
+changes which URLs a generated file lists, which is fully determined by tests.
+Re-running it would have cost a repository refresh, a re-audit and regenerated
+opportunities to prove something the unit tests already prove.
+
+The dogfood branch `vibe/seo-foundations-cc32273131c5` is untouched, and still
+contains the v1 output.
+
+### Mutation validation
+
+Nine mutations, each verified to break tests — including two that were not in
+the brief and one that initially **survived**:
+
+| Mutation | Result |
+| --- | --- |
+| auth-route exclusion removed | 16 tests fail |
+| `/app/*` exclusion removed | 5 fail |
+| sitemap falls back to all public routes | 6 fail |
+| capability left at v1 | 5 fail |
+| dynamic-route exclusion removed | 2 fail |
+| capability/version map drifts | 2 fail |
+| API exclusion removed | 1 fail |
+| generator ignores its `routes` input | 3 fail |
+| `getSnapshotById` drops the `project_id` predicate | **survived → test added → 1 fail** |
+
+The survivor mattered. Reading route intelligence during the write step
+introduced a new service-role query, and under ADR 0013 the ownership predicate
+is the only thing standing between an operation and another tenant's snapshot,
+because RLS is bypassed. It had no test until the mutation said so.
+
+The change-preparation test fake was also corrected: it previously echoed a
+module-level fixture back as the branch's file content, so read-back
+verification was checking the test's own constant against itself. Blob and tree
+contents are now carried through faithfully, which is what lets the end-to-end
+sitemap assertions mean anything.
 
 ## Known limitations
 
-- The GitHub App still holds `Contents: read`. Even with the wiring in place, a permission upgrade would be required before any write — see Manual action in the report.
-- No repository execution of any kind: no clone, no install, no build, no tests. Vibe has no sandbox, so a prepared change can honestly be called `repository_write_verified` but never `application_validated`.
-- Creating a branch may trigger repository-configured CI or preview automation. Vibe neither triggers nor manages those.
+- No repository execution of any kind: no clone, no install, no build, no tests. Vibe has no sandbox, so a prepared change can honestly be called `repository_write_verified` but never `application_validated`. **The dogfood does not show the generated code is correct — only that the write was safe, deterministic and verified.**
+- Nothing in the pipeline judges output *quality*. v2 fixed the one issue review found; it did not add a mechanism that would have found it. Human review before merge remains the only content gate.
+- Route classification is a heuristic list of conventional segment names. It can omit a legitimate public page whose first segment happens to look like an app surface — deliberately, since the failure it prevents is worse than the one it causes (§4). It may only ever remove routes, never add one.
+- Creating a branch may trigger repository-configured CI or preview automation. Vibe neither triggers nor manages those. The confirmation dialog says so.
 
 ## Next step
 
-Complete the wiring in the order the safety story implies: persistence → durable operation → service with live probes → UI → permission upgrade → dogfood. The domain core does not change; it is the part that is already proven.
+Not decided. The obvious candidates — preview, merge, deploy — each require an
+approval architecture that does not exist, and none should be built on the
+strength of one successful preparation.

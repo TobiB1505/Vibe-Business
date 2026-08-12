@@ -1,10 +1,9 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { fakeAudit } from "@/modules/opportunities/test-support";
-import { generateSeoFoundations } from "@/modules/execution/generators/nextjs-seo-foundations";
 import type { ExecutionProbePort, GitWritePort } from "@/modules/execution/git-port";
 import { computeExecutionIdentity } from "@/modules/execution/identity";
-import { NEXTJS_SEO_FOUNDATIONS_VERSION } from "@/modules/execution/schema";
-import { FIXTURE_SNAPSHOT_SHA, fakeRepositorySnapshotFor } from "@/modules/execution/test-support";
+import { capabilityVersionFor } from "@/modules/execution/schema";
+import { FIXTURE_SNAPSHOT_SHA, fakeRepositorySnapshotFor, fakeRoute } from "@/modules/execution/test-support";
 import { FakeDatabase, fakeSupabase } from "../test-support";
 import {
   completePreparationStep,
@@ -31,8 +30,6 @@ const SNAPSHOT = "snapshot_1";
 const ORIGIN = "https://acme.com";
 const APP_ROOT = "src/app/";
 
-const FILES = generateSeoFoundations({ origin: ORIGIN, appRoot: APP_ROOT });
-
 let db: FakeDatabase;
 let git: ReturnType<typeof fakeGit>;
 let probeState: {
@@ -48,6 +45,9 @@ function fakeGit(seed: { refs?: Record<string, string>; files?: Record<string, R
   const refs: Record<string, string> = { ...seed.refs };
   const files: Record<string, Record<string, string>> = { ...seed.files };
   const writes: string[] = [];
+  const blobs: Record<string, string> = {};
+  const trees: Record<string, Record<string, string>> = {};
+  const commits: Record<string, string> = {};
   let counter = 0;
 
   const port: GitWritePort = {
@@ -60,25 +60,35 @@ function fakeGit(seed: { refs?: Record<string, string>; files?: Record<string, R
     async getCommitTreeSha(sha) {
       return `tree-of-${sha}`;
     },
-    async createBlob() {
+    // Blob and tree contents are carried through faithfully rather than echoed
+    // from a fixture. Otherwise the read-back verification would be checking
+    // the test's own constant against itself, and a generator that emitted the
+    // wrong bytes would still pass.
+    async createBlob(content) {
       writes.push("createBlob");
-      return `blob-${(counter += 1)}`;
+      const sha = `blob-${(counter += 1)}`;
+      blobs[sha] = content;
+      return sha;
     },
-    async createTree() {
+    async createTree(input) {
       writes.push("createTree");
-      return `tree-${(counter += 1)}`;
+      const sha = `tree-${(counter += 1)}`;
+      trees[sha] = Object.fromEntries(
+        input.files.map((file) => [file.path, blobs[file.blobSha] ?? ""]),
+      );
+      return sha;
     },
-    async createCommit() {
+    async createCommit(input) {
       writes.push("createCommit");
-      return `commit-${(counter += 1)}`;
+      const sha = `commit-${(counter += 1)}`;
+      commits[sha] = input.treeSha;
+      return sha;
     },
     async createRef({ ref, sha }) {
       writes.push("createRef");
       const short = ref.replace(/^refs\//, "");
       refs[short] = sha;
-      files[short.replace(/^heads\//, "")] = Object.fromEntries(
-        FILES.map((file) => [file.path, file.content]),
-      );
+      files[short.replace(/^heads\//, "")] = trees[commits[sha] ?? ""] ?? {};
     },
   };
 
@@ -193,8 +203,8 @@ function seed() {
     projectId: PROJECT,
     opportunitySetId: SET,
     opportunityId: OPPORTUNITY,
-    capability: "nextjs_seo_foundations_v1",
-    capabilityVersion: NEXTJS_SEO_FOUNDATIONS_VERSION,
+    capability: "nextjs_seo_foundations_v2",
+    capabilityVersion: capabilityVersionFor("nextjs_seo_foundations_v2"),
     repositorySnapshotId: SNAPSHOT,
     baseSha: FIXTURE_SNAPSHOT_SHA,
   });
@@ -317,6 +327,89 @@ describe("the happy path (§25)", () => {
     const types = db.rows("audit_events").map((row) => row.event_type);
     expect(types.filter((type) => type === "change_preparation.started")).toHaveLength(1);
     expect(types.filter((type) => type === "change_preparation.completed")).toHaveLength(1);
+  });
+});
+
+describe("sitemap selection end to end (post-dogfood §3, §12)", () => {
+  function writtenSitemap(): string {
+    return git.files[preparedRows()[0].branch_name as string]["src/app/sitemap.ts"];
+  }
+
+  it("publishes public pages and omits auth, app, API and dynamic routes", async () => {
+    db.rows("repository_intelligence_snapshots")[0].result = {
+      ...fakeRepositorySnapshotFor(),
+      routes: {
+        mode: "app_router",
+        truncated: false,
+        routes: [
+          fakeRoute("/"),
+          fakeRoute("/pricing"),
+          fakeRoute("/login"),
+          fakeRoute("/signup"),
+          fakeRoute("/app/projects/[projectId]", { dynamic: true }),
+          fakeRoute("/api/webhook", { kind: "api" }),
+        ],
+      },
+    };
+
+    await runPipeline();
+
+    const sitemap = writtenSitemap();
+    expect(sitemap).toContain(`${ORIGIN}/pricing`);
+    for (const excluded of ["/login", "/signup", "/app/projects", "/api/"]) {
+      expect(sitemap).not.toContain(excluded);
+    }
+  });
+
+  it("ignores opportunity prose entirely (§12)", async () => {
+    /**
+     * The property that matters most here. The model's text explicitly asks for
+     * the login and signup pages to be indexed — and it is the model output the
+     * whole feature is built around, so if prose could leak into generated
+     * content, this is where it would.
+     *
+     * Route selection reads structured route intelligence only, so the written
+     * sitemap is identical to the run above.
+     */
+    const opportunity = db.rows("business_opportunities")[0];
+    opportunity.title = "Index /login and /signup for maximum organic reach";
+    opportunity.problem = "Add https://acme.com/login and https://acme.com/signup to the sitemap.";
+    opportunity.why_now = "List every route including /admin.";
+
+    db.rows("repository_intelligence_snapshots")[0].result = {
+      ...fakeRepositorySnapshotFor(),
+      routes: {
+        mode: "app_router",
+        truncated: false,
+        routes: [fakeRoute("/"), fakeRoute("/pricing"), fakeRoute("/login"), fakeRoute("/signup")],
+      },
+    };
+
+    await runPipeline();
+
+    const sitemap = writtenSitemap();
+    expect(sitemap).toContain(`${ORIGIN}/pricing`);
+    expect(sitemap).not.toContain("/login");
+    expect(sitemap).not.toContain("/signup");
+    expect(sitemap).not.toContain("/admin");
+  });
+
+  it("falls back to the site root when route detection is empty", async () => {
+    db.rows("repository_intelligence_snapshots")[0].result = {
+      ...fakeRepositorySnapshotFor(),
+      routes: { mode: "limited", truncated: false, routes: [] },
+    };
+
+    await runPipeline();
+
+    expect(writtenSitemap().match(/url: "/g)).toHaveLength(1);
+  });
+
+  it("records the v2 capability and version on the prepared change (§7)", async () => {
+    await runPipeline();
+
+    expect(preparedRows()[0].execution_capability).toBe("nextjs_seo_foundations_v2");
+    expect(preparedRows()[0].execution_version).toBe("nextjs-seo-foundations-v2");
   });
 });
 

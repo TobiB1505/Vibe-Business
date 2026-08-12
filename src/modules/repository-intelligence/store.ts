@@ -82,6 +82,33 @@ export async function getLatestSuccessfulSnapshot(
 }
 
 /**
+ * One specific snapshot, scoped to its project.
+ *
+ * Used by change preparation, which must read the snapshot its execution
+ * identity was computed from rather than whichever is newest — otherwise the
+ * same identity could generate different bytes on a replay.
+ *
+ * The `project_id` predicate is not redundant. This runs under the service-role
+ * client during durable execution, where RLS is bypassed, so ownership has to
+ * be asserted explicitly from the persisted operation row (ADR 0013).
+ */
+export async function getSnapshotById(
+  supabase: SupabaseClient,
+  params: { snapshotId: string; projectId: string },
+): Promise<StoredSnapshot | null> {
+  const { data, error } = await supabase
+    .from("repository_intelligence_snapshots")
+    .select(SNAPSHOT_COLUMNS)
+    .eq("id", params.snapshotId)
+    .eq("project_id", params.projectId)
+    .eq("status", "completed")
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? mapRow(data as SnapshotRow) : null;
+}
+
+/**
  * Reuse lookup (Sprint 2 §31). A successful snapshot for the same commit
  * *and* the same analyzer version is still valid — nothing about the
  * inputs or the rules has changed, so re-reading GitHub would be pure

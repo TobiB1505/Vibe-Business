@@ -19,11 +19,49 @@
  * contract: changing what the generator emits must produce a new capability
  * version rather than silently changing what a "prepared" change means.
  */
-export const EXECUTION_CAPABILITIES = ["nextjs_seo_foundations_v1"] as const;
+export const EXECUTION_CAPABILITIES = [
+  /**
+   * Historical. Emitted a fixed sitemap that listed `/login` and `/signup`.
+   *
+   * Retained because the first real Vibe-prepared change (`2f05958` on
+   * `vibe/seo-foundations-cc32273131c5`) was produced by it, and its
+   * `PreparedChange` row must keep meaning what it meant when it was written.
+   * Never resolved for new preparations.
+   */
+  "nextjs_seo_foundations_v1",
+  /** Current. Sitemap derived from structured route intelligence. */
+  "nextjs_seo_foundations_v2",
+] as const;
 export type ExecutionCapability = (typeof EXECUTION_CAPABILITIES)[number];
 
-/** Bumped when the deterministic generator's output changes (§10). */
+/** The capability new preparations resolve to. */
+export const CURRENT_SEO_FOUNDATIONS_CAPABILITY = "nextjs_seo_foundations_v2" as const;
+
+/**
+ * Generator output versions (§10).
+ *
+ * Bumped whenever the emitted bytes change meaning. Both remain declared: v1 is
+ * still the honest description of what the first dogfood commit contains.
+ */
 export const NEXTJS_SEO_FOUNDATIONS_VERSION = "nextjs-seo-foundations-v1" as const;
+export const NEXTJS_SEO_FOUNDATIONS_V2_VERSION = "nextjs-seo-foundations-v2" as const;
+
+/**
+ * The generator version a capability produces.
+ *
+ * A single map rather than a constant read at each call site, because
+ * capability and version both feed the execution identity: if they could drift
+ * apart, two different generators could share one identity and the second would
+ * silently reuse the first one's branch.
+ */
+export const CAPABILITY_VERSIONS: Record<ExecutionCapability, string> = {
+  nextjs_seo_foundations_v1: NEXTJS_SEO_FOUNDATIONS_VERSION,
+  nextjs_seo_foundations_v2: NEXTJS_SEO_FOUNDATIONS_V2_VERSION,
+};
+
+export function capabilityVersionFor(capability: ExecutionCapability): string {
+  return CAPABILITY_VERSIONS[capability];
+}
 
 /**
  * Why a preflight refused (§3).

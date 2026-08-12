@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
-import { NEXTJS_SEO_FOUNDATIONS_VERSION, type PreparedFile } from "../schema";
+import type { RouteSummary } from "@/modules/repository-intelligence/schema";
+import { NEXTJS_SEO_FOUNDATIONS_V2_VERSION, type PreparedFile } from "../schema";
+import { selectSitemapRoutes } from "./route-classification";
 
 /**
  * The deterministic SEO-foundations generator (Sprint 9 §10, §11).
@@ -9,17 +11,41 @@ import { NEXTJS_SEO_FOUNDATIONS_VERSION, type PreparedFile } from "../schema";
  * proving that an AI can write code. Those are two different risks and mixing
  * them would make a failure impossible to attribute.
  *
- * The output is a pure function of `(origin, appRoot)`. Same inputs, same
- * bytes, same hashes — which is what makes post-write verification meaningful
- * (§25) and re-running safe (§20).
+ * The output is a pure function of `(origin, appRoot, routes)`. Same inputs,
+ * same bytes, same hashes — which is what makes post-write verification
+ * meaningful (§25) and re-running safe (§20).
  *
  * The emitted code follows the Next.js App Router metadata-route conventions
  * as documented for 16.3.0 (`MetadataRoute.Robots`, `MetadataRoute.Sitemap`).
  * Checked against the current documentation at implementation time rather than
  * recalled.
+ *
+ * ## v2 — sitemap selection
+ *
+ * v1 emitted a fixed route list and put `/login` and `/signup` in the sitemap
+ * of the first real execution. v2 derives the list from structured route
+ * intelligence and omits every known authentication, account, application, API
+ * and administrative surface — see `route-classification.ts`.
+ *
+ * The capability identifier and version were bumped rather than edited in
+ * place. `nextjs_seo_foundations_v1` still describes exactly what the first
+ * dogfood commit contains, and rewriting that meaning retroactively would make
+ * the stored `PreparedChange` rows lie about their own output.
  */
 
-/** Paths under the app root that must never be advertised to crawlers. */
+/**
+ * Paths robots.txt discourages crawling, independent of sitemap selection.
+ *
+ * Kept deliberately narrow. Omitting a route from the sitemap says "we are not
+ * asking you to index this"; a robots `disallow` says "do not fetch this at
+ * all". Those are different claims and conflating them causes real damage —
+ * blanket-disallowing `/login` can suppress legitimate pages behind shared
+ * prefixes and, on some sites, break link previews and verification flows.
+ *
+ * So only surfaces that are useless to a crawler under *any* SEO strategy
+ * appear here: the signed-in application and the API. Authentication routes are
+ * excluded from the sitemap but intentionally left crawlable (§10).
+ */
 const PRIVATE_PATH_PREFIXES = ["/app/", "/api/"] as const;
 
 export type SeoFoundationsInput = {
@@ -27,6 +53,15 @@ export type SeoFoundationsInput = {
   origin: string;
   /** Resolved app root with trailing slash, e.g. `src/app/`. Never model-supplied. */
   appRoot: string;
+  /**
+   * Structured route intelligence for the analyzed commit.
+   *
+   * Derived from repository paths by the Sprint 2 detector — never from file
+   * contents and never from model output. An empty list is valid and means the
+   * sitemap contains only the site root, which is the conservative outcome
+   * rather than an error (§4).
+   */
+  routes: readonly RouteSummary[];
 };
 
 function robotsSource(origin: string): string {
@@ -56,40 +91,49 @@ ${disallow.replace(/'/g, '"')}
 `;
 }
 
-function sitemapSource(origin: string): string {
-  // Only the marketing surfaces a signed-out visitor can reach. Nothing behind
-  // authentication, nothing internal — a sitemap is a public invitation, and
-  // listing a protected route is both useless and a disclosure (§11).
+/**
+ * One sitemap entry.
+ *
+ * `changeFrequency` and `priority` are fixed by position — root, then
+ * everything else — rather than reasoned about. Vibe has no basis for an
+ * opinion on how often a customer's pricing page changes, and inventing one
+ * would be strategy dressed up as determinism.
+ */
+function sitemapEntry(url: string, root: boolean): string {
+  return `    {
+      url: "${url}",
+      lastModified: new Date(),
+      changeFrequency: "${root ? "weekly" : "monthly"}",
+      priority: ${root ? "1" : "0.7"},
+    },`;
+}
+
+function sitemapSource(origin: string, routes: readonly RouteSummary[]): string {
+  // The site root is the verified production origin itself, so it is listed
+  // whether or not route detection found anything. Every other entry must earn
+  // its place through classification (§3, §4).
+  const entries = [
+    sitemapEntry(origin, true),
+    ...selectSitemapRoutes(routes).map((path) => sitemapEntry(`${origin}${path}`, false)),
+  ].join("\n");
+
   return `import type { MetadataRoute } from "next";
 
 /**
  * Sitemap for search engine crawlers.
  *
- * Deliberately limited to publicly reachable pages. Authenticated and internal
- * routes are excluded.
+ * Deliberately conservative: only high-confidence public pages are listed.
+ * Authentication, account, application, API and administrative routes are
+ * excluded, as are dynamic routes whose URLs depend on real data.
+ *
+ * Add any public marketing or content pages that belong here — omission is the
+ * intended default, not an assertion that no other page should be indexed.
  *
  * Prepared by Vibe Business. Review before merging.
  */
 export default function sitemap(): MetadataRoute.Sitemap {
   return [
-    {
-      url: "${origin}",
-      lastModified: new Date(),
-      changeFrequency: "weekly",
-      priority: 1,
-    },
-    {
-      url: "${origin}/login",
-      lastModified: new Date(),
-      changeFrequency: "monthly",
-      priority: 0.5,
-    },
-    {
-      url: "${origin}/signup",
-      lastModified: new Date(),
-      changeFrequency: "monthly",
-      priority: 0.8,
-    },
+${entries}
   ];
 }
 `;
@@ -114,7 +158,7 @@ export function generateSeoFoundations(input: SeoFoundationsInput): GeneratedFil
 
   return [
     { path: `${appRoot}robots.ts`, content: robotsSource(origin) },
-    { path: `${appRoot}sitemap.ts`, content: sitemapSource(origin) },
+    { path: `${appRoot}sitemap.ts`, content: sitemapSource(origin, input.routes) },
   ].map((file) => ({
     path: file.path,
     content: file.content,
@@ -123,4 +167,4 @@ export function generateSeoFoundations(input: SeoFoundationsInput): GeneratedFil
   }));
 }
 
-export const SEO_FOUNDATIONS_VERSION = NEXTJS_SEO_FOUNDATIONS_VERSION;
+export const SEO_FOUNDATIONS_VERSION = NEXTJS_SEO_FOUNDATIONS_V2_VERSION;

@@ -2,7 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { recordAuditEvent } from "@/modules/audit-log/events";
-import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
+import { getLatestSuccessfulSnapshot, getSnapshotById } from "@/modules/repository-intelligence/store";
 import { getAuditCurrency } from "@/modules/business-audit/service";
 import { getLatestOpportunities } from "@/modules/opportunities/service";
 import { resolveExecutionCapability } from "@/modules/execution/capabilities";
@@ -12,7 +12,7 @@ import { prepareChangeOnBranch } from "@/modules/execution/github-writer";
 import { branchNameFor, computeExecutionIdentity } from "@/modules/execution/identity";
 import { runExecutionPreflight } from "@/modules/execution/preflight";
 import {
-  NEXTJS_SEO_FOUNDATIONS_VERSION,
+  capabilityVersionFor,
   type ExecutionFailureCode,
 } from "@/modules/execution/schema";
 import {
@@ -144,10 +144,16 @@ export async function preflightStep(
   if (!capability.supported) return { ok: false, failureCode: "unsupported_opportunity" };
 
   // Probe live state for the exact paths this capability would write.
+  // Only the paths matter here, and paths do not depend on route selection or
+  // origin — so a placeholder origin and no routes are deliberate.
   const candidateFiles =
     target.appRoot === null
       ? []
-      : generateSeoFoundations({ origin: target.productionOrigin ?? "https://example.invalid", appRoot: target.appRoot });
+      : generateSeoFoundations({
+          origin: target.productionOrigin ?? "https://example.invalid",
+          appRoot: target.appRoot,
+          routes: [],
+        });
 
   const [existingTargetPaths, liveRobotsServed, liveSitemapServed, hasWritePermission] = await Promise.all([
     target.probe.findExistingPaths(candidateFiles.map((file) => file.path)),
@@ -176,7 +182,7 @@ export async function preflightStep(
     opportunitySetId: opportunities.set.id,
     opportunityId: opportunity.id,
     capability: preflight.capability,
-    capabilityVersion: NEXTJS_SEO_FOUNDATIONS_VERSION,
+    capabilityVersion: capabilityVersionFor(preflight.capability),
     repositorySnapshotId: snapshot.id,
     baseSha: preflight.baseSha,
   });
@@ -188,7 +194,7 @@ export async function preflightStep(
     opportunitySetId: opportunities.set.id,
     opportunityId: opportunity.id,
     capability: preflight.capability,
-    capabilityVersion: NEXTJS_SEO_FOUNDATIONS_VERSION,
+    capabilityVersion: capabilityVersionFor(preflight.capability),
     repositorySnapshotId: snapshot.id,
     baseBranch: preflight.baseBranch,
     baseSha: preflight.baseSha,
@@ -275,10 +281,27 @@ export async function writeChangeStep(
     return { ok: false, failureCode: "github_write_permission_required" };
   }
 
+  // Route intelligence comes from the exact snapshot this preparation was
+  // claimed against, not from "the latest". The snapshot id is part of the
+  // execution identity, so reading a newer one here would let the same identity
+  // produce different bytes — and silently reuse the earlier branch (§25).
+  const snapshot = await getSnapshotById(deps.supabase, {
+    snapshotId: prepared.repositorySnapshotId,
+    projectId: operation.projectId,
+  });
+  if (!snapshot?.result) {
+    await markPreparedChangeFailed(deps.supabase, {
+      preparedChangeId: prepared.id,
+      failureCode: "missing_required_context",
+    });
+    return { ok: false, failureCode: "missing_required_context" };
+  }
+
   await setOperationStage(deps.supabase, { operationId, stage: "generating_change" });
   const files = generateSeoFoundations({
     origin: target.productionOrigin,
     appRoot: target.appRoot,
+    routes: snapshot.result.routes.routes,
   });
 
   await setOperationStage(deps.supabase, { operationId, stage: "writing_repository" });

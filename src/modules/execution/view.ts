@@ -160,4 +160,5 @@ export const BLOCKED_ACTION_LABELS: Record<Exclude<BlockedAction["kind"], "none"
 /** The capability's user-facing name. Never the internal identifier. */
 export const CAPABILITY_LABELS: Record<ExecutionCapability, string> = {
   nextjs_seo_foundations_v1: "SEO foundations",
+  nextjs_seo_foundations_v2: "SEO foundations",
 };

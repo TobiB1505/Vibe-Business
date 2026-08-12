@@ -1,5 +1,5 @@
 import type { BusinessOpportunity } from "@/modules/opportunities/schema";
-import type { RepositoryIntelligenceSnapshot } from "@/modules/repository-intelligence/schema";
+import type { RepositoryIntelligenceSnapshot, RouteSummary } from "@/modules/repository-intelligence/schema";
 import type { PreflightInput, PreflightProbe } from "./preflight";
 
 /**
@@ -116,3 +116,35 @@ export function fakePreflightInput(overrides: Partial<PreflightInput> = {}): Pre
 }
 
 export const FIXTURE_SNAPSHOT_SHA = SNAPSHOT_SHA;
+
+/**
+ * A route as the Sprint 2 detector would report it.
+ *
+ * Defaults to a static page, so a test that cares about `dynamic` or `kind`
+ * sets exactly that and nothing else.
+ */
+export function fakeRoute(path: string, overrides: Partial<RouteSummary> = {}): RouteSummary {
+  return {
+    path,
+    kind: "page",
+    dynamic: false,
+    sourcePath: `src/app${path === "/" ? "" : path}/page.tsx`,
+    ...overrides,
+  };
+}
+
+/**
+ * The route shape of a typical SaaS product: a marketing root, real content
+ * pages, and the authenticated/utility surfaces that must never be published.
+ */
+export const FIXTURE_ROUTES: RouteSummary[] = [
+  fakeRoute("/"),
+  fakeRoute("/pricing"),
+  fakeRoute("/blog"),
+  fakeRoute("/login"),
+  fakeRoute("/signup"),
+  fakeRoute("/app"),
+  fakeRoute("/app/projects/[projectId]", { dynamic: true }),
+  fakeRoute("/api/webhook", { kind: "api" }),
+  fakeRoute("/blog/[slug]", { dynamic: true }),
+];

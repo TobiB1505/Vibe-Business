@@ -1,0 +1,137 @@
+import type { RouteSummary } from "@/modules/repository-intelligence/schema";
+
+/**
+ * Which routes may appear in a generated sitemap (Sprint 9 post-dogfood §3, §4).
+ *
+ * ## Why this file exists
+ *
+ * The first real execution wrote a sitemap listing `/`, `/login` and `/signup`.
+ * Nothing unsafe happened — the bytes written were exactly the bytes intended,
+ * verified by read-back — but a sitemap is a public invitation to index, and
+ * inviting a search engine to index a login form is not what anyone asked for.
+ *
+ * That is the distinction the dogfood surfaced: `repository_write_verified`
+ * says the write was correct, not that the *content* was good. This module is
+ * the content half, and it is deliberately dull.
+ *
+ * ## The rule
+ *
+ * A route is a sitemap candidate only when it is a **static page route outside
+ * every known authentication, account, application, API and administrative
+ * surface**. Everything else is omitted.
+ *
+ * The bias is explicit and one-directional: **when in doubt, omit.** A missing
+ * marketing page costs a little organic reach that a human can restore in one
+ * line. A published `/reset-password` costs a private surface advertised to
+ * every crawler on the internet, and cannot be un-published. For V0.1 that
+ * trade is not close.
+ *
+ * ## What it never reads
+ *
+ * Only `RouteSummary` — structured route intelligence derived from repository
+ * *paths*, never file contents and never model output. An opportunity's title,
+ * problem text or evidence prose cannot influence which URLs are published,
+ * for the same reason it cannot influence which files are written: model
+ * wording is not a machine API.
+ */
+
+export const SITEMAP_EXCLUSION_REASONS = [
+  /** A layout, or an API route handler rather than a page. */
+  "not_a_page",
+  /** `/blog/[slug]` — a template, not a URL. Enumerating it needs real data. */
+  "dynamic_route",
+  /** Sign-in, sign-up, password recovery, callbacks. */
+  "authentication_surface",
+  /** The signed-in product itself. */
+  "application_surface",
+  /** Account, billing and settings surfaces. */
+  "account_surface",
+  "api_surface",
+  "administrative_surface",
+] as const;
+export type SitemapExclusionReason = (typeof SITEMAP_EXCLUSION_REASONS)[number];
+
+export type RouteClassification =
+  | { indexable: true }
+  | { indexable: false; reason: SitemapExclusionReason };
+
+/**
+ * First-segment classification.
+ *
+ * Matching on the first segment means a rule covers the whole subtree:
+ * excluding `app` excludes `/app/projects/123` without needing to know it
+ * exists. These are conventional names, so the list is a heuristic — which is
+ * precisely why it may only ever *remove* routes, never add one.
+ */
+const EXCLUDED_FIRST_SEGMENTS: ReadonlyMap<string, SitemapExclusionReason> = new Map([
+  // Authentication and credential recovery.
+  ["login", "authentication_surface"],
+  ["logout", "authentication_surface"],
+  ["signin", "authentication_surface"],
+  ["sign-in", "authentication_surface"],
+  ["signout", "authentication_surface"],
+  ["sign-out", "authentication_surface"],
+  ["signup", "authentication_surface"],
+  ["sign-up", "authentication_surface"],
+  ["register", "authentication_surface"],
+  ["forgot-password", "authentication_surface"],
+  ["reset-password", "authentication_surface"],
+  ["verify-email", "authentication_surface"],
+  ["auth", "authentication_surface"],
+
+  // The signed-in product.
+  ["app", "application_surface"],
+  ["dashboard", "application_surface"],
+
+  // Account management.
+  ["account", "account_surface"],
+  ["settings", "account_surface"],
+  ["billing", "account_surface"],
+
+  ["api", "api_surface"],
+  ["admin", "administrative_surface"],
+]);
+
+function firstSegment(routePath: string): string {
+  return routePath.split("/").filter((segment) => segment.length > 0)[0] ?? "";
+}
+
+/**
+ * Is this route safe to advertise to search engines?
+ *
+ * Surface classification is checked before route kind so the reason stays
+ * meaningful: `/api/webhook` is an API surface, which is a more useful thing to
+ * report than "not a page".
+ */
+export function classifyRouteForSitemap(route: RouteSummary): RouteClassification {
+  const excluded = EXCLUDED_FIRST_SEGMENTS.get(firstSegment(route.path));
+  if (excluded !== undefined) return { indexable: false, reason: excluded };
+
+  // A dynamic segment is a template. Turning `/blog/[slug]` into real URLs
+  // would mean reading the customer's data, which this capability does not do.
+  if (route.dynamic) return { indexable: false, reason: "dynamic_route" };
+
+  if (route.kind !== "page") return { indexable: false, reason: "not_a_page" };
+
+  return { indexable: true };
+}
+
+/**
+ * The public routes a sitemap may list, deduplicated and ordered.
+ *
+ * `/` is excluded here and added by the generator instead: the site root is the
+ * verified production origin itself, so it does not depend on route detection
+ * having worked. Ordering is alphabetical purely so the generated bytes are
+ * stable — identical inputs must produce an identical hash (§25).
+ */
+export function selectSitemapRoutes(routes: readonly RouteSummary[]): string[] {
+  const selected = new Set<string>();
+
+  for (const route of routes) {
+    if (route.path === "/") continue;
+    if (!classifyRouteForSitemap(route).indexable) continue;
+    selected.add(route.path);
+  }
+
+  return [...selected].sort();
+}

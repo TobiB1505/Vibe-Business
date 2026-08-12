@@ -30,7 +30,7 @@ describe("capability resolution (§39)", () => {
   }
 
   it("supports a structurally valid SEO opportunity", () => {
-    expect(resolve()).toEqual({ supported: true, capability: "nextjs_seo_foundations_v1" });
+    expect(resolve()).toEqual({ supported: true, capability: "nextjs_seo_foundations_v2" });
   });
 
   it("supports the same structure under completely different wording", () => {
@@ -88,7 +88,7 @@ describe("preflight — the happy path", () => {
 
     expect(result.eligible).toBe(true);
     if (!result.eligible) return;
-    expect(result.capability).toBe("nextjs_seo_foundations_v1");
+    expect(result.capability).toBe("nextjs_seo_foundations_v2");
     expect(result.baseSha).toBe(FIXTURE_SNAPSHOT_SHA);
     expect(result.baseBranch).toBe("main");
   });

@@ -1425,6 +1425,28 @@ gespeicherte Evidence IDs    → autorisieren nichts
 Nur aktueller, unmittelbar vor dem Schreibvorgang unabhängig geprüfter Zustand
 autorisiert einen konsequenten externen Write.
 
+**16. Erfolgreiche Ausführung hat mehrere Vertrauensebenen**
+Zu verifizieren, dass Vibe exakt die beabsichtigten Bytes geschrieben hat,
+beweist die Integrität des Repository-Writes. Es beweist **nicht**, dass die
+vorgeschlagene Änderung produktreif oder inhaltlich gut ist.
+
+```
+Bytes stimmen mit Absicht überein  → repository_write_verified
+Absicht war richtig                → menschliches Review
+Code funktioniert im Betrieb       → Runtime-Validierung (existiert nicht)
+```
+
+Der erste echte Write war auf jeder Sicherheitsebene korrekt und listete
+trotzdem `/login` in einer Sitemap. Kein Invariant ist gebrochen — die Absicht
+war falsch. Human Review und spätere Runtime-Validierung bleiben eigene Gates,
+und keines davon lässt sich durch ein grüneres Hash-Ergebnis ersetzen.
+
+Nebenbefund derselben Klasse wie der `project_repositories`-Bug: Ein
+TypeScript-Union und ein SQL-CHECK-Constraint beschreiben dieselbe Regel an zwei
+Stellen, die nichts zur Übereinstimmung zwingt. 1376 grüne Tests, und jede echte
+Preparation wäre am INSERT gescheitert. Wo eine Regel doppelt existiert, muss ein
+Test die beiden Kopien vergleichen.
+
 ---
 
 ## 37. Aktueller Stand
@@ -1464,13 +1486,28 @@ Opportunity Engine            ✅
 **Execute**
 
 ```
-Branch creation               NEXT
-Code changes                  NEXT
+Branch creation               ✅
+Code changes                  ✅ (eine Capability)
 Tests                         planned
 Preview                       planned
 Approval                      planned
 Merge                         planned
 ```
+
+Am 12.08.2026 hat Vibe zum ersten Mal Code in ein echtes Repository
+geschrieben: ein Branch, ein Commit, zwei Dateien, per Read-back verifiziert.
+Der Default-Branch wurde nie angefasst. 0 AI-Calls, $0 — die Ausführung selbst
+ist deterministisch, das Modell hat nur priorisiert, nicht geschrieben.
+
+Drei Versuche sind vorher fehlgeschlagen, an einem Tabellennamen, den kein Test
+finden konnte, weil jeder Workflow-Test genau diese Stelle durch ein Fake
+ersetzt. Das ist inzwischen das wiederkehrende Muster dieses Projekts: die
+Tests beweisen die Logik, der Dogfood beweist die Verdrahtung.
+
+Was der Dogfood **nicht** zeigt: dass der erzeugte Code gut ist. Nichts hat ihn
+gebaut, ausgeführt oder getestet. `repository_write_verified` ist die ehrliche
+Obergrenze — und der erzeugte Sitemap listet `/login`, was ein Reviewer
+vermutlich streichen würde.
 
 **Measure**
 
