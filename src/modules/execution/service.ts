@@ -385,6 +385,33 @@ export async function getOpportunityExecutionSummaries(
   return summaries;
 }
 
+/**
+ * The most recent *failed* preparation for one opportunity.
+ *
+ * Without this the UI silently re-offers the start button after a failure,
+ * which is what happened on the first three production attempts: the operation
+ * failed, and the page showed "Let Vibe prepare this" again with no explanation
+ * of why nothing had happened.
+ */
+export async function getLatestFailedPreparationFor(
+  supabase: SupabaseClient,
+  params: { projectId: string; opportunityId: string },
+): Promise<OperationView | null> {
+  const { data, error } = await supabase
+    .from("operation_runs")
+    .select("id, status, stage, failure_code, result_id, started_at, completed_at, created_at")
+    .eq("project_id", params.projectId)
+    .eq("operation_type", "change_preparation")
+    .eq("subject_id", params.opportunityId)
+    .eq("status", "failed")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? toOperationView(data as OperationRunRow) : null;
+}
+
 /** The live preparation for one opportunity, when there is one (§17). */
 export async function getActivePreparationFor(
   supabase: SupabaseClient,
@@ -404,17 +431,21 @@ export async function getActivePreparationFor(
   if (error) throw error;
   if (!data) return null;
 
-  const row = data as {
-    id: string;
-    status: StoredOperationRun["status"];
-    stage: StoredOperationRun["stage"];
-    failure_code: string | null;
-    result_id: string | null;
-    started_at: string | null;
-    completed_at: string | null;
-    created_at: string;
-  };
+  return toOperationView(data as OperationRunRow);
+}
 
+type OperationRunRow = {
+  id: string;
+  status: StoredOperationRun["status"];
+  stage: StoredOperationRun["stage"];
+  failure_code: string | null;
+  result_id: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+};
+
+function toOperationView(row: OperationRunRow): OperationView {
   return buildOperationView({
     operationId: row.id,
     status: row.status,

@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getPreparedDiff, type PreparedDiff } from "@/modules/execution/diff";
 import { createGithubGitWritePort } from "@/modules/execution/github/adapter";
 import { startChangePreparation } from "@/modules/execution/service";
+import { getProjectWithRepository } from "@/modules/projects/queries";
 import type { OperationFailureCode } from "@/modules/operations/failures";
 import type { OperationView } from "@/modules/operations/view";
 import { VercelWorkflowExecutor } from "@/modules/operations/vercel/executor";
@@ -78,25 +79,16 @@ export async function getPreparedDiffAction(
   const session = await requireSession();
   const supabase = await createClient();
 
-  const { data: project } = await supabase
-    .from("projects")
-    .select("id, repository:project_repositories(full_name, installation_id)")
-    .eq("id", projectId)
-    .eq("user_id", session.userId)
-    .maybeSingle();
+  const project = await getProjectWithRepository(supabase, projectId);
+  if (!project || project.userId !== session.userId) return { ok: false, error: "not_found" };
+  if (!project.repository) return { ok: false, error: "unavailable" };
 
-  if (!project) return { ok: false, error: "not_found" };
-
-  const repository = (project as { repository?: { full_name: string; installation_id: number }[] })
-    .repository?.[0];
-  if (!repository) return { ok: false, error: "unavailable" };
-
-  const [owner, repo] = repository.full_name.split("/");
   const port = createGithubGitWritePort({
-    installationId: repository.installation_id,
-    owner,
-    repo,
+    installationId: project.repository.installationId,
+    owner: project.repository.owner,
+    repo: project.repository.name,
   });
+
   const result = await getPreparedDiff(supabase, port, { projectId, preparedChangeId });
   return result.ok ? { ok: true, diff: result.diff } : { ok: false, error: result.error };
 }

@@ -16,6 +16,7 @@ import {
 import { getLatestOpportunities, getOpportunityReadiness } from "@/modules/opportunities/service";
 import {
   getActivePreparationFor,
+  getLatestFailedPreparationFor,
   getOpportunityExecutionSummaries,
 } from "@/modules/execution/service";
 import { buildOpportunityActionState } from "@/modules/execution/view";
@@ -128,7 +129,12 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
         projectId,
         opportunityId: summary.opportunityId,
       }),
-      failedOperation: null,
+      // Without this a failed preparation silently re-offers the start button
+      // instead of saying what went wrong.
+      failedOperation: await getLatestFailedPreparationFor(supabase, {
+        projectId,
+        opportunityId: summary.opportunityId,
+      }),
       blockedReason: null,
     });
 
