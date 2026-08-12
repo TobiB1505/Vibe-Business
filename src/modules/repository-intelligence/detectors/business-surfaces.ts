@@ -33,6 +33,41 @@ const ROUTE_PATTERNS: Partial<Record<BusinessSurfaceId, RegExp>> = {
   dashboard_app: /^\/(app|dashboard|console|admin)(\/|$)/i,
 };
 
+/**
+ * `robots` and `sitemap` claim that the *product serves* /robots.txt and
+ * /sitemap.xml, so only locations a framework actually serves from may
+ * count. A file merely *named* robots.ts — a parser, a fixture, a helper
+ * anywhere in `src/` — proves nothing, and matching it produced a false
+ * positive that directly contradicted the live crawl.
+ *
+ * Recognised locations:
+ *   - a static asset directory served verbatim (`public/`, `static/`)
+ *   - the repository root of a plain static site
+ *   - the Next.js App Router metadata convention (`app/robots.ts`),
+ *     optionally nested in route groups, which contribute no URL segment
+ *
+ * Each may sit under a monorepo workspace (`apps/web/…`, `packages/site/…`).
+ */
+const WORKSPACE_PREFIX = String.raw`(?:(?:apps|packages)/[^/]+/)?`;
+const ROUTE_GROUPS = String.raw`(?:\([^/]+\)/)*`;
+const ROUTE_FILE_EXTENSION = String.raw`(?:ts|tsx|js|jsx|mjs)`;
+
+function servedFilePattern(name: string, staticExtension: string): RegExp {
+  return new RegExp(
+    `^${WORKSPACE_PREFIX}(?:` +
+      String.raw`(?:public|static)/${name}\.${staticExtension}` +
+      "|" +
+      String.raw`${name}\.${staticExtension}` +
+      "|" +
+      `(?:src/)?app/${ROUTE_GROUPS}${name}\\.${ROUTE_FILE_EXTENSION}` +
+      ")$",
+    "i",
+  );
+}
+
+const ROBOTS_PATH = servedFilePattern("robots", "txt");
+const SITEMAP_PATH = servedFilePattern("sitemap", "xml");
+
 const SURFACE_NAMES: Record<BusinessSurfaceId, string> = {
   authentication: "Authentication",
   payments: "Payments",
@@ -95,10 +130,10 @@ export function detectBusinessSurfaces(
   );
 
   // --- Surfaces backed by a known file --------------------------------
-  const robots = context.findByBasename(/^robots\.(txt|ts|js)$/i)[0];
+  const robots = context.sourcePaths.find((path) => ROBOTS_PATH.test(path));
   results.push(robots ? detected("robots", [evidence("file_path", robots)]) : notDetected("robots"));
 
-  const sitemap = context.findByBasename(/^sitemap(\.xml|\.ts|\.js)?$/i)[0];
+  const sitemap = context.sourcePaths.find((path) => SITEMAP_PATH.test(path));
   results.push(sitemap ? detected("sitemap", [evidence("file_path", sitemap)]) : notDetected("sitemap"));
 
   // Next.js exposes SEO metadata through a `metadata` export or a
