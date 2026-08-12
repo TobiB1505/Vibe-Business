@@ -2,6 +2,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { createExecutionProbe, createGithubGitWritePort } from "@/modules/execution/github/adapter";
 import { resolveAppRoot } from "@/modules/execution/app-root";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
+import { getProjectWithRepository } from "@/modules/projects/queries";
 import type { OperationFailureCode } from "../failures";
 import type { StoredOperationRun } from "../store";
 import {
@@ -36,28 +37,21 @@ import {
 async function resolveTarget(operation: StoredOperationRun): Promise<PreparationTarget | null> {
   const supabase = createServiceClient();
 
-  const { data: project } = await supabase
-    .from("projects")
-    .select("id, production_url, repository:project_repositories(full_name, installation_id)")
-    .eq("id", operation.projectId)
-    .maybeSingle();
+  // The same query the project page uses. Hand-rolling a second one is how
+  // this step spent three production runs failing on a table name that never
+  // existed — reuse the resolved shape rather than re-deriving it.
+  const project = await getProjectWithRepository(supabase, operation.projectId);
+  if (!project?.repository) return null;
 
-  if (!project) return null;
+  const { owner, name: repo, fullName, installationId } = project.repository;
+  if (!owner || !repo || !fullName) return null;
 
-  const repository = (project as { repository?: { full_name: string; installation_id: number }[] })
-    .repository?.[0];
-  if (!repository) return null;
-
-  const [owner, repo] = repository.full_name.split("/");
-  if (!owner || !repo) return null;
-
-  const productionUrl = (project as { production_url: string | null }).production_url;
-  const productionOrigin = productionUrl === null ? null : safeOrigin(productionUrl);
+  const productionOrigin = project.productionUrl === null ? null : safeOrigin(project.productionUrl);
 
   const snapshot = await getLatestSuccessfulSnapshot(supabase, operation.projectId);
   const appRoot = snapshot?.result ? resolveAppRoot(snapshot.result) : null;
 
-  const target = { installationId: repository.installation_id, owner, repo };
+  const target = { installationId, owner, repo };
 
   return {
     owner,
