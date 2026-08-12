@@ -144,9 +144,32 @@ The Opportunity Engine behaved correctly: it cited real ids and its conclusion f
 
 Recorded as a separate repository-analyzer fix. It is not a prompt or rubric problem, and per §43 nothing was tuned from one sample. Fixed in the Sprint 2 detector — see [Sprint 2 detector validation](0002-repository-intelligence.md#detector-validation-against-this-repository-local-harness).
 
+### Follow-up: the defect was fixed, and the advice corrected itself
+
+The analyzer fix landed as [#20](https://github.com/TobiB1505/Vibe-Business/pull/20) (`repo-intelligence-v2`, detectors now match only locations a framework actually serves from). The chain was then re-run end to end on 2026-08-12: repository snapshot `478f4f78`, audit `ec6d8e7c`, opportunity set `43512a51`.
+
+Opportunity 3 corrected itself with **no change to the prompt, the rubric, or the engine**:
+
+| | |
+| --- | --- |
+| Before | *"the repository itself contains robots.txt and sitemap files — they simply aren't being served"* — false |
+| After | *"The repository confirms none of these are implemented in code either."* — true |
+
+It also reclassified itself from `configuration_change` to `code_change`, which is the more accurate label and changes which category the one `ready` opportunity falls into — relevant to whatever Sprint 9 chooses to execute first.
+
+This is the clearest confirmation available that the engine transmits its evidence faithfully rather than reasoning around it. *Opportunity quality is bounded by evidence quality* holds in both directions: feed it a false signal and it produces confident wrong advice; fix the signal and the advice repairs itself.
+
+**Prioritization proved more stable than scoring.** Ranks 1 and 2 were near-identical across two independent runs on different evidence — same order, same `Opportunity 1` dependency, same `needs_user_input`. Over the same period the audit's overall score moved 38 → 40 → 41 → 38. Whatever is tuned later, the rubric should not be tuned off a single run when the layer beneath it is noisier than the layer above.
+
+**The score fell to 38 and that is the better number.** Distribution genuinely scores worse once robots.txt and the sitemap are correctly reported absent rather than falsely present. A rising score was never the goal.
+
+Cost of the correction: audit $0.0561 + opportunities $0.0575 = **$0.1136**, within a cent of the estimate made when the version bump was proposed. Lifetime provider spend across the whole product is $0.4312 over 16 usage events.
+
 ### Quality classification: B
 
 Two of three opportunities are specific, well-ordered and correctly grounded, and the prioritization behaviour is exactly what the rubric specifies. But one of three cards tells the founder to restore files they do not have, and from the user's seat that is simply wrong advice regardless of which layer caused it. A grade of A would be marking the engine on the parts that went well and ignoring what the product actually said.
+
+The grade is left at B deliberately, describing what shipped on the day rather than what the code does now. The current state — after the follow-up above — is A-quality: three specific, correctly grounded, well-ordered opportunities with honest execution labels. Rewriting the B would erase the more useful record: a defect found by dogfooding, traced upstream, fixed, and verified downstream.
 
 ## Known limitations
 
