@@ -43,7 +43,12 @@ export type AuditEventType =
   | "operation.failed"
   | "opportunities.completed"
   | "opportunities.failed"
-  | "opportunities.reused";
+  | "opportunities.reused"
+  // Change preparation (Sprint 9B §17). Domain lifecycle, distinct from the
+  // generic operation.* execution events.
+  | "change_preparation.started"
+  | "change_preparation.completed"
+  | "change_preparation.failed";
 
 export type RecordAuditEventParams = {
   userId: string;

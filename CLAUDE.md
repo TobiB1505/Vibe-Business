@@ -56,6 +56,14 @@ This file governs how Claude Code (and any AI-assisted session) works in this re
 52. Workflow state is a third-party durable log. Never let secrets, credentials, prompts, model output, or raw untrusted source content cross a step boundary — pass identifiers and rebuild bounded data inside the step.
 53. The service-role Supabase client is for durable execution only. It bypasses RLS, so every query made with it must filter on ownership taken from the persisted operation row, and only `src/modules/operations/` may use it.
 
+54. Never execute a code change on the strength of Opportunity model output alone. `executionReadiness` is a model opinion, not authority — see [ADR 0014](docs/decisions/0014-first-execution-safety.md).
+55. Revalidate execution premises against live state immediately before any consequential external write. Stored evidence is a routing signal, never permission.
+56. Repository HEAD must match the analyzed state before a change is prepared. A moved default branch blocks execution rather than triggering merge reasoning.
+57. Model output must never control repository paths, refs, branch names, commit messages or generated code. Only deterministic capability code produces those.
+58. Vibe writes only to isolated branches. Default-branch writes require a separate approval architecture that does not exist yet.
+59. Never execute untrusted customer repositories — no clone, install, build or test — until an isolated sandbox exists.
+60. Never trigger a paid refresh on the user's behalf. Blocked work explains what needs refreshing; the user starts it.
+
 ## Related Documents
 
 - [PRODUCT.md](PRODUCT.md) — product vision, scope, and non-goals

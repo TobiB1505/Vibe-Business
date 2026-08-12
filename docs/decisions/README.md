@@ -43,6 +43,7 @@ V0.1 foundational architecture decisions have been recorded:
 - [0011](0011-ai-inference-and-evidence-trust-boundary.md) — AI Inference and the Evidence Trust Boundary (Accepted)
 - [0012](0012-authenticated-browser-analysis.md) — Authenticated Browser Analysis (Accepted)
 - [0013](0013-durable-operation-execution.md) — Durable Operation Execution (Accepted)
+- [0014](0014-first-execution-safety.md) — First execution is isolated, premise-revalidated and capability-scoped (Accepted)
 
 Several architecture questions remain intentionally open — see [ARCHITECTURE.md §7](../../ARCHITECTURE.md#7-deferred--open-decisions).
 

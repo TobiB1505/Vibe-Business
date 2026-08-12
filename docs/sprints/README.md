@@ -19,6 +19,7 @@ Implementation work should be scoped and recorded as discrete sprints, each tied
 - [0006-deep-scan-audit-evidence](0006-deep-scan-audit-evidence.md) — Deep Scan evidence in the Business Audit, evidence pack v2 (Complete — merged, updated real audit run once: 34 → 40/100)
 - [0007-durable-operation-execution](0007-durable-operation-execution.md) — durable execution for long-running operations; Business Audit is the first consumer (Complete — merged and dogfooded: audit ran durably, request returned before inference began)
 - [0008-opportunity-engine](0008-opportunity-engine.md) — prioritized, evidence-grounded opportunities from the Business Audit (Complete — merged and dogfooded: 3 opportunities, correct prerequisite ordering; one upstream evidence defect found, fixed, and the advice verified corrected)
+- [0009-first-execution](0009-first-execution.md) — execution safety core: preflight, premise revalidation, deterministic generator (9A+9B complete — core and backend wiring built and mutation-validated; 9C UI, permission upgrade and dogfood pending)
 
 ## Format
 

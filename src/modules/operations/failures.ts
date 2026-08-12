@@ -1,6 +1,7 @@
 import type { AuditRunFailure } from "@/modules/business-audit/runner";
 import type { AuditPrerequisite } from "@/modules/business-audit/service";
 import type { OpportunityRunFailure } from "@/modules/opportunities/runner";
+import type { ExecutionFailureCode } from "@/modules/execution/schema";
 
 /**
  * Every way a durable operation can end badly (Sprint 7 §21).
@@ -37,6 +38,7 @@ export type OperationExecutionFailure =
 export type OperationFailureCode =
   | AuditRunFailure
   | OpportunityRunFailure
+  | ExecutionFailureCode
   | AuditPrerequisite
   | OperationExecutionFailure;
 

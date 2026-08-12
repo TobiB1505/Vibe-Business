@@ -102,6 +102,17 @@ export class FakeDatabase {
       if (clash) return { code: POSTGRES_UNIQUE_VIOLATION, message: "one in-flight set per input" };
     }
 
+    // At most one live-or-successful preparation per execution identity.
+    if (table === "prepared_changes" && ["preparing", "prepared"].includes(String(candidate.status))) {
+      const clash = others.some(
+        (row) =>
+          row.project_id === candidate.project_id &&
+          row.execution_identity === candidate.execution_identity &&
+          ["preparing", "prepared"].includes(String(row.status)),
+      );
+      if (clash) return { code: POSTGRES_UNIQUE_VIOLATION, message: "one active preparation per identity" };
+    }
+
     // The ledger's idempotency guarantee: one usage event per job.
     if (table === "ai_usage_events" && candidate.job_id != null) {
       const clash = others.some((row) => row.job_id === candidate.job_id);

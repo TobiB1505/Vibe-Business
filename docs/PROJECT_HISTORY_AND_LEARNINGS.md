@@ -1411,6 +1411,20 @@ Vibe Business ist Kunde #1.
 **14. Every manual business task is potential product discovery**
 SEO, Ads, Pricing, Launch und Growth gehören genauso zur Produktentwicklung wie Code.
 
+**15. Advice may rest on stored evidence — execution must revalidate the premise**
+Ein Ratschlag aus falscher Evidenz ist ein falscher Satz. Ein Repository-Write
+aus falscher Evidenz ist ein falscher Commit im Repository eines Kunden.
+
+Deshalb erbt Execution nicht das Vertrauen der Evidence-Kette:
+
+```
+executionReadiness = ready   → autorisiert nichts
+gespeicherte Evidence IDs    → autorisieren nichts
+```
+
+Nur aktueller, unmittelbar vor dem Schreibvorgang unabhängig geprüfter Zustand
+autorisiert einen konsequenten externen Write.
+
 ---
 
 ## 37. Aktueller Stand
