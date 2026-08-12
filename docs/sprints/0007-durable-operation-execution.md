@@ -1,6 +1,6 @@
 # Sprint 7 — Durable operation execution
 
-Status: Implemented. Migration deployed via the linked Supabase CLI workflow. **Requires `SUPABASE_SERVICE_ROLE_KEY` in the Vercel project before the durable path works in production — see [Manual action](#manual-action).**
+Status: Complete. Merged as [#18](https://github.com/TobiB1505/Vibe-Business/pull/18), migration deployed, and dogfooded in production on 2026-08-12 — see [Dogfood result](#dogfood-result).
 Branch: `feat/durable-operation-execution`
 
 ## Goal
@@ -160,7 +160,7 @@ Verified on the remote database: `operation_runs` has RLS enabled with 4 policie
 
 ## Manual action
 
-`SUPABASE_SERVICE_ROLE_KEY` must be added to the Vercel project (Production and Preview) before the durable path works. Until it is, workflow steps cannot reach the database: the run fails, the operation is marked failed by the workflow's terminal handler, and the UI reports that the audit could not complete.
+`SUPABASE_SERVICE_ROLE_KEY` must be present in the Vercel project (Production and Preview). It was added on 2026-08-12; without it workflow steps cannot reach the database, the run fails, and the UI reports that the audit could not complete.
 
 ## Known limitations
 
@@ -172,4 +172,27 @@ Verified on the remote database: `operation_runs` has RLS enabled with 4 policie
 
 ## Dogfood result
 
-Pending. The durable path cannot be exercised in production until the service-role key is configured, and the current evidence identity already has a reusable successful audit (40/100), so the user flow can be tested without a paid call once the key is in place.
+Run on production on 2026-08-12, operation `d2c2ddd9`, against genuinely new evidence (repository and live snapshots had both been refreshed, so the identity `c985cad4…` was new rather than forced).
+
+| | |
+| --- | --- |
+| Operation runs created | **1** |
+| Durable runs started | **1** (`vercel_workflow`) |
+| Audits created | **1**, linked to the operation |
+| AI usage events | **1** |
+| Audit events | **4** — `operation.started`, `business_audit.started`, `business_audit.completed`, `operation.completed`, one each |
+| Queue latency | 2.66s from claim to the first step marking the operation running |
+| Total operation | 57.5s |
+| Inference | 46.7s |
+| Cost | $0.0677 (6,910 in / 5,388 out / 1,947 thinking) |
+| Score | 41 / 100 |
+
+The point of the sprint is the shape of those timings: the operation row was claimed at `00:50:04.72`, the audit row was not created until `00:50:07.99`, and the audit completed at `00:51:00.61`. Inference happened in a function invocation that started three seconds *after* the browser request was already over. The request no longer owns the lifecycle.
+
+Every duplication guarantee held on real data: one operation, one audit, one usage event, one of each lifecycle event, `inference_started_at` set, and the operation pointing at the audit it produced. Across the whole ledger, 13 audits and 13 usage events — still exactly 1:1.
+
+Not verified from the database, and worth confirming by hand next time: the client-side experience of navigating away mid-run and returning.
+
+### Score context
+
+41/100, against 34 (v1 evidence), 40 and 38 (v2, identical evidence). The 40/38 pair came from byte-identical evidence, so the spread across these runs is mostly run-to-run model variance, not signal. This one also saw refreshed repository and live snapshots, so it is not directly comparable to either.

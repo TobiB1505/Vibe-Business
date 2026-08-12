@@ -17,7 +17,7 @@ Implementation work should be scoped and recorded as discrete sprints, each tied
 - [0004-business-readiness-audit](0004-business-readiness-audit.md) — diagnostic AI Business Readiness Audit, first paid inference (Complete — real dogfood audit run: 34/100)
 - [0005-authenticated-live-product-intelligence](0005-authenticated-live-product-intelligence.md) — human-in-the-loop Deep Scan of the signed-in product (Complete — dogfooded against the real deployment)
 - [0006-deep-scan-audit-evidence](0006-deep-scan-audit-evidence.md) — Deep Scan evidence in the Business Audit, evidence pack v2 (Complete — merged, updated real audit run once: 34 → 40/100)
-- [0007-durable-operation-execution](0007-durable-operation-execution.md) — durable execution for long-running operations; Business Audit is the first consumer (Implemented; requires SUPABASE_SERVICE_ROLE_KEY in Vercel)
+- [0007-durable-operation-execution](0007-durable-operation-execution.md) — durable execution for long-running operations; Business Audit is the first consumer (Complete — merged and dogfooded: audit ran durably, request returned before inference began)
 
 ## Format
 
