@@ -152,6 +152,21 @@ export async function findReusableAudit(
   return data ? mapRow(data as AuditRow) : null;
 }
 
+/** One audit row by id. Used by durable execution to detect a replay. */
+export async function getAuditById(
+  supabase: SupabaseClient,
+  auditId: string,
+): Promise<StoredAudit | null> {
+  const { data, error } = await supabase
+    .from("business_readiness_audits")
+    .select(AUDIT_COLUMNS)
+    .eq("id", auditId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? mapRow(data as AuditRow) : null;
+}
+
 export type CreateAuditRunResult =
   | { ok: true; auditId: string }
   | { ok: false; error: "already_running" }

@@ -2,7 +2,7 @@
   "name": "vibe-business",
   "version": "0.1.0",
   "private": true,
-  "description": "Vibe Business — the business layer for AI-built products.",
+  "description": "Vibe Business \u2014 the business layer for AI-built products.",
   "engines": {
     "node": ">=20.9.0"
   },
@@ -32,6 +32,7 @@
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "server-only": "0.0.1",
+    "workflow": "4.8.2",
     "zod": "4.4.3"
   },
   "devDependencies": {

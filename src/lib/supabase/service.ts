@@ -1,0 +1,46 @@
+import "server-only";
+
+import { createClient } from "@supabase/supabase-js";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { getPublicEnv } from "@/lib/env/env";
+import { getSupabaseServiceEnv } from "@/lib/env/supabase-service";
+
+/**
+ * The service-role Supabase client. **RLS does not apply to this client.**
+ *
+ * It exists for exactly one caller: durable operation execution (ADR 0013). A
+ * workflow step runs outside any HTTP request, so there is no cookie, no
+ * session, and no `auth.uid()` for a policy to check against.
+ *
+ * ## The rules that replace RLS
+ *
+ * RLS was not a nice-to-have here — it was the single mechanism preventing one
+ * user's data reaching another. Removing it means the guarantee has to be
+ * re-established in code, so every query made with this client MUST:
+ *
+ *  1. **Filter on ownership explicitly.** `project_id` and `user_id` come from
+ *     the persisted operation row, never from a function argument that
+ *     originated outside the server.
+ *  2. **Take its identifiers from one trusted source.** A workflow step is
+ *     handed an operation id and nothing else; it re-reads the row and uses
+ *     that row's ids. A step must never accept a `projectId` or `userId`
+ *     parameter, because then a caller could name someone else's.
+ *  3. **Stay inside `src/modules/operations/`.** Nothing else may import this
+ *     module. The read path the browser uses stays on the cookie-scoped
+ *     client in `server.ts`, where RLS still enforces everything.
+ *
+ * Sessions are disabled: this client must never pick up, persist or refresh a
+ * user session, and it has no storage to put one in.
+ */
+export function createServiceClient(): SupabaseClient {
+  const env = getPublicEnv();
+  const service = getSupabaseServiceEnv();
+
+  return createClient(env.NEXT_PUBLIC_SUPABASE_URL, service.SUPABASE_SERVICE_ROLE_KEY, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+    },
+  });
+}

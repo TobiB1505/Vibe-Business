@@ -32,7 +32,15 @@ export type AuditEventType =
   | "deep_scan.started"
   | "deep_scan.completed"
   | "deep_scan.failed"
-  | "deep_scan.cancelled";
+  | "deep_scan.cancelled"
+  // Execution lifecycle, distinct from the domain lifecycle above (Sprint 7
+  // §22). `operation.*` says whether durable work started, finished or died;
+  // `business_audit.*` says what the audit itself did. Emitting both from the
+  // same moment would double every entry, so each layer owns its own: the
+  // operation records execution, the audit records inference.
+  | "operation.started"
+  | "operation.completed"
+  | "operation.failed";
 
 export type RecordAuditEventParams = {
   userId: string;

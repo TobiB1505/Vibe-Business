@@ -1,5 +1,26 @@
 allowBuilds:
+  # The Workflow SDK's compiler ships native binaries whose install scripts
+  # must run; without them `next build` cannot compile the workflow routes.
+  # These are our own build tools, never customer repository scripts
+  # (CLAUDE.md rule 19).
+  '@swc/core': true
+  cbor-extract: true
+  esbuild: true
   sharp: false
   unrs-resolver: false
+minimumReleaseAgeExclude:
+  - '@workflow/astro@4.0.17'
+  - '@workflow/builders@4.1.7'
+  - '@workflow/cli@4.3.6'
+  - '@workflow/core@4.8.2'
+  - '@workflow/nest@4.0.18'
+  - '@workflow/next@4.1.6'
+  - '@workflow/nitro@4.1.8'
+  - '@workflow/nuxt@4.0.18'
+  - '@workflow/rollup@4.0.17'
+  - '@workflow/sveltekit@4.0.17'
+  - '@workflow/vite@4.0.17'
+  - '@workflow/web@4.1.18'
+  - workflow@4.8.2
 patchedDependencies:
   playwright-core@1.62.1: patches/playwright-core@1.62.1.patch
