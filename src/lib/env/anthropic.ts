@@ -14,14 +14,21 @@ import { z } from "zod";
  */
 
 const anthropicEnvSchema = z.object({
-  ANTHROPIC_API_KEY: z
-    .string()
-    .min(1, "ANTHROPIC_API_KEY is required.")
-    // A cheap shape check that catches a pasted placeholder before it
-    // becomes a confusing 401 from the provider.
-    .refine((key) => key.startsWith("sk-ant-"), {
-      message: 'ANTHROPIC_API_KEY does not look like an Anthropic key (expected an "sk-ant-" prefix).',
-    }),
+  // Presence only, deliberately.
+  //
+  // This previously required an `sk-ant-` prefix as a "cheap shape check". It
+  // was a guess about a format we do not control, and the failure mode is
+  // silent: `hasAnthropicApiKey()` gates UI affordances, so a valid key in an
+  // unanticipated shape would remove the audit action with no error anywhere
+  // for the user to act on. The identical `bb_` check on
+  // `BROWSERBASE_API_KEY` did exactly that in production — the Deep Scan
+  // button rendered as inert text with a correctly configured key.
+  //
+  // A guess about formatting must never be able to disable a feature. The
+  // provider is the authority on its own keys, and a genuinely wrong one fails
+  // loudly there as a typed `provider_auth_error`, which is both accurate and
+  // actionable.
+  ANTHROPIC_API_KEY: z.string().min(1, "ANTHROPIC_API_KEY is required."),
 });
 
 export type AnthropicEnv = z.infer<typeof anthropicEnvSchema>;
