@@ -19,7 +19,7 @@ import { buildOperationView, type OperationView } from "@/modules/operations/vie
 import { resolveAppRoot } from "./app-root";
 import { resolveExecutionCapability } from "./capabilities";
 import { branchNameFor, computeExecutionIdentity } from "./identity";
-import { NEXTJS_SEO_FOUNDATIONS_VERSION } from "./schema";
+import { NEXTJS_SEO_FOUNDATIONS_VERSION, type ExecutionCapability } from "./schema";
 import { findReusablePreparedChange, getPreparedChange, type StoredPreparedChange } from "./store";
 
 /**
@@ -304,4 +304,125 @@ export async function getPreparedChangeView(
     failureCode: prepared.failureCode,
     completedAt: prepared.completedAt,
   };
+}
+
+/**
+ * The execution state of every opportunity in the current set (Sprint 9C §2).
+ *
+ * Resolved server-side and handed to the UI, so the browser never decides
+ * whether Vibe has an executor — it renders an answer it was given.
+ *
+ * Deliberately cheap: capability resolution and stored lookups only. The
+ * expensive live probes (HEAD, target files, live routes, permission) run in
+ * the workflow, where they are the safety boundary. Running them for every
+ * card on every page render would be several GitHub calls per view for an
+ * answer that could be stale by the time the user clicks anyway.
+ */
+export type OpportunityExecutionSummary = {
+  opportunityId: string;
+  capability: ExecutionCapability | null;
+  preparedChangeId: string | null;
+  branchName: string | null;
+};
+
+export async function getOpportunityExecutionSummaries(
+  supabase: SupabaseClient,
+  projectId: string,
+): Promise<OpportunityExecutionSummary[]> {
+  const [snapshot, opportunities, project] = await Promise.all([
+    getLatestSuccessfulSnapshot(supabase, projectId),
+    getLatestOpportunities(supabase, projectId),
+    supabase.from("projects").select("production_url").eq("id", projectId).maybeSingle(),
+  ]);
+
+  if (!snapshot?.result || !opportunities) return [];
+
+  const hasProductionOrigin =
+    (project.data as { production_url: string | null } | null)?.production_url != null;
+
+  const summaries: OpportunityExecutionSummary[] = [];
+
+  for (const opportunity of opportunities.set.opportunities) {
+    const capability = resolveExecutionCapability({
+      opportunity,
+      repository: snapshot.result,
+      hasProductionOrigin,
+    });
+
+    if (!capability.supported) {
+      summaries.push({
+        opportunityId: opportunity.id,
+        capability: null,
+        preparedChangeId: null,
+        branchName: null,
+      });
+      continue;
+    }
+
+    const identity = computeExecutionIdentity({
+      projectId,
+      opportunitySetId: opportunities.set.id,
+      opportunityId: opportunity.id,
+      capability: capability.capability,
+      capabilityVersion: NEXTJS_SEO_FOUNDATIONS_VERSION,
+      repositorySnapshotId: snapshot.id,
+      baseSha: snapshot.result.source.commitSha,
+    });
+
+    const prepared = await findReusablePreparedChange(supabase, {
+      projectId,
+      executionIdentity: identity,
+    });
+
+    summaries.push({
+      opportunityId: opportunity.id,
+      capability: capability.capability,
+      preparedChangeId: prepared?.id ?? null,
+      branchName: prepared?.branchName ?? null,
+    });
+  }
+
+  return summaries;
+}
+
+/** The live preparation for one opportunity, when there is one (§17). */
+export async function getActivePreparationFor(
+  supabase: SupabaseClient,
+  params: { projectId: string; opportunityId: string },
+): Promise<OperationView | null> {
+  const { data, error } = await supabase
+    .from("operation_runs")
+    .select("id, status, stage, failure_code, result_id, started_at, completed_at, created_at")
+    .eq("project_id", params.projectId)
+    .eq("operation_type", "change_preparation")
+    .eq("subject_id", params.opportunityId)
+    .in("status", ["queued", "running"])
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) return null;
+
+  const row = data as {
+    id: string;
+    status: StoredOperationRun["status"];
+    stage: StoredOperationRun["stage"];
+    failure_code: string | null;
+    result_id: string | null;
+    started_at: string | null;
+    completed_at: string | null;
+    created_at: string;
+  };
+
+  return buildOperationView({
+    operationId: row.id,
+    status: row.status,
+    stage: row.stage,
+    failureCode: row.failure_code,
+    resultId: row.result_id,
+    startedAt: row.started_at,
+    completedAt: row.completed_at,
+    createdAt: row.created_at,
+  });
 }

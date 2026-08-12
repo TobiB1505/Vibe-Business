@@ -1,13 +1,13 @@
 # Sprint 9 — First Execution
 
-Status: **9A complete · 9B complete · 9C pending.** The execution core and its backend wiring are built, tested and mutation-validated. There is **no customer-facing trigger**: no UI, no permission upgrade, no dogfood, and no repository write has ever been performed.
+Status: **9A complete · 9B complete · 9C built, blocked on a manual GitHub action.** The product flow exists end to end in code, but the GitHub App still holds `Contents: read`, so no preparation can run and **no repository write has ever been performed**. Sprint 9 is not complete until the dogfood runs.
 Branch: `feat/first-execution`
 
 | Phase | Scope | Status |
 | --- | --- | --- |
 | **9A** | Safety core: capability resolution, preflight, premise revalidation, path allowlist, deterministic generator, atomic writer | Complete |
 | **9B** | Backend wiring: `prepared_changes`, execution identity, `change_preparation` operation, durable workflow, application service | Complete |
-| **9C** | UI, GitHub permission upgrade, dogfood | Pending |
+| **9C** | Product flow: capability-aware UI, confirmation, durable status, blocked-state UX, bounded diff review | Built — dogfood blocked on the owner enabling `Contents: write` |
 
 ## Goal
 
@@ -160,12 +160,66 @@ Two of those — active-operation reuse and persistence replay — **survived th
 
 `inspectExistingBranch` was explicitly untested in 9A and now has five cases: absent, exact match, different content, missing file, single-byte difference.
 
+## Product flow (9C)
+
+### Capability-aware opportunity UI
+
+The card's execution affordance is derived server-side from **capability**, not from the model's readiness label. `executionReadiness === "ready"` on an opportunity Vibe has no executor for renders nothing — a button that looks like capability and produces a failure is the worst kind of product lie.
+
+States: `preparable` · `already_prepared` · `preparing` · `failed` · `blocked` · `needs_user_input` · `not_automated`. An active operation suppresses a second start; an existing prepared change offers review instead of a write, exercising the 9B reuse semantics rather than duplicating them.
+
+### Confirmation
+
+Two clicks. The dialog states that Vibe will create an isolated branch and commit, that the default branch and production site will not change, and — deliberately — that **the user's own CI, preview deployments or GitHub automation may react to the new branch**. Claiming "nothing external can happen" would be false, since branch creation triggers whatever the customer configured.
+
+The confirmation is load-bearing, not decorative: the action refuses any submission without the confirmation flag, so a stray POST cannot start a preparation.
+
+### Refresh flow — the one deliberate inline action
+
+`repository_changed` offers **Refresh product intelligence** inline, because that operation is deterministic and costs nothing.
+
+Everything paid stays a separate, explicit decision. A repository refresh never chains into an audit, and an audit never chains into opportunity generation. The blocked-action map encodes this: `stale_audit → update_audit`, `stale_opportunity → refresh_opportunities`, each its own user action. No hidden spend.
+
+### Bounded diff review
+
+The GitHub branch is canonical; the diff is fetched on demand and never persisted. Limits: 10 files, 64 KB per file, 256 KB total, 500 lines per file — applied even though this capability writes two small files, because a bound's value is that it holds when the assumption behind it stops being true.
+
+The branch and paths come from the stored prepared change, so a caller cannot read an arbitrary ref. Content is returned as plain text lines and rendered in a `<pre>` through React's escaping: no `dangerouslySetInnerHTML`, no markdown-with-HTML, no highlighter that evaluates input.
+
+### Prepared change UI
+
+*Change prepared* · **Not merged · Not deployed · Not runtime-tested**, plus review and *Open branch on GitHub* (URL built from stored linkage). No merge, deploy or approve affordance exists.
+
+## 9C tests and mutation validation
+
+1280 → 1331 tests. Four new mutations, each breaking real tests:
+
+| Mutation | Result |
+| --- | --- |
+| Unsupported opportunity gets an active button | 2 tests fail |
+| Active operation fails to suppress a second start | 2 fail |
+| Existing PreparedChange fails to suppress a second start | 1 fails |
+| Diff authorization removed (project filter dropped) | 1 fails |
+
+The first attempt at the diff mutation was written badly — it kept the same filter through a fallback, so it proved nothing. Rewritten to actually drop the `project_id` predicate, it fails as it should. A mutation that does not mutate is worse than no mutation, because it reports confidence it has not earned.
+
 ## What is NOT implemented
 
-- **No UI.** No "Let Vibe prepare this" button, no confirmation dialog, no diff view, no permission-upgrade prompt.
-- **No GitHub permission upgrade.** The App still holds `Contents: read`, so a real write would block at the preflight's permission gate.
+- **No GitHub permission upgrade has been performed.** The App registration still requests `Contents: read`, so every preparation blocks at the permission gate. This is a one-time owner action — see Manual action below.
 - **No dogfood.** No branch, no commit, nothing written to any repository by anything.
-- **No diff retrieval.** `getPreparedChangeView` returns file paths, not content — fetching a bounded diff for review belongs to 9C.
+- **No preview, merge or deploy**, by design.
+
+## Manual action required
+
+The GitHub App registration must be changed by its owner:
+
+**Settings → Developer settings → GitHub Apps → Vibe Business → Permissions & events → Repository permissions → Contents: Read-only → Read and write.**
+
+Why: creating blobs, trees, commits and refs all require `Contents: write`. It is the minimum for this capability.
+
+Deliberately **not** requested: Pull Requests, Administration, Actions, Issues, Secrets.
+
+GitHub then notifies each installation's owner, who must approve the updated permission from the installation settings page. Until approval, the app keeps its current permissions — so the product reads the granted permission from the installation token and refuses rather than assuming. A query parameter claiming approval is never trusted.
 
 ## Known limitations
 

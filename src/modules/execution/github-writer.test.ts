@@ -259,7 +259,7 @@ describe("prepareChangeOnBranch — verification (§25)", () => {
       created = true;
       git.refs[ref.replace(/^refs\//, "")] = sha;
     };
-    git.port.getRefSha = async (ref) => (created ? "commit-2" : null);
+    git.port.getRefSha = async () => (created ? "commit-2" : null);
     git.port.getFileContent = async (path, ref) => (created ? "// tampered" : original(path, ref));
 
     const result = await prepareChangeOnBranch(git.port, TARGET, FILES);

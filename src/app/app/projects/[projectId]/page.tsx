@@ -14,6 +14,12 @@ import {
   getActiveOpportunityOperation,
 } from "@/modules/operations/service";
 import { getLatestOpportunities, getOpportunityReadiness } from "@/modules/opportunities/service";
+import {
+  getActivePreparationFor,
+  getOpportunityExecutionSummaries,
+} from "@/modules/execution/service";
+import { buildOpportunityActionState } from "@/modules/execution/view";
+import { buildBranchUrl } from "@/modules/execution/diff";
 import { buildAuditEvidenceNotice } from "@/modules/business-audit/evidence-notice";
 import { isBrowserProviderConfigured } from "@/modules/authenticated-product-intelligence/browserbase/client";
 import { getDeepScanAccessStatus } from "@/modules/authenticated-product-intelligence/service";
@@ -84,6 +90,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
     opportunities,
     opportunityReadiness,
     activeOpportunityOperation,
+    executionSummaries,
   ] = await Promise.all([
     getLatestSuccessfulSnapshot(supabase, projectId),
     getLatestSuccessfulLiveSnapshot(supabase, projectId),
@@ -99,7 +106,36 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
     getLatestOpportunities(supabase, projectId),
     getOpportunityReadiness(supabase, projectId),
     getActiveOpportunityOperation(supabase, projectId),
+    getOpportunityExecutionSummaries(supabase, projectId),
   ]);
+
+  // Execution state per opportunity, resolved here so the browser renders an
+  // answer rather than deciding whether Vibe has an executor (Sprint 9C §2).
+  const executionStates: Record<string, ReturnType<typeof buildOpportunityActionState>> = {};
+  const branchUrls: Record<string, string> = {};
+
+  for (const summary of executionSummaries) {
+    const opportunity = opportunities?.set.opportunities.find(
+      (entry) => entry.id === summary.opportunityId,
+    );
+    if (!opportunity) continue;
+
+    executionStates[summary.opportunityId] = buildOpportunityActionState({
+      opportunity,
+      capability: summary.capability,
+      preparedChangeId: summary.preparedChangeId,
+      activeOperation: await getActivePreparationFor(supabase, {
+        projectId,
+        opportunityId: summary.opportunityId,
+      }),
+      failedOperation: null,
+      blockedReason: null,
+    });
+
+    if (summary.branchName && repository) {
+      branchUrls[summary.opportunityId] = buildBranchUrl(repository.fullName, summary.branchName);
+    }
+  }
 
   // Deep Scan state is derived on the server (Sprint 5 §13): entitlement,
   // cooldown and eligibility are the domain's answers, not React's.
@@ -273,6 +309,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
         <OpportunitiesPanel
           projectId={project.id}
           opportunities={opportunities?.set.opportunities ?? []}
+          executionStates={executionStates}
+          branchUrls={branchUrls}
           stale={opportunities?.stale ?? false}
           activeOperation={activeOpportunityOperation}
           blockedReason={opportunityReadiness.blockedReason}

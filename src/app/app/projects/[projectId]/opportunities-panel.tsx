@@ -7,6 +7,8 @@ import { DIMENSION_LABELS } from "@/modules/business-audit/schema";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { OPERATION_STAGE_LABELS, type OperationView } from "@/modules/operations/view";
 import { buildOpportunityBlockNotice } from "@/modules/opportunities/view";
+import type { OpportunityActionState } from "@/modules/execution/view";
+import { PrepareChangePanel } from "./prepare-change-panel";
 import {
   CONFIDENCE_LABELS,
   EFFORT_LABELS,
@@ -55,7 +57,18 @@ function Badge({ children, className = "" }: { children: React.ReactNode; classN
   );
 }
 
-function OpportunityCard({ opportunity }: { opportunity: BusinessOpportunity }) {
+function OpportunityCard({
+  projectId,
+  opportunity,
+  execution,
+  branchUrl,
+}: {
+  projectId: string;
+  opportunity: BusinessOpportunity;
+  /** Derived server-side. Null when this project has no execution state yet. */
+  execution: OpportunityActionState | null;
+  branchUrl: string | null;
+}) {
   return (
     <li className="space-y-3 rounded-md border border-zinc-800 p-4">
       <div className="flex items-baseline gap-3">
@@ -110,6 +123,17 @@ function OpportunityCard({ opportunity }: { opportunity: BusinessOpportunity }) 
           )}
         </div>
       </details>
+
+      {/* The execution affordance renders only where Vibe genuinely has an
+          executor. A "ready" badge alone never produces a button (§2). */}
+      {execution && (
+        <PrepareChangePanel
+          projectId={projectId}
+          opportunityId={opportunity.id}
+          actionState={execution}
+          branchUrl={branchUrl}
+        />
+      )}
     </li>
   );
 }
@@ -119,12 +143,17 @@ const initialState: StartOpportunitiesActionState = null;
 export function OpportunitiesPanel({
   projectId,
   opportunities,
+  executionStates,
+  branchUrls,
   stale,
   activeOperation,
   blockedReason,
 }: {
   projectId: string;
   opportunities: BusinessOpportunity[];
+  /** Per-opportunity execution state, resolved on the server (§2). */
+  executionStates: Record<string, OpportunityActionState>;
+  branchUrls: Record<string, string>;
   /** A newer audit exists than the one these were prioritized from (§35). */
   stale: boolean;
   activeOperation: OperationView | null;
@@ -171,7 +200,13 @@ export function OpportunitiesPanel({
       {hasOpportunities && (
         <ol className="space-y-3">
           {opportunities.map((opportunity) => (
-            <OpportunityCard key={opportunity.id} opportunity={opportunity} />
+            <OpportunityCard
+              key={opportunity.id}
+              projectId={projectId}
+              opportunity={opportunity}
+              execution={executionStates[opportunity.id] ?? null}
+              branchUrl={branchUrls[opportunity.id] ?? null}
+            />
           ))}
         </ol>
       )}
