@@ -8,6 +8,8 @@ import { PROMPT_VERSION } from "@/modules/business-audit/prompt";
 import { RUBRIC_VERSION } from "@/modules/business-audit/rubric";
 import { BUSINESS_AUDIT_SCHEMA_VERSION, BUSINESS_AUDIT_VERSION } from "@/modules/business-audit/schema";
 import { computeAuditInputHash, findReusableAudit } from "@/modules/business-audit/store";
+import { resolveOpportunityIdentity } from "@/modules/opportunities/service";
+import { findReusableOpportunitySet } from "@/modules/opportunities/store";
 import { getLatestSuccessfulAuthenticatedSnapshot } from "@/modules/authenticated-product-intelligence/store";
 import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intelligence/store";
 import { getBusinessContext } from "@/modules/projects/business-context-store";
@@ -101,7 +103,7 @@ function view(operation: StoredOperationRun): OperationView {
     status: operation.status,
     stage: operation.stage,
     failureCode: operation.failureCode,
-    auditId: operation.auditId,
+    resultId: operation.resultId,
     startedAt: operation.startedAt,
     completedAt: operation.completedAt,
     createdAt: operation.createdAt,
@@ -233,6 +235,122 @@ export async function getActiveBusinessAuditOperation(
   const operation = await findActiveOperation(supabase, {
     projectId,
     operationType: "business_audit",
+  });
+  return operation ? view(operation) : null;
+}
+
+/**
+ * Starting a durable opportunity generation (Sprint 8 §23, §24, §26).
+ *
+ * The same sequence of refusals as the audit, against the same guarantees —
+ * this is the second consumer of one execution foundation, not a second
+ * mechanism. What differs is only what identity means: a prioritization is
+ * identified by the diagnosis it reasons from, not by the raw evidence.
+ */
+export async function startOpportunityOperation(
+  supabase: SupabaseClient,
+  executor: OperationExecutor,
+  params: { projectId: string; userId: string; force?: boolean },
+): Promise<StartOperationOutcome> {
+  const { data: project } = await supabase
+    .from("projects")
+    .select("id")
+    .eq("id", params.projectId)
+    .eq("user_id", params.userId)
+    .maybeSingle();
+
+  if (!project) return { kind: "failed", error: "project_not_found" };
+
+  // Refuses outright when the audit is missing or stale (§34): prioritizing a
+  // diagnosis we already know is out of date produces confident advice about a
+  // product that has since changed, and nothing on screen would say so.
+  const identity = await resolveOpportunityIdentity(supabase, params.projectId);
+  if (!identity.ok) return { kind: "failed", error: identity.error };
+
+  if (!params.force) {
+    const reusable = await findReusableOpportunitySet(supabase, {
+      projectId: params.projectId,
+      inputHash: identity.inputHash,
+    });
+    if (reusable) {
+      await recordAuditEvent(supabase, {
+        userId: params.userId,
+        eventType: "opportunities.reused",
+        metadata: {
+          projectId: params.projectId,
+          opportunitySetId: reusable.id,
+          auditId: identity.auditId,
+        },
+      });
+      return { kind: "reused", auditId: reusable.id };
+    }
+  }
+
+  const alreadyActive = await findActiveOperationByIdentity(supabase, {
+    projectId: params.projectId,
+    operationType: "opportunity_generation",
+    inputIdentity: identity.inputHash,
+  });
+  if (alreadyActive) return { kind: "active", operation: view(alreadyActive) };
+
+  const created = await createOperationRun(supabase, {
+    projectId: params.projectId,
+    userId: params.userId,
+    operationType: "opportunity_generation",
+    inputIdentity: identity.inputHash,
+  });
+
+  if (!created.ok) {
+    if (created.error === "already_active") {
+      const existing = await findActiveOperationByIdentity(supabase, {
+        projectId: params.projectId,
+        operationType: "opportunity_generation",
+        inputIdentity: identity.inputHash,
+      });
+      if (existing) return { kind: "active", operation: view(existing) };
+    }
+    return { kind: "failed", error: "opportunity_generation_failed" };
+  }
+
+  const operation = created.operation;
+  const started = await executor.start({
+    operationId: operation.id,
+    operationType: "opportunity_generation",
+  });
+
+  if (!started.ok) {
+    await failOperationRun(supabase, { operationId: operation.id, failureCode: "execution_start_failed" });
+    return { kind: "failed", error: "execution_start_failed" };
+  }
+
+  await attachExecutionRun(supabase, {
+    operationId: operation.id,
+    workflowRunId: started.runId,
+    executionProvider: executor.name,
+  });
+
+  await recordAuditEvent(supabase, {
+    userId: params.userId,
+    eventType: "operation.started",
+    metadata: {
+      projectId: params.projectId,
+      operationId: operation.id,
+      operationType: "opportunity_generation",
+      executionProvider: executor.name,
+    },
+  });
+
+  return { kind: "started", operation: view(operation) };
+}
+
+/** The live generation a reloaded project page should display (Sprint 7 §19). */
+export async function getActiveOpportunityOperation(
+  supabase: SupabaseClient,
+  projectId: string,
+): Promise<OperationView | null> {
+  const operation = await findActiveOperation(supabase, {
+    projectId,
+    operationType: "opportunity_generation",
   });
   return operation ? view(operation) : null;
 }

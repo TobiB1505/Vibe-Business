@@ -50,7 +50,7 @@ export type BuildOperationViewInput = {
   status: OperationStatus;
   stage: OperationStage;
   failureCode: string | null;
-  auditId: string | null;
+  resultId: string | null;
   startedAt: string | null;
   completedAt: string | null;
   createdAt: string;
@@ -73,7 +73,7 @@ export function buildOperationView(
     startedAt: input.startedAt,
     completedAt: input.completedAt,
     failureCode,
-    resultId: input.auditId,
+    resultId: input.resultId,
     // A stalled operation stops being polled: continuing would be a request
     // every few seconds, forever, for an answer that is not coming.
     shouldPoll: live && !stalled,
@@ -93,6 +93,7 @@ export const OPERATION_STAGE_LABELS: Record<OperationStage, string> = {
   preparing: "Preparing evidence",
   counting_tokens: "Preparing evidence",
   running_ai: "Analyzing business",
+  prioritizing: "Finding your highest-impact opportunities",
   validating: "Validating result",
   persisting: "Saving result",
   completed: "Completed",

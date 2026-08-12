@@ -96,7 +96,7 @@ function seed(options: { inputIdentity?: string } = {}) {
     input_identity: options.inputIdentity ?? identity(),
     workflow_run_id: "run_1",
     execution_provider: "fake_executor",
-    audit_id: null,
+    result_id: null,
     inference_started_at: null,
     failure_code: null,
     started_at: null,
@@ -159,7 +159,7 @@ describe("the happy path", () => {
 
     expect(operationRow().status).toBe("completed");
     expect(operationRow().stage).toBe("completed");
-    expect(operationRow().audit_id).toBe(auditRows()[0].id);
+    expect(operationRow().result_id).toBe(auditRows()[0].id);
     expect(operationRow().completed_at).not.toBeNull();
   });
 

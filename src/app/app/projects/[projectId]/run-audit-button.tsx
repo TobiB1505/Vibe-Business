@@ -2,51 +2,13 @@
 
 import { useActionState, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import type { OperationFailureCode } from "@/modules/operations/failures";
+import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { OPERATION_STAGE_LABELS, type OperationView } from "@/modules/operations/view";
 import {
   getOperationStatusAction,
   startAuditAction,
   type StartAuditActionState,
 } from "./run-audit-action";
-
-/**
- * User-facing copy for every typed failure (Sprint 4 §27, Sprint 7 §21).
- *
- * Raw provider errors, workflow internals and stack traces never reach the
- * browser. Each message says what happened and, where it is true, what the
- * user can do about it.
- */
-const ERROR_MESSAGES: Record<OperationFailureCode, string> = {
-  project_not_found: "This project could not be found.",
-  operation_not_found: "That analysis could not be found.",
-  repository_intelligence_missing: "Inspect the repository first — the audit needs that evidence.",
-  live_product_intelligence_missing: "Inspect the live product first — the audit needs that evidence.",
-  business_context_missing: "Complete your business context first.",
-  already_running: "An audit is already running for this project. Give it a moment.",
-  // The evidence moved under the operation's feet — a Deep Scan finished, or
-  // the context was edited. Starting again picks up the new evidence.
-  inputs_changed: "Your evidence changed while the audit was starting. Run it again to use the latest.",
-  execution_start_failed: "The analysis could not be queued. Try again in a moment.",
-  // Deliberately does not claim the call was free. We do not know.
-  inference_interrupted:
-    "The analysis was interrupted while the AI was running, so Vibe stopped rather than risk analyzing twice.",
-  audit_input_budget_exceeded: "There is too much evidence to analyze in one audit. This is a bug — please report it.",
-  token_count_failed: "The audit could not be prepared. Try again in a moment.",
-  provider_rate_limited: "The AI provider is rate limiting requests. Try again in a few minutes.",
-  provider_auth_error: "Vibe Business is not correctly configured to reach the AI provider.",
-  provider_billing_error: "The AI provider account has no available usage credit or has a billing issue.",
-  provider_timeout: "The audit took too long to complete. Try again.",
-  provider_unavailable: "The AI provider could not be reached. Try again in a moment.",
-  provider_overloaded: "The AI provider is overloaded right now. Try again in a few minutes.",
-  provider_refusal: "The AI provider declined to analyze this input. Nothing was saved.",
-  provider_request_rejected: "The AI provider rejected the audit request. The integration needs adjustment.",
-  structured_output_empty: "The AI provider returned no usable audit output.",
-  structured_output_json_invalid: "The AI provider returned an invalid audit format.",
-  structured_output_schema_invalid: "The audit response did not pass Vibe's validation.",
-  output_truncated: "The audit result was cut short. Nothing was saved.",
-  audit_failed: "The business audit could not be completed.",
-};
 
 /** Conservative, and it stops (§20). */
 const POLL_INTERVAL_MS = 3_000;
@@ -141,7 +103,7 @@ export function RunAuditButton({
       {failed && operation?.failureCode && (
         <div className="space-y-2">
           <p className="text-sm text-amber-400">
-            Business audit couldn&apos;t complete. {ERROR_MESSAGES[operation.failureCode]}
+            Business audit couldn&apos;t complete. {OPERATION_FAILURE_MESSAGES[operation.failureCode]}
           </p>
           {/* Only offered where starting again is honest — never after an
               interrupted paid call, where we cannot say whether it was
@@ -157,7 +119,7 @@ export function RunAuditButton({
         </div>
       )}
 
-      {state && !state.ok && <p className="text-sm text-amber-400">{ERROR_MESSAGES[state.error]}</p>}
+      {state && !state.ok && <p className="text-sm text-amber-400">{OPERATION_FAILURE_MESSAGES[state.error]}</p>}
 
       {state?.ok && state.kind === "reused" && (
         <p className="text-sm text-zinc-500">

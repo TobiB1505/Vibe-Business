@@ -9,7 +9,11 @@ import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/s
 import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intelligence/store";
 import { getLatestSuccessfulAudit } from "@/modules/business-audit/store";
 import { getAuditCurrency } from "@/modules/business-audit/service";
-import { getActiveBusinessAuditOperation } from "@/modules/operations/service";
+import {
+  getActiveBusinessAuditOperation,
+  getActiveOpportunityOperation,
+} from "@/modules/operations/service";
+import { getLatestOpportunities, getOpportunityReadiness } from "@/modules/opportunities/service";
 import { buildAuditEvidenceNotice } from "@/modules/business-audit/evidence-notice";
 import { isBrowserProviderConfigured } from "@/modules/authenticated-product-intelligence/browserbase/client";
 import { getDeepScanAccessStatus } from "@/modules/authenticated-product-intelligence/service";
@@ -20,6 +24,7 @@ import {
 import { detectAuthenticatedSurfaces } from "@/modules/authenticated-product-intelligence/surface-detection";
 import { buildDeepScanViewModel } from "@/modules/authenticated-product-intelligence/view";
 import { AuditEvidenceNotice } from "./audit-evidence-notice";
+import { OpportunitiesPanel } from "./opportunities-panel";
 import { BusinessAuditSummary } from "./business-audit-summary";
 import { DeepScanPanel } from "./deep-scan-panel";
 import { BusinessContextForm } from "./business-context-form";
@@ -76,6 +81,9 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
     latestDeepScanSession,
     auditCurrency,
     activeAuditOperation,
+    opportunities,
+    opportunityReadiness,
+    activeOpportunityOperation,
   ] = await Promise.all([
     getLatestSuccessfulSnapshot(supabase, projectId),
     getLatestSuccessfulLiveSnapshot(supabase, projectId),
@@ -88,6 +96,9 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
     // Discovered on the server so returning to this page shows a running
     // audit rather than an inviting button (Sprint 7 §19).
     getActiveBusinessAuditOperation(supabase, projectId),
+    getLatestOpportunities(supabase, projectId),
+    getOpportunityReadiness(supabase, projectId),
+    getActiveOpportunityOperation(supabase, projectId),
   ]);
 
   // Deep Scan state is derived on the server (Sprint 5 §13): entitlement,
@@ -204,6 +215,12 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
               </dd>
             </div>
             <div className="flex items-baseline justify-between gap-3">
+              <dt className="text-zinc-500">Opportunities</dt>
+              <dd className={opportunities ? "text-emerald-400" : "text-zinc-600"}>
+                {opportunities ? `${opportunities.set.opportunities.length} identified` : "Not identified yet"}
+              </dd>
+            </div>
+            <div className="flex items-baseline justify-between gap-3">
               <dt className="text-zinc-500">Business readiness</dt>
               <dd className={latestAudit?.result ? "text-emerald-400" : "text-zinc-600"}>
                 {latestAudit?.result ? "Ready" : "Not analyzed yet"}
@@ -223,7 +240,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
           <BusinessContextForm projectId={project.id} context={businessContext?.context ?? null} />
         </section>
 
-        <section className="space-y-3">
+        {/* `id` is the jump target for a blocked Opportunities section. */}
+        <section id="business-audit" className="space-y-3">
           <AuditEvidenceNotice notice={auditEvidenceNotice} />
 
           {latestAudit?.result ? (
@@ -251,6 +269,14 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
             activeOperation={activeAuditOperation}
           />
         </section>
+
+        <OpportunitiesPanel
+          projectId={project.id}
+          opportunities={opportunities?.set.opportunities ?? []}
+          stale={opportunities?.stale ?? false}
+          activeOperation={activeOpportunityOperation}
+          blockedReason={opportunityReadiness.blockedReason}
+        />
 
         <section className="space-y-2">
           <h2 className="text-sm font-medium text-zinc-200">Production website</h2>

@@ -45,8 +45,32 @@ export const BUSINESS_READINESS_AUDIT_CONFIG: OperationConfig = {
   maxInputTokens: 30_000,
 };
 
+/**
+ * Prioritization (Sprint 8 §19).
+ *
+ * Its own config, deliberately: the audit's settings are a measured baseline
+ * and changing them to suit a second operation would invalidate every audit
+ * comparison made so far.
+ *
+ * Same model and effort as the audit, for the same reason — deciding what a
+ * founder should do next from mixed evidence is judgement, not extraction, and
+ * `high` is the right first setting when quality has yet to be measured.
+ *
+ * The budgets differ. Output is smaller because at most 5 opportunities is a
+ * far smaller object than a five-dimension audit, and input is larger because
+ * this operation sends the audit *and* the evidence pack it came from.
+ */
+export const OPPORTUNITY_GENERATION_CONFIG: OperationConfig = {
+  operation: "opportunity_generation",
+  model: "claude-sonnet-5",
+  effort: "high",
+  maxOutputTokens: 12_000,
+  maxInputTokens: 40_000,
+};
+
 const CONFIGS: Record<AIOperation, OperationConfig> = {
   business_readiness_audit: BUSINESS_READINESS_AUDIT_CONFIG,
+  opportunity_generation: OPPORTUNITY_GENERATION_CONFIG,
 };
 
 export function getOperationConfig(operation: AIOperation): OperationConfig {
