@@ -1,5 +1,6 @@
 import type { AuditRunFailure } from "@/modules/business-audit/runner";
 import type { AuditPrerequisite } from "@/modules/business-audit/service";
+import type { OpportunityRunFailure } from "@/modules/opportunities/runner";
 
 /**
  * Every way a durable operation can end badly (Sprint 7 §21).
@@ -27,9 +28,17 @@ export type OperationExecutionFailure =
    */
   | "inference_interrupted"
   /** The execution provider refused to accept the durable run. */
-  | "execution_start_failed";
+  | "execution_start_failed"
+  /** Prioritization needs a diagnosis to prioritize from (Sprint 8 §34). */
+  | "audit_missing"
+  /** The audit is older than the evidence that exists now (Sprint 8 §34). */
+  | "audit_stale";
 
-export type OperationFailureCode = AuditRunFailure | AuditPrerequisite | OperationExecutionFailure;
+export type OperationFailureCode =
+  | AuditRunFailure
+  | OpportunityRunFailure
+  | AuditPrerequisite
+  | OperationExecutionFailure;
 
 /**
  * Failures where starting the same operation again is a sane thing to offer.
@@ -49,6 +58,10 @@ const RETRYABLE: readonly OperationFailureCode[] = [
   "execution_start_failed",
   "inputs_changed",
   "already_running",
+  // Both are fixed by doing something first, and the UI says what. Offering
+  // the button is honest because the user can act on it.
+  "audit_missing",
+  "audit_stale",
 ];
 
 export function isRetryable(code: OperationFailureCode): boolean {

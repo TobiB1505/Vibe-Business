@@ -82,6 +82,26 @@ export class FakeDatabase {
       if (clash) return { code: POSTGRES_UNIQUE_VIOLATION, message: "one in-flight audit per input" };
     }
 
+    // Unique ranks within an opportunity set (Sprint 8 §29).
+    if (table === "business_opportunities") {
+      const clash = others.some(
+        (row) =>
+          row.opportunity_set_id === candidate.opportunity_set_id && row.rank === candidate.rank,
+      );
+      if (clash) return { code: POSTGRES_UNIQUE_VIOLATION, message: "duplicate rank in set" };
+    }
+
+    // At most one in-flight opportunity set per project + input.
+    if (table === "opportunity_sets" && IN_FLIGHT_AUDIT_STATUSES.includes(String(candidate.status))) {
+      const clash = others.some(
+        (row) =>
+          row.project_id === candidate.project_id &&
+          row.input_hash === candidate.input_hash &&
+          IN_FLIGHT_AUDIT_STATUSES.includes(String(row.status)),
+      );
+      if (clash) return { code: POSTGRES_UNIQUE_VIOLATION, message: "one in-flight set per input" };
+    }
+
     // The ledger's idempotency guarantee: one usage event per job.
     if (table === "ai_usage_events" && candidate.job_id != null) {
       const clash = others.some((row) => row.job_id === candidate.job_id);
@@ -102,7 +122,7 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
     private readonly db: FakeDatabase,
     private readonly table: string,
     private readonly mode: "select" | "insert" | "update",
-    private readonly payload?: Row,
+    private readonly payload?: Row | Row[],
   ) {}
 
   eq(column: string, value: unknown): this {
@@ -160,15 +180,24 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
       const failure = this.failure();
       if (failure) return { data: null, error: failure };
 
-      const row: Row = { id: `${this.table}_${this.db.rows(this.table).length + 1}`, ...this.payload };
-      row.created_at ??= new Date().toISOString();
-      row.updated_at ??= new Date().toISOString();
+      // Supabase accepts a single row or an array; the opportunity store
+      // inserts a whole set at once, so the double has to as well.
+      const payloads = Array.isArray(this.payload) ? this.payload : [this.payload ?? {}];
+      const inserted: Row[] = [];
 
-      const violation = this.db.checkConstraints(this.table, row);
-      if (violation) return { data: null, error: violation };
+      for (const payload of payloads) {
+        const row: Row = { id: `${this.table}_${this.db.rows(this.table).length + 1}`, ...payload };
+        row.created_at ??= new Date().toISOString();
+        row.updated_at ??= new Date().toISOString();
 
-      this.db.rows(this.table).push(row);
-      return { data: row, error: null };
+        const violation = this.db.checkConstraints(this.table, row);
+        if (violation) return { data: null, error: violation };
+
+        this.db.rows(this.table).push(row);
+        inserted.push(row);
+      }
+
+      return { data: Array.isArray(this.payload) ? inserted : inserted[0], error: null };
     }
 
     if (this.mode === "update") {
@@ -217,7 +246,7 @@ export function fakeSupabase(db: FakeDatabase): SupabaseClient {
     from(table: string) {
       return {
         select: () => new FakeQuery(db, table, "select"),
-        insert: (payload: Row) => new FakeQuery(db, table, "insert", payload),
+        insert: (payload: Row | Row[]) => new FakeQuery(db, table, "insert", payload),
         update: (payload: Row) => new FakeQuery(db, table, "update", payload),
       };
     },

@@ -226,6 +226,20 @@ Not all dimensions need to be fully automated in V0.1. The underlying data model
 
 ## 11. Opportunity Model
 
+The durable product model is:
+
+```
+Understand → Diagnose → Prioritize → Execute → Measure
+```
+
+| Stage | What it is | Status |
+|---|---|---|
+| Understand | Repository, public product, Deep Scan, Business Context | Built |
+| Diagnose | Business Readiness Audit | Built |
+| Prioritize | Opportunity Engine | Built |
+| Execute | Vibe makes the change | **Not built** |
+| Measure | Impact of a change | **Not built** |
+
 Vibe Business does not present users with large audit reports. After an analysis, the system surfaces a small number of highly prioritized opportunities. Example:
 
 > **Opportunity 1** — Improve homepage value proposition

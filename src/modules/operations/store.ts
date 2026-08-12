@@ -26,7 +26,8 @@ export type StoredOperationRun = {
   inputIdentity: string;
   workflowRunId: string | null;
   executionProvider: string | null;
-  auditId: string | null;
+  /** The row this operation produced — an audit, an opportunity set, … */
+  resultId: string | null;
   inferenceStartedAt: string | null;
   failureCode: string | null;
   startedAt: string | null;
@@ -45,7 +46,7 @@ type OperationRow = {
   input_identity: string;
   workflow_run_id: string | null;
   execution_provider: string | null;
-  audit_id: string | null;
+  result_id: string | null;
   inference_started_at: string | null;
   failure_code: string | null;
   started_at: string | null;
@@ -55,7 +56,7 @@ type OperationRow = {
 };
 
 const OPERATION_COLUMNS =
-  "id, project_id, user_id, operation_type, status, stage, input_identity, workflow_run_id, execution_provider, audit_id, inference_started_at, failure_code, started_at, completed_at, created_at, updated_at";
+  "id, project_id, user_id, operation_type, status, stage, input_identity, workflow_run_id, execution_provider, result_id, inference_started_at, failure_code, started_at, completed_at, created_at, updated_at";
 
 function mapRow(row: OperationRow): StoredOperationRun {
   return {
@@ -68,7 +69,7 @@ function mapRow(row: OperationRow): StoredOperationRun {
     inputIdentity: row.input_identity,
     workflowRunId: row.workflow_run_id,
     executionProvider: row.execution_provider,
-    auditId: row.audit_id,
+    resultId: row.result_id,
     inferenceStartedAt: row.inference_started_at,
     failureCode: row.failure_code,
     startedAt: row.started_at,
@@ -242,19 +243,19 @@ export async function setOperationStage(
 }
 
 /**
- * Records the audit row this operation claimed, before inference runs.
+ * Records the row this operation claimed, before inference runs.
  *
- * This is the hinge of the paid-call safety story (§11, §12): a step that
- * re-enters and finds `audit_id` already set knows a provider call may already
- * have been made, and refuses to make another.
+ * The hinge of the paid-call safety story (Sprint 7 §11, §12): a step that
+ * re-enters and finds `result_id` already set knows a provider call may
+ * already have been made, and refuses to make another.
  */
-export async function claimAuditForOperation(
+export async function claimResultForOperation(
   supabase: SupabaseClient,
-  params: { operationId: string; auditId: string },
+  params: { operationId: string; resultId: string },
 ): Promise<void> {
   const { error } = await supabase
     .from("operation_runs")
-    .update({ audit_id: params.auditId })
+    .update({ result_id: params.resultId })
     .eq("id", params.operationId);
 
   if (error) throw error;
@@ -289,14 +290,14 @@ export async function markInferenceStarted(
  */
 export async function completeOperationRun(
   supabase: SupabaseClient,
-  params: { operationId: string; auditId: string },
+  params: { operationId: string; resultId: string },
 ): Promise<boolean> {
   const { data, error } = await supabase
     .from("operation_runs")
     .update({
       status: "completed",
       stage: "completed",
-      audit_id: params.auditId,
+      result_id: params.resultId,
       failure_code: null,
       completed_at: new Date().toISOString(),
     })

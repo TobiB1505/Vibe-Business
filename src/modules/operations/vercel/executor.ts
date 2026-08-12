@@ -2,7 +2,9 @@ import "server-only";
 
 import { start } from "workflow/api";
 import { businessAuditWorkflow } from "../business-audit/workflow";
+import { opportunityGenerationWorkflow } from "../opportunities/workflow";
 import type { OperationExecutor, StartOperationInput, StartOperationResult } from "../executor";
+import type { OperationType } from "../schema";
 
 /**
  * Vercel Workflows adapter (Sprint 7 §3, §4 — ADR 0013).
@@ -19,6 +21,18 @@ import type { OperationExecutor, StartOperationInput, StartOperationResult } fro
  * caller has already created an operation row, and leaving it queued with no
  * durable run behind it would block the identity's unique index forever.
  */
+/**
+ * The one place an operation type is mapped to durable work.
+ *
+ * A `Record` over the closed type union rather than a switch: adding an
+ * operation type without a workflow becomes a type error instead of a run that
+ * is accepted and then never happens.
+ */
+const WORKFLOWS: Record<OperationType, (operationId: string) => Promise<void>> = {
+  business_audit: businessAuditWorkflow,
+  opportunity_generation: opportunityGenerationWorkflow,
+};
+
 export class VercelWorkflowExecutor implements OperationExecutor {
   readonly name = "vercel_workflow";
 
@@ -26,7 +40,7 @@ export class VercelWorkflowExecutor implements OperationExecutor {
     try {
       // Only the id crosses the boundary. Everything the run needs is in the
       // database, which is what keeps evidence out of the durable log (§14).
-      const run = await start(businessAuditWorkflow, [input.operationId]);
+      const run = await start(WORKFLOWS[input.operationType], [input.operationId]);
       return { ok: true, runId: run.runId };
     } catch (error) {
       // The provider's message is not shown to a user and not stored; it goes

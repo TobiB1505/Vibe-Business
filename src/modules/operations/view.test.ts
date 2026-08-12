@@ -22,7 +22,7 @@ function view(overrides: Partial<BuildOperationViewInput> = {}, now: Date = NOW)
       status: "running",
       stage: "running_ai",
       failureCode: null,
-      auditId: null,
+      resultId: null,
       startedAt: "2026-08-12T11:59:30.000Z",
       completedAt: null,
       createdAt: "2026-08-12T11:59:29.000Z",
@@ -98,7 +98,7 @@ describe("retry offers", () => {
 
 describe("the DTO surface", () => {
   it("exposes the result once there is one", () => {
-    const done = view({ status: "completed", auditId: "audit_1", completedAt: "x", stage: "completed" });
+    const done = view({ status: "completed", resultId: "audit_1", completedAt: "x", stage: "completed" });
 
     expect(done.resultId).toBe("audit_1");
   });

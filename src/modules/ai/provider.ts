@@ -28,7 +28,7 @@
  */
 
 /** Operation identifiers, used for usage accounting and configuration lookup. */
-export type AIOperation = "business_readiness_audit";
+export type AIOperation = "business_readiness_audit" | "opportunity_generation";
 
 /** Effort levels supported by the configured model family. */
 export type AIEffort = "low" | "medium" | "high";

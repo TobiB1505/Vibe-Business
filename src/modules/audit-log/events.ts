@@ -40,7 +40,10 @@ export type AuditEventType =
   // operation records execution, the audit records inference.
   | "operation.started"
   | "operation.completed"
-  | "operation.failed";
+  | "operation.failed"
+  | "opportunities.completed"
+  | "opportunities.failed"
+  | "opportunities.reused";
 
 export type RecordAuditEventParams = {
   userId: string;

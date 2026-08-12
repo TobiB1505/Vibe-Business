@@ -300,7 +300,7 @@ describe("reading operation state", () => {
     const operation = db.rows("operation_runs")[0];
     operation.status = "completed";
     operation.stage = "completed";
-    operation.audit_id = "audit_1";
+    operation.result_id = "audit_1";
     operation.completed_at = "2026-08-02T00:00:00.000Z";
 
     expect(await getActiveBusinessAuditOperation(fakeSupabase(db), PROJECT)).toBeNull();
@@ -311,7 +311,7 @@ describe("reading operation state", () => {
     const operation = db.rows("operation_runs")[0];
     operation.status = "completed";
     operation.stage = "completed";
-    operation.audit_id = "audit_7";
+    operation.result_id = "audit_7";
     operation.completed_at = "2026-08-02T00:00:00.000Z";
 
     const status = await getOperationStatus(fakeSupabase(db), {

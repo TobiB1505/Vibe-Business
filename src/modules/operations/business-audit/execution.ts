@@ -28,7 +28,7 @@ import { getBusinessContext } from "@/modules/projects/business-context-store";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import type { OperationFailureCode } from "../failures";
 import {
-  claimAuditForOperation,
+  claimResultForOperation,
   completeOperationRun,
   failOperationRun,
   getOperationRunById,
@@ -204,7 +204,7 @@ export async function prepareEvidenceStep(
   const { operation } = loaded;
 
   // A replay after the claim already happened: reuse it, never claim twice.
-  if (operation.auditId) return { ok: true, auditId: operation.auditId };
+  if (operation.resultId) return { ok: true, auditId: operation.resultId };
 
   await setOperationStage(deps.supabase, { operationId, stage: "preparing", markRunning: true });
 
@@ -231,7 +231,7 @@ export async function prepareEvidenceStep(
     return { ok: false, failureCode: run.error === "already_running" ? "already_running" : "audit_failed" };
   }
 
-  await claimAuditForOperation(deps.supabase, { operationId, auditId: run.auditId });
+  await claimResultForOperation(deps.supabase, { operationId, resultId: run.auditId });
 
   await recordAuditEvent(deps.supabase, {
     userId: operation.userId,
@@ -313,9 +313,9 @@ export async function runInferenceStep(
   if (!loaded.ok) return loaded;
   const { operation } = loaded;
 
-  if (!operation.auditId) return { ok: false, failureCode: "audit_failed" };
+  if (!operation.resultId) return { ok: false, failureCode: "audit_failed" };
 
-  const existing = await getAuditById(deps.supabase, operation.auditId);
+  const existing = await getAuditById(deps.supabase, operation.resultId);
 
   // Already finished: a replay of a step that completed. Report the same
   // result rather than producing a second one.
@@ -354,7 +354,7 @@ export async function runInferenceStep(
     operation: config.operation,
     provider: deps.provider.name,
     model: config.model,
-    jobId: operation.auditId,
+    jobId: operation.resultId,
     status: outcome.ok ? "succeeded" : "failed",
     usage: outcome.usage,
     estimatedInputTokens: outcome.estimatedInputTokens ?? estimatedInputTokens,
@@ -363,13 +363,13 @@ export async function runInferenceStep(
   });
 
   if (!outcome.ok) {
-    await failAuditRun(deps.supabase, operation.auditId, outcome.error);
+    await failAuditRun(deps.supabase, operation.resultId, outcome.error);
     await recordAuditEvent(deps.supabase, {
       userId: operation.userId,
       eventType: "business_audit.failed",
       metadata: {
         projectId: operation.projectId,
-        auditId: operation.auditId,
+        auditId: operation.resultId,
         operationId,
         reason: outcome.error,
         ...(outcome.diagnostic ? { diagnostic: outcome.diagnostic } : {}),
@@ -380,14 +380,14 @@ export async function runInferenceStep(
 
   await setOperationStage(deps.supabase, { operationId, stage: "validating" });
   await setOperationStage(deps.supabase, { operationId, stage: "persisting" });
-  await completeAuditRun(deps.supabase, operation.auditId, outcome.audit);
+  await completeAuditRun(deps.supabase, operation.resultId, outcome.audit);
 
   await recordAuditEvent(deps.supabase, {
     userId: operation.userId,
     eventType: "business_audit.completed",
     metadata: {
       projectId: operation.projectId,
-      auditId: operation.auditId,
+      auditId: operation.resultId,
       operationId,
       model: config.model,
       promptVersion: PROMPT_VERSION,
@@ -396,7 +396,7 @@ export async function runInferenceStep(
     },
   });
 
-  return { ok: true, auditId: operation.auditId };
+  return { ok: true, auditId: operation.resultId };
 }
 
 /**
@@ -410,7 +410,7 @@ export async function completeOperationStep(
   operationId: string,
   auditId: string,
 ): Promise<void> {
-  const transitioned = await completeOperationRun(deps.supabase, { operationId, auditId });
+  const transitioned = await completeOperationRun(deps.supabase, { operationId, resultId: auditId });
   if (!transitioned) return;
 
   const operation = await getOperationRunById(deps.supabase, operationId);
