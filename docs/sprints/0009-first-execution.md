@@ -1,13 +1,14 @@
 # Sprint 9 — First Execution
 
-Status: **9A complete · 9B complete · 9C built, blocked on a manual GitHub action.** The product flow exists end to end in code, but the GitHub App still holds `Contents: read`, so no preparation can run and **no repository write has ever been performed**. Sprint 9 is not complete until the dogfood runs.
+Status: **Complete.** Vibe has written code to a real repository — one branch, one commit, two files, verified by read-back. The default branch was never touched.
 Branch: `feat/first-execution`
 
 | Phase | Scope | Status |
 | --- | --- | --- |
 | **9A** | Safety core: capability resolution, preflight, premise revalidation, path allowlist, deterministic generator, atomic writer | Complete |
 | **9B** | Backend wiring: `prepared_changes`, execution identity, `change_preparation` operation, durable workflow, application service | Complete |
-| **9C** | Product flow: capability-aware UI, confirmation, durable status, blocked-state UX, bounded diff review | Built — dogfood blocked on the owner enabling `Contents: write` |
+| **9C** | Product flow: capability-aware UI, confirmation, durable status, blocked-state UX, bounded diff review | Complete |
+| **Dogfood** | One real preparation against `TobiB1505/Vibe-Business` | Complete — see below |
 
 ## Goal
 
@@ -203,30 +204,64 @@ The branch and paths come from the stored prepared change, so a caller cannot re
 
 The first attempt at the diff mutation was written badly — it kept the same filter through a fallback, so it proved nothing. Rewritten to actually drop the `project_id` predicate, it fails as it should. A mutation that does not mutate is worse than no mutation, because it reports confidence it has not earned.
 
-## What is NOT implemented
+## The dogfood — 2026-08-12
 
-- **No GitHub permission upgrade has been performed.** The App registration still requests `Contents: read`, so every preparation blocks at the permission gate. This is a one-time owner action — see Manual action below.
-- **No dogfood.** No branch, no commit, nothing written to any repository by anything.
-- **No preview, merge or deploy**, by design.
+One preparation, run from the deployed product against this repository.
 
-## Manual action required
+| | |
+| --- | --- |
+| Branch | `vibe/seo-foundations-cc32273131c5` — the only `vibe/` branch in the repository |
+| Commit | `2f05958e3410deaeb97029861abc05889139b4a7`, author `vibe-business[bot]` |
+| Parent | `528d372b81cf28786edcba7d6384f9f74e55ba33` — the analyzed base |
+| Files | `src/app/robots.ts` (+20), `src/app/sitemap.ts` (+32), both `added`, zero deletions |
+| Capability | `nextjs_seo_foundations_v1` / `nextjs-seo-foundations-v1` |
+| Duration | 9.0s write, 15.9s operation total |
+| AI calls | **0** |
+| Cost | **$0** |
+| Default branch | `main` still at `528d372` — never written to |
 
-The GitHub App registration must be changed by its owner:
+Verified independently of the product's own report: both files were downloaded from
+GitHub and hashed, and both matched the `contentHash` values recorded in
+`prepared_changes` byte for byte. That is what makes `repository_write_verified`
+a claim rather than an assertion.
 
-**Settings → Developer settings → GitHub Apps → Vibe Business → Permissions & events → Repository permissions → Contents: Read-only → Read and write.**
+### What the dogfood cost before it worked
 
-Why: creating blobs, trees, commits and refs all require `Contents: write`. It is the minimum for this capability.
+Three preparations failed first, all at `missing_required_context`, all before any
+write. The cause was a plain bug: the workflow's `resolveTarget` queried a table
+named `project_repositories`, which does not exist. No test could catch it, because
+every workflow test injects `resolveTarget` as a fake — the seam that makes the
+workflow testable is exactly the seam the bug lived in. Fixed in #23 by reusing
+`getProjectWithRepository`, the same function the rest of the application uses.
 
-Deliberately **not** requested: Pull Requests, Administration, Actions, Issues, Secrets.
+The second half of #23 was a UI defect the same run exposed: a failed preparation
+re-offered the start button, because the project page passed `failedOperation: null`
+instead of querying for one.
 
-GitHub then notifies each installation's owner, who must approve the updated permission from the installation settings page. Until approval, the app keeps its current permissions — so the product reads the granted permission from the installation token and refuses rather than assuming. A query parameter claiming approval is never trusted.
+Merging #23 then moved `main` past the analyzed snapshot, so the next attempt
+blocked on `repository_changed` — correctly, and at our own expense. Clearing it
+required a repository refresh (free) plus a re-audit and regenerated opportunities
+(~$0.12). Worth recording plainly: **staleness blocking costs real money on a
+repository that moves as fast as its own analyzer.** For a customer product that
+changes weekly this is invisible; for this repository it is not.
+
+### What the regenerated opportunity proved
+
+The SEO opportunity survived regeneration with different wording — "Add missing
+technical SEO foundations", where the earlier set said "Fix missing…" — and still
+resolved to the same capability. Capability resolution reads evidence and
+structure, never prose, so a reworded model output routed identically. That is
+the property `capabilities.ts` exists to guarantee, tested in the unit suite and
+now observed on genuinely regenerated production data.
 
 ## Known limitations
 
-- The GitHub App still holds `Contents: read`. Even with the wiring in place, a permission upgrade would be required before any write — see Manual action in the report.
-- No repository execution of any kind: no clone, no install, no build, no tests. Vibe has no sandbox, so a prepared change can honestly be called `repository_write_verified` but never `application_validated`.
-- Creating a branch may trigger repository-configured CI or preview automation. Vibe neither triggers nor manages those.
+- No repository execution of any kind: no clone, no install, no build, no tests. Vibe has no sandbox, so a prepared change can honestly be called `repository_write_verified` but never `application_validated`. **The dogfood does not show the generated code is correct — only that the write was safe, deterministic and verified.**
+- The generated sitemap lists `/login` while the generated robots file disallows only `/app/` and `/api/`. Defensible but not obviously right, and the two files are mildly inconsistent with each other. Nothing in the pipeline judges output quality; that is what human review before merge is for.
+- Creating a branch may trigger repository-configured CI or preview automation. Vibe neither triggers nor manages those. The confirmation dialog says so.
 
 ## Next step
 
-Complete the wiring in the order the safety story implies: persistence → durable operation → service with live probes → UI → permission upgrade → dogfood. The domain core does not change; it is the part that is already proven.
+Not decided. The obvious candidates — preview, merge, deploy — each require an
+approval architecture that does not exist, and none should be built on the
+strength of one successful preparation.
