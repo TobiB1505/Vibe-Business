@@ -144,7 +144,7 @@ Reaching a budget is **never an error**. The snapshot's completeness becomes `pa
 
 ## Snapshot schema
 
-`schemaVersion: "repository_intelligence.v1"`, `analyzerVersion: "repo-intelligence-v1"` — the analyzer version is explicit and deliberately independent of the app/package version, so detection-rule changes can invalidate reuse without a release bump.
+`schemaVersion: "repository_intelligence.v1"`, `analyzerVersion: "repo-intelligence-v2"` — the analyzer version is explicit and deliberately independent of the app/package version, so detection-rule changes can invalidate reuse without a release bump.
 
 Shape (see `src/modules/repository-intelligence/schema.ts` for the authoritative types):
 
@@ -220,6 +220,14 @@ The harness found two real detector bugs, both fixed with regression tests:
 
 1. **Monorepo false positive.** A lone `pnpm-workspace.yaml` was treated as a monorepo. In this repository that file exists only to carry pnpm settings (`allowBuilds`), with no `packages:` list — a common pattern in single-package repos. Monorepo detection now requires corroborating structure (an `apps/`/`packages/` layout, or more than one `package.json`). This also removed a spurious `partial` completeness verdict.
 2. **Supabase Auth false negative.** Authentication was reported as not detected despite being core to this app, because the auth rule only knew the `auth-helpers` packages. `@supabase/ssr` — whose entire purpose is cookie-based Supabase Auth sessions — is now recognised as auth evidence.
+
+A third detector bug surfaced later, during the [Sprint 8](0008-opportunity-engine.md#what-did-not) production dogfood:
+
+3. **robots.txt / sitemap false positive.** Both surfaces matched *any* file named `robots.*` or `sitemap.*` anywhere in the tree, so this repository's own robots.txt and sitemap **parsers** (`src/modules/live-product-intelligence/`) were reported as the product serving `/robots.txt` and `/sitemap.xml` — directly contradicting the live crawl, which correctly reported both missing. A downstream opportunity was generated whose stated problem was false. All three file-backed surfaces now match only locations a framework actually serves from: a static directory (`public/`, `static/`), the repository root, or the Next.js App Router file conventions, each optionally under a monorepo workspace.
+
+`seo_metadata` shared the flaw and was corrected with it — `icon.tsx` is among the most common component names in a React codebase, and `manifest.json` names a browser extension at least as often as a web app manifest. Metadata images now count only inside the router (`app/blog/opengraph-image.png`, at any routable depth, since these apply per route segment), excluding `_private` directories that Next.js does not route at all; a bare repository-root `manifest.json` no longer counts, while the unambiguous `site.webmanifest` still does.
+
+`ANALYZER_VERSION` moved to `repo-intelligence-v2` so stored snapshots carrying the old rules are not reused.
 
 Known true negatives (correct, not bugs): Vercel is not detected because this repository has no `vercel.json` (deployment runs through the Git integration), and payments/analytics/SEO surfaces are genuinely absent.
 

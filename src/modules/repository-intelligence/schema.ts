@@ -23,7 +23,7 @@ export const REPOSITORY_INTELLIGENCE_SCHEMA_VERSION = "repository_intelligence.v
  * always says which analyzer produced it and reuse can be invalidated.
  * Deliberately independent of the app/package version (Sprint 2 §30).
  */
-export const ANALYZER_VERSION = "repo-intelligence-v1" as const;
+export const ANALYZER_VERSION = "repo-intelligence-v2" as const;
 
 /** Deliberately coarse — see Sprint 2 §18, no fake precision. */
 export type Confidence = "high" | "medium" | "low";

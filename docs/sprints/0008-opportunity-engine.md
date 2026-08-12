@@ -142,7 +142,7 @@ The cause is upstream. The repository analyzer reports `robots: detected: true` 
 
 The Opportunity Engine behaved correctly: it cited real ids and its conclusion follows validly from the evidence it was handed. The evidence was wrong, and nothing downstream can detect that. This is the "audit is evidence, not authority" principle applying one level deeper than the sprint wrote it — deterministic analyzers can be wrong too.
 
-Recorded as a separate repository-analyzer fix. It is not a prompt or rubric problem, and per §43 nothing was tuned from one sample.
+Recorded as a separate repository-analyzer fix. It is not a prompt or rubric problem, and per §43 nothing was tuned from one sample. Fixed in the Sprint 2 detector — see [Sprint 2 detector validation](0002-repository-intelligence.md#detector-validation-against-this-repository-local-harness).
 
 ### Quality classification: B
 

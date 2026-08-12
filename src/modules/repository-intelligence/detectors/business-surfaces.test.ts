@@ -59,8 +59,109 @@ describe("detectBusinessSurfaces", () => {
     expect(isDetected(files, "sitemap")).toBe(true);
   });
 
+  it.each([
+    "app/robots.ts",
+    "src/app/robots.js",
+    "app/(marketing)/robots.ts",
+    "public/robots.txt",
+    "static/robots.txt",
+    "robots.txt",
+    "apps/web/public/robots.txt",
+    "packages/site/app/robots.ts",
+  ])("detects robots served from %s", (path) => {
+    expect(isDetected([{ path }], "robots")).toBe(true);
+  });
+
+  it.each([
+    "app/sitemap.ts",
+    "src/app/sitemap.tsx",
+    "app/(marketing)/sitemap.ts",
+    "public/sitemap.xml",
+    "static/sitemap.xml",
+    "sitemap.xml",
+    "apps/web/public/sitemap.xml",
+  ])("detects a sitemap served from %s", (path) => {
+    expect(isDetected([{ path }], "sitemap")).toBe(true);
+  });
+
+  // Regression (Sprint 8 dogfood): this repository's own robots.txt/sitemap.xml
+  // *parsers* live in a library directory. They are code that reads other
+  // sites' files, not files this product serves — so claiming the surfaces
+  // contradicted the live crawl, which correctly reported both as missing.
+  it.each([
+    "src/modules/live-product-intelligence/robots.ts",
+    "src/lib/robots.ts",
+    "src/utils/robots.txt",
+    "docs/robots.txt",
+    "tests/fixtures/robots.txt",
+    "app/api/robots/route.ts",
+    "src/app/components/robots.tsx",
+  ])("does not claim robots for a same-named file at %s", (path) => {
+    expect(isDetected([{ path }], "robots")).toBe(false);
+  });
+
+  it.each([
+    "src/modules/live-product-intelligence/sitemap.ts",
+    "src/lib/sitemap.ts",
+    "src/modules/live-product-intelligence/sitemap.test.ts",
+    "docs/sitemap.xml",
+    "tests/fixtures/sitemap.xml",
+    "src/app/lib/sitemap.ts",
+  ])("does not claim a sitemap for a same-named file at %s", (path) => {
+    expect(isDetected([{ path }], "sitemap")).toBe(false);
+  });
+
+  it("reports both surfaces as absent for a repository that only parses them", () => {
+    const surfaces = surfacesFor([
+      { path: "package.json", content: packageJson({ dependencies: { next: "15" } }) },
+      { path: "src/app/page.tsx" },
+      { path: "src/modules/live-product-intelligence/robots.ts" },
+      { path: "src/modules/live-product-intelligence/sitemap.ts" },
+    ]);
+
+    expect(surfaces.find((surface) => surface.id === "robots")?.detected).toBe(false);
+    expect(surfaces.find((surface) => surface.id === "sitemap")?.detected).toBe(false);
+  });
+
   it("detects SEO metadata infrastructure from conventional assets", () => {
     expect(isDetected([{ path: "src/app/opengraph-image.png" }], "seo_metadata")).toBe(true);
+  });
+
+  it.each([
+    "app/opengraph-image.tsx",
+    "src/app/twitter-image.png",
+    "app/blog/opengraph-image.jpg",
+    "app/(marketing)/apple-icon.png",
+    "src/app/icon.svg",
+    "app/icon1.png",
+    "app/manifest.ts",
+    "public/manifest.json",
+    "public/site.webmanifest",
+    "static/manifest.json",
+    "site.webmanifest",
+    "apps/web/app/opengraph-image.png",
+  ])("detects SEO metadata from %s", (path) => {
+    expect(isDetected([{ path }], "seo_metadata")).toBe(true);
+  });
+
+  // Same class of false positive as robots/sitemap: `icon.tsx` is one of
+  // the most common component names there is, and `manifest.json` names a
+  // browser extension at least as often as a web app manifest.
+  it.each([
+    "src/components/icon.tsx",
+    "src/components/ui/icon.tsx",
+    "src/lib/icons/apple-icon.tsx",
+    // Inside the router but in a `_private` directory, which Next.js opts
+    // out of routing entirely — so nothing there is ever served.
+    "app/_components/icon.tsx",
+    "src/app/_lib/opengraph-image.png",
+    "tests/fixtures/opengraph-image.png",
+    "docs/twitter-image.png",
+    "manifest.json",
+    "src/manifest.json",
+    "extension/manifest.json",
+  ])("does not claim SEO metadata for a same-named file at %s", (path) => {
+    expect(isDetected([{ path }], "seo_metadata")).toBe(false);
   });
 
   it("reports not-detected rather than omitting absent surfaces", () => {
