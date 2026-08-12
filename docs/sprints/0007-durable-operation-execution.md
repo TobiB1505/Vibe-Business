@@ -191,7 +191,9 @@ The point of the sprint is the shape of those timings: the operation row was cla
 
 Every duplication guarantee held on real data: one operation, one audit, one usage event, one of each lifecycle event, `inference_started_at` set, and the operation pointing at the audit it produced. Across the whole ledger, 13 audits and 13 usage events — still exactly 1:1.
 
-Not verified from the database, and worth confirming by hand next time: the client-side experience of navigating away mid-run and returning.
+The user-visible half matches: the response was immediate — the button returned and the running state rendered without the wait the old path forced. That is the behaviour the 2.66s queue latency predicts, observed rather than inferred.
+
+Still unconfirmed by hand: navigating away mid-run and returning to find the operation still running. The server-side discovery it relies on is covered by tests, and the operation row it reads was present throughout this run, but nobody has actually done it in a browser yet.
 
 ### Score context
 
