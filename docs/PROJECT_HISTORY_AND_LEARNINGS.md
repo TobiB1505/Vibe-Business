@@ -976,6 +976,89 @@ Eine Opportunity soll enthalten:
 - Execution Type
 - Execution Readiness
 
+### Status: implementiert (Sprint 8)
+
+Der obige Abschnitt beschreibt die Planung. Die Opportunity Engine wurde
+anschließend gebaut und gemerged.
+
+Das Ergebnis des ersten realen Dogfood-Laufs:
+
+| Messwert | Wert |
+|---|---|
+| Opportunities | 3 |
+| Input tokens | 10,309 |
+| Output tokens | 3,092 |
+| Thinking tokens | 2,010 |
+| Latency | 33.9 s |
+| Provider cost | $0.0515 |
+
+Die wichtigste Beobachtung war nicht der Score, sondern die Reihenfolge.
+
+Monetization war mit 10/100 die schwächste Dimension — wurde aber **nicht**
+Rang 1. Die Engine setzte "Clarify what the product is and who it's for" davor,
+mit expliziter Dependency, und begründete das selbst damit, dass eine
+Pricing-Entscheidung gegen unklare Positionierung doppelte Arbeit wäre.
+
+Damit wurde in der Realität bestätigt:
+
+> **Sequencing beats severity.**
+
+Der niedrigste Score ist nicht automatisch die höchste Priorität.
+
+#### Das wichtigste Learning aus diesem Sprint
+
+Eine der drei Opportunities war sachlich falsch. Sie behauptete, robots.txt und
+sitemap seien im Repository vorhanden und würden nur nicht ausgeliefert.
+
+Die Ursache lag **nicht** in der Opportunity Engine.
+
+Der Repository-Analyzer meldete `robots: detected: true` — und zitierte dabei
+`src/modules/live-product-intelligence/robots.ts`, also den robots.txt-**Parser**
+des eigenen Crawlers. Für ein Produkt, das robots.txt analysiert, war der
+Detector zu unspezifisch.
+
+Die Engine hatte korrekt gearbeitet: sie zitierte echte Evidence IDs und ihre
+Schlussfolgerung folgte gültig daraus. Die Evidence war falsch.
+
+Nach dem Fix des Analyzers (`repo-intelligence-v2`) und einem erneuten
+Durchlauf korrigierte sich die Aussage **ohne jede Änderung an Prompt, Rubric
+oder Engine**:
+
+```
+vorher:  "the repository itself contains robots.txt and sitemap files —
+          they simply aren't being served"        ← falsch
+
+nachher: "The repository confirms none of these are implemented in code
+          either."                                ← korrekt
+```
+
+Daraus folgt ein dauerhaftes Learning:
+
+> **Opportunity quality is bounded by evidence quality.**
+
+Das gilt in beide Richtungen. Ein falsches Signal erzeugt selbstbewusste
+Falschaussagen — und nichts weiter unten in der Kette kann das erkennen, weil
+die zitierte Evidence ID real existiert. Wird das Signal korrigiert, repariert
+sich die Aussage von selbst.
+
+Das erweitert **Evidence before AI** (§16) um eine Ebene: auch deterministische
+Analyzer können falsch liegen, nicht nur das Modell.
+
+#### Prioritization ist stabiler als Scoring
+
+Über zwei unabhängige Läufe auf unterschiedlicher Evidence blieben Rang 1 und 2
+nahezu identisch — gleiche Reihenfolge, gleiche Dependency, gleiche Execution
+Readiness. Im selben Zeitraum bewegte sich der Audit-Score:
+
+```
+38 → 40 → 41 → 38
+```
+
+Die Prioritisierungsebene war also reproduzierbarer als die Diagnose darunter.
+
+Learning: Rubric-Tuning aus einem einzelnen Lauf ist besonders dann gefährlich,
+wenn die Ebene darunter mehr rauscht als die Ebene darüber.
+
 ---
 
 ## 30. Der spätere Kernmoment
@@ -1361,14 +1444,14 @@ Vercel deployment             ✅
 **Prioritize**
 
 ```
-Opportunity Engine            NEXT
+Opportunity Engine            ✅
 ```
 
 **Execute**
 
 ```
-Branch creation               planned
-Code changes                  planned
+Branch creation               NEXT
+Code changes                  NEXT
 Tests                         planned
 Preview                       planned
 Approval                      planned
@@ -1388,15 +1471,15 @@ Revenue/CAC                   planned
 
 ## 38. Der nächste große Übergang
 
-Bis jetzt haben wir hauptsächlich gebaut:
+Bis jetzt haben wir gebaut:
 
 > Vibe understands your product and business.
 
-Der nächste Abschnitt ist:
+und inzwischen auch:
 
 > Vibe decides what should happen next.
 
-Danach:
+Der nächste Abschnitt ist:
 
 > Vibe does it.
 
