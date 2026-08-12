@@ -1,6 +1,6 @@
 # Sprint 4 — Business Readiness Audit
 
-Status: Implemented. Migration deployed via the linked Supabase CLI workflow. **The real dogfood audit is blocked on `ANTHROPIC_API_KEY` being configured — see [Real audit](#real-vibe-business-audit).**
+Status: Complete. Migration deployed via the linked Supabase CLI workflow. The real dogfood audit ran on 2026-08-11 and scored 34/100 — see [Real audit](#real-vibe-business-audit).
 Branch: `feat/sprint-4-business-readiness-audit`
 
 ## Goal
@@ -153,26 +153,40 @@ The first `db:status` attempt returned a transient Cloudflare 502 from `api.supa
 
 ## Real Vibe Business audit
 
-**Not yet run — blocked on manual configuration.** `ANTHROPIC_API_KEY` is not set in `.env.local`, and per §41 it is expected manual setup. No provider billing, token count, latency, or audit content is reported, because fabricating any of it would defeat the purpose of the measurement.
+**Run on 2026-08-11**, once the key was configured. Result: **34 / 100**, five of five dimensions assessed, structured output valid, no evidence id discarded.
 
-Everything up to the paid boundary is verified against the real pipeline with an injected provider: evidence-pack construction from real snapshot shapes, request shaping (adaptive thinking, effort, JSON schema, no tools), token-count gating, validation, scoring, persistence and usage accounting.
+| | |
+| --- | --- |
+| Estimated input tokens | 5,233 |
+| Actual input tokens | 5,233 |
+| Output tokens | 5,218 |
+| Thinking tokens | 2,637 |
+| Provider cost | $0.0626 (`claude-sonnet-5-introductory-2026`) |
+| Latency | 53.8s |
 
-To unblock, add the key to `.env.local` (never committed):
+Estimated input equalled actual exactly, so the pre-spend counting gate measures the request that is actually billed rather than approximating it.
 
-```
-ANTHROPIC_API_KEY=sk-ant-...
-```
+The audit correctly refused to guess: monetization scored 8 on *converging* evidence of absence (founder states no model, no pricing surface, no checkout, no payment integration), while retention stayed `partial` with low confidence because the authenticated app area was visible in the repository but unreachable by a public crawl. That gap is precisely what Sprint 5's Deep Scan and [Sprint 6](0006-deep-scan-audit-evidence.md) went on to close — the follow-up audit with authenticated evidence scored 40/100 and resolved retention's stated unknown by observation.
 
-Then run one audit from the project page for a project that already has repository intelligence, live product intelligence, and business context. Record: estimated vs actual input tokens, output tokens, thinking tokens, latency, provider cost, structured-output validity, evidence correctness, unknown handling, and score plausibility.
+### What the usage ledger shows
+
+Eleven usage events exist for this project, and the split is the point:
+
+- **2 succeeded** — real token counts and real cost, above.
+- **9 failed** — 5 `token_count_failed`, 2 `structured_output_invalid`, 2 `provider_request_rejected` — every one with `input_tokens`, `output_tokens` and `provider_cost_usd` all `null`.
+
+That is the §25/§27 invariant holding on real data: an attempt is always recorded, but only genuinely billed tokens are ever written as usage. A failed audit costs the ledger a row, not a number.
+
+Everything up to the paid boundary had already been verified against the real pipeline with an injected provider — evidence-pack construction, request shaping (adaptive thinking, effort, JSON schema, no tools), token-count gating, validation, scoring, persistence and usage accounting — and the live run contradicted none of it.
 
 ## Known limitations
 
-- **Unmeasured audit quality.** No real audit has run, so prompt/rubric quality is unvalidated. The first run is a measurement, not a formality.
+- **Audit quality is measured by two runs, not validated.** The 34/100 run and the [Sprint 6](0006-deep-scan-audit-evidence.md) 40/100 re-run are two data points. They showed the scoring and evidence discipline behaving as designed, and also showed dimensions moving several points on *identical* evidence — so treat small score differences as run-to-run variance rather than signal.
 - **Single call.** If one call proves insufficient, that is a product finding — not a reason to add loops before measuring.
 - **Coverage threshold is a judgement call.** 3-of-5 is defensible, not derived from data.
 - **Equal dimension weighting** encodes no product opinion yet, deliberately.
 - **Synchronous execution.** An audit runs inside the request. Sonnet 5 at `high` effort on a small structured task should be well inside typical limits, but this shares the Vercel `maxDuration` question already open from Sprint 3.
-- **Estimate drift is recorded but unanalysed.** `estimated_input_tokens` sits beside the actual count; nothing consumes it yet.
+- **Estimate drift is recorded but unanalysed.** `estimated_input_tokens` sits beside the actual count; nothing consumes it yet. On both real runs the two were identical.
 - **No usage UI.** The ledger is intentionally unreadable through the app; analysis is via direct database access.
 
 ## Non-goals (explicitly not implemented)
