@@ -1,6 +1,6 @@
 import type { RepositoryIntelligenceSnapshot } from "@/modules/repository-intelligence/schema";
 import type { BusinessOpportunity } from "@/modules/opportunities/schema";
-import type { ExecutionCapability } from "./schema";
+import { CURRENT_SEO_FOUNDATIONS_CAPABILITY, type ExecutionCapability } from "./schema";
 
 /**
  * Deterministic capability resolution (Sprint 9 §7, §33).
@@ -97,5 +97,7 @@ export function resolveExecutionCapability(
     return { supported: false, reason: "no_matching_capability" };
   }
 
-  return { supported: true, capability: "nextjs_seo_foundations_v1" };
+  // Always the current capability. v1 is still declared for the historical
+  // PreparedChange rows that were written by it, but it is never resolved.
+  return { supported: true, capability: CURRENT_SEO_FOUNDATIONS_CAPABILITY };
 }

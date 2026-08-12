@@ -19,7 +19,7 @@ import { buildOperationView, type OperationView } from "@/modules/operations/vie
 import { resolveAppRoot } from "./app-root";
 import { resolveExecutionCapability } from "./capabilities";
 import { branchNameFor, computeExecutionIdentity } from "./identity";
-import { NEXTJS_SEO_FOUNDATIONS_VERSION, type ExecutionCapability } from "./schema";
+import { capabilityVersionFor, type ExecutionCapability } from "./schema";
 import { findReusablePreparedChange, getPreparedChange, type StoredPreparedChange } from "./store";
 
 /**
@@ -133,7 +133,7 @@ async function resolveContext(
         opportunitySetId: opportunities.set.id,
         opportunityId: opportunity.id,
         capability: capability.capability,
-        capabilityVersion: NEXTJS_SEO_FOUNDATIONS_VERSION,
+        capabilityVersion: capabilityVersionFor(capability.capability),
         repositorySnapshotId: snapshot.id,
         baseSha,
       }),
@@ -364,7 +364,7 @@ export async function getOpportunityExecutionSummaries(
       opportunitySetId: opportunities.set.id,
       opportunityId: opportunity.id,
       capability: capability.capability,
-      capabilityVersion: NEXTJS_SEO_FOUNDATIONS_VERSION,
+      capabilityVersion: capabilityVersionFor(capability.capability),
       repositorySnapshotId: snapshot.id,
       baseSha: snapshot.result.source.commitSha,
     });

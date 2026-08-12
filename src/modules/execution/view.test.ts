@@ -37,7 +37,7 @@ function operation(overrides: Partial<OperationView> = {}): OperationView {
 function state(overrides: Partial<OpportunityActionInput> = {}) {
   return buildOpportunityActionState({
     opportunity: fakeSeoOpportunity(),
-    capability: "nextjs_seo_foundations_v1",
+    capability: "nextjs_seo_foundations_v2",
     preparedChangeId: null,
     activeOperation: null,
     failedOperation: null,
@@ -48,7 +48,7 @@ function state(overrides: Partial<OpportunityActionInput> = {}) {
 
 describe("execution button states (§23)", () => {
   it("offers preparation for a supported opportunity", () => {
-    expect(state()).toEqual({ kind: "preparable", capability: "nextjs_seo_foundations_v1" });
+    expect(state()).toEqual({ kind: "preparable", capability: "nextjs_seo_foundations_v2" });
   });
 
   it("offers nothing executable when Vibe has no executor, however ready the model says it is", () => {

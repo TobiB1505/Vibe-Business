@@ -23,10 +23,10 @@ const TARGET: WriteTarget = {
   baseBranch: "main",
   baseSha: "base-sha",
   branchName: "vibe/seo-foundations-abc123",
-  capability: "nextjs_seo_foundations_v1",
+  capability: "nextjs_seo_foundations_v2",
 };
 
-const FILES = generateSeoFoundations({ origin: "https://acme.com", appRoot: "src/app/" });
+const FILES = generateSeoFoundations({ origin: "https://acme.com", appRoot: "src/app/", routes: [] });
 
 type Call = { op: string; detail?: string };
 

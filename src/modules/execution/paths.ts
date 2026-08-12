@@ -21,6 +21,9 @@ import type { ExecutionCapability } from "./schema";
 /** Exact basenames a capability may create, per capability. */
 const CAPABILITY_BASENAMES: Record<ExecutionCapability, readonly string[]> = {
   nextjs_seo_foundations_v1: ["robots.ts", "sitemap.ts"],
+  // v2 refined *what the sitemap lists*, not which files exist. The capability
+  // scope is unchanged: two files, same names, same places.
+  nextjs_seo_foundations_v2: ["robots.ts", "sitemap.ts"],
 };
 
 /**

@@ -9,6 +9,10 @@ Branch: `feat/first-execution`
 | **9B** | Backend wiring: `prepared_changes`, execution identity, `change_preparation` operation, durable workflow, application service | Complete |
 | **9C** | Product flow: capability-aware UI, confirmation, durable status, blocked-state UX, bounded diff review | Complete |
 | **Dogfood** | One real preparation against `TobiB1505/Vibe-Business` | Complete — see below |
+| **Refinement** | Generator v2: conservative sitemap selection, after reviewing what the dogfood produced | Complete |
+
+Sprint 9 does **not** include repository build or test execution, runtime
+validation, preview environments, merge, or deploy. None of those exist.
 
 ## Goal
 
@@ -254,10 +258,134 @@ structure, never prose, so a reworded model output routed identically. That is
 the property `capabilities.ts` exists to guarantee, tested in the unit suite and
 now observed on genuinely regenerated production data.
 
+## Post-dogfood refinement — SEO generator v2
+
+The dogfood result above is unchanged and stands as recorded. What follows
+happened *after* it, in response to reviewing what it produced.
+
+### What review found
+
+The generated sitemap listed `/`, `/login` and `/signup`.
+
+No safety invariant failed. The preflight refused correctly four times, the
+write went to an isolated branch, the read-back matched the recorded hashes byte
+for byte, and the default branch was never touched. Vibe wrote exactly what it
+intended to write.
+
+**The intent was wrong.** A sitemap is a public invitation to index, and
+inviting a crawler to index a login form is not a thing anyone asked for. This
+is the distinction the sprint had claimed in the abstract and now had a concrete
+example of: `repository_write_verified` means the write was correct, not that
+the content was good. Human review is a separate gate, and it earned its keep on
+the first change that ever passed through it.
+
+### What changed
+
+`nextjs_seo_foundations_v2` — a new capability, not an edit to v1.
+
+Sitemap entries are now selected by `generators/route-classification.ts` from
+structured route intelligence: the site root, plus static `page` routes outside
+every known authentication, account, application, API and administrative
+surface. Dynamic routes are omitted because `/blog/[slug]` is a template, not a
+URL, and resolving it would mean reading customer data this capability does not
+touch.
+
+For Vibe Business itself the corrected sitemap contains exactly one entry, `/`.
+That follows from generic classification, not from anything hard-coded: the
+product's other routes are `/login`, `/signup` and `/app/*`.
+
+`/signup` is excluded **as V0.1 policy, not as an SEO law**. Signup pages are
+sometimes indexed deliberately. Vibe does not yet hold the business context to
+make that call, so it declines to make it rather than guessing. A later
+capability can revisit this knowing it was a decision.
+
+### What deliberately did not change
+
+Robots rules. Omitting a route from a sitemap says "we are not asking you to
+index this"; a robots `disallow` says "do not fetch this at all". Those are
+different claims, and conflating them is how a generator quietly breaks a
+customer's site. `robots.ts` still disallows only `/app/` and `/api/` —
+authentication routes are excluded from the sitemap but remain crawlable (§10).
+
+Capability scope is also unchanged: two files, `robots.ts` and `sitemap.ts`, in
+the resolved app root. No metadata, canonical tags, Open Graph, structured data
+or redirects.
+
+### Versioning
+
+v1 remains declared and remains permitted by the database. The `prepared_changes`
+row for `2f05958` carries it, and that row must keep describing what was
+actually written. Old rows were not migrated and history was not relabelled —
+**v2 did not produce the first dogfood commit, and the record says so.**
+
+Capability and generator version both feed the execution identity, so a
+re-preparation of the same opportunity, snapshot and base commit under v2
+computes a different identity and a different branch. Without that, the user
+would be handed the old branch — still containing `/login` — as though it were
+the corrected change. Pinned by `identity.test.ts`.
+
+### A migration was required after all
+
+The task assumed none would be. That was wrong, and the way it was wrong is the
+interesting part.
+
+`prepared_changes.execution_capability` carried
+`CHECK (execution_capability = 'nextjs_seo_foundations_v1')`. The v2 bump passed
+lint, typecheck, build and 1376 unit tests while every real preparation would
+have failed at INSERT. The in-memory test database does not evaluate CHECK
+constraints, so no behavioural test could have seen it — the same shape as the
+`project_repositories` bug that cost three failed dogfood attempts: a TypeScript
+value and a database rule expressing one thing in two places that nothing forced
+to agree.
+
+`20260812150000_prepared_changes_capability_v2.sql` widens the constraint to
+permit both. `schema.test.ts` now parses the migrations and asserts the SQL
+constraint matches `EXECUTION_CAPABILITIES`, so the next capability cannot drift
+the same way.
+
+### No second real write
+
+None was performed. The write path was proven by the dogfood; this refinement
+changes which URLs a generated file lists, which is fully determined by tests.
+Re-running it would have cost a repository refresh, a re-audit and regenerated
+opportunities to prove something the unit tests already prove.
+
+The dogfood branch `vibe/seo-foundations-cc32273131c5` is untouched, and still
+contains the v1 output.
+
+### Mutation validation
+
+Nine mutations, each verified to break tests — including two that were not in
+the brief and one that initially **survived**:
+
+| Mutation | Result |
+| --- | --- |
+| auth-route exclusion removed | 16 tests fail |
+| `/app/*` exclusion removed | 5 fail |
+| sitemap falls back to all public routes | 6 fail |
+| capability left at v1 | 5 fail |
+| dynamic-route exclusion removed | 2 fail |
+| capability/version map drifts | 2 fail |
+| API exclusion removed | 1 fail |
+| generator ignores its `routes` input | 3 fail |
+| `getSnapshotById` drops the `project_id` predicate | **survived → test added → 1 fail** |
+
+The survivor mattered. Reading route intelligence during the write step
+introduced a new service-role query, and under ADR 0013 the ownership predicate
+is the only thing standing between an operation and another tenant's snapshot,
+because RLS is bypassed. It had no test until the mutation said so.
+
+The change-preparation test fake was also corrected: it previously echoed a
+module-level fixture back as the branch's file content, so read-back
+verification was checking the test's own constant against itself. Blob and tree
+contents are now carried through faithfully, which is what lets the end-to-end
+sitemap assertions mean anything.
+
 ## Known limitations
 
 - No repository execution of any kind: no clone, no install, no build, no tests. Vibe has no sandbox, so a prepared change can honestly be called `repository_write_verified` but never `application_validated`. **The dogfood does not show the generated code is correct — only that the write was safe, deterministic and verified.**
-- The generated sitemap lists `/login` while the generated robots file disallows only `/app/` and `/api/`. Defensible but not obviously right, and the two files are mildly inconsistent with each other. Nothing in the pipeline judges output quality; that is what human review before merge is for.
+- Nothing in the pipeline judges output *quality*. v2 fixed the one issue review found; it did not add a mechanism that would have found it. Human review before merge remains the only content gate.
+- Route classification is a heuristic list of conventional segment names. It can omit a legitimate public page whose first segment happens to look like an app surface — deliberately, since the failure it prevents is worse than the one it causes (§4). It may only ever remove routes, never add one.
 - Creating a branch may trigger repository-configured CI or preview automation. Vibe neither triggers nor manages those. The confirmation dialog says so.
 
 ## Next step

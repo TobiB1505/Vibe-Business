@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { FakeDatabase, FakeExecutor, fakeSupabase } from "@/modules/operations/test-support";
 import { fakeAudit } from "@/modules/opportunities/test-support";
 import { computeExecutionIdentity } from "./identity";
-import { NEXTJS_SEO_FOUNDATIONS_VERSION } from "./schema";
+import { capabilityVersionFor } from "./schema";
 import { getChangePreparationStatus, getPreparedChangeView, startChangePreparation } from "./service";
 import { fakeRepositorySnapshotFor, FIXTURE_SNAPSHOT_SHA } from "./test-support";
 
@@ -28,8 +28,8 @@ function identityFor(overrides: { snapshotId?: string; baseSha?: string; opportu
     projectId: PROJECT,
     opportunitySetId: SET,
     opportunityId: overrides.opportunityId ?? OPPORTUNITY,
-    capability: "nextjs_seo_foundations_v1",
-    capabilityVersion: NEXTJS_SEO_FOUNDATIONS_VERSION,
+    capability: "nextjs_seo_foundations_v2",
+    capabilityVersion: capabilityVersionFor("nextjs_seo_foundations_v2"),
     repositorySnapshotId: overrides.snapshotId ?? SNAPSHOT,
     baseSha: overrides.baseSha ?? FIXTURE_SNAPSHOT_SHA,
   });
@@ -310,8 +310,8 @@ describe("identity and reuse (§24)", () => {
       operation_run_id: "operation_old",
       opportunity_set_id: SET,
       opportunity_id: OPPORTUNITY,
-      execution_capability: "nextjs_seo_foundations_v1",
-      execution_version: NEXTJS_SEO_FOUNDATIONS_VERSION,
+      execution_capability: "nextjs_seo_foundations_v2",
+      execution_version: capabilityVersionFor("nextjs_seo_foundations_v2"),
       repository_snapshot_id: SNAPSHOT,
       base_branch: "main",
       base_sha: FIXTURE_SNAPSHOT_SHA,
@@ -360,7 +360,7 @@ describe("identity and reuse (§24)", () => {
         projectId: PROJECT,
         opportunitySetId: SET,
         opportunityId: OPPORTUNITY,
-        capability: "nextjs_seo_foundations_v1",
+        capability: "nextjs_seo_foundations_v2",
         capabilityVersion: "nextjs-seo-foundations-v0",
         repositorySnapshotId: SNAPSHOT,
         baseSha: FIXTURE_SNAPSHOT_SHA,

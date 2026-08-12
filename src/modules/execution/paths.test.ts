@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { generateSeoFoundations } from "./generators/nextjs-seo-foundations";
 import { checkWritePath, checkWritePaths } from "./paths";
+import { FIXTURE_ROUTES, fakeRoute } from "./test-support";
 
 /**
  * Path safety and the deterministic generator (Sprint 9 §11, §13, §32, §41).
@@ -11,7 +12,7 @@ import { checkWritePath, checkWritePaths } from "./paths";
  * refused if it somehow arrived.
  */
 
-const CAPABILITY = "nextjs_seo_foundations_v1" as const;
+const CAPABILITY = "nextjs_seo_foundations_v2" as const;
 
 describe("write path allowlist (§13)", () => {
   it("allows exactly the two files this capability creates", () => {
@@ -69,7 +70,7 @@ describe("write path allowlist (§13)", () => {
 });
 
 describe("deterministic generator (§10, §11)", () => {
-  const files = generateSeoFoundations({ origin: "https://acme.com", appRoot: "src/app/" });
+  const files = generateSeoFoundations({ origin: "https://acme.com", appRoot: "src/app/", routes: FIXTURE_ROUTES });
 
   it("produces exactly the two supported files", () => {
     expect(files.map((file) => file.path)).toEqual(["src/app/robots.ts", "src/app/sitemap.ts"]);
@@ -78,7 +79,7 @@ describe("deterministic generator (§10, §11)", () => {
   it("produces byte-identical output for identical input", () => {
     // This is what makes post-write verification meaningful: a changed hash
     // means the repository disagrees with us, not that we are nondeterministic.
-    const again = generateSeoFoundations({ origin: "https://acme.com", appRoot: "src/app/" });
+    const again = generateSeoFoundations({ origin: "https://acme.com", appRoot: "src/app/", routes: FIXTURE_ROUTES });
 
     expect(again.map((file) => file.contentHash)).toEqual(files.map((file) => file.contentHash));
   });
@@ -91,7 +92,7 @@ describe("deterministic generator (§10, §11)", () => {
   });
 
   it("normalizes a trailing slash rather than emitting a double slash", () => {
-    const [robots] = generateSeoFoundations({ origin: "https://acme.com/", appRoot: "src/app" });
+    const [robots] = generateSeoFoundations({ origin: "https://acme.com/", appRoot: "src/app", routes: [] });
 
     expect(robots.content).toContain("https://acme.com/sitemap.xml");
     expect(robots.content).not.toContain("acme.com//");
@@ -123,8 +124,75 @@ describe("deterministic generator (§10, §11)", () => {
     expect(checkWritePaths(files.map((file) => file.path), CAPABILITY)).toEqual({ ok: true });
   });
 
+  it("publishes only classified public routes (§3, §11)", () => {
+    // FIXTURE_ROUTES is a typical SaaS shape: marketing pages plus the auth,
+    // app, API and dynamic surfaces that must never reach a sitemap.
+    const sitemap = files[1].content;
+
+    expect(sitemap).toContain('url: "https://acme.com"');
+    expect(sitemap).toContain('url: "https://acme.com/pricing"');
+    expect(sitemap).toContain('url: "https://acme.com/blog"');
+
+    for (const excluded of ["/login", "/signup", "/app", "/api", "[slug]", "[projectId]"]) {
+      expect(sitemap).not.toContain(excluded);
+    }
+  });
+
+  it("emits only the site root when no public routes are evidenced (§6)", () => {
+    // The Vibe Business shape: a marketing root, then nothing but auth and the
+    // signed-in product. A one-entry sitemap is the correct answer, not a bug.
+    const [, sitemap] = generateSeoFoundations({
+      origin: "https://acme.com",
+      appRoot: "src/app/",
+      routes: [
+        fakeRoute("/"),
+        fakeRoute("/login"),
+        fakeRoute("/signup"),
+        fakeRoute("/app"),
+        fakeRoute("/app/projects/[projectId]", { dynamic: true }),
+        fakeRoute("/api/webhook", { kind: "api" }),
+      ],
+    });
+
+    expect(sitemap.content.match(/url: "/g)).toHaveLength(1);
+    expect(sitemap.content).toContain('url: "https://acme.com"');
+  });
+
+  it("is deterministic in route order", () => {
+    const forward = generateSeoFoundations({
+      origin: "https://acme.com",
+      appRoot: "src/app/",
+      routes: FIXTURE_ROUTES,
+    });
+    const reversed = generateSeoFoundations({
+      origin: "https://acme.com",
+      appRoot: "src/app/",
+      routes: [...FIXTURE_ROUTES].reverse(),
+    });
+
+    expect(reversed[1].contentHash).toBe(forward[1].contentHash);
+  });
+
+  it("emits valid Next.js sitemap change frequencies", () => {
+    // Checked against the 16.3.0 metadata-route documentation: the allowed set
+    // is always|hourly|daily|weekly|monthly|yearly|never.
+    const frequencies = [...files[1].content.matchAll(/changeFrequency: "([^"]+)"/g)].map((m) => m[1]);
+
+    expect(frequencies.length).toBeGreaterThan(0);
+    for (const frequency of frequencies) {
+      expect(["always", "hourly", "daily", "weekly", "monthly", "yearly", "never"]).toContain(frequency);
+    }
+  });
+
+  it("does not disallow authentication routes in robots (§10)", () => {
+    // Omitted from the sitemap is not the same claim as blocked from crawling.
+    // Conflating them is how a generator quietly breaks a customer's site.
+    expect(files[0].content).not.toContain("/login");
+    expect(files[0].content).not.toContain("/signup");
+  });
+
   it("respects a resolved monorepo app root", () => {
-    const workspace = generateSeoFoundations({ origin: "https://acme.com", appRoot: "apps/web/app/" });
+    const workspace = generateSeoFoundations({ origin: "https://acme.com", appRoot: "apps/web/app/", routes: [] });
 
     expect(workspace.map((file) => file.path)).toEqual([
       "apps/web/app/robots.ts",
