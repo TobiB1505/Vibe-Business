@@ -6,6 +6,7 @@ import { describeEvidenceId } from "@/modules/business-audit/evidence-labels";
 import { DIMENSION_LABELS } from "@/modules/business-audit/schema";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { OPERATION_STAGE_LABELS, type OperationView } from "@/modules/operations/view";
+import { buildOpportunityBlockNotice } from "@/modules/opportunities/view";
 import {
   CONFIDENCE_LABELS,
   EFFORT_LABELS,
@@ -159,6 +160,7 @@ export function OpportunitiesPanel({
 
   const running = operation !== null && (operation.status === "queued" || operation.status === "running");
   const hasOpportunities = opportunities.length > 0;
+  const blockNotice = buildOpportunityBlockNotice(blockedReason);
 
   return (
     <section className="space-y-3">
@@ -197,8 +199,18 @@ export function OpportunitiesPanel({
         </div>
       )}
 
-      {!running && blockedReason !== null && (
-        <p className="text-sm text-zinc-500">{OPERATION_FAILURE_MESSAGES[blockedReason]}</p>
+      {!running && blockNotice !== null && (
+        <div className="space-y-2">
+          <p className="text-sm text-zinc-500">{OPERATION_FAILURE_MESSAGES[blockNotice.reason]}</p>
+          {/* Never a heading with a disabled button and no way forward — that
+              dead end was reported as a broken feature twice in Deep Scan. */}
+          <a
+            href={blockNotice.anchor}
+            className="inline-block text-sm text-zinc-300 underline underline-offset-2 hover:text-zinc-50"
+          >
+            {blockNotice.actionLabel}
+          </a>
+        </div>
       )}
 
       {!running && !hasOpportunities && blockedReason === null && (
@@ -207,10 +219,10 @@ export function OpportunitiesPanel({
         </p>
       )}
 
-      {!running && (
+      {!running && blockNotice === null && (
         <form action={formAction} className="flex items-center gap-3">
           <input type="hidden" name="force" value={hasOpportunities ? "true" : "false"} />
-          <Button type="submit" disabled={pending || blockedReason !== null}>
+          <Button type="submit" disabled={pending}>
             {pending ? "Starting…" : hasOpportunities ? "Refresh opportunities" : "Find opportunities"}
           </Button>
         </form>

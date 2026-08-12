@@ -240,7 +240,8 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
           <BusinessContextForm projectId={project.id} context={businessContext?.context ?? null} />
         </section>
 
-        <section className="space-y-3">
+        {/* `id` is the jump target for a blocked Opportunities section. */}
+        <section id="business-audit" className="space-y-3">
           <AuditEvidenceNotice notice={auditEvidenceNotice} />
 
           {latestAudit?.result ? (

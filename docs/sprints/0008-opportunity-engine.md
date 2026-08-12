@@ -79,7 +79,11 @@ Input identity is the audit's id **and** its own input hash, plus the pack versi
 
 Two different questions, deliberately separate:
 
-- **Audit stale** (§34) — generation is *blocked*, not warned. A prioritized list built from a diagnosis we already know is out of date reads exactly like one built from current evidence, and the user has no way to tell. The UI says the audit needs updating first.
+- **Audit stale** (§34) — generation is *blocked*, not warned, and the block links straight to the audit.
+
+  The reason is correctness, not tone. The engine sends the model an audit **and an evidence pack rebuilt from today's snapshots**. When the audit is current those agree; when it is stale they do not, and the model is asked to prioritize a diagnosis against evidence that diagnosis never saw. No amount of labelling makes two inconsistent inputs consistent.
+
+  The cost of blocking — a second paid call when evidence has moved — is real and accepted. What is not accepted is a dead end: every blocked reason carries an action and an anchor to the audit section, and a test asserts that for every reason in the union. Deep Scan shipped a heading with a disabled button and no way forward twice, and both times it was reported as the feature being broken.
 - **Set stale** (§35) — a newer audit exists than the one a set came from. The set stays visible, marked, with an offer to refresh. It was true when it was made, and deleting a founder's list because the diagnosis moved would be worse than saying so. No automatic spend.
 
 ## UI
@@ -90,7 +94,7 @@ During generation: *"Finding your highest-impact opportunities…"* and *"You ca
 
 ## Tests
 
-1061 → 1113. Coverage: 20 validation cases (ranks, caps, evidence integrity, duplicates, field validity, determinism), 15 runner cases (versioning, fencing, injection resistance, cost discipline, prioritization fixtures), 17 durable-execution cases (happy path, re-entry, paid-call ambiguity, guards).
+1061 → 1119. Coverage: 20 validation cases (ranks, caps, evidence integrity, duplicates, field validity, determinism), 15 runner cases (versioning, fencing, injection resistance, cost discipline, prioritization fixtures), 17 durable-execution cases (happy path, re-entry, paid-call ambiguity, guards).
 
 The prioritization fixtures assert structure, never wording — a test that pinned phrasing would break every time the prompt improved and would say nothing about whether the prioritization was good.
 
@@ -113,4 +117,4 @@ Once merged, generating one set for the current audit (`5f1928a7`, 41/100) is on
 - **Duplicate detection is a coarse key**, `category:primaryDimension`. It catches the common V0.1 duplicate — the same work proposed twice under different titles — and will merge two genuinely different opportunities that share a category. The higher-ranked one survives. No embeddings, deliberately.
 - **Prioritization quality is unmeasured.** The rubric encodes a philosophy; whether the model follows it is a question for the dogfood, not for tests.
 - **No execution.** Nothing here writes to a repository, and `ready` means "could be, later".
-- **Blocking on a stale audit is a strong choice.** It is the honest one, but it means a user with new evidence must spend an audit call before they can spend a prioritization call.
+- **Blocking on a stale audit costs a second call.** A user with new evidence must refresh the audit before prioritizing. That is deliberate — see Staleness — but it is a real cost, and worth revisiting if prioritizing against the audit's *own* historical evidence pack ever becomes cheap to reconstruct.
