@@ -127,6 +127,37 @@ export async function findPreparedChangeByOperation(
 }
 
 /** One prepared change the caller owns. Ownership is the query, not a check. */
+/**
+ * Every successfully prepared change for a project, newest first.
+ *
+ * Deliberately not scoped to the current opportunity set. A prepared change is
+ * an **artifact**: a branch and a commit that exist in the customer's
+ * repository whether or not the opportunity that motivated it is still in the
+ * latest set. Looking it up through the live opportunity set — which is how the
+ * project page originally reached it — made every prepared change silently
+ * unreachable the moment opportunities were regenerated, even though the branch
+ * was still sitting there.
+ *
+ * That is the same artifact-centric reasoning validation eligibility uses
+ * (Sprint 10A §28): "does this commit build?" is a question about a commit, and
+ * it does not stop being answerable because advice moved on.
+ */
+export async function listPreparedChangesForProject(
+  supabase: SupabaseClient,
+  projectId: string,
+): Promise<StoredPreparedChange[]> {
+  const { data, error } = await supabase
+    .from("prepared_changes")
+    .select(COLUMNS)
+    .eq("project_id", projectId)
+    .eq("status", "prepared")
+    .order("created_at", { ascending: false })
+    .limit(20);
+
+  if (error) throw error;
+  return (data ?? []).map((row) => mapRow(row as Row));
+}
+
 export async function getPreparedChange(
   supabase: SupabaseClient,
   params: { projectId: string; preparedChangeId: string },
