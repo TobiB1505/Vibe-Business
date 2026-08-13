@@ -5,6 +5,11 @@ microVM: dependencies installed, types checked, 1331 tests run and the
 application built — all with the GitHub credential gone and the network closed.
 Seven runs were needed; the six failures were all Vibe's own defects and each is
 recorded below.
+
+Subsequently refactored into durable per-phase steps (**sandbox-policy-v3**) and
+re-dogfooded: one sandbox spanning seven durable steps, every phase passing,
+285 s end to end — work that no longer fits in a single orchestration budget and
+completes anyway.
 Branch: `feat/isolated-change-validation`
 
 ## Goal
@@ -1013,19 +1018,112 @@ there is no local execution path. This is an orchestration refactor; validation
 is not weakened anywhere. The build remains a required gate — a skipped build is
 never a pass, asserted in both the domain and the finalize step.
 
-### Not yet dogfooded
+### The v3 dogfood — 2026-08-13, passed first time
 
-**No sandbox has been provisioned under v3.** The refactor is proven by 1640
-tests and nineteen mutations; it is not proven by a real run, and this sprint's
-own record is unambiguous about what that distinction has cost — six of the
-seven earlier failures were found only by running it.
+One validation of the existing prepared change, run from the deployed product.
+No repository write, no second branch, no AI call.
 
-The dogfood is one validation of the existing prepared change `2f05958` on
-`vibe/seo-foundations-cc32273131c5`, which must not be merged, modified or
-regenerated. Under v3 it computes a new validation identity, so it will run
-rather than reuse the v1 pass. A failure is still a successful result for this
-refactor, provided the correct phase is persisted, cleanup happens, and the
-failure is accurately observable.
+```
+validation run  33923863-5853-4aa4-ac27-7ffef2e08c17     passed
+operation       e271cb55-87de-46c4-84cb-54d52acf4cf4     completed
+prepared change commit 2f05958  on  vibe/seo-foundations-cc32273131c5
+profile         nextjs_node_v1 / nextjs-node-v1
+policy          sandbox-policy-v3
+provider        vercel_sandbox   runtime node22   pnpm
+cleanup         stopped
+```
+
+| Phase | Result | Duration |
+| --- | --- | --- |
+| Source integrity | verified | — |
+| `pnpm install --frozen-lockfile --ignore-scripts` | passed | 11.5 s |
+| `pnpm run typecheck` | passed | 78.5 s |
+| `pnpm run test` | passed | 76.3 s |
+| `pnpm run build` | passed | 89.9 s |
+| Finalizing | completed | — |
+
+Commands total **256.3 s**; sandbox lifetime 283.9 s; operation 284.9 s.
+
+### What the run proves that the tests could not
+
+- **One sandbox spanned seven durable steps.** Provision, verify, four phases
+  and cleanup each ran in their own function invocation, reconnecting by name,
+  and the build ran against the `node_modules` the install created. Exactly one
+  `sandbox_usage_events` row for the run.
+- **No phase was repeated.** Four phases, four recorded results, one of each.
+- **The work now exceeds a single 300 s orchestration budget and completes
+  anyway.** 256 s of commands plus provisioning, verification and finalization
+  came to 285 s end to end — which is the case v2 could not express.
+- **Cleanup ran on the success path**, `cleanup_status = stopped`.
+- **Zero AI calls** during the run, as designed: the execution is deterministic.
+
+Source integrity, in full, and better than the first passing run:
+
+```
+revisionMode                 provider_pinned
+gitCommitObserved            true
+changedFilesVerified         true
+buildIdentityFilesVerified   package.json, pnpm-lock.yaml, next.config.ts, tsconfig.json
+buildIdentityFilesUnverified (none)
+```
+
+The v1 pass recorded `pnpm-lock.yaml` as **unverified** — the one file that
+decides which code gets installed. The v2 integrity fix is now confirmed on real
+data rather than in a unit test: all four build-identity files hashed against
+GitHub at the pinned commit, nothing skipped.
+
+### The failure this replaced, now diagnosed
+
+The refactor was undertaken on a hypothesis. The database settles it: the run
+that failed before this work was `84fff40a`, under **sandbox-policy-v2**, and it
+failed at stage `building` with `sandbox_timeout` after 242.2 s — the v2
+self-abort clock (`stopStartingWorkAfterMs`, 240 s) firing before the build
+could finish.
+
+So the diagnosis was right, and worth stating precisely: **that run did not
+crash. It worked exactly as v2 designed it to.** The sandbox was stopped
+cleanly, nothing leaked, and the honest outcome was still *no verdict about the
+artifact* — the ceiling was reported as a property of the change. That is what
+v3 removes.
+
+The run before it, `fb4e0865`, is the other half of the argument:
+`validation_run_failed`, *"the validation step ended without recording a
+result"*, `cleanup_status = not_provisioned`, 550 s elapsed. That is the killed
+step — no cleanup, no phase results, nothing to diagnose from.
+
+| Run | Policy | Outcome | Sandbox | Active CPU |
+| --- | --- | --- | --- | --- |
+| `fb4e0865` | v2 | killed at the ceiling, no result recorded | not stopped by us | — |
+| `84fff40a` | v2 | `sandbox_timeout` at `building` | stopped, 242.2 s | 85.3 s |
+| `33923863` | **v3** | **passed** | stopped, 283.9 s | 124.5 s |
+
+### What four vCPUs actually bought
+
+Both passing runs validated the same commit, so they compare directly. The v1
+pass ran on two vCPUs, the v3 pass on four:
+
+| Phase | 2 vCPU (v1) | 4 vCPU (v3) | Change |
+| --- | --- | --- | --- |
+| install | 18.4 s | 11.5 s | −37 % |
+| typecheck | 79.1 s | 78.5 s | **−0.8 %** |
+| test | 83.9 s | 76.3 s | −9 % |
+| build | 99.3 s | 89.9 s | −9 % |
+| **commands total** | 280.7 s | 256.3 s | −9 % |
+
+`tsc` did not get faster at all, which is the single-core reasoning confirmed by
+measurement rather than asserted — and it was the second-largest phase.
+
+One claim from the v2 record needs correcting. "More vCPUs cost more per second
+and finish sooner, so the bill is roughly unchanged" is not quite what happened:
+Active CPU rose from 116.2 s to 124.5 s, about 7 %, while wall time fell 2 %.
+Vercel meters Active CPU, so four vCPUs are modestly *more* expensive here, not
+neutral. Small in absolute terms — roughly a cent either way — but the record
+should say what was measured rather than what was predicted.
+
+Since the correctness argument for four vCPUs is gone under v3 and the measured
+benefit is a 9 % wall-clock saving for a 7 % CPU premium, dropping back to two is
+now a legitimate open question rather than a regression. Deliberately not
+changed in this refactor.
 
 ## Known limitations
 
@@ -1048,7 +1146,16 @@ failure is accurately observable.
 
 ## Next step
 
-Not decided. Sprint 10B is preview, and the separation was deliberate: exposing
+Sprint 10A is finished: the durable-phase refactor is built, mutation-validated
+and dogfooded green, and PR #25 has nothing left blocking it.
+
+What is *not* finished is the honest limit this sprint has restated at every
+stage. `sandbox_validation_passed` means the profile's commands exited zero in
+an isolated VM. The change it just validated is still the one that lists only
+`/` in a sitemap because a human reviewed the v1 output and said so — no part of
+this pipeline judged that, and none of it would have.
+
+Sprint 10B is preview, and the separation was deliberate: exposing
 a port serves unvalidated customer code on a public URL, which is a materially
 different exposure that deserves its own decision rather than momentum.
 
