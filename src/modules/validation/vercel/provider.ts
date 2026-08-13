@@ -54,6 +54,18 @@ async function readOutput(command: {
     : combined;
 }
 
+/**
+ * A safe description of a thrown provider value.
+ *
+ * Name and message only. The object itself can carry request context, headers
+ * and occasionally credentials, so it is never stored or logged whole — but
+ * refusing to record *anything* is how a failure becomes undiagnosable.
+ */
+function describeProviderError(error: unknown): string {
+  if (error instanceof Error) return `${error.name}: ${error.message}`;
+  return "the sandbox provider threw a non-error value";
+}
+
 class VercelSandboxHandle implements SandboxHandle {
   constructor(
     private readonly sandbox: Sandbox,
@@ -88,14 +100,20 @@ class VercelSandboxHandle implements SandboxHandle {
         output: await readOutput(result),
         timedOut: false,
       };
-    } catch {
+    } catch (error) {
       // An abort is a timeout; anything else is reported as a non-zero exit so
       // the orchestrator treats it as a failed step rather than crashing.
+      //
+      // The message is carried through rather than replaced with a placeholder.
+      // A generic "[command could not be executed]" is what turned the fourth
+      // dogfood run into another guess: the orchestrator had been taught to
+      // explain itself, and this layer was still swallowing the one fact that
+      // mattered. Callers sanitize and bound it like any other output.
       const timedOut = controller.signal.aborted;
       return {
         exitCode: timedOut ? -1 : 1,
         durationMs: Date.now() - startedAt,
-        output: timedOut ? "[command exceeded its time budget]" : "[command could not be executed]",
+        output: timedOut ? "[command exceeded its time budget]" : describeProviderError(error),
         timedOut,
       };
     } finally {

@@ -122,3 +122,80 @@ describe("sandbox creation options", () => {
     expect(options.image).toContain("vercel/sandbox");
   });
 });
+
+describe("command failures explain themselves (post-dogfood)", () => {
+  /**
+   * The fourth real run reported `[command could not be executed]` — this
+   * adapter's placeholder. The orchestrator had been taught to explain itself
+   * while this layer still replaced the one useful fact with a constant, so a
+   * production failure was undiagnosable one level down from where it was
+   * fixed.
+   *
+   * Name and message only: the thrown object can carry request context and
+   * occasionally credentials, so it is never surfaced whole.
+   */
+  it("carries the provider's error message into the command output", async () => {
+    create.mockResolvedValue({
+      name: "vibe-validate-abc",
+      runtime: "node24",
+      async runCommand() {
+        throw new Error("cwd must be relative to the sandbox root");
+      },
+      async stop() {
+        return { activeCpuDurationMs: 1, networkTransfer: { ingress: 1, egress: 1 } };
+      },
+    });
+
+    const { createVercelSandboxProvider } = await import("./provider");
+    const sandbox = await createVercelSandboxProvider().create({
+      name: "vibe-validate-abc",
+      source: { repositoryUrl: "https://github.com/acme/p.git", revision: "abc", credential: null },
+      networkPolicy: { mode: "deny_all" },
+      timeoutMs: 1000,
+      env: {},
+    });
+
+    const result = await sandbox.run({
+      command: { command: "git", args: ["rev-parse", "HEAD"] },
+      cwd: ".",
+      timeoutMs: 1000,
+    });
+
+    expect(result.exitCode).not.toBe(0);
+    expect(result.timedOut).toBe(false);
+    expect(result.output).toContain("cwd must be relative to the sandbox root");
+    expect(result.output).not.toBe("[command could not be executed]");
+  });
+
+  it("describes a non-error thrown value without inspecting it", async () => {
+    create.mockResolvedValue({
+      name: "vibe-validate-abc",
+      runtime: "node24",
+      async runCommand() {
+        throw { secret: "ghs_shouldNeverBeSurfaced" };
+      },
+      async stop() {
+        return { activeCpuDurationMs: 1, networkTransfer: { ingress: 1, egress: 1 } };
+      },
+    });
+
+    const { createVercelSandboxProvider } = await import("./provider");
+    const sandbox = await createVercelSandboxProvider().create({
+      name: "vibe-validate-abc",
+      source: { repositoryUrl: "https://github.com/acme/p.git", revision: "abc", credential: null },
+      networkPolicy: { mode: "deny_all" },
+      timeoutMs: 1000,
+      env: {},
+    });
+
+    const result = await sandbox.run({
+      command: { command: "git", args: ["status"] },
+      cwd: ".",
+      timeoutMs: 1000,
+    });
+
+    // Described, never serialized: an arbitrary thrown object may carry anything.
+    expect(result.output).toContain("non-error value");
+    expect(result.output).not.toContain("ghs_");
+  });
+});

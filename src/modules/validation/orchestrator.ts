@@ -150,9 +150,22 @@ function sha256(content: string): string {
  */
 const SANDBOX_WORKDIR = "/vercel/sandbox";
 
-function absolute(root: string, path = ""): string {
-  const base = root === "." || root === "" ? SANDBOX_WORKDIR : `${SANDBOX_WORKDIR}/${root.replace(/\/+$/, "")}`;
-  return path === "" ? base : `${base}/${path}`;
+/**
+ * Paths stay **relative** to the sandbox's working directory.
+ *
+ * The fourth dogfood run tried absolute addressing and `runCommand` threw,
+ * where the relative form had executed and produced a real git error. So the
+ * provider wants relative paths, and — usefully — that also settles the
+ * ambiguity the absolute experiment was meant to settle: the earlier
+ * `fatal: not a git repository` came from the right directory. The checkout
+ * genuinely has no `.git`.
+ *
+ * `SANDBOX_WORKDIR` is kept for messages, so a failure says where it looked.
+ */
+export function inWorkspace(root: string, path = ""): string {
+  const base = root === "." || root === "" ? "" : root.replace(/\/+$/, "");
+  if (path === "") return base === "" ? "." : base;
+  return base === "" ? path : `${base}/${path}`;
 }
 
 function stepResult(
@@ -265,7 +278,7 @@ export async function runValidation(
     // Validation must describe exactly what Vibe prepared. The provider was
     // asked for a revision; this checks it actually delivered it (§6).
     await setStage("verifying_source");
-    const workdir = absolute(target.workspaceRoot);
+    const workdir = inWorkspace(target.workspaceRoot);
     const head = await sandbox.run({
       command: { command: "git", args: ["rev-parse", "HEAD"] },
       cwd: workdir,
@@ -277,7 +290,7 @@ export async function runValidation(
       // bounded output — no repository code runs — and it is the difference
       // between another hypothesis and a finding.
       const listing = await sandbox.run({
-        command: { command: "ls", args: ["-a", workdir] },
+        command: { command: "ls", args: ["-a"] },
         cwd: workdir,
         timeoutMs: SANDBOX_BUDGETS.sourceTimeoutMs,
       });
@@ -285,8 +298,8 @@ export async function runValidation(
       return finish(
         "failed",
         "source_acquisition_failed",
-        `git rev-parse HEAD exited ${head.exitCode} in ${workdir}\n${head.output}\n` +
-          `contents of ${workdir}:\n${listing.output}`,
+        `git rev-parse HEAD exited ${head.exitCode} in ${SANDBOX_WORKDIR}/${workdir}\n${head.output}\n` +
+          `directory contents:\n${listing.output}`,
       );
     }
     if (head.output.trim() !== target.preparedCommitSha) {
@@ -301,7 +314,7 @@ export async function runValidation(
     // that was prepared, hash for hash.
     for (const file of target.preparedFiles.slice(0, SANDBOX_BUDGETS.maxIntegrityFiles)) {
       const content = await sandbox.readFile({
-        path: absolute(target.workspaceRoot, file.path),
+        path: inWorkspace(target.workspaceRoot, file.path),
         maxBytes: SANDBOX_BUDGETS.maxIntegrityFileBytes,
       });
 
@@ -319,7 +332,7 @@ export async function runValidation(
     // filesystem. "The token is short-lived" is not the boundary (§7).
     await setStage("securing_sandbox");
     await sandbox.run({
-      command: { command: "rm", args: ["-rf", absolute(target.workspaceRoot, ".git")] },
+      command: { command: "rm", args: ["-rf", inWorkspace(target.workspaceRoot, ".git")] },
       cwd: workdir,
       timeoutMs: SANDBOX_BUDGETS.sourceTimeoutMs,
     });
@@ -327,7 +340,7 @@ export async function runValidation(
     // Verified, not assumed. If the credential store still exists, refuse to
     // run repository code at all rather than hope.
     const gitConfig = await sandbox.readFile({
-      path: absolute(target.workspaceRoot, ".git/config"),
+      path: inWorkspace(target.workspaceRoot, ".git/config"),
       maxBytes: 4096,
     });
     if (gitConfig !== null) {
@@ -338,7 +351,7 @@ export async function runValidation(
     // Parsed in *our* process, not executed. This is what decides which steps
     // exist — never an opportunity's prose (§12).
     const manifestRaw = await sandbox.readFile({
-      path: absolute(target.workspaceRoot, "package.json"),
+      path: inWorkspace(target.workspaceRoot, "package.json"),
       maxBytes: SANDBOX_BUDGETS.maxIntegrityFileBytes,
     });
     if (manifestRaw === null) {
@@ -354,7 +367,7 @@ export async function runValidation(
     }
 
     const lockfile = await sandbox.readFile({
-      path: absolute(target.workspaceRoot, LOCKFILES[target.packageManager]),
+      path: inWorkspace(target.workspaceRoot, LOCKFILES[target.packageManager]),
       maxBytes: 1024,
     });
     if (lockfile === null) {

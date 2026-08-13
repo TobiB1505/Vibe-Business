@@ -240,7 +240,7 @@ wearing an accounting figure's clothes. The measured inputs are stored instead.
 1510 tests pass. 87 new to this sprint, all against fakes — `pnpm test` never
 provisions a real sandbox (§39).
 
-Twenty-seven mutations, each verified to break tests:
+Thirty mutations, each verified to break tests:
 
 | Mutation | Tests failed |
 | --- | --- |
@@ -271,6 +271,9 @@ Twenty-seven mutations, each verified to break tests:
 | raw error object stored instead of name+message | 1 |
 | relative working directory restored | 3 |
 | diagnostic directory listing dropped | 1 |
+| adapter replaces the provider error with a placeholder | 2 |
+| raw thrown object serialized instead of name+message | 1 |
+| workspace path prefix dropped | 1 |
 
 The last five target the **adapter**, and exist because that seam has now cost
 this project twice: a table name in Sprint 9, a CHECK constraint in the 9
@@ -395,6 +398,35 @@ listing is a diagnostic, not a licence.
 The fake sandbox models the same working directory, because a fake that accepted
 bare relative paths would pass while production failed. That is the specific
 trap this sprint has now hit twice.
+
+### Fourth attempt: the ambiguity is settled
+
+The absolute-path experiment failed differently:
+
+```
+git rev-parse HEAD exited 1 in /vercel/sandbox
+[command could not be executed]
+```
+
+`[command could not be executed]` was this codebase's own placeholder — the
+adapter's catch block. Absolute addressing made `runCommand` throw, where the
+relative form had executed and produced a real `git` error.
+
+Two things follow. The provider wants **relative** paths, so addressing is back
+to relative. And the ambiguity the experiment existed to resolve is resolved by
+its own failure: the earlier `fatal: not a git repository` came from the correct
+directory. **The checkout genuinely has no `.git`.**
+
+The more useful lesson is the placeholder. `failure_detail` had taught the
+orchestrator to explain itself, and the layer below it was still replacing the
+one fact that mattered with a constant — the same defect, one level down from
+where it was fixed. Provider errors now carry their name and message through
+(never the object, which can hold request context and credentials).
+
+That gap also survived its first mutation: the test asserting error
+pass-through exercised the *fake* provider, not the adapter. A test that cannot
+fail is worse than no test, so the assertion moved to the adapter's own suite
+against a mocked SDK, and the mutation now fails.
 
 If the tree genuinely arrives without `.git`, §6's independent SHA check cannot
 be satisfied by `git rev-parse` and the design needs revisiting rather than

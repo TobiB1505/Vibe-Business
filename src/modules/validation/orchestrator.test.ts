@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { runValidation, SANDBOX_ENVIRONMENT } from "./orchestrator";
+import { inWorkspace, runValidation, SANDBOX_ENVIRONMENT } from "./orchestrator";
 import {
   FIXTURE_COMMIT_SHA,
   fakeSandboxProvider,
@@ -67,7 +67,7 @@ describe("the happy path", () => {
 
     expect(provider.commands()).toEqual([
       HEAD,
-      "rm -rf /vercel/sandbox/.git",
+      "rm -rf .git",
       "pnpm install --frozen-lockfile --ignore-scripts",
       "pnpm run typecheck",
       "pnpm run test",
@@ -175,7 +175,7 @@ describe("credential handling (§7, §37)", () => {
       results: {
         [HEAD]: { output: `${FIXTURE_COMMIT_SHA}\n` },
         // The scrub reports success but leaves the file behind.
-        "rm -rf /vercel/sandbox/.git": { exitCode: 0 },
+        "rm -rf .git": { exitCode: 0 },
       },
     });
     // Re-add `.git/config` after the fake's own deletion by making it
@@ -607,30 +607,29 @@ describe("a retry is not doomed by its own name (post-dogfood)", () => {
 
 describe("diagnosing a missing checkout (post-dogfood)", () => {
   /**
-   * The third real run failed with `fatal: not a git repository`. That ruled
+   * The third real run failed with `fatal: not a git repository`, which ruled
    * out the earlier guess — `git` was present and ran — but left two live
    * possibilities: the platform materializes the tree without `.git`, or the
    * command ran somewhere other than where the source landed.
    *
-   * Guessing a third time would have been the wrong move, so a failed source
-   * verification now describes the directory it looked in. `ls` is Vibe's own
-   * command with bounded output; no repository code runs.
+   * The fourth run settled it. Addressing paths absolutely made `runCommand`
+   * throw, where the relative form had executed and produced a real git error.
+   * The provider wants relative paths, and the earlier failure therefore came
+   * from the right directory: the checkout genuinely has no `.git`.
    */
-  it("addresses the documented working directory absolutely", async () => {
-    const provider = setup();
-    await runValidation(provider, fakeValidationTarget());
-
-    for (const event of provider.events) {
-      if (event.kind === "command") expect(event.cwd).toBe("/vercel/sandbox");
-      if (event.kind === "read") expect(event.path.startsWith("/vercel/sandbox/")).toBe(true);
-    }
+  it("addresses paths relative to the sandbox working directory", () => {
+    expect(inWorkspace(".")).toBe(".");
+    expect(inWorkspace(".", "package.json")).toBe("package.json");
+    expect(inWorkspace("apps/web")).toBe("apps/web");
+    expect(inWorkspace("apps/web", "package.json")).toBe("apps/web/package.json");
+    expect(inWorkspace("apps/web/", ".git/config")).toBe("apps/web/.git/config");
   });
 
   it("reports what was actually on disk when verification fails", async () => {
     const provider = setup({
       results: {
         [HEAD]: { exitCode: 128, output: "fatal: not a git repository" },
-        "ls -a /vercel/sandbox": { output: ". .. package.json src" },
+        "ls -a": { output: ". .. package.json src" },
       },
     });
 
@@ -642,13 +641,15 @@ describe("diagnosing a missing checkout (post-dogfood)", () => {
     expect(provider.commands().some((command) => command.startsWith("pnpm"))).toBe(false);
   });
 
-  it("resolves a monorepo workspace root under the working directory", async () => {
-    const provider = setup({ files: {} });
-    await runValidation(provider, fakeValidationTarget({ workspaceRoot: "apps/web" }));
+  it("carries a provider error through instead of a placeholder", async () => {
+    // The fourth run's real lesson: the orchestrator had been taught to explain
+    // itself while the adapter still replaced the one useful fact with
+    // "[command could not be executed]".
+    const provider = setup({ throwOn: HEAD });
 
-    expect(provider.commands()[0]).toBe("git rev-parse HEAD");
-    expect(provider.events.find((event) => event.kind === "command")?.cwd).toBe(
-      "/vercel/sandbox/apps/web",
-    );
+    const outcome = await runValidation(provider, fakeValidationTarget());
+
+    expect(outcome.failureCode).toBe("validation_run_failed");
+    expect(outcome.failureDetail).toContain("provider exploded");
   });
 });
