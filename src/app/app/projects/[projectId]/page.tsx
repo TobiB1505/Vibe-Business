@@ -23,6 +23,7 @@ import { buildOpportunityActionState } from "@/modules/execution/view";
 import { buildBranchUrl } from "@/modules/execution/diff";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { getLatestValidation } from "@/modules/validation/service";
+import { SANDBOX_POLICY_VERSION } from "@/modules/validation/schema";
 import { listPreparedChangesForProject } from "@/modules/execution/store";
 import { PreparedChangesSection, type PreparedChangeCard } from "./prepared-changes-section";
 import type { ValidationSummary } from "./validation-panel";
@@ -165,6 +166,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
             ? (OPERATION_FAILURE_MESSAGES[validation.failureCode] ?? null)
             : null,
           sandboxDurationMs: validation.sandboxDurationMs,
+          underCurrentPolicy: validation.sandboxPolicyVersion === SANDBOX_POLICY_VERSION,
         };
       }
     }
@@ -197,6 +199,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
               ? (OPERATION_FAILURE_MESSAGES[validation.failureCode] ?? null)
               : null,
             sandboxDurationMs: validation.sandboxDurationMs,
+            underCurrentPolicy: validation.sandboxPolicyVersion === SANDBOX_POLICY_VERSION,
           }
         : null,
     });

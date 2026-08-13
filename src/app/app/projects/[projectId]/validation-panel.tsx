@@ -50,6 +50,15 @@ export type ValidationSummary = {
   steps: Partial<Record<string, ValidationStepResult>>;
   failureMessage: string | null;
   sandboxDurationMs: number | null;
+  /**
+   * Whether this result was produced under the integrity policy in force now.
+   *
+   * A stored pass describes the rules it was checked against. When those rules
+   * tighten, the old result is still true about the old rules and false about
+   * the new ones — so the panel says which, rather than showing a green tick
+   * that quietly means less than it used to.
+   */
+  underCurrentPolicy: boolean;
 };
 
 function StepRow({ name, step }: { name: string; step: ValidationStepResult }) {
@@ -165,9 +174,13 @@ export function ValidationPanel({
         </div>
       ) : summary?.status === "passed" ? (
         <div className="space-y-3">
-          <p className="text-sm text-emerald-400">Validation passed</p>
+          <p className={summary.underCurrentPolicy ? "text-sm text-emerald-400" : "text-sm text-amber-400"}>
+            {summary.underCurrentPolicy ? "Validation passed" : "Validated under an earlier policy"}
+          </p>
           <p className="text-sm text-zinc-400">
-            The application built successfully in an isolated environment.
+            {summary.underCurrentPolicy
+              ? "The application built successfully in an isolated environment."
+              : "This result was produced before Vibe's integrity checks were tightened. It still describes what was checked at the time, but not what would be checked now."}
           </p>
           <ul className="space-y-2">
             {Object.entries(summary.steps).map(([name, step]) =>
@@ -179,6 +192,19 @@ export function ValidationPanel({
           <p className="text-xs text-zinc-500">
             Not merged · Not deployed · Not reviewed by a human
           </p>
+
+          {/* Always available, and always safe: validation identity decides
+              what happens. Under the same policy this reuses the stored result
+              and provisions nothing; after a policy change it is the only way
+              to get a result that means what the current rules mean. */}
+          <button
+            type="button"
+            onClick={validate}
+            disabled={pending}
+            className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-900 disabled:opacity-60"
+          >
+            {summary.underCurrentPolicy ? "Validate again" : "Validate under current policy"}
+          </button>
         </div>
       ) : summary?.status === "failed" ? (
         <div className="space-y-3">
