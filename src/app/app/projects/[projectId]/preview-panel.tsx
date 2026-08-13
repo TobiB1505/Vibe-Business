@@ -222,10 +222,26 @@ export function PreviewPanel({
     });
     setStage(result.stage as PreviewStage);
 
-    // Terminal, or newly ready. Either way the server-rendered card is now
-    // behind, and the verdict lives in the database rather than in this state.
-    if (result.status !== "starting") router.refresh();
-  }, [projectId, sessionId, router]);
+    /**
+     * Refresh only when the server render is genuinely behind (§7).
+     *
+     * Refreshing on every tick looked harmless and was not. This page render
+     * costs a provider call and several reads, so a refresh can outlast the two
+     * seconds until the next one — and the next `router.refresh()` supersedes
+     * the one still in flight. At two-second intervals for a fifteen-minute
+     * preview, that is ~450 re-renders of which one may never land.
+     *
+     * The preview panel hid this from itself: `previewState` prefers the poll,
+     * so it rendered a running preview correctly while the page around it kept
+     * the state from *before* the preview existed. The Review section, reading
+     * that same stale render, said "Preview required" beside a running preview.
+     *
+     * So compare against what the card already shows and refresh on the
+     * transition only. Once the card agrees, there is nothing to fetch until
+     * the status changes again.
+     */
+    if (result.status !== card.state) router.refresh();
+  }, [projectId, sessionId, router, card.state]);
 
   useEffect(() => {
     if (!shouldPoll || !sessionId) return;

@@ -240,6 +240,30 @@ knowing: a visual comparison proves the review *pipeline* works, not that every
 code change is visible in pixels. `/robots.txt` and `/sitemap.xml` in the
 preview are where that change is observable.
 
+### Dogfood finding 1 — "Preview required" beside a running preview
+
+The first real run showed the Preview section running with 14 minutes left and
+the Review section saying *Preview required*. The database was right: the
+session row said `running`. The **page render** was stale.
+
+The preview panel polled every 2 s and called `router.refresh()` on every tick
+while running. This page render costs a sandbox provider call and several reads,
+so a refresh can outlast the two seconds until the next one — and each new
+`router.refresh()` supersedes the one still in flight. For a fifteen-minute
+preview that is ~450 re-renders, of which one may never land.
+
+The preview panel hid the failure from itself: `previewState` prefers what the
+poll just learned, so it rendered the running preview correctly while the page
+around it still held the state from *before* the preview existed. The Review
+section, reading that same render, could only say "Preview required".
+
+Fixed by refreshing on the **transition** — when the polled status differs from
+what the card already shows — instead of on every tick. A hard page reload was
+the workaround, and is why the dogfood did not need a second paid preview.
+
+The general shape is worth keeping: *a panel that compensates for its own stale
+props hides the staleness from every sibling that does not.*
+
 ## Known limitations
 
 - **One route, one desktop viewport.** A change below the fold, on another page,
