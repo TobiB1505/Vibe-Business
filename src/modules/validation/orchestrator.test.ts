@@ -1056,12 +1056,45 @@ describe("validated artifact capture (Sprint 10B §5)", () => {
 
     // Nothing to stop and nothing to measure, so no usage — as distinct from
     // the other two refusals, which both terminate a live sandbox.
-    expect(await captureValidatedArtifact(provider, fakeValidationTarget())).toEqual({
+    expect(await captureValidatedArtifact(provider, fakeValidationTarget())).toMatchObject({
       ok: false,
       reason: "sandbox_lost",
-      detail: null,
       usage: null,
     });
+  });
+
+  it("says why the sandbox was lost instead of only that it was", async () => {
+    const provider = setup({
+      loseSandboxBeforeReconnect: 1,
+      inspectDetail: "status=stopped timeout=300000",
+    });
+
+    await provisionSandbox(provider, fakeValidationTarget()).catch(() => undefined);
+    const result = await captureValidatedArtifact(provider, fakeValidationTarget());
+
+    // The third instance of one lesson. `capture_failed` with no detail cost a
+    // run; `Status code 400 is not ok` cost another; the full provider message
+    // fixed the cause in one. Then capture started failing as `sandbox_lost`,
+    // which carried no detail at all — the same blind spot, one layer down.
+    //
+    // Status *and* timeout, because they answer different halves: a session
+    // stopped at 300000 ms means the lifetime we asked for never took effect;
+    // stopped at 900000 ms means it did and something else ended it.
+    expect(result.ok === false && result.detail).toBe("status=stopped timeout=300000");
+  });
+
+  it("does not let a failed diagnosis become a second failure", async () => {
+    const provider = setup({ loseSandboxBeforeReconnect: 1 });
+    provider.inspect = async () => {
+      throw new Error("provider refused to describe it");
+    };
+
+    await provisionSandbox(provider, fakeValidationTarget()).catch(() => undefined);
+    const result = await captureValidatedArtifact(provider, fakeValidationTarget());
+
+    // Still a clean `sandbox_lost`. Diagnosis is worth less than the
+    // classification it would otherwise take down.
+    expect(result).toMatchObject({ ok: false, reason: "sandbox_lost", detail: null });
   });
 
   it("still stops the sandbox when capture fails", async () => {

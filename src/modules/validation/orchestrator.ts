@@ -880,9 +880,23 @@ export async function captureValidatedArtifact(
   provider: SandboxProvider,
   target: ValidationTarget,
 ): Promise<CaptureOutcome> {
-  const sandbox = await provider.reconnect({ name: sandboxNameFor(target.validationRunId) });
-  // Nothing to stop and nothing to measure: the sandbox is already gone.
-  if (!sandbox) return { ok: false, reason: "sandbox_lost", detail: null, usage: null };
+  const name = sandboxNameFor(target.validationRunId);
+  const sandbox = await provider.reconnect({ name });
+
+  if (!sandbox) {
+    // Nothing to stop and nothing to measure — but "the sandbox was gone" is a
+    // finding, not an explanation, and a bare `sandbox_lost` is what made the
+    // second wave of capture failures as opaque as the first. Ask once, on a
+    // path that has already failed.
+    let detail: string | null = null;
+    try {
+      detail = await provider.inspect({ name });
+    } catch {
+      // A diagnosis that cannot be obtained must not become a second failure.
+    }
+
+    return { ok: false, reason: "sandbox_lost", detail, usage: null };
+  }
 
   /** Terminates, and keeps what the provider measured on the way out. */
   const terminate = async (): Promise<SandboxUsage | null> => {

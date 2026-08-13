@@ -453,6 +453,28 @@ export function createVercelSandboxProvider(): SandboxProvider {
         return null;
       }
     },
+
+    async inspect(input: { name: string }): Promise<string | null> {
+      try {
+        const sandbox = await Sandbox.get({ name: input.name, resume: false });
+
+        // Status and timeout together, because they answer different halves of
+        // the same question. A `stopped` session whose timeout reads 300000 ms
+        // means the lifetime we asked for never took effect; one that reads
+        // 900000 ms means it did and something else ended the session.
+        const facts = [
+          `status=${safeProviderField(sandbox.status) ?? "unknown"}`,
+          sandbox.timeout === undefined ? null : `timeout=${sandbox.timeout}`,
+        ].filter((fact): fact is string => fact !== null);
+
+        return facts.join(" ");
+      } catch (error) {
+        // The sandbox is not merely unusable, it cannot be described. That is
+        // itself the finding — "no longer exists" and "the provider refused to
+        // say" are different failures.
+        return describeProviderError(error);
+      }
+    },
     async deleteArtifact(snapshotId: string): Promise<void> {
       // Reported rather than swallowed. A snapshot that cannot be deleted still
       // expires on the explicit TTL it was created with, so the failure is

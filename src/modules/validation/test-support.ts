@@ -49,6 +49,7 @@ export type FakeEvent =
   | { kind: "origin"; port: number }
   | { kind: "delete_artifact"; snapshotId: string }
   | { kind: "background"; command: string; cwd: string }
+  | { kind: "inspect"; name: string }
   | { kind: "stop" };
 
 export type FakeSandboxOptions = {
@@ -112,6 +113,8 @@ export type FakeSandboxOptions = {
   failPublicOrigin?: boolean;
   /** Make `deleteArtifact` throw, for the cleanup-failure path. */
   failDeleteArtifact?: boolean;
+  /** What `inspect` reports about an unusable sandbox. */
+  inspectDetail?: string | null;
 };
 
 export type FakeSandboxProvider = SandboxProvider & {
@@ -304,6 +307,14 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
       if (options.failCreate) throw new Error("no capacity");
       createCount += 1;
       return handle;
+    },
+
+    async inspect(input) {
+      events.push({ kind: "inspect", name: input.name });
+      if (options.inspectDetail !== undefined) return options.inspectDetail;
+      // Mirrors the adapter's shape, so a test asserting on a diagnosis is
+      // asserting on something the real provider could actually return.
+      return stopCount > 0 ? "status=stopped timeout=900000" : "status=running timeout=900000";
     },
 
     async deleteArtifact(snapshotId) {

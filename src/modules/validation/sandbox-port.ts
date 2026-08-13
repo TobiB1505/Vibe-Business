@@ -281,6 +281,34 @@ export interface SandboxProvider {
   reconnect(input: { name: string }): Promise<SandboxHandle | null>;
 
   /**
+   * A sanitized description of why a sandbox is not usable.
+   *
+   * ## Why this exists as a separate call
+   *
+   * `reconnect` deliberately answers one question — can I work in this sandbox
+   * — and collapses every other answer to `null`, because the caller's next act
+   * is to run a command that assumes a filesystem. That collapse is correct for
+   * control flow and useless for diagnosis, and the difference cost three
+   * dogfood runs.
+   *
+   * The first said `capture_failed` with nothing else. The second said
+   * `Status code 400 is not ok`. The third finally said `` `expiration` must be
+   * 0 or >= 86400000 ms `` and the real cause was fixed in one attempt. Then
+   * capture started failing as `sandbox_lost`, which carries no detail at all —
+   * the same blind spot, one layer down (ADR 0015 §9).
+   *
+   * So this is asked **only on a path that has already failed**: it costs one
+   * extra provider call when something is already wrong, and nothing at all
+   * when things work. It returns the observed status and the session's own
+   * timeout, because "stopped at a 300000 ms timeout" and "stopped at a 900000
+   * ms timeout" are different bugs with different fixes.
+   *
+   * Never shown to a user. Bounded and secret-redacted like any other untrusted
+   * text, and recorded on the audit event an operator reads.
+   */
+  inspect(input: { name: string }): Promise<string | null>;
+
+  /**
    * Deletes a stored artifact.
    *
    * Explicit rather than left to expiry. A preview that has ended should not
