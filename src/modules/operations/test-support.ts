@@ -22,19 +22,23 @@ type QueryError = { code?: string; message: string } | null;
 const POSTGRES_UNIQUE_VIOLATION = "23505";
 const ACTIVE_OPERATION_STATUSES = ["queued", "running"];
 const IN_FLIGHT_AUDIT_STATUSES = ["pending", "analyzing"];
-const ACTIVE_VALIDATION_STATUSES = ["queued", "running", "passed"];
+const ACTIVE_VALIDATION_STATUSES = ["queued", "running"];
 const ACTIVE_PREVIEW_STATUSES = ["starting", "running"];
 
 type Filter =
   | { kind: "eq"; column: string; value: unknown }
   | { kind: "in"; column: string; values: unknown[] }
-  | { kind: "is"; column: string; value: null };
+  | { kind: "is"; column: string; value: null }
+  | { kind: "not_is"; column: string; value: null }
+  | { kind: "gt"; column: string; value: unknown };
 
 function matches(row: Row, filters: Filter[]): boolean {
   return filters.every((filter) => {
     if (filter.kind === "eq") return row[filter.column] === filter.value;
     if (filter.kind === "in") return filter.values.includes(row[filter.column]);
-    return row[filter.column] === null || row[filter.column] === undefined;
+    if (filter.kind === "is") return row[filter.column] === null || row[filter.column] === undefined;
+    if (filter.kind === "not_is") return row[filter.column] !== null && row[filter.column] !== undefined;
+    return String(row[filter.column] ?? "") > String(filter.value);
   });
 }
 
@@ -74,9 +78,10 @@ export class FakeDatabase {
       if (clash) return { code: POSTGRES_UNIQUE_VIOLATION, message: "one active operation per identity" };
     }
 
-    // validation_runs_single_active_idx (Sprint 10A §21). Modelled so a double
-    // click loses its second insert in tests exactly as it would in Postgres —
-    // otherwise the test would "prove" idempotency the database provides.
+    // validation_runs_single_active_idx (Sprint 10A §21, narrowed after the
+    // first 10B dogfood). Only in-flight rows conflict: a historical pass with
+    // no usable artifact must not prevent an explicit re-validation. Modelled
+    // so a double click still loses its second insert exactly as in Postgres.
     if (table === "validation_runs" && ACTIVE_VALIDATION_STATUSES.includes(String(candidate.status))) {
       const clash = others.some(
         (row) =>
@@ -183,6 +188,15 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
   }
   is(column: string, value: null): this {
     this.filters.push({ kind: "is", column, value });
+    return this;
+  }
+  not(column: string, operator: "is", value: null): this {
+    if (operator !== "is") throw new Error(`unsupported fake query operator: not ${operator}`);
+    this.filters.push({ kind: "not_is", column, value });
+    return this;
+  }
+  gt(column: string, value: unknown): this {
+    this.filters.push({ kind: "gt", column, value });
     return this;
   }
   order(column: string, options?: { ascending?: boolean }): this {

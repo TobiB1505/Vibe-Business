@@ -122,7 +122,7 @@ describe("preview session enums match the database constraints", () => {
     // A version string is deliberately not an enum: bumping it must not require
     // a migration, or the version would stop being cheap to bump and would stop
     // being bumped.
-    const sql = migrations().at(-1) ?? "";
+    const sql = migrations().join("\n");
     expect(sql).toMatch(/preview_policy_version text not null check \(char_length/);
   });
 });

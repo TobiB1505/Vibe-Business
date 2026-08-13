@@ -141,7 +141,10 @@ export async function startChangeValidation(
   if (!resolved.ok) return { kind: "failed", error: resolved.error };
 
   // Cheapest answer first: this exact artifact already passed under this exact
-  // policy, so there is nothing to learn from a second microVM (§21).
+  // policy *and its captured filesystem is still usable*, so there is nothing
+  // to learn from a second microVM (§21). A pass whose capture failed, expired
+  // or was deleted must be allowed to run again; otherwise Preview's explicit
+  // "Validate again" action can never recover the missing artifact.
   const reusable = await findReusableValidationRun(supabase, {
     projectId: params.projectId,
     validationIdentity: resolved.identity,

@@ -99,11 +99,17 @@ function mapRow(row: Row): StoredValidationRun {
 }
 
 /**
- * A validation that already answered this exact question (§21).
+ * A validation that already answered this exact question and still carries the
+ * usable artifact a preview needs (§21, Sprint 10B dogfood).
  *
- * Only `passed` is reusable. A previous failure is not a durable fact about
- * the artifact: the build may have failed on a transient registry error, and
- * refusing to re-run would strand the user with a verdict they cannot retry.
+ * Only `passed` with a live, undeleted snapshot is reusable. A passing verdict
+ * without one still proves the commands succeeded, but reusing it would make
+ * the Preview panel's explicit "Validate again" action a no-op and leave the
+ * user permanently stranded after a capture failure or artifact expiry.
+ *
+ * A previous failure is not a durable fact about the artifact either: the
+ * build may have failed on a transient registry error, and refusing to re-run
+ * would strand the user with a verdict they cannot retry.
  */
 export async function findReusableValidationRun(
   supabase: SupabaseClient,
@@ -115,6 +121,9 @@ export async function findReusableValidationRun(
     .eq("project_id", params.projectId)
     .eq("validation_identity", params.validationIdentity)
     .eq("status", "passed")
+    .not("artifact_snapshot_id", "is", null)
+    .is("artifact_deleted_at", null)
+    .gt("artifact_expires_at", new Date().toISOString())
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();

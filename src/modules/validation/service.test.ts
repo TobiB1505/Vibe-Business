@@ -204,12 +204,75 @@ describe("idempotency (§21, §35)", () => {
       sandbox_provider: "vercel_sandbox",
       package_manager: "pnpm",
       prepared_commit_sha: FIXTURE_COMMIT_SHA,
+      artifact_snapshot_id: "snap_validation_1",
+      artifact_expires_at: "2099-01-01T00:00:00.000Z",
+      artifact_deleted_at: null,
     });
 
     const outcome = await start();
 
     expect(outcome).toEqual({ kind: "reused", validationRunId: "validation_1", status: "passed" });
     expect(executor.starts).toHaveLength(0);
+  });
+
+  it("does not reuse a pass whose artifact capture failed", async () => {
+    // The first real 10B dogfood reached exactly this state: validation passed,
+    // snapshot() threw, and the next explicit click was incorrectly answered
+    // with "nothing was re-run". That made recovery impossible even after the
+    // capture defect had been fixed.
+    seed();
+    db.seed("validation_runs", {
+      id: "validation_without_artifact",
+      project_id: PROJECT,
+      user_id: USER,
+      prepared_change_id: PREPARED,
+      operation_run_id: "operation_old",
+      validation_identity: identityFor(),
+      status: "passed",
+      stage: "completed",
+      steps: {},
+      validation_profile: "nextjs_node_v1",
+      validation_profile_version: validationProfileVersionFor("nextjs_node_v1"),
+      sandbox_policy_version: SANDBOX_POLICY_VERSION,
+      sandbox_provider: "vercel_sandbox",
+      package_manager: "pnpm",
+      prepared_commit_sha: FIXTURE_COMMIT_SHA,
+      artifact_snapshot_id: null,
+      artifact_expires_at: null,
+      artifact_deleted_at: null,
+    });
+
+    expect((await start()).kind).toBe("started");
+    expect(executor.starts).toHaveLength(1);
+  });
+
+  it.each([
+    ["expired", { artifact_expires_at: "2020-01-01T00:00:00.000Z", artifact_deleted_at: null }],
+    ["deleted", { artifact_expires_at: "2099-01-01T00:00:00.000Z", artifact_deleted_at: "2026-08-13T00:00:00.000Z" }],
+  ])("does not reuse a pass whose artifact is %s", async (_state, artifact) => {
+    seed();
+    db.seed("validation_runs", {
+      id: `validation_${_state}`,
+      project_id: PROJECT,
+      user_id: USER,
+      prepared_change_id: PREPARED,
+      operation_run_id: "operation_old",
+      validation_identity: identityFor(),
+      status: "passed",
+      stage: "completed",
+      steps: {},
+      validation_profile: "nextjs_node_v1",
+      validation_profile_version: validationProfileVersionFor("nextjs_node_v1"),
+      sandbox_policy_version: SANDBOX_POLICY_VERSION,
+      sandbox_provider: "vercel_sandbox",
+      package_manager: "pnpm",
+      prepared_commit_sha: FIXTURE_COMMIT_SHA,
+      artifact_snapshot_id: `snap_${_state}`,
+      ...artifact,
+    });
+
+    expect((await start()).kind).toBe("started");
+    expect(executor.starts).toHaveLength(1);
   });
 
   it("does not reuse a previous failure", async () => {
@@ -304,6 +367,9 @@ describe("validation identity (§21, §22, §35)", () => {
       sandbox_provider: "vercel_sandbox",
       package_manager: "pnpm",
       prepared_commit_sha: FIXTURE_COMMIT_SHA,
+      artifact_snapshot_id: "snap_old_policy",
+      artifact_expires_at: "2099-01-01T00:00:00.000Z",
+      artifact_deleted_at: null,
     });
 
     expect((await start()).kind).toBe("started");
@@ -425,6 +491,9 @@ describe("integrity policy versioning (post-dogfood v1 → v2)", () => {
       sandbox_provider: "vercel_sandbox",
       package_manager: "pnpm",
       prepared_commit_sha: FIXTURE_COMMIT_SHA,
+      artifact_snapshot_id: "snap_validation_v2",
+      artifact_expires_at: "2099-01-01T00:00:00.000Z",
+      artifact_deleted_at: null,
     });
 
     expect(await start()).toEqual({

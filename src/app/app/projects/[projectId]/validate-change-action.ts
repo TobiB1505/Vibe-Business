@@ -32,7 +32,7 @@ import { buildValidationSummary, type ValidationSummary } from "@/modules/valida
 
 export type ValidateChangeActionState =
   | { ok: true; kind: "running"; operation: OperationView }
-  /** This exact artifact already passed under this exact policy — no new sandbox. */
+  /** This exact artifact passed and its captured filesystem is still usable. */
   | { ok: true; kind: "reused"; validationRunId: string }
   | { ok: false; error: ValidationFailureCode | "project_not_found" | "execution_start_failed" }
   | null;

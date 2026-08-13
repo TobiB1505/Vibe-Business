@@ -131,6 +131,34 @@ describe("columns the refactor writes without a migration (§26)", () => {
   });
 });
 
+describe("validation retry index after artifact capture failure", () => {
+  function currentActiveStatuses(): string[] {
+    const files = readdirSync(MIGRATIONS).filter((file) => file.endsWith(".sql")).sort();
+    let statuses: string[] | null = null;
+
+    for (const file of files) {
+      const sql = readFileSync(join(MIGRATIONS, file), "utf8").replace(/--[^\n]*/g, "");
+      const matches = [
+        ...sql.matchAll(
+          /create unique index validation_runs_single_active_idx[\s\S]*?where status in \(([^)]*)\)/g,
+        ),
+      ];
+      const latest = matches.at(-1);
+      if (latest) statuses = [...latest[1].matchAll(/'([^']+)'/g)].map((match) => match[1]);
+    }
+
+    if (statuses === null) throw new Error("no validation_runs_single_active_idx found in migrations");
+    return statuses;
+  }
+
+  it("blocks concurrent work without making a historical pass permanently active", () => {
+    // A pass whose snapshot capture failed must be allowed to run again. The
+    // operation and this index still prevent two concurrent retries from
+    // provisioning two paid sandboxes.
+    expect(currentActiveStatuses().sort()).toEqual(["queued", "running"]);
+  });
+});
+
 describe("the sandbox policy version tracks what it claims to (§9)", () => {
   /**
    * The rule this file could not previously enforce.
