@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
+import { SANDBOX_BUDGETS } from "./budgets";
 import { inRepository, inSandbox, runValidation, SANDBOX_ENVIRONMENT } from "./orchestrator";
 import {
   FIXTURE_COMMIT_SHA,
@@ -763,5 +764,44 @@ describe("what source verification actually claims (post-dogfood, Option A)", ()
 
     expect(outcome.failureCode).toBe("source_integrity_failed");
     expect(provider.commands().some((command) => command.startsWith("pnpm"))).toBe(false);
+  });
+});
+
+describe("large build-identity files (post-dogfood)", () => {
+  /**
+   * The first passing run verified package.json, next.config.ts and
+   * tsconfig.json — and recorded `pnpm-lock.yaml` as unverified, because this
+   * repository's lockfile is ~310 KB against a 256 KB budget. That is the one
+   * of the four that decides which code gets installed, so a budget silently
+   * excluding it was the wrong budget.
+   */
+  it("verifies a lockfile larger than the general integrity budget", async () => {
+    const lockfile = `lockfileVersion: '9.0'\n${"# padding\n".repeat(40_000)}`;
+    const provider = setup({ files: healthySandboxFiles({ "product/pnpm-lock.yaml": lockfile }) });
+    const manifest = {
+      getTextFile: async (path: string) => (path === "pnpm-lock.yaml" ? lockfile : null),
+    };
+
+    const outcome = await runValidation(provider, manifest, fakeValidationTarget());
+
+    expect(outcome.status).toBe("passed");
+    expect(outcome.sourceIntegrity?.buildIdentityFilesVerified).toContain("pnpm-lock.yaml");
+  });
+
+  it("records a file past even the larger budget as unverified, never as a mismatch", async () => {
+    // A truncated prefix hashed against a whole file reports a *content
+    // mismatch* for a file that is merely large — a false integrity failure,
+    // which is the worst kind because it looks exactly like a real one.
+    const huge = "x".repeat(SANDBOX_BUDGETS.maxBuildIdentityFileBytes + 10);
+    const provider = setup({ files: healthySandboxFiles({ "product/pnpm-lock.yaml": huge }) });
+    const manifest = {
+      getTextFile: async (path: string) => (path === "pnpm-lock.yaml" ? huge : null),
+    };
+
+    const outcome = await runValidation(provider, manifest, fakeValidationTarget());
+
+    expect(outcome.status).toBe("passed");
+    expect(outcome.failureCode).toBeNull();
+    expect(outcome.sourceIntegrity?.buildIdentityFilesUnverified).toContain("pnpm-lock.yaml");
   });
 });

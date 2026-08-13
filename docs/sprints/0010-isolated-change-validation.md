@@ -1,9 +1,10 @@
 # Sprint 10A — Isolated Change Validation
 
-Status: **Implemented; first dogfood attempted and failed, defects fixed, second
-attempt pending.** Two real sandboxes were provisioned. Both runs failed, for
-three reasons that were all mine — see
-[First dogfood attempt](#first-dogfood-attempt--2026-08-12).
+Status: **Complete.** A prepared change was validated in an isolated Firecracker
+microVM: dependencies installed, types checked, 1331 tests run and the
+application built — all with the GitHub credential gone and the network closed.
+Seven runs were needed; the six failures were all Vibe's own defects and each is
+recorded below.
 Branch: `feat/isolated-change-validation`
 
 ## Goal
@@ -240,7 +241,7 @@ wearing an accounting figure's clothes. The measured inputs are stored instead.
 1510 tests pass. 87 new to this sprint, all against fakes — `pnpm test` never
 provisions a real sandbox (§39).
 
-Forty-one mutations, each verified to break tests:
+Forty-three mutations, each verified to break tests:
 
 | Mutation | Tests failed |
 | --- | --- |
@@ -537,6 +538,93 @@ failure: `summary` is rendered on the server and never refetched when polling
 ended. From the outside, a run that failed looked like a run that never
 happened. It now refreshes on terminal state.
 
+## The passing run — 2026-08-13
+
+```
+validation run  61b8c9f1-1803-4c02-9f32-903a231dd2a5     passed
+operation       eff43f82-a578-40c5-a3fc-c2e8af52e301     completed
+prepared change 3480ad0a  →  commit 2f05958  on  vibe/seo-foundations-cc32273131c5
+profile         nextjs_node_v1 / nextjs-node-v1
+policy          sandbox-policy-v1
+provider        vercel_sandbox   runtime node22   pnpm
+```
+
+### Source integrity, as actually established
+
+```
+revisionMode                 provider_pinned
+gitCommitObserved            true      ← matched the prepared SHA
+changedFilesVerified         true      ← robots.ts + sitemap.ts hashed
+buildIdentityFilesVerified   package.json, next.config.ts, tsconfig.json
+buildIdentityFilesUnverified pnpm-lock.yaml            (see below)
+```
+
+### Steps
+
+| Step | Result | Duration |
+| --- | --- | --- |
+| `pnpm install --frozen-lockfile --ignore-scripts` | passed | 18.4 s |
+| `pnpm run typecheck` | passed | 79.1 s |
+| `pnpm run test` | passed — **1331 tests, 77 files** | 83.9 s |
+| `pnpm run build` | passed — Next.js 16.3.0, 14 static pages | 99.3 s |
+
+Total sandbox lifetime **288 s**, operation **297 s**, cleanup `stopped`.
+
+The build output is the most satisfying line in this sprint:
+
+```
+├ ○ /robots.txt
+└ ○ /sitemap.xml
+```
+
+The change Vibe prepared in Sprint 9 produces routes that actually build. That
+is a fact about the artifact, established by running it — not inferred from a
+hash.
+
+### Cost
+
+| Metric | Measured |
+| --- | --- |
+| Active CPU | 116,182 ms |
+| Provisioned memory | 4 GB × 288 s |
+| Network in / out | 332 MB / 1.7 MB |
+| `provider_cost_usd` | **null** |
+
+At published Pro rates this is roughly **$0.011** — about one cent. That figure
+is *not* stored: Vercel exposes no attributable per-sandbox amount, and a
+rate-card derivation presented as accounting would be an estimate in a ledger's
+clothing. The measured inputs are what the row contains.
+
+Across all seven runs: 127 s of Active CPU total. Zero AI calls, zero repository
+writes, `main` and the dogfood branch untouched throughout.
+
+### Why it takes five minutes
+
+Nearly all of it is real work: 79 s of typecheck, 84 s running the customer's
+own 1331-test suite, 99 s of production build, on 2 vCPU with no build cache and
+a cold dependency store. A validation that finished in ten seconds would not
+have validated much.
+
+This is exactly the case the durable-operation foundation exists for. The
+initiating request owns none of it, the panel says *"You can leave this page"*,
+and the verdict is in the database when the user returns. Reducing it later is a
+real option — more vCPUs, a warm store, a snapshot — and each trades money or
+isolation for time, which is a decision rather than a default.
+
+### The gap it exposed
+
+`pnpm-lock.yaml` came back **unverified**: this repository's lockfile is ~310 KB
+against a 256 KB read budget. That is the one build-identity file that decides
+*which code gets installed*, so a budget silently excluding it was the wrong
+budget. Build-identity files now have their own 4 MB budget.
+
+Fixing it surfaced a latent bug worth more than the gap. The adapter truncates
+at the byte budget, so hashing a truncated prefix against a whole file would
+have reported a **content mismatch for a file that is merely large** — a false
+integrity failure, which is the worst kind because it is indistinguishable from
+a real one. Reads now request one byte past the budget, and "too large" is
+recorded as unverified rather than compared.
+
 ## Known limitations
 
 - `--ignore-scripts` will fail repositories that genuinely need a postinstall
@@ -551,6 +639,18 @@ happened. It now refreshes on terminal state.
   in a sitemap.
 
 ## Next step
+
+Not decided. Sprint 10B is preview, and the separation was deliberate: exposing
+a port serves unvalidated customer code on a public URL, which is a materially
+different exposure that deserves its own decision rather than momentum.
+
+Worth carrying forward from this sprint's seven runs: **six of the failures were
+found only by running it.** Every one passed lint, typecheck, build and the full
+test suite first. The pattern is now unmistakable across three sprints — the
+seams that make a domain testable are the seams nothing exercises, and a real
+run is the only thing that touches them.
+
+### The original plan, retained
 
 The dogfood, once the manual checkpoint clears: validate the historical prepared
 change `2f05958` on `vibe/seo-foundations-cc32273131c5`. That branch must not be

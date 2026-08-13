@@ -36,6 +36,17 @@ export const SANDBOX_BUDGETS = {
   /** Files read back out of the sandbox for integrity checking (§29). */
   maxIntegrityFiles: 20,
   maxIntegrityFileBytes: 256 * 1024,
+  /**
+   * Build-identity files get their own, larger budget.
+   *
+   * Lockfiles are the reason. This repository's is ~310 KB, so the first
+   * passing dogfood verified `package.json`, `next.config.ts` and
+   * `tsconfig.json` but recorded `pnpm-lock.yaml` as *unverified* — the single
+   * most security-relevant file of the four, since it decides which code gets
+   * installed. A budget that silently excludes the important case is worse than
+   * a larger number.
+   */
+  maxBuildIdentityFileBytes: 4 * 1024 * 1024,
 } as const;
 
 /**

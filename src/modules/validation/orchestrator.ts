@@ -181,6 +181,28 @@ function describeError(error: unknown): string {
   return "non-error value thrown";
 }
 
+/**
+ * Reads a file only when it fits entirely within the budget.
+ *
+ * The distinction matters: the adapter truncates at `maxBytes`, so hashing a
+ * truncated prefix against a complete file would report a **content mismatch**
+ * for a file that is merely large. That is a false integrity failure — the
+ * worst kind, because it looks exactly like a real one.
+ *
+ * Reading one byte past the budget makes "too large" observable, and too large
+ * is recorded as unverified rather than compared.
+ */
+async function readWhole(
+  sandbox: SandboxHandle,
+  path: string,
+  maxBytes: number,
+): Promise<{ kind: "content"; content: string } | { kind: "absent" } | { kind: "too_large" }> {
+  const content = await sandbox.readFile({ path, maxBytes: maxBytes + 1 });
+  if (content === null) return { kind: "absent" };
+  if (content.length > maxBytes) return { kind: "too_large" };
+  return { kind: "content", content };
+}
+
 function sha256(content: string): string {
   return createHash("sha256").update(content, "utf8").digest("hex");
 }
@@ -435,28 +457,29 @@ export async function runValidation(
     const unverified: string[] = [];
 
     for (const path of BUILD_IDENTITY_FILES) {
-      const onDisk = await sandbox.readFile({
-        path: inSandbox(target.sourceRoot, target.workspaceRoot, path),
-        maxBytes: SANDBOX_BUDGETS.maxIntegrityFileBytes,
-      });
+      const onDisk = await readWhole(
+        sandbox,
+        inSandbox(target.sourceRoot, target.workspaceRoot, path),
+        SANDBOX_BUDGETS.maxBuildIdentityFileBytes,
+      );
       const atCommit = await manifest.getTextFile(
         inRepository(target.workspaceRoot, path),
         target.preparedCommitSha,
-        SANDBOX_BUDGETS.maxIntegrityFileBytes,
+        SANDBOX_BUDGETS.maxBuildIdentityFileBytes,
       );
 
       // Absent on both sides is agreement, not a gap: most repositories have
       // only one lockfile and one next.config extension.
-      if (onDisk === null && atCommit === null) continue;
+      if (onDisk.kind === "absent" && atCommit === null) continue;
 
       // Absent on one side, or past the read budget, cannot be compared.
       // Recorded as unverified rather than quietly counted as verified.
-      if (onDisk === null || atCommit === null) {
+      if (onDisk.kind !== "content" || atCommit === null) {
         unverified.push(path);
         continue;
       }
 
-      if (sha256(onDisk) !== sha256(atCommit)) {
+      if (sha256(onDisk.content) !== sha256(atCommit)) {
         return finish(
           "failed",
           "source_integrity_failed",
