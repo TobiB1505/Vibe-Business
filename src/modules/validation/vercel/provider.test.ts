@@ -27,12 +27,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const create = vi.fn();
 const get = vi.fn();
 const update = vi.fn();
+const listSessions = vi.fn();
+const extendTimeout = vi.fn();
 
 vi.mock("@vercel/sandbox", () => ({
   Sandbox: {
     create: async (...args: unknown[]) => {
       const sandbox = await create(...args);
-      return Object.assign(sandbox, { update: (...updateArgs: unknown[]) => update(...updateArgs) });
+      return Object.assign(sandbox, {
+        update: (...updateArgs: unknown[]) => update(...updateArgs),
+        listSessions: (...listArgs: unknown[]) => listSessions(...listArgs),
+        extendTimeout: (...extendArgs: unknown[]) => extendTimeout(...extendArgs),
+      });
     },
     get: (...args: unknown[]) => get(...args),
   },
@@ -45,6 +51,12 @@ beforeEach(() => {
   get.mockReset();
   update.mockReset();
   update.mockResolvedValue(undefined);
+  listSessions.mockReset();
+  extendTimeout.mockReset();
+  extendTimeout.mockResolvedValue(undefined);
+  // A session that already carries the requested lifetime: the ordinary case,
+  // where nothing needs extending.
+  listSessions.mockResolvedValue({ sessions: [{ status: "running", timeout: 600_000 }] });
   create.mockResolvedValue({
     name: "vibe-validate-abc",
     runtime: "node24",
@@ -491,5 +503,64 @@ describe("capturing an artifact must not cost the ledger (Sprint 10B §5)", () =
     expect(options).not.toHaveProperty("image");
     expect(options.ports).toEqual([3000]);
     expect(options.persistent).toBe(false);
+  });
+});
+
+/**
+ * The session's own deadline (found by dogfood, three runs deep).
+ *
+ * Three validations died within seconds of five minutes and were found
+ * `stopped` at capture. `timeout` had been passed at creation and
+ * `update({ timeout })` added afterwards, and neither helped.
+ *
+ * The diagnostic that followed produced an apparent contradiction —
+ * `status=stopped timeout=900000` — which resolved into the actual bug:
+ * `Sandbox.status` reads through to the **session**, while `Sandbox.timeout` is
+ * the **sandbox-level default**. The two describe different objects, and the
+ * value was landing on the one that does not govern how long the VM lives.
+ */
+describe("the session's lifetime, not just the sandbox's", () => {
+  it("extends a session that came up short, by exactly the shortfall", async () => {
+    listSessions.mockResolvedValue({ sessions: [{ status: "running", timeout: 300_000 }] });
+
+    await createSandbox({ timeoutMs: 900_000 });
+
+    // Exactly, not a round number. The lifetime is a leak bound, and
+    // over-extending would let a runaway sandbox outlive the run's budget.
+    expect(extendTimeout).toHaveBeenCalledWith(600_000);
+  });
+
+  it("leaves a session that already has the requested lifetime alone", async () => {
+    listSessions.mockResolvedValue({ sessions: [{ status: "running", timeout: 900_000 }] });
+
+    await createSandbox({ timeoutMs: 900_000 });
+
+    expect(extendTimeout).not.toHaveBeenCalled();
+  });
+
+  it("never shortens a session that has more than was asked for", async () => {
+    listSessions.mockResolvedValue({ sessions: [{ status: "running", timeout: 1_800_000 }] });
+
+    await createSandbox({ timeoutMs: 900_000 });
+
+    expect(extendTimeout).not.toHaveBeenCalled();
+  });
+
+  it("does not fail creation when the session cannot be read", async () => {
+    listSessions.mockRejectedValue(new Error("list unavailable"));
+
+    // The sandbox-level value is evidence the bound was accepted somewhere, and
+    // failing a working run over a list call would trade a real outcome for a
+    // tidy one.
+    await expect(createSandbox({ timeoutMs: 900_000 })).resolves.toBeDefined();
+  });
+
+  it("fails creation when a short session cannot be extended", async () => {
+    listSessions.mockResolvedValue({ sessions: [{ status: "running", timeout: 300_000 }] });
+    extendTimeout.mockRejectedValue(new Error("cannot extend"));
+
+    // A clear failure now beats a mystery death four minutes in, which is
+    // exactly what the last three dogfood runs were.
+    await expect(createSandbox({ timeoutMs: 900_000 })).rejects.toThrow();
   });
 });

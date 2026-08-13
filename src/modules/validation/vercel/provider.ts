@@ -346,6 +346,56 @@ class VercelSandboxHandle implements SandboxHandle {
   }
 }
 
+/** The session a sandbox is currently running, or null when it reports none. */
+async function currentSession(
+  sandbox: Sandbox,
+): Promise<{ status: string; timeout: number; startedAt?: number; stoppedAt?: number } | null> {
+  const page = await sandbox.listSessions({ limit: 1, sortOrder: "desc" });
+  return page.sessions[0] ?? null;
+}
+
+/**
+ * Makes the session's own deadline match the lifetime the run asked for.
+ *
+ * ## Why `timeout` at creation is not enough, established by dogfood
+ *
+ * Three runs died within seconds of five minutes — the provider's default —
+ * and each time the sandbox was found `stopped` at capture. Adding
+ * `update({ timeout })` after creation did not help, and the diagnostic that
+ * followed explained why: `sandbox.timeout` read **900000**, so the value had
+ * been accepted at the *sandbox* level, while `sandbox.status` comes from the
+ * **session** — a different object with its own deadline.
+ *
+ * The SDK's own update path shows the two are distinct: it computes
+ * `params.timeout - session.timeout` and extends only when that is positive
+ * *and* the session is already `running`. Immediately after creation it need
+ * not be, so the extension is skipped and the session keeps the default.
+ *
+ * This closes that gap by reading the session back and extending it by exactly
+ * the shortfall. Exactly, deliberately: the lifetime is a leak bound, and
+ * extending by a round number would let a runaway sandbox outlive the budget
+ * the run was granted (ADR 0015, `SANDBOX_BUDGETS.totalLifetimeMs`).
+ *
+ * A session that cannot be *read* is left alone — the sandbox-level value is
+ * evidence the bound was accepted somewhere, and failing creation over a list
+ * call would trade a working run for a tidy one. A session that reads short and
+ * cannot be *extended* throws, because that is the difference between a clear
+ * `sandbox_unavailable` now and a mystery death four minutes later.
+ */
+async function enforceSessionLifetime(sandbox: Sandbox, timeoutMs: number): Promise<void> {
+  let session: Awaited<ReturnType<typeof currentSession>>;
+  try {
+    session = await currentSession(sandbox);
+  } catch {
+    return;
+  }
+
+  if (!session) return;
+
+  const shortfall = timeoutMs - session.timeout;
+  if (shortfall > 0) await sandbox.extendTimeout(shortfall);
+}
+
 export function createVercelSandboxProvider(): SandboxProvider {
   return {
     id: "vercel_sandbox",
@@ -393,14 +443,8 @@ export function createVercelSandboxProvider(): SandboxProvider {
               },
             });
 
-      // Reassert the lifetime against the running session. The provider
-      // accepted `timeout` on create during dogfood but the session still died
-      // at its five-minute default, immediately before artifact capture. The
-      // SDK's update path compares the requested sandbox timeout with the live
-      // session timeout and extends that session when it is shorter. Keeping
-      // the create option as well means the VM is bounded from its first
-      // instant; this second call verifies/enforces the same chosen bound.
       await sandbox.update({ timeout: input.timeoutMs });
+      await enforceSessionLifetime(sandbox, input.timeoutMs);
 
       // Freshly created, so liveness is not in question — and asserting it here
       // would turn a provider quirk in the status field into a failure to run
@@ -458,13 +502,32 @@ export function createVercelSandboxProvider(): SandboxProvider {
       try {
         const sandbox = await Sandbox.get({ name: input.name, resume: false });
 
-        // Status and timeout together, because they answer different halves of
-        // the same question. A `stopped` session whose timeout reads 300000 ms
-        // means the lifetime we asked for never took effect; one that reads
-        // 900000 ms means it did and something else ended the session.
+        // The **session's** numbers, not the sandbox's. The first version of
+        // this reported `sandbox.timeout` and produced a contradiction:
+        // `status=stopped timeout=900000` on a session that had died at five
+        // minutes. `status` reads through to the session while `timeout` is the
+        // sandbox-level default, so the two described different objects and the
+        // line looked like a provider bug rather than our own reporting.
+        let session: Awaited<ReturnType<typeof currentSession>> = null;
+        try {
+          session = await currentSession(sandbox);
+        } catch {
+          session = null;
+        }
+
+        const lifetime =
+          session === null
+            ? null
+            : session.startedAt !== undefined && session.stoppedAt !== undefined
+              ? `livedMs=${session.stoppedAt - session.startedAt}`
+              : null;
+
         const facts = [
           `status=${safeProviderField(sandbox.status) ?? "unknown"}`,
-          sandbox.timeout === undefined ? null : `timeout=${sandbox.timeout}`,
+          `sandboxTimeout=${sandbox.timeout ?? "unknown"}`,
+          session === null ? null : `sessionStatus=${safeProviderField(session.status) ?? "unknown"}`,
+          session === null ? null : `sessionTimeout=${session.timeout}`,
+          lifetime,
         ].filter((fact): fact is string => fact !== null);
 
         return facts.join(" ");
