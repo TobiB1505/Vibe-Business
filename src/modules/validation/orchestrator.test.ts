@@ -997,9 +997,9 @@ describe("validated artifact capture (Sprint 10B §5)", () => {
     expect(snapshot?.kind === "snapshot" ? snapshot.expirationMs : null).toBe(
       SANDBOX_BUDGETS.validatedArtifactTtlMs,
     );
-    // An hour, not thirty days. The provider's default is what happens when
-    // nobody decides.
-    expect(SANDBOX_BUDGETS.validatedArtifactTtlMs).toBeLessThanOrEqual(60 * 60 * 1000);
+    // The provider's minimum (one day), not its 30-day default. The minimum is
+    // the tightest backstop Vercel accepts when explicit deletion never runs.
+    expect(SANDBOX_BUDGETS.validatedArtifactTtlMs).toBe(24 * 60 * 60 * 1000);
   });
 
   it("re-verifies the credential scrub before keeping anything", async () => {

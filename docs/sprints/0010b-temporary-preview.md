@@ -255,7 +255,7 @@ loop is now bounded by attempt count as well as by the clock.
   turns that into an observed fact.
 - **Expiry convergence is lazy.** A session nobody reads keeps a stale `running`
   row until someone does. The VM stops regardless (provider timeout) and the
-  snapshot expires regardless (60-minute TTL), so nothing leaks — but the row is
+  snapshot expires regardless (provider-minimum 24-hour TTL), so nothing leaks — but the row is
   not self-healing, and the product must not say it is.
 - **A preview is usually a one-shot.** Deleting the artifact at teardown means a
   second preview of the same change normally needs an explicit re-validation.
@@ -381,7 +381,7 @@ them away.
   never been opened.
 - **Expiry convergence is lazy.** A session nobody reads keeps a stale
   `running` row until someone does. The VM stops regardless (provider timeout)
-  and the snapshot expires regardless (60-minute TTL), so nothing leaks — but
+  and the snapshot expires regardless (provider-minimum 24-hour TTL), so nothing leaks — but
   the row is not self-healing and the product does not pretend it is.
 - **A preview is usually a one-shot.** The artifact is deleted at teardown, so a
   second preview normally costs a new validation. The UI says so; there is no

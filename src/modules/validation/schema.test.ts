@@ -218,6 +218,7 @@ describe("the sandbox policy version tracks what it claims to (§9)", () => {
   const POLICY_DIGESTS: Record<string, string> = {
     "sandbox-policy-v3": "1516401ee57c583c",
     "sandbox-policy-v4": "60c4a0790acd706c",
+    "sandbox-policy-v5": "b581f04c52fe0e7a",
   };
 
   it("names a policy version that matches the policy actually in force", () => {

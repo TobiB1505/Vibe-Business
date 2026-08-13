@@ -602,8 +602,8 @@ export type PreviewTeardown = {
  * party's storage. It exists for one reason — so a preview can start from the
  * exact validated bytes — and once that preview has ended, keeping it would be
  * paying a provider to retain customer data for a purpose that no longer
- * exists. The 60-minute TTL is the backstop for the cases where deletion
- * cannot be confirmed, not the plan.
+ * exists. The provider-minimum 24-hour TTL is the backstop for the cases where
+ * deletion cannot be confirmed, not the plan.
  *
  * The consequence is deliberate and is stated in the product rather than
  * hidden: a future preview of the same change will usually need an explicit

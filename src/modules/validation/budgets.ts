@@ -95,13 +95,13 @@ export const SANDBOX_BUDGETS = {
   /**
    * How long a validated artifact may be retained (Sprint 10B §5).
    *
-   * Sixty minutes, explicit. The provider's default is 30 days, which is not a
-   * retention policy anyone chose — it is what happens when nobody decides.
-   * A customer's built filesystem lives in provider storage for exactly as long
-   * as a preview might plausibly want it, and is deleted sooner when the
-   * preview ends.
+   * Twenty-four hours, explicit: the shortest expiry Vercel accepts. The
+   * provider's default is 30 days, which is not a retention policy anyone chose
+   * — it is what happens when nobody decides. A customer's built filesystem is
+   * still deleted sooner when the preview ends; this TTL is only the backstop
+   * when explicit deletion cannot be confirmed or no preview is ever started.
    */
-  validatedArtifactTtlMs: 60 * 60 * 1000,
+  validatedArtifactTtlMs: 24 * 60 * 60 * 1000,
 
   /** Files read back out of the sandbox for integrity checking (§29). */
   maxIntegrityFiles: 20,

@@ -328,9 +328,9 @@ export type PreviewView = {
  *     which exists in this architecture, and inventing one for a fifteen-minute
  *     TTL would be new infrastructure for a problem the provider already
  *     bounds.
- *  3. **The snapshot's own 60-minute TTL** is the backstop for the case where
- *     nobody ever reads again, so a customer's filesystem cannot outlive an
- *     hour in provider storage regardless.
+ *  3. **The snapshot's own provider-minimum 24-hour TTL** is the backstop for
+ *     the case where nobody ever reads again. Explicit deletion still runs as
+ *     soon as the preview reaches a terminal state.
  *
  * What is deliberately *not* claimed: that a session row transitions to
  * `expired` promptly on its own. It transitions when someone looks. The product
@@ -614,8 +614,8 @@ async function retryArtifactDeletion(
   try {
     await provider.deleteArtifact(session.artifactSnapshotId);
   } catch {
-    // Still not deletable. The artifact's own 60-minute TTL remains the
-    // backstop, and the session keeps saying deletion is outstanding.
+    // Still not deletable. The artifact's own provider-minimum 24-hour TTL
+    // remains the backstop, and the session keeps saying deletion is outstanding.
     return;
   }
 

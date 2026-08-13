@@ -106,7 +106,7 @@ export const VALIDATION_PROFILE_VERSIONS: Record<ValidationProfile, string> = {
  * all, which is why it lives behind a version rather than in a constant someone
  * can raise quietly.
  */
-export const SANDBOX_POLICY_VERSION = "sandbox-policy-v4" as const;
+export const SANDBOX_POLICY_VERSION = "sandbox-policy-v5" as const;
 
 export const SANDBOX_PROVIDERS = ["vercel_sandbox"] as const;
 export type SandboxProviderId = (typeof SANDBOX_PROVIDERS)[number];

@@ -118,7 +118,7 @@ Three mechanisms, and only the first is guaranteed to run:
 
 1. the provider's sandbox timeout stops the VM;
 2. the next authorized read marks the session `expired`, attempts teardown, and deletes the snapshot;
-3. the snapshot's own 60-minute TTL is the backstop for the case where nobody ever reads.
+3. the snapshot's own 24-hour TTL — the shortest Vercel accepts — is the backstop for the case where nobody ever reads.
 
 There is no cron, no scheduler and no background sweeper — none exists in this architecture, and inventing one for a fifteen-minute TTL would be new infrastructure for a problem the provider already bounds ([ARCHITECTURE.md §7](../../ARCHITECTURE.md#7-deferred--open-decisions) leaves job technology undecided).
 
@@ -128,7 +128,7 @@ What is deliberately **not** claimed: that a session row transitions promptly on
 
 Stop, expiry, or a terminal start failure all lead to: stop the sandbox → delete the snapshot → mark the artifact deleted.
 
-An artifact is a customer's built filesystem in a third party's storage. It exists for one reason, and once the preview that needed it has ended, keeping it would be paying a provider to retain customer data for a purpose that no longer exists. The 60-minute TTL is the backstop for the cases where deletion cannot be confirmed, not the plan.
+An artifact is a customer's built filesystem in a third party's storage. It exists for one reason, and once the preview that needed it has ended, keeping it would be paying a provider to retain customer data for a purpose that no longer exists. The provider-minimum 24-hour TTL is the backstop for the cases where deletion cannot be confirmed, not the plan.
 
 Deletion is idempotent, and a failure is **recorded rather than swallowed** (`artifact_delete_failed`) so it can be retried — while never overwriting the reason a preview failed. A user asking why their preview did not work is not asking about snapshot housekeeping.
 
