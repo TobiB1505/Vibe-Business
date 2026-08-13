@@ -73,9 +73,15 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
 
       // Removing `.git` is a real mutation in the fake too, so the credential
       // scrub is verified against actual state rather than a hardcoded answer.
-      if (input.command.command === "rm" && (input.command.args.at(-1) ?? "").endsWith(".git")) {
+      // Removing `.git` is a real mutation in the fake too, so the credential
+      // scrub is verified against actual state rather than a hardcoded answer.
+      // Matched against the path actually removed, because the provider clones
+      // into a subdirectory and an unprefixed match would delete nothing while
+      // reporting success.
+      const removed = input.command.args.at(-1) ?? "";
+      if (input.command.command === "rm" && removed.endsWith(".git")) {
         for (const path of Object.keys(files)) {
-          if (path === ".git" || path.startsWith(".git/")) delete files[path];
+          if (path === removed || path.startsWith(`${removed}/`)) delete files[path];
         }
       }
 
@@ -155,12 +161,13 @@ export function healthySandboxFiles(
   overrides: Record<string, string | null> = {},
 ): Record<string, string> {
   const files: Record<string, string> = {
-    "package.json": JSON.stringify({
+    // Keyed the way the provider lays them out: inside the clone directory.
+    "product/package.json": JSON.stringify({
       name: "product",
       scripts: { build: "next build", test: "vitest run", typecheck: "tsc --noEmit" },
     }),
-    "pnpm-lock.yaml": "lockfileVersion: '9.0'\n",
-    ".git/config": "[remote \"origin\"]\n\turl = https://x-access-token:ghs_secret@github.com/acme/product.git\n",
+    "product/pnpm-lock.yaml": "lockfileVersion: '9.0'\n",
+    "product/.git/config": "[remote \"origin\"]\n\turl = https://x-access-token:ghs_secret@github.com/acme/product.git\n",
   };
 
   for (const [path, content] of Object.entries(overrides)) {
@@ -179,6 +186,7 @@ export function fakeValidationTarget(overrides: Partial<ValidationTarget> = {}):
     cloneCredential: { username: "x-access-token", password: "ghs_cloneTokenValue123456" },
     profile: "nextjs_node_v1",
     packageManager: "pnpm",
+    sourceRoot: "product",
     workspaceRoot: ".",
     preparedFiles: [],
     validationRunId: "11111111-2222-3333-4444-555555555555",

@@ -158,19 +158,33 @@ export type ValidationStepName = (typeof VALIDATION_STEPS)[number];
  * rejected deliberately: **do not introduce a stronger secret to obtain a
  * weaker proof.**
  *
- * So the claim is narrowed to what is genuinely established:
+ * ## Corrected 2026-08-13
+ *
+ * The paragraph above was written on a wrong inference. `git rev-parse` failed
+ * because Vercel clones into `/vercel/sandbox/<repo>/` and the command ran in
+ * the home directory — not because the checkout lacks git metadata. Four runs
+ * were spent before a directory listing settled it.
+ *
+ * The provider-side clone does leave a real checkout, so observing the commit
+ * costs nothing: no credential enters the VM, because Vercel performed the
+ * clone. The Option A machinery stays and the observation is layered on top:
  *
  * ```
  * source_revision_pinned              ✅ immutable SHA passed to the provider
  * prepared_change_files_verified      ✅ hashed in the sandbox, before any repo code
  * build_identity_files_verified       ✅ hashed against GitHub at that same SHA
- * git_commit_independently_observed   ❌ no git metadata in a materialized source
+ * git_commit_observed                 ✅ where the provider leaves a checkout
  * ```
  *
- * A commit SHA is immutable, so "the branch moved" — the failure the original
- * check existed to catch — cannot happen to a pinned revision. What remains is
- * "did the provider deliver what was asked for", and that is answered by
- * hashing files rather than by asking git.
+ * A commit SHA is immutable, so "the branch moved" cannot happen to a pinned
+ * revision — which is why the observation is *recorded* rather than *required*.
+ * A mismatch is a definitive integrity failure and stops the run; an
+ * unavailable git is not, because pinning plus hashing still carries the
+ * guarantee on a provider that materializes a bare filesystem.
+ *
+ * What has not changed is the rejection of a self-managed clone: carrying an
+ * installation token into a VM that later runs untrusted code would still be
+ * introducing a stronger secret to obtain a weaker proof.
  */
 export const REVISION_MODES = [
   /** An immutable commit SHA was passed to the provider as the source revision. */
@@ -181,6 +195,13 @@ export type RevisionMode = (typeof REVISION_MODES)[number];
 export type SourceIntegrity = {
   requestedRevision: string;
   revisionMode: RevisionMode;
+  /**
+   * Whether the checked-out commit was read back from git inside the sandbox.
+   *
+   * False is a statement about the provider, not a failure: pinning and hashing
+   * carry the guarantee either way.
+   */
+  gitCommitObserved: boolean;
   /** The prepared change's own files, hashed against their stored digests. */
   changedFilesVerified: boolean;
   /** Build-identity files whose sandbox bytes matched GitHub at the pinned SHA. */

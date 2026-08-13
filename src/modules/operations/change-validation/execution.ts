@@ -68,6 +68,8 @@ export type ValidationDeps = {
 
 export type ValidationRepositoryTarget = {
   repositoryUrl: string;
+  /** The directory Vercel clones into, i.e. the repository name. */
+  sourceRoot: string;
   /**
    * Resolves file bytes from GitHub at an exact commit.
    *
@@ -241,6 +243,9 @@ export async function executeValidationStep(
     cloneCredential: target.cloneCredential,
     profile: profile.profile,
     packageManager: profile.packageManager,
+    // The provider clones into a directory named after the repository. Taken
+    // from server state, never guessed inside the sandbox.
+    sourceRoot: target.sourceRoot,
     workspaceRoot: profile.workspaceRoot,
     preparedFiles: prepared.files.map((file) => ({ path: file.path, contentHash: file.contentHash })),
     validationRunId: run.id,

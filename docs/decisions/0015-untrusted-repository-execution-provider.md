@@ -76,12 +76,18 @@ A repository whose build needs arbitrary network access fails validation in V0.1
 
 ### 8. Source identity is established by pinning and hashing, not by Git
 
-**Amended 2026-08-13, after five real runs.**
+**Amended 2026-08-13, after six real runs. The first amendment rested on a wrong
+inference and is corrected below.**
 
 The original design re-observed the checked-out commit with `git rev-parse HEAD`
-and compared it to the prepared commit. That is not possible on this provider:
-Vercel materializes a git source as a **filesystem**, not a checkout, so the
-sandbox contains no `.git`. This was established by running it, not assumed.
+and compared it to the prepared commit. Four runs failed with
+`fatal: not a git repository`, and this ADR briefly recorded that Vercel
+materializes a git source as a filesystem without git metadata.
+
+**That was wrong.** A directory listing showed the cause: Vercel clones into
+`/vercel/sandbox/<repo>/`, and the command had been running in the sandbox home.
+The provider-side clone leaves a real checkout one directory down. The error
+message was accurate; the conclusion drawn from it was not.
 
 The alternative was to clone inside the sandbox ourselves. Rejected:
 
@@ -94,14 +100,22 @@ filesystem state or one scrubbing bug would turn a theoretical integrity gap
 into a real credential exposure. The proof gained does not justify the secret
 introduced.
 
-What is claimed instead, recorded per run in `validation_runs.source_integrity`:
+Because the checkout exists, observing the commit costs nothing — Vercel
+performed the clone, so no credential enters the VM. The layered claim,
+recorded per run in `validation_runs.source_integrity`:
 
 ```
 source_revision_pinned              ✅ immutable SHA passed to the provider
 prepared_change_files_verified      ✅ hashed in the sandbox, before any repo code
 build_identity_files_verified       ✅ hashed against GitHub at that same SHA
-git_commit_independently_observed   ❌ no git metadata in a materialized source
+git_commit_observed                 ✅ where the provider leaves a checkout
 ```
+
+The observation is **recorded, not required**. A mismatch is a definitive
+integrity failure and stops the run before any repository-controlled command. An
+*unavailable* git is not a failure, because pinning plus hashing already carries
+the guarantee on a provider that materializes a bare filesystem. The strongest
+available proof is taken; the weaker ones always hold.
 
 A commit SHA is immutable, so the failure the original check existed to catch —
 the branch moving under us — cannot happen to a pinned revision. The remaining

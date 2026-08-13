@@ -54,6 +54,8 @@ async function resolveTarget(operation: StoredOperationRun): Promise<ValidationR
 
   return {
     repositoryUrl: `https://github.com/${owner}/${repo}.git`,
+    // Vercel materializes the clone at `/vercel/sandbox/<repo>/`.
+    sourceRoot: repo,
     cloneCredential,
     // The same bounded reader the analyzer uses. Verifying build identity
     // against the pinned commit is an ordinary read, not a new capability.

@@ -32,8 +32,17 @@ import {
  * must not silently lose the `git rev-parse` answer and fail integrity
  * verification instead of the thing it meant to test.
  */
+const HEAD = "git rev-parse HEAD";
+
 function setup(options: FakeSandboxOptions = {}) {
-  return fakeSandboxProvider({ files: healthySandboxFiles(), ...options });
+  return fakeSandboxProvider({
+    files: healthySandboxFiles(),
+    ...options,
+    // The provider-side clone leaves a real checkout, so the happy path
+    // observes the prepared commit. Merged, never replaced: a test overriding
+    // one command must not silently lose this and fail integrity instead.
+    results: { [HEAD]: { output: `${FIXTURE_COMMIT_SHA}\n` }, ...(options.results ?? {}) },
+  });
 }
 
 /**
@@ -70,7 +79,8 @@ describe("the happy path", () => {
     await runValidation(provider, noManifest, fakeValidationTarget());
 
     expect(provider.commands()).toEqual([
-      "rm -rf .git",
+      HEAD,
+      "rm -rf product/.git",
       "pnpm install --frozen-lockfile --ignore-scripts",
       "pnpm run typecheck",
       "pnpm run test",
@@ -176,7 +186,7 @@ describe("credential handling (§7, §37)", () => {
     const provider = fakeSandboxProvider({
       files: healthySandboxFiles(),
       // The scrub reports success but leaves the file behind.
-      results: { "rm -rf .git": { exitCode: 0 } },
+      results: { "rm -rf product/.git": { exitCode: 0 } },
     });
     // Re-add `.git/config` after the fake's own deletion by making it
     // unremovable: a file the scrub cannot touch.
@@ -253,7 +263,7 @@ describe("source integrity (§6, §29)", () => {
 
   it("refuses when a prepared file's hash does not match", async () => {
     const provider = setup({
-      files: healthySandboxFiles({ "src/app/robots.ts": "// something else entirely" }),
+      files: healthySandboxFiles({ "product/src/app/robots.ts": "// something else entirely" }),
     });
 
     const outcome = await runValidation(
@@ -270,7 +280,7 @@ describe("source integrity (§6, §29)", () => {
 
   it("accepts a prepared file whose hash matches", async () => {
     const content = "export default function robots() {}\n";
-    const provider = setup({ files: healthySandboxFiles({ "src/app/robots.ts": content }) });
+    const provider = setup({ files: healthySandboxFiles({ "product/src/app/robots.ts": content }) });
 
     const outcome = await runValidation(
       provider,
@@ -302,7 +312,7 @@ describe("step semantics (§19, §33)", () => {
   it("skips a step whose script does not exist, with a reason", async () => {
     const provider = setup({
       files: healthySandboxFiles({
-        "package.json": JSON.stringify({ scripts: { build: "next build" } }),
+        "product/package.json": JSON.stringify({ scripts: { build: "next build" } }),
       }),
     });
 
@@ -317,7 +327,7 @@ describe("step semantics (§19, §33)", () => {
     // A repository that simply never had tests must not be reported as failing
     // them, which is what `npm test` on a scriptless project would produce.
     const provider = setup({
-      files: healthySandboxFiles({ "package.json": JSON.stringify({ scripts: { build: "next build" } }) }),
+      files: healthySandboxFiles({ "product/package.json": JSON.stringify({ scripts: { build: "next build" } }) }),
     });
     await runValidation(provider, noManifest, fakeValidationTarget());
 
@@ -357,7 +367,7 @@ describe("step semantics (§19, §33)", () => {
     // "It builds" is the claim. A repository that cannot make it is not
     // validated — it is unsupported.
     const provider = setup({
-      files: healthySandboxFiles({ "package.json": JSON.stringify({ scripts: { test: "vitest" } }) }),
+      files: healthySandboxFiles({ "product/package.json": JSON.stringify({ scripts: { test: "vitest" } }) }),
     });
 
     const outcome = await runValidation(provider, noManifest, fakeValidationTarget());
@@ -379,7 +389,7 @@ describe("step semantics (§19, §33)", () => {
 
   it("uses npm's locked install when the project uses npm", async () => {
     const provider = setup({
-      files: healthySandboxFiles({ "pnpm-lock.yaml": null, "package-lock.json": "{}" }),
+      files: healthySandboxFiles({ "product/pnpm-lock.yaml": null, "product/package-lock.json": "{}" }),
     });
 
     await runValidation(provider, noManifest, fakeValidationTarget({ packageManager: "npm" }));
@@ -389,7 +399,7 @@ describe("step semantics (§19, §33)", () => {
   });
 
   it("refuses without a lockfile rather than resolving fresh dependencies", async () => {
-    const provider = setup({ files: healthySandboxFiles({ "pnpm-lock.yaml": null }) });
+    const provider = setup({ files: healthySandboxFiles({ "product/pnpm-lock.yaml": null }) });
 
     const outcome = await runValidation(provider, noManifest, fakeValidationTarget());
 
@@ -417,7 +427,7 @@ describe("cleanup on every path (§23, §36)", () => {
     ["test failure", { results: { "pnpm run test": { exitCode: 1 } } }],
     ["build failure", { results: { "pnpm run build": { exitCode: 1 } } }],
     ["timeout", { results: { "pnpm run build": { timedOut: true, exitCode: -1 } } }],
-    ["provider error during the scrub", { throwOn: "rm -rf .git" }],
+    ["provider error during the scrub", { throwOn: "rm -rf product/.git" }],
     ["provider error mid-run", { throwOn: "pnpm run build" }],
   ])("stops the sandbox after %s", async (_label, options) => {
     const provider = setup(options as FakeSandboxOptions);
@@ -551,7 +561,7 @@ describe("failures explain themselves (post-dogfood)", () => {
   });
 
   it("carries a provider error through instead of a placeholder", async () => {
-    const provider = setup({ throwOn: "rm -rf .git" });
+    const provider = setup({ throwOn: "rm -rf product/.git" });
 
     const outcome = await runValidation(provider, noManifest, fakeValidationTarget());
 
@@ -630,11 +640,13 @@ describe("diagnosing a missing checkout (post-dogfood)", () => {
    * from the right directory: the checkout genuinely has no `.git`.
    */
   it("addresses paths relative to the sandbox working directory", () => {
-    expect(inWorkspace(".")).toBe(".");
-    expect(inWorkspace(".", "package.json")).toBe("package.json");
-    expect(inWorkspace("apps/web")).toBe("apps/web");
-    expect(inWorkspace("apps/web", "package.json")).toBe("apps/web/package.json");
-    expect(inWorkspace("apps/web/", ".git/config")).toBe("apps/web/.git/config");
+    // The provider clones into a directory named after the repository, so the
+    // sandbox home is never the workspace. Four runs looked in the wrong place.
+    expect(inWorkspace("product", ".")).toBe("product");
+    expect(inWorkspace("product", ".", "package.json")).toBe("product/package.json");
+    expect(inWorkspace("product", "apps/web")).toBe("product/apps/web");
+    expect(inWorkspace("product", "apps/web", "package.json")).toBe("product/apps/web/package.json");
+    expect(inWorkspace("product/", "apps/web/", ".git/config")).toBe("product/apps/web/.git/config");
   });
 
 });
@@ -657,25 +669,42 @@ describe("what source verification actually claims (post-dogfood, Option A)", ()
     });
   });
 
-  it("never claims git observed the commit", async () => {
+  it("records whether git observed the commit, rather than assuming either way", async () => {
+    // Corrected after the fifth run: the provider-side clone does leave a real
+    // checkout, in a subdirectory. Observing it costs nothing — Vercel did the
+    // clone, so no credential enters the VM.
     const outcome = await runValidation(setup(), noManifest, fakeValidationTarget());
 
-    // The record says what was established. There is no field asserting an
-    // independent Git observation, because none happened.
-    expect(JSON.stringify(outcome.sourceIntegrity)).not.toContain("gitCommit");
-    expect(Object.keys(outcome.sourceIntegrity ?? {})).toEqual([
-      "requestedRevision",
-      "revisionMode",
-      "changedFilesVerified",
-      "buildIdentityFilesVerified",
-      "buildIdentityFilesUnverified",
-    ]);
+    expect(outcome.sourceIntegrity).toMatchObject({ gitCommitObserved: true });
+  });
+
+  it("still passes when the provider leaves no checkout to observe", async () => {
+    // A provider that materializes a bare filesystem is not a failure: pinning
+    // plus hashing carries the guarantee. Recorded as false, not fatal.
+    const provider = setup({ results: { "git rev-parse HEAD": { exitCode: 128, output: "not a git repository" } } });
+
+    const outcome = await runValidation(provider, noManifest, fakeValidationTarget());
+
+    expect(outcome.status).toBe("passed");
+    expect(outcome.sourceIntegrity).toMatchObject({ gitCommitObserved: false });
+  });
+
+  it("refuses when the observed commit is not the prepared one", async () => {
+    // A mismatch *is* definitive: the provider delivered something other than
+    // what was asked for. Stops before any repository-controlled command.
+    const provider = setup({ results: { "git rev-parse HEAD": { output: "deadbeefdeadbeef\n" } } });
+
+    const outcome = await runValidation(provider, noManifest, fakeValidationTarget());
+
+    expect(outcome).toMatchObject({ status: "failed", failureCode: "source_integrity_failed" });
+    expect(outcome.failureDetail).toContain("deadbeefdeadbeef");
+    expect(provider.commands().some((command) => command.startsWith("pnpm"))).toBe(false);
   });
 
   it("verifies build identity against GitHub at the pinned commit", async () => {
     const manifest = {
       getTextFile: async (path: string) =>
-        path === "package.json" ? healthySandboxFiles()["package.json"] : null,
+        path === "product/package.json" ? healthySandboxFiles()["product/package.json"] : null,
     };
 
     const outcome = await runValidation(setup(), manifest, fakeValidationTarget());
@@ -688,7 +717,7 @@ describe("what source verification actually claims (post-dogfood, Option A)", ()
     // A matching robots.ts beside a different lockfile is a different build.
     const manifest = {
       getTextFile: async (path: string) =>
-        path === "pnpm-lock.yaml" ? "lockfileVersion: '6.0'\n" : null,
+        path === "product/pnpm-lock.yaml" ? "lockfileVersion: '6.0'\n" : null,
     };
 
     const provider = setup();

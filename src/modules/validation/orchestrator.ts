@@ -65,6 +65,15 @@ export type ValidationTarget = {
   cloneCredential: { username: string; password: string } | null;
   profile: ValidationProfile;
   packageManager: SupportedPackageManager;
+  /**
+   * The directory the provider clones into, relative to the sandbox home.
+   *
+   * Vercel materializes a git source at `/vercel/sandbox/<repo>/`, not at
+   * `/vercel/sandbox`. Discovered by listing the directory after four runs
+   * looked in the wrong place — and taken from the repository name on the
+   * server, never guessed inside the sandbox.
+   */
+  sourceRoot: string;
   workspaceRoot: string;
   /** Path + sha256 of every file Vibe prepared, for integrity checking (§29). */
   preparedFiles: readonly { path: string; contentHash: string }[];
@@ -198,10 +207,12 @@ const SANDBOX_WORKDIR = "/vercel/sandbox";
  *
  * `SANDBOX_WORKDIR` is kept for messages, so a failure says where it looked.
  */
-export function inWorkspace(root: string, path = ""): string {
-  const base = root === "." || root === "" ? "" : root.replace(/\/+$/, "");
-  if (path === "") return base === "" ? "." : base;
-  return base === "" ? path : `${base}/${path}`;
+export function inWorkspace(sourceRoot: string, workspaceRoot: string, path = ""): string {
+  const segments = [sourceRoot, workspaceRoot === "." ? "" : workspaceRoot, path]
+    .map((segment) => segment.replace(/^\/+|\/+$/g, ""))
+    .filter((segment) => segment.length > 0);
+
+  return segments.length === 0 ? "." : segments.join("/");
 }
 
 function stepResult(
@@ -333,11 +344,39 @@ export async function runValidation(
     //
     // All of it before a single repository-controlled command (§29).
     await setStage("verifying_source");
-    const workdir = inWorkspace(target.workspaceRoot);
+    const workdir = inWorkspace(target.sourceRoot, target.workspaceRoot);
+
+    // The provider-side clone leaves a real checkout — in a subdirectory, which
+    // is what four runs took to establish. Observing the commit is therefore
+    // free: no credential enters the VM, because Vercel performed the clone.
+    //
+    // Recorded rather than required. A mismatch is a definitive integrity
+    // failure and stops the run; an *unavailable* git is not, because pinning
+    // plus hashing already carries the guarantee on a provider that
+    // materializes a bare filesystem. The strongest available proof is taken,
+    // and the weaker ones always hold.
+    const head = await sandbox.run({
+      command: { command: "git", args: ["rev-parse", "HEAD"] },
+      cwd: workdir,
+      timeoutMs: SANDBOX_BUDGETS.sourceTimeoutMs,
+    });
+
+    // Empty output from a "successful" rev-parse is not an observation. Treated
+    // as unavailable rather than compared, so a quirk cannot masquerade as a
+    // mismatch and fail an otherwise sound run.
+    const observedCommit =
+      head.exitCode === 0 && head.output.trim().length > 0 ? head.output.trim() : null;
+    if (observedCommit !== null && observedCommit !== target.preparedCommitSha) {
+      return finish(
+        "failed",
+        "source_integrity_failed",
+        `checked-out commit ${observedCommit} is not the prepared commit ${target.preparedCommitSha}`,
+      );
+    }
 
     for (const file of target.preparedFiles.slice(0, SANDBOX_BUDGETS.maxIntegrityFiles)) {
       const content = await sandbox.readFile({
-        path: inWorkspace(target.workspaceRoot, file.path),
+        path: inWorkspace(target.sourceRoot, target.workspaceRoot, file.path),
         maxBytes: SANDBOX_BUDGETS.maxIntegrityFileBytes,
       });
 
@@ -373,11 +412,11 @@ export async function runValidation(
 
     for (const path of BUILD_IDENTITY_FILES) {
       const inSandbox = await sandbox.readFile({
-        path: inWorkspace(target.workspaceRoot, path),
+        path: inWorkspace(target.sourceRoot, target.workspaceRoot, path),
         maxBytes: SANDBOX_BUDGETS.maxIntegrityFileBytes,
       });
       const atCommit = await manifest.getTextFile(
-        inWorkspace(target.workspaceRoot, path),
+        inWorkspace(target.sourceRoot, target.workspaceRoot, path),
         target.preparedCommitSha,
         SANDBOX_BUDGETS.maxIntegrityFileBytes,
       );
@@ -407,6 +446,7 @@ export async function runValidation(
     sourceIntegrity = {
       requestedRevision: target.preparedCommitSha,
       revisionMode: "provider_pinned",
+      gitCommitObserved: observedCommit !== null,
       changedFilesVerified: target.preparedFiles.length > 0,
       buildIdentityFilesVerified: verified,
       buildIdentityFilesUnverified: unverified,
@@ -420,7 +460,7 @@ export async function runValidation(
     // on disk, and this step is what stops it reaching repository code (§7).
     await setStage("securing_sandbox");
     await sandbox.run({
-      command: { command: "rm", args: ["-rf", inWorkspace(target.workspaceRoot, ".git")] },
+      command: { command: "rm", args: ["-rf", inWorkspace(target.sourceRoot, target.workspaceRoot, ".git")] },
       cwd: workdir,
       timeoutMs: SANDBOX_BUDGETS.sourceTimeoutMs,
     });
@@ -428,7 +468,7 @@ export async function runValidation(
     // Verified, not assumed. If the credential store still exists, refuse to
     // run repository code at all rather than hope.
     const gitConfig = await sandbox.readFile({
-      path: inWorkspace(target.workspaceRoot, ".git/config"),
+      path: inWorkspace(target.sourceRoot, target.workspaceRoot, ".git/config"),
       maxBytes: 4096,
     });
     if (gitConfig !== null) {
@@ -439,7 +479,7 @@ export async function runValidation(
     // Parsed in *our* process, not executed. This is what decides which steps
     // exist — never an opportunity's prose (§12).
     const manifestRaw = await sandbox.readFile({
-      path: inWorkspace(target.workspaceRoot, "package.json"),
+      path: inWorkspace(target.sourceRoot, target.workspaceRoot, "package.json"),
       maxBytes: SANDBOX_BUDGETS.maxIntegrityFileBytes,
     });
     if (manifestRaw === null) {
@@ -455,7 +495,7 @@ export async function runValidation(
     }
 
     const lockfile = await sandbox.readFile({
-      path: inWorkspace(target.workspaceRoot, LOCKFILES[target.packageManager]),
+      path: inWorkspace(target.sourceRoot, target.workspaceRoot, LOCKFILES[target.packageManager]),
       maxBytes: 1024,
     });
     if (lockfile === null) {

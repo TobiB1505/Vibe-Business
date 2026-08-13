@@ -240,7 +240,7 @@ wearing an accounting figure's clothes. The measured inputs are stored instead.
 1510 tests pass. 87 new to this sprint, all against fakes — `pnpm test` never
 provisions a real sandbox (§39).
 
-Thirty mutations, each verified to break tests:
+Thirty-nine mutations, each verified to break tests:
 
 | Mutation | Tests failed |
 | --- | --- |
@@ -428,7 +428,36 @@ pass-through exercised the *fake* provider, not the adapter. A test that cannot
 fail is worse than no test, so the assertion moved to the adapter's own suite
 against a mocked SDK, and the mutation now fails.
 
-### Decision: Option A — pin and hash, do not re-observe
+### Sixth attempt: the clone is in a subdirectory
+
+The directory listing settled everything:
+
+```
+/vercel/sandbox/
+  .cache .codex .config .global .local .npm .npmrc .sudo_as_admin_successful
+  Vibe-Business        ← the repository
+```
+
+Vercel clones into `/vercel/sandbox/<repo>/`. Every command had been running in
+the sandbox home, where `fatal: not a git repository` was a perfectly accurate
+message about a directory that is not a repository.
+
+**The conclusion drawn from it was wrong.** "There is no `.git`" was reported as
+a finding when it was still a hypothesis, and a design decision was taken on it.
+The right move would have been to list the directory the first time the question
+came up rather than the fourth.
+
+The correction is small and the Option A machinery all stays. `sourceRoot` comes
+from the repository name in server state — never guessed inside the sandbox —
+and `git rev-parse` returns, because the provider-side clone leaves a real
+checkout and observing it costs nothing: Vercel did the clone, so no credential
+enters the VM.
+
+What has *not* changed is the rejection of a self-managed clone. That reasoning
+was about carrying a token into a VM that later runs untrusted code, and it
+stands regardless of where the checkout lives.
+
+### Decision: Option A — pin and hash, plus observe where possible
 
 Confirmed and adopted. `git rev-parse` is removed as a source-integrity
 condition. The reasoning and the exact wording of the narrowed claim live in
