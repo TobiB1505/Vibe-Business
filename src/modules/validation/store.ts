@@ -403,12 +403,37 @@ export async function completeValidationRun(
     sandboxRuntime: string | null;
     sandboxDurationMs: number | null;
     cleanupStatus: CleanupStatus;
+    /**
+     * A captured artifact, written in the same statement as the verdict.
+     *
+     * Not a convenience. `validation_runs_artifact_only_when_passed` refuses an
+     * artifact on a row that is not `passed`, so recording it at capture time —
+     * one step earlier, while the run is still `running` — violated the CHECK,
+     * failed that step, and had it retried onto a sandbox the successful
+     * snapshot had already stopped. Four dogfood rounds were spent on the
+     * resulting `sandbox_lost` while the snapshot sat orphaned in provider
+     * storage.
+     *
+     * Setting both in one UPDATE makes the constraint satisfiable by
+     * construction: the row becomes `passed` and gains its artifact atomically,
+     * or neither happens.
+     */
+    artifact?: { snapshotId: string; sizeBytes: number | null; expiresAt: string } | null;
   },
 ): Promise<boolean> {
   const { data, error } = await supabase
     .from("validation_runs")
     .update({
       status: params.status,
+      // Only ever alongside `status: "passed"` — the caller supplies an
+      // artifact only for a passing run, and the database enforces the rest.
+      ...(params.artifact
+        ? {
+            artifact_snapshot_id: params.artifact.snapshotId,
+            artifact_size_bytes: params.artifact.sizeBytes,
+            artifact_expires_at: params.artifact.expiresAt,
+          }
+        : {}),
       stage: params.stage,
       steps: params.steps,
       failure_code: params.failureCode,

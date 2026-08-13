@@ -20,6 +20,7 @@ export type Row = Record<string, unknown>;
 type QueryError = { code?: string; message: string } | null;
 
 const POSTGRES_UNIQUE_VIOLATION = "23505";
+const POSTGRES_CHECK_VIOLATION = "23514";
 const ACTIVE_OPERATION_STATUSES = ["queued", "running"];
 const IN_FLIGHT_AUDIT_STATUSES = ["pending", "analyzing"];
 const ACTIVE_VALIDATION_STATUSES = ["queued", "running"];
@@ -90,6 +91,30 @@ export class FakeDatabase {
           ACTIVE_VALIDATION_STATUSES.includes(String(row.status)),
       );
       if (clash) return { code: POSTGRES_UNIQUE_VIOLATION, message: "one live validation per identity" };
+    }
+
+    // validation_runs_artifact_only_when_passed.
+    //
+    // A CHECK rather than an index, and modelled here because the fake's
+    // silence on CHECK constraints cost four dogfood rounds. The artifact was
+    // being written one step before the verdict, while the row was still
+    // `running`. Postgres refused it, the step failed, the retry found a
+    // sandbox the successful snapshot had already stopped, and the run reported
+    // `sandbox_lost` — with a 1.14 GB snapshot orphaned in provider storage and
+    // every test green.
+    //
+    // The in-memory database will never evaluate constraints in general, but a
+    // rule this load-bearing is worth stating twice.
+    if (table === "validation_runs" && candidate.artifact_snapshot_id != null) {
+      if (candidate.status !== "passed") {
+        return {
+          code: POSTGRES_CHECK_VIOLATION,
+          message: "validation_runs_artifact_only_when_passed",
+        };
+      }
+      if (candidate.artifact_expires_at == null) {
+        return { code: POSTGRES_CHECK_VIOLATION, message: "validation_runs_artifact_has_expiry" };
+      }
     }
 
     // preview_sessions_single_active_idx (Sprint 10B-2 §32). One live preview

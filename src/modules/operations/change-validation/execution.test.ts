@@ -537,6 +537,7 @@ describe("re-entry after a resumed workflow (§11, §20)", () => {
     const before = provider.commands().length;
     const cleanup: CleanupRecord = {
       cleanup: "not_provisioned",
+      artifact: null,
       runtime: null,
       sandboxDurationMs: null,
       usage: null,
@@ -572,6 +573,7 @@ describe("re-entry after a resumed workflow (§11, §20)", () => {
 
     const replay = await finalizeValidationStep(d, OPERATION, "validation_run_failed", {
       cleanup: "not_provisioned",
+      artifact: null,
       runtime: null,
       sandboxDurationMs: null,
       usage: null,
