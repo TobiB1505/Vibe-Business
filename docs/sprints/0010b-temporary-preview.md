@@ -7,12 +7,13 @@
 | 10B-1 — ValidatedArtifact capture | ✅ Complete (`f18aef3`) |
 | 10B-2 — Preview runtime & lifecycle | ✅ Complete (`b0817cb`) |
 | 10B-3 — Preview UI | ✅ Complete (`9152c46`) |
-| 10B-3 — Real preview dogfood | ✅ Core flow verified end to end |
+| 10B-3 — Real preview dogfood | ✅ Verified end to end, twice |
+| Durable teardown | ✅ Verified against the real provider |
 
-**Sprint 10B is not closed yet.** The core flow has been observed end to end on
-2026-08-13 — artifact captured, preview started and reachable, public edge
-opened by a human, stopped, snapshot deleted. All four of the sprint's open
-claims became observations:
+**Sprint 10B is COMPLETE.** Everything it set out to establish has been
+observed against the real provider on 2026-08-13, including the durable teardown
+that the first dogfood forced. All four of the sprint's open claims became
+observations:
 
 | Claim | Result |
 | --- | --- |
@@ -21,9 +22,9 @@ claims became observations:
 | Teardown deletes the snapshot at the provider | ✅ confirmed |
 | The whole flow works end to end | ✅ 14.6 s from start to reachable |
 
-What remains open is the **durable teardown**, rewritten after the dogfood
-exposed a defect no test could see (see [Teardown](#teardown-moved-into-durable-execution)).
-That path has not been exercised against a real preview.
+A fifth was added by the dogfood itself and then closed: that preview spend is
+actually recorded. It was not, silently, and the fix is
+[durable teardown](#teardown-moved-into-durable-execution).
 
 ## Goal
 
@@ -408,12 +409,41 @@ Mutation 6 is reported honestly as **equivalent, not a gap**: `getPreviewSession
 already filters on the operation's project, so a session is only ever found when
 the two agree. There is no behaviour to break.
 
-## Remaining before Sprint 10B closes
+## Durable teardown — verified 2026-08-13
 
-1. One preview started and stopped through the **durable teardown**, confirming
-   a `sandbox_usage_events` row now exists with `operation = change_preview`.
-   The path is fully tested against doubles; it has not met the real provider.
-2. Then mark Sprint 10B complete.
+Second preview, started and stopped through the rewritten path. The step order
+is visible in the timestamps rather than asserted:
+
+```
+22:46:49.944  session started
+22:47:01.686  ready_at            11.7 s to reachable
+22:47:29.561  teardown operation started
+22:47:33.070  usage ledger row written        ← step 2
+22:47:34.051  session converged, artifact deleted  ← step 3
+22:47:34.353  ValidationRun artifact marked deleted
+22:47:34.640  teardown operation completed
+```
+
+The ledger row that could not exist before:
+
+| Field | Value |
+| --- | --- |
+| `operation` | `change_preview` |
+| `sandbox_duration_ms` | 42 163 |
+| `active_cpu_ms` | **3 628** |
+| `network_ingress_bytes` | 43 785 |
+| `network_egress_bytes` | 286 869 |
+| `provider_cost_usd` | `null` — never estimated |
+| `cleanup_status` | `stopped` |
+
+Measured, not derived. The egress figure is the public-edge traffic from opening
+the preview in a browser, which is billable and now visible.
+
+Also confirmed: `teardown_reason` persisted as `stopped` by the initiator; one
+ledger row and no duplicate; no `change_preview.cleanup_incomplete` event, so
+the snapshot deleted cleanly; the teardown operation completed with no failure
+code; the ValidationRun stayed `passed` and the PreparedChange stayed
+`prepared`.
 
 ## Known limitations carried forward
 
