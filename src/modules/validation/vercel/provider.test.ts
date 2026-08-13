@@ -26,10 +26,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const create = vi.fn();
 const get = vi.fn();
+const update = vi.fn();
 
 vi.mock("@vercel/sandbox", () => ({
   Sandbox: {
-    create: (...args: unknown[]) => create(...args),
+    create: async (...args: unknown[]) => {
+      const sandbox = await create(...args);
+      return Object.assign(sandbox, { update: (...updateArgs: unknown[]) => update(...updateArgs) });
+    },
     get: (...args: unknown[]) => get(...args),
   },
 }));
@@ -39,6 +43,8 @@ vi.mock("server-only", () => ({}));
 beforeEach(() => {
   create.mockReset();
   get.mockReset();
+  update.mockReset();
+  update.mockResolvedValue(undefined);
   create.mockResolvedValue({
     name: "vibe-validate-abc",
     runtime: "node24",
@@ -117,6 +123,16 @@ describe("sandbox creation options", () => {
 
   it("bounds the sandbox lifetime", async () => {
     expect(await createSandbox()).toMatchObject({ timeout: 600_000 });
+  });
+
+  it("reasserts the timeout on the live session after creation", async () => {
+    await createSandbox();
+
+    // The fifth dogfood session stopped after Vercel's five-minute default
+    // despite `timeout` being present on create. `update()` is not redundant:
+    // the SDK also extends a running session whose actual timeout is shorter
+    // than the requested sandbox default.
+    expect(update).toHaveBeenCalledWith({ timeout: 600_000 });
   });
 
   it("pins the image, so 'validated' means a known toolchain", async () => {

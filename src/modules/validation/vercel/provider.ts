@@ -393,6 +393,15 @@ export function createVercelSandboxProvider(): SandboxProvider {
               },
             });
 
+      // Reassert the lifetime against the running session. The provider
+      // accepted `timeout` on create during dogfood but the session still died
+      // at its five-minute default, immediately before artifact capture. The
+      // SDK's update path compares the requested sandbox timeout with the live
+      // session timeout and extends that session when it is shorter. Keeping
+      // the create option as well means the VM is bounded from its first
+      // instant; this second call verifies/enforces the same chosen bound.
+      await sandbox.update({ timeout: input.timeoutMs });
+
       // Freshly created, so liveness is not in question — and asserting it here
       // would turn a provider quirk in the status field into a failure to run
       // at all. Reconnection is where liveness is a real question.
