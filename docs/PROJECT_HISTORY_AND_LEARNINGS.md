@@ -1471,6 +1471,45 @@ sobald der Preview endet — mit der ehrlichen Folge, dass ein zweiter Preview
 meist eine neue Validierung kostet. Diese Kosten gehören sichtbar in die UI und
 niemals in einen automatischen "Refresh".
 
+**18. Review ist ein eigenes Gate — und ein Vergleich ist nur dann ehrlich, wenn
+seine Vergleichbarkeit erzwungen wird**
+Ein Diff verlangt, Code zu lesen. Ein Preview-Link verlangt, zwei Tabs aus dem
+Gedächtnis nebeneinanderzuhalten, bevor der Preview abläuft. Beides ist
+Hausaufgabe, kein Review. Das Artefakt, das dazwischen fehlte, ist ein
+kontrollierter Vorher/Nachher-Vergleich:
+
+```
+preview_available          → genau dieses Artefakt läuft und ist erreichbar
+review_artifact_available  → ein kontrollierter Vergleich existiert
+human_approved             → jemand hat hingesehen und entschieden
+```
+
+Drei Dinge, die dieser Sprint gelehrt hat:
+
+*Vergleichbarkeit ist eine Datenbank-Invariante, keine Absicht.* Zwei Bilder in
+unterschiedlichen Größen sind kein Vorher/Nachher — jedes umgebrochene Element
+darin liest sich als Änderung, die nie stattgefunden hat. Deshalb erzwingt ein
+CHECK, dass ein `ready`-Artefakt **beide** Seiten und **identische** Maße hat.
+Und ein einseitiger Vergleich ist ein Fehler, kein Teilerfolg: ein Bild neben
+einem leeren Kasten liest sich als "die Änderung hat die Seite gelöscht".
+
+*"Vorher" ist das, was beobachtet wurde — nicht der Base-Commit.* Production
+konnte in dem Moment alles sein. Also wird `before_origin` mit Zeitstempel
+gespeichert und die ehrliche Semantik mitgeführt, statt eine Aussage über einen
+Commit zu erfinden, die niemand geprüft hat.
+
+*Das Review-Artefakt überlebt den Preview, den es fotografiert hat.* Sonst
+entsteht genau der falsche Anreiz: eine bezahlte Sandbox am Leben halten, damit
+ein Screenshot sichtbar bleibt. `ON DELETE SET NULL` statt `CASCADE` — der
+Aufräum-Pfad darf die Evidenz nicht mitnehmen.
+
+Und die Grenze bleibt: kein Score, kein "verbessert", 0 AI-Calls im gesamten
+Review-Pfad. Der erste Vergleich wird eine Startseite zeigen, die vorher und
+nachher gleich aussieht, weil die SEO-Änderung `robots.ts` und `sitemap.ts`
+betrifft. Das ist das ehrliche Ergebnis — ein visueller Vergleich beweist, dass
+die Review-Pipeline funktioniert, nicht dass jede Codeänderung in Pixeln sichtbar
+ist.
+
 ---
 
 ## 37. Aktueller Stand
@@ -1512,8 +1551,9 @@ Opportunity Engine            ✅
 ```
 Branch creation               ✅
 Code changes                  ✅ (eine Capability)
-Tests                         planned
-Preview                       planned
+Isolated validation           ✅ (Sandbox, install/typecheck/test/build)
+Preview                       ✅ (15 Min, temporär, öffentlich-unlisted)
+Before/After Review           ✅ gebaut · Dogfood offen
 Approval                      planned
 Merge                         planned
 ```

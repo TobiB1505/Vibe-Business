@@ -1,5 +1,8 @@
 import type { PreviewCard } from "@/modules/change-preview/view";
+import type { ReviewCard } from "@/modules/review/view";
+import type { ReviewImages } from "@/modules/review/service";
 import { PreviewPanel } from "./preview-panel";
+import { ReviewPanel } from "./review-panel";
 import { ValidationPanel, type ValidationSummary } from "./validation-panel";
 
 /**
@@ -40,6 +43,14 @@ export type PreparedChangeCard = {
    * port, no command (§6).
    */
   validatedArtifactId: string | null;
+  /** Review state, decided on the server like every other panel's. */
+  review: ReviewCard;
+  /** Signed, short-lived image URLs. Minted server-side, never persisted (§16). */
+  reviewImages: ReviewImages | null;
+  /** The running preview to photograph, when there is one. */
+  previewSessionId: string | null;
+  /** Provider-resolved preview origin, for "Open". Null once the preview ends. */
+  previewOrigin: string | null;
 };
 
 export function PreparedChangesSection({
@@ -108,6 +119,21 @@ export function PreparedChangesSection({
               preparedChangeId={change.id}
               card={change.preview}
               validatedArtifactId={change.validatedArtifactId}
+            />
+
+            {/* Below Preview, because a comparison photographs a running
+                preview. The order on screen is the order of the gates — and
+                there is no Approve, Merge or Deploy control after it. */}
+            <ReviewPanel
+              projectId={projectId}
+              preparedChangeId={change.id}
+              card={change.review}
+              images={change.reviewImages}
+              previewSessionId={change.previewSessionId}
+              previewOrigin={change.previewOrigin}
+              branchUrl={change.branchUrl}
+              commitSha={change.commitSha}
+              filesChanged={change.filePaths.length}
             />
           </li>
         ))}

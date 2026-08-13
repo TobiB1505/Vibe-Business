@@ -1,6 +1,5 @@
-import { readFileSync, readdirSync } from "node:fs";
-import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { checkedValues, migrationSql } from "@/modules/operations/migration-test-support";
 import { OPERATION_STAGES, OPERATION_TYPES } from "@/modules/operations/schema";
 import { PREVIEW_BUDGETS } from "./budgets";
 import { computePreviewIdentity, previewSandboxNameFor } from "./identity";
@@ -34,95 +33,66 @@ import { FIXTURE_COMMIT_SHA } from "./test-support";
  * the first insert, after the UI had already told the user it was starting.
  */
 
-const MIGRATIONS_DIR = join(process.cwd(), "supabase/migrations");
-
-function migrations(): string[] {
-  return readdirSync(MIGRATIONS_DIR)
-    .filter((name) => name.endsWith(".sql"))
-    .sort()
-    .map((name) =>
-      // Comments are stripped first, and that is not cosmetic: this file's own
-      // constraints carry explanatory comments containing parentheses — "(§7)",
-      // "(Sprint 10B-2 §23)" — and a naive `[^)]*` scan truncates the value
-      // list at the first one. The first draft of this test did exactly that
-      // and reported four permitted stages out of twenty-five.
-      readFileSync(join(MIGRATIONS_DIR, name), "utf8").replace(/--[^\n]*/g, ""),
-    );
-}
-
 /**
- * Values permitted by the most recent `check (column in (...))` in the schema.
+ * The migration reader is shared and **table-aware**.
  *
- * Anchored on `check` specifically, so a partial index predicate — `where
- * status in ('starting', 'running')` — is not mistaken for the constraint. That
- * predicate is a *subset* of the allowed values by design, so reading it as the
- * constraint would silently weaken every assertion below into a tautology.
+ * The first version of this test took the last `check (<column> in (...))`
+ * anywhere in the history, which broke the moment a second table used the same
+ * column name: `review_browser_usage.status` silently redirected the preview
+ * status assertion at the wrong constraint. A column name is not a unique key
+ * across a schema.
  */
-function allowedBySchema(column: string): string[] {
-  let allowed: string[] | null = null;
-
-  for (const sql of migrations()) {
-    // The last definition wins, exactly as it does in Postgres: constraints are
-    // dropped and re-added, so an earlier, narrower list is history.
-    const matches = [...sql.matchAll(new RegExp(`check\\s*\\(\\s*${column} in \\(([^)]*)\\)`, "gi"))];
-    const last = matches.at(-1);
-    if (last) allowed = [...last[1].matchAll(/'([^']+)'/g)].map((match) => match[1]);
-  }
-
-  if (allowed === null) throw new Error(`no ${column} constraint found in migrations`);
-  return allowed;
-}
 
 describe("operation types match the database constraint", () => {
   it("permits every declared operation type", () => {
-    expect(allowedBySchema("operation_type").sort()).toEqual([...OPERATION_TYPES].sort());
+    expect(checkedValues("operation_runs", "operation_type").sort()).toEqual([...OPERATION_TYPES].sort());
   });
 
   it("permits change_preview", () => {
     // Stated separately from the set equality above, because this is the exact
     // value the live constraint did not have before this sprint.
-    expect(allowedBySchema("operation_type")).toContain("change_preview");
+    expect(checkedValues("operation_runs", "operation_type")).toContain("change_preview");
   });
 
   it("still permits every historical operation type", () => {
     // Rows exist under all of these. A constraint that dropped one would make
     // history unreadable.
     for (const type of ["business_audit", "opportunity_generation", "change_preparation", "change_validation"]) {
-      expect(allowedBySchema("operation_type")).toContain(type);
+      expect(checkedValues("operation_runs", "operation_type")).toContain(type);
     }
   });
 });
 
 describe("operation stages match the database constraint", () => {
   it("permits every declared stage", () => {
-    expect(allowedBySchema("stage").sort()).toEqual([...OPERATION_STAGES].sort());
+    expect(checkedValues("operation_runs", "stage").sort()).toEqual([...OPERATION_STAGES].sort());
   });
 
   it("permits every preview stage", () => {
     for (const stage of ["restoring_artifact", "verifying_artifact", "starting_server", "checking_preview"]) {
-      expect(allowedBySchema("stage")).toContain(stage);
+      expect(checkedValues("operation_runs", "stage")).toContain(stage);
     }
   });
 });
 
 describe("preview session enums match the database constraints", () => {
   it("permits every declared preview status", () => {
-    expect(allowedBySchema("status").sort()).toEqual([...PREVIEW_STATUSES].sort());
+    expect(checkedValues("preview_sessions", "status").sort()).toEqual([...PREVIEW_STATUSES].sort());
   });
 
   it("permits every declared preview profile", () => {
-    expect(allowedBySchema("preview_profile")).toEqual([...PREVIEW_PROFILES]);
+    expect(checkedValues("preview_sessions", "preview_profile")).toEqual([...PREVIEW_PROFILES]);
   });
 
   it("permits every declared cleanup status", () => {
-    expect(allowedBySchema("cleanup_status").sort()).toEqual([...PREVIEW_CLEANUP_STATUSES].sort());
+    expect(checkedValues("preview_sessions", "cleanup_status").sort()).toEqual([...PREVIEW_CLEANUP_STATUSES].sort());
   });
 
   it("stores the preview policy version rather than enumerating it", () => {
     // A version string is deliberately not an enum: bumping it must not require
     // a migration, or the version would stop being cheap to bump and would stop
     // being bumped.
-    const sql = migrations().join("\n");
+    const sql = migrationSql().join("\n");
     expect(sql).toMatch(/preview_policy_version text not null check \(char_length/);
   });
 });

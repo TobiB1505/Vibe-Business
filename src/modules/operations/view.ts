@@ -118,5 +118,10 @@ export const OPERATION_STAGE_LABELS: Record<OperationStage, string> = {
   verifying_artifact: "Verifying the restored build",
   starting_server: "Starting the application",
   checking_preview: "Checking the preview responds",
+  // Visual review. Named for what is being photographed, because "capturing"
+  // alone leaves a user wondering which half is happening.
+  capturing_before: "Capturing current live product",
+  capturing_after: "Capturing preview",
+  persisting_artifacts: "Preparing comparison",
   completed: "Completed",
 };

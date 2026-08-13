@@ -117,4 +117,20 @@ export const OPERATION_FAILURE_MESSAGES: Record<OperationFailureCode, string> = 
   preview_provider_unavailable: "The preview environment could not be reached. Try again in a moment.",
   preview_cleanup_failed: "Vibe could not confirm the preview environment was fully cleaned up.",
   preview_failed: "The preview could not be started.",
+
+  // Visual review (Sprint 11A §31). Each says what happened and, where it is
+  // true, what the user can do. None implies the comparison is a judgement.
+  review_preview_required:
+    "Start a temporary preview first — a comparison photographs the running preview.",
+  review_before_unavailable:
+    "Vibe needs a verified production URL before it can capture a \"before\" image.",
+  review_not_supported: "This change cannot be compared visually yet.",
+  review_auth_required_not_supported:
+    "This page needs a sign-in. Vibe only compares public pages for now, and it will not move your login between environments.",
+  review_browser_unavailable: "The browser environment could not be reached. Try again in a moment.",
+  review_before_capture_failed: "Vibe could not capture your current live page.",
+  review_after_capture_failed: "Vibe could not capture the preview page.",
+  review_storage_failed: "The comparison images could not be saved.",
+  review_expired: "This comparison has expired and its images were removed.",
+  review_failed: "The comparison could not be created.",
 };
