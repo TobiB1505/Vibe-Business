@@ -942,7 +942,7 @@ gains an enumerated constraint.
 
 ### Tests and mutation validation
 
-1518 → **1641 tests**. Every existing security assertion was kept and now runs
+1518 → **1645 tests**. Every existing security assertion was kept and now runs
 *through* the step boundaries: the orchestrator suite drives the real phase
 functions through the real `reconnect` path, so a phase that forgot to
 reconnect, or quietly created a second sandbox, fails there.

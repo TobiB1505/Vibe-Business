@@ -929,16 +929,32 @@ describe("the timeout model after the durable-phase refactor (§8)", () => {
     expect(SANDBOX_BUDGETS.totalLifetimeMs).toBeGreaterThan(measuredTotalMs * 2);
   });
 
-  it("reports a command that exceeds its budget as timed out, and cleans up", async () => {
-    const provider = setup({
-      results: { "pnpm run build": { timedOut: true, exitCode: -1 } },
-    });
+  it.each([
+    ["install", "pnpm install --frozen-lockfile --ignore-scripts"],
+    ["typecheck", "pnpm run typecheck"],
+    ["test", "pnpm run test"],
+    ["build", "pnpm run build"],
+  ])("reports a %s that exceeds its budget as timed out, and cleans up", async (phase, command) => {
+    // Classified, never surfaced as a generic provider failure: "the build
+    // timed out" is actionable, "validation could not be completed" is not.
+    const provider = setup({ results: { [command]: { timedOut: true, exitCode: -1 } } });
 
     const outcome = await runValidationPhases(provider, noManifest, fakeValidationTarget());
 
     expect(outcome).toMatchObject({ status: "failed", failureCode: "sandbox_timeout" });
-    expect(outcome.steps.build?.status).toBe("timed_out");
+    expect(outcome.steps[phase as "build"]?.status).toBe("timed_out");
     expect(outcome.cleanup).toBe("stopped");
     expect(provider.stopped()).toBe(true);
+  });
+
+  it("attempts cleanup even when the sandbox is already gone", async () => {
+    // The whole-lifetime case: the sandbox outlived its own timeout and
+    // vanished. Cleanup still runs and reports honestly rather than throwing.
+    const provider = setup({ loseSandboxBeforeReconnect: 2 });
+
+    const outcome = await runValidationPhases(provider, noManifest, fakeValidationTarget());
+
+    expect(outcome).toMatchObject({ status: "failed", failureCode: "sandbox_lost" });
+    expect(outcome.cleanup).toBe("not_provisioned");
   });
 });
