@@ -4,7 +4,12 @@ import { fakeSandboxProvider } from "@/modules/validation/test-support";
 import { PREVIEW_BUDGETS } from "./budgets";
 import { computePreviewIdentity } from "./identity";
 import { PREVIEW_POLICY_VERSION, previewProfileVersionFor } from "./schema";
-import { getPreviewStatus, startChangePreview, stopChangePreview } from "./service";
+import {
+  getPreviewCard,
+  getPreviewStatus,
+  startChangePreview,
+  stopChangePreview,
+} from "./service";
 import { FIXTURE_COMMIT_SHA, PREVIEW_SNAPSHOT_ID } from "./test-support";
 
 /**
@@ -453,6 +458,39 @@ describe("reading a preview", () => {
     expect(await read({ userId: OTHER_USER })).toBeNull();
   });
 
+  it("hides the session from a different project", async () => {
+    seedRunning(new Date(Date.now() + PREVIEW_BUDGETS.ttlMs).toISOString());
+
+    // The other project genuinely belongs to the other user, so this is the
+    // "right session id, wrong project" case rather than a second ownership
+    // check on the same tenant.
+    expect(await read({ projectId: OTHER_PROJECT, userId: OTHER_USER })).toBeNull();
+  });
+
+  it("returns no origin for a session that is not running", async () => {
+    // Every non-running status. Deleting the status gate from the origin read
+    // survived the first mutation run, because the only coverage was in the
+    // action tests against a mocked service — which cannot fail when the
+    // service is what changed.
+    for (const status of ["starting", "stopping", "stopped", "expired", "failed"] as const) {
+      db = new FakeDatabase();
+      provider = fakeSandboxProvider();
+      seedRunning(new Date(Date.now() + PREVIEW_BUDGETS.ttlMs).toISOString());
+      const session = db.rows("preview_sessions")[0];
+      session.status = status;
+      if (status !== "starting" && status !== "stopping") session.stopped_at = new Date().toISOString();
+      if (status === "failed") session.failure_code = "preview_health_check_failed";
+
+      const view = await read();
+
+      expect(view?.status).toBe(status);
+      expect(view?.origin).toBeNull();
+      expect(view?.verdict).toBeNull();
+      // And no provider call was made to find out.
+      expect(provider.origins()).toEqual([]);
+    }
+  });
+
   it("returns no origin past the deadline, and converges the row", async () => {
     seedRunning(HOUR_AGO());
 
@@ -614,5 +652,147 @@ describe("stopping a preview", () => {
     // amount, and a rate-card figure would be a guess in an accounting field.
     expect(usage.provider_cost_usd).toBeNull();
     expect(usage.active_cpu_ms).toBe(1234);
+  });
+});
+
+describe("the preview card, and what reading it must never cost", () => {
+  function card(overrides: { validation?: { id: string; status: string } | null } = {}) {
+    const validation =
+      overrides.validation === undefined ? { id: VALIDATION, status: "passed" } : overrides.validation;
+
+    return getPreviewCard(fakeSupabase(db), {
+      projectId: PROJECT,
+      preparedChangeId: PREPARED,
+      validation,
+      resolveFailureMessage: () => "safe copy",
+    });
+  }
+
+  it("offers a start when a live artifact exists", async () => {
+    seed();
+
+    expect((await card()).state).toBe("ready_to_start");
+  });
+
+  it("requires validation when none has passed", async () => {
+    seed({ validationStatus: "failed" });
+
+    expect((await card({ validation: { id: VALIDATION, status: "failed" } })).state).toBe(
+      "needs_validation",
+    );
+  });
+
+  it("reports an unavailable artifact and asks for a deliberate re-validation", async () => {
+    seed({ artifactDeletedAt: new Date().toISOString() });
+
+    const result = await card();
+
+    expect(result.state).toBe("artifact_unavailable");
+    expect(result.revalidationRequired).toBe(true);
+  });
+
+  it("reports an expired artifact separately", async () => {
+    seed({ artifactExpiresAt: HOUR_AGO() });
+
+    expect((await card()).state).toBe("artifact_expired");
+  });
+
+  it("starts nothing at all when the artifact is unavailable", async () => {
+    seed({ artifactDeletedAt: new Date().toISOString() });
+
+    await card();
+
+    // The regression this exists for (§22). A panel that "helpfully"
+    // re-validated an expired artifact on render would spend the user's money
+    // for looking at a page. Zero of everything, asserted rather than assumed.
+    expect(db.rows("validation_runs").filter((row) => row.status === "running")).toHaveLength(0);
+    expect(db.rows("preview_sessions")).toHaveLength(0);
+    expect(db.rows("operation_runs")).toHaveLength(0);
+    expect(executor.starts).toHaveLength(0);
+    expect(provider.createCount()).toBe(0);
+    expect(db.rows("sandbox_usage_events")).toHaveLength(0);
+    expect(db.rows("ai_usage_events")).toHaveLength(0);
+  });
+
+  it("starts nothing after a failed preview either", async () => {
+    seed({ artifactDeletedAt: new Date().toISOString() });
+    db.seed("preview_sessions", {
+      id: "preview_failed",
+      project_id: PROJECT,
+      user_id: USER,
+      prepared_change_id: PREPARED,
+      validation_run_id: VALIDATION,
+      operation_run_id: "operation_old",
+      artifact_snapshot_id: PREVIEW_SNAPSHOT_ID,
+      preview_profile: "nextjs_preview_v1",
+      preview_identity: identityFor(),
+      status: "failed",
+      failure_code: "preview_health_check_failed",
+      port: PREVIEW_BUDGETS.port,
+      expires_at: HOUR_AGO(),
+      stopped_at: HOUR_AGO(),
+    });
+
+    const result = await card();
+
+    expect(result.state).toBe("failed");
+    expect(result.failureMessage).toBe("safe copy");
+    // A failure must never trigger a retry, a re-validation, a fresh scan, an
+    // audit or an opportunity run on the user's behalf (§22).
+    expect(executor.starts).toHaveLength(0);
+    expect(provider.createCount()).toBe(0);
+    expect(db.rows("ai_usage_events")).toHaveLength(0);
+    expect(db.rows("repository_intelligence_snapshots")).toHaveLength(0);
+    expect(db.rows("business_readiness_audits")).toHaveLength(0);
+    expect(db.rows("opportunity_sets")).toHaveLength(0);
+  });
+
+  it("shows a live session over the artifact it already consumed", async () => {
+    seed({ artifactDeletedAt: new Date().toISOString() });
+    db.seed("preview_sessions", {
+      id: "preview_live",
+      project_id: PROJECT,
+      user_id: USER,
+      prepared_change_id: PREPARED,
+      validation_run_id: VALIDATION,
+      operation_run_id: "operation_old",
+      artifact_snapshot_id: PREVIEW_SNAPSHOT_ID,
+      preview_profile: "nextjs_preview_v1",
+      preview_identity: identityFor(),
+      status: "running",
+      stage: "completed",
+      port: PREVIEW_BUDGETS.port,
+      ready_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + PREVIEW_BUDGETS.ttlMs).toISOString(),
+    });
+
+    // The artifact is deleted at teardown, so a running preview whose artifact
+    // is gone is the normal case rather than an inconsistency.
+    expect((await card()).state).toBe("running");
+  });
+
+  it("never returns another project's preview", async () => {
+    seed();
+    db.seed("preview_sessions", {
+      id: "preview_other",
+      project_id: OTHER_PROJECT,
+      user_id: OTHER_USER,
+      prepared_change_id: PREPARED,
+      validation_run_id: VALIDATION,
+      operation_run_id: "operation_other",
+      artifact_snapshot_id: "snap_someone_else",
+      preview_profile: "nextjs_preview_v1",
+      preview_identity: identityFor(),
+      status: "running",
+      stage: "completed",
+      port: PREVIEW_BUDGETS.port,
+      ready_at: new Date().toISOString(),
+      expires_at: new Date(Date.now() + PREVIEW_BUDGETS.ttlMs).toISOString(),
+    });
+
+    const result = await card();
+
+    expect(result.state).toBe("ready_to_start");
+    expect(result.previewSessionId).toBeNull();
   });
 });

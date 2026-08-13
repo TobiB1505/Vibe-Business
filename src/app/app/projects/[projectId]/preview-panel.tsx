@@ -1,0 +1,428 @@
+"use client";
+
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState, useTransition } from "react";
+import { PREVIEW_STAGE_LABELS, type PreviewCard } from "@/modules/change-preview/view";
+import type { PreviewStage } from "@/modules/change-preview/schema";
+import { validateChangeAction } from "./validate-change-action";
+import {
+  getPreviewStatusAction,
+  startPreviewAction,
+  stopPreviewAction,
+  type StartPreviewActionState,
+} from "./preview-actions";
+
+/**
+ * Temporary preview, as the user sees it (Sprint 10B-3 §2, §4, §8, §10, §17).
+ *
+ * ## The vocabulary is the product guarantee
+ *
+ * A running preview means one thing: the exact validated artifact started and
+ * answered inside an isolated environment. It is never rendered as *approved*,
+ * *reviewed*, *merged* or *deployed*, and the panel keeps saying so at the
+ * moment a user is most likely to assume otherwise — when they are looking at
+ * their own application working.
+ *
+ * ```
+ * sandbox_validation_passed → preview_available → human review → merge → deploy
+ *                                    ↑ we are here
+ * ```
+ *
+ * ## The preview URL is untrusted, and stays outside Vibe
+ *
+ * `Open preview` is a plain link with `target="_blank"`. Deliberately:
+ *
+ *  - **no iframe.** Embedding untrusted customer code inside Vibe's origin is
+ *    the whole class of problem this codebase exists not to have.
+ *  - **no proxy.** Serving it through Vibe would make Vibe's runtime fetch
+ *    arbitrary responses from an application it did not write.
+ *  - **no screenshot, no DOM import, no HTML fetch.** Nothing from the preview
+ *    is ever rendered anywhere inside Vibe (§17).
+ *
+ * `rel="noreferrer"` matters here beyond habit: without it the preview would
+ * receive Vibe's project URL — which contains the project id — in a `Referer`
+ * header, handing an internal identifier to code we did not write.
+ *
+ * ## State is given, never inferred
+ *
+ * The card comes from the server. The one thing this component computes is the
+ * countdown, and it is presentation only — the server refuses to return an
+ * origin past the deadline whatever the browser believes (§13).
+ */
+
+const POLL_INTERVAL_MS = 2000;
+
+type Origin = { origin: string | null; expiresAt: string; verdict: string | null };
+
+function remaining(expiresAt: string, now: number): string | null {
+  const deadline = Date.parse(expiresAt);
+  if (!Number.isFinite(deadline)) return null;
+
+  const seconds = Math.floor((deadline - now) / 1000);
+  if (seconds <= 0) return null;
+
+  const minutes = Math.floor(seconds / 60);
+  return minutes >= 1 ? `${minutes} min left` : `${seconds}s left`;
+}
+
+function localTime(iso: string): string {
+  const parsed = new Date(iso);
+  return Number.isNaN(parsed.getTime()) ? iso : parsed.toLocaleTimeString();
+}
+
+/**
+ * The public-exposure confirmation (§4).
+ *
+ * Every sentence is load-bearing and none of them is reassurance. It says what
+ * will exist (a public, unlisted URL), who can reach it (anyone with the link),
+ * what will not be there (production secrets and data), how long it lasts, and
+ * what is not being changed.
+ *
+ * It deliberately never says *private*, *secure link* or *authenticated
+ * preview*. There is no access control on the origin, and describing one that
+ * does not exist would be the single most dangerous sentence in this product.
+ */
+function ConfirmDialog({
+  onCancel,
+  onConfirm,
+  pending,
+}: {
+  onCancel: () => void;
+  onConfirm: () => void;
+  pending: boolean;
+}) {
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="preview-confirm-title"
+      className="space-y-3 rounded-md border border-amber-800/60 bg-amber-950/20 p-4"
+    >
+      <h5 id="preview-confirm-title" className="text-sm font-medium text-zinc-100">
+        Start temporary preview?
+      </h5>
+
+      <div className="space-y-2 text-sm text-zinc-300">
+        <p>
+          Vibe will start the validated application in an isolated environment and make it
+          temporarily available through a public, unlisted URL.
+        </p>
+        <p className="text-amber-300">
+          Anyone who has the URL may be able to open it until the preview expires.
+        </p>
+        <p>Vibe will not add production secrets or production data.</p>
+        <p>The preview expires automatically after 15 minutes.</p>
+        <p>Your production site and default branch will not be changed.</p>
+      </div>
+
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={pending}
+          className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-900 disabled:opacity-60"
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          onClick={onConfirm}
+          disabled={pending}
+          className="rounded-md border border-amber-700 bg-amber-900/40 px-3 py-1.5 text-sm text-amber-100 hover:bg-amber-900/60 disabled:opacity-60"
+        >
+          Start temporary preview
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Repeated wherever a preview looks like success. That is exactly when it is needed. */
+function NotApproved() {
+  return <p className="text-xs text-zinc-500">Not merged · Not deployed · Not reviewed by a human</p>;
+}
+
+export function PreviewPanel({
+  projectId,
+  preparedChangeId,
+  card,
+  /** The passing validation whose artifact would be previewed, if there is one. */
+  validatedArtifactId,
+}: {
+  projectId: string;
+  preparedChangeId: string;
+  card: PreviewCard;
+  validatedArtifactId: string | null;
+}) {
+  const router = useRouter();
+  const [confirming, setConfirming] = useState(false);
+  const [state, setState] = useState<StartPreviewActionState>(null);
+  const [pending, startTransition] = useTransition();
+  const [stopping, setStopping] = useState(false);
+  const [live, setLive] = useState<Origin | null>(null);
+  const [stage, setStage] = useState<PreviewStage | null>(card.stage);
+  const [now, setNow] = useState(() => Date.now());
+
+  const startedSessionId = state?.ok
+    ? "previewSessionId" in state
+      ? state.previewSessionId
+      : null
+    : null;
+  const sessionId = startedSessionId ?? card.previewSessionId;
+
+  // `starting` and `running` are the two states with something to poll for.
+  // Anything else is settled, and polling it would be a request every two
+  // seconds forever for an answer that is not coming.
+  const shouldPoll = card.state === "starting" || card.state === "running" || pending;
+
+  const poll = useCallback(async () => {
+    if (!sessionId) return;
+
+    const result = await getPreviewStatusAction(projectId, sessionId);
+    if (!result.ok) return;
+
+    setLive({ origin: result.origin, expiresAt: result.expiresAt, verdict: result.verdict });
+    setStage(result.stage as PreviewStage);
+
+    // Terminal, or newly ready. Either way the server-rendered card is now
+    // behind, and the verdict lives in the database rather than in this state.
+    if (result.status !== "starting") router.refresh();
+  }, [projectId, sessionId, router]);
+
+  useEffect(() => {
+    if (!shouldPoll || !sessionId) return;
+
+    let cancelled = false;
+    const timer = setInterval(() => {
+      if (!cancelled) void poll();
+    }, POLL_INTERVAL_MS);
+
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [shouldPoll, sessionId, poll]);
+
+  // Drives the countdown only. The server is what refuses an expired origin.
+  useEffect(() => {
+    if (card.state !== "running") return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [card.state]);
+
+  function confirmStart() {
+    if (!validatedArtifactId) return;
+
+    startTransition(async () => {
+      setConfirming(false);
+      // The confirmation travels to the server as an explicit argument. The
+      // dialog closing is not what authorizes this; the boolean is (§5).
+      setState(await startPreviewAction(projectId, validatedArtifactId, true));
+      router.refresh();
+    });
+  }
+
+  /**
+   * Starts a fresh validation, because the artifact this preview needed is gone.
+   *
+   * Called only from an explicit click, never on render, never on poll, never
+   * as a "helpful" recovery from a failed preview. A new ValidationRun
+   * provisions a paid sandbox, and spending on a user's behalf is exactly what
+   * CLAUDE.md rule 60 forbids (§15, §22).
+   */
+  function validateAgain() {
+    startTransition(async () => {
+      await validateChangeAction(projectId, preparedChangeId);
+      router.refresh();
+    });
+  }
+
+  function stop() {
+    if (!sessionId) return;
+
+    setStopping(true);
+    startTransition(async () => {
+      await stopPreviewAction(projectId, sessionId);
+      // Never a faked "stopped" before the backend confirms: the sandbox and
+      // the snapshot are the backend's to account for (§12).
+      setStopping(false);
+      router.refresh();
+    });
+  }
+
+  const expiresAt = live?.expiresAt ?? card.expiresAt;
+  const countdown = expiresAt ? remaining(expiresAt, now) : null;
+  const starting = card.state === "starting" || pending;
+
+  return (
+    <section className="space-y-3 border-t border-zinc-800 pt-4">
+      <h4 className="text-sm font-medium text-zinc-200">Preview</h4>
+
+      {starting ? (
+        <div className="space-y-2">
+          <p className="text-sm text-zinc-300">Starting temporary preview…</p>
+          <p className="text-sm text-zinc-400">
+            {PREVIEW_STAGE_LABELS[stage ?? "preflight"]}
+          </p>
+          {/* The Sprint 7 promise, restated where it matters. */}
+          <p className="text-xs text-zinc-500">
+            You can leave this page. Vibe will continue starting the preview.
+          </p>
+        </div>
+      ) : card.state === "running" ? (
+        <div className="space-y-3">
+          <p className="text-sm text-emerald-400">Temporary public preview</p>
+
+          <div className="flex flex-wrap gap-2">
+            {live?.origin ? (
+              <a
+                href={live.origin}
+                target="_blank"
+                // Not only convention: without `noreferrer` the preview would
+                // receive Vibe's project URL — and the project id in it — in a
+                // Referer header, handing an internal identifier to code Vibe
+                // did not write.
+                rel="noreferrer noopener"
+                className="rounded-md border border-emerald-800 bg-emerald-950/40 px-3 py-1.5 text-sm text-emerald-200 hover:bg-emerald-900/40"
+              >
+                Open preview
+              </a>
+            ) : (
+              <span className="rounded-md border border-zinc-800 px-3 py-1.5 text-sm text-zinc-500">
+                Resolving preview address…
+              </span>
+            )}
+
+            <button
+              type="button"
+              onClick={stop}
+              disabled={stopping || pending}
+              className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-900 disabled:opacity-60"
+            >
+              {stopping ? "Stopping preview…" : "Stop preview"}
+            </button>
+          </div>
+
+          {expiresAt && (
+            <p className="text-xs text-zinc-500">
+              Expires at {localTime(expiresAt)}
+              {countdown ? ` · ${countdown}` : ""}
+            </p>
+          )}
+
+          <p className="text-xs text-amber-300/80">
+            Anyone with the preview URL may be able to access it until it expires.
+          </p>
+          <NotApproved />
+        </div>
+      ) : card.state === "needs_validation" || card.state === "not_available" ? (
+        <div className="space-y-2">
+          <p className="text-sm text-zinc-400">Validation required</p>
+          <p className="text-xs text-zinc-500">
+            This change must pass isolated validation before Vibe can create a temporary preview.
+          </p>
+        </div>
+      ) : card.state === "artifact_unavailable" || card.state === "artifact_expired" ? (
+        <div className="space-y-2">
+          <p className="text-sm text-zinc-400">
+            {card.state === "artifact_expired"
+              ? "Preview artifact expired"
+              : "Preview artifact unavailable"}
+          </p>
+          {/* Deliberately not phrased as a free refresh. A new validation
+              provisions a paid sandbox, and the user starts it or nobody
+              does (§15, CLAUDE.md rule 60). */}
+          <p className="text-xs text-zinc-500">
+            The previous validated artifact is no longer retained. Validate the change again to
+            create a new preview artifact.
+          </p>
+          <button
+            type="button"
+            onClick={validateAgain}
+            className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-900"
+          >
+            Validate again
+          </button>
+        </div>
+      ) : card.state === "failed" ? (
+        <div className="space-y-2">
+          <p className="text-sm text-red-400">Preview failed</p>
+          {/* Safe copy from a stable code. Never a provider message, never a
+              sandbox stack trace (§14). */}
+          {card.failureMessage && <p className="text-sm text-zinc-400">{card.failureMessage}</p>}
+          {card.revalidationRequired && (
+            <>
+              <p className="text-xs text-zinc-500">
+                The validated artifact was released when the preview ended. Validate the change
+                again to create a new preview artifact.
+              </p>
+              <button
+                type="button"
+                onClick={validateAgain}
+                className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-900"
+              >
+                Validate again
+              </button>
+            </>
+          )}
+        </div>
+      ) : card.state === "stopped" || card.state === "expired" ? (
+        <div className="space-y-2">
+          <p className="text-sm text-zinc-400">
+            {card.state === "expired" ? "Preview expired" : "Preview stopped"}
+          </p>
+          <p className="text-xs text-zinc-500">
+            {card.state === "expired"
+              ? "The temporary preview has ended."
+              : "The temporary preview was stopped and its environment was released."}
+          </p>
+          {card.revalidationRequired && (
+            <>
+              <p className="text-xs text-zinc-500">
+                The validated artifact was released when the preview ended. Validate the change
+                again to create a new preview artifact.
+              </p>
+              <button
+                type="button"
+                onClick={validateAgain}
+                className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-900"
+              >
+                Validate again
+              </button>
+            </>
+          )}
+        </div>
+      ) : confirming ? (
+        <ConfirmDialog
+          onCancel={() => setConfirming(false)}
+          onConfirm={confirmStart}
+          pending={pending}
+        />
+      ) : (
+        <div className="space-y-2">
+          <p className="text-sm text-zinc-400">Not started</p>
+          <p className="text-xs text-zinc-500">
+            Vibe will run the exact validated build in an isolated environment for 15 minutes, on a
+            public, unlisted URL. Your repository and production site are not changed.
+          </p>
+          <button
+            type="button"
+            onClick={() => setConfirming(true)}
+            disabled={pending || !validatedArtifactId}
+            className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-900 disabled:opacity-60"
+          >
+            Start temporary preview
+          </button>
+        </div>
+      )}
+
+      {state?.ok === false && <p className="text-sm text-red-400">{state.message}</p>}
+
+      {state?.ok && state.kind === "reused" && (
+        <p className="text-xs text-zinc-500">
+          A preview of this exact artifact is already running — nothing new was started.
+        </p>
+      )}
+    </section>
+  );
+}

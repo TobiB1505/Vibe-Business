@@ -23,10 +23,12 @@ import {
   type PreviewSession,
   type PreviewStatus,
 } from "./schema";
+import { buildPreviewCard, type PreviewCard } from "./view";
 import {
   claimPreviewSession,
   completePreviewSession,
   findActivePreviewByIdentity,
+  getLatestPreviewForPreparedChange,
   getPreviewSession,
   getValidatedArtifact,
   markPreviewArtifactDeleted,
@@ -376,6 +378,59 @@ export async function getPreviewStatus(
     origin: await resolvePreviewOrigin(provider, { previewSessionId: session.id }),
     verdict: "preview_available",
   };
+}
+
+/**
+ * The preview state for one prepared change, decided on the server (§2).
+ *
+ * ## Why this is a read and nothing more
+ *
+ * Opening the preview panel must cost nothing. No sandbox, no validation, no
+ * provider call of any kind — a user looking at a page has not asked to spend
+ * money, and a panel that quietly re-validated to "helpfully" refresh an
+ * expired artifact would be exactly the invisible spend CLAUDE.md rule 60
+ * forbids (§22).
+ *
+ * So this reads three rows and returns a state. Every action that costs
+ * something is behind an explicit click.
+ *
+ * The artifact is resolved through `getValidatedArtifact`, which already
+ * filters on a passing run, a captured snapshot and a live deletion state — so
+ * "there is no artifact" and "the artifact is not usable" are the same answer
+ * here, and the view turns them into the same sentence.
+ */
+export async function getPreviewCard(
+  supabase: SupabaseClient,
+  params: {
+    projectId: string;
+    preparedChangeId: string;
+    /** The latest validation for this change, already loaded by the caller. */
+    validation: { id: string; status: string } | null;
+    /** Safe copy for a failed session's code. Never a provider message. */
+    resolveFailureMessage: (code: string) => string | null;
+  },
+): Promise<PreviewCard> {
+  const session = await getLatestPreviewForPreparedChange(supabase, {
+    projectId: params.projectId,
+    preparedChangeId: params.preparedChangeId,
+  });
+
+  const artifact =
+    params.validation && params.validation.status === "passed"
+      ? await getValidatedArtifact(supabase, {
+          projectId: params.projectId,
+          validatedArtifactId: params.validation.id,
+        })
+      : null;
+
+  return buildPreviewCard({
+    validation: params.validation,
+    artifact: artifact ? { expiresAt: artifact.expiresAt } : null,
+    session,
+    failureMessage: session?.failureCode
+      ? params.resolveFailureMessage(session.failureCode)
+      : null,
+  });
 }
 
 export type StopPreviewOutcome =

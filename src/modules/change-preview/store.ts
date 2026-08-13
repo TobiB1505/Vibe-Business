@@ -167,6 +167,35 @@ export async function findActivePreviewByIdentity(
   return data ? mapRow(data as unknown as Row) : null;
 }
 
+/**
+ * The most recent preview for one prepared change, in any state (§16).
+ *
+ * Ordered newest-first and limited to one, deliberately: the product shows the
+ * *current* preview state, not a history. A preview management screen is not a
+ * V0.1 need, and building one would invite the question of what an old,
+ * stopped preview of a superseded artifact is for.
+ *
+ * Scoped by prepared change rather than by validation run, so a change that was
+ * re-validated still shows its latest preview rather than appearing to have
+ * none.
+ */
+export async function getLatestPreviewForPreparedChange(
+  supabase: SupabaseClient,
+  params: { projectId: string; preparedChangeId: string },
+): Promise<PreviewSession | null> {
+  const { data, error } = await supabase
+    .from("preview_sessions")
+    .select(COLUMNS)
+    .eq("project_id", params.projectId)
+    .eq("prepared_change_id", params.preparedChangeId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? mapRow(data as unknown as Row) : null;
+}
+
 export async function findPreviewByOperation(
   supabase: SupabaseClient,
   operationRunId: string,
