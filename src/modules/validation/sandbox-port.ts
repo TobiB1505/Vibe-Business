@@ -60,6 +60,38 @@ export type SandboxCommandResult = {
 };
 
 /**
+ * A command that outlives the call that started it (Sprint 10B §15).
+ *
+ * Preview needs one: a server that returns when it is ready would not be a
+ * server. The provider's own detached primitive is used rather than `nohup`,
+ * `tmux` or a backgrounding shell string — those would put process management
+ * into a shell line, which is exactly where an injection point would live, and
+ * they would leave the domain unable to answer the one question a health check
+ * asks.
+ *
+ * That question is deliberately the whole interface:
+ *
+ * > has this process exited, and with what?
+ *
+ * Not "is it healthy" — a running process proves nothing about whether the
+ * application answers — and not a stream of logs, which would pull unbounded
+ * untrusted output into Vibe's memory for no decision.
+ */
+export type SandboxProcess = {
+  /** Provider process id. Diagnostic only; never a credential, never exposed. */
+  readonly id: string;
+  /**
+   * The exit code, or `null` if the process was still running after `withinMs`.
+   *
+   * Doubles as the health loop's delay, so a server that crashes on boot is
+   * classified within one poll interval instead of after the whole budget.
+   */
+  exitedWithin(withinMs: number): Promise<number | null>;
+  /** Bounded tail of what the process printed. For diagnosis, never for storage raw. */
+  output(): Promise<string>;
+};
+
+/**
  * Where a sandbox's filesystem comes from.
  *
  * Two shapes, and the difference is a trust boundary. `git` acquires source
@@ -117,6 +149,14 @@ export type CreateSandboxInput = {
    * tests, because the interface cannot prevent a caller passing a secret (§8).
    */
   env: Record<string, string>;
+  /**
+   * vCPUs to provision. Defaults to the validation shape when omitted.
+   *
+   * Explicit because preview and validation want different shapes for reasons
+   * that are not interchangeable — one races a build against a step deadline,
+   * the other serves a handful of requests for fifteen billed minutes.
+   */
+  vcpus?: number;
 };
 
 /** Usage the provider reports once the sandbox has stopped (§25). */
@@ -155,14 +195,21 @@ export interface SandboxHandle {
     command: SandboxCommand;
     cwd: string;
     timeoutMs: number;
-  /**
-   * Inbound ports to expose publicly.
-   *
-   * Empty for validation: an exposed port serves untrusted code on a public URL,
-   * which is a different exposure entirely and belongs to preview alone.
-   */
-  ports?: readonly number[];
   }): Promise<SandboxCommandResult>;
+
+  /**
+   * Starts a Vibe-constructed command in the background and returns immediately.
+   *
+   * Only preview uses this. Validation deliberately does not: every validation
+   * command has a verdict, and a command with no verdict has no place in a run
+   * that produces one.
+   */
+  runBackground(input: {
+    command: SandboxCommand;
+    cwd: string;
+    /** Merged over the sandbox environment. Must contain no privilege (§12). */
+    env?: Record<string, string>;
+  }): Promise<SandboxProcess>;
 
   /** Reads a bounded file back out, for integrity checks. Null when absent. */
   readFile(input: { path: string; maxBytes: number }): Promise<string | null>;
@@ -185,7 +232,18 @@ export interface SandboxHandle {
    */
   snapshot(input: { expirationMs: number }): Promise<SandboxArtifact>;
 
-  /** The public origin for an exposed port. Provider-derived, never assembled. */
+  /**
+   * The public origin for an exposed port. Provider-derived, never assembled.
+   *
+   * Throws when the provider has no route for the port, which is a real and
+   * distinct failure: the server may be running perfectly and still be
+   * unreachable. Callers classify it as `preview_provider_unavailable` rather
+   * than blaming the application (Sprint 10B §17).
+   *
+   * The returned origin is capability-like. It is an unlisted public URL to a
+   * VM serving untrusted code, so it is never persisted, never logged broadly,
+   * never placed in an audit event, in AI evidence, or in analytics (§16).
+   */
   publicOrigin(port: number): Promise<string>;
 
   /** Terminates the sandbox and reports usage. Safe to call more than once. */
@@ -229,6 +287,15 @@ export interface SandboxProvider {
    * leave a customer's filesystem sitting in provider storage for the remainder
    * of its TTL — the TTL is a backstop for the cases where we cannot delete,
    * not the plan.
+   *
+   * **Throws when deletion could not be confirmed.** Swallowing that here would
+   * make "the snapshot is gone" unfalsifiable at every layer above; the caller
+   * catches it, records `artifact_delete_failed`, and leaves the cleanup
+   * retryable — without letting storage housekeeping overwrite the preview's
+   * own result (Sprint 10B §19).
+   *
+   * Deleting an already-deleted snapshot must succeed: idempotence is the
+   * point, since retry is the recovery path.
    */
   deleteArtifact(snapshotId: string): Promise<void>;
 }

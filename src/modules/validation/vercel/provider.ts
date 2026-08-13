@@ -3,12 +3,14 @@ import "server-only";
 import { Sandbox } from "@vercel/sandbox";
 import { SANDBOX_BUDGETS, SANDBOX_RESOURCES } from "../budgets";
 import { Snapshot } from "@vercel/sandbox";
+import type { Command } from "@vercel/sandbox";
 import type {
   CreateSandboxInput,
   SandboxArtifact,
   SandboxHandle,
   SandboxLiveness,
   SandboxNetworkPolicy,
+  SandboxProcess,
   SandboxProvider,
   SandboxUsage,
 } from "../sandbox-port";
@@ -83,6 +85,55 @@ function toLiveness(status: string | undefined): SandboxLiveness {
   return status === "running" ? "running" : "gone";
 }
 
+/**
+ * A detached command, reduced to the one question the domain asks.
+ *
+ * `exitedWithin` is implemented by racing the SDK's `wait()` against an abort,
+ * rather than by polling a command-status endpoint. The polling shape would
+ * need `Sandbox.getCommand`, which the SDK marks internal — building a
+ * security-relevant health classification on an internal API is how a minor
+ * version bump becomes an outage.
+ *
+ * Aborting rather than leaving the promise pending matters: an un-aborted
+ * `wait()` per poll would accumulate one live request per iteration for the
+ * whole health budget.
+ */
+class VercelSandboxProcess implements SandboxProcess {
+  constructor(private readonly command: Command) {}
+
+  get id(): string {
+    return this.command.cmdId;
+  }
+
+  async exitedWithin(withinMs: number): Promise<number | null> {
+    const controller = new AbortController();
+    const deadline = setTimeout(() => controller.abort(), withinMs);
+
+    try {
+      const finished = await this.command.wait({ signal: controller.signal });
+      return finished.exitCode;
+    } catch {
+      // Two cases resolve the same way, deliberately. An abort means "still
+      // running", which is the answer the caller wants. Anything else means the
+      // provider could not tell us, and reporting a fabricated exit code would
+      // turn an observability gap into a false `preview_process_exited`.
+      return null;
+    } finally {
+      clearTimeout(deadline);
+    }
+  }
+
+  async output(): Promise<string> {
+    try {
+      return await readOutput(this.command);
+    } catch {
+      // A process whose output cannot be read is still a process. Diagnosis is
+      // worth less than the classification it would otherwise take down.
+      return "";
+    }
+  }
+}
+
 class VercelSandboxHandle implements SandboxHandle {
   /**
    * Usage captured at termination.
@@ -146,6 +197,26 @@ class VercelSandboxHandle implements SandboxHandle {
     } finally {
       clearTimeout(deadline);
     }
+  }
+
+  async runBackground(input: {
+    command: { command: string; args: string[] };
+    cwd: string;
+    env?: Record<string, string>;
+  }): Promise<SandboxProcess> {
+    // The SDK's own detached primitive. Not `nohup`, not a backgrounding shell
+    // string: those would need a shell line to manage the process, which is the
+    // one place a command string could ever be assembled rather than passed as
+    // an argument array.
+    const command = await this.sandbox.runCommand({
+      cmd: input.command.command,
+      args: input.command.args,
+      cwd: input.cwd,
+      ...(input.env ? { env: input.env } : {}),
+      detached: true,
+    });
+
+    return new VercelSandboxProcess(command);
   }
 
   async readFile(input: { path: string; maxBytes: number }): Promise<string | null> {
@@ -222,7 +293,7 @@ export function createVercelSandboxProvider(): SandboxProvider {
       // credential scrub has been re-verified (Sprint 10B §5).
       const common = {
         name: input.name,
-        resources: { vcpus: SANDBOX_RESOURCES.vcpus },
+        resources: { vcpus: input.vcpus ?? SANDBOX_RESOURCES.vcpus },
         timeout: input.timeoutMs,
         networkPolicy: toProviderPolicy(input.networkPolicy),
         env: input.env,
@@ -310,15 +381,23 @@ export function createVercelSandboxProvider(): SandboxProvider {
       }
     },
     async deleteArtifact(snapshotId: string): Promise<void> {
-      // Best effort by design. A snapshot that cannot be deleted still expires
-      // on the explicit TTL it was created with, and failing a preview teardown
-      // over storage housekeeping would trade a real outcome for a tidy one.
+      // Reported rather than swallowed. A snapshot that cannot be deleted still
+      // expires on the explicit TTL it was created with, so the failure is
+      // never fatal — but the caller has to *know* in order to record
+      // `artifact_delete_failed` and leave the cleanup retryable. Swallowing it
+      // here would make "the customer's filesystem is gone" a claim nothing in
+      // the system could contradict.
+      //
+      // A snapshot that no longer exists is a success: `Snapshot.get` is the
+      // idempotence point, because deletion's recovery path is retry.
+      let snapshot: Snapshot;
       try {
-        const snapshot = await Snapshot.get({ snapshotId });
-        await snapshot.delete();
+        snapshot = await Snapshot.get({ snapshotId });
       } catch {
         return;
       }
+
+      await snapshot.delete();
     },
   };
 }

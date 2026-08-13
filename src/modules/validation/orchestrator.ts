@@ -522,6 +522,9 @@ export async function verifySource(
     // deliver the revision we asked for" without needing git metadata.
     const verified: string[] = [];
     const unverified: string[] = [];
+    // Recorded so a preview can prove the restored bytes are these bytes,
+    // without acquiring the source a second time (Sprint 10B §11).
+    const digests: Record<string, string> = {};
 
     for (const path of BUILD_IDENTITY_FILES) {
       const onDisk = await readWhole(
@@ -546,7 +549,8 @@ export async function verifySource(
         continue;
       }
 
-      if (sha256(onDisk.content) !== sha256(atCommit)) {
+      const onDiskDigest = sha256(onDisk.content);
+      if (onDiskDigest !== sha256(atCommit)) {
         return fail(
           "source_integrity_failed",
           `build identity mismatch against ${target.preparedCommitSha}: ${path}`,
@@ -554,6 +558,7 @@ export async function verifySource(
       }
 
       verified.push(path);
+      digests[path] = onDiskDigest;
     }
 
     const sourceIntegrity: SourceIntegrity = {
@@ -563,6 +568,7 @@ export async function verifySource(
       changedFilesVerified: target.preparedFiles.length > 0,
       buildIdentityFilesVerified: verified,
       buildIdentityFilesUnverified: unverified,
+      buildIdentityDigests: digests,
     };
 
     // On this provider there is no `.git` to remove, so this is defence in

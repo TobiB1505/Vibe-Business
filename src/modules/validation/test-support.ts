@@ -48,6 +48,7 @@ export type FakeEvent =
   | { kind: "snapshot"; expirationMs: number }
   | { kind: "origin"; port: number }
   | { kind: "delete_artifact"; snapshotId: string }
+  | { kind: "background"; command: string; cwd: string }
   | { kind: "stop" };
 
 export type FakeSandboxOptions = {
@@ -79,6 +80,38 @@ export type FakeSandboxOptions = {
   loseSandboxBeforeReconnect?: number;
   /** Reconnect reports a live sandbox whose session is no longer running. */
   reconnectLiveness?: SandboxLiveness;
+
+  // -------------------------------------------------------------------------
+  // Preview (Sprint 10B-2). Modelled rather than stubbed, because the security
+  // properties under test are *sequences*: the server must not start before the
+  // integrity check, and the port must not be exposed before either.
+  // -------------------------------------------------------------------------
+
+  /** Make `runBackground` throw, for the server-could-not-start path. */
+  failBackground?: boolean;
+  /**
+   * Exit code the detached server reports, or undefined to keep running.
+   *
+   * A number here models a crash-on-boot: `exitedWithin` answers immediately
+   * instead of timing out, which is what lets the health loop distinguish
+   * `preview_process_exited` from `preview_health_check_failed`.
+   */
+  backgroundExitCode?: number;
+  /** What the detached process printed. Read only when it exits. */
+  backgroundOutput?: string;
+  /**
+   * HTTP status the loopback probe reports, or null to make the probe fail.
+   *
+   * Defaults to 200. A `null` models a server that is up but not yet
+   * answering — the probe exits non-zero, exactly as `curl` would.
+   */
+  healthStatus?: number | null;
+  /** Probes that fail before `healthStatus` starts being returned. */
+  healthFailingProbes?: number;
+  /** Make `publicOrigin` throw, for the provider-has-no-route path. */
+  failPublicOrigin?: boolean;
+  /** Make `deleteArtifact` throw, for the cleanup-failure path. */
+  failDeleteArtifact?: boolean;
 };
 
 export type FakeSandboxProvider = SandboxProvider & {
@@ -102,6 +135,12 @@ export type FakeSandboxProvider = SandboxProvider & {
   reconnects(): string[];
   snapshots(): number;
   deletedArtifacts(): string[];
+  /** Ordered detached commands. Exactly one server, or the test has found a bug. */
+  backgroundCommands(): string[];
+  /** Ports the sandbox was created with. Exactly one, and Vibe's (§16, §31). */
+  exposedPorts(): readonly number[];
+  /** Origins handed out, for asserting the URL is never assembled by Vibe. */
+  origins(): number[];
 };
 
 export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandboxProvider {
@@ -112,6 +151,8 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
   let createCount = 0;
   let reconnectCount = 0;
   let snapshotCount = 0;
+  let probeCount = 0;
+  let backgroundCount = 0;
   let terminated = false;
   const deletedArtifacts: string[] = [];
 
@@ -125,6 +166,29 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
       events.push({ kind: "command", command: rendered, cwd: input.cwd });
 
       if (options.throwOn === rendered) throw new Error("provider exploded");
+
+      // The loopback health probe, modelled as `curl` actually behaves: a
+      // non-zero exit when nothing answers, and the status code on stdout when
+      // something does. Keyed on the command rather than stubbed by name so a
+      // test that changes the probe changes what the fake responds to.
+      if (input.command.command === "curl") {
+        // Nothing is listening until something is started. Modelling this is
+        // the point: a fake whose port answered on a fresh sandbox would let
+        // the re-entry short-circuit swallow the server start entirely, and
+        // "exactly one server was started" would pass while none was.
+        if (backgroundCount === 0) {
+          return { exitCode: 7, durationMs: 5, output: "", timedOut: false };
+        }
+
+        probeCount += 1;
+        const stillWarming = probeCount <= (options.healthFailingProbes ?? 0);
+        const status = options.healthStatus === undefined ? 200 : options.healthStatus;
+
+        if (stillWarming || status === null) {
+          return { exitCode: 7, durationMs: 5, output: "", timedOut: false };
+        }
+        return { exitCode: 0, durationMs: 5, output: String(status), timedOut: false };
+      }
 
       // Removing `.git` is a real mutation in the fake too, so the credential
       // scrub is verified against actual state rather than a hardcoded answer.
@@ -182,8 +246,29 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
       };
     },
 
+    async runBackground(input) {
+      const rendered = [input.command.command, ...input.command.args].join(" ");
+      events.push({ kind: "background", command: rendered, cwd: input.cwd });
+
+      if (options.failBackground) throw new Error("could not start process");
+      backgroundCount += 1;
+
+      return {
+        id: "cmd_fake_1",
+        async exitedWithin() {
+          // `undefined` means the process is still running, which is what the
+          // health loop treats as "keep probing". A number is a crash.
+          return options.backgroundExitCode ?? null;
+        },
+        async output() {
+          return options.backgroundOutput ?? "";
+        },
+      };
+    },
+
     async publicOrigin(port) {
       events.push({ kind: "origin", port });
+      if (options.failPublicOrigin) throw new Error("no route for port");
       return `https://sandbox-${port}.example.invalid`;
     },
 
@@ -223,6 +308,9 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
 
     async deleteArtifact(snapshotId) {
       events.push({ kind: "delete_artifact", snapshotId });
+      // Thrown rather than swallowed, matching the adapter: the caller has to
+      // be able to record `artifact_delete_failed` and retry.
+      if (options.failDeleteArtifact) throw new Error("snapshot could not be deleted");
       deletedArtifacts.push(snapshotId);
     },
 
@@ -282,6 +370,19 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
 
     reconnects() {
       return events.filter((event) => event.kind === "reconnect").map((event) => event.name);
+    },
+
+    backgroundCommands() {
+      return events.filter((event) => event.kind === "background").map((event) => event.command);
+    },
+
+    exposedPorts() {
+      const created = events.find((event) => event.kind === "create");
+      return created?.input.ports ?? [];
+    },
+
+    origins() {
+      return events.filter((event) => event.kind === "origin").map((event) => event.port);
     },
   };
 }

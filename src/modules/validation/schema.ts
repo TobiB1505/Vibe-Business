@@ -278,6 +278,32 @@ export type SourceIntegrity = {
    * budget. Recorded rather than silently counted as verified.
    */
   buildIdentityFilesUnverified: string[];
+  /**
+   * sha256 of each verified build-identity file, by repository-relative path.
+   *
+   * ## Why a hash and not just the path
+   *
+   * Preview restores a snapshot of this filesystem and has to prove the bytes
+   * that came back are the bytes that were validated (Sprint 10B §11). It
+   * cannot re-fetch them from GitHub: preview acquires no source and holds no
+   * credential, by design. So the digest has to travel with the run.
+   *
+   * These hashes are already computed during verification — this records what
+   * was measured instead of throwing it away, so it costs no read and no time.
+   *
+   * ## Why this does not bump the sandbox policy version
+   *
+   * The policy version answers "what did *validated* mean when this ran": the
+   * commands, the network, the timeouts, the install flags, the secrets. This
+   * changes none of them and can fail nothing that previously passed. A run
+   * recorded before this field existed is still exactly as validated as it was;
+   * it simply carries less forward, and preview treats an absent digest as
+   * *unverifiable* rather than as agreement.
+   *
+   * Optional for that reason: historical rows do not have it and are not
+   * rewritten.
+   */
+  buildIdentityDigests?: Record<string, string>;
 };
 
 /**

@@ -23,6 +23,7 @@ const POSTGRES_UNIQUE_VIOLATION = "23505";
 const ACTIVE_OPERATION_STATUSES = ["queued", "running"];
 const IN_FLIGHT_AUDIT_STATUSES = ["pending", "analyzing"];
 const ACTIVE_VALIDATION_STATUSES = ["queued", "running", "passed"];
+const ACTIVE_PREVIEW_STATUSES = ["starting", "running"];
 
 type Filter =
   | { kind: "eq"; column: string; value: unknown }
@@ -84,6 +85,28 @@ export class FakeDatabase {
           ACTIVE_VALIDATION_STATUSES.includes(String(row.status)),
       );
       if (clash) return { code: POSTGRES_UNIQUE_VIOLATION, message: "one live validation per identity" };
+    }
+
+    // preview_sessions_single_active_idx (Sprint 10B-2 §32). One live preview
+    // per identity, so a double click loses its second insert here exactly as
+    // it would in Postgres — otherwise the test would "prove" idempotency the
+    // database provides.
+    if (table === "preview_sessions" && ACTIVE_PREVIEW_STATUSES.includes(String(candidate.status))) {
+      const clash = others.some(
+        (row) =>
+          row.project_id === candidate.project_id &&
+          row.preview_identity === candidate.preview_identity &&
+          ACTIVE_PREVIEW_STATUSES.includes(String(row.status)),
+      );
+      if (clash) return { code: POSTGRES_UNIQUE_VIOLATION, message: "one live preview per identity" };
+    }
+
+    // sandbox_usage_events_preview_unique_idx (§27). One ledger row per preview
+    // session: a retried terminal step must not double-count a sandbox that
+    // only ran once.
+    if (table === "sandbox_usage_events" && candidate.preview_session_id != null) {
+      const clash = others.some((row) => row.preview_session_id === candidate.preview_session_id);
+      if (clash) return { code: POSTGRES_UNIQUE_VIOLATION, message: "usage already recorded for preview" };
     }
 
     if (table === "business_readiness_audits" && IN_FLIGHT_AUDIT_STATUSES.includes(String(candidate.status))) {
