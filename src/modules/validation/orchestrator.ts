@@ -207,12 +207,36 @@ const SANDBOX_WORKDIR = "/vercel/sandbox";
  *
  * `SANDBOX_WORKDIR` is kept for messages, so a failure says where it looked.
  */
-export function inWorkspace(sourceRoot: string, workspaceRoot: string, path = ""): string {
-  const segments = [sourceRoot, workspaceRoot === "." ? "" : workspaceRoot, path]
+function join(...segments: string[]): string {
+  const parts = segments
     .map((segment) => segment.replace(/^\/+|\/+$/g, ""))
-    .filter((segment) => segment.length > 0);
+    .filter((segment) => segment.length > 0 && segment !== ".");
 
-  return segments.length === 0 ? "." : segments.join("/");
+  return parts.length === 0 ? "." : parts.join("/");
+}
+
+/**
+ * A path relative to the **sandbox home**, for filesystem reads.
+ *
+ * `readFile` takes no working directory, so it resolves against
+ * `/vercel/sandbox` — which means the clone directory has to be included.
+ */
+export function inSandbox(sourceRoot: string, workspaceRoot: string, path = ""): string {
+  return join(sourceRoot, workspaceRoot, path);
+}
+
+/**
+ * A path relative to the **repository root**, for commands and for GitHub.
+ *
+ * Commands run with `cwd` already set to the workspace directory, and GitHub
+ * addresses files from the repository root. Both therefore want a path *without*
+ * the clone directory — and including it is silent rather than loud:
+ * `rm -rf <repo>/.git` from inside `<repo>` targets a path that does not exist,
+ * which `-f` reports as success while the real `.git` survives. That cost a run,
+ * so the two addressing schemes have separate names.
+ */
+export function inRepository(workspaceRoot: string, path = ""): string {
+  return join(workspaceRoot, path);
 }
 
 function stepResult(
@@ -344,7 +368,7 @@ export async function runValidation(
     //
     // All of it before a single repository-controlled command (§29).
     await setStage("verifying_source");
-    const workdir = inWorkspace(target.sourceRoot, target.workspaceRoot);
+    const workdir = inSandbox(target.sourceRoot, target.workspaceRoot);
 
     // The provider-side clone leaves a real checkout — in a subdirectory, which
     // is what four runs took to establish. Observing the commit is therefore
@@ -376,7 +400,7 @@ export async function runValidation(
 
     for (const file of target.preparedFiles.slice(0, SANDBOX_BUDGETS.maxIntegrityFiles)) {
       const content = await sandbox.readFile({
-        path: inWorkspace(target.sourceRoot, target.workspaceRoot, file.path),
+        path: inSandbox(target.sourceRoot, target.workspaceRoot, file.path),
         maxBytes: SANDBOX_BUDGETS.maxIntegrityFileBytes,
       });
 
@@ -411,28 +435,28 @@ export async function runValidation(
     const unverified: string[] = [];
 
     for (const path of BUILD_IDENTITY_FILES) {
-      const inSandbox = await sandbox.readFile({
-        path: inWorkspace(target.sourceRoot, target.workspaceRoot, path),
+      const onDisk = await sandbox.readFile({
+        path: inSandbox(target.sourceRoot, target.workspaceRoot, path),
         maxBytes: SANDBOX_BUDGETS.maxIntegrityFileBytes,
       });
       const atCommit = await manifest.getTextFile(
-        inWorkspace(target.sourceRoot, target.workspaceRoot, path),
+        inRepository(target.workspaceRoot, path),
         target.preparedCommitSha,
         SANDBOX_BUDGETS.maxIntegrityFileBytes,
       );
 
       // Absent on both sides is agreement, not a gap: most repositories have
       // only one lockfile and one next.config extension.
-      if (inSandbox === null && atCommit === null) continue;
+      if (onDisk === null && atCommit === null) continue;
 
       // Absent on one side, or past the read budget, cannot be compared.
       // Recorded as unverified rather than quietly counted as verified.
-      if (inSandbox === null || atCommit === null) {
+      if (onDisk === null || atCommit === null) {
         unverified.push(path);
         continue;
       }
 
-      if (sha256(inSandbox) !== sha256(atCommit)) {
+      if (sha256(onDisk) !== sha256(atCommit)) {
         return finish(
           "failed",
           "source_integrity_failed",
@@ -460,7 +484,7 @@ export async function runValidation(
     // on disk, and this step is what stops it reaching repository code (§7).
     await setStage("securing_sandbox");
     await sandbox.run({
-      command: { command: "rm", args: ["-rf", inWorkspace(target.sourceRoot, target.workspaceRoot, ".git")] },
+      command: { command: "rm", args: ["-rf", ".git"] },
       cwd: workdir,
       timeoutMs: SANDBOX_BUDGETS.sourceTimeoutMs,
     });
@@ -468,7 +492,7 @@ export async function runValidation(
     // Verified, not assumed. If the credential store still exists, refuse to
     // run repository code at all rather than hope.
     const gitConfig = await sandbox.readFile({
-      path: inWorkspace(target.sourceRoot, target.workspaceRoot, ".git/config"),
+      path: inSandbox(target.sourceRoot, target.workspaceRoot, ".git/config"),
       maxBytes: 4096,
     });
     if (gitConfig !== null) {
@@ -479,7 +503,7 @@ export async function runValidation(
     // Parsed in *our* process, not executed. This is what decides which steps
     // exist — never an opportunity's prose (§12).
     const manifestRaw = await sandbox.readFile({
-      path: inWorkspace(target.sourceRoot, target.workspaceRoot, "package.json"),
+      path: inSandbox(target.sourceRoot, target.workspaceRoot, "package.json"),
       maxBytes: SANDBOX_BUDGETS.maxIntegrityFileBytes,
     });
     if (manifestRaw === null) {
@@ -495,7 +519,7 @@ export async function runValidation(
     }
 
     const lockfile = await sandbox.readFile({
-      path: inWorkspace(target.sourceRoot, target.workspaceRoot, LOCKFILES[target.packageManager]),
+      path: inSandbox(target.sourceRoot, target.workspaceRoot, LOCKFILES[target.packageManager]),
       maxBytes: 1024,
     });
     if (lockfile === null) {

@@ -240,7 +240,7 @@ wearing an accounting figure's clothes. The measured inputs are stored instead.
 1510 tests pass. 87 new to this sprint, all against fakes — `pnpm test` never
 provisions a real sandbox (§39).
 
-Thirty-nine mutations, each verified to break tests:
+Forty-one mutations, each verified to break tests:
 
 | Mutation | Tests failed |
 | --- | --- |
@@ -456,6 +456,42 @@ enters the VM.
 What has *not* changed is the rejection of a self-managed clone. That reasoning
 was about carrying a token into a VM that later runs untrusted code, and it
 stands regardless of where the checkout lives.
+
+### Seventh attempt: two addressing schemes, not one
+
+The run got materially further, and the record proves it:
+
+```
+gitCommitObserved:           true       ← matched the prepared SHA
+changedFilesVerified:        true       ← robots.ts and sitemap.ts hashed correctly
+buildIdentityFilesUnverified: [package.json, pnpm-lock.yaml, next.config.ts, tsconfig.json]
+failure:                     credential_scrub_failed
+```
+
+Commit observation and prepared-file verification both worked. Two path bugs
+remained, and this run's data pinned both exactly — which is what the
+diagnosability work was for.
+
+The cause is an asymmetry that deserved a name earlier:
+
+| Consumer | Addresses from | Example |
+| --- | --- | --- |
+| `readFile` | the sandbox home | `Vibe-Business/package.json` |
+| a command | its own `cwd` | `package.json` |
+| GitHub | the repository root | `package.json` |
+
+One helper served all three, so commands and GitHub were both handed the clone
+directory they must not have. The GitHub half failed loudly — every
+build-identity file came back unverified. The command half failed **silently**:
+`rm -rf Vibe-Business/.git` executed from inside `Vibe-Business` targets a path
+that does not exist, and `-f` calls that success. The scrub reported done, the
+real `.git` survived, and `credential_scrub_failed` fired — correctly.
+
+That silent failure is the more instructive one, and it is exactly the case the
+verification exists to catch. The check worked. `inSandbox` and `inRepository`
+are now separate functions with the reason written next to them, and the fake
+sandbox resolves `rm` against the command's `cwd` like a real shell, because a
+fake that ignored `cwd` would have hidden it.
 
 ### Decision: Option A — pin and hash, plus observe where possible
 

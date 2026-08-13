@@ -78,8 +78,16 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
       // Matched against the path actually removed, because the provider clones
       // into a subdirectory and an unprefixed match would delete nothing while
       // reporting success.
-      const removed = input.command.args.at(-1) ?? "";
-      if (input.command.command === "rm" && removed.endsWith(".git")) {
+      // Resolved against the command's cwd, like a real shell. Modelling this
+      // is the point: `rm -rf <repo>/.git` run from inside `<repo>` targets a
+      // path that does not exist, and `-f` reports success while the real
+      // `.git` survives. A fake that ignored cwd would have hidden that.
+      const argument = input.command.args.at(-1) ?? "";
+      if (input.command.command === "rm" && argument.endsWith(".git")) {
+        const removed = argument.startsWith("/") || input.cwd === "." || input.cwd === ""
+          ? argument
+          : `${input.cwd}/${argument}`;
+
         for (const path of Object.keys(files)) {
           if (path === removed || path.startsWith(`${removed}/`)) delete files[path];
         }

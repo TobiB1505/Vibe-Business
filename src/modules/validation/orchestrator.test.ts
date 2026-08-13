@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { inWorkspace, runValidation, SANDBOX_ENVIRONMENT } from "./orchestrator";
+import { inRepository, inSandbox, runValidation, SANDBOX_ENVIRONMENT } from "./orchestrator";
 import {
   FIXTURE_COMMIT_SHA,
   fakeSandboxProvider,
@@ -80,7 +80,7 @@ describe("the happy path", () => {
 
     expect(provider.commands()).toEqual([
       HEAD,
-      "rm -rf product/.git",
+      "rm -rf .git",
       "pnpm install --frozen-lockfile --ignore-scripts",
       "pnpm run typecheck",
       "pnpm run test",
@@ -186,7 +186,7 @@ describe("credential handling (§7, §37)", () => {
     const provider = fakeSandboxProvider({
       files: healthySandboxFiles(),
       // The scrub reports success but leaves the file behind.
-      results: { "rm -rf product/.git": { exitCode: 0 } },
+      results: { "rm -rf .git": { exitCode: 0 } },
     });
     // Re-add `.git/config` after the fake's own deletion by making it
     // unremovable: a file the scrub cannot touch.
@@ -427,7 +427,7 @@ describe("cleanup on every path (§23, §36)", () => {
     ["test failure", { results: { "pnpm run test": { exitCode: 1 } } }],
     ["build failure", { results: { "pnpm run build": { exitCode: 1 } } }],
     ["timeout", { results: { "pnpm run build": { timedOut: true, exitCode: -1 } } }],
-    ["provider error during the scrub", { throwOn: "rm -rf product/.git" }],
+    ["provider error during the scrub", { throwOn: "rm -rf .git" }],
     ["provider error mid-run", { throwOn: "pnpm run build" }],
   ])("stops the sandbox after %s", async (_label, options) => {
     const provider = setup(options as FakeSandboxOptions);
@@ -561,7 +561,7 @@ describe("failures explain themselves (post-dogfood)", () => {
   });
 
   it("carries a provider error through instead of a placeholder", async () => {
-    const provider = setup({ throwOn: "rm -rf product/.git" });
+    const provider = setup({ throwOn: "rm -rf .git" });
 
     const outcome = await runValidation(provider, noManifest, fakeValidationTarget());
 
@@ -642,11 +642,17 @@ describe("diagnosing a missing checkout (post-dogfood)", () => {
   it("addresses paths relative to the sandbox working directory", () => {
     // The provider clones into a directory named after the repository, so the
     // sandbox home is never the workspace. Four runs looked in the wrong place.
-    expect(inWorkspace("product", ".")).toBe("product");
-    expect(inWorkspace("product", ".", "package.json")).toBe("product/package.json");
-    expect(inWorkspace("product", "apps/web")).toBe("product/apps/web");
-    expect(inWorkspace("product", "apps/web", "package.json")).toBe("product/apps/web/package.json");
-    expect(inWorkspace("product/", "apps/web/", ".git/config")).toBe("product/apps/web/.git/config");
+    expect(inSandbox("product", ".")).toBe("product");
+    expect(inSandbox("product", ".", "package.json")).toBe("product/package.json");
+    expect(inSandbox("product", "apps/web", "package.json")).toBe("product/apps/web/package.json");
+    expect(inSandbox("product/", "apps/web/", ".git/config")).toBe("product/apps/web/.git/config");
+
+    // GitHub and command arguments address from the repository root. Including
+    // the clone directory there fails *silently*: `rm -rf product/.git` run from
+    // inside `product` targets nothing, and `-f` calls that success.
+    expect(inRepository(".", "package.json")).toBe("package.json");
+    expect(inRepository("apps/web", "package.json")).toBe("apps/web/package.json");
+    expect(inRepository(".")).toBe(".");
   });
 
 });
@@ -704,7 +710,7 @@ describe("what source verification actually claims (post-dogfood, Option A)", ()
   it("verifies build identity against GitHub at the pinned commit", async () => {
     const manifest = {
       getTextFile: async (path: string) =>
-        path === "product/package.json" ? healthySandboxFiles()["product/package.json"] : null,
+        path === "package.json" ? healthySandboxFiles()["product/package.json"] : null,
     };
 
     const outcome = await runValidation(setup(), manifest, fakeValidationTarget());
@@ -717,7 +723,7 @@ describe("what source verification actually claims (post-dogfood, Option A)", ()
     // A matching robots.ts beside a different lockfile is a different build.
     const manifest = {
       getTextFile: async (path: string) =>
-        path === "product/pnpm-lock.yaml" ? "lockfileVersion: '6.0'\n" : null,
+        path === "pnpm-lock.yaml" ? "lockfileVersion: '6.0'\n" : null,
     };
 
     const provider = setup();
