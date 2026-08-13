@@ -59,12 +59,74 @@ export type SandboxCommandResult = {
   timedOut: boolean;
 };
 
-/** Where the source comes from. Credentials are used once and never persisted (§7). */
-export type SandboxSource = {
-  repositoryUrl: string;
-  /** The exact commit to check out. Never a branch name (§6). */
-  revision: string;
-  credential: { username: string; password: string } | null;
+/**
+ * A command that outlives the call that started it (Sprint 10B §15).
+ *
+ * Preview needs one: a server that returns when it is ready would not be a
+ * server. The provider's own detached primitive is used rather than `nohup`,
+ * `tmux` or a backgrounding shell string — those would put process management
+ * into a shell line, which is exactly where an injection point would live, and
+ * they would leave the domain unable to answer the one question a health check
+ * asks.
+ *
+ * That question is deliberately the whole interface:
+ *
+ * > has this process exited, and with what?
+ *
+ * Not "is it healthy" — a running process proves nothing about whether the
+ * application answers — and not a stream of logs, which would pull unbounded
+ * untrusted output into Vibe's memory for no decision.
+ */
+export type SandboxProcess = {
+  /** Provider process id. Diagnostic only; never a credential, never exposed. */
+  readonly id: string;
+  /**
+   * The exit code, or `null` if the process was still running after `withinMs`.
+   *
+   * Doubles as the health loop's delay, so a server that crashes on boot is
+   * classified within one poll interval instead of after the whole budget.
+   */
+  exitedWithin(withinMs: number): Promise<number | null>;
+  /** Bounded tail of what the process printed. For diagnosis, never for storage raw. */
+  output(): Promise<string>;
+};
+
+/**
+ * Where a sandbox's filesystem comes from.
+ *
+ * Two shapes, and the difference is a trust boundary. `git` acquires source
+ * from GitHub with a credential; `snapshot` restores a filesystem Vibe already
+ * validated, needing no credential at all — which is why preview never touches
+ * GitHub (Sprint 10B §30).
+ */
+export type SandboxSource =
+  | {
+      kind: "git";
+      repositoryUrl: string;
+      /** The exact commit to check out. Never a branch name (§6). */
+      revision: string;
+      credential: { username: string; password: string } | null;
+    }
+  | {
+      kind: "snapshot";
+      /** A provider snapshot id Vibe created and stored. Never client-supplied. */
+      snapshotId: string;
+    };
+
+/**
+ * A filesystem Vibe captured after a validation succeeded (Sprint 10B §5).
+ *
+ * Created **only** after every check passed and the credential scrub was
+ * re-verified, so what is retained is a known-clean artifact rather than
+ * whatever a sandbox happened to contain. Expiry is always explicit — the
+ * provider's own default is 30 days, which is not a retention policy anyone
+ * chose.
+ */
+export type SandboxArtifact = {
+  snapshotId: string;
+  sizeBytes: number | null;
+  /** Provider-reported expiry. Null only if the provider declines to say. */
+  expiresAt: string | null;
 };
 
 export type CreateSandboxInput = {
@@ -74,12 +136,27 @@ export type CreateSandboxInput = {
   networkPolicy: SandboxNetworkPolicy;
   timeoutMs: number;
   /**
+   * Inbound ports to expose publicly.
+   *
+   * Empty for validation: an exposed port serves untrusted code on a public URL,
+   * which is a different exposure entirely and belongs to preview alone.
+   */
+  ports?: readonly number[];
+  /**
    * Environment for every command.
    *
    * Must contain no privilege. Enforced by the orchestrator and asserted by
    * tests, because the interface cannot prevent a caller passing a secret (§8).
    */
   env: Record<string, string>;
+  /**
+   * vCPUs to provision. Defaults to the validation shape when omitted.
+   *
+   * Explicit because preview and validation want different shapes for reasons
+   * that are not interchangeable — one races a build against a step deadline,
+   * the other serves a handful of requests for fifteen billed minutes.
+   */
+  vcpus?: number;
 };
 
 /** Usage the provider reports once the sandbox has stopped (§25). */
@@ -120,6 +197,20 @@ export interface SandboxHandle {
     timeoutMs: number;
   }): Promise<SandboxCommandResult>;
 
+  /**
+   * Starts a Vibe-constructed command in the background and returns immediately.
+   *
+   * Only preview uses this. Validation deliberately does not: every validation
+   * command has a verdict, and a command with no verdict has no place in a run
+   * that produces one.
+   */
+  runBackground(input: {
+    command: SandboxCommand;
+    cwd: string;
+    /** Merged over the sandbox environment. Must contain no privilege (§12). */
+    env?: Record<string, string>;
+  }): Promise<SandboxProcess>;
+
   /** Reads a bounded file back out, for integrity checks. Null when absent. */
   readFile(input: { path: string; maxBytes: number }): Promise<string | null>;
 
@@ -130,6 +221,30 @@ export interface SandboxHandle {
    * network between dependency acquisition and repository execution.
    */
   applyNetworkPolicy(policy: SandboxNetworkPolicy): Promise<void>;
+
+  /**
+   * Captures the filesystem and terminates the sandbox.
+   *
+   * Terminating is the provider's behaviour, not ours: after a snapshot the
+   * sandbox is unreachable and `stop()` would fail. So this is a *terminal*
+   * operation, and `stop()` afterwards must still report usage rather than
+   * throw — otherwise capturing an artifact would cost us the accounting.
+   */
+  snapshot(input: { expirationMs: number }): Promise<SandboxArtifact>;
+
+  /**
+   * The public origin for an exposed port. Provider-derived, never assembled.
+   *
+   * Throws when the provider has no route for the port, which is a real and
+   * distinct failure: the server may be running perfectly and still be
+   * unreachable. Callers classify it as `preview_provider_unavailable` rather
+   * than blaming the application (Sprint 10B §17).
+   *
+   * The returned origin is capability-like. It is an unlisted public URL to a
+   * VM serving untrusted code, so it is never persisted, never logged broadly,
+   * never placed in an audit event, in AI evidence, or in analytics (§16).
+   */
+  publicOrigin(port: number): Promise<string>;
 
   /** Terminates the sandbox and reports usage. Safe to call more than once. */
   stop(): Promise<SandboxUsage>;
@@ -164,6 +279,53 @@ export interface SandboxProvider {
    * must **not** create a replacement: the filesystem is the state (§12).
    */
   reconnect(input: { name: string }): Promise<SandboxHandle | null>;
+
+  /**
+   * A sanitized description of why a sandbox is not usable.
+   *
+   * ## Why this exists as a separate call
+   *
+   * `reconnect` deliberately answers one question — can I work in this sandbox
+   * — and collapses every other answer to `null`, because the caller's next act
+   * is to run a command that assumes a filesystem. That collapse is correct for
+   * control flow and useless for diagnosis, and the difference cost three
+   * dogfood runs.
+   *
+   * The first said `capture_failed` with nothing else. The second said
+   * `Status code 400 is not ok`. The third finally said `` `expiration` must be
+   * 0 or >= 86400000 ms `` and the real cause was fixed in one attempt. Then
+   * capture started failing as `sandbox_lost`, which carries no detail at all —
+   * the same blind spot, one layer down (ADR 0015 §9).
+   *
+   * So this is asked **only on a path that has already failed**: it costs one
+   * extra provider call when something is already wrong, and nothing at all
+   * when things work. It returns the observed status and the session's own
+   * timeout, because "stopped at a 300000 ms timeout" and "stopped at a 900000
+   * ms timeout" are different bugs with different fixes.
+   *
+   * Never shown to a user. Bounded and secret-redacted like any other untrusted
+   * text, and recorded on the audit event an operator reads.
+   */
+  inspect(input: { name: string }): Promise<string | null>;
+
+  /**
+   * Deletes a stored artifact.
+   *
+   * Explicit rather than left to expiry. A preview that has ended should not
+   * leave a customer's filesystem sitting in provider storage for the remainder
+   * of its TTL — the TTL is a backstop for the cases where we cannot delete,
+   * not the plan.
+   *
+   * **Throws when deletion could not be confirmed.** Swallowing that here would
+   * make "the snapshot is gone" unfalsifiable at every layer above; the caller
+   * catches it, records `artifact_delete_failed`, and leaves the cleanup
+   * retryable — without letting storage housekeeping overwrite the preview's
+   * own result (Sprint 10B §19).
+   *
+   * Deleting an already-deleted snapshot must succeed: idempotence is the
+   * point, since retry is the recovery path.
+   */
+  deleteArtifact(snapshotId: string): Promise<void>;
 }
 
 /**

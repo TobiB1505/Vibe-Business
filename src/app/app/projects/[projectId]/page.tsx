@@ -23,6 +23,7 @@ import { buildOpportunityActionState } from "@/modules/execution/view";
 import { buildBranchUrl } from "@/modules/execution/diff";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { getLatestValidation } from "@/modules/validation/service";
+import { getPreviewCard } from "@/modules/change-preview/service";
 import { SANDBOX_POLICY_VERSION } from "@/modules/validation/schema";
 import { buildValidationSummary } from "@/modules/validation/view";
 import { listPreparedChangesForProject } from "@/modules/execution/store";
@@ -181,6 +182,17 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
       preparedChangeId: prepared.id,
     });
 
+    // Preview state is the server's answer, not something the panel derives
+    // from validation plus a guess. This read costs three rows and no provider
+    // call: opening the page must never spend anything (Sprint 10B-3 §2, §22).
+    const preview = await getPreviewCard(supabase, {
+      projectId,
+      preparedChangeId: prepared.id,
+      validation: validation ? { id: validation.id, status: validation.status } : null,
+      resolveFailureMessage: (code) =>
+        OPERATION_FAILURE_MESSAGES[code as keyof typeof OPERATION_FAILURE_MESSAGES] ?? null,
+    });
+
     preparedChangeCards.push({
       id: prepared.id,
       branchName: prepared.branchName,
@@ -197,6 +209,10 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
               : null,
           })
         : null,
+      preview,
+      // The artifact's id is its validation run's, and only a passing run can
+      // have one. A failed run offers nothing for the client to name.
+      validatedArtifactId: validation?.status === "passed" ? validation.id : null,
     });
   }
 

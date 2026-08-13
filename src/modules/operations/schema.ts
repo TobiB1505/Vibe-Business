@@ -24,6 +24,15 @@ export const OPERATION_TYPES = [
   "change_preparation",
   /** Isolated sandbox validation of a prepared change (Sprint 10A §20). */
   "change_validation",
+  /** Temporary preview of a validated artifact (Sprint 10B-2 §23). */
+  "change_preview",
+  /**
+   * Ending a preview: stop, delete the artifact, record the spend.
+   *
+   * Durable because it needs the privileged ledger writer, not because it is
+   * slow. Manual stop and expiry both converge here (ADR 0016 §14).
+   */
+  "preview_teardown",
 ] as const;
 export type OperationType = (typeof OPERATION_TYPES)[number];
 
@@ -62,6 +71,17 @@ export const OPERATION_STAGES = [
   "building",
   "collecting_results",
   "cleaning_up",
+  /**
+   * Temporary preview (Sprint 10B-2 §23).
+   *
+   * Granular for the same reason validation's are: a restore-plus-boot is tens
+   * of seconds, and one opaque stage tells a waiting user nothing that a
+   * percentage would not tell them falsely.
+   */
+  "restoring_artifact",
+  "verifying_artifact",
+  "starting_server",
+  "checking_preview",
   "completed",
 ] as const;
 export type OperationStage = (typeof OPERATION_STAGES)[number];
@@ -86,5 +106,19 @@ export function isActive(status: OperationStatus): boolean {
  * cancellation cannot be honestly promised.
  */
 export function hasEnteredPaidWork(stage: OperationStage): boolean {
-  return stage === "running_ai" || stage === "prioritizing" || stage === "writing_repository" || stage === "validating" || stage === "persisting" || stage === "completed";
+  return (
+    stage === "running_ai" ||
+    stage === "prioritizing" ||
+    stage === "writing_repository" ||
+    stage === "validating" ||
+    stage === "persisting" ||
+    // Restoring an artifact creates a billed microVM. Not inference, but the
+    // property this function exists to express is "money may already have been
+    // spent", and a sandbox creation qualifies (Sprint 10B-2 §27).
+    stage === "restoring_artifact" ||
+    stage === "verifying_artifact" ||
+    stage === "starting_server" ||
+    stage === "checking_preview" ||
+    stage === "completed"
+  );
 }

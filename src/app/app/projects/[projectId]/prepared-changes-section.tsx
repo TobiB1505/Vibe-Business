@@ -1,3 +1,5 @@
+import type { PreviewCard } from "@/modules/change-preview/view";
+import { PreviewPanel } from "./preview-panel";
 import { ValidationPanel, type ValidationSummary } from "./validation-panel";
 
 /**
@@ -28,6 +30,16 @@ export type PreparedChangeCard = {
   createdAt: string;
   branchUrl: string | null;
   validation: ValidationSummary | null;
+  /** Preview state, decided on the server. Never inferred from the fields above. */
+  preview: PreviewCard;
+  /**
+   * The ValidatedArtifact a preview would restore, when one exists.
+   *
+   * Its id is the validation run that captured it. The client passes it back to
+   * start a preview and can name nothing else — no snapshot, no sandbox, no
+   * port, no command (§6).
+   */
+  validatedArtifactId: string | null;
 };
 
 export function PreparedChangesSection({
@@ -85,6 +97,17 @@ export function PreparedChangesSection({
               preparedChangeId={change.id}
               summary={change.validation}
               runningOperation={null}
+            />
+
+            {/* Below validation, deliberately: a preview restores what a
+                validation produced, so the order on screen is the order of the
+                gates. There is no Merge, Deploy or Approve button here or
+                anywhere — none of those exist. */}
+            <PreviewPanel
+              projectId={projectId}
+              preparedChangeId={change.id}
+              card={change.preview}
+              validatedArtifactId={change.validatedArtifactId}
             />
           </li>
         ))}

@@ -47,6 +47,10 @@ export type StoredValidationRun = {
   failureCode: ValidationFailureCode | null;
   failureDetail: string | null;
   sourceIntegrity: SourceIntegrity | null;
+  /** Present only on a passing run whose filesystem was captured (§5). */
+  artifactSnapshotId: string | null;
+  artifactExpiresAt: string | null;
+  artifactDeletedAt: string | null;
   sandboxDurationMs: number | null;
   cleanupStatus: CleanupStatus | null;
   validationIdentity: string;
@@ -58,7 +62,7 @@ export type StoredValidationRun = {
 const COLUMNS =
   "id, project_id, prepared_change_id, operation_run_id, validation_profile, validation_profile_version, " +
   "sandbox_policy_version, sandbox_provider, sandbox_runtime, package_manager, prepared_commit_sha, " +
-  "status, stage, steps, failure_code, failure_detail, source_integrity, sandbox_duration_ms, cleanup_status, validation_identity, " +
+  "status, stage, steps, failure_code, failure_detail, source_integrity, artifact_snapshot_id, artifact_expires_at, artifact_deleted_at, sandbox_duration_ms, cleanup_status, validation_identity, " +
   "created_at, started_at, completed_at";
 
 type Row = Record<string, unknown>;
@@ -82,6 +86,9 @@ function mapRow(row: Row): StoredValidationRun {
     failureCode: (row.failure_code as ValidationFailureCode | null) ?? null,
     failureDetail: (row.failure_detail as string | null) ?? null,
     sourceIntegrity: (row.source_integrity as SourceIntegrity | null) ?? null,
+    artifactSnapshotId: (row.artifact_snapshot_id as string | null) ?? null,
+    artifactExpiresAt: (row.artifact_expires_at as string | null) ?? null,
+    artifactDeletedAt: (row.artifact_deleted_at as string | null) ?? null,
     sandboxDurationMs: (row.sandbox_duration_ms as number | null) ?? null,
     cleanupStatus: (row.cleanup_status as CleanupStatus | null) ?? null,
     validationIdentity: String(row.validation_identity),
@@ -92,11 +99,17 @@ function mapRow(row: Row): StoredValidationRun {
 }
 
 /**
- * A validation that already answered this exact question (§21).
+ * A validation that already answered this exact question and still carries the
+ * usable artifact a preview needs (§21, Sprint 10B dogfood).
  *
- * Only `passed` is reusable. A previous failure is not a durable fact about
- * the artifact: the build may have failed on a transient registry error, and
- * refusing to re-run would strand the user with a verdict they cannot retry.
+ * Only `passed` with a live, undeleted snapshot is reusable. A passing verdict
+ * without one still proves the commands succeeded, but reusing it would make
+ * the Preview panel's explicit "Validate again" action a no-op and leave the
+ * user permanently stranded after a capture failure or artifact expiry.
+ *
+ * A previous failure is not a durable fact about the artifact either: the
+ * build may have failed on a transient registry error, and refusing to re-run
+ * would strand the user with a verdict they cannot retry.
  */
 export async function findReusableValidationRun(
   supabase: SupabaseClient,
@@ -108,6 +121,9 @@ export async function findReusableValidationRun(
     .eq("project_id", params.projectId)
     .eq("validation_identity", params.validationIdentity)
     .eq("status", "passed")
+    .not("artifact_snapshot_id", "is", null)
+    .is("artifact_deleted_at", null)
+    .gt("artifact_expires_at", new Date().toISOString())
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -204,6 +220,51 @@ export async function claimValidationRun(
   if (!data) return { ok: false, error: "persistence_failed" };
 
   return { ok: true, validationRun: mapRow(data as unknown as Row) };
+}
+
+/**
+ * Records a captured artifact against its run.
+ *
+ * Scoped to the project and to a passing run, because the service-role client
+ * bypasses RLS and because the database's own CHECK already refuses an artifact
+ * on a non-passing row — this is the same rule stated where the query lives.
+ */
+export async function recordValidatedArtifact(
+  supabase: SupabaseClient,
+  params: {
+    validationRunId: string;
+    projectId: string;
+    snapshotId: string;
+    sizeBytes: number | null;
+    expiresAt: string;
+  },
+): Promise<void> {
+  const { error } = await supabase
+    .from("validation_runs")
+    .update({
+      artifact_snapshot_id: params.snapshotId,
+      artifact_size_bytes: params.sizeBytes,
+      artifact_expires_at: params.expiresAt,
+    })
+    .eq("id", params.validationRunId)
+    .eq("project_id", params.projectId);
+
+  if (error) throw error;
+}
+
+/** Marks an artifact deleted. Expiry is the backstop; this is the plan. */
+export async function markArtifactDeleted(
+  supabase: SupabaseClient,
+  params: { validationRunId: string; projectId: string },
+): Promise<void> {
+  const { error } = await supabase
+    .from("validation_runs")
+    .update({ artifact_deleted_at: new Date().toISOString() })
+    .eq("id", params.validationRunId)
+    .eq("project_id", params.projectId)
+    .is("artifact_deleted_at", null);
+
+  if (error) throw error;
 }
 
 export async function setValidationStage(
@@ -342,12 +403,37 @@ export async function completeValidationRun(
     sandboxRuntime: string | null;
     sandboxDurationMs: number | null;
     cleanupStatus: CleanupStatus;
+    /**
+     * A captured artifact, written in the same statement as the verdict.
+     *
+     * Not a convenience. `validation_runs_artifact_only_when_passed` refuses an
+     * artifact on a row that is not `passed`, so recording it at capture time —
+     * one step earlier, while the run is still `running` — violated the CHECK,
+     * failed that step, and had it retried onto a sandbox the successful
+     * snapshot had already stopped. Four dogfood rounds were spent on the
+     * resulting `sandbox_lost` while the snapshot sat orphaned in provider
+     * storage.
+     *
+     * Setting both in one UPDATE makes the constraint satisfiable by
+     * construction: the row becomes `passed` and gains its artifact atomically,
+     * or neither happens.
+     */
+    artifact?: { snapshotId: string; sizeBytes: number | null; expiresAt: string } | null;
   },
 ): Promise<boolean> {
   const { data, error } = await supabase
     .from("validation_runs")
     .update({
       status: params.status,
+      // Only ever alongside `status: "passed"` — the caller supplies an
+      // artifact only for a passing run, and the database enforces the rest.
+      ...(params.artifact
+        ? {
+            artifact_snapshot_id: params.artifact.snapshotId,
+            artifact_size_bytes: params.artifact.sizeBytes,
+            artifact_expires_at: params.artifact.expiresAt,
+          }
+        : {}),
       stage: params.stage,
       steps: params.steps,
       failure_code: params.failureCode,

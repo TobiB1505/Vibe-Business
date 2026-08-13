@@ -220,10 +220,10 @@ export function ValidationPanel({
             Not merged · Not deployed · Not reviewed by a human
           </p>
 
-          {/* Always available, and always safe: validation identity decides
-              what happens. Under the same policy this reuses the stored result
-              and provisions nothing; after a policy change it is the only way
-              to get a result that means what the current rules mean. */}
+          {/* Always available, and always safe: validation identity plus
+              artifact availability decide what happens. A current pass with a
+              live artifact is reused; a missing/expired artifact or a policy
+              change starts the explicit new validation the user requested. */}
           <button
             type="button"
             onClick={validate}

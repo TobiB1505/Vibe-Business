@@ -112,5 +112,11 @@ export const OPERATION_STAGE_LABELS: Record<OperationStage, string> = {
   building: "Building application",
   collecting_results: "Collecting results",
   cleaning_up: "Cleaning up",
+  // Temporary preview. "Restoring" rather than "building": the build already
+  // happened, and saying otherwise would misdescribe what a preview is.
+  restoring_artifact: "Restoring the validated build",
+  verifying_artifact: "Verifying the restored build",
+  starting_server: "Starting the application",
+  checking_preview: "Checking the preview responds",
   completed: "Completed",
 };

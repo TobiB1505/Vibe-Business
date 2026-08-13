@@ -6,6 +6,7 @@ import { sanitizeCommandOutput } from "./logs";
 import {
   DEPENDENCY_HOSTS,
   SOURCE_HOSTS,
+  type SandboxArtifact,
   type SandboxHandle,
   type SandboxProvider,
   type SandboxUsage,
@@ -401,6 +402,7 @@ export async function provisionSandbox(
     const sandbox = await provider.create({
       name: sandboxNameFor(target.validationRunId),
       source: {
+        kind: "git",
         repositoryUrl: target.repositoryUrl,
         revision: target.preparedCommitSha,
         credential: target.cloneCredential,
@@ -520,6 +522,9 @@ export async function verifySource(
     // deliver the revision we asked for" without needing git metadata.
     const verified: string[] = [];
     const unverified: string[] = [];
+    // Recorded so a preview can prove the restored bytes are these bytes,
+    // without acquiring the source a second time (Sprint 10B §11).
+    const digests: Record<string, string> = {};
 
     for (const path of BUILD_IDENTITY_FILES) {
       const onDisk = await readWhole(
@@ -544,7 +549,8 @@ export async function verifySource(
         continue;
       }
 
-      if (sha256(onDisk.content) !== sha256(atCommit)) {
+      const onDiskDigest = sha256(onDisk.content);
+      if (onDiskDigest !== sha256(atCommit)) {
         return fail(
           "source_integrity_failed",
           `build identity mismatch against ${target.preparedCommitSha}: ${path}`,
@@ -552,6 +558,7 @@ export async function verifySource(
       }
 
       verified.push(path);
+      digests[path] = onDiskDigest;
     }
 
     const sourceIntegrity: SourceIntegrity = {
@@ -561,6 +568,7 @@ export async function verifySource(
       changedFilesVerified: target.preparedFiles.length > 0,
       buildIdentityFilesVerified: verified,
       buildIdentityFilesUnverified: unverified,
+      buildIdentityDigests: digests,
     };
 
     // On this provider there is no `.git` to remove, so this is defence in
@@ -793,6 +801,151 @@ export async function runCheckPhase(
  * "Already gone" is a success, not an error. Stopping is idempotent and this
  * step is safe to retry, which is why it is one of the few that may be.
  */
+/**
+ * Captures the validated filesystem as a bounded, resumable artifact (§5).
+ *
+ * ## Why this is not "make sandboxes persistent"
+ *
+ * ADR 0015 §5 keeps `persistent: false`, and this does not reverse it. A
+ * persistent sandbox snapshots itself on *every* stop — including failed runs,
+ * including runs that stopped mid-scrub — and inherits the provider's 30-day
+ * default retention. That would put arbitrary customer filesystems into
+ * provider storage as a side effect of validating.
+ *
+ * This is the opposite shape. Capture happens **only** when:
+ *
+ *  1. every configured check passed, and
+ *  2. the credential scrub is re-verified immediately beforehand.
+ *
+ * So what is retained is a known-clean artifact of a known-good run, with an
+ * explicit expiry, deleted when the preview that uses it ends. A failed
+ * validation never produces one.
+ *
+ * The re-verification is not paranoia about our own code: the scrub ran before
+ * the build, and a build executes repository-controlled code that could write
+ * anything, including a `.git` directory. Checking again is checking the thing
+ * we are about to keep.
+ */
+export type CaptureOutcome =
+  | { ok: true; artifact: SandboxArtifact; usage: SandboxUsage | null }
+  | {
+      ok: false;
+      reason: "sandbox_lost" | "credential_present" | "capture_failed";
+      /**
+       * Sanitized name and message of whatever the provider threw.
+       *
+       * ## Why this exists, written after it cost a dogfood run
+       *
+       * The first real capture failed and recorded `capture_failed` and nothing
+       * else. Three hypotheses were raised and eliminated from the SDK source —
+       * non-persistent sandboxes cannot be snapshotted (the docs say they can),
+       * a nested `"use step"` (every SDK method has one, including the ones that
+       * worked), a throwing usage getter (they are plain property reads) — and
+       * the actual reason remained unknowable, because this function refused to
+       * look at it.
+       *
+       * That is precisely the failure mode ADR 0015 §9 was written about after
+       * Sprint 10A lost four runs to it:
+       *
+       * ```
+       * provider error → sanitized structured error → failure code → user-safe message
+       * ```
+       *
+       * never
+       *
+       * ```
+       * provider error → generic constant → generic constant → "something failed"
+       * ```
+       *
+       * The rule was recorded and then reintroduced one sprint later, in a bare
+       * `catch {}`. Users still never see this string; it is bounded and
+       * secret-redacted like any other untrusted text, and it goes to the audit
+       * event so an operator can act on it.
+       */
+      detail: string | null;
+      /**
+       * Usage measured while terminating, when termination was reached.
+       *
+       * Not an extra: the first failed capture recorded `active_cpu_ms: null`
+       * and `cleanup_status: not_provisioned` for a sandbox that had genuinely
+       * run for 326 seconds. The fallback `stop()` below already held those
+       * numbers and threw them away, and the later cleanup step could not
+       * reconnect to re-read them — so a capture failure silently erased the
+       * run's entire ledger entry.
+       */
+      usage: SandboxUsage | null;
+    };
+
+export async function captureValidatedArtifact(
+  provider: SandboxProvider,
+  target: ValidationTarget,
+): Promise<CaptureOutcome> {
+  const name = sandboxNameFor(target.validationRunId);
+  const sandbox = await provider.reconnect({ name });
+
+  if (!sandbox) {
+    // Nothing to stop and nothing to measure — but "the sandbox was gone" is a
+    // finding, not an explanation, and a bare `sandbox_lost` is what made the
+    // second wave of capture failures as opaque as the first. Ask once, on a
+    // path that has already failed.
+    let detail: string | null = null;
+    try {
+      detail = await provider.inspect({ name });
+    } catch {
+      // A diagnosis that cannot be obtained must not become a second failure.
+    }
+
+    return { ok: false, reason: "sandbox_lost", detail, usage: null };
+  }
+
+  /** Terminates, and keeps what the provider measured on the way out. */
+  const terminate = async (): Promise<SandboxUsage | null> => {
+    try {
+      return await sandbox.stop();
+    } catch {
+      return null;
+    }
+  };
+
+  // The build ran repository-controlled code after the original scrub. Verify
+  // the thing being kept, not the thing that was checked earlier.
+  const credentialStore = await sandbox.readFile({
+    path: inSandbox(target.sourceRoot, target.workspaceRoot, ".git/config"),
+    maxBytes: 4096,
+  });
+
+  if (credentialStore !== null) {
+    // Refuse to retain it, and leave no artifact behind. The run still cost
+    // what it cost, so its usage still comes back.
+    return {
+      ok: false,
+      reason: "credential_present",
+      detail: detail("a git credential store was present at capture time"),
+      usage: await terminate(),
+    };
+  }
+
+  try {
+    const artifact = await sandbox.snapshot({
+      expirationMs: SANDBOX_BUDGETS.validatedArtifactTtlMs,
+    });
+
+    // Snapshotting terminates the sandbox, so the usage read here is the whole
+    // run's. A later `stop()` reports the same numbers rather than throwing.
+    return { ok: true, artifact, usage: await terminate() };
+  } catch (error) {
+    // A run that validated successfully but could not be captured is still a
+    // successful validation. Preview simply has nothing to resume — and now
+    // there is a recorded reason why.
+    return {
+      ok: false,
+      reason: "capture_failed",
+      detail: detail(describeError(error)),
+      usage: await terminate(),
+    };
+  }
+}
+
 export async function stopSandbox(
   provider: SandboxProvider,
   target: ValidationTarget,

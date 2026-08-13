@@ -50,8 +50,20 @@ export type AuditEventType =
   | "change_validation.started"
   | "change_validation.passed"
   | "change_validation.failed"
+  | "change_validation.artifact_capture_failed"
   | "change_preparation.completed"
-  | "change_preparation.failed";
+  | "change_preparation.failed"
+  // Temporary preview (Sprint 10B-2). None of these may carry the preview
+  // origin: an unlisted public URL to a VM serving untrusted code is
+  // capability-like, and an audit log is exactly the kind of durable, widely
+  // readable place it must not reach (§16).
+  | "change_preview.started"
+  | "change_preview.running"
+  | "change_preview.integrity_failed"
+  | "change_preview.failed"
+  | "change_preview.stopped"
+  | "change_preview.cleanup_incomplete"
+  | "change_preview.expired";
 
 export type RecordAuditEventParams = {
   userId: string;

@@ -537,6 +537,7 @@ describe("re-entry after a resumed workflow (§11, §20)", () => {
     const before = provider.commands().length;
     const cleanup: CleanupRecord = {
       cleanup: "not_provisioned",
+      artifact: null,
       runtime: null,
       sandboxDurationMs: null,
       usage: null,
@@ -572,6 +573,7 @@ describe("re-entry after a resumed workflow (§11, §20)", () => {
 
     const replay = await finalizeValidationStep(d, OPERATION, "validation_run_failed", {
       cleanup: "not_provisioned",
+      artifact: null,
       runtime: null,
       sandboxDurationMs: null,
       usage: null,
@@ -830,7 +832,7 @@ describe("no secrets reach the sandbox (§8, §31, §37)", () => {
     await runPipeline();
 
     const created = provider.createdWith();
-    expect(created?.source.credential?.password).toBe(CLONE_TOKEN);
+    expect(created?.source.kind === "git" ? created.source.credential?.password : undefined).toBe(CLONE_TOKEN);
     expect(JSON.stringify(created?.env)).not.toContain(CLONE_TOKEN);
   });
 
@@ -847,5 +849,109 @@ describe("no secrets reach the sandbox (§8, §31, §37)", () => {
 
     expect(everything).not.toContain(CLONE_TOKEN);
     expect(everything).not.toContain("x-access-token");
+  });
+});
+
+describe("only a passing run keeps an artifact (Sprint 10B §5)", () => {
+  /**
+   * The whole reason capture is explicit rather than `persistent: true`. A
+   * persistent sandbox snapshots on every stop — including the run whose build
+   * just failed, and including one that stopped mid-scrub. Retaining a customer
+   * filesystem must be a consequence of success, never of stopping.
+   */
+  it("captures nothing when the build failed", async () => {
+    seed();
+    provider = fakeSandboxProvider({
+      files: healthySandboxFiles(),
+      results: { "pnpm run build": { exitCode: 1, output: "Build error" } },
+    });
+
+    await runPipeline();
+
+    expect(provider.snapshots()).toBe(0);
+    expect(db.rows("validation_runs")[0].status).toBe("failed");
+    expect(db.rows("validation_runs")[0].artifact_snapshot_id ?? null).toBeNull();
+  });
+
+  it("captures nothing when the tests failed", async () => {
+    seed();
+    provider = fakeSandboxProvider({
+      files: healthySandboxFiles(),
+      results: { "pnpm run test": { exitCode: 1 } },
+    });
+
+    await runPipeline();
+
+    expect(provider.snapshots()).toBe(0);
+  });
+
+  it("records the artifact against a passing run", async () => {
+    seed();
+    await runPipeline();
+
+    const run = db.rows("validation_runs")[0];
+    expect(run.status).toBe("passed");
+    expect(run.artifact_snapshot_id).toBe("snap_fake_1");
+    // A retained artifact always has a deadline Vibe chose.
+    expect(run.artifact_expires_at).toBeTruthy();
+  });
+});
+
+/**
+ * What a failed capture must not also destroy (found by the first real dogfood).
+ *
+ * The first real `sandbox-policy-v4` run passed in 326 seconds and then failed
+ * to capture. Two things went wrong beyond the missing artifact, and both were
+ * silent:
+ *
+ *  - the provider's error was swallowed by a bare `catch {}`, so the reason was
+ *    unknowable — the exact pattern ADR 0015 §9 exists to forbid;
+ *  - the ledger row recorded `active_cpu_ms: null` and
+ *    `cleanup_status: not_provisioned` for a sandbox that had genuinely run,
+ *    because the fallback `stop()` held the numbers and dropped them.
+ *
+ * A failed capture is an acceptable outcome. Losing the diagnosis and the
+ * accounting is not.
+ */
+describe("a failed capture keeps the diagnosis and the ledger", () => {
+  it("records why capture failed, not merely that it did", async () => {
+    seed();
+    provider = fakeSandboxProvider({ files: healthySandboxFiles(), failSnapshot: true });
+
+    await runPipeline();
+
+    const event = db
+      .rows("audit_events")
+      .find((row) => row.event_type === "change_validation.artifact_capture_failed");
+
+    expect(event).toBeTruthy();
+    const metadata = event?.metadata as { reason?: string; detail?: string };
+    expect(metadata.reason).toBe("capture_failed");
+    expect(metadata.detail).toContain("snapshot failed");
+  });
+
+  it("still records the run's measured usage", async () => {
+    seed();
+    provider = fakeSandboxProvider({ files: healthySandboxFiles(), failSnapshot: true });
+
+    await runPipeline();
+
+    const [usage] = db.rows("sandbox_usage_events");
+    // Not null. A run that cost five minutes of sandbox must appear in the
+    // ledger as five minutes of sandbox, whatever happened to the snapshot.
+    expect(usage.active_cpu_ms).toBe(1234);
+    expect(usage.cleanup_status).toBe("stopped");
+  });
+
+  it("still passes the validation", async () => {
+    seed();
+    provider = fakeSandboxProvider({ files: healthySandboxFiles(), failSnapshot: true });
+
+    await runPipeline();
+
+    // The verdict is about the commands, not about whether a copy was kept.
+    const run = db.rows("validation_runs")[0];
+    expect(run.status).toBe("passed");
+    expect(run.artifact_snapshot_id ?? null).toBeNull();
   });
 });

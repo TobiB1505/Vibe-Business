@@ -2,11 +2,13 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { recordAuditEvent } from "@/modules/audit-log/events";
+import { SANDBOX_BUDGETS } from "@/modules/validation/budgets";
 import { getPreparedChange } from "@/modules/execution/store";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import { computeValidationIdentity } from "@/modules/validation/identity";
 import {
   buildSatisfiesProfile,
+  captureValidatedArtifact,
   provisionSandbox,
   runCheckPhase,
   stopSandbox,
@@ -142,6 +144,15 @@ export type CleanupRecord = {
   runtime: string | null;
   sandboxDurationMs: number | null;
   usage: SandboxUsage | null;
+  /**
+   * A captured artifact, carried to the step that records the verdict.
+   *
+   * It cannot be persisted at capture time: the database refuses an artifact on
+   * a run that is not yet `passed`, and the verdict is written one step later.
+   * Numbers and identifiers only — nothing here is secret, and it is exactly
+   * what the terminal write needs to satisfy the constraint in one statement.
+   */
+  artifact: { snapshotId: string; sizeBytes: number | null; expiresAt: string } | null;
 };
 
 async function loadOperation(
@@ -552,7 +563,7 @@ export async function cleanupSandboxStep(
 ): Promise<CleanupRecord> {
   const resolved = await resolveRunContext(deps, operationId, { withCloneCredential: false });
   if (!resolved.ok) {
-    return { cleanup: "not_provisioned", runtime: null, sandboxDurationMs: null, usage: null };
+    return { cleanup: "not_provisioned", runtime: null, sandboxDurationMs: null, usage: null, artifact: null };
   }
   const { operation, run, target } = resolved;
 
@@ -562,6 +573,81 @@ export async function cleanupSandboxStep(
     validationRunId: run.id,
     stage: "cleaning_up",
   });
+
+  // A passing run keeps its filesystem as a bounded artifact instead of merely
+  // being torn down, so a preview can start from the exact validated bytes.
+  // Capture is terminal — it stops the sandbox itself — so it replaces cleanup
+  // rather than preceding it (§5).
+  const passing = buildSatisfiesProfile(run.steps);
+
+  if (passing) {
+    const captured = await captureValidatedArtifact(deps.provider, target);
+
+    if (captured.ok) {
+      // Deliberately **not** written here. The database refuses an artifact on
+      // a row that is not yet `passed`, and at this point the run is still
+      // `running` — the verdict is recorded by the finalize step that follows.
+      //
+      // Writing it here threw a CHECK violation, which failed this step, which
+      // retried it, which found the sandbox already stopped by the successful
+      // snapshot and reported `sandbox_lost`. Four rounds of dogfood chased
+      // that phantom while the provider had been doing its job perfectly: the
+      // snapshot existed, 1.14 GB of it, orphaned in provider storage with
+      // nothing in Vibe pointing at it.
+      //
+      // So the artifact travels to finalize and is written in the same
+      // statement that sets `status = 'passed'`. One write, constraint
+      // satisfied, nothing to retry.
+      const startedFrom = run.startedAt ? Date.parse(run.startedAt) : null;
+      return {
+        cleanup: "stopped",
+        runtime: run.sandboxRuntime,
+        sandboxDurationMs:
+          startedFrom !== null && Number.isFinite(startedFrom) ? Date.now() - startedFrom : null,
+        usage: captured.usage,
+        artifact: {
+          snapshotId: captured.artifact.snapshotId,
+          sizeBytes: captured.artifact.sizeBytes,
+          // Vibe's own deadline, not the provider's report, so retention is a
+          // number we chose even if the provider declines to say.
+          expiresAt: new Date(Date.now() + SANDBOX_BUDGETS.validatedArtifactTtlMs).toISOString(),
+        },
+      };
+    }
+
+    // Capture failed. The validation still passed — that verdict is about the
+    // commands, not about whether we kept a copy — so the run is not failed
+    // here. Preview will simply have nothing to resume and will say so.
+    await recordAuditEvent(deps.supabase, {
+      userId: operation.userId,
+      eventType: "change_validation.artifact_capture_failed",
+      metadata: {
+        projectId: operation.projectId,
+        operationId,
+        validationRunId: run.id,
+        reason: captured.reason,
+        // The whole point of the fix. A reason with no detail is what made the
+        // first real capture failure undiagnosable (ADR 0015 §9).
+        detail: captured.detail,
+      },
+    });
+
+    if (captured.usage) {
+      // Already terminated, and holding the numbers. Falling through to
+      // `stopSandbox` would reconnect to nothing, report `not_provisioned`, and
+      // write a ledger row claiming a 326-second sandbox never existed — which
+      // is exactly what the first failed capture did.
+      const startedFrom = run.startedAt ? Date.parse(run.startedAt) : null;
+      return {
+        cleanup: "stopped",
+        runtime: run.sandboxRuntime,
+        sandboxDurationMs:
+          startedFrom !== null && Number.isFinite(startedFrom) ? Date.now() - startedFrom : null,
+        usage: captured.usage,
+        artifact: null,
+      };
+    }
+  }
 
   const outcome = await stopSandbox(deps.provider, target);
 
@@ -577,6 +663,7 @@ export async function cleanupSandboxStep(
     runtime: outcome.runtime ?? run.sandboxRuntime,
     sandboxDurationMs,
     usage: outcome.usage,
+    artifact: null,
   };
 }
 
@@ -632,7 +719,24 @@ export async function finalizeValidationStep(
     sandboxDurationMs: cleanup.sandboxDurationMs ?? run.sandboxDurationMs,
     cleanupStatus: cleanup.cleanup,
     sourceIntegrity: run.sourceIntegrity,
+    // Written in the same statement as the verdict, which is the only order the
+    // constraint permits. A captured artifact only ever accompanies a pass.
+    artifact: status === "passed" ? cleanup.artifact : null,
   });
+
+  // A snapshot Vibe cannot point at is a snapshot nobody will ever delete: a
+  // gigabyte of a customer's filesystem in provider storage, invisible to the
+  // application that created it. If the terminal write did not apply — a replay,
+  // an already-terminal row — the artifact captured in *this* invocation has no
+  // owner, so it goes rather than leaking silently.
+  if (!persisted && cleanup.artifact) {
+    try {
+      await deps.provider.deleteArtifact(cleanup.artifact.snapshotId);
+    } catch {
+      // Recorded by absence rather than by failing a finished validation. The
+      // artifact's own TTL remains the backstop.
+    }
+  }
 
   if (persisted) {
     // Exactly one usage record per validation run, tied to the terminal write

@@ -26,11 +26,31 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const create = vi.fn();
 const get = vi.fn();
+const update = vi.fn();
+const listSessions = vi.fn();
+const extendTimeout = vi.fn();
 
 vi.mock("@vercel/sandbox", () => ({
   Sandbox: {
-    create: (...args: unknown[]) => create(...args),
-    get: (...args: unknown[]) => get(...args),
+    create: async (...args: unknown[]) => {
+      const sandbox = await create(...args);
+      return Object.assign(sandbox, {
+        update: (...updateArgs: unknown[]) => update(...updateArgs),
+        listSessions: (...listArgs: unknown[]) => listSessions(...listArgs),
+        extendTimeout: (...extendArgs: unknown[]) => extendTimeout(...extendArgs),
+      });
+    },
+    get: async (...args: unknown[]) => {
+      const sandbox = await get(...args);
+      // Mirrors `create`: a reconnected sandbox exposes the same session APIs
+      // the adapter uses to diagnose one that ended early.
+      return sandbox && typeof sandbox === "object"
+        ? Object.assign(sandbox, {
+            listSessions: (...listArgs: unknown[]) => listSessions(...listArgs),
+            extendTimeout: (...extendArgs: unknown[]) => extendTimeout(...extendArgs),
+          })
+        : sandbox;
+    },
   },
 }));
 
@@ -39,6 +59,14 @@ vi.mock("server-only", () => ({}));
 beforeEach(() => {
   create.mockReset();
   get.mockReset();
+  update.mockReset();
+  update.mockResolvedValue(undefined);
+  listSessions.mockReset();
+  extendTimeout.mockReset();
+  extendTimeout.mockResolvedValue(undefined);
+  // A session that already carries the requested lifetime: the ordinary case,
+  // where nothing needs extending.
+  listSessions.mockResolvedValue({ sessions: [{ status: "running", timeout: 600_000 }] });
   create.mockResolvedValue({
     name: "vibe-validate-abc",
     runtime: "node24",
@@ -57,6 +85,7 @@ async function createSandbox(overrides: Record<string, unknown> = {}) {
   await createVercelSandboxProvider().create({
     name: "vibe-validate-abc",
     source: {
+      kind: "git",
       repositoryUrl: "https://github.com/acme/product.git",
       revision: "2f05958e3410deaeb97029861abc05889139b4a7",
       credential: { username: "x-access-token", password: "ghs_token" },
@@ -118,6 +147,16 @@ describe("sandbox creation options", () => {
     expect(await createSandbox()).toMatchObject({ timeout: 600_000 });
   });
 
+  it("reasserts the timeout on the live session after creation", async () => {
+    await createSandbox();
+
+    // The fifth dogfood session stopped after Vercel's five-minute default
+    // despite `timeout` being present on create. `update()` is not redundant:
+    // the SDK also extends a running session whose actual timeout is shorter
+    // than the requested sandbox default.
+    expect(update).toHaveBeenCalledWith({ timeout: 600_000 });
+  });
+
   it("pins the image, so 'validated' means a known toolchain", async () => {
     const options = await createSandbox();
 
@@ -152,7 +191,7 @@ describe("command failures explain themselves (post-dogfood)", () => {
     const { createVercelSandboxProvider } = await import("./provider");
     const sandbox = await createVercelSandboxProvider().create({
       name: "vibe-validate-abc",
-      source: { repositoryUrl: "https://github.com/acme/p.git", revision: "abc", credential: null },
+      source: { kind: "git", repositoryUrl: "https://github.com/acme/p.git", revision: "abc", credential: null },
       networkPolicy: { mode: "deny_all" },
       timeoutMs: 1000,
       env: {},
@@ -185,7 +224,7 @@ describe("command failures explain themselves (post-dogfood)", () => {
     const { createVercelSandboxProvider } = await import("./provider");
     const sandbox = await createVercelSandboxProvider().create({
       name: "vibe-validate-abc",
-      source: { repositoryUrl: "https://github.com/acme/p.git", revision: "abc", credential: null },
+      source: { kind: "git", repositoryUrl: "https://github.com/acme/p.git", revision: "abc", credential: null },
       networkPolicy: { mode: "deny_all" },
       timeoutMs: 1000,
       env: {},
@@ -300,5 +339,274 @@ describe("reconnecting across durable steps (§3, §12)", () => {
     // `Sandbox.getOrCreate` exists and is exactly the wrong function here: it
     // would silently hand back a fresh, empty VM (§12).
     expect(create).not.toHaveBeenCalled();
+  });
+});
+
+describe("capturing an artifact must not cost the ledger (Sprint 10B §5)", () => {
+  async function capturedFailure(providerError: unknown): Promise<Error> {
+    create.mockResolvedValue({
+      name: "vibe-validate-abc",
+      runtime: "node24",
+      async snapshot() {
+        throw providerError;
+      },
+      async stop() {
+        return { activeCpuDurationMs: 1, networkTransfer: { ingress: 1, egress: 1 } };
+      },
+    });
+
+    const { createVercelSandboxProvider } = await import("./provider");
+    const sandbox = await createVercelSandboxProvider().create({
+      name: "vibe-validate-abc",
+      source: { kind: "git", repositoryUrl: "https://github.com/a/b.git", revision: "abc", credential: null },
+      networkPolicy: { mode: "deny_all" },
+      timeoutMs: 1000,
+      env: {},
+    });
+
+    try {
+      await sandbox.snapshot({ expirationMs: 60_000 });
+      throw new Error("expected snapshot to fail");
+    } catch (error) {
+      expect(error).toBeInstanceOf(Error);
+      return error as Error;
+    }
+  }
+
+  /**
+   * `sandbox.snapshot()` terminates the sandbox. A later `stop()` therefore
+   * throws — and `stop()` is where usage comes from. Without capturing usage at
+   * the moment of termination, retaining an artifact would silently cost us the
+   * accounting for the whole run.
+   */
+  it("reports usage from a stop() that the provider would refuse", async () => {
+    let stopped = false;
+    create.mockResolvedValue({
+      name: "vibe-validate-abc",
+      runtime: "node24",
+      totalActiveCpuDurationMs: 9876,
+      totalIngressBytes: 4242,
+      totalEgressBytes: 24,
+      async snapshot() {
+        stopped = true;
+        return { snapshotId: "snap_1", sizeBytes: 10, expiresAt: new Date(1) };
+      },
+      async stop() {
+        // Exactly what the real provider does once snapshotted.
+        if (stopped) throw new Error("sandbox is no longer running");
+        return { activeCpuDurationMs: 1, networkTransfer: { ingress: 1, egress: 1 } };
+      },
+    });
+
+    const { createVercelSandboxProvider } = await import("./provider");
+    const sandbox = await createVercelSandboxProvider().create({
+      name: "vibe-validate-abc",
+      source: { kind: "git", repositoryUrl: "https://github.com/a/b.git", revision: "abc", credential: null },
+      networkPolicy: { mode: "deny_all" },
+      timeoutMs: 1000,
+      env: {},
+    });
+
+    const artifact = await sandbox.snapshot({ expirationMs: 60_000 });
+    expect(artifact.snapshotId).toBe("snap_1");
+
+    // Would throw without the captured usage.
+    const usage = await sandbox.stop();
+    expect(usage.activeCpuDurationMs).toBe(9876);
+    expect(usage.networkIngressBytes).toBe(4242);
+  });
+
+  it("passes the explicit expiry through to the provider", async () => {
+    const snapshot = vi.fn(async () => ({ snapshotId: "s", sizeBytes: 1, expiresAt: null }));
+    create.mockResolvedValue({
+      name: "vibe-validate-abc",
+      runtime: "node24",
+      snapshot,
+      async stop() {
+        return { activeCpuDurationMs: 1, networkTransfer: { ingress: 1, egress: 1 } };
+      },
+    });
+
+    const { createVercelSandboxProvider } = await import("./provider");
+    const sandbox = await createVercelSandboxProvider().create({
+      name: "vibe-validate-abc",
+      source: { kind: "git", repositoryUrl: "https://github.com/a/b.git", revision: "abc", credential: null },
+      networkPolicy: { mode: "deny_all" },
+      timeoutMs: 1000,
+      env: {},
+    });
+
+    await sandbox.snapshot({ expirationMs: 60 * 60 * 1000 });
+
+    // Never the provider's 30-day default.
+    expect(snapshot).toHaveBeenCalledWith({ expiration: 60 * 60 * 1000 });
+  });
+
+  it("preserves the allowlisted Vercel API classification for a failed snapshot", async () => {
+    const providerError = Object.assign(new Error("Status code 400 is not ok"), {
+      name: "APIError",
+      response: { status: 400, headers: { authorization: "Bearer never-store-this" } },
+      json: {
+        error: {
+          code: "invalid_snapshot_expiration",
+          message: "Snapshot expiration must satisfy the provider limit",
+        },
+      },
+      text: '{"full":"raw response must never cross the adapter"}',
+    });
+
+    const error = await capturedFailure(providerError);
+
+    expect(error.message).toContain("APIError: HTTP 400");
+    expect(error.message).toContain("code=invalid_snapshot_expiration");
+    expect(error.message).toContain("message=Snapshot expiration must satisfy the provider limit");
+  });
+
+  it("never serializes raw provider response material and redacts a secret in the allowed message", async () => {
+    const token = `ghp_${"a".repeat(36)}`;
+    const providerError = Object.assign(new Error("Status code 400 is not ok"), {
+      name: "APIError",
+      response: { status: 400, headers: { authorization: `Bearer ${token}` } },
+      json: {
+        error: { code: "snapshot_rejected", message: `token=${token}` },
+        internalRequest: { authorization: token },
+      },
+      text: `raw-body-${token}`,
+    });
+
+    const error = await capturedFailure(providerError);
+
+    expect(error.message).toContain("code=snapshot_rejected");
+    expect(error.message).toContain("message=token=[redacted]");
+    expect(error.message).not.toContain(token);
+    expect(error.message).not.toContain("authorization");
+    expect(error.message).not.toContain("raw-body");
+  });
+
+  it("bounds an allowlisted provider message before it crosses the adapter", async () => {
+    const providerError = Object.assign(new Error("Status code 400 is not ok"), {
+      name: "APIError",
+      response: { status: 400 },
+      json: { error: { code: "snapshot_rejected", message: "x".repeat(10_000) } },
+    });
+
+    const error = await capturedFailure(providerError);
+
+    expect(error.message).toContain("…[truncated]");
+    expect(error.message.length).toBeLessThan(700);
+  });
+
+  it("restores from a snapshot without re-imaging it", async () => {
+    const { createVercelSandboxProvider } = await import("./provider");
+    await createVercelSandboxProvider().create({
+      name: "vibe-preview-abc",
+      source: { kind: "snapshot", snapshotId: "snap_1" },
+      networkPolicy: { mode: "deny_all" },
+      timeoutMs: 1000,
+      env: {},
+      ports: [3000],
+    });
+
+    const options = create.mock.calls[0][0] as Record<string, unknown>;
+    expect(options.source).toEqual({ type: "snapshot", snapshotId: "snap_1" });
+    // A snapshot carries its own image; re-imaging would make it a different artifact.
+    expect(options).not.toHaveProperty("image");
+    expect(options.ports).toEqual([3000]);
+    expect(options.persistent).toBe(false);
+  });
+});
+
+/**
+ * The session's own deadline (found by dogfood, three runs deep).
+ *
+ * Three validations died within seconds of five minutes and were found
+ * `stopped` at capture. `timeout` had been passed at creation and
+ * `update({ timeout })` added afterwards, and neither helped.
+ *
+ * The diagnostic that followed produced an apparent contradiction —
+ * `status=stopped timeout=900000` — which resolved into the actual bug:
+ * `Sandbox.status` reads through to the **session**, while `Sandbox.timeout` is
+ * the **sandbox-level default**. The two describe different objects, and the
+ * value was landing on the one that does not govern how long the VM lives.
+ */
+describe("the session's lifetime, not just the sandbox's", () => {
+  it("extends a session that came up short, by exactly the shortfall", async () => {
+    listSessions.mockResolvedValue({ sessions: [{ status: "running", timeout: 300_000 }] });
+
+    await createSandbox({ timeoutMs: 900_000 });
+
+    // Exactly, not a round number. The lifetime is a leak bound, and
+    // over-extending would let a runaway sandbox outlive the run's budget.
+    expect(extendTimeout).toHaveBeenCalledWith(600_000);
+  });
+
+  it("leaves a session that already has the requested lifetime alone", async () => {
+    listSessions.mockResolvedValue({ sessions: [{ status: "running", timeout: 900_000 }] });
+
+    await createSandbox({ timeoutMs: 900_000 });
+
+    expect(extendTimeout).not.toHaveBeenCalled();
+  });
+
+  it("never shortens a session that has more than was asked for", async () => {
+    listSessions.mockResolvedValue({ sessions: [{ status: "running", timeout: 1_800_000 }] });
+
+    await createSandbox({ timeoutMs: 900_000 });
+
+    expect(extendTimeout).not.toHaveBeenCalled();
+  });
+
+  it("does not fail creation when the session cannot be read", async () => {
+    listSessions.mockRejectedValue(new Error("list unavailable"));
+
+    // The sandbox-level value is evidence the bound was accepted somewhere, and
+    // failing a working run over a list call would trade a real outcome for a
+    // tidy one.
+    await expect(createSandbox({ timeoutMs: 900_000 })).resolves.toBeDefined();
+  });
+
+  it("fails creation when a short session cannot be extended", async () => {
+    listSessions.mockResolvedValue({ sessions: [{ status: "running", timeout: 300_000 }] });
+    extendTimeout.mockRejectedValue(new Error("cannot extend"));
+
+    // A clear failure now beats a mystery death four minutes in, which is
+    // exactly what the last three dogfood runs were.
+    await expect(createSandbox({ timeoutMs: 900_000 })).rejects.toThrow();
+  });
+});
+
+describe("attributing a session that ended early", () => {
+  async function inspect() {
+    const { createVercelSandboxProvider } = await import("./provider");
+    return createVercelSandboxProvider().inspect({ name: "vibe-validate-abc" });
+  }
+
+  it("names what asked the session to stop", async () => {
+    get.mockResolvedValue({ name: "vibe-validate-abc", status: "stopped", timeout: 900_000 });
+    listSessions.mockResolvedValue({
+      sessions: [
+        { status: "stopped", timeout: 900_000, startedAt: 1000, stoppedAt: 283_318, requestedStopAt: 283_000 },
+      ],
+    });
+
+    const detail = await inspect();
+
+    // A session with 900000 ms of deadline that stopped after 282318 ms did not
+    // time out. The remaining question is who ended it, and a stop *request* is
+    // a different bug from a provider-side termination.
+    expect(detail).toContain("sessionTimeout=900000");
+    expect(detail).toContain("livedMs=282318");
+    expect(detail).toContain("requestedStop=283000");
+  });
+
+  it("says so explicitly when nothing accounts for the ending", async () => {
+    get.mockResolvedValue({ name: "vibe-validate-abc", status: "stopped", timeout: 900_000 });
+    listSessions.mockResolvedValue({
+      sessions: [{ status: "stopped", timeout: 900_000, startedAt: 1000, stoppedAt: 283_318 }],
+    });
+
+    // The absence of an attribution is itself the finding, so it is stated
+    // rather than left as a gap in the line.
+    expect(await inspect()).toContain("endedBy=unattributed");
   });
 });

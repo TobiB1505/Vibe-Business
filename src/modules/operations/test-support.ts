@@ -20,20 +20,26 @@ export type Row = Record<string, unknown>;
 type QueryError = { code?: string; message: string } | null;
 
 const POSTGRES_UNIQUE_VIOLATION = "23505";
+const POSTGRES_CHECK_VIOLATION = "23514";
 const ACTIVE_OPERATION_STATUSES = ["queued", "running"];
 const IN_FLIGHT_AUDIT_STATUSES = ["pending", "analyzing"];
-const ACTIVE_VALIDATION_STATUSES = ["queued", "running", "passed"];
+const ACTIVE_VALIDATION_STATUSES = ["queued", "running"];
+const ACTIVE_PREVIEW_STATUSES = ["starting", "running"];
 
 type Filter =
   | { kind: "eq"; column: string; value: unknown }
   | { kind: "in"; column: string; values: unknown[] }
-  | { kind: "is"; column: string; value: null };
+  | { kind: "is"; column: string; value: null }
+  | { kind: "not_is"; column: string; value: null }
+  | { kind: "gt"; column: string; value: unknown };
 
 function matches(row: Row, filters: Filter[]): boolean {
   return filters.every((filter) => {
     if (filter.kind === "eq") return row[filter.column] === filter.value;
     if (filter.kind === "in") return filter.values.includes(row[filter.column]);
-    return row[filter.column] === null || row[filter.column] === undefined;
+    if (filter.kind === "is") return row[filter.column] === null || row[filter.column] === undefined;
+    if (filter.kind === "not_is") return row[filter.column] !== null && row[filter.column] !== undefined;
+    return String(row[filter.column] ?? "") > String(filter.value);
   });
 }
 
@@ -73,9 +79,10 @@ export class FakeDatabase {
       if (clash) return { code: POSTGRES_UNIQUE_VIOLATION, message: "one active operation per identity" };
     }
 
-    // validation_runs_single_active_idx (Sprint 10A §21). Modelled so a double
-    // click loses its second insert in tests exactly as it would in Postgres —
-    // otherwise the test would "prove" idempotency the database provides.
+    // validation_runs_single_active_idx (Sprint 10A §21, narrowed after the
+    // first 10B dogfood). Only in-flight rows conflict: a historical pass with
+    // no usable artifact must not prevent an explicit re-validation. Modelled
+    // so a double click still loses its second insert exactly as in Postgres.
     if (table === "validation_runs" && ACTIVE_VALIDATION_STATUSES.includes(String(candidate.status))) {
       const clash = others.some(
         (row) =>
@@ -84,6 +91,52 @@ export class FakeDatabase {
           ACTIVE_VALIDATION_STATUSES.includes(String(row.status)),
       );
       if (clash) return { code: POSTGRES_UNIQUE_VIOLATION, message: "one live validation per identity" };
+    }
+
+    // validation_runs_artifact_only_when_passed.
+    //
+    // A CHECK rather than an index, and modelled here because the fake's
+    // silence on CHECK constraints cost four dogfood rounds. The artifact was
+    // being written one step before the verdict, while the row was still
+    // `running`. Postgres refused it, the step failed, the retry found a
+    // sandbox the successful snapshot had already stopped, and the run reported
+    // `sandbox_lost` — with a 1.14 GB snapshot orphaned in provider storage and
+    // every test green.
+    //
+    // The in-memory database will never evaluate constraints in general, but a
+    // rule this load-bearing is worth stating twice.
+    if (table === "validation_runs" && candidate.artifact_snapshot_id != null) {
+      if (candidate.status !== "passed") {
+        return {
+          code: POSTGRES_CHECK_VIOLATION,
+          message: "validation_runs_artifact_only_when_passed",
+        };
+      }
+      if (candidate.artifact_expires_at == null) {
+        return { code: POSTGRES_CHECK_VIOLATION, message: "validation_runs_artifact_has_expiry" };
+      }
+    }
+
+    // preview_sessions_single_active_idx (Sprint 10B-2 §32). One live preview
+    // per identity, so a double click loses its second insert here exactly as
+    // it would in Postgres — otherwise the test would "prove" idempotency the
+    // database provides.
+    if (table === "preview_sessions" && ACTIVE_PREVIEW_STATUSES.includes(String(candidate.status))) {
+      const clash = others.some(
+        (row) =>
+          row.project_id === candidate.project_id &&
+          row.preview_identity === candidate.preview_identity &&
+          ACTIVE_PREVIEW_STATUSES.includes(String(row.status)),
+      );
+      if (clash) return { code: POSTGRES_UNIQUE_VIOLATION, message: "one live preview per identity" };
+    }
+
+    // sandbox_usage_events_preview_unique_idx (§27). One ledger row per preview
+    // session: a retried terminal step must not double-count a sandbox that
+    // only ran once.
+    if (table === "sandbox_usage_events" && candidate.preview_session_id != null) {
+      const clash = others.some((row) => row.preview_session_id === candidate.preview_session_id);
+      if (clash) return { code: POSTGRES_UNIQUE_VIOLATION, message: "usage already recorded for preview" };
     }
 
     if (table === "business_readiness_audits" && IN_FLIGHT_AUDIT_STATUSES.includes(String(candidate.status))) {
@@ -160,6 +213,15 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
   }
   is(column: string, value: null): this {
     this.filters.push({ kind: "is", column, value });
+    return this;
+  }
+  not(column: string, operator: "is", value: null): this {
+    if (operator !== "is") throw new Error(`unsupported fake query operator: not ${operator}`);
+    this.filters.push({ kind: "not_is", column, value });
+    return this;
+  }
+  gt(column: string, value: unknown): this {
+    this.filters.push({ kind: "gt", column, value });
     return this;
   }
   order(column: string, options?: { ascending?: boolean }): this {
