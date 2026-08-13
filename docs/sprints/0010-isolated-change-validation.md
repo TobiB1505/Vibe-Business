@@ -942,12 +942,12 @@ gains an enumerated constraint.
 
 ### Tests and mutation validation
 
-1518 → **1640 tests**. Every existing security assertion was kept and now runs
+1518 → **1641 tests**. Every existing security assertion was kept and now runs
 *through* the step boundaries: the orchestrator suite drives the real phase
 functions through the real `reconnect` path, so a phase that forgot to
 reconnect, or quietly created a second sandbox, fails there.
 
-Nineteen mutations, every one verified to break tests — including two that
+Twenty mutations, every one verified to break tests — including two that
 **survived** first:
 
 | Mutation | Result |
@@ -965,6 +965,7 @@ Nineteen mutations, every one verified to break tests — including two that
 | clone credential minted for every phase | 1 fail |
 | source re-verified on re-entry | 1 fail |
 | provision replays into a second sandbox | 1 fail |
+| provision does not adopt an existing sandbox | 1 fail |
 | cleanup reports success without stopping anything | 18 fail |
 | **policy version left at v2** | **survived → test added → 1 fail** |
 | **terminal-replay guard removed from finalize** | **survived → test added → 1 fail** |
@@ -987,6 +988,22 @@ terminal write is scoped to `status = 'running'`, so a replay writes nothing.
 What the database does not protect is the value the step *returns* — a finalize
 retried after a transient throw would have reported failure for a run recorded
 as passed, completing the operation as failed while its result said otherwise.
+
+### One hole found by reviewing the re-entry story
+
+Writing the retry policy down surfaced a defect the tests did not yet cover.
+The sandbox name is deterministic per attempt, so a provision step that created
+the sandbox and *then* died — killed, redeployed, or failed while returning —
+leaves a live sandbox whose name `Sandbox.create` will refuse. The retry would
+report `sandbox_unavailable`: a run doomed by its own successful provisioning.
+
+Nearly the same failure cost a real dogfood run earlier in this sprint, when the
+name was derived from the validation identity rather than the attempt.
+
+Provisioning now reconnects first and adopts an existing sandbox. It is only
+reachable when no phase has run yet — the step refuses to re-provision once any
+phase state exists — so adoption can never resume onto a filesystem a later
+phase already depended on.
 
 ### What did not change
 

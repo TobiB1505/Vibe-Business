@@ -381,6 +381,22 @@ export async function provisionSandbox(
   provider: SandboxProvider,
   target: ValidationTarget,
 ): Promise<ProvisionOutcome> {
+  // Re-entry, and a genuine hole in the naive version of this step.
+  //
+  // The sandbox name is deterministic per attempt, so a previous run of *this
+  // step* that created the sandbox and then died — killed, redeployed, or
+  // failed while returning — leaves a live sandbox whose name `create` will
+  // refuse. Without this the retry would report `sandbox_unavailable` and the
+  // run would be doomed by its own successful provisioning. That exact failure
+  // mode cost a real dogfood run when the name was derived from the validation
+  // *identity* rather than the attempt.
+  //
+  // Only reachable when no phase has run yet — the caller refuses to
+  // re-provision once any phase state exists — so adopting an existing sandbox
+  // here can never resume onto a filesystem some earlier phase depended on.
+  const existing = await attach(provider, target);
+  if (existing) return { ok: true, sandboxId: existing.id, runtime: existing.runtime };
+
   try {
     const sandbox = await provider.create({
       name: sandboxNameFor(target.validationRunId),

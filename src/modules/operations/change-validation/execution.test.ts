@@ -249,8 +249,8 @@ describe("one sandbox per validation run (§23)", () => {
     const expectedName = `vibe-validate-${validationRun().id.replace(/-/g, "").slice(0, 20)}`;
     const names = provider.reconnects();
 
-    // verify, install, typecheck, test, build, cleanup.
-    expect(names).toHaveLength(6);
+    // provision (adopt-check), verify, install, typecheck, test, build, cleanup.
+    expect(names).toHaveLength(7);
     expect(new Set(names)).toEqual(new Set([expectedName]));
   });
 
@@ -491,6 +491,34 @@ describe("re-entry after a resumed workflow (§11, §20)", () => {
     expect(provider.createCount()).toBe(1);
   });
 
+  it("adopts the sandbox a killed provision step already created", async () => {
+    /**
+     * The hole in the naive version of the provisioning step.
+     *
+     * The sandbox name is deterministic per attempt, so a provision step that
+     * created the sandbox and then died leaves a live sandbox whose name
+     * `create` refuses — and the retry would report `sandbox_unavailable`,
+     * doomed by its own successful provisioning. A near-identical failure cost
+     * a real dogfood run when the name came from the validation identity.
+     */
+    seed();
+    const d = deps();
+    await prepareValidationStep(d, OPERATION);
+
+    // First attempt creates the sandbox, then the step "dies" before anything
+    // is recorded — so no phase state exists and the guard does not fire.
+    await provisionSandboxStep(d, OPERATION);
+    const replay = await provisionSandboxStep(d, OPERATION);
+
+    expect(replay.ok).toBe(true);
+    expect(provider.createCount()).toBe(1);
+
+    // And the run continues normally on that same sandbox, rather than being
+    // doomed by its own successful provisioning.
+    const verified = await verifySourceStep(d, OPERATION);
+    expect(verified.ok).toBe(true);
+  });
+
   it("does not claim a second validation when the prepare step replays", async () => {
     seed();
     const d = deps();
@@ -584,8 +612,9 @@ describe("re-entry after a resumed workflow (§11, §20)", () => {
 
 describe("sandbox loss between phases (§12, §22)", () => {
   it.each([
-    ["between install and typecheck", 3],
-    ["between tests and build", 5],
+    // Reconnect order: provision, verify, install, typecheck, test, build, cleanup.
+    ["between install and typecheck", 4],
+    ["between tests and build", 6],
   ])("fails as sandbox_lost when the sandbox disappears %s", async (_label, reconnectIndex) => {
     seed();
     provider = fakeSandboxProvider({
@@ -605,7 +634,7 @@ describe("sandbox loss between phases (§12, §22)", () => {
     provider = fakeSandboxProvider({
       files: healthySandboxFiles(),
       results: { [HEAD]: { output: `${FIXTURE_COMMIT_SHA}\n` } },
-      loseSandboxBeforeReconnect: 3,
+      loseSandboxBeforeReconnect: 4,
     });
 
     await runPipeline();
@@ -633,13 +662,15 @@ describe("sandbox loss between phases (§12, §22)", () => {
     provider = fakeSandboxProvider({
       files: healthySandboxFiles(),
       results: { [HEAD]: { output: `${FIXTURE_COMMIT_SHA}\n` } },
-      loseSandboxBeforeReconnect: 4,
+      // Lost at the test phase, so install and typecheck already completed.
+      loseSandboxBeforeReconnect: 5,
     });
 
     await runPipeline();
 
     const steps = validationRun().steps;
     expect(steps.install?.status).toBe("passed");
+    expect(steps.typecheck?.status).toBe("passed");
     expect(steps.test).toBeUndefined();
   });
 });
