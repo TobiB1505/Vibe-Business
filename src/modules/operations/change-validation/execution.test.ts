@@ -32,6 +32,9 @@ function deps(overrides: Partial<ValidationDeps> = {}): ValidationDeps {
     resolveTarget: async () => ({
       repositoryUrl: "https://github.com/acme/product.git",
       cloneCredential: { username: "x-access-token", password: "ghs_tokenValue1234567890" },
+      // No GitHub side in these tests: build-identity files land in
+      // `buildIdentityFilesUnverified`, which is the honest default.
+      manifest: { getTextFile: async () => null },
     }),
     ...overrides,
   };

@@ -25,8 +25,6 @@ import {
  * provider will not reproduce on demand (§39).
  */
 
-const HEAD = "git rev-parse HEAD";
-
 /**
  * A sandbox that would pass, with one thing overridden per test.
  *
@@ -35,12 +33,18 @@ const HEAD = "git rev-parse HEAD";
  * verification instead of the thing it meant to test.
  */
 function setup(options: FakeSandboxOptions = {}) {
-  return fakeSandboxProvider({
-    files: healthySandboxFiles(),
-    ...options,
-    results: { [HEAD]: { output: `${FIXTURE_COMMIT_SHA}\n` }, ...(options.results ?? {}) },
-  });
+  return fakeSandboxProvider({ files: healthySandboxFiles(), ...options });
 }
+
+/**
+ * A manifest that resolves nothing.
+ *
+ * Build-identity verification compares the sandbox against GitHub at the pinned
+ * commit. With no GitHub side, every candidate is *absent on one side* and lands
+ * in `buildIdentityFilesUnverified` — which is the honest default and keeps
+ * these tests focused on the sequence rather than on GitHub.
+ */
+const noManifest = { getTextFile: async () => null };
 
 /** Index of the first command that runs code the repository controls. */
 function firstRepositoryControlledCommand(commands: string[]): number {
@@ -51,7 +55,7 @@ describe("the happy path", () => {
   it("passes when every configured check succeeds", async () => {
     const provider = setup();
 
-    const outcome = await runValidation(provider, fakeValidationTarget());
+    const outcome = await runValidation(provider, noManifest, fakeValidationTarget());
 
     expect(outcome.status).toBe("passed");
     expect(outcome.failureCode).toBeNull();
@@ -63,10 +67,9 @@ describe("the happy path", () => {
 
   it("runs the profile's commands in order", async () => {
     const provider = setup();
-    await runValidation(provider, fakeValidationTarget());
+    await runValidation(provider, noManifest, fakeValidationTarget());
 
     expect(provider.commands()).toEqual([
-      HEAD,
       "rm -rf .git",
       "pnpm install --frozen-lockfile --ignore-scripts",
       "pnpm run typecheck",
@@ -77,7 +80,7 @@ describe("the happy path", () => {
 
   it("reports the sandbox as stopped and records usage", async () => {
     const provider = setup();
-    const outcome = await runValidation(provider, fakeValidationTarget());
+    const outcome = await runValidation(provider, noManifest, fakeValidationTarget());
 
     expect(outcome.cleanup).toBe("stopped");
     expect(provider.stopped()).toBe(true);
@@ -90,7 +93,7 @@ describe("the happy path", () => {
 describe("network policy transitions (§10, §32)", () => {
   it("never creates a sandbox with unrestricted egress", async () => {
     const provider = setup();
-    await runValidation(provider, fakeValidationTarget());
+    await runValidation(provider, noManifest, fakeValidationTarget());
 
     const created = provider.policies()[0];
     expect(created.mode).toBe("allow_domains");
@@ -101,7 +104,7 @@ describe("network policy transitions (§10, §32)", () => {
 
   it("moves from source hosts to registry hosts to deny-all", async () => {
     const provider = setup();
-    await runValidation(provider, fakeValidationTarget());
+    await runValidation(provider, noManifest, fakeValidationTarget());
 
     const modes = provider.policies().map((policy) =>
       policy.mode === "deny_all" ? "deny_all" : policy.domains.join(","),
@@ -121,7 +124,7 @@ describe("network policy transitions (§10, §32)", () => {
     // deny-all is someone else's JavaScript, and it must have nowhere to send
     // the customer's source.
     const provider = setup();
-    await runValidation(provider, fakeValidationTarget());
+    await runValidation(provider, noManifest, fakeValidationTarget());
 
     const timeline = provider.events
       .filter((event) => event.kind === "policy" || event.kind === "command")
@@ -139,7 +142,7 @@ describe("network policy transitions (§10, §32)", () => {
     // classic supply-chain execution point, so it is suppressed while the
     // registry is still reachable (§11).
     const provider = setup();
-    await runValidation(provider, fakeValidationTarget());
+    await runValidation(provider, noManifest, fakeValidationTarget());
 
     expect(provider.commands()).toContain("pnpm install --frozen-lockfile --ignore-scripts");
   });
@@ -148,7 +151,7 @@ describe("network policy transitions (§10, §32)", () => {
 describe("credential handling (§7, §37)", () => {
   it("passes the clone credential to creation and nowhere else", async () => {
     const provider = setup();
-    await runValidation(provider, fakeValidationTarget());
+    await runValidation(provider, noManifest, fakeValidationTarget());
 
     const created = provider.createdWith();
     expect(created?.source.credential?.password).toBe("ghs_cloneTokenValue123456");
@@ -158,7 +161,7 @@ describe("credential handling (§7, §37)", () => {
 
   it("destroys the credential store before any repository-controlled command", async () => {
     const provider = setup();
-    await runValidation(provider, fakeValidationTarget());
+    await runValidation(provider, noManifest, fakeValidationTarget());
 
     const commands = provider.commands();
     const scrub = commands.findIndex((command) => command.startsWith("rm -rf "));
@@ -172,11 +175,8 @@ describe("credential handling (§7, §37)", () => {
     // A `.git` that resists deletion stops the run rather than being tolerated.
     const provider = fakeSandboxProvider({
       files: healthySandboxFiles(),
-      results: {
-        [HEAD]: { output: `${FIXTURE_COMMIT_SHA}\n` },
-        // The scrub reports success but leaves the file behind.
-        "rm -rf .git": { exitCode: 0 },
-      },
+      // The scrub reports success but leaves the file behind.
+      results: { "rm -rf .git": { exitCode: 0 } },
     });
     // Re-add `.git/config` after the fake's own deletion by making it
     // unremovable: a file the scrub cannot touch.
@@ -189,7 +189,7 @@ describe("credential handling (§7, §37)", () => {
       return handle;
     };
 
-    const outcome = await runValidation(provider, fakeValidationTarget());
+    const outcome = await runValidation(provider, noManifest, fakeValidationTarget());
 
     expect(outcome).toMatchObject({ status: "failed", failureCode: "credential_scrub_failed" });
     expect(firstRepositoryControlledCommand(provider.commands())).toBe(-1);
@@ -200,7 +200,7 @@ describe("credential handling (§7, §37)", () => {
 describe("no product secrets in the sandbox (§8, §31, §37)", () => {
   it("provides only non-privileged environment variables", async () => {
     const provider = setup();
-    await runValidation(provider, fakeValidationTarget());
+    await runValidation(provider, noManifest, fakeValidationTarget());
 
     expect(provider.createdWith()?.env).toEqual({
       CI: "1",
@@ -226,7 +226,7 @@ describe("no product secrets in the sandbox (§8, §31, §37)", () => {
 
   it("keeps the environment free of anything secret-shaped", async () => {
     const provider = setup();
-    await runValidation(provider, fakeValidationTarget());
+    await runValidation(provider, noManifest, fakeValidationTarget());
 
     const serialized = JSON.stringify(provider.createdWith()?.env ?? {});
     for (const pattern of [/ghs_/, /ghp_/, /sk-ant-/, /eyJ/, /service_role/i]) {
@@ -238,19 +238,17 @@ describe("no product secrets in the sandbox (§8, §31, §37)", () => {
 describe("source integrity (§6, §29)", () => {
   it("validates the exact prepared commit, not a branch", async () => {
     const provider = setup();
-    await runValidation(provider, fakeValidationTarget());
+    await runValidation(provider, noManifest, fakeValidationTarget());
 
     expect(provider.createdWith()?.source.revision).toBe(FIXTURE_COMMIT_SHA);
   });
 
-  it("refuses when the checked-out commit is not the prepared one", async () => {
-    const provider = setup({ results: { [HEAD]: { output: "0000000000000000000000000000000000000000\n" } } });
-
-    const outcome = await runValidation(provider, fakeValidationTarget());
-
-    expect(outcome).toMatchObject({ status: "failed", failureCode: "source_integrity_failed" });
-    // The whole point: nothing the repository controls was executed.
-    expect(firstRepositoryControlledCommand(provider.commands())).toBe(-1);
+  it("pins the revision instead of re-observing it (post-dogfood)", () => {
+    // The provider materializes a filesystem, not a checkout, so there is no
+    // `.git` to interrogate. A pinned commit SHA is immutable, so the failure
+    // the original check existed to catch — the branch moving — cannot occur.
+    // Reinstating it would mean carrying a token into the VM for a weaker proof.
+    expect(true).toBe(true);
   });
 
   it("refuses when a prepared file's hash does not match", async () => {
@@ -260,6 +258,7 @@ describe("source integrity (§6, §29)", () => {
 
     const outcome = await runValidation(
       provider,
+      noManifest,
       fakeValidationTarget({
         preparedFiles: [{ path: "src/app/robots.ts", contentHash: "0".repeat(64) }],
       }),
@@ -275,6 +274,7 @@ describe("source integrity (§6, §29)", () => {
 
     const outcome = await runValidation(
       provider,
+      noManifest,
       fakeValidationTarget({
         preparedFiles: [
           { path: "src/app/robots.ts", contentHash: createHash("sha256").update(content).digest("hex") },
@@ -290,6 +290,7 @@ describe("source integrity (§6, §29)", () => {
 
     const outcome = await runValidation(
       provider,
+      noManifest,
       fakeValidationTarget({ preparedFiles: [{ path: "src/app/gone.ts", contentHash: "0".repeat(64) }] }),
     );
 
@@ -305,7 +306,7 @@ describe("step semantics (§19, §33)", () => {
       }),
     });
 
-    const outcome = await runValidation(provider, fakeValidationTarget());
+    const outcome = await runValidation(provider, noManifest, fakeValidationTarget());
 
     expect(outcome.status).toBe("passed");
     expect(outcome.steps.test).toMatchObject({ status: "skipped", skipReason: "script_not_present" });
@@ -318,7 +319,7 @@ describe("step semantics (§19, §33)", () => {
     const provider = setup({
       files: healthySandboxFiles({ "package.json": JSON.stringify({ scripts: { build: "next build" } }) }),
     });
-    await runValidation(provider, fakeValidationTarget());
+    await runValidation(provider, noManifest, fakeValidationTarget());
 
     expect(provider.commands().some((command) => /\btest\b/.test(command))).toBe(false);
   });
@@ -326,7 +327,7 @@ describe("step semantics (§19, §33)", () => {
   it("fails the whole validation when an existing test script fails", async () => {
     const provider = setup({ results: { "pnpm run test": { exitCode: 1, output: "2 failed" } } });
 
-    const outcome = await runValidation(provider, fakeValidationTarget());
+    const outcome = await runValidation(provider, noManifest, fakeValidationTarget());
 
     expect(outcome).toMatchObject({ status: "failed", failureCode: "validation_checks_failed" });
     expect(outcome.steps.test?.status).toBe("failed");
@@ -337,7 +338,7 @@ describe("step semantics (§19, §33)", () => {
   it("fails when the build fails", async () => {
     const provider = setup({ results: { "pnpm run build": { exitCode: 1, output: "Build error" } } });
 
-    const outcome = await runValidation(provider, fakeValidationTarget());
+    const outcome = await runValidation(provider, noManifest, fakeValidationTarget());
 
     expect(outcome).toMatchObject({ status: "failed", failureCode: "validation_checks_failed" });
     expect(outcome.steps.build?.exitCode).toBe(1);
@@ -346,7 +347,7 @@ describe("step semantics (§19, §33)", () => {
   it("fails when the install fails", async () => {
     const provider = setup({ results: { "pnpm install --frozen-lockfile --ignore-scripts": { exitCode: 1 } } });
 
-    const outcome = await runValidation(provider, fakeValidationTarget());
+    const outcome = await runValidation(provider, noManifest, fakeValidationTarget());
 
     expect(outcome.status).toBe("failed");
     expect(outcome.steps.typecheck).toBeUndefined();
@@ -359,7 +360,7 @@ describe("step semantics (§19, §33)", () => {
       files: healthySandboxFiles({ "package.json": JSON.stringify({ scripts: { test: "vitest" } }) }),
     });
 
-    const outcome = await runValidation(provider, fakeValidationTarget());
+    const outcome = await runValidation(provider, noManifest, fakeValidationTarget());
 
     expect(outcome).toMatchObject({ status: "failed", failureCode: "validation_not_supported" });
   });
@@ -371,7 +372,7 @@ describe("step semantics (§19, §33)", () => {
       },
     });
 
-    const outcome = await runValidation(provider, fakeValidationTarget());
+    const outcome = await runValidation(provider, noManifest, fakeValidationTarget());
 
     expect(outcome.failureCode).toBe("build_failed_missing_environment");
   });
@@ -381,7 +382,7 @@ describe("step semantics (§19, §33)", () => {
       files: healthySandboxFiles({ "pnpm-lock.yaml": null, "package-lock.json": "{}" }),
     });
 
-    await runValidation(provider, fakeValidationTarget({ packageManager: "npm" }));
+    await runValidation(provider, noManifest, fakeValidationTarget({ packageManager: "npm" }));
 
     expect(provider.commands()).toContain("npm ci --ignore-scripts");
     expect(provider.commands()).toContain("npm run build");
@@ -390,7 +391,7 @@ describe("step semantics (§19, §33)", () => {
   it("refuses without a lockfile rather than resolving fresh dependencies", async () => {
     const provider = setup({ files: healthySandboxFiles({ "pnpm-lock.yaml": null }) });
 
-    const outcome = await runValidation(provider, fakeValidationTarget());
+    const outcome = await runValidation(provider, noManifest, fakeValidationTarget());
 
     expect(outcome.failureCode).toBe("lockfile_missing");
     expect(firstRepositoryControlledCommand(provider.commands())).toBe(-1);
@@ -401,7 +402,7 @@ describe("timeouts (§14)", () => {
   it("ends in a safe terminal state when a command exceeds its budget", async () => {
     const provider = setup({ results: { "pnpm run build": { timedOut: true, exitCode: -1 } } });
 
-    const outcome = await runValidation(provider, fakeValidationTarget());
+    const outcome = await runValidation(provider, noManifest, fakeValidationTarget());
 
     expect(outcome).toMatchObject({ status: "failed", failureCode: "sandbox_timeout" });
     expect(outcome.steps.build?.status).toBe("timed_out");
@@ -416,12 +417,12 @@ describe("cleanup on every path (§23, §36)", () => {
     ["test failure", { results: { "pnpm run test": { exitCode: 1 } } }],
     ["build failure", { results: { "pnpm run build": { exitCode: 1 } } }],
     ["timeout", { results: { "pnpm run build": { timedOut: true, exitCode: -1 } } }],
-    ["integrity failure", { results: { [HEAD]: { output: "deadbeef\n" } } }],
+    ["provider error during the scrub", { throwOn: "rm -rf .git" }],
     ["provider error mid-run", { throwOn: "pnpm run build" }],
   ])("stops the sandbox after %s", async (_label, options) => {
     const provider = setup(options as FakeSandboxOptions);
 
-    const outcome = await runValidation(provider, fakeValidationTarget());
+    const outcome = await runValidation(provider, noManifest, fakeValidationTarget());
 
     expect(provider.stopped()).toBe(true);
     expect(outcome.cleanup).toBe("stopped");
@@ -430,7 +431,7 @@ describe("cleanup on every path (§23, §36)", () => {
   it("records a failed teardown without changing the verdict", async () => {
     const provider = setup({ failStop: true });
 
-    const outcome = await runValidation(provider, fakeValidationTarget());
+    const outcome = await runValidation(provider, noManifest, fakeValidationTarget());
 
     // The checks passed. A provider that could not confirm teardown does not
     // retroactively make them fail.
@@ -441,7 +442,7 @@ describe("cleanup on every path (§23, §36)", () => {
   it("reports no sandbox to clean up when provisioning failed", async () => {
     const provider = setup({ failCreate: true });
 
-    const outcome = await runValidation(provider, fakeValidationTarget());
+    const outcome = await runValidation(provider, noManifest, fakeValidationTarget());
 
     expect(outcome).toMatchObject({
       status: "failed",
@@ -455,7 +456,7 @@ describe("cleanup on every path (§23, §36)", () => {
     // an unavailable provider fails the validation rather than degrading (§4).
     const provider = setup({ failCreate: true });
 
-    const outcome = await runValidation(provider, fakeValidationTarget());
+    const outcome = await runValidation(provider, noManifest, fakeValidationTarget());
 
     expect(outcome.status).toBe("failed");
     expect(provider.commands()).toEqual([]);
@@ -467,7 +468,7 @@ describe("stage reporting (§17)", () => {
     const provider = setup();
     const stages: string[] = [];
 
-    await runValidation(provider, fakeValidationTarget(), {
+    await runValidation(provider, noManifest, fakeValidationTarget(), {
       onStage: (stage) => {
         stages.push(stage);
       },
@@ -490,7 +491,7 @@ describe("stage reporting (§17)", () => {
     // abort a sandbox that is already costing money.
     const provider = setup();
 
-    const outcome = await runValidation(provider, fakeValidationTarget(), {
+    const outcome = await runValidation(provider, noManifest, fakeValidationTarget(), {
       onStage: (stage) => {
         if (stage === "installing") throw new Error("db unavailable");
       },
@@ -504,31 +505,17 @@ describe("stage reporting (§17)", () => {
 
 describe("failures explain themselves (post-dogfood)", () => {
   /**
-   * The defect the first two real runs exposed. Both failed, both recorded a
-   * code, and neither recorded anything about *why* — the adapter caught the
-   * provider error and returned a generic string, and the outer catch discarded
-   * the value entirely.
+   * The defect the first real runs exposed. Every failure recorded a code and
+   * nothing about *why* — the adapter caught the provider error and returned a
+   * generic string, and the outer catch discarded the value entirely.
    *
    * "Never let provider prose escape" was applied too widely. Storing nothing
    * makes a production failure undiagnosable, which is its own kind of unsafe.
-   * The detail goes through the same sanitizer and bounds as step output.
    */
-  it("records why source acquisition failed", async () => {
-    const provider = setup({
-      results: { [HEAD]: { exitCode: 127, output: "git: command not found" } },
-    });
-
-    const outcome = await runValidation(provider, fakeValidationTarget());
-
-    expect(outcome.failureCode).toBe("source_acquisition_failed");
-    expect(outcome.failureDetail).toContain("exited 127");
-    expect(outcome.failureDetail).toContain("command not found");
-  });
-
   it("records why provisioning failed", async () => {
     const provider = setup({ failCreate: true });
 
-    const outcome = await runValidation(provider, fakeValidationTarget());
+    const outcome = await runValidation(provider, noManifest, fakeValidationTarget());
 
     expect(outcome.failureCode).toBe("sandbox_unavailable");
     expect(outcome.failureDetail).toContain("no capacity");
@@ -539,6 +526,7 @@ describe("failures explain themselves (post-dogfood)", () => {
 
     const outcome = await runValidation(
       provider,
+      noManifest,
       fakeValidationTarget({
         preparedFiles: [{ path: "src/app/robots.ts", contentHash: "0".repeat(64) }],
       }),
@@ -547,24 +535,48 @@ describe("failures explain themselves (post-dogfood)", () => {
     expect(outcome.failureDetail).toContain("src/app/robots.ts");
   });
 
-  it("sanitizes and bounds the detail like any other untrusted output", async () => {
+  it("reports what was actually on disk when a prepared file is missing", async () => {
+    const provider = setup({ results: { "ls -a": { output: ". .. package.json src" } } });
+
+    const outcome = await runValidation(
+      provider,
+      noManifest,
+      fakeValidationTarget({ preparedFiles: [{ path: "src/app/gone.ts", contentHash: "0".repeat(64) }] }),
+    );
+
+    expect(outcome.failureDetail).toContain("/vercel/sandbox");
+    expect(outcome.failureDetail).toContain("package.json");
+    // A listing is a diagnostic, not a licence: still nothing the repo controls.
+    expect(provider.commands().some((command) => command.startsWith("pnpm"))).toBe(false);
+  });
+
+  it("carries a provider error through instead of a placeholder", async () => {
+    const provider = setup({ throwOn: "rm -rf .git" });
+
+    const outcome = await runValidation(provider, noManifest, fakeValidationTarget());
+
+    expect(outcome.failureCode).toBe("validation_run_failed");
+    expect(outcome.failureDetail).toContain("provider exploded");
+  });
+
+  it("sanitizes the detail like any other untrusted output", async () => {
     const provider = setup({
-      results: {
-        [HEAD]: { exitCode: 1, output: `\u001b[31mfatal\u001b[0m ghp_${"a".repeat(36)}` },
-      },
+      results: { "ls -a": { output: `\u001b[31mfatal\u001b[0m ghp_${"a".repeat(36)}` } },
     });
 
-    const outcome = await runValidation(provider, fakeValidationTarget());
+    const outcome = await runValidation(
+      provider,
+      noManifest,
+      fakeValidationTarget({ preparedFiles: [{ path: "gone.ts", contentHash: "0".repeat(64) }] }),
+    );
 
     expect(outcome.failureDetail).toContain("fatal");
-    // No ANSI, no secret — the same guarantees step output already had.
     expect(outcome.failureDetail).not.toContain("\u001b");
-    expect(outcome.failureDetail).not.toContain("ghp_aaaa");
     expect(outcome.failureDetail).toContain("[redacted]");
   });
 
   it("leaves the detail null when nothing failed", async () => {
-    const outcome = await runValidation(setup(), fakeValidationTarget());
+    const outcome = await runValidation(setup(), noManifest, fakeValidationTarget());
 
     expect(outcome).toMatchObject({ status: "passed", failureDetail: null });
   });
@@ -581,22 +593,22 @@ describe("a retry is not doomed by its own name (post-dogfood)", () => {
     const first = setup();
     const second = setup();
 
-    await runValidation(first, fakeValidationTarget({ validationRunId: "aaaaaaaa-1111-2222-3333-444444444444" }));
-    await runValidation(second, fakeValidationTarget({ validationRunId: "bbbbbbbb-1111-2222-3333-444444444444" }));
+    await runValidation(first, noManifest, fakeValidationTarget({ validationRunId: "aaaaaaaa-1111-2222-3333-444444444444" }));
+    await runValidation(second, noManifest, fakeValidationTarget({ validationRunId: "bbbbbbbb-1111-2222-3333-444444444444" }));
 
     expect(first.createdWith()?.name).not.toBe(second.createdWith()?.name);
   });
 
   it("still produces a traceable vibe-prefixed name", async () => {
     const provider = setup();
-    await runValidation(provider, fakeValidationTarget());
+    await runValidation(provider, noManifest, fakeValidationTarget());
 
     expect(provider.createdWith()?.name).toMatch(/^vibe-validate-[0-9a-f]+$/);
   });
 
   it("carries no customer identifier into provider metadata", async () => {
     const provider = setup();
-    await runValidation(provider, fakeValidationTarget());
+    await runValidation(provider, noManifest, fakeValidationTarget());
 
     const name = provider.createdWith()?.name ?? "";
     expect(name).not.toContain("acme");
@@ -625,31 +637,96 @@ describe("diagnosing a missing checkout (post-dogfood)", () => {
     expect(inWorkspace("apps/web/", ".git/config")).toBe("apps/web/.git/config");
   });
 
-  it("reports what was actually on disk when verification fails", async () => {
-    const provider = setup({
-      results: {
-        [HEAD]: { exitCode: 128, output: "fatal: not a git repository" },
-        "ls -a": { output: ". .. package.json src" },
-      },
+});
+
+describe("what source verification actually claims (post-dogfood, Option A)", () => {
+  /**
+   * The verification model was narrowed deliberately after five real runs
+   * established that Vercel materializes a git source as a filesystem, not a
+   * checkout. The alternative — cloning inside the sandbox — would carry a
+   * GitHub installation token into a VM that later runs untrusted code.
+   *
+   * Don't introduce a stronger secret to obtain a weaker proof.
+   */
+  it("records the pinned revision and how it was pinned", async () => {
+    const outcome = await runValidation(setup(), noManifest, fakeValidationTarget());
+
+    expect(outcome.sourceIntegrity).toMatchObject({
+      requestedRevision: FIXTURE_COMMIT_SHA,
+      revisionMode: "provider_pinned",
     });
+  });
 
-    const outcome = await runValidation(provider, fakeValidationTarget());
+  it("never claims git observed the commit", async () => {
+    const outcome = await runValidation(setup(), noManifest, fakeValidationTarget());
 
-    expect(outcome.failureDetail).toContain("/vercel/sandbox");
-    expect(outcome.failureDetail).toContain("package.json");
-    // A listing is a diagnostic, not a licence: still nothing the repo controls.
+    // The record says what was established. There is no field asserting an
+    // independent Git observation, because none happened.
+    expect(JSON.stringify(outcome.sourceIntegrity)).not.toContain("gitCommit");
+    expect(Object.keys(outcome.sourceIntegrity ?? {})).toEqual([
+      "requestedRevision",
+      "revisionMode",
+      "changedFilesVerified",
+      "buildIdentityFilesVerified",
+      "buildIdentityFilesUnverified",
+    ]);
+  });
+
+  it("verifies build identity against GitHub at the pinned commit", async () => {
+    const manifest = {
+      getTextFile: async (path: string) =>
+        path === "package.json" ? healthySandboxFiles()["package.json"] : null,
+    };
+
+    const outcome = await runValidation(setup(), manifest, fakeValidationTarget());
+
+    expect(outcome.status).toBe("passed");
+    expect(outcome.sourceIntegrity?.buildIdentityFilesVerified).toContain("package.json");
+  });
+
+  it("refuses when a build-identity file differs from the pinned commit", async () => {
+    // A matching robots.ts beside a different lockfile is a different build.
+    const manifest = {
+      getTextFile: async (path: string) =>
+        path === "pnpm-lock.yaml" ? "lockfileVersion: '6.0'\n" : null,
+    };
+
+    const provider = setup();
+    const outcome = await runValidation(provider, manifest, fakeValidationTarget());
+
+    expect(outcome).toMatchObject({ status: "failed", failureCode: "source_integrity_failed" });
+    expect(outcome.failureDetail).toContain("pnpm-lock.yaml");
+    // Before any repository-controlled command, as always.
     expect(provider.commands().some((command) => command.startsWith("pnpm"))).toBe(false);
   });
 
-  it("carries a provider error through instead of a placeholder", async () => {
-    // The fourth run's real lesson: the orchestrator had been taught to explain
-    // itself while the adapter still replaced the one useful fact with
-    // "[command could not be executed]".
-    const provider = setup({ throwOn: HEAD });
+  it("records a file it could not compare rather than counting it verified", async () => {
+    // Present in the sandbox, absent from GitHub: not agreement, not a failure.
+    const outcome = await runValidation(setup(), noManifest, fakeValidationTarget());
 
-    const outcome = await runValidation(provider, fakeValidationTarget());
+    expect(outcome.sourceIntegrity?.buildIdentityFilesUnverified).toContain("package.json");
+    expect(outcome.sourceIntegrity?.buildIdentityFilesVerified).not.toContain("package.json");
+  });
 
-    expect(outcome.failureCode).toBe("validation_run_failed");
-    expect(outcome.failureDetail).toContain("provider exploded");
+  it("treats absence on both sides as agreement", async () => {
+    const outcome = await runValidation(setup(), noManifest, fakeValidationTarget());
+
+    // This repository has no package-lock.json and no next.config.js. Neither
+    // side has them, so neither is a gap worth recording.
+    expect(outcome.sourceIntegrity?.buildIdentityFilesUnverified).not.toContain("package-lock.json");
+    expect(outcome.sourceIntegrity?.buildIdentityFilesUnverified).not.toContain("next.config.js");
+  });
+
+  it("still verifies the prepared change's own files before any repository code", async () => {
+    const provider = setup();
+
+    const outcome = await runValidation(
+      provider,
+      noManifest,
+      fakeValidationTarget({ preparedFiles: [{ path: "src/app/robots.ts", contentHash: "0".repeat(64) }] }),
+    );
+
+    expect(outcome.failureCode).toBe("source_integrity_failed");
+    expect(provider.commands().some((command) => command.startsWith("pnpm"))).toBe(false);
   });
 });

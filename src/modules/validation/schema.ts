@@ -105,7 +105,6 @@ export const VALIDATION_FAILURE_REASONS = [
   "source_integrity_failed",
   "sandbox_unavailable",
   "sandbox_timeout",
-  "source_acquisition_failed",
   /** Credential scrubbing did not verifiably succeed — refuse rather than run. */
   "credential_scrub_failed",
   /** A required check failed. The ordinary outcome of validating a broken change. */
@@ -145,6 +144,55 @@ export const VALIDATION_STEPS = ["install", "typecheck", "test", "build"] as con
 export type ValidationStepName = (typeof VALIDATION_STEPS)[number];
 
 /**
+ * How the validated source's identity was established.
+ *
+ * Named for what is actually proven, because the honest answer turned out
+ * narrower than the sprint brief assumed. Vercel materializes a git source as a
+ * **filesystem**, not a git checkout — there is no `.git` in the sandbox, which
+ * five real runs established rather than assumed. Vibe therefore cannot
+ * re-observe the commit with `git rev-parse`.
+ *
+ * Reinstating that check would mean cloning inside the sandbox ourselves, which
+ * carries a GitHub installation token into a VM that later runs untrusted code.
+ * That is a real secret lifecycle bought to obtain a weaker proof, and it was
+ * rejected deliberately: **do not introduce a stronger secret to obtain a
+ * weaker proof.**
+ *
+ * So the claim is narrowed to what is genuinely established:
+ *
+ * ```
+ * source_revision_pinned              ✅ immutable SHA passed to the provider
+ * prepared_change_files_verified      ✅ hashed in the sandbox, before any repo code
+ * build_identity_files_verified       ✅ hashed against GitHub at that same SHA
+ * git_commit_independently_observed   ❌ no git metadata in a materialized source
+ * ```
+ *
+ * A commit SHA is immutable, so "the branch moved" — the failure the original
+ * check existed to catch — cannot happen to a pinned revision. What remains is
+ * "did the provider deliver what was asked for", and that is answered by
+ * hashing files rather than by asking git.
+ */
+export const REVISION_MODES = [
+  /** An immutable commit SHA was passed to the provider as the source revision. */
+  "provider_pinned",
+] as const;
+export type RevisionMode = (typeof REVISION_MODES)[number];
+
+export type SourceIntegrity = {
+  requestedRevision: string;
+  revisionMode: RevisionMode;
+  /** The prepared change's own files, hashed against their stored digests. */
+  changedFilesVerified: boolean;
+  /** Build-identity files whose sandbox bytes matched GitHub at the pinned SHA. */
+  buildIdentityFilesVerified: string[];
+  /**
+   * Files that could not be compared — absent on one side, or past the read
+   * budget. Recorded rather than silently counted as verified.
+   */
+  buildIdentityFilesUnverified: string[];
+};
+
+/**
  * What a passing run is allowed to claim (§18, §45).
  *
  * Named for what was actually observed. `sandbox_validation_passed` means a
@@ -170,6 +218,7 @@ export type ValidationRun = {
   stage: ValidationStage;
   steps: Partial<Record<ValidationStepName, ValidationStepResult>>;
   failureCode: ValidationFailureCode | null;
+  sourceIntegrity: SourceIntegrity | null;
   sandboxDurationMs: number | null;
   createdAt: string;
   startedAt: string | null;

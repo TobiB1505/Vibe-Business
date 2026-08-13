@@ -3,6 +3,7 @@ import type { CleanupStatus } from "./orchestrator";
 import type { SandboxUsage } from "./sandbox-port";
 import type {
   SandboxProviderId,
+  SourceIntegrity,
   SupportedPackageManager,
   ValidationFailureCode,
   ValidationProfile,
@@ -45,6 +46,7 @@ export type StoredValidationRun = {
   steps: Partial<Record<ValidationStepName, ValidationStepResult>>;
   failureCode: ValidationFailureCode | null;
   failureDetail: string | null;
+  sourceIntegrity: SourceIntegrity | null;
   sandboxDurationMs: number | null;
   cleanupStatus: CleanupStatus | null;
   validationIdentity: string;
@@ -56,7 +58,7 @@ export type StoredValidationRun = {
 const COLUMNS =
   "id, project_id, prepared_change_id, operation_run_id, validation_profile, validation_profile_version, " +
   "sandbox_policy_version, sandbox_provider, sandbox_runtime, package_manager, prepared_commit_sha, " +
-  "status, stage, steps, failure_code, failure_detail, sandbox_duration_ms, cleanup_status, validation_identity, " +
+  "status, stage, steps, failure_code, failure_detail, source_integrity, sandbox_duration_ms, cleanup_status, validation_identity, " +
   "created_at, started_at, completed_at";
 
 type Row = Record<string, unknown>;
@@ -79,6 +81,7 @@ function mapRow(row: Row): StoredValidationRun {
     steps: (row.steps ?? {}) as Partial<Record<ValidationStepName, ValidationStepResult>>,
     failureCode: (row.failure_code as ValidationFailureCode | null) ?? null,
     failureDetail: (row.failure_detail as string | null) ?? null,
+    sourceIntegrity: (row.source_integrity as SourceIntegrity | null) ?? null,
     sandboxDurationMs: (row.sandbox_duration_ms as number | null) ?? null,
     cleanupStatus: (row.cleanup_status as CleanupStatus | null) ?? null,
     validationIdentity: String(row.validation_identity),
@@ -235,6 +238,7 @@ export async function completeValidationRun(
     failureCode: ValidationFailureCode | null;
     /** Already sanitized and bounded by the orchestrator. */
     failureDetail: string | null;
+    sourceIntegrity: SourceIntegrity | null;
     sandboxRuntime: string | null;
     sandboxDurationMs: number | null;
     cleanupStatus: CleanupStatus;
@@ -248,6 +252,7 @@ export async function completeValidationRun(
       steps: params.steps,
       failure_code: params.failureCode,
       failure_detail: params.failureDetail,
+      source_integrity: params.sourceIntegrity,
       sandbox_runtime: params.sandboxRuntime,
       sandbox_duration_ms: params.sandboxDurationMs,
       cleanup_status: params.cleanupStatus,

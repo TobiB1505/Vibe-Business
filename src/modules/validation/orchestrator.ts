@@ -11,6 +11,7 @@ import {
   type SandboxUsage,
 } from "./sandbox-port";
 import type {
+  SourceIntegrity,
   SupportedPackageManager,
   ValidationFailureCode,
   ValidationProfile,
@@ -73,6 +74,17 @@ export type ValidationTarget = {
 
 export type CleanupStatus = "stopped" | "stop_failed" | "not_provisioned";
 
+/**
+ * Resolves a file's bytes from GitHub at an exact commit.
+ *
+ * Injected so the orchestrator stays testable without a network. Reuses the
+ * repository reader the analyzer already uses — this is an ordinary bounded
+ * read, not a new capability.
+ */
+export type SourceManifestPort = {
+  getTextFile(path: string, commitSha: string, maxBytes: number): Promise<string | null>;
+};
+
 export type ValidationOutcome = {
   status: "passed" | "failed";
   failureCode: ValidationFailureCode | null;
@@ -91,6 +103,8 @@ export type ValidationOutcome = {
   cleanup: CleanupStatus;
   usage: SandboxUsage | null;
   sandboxDurationMs: number | null;
+  /** What was actually established about the validated source. */
+  sourceIntegrity: SourceIntegrity | null;
 };
 
 /**
@@ -110,6 +124,28 @@ export const SANDBOX_ENVIRONMENT: Readonly<Record<string, string>> = Object.free
   NODE_ENV: "production",
   NEXT_TELEMETRY_DISABLED: "1",
 });
+
+/**
+ * Files whose bytes define what a build *is* (§ post-dogfood).
+ *
+ * The prepared change's own files are verified against stored hashes, which
+ * proves Vibe's edit arrived intact. These prove the rest of the build identity
+ * arrived intact too: a matching `robots.ts` beside a different lockfile would
+ * be a different build.
+ *
+ * Deliberately a short list, not a Merkle tree over the repository. A full
+ * source manifest digest is a real future capability; building one now would be
+ * overengineering for a profile that supports one framework.
+ */
+const BUILD_IDENTITY_FILES: readonly string[] = [
+  "package.json",
+  "pnpm-lock.yaml",
+  "package-lock.json",
+  "next.config.ts",
+  "next.config.js",
+  "next.config.mjs",
+  "tsconfig.json",
+];
 
 const LOCKFILES: Record<SupportedPackageManager, string> = {
   pnpm: "pnpm-lock.yaml",
@@ -205,6 +241,7 @@ function looksLikeMissingEnvironment(step: ValidationStepResult | undefined): bo
 
 export async function runValidation(
   provider: SandboxProvider,
+  manifest: SourceManifestPort,
   target: ValidationTarget,
   hooks: { onStage?: (stage: ValidationStage) => Promise<void> | void } = {},
 ): Promise<ValidationOutcome> {
@@ -219,6 +256,8 @@ export async function runValidation(
   };
 
   /** Terminal helper: cleanup always runs, so no path can leak a paid VM (§23). */
+  let sourceIntegrity: SourceIntegrity | null = null;
+
   const finish = async (
     status: "passed" | "failed",
     failureCode: ValidationFailureCode | null,
@@ -250,6 +289,7 @@ export async function runValidation(
       cleanup,
       usage,
       sandboxDurationMs: Date.now() - startedAt,
+      sourceIntegrity,
     };
   };
 
@@ -274,44 +314,27 @@ export async function runValidation(
       return finish("failed", "sandbox_unavailable", describeError(error));
     }
 
-    // ---- 2. Verify the commit --------------------------------------------
-    // Validation must describe exactly what Vibe prepared. The provider was
-    // asked for a revision; this checks it actually delivered it (§6).
+    // ---- 2. Verify the source's identity ---------------------------------
+    //
+    // NOT by asking git. Vercel materializes a git source as a **filesystem**,
+    // not a checkout: there is no `.git` in the sandbox, established over five
+    // real runs rather than assumed. Reinstating `git rev-parse` would mean
+    // cloning inside the sandbox ourselves, which carries a GitHub installation
+    // token into a VM that later runs untrusted code — a real secret lifecycle
+    // bought to obtain a weaker proof. Rejected deliberately.
+    //
+    // What is established instead, and recorded as exactly that:
+    //
+    //   - the revision is an immutable commit SHA pinned at creation, so the
+    //     "branch moved" failure the original check existed to catch cannot
+    //     occur;
+    //   - the prepared change's own files are hashed against stored digests;
+    //   - the build-identity files are hashed against GitHub at that same SHA.
+    //
+    // All of it before a single repository-controlled command (§29).
     await setStage("verifying_source");
     const workdir = inWorkspace(target.workspaceRoot);
-    const head = await sandbox.run({
-      command: { command: "git", args: ["rev-parse", "HEAD"] },
-      cwd: workdir,
-      timeoutMs: SANDBOX_BUDGETS.sourceTimeoutMs,
-    });
 
-    if (head.exitCode !== 0) {
-      // Describe what is actually on disk. `ls -a` is our own command with
-      // bounded output — no repository code runs — and it is the difference
-      // between another hypothesis and a finding.
-      const listing = await sandbox.run({
-        command: { command: "ls", args: ["-a"] },
-        cwd: workdir,
-        timeoutMs: SANDBOX_BUDGETS.sourceTimeoutMs,
-      });
-
-      return finish(
-        "failed",
-        "source_acquisition_failed",
-        `git rev-parse HEAD exited ${head.exitCode} in ${SANDBOX_WORKDIR}/${workdir}\n${head.output}\n` +
-          `directory contents:\n${listing.output}`,
-      );
-    }
-    if (head.output.trim() !== target.preparedCommitSha) {
-      // Zero repository-controlled commands have run at this point, and none
-      // will (§29).
-      return finish("failed", "source_integrity_failed");
-    }
-
-    // ---- 3. Verify the prepared bytes ------------------------------------
-    // Sprint 9 verified the write by reading it back from GitHub. This closes
-    // the loop at the other end: the artifact in the sandbox is the artifact
-    // that was prepared, hash for hash.
     for (const file of target.preparedFiles.slice(0, SANDBOX_BUDGETS.maxIntegrityFiles)) {
       const content = await sandbox.readFile({
         path: inWorkspace(target.workspaceRoot, file.path),
@@ -319,17 +342,82 @@ export async function runValidation(
       });
 
       if (content === null) {
-        return finish("failed", "source_integrity_failed", `prepared file missing: ${file.path}`);
+        // Describe what is actually on disk. `ls -a` is Vibe's own command with
+        // bounded output — no repository code runs — and it is the difference
+        // between another hypothesis and a finding. That distinction cost this
+        // sprint four runs.
+        const listing = await sandbox.run({
+          command: { command: "ls", args: ["-a"] },
+          cwd: workdir,
+          timeoutMs: SANDBOX_BUDGETS.sourceTimeoutMs,
+        });
+
+        return finish(
+          "failed",
+          "source_integrity_failed",
+          `prepared file missing: ${file.path} (looked in ${SANDBOX_WORKDIR}/${workdir})\n` +
+            `directory contents:\n${listing.output}`,
+        );
       }
       if (sha256(content) !== file.contentHash) {
         return finish("failed", "source_integrity_failed", `content hash mismatch: ${file.path}`);
       }
     }
 
-    // ---- 4. Destroy the clone credential ---------------------------------
-    // `.git` holds the remote URL the clone authenticated with, so removing
-    // the directory removes the credential's only resting place in the
-    // filesystem. "The token is short-lived" is not the boundary (§7).
+    // ---- 3. Verify the build identity against GitHub ---------------------
+    // A matching `robots.ts` beside a different lockfile would be a different
+    // build. Compared against the pinned SHA, so this answers "did the provider
+    // deliver the revision we asked for" without needing git metadata.
+    const verified: string[] = [];
+    const unverified: string[] = [];
+
+    for (const path of BUILD_IDENTITY_FILES) {
+      const inSandbox = await sandbox.readFile({
+        path: inWorkspace(target.workspaceRoot, path),
+        maxBytes: SANDBOX_BUDGETS.maxIntegrityFileBytes,
+      });
+      const atCommit = await manifest.getTextFile(
+        inWorkspace(target.workspaceRoot, path),
+        target.preparedCommitSha,
+        SANDBOX_BUDGETS.maxIntegrityFileBytes,
+      );
+
+      // Absent on both sides is agreement, not a gap: most repositories have
+      // only one lockfile and one next.config extension.
+      if (inSandbox === null && atCommit === null) continue;
+
+      // Absent on one side, or past the read budget, cannot be compared.
+      // Recorded as unverified rather than quietly counted as verified.
+      if (inSandbox === null || atCommit === null) {
+        unverified.push(path);
+        continue;
+      }
+
+      if (sha256(inSandbox) !== sha256(atCommit)) {
+        return finish(
+          "failed",
+          "source_integrity_failed",
+          `build identity mismatch against ${target.preparedCommitSha}: ${path}`,
+        );
+      }
+
+      verified.push(path);
+    }
+
+    sourceIntegrity = {
+      requestedRevision: target.preparedCommitSha,
+      revisionMode: "provider_pinned",
+      changedFilesVerified: target.preparedFiles.length > 0,
+      buildIdentityFilesVerified: verified,
+      buildIdentityFilesUnverified: unverified,
+    };
+
+    // ---- 4. Destroy any clone credential ---------------------------------
+    // On this provider there is no `.git` to remove, so this is now defence in
+    // depth rather than the primary control — and it is kept precisely because
+    // that is a fact about *this* provider and image, not a guarantee. A future
+    // provider that does leave a checkout would put a credential-bearing remote
+    // on disk, and this step is what stops it reaching repository code (§7).
     await setStage("securing_sandbox");
     await sandbox.run({
       command: { command: "rm", args: ["-rf", inWorkspace(target.workspaceRoot, ".git")] },

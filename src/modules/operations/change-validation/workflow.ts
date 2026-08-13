@@ -1,5 +1,6 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { mintInstallationCloneCredential } from "@/modules/github/installation-token";
+import { createGithubRepositoryReader } from "@/modules/github/repository-reader";
 import { getProjectWithRepository } from "@/modules/projects/queries";
 import { createVercelSandboxProvider } from "@/modules/validation/vercel/provider";
 import type { OperationFailureCode } from "../failures";
@@ -54,6 +55,9 @@ async function resolveTarget(operation: StoredOperationRun): Promise<ValidationR
   return {
     repositoryUrl: `https://github.com/${owner}/${repo}.git`,
     cloneCredential,
+    // The same bounded reader the analyzer uses. Verifying build identity
+    // against the pinned commit is an ordinary read, not a new capability.
+    manifest: createGithubRepositoryReader(installationId, owner, repo),
   };
 }
 

@@ -5,7 +5,11 @@ import { recordAuditEvent } from "@/modules/audit-log/events";
 import { getPreparedChange } from "@/modules/execution/store";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import { computeValidationIdentity } from "@/modules/validation/identity";
-import { runValidation, type ValidationTarget } from "@/modules/validation/orchestrator";
+import {
+  runValidation,
+  type SourceManifestPort,
+  type ValidationTarget,
+} from "@/modules/validation/orchestrator";
 import { resolveValidationProfile } from "@/modules/validation/profile";
 import type { SandboxProvider } from "@/modules/validation/sandbox-port";
 import {
@@ -64,6 +68,13 @@ export type ValidationDeps = {
 
 export type ValidationRepositoryTarget = {
   repositoryUrl: string;
+  /**
+   * Resolves file bytes from GitHub at an exact commit.
+   *
+   * Used to verify the build identity against the pinned revision, which is
+   * what replaced the `git rev-parse` check the provider cannot support.
+   */
+  manifest: SourceManifestPort;
   /**
    * A short-lived GitHub installation token, scoped to source acquisition only.
    *
@@ -235,7 +246,7 @@ export async function executeValidationStep(
     validationRunId: run.id,
   };
 
-  const outcome = await runValidation(deps.provider, validationTarget, {
+  const outcome = await runValidation(deps.provider, target.manifest, validationTarget, {
     // Stage updates are best-effort progress reporting for a page the user may
     // have left. A failed status write must never abort a running sandbox.
     onStage: async (stage) => {
@@ -278,6 +289,7 @@ export async function executeValidationStep(
     sandboxRuntime: outcome.sandboxRuntime,
     sandboxDurationMs: outcome.sandboxDurationMs,
     cleanupStatus: outcome.cleanup,
+    sourceIntegrity: outcome.sourceIntegrity,
   });
 
   if (persisted) {
@@ -348,6 +360,7 @@ export async function failValidationStep(
         steps: run.steps,
         failureCode: (failureCode as ValidationFailureCode) ?? "validation_run_failed",
         failureDetail: "the validation step ended without recording a result",
+        sourceIntegrity: run.sourceIntegrity,
         sandboxRuntime: run.sandboxRuntime,
         sandboxDurationMs: run.sandboxDurationMs,
         cleanupStatus: run.cleanupStatus ?? "not_provisioned",

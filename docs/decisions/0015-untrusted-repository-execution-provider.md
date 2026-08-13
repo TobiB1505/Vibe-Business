@@ -74,7 +74,75 @@ A short-lived GitHub installation token is minted immediately before creation an
 
 A repository whose build needs arbitrary network access fails validation in V0.1. The global policy is not widened to make one project pass.
 
-### 8. Validation is not approval
+### 8. Source identity is established by pinning and hashing, not by Git
+
+**Amended 2026-08-13, after five real runs.**
+
+The original design re-observed the checked-out commit with `git rev-parse HEAD`
+and compared it to the prepared commit. That is not possible on this provider:
+Vercel materializes a git source as a **filesystem**, not a checkout, so the
+sandbox contains no `.git`. This was established by running it, not assumed.
+
+The alternative was to clone inside the sandbox ourselves. Rejected:
+
+> **Do not introduce a stronger secret to obtain a weaker proof.**
+
+A self-managed clone means carrying a GitHub installation token into a VM that
+later runs untrusted code — the token would sit in a command line and in
+`.git/config` until scrubbed. Package managers, git hooks, an unexpected
+filesystem state or one scrubbing bug would turn a theoretical integrity gap
+into a real credential exposure. The proof gained does not justify the secret
+introduced.
+
+What is claimed instead, recorded per run in `validation_runs.source_integrity`:
+
+```
+source_revision_pinned              ✅ immutable SHA passed to the provider
+prepared_change_files_verified      ✅ hashed in the sandbox, before any repo code
+build_identity_files_verified       ✅ hashed against GitHub at that same SHA
+git_commit_independently_observed   ❌ no git metadata in a materialized source
+```
+
+A commit SHA is immutable, so the failure the original check existed to catch —
+the branch moving under us — cannot happen to a pinned revision. The remaining
+question is whether the provider delivered what was asked for, and that is
+answered by hashing files: the prepared change's own files against their stored
+digests, plus `package.json`, the lockfile, `next.config.*` and `tsconfig.json`
+against GitHub at the same SHA. A matching `robots.ts` beside a different
+lockfile would be a different build.
+
+This is deliberately **not** a Merkle tree over the repository. A full source
+manifest digest is a real future capability; building one now would be
+overengineering for a profile that supports one framework.
+
+Files that cannot be compared — absent on one side, or past the read budget —
+are recorded as unverified rather than silently counted as verified.
+
+### 9. Provider errors must survive as diagnosis
+
+Also learned by running it. Four runs failed with codes and no explanation,
+because "never let raw provider prose escape" had been applied so widely that
+the adapter replaced every error with a constant. A production failure could not
+be attributed to the provider, the customer's code, or Vibe's own adapter.
+
+The required chain is:
+
+```
+provider error → sanitized structured error → failure code → user-safe message
+```
+
+Never:
+
+```
+provider error → generic constant → generic constant → "something failed"
+```
+
+Users still never see raw provider output. Internally, name and message are kept
+— bounded, ANSI-stripped and secret-redacted like any other untrusted text.
+Refusing to *look* at untrusted data is a security property; being unable to
+*find out* what happened is a blind spot wearing the same clothes.
+
+### 10. Validation is not approval
 
 `sandbox_validation_passed` means the profile's commands exited zero in an isolated VM. It does not mean safe, correct, secure, reviewed, or production ready. These remain separate gates:
 

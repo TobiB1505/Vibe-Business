@@ -80,7 +80,6 @@ export const OPERATION_FAILURE_MESSAGES: Record<OperationFailureCode, string> = 
   source_integrity_failed: "The code in the isolated environment did not match the prepared change, so nothing was run.",
   sandbox_unavailable: "The isolated environment could not be started. Nothing was run.",
   sandbox_timeout: "Validation ran out of time and was stopped.",
-  source_acquisition_failed: "The prepared commit could not be checked out.",
   credential_scrub_failed: "Vibe could not confirm the environment was safe to run code in, so it stopped.",
   validation_checks_failed: "Validation failed. See which step failed below.",
   build_failed_missing_environment: "The build needs environment variables that Vibe does not have. Validation cannot supply them yet.",

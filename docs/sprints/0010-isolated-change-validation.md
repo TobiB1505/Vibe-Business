@@ -428,6 +428,35 @@ pass-through exercised the *fake* provider, not the adapter. A test that cannot
 fail is worse than no test, so the assertion moved to the adapter's own suite
 against a mocked SDK, and the mutation now fails.
 
+### Decision: Option A — pin and hash, do not re-observe
+
+Confirmed and adopted. `git rev-parse` is removed as a source-integrity
+condition. The reasoning and the exact wording of the narrowed claim live in
+[ADR 0015 §8](../decisions/0015-untrusted-repository-execution-provider.md).
+
+The documentation changed from:
+
+> Exact commit independently verified through `.git`.
+
+to:
+
+> The PreparedChange commit is pinned as an immutable provider source revision.
+> Because Vercel's materialized repository source does not expose Git metadata
+> in the sandbox, Vibe does not independently re-observe the commit through Git.
+> Instead, it independently verifies the prepared-change file hashes — and the
+> build-identity files against GitHub at that same commit — before any
+> repository-controlled command executes.
+
+`rm -rf .git` and its absence check are **kept** as defence in depth. On this
+provider there is nothing to remove, but that is a fact about this provider and
+image rather than a guarantee, and a future provider that does leave a checkout
+would put a credential-bearing remote on disk.
+
+The obsolete `source_acquisition_failed` code was removed rather than left
+unreachable.
+
+### The original note, retained
+
 If the tree genuinely arrives without `.git`, §6's independent SHA check cannot
 be satisfied by `git rev-parse` and the design needs revisiting rather than
 patching: pinning an immutable commit SHA at creation already removes the
