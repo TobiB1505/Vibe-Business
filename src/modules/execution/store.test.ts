@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { FakeDatabase, fakeSupabase } from "@/modules/operations/test-support";
-import { markPreparedChangeFailed, markPreparedChangePrepared } from "./store";
+import {
+  listPreparedChangesForProject,
+  markPreparedChangeFailed,
+  markPreparedChangePrepared,
+} from "./store";
 
 /**
  * Prepared-change lifecycle transitions (Sprint 9B §3, §26).
@@ -95,5 +99,82 @@ describe("markPreparedChangeFailed", () => {
 
     expect(failed).toBe(false);
     expect(db.rows("prepared_changes")[0].status).toBe("prepared");
+  });
+});
+
+describe("listPreparedChangesForProject (Sprint 10A §44)", () => {
+  /**
+   * The regression this exists for: a prepared change was only reachable via
+   * the current opportunity set, so regenerating opportunities made an
+   * existing branch disappear from the UI while it sat untouched in the
+   * repository. An artifact must stay reachable regardless of current advice.
+   */
+  function seeded() {
+    const db = new FakeDatabase();
+    const base = {
+      project_id: "project_1",
+      user_id: "user_1",
+      operation_run_id: "operation_1",
+      execution_capability: "nextjs_seo_foundations_v1",
+      execution_version: "nextjs-seo-foundations-v1",
+      repository_snapshot_id: "snapshot_1",
+      base_branch: "main",
+      base_sha: "528d372",
+      files: [{ path: "src/app/robots.ts", contentHash: "a".repeat(64), bytes: 408 }],
+      execution_identity: "b".repeat(64),
+    };
+
+    db.seed("prepared_changes", {
+      ...base,
+      id: "prepared_old_set",
+      opportunity_set_id: "set_superseded",
+      opportunity_id: "opportunity_gone",
+      branch_name: "vibe/seo-foundations-cc32273131c5",
+      commit_sha: "2f05958",
+      status: "prepared",
+      created_at: "2026-08-12T13:00:00.000Z",
+    });
+    db.seed("prepared_changes", {
+      ...base,
+      id: "prepared_failed",
+      opportunity_set_id: "set_superseded",
+      opportunity_id: "opportunity_gone",
+      branch_name: "vibe/failed",
+      commit_sha: null,
+      status: "failed",
+      created_at: "2026-08-12T14:00:00.000Z",
+    });
+    db.seed("prepared_changes", {
+      ...base,
+      id: "prepared_other_project",
+      project_id: "project_2",
+      opportunity_set_id: "set_x",
+      opportunity_id: "opportunity_x",
+      branch_name: "vibe/other",
+      commit_sha: "abc1234",
+      status: "prepared",
+      created_at: "2026-08-12T15:00:00.000Z",
+    });
+
+    return fakeSupabase(db);
+  }
+
+  it("returns a prepared change whose opportunity set has been superseded", async () => {
+    const changes = await listPreparedChangesForProject(seeded(), "project_1");
+
+    expect(changes.map((change) => change.id)).toEqual(["prepared_old_set"]);
+    expect(changes[0].branchName).toBe("vibe/seo-foundations-cc32273131c5");
+  });
+
+  it("omits changes that never completed", async () => {
+    const changes = await listPreparedChangesForProject(seeded(), "project_1");
+
+    expect(changes.some((change) => change.id === "prepared_failed")).toBe(false);
+  });
+
+  it("never returns another project's changes", async () => {
+    const changes = await listPreparedChangesForProject(seeded(), "project_1");
+
+    expect(changes.some((change) => change.id === "prepared_other_project")).toBe(false);
   });
 });

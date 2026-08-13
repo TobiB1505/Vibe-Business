@@ -1,0 +1,737 @@
+import "server-only";
+
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { recordAuditEvent } from "@/modules/audit-log/events";
+import { getPreparedChange } from "@/modules/execution/store";
+import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
+import { computeValidationIdentity } from "@/modules/validation/identity";
+import {
+  buildSatisfiesProfile,
+  provisionSandbox,
+  runCheckPhase,
+  stopSandbox,
+  verifySource,
+  type CleanupStatus,
+  type SourceManifestPort,
+  type ValidationTarget,
+} from "@/modules/validation/orchestrator";
+import { resolveValidationProfile } from "@/modules/validation/profile";
+import type { SandboxProvider, SandboxUsage } from "@/modules/validation/sandbox-port";
+import {
+  SANDBOX_POLICY_VERSION,
+  validationProfileVersionFor,
+  type ValidationFailureCode,
+  type ValidationStage,
+  type ValidationStepName,
+} from "@/modules/validation/schema";
+import {
+  claimValidationRun,
+  completeValidationRun,
+  findValidationRunByOperation,
+  recordSandboxUsage,
+  recordSourceIntegrity,
+  recordValidationPhase,
+  setValidationStage,
+  type StoredValidationRun,
+} from "@/modules/validation/store";
+import type { OperationFailureCode } from "../failures";
+import {
+  claimResultForOperation,
+  completeOperationRun,
+  failOperationRun,
+  getOperationRunById,
+  setOperationStage,
+  type StoredOperationRun,
+} from "../store";
+
+/**
+ * Durable steps for isolated change validation (Sprint 10A §20, §8 refactor).
+ *
+ * ## Why this is a sequence of steps rather than one
+ *
+ * The first design ran provisioning, verification, install, typecheck, test,
+ * build and teardown inside a single durable step. It was defensible — teardown
+ * lived in the same `finally` as the work, so no path could leak a paid VM —
+ * and a real run proved it wrong in the worst possible way: the step hit the
+ * platform's function ceiling mid-build, was killed, and *because it was
+ * killed, its cleanup never ran*. The guarantee held only for failures the
+ * function survived, which is exactly the wrong set.
+ *
+ * Splitting the pipeline fixes both halves of that:
+ *
+ *  - each phase gets its own function invocation and its own ceiling, so a
+ *    five-minute pipeline is no longer racing a five-minute limit;
+ *  - cleanup is a step of its own, so it runs on the paths that previously ran
+ *    nothing — including a phase step the platform killed outright.
+ *
+ * ## What every step must do, because none of them share memory
+ *
+ * A step receives an operation id. It re-derives the project, the prepared
+ * change, the repository, the profile and the sandbox name from persisted
+ * state, and reconnects to the sandbox by a name computed from the validation
+ * run id. Nothing about the sandbox is carried in the durable log: no handle,
+ * no capability URL, no token (§3, CLAUDE.md rule 52).
+ *
+ * The GitHub clone credential is minted in exactly one step — the one that
+ * clones — rather than for every step that needs a target. A short-lived token
+ * that is never requested is a token that cannot leak.
+ *
+ * Nothing in this file calls a model, and no `ai_usage_events` row is written —
+ * none is earned. Sandbox spend goes to its own ledger (§25).
+ */
+
+export type ValidationDeps = {
+  /** Service-role client: workflow steps have no user session (ADR 0013). */
+  supabase: SupabaseClient;
+  /**
+   * The sandbox provider.
+   *
+   * Injected so tests can supply a fake that executes nothing. There is no
+   * local-execution implementation and there must never be one (§4).
+   */
+  provider: SandboxProvider;
+  /**
+   * Rebuilt from the operation's own project — never from client input.
+   *
+   * `withCloneCredential` is requested only by the provisioning step. Every
+   * other phase resolves a target with `cloneCredential: null`, because by then
+   * the source is on disk and a credential would be pure additional exposure.
+   */
+  resolveTarget: (
+    operation: StoredOperationRun,
+    options: { withCloneCredential: boolean },
+  ) => Promise<ValidationRepositoryTarget | null>;
+};
+
+export type ValidationRepositoryTarget = {
+  repositoryUrl: string;
+  /** The directory Vercel clones into, i.e. the repository name. */
+  sourceRoot: string;
+  /**
+   * Resolves file bytes from GitHub at an exact commit.
+   *
+   * Used to verify the build identity against the pinned revision, which is
+   * what replaced the `git rev-parse` check the provider cannot support.
+   */
+  manifest: SourceManifestPort;
+  /**
+   * A short-lived GitHub installation token, scoped to source acquisition only.
+   *
+   * Minted immediately before the clone and destroyed inside the sandbox
+   * before any repository-controlled command runs. Never persisted, never
+   * placed in the sandbox environment (§7).
+   */
+  cloneCredential: { username: string; password: string } | null;
+};
+
+export type StepOutcome<T> = ({ ok: true } & T) | { ok: false; failureCode: OperationFailureCode };
+
+/**
+ * A phase step's answer: it worked, or it did not and here is why.
+ *
+ * Deliberately carries no payload on success. Everything a later phase needs is
+ * in the database by the time this returns, and a step that returned its result
+ * would tempt the next one into trusting a value from the durable log instead
+ * of re-reading the row (§4).
+ */
+export type PhaseStepOutcome = { ok: true } | { ok: false; failureCode: OperationFailureCode };
+
+/** Metrics a finished sandbox reported. Numbers and enums only — never secrets. */
+export type CleanupRecord = {
+  cleanup: CleanupStatus;
+  runtime: string | null;
+  sandboxDurationMs: number | null;
+  usage: SandboxUsage | null;
+};
+
+async function loadOperation(
+  supabase: SupabaseClient,
+  operationId: string,
+): Promise<StepOutcome<{ operation: StoredOperationRun }>> {
+  const operation = await getOperationRunById(supabase, operationId);
+  if (!operation) return { ok: false, failureCode: "operation_not_found" };
+
+  const { data: project } = await supabase
+    .from("projects")
+    .select("id, user_id")
+    .eq("id", operation.projectId)
+    .maybeSingle();
+
+  if (!project || (project as { user_id: string }).user_id !== operation.userId) {
+    return { ok: false, failureCode: "project_not_found" };
+  }
+
+  return { ok: true, operation };
+}
+
+/**
+ * Everything a sandbox-touching step needs, rebuilt from persisted state.
+ *
+ * The one place the world is re-derived, so a phase step is a short function
+ * about its phase rather than a repetition of this. Ownership is asserted at
+ * every hop: the operation's project, the project's owner, and the prepared
+ * change scoped to that project (ADR 0013).
+ */
+async function resolveRunContext(
+  deps: ValidationDeps,
+  operationId: string,
+  options: { withCloneCredential: boolean },
+): Promise<
+  StepOutcome<{
+    operation: StoredOperationRun;
+    run: StoredValidationRun;
+    target: ValidationTarget;
+    manifest: SourceManifestPort;
+  }>
+> {
+  const loaded = await loadOperation(deps.supabase, operationId);
+  if (!loaded.ok) return loaded;
+  const { operation } = loaded;
+
+  const run = await findValidationRunByOperation(deps.supabase, operationId);
+  if (!run) return { ok: false, failureCode: "validation_run_failed" };
+
+  const prepared = await getPreparedChange(deps.supabase, {
+    projectId: operation.projectId,
+    preparedChangeId: run.preparedChangeId,
+  });
+  if (!prepared || prepared.commitSha === null) {
+    return { ok: false, failureCode: "prepared_change_not_ready" };
+  }
+
+  const repository = await deps.resolveTarget(operation, options);
+  if (!repository) return { ok: false, failureCode: "repository_connection_invalid" };
+
+  const snapshot = await getLatestSuccessfulSnapshot(deps.supabase, operation.projectId);
+  if (!snapshot?.result) return { ok: false, failureCode: "validation_not_supported" };
+  const profile = resolveValidationProfile(snapshot.result);
+  if (!profile.supported) return { ok: false, failureCode: profile.reason };
+
+  return {
+    ok: true,
+    operation,
+    run,
+    manifest: repository.manifest,
+    target: {
+      preparedChangeId: prepared.id,
+      preparedCommitSha: prepared.commitSha,
+      repositoryUrl: repository.repositoryUrl,
+      cloneCredential: repository.cloneCredential,
+      profile: profile.profile,
+      packageManager: profile.packageManager,
+      sourceRoot: repository.sourceRoot,
+      workspaceRoot: profile.workspaceRoot,
+      preparedFiles: prepared.files.map((file) => ({
+        path: file.path,
+        contentHash: file.contentHash,
+      })),
+      validationRunId: run.id,
+    },
+  };
+}
+
+/**
+ * Progress reporting, on both rows that describe the same run.
+ *
+ * Best-effort by design: this is a page the user may have left, and a failed
+ * status write must never abort a sandbox that is working correctly.
+ */
+async function announceStage(
+  deps: ValidationDeps,
+  params: { operationId: string; projectId: string; validationRunId: string; stage: ValidationStage },
+): Promise<void> {
+  try {
+    await setValidationStage(deps.supabase, {
+      validationRunId: params.validationRunId,
+      projectId: params.projectId,
+      stage: params.stage,
+    });
+    await setOperationStage(deps.supabase, { operationId: params.operationId, stage: params.stage });
+  } catch {
+    return;
+  }
+}
+
+/**
+ * Step 1 — establish eligibility and claim the run. No sandbox yet.
+ *
+ * Everything that can refuse without spending money refuses here (§34).
+ */
+export async function prepareValidationStep(
+  deps: ValidationDeps,
+  operationId: string,
+): Promise<StepOutcome<{ validationRunId: string }>> {
+  const loaded = await loadOperation(deps.supabase, operationId);
+  if (!loaded.ok) return loaded;
+  const { operation } = loaded;
+
+  // A replay after the claim: reuse rather than claiming twice.
+  const existing = await findValidationRunByOperation(deps.supabase, operationId);
+  if (existing) return { ok: true, validationRunId: existing.id };
+
+  await setOperationStage(deps.supabase, { operationId, stage: "preparing", markRunning: true });
+
+  if (!operation.subjectId) return { ok: false, failureCode: "missing_required_context" };
+
+  const prepared = await getPreparedChange(deps.supabase, {
+    projectId: operation.projectId,
+    preparedChangeId: operation.subjectId,
+  });
+  if (!prepared) return { ok: false, failureCode: "prepared_change_not_ready" };
+
+  // Only a completed preparation has a commit to validate.
+  if (prepared.status !== "prepared" || prepared.commitSha === null) {
+    return { ok: false, failureCode: "prepared_change_not_ready" };
+  }
+
+  // Validation is artifact-centric (§28): the snapshot is consulted for the
+  // repository's *shape* — framework, package manager, workspace layout —
+  // never to decide whether the artifact is still current. A prepared commit
+  // stays validatable after newer intelligence arrives.
+  const snapshot = await getLatestSuccessfulSnapshot(deps.supabase, operation.projectId);
+  if (!snapshot?.result) return { ok: false, failureCode: "validation_not_supported" };
+
+  const profile = resolveValidationProfile(snapshot.result);
+  if (!profile.supported) return { ok: false, failureCode: profile.reason };
+
+  const identity = computeValidationIdentity({
+    preparedChangeId: prepared.id,
+    preparedCommitSha: prepared.commitSha,
+    validationProfile: profile.profile,
+    validationProfileVersion: validationProfileVersionFor(profile.profile),
+    sandboxPolicyVersion: SANDBOX_POLICY_VERSION,
+  });
+
+  const claim = await claimValidationRun(deps.supabase, {
+    projectId: operation.projectId,
+    userId: operation.userId,
+    preparedChangeId: prepared.id,
+    operationRunId: operationId,
+    validationProfile: profile.profile,
+    validationProfileVersion: validationProfileVersionFor(profile.profile),
+    sandboxPolicyVersion: SANDBOX_POLICY_VERSION,
+    sandboxProvider: deps.provider.id,
+    packageManager: profile.packageManager,
+    preparedCommitSha: prepared.commitSha,
+    validationIdentity: identity,
+  });
+
+  if (!claim.ok) {
+    return {
+      ok: false,
+      failureCode: claim.error === "already_active" ? "already_running" : "validation_run_failed",
+    };
+  }
+
+  await claimResultForOperation(deps.supabase, { operationId, resultId: claim.validationRun.id });
+
+  await recordAuditEvent(deps.supabase, {
+    userId: operation.userId,
+    eventType: "change_validation.started",
+    metadata: {
+      projectId: operation.projectId,
+      operationId,
+      validationRunId: claim.validationRun.id,
+      preparedChangeId: prepared.id,
+      profile: profile.profile,
+      sandboxPolicyVersion: SANDBOX_POLICY_VERSION,
+    },
+  });
+
+  return { ok: true, validationRunId: claim.validationRun.id };
+}
+
+/**
+ * Step 2 — provision the sandbox, and nothing else.
+ *
+ * The only billable-and-ambiguous operation in the run, alone in its own step
+ * so that step can refuse retries without that refusal spreading to work which
+ * is safe to repeat. A platform retry here could buy a second microVM for a
+ * question the first one may already have answered (§10).
+ *
+ * Re-entry is still safe: a replay finds the sandbox already exists and the
+ * cheapest correct thing to do is nothing, because the name is deterministic
+ * and the provider refuses a duplicate.
+ */
+export async function provisionSandboxStep(
+  deps: ValidationDeps,
+  operationId: string,
+): Promise<PhaseStepOutcome> {
+  const resolved = await resolveRunContext(deps, operationId, { withCloneCredential: true });
+  if (!resolved.ok) return resolved;
+  const { operation, run, target } = resolved;
+
+  // Already past provisioning on a previous attempt: the sandbox exists and
+  // later phases will reconnect to it. Provisioning again would be a second VM.
+  if (run.sourceIntegrity !== null || Object.keys(run.steps).length > 0) {
+    return { ok: true };
+  }
+
+  await announceStage(deps, {
+    operationId,
+    projectId: operation.projectId,
+    validationRunId: run.id,
+    stage: "provisioning",
+  });
+
+  const outcome = await provisionSandbox(deps.provider, target);
+  if (!outcome.ok) {
+    await recordFailureDetail(deps, run, outcome.failureDetail);
+    return { ok: false, failureCode: outcome.failureCode };
+  }
+
+  return { ok: true };
+}
+
+/**
+ * Step 3 — verify the source, then destroy the clone credential.
+ *
+ * Idempotent: a run whose `source_integrity` is already recorded has already
+ * proved what this step proves, so a replay reuses it rather than re-reading
+ * every build-identity file (§11).
+ */
+export async function verifySourceStep(
+  deps: ValidationDeps,
+  operationId: string,
+): Promise<PhaseStepOutcome> {
+  const resolved = await resolveRunContext(deps, operationId, { withCloneCredential: false });
+  if (!resolved.ok) return resolved;
+  const { operation, run, target, manifest } = resolved;
+
+  if (run.sourceIntegrity !== null) return { ok: true };
+
+  await announceStage(deps, {
+    operationId,
+    projectId: operation.projectId,
+    validationRunId: run.id,
+    stage: "verifying_source",
+  });
+
+  const outcome = await verifySource(deps.provider, manifest, target);
+
+  if (!outcome.ok) {
+    if (outcome.sourceIntegrity) {
+      await recordSourceIntegrity(deps.supabase, {
+        validationRunId: run.id,
+        projectId: operation.projectId,
+        sourceIntegrity: outcome.sourceIntegrity,
+        sandboxRuntime: run.sandboxRuntime,
+        stage: "verifying_source",
+      });
+    }
+    await recordFailureDetail(deps, run, outcome.failureDetail);
+    return { ok: false, failureCode: outcome.failureCode };
+  }
+
+  await recordSourceIntegrity(deps.supabase, {
+    validationRunId: run.id,
+    projectId: operation.projectId,
+    sourceIntegrity: outcome.sourceIntegrity,
+    sandboxRuntime: outcome.runtime,
+    stage: "securing_sandbox",
+  });
+
+  return { ok: true };
+}
+
+const PHASE_STAGES: Record<ValidationStepName, ValidationStage> = {
+  install: "installing",
+  typecheck: "typechecking",
+  test: "testing",
+  build: "building",
+};
+
+/**
+ * Steps 4–7 — one validation phase each.
+ *
+ * ## The re-entry rule, which is the reason this function exists
+ *
+ * A durable workflow can resume for reasons that have nothing to do with the
+ * work: a persistence error, a provider hiccup, a redeploy. If resuming meant
+ * re-running, a validation that had already spent 84 seconds running the
+ * customer's test suite would spend them again — and worse, could report a
+ * *different* verdict for the same artifact on the same filesystem.
+ *
+ * So the first thing a phase does is read what is already recorded. A phase
+ * with a persisted result is finished, and its stored result is the answer
+ * (§11, §20). This is checked against the database rather than against anything
+ * in memory, because memory is exactly what a resumed step does not have.
+ */
+export async function runPhaseStep(
+  deps: ValidationDeps,
+  operationId: string,
+  phase: ValidationStepName,
+): Promise<PhaseStepOutcome> {
+  const resolved = await resolveRunContext(deps, operationId, { withCloneCredential: false });
+  if (!resolved.ok) return resolved;
+  const { operation, run, target } = resolved;
+
+  const recorded = run.steps[phase];
+  if (recorded) {
+    // Already done, on a previous attempt. Reuse the persisted verdict — never
+    // re-run a repository-controlled command to re-answer a settled question.
+    if (recorded.status === "passed" || recorded.status === "skipped") return { ok: true };
+    // A recorded failure is equally final. Re-running to see whether the tests
+    // fail differently this time is how a flaky suite becomes a coin toss.
+    return {
+      ok: false,
+      failureCode: recorded.status === "timed_out" ? "sandbox_timeout" : "validation_checks_failed",
+    };
+  }
+
+  await announceStage(deps, {
+    operationId,
+    projectId: operation.projectId,
+    validationRunId: run.id,
+    stage: PHASE_STAGES[phase],
+  });
+
+  const outcome = await runCheckPhase(deps.provider, target, phase);
+
+  if (outcome.step) {
+    await recordValidationPhase(deps.supabase, {
+      validationRunId: run.id,
+      projectId: operation.projectId,
+      step: phase,
+      result: outcome.step,
+      stage: PHASE_STAGES[phase],
+    });
+  }
+
+  if (!outcome.ok) {
+    await recordFailureDetail(deps, run, outcome.failureDetail);
+    return { ok: false, failureCode: outcome.failureCode };
+  }
+
+  return { ok: true };
+}
+
+/**
+ * A failure explanation that would otherwise be lost.
+ *
+ * Written onto the run while it is still `running`, so the terminal write does
+ * not have to carry an explanation through a step boundary. Best-effort: an
+ * unexplained failure is bad, but a failure to explain must not become a second
+ * failure.
+ */
+async function recordFailureDetail(
+  deps: ValidationDeps,
+  run: StoredValidationRun,
+  failureDetail: string | null,
+): Promise<void> {
+  if (!failureDetail) return;
+  try {
+    await deps.supabase
+      .from("validation_runs")
+      .update({ failure_detail: failureDetail })
+      .eq("id", run.id)
+      .eq("project_id", run.projectId)
+      .eq("status", "running");
+  } catch {
+    return;
+  }
+}
+
+/**
+ * Step 8 — stop the sandbox. Runs on every path (§13).
+ *
+ * Deliberately ordered **before** result collection rather than after it, which
+ * is a small departure from the phase list and a deliberate one: once the last
+ * phase has returned, the sandbox has no remaining purpose, and nothing about
+ * deciding a verdict should be able to keep a paid VM alive. Cleanup that
+ * depends on the correctness of result-collection logic is cleanup with a
+ * condition attached.
+ *
+ * Safe to retry, and one of the few steps that should be: stopping is
+ * idempotent, "already gone" is a success, and a leaked microVM is worse than a
+ * duplicate stop request.
+ */
+export async function cleanupSandboxStep(
+  deps: ValidationDeps,
+  operationId: string,
+): Promise<CleanupRecord> {
+  const resolved = await resolveRunContext(deps, operationId, { withCloneCredential: false });
+  if (!resolved.ok) {
+    return { cleanup: "not_provisioned", runtime: null, sandboxDurationMs: null, usage: null };
+  }
+  const { operation, run, target } = resolved;
+
+  await announceStage(deps, {
+    operationId,
+    projectId: operation.projectId,
+    validationRunId: run.id,
+    stage: "cleaning_up",
+  });
+
+  const outcome = await stopSandbox(deps.provider, target);
+
+  // Wall time from the claim, which is the closest honest bound on how long the
+  // sandbox could have existed. The provider's own Active CPU figure is the
+  // billing-relevant number and is recorded separately.
+  const startedAt = run.startedAt ? Date.parse(run.startedAt) : null;
+  const sandboxDurationMs =
+    startedAt !== null && Number.isFinite(startedAt) ? Date.now() - startedAt : null;
+
+  return {
+    cleanup: outcome.cleanup,
+    runtime: outcome.runtime ?? run.sandboxRuntime,
+    sandboxDurationMs,
+    usage: outcome.usage,
+  };
+}
+
+/**
+ * Step 9 — decide and record the verdict.
+ *
+ * Reads the phases from the database rather than receiving them through the
+ * durable log: they were written as they happened, and re-reading them is what
+ * makes this step's answer independent of how many times the workflow was
+ * resumed on the way here.
+ */
+export async function finalizeValidationStep(
+  deps: ValidationDeps,
+  operationId: string,
+  failureCode: OperationFailureCode | null,
+  cleanup: CleanupRecord,
+): Promise<StepOutcome<{ validationRunId: string; status: "passed" | "failed" }>> {
+  const loaded = await loadOperation(deps.supabase, operationId);
+  if (!loaded.ok) return loaded;
+  const { operation } = loaded;
+
+  const run = await findValidationRunByOperation(deps.supabase, operationId);
+  if (!run) return { ok: false, failureCode: "validation_run_failed" };
+
+  // A replay of a step that already finished.
+  if (run.status === "passed" || run.status === "failed") {
+    return run.status === "passed"
+      ? { ok: true, validationRunId: run.id, status: "passed" }
+      : { ok: false, failureCode: run.failureCode ?? "validation_run_failed" };
+  }
+
+  // The build is mandatory. A pipeline that ran to the end without a passing
+  // build has not established the claim this sprint makes, and must not be
+  // recorded as though it had (§6).
+  const resolvedFailure: ValidationFailureCode | null =
+    failureCode !== null
+      ? (failureCode as ValidationFailureCode)
+      : buildSatisfiesProfile(run.steps)
+        ? null
+        : "validation_not_supported";
+
+  const status = resolvedFailure === null ? "passed" : "failed";
+
+  const persisted = await completeValidationRun(deps.supabase, {
+    validationRunId: run.id,
+    projectId: operation.projectId,
+    status,
+    stage: status === "passed" ? "completed" : run.stage,
+    steps: run.steps,
+    failureCode: resolvedFailure,
+    failureDetail: run.failureDetail,
+    sandboxRuntime: cleanup.runtime ?? run.sandboxRuntime,
+    sandboxDurationMs: cleanup.sandboxDurationMs ?? run.sandboxDurationMs,
+    cleanupStatus: cleanup.cleanup,
+    sourceIntegrity: run.sourceIntegrity,
+  });
+
+  if (persisted) {
+    // Exactly one usage record per validation run, tied to the terminal write
+    // so a retried finalize cannot produce a second one (§18).
+    await recordSandboxUsage(deps.supabase, {
+      projectId: operation.projectId,
+      userId: operation.userId,
+      validationRunId: run.id,
+      provider: deps.provider.id,
+      runtime: cleanup.runtime ?? run.sandboxRuntime,
+      status,
+      sandboxDurationMs: cleanup.sandboxDurationMs,
+      usage: cleanup.usage,
+      cleanupStatus: cleanup.cleanup,
+      failureCode: resolvedFailure,
+      failureDetail: run.failureDetail,
+    });
+
+    await recordAuditEvent(deps.supabase, {
+      userId: operation.userId,
+      eventType: status === "passed" ? "change_validation.passed" : "change_validation.failed",
+      metadata: {
+        projectId: operation.projectId,
+        operationId,
+        validationRunId: run.id,
+        preparedChangeId: run.preparedChangeId,
+        failureCode: resolvedFailure,
+        cleanup: cleanup.cleanup,
+        failureDetail: run.failureDetail,
+        sandboxDurationMs: cleanup.sandboxDurationMs,
+      },
+    });
+  }
+
+  if (status === "failed") {
+    return { ok: false, failureCode: resolvedFailure ?? "validation_run_failed" };
+  }
+
+  return { ok: true, validationRunId: run.id, status: "passed" };
+}
+
+/** Step 10 — finish, idempotently. */
+export async function completeValidationStep(
+  deps: ValidationDeps,
+  operationId: string,
+  validationRunId: string,
+): Promise<void> {
+  const transitioned = await completeOperationRun(deps.supabase, {
+    operationId,
+    resultId: validationRunId,
+  });
+  if (!transitioned) return;
+
+  const operation = await getOperationRunById(deps.supabase, operationId);
+  if (!operation) return;
+
+  await recordAuditEvent(deps.supabase, {
+    userId: operation.userId,
+    eventType: "operation.completed",
+    metadata: { projectId: operation.projectId, operationId, operationType: operation.operationType },
+  });
+}
+
+export async function failValidationStep(
+  deps: ValidationDeps,
+  operationId: string,
+  failureCode: OperationFailureCode,
+): Promise<void> {
+  // A run claimed but never completed — a step died outside the returned-failure
+  // convention. Close the row so the UI is not left waiting.
+  const run = await findValidationRunByOperation(deps.supabase, operationId);
+  if (run && (run.status === "running" || run.status === "queued")) {
+    const operation = await getOperationRunById(deps.supabase, operationId);
+    if (operation) {
+      await completeValidationRun(deps.supabase, {
+        validationRunId: run.id,
+        projectId: operation.projectId,
+        status: "failed",
+        stage: run.stage,
+        steps: run.steps,
+        failureCode: (failureCode as ValidationFailureCode) ?? "validation_run_failed",
+        failureDetail: run.failureDetail ?? "the validation step ended without recording a result",
+        sourceIntegrity: run.sourceIntegrity,
+        sandboxRuntime: run.sandboxRuntime,
+        sandboxDurationMs: run.sandboxDurationMs,
+        cleanupStatus: run.cleanupStatus ?? "not_provisioned",
+      });
+    }
+  }
+
+  const transitioned = await failOperationRun(deps.supabase, { operationId, failureCode });
+  if (!transitioned) return;
+
+  const operation = await getOperationRunById(deps.supabase, operationId);
+  if (!operation) return;
+
+  await recordAuditEvent(deps.supabase, {
+    userId: operation.userId,
+    eventType: "operation.failed",
+    metadata: { projectId: operation.projectId, operationId, failureCode },
+  });
+}

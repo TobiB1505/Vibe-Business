@@ -100,5 +100,17 @@ export const OPERATION_STAGE_LABELS: Record<OperationStage, string> = {
   verifying_repository: "Verifying the change",
   validating: "Validating result",
   persisting: "Saving result",
+  // Isolated validation. Each names a real step the user could verify, which
+  // is the whole reason the stage list is granular rather than "working…".
+  provisioning: "Starting an isolated environment",
+  acquiring_source: "Fetching the prepared commit",
+  verifying_source: "Verifying the prepared commit",
+  securing_sandbox: "Securing the environment",
+  installing: "Installing dependencies",
+  typechecking: "Checking types",
+  testing: "Running tests",
+  building: "Building application",
+  collecting_results: "Collecting results",
+  cleaning_up: "Cleaning up",
   completed: "Completed",
 };

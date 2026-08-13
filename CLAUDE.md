@@ -63,6 +63,12 @@ This file governs how Claude Code (and any AI-assisted session) works in this re
 58. Vibe writes only to isolated branches. Default-branch writes require a separate approval architecture that does not exist yet.
 59. Never execute untrusted customer repositories — no clone, install, build or test — until an isolated sandbox exists.
 60. Never trigger a paid refresh on the user's behalf. Blocked work explains what needs refreshing; the user starts it.
+61. Never execute customer repository code outside an approved isolated sandbox provider. No local, in-process, developer-convenience or "just for now" execution path may exist — see [ADR 0015](docs/decisions/0015-untrusted-repository-execution-provider.md). Tests use fake providers; production uses the sandbox; an unavailable sandbox fails the validation rather than degrading to somewhere less isolated.
+62. Never expose Vibe or customer production secrets to validation code. The sandbox environment carries no credential, key or token, and a build that needs one fails rather than being given one.
+63. Source-acquisition credentials must be destroyed before any repository-controlled command runs, and their absence verified rather than assumed. Short expiry is not a security boundary.
+64. Repository-controlled execution runs under the most restrictive network policy the provider supports. Never widen the global policy to make one project pass.
+65. Validation semantics must be versioned. Network policy, command sequence, timeouts, install flags and secret handling together define what "validated" means, so they belong in the validation identity — a stored pass must never be reinterpreted under rules it was not checked against.
+66. A successful validation authorizes nothing. `sandbox_validation_passed` means a profile's commands exited zero in an isolated VM — never that a change is safe, correct, reviewed, mergeable or production ready. Never render it as any of those.
 
 ## Related Documents
 

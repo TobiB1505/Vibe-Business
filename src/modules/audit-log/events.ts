@@ -47,6 +47,9 @@ export type AuditEventType =
   // Change preparation (Sprint 9B §17). Domain lifecycle, distinct from the
   // generic operation.* execution events.
   | "change_preparation.started"
+  | "change_validation.started"
+  | "change_validation.passed"
+  | "change_validation.failed"
   | "change_preparation.completed"
   | "change_preparation.failed";
 

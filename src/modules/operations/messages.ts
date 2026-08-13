@@ -67,4 +67,27 @@ export const OPERATION_FAILURE_MESSAGES: Record<OperationFailureCode, string> = 
   write_verification_failed: "Vibe prepared the change but could not verify it, so nothing was recorded.",
   github_unavailable: "GitHub could not be reached. Try again in a moment.",
   change_preparation_failed: "Vibe could not prepare this change.",
+
+  // Isolated validation (Sprint 10A). "Not supported" is a statement about
+  // Vibe's coverage, never about the customer's repository being wrong — the
+  // copy says so, because a tool telling you your project is unsupported
+  // should not also imply it is bad.
+  validation_not_supported: "Vibe cannot validate this project yet. Validation currently supports single-app Next.js repositories using npm or pnpm.",
+  prepared_change_not_ready: "This change is not ready to validate.",
+  ambiguous_workspace: "Vibe could not tell which app to validate. Workspaces and monorepos are not supported yet.",
+  lockfile_missing: "No lockfile was found, so dependencies cannot be installed exactly as committed.",
+  repository_connection_invalid: "Vibe could not reach this repository. Check the GitHub connection.",
+  source_integrity_failed: "The code in the isolated environment did not match the prepared change, so nothing was run.",
+  sandbox_unavailable: "The isolated environment could not be started. Nothing was run.",
+  sandbox_timeout: "Validation ran out of time and was stopped.",
+  // Says what was lost, not just that something was. "The environment
+  // disappeared" invites the reasonable question "so start another one?" — and
+  // the answer is that the installed dependencies went with it, so a fresh
+  // machine would be answering a different question.
+  sandbox_lost:
+    "The isolated environment stopped being available part-way through, taking its installed dependencies with it. Vibe stopped rather than finishing on a different machine. Validating again starts a fresh environment.",
+  credential_scrub_failed: "Vibe could not confirm the environment was safe to run code in, so it stopped.",
+  validation_checks_failed: "Validation failed. See which step failed below.",
+  build_failed_missing_environment: "The build needs environment variables that Vibe does not have. Validation cannot supply them yet.",
+  validation_run_failed: "Validation could not be completed.",
 };

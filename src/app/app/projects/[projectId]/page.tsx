@@ -21,6 +21,13 @@ import {
 } from "@/modules/execution/service";
 import { buildOpportunityActionState } from "@/modules/execution/view";
 import { buildBranchUrl } from "@/modules/execution/diff";
+import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
+import { getLatestValidation } from "@/modules/validation/service";
+import { SANDBOX_POLICY_VERSION } from "@/modules/validation/schema";
+import { buildValidationSummary } from "@/modules/validation/view";
+import { listPreparedChangesForProject } from "@/modules/execution/store";
+import { PreparedChangesSection, type PreparedChangeCard } from "./prepared-changes-section";
+import type { ValidationSummary } from "./validation-panel";
 import { buildAuditEvidenceNotice } from "@/modules/business-audit/evidence-notice";
 import { isBrowserProviderConfigured } from "@/modules/authenticated-product-intelligence/browserbase/client";
 import { getDeepScanAccessStatus } from "@/modules/authenticated-product-intelligence/service";
@@ -114,6 +121,10 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
   // answer rather than deciding whether Vibe has an executor (Sprint 9C §2).
   const executionStates: Record<string, ReturnType<typeof buildOpportunityActionState>> = {};
   const branchUrls: Record<string, string> = {};
+  // Isolated validation state per prepared change (Sprint 10A §44), resolved
+  // server-side for the same reason execution state is: the browser renders an
+  // answer, it does not decide what Vibe is willing to run.
+  const validationSummaries: Record<string, ValidationSummary> = {};
 
   for (const summary of executionSummaries) {
     const opportunity = opportunities?.set.opportunities.find(
@@ -141,6 +152,52 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
     if (summary.branchName && repository) {
       branchUrls[summary.opportunityId] = buildBranchUrl(repository.fullName, summary.branchName);
     }
+
+    if (summary.preparedChangeId) {
+      const validation = await getLatestValidation(supabase, {
+        projectId,
+        preparedChangeId: summary.preparedChangeId,
+      });
+
+      if (validation) {
+        validationSummaries[summary.opportunityId] = buildValidationSummary(validation, {
+          currentPolicyVersion: SANDBOX_POLICY_VERSION,
+          failureMessage: validation.failureCode
+            ? (OPERATION_FAILURE_MESSAGES[validation.failureCode] ?? null)
+            : null,
+        });
+      }
+    }
+  }
+
+  // Prepared changes as artifacts, independent of the current opportunity set.
+  // Looking them up through live opportunities made an existing branch vanish
+  // from the UI whenever opportunities were regenerated (Sprint 10A §44).
+  const preparedChangeCards: PreparedChangeCard[] = [];
+
+  for (const prepared of await listPreparedChangesForProject(supabase, projectId)) {
+    const validation = await getLatestValidation(supabase, {
+      projectId,
+      preparedChangeId: prepared.id,
+    });
+
+    preparedChangeCards.push({
+      id: prepared.id,
+      branchName: prepared.branchName,
+      commitSha: prepared.commitSha,
+      baseBranch: prepared.baseBranch,
+      filePaths: prepared.files.map((file) => file.path),
+      createdAt: prepared.createdAt,
+      branchUrl: repository ? buildBranchUrl(repository.fullName, prepared.branchName) : null,
+      validation: validation
+        ? buildValidationSummary(validation, {
+            currentPolicyVersion: SANDBOX_POLICY_VERSION,
+            failureMessage: validation.failureCode
+              ? (OPERATION_FAILURE_MESSAGES[validation.failureCode] ?? null)
+              : null,
+          })
+        : null,
+    });
   }
 
   // Deep Scan state is derived on the server (Sprint 5 §13): entitlement,
@@ -317,10 +374,13 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
           opportunities={opportunities?.set.opportunities ?? []}
           executionStates={executionStates}
           branchUrls={branchUrls}
+          validationSummaries={validationSummaries}
           stale={opportunities?.stale ?? false}
           activeOperation={activeOpportunityOperation}
           blockedReason={opportunityReadiness.blockedReason}
         />
+
+        <PreparedChangesSection projectId={project.id} changes={preparedChangeCards} />
 
         <section className="space-y-2">
           <h2 className="text-sm font-medium text-zinc-200">Production website</h2>
