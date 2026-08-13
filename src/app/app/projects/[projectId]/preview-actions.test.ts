@@ -74,9 +74,9 @@ beforeEach(() => {
     operation: { operationId: "operation_1" },
   });
   stopChangePreviewMock.mockResolvedValue({
-    kind: "stopped",
+    kind: "stopping",
     previewSessionId: SESSION,
-    cleanupComplete: true,
+    operation: { operationId: "teardown_1" },
   });
   getPreviewStatusMock.mockResolvedValue({
     previewSessionId: SESSION,
@@ -190,6 +190,9 @@ describe("reading a preview", () => {
     expect(getPreviewStatusMock).toHaveBeenCalledWith(
       expect.anything(),
       expect.anything(),
+      // The executor: an expired session hands itself to the durable teardown,
+      // which is the only place allowed to write the usage ledger.
+      expect.anything(),
       expect.objectContaining({ userId: SERVER_USER, projectId: PROJECT, previewSessionId: SESSION }),
     );
     expect(result).toMatchObject({ ok: true, origin: "https://sandbox-3000.vercel.run" });
@@ -235,7 +238,7 @@ describe("reading a preview", () => {
 });
 
 describe("stopping a preview", () => {
-  it("takes the user from the session and stops exactly once", async () => {
+  it("takes the user from the session and requests teardown exactly once", async () => {
     const result = await stopPreviewAction(PROJECT, SESSION);
 
     expect(stopChangePreviewMock).toHaveBeenCalledTimes(1);
@@ -244,7 +247,7 @@ describe("stopping a preview", () => {
       expect.anything(),
       expect.objectContaining({ userId: SERVER_USER, previewSessionId: SESSION }),
     );
-    expect(result).toEqual({ ok: true, kind: "stopped" });
+    expect(result).toEqual({ ok: true, kind: "stopping" });
   });
 
   it("reports an already-stopped session as a result, not an error", async () => {

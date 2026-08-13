@@ -117,7 +117,7 @@ They are deliberately not the same clock. It is written at claim time, before th
 Three mechanisms, and only the first is guaranteed to run:
 
 1. the provider's sandbox timeout stops the VM;
-2. the next authorized read marks the session `expired`, attempts teardown, and deletes the snapshot;
+2. the next authorized read notices the deadline and hands the session to the durable teardown (§14), which stops the sandbox and deletes the snapshot;
 3. the snapshot's own 24-hour TTL — the shortest Vercel accepts — is the backstop for the case where nobody ever reads.
 
 There is no cron, no scheduler and no background sweeper — none exists in this architecture, and inventing one for a fifteen-minute TTL would be new infrastructure for a problem the provider already bounds ([ARCHITECTURE.md §7](../../ARCHITECTURE.md#7-deferred--open-decisions) leaves job technology undecided).
@@ -125,6 +125,8 @@ There is no cron, no scheduler and no background sweeper — none exists in this
 What is deliberately **not** claimed: that a session row transitions promptly on its own. It transitions when someone looks. Saying otherwise would be describing a cleanup nothing performs.
 
 ### 11. The ValidatedArtifact is deleted at terminal preview lifecycle
+
+**Originally recorded here: teardown runs inline, in the request, because it is two provider calls and two writes and ADR 0013's durability threshold is work measured in tens of seconds. That reasoning is preserved because it was sound on the evidence available; §14 records what the first real preview showed and why it was reversed.**
 
 Stop, expiry, or a terminal start failure all lead to: stop the sandbox → delete the snapshot → mark the artifact deleted.
 
@@ -152,6 +154,38 @@ There is no merge authority and no deploy authority in this sprint or anywhere i
 ### 13. Preview semantics are versioned
 
 `preview-policy-v1` versions the runtime, the port, the server command strategy, the network policy, the TTL, health-check behaviour, the secret policy, and cleanup and snapshot-deletion semantics — together. It is part of the preview identity, so changing any of them invalidates preview reuse by construction rather than by anyone remembering to (CLAUDE.md rule 65).
+
+### 14. Preview teardown is durable execution
+
+**Amended 2026-08-13, after the first real preview. The original decision is preserved below because the reasoning that produced it was sound and the thing that refuted it was not visible from the code.**
+
+The original §11 had teardown run inline, in the request: stop the sandbox, delete the snapshot, record the spend, mark the session. The argument was ADR 0013's own threshold — durable execution is for work measured in tens of seconds, and this is four operations measured in one or two. Making it a workflow looked like ceremony.
+
+The first real stop was correct in every visible way. The sandbox stopped, the snapshot was deleted, the session went terminal, the audit event was written. `sandbox_usage_events` recorded **nothing**, and nothing anywhere reported a problem.
+
+`sandbox_usage_events` grants `SELECT` and no other policy, deliberately — *a ledger the client can write is not a ledger*. An inline stop runs under the cookie-scoped client, so its insert was refused by RLS, and `recordPreviewSandboxUsage` swallows write failures by design so that a ledger problem cannot take down the operation that earned it. Three correct decisions composed into a silent one.
+
+**The threshold that matters was never duration. It is whether the work needs the privileged writer.** Teardown does, and only durable execution may hold it (CLAUDE.md rule 53). So teardown is durable execution.
+
+Two alternatives were considered and refused:
+
+- **An owner `INSERT` policy on `sandbox_usage_events`.** This is the smallest change and it makes the ledger client-writable, which is the one property it exists to have.
+- **A service-role ledger helper called from the request.** This satisfies "only `src/modules/operations/` may use the service-role client" as text while breaking what the rule is for. Rule 53 says *for durable execution only*, and a request is not that.
+
+Manual stop and expiry converge on **one** workflow. They differ in a status and a sentence; everything else about ending a preview is identical, and two implementations would drift on exactly the parts that cost money.
+
+```
+terminate ─▶ record usage ─▶ converge
+ destructive   retryable      retryable
+```
+
+**Cleanup outranks accounting.** If the ledger write fails after the sandbox is already stopped, the sandbox stays stopped and the ledger step retries alone. Nothing resurrects or retains a paid VM to make the books balance.
+
+Retries are safe on every step. `terminate` is idempotent by construction — stopping a stopped sandbox and deleting a deleted snapshot are its intended outcomes — and still carries `maxRetries = 0`, because a platform retry of a provider call is ambiguity bought for nothing. The ledger row is protected by a unique index on `preview_session_id`, so a retry loses at the database rather than double-counting a sandbox that ran once. Convergence is scoped to non-terminal rows.
+
+The reason for teardown is **persisted by whoever initiates it**, not inferred later from `expires_at`: after queue latency, a manual stop made seconds before the deadline would otherwise converge as an expiry.
+
+What the request still does is claim the session — one conditional `UPDATE` out of `starting`/`running` — so a double click, or an expiry racing a manual stop, finds nothing left to claim and starts no second teardown.
 
 ## Consequences
 

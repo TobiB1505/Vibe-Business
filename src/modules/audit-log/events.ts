@@ -62,6 +62,7 @@ export type AuditEventType =
   | "change_preview.integrity_failed"
   | "change_preview.failed"
   | "change_preview.stopped"
+  | "change_preview.cleanup_incomplete"
   | "change_preview.expired";
 
 export type RecordAuditEventParams = {

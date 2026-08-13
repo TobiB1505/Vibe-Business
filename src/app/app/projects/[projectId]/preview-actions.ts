@@ -142,11 +142,15 @@ export async function getPreviewStatusAction(
   const session = await requireSession();
   const supabase = await createClient();
 
-  const view = await getPreviewStatus(supabase, createVercelSandboxProvider(), {
-    projectId,
-    userId: session.userId,
-    previewSessionId,
-  });
+  const view = await getPreviewStatus(
+    supabase,
+    createVercelSandboxProvider(),
+    // An expired session hands itself to the durable teardown, which is the one
+    // place allowed to write the ledger. This read notices the deadline; it does
+    // not do the work.
+    new VercelWorkflowExecutor(),
+    { projectId, userId: session.userId, previewSessionId },
+  );
 
   if (!view) return { ok: false };
 
@@ -164,18 +168,23 @@ export async function getPreviewStatusAction(
 }
 
 export type StopPreviewActionState =
-  | { ok: true; kind: "stopped" | "already_stopped" }
+  | { ok: true; kind: "stopping" | "already_stopped" }
   | { ok: false; message: string }
   | null;
 
 /**
  * Stops a preview the caller owns.
  *
- * Idempotent by way of the service: a second call on an already-terminal
- * session returns `already_stopped` rather than an error, and cannot produce a
- * second ledger row or a second teardown. The UI does not need to guard
- * against a double click, and deliberately does not pretend to have stopped
- * before the backend confirms (§12).
+ * Returns as soon as the teardown is *claimed*, not when it is done. Ending a
+ * preview stops a sandbox, deletes a snapshot and writes to a ledger only
+ * durable execution may write, so the work belongs to a workflow (ADR 0016
+ * §14).
+ *
+ * Idempotent by way of the service: the claim moves the session out of
+ * `running` in one statement, so a second call — or an expiry racing a manual
+ * stop — returns `already_stopped` rather than starting a second teardown. The
+ * UI deliberately does not pretend to have stopped before the backend confirms
+ * (§12).
  */
 export async function stopPreviewAction(
   projectId: string,
@@ -184,7 +193,7 @@ export async function stopPreviewAction(
   const session = await requireSession();
   const supabase = await createClient();
 
-  const outcome = await stopChangePreview(supabase, createVercelSandboxProvider(), {
+  const outcome = await stopChangePreview(supabase, new VercelWorkflowExecutor(), {
     projectId,
     userId: session.userId,
     previewSessionId,

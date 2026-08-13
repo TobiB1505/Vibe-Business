@@ -416,7 +416,7 @@ describe("reading a preview", () => {
   }
 
   function read(params: { userId?: string; projectId?: string } = {}) {
-    return getPreviewStatus(fakeSupabase(db), provider, {
+    return getPreviewStatus(fakeSupabase(db), provider, executor, {
       projectId: params.projectId ?? PROJECT,
       userId: params.userId ?? USER,
       previewSessionId: "preview_1",
@@ -491,36 +491,40 @@ describe("reading a preview", () => {
     }
   });
 
-  it("returns no origin past the deadline, and converges the row", async () => {
+  it("returns no origin past the deadline, and hands it to teardown", async () => {
     seedRunning(HOUR_AGO());
 
     const view = await read();
 
-    expect(view).toMatchObject({ status: "expired", origin: null, verdict: null });
-    expect(db.rows("preview_sessions")[0].status).toBe("expired");
-    expect(db.rows("preview_sessions")[0].stopped_at).toBeTruthy();
+    expect(view).toMatchObject({ status: "stopping", origin: null, verdict: null });
+    expect(db.rows("preview_sessions")[0].status).toBe("stopping");
+    // The reason is persisted by whoever noticed, not inferred later. A manual
+    // stop seconds before the deadline would otherwise converge as an expiry.
+    expect(db.rows("preview_sessions")[0].teardown_reason).toBe("expired");
   });
 
-  it("deletes the artifact when it converges an expired preview", async () => {
+  it("performs no provider work in the request that noticed the expiry", async () => {
     seedRunning(HOUR_AGO());
 
     await read();
 
-    // Nothing else performs this. Saying expiry "cleans up automatically"
-    // without something doing it would be a claim with no actor (§25).
-    expect(provider.deletedArtifacts()).toEqual([PREVIEW_SNAPSHOT_ID]);
-    expect(db.rows("validation_runs")[0].artifact_deleted_at).toBeTruthy();
-    expect(db.rows("preview_sessions")[0].artifact_deleted_at).toBeTruthy();
+    // The read notices; the workflow acts. Doing it here is what left the first
+    // real preview's spend unrecorded — a request has no privileged writer.
+    expect(provider.deletedArtifacts()).toEqual([]);
+    expect(provider.stopped()).toBe(false);
+    expect(db.rows("sandbox_usage_events")).toHaveLength(0);
   });
 
-  it("records one usage row when it converges, and not a second on re-read", async () => {
+  it("starts exactly one teardown however many times it is read", async () => {
     seedRunning(HOUR_AGO());
 
     await read();
     await read();
+    await read();
 
-    expect(db.rows("sandbox_usage_events")).toHaveLength(1);
-    expect(db.rows("sandbox_usage_events")[0].operation).toBe("change_preview");
+    const teardowns = executor.starts.filter((s) => s.operationType === "preview_teardown");
+    expect(teardowns).toHaveLength(1);
+    expect(db.rows("operation_runs")).toHaveLength(1);
   });
 });
 
@@ -549,33 +553,36 @@ describe("stopping a preview", () => {
   }
 
   function stop(params: { userId?: string; projectId?: string } = {}) {
-    return stopChangePreview(fakeSupabase(db), provider, {
+    return stopChangePreview(fakeSupabase(db), executor, {
       projectId: params.projectId ?? PROJECT,
       userId: params.userId ?? USER,
       previewSessionId: "preview_1",
     });
   }
 
-  it("stops the sandbox, deletes the snapshot and marks the artifact gone", async () => {
+  it("claims the session and hands the work to a durable teardown", async () => {
     seedRunning();
 
     const outcome = await stop();
 
-    expect(outcome).toMatchObject({ kind: "stopped", cleanupComplete: true });
-    expect(provider.deletedArtifacts()).toEqual([PREVIEW_SNAPSHOT_ID]);
-    expect(db.rows("preview_sessions")[0].status).toBe("stopped");
-    expect(db.rows("validation_runs")[0].artifact_deleted_at).toBeTruthy();
+    expect(outcome).toMatchObject({ kind: "stopping", previewSessionId: "preview_1" });
+    expect(db.rows("preview_sessions")[0].status).toBe("stopping");
+    expect(db.rows("preview_sessions")[0].teardown_reason).toBe("stopped");
+    expect(executor.starts).toHaveLength(1);
+    expect(executor.starts[0].operationType).toBe("preview_teardown");
   });
 
-  it("leaves the ValidationRun and PreparedChange historically intact", async () => {
+  it("touches no provider and writes no ledger row in the request", async () => {
     seedRunning();
 
     await stop();
 
-    // Only the artifact's availability is lost. Rewriting the past to tidy up
-    // storage would make "this change validated" untrue after the fact (§20).
-    expect(db.rows("validation_runs")[0].status).toBe("passed");
-    expect(db.rows("prepared_changes")[0].status).toBe("prepared");
+    // The defect this design exists to prevent. `sandbox_usage_events` grants
+    // SELECT only, so an inline stop's ledger insert was refused by RLS and
+    // swallowed — the preview stopped and its spend was recorded nowhere.
+    expect(provider.stopped()).toBe(false);
+    expect(provider.deletedArtifacts()).toEqual([]);
+    expect(db.rows("sandbox_usage_events")).toHaveLength(0);
   });
 
   it("refuses another user's preview", async () => {
@@ -585,73 +592,40 @@ describe("stopping a preview", () => {
       kind: "failed",
       error: "project_not_found",
     });
-    expect(provider.deletedArtifacts()).toEqual([]);
+    expect(executor.starts).toHaveLength(0);
     expect(db.rows("preview_sessions")[0].status).toBe("running");
   });
 
-  it("produces one logical result when called twice", async () => {
+  it("starts one teardown when clicked twice", async () => {
     seedRunning();
 
     const first = await stop();
     const second = await stop();
 
-    expect(first.kind).toBe("stopped");
-    expect(second).toMatchObject({ kind: "already_stopped", status: "stopped" });
-    // One ledger row, one stop, no error from an already-stopped provider.
-    expect(db.rows("sandbox_usage_events")).toHaveLength(1);
+    // The claim moves the session out of `running` in one conditional
+    // statement, so the second call finds nothing left to claim.
+    expect(first.kind).toBe("stopping");
+    expect(second).toMatchObject({ kind: "already_stopped", status: "stopping" });
+    expect(executor.starts).toHaveLength(1);
   });
 
-  it("reports an outstanding snapshot deletion rather than claiming success", async () => {
-    provider = fakeSandboxProvider({ failDeleteArtifact: true });
-    seedRunning();
+  it("does not start a second teardown for an already terminal session", async () => {
+    seedRunning({ status: "stopped", stopped_at: new Date().toISOString() });
 
-    const outcome = await stop();
-
-    expect(outcome).toMatchObject({ kind: "stopped", cleanupComplete: false });
-    expect(db.rows("preview_sessions")[0].cleanup_status).toBe("artifact_delete_failed");
-    expect(db.rows("preview_sessions")[0].artifact_deleted_at).toBeFalsy();
-    // The run keeps its artifact marked live, because it *is* still live.
-    expect(db.rows("validation_runs")[0].artifact_deleted_at).toBeFalsy();
+    expect(await stop()).toMatchObject({ kind: "already_stopped", status: "stopped" });
+    expect(executor.starts).toHaveLength(0);
   });
 
-  it("retries an outstanding snapshot deletion on a later stop", async () => {
-    provider = fakeSandboxProvider({ failDeleteArtifact: true });
+  it("leaves the ValidationRun and PreparedChange historically intact", async () => {
     seedRunning();
-    await stop();
-
-    // The storage call now succeeds. The session is already terminal, so the
-    // retry must fix the deletion without reopening it (§33).
-    provider = fakeSandboxProvider();
-    const again = await stop();
-
-    expect(again.kind).toBe("already_stopped");
-    expect(provider.deletedArtifacts()).toEqual([PREVIEW_SNAPSHOT_ID]);
-    expect(db.rows("preview_sessions")[0].artifact_deleted_at).toBeTruthy();
-    expect(db.rows("validation_runs")[0].artifact_deleted_at).toBeTruthy();
-  });
-
-  it("records preview spend against the preview, distinguishable from validation", async () => {
-    seedRunning();
-    // A sandbox that actually exists, so the ledger records what the provider
-    // measured rather than the nulls of a preview that never provisioned.
-    await provider.create({
-      name: "vibe-preview-1",
-      source: { kind: "snapshot", snapshotId: PREVIEW_SNAPSHOT_ID },
-      networkPolicy: { mode: "deny_all" },
-      ports: [PREVIEW_BUDGETS.port],
-      timeoutMs: PREVIEW_BUDGETS.ttlMs,
-      env: {},
-    });
 
     await stop();
 
-    const [usage] = db.rows("sandbox_usage_events");
-    expect(usage.operation).toBe("change_preview");
-    expect(usage.preview_session_id).toBe("preview_1");
-    // Measured, never estimated: Vercel exposes no attributable per-sandbox
-    // amount, and a rate-card figure would be a guess in an accounting field.
-    expect(usage.provider_cost_usd).toBeNull();
-    expect(usage.active_cpu_ms).toBe(1234);
+    // Only the artifact's availability is ever lost, and the workflow is what
+    // records even that. Rewriting the past to tidy up storage would make "this
+    // change validated" untrue after the fact (§20).
+    expect(db.rows("validation_runs")[0].status).toBe("passed");
+    expect(db.rows("prepared_changes")[0].status).toBe("prepared");
   });
 });
 

@@ -44,6 +44,8 @@ export type PreviewCardState =
   | "ready_to_start"
   | "starting"
   | "running"
+  /** Teardown has been claimed and handed to the durable workflow (§14). */
+  | "stopping"
   | "failed"
   | "stopped"
   | "expired";
@@ -107,6 +109,19 @@ export function buildPreviewCard(input: PreviewCardInput, now: Date = new Date()
     readyAt: null,
     revalidationRequired: false,
   } as const;
+
+  // A claimed teardown outranks everything, including the deadline. The work is
+  // already in flight, so reporting the session as expired would invite a second
+  // stop for something being stopped.
+  if (input.session?.status === "stopping") {
+    return {
+      ...empty,
+      state: "stopping",
+      previewSessionId: input.session.id,
+      operationRunId: input.session.operationRunId,
+      expiresAt: input.session.expiresAt,
+    };
+  }
 
   // A live session outranks everything below it, including artifact state. The
   // artifact is deleted at teardown, so a *running* preview whose artifact is
@@ -175,6 +190,7 @@ function terminalSession(input: PreviewCardInput, now: Date): PreviewCard | null
   const unconverged =
     (session.status === "starting" || session.status === "running") &&
     isPreviewExpired(session, now);
+
 
   // A usable artifact outranks a *settled* session. Previewed, stopped, then
   // re-validated is a real sequence, and reporting it as "Preview stopped"

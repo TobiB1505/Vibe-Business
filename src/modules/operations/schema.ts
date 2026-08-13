@@ -26,6 +26,13 @@ export const OPERATION_TYPES = [
   "change_validation",
   /** Temporary preview of a validated artifact (Sprint 10B-2 §23). */
   "change_preview",
+  /**
+   * Ending a preview: stop, delete the artifact, record the spend.
+   *
+   * Durable because it needs the privileged ledger writer, not because it is
+   * slow. Manual stop and expiry both converge here (ADR 0016 §14).
+   */
+  "preview_teardown",
 ] as const;
 export type OperationType = (typeof OPERATION_TYPES)[number];
 

@@ -12,8 +12,8 @@ import {
 import { buildOperationView, type OperationView } from "@/modules/operations/view";
 import type { SandboxProvider } from "@/modules/validation/sandbox-port";
 import { PREVIEW_BUDGETS } from "./budgets";
-import { computePreviewIdentity } from "./identity";
-import { resolvePreviewOrigin, teardownPreview } from "./orchestrator";
+import { computePreviewIdentity, computeTeardownIdentity } from "./identity";
+import { resolvePreviewOrigin } from "./orchestrator";
 import {
   PREVIEW_POLICY_VERSION,
   isPreviewExpired,
@@ -22,18 +22,16 @@ import {
   type PreviewFailureCode,
   type PreviewSession,
   type PreviewStatus,
+  type TeardownReason,
 } from "./schema";
 import { buildPreviewCard, type PreviewCard } from "./view";
 import {
   claimPreviewSession,
-  completePreviewSession,
+  claimPreviewTeardown,
   findActivePreviewByIdentity,
   getLatestPreviewForPreparedChange,
   getPreviewSession,
   getValidatedArtifact,
-  markPreviewArtifactDeleted,
-  markValidatedArtifactDeleted,
-  recordPreviewSandboxUsage,
 } from "./store";
 
 /**
@@ -339,6 +337,7 @@ export type PreviewView = {
 export async function getPreviewStatus(
   supabase: SupabaseClient,
   provider: SandboxProvider,
+  executor: OperationExecutor,
   params: { projectId: string; userId: string; previewSessionId: string },
 ): Promise<PreviewView | null> {
   if (!(await ownsProject(supabase, params))) return null;
@@ -362,11 +361,12 @@ export async function getPreviewStatus(
   };
 
   if (isPreviewExpired(session)) {
-    // Converge before answering, so the answer is not "expired" beside a row
-    // that still claims to be running.
+    // Hand it to the same teardown a manual stop uses. This read is what
+    // *notices* the deadline; it does not do the work, because the work needs
+    // the privileged ledger writer and a request never gets one.
     if (session.status === "starting" || session.status === "running") {
-      await expirePreview(supabase, provider, session);
-      return { ...base, status: "expired" };
+      await requestTeardown(supabase, executor, session, "expired");
+      return { ...base, status: "stopping" };
     }
     return base;
   }
@@ -434,29 +434,39 @@ export async function getPreviewCard(
 }
 
 export type StopPreviewOutcome =
-  | { kind: "stopped"; previewSessionId: string; cleanupComplete: boolean }
-  /** Already terminal. One logical result, no error (§24, §32). */
+  | { kind: "stopping"; previewSessionId: string; operation: OperationView }
+  /** Already terminal, or already being torn down. One logical result (§24). */
   | { kind: "already_stopped"; previewSessionId: string; status: PreviewStatus }
   | { kind: "failed"; error: "project_not_found" | "preview_failed" };
 
 /**
- * Stops a preview the caller owns (§24).
+ * Ends a preview the caller owns (§24, and revised after the first dogfood).
  *
- * Runs inline rather than as a durable operation, deliberately: it is two
- * provider calls and two writes, none of which is measured in tens of seconds,
- * so ADR 0013's durability threshold does not apply. What it *is* is
- * irreversible — the snapshot goes — which is why it is only ever reached
- * through an authorized, explicit call.
+ * ## Why this no longer does the work
  *
- * Idempotent on every axis. A session that is already terminal returns its
- * existing status rather than an error; stopping a stopped sandbox and deleting
- * a deleted snapshot are successes; and a second call cannot produce a second
- * ledger row, because the terminal write is conditional on a live status and
- * the ledger has a unique index on the session.
+ * It used to: stop the sandbox, delete the snapshot, write the ledger, mark the
+ * session — all inline, on the reasoning that four operations measured in
+ * seconds do not need durability (ADR 0016, original §11).
+ *
+ * The first real stop was correct in every visible way and recorded no spend at
+ * all. `sandbox_usage_events` grants SELECT only, deliberately — a ledger the
+ * client can write is not a ledger — and an inline stop runs under the
+ * cookie-scoped client, so the insert was refused by RLS and swallowed.
+ *
+ * The threshold that matters was never duration. It is whether the work needs
+ * the privileged writer, and only durable execution may hold it (CLAUDE.md rule
+ * 53). So this claims the session and hands it to a workflow.
+ *
+ * ## Idempotency lives in the claim
+ *
+ * `claimPreviewTeardown` moves the session out of `starting`/`running` in one
+ * conditional statement. A double click, or an expiry racing a manual stop,
+ * finds nothing left to claim and starts no second teardown — and the
+ * operation's own unique index is the second guard behind that.
  */
 export async function stopChangePreview(
   supabase: SupabaseClient,
-  provider: SandboxProvider,
+  executor: OperationExecutor,
   params: { projectId: string; userId: string; previewSessionId: string },
 ): Promise<StopPreviewOutcome> {
   if (!(await ownsProject(supabase, params))) {
@@ -469,168 +479,74 @@ export async function stopChangePreview(
   });
   if (!session) return { kind: "failed", error: "project_not_found" };
 
-  if (session.status === "stopped" || session.status === "expired" || session.status === "failed") {
-    // Terminal already. The snapshot deletion may still be outstanding from a
-    // previous attempt, so retry that half without reopening the session (§33).
-    if (session.artifactDeletedAt === null) {
-      await retryArtifactDeletion(supabase, provider, session);
-    }
-    return { kind: "already_stopped", previewSessionId: session.id, status: session.status };
-  }
-
-  const teardown = await teardownPreview(
-    provider,
-    { previewSessionId: session.id, snapshotId: session.artifactSnapshotId },
-    { deleteArtifact: true },
-  );
-
-  const persisted = await completePreviewSession(supabase, {
-    previewSessionId: session.id,
-    projectId: params.projectId,
-    status: "stopped",
-    failureCode: null,
-    cleanupStatus: teardown.cleanup,
-    artifactDeleted: teardown.artifactDeleted,
-  });
-
-  if (teardown.artifactDeleted) {
-    await markValidatedArtifactDeleted(supabase, {
-      validationRunId: session.validationRunId,
-      projectId: params.projectId,
-    });
-  }
-
-  if (persisted) {
-    await recordPreviewSandboxUsage(supabase, {
-      projectId: params.projectId,
-      userId: params.userId,
-      previewSessionId: session.id,
-      provider: session.provider,
-      runtime: teardown.runtime ?? session.runtime,
-      status: "passed",
-      sandboxDurationMs: elapsed(session.startedAt),
-      usage: teardown.usage,
-      cleanupStatus: teardown.cleanup,
-      failureCode: null,
-    });
-
-    await recordAuditEvent(supabase, {
-      userId: params.userId,
-      eventType: "change_preview.stopped",
-      metadata: {
-        projectId: params.projectId,
-        previewSessionId: session.id,
-        validationRunId: session.validationRunId,
-        cleanup: teardown.cleanup,
-        artifactDeleted: teardown.artifactDeleted,
-      },
-    });
-  }
-
-  return {
-    kind: "stopped",
-    previewSessionId: session.id,
-    // Reported rather than hidden. A preview that stopped correctly but whose
-    // snapshot survived is a real, different outcome, and the retry path above
-    // is what fixes it (§19).
-    //
-    // `not_provisioned` counts as complete: nothing is running, which is what
-    // cleanup exists to produce. Only the two genuine failures do not.
-    cleanupComplete:
-      teardown.artifactDeleted &&
-      teardown.cleanup !== "stop_failed" &&
-      teardown.cleanup !== "artifact_delete_failed",
-  };
-}
-
-/** Lazy convergence for a session that outlived its deadline (§25). */
-async function expirePreview(
-  supabase: SupabaseClient,
-  provider: SandboxProvider,
-  session: PreviewSession,
-): Promise<void> {
-  const teardown = await teardownPreview(
-    provider,
-    { previewSessionId: session.id, snapshotId: session.artifactSnapshotId },
-    { deleteArtifact: true },
-  );
-
-  const persisted = await completePreviewSession(supabase, {
-    previewSessionId: session.id,
-    projectId: session.projectId,
-    status: "expired",
-    failureCode: null,
-    cleanupStatus: teardown.cleanup,
-    artifactDeleted: teardown.artifactDeleted,
-  });
-
-  if (teardown.artifactDeleted) {
-    await markValidatedArtifactDeleted(supabase, {
-      validationRunId: session.validationRunId,
-      projectId: session.projectId,
-    });
-  }
-
-  if (persisted) {
-    await recordPreviewSandboxUsage(supabase, {
-      projectId: session.projectId,
-      userId: session.userId,
-      previewSessionId: session.id,
-      provider: session.provider,
-      runtime: teardown.runtime ?? session.runtime,
-      status: "passed",
-      sandboxDurationMs: elapsed(session.startedAt),
-      usage: teardown.usage,
-      cleanupStatus: teardown.cleanup,
-      failureCode: null,
-    });
-
-    await recordAuditEvent(supabase, {
-      userId: session.userId,
-      eventType: "change_preview.expired",
-      metadata: {
-        projectId: session.projectId,
-        previewSessionId: session.id,
-        validationRunId: session.validationRunId,
-        cleanup: teardown.cleanup,
-        artifactDeleted: teardown.artifactDeleted,
-      },
-    });
-  }
+  return requestTeardown(supabase, executor, session, "stopped");
 }
 
 /**
- * Retries a snapshot deletion that failed earlier.
+ * Starts the teardown workflow for a session, whatever ended it.
  *
- * The whole reason `artifact_delete_failed` is a recorded state rather than a
- * swallowed error: the customer's filesystem is still in provider storage, and
- * something has to be able to try again without reopening a closed session.
+ * Manual stop and expiry converge here rather than each doing their own
+ * teardown, because the parts that differ are a status and a sentence, and the
+ * parts that are the same are the ones that cost money.
  */
-async function retryArtifactDeletion(
+async function requestTeardown(
   supabase: SupabaseClient,
-  provider: SandboxProvider,
+  executor: OperationExecutor,
   session: PreviewSession,
-): Promise<void> {
-  try {
-    await provider.deleteArtifact(session.artifactSnapshotId);
-  } catch {
-    // Still not deletable. The artifact's own provider-minimum 24-hour TTL
-    // remains the backstop, and the session keeps saying deletion is outstanding.
-    return;
-  }
-
-  await markPreviewArtifactDeleted(supabase, {
+  reason: TeardownReason,
+): Promise<StopPreviewOutcome> {
+  const claimed = await claimPreviewTeardown(supabase, {
     previewSessionId: session.id,
     projectId: session.projectId,
+    reason,
   });
-  await markValidatedArtifactDeleted(supabase, {
-    validationRunId: session.validationRunId,
+
+  if (!claimed) {
+    // Already terminal, or another teardown claimed it first. Both are the same
+    // logical result: this preview is ending and nothing further is owed.
+    const current = await getPreviewSession(supabase, {
+      projectId: session.projectId,
+      previewSessionId: session.id,
+    });
+    return {
+      kind: "already_stopped",
+      previewSessionId: session.id,
+      status: current?.status ?? session.status,
+    };
+  }
+
+  const created = await createOperationRun(supabase, {
     projectId: session.projectId,
+    userId: session.userId,
+    operationType: "preview_teardown",
+    inputIdentity: computeTeardownIdentity(session.id),
+    subjectId: session.id,
   });
+
+  if (!created.ok) {
+    if (created.error === "already_active") {
+      const running = await findActiveOperationByIdentity(supabase, {
+        projectId: session.projectId,
+        operationType: "preview_teardown",
+        inputIdentity: computeTeardownIdentity(session.id),
+      });
+      if (running) {
+        return { kind: "stopping", previewSessionId: session.id, operation: view(running) };
+      }
+    }
+    return { kind: "failed", error: "preview_failed" };
+  }
+
+  const started = await executor.start({
+    operationId: created.operation.id,
+    operationType: "preview_teardown",
+  });
+
+  // The sandbox is still running and the session now says `stopping`. Reporting
+  // failure here is honest: nothing has been torn down, and the provider
+  // timeout plus the snapshot TTL remain the backstops until a retry succeeds.
+  if (!started.ok) return { kind: "failed", error: "preview_failed" };
+
+  return { kind: "stopping", previewSessionId: session.id, operation: view(created.operation) };
 }
 
-function elapsed(startedAt: string | null): number | null {
-  if (!startedAt) return null;
-  const started = Date.parse(startedAt);
-  return Number.isFinite(started) ? Date.now() - started : null;
-}

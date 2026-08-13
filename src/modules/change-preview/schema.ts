@@ -196,6 +196,10 @@ export const PREVIEW_FAILURE_CODES = [
 export type PreviewFailureCode = (typeof PREVIEW_FAILURE_CODES)[number];
 
 /** Whether the sandbox was verifiably torn down. Recorded, never a verdict. */
+/** The terminal status a teardown is heading for. */
+export const TEARDOWN_REASONS = ["stopped", "expired"] as const;
+export type TeardownReason = (typeof TEARDOWN_REASONS)[number];
+
 export const PREVIEW_CLEANUP_STATUSES = [
   "stopped",
   "stop_failed",
@@ -253,6 +257,15 @@ export type PreviewSession = {
   status: PreviewStatus;
   stage: PreviewStage;
   failureCode: PreviewFailureCode | null;
+  /**
+   * Why teardown was requested, once it has been (Sprint 10B-3).
+   *
+   * Set by whoever initiates it and read by the durable workflow, because what
+   * crosses a step boundary is an operation id and nothing else. Deriving it
+   * later from `expires_at` would report a manual stop made seconds before the
+   * deadline as an expiry, once queue latency is counted.
+   */
+  teardownReason: TeardownReason | null;
   cleanupStatus: PreviewCleanupStatus | null;
 
   previewIdentity: string;

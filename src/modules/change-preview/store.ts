@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { SandboxUsage } from "@/modules/validation/sandbox-port";
 import type {
+  TeardownReason,
   PreviewCleanupStatus,
   PreviewFailureCode,
   PreviewProfile,
@@ -31,6 +32,7 @@ const COLUMNS =
   "id, project_id, user_id, prepared_change_id, validation_run_id, operation_run_id, " +
   "artifact_snapshot_id, preview_profile, preview_profile_version, preview_policy_version, " +
   "provider, runtime, port, status, stage, failure_code, cleanup_status, preview_identity, " +
+  "teardown_reason, " +
   "started_at, ready_at, expires_at, stopped_at, artifact_deleted_at, created_at, updated_at";
 
 type Row = Record<string, unknown>;
@@ -53,6 +55,7 @@ function mapRow(row: Row): PreviewSession {
     status: row.status as PreviewStatus,
     stage: row.stage as PreviewStage,
     failureCode: (row.failure_code as PreviewFailureCode | null) ?? null,
+    teardownReason: (row.teardown_reason as TeardownReason | null) ?? null,
     cleanupStatus: (row.cleanup_status as PreviewCleanupStatus | null) ?? null,
     previewIdentity: String(row.preview_identity),
     startedAt: (row.started_at as string | null) ?? null,
@@ -291,6 +294,33 @@ export async function claimPreviewSession(
   if (!data) return { ok: false, error: "persistence_failed" };
 
   return { ok: true, session: mapRow(data as unknown as Row) };
+}
+
+/**
+ * Claims a preview for teardown (Sprint 10B-3).
+ *
+ * The transition that makes teardown safe to hand to a workflow: the session
+ * leaves `starting`/`running` in one conditional statement, so a second stop —
+ * or an expiry racing a manual stop — finds nothing to claim and starts no
+ * second teardown. Returns whether *this* call claimed it.
+ *
+ * The reason is written here, by the initiator, because a workflow step
+ * receives an operation id and re-derives everything else from the database.
+ */
+export async function claimPreviewTeardown(
+  supabase: SupabaseClient,
+  params: { previewSessionId: string; projectId: string; reason: TeardownReason },
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("preview_sessions")
+    .update({ status: "stopping", teardown_reason: params.reason })
+    .eq("id", params.previewSessionId)
+    .eq("project_id", params.projectId)
+    .in("status", ["starting", "running"])
+    .select("id");
+
+  if (error) throw error;
+  return (data ?? []).length > 0;
 }
 
 /** Progress. Scoped to live statuses so a replay cannot amend a finished session. */

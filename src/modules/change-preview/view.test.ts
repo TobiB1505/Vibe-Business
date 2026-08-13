@@ -38,6 +38,7 @@ function session(overrides: Partial<PreviewSession> = {}): PreviewSession {
     status: "running",
     stage: "completed",
     failureCode: null,
+    teardownReason: null,
     cleanupStatus: null,
     previewIdentity: "p".repeat(64),
     startedAt: EARLIER,

@@ -202,7 +202,11 @@ export function PreviewPanel({
   // `starting` and `running` are the two states with something to poll for.
   // Anything else is settled, and polling it would be a request every two
   // seconds forever for an answer that is not coming.
-  const shouldPoll = previewState === "starting" || previewState === "running" || intent === "start";
+  const shouldPoll =
+    previewState === "starting" ||
+    previewState === "running" ||
+    previewState === "stopping" ||
+    intent === "start";
 
   const poll = useCallback(async () => {
     if (!sessionId) return;
@@ -352,6 +356,16 @@ export function PreviewPanel({
             Anyone with the preview URL may be able to access it until it expires.
           </p>
           <NotApproved />
+        </div>
+      ) : previewState === "stopping" ? (
+        <div className="space-y-2">
+          <p className="text-sm text-zinc-300">Stopping preview…</p>
+          {/* The workflow owns the sandbox, the snapshot and the ledger from
+              here. Saying "stopped" before it confirms would be the one claim
+              this panel is in no position to make (§12). */}
+          <p className="text-xs text-zinc-500">
+            Vibe is stopping the environment and releasing the validated artifact.
+          </p>
         </div>
       ) : previewState === "needs_validation" || previewState === "not_available" ? (
         <div className="space-y-2">

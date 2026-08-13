@@ -7,19 +7,23 @@
 | 10B-1 — ValidatedArtifact capture | ✅ Complete (`f18aef3`) |
 | 10B-2 — Preview runtime & lifecycle | ✅ Complete (`b0817cb`) |
 | 10B-3 — Preview UI | ✅ Complete (`9152c46`) |
-| 10B-3 — Real preview dogfood | ⛔ Blocked — see [Dogfood](#real-dogfood-blocked) |
+| 10B-3 — Real preview dogfood | ✅ Core flow verified end to end |
 
-**Sprint 10B is NOT complete.** The capability is built, tested, deployed and
-reachable in the UI, but **no preview has ever been started against a real
-repository**. Until it has, four things remain claims rather than observations:
+**Sprint 10B is not closed yet.** The core flow has been observed end to end on
+2026-08-13 — artifact captured, preview started and reachable, public edge
+opened by a human, stopped, snapshot deleted. All four of the sprint's open
+claims became observations:
 
-- that loopback works under `deny-all` egress;
-- that the public preview edge actually serves;
-- that teardown really deletes the snapshot at the provider;
-- that the whole flow works end to end.
+| Claim | Result |
+| --- | --- |
+| Loopback works under `deny-all` egress | ✅ confirmed — health check passed, egress untouched |
+| The public preview edge serves | ✅ confirmed — page rendered in a browser |
+| Teardown deletes the snapshot at the provider | ✅ confirmed |
+| The whole flow works end to end | ✅ 14.6 s from start to reachable |
 
-The sprint stays open until those are observed. See
-[Real dogfood](#real-dogfood-blocked).
+What remains open is the **durable teardown**, rewritten after the dogfood
+exposed a defect no test could see (see [Teardown](#teardown-moved-into-durable-execution)).
+That path has not been exercised against a real preview.
 
 ## Goal
 
@@ -271,126 +275,162 @@ loop is now bounded by attempt count as well as by the clock.
   policy, no timeout and no secret handling, and can fail nothing that
   previously passed.
 
-## Real dogfood — blocked
+## Real dogfood — 2026-08-13
 
-**No preview has been started against a real repository. Nothing below is an
-observation; it is a plan.**
+### What was observed
 
-### Why it is blocked
+One new ValidationRun under `sandbox-policy-v5` captured an artifact
+(`snap_wxSSmjhOgvWZm9kZXz8v7ZPFNWMo`). One preview was started from it:
 
-The dogfood has to run against the deployed branch, through the real UI, as the
-real user. Three facts make that impossible from here:
-
-1. The branch deployment
-   (`vibe-business-930iwjc7c-planner-agent.vercel.app`, commit `9152c46`,
-   state `READY`) is behind **Vercel SSO** — `ssoProtection` is enabled for
-   `all_except_custom_domains`, and a branch deployment has no custom domain.
-2. Reaching the Vibe app behind it needs a **Supabase login**. Sessions are
-   per-origin cookies, so an existing session on production does not carry to a
-   branch deployment.
-3. Both gates are password entry, which this assistant does not do, and no
-   browser with an existing session was available.
-
-The alternative — writing rows directly, or calling the service outside the UI
-— was rejected. It would skip the confirmation flow, the durable workflow and
-the real provider, which are the three things the dogfood exists to exercise.
-A green result obtained that way would be a worse outcome than an honest gap.
-
-### Baseline, verified in the live database
-
-Confirmed before any dogfood, so the run starts from a known state:
-
-| Fact | Value |
+| | |
 | --- | --- |
-| PreparedChange | `3480ad0a-db63-4b9d-8073-ea5ef9a72508` |
-| Branch | `vibe/seo-foundations-cc32273131c5` |
-| Commit | `2f05958e3410deaeb97029861abc05889139b4a7` |
-| Prepared status | `prepared` |
-| Latest passing ValidationRun | `33923863-5853-4aa4-ac27-7ffef2e08c17`, `sandbox-policy-v3` |
-| Artifacts ever captured | **0** |
-| PreviewSessions | **0** |
-| `change_preview` operations | **0** |
-| Preview usage rows | **0** |
-| Validation usage rows | 9 (historical) |
+| PreviewSession | `5dc487ed-7caa-4b7f-ab6d-6f29280b42db` |
+| Time to reachable | **14.6 s** |
+| Port | 3000, the only one exposed |
+| Runtime | `node22` — the snapshot's own image, as designed |
+| TTL | 15 minutes, `expires_at` persisted at claim time |
+| AI calls | **0** |
+| GitHub writes | **0** |
 
-Two consequences worth stating, because they are what makes the plan work:
+**Loopback under `deny-all`: confirmed.** `ready_at` is only written when the
+health probe succeeds, so the sprint's one unproven assumption is now an
+observation — and the egress policy was never touched to get it.
 
-- The last pass ran under `sandbox-policy-v3` and the current policy is **v4**,
-  so the validation identity differs and a new validation genuinely runs rather
-  than reusing the stored pass. Exactly one new ValidationRun, as intended.
-- No historical run has `buildIdentityDigests` — that recording landed with
-  10B-2 — so the new run is also what makes the restore-time build-identity
-  comparison possible at all.
+**Public edge: confirmed.** The URL was opened manually and the page rendered.
+Recorded as a separate observation from the loopback result, because they prove
+different things.
 
-Until the new run exists, the UI will correctly show **Preview artifact
-unavailable** with a **Validate again** button for this change. That is the
-first thing to confirm on screen, and it costs nothing.
+**Stop and cleanup: confirmed.** Sandbox stopped, snapshot deleted, artifact
+marked deleted on both the session and the run, `Open preview` gone. The
+ValidationRun stayed `passed`, the PreparedChange stayed `prepared`, and the
+repository was untouched.
 
-### The run, when someone can sign in
+Human observation only: the page renders. That is not approval, and Sprint 10B
+has no approval gate.
 
-1. Open the branch deployment, sign in, open the project.
-2. On the prepared change, confirm `Preview` reads *artifact unavailable* and
-   that opening the page started **nothing** (`operation_runs` unchanged).
-3. Click **Validate again**. One ValidationRun, `sandbox-policy-v4`. Record:
-   run id, operation id, result, `artifact_snapshot_id`, `artifact_expires_at`,
-   credential scrub, build-identity verification, sandbox usage, cleanup.
-4. Verify in the database, **before** previewing: run `passed`, artifact
-   present, belonging to that run and to commit `2f05958`, not deleted, expiry
-   in the future.
-5. Click **Start temporary preview** and confirm the public-exposure dialog.
-   Exactly one start. Record: session id, operation id, profile and policy
-   versions, runtime, integrity result, network policy, server start duration,
-   health result, time to ready, port, expiry, usage, AI calls (expect `0`).
-6. **Record the loopback result explicitly.** This is the one open technical
-   question in the sprint: does a loopback probe reach the local Next.js
-   process while egress is `deny-all`? If it fails, classify the provider
-   behaviour and **stop** — do not widen egress to make it pass.
-7. Click **Open preview**. This is the **first public-edge verification**, and
-   it is a separate observation from the loopback result. Check the homepage
-   renders, the origin is the sandbox preview origin, and `/robots.txt` and
-   `/sitemap.xml` respond. Do not automate a crawl.
-8. Note human observations as **observations**. Not approval — Sprint 10B has
-   no approval gate.
-9. Confirm no secrets reached the preview (GitHub token, Anthropic key,
-   Supabase service role, Browserbase key, Vercel management token, customer
-   production values). Record invariants, never values.
-10. Click **Stop preview** — do not just wait for expiry. Then verify
-    independently: session `stopped`, sandbox gone at the provider, snapshot
-    deleted, artifact marked deleted, **Open preview** gone, no origin
-    returned, PreparedChange still `prepared`, ValidationRun still `passed`,
-    repository unchanged.
-11. Record provider usage for both sandboxes. `provider_cost_usd` stays `null`
-    unless an exact attributable amount exists; any rate-card figure is labelled
-    an **estimate** and is not persisted as accounting truth.
+### What it took to get there
 
-### Then, and only then
+Four rounds, and the value of each is in what it eliminated rather than what it
+fixed:
 
-Mark 10B-3 dogfood ✅ and Sprint 10B complete, recording failures honestly if
-any occur and preserving the intermediate findings above rather than tidying
-them away.
+| Failure | Cause | Fix |
+| --- | --- | --- |
+| `capture_failed`, no detail | a bare `catch {}` | record the sanitized provider error |
+| `Status code 400 is not ok` | `Error.message` only | allowlisted extraction of the provider's own fields |
+| HTTP 400 on snapshot | expiry below the provider's 24 h minimum | TTL 60 min → 24 h, `sandbox-policy-v4` → `v5` |
+| `sandbox_lost` | **the real cause** — see below | write the artifact with the verdict |
 
-## Known limitations carried into 10C
+The last one is the sprint's most useful lesson. The snapshot had been
+succeeding all along; the Vercel activity log showed it created, 1.14 GB, seven
+seconds before Vibe reported `sandbox_lost`.
 
-- **Loopback under `deny-all` is still an assumption.** The provider documents
-  the network policy as governing egress and loopback never leaves the VM, but
-  no real preview has confirmed it. If it is wrong, the symptom is an honest
-  `preview_health_check_failed`, and the fix is a narrower provider mechanism —
-  never a wider egress policy.
-- **Public-edge reachability is unverified.** The health check plus the
-  provider's route is what `preview_available` claims; the edge itself has
-  never been opened.
-- **Expiry convergence is lazy.** A session nobody reads keeps a stale
-  `running` row until someone does. The VM stops regardless (provider timeout)
-  and the snapshot expires regardless (provider-minimum 24-hour TTL), so nothing leaks — but
-  the row is not self-healing and the product does not pretend it is.
+`validation_runs_artifact_only_when_passed` refuses an artifact on a row that
+is not `passed`, and the artifact was written by the cleanup step — which runs
+*before* the finalize step that records the verdict. Postgres rejected it, the
+step failed, the retry found a sandbox the successful snapshot had already
+stopped, and reported the only thing it could see.
+
+**No test could see it**: the in-memory database does not evaluate CHECK
+constraints, so the write production refused succeeded in every test. Both
+artifact CHECKs are now modelled there, and reinstating the old write order
+fails a test.
+
+Two diagnostics were added along the way and both earned their place —
+`inspect()` on the provider port, which turned `sandbox_lost` into
+`status=stopped sessionTimeout=900000 livedMs=282318`, and a session-lifetime
+fix that worked and changed nothing, which is what proved the timeout theory
+wrong.
+
+## Teardown moved into durable execution
+
+The dogfood's second finding, and the reason this sprint is not closed.
+
+The stop was correct in every visible way and recorded **no provider spend at
+all**. `sandbox_usage_events` grants `SELECT` and nothing else — deliberately,
+because a ledger the client can write is not a ledger — and an inline stop runs
+under the cookie-scoped client, so its insert was refused by RLS and swallowed
+by a best-effort handler that exists so a ledger problem cannot take down the
+operation that earned it. Three correct decisions composed into a silent one.
+
+ADR 0016 originally recorded that teardown runs inline because it is well under
+ADR 0013's durability threshold. **The threshold was the wrong test.** What
+decides is whether the work needs the privileged writer, and only durable
+execution may hold one (CLAUDE.md rule 53).
+
+Manual stop and expiry now converge on one workflow:
+
+```
+terminate ─▶ record usage ─▶ converge
+ destructive   retryable      retryable
+```
+
+- **Cleanup outranks accounting.** A failed ledger write never resurrects or
+  retains the sandbox; the ledger step retries alone.
+- **Retries cannot double-count.** A unique index on `preview_session_id` means
+  a second insert loses at the database.
+- **The request only claims.** One conditional `UPDATE` out of
+  `starting`/`running`, so a double click or an expiry racing a manual stop
+  starts no second teardown.
+- **The reason is persisted, not inferred.** After queue latency, deriving it
+  from `expires_at` would report a manual stop made seconds before the deadline
+  as an expiry.
+
+Refused, on instruction and on merit: an owner `INSERT` policy (makes the ledger
+client-writable) and a service-role helper called from a request (satisfies the
+module boundary as text while breaking what it is for).
+
+Recorded in [ADR 0016 §14](../decisions/0016-temporary-preview-isolation.md),
+which preserves the original inline decision rather than rewriting it.
+
+## Validation
+
+```
+pnpm lint         ✅
+pnpm typecheck    ✅
+pnpm test         ✅  1849 tests, 98 files
+pnpm build        ✅
+pnpm db:status    ✅  no pending migrations
+pnpm db:lint      ✅  no schema errors
+```
+
+### Mutation validation — teardown
+
+| # | Mutation | Result |
+| --- | --- | --- |
+| 1 | Stop writes the ledger inline again (the RLS defect) | ✅ fails |
+| 2 | Teardown skips the ledger step | ✅ fails |
+| 3 | The claim no longer gates a second teardown | ✅ fails |
+| 4 | The ledger loses its idempotency index | ✅ fails |
+| 5 | Ledger runs before cleanup (accounting outranks cleanup) | ✅ fails |
+| 6 | Ledger ownership taken from the session, not the operation | ⚪ equivalent |
+
+Mutation 6 is reported honestly as **equivalent, not a gap**: `getPreviewSession`
+already filters on the operation's project, so a session is only ever found when
+the two agree. There is no behaviour to break.
+
+## Remaining before Sprint 10B closes
+
+1. One preview started and stopped through the **durable teardown**, confirming
+   a `sandbox_usage_events` row now exists with `operation = change_preview`.
+   The path is fully tested against doubles; it has not met the real provider.
+2. Then mark Sprint 10B complete.
+
+## Known limitations carried forward
+
+- **Expiry convergence is lazy.** A session nobody reads keeps a stale `running`
+  row until someone does. The VM stops regardless (provider timeout) and the
+  snapshot expires regardless (provider-minimum 24-hour TTL), so nothing leaks —
+  but the row is not self-healing and the product does not pretend it is.
+- **The artifact retention backstop is 24 hours, not the hour originally
+  chosen.** Vercel rejects any shorter expiry. Explicit deletion at teardown is
+  unchanged, so the expected lifetime is still minutes.
 - **A preview is usually a one-shot.** The artifact is deleted at teardown, so a
   second preview normally costs a new validation. The UI says so; there is no
   automatic refresh.
 - **`next start` may not suit every Next.js output mode.** `output: 'export'`
-  has no server and `standalone` has a different entrypoint. Both currently
-  fail as `preview_start_failed`, which is honest but unhelpful copy. Worth a
-  narrower code once a real repository hits it.
-- **No component tests.** The project has no React testing tooling, and the
-  convention is to test pure view functions instead — which the preview state
-  machine is. Adding a test renderer for one panel was not worth new
-  infrastructure.
+  has no server and `standalone` has a different entrypoint. Both currently fail
+  as `preview_start_failed` — honest, but unhelpful copy.
+- **Orphaned snapshots from the four failed runs** were left in provider storage
+  and expire on the 24-hour TTL.
+- **No component tests.** The project has no React testing tooling and tests
+  pure view functions instead, which the preview state machine is.

@@ -69,3 +69,17 @@ export function computePreviewIdentity(params: {
 export function previewSandboxNameFor(previewSessionId: string): string {
   return `vibe-preview-${previewSessionId.replace(/-/g, "").slice(0, 20)}`;
 }
+
+/**
+ * The operation identity for tearing one preview down.
+ *
+ * A preview ends once, so the session id is the whole question. Hashing it into
+ * the 64-character shape `operation_runs.input_identity` requires makes the
+ * unique index the second guard behind the session claim: two teardown requests
+ * for the same session cannot both create an operation.
+ */
+export function computeTeardownIdentity(previewSessionId: string): string {
+  return createHash("sha256")
+    .update(JSON.stringify(["preview_teardown", previewSessionId]))
+    .digest("hex");
+}
