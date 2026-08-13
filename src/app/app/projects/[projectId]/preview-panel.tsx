@@ -52,7 +52,13 @@ import {
 
 const POLL_INTERVAL_MS = 2000;
 
-type Origin = { origin: string | null; expiresAt: string; verdict: string | null };
+type Live = {
+  /** The server's own status for this session, ahead of the next server render. */
+  status: string;
+  origin: string | null;
+  expiresAt: string;
+  verdict: string | null;
+};
 
 function remaining(expiresAt: string, now: number): string | null {
   const deadline = Date.parse(expiresAt);
@@ -159,7 +165,7 @@ export function PreviewPanel({
   const [state, setState] = useState<StartPreviewActionState>(null);
   const [pending, startTransition] = useTransition();
   const [stopping, setStopping] = useState(false);
-  const [live, setLive] = useState<Origin | null>(null);
+  const [live, setLive] = useState<Live | null>(null);
   const [stage, setStage] = useState<PreviewStage | null>(card.stage);
   const [now, setNow] = useState(() => Date.now());
 
@@ -170,10 +176,25 @@ export function PreviewPanel({
     : null;
   const sessionId = startedSessionId ?? card.previewSessionId;
 
+  /**
+   * The session's state, preferring what the poll just learned.
+   *
+   * The card is a server render, and between the poll seeing `running` and
+   * `router.refresh()` landing there is a window where the panel knows the
+   * preview is ready and renders "Starting…" anyway. The first real preview
+   * spent that window showing a user a working preview they could not open.
+   *
+   * So the poll's answer wins while it is fresher. It is the same server
+   * authority either way — this read went through `getPreviewStatus`, which
+   * checks ownership and expiry — just newer than the last render.
+   */
+  const previewState =
+    live?.status === "running" && card.state === "starting" ? "running" : card.state;
+
   // `starting` and `running` are the two states with something to poll for.
   // Anything else is settled, and polling it would be a request every two
   // seconds forever for an answer that is not coming.
-  const shouldPoll = card.state === "starting" || card.state === "running" || pending;
+  const shouldPoll = previewState === "starting" || previewState === "running" || pending;
 
   const poll = useCallback(async () => {
     if (!sessionId) return;
@@ -181,7 +202,12 @@ export function PreviewPanel({
     const result = await getPreviewStatusAction(projectId, sessionId);
     if (!result.ok) return;
 
-    setLive({ origin: result.origin, expiresAt: result.expiresAt, verdict: result.verdict });
+    setLive({
+      status: result.status,
+      origin: result.origin,
+      expiresAt: result.expiresAt,
+      verdict: result.verdict,
+    });
     setStage(result.stage as PreviewStage);
 
     // Terminal, or newly ready. Either way the server-rendered card is now
@@ -205,10 +231,10 @@ export function PreviewPanel({
 
   // Drives the countdown only. The server is what refuses an expired origin.
   useEffect(() => {
-    if (card.state !== "running") return;
+    if (previewState !== "running") return;
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
-  }, [card.state]);
+  }, [previewState]);
 
   function confirmStart() {
     if (!validatedArtifactId) return;
@@ -252,7 +278,7 @@ export function PreviewPanel({
 
   const expiresAt = live?.expiresAt ?? card.expiresAt;
   const countdown = expiresAt ? remaining(expiresAt, now) : null;
-  const starting = card.state === "starting" || pending;
+  const starting = previewState === "starting" || pending;
 
   return (
     <section className="space-y-3 border-t border-zinc-800 pt-4">
@@ -269,7 +295,7 @@ export function PreviewPanel({
             You can leave this page. Vibe will continue starting the preview.
           </p>
         </div>
-      ) : card.state === "running" ? (
+      ) : previewState === "running" ? (
         <div className="space-y-3">
           <p className="text-sm text-emerald-400">Temporary public preview</p>
 
@@ -315,17 +341,17 @@ export function PreviewPanel({
           </p>
           <NotApproved />
         </div>
-      ) : card.state === "needs_validation" || card.state === "not_available" ? (
+      ) : previewState === "needs_validation" || previewState === "not_available" ? (
         <div className="space-y-2">
           <p className="text-sm text-zinc-400">Validation required</p>
           <p className="text-xs text-zinc-500">
             This change must pass isolated validation before Vibe can create a temporary preview.
           </p>
         </div>
-      ) : card.state === "artifact_unavailable" || card.state === "artifact_expired" ? (
+      ) : previewState === "artifact_unavailable" || previewState === "artifact_expired" ? (
         <div className="space-y-2">
           <p className="text-sm text-zinc-400">
-            {card.state === "artifact_expired"
+            {previewState === "artifact_expired"
               ? "Preview artifact expired"
               : "Preview artifact unavailable"}
           </p>
@@ -344,7 +370,7 @@ export function PreviewPanel({
             Validate again
           </button>
         </div>
-      ) : card.state === "failed" ? (
+      ) : previewState === "failed" ? (
         <div className="space-y-2">
           <p className="text-sm text-red-400">Preview failed</p>
           {/* Safe copy from a stable code. Never a provider message, never a
@@ -366,13 +392,13 @@ export function PreviewPanel({
             </>
           )}
         </div>
-      ) : card.state === "stopped" || card.state === "expired" ? (
+      ) : previewState === "stopped" || previewState === "expired" ? (
         <div className="space-y-2">
           <p className="text-sm text-zinc-400">
-            {card.state === "expired" ? "Preview expired" : "Preview stopped"}
+            {previewState === "expired" ? "Preview expired" : "Preview stopped"}
           </p>
           <p className="text-xs text-zinc-500">
-            {card.state === "expired"
+            {previewState === "expired"
               ? "The temporary preview has ended."
               : "The temporary preview was stopped and its environment was released."}
           </p>
