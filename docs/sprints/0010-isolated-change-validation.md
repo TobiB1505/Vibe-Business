@@ -241,7 +241,7 @@ wearing an accounting figure's clothes. The measured inputs are stored instead.
 1510 tests pass. 87 new to this sprint, all against fakes — `pnpm test` never
 provisions a real sandbox (§39).
 
-Forty-three mutations, each verified to break tests:
+Forty-nine mutations, each verified to break tests:
 
 | Mutation | Tests failed |
 | --- | --- |
@@ -680,6 +680,45 @@ constraints. Sprint 9 shipped a capability bump against a column that *did*
 carry an enum CHECK, and every test passed while every real run would have
 failed at INSERT; that is why the live schema is now read before this claim is
 made.
+
+## The step ceiling — a budget calibrated against the wrong limit
+
+The first v2 run reached `building` and was then killed:
+
+```
+01:36:38  Vercel Runtime Timeout Error: Task timed out after 300 seconds
+01:45:44  [Workflow] Step exceeded max retries — executeValidation
+```
+
+A Vercel Function is capped at 300 s. The v1 pass measured 288 s of commands and
+squeaked under it; the v2 run did not. That margin was never a margin.
+
+The defect is in the budgets. `totalLifetimeMs` was 600 s — calibrated against
+the *sandbox's* limit, which is 45 minutes, while the function awaiting it could
+live 300 s. **Two different limits, and the smaller one binds.**
+
+The second consequence is worse than the timeout. A killed step runs no cleanup,
+so the sandbox stayed alive on its own timer with nothing responsible for it.
+Every cleanup guarantee in this sprint lives inside `runValidation`, and none of
+it survives the process being killed.
+
+Three changes, in order of importance:
+
+1. **The sandbox lifetime is now below the step ceiling** (260 s vs 300 s). If
+   the step is killed anyway, the sandbox's own timeout is the only thing left
+   stopping a paid VM, so it has to be short enough to matter.
+2. **The run watches its own clock.** Before each command it checks the time
+   remaining and ends itself — with cleanup — rather than starting work it
+   cannot finish. Every command timeout is clamped to the time actually left.
+   Being killed is not an acceptable way to finish something that owns
+   infrastructure.
+3. **Four vCPUs instead of two.** Not a performance preference: 281 s of
+   measured work against a 300 s ceiling is not a margin. More vCPUs cost more
+   per second and finish sooner, so the bill is roughly unchanged. Four is the
+   Hobby maximum, so this is the whole of the available headroom.
+
+If the work still does not fit, the answer is to split it across steps or move
+to a plan with a longer function limit — a decision, not a larger number.
 
 ## Known limitations
 

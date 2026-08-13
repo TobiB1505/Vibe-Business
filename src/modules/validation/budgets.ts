@@ -15,13 +15,40 @@
  * something about the repository, and the honest answer in V0.1 is to time out
  * and say so.
  */
+/**
+ * The hard ceiling on the durable step that awaits a validation.
+ *
+ * A Vercel Function is killed at 300 s. This is **not** the sandbox's limit —
+ * a sandbox may live 45 minutes — and conflating the two is what the sixth
+ * dogfood cost: budgets were calibrated against the sandbox and the function
+ * awaiting them died first, at exactly `Task timed out after 300 seconds`.
+ *
+ * Everything below is derived from this number rather than chosen next to it.
+ */
+export const STEP_DEADLINE_MS = 300 * 1000;
+
 export const SANDBOX_BUDGETS = {
-  /** Whole-sandbox lifetime, including provisioning and cleanup. */
-  totalLifetimeMs: 10 * 60 * 1000,
-  /** Dependency install — the slowest step, and the one with network. */
-  installTimeoutMs: 5 * 60 * 1000,
+  /**
+   * Whole-sandbox lifetime.
+   *
+   * Deliberately **below** `STEP_DEADLINE_MS`, so the sandbox expires before
+   * the function that owns it. That ordering is the leak bound: if the step is
+   * killed anyway, its cleanup never runs, and the only thing left stopping a
+   * paid VM is the sandbox's own timeout. It must therefore be short enough to
+   * matter.
+   */
+  totalLifetimeMs: 260 * 1000,
+  /**
+   * When to stop starting new work.
+   *
+   * Reaching this ends the run *ourselves*, with cleanup, rather than being
+   * killed mid-command with a sandbox still running.
+   */
+  stopStartingWorkAfterMs: 240 * 1000,
+  /** Dependency install — the one step with network. */
+  installTimeoutMs: 120 * 1000,
   /** Any single validation command. */
-  commandTimeoutMs: 4 * 60 * 1000,
+  commandTimeoutMs: 180 * 1000,
   /** Source acquisition and integrity verification, before any repository code. */
   sourceTimeoutMs: 90 * 1000,
 
@@ -58,7 +85,21 @@ export const SANDBOX_BUDGETS = {
  * shows it needs to grow.
  */
 export const SANDBOX_RESOURCES = {
-  vcpus: 2,
+  /**
+   * Four vCPUs, not the platform default of two.
+   *
+   * Not a performance preference — a correctness requirement. On two vCPUs the
+   * real workload measured 281 s of commands (install 18 s, typecheck 79 s,
+   * test 84 s, build 99 s) against a 300 s step ceiling, which is not a margin.
+   * More vCPUs cost more per second and finish sooner, so the bill is roughly
+   * unchanged while the run stops racing the platform.
+   *
+   * Four is also the Hobby maximum, so this is the whole of the available
+   * headroom. If the work still does not fit, the answer is to split it across
+   * steps or move to a plan with a longer function limit — a decision, not a
+   * larger number.
+   */
+  vcpus: 4,
   /**
    * The documented default Vercel Managed Image.
    *

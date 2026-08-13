@@ -315,6 +315,17 @@ export async function runValidation(
   /** Terminal helper: cleanup always runs, so no path can leak a paid VM (§23). */
   let sourceIntegrity: SourceIntegrity | null = null;
 
+  /**
+   * Time left before this run must be over.
+   *
+   * The durable step is killed at a hard platform ceiling, and a killed step
+   * runs no cleanup — leaving a paid VM alive until its own timeout. So the run
+   * watches its own clock and stops itself first. Being killed is never an
+   * acceptable way to finish something that owns infrastructure.
+   */
+  const remainingMs = () => SANDBOX_BUDGETS.stopStartingWorkAfterMs - (Date.now() - startedAt);
+  const outOfTime = () => remainingMs() <= 0;
+
   const finish = async (
     status: "passed" | "failed",
     failureCode: ValidationFailureCode | null,
@@ -560,10 +571,14 @@ export async function runValidation(
     const install = plan.find((entry) => entry.step === "install");
     if (!install || !install.run) return finish("failed", "validation_run_failed");
 
+    if (outOfTime()) return finish("failed", "sandbox_timeout", "no time left to install dependencies");
+
     const installResult = await sandbox.run({
       command: install.command,
       cwd: workdir,
-      timeoutMs: SANDBOX_BUDGETS.installTimeoutMs,
+      // Never longer than the run has left: a command allowed to outlive the
+      // step would be killed with it, cleanup and all.
+      timeoutMs: Math.min(SANDBOX_BUDGETS.installTimeoutMs, remainingMs()),
     });
     steps.install = stepResult(install.command, installResult);
 
@@ -596,10 +611,14 @@ export async function runValidation(
         continue;
       }
 
+      if (outOfTime()) {
+        return finish("failed", "sandbox_timeout", `no time left to run ${entry.step}`);
+      }
+
       const result = await sandbox.run({
         command: entry.command,
         cwd: workdir,
-        timeoutMs: SANDBOX_BUDGETS.commandTimeoutMs,
+        timeoutMs: Math.min(SANDBOX_BUDGETS.commandTimeoutMs, remainingMs()),
       });
       const recorded = stepResult(entry.command, result);
       steps[entry.step] = recorded;

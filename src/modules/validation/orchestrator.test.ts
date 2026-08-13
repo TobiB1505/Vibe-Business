@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { describe, expect, it } from "vitest";
-import { SANDBOX_BUDGETS } from "./budgets";
+import { describe, expect, it, vi } from "vitest";
+import { SANDBOX_BUDGETS, STEP_DEADLINE_MS } from "./budgets";
 import { inRepository, inSandbox, runValidation, SANDBOX_ENVIRONMENT } from "./orchestrator";
 import {
   FIXTURE_COMMIT_SHA,
@@ -850,5 +850,97 @@ describe("gitCommitObserved reflects an observation, never an assumption", () =>
     const outcome = await runValidation(setup({ failCreate: true }), noManifest, fakeValidationTarget());
 
     expect(outcome.sourceIntegrity).toBeNull();
+  });
+});
+
+describe("the run must outlive nothing (post-dogfood: step deadline)", () => {
+  /**
+   * The v2 run reached `building` and was then killed:
+   *
+   *     Vercel Runtime Timeout Error: Task timed out after 300 seconds
+   *
+   * The durable step has a hard platform ceiling, and a killed step runs no
+   * cleanup — so the sandbox stayed alive on its own timer. The budgets had
+   * been calibrated against the *sandbox* limit (45 minutes) while the function
+   * awaiting them could live 300 seconds. Conflating the two is the defect.
+   */
+  it("keeps the sandbox lifetime below the step ceiling", () => {
+    // The leak bound: if the step is killed anyway, the sandbox's own timeout
+    // is the only thing left stopping a paid VM.
+    expect(SANDBOX_BUDGETS.totalLifetimeMs).toBeLessThan(STEP_DEADLINE_MS);
+    expect(SANDBOX_BUDGETS.stopStartingWorkAfterMs).toBeLessThan(SANDBOX_BUDGETS.totalLifetimeMs);
+  });
+
+  it("keeps every single command inside the run's own budget", () => {
+    expect(SANDBOX_BUDGETS.installTimeoutMs).toBeLessThan(SANDBOX_BUDGETS.stopStartingWorkAfterMs);
+    expect(SANDBOX_BUDGETS.commandTimeoutMs).toBeLessThan(SANDBOX_BUDGETS.stopStartingWorkAfterMs);
+  });
+
+  it("clamps a command timeout to the time actually remaining", async () => {
+    // The assertion that matters is the *short* case. Comparing against the
+    // static budget passes whether or not the clamp exists, because the budget
+    // is already under the deadline — a test that cannot fail.
+    const provider = setup();
+    const requested: { command: string; timeoutMs: number }[] = [];
+    const elapsed = SANDBOX_BUDGETS.stopStartingWorkAfterMs - 5_000;
+
+    const original = provider.create.bind(provider);
+    provider.create = async (input) => {
+      const handle = await original(input);
+      const run = handle.run.bind(handle);
+      handle.run = async (command) => {
+        requested.push({ command: command.command.command, timeoutMs: command.timeoutMs });
+        // Burn most of the budget during verification, so the first
+        // repository-controlled command starts with almost nothing left. The
+        // clock has to move *inside* the run: `startedAt` is captured there.
+        if (command.command.command === "git") vi.setSystemTime(Date.now() + elapsed);
+        return run(command);
+      };
+      return handle;
+    };
+
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      await runValidation(provider, noManifest, fakeValidationTarget());
+    } finally {
+      vi.useRealTimers();
+    }
+
+    const install = requested.find((entry) => entry.command === "pnpm");
+    expect(install).toBeDefined();
+    // Five seconds left, so the install may not ask for its full budget.
+    expect(install!.timeoutMs).toBeLessThan(SANDBOX_BUDGETS.installTimeoutMs);
+    expect(install!.timeoutMs).toBeLessThanOrEqual(6_000);
+  });
+
+  it("stops itself with cleanup rather than being killed mid-command", async () => {
+    // A sandbox whose commands each consume most of the budget: the run must
+    // notice and end, not keep starting work it cannot finish.
+    const provider = setup();
+    const original = provider.create.bind(provider);
+    provider.create = async (input) => {
+      const handle = await original(input);
+      const run = handle.run.bind(handle);
+      handle.run = async (command) => {
+        // Advance the clock past the deadline on the first repository command.
+        if (command.command.command === "pnpm") {
+          vi.setSystemTime(Date.now() + SANDBOX_BUDGETS.stopStartingWorkAfterMs + 1000);
+        }
+        return run(command);
+      };
+      return handle;
+    };
+
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      const outcome = await runValidation(provider, noManifest, fakeValidationTarget());
+
+      expect(outcome).toMatchObject({ status: "failed", failureCode: "sandbox_timeout" });
+      // The whole point: we ended it, so cleanup ran.
+      expect(outcome.cleanup).toBe("stopped");
+      expect(provider.stopped()).toBe(true);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
