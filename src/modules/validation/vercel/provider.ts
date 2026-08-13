@@ -1,9 +1,8 @@
 import "server-only";
 
-import { Sandbox } from "@vercel/sandbox";
+import { Sandbox, Snapshot, type Command } from "@vercel/sandbox";
 import { SANDBOX_BUDGETS, SANDBOX_RESOURCES } from "../budgets";
-import { Snapshot } from "@vercel/sandbox";
-import type { Command } from "@vercel/sandbox";
+import { sanitizeCommandOutput } from "../logs";
 import type {
   CreateSandboxInput,
   SandboxArtifact,
@@ -62,13 +61,69 @@ async function readOutput(command: {
 /**
  * A safe description of a thrown provider value.
  *
- * Name and message only. The object itself can carry request context, headers
- * and occasionally credentials, so it is never stored or logged whole — but
- * refusing to record *anything* is how a failure becomes undiagnosable.
+ * Never serialize the object. The Vercel SDK's `APIError` carries the whole
+ * response, headers and raw response text alongside the useful fields. The
+ * first capture-failure fix kept only `Error.name` and `Error.message`, which
+ * turned the provider's HTTP 400 back into another generic constant.
+ *
+ * Read only three allowlisted scalars: HTTP status, `error.code`, and
+ * `error.message` (with top-level `message` as a documented-shape fallback).
+ * Each string is bounded and secret-redacted before it crosses this adapter.
  */
+function safeProviderField(value: unknown): string | null {
+  if (typeof value !== "string" || value.trim().length === 0) return null;
+
+  const sanitized = sanitizeCommandOutput(value).text.replace(/\s+/g, " ").trim();
+  if (sanitized.length <= SANDBOX_BUDGETS.maxLineChars) return sanitized;
+  return `${sanitized.slice(0, SANDBOX_BUDGETS.maxLineChars)}…[truncated]`;
+}
+
+function providerJsonError(value: unknown): { code: string | null; message: string | null } {
+  if (typeof value !== "object" || value === null) return { code: null, message: null };
+
+  const json = value as Record<string, unknown>;
+  const nested =
+    typeof json.error === "object" && json.error !== null
+      ? (json.error as Record<string, unknown>)
+      : null;
+
+  return {
+    code: safeProviderField(nested?.code),
+    message: safeProviderField(nested?.message) ?? safeProviderField(json.message),
+  };
+}
+
 function describeProviderError(error: unknown): string {
-  if (error instanceof Error) return `${error.name}: ${error.message}`;
+  if (error instanceof Error) {
+    const shaped = error as Error & {
+      response?: { status?: unknown };
+      json?: unknown;
+    };
+    const status =
+      typeof shaped.response?.status === "number" && Number.isInteger(shaped.response.status)
+        ? shaped.response.status
+        : null;
+    const provider = providerJsonError(shaped.json);
+    const facts = [
+      status === null ? null : `HTTP ${status}`,
+      provider.code === null ? null : `code=${provider.code}`,
+      provider.message === null ? null : `message=${provider.message}`,
+    ].filter((fact): fact is string => fact !== null);
+
+    const name = safeProviderField(error.name) ?? "ProviderError";
+    if (facts.length > 0) return `${name}: ${facts.join(" ")}`;
+
+    const message = safeProviderField(error.message);
+    return message ? `${name}: ${message}` : name;
+  }
   return "the sandbox provider threw a non-error value";
+}
+
+class SanitizedSandboxProviderError extends Error {
+  constructor(error: unknown) {
+    super(describeProviderError(error));
+    this.name = "SandboxProviderError";
+  }
 }
 
 /**
@@ -238,9 +293,18 @@ class VercelSandboxHandle implements SandboxHandle {
   }
 
   async snapshot(input: { expirationMs: number }): Promise<SandboxArtifact> {
-    // Explicit expiry, never the provider's 30-day default — an unbounded
-    // retention of a customer's filesystem is not a policy anyone chose.
-    const snapshot = await this.sandbox.snapshot({ expiration: input.expirationMs });
+    let snapshot: Awaited<ReturnType<Sandbox["snapshot"]>>;
+    try {
+      // Explicit expiry, never the provider's 30-day default — an unbounded
+      // retention of a customer's filesystem is not a policy anyone chose.
+      snapshot = await this.sandbox.snapshot({ expiration: input.expirationMs });
+    } catch (error) {
+      // `APIError` contains the actual provider classification, but also raw
+      // response material. Convert it here, at the provider boundary: callers
+      // receive enough to diagnose the 400 without receiving headers, request
+      // context, raw JSON/text or a credential-bearing cause object.
+      throw new SanitizedSandboxProviderError(error);
+    }
 
     // The sandbox is now unreachable, so read what it measured before losing it.
     this.terminalUsage = {

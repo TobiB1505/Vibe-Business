@@ -305,6 +305,36 @@ describe("reconnecting across durable steps (§3, §12)", () => {
 });
 
 describe("capturing an artifact must not cost the ledger (Sprint 10B §5)", () => {
+  async function capturedFailure(providerError: unknown): Promise<Error> {
+    create.mockResolvedValue({
+      name: "vibe-validate-abc",
+      runtime: "node24",
+      async snapshot() {
+        throw providerError;
+      },
+      async stop() {
+        return { activeCpuDurationMs: 1, networkTransfer: { ingress: 1, egress: 1 } };
+      },
+    });
+
+    const { createVercelSandboxProvider } = await import("./provider");
+    const sandbox = await createVercelSandboxProvider().create({
+      name: "vibe-validate-abc",
+      source: { kind: "git", repositoryUrl: "https://github.com/a/b.git", revision: "abc", credential: null },
+      networkPolicy: { mode: "deny_all" },
+      timeoutMs: 1000,
+      env: {},
+    });
+
+    try {
+      await sandbox.snapshot({ expirationMs: 60_000 });
+      throw new Error("expected snapshot to fail");
+    } catch (error) {
+      expect(error).toBeInstanceOf(Error);
+      return error as Error;
+    }
+  }
+
   /**
    * `sandbox.snapshot()` terminates the sandbox. A later `stop()` therefore
    * throws — and `stop()` is where usage comes from. Without capturing usage at
@@ -372,6 +402,60 @@ describe("capturing an artifact must not cost the ledger (Sprint 10B §5)", () =
 
     // Never the provider's 30-day default.
     expect(snapshot).toHaveBeenCalledWith({ expiration: 60 * 60 * 1000 });
+  });
+
+  it("preserves the allowlisted Vercel API classification for a failed snapshot", async () => {
+    const providerError = Object.assign(new Error("Status code 400 is not ok"), {
+      name: "APIError",
+      response: { status: 400, headers: { authorization: "Bearer never-store-this" } },
+      json: {
+        error: {
+          code: "invalid_snapshot_expiration",
+          message: "Snapshot expiration must satisfy the provider limit",
+        },
+      },
+      text: '{"full":"raw response must never cross the adapter"}',
+    });
+
+    const error = await capturedFailure(providerError);
+
+    expect(error.message).toContain("APIError: HTTP 400");
+    expect(error.message).toContain("code=invalid_snapshot_expiration");
+    expect(error.message).toContain("message=Snapshot expiration must satisfy the provider limit");
+  });
+
+  it("never serializes raw provider response material and redacts a secret in the allowed message", async () => {
+    const token = `ghp_${"a".repeat(36)}`;
+    const providerError = Object.assign(new Error("Status code 400 is not ok"), {
+      name: "APIError",
+      response: { status: 400, headers: { authorization: `Bearer ${token}` } },
+      json: {
+        error: { code: "snapshot_rejected", message: `token=${token}` },
+        internalRequest: { authorization: token },
+      },
+      text: `raw-body-${token}`,
+    });
+
+    const error = await capturedFailure(providerError);
+
+    expect(error.message).toContain("code=snapshot_rejected");
+    expect(error.message).toContain("message=token=[redacted]");
+    expect(error.message).not.toContain(token);
+    expect(error.message).not.toContain("authorization");
+    expect(error.message).not.toContain("raw-body");
+  });
+
+  it("bounds an allowlisted provider message before it crosses the adapter", async () => {
+    const providerError = Object.assign(new Error("Status code 400 is not ok"), {
+      name: "APIError",
+      response: { status: 400 },
+      json: { error: { code: "snapshot_rejected", message: "x".repeat(10_000) } },
+    });
+
+    const error = await capturedFailure(providerError);
+
+    expect(error.message).toContain("…[truncated]");
+    expect(error.message.length).toBeLessThan(700);
   });
 
   it("restores from a snapshot without re-imaging it", async () => {
