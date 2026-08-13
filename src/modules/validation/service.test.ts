@@ -273,7 +273,9 @@ describe("validation identity (§21, §22, §35)", () => {
     // The point of putting policy in the identity: a stored `passed` describes
     // commands that ran under specific rules. Tighten the rules and the old
     // result no longer describes what would happen now.
-    expect(identityFor({ policyVersion: "sandbox-policy-v2" })).not.toBe(identityFor());
+    // Deliberately a version that is neither the current one nor a past one, so
+    // this test keeps testing the mechanism rather than a particular bump.
+    expect(identityFor({ policyVersion: "sandbox-policy-vNext" })).not.toBe(identityFor());
   });
 
   it("changes when the validation profile version changes", () => {
@@ -305,5 +307,130 @@ describe("validation identity (§21, §22, §35)", () => {
     });
 
     expect((await start()).kind).toBe("started");
+  });
+});
+
+describe("integrity policy versioning (post-dogfood v1 → v2)", () => {
+  /**
+   * The first passing run recorded `pnpm-lock.yaml` as unverified, because a
+   * 256 KB per-file budget silently excluded a ~310 KB lockfile — the one
+   * build-identity file that decides which code gets installed. "Validated"
+   * under v1 therefore meant something materially weaker than it looked.
+   *
+   * The budget and the truncation semantics both changed, so the claim changed,
+   * so the version changed. These tests exist to stop that being reversible by
+   * accident.
+   */
+  it("carries a policy version distinct from the one the first dogfood ran under", () => {
+    expect(SANDBOX_POLICY_VERSION).not.toBe("sandbox-policy-v1");
+  });
+
+  it("leaves the command profile untouched", () => {
+    // Integrity rules changed; which commands run did not. Bumping the profile
+    // too would invalidate reuse for a reason that did not occur.
+    expect(validationProfileVersionFor("nextjs_node_v1")).toBe("nextjs-node-v1");
+  });
+
+  it("produces a different validation identity for the same artifact", () => {
+    const underV1 = computeValidationIdentity({
+      preparedChangeId: PREPARED,
+      preparedCommitSha: FIXTURE_COMMIT_SHA,
+      validationProfile: "nextjs_node_v1",
+      validationProfileVersion: validationProfileVersionFor("nextjs_node_v1"),
+      sandboxPolicyVersion: "sandbox-policy-v1",
+    });
+
+    expect(identityFor()).not.toBe(underV1);
+  });
+
+  it("does not reuse the first dogfood's pass under the new policy", async () => {
+    // The exact scenario: run 61b8c9f1 passed under v1 with an unverified
+    // lockfile. Reusing it now would report a v1 result as though it had been
+    // checked under v2's stronger rules.
+    seed();
+    db.seed("validation_runs", {
+      id: "validation_v1_pass",
+      project_id: PROJECT,
+      user_id: USER,
+      prepared_change_id: PREPARED,
+      operation_run_id: "operation_old",
+      validation_identity: computeValidationIdentity({
+        preparedChangeId: PREPARED,
+        preparedCommitSha: FIXTURE_COMMIT_SHA,
+        validationProfile: "nextjs_node_v1",
+        validationProfileVersion: validationProfileVersionFor("nextjs_node_v1"),
+        sandboxPolicyVersion: "sandbox-policy-v1",
+      }),
+      status: "passed",
+      stage: "completed",
+      steps: {},
+      validation_profile: "nextjs_node_v1",
+      validation_profile_version: validationProfileVersionFor("nextjs_node_v1"),
+      sandbox_policy_version: "sandbox-policy-v1",
+      sandbox_provider: "vercel_sandbox",
+      package_manager: "pnpm",
+      prepared_commit_sha: FIXTURE_COMMIT_SHA,
+    });
+
+    const outcome = await start();
+
+    expect(outcome.kind).toBe("started");
+  });
+
+  it("leaves the historical v1 row exactly as it was", async () => {
+    seed();
+    db.seed("validation_runs", {
+      id: "validation_v1_pass",
+      project_id: PROJECT,
+      user_id: USER,
+      prepared_change_id: PREPARED,
+      operation_run_id: "operation_old",
+      validation_identity: "v1identity".padEnd(64, "0"),
+      status: "passed",
+      stage: "completed",
+      steps: {},
+      validation_profile: "nextjs_node_v1",
+      validation_profile_version: validationProfileVersionFor("nextjs_node_v1"),
+      sandbox_policy_version: "sandbox-policy-v1",
+      sandbox_provider: "vercel_sandbox",
+      package_manager: "pnpm",
+      prepared_commit_sha: FIXTURE_COMMIT_SHA,
+    });
+
+    await start();
+
+    // History is not rewritten. The old row still says what it meant when it
+    // was written, which is the whole reason the version is stored per run.
+    const historical = db.rows("validation_runs").find((row) => row.id === "validation_v1_pass");
+    expect(historical?.sandbox_policy_version).toBe("sandbox-policy-v1");
+    expect(historical?.status).toBe("passed");
+  });
+
+  it("still reuses a pass recorded under the current policy", async () => {
+    // The bump must not break reuse generally — only across the change.
+    seed();
+    db.seed("validation_runs", {
+      id: "validation_v2_pass",
+      project_id: PROJECT,
+      user_id: USER,
+      prepared_change_id: PREPARED,
+      operation_run_id: "operation_old",
+      validation_identity: identityFor(),
+      status: "passed",
+      stage: "completed",
+      steps: {},
+      validation_profile: "nextjs_node_v1",
+      validation_profile_version: validationProfileVersionFor("nextjs_node_v1"),
+      sandbox_policy_version: SANDBOX_POLICY_VERSION,
+      sandbox_provider: "vercel_sandbox",
+      package_manager: "pnpm",
+      prepared_commit_sha: FIXTURE_COMMIT_SHA,
+    });
+
+    expect(await start()).toEqual({
+      kind: "reused",
+      validationRunId: "validation_v2_pass",
+      status: "passed",
+    });
   });
 });

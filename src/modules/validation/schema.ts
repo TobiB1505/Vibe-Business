@@ -41,14 +41,38 @@ export const VALIDATION_PROFILE_VERSIONS: Record<ValidationProfile, string> = {
 };
 
 /**
- * The sandbox execution policy version (§22).
+ * The sandbox execution and integrity policy version (§22).
  *
- * Network policy, command sequence, timeouts, install flags and secret
- * handling together define what "validated" means. Changing any of them
- * changes the claim, so the version is part of the validation identity and a
- * previously passing run is not silently reused under new rules.
+ * Network policy, command sequence, timeouts, install flags, secret handling
+ * **and source-integrity rules** together define what "validated" means.
+ * Changing any of them changes the claim, so the version is part of the
+ * validation identity and a previously passing run is never silently reused
+ * under rules it was not checked against.
+ *
+ * ## v1 → v2 (2026-08-13)
+ *
+ * The first passing dogfood ran under v1 and recorded `pnpm-lock.yaml` as
+ * **unverified**: this repository's lockfile is ~310 KB against a 256 KB
+ * per-file read budget. The lockfile is the one build-identity file that
+ * decides *which code gets installed*, so "validated" under v1 meant something
+ * materially weaker than it appeared.
+ *
+ * Two integrity rules changed in response:
+ *
+ *  - build-identity files get a dedicated 4 MB budget, so lockfiles are
+ *    actually compared rather than silently skipped;
+ *  - reads request one byte past the budget, so an oversized file is recorded
+ *    as *unverified* instead of being hashed as a truncated prefix — which
+ *    would have reported a content **mismatch** for a file that is merely
+ *    large, a false integrity failure indistinguishable from a real one.
+ *
+ * The command profile is untouched, so `nextjs_node_v1` stays as it is. This is
+ * a security/integrity policy change, which is exactly what this version is
+ * for. Run `61b8c9f1` remains historically v1 and is not rewritten; its
+ * identity no longer matches, so it cannot be reused as though it had been
+ * produced under v2.
  */
-export const SANDBOX_POLICY_VERSION = "sandbox-policy-v1" as const;
+export const SANDBOX_POLICY_VERSION = "sandbox-policy-v2" as const;
 
 export const SANDBOX_PROVIDERS = ["vercel_sandbox"] as const;
 export type SandboxProviderId = (typeof SANDBOX_PROVIDERS)[number];

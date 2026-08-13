@@ -805,3 +805,50 @@ describe("large build-identity files (post-dogfood)", () => {
     expect(outcome.sourceIntegrity?.buildIdentityFilesUnverified).toContain("pnpm-lock.yaml");
   });
 });
+
+describe("gitCommitObserved reflects an observation, never an assumption", () => {
+  /**
+   * The field says whether the checked-out commit was actually read back from
+   * git inside the sandbox. It is a *report*, so the only thing that must be
+   * impossible is reporting an observation that did not happen.
+   *
+   * No credential is involved either way: Vercel performs the clone
+   * provider-side, so observing the checkout costs nothing.
+   */
+  it("is false when git cannot answer", async () => {
+    const provider = setup({
+      results: { "git rev-parse HEAD": { exitCode: 128, output: "not a git repository" } },
+    });
+
+    const outcome = await runValidation(provider, noManifest, fakeValidationTarget());
+
+    expect(outcome.sourceIntegrity).toMatchObject({ gitCommitObserved: false });
+    // And the run still passes: pinning plus hashing carries the guarantee.
+    expect(outcome.status).toBe("passed");
+  });
+
+  it("is false when git answers with nothing", async () => {
+    // Exit 0 with empty output is not an observation.
+    const provider = setup({ results: { "git rev-parse HEAD": { exitCode: 0, output: "   \n" } } });
+
+    const outcome = await runValidation(provider, noManifest, fakeValidationTarget());
+
+    expect(outcome.sourceIntegrity).toMatchObject({ gitCommitObserved: false });
+  });
+
+  it("is true only when git returned the prepared commit", async () => {
+    const provider = setup();
+
+    const outcome = await runValidation(provider, noManifest, fakeValidationTarget());
+
+    expect(provider.commands()).toContain("git rev-parse HEAD");
+    expect(outcome.sourceIntegrity).toMatchObject({ gitCommitObserved: true });
+  });
+
+  it("never reports an observation when the command never ran", async () => {
+    // Provisioning failed, so nothing was observed and nothing is claimed.
+    const outcome = await runValidation(setup({ failCreate: true }), noManifest, fakeValidationTarget());
+
+    expect(outcome.sourceIntegrity).toBeNull();
+  });
+});

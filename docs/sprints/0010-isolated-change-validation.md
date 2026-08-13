@@ -625,6 +625,62 @@ integrity failure, which is the worst kind because it is indistinguishable from
 a real one. Reads now request one byte past the budget, and "too large" is
 recorded as unverified rather than compared.
 
+## Reconciling `gitCommitObserved`
+
+The passing run recorded `gitCommitObserved: true`, which looks inconsistent
+with the Option A decision to stop re-observing the commit. It is not. The
+record is correct, and the confusion is the residue of a wrong report of mine.
+
+Evidence, in order:
+
+| Source | Finding |
+| --- | --- |
+| `orchestrator.ts` | `git rev-parse HEAD` **is** in the implementation |
+| `git log -S"rev-parse"` | removed in `b4f5573` (Option A), **restored in `e10b66b`** |
+| `orchestrator.ts` | `gitCommitObserved: observedCommit !== null`, and `observedCommit` requires exit 0 *and* non-empty output |
+| `orchestrator.ts` | a mismatch fails the run — the run **passed**, so `rev-parse` returned exactly `2f05958e…` |
+| `validation_runs` | only the two runs created *after* `e10b66b` deployed carry `source_integrity`; the five earlier rows are `null` |
+
+`e10b66b` is where the directory listing proved the checkout exists at
+`/vercel/sandbox/<repo>/`. The earlier claim that the materialized source has no
+`.git` was an inference from a `git` error raised in the sandbox *home*
+directory, and it was wrong.
+
+So the observation is real, and **no credential is involved**: Vercel performs
+the clone provider-side, so nothing is passed into the VM. Setting the field to
+`false` would record a falsehood. It stays `true`, and the field is now covered
+by tests asserting it is false when git cannot answer, false when git answers
+with nothing, and absent entirely when no sandbox was provisioned.
+
+What has *not* changed is the rejection of a self-managed clone. That decision
+was about carrying an installation token into a VM that later runs untrusted
+code, and it stands regardless of where the checkout lives.
+
+## Integrity policy v1 → v2
+
+The first passing run is historically a **v1** result and stays one. Its
+`pnpm-lock.yaml` was unverified, so "validated" under v1 meant something
+materially weaker than it appeared — the lockfile is the file that decides which
+code gets installed.
+
+Two integrity rules changed: build-identity files get a dedicated 4 MB budget,
+and reads request one byte past the budget so an oversized file is recorded as
+unverified rather than hashed as a truncated prefix. The command profile did not
+change, so `nextjs_node_v1` stays as it is; this is a security/integrity change,
+which is what `sandbox-policy-*` versions exist for.
+
+Because the policy version is part of the validation identity, run `61b8c9f1`
+cannot be reused under v2 — by construction, not by anyone remembering. No
+historical row was rewritten.
+
+**No migration was required, and that was verified rather than assumed.** The
+live constraint on `validation_runs.sandbox_policy_version` is
+`CHECK (char_length(btrim(sandbox_policy_version)) > 0)` with zero enum-like
+constraints. Sprint 9 shipped a capability bump against a column that *did*
+carry an enum CHECK, and every test passed while every real run would have
+failed at INSERT; that is why the live schema is now read before this claim is
+made.
+
 ## Known limitations
 
 - `--ignore-scripts` will fail repositories that genuinely need a postinstall

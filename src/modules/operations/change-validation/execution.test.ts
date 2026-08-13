@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { FIXTURE_COMMIT_SHA, fakeSandboxProvider, fakeValidatableSnapshot, healthySandboxFiles } from "@/modules/validation/test-support";
+import { SANDBOX_POLICY_VERSION } from "@/modules/validation/schema";
 import { FakeDatabase, fakeSupabase } from "../test-support";
 import {
   executeValidationStep,
@@ -129,7 +130,10 @@ describe("the happy path", () => {
     seed();
     await runPipeline();
 
-    expect(db.rows("validation_runs")[0].sandbox_policy_version).toBe("sandbox-policy-v1");
+    // Asserted against the constant, not a literal: this test is about the
+    // version being *recorded*, not about which version is current. Pinning a
+    // literal here made a legitimate policy bump look like a regression.
+    expect(db.rows("validation_runs")[0].sandbox_policy_version).toBe(SANDBOX_POLICY_VERSION);
   });
 
   it("emits the domain lifecycle events once each", async () => {
