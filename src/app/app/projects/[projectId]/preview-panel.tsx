@@ -163,8 +163,16 @@ export function PreviewPanel({
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
   const [state, setState] = useState<StartPreviewActionState>(null);
-  const [pending, startTransition] = useTransition();
-  const [stopping, setStopping] = useState(false);
+  const [, startTransition] = useTransition();
+  /**
+   * Which action is in flight, if any.
+   *
+   * `useTransition`'s `pending` cannot answer this: one transition serves start,
+   * stop and re-validate, so keying the "Starting…" block off it meant clicking
+   * **Stop** rendered "Starting temporary preview… / Preview ready". Both lines
+   * were technically produced by the code and neither was true.
+   */
+  const [intent, setIntent] = useState<"start" | "stop" | "validate" | null>(null);
   const [live, setLive] = useState<Live | null>(null);
   const [stage, setStage] = useState<PreviewStage | null>(card.stage);
   const [now, setNow] = useState(() => Date.now());
@@ -194,7 +202,7 @@ export function PreviewPanel({
   // `starting` and `running` are the two states with something to poll for.
   // Anything else is settled, and polling it would be a request every two
   // seconds forever for an answer that is not coming.
-  const shouldPoll = previewState === "starting" || previewState === "running" || pending;
+  const shouldPoll = previewState === "starting" || previewState === "running" || intent === "start";
 
   const poll = useCallback(async () => {
     if (!sessionId) return;
@@ -239,12 +247,14 @@ export function PreviewPanel({
   function confirmStart() {
     if (!validatedArtifactId) return;
 
+    setIntent("start");
     startTransition(async () => {
       setConfirming(false);
       // The confirmation travels to the server as an explicit argument. The
       // dialog closing is not what authorizes this; the boolean is (§5).
       setState(await startPreviewAction(projectId, validatedArtifactId, true));
       router.refresh();
+      setIntent(null);
     });
   }
 
@@ -257,28 +267,30 @@ export function PreviewPanel({
    * CLAUDE.md rule 60 forbids (§15, §22).
    */
   function validateAgain() {
+    setIntent("validate");
     startTransition(async () => {
       await validateChangeAction(projectId, preparedChangeId);
       router.refresh();
+      setIntent(null);
     });
   }
 
   function stop() {
     if (!sessionId) return;
 
-    setStopping(true);
+    setIntent("stop");
     startTransition(async () => {
       await stopPreviewAction(projectId, sessionId);
       // Never a faked "stopped" before the backend confirms: the sandbox and
       // the snapshot are the backend's to account for (§12).
-      setStopping(false);
       router.refresh();
+      setIntent(null);
     });
   }
 
   const expiresAt = live?.expiresAt ?? card.expiresAt;
   const countdown = expiresAt ? remaining(expiresAt, now) : null;
-  const starting = previewState === "starting" || pending;
+  const starting = previewState === "starting" || intent === "start";
 
   return (
     <section className="space-y-3 border-t border-zinc-800 pt-4">
@@ -322,10 +334,10 @@ export function PreviewPanel({
             <button
               type="button"
               onClick={stop}
-              disabled={stopping || pending}
+              disabled={intent !== null}
               className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-900 disabled:opacity-60"
             >
-              {stopping ? "Stopping preview…" : "Stop preview"}
+              {intent === "stop" ? "Stopping preview…" : "Stop preview"}
             </button>
           </div>
 
@@ -422,7 +434,10 @@ export function PreviewPanel({
         <ConfirmDialog
           onCancel={() => setConfirming(false)}
           onConfirm={confirmStart}
-          pending={pending}
+          // Any action in flight disables the dialog. A start specifically
+          // cannot be one of them — that renders the starting block instead,
+          // which is exactly what the type narrowing here proves.
+          pending={intent !== null}
         />
       ) : (
         <div className="space-y-2">
@@ -434,7 +449,7 @@ export function PreviewPanel({
           <button
             type="button"
             onClick={() => setConfirming(true)}
-            disabled={pending || !validatedArtifactId}
+            disabled={intent !== null || !validatedArtifactId}
             className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-900 disabled:opacity-60"
           >
             Start temporary preview
