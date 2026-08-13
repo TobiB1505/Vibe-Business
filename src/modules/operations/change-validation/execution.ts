@@ -607,8 +607,26 @@ export async function cleanupSandboxStep(
         operationId,
         validationRunId: run.id,
         reason: captured.reason,
+        // The whole point of the fix. A reason with no detail is what made the
+        // first real capture failure undiagnosable (ADR 0015 §9).
+        detail: captured.detail,
       },
     });
+
+    if (captured.usage) {
+      // Already terminated, and holding the numbers. Falling through to
+      // `stopSandbox` would reconnect to nothing, report `not_provisioned`, and
+      // write a ledger row claiming a 326-second sandbox never existed — which
+      // is exactly what the first failed capture did.
+      const startedFrom = run.startedAt ? Date.parse(run.startedAt) : null;
+      return {
+        cleanup: "stopped",
+        runtime: run.sandboxRuntime,
+        sandboxDurationMs:
+          startedFrom !== null && Number.isFinite(startedFrom) ? Date.now() - startedFrom : null,
+        usage: captured.usage,
+      };
+    }
   }
 
   const outcome = await stopSandbox(deps.provider, target);

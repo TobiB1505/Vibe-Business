@@ -1040,10 +1040,13 @@ describe("validated artifact capture (Sprint 10B §5)", () => {
     await provisionSandbox(provider, fakeValidationTarget());
     const result = await captureValidatedArtifact(provider, fakeValidationTarget());
 
-    expect(result).toEqual({ ok: false, reason: "credential_present" });
+    expect(result).toMatchObject({ ok: false, reason: "credential_present" });
     // Nothing kept, and the sandbox is gone anyway.
     expect(provider.snapshots()).toBe(0);
     expect(provider.stopped()).toBe(true);
+    // The run still cost what it cost. A refusal must not also erase the
+    // ledger entry for a sandbox that genuinely ran.
+    expect(result.ok === false && result.usage).not.toBeNull();
   });
 
   it("reports a lost sandbox rather than inventing an artifact", async () => {
@@ -1051,9 +1054,13 @@ describe("validated artifact capture (Sprint 10B §5)", () => {
 
     await provisionSandbox(provider, fakeValidationTarget()).catch(() => undefined);
 
+    // Nothing to stop and nothing to measure, so no usage — as distinct from
+    // the other two refusals, which both terminate a live sandbox.
     expect(await captureValidatedArtifact(provider, fakeValidationTarget())).toEqual({
       ok: false,
       reason: "sandbox_lost",
+      detail: null,
+      usage: null,
     });
   });
 
@@ -1063,8 +1070,35 @@ describe("validated artifact capture (Sprint 10B §5)", () => {
     await provisionSandbox(provider, fakeValidationTarget());
     const result = await captureValidatedArtifact(provider, fakeValidationTarget());
 
-    expect(result).toEqual({ ok: false, reason: "capture_failed" });
+    expect(result).toMatchObject({ ok: false, reason: "capture_failed" });
     expect(provider.stopped()).toBe(true);
+  });
+
+  it("records why capture failed instead of swallowing the provider error", async () => {
+    const provider = scrubbed({ failSnapshot: true });
+
+    await provisionSandbox(provider, fakeValidationTarget());
+    const result = await captureValidatedArtifact(provider, fakeValidationTarget());
+
+    // The defect the first real dogfood exposed. `capture_failed` with no
+    // detail cost a whole run: three hypotheses were raised and eliminated from
+    // the SDK source, and the actual reason stayed unknowable because this
+    // function refused to look at it (ADR 0015 §9).
+    expect(result.ok).toBe(false);
+    expect(result.ok === false && result.detail).toContain("snapshot failed");
+  });
+
+  it("keeps the run's usage when capture fails", async () => {
+    const provider = scrubbed({ failSnapshot: true });
+
+    await provisionSandbox(provider, fakeValidationTarget());
+    const result = await captureValidatedArtifact(provider, fakeValidationTarget());
+
+    // The second defect from the same run: a 326-second sandbox was recorded
+    // with `active_cpu_ms: null` because the fallback `stop()` held the numbers
+    // and dropped them, and the later cleanup step could not reconnect to
+    // re-read them.
+    expect(result.ok === false && result.usage?.activeCpuDurationMs).toBe(1234);
   });
 
   it("still reports usage after capture terminates the sandbox", async () => {

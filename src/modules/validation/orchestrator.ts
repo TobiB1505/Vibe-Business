@@ -826,15 +826,72 @@ export async function runCheckPhase(
  * anything, including a `.git` directory. Checking again is checking the thing
  * we are about to keep.
  */
+export type CaptureOutcome =
+  | { ok: true; artifact: SandboxArtifact; usage: SandboxUsage | null }
+  | {
+      ok: false;
+      reason: "sandbox_lost" | "credential_present" | "capture_failed";
+      /**
+       * Sanitized name and message of whatever the provider threw.
+       *
+       * ## Why this exists, written after it cost a dogfood run
+       *
+       * The first real capture failed and recorded `capture_failed` and nothing
+       * else. Three hypotheses were raised and eliminated from the SDK source —
+       * non-persistent sandboxes cannot be snapshotted (the docs say they can),
+       * a nested `"use step"` (every SDK method has one, including the ones that
+       * worked), a throwing usage getter (they are plain property reads) — and
+       * the actual reason remained unknowable, because this function refused to
+       * look at it.
+       *
+       * That is precisely the failure mode ADR 0015 §9 was written about after
+       * Sprint 10A lost four runs to it:
+       *
+       * ```
+       * provider error → sanitized structured error → failure code → user-safe message
+       * ```
+       *
+       * never
+       *
+       * ```
+       * provider error → generic constant → generic constant → "something failed"
+       * ```
+       *
+       * The rule was recorded and then reintroduced one sprint later, in a bare
+       * `catch {}`. Users still never see this string; it is bounded and
+       * secret-redacted like any other untrusted text, and it goes to the audit
+       * event so an operator can act on it.
+       */
+      detail: string | null;
+      /**
+       * Usage measured while terminating, when termination was reached.
+       *
+       * Not an extra: the first failed capture recorded `active_cpu_ms: null`
+       * and `cleanup_status: not_provisioned` for a sandbox that had genuinely
+       * run for 326 seconds. The fallback `stop()` below already held those
+       * numbers and threw them away, and the later cleanup step could not
+       * reconnect to re-read them — so a capture failure silently erased the
+       * run's entire ledger entry.
+       */
+      usage: SandboxUsage | null;
+    };
+
 export async function captureValidatedArtifact(
   provider: SandboxProvider,
   target: ValidationTarget,
-): Promise<
-  | { ok: true; artifact: SandboxArtifact; usage: SandboxUsage | null }
-  | { ok: false; reason: "sandbox_lost" | "credential_present" | "capture_failed" }
-> {
+): Promise<CaptureOutcome> {
   const sandbox = await provider.reconnect({ name: sandboxNameFor(target.validationRunId) });
-  if (!sandbox) return { ok: false, reason: "sandbox_lost" };
+  // Nothing to stop and nothing to measure: the sandbox is already gone.
+  if (!sandbox) return { ok: false, reason: "sandbox_lost", detail: null, usage: null };
+
+  /** Terminates, and keeps what the provider measured on the way out. */
+  const terminate = async (): Promise<SandboxUsage | null> => {
+    try {
+      return await sandbox.stop();
+    } catch {
+      return null;
+    }
+  };
 
   // The build ran repository-controlled code after the original scrub. Verify
   // the thing being kept, not the thing that was checked earlier.
@@ -844,13 +901,14 @@ export async function captureValidatedArtifact(
   });
 
   if (credentialStore !== null) {
-    // Refuse to retain it, and leave no artifact behind.
-    try {
-      await sandbox.stop();
-    } catch {
-      // The verdict stands regardless of whether teardown could be confirmed.
-    }
-    return { ok: false, reason: "credential_present" };
+    // Refuse to retain it, and leave no artifact behind. The run still cost
+    // what it cost, so its usage still comes back.
+    return {
+      ok: false,
+      reason: "credential_present",
+      detail: detail("a git credential store was present at capture time"),
+      usage: await terminate(),
+    };
   }
 
   try {
@@ -860,23 +918,17 @@ export async function captureValidatedArtifact(
 
     // Snapshotting terminates the sandbox, so the usage read here is the whole
     // run's. A later `stop()` reports the same numbers rather than throwing.
-    let usage: SandboxUsage | null = null;
-    try {
-      usage = await sandbox.stop();
-    } catch {
-      usage = null;
-    }
-
-    return { ok: true, artifact, usage };
-  } catch {
+    return { ok: true, artifact, usage: await terminate() };
+  } catch (error) {
     // A run that validated successfully but could not be captured is still a
-    // successful validation. Preview simply has nothing to resume.
-    try {
-      await sandbox.stop();
-    } catch {
-      // Nothing further to do; the sandbox's own timeout bounds it.
-    }
-    return { ok: false, reason: "capture_failed" };
+    // successful validation. Preview simply has nothing to resume — and now
+    // there is a recorded reason why.
+    return {
+      ok: false,
+      reason: "capture_failed",
+      detail: detail(describeError(error)),
+      usage: await terminate(),
+    };
   }
 }
 

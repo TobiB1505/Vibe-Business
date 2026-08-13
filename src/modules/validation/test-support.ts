@@ -324,7 +324,12 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
         options.loseSandboxBeforeReconnect !== undefined &&
         reconnectCount >= options.loseSandboxBeforeReconnect;
 
-      if (lost || createCount === 0) {
+      // A stopped sandbox does not answer to its name any more. Modelling this
+      // is not pedantry: the first real capture failure stopped the sandbox on
+      // its way out, and the cleanup step that followed reconnected to nothing
+      // and recorded a 326-second run as `not_provisioned` with null usage. A
+      // fake that kept answering after `stop()` let that pass every test.
+      if (lost || createCount === 0 || stopCount > 0) {
         events.push({ kind: "reconnect", name: input.name, found: false });
         return null;
       }
