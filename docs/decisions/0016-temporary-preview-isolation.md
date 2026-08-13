@@ -159,10 +159,12 @@ There is no merge authority and no deploy authority in this sprint or anywhere i
 
 - A user can see a validated change running, without a deploy, a merge, or their own hosting.
 - The public-exposure decision is explicit, server-enforced, and auditable.
-- No customer filesystem sits in provider storage longer than an hour, and normally far less.
+- A customer filesystem is deleted as soon as the preview that needed it ends, which is normally minutes.
 - Preview spend is measured in `sandbox_usage_events` alongside validation, distinguishable by operation, and separate from inference spend.
 
 ### Negative / Tradeoffs
+
+- **The retention backstop is 24 hours, not the hour originally chosen.** Vercel rejects any snapshot expiry below `86400000` ms, which the first dogfood established by being refused with an HTTP 400. Explicit deletion at the end of a preview is unchanged and remains the plan, so the *expected* lifetime is minutes — but when deletion cannot be confirmed, a customer's built filesystem now sits in provider storage for a day rather than an hour. That is a real weakening of the backstop, it is not something Vibe can tighten, and it is recorded here rather than left to be discovered in the budget constant.
 
 - **A preview is usually a one-shot.** Deleting the artifact at teardown means previewing the same change again normally requires an explicit re-validation, and that costs sandbox minutes. The alternative — keeping artifacts around — is retaining customer data speculatively, which is a worse trade.
 - **Fifteen minutes is short** for a careful review. Extending it means starting another preview deliberately, which is visible and paid for rather than silent.
