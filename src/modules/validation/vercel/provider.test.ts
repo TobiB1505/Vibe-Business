@@ -40,7 +40,17 @@ vi.mock("@vercel/sandbox", () => ({
         extendTimeout: (...extendArgs: unknown[]) => extendTimeout(...extendArgs),
       });
     },
-    get: (...args: unknown[]) => get(...args),
+    get: async (...args: unknown[]) => {
+      const sandbox = await get(...args);
+      // Mirrors `create`: a reconnected sandbox exposes the same session APIs
+      // the adapter uses to diagnose one that ended early.
+      return sandbox && typeof sandbox === "object"
+        ? Object.assign(sandbox, {
+            listSessions: (...listArgs: unknown[]) => listSessions(...listArgs),
+            extendTimeout: (...extendArgs: unknown[]) => extendTimeout(...extendArgs),
+          })
+        : sandbox;
+    },
   },
 }));
 
@@ -562,5 +572,41 @@ describe("the session's lifetime, not just the sandbox's", () => {
     // A clear failure now beats a mystery death four minutes in, which is
     // exactly what the last three dogfood runs were.
     await expect(createSandbox({ timeoutMs: 900_000 })).rejects.toThrow();
+  });
+});
+
+describe("attributing a session that ended early", () => {
+  async function inspect() {
+    const { createVercelSandboxProvider } = await import("./provider");
+    return createVercelSandboxProvider().inspect({ name: "vibe-validate-abc" });
+  }
+
+  it("names what asked the session to stop", async () => {
+    get.mockResolvedValue({ name: "vibe-validate-abc", status: "stopped", timeout: 900_000 });
+    listSessions.mockResolvedValue({
+      sessions: [
+        { status: "stopped", timeout: 900_000, startedAt: 1000, stoppedAt: 283_318, requestedStopAt: 283_000 },
+      ],
+    });
+
+    const detail = await inspect();
+
+    // A session with 900000 ms of deadline that stopped after 282318 ms did not
+    // time out. The remaining question is who ended it, and a stop *request* is
+    // a different bug from a provider-side termination.
+    expect(detail).toContain("sessionTimeout=900000");
+    expect(detail).toContain("livedMs=282318");
+    expect(detail).toContain("requestedStop=283000");
+  });
+
+  it("says so explicitly when nothing accounts for the ending", async () => {
+    get.mockResolvedValue({ name: "vibe-validate-abc", status: "stopped", timeout: 900_000 });
+    listSessions.mockResolvedValue({
+      sessions: [{ status: "stopped", timeout: 900_000, startedAt: 1000, stoppedAt: 283_318 }],
+    });
+
+    // The absence of an attribution is itself the finding, so it is stated
+    // rather than left as a gap in the line.
+    expect(await inspect()).toContain("endedBy=unattributed");
   });
 });

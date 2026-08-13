@@ -347,9 +347,16 @@ class VercelSandboxHandle implements SandboxHandle {
 }
 
 /** The session a sandbox is currently running, or null when it reports none. */
-async function currentSession(
-  sandbox: Sandbox,
-): Promise<{ status: string; timeout: number; startedAt?: number; stoppedAt?: number } | null> {
+async function currentSession(sandbox: Sandbox): Promise<{
+  status: string;
+  timeout: number;
+  startedAt?: number;
+  stoppedAt?: number;
+  /** Set when something *asked* the session to stop, as opposed to it ending. */
+  requestedStopAt?: number;
+  abortedAt?: number;
+  snapshottedAt?: number;
+} | null> {
   const page = await sandbox.listSessions({ limit: 1, sortOrder: "desc" });
   return page.sessions[0] ?? null;
 }
@@ -522,12 +529,31 @@ export function createVercelSandboxProvider(): SandboxProvider {
               ? `livedMs=${session.stoppedAt - session.startedAt}`
               : null;
 
+        // Attribution, which is the question left after the last run. The
+        // session held a 900000 ms deadline and stopped after 282318 ms, so it
+        // did not time out — something ended it. These three fields say which:
+        //
+        //   requestedStop=…  something asked it to stop
+        //   aborted=…        it was aborted
+        //   snapshotted=…    a snapshot ended it, which is snapshot()'s
+        //                    documented behaviour and would mean the capture
+        //                    got further than the failure code suggests
+        //
+        // None of them set, with a deadline still to run, points away from our
+        // code entirely and at the provider.
+        const ending = [
+          session?.requestedStopAt === undefined ? null : `requestedStop=${session.requestedStopAt}`,
+          session?.abortedAt === undefined ? null : `aborted=${session.abortedAt}`,
+          session?.snapshottedAt === undefined ? null : `snapshotted=${session.snapshottedAt}`,
+        ].filter((fact): fact is string => fact !== null);
+
         const facts = [
           `status=${safeProviderField(sandbox.status) ?? "unknown"}`,
           `sandboxTimeout=${sandbox.timeout ?? "unknown"}`,
           session === null ? null : `sessionStatus=${safeProviderField(session.status) ?? "unknown"}`,
           session === null ? null : `sessionTimeout=${session.timeout}`,
           lifetime,
+          ...(ending.length > 0 ? ending : session === null ? [] : ["endedBy=unattributed"]),
         ].filter((fact): fact is string => fact !== null);
 
         return facts.join(" ");
