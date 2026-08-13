@@ -4,9 +4,15 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireSession } from "@/modules/auth/session";
 import { VercelWorkflowExecutor } from "@/modules/operations/vercel/executor";
+import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import type { OperationView } from "@/modules/operations/view";
-import type { ValidationFailureCode } from "@/modules/validation/schema";
-import { startChangeValidation } from "@/modules/validation/service";
+import { SANDBOX_POLICY_VERSION, type ValidationFailureCode } from "@/modules/validation/schema";
+import {
+  getLatestValidation,
+  getValidationStatus,
+  startChangeValidation,
+} from "@/modules/validation/service";
+import { buildValidationSummary, type ValidationSummary } from "@/modules/validation/view";
 
 /**
  * Starting an isolated validation (Sprint 10A §27, §44).
@@ -39,6 +45,52 @@ export type ValidateChangeActionState =
  * surface that exists only to be ignored, and the next person to touch this
  * would reasonably start reading from it.
  */
+/**
+ * Live phase progress for a validation the user is watching.
+ *
+ * Reads persisted state and nothing else: the ValidationRun row that each
+ * durable step writes as it finishes. The workflow's own step index is not
+ * consulted and must not be — it is a third-party execution detail, and it
+ * would report progress for work whose result was never recorded (§4).
+ *
+ * Scoped to the session's own project, like every other read here. The prepared
+ * change id decides which artifact's validation is returned, and both are
+ * checked against the user before anything is read.
+ */
+export async function getValidationProgressAction(
+  projectId: string,
+  preparedChangeId: string,
+  operationId: string,
+): Promise<
+  | { ok: true; operation: OperationView; summary: ValidationSummary | null }
+  | { ok: false }
+> {
+  const session = await requireSession();
+  const supabase = await createClient();
+
+  const operation = await getValidationStatus(supabase, {
+    projectId,
+    userId: session.userId,
+    operationId,
+  });
+  if (!operation) return { ok: false };
+
+  const validation = await getLatestValidation(supabase, { projectId, preparedChangeId });
+
+  return {
+    ok: true,
+    operation,
+    summary: validation
+      ? buildValidationSummary(validation, {
+          currentPolicyVersion: SANDBOX_POLICY_VERSION,
+          failureMessage: validation.failureCode
+            ? (OPERATION_FAILURE_MESSAGES[validation.failureCode] ?? null)
+            : null,
+        })
+      : null,
+  };
+}
+
 export async function validateChangeAction(
   projectId: string,
   preparedChangeId: string,

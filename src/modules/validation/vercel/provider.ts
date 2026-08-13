@@ -5,6 +5,7 @@ import { SANDBOX_BUDGETS, SANDBOX_RESOURCES } from "../budgets";
 import type {
   CreateSandboxInput,
   SandboxHandle,
+  SandboxLiveness,
   SandboxNetworkPolicy,
   SandboxProvider,
   SandboxUsage,
@@ -66,11 +67,26 @@ function describeProviderError(error: unknown): string {
   return "the sandbox provider threw a non-error value";
 }
 
+/**
+ * Maps the provider's session status onto the domain's two-value liveness.
+ *
+ * Only `running` is usable. Everything else — `stopped`, `failed`, `aborted`,
+ * and the in-between states `pending`, `stopping`, `snapshotting` — is `gone`,
+ * because a phase step is about to run a command that assumes a filesystem
+ * built by earlier phases. A sandbox that is merely *becoming* available is not
+ * the sandbox that installed `node_modules`, and treating an ambiguous status
+ * as usable is how a partial-state continuation gets reported as a pass (§12).
+ */
+function toLiveness(status: string | undefined): SandboxLiveness {
+  return status === "running" ? "running" : "gone";
+}
+
 class VercelSandboxHandle implements SandboxHandle {
   constructor(
     private readonly sandbox: Sandbox,
     readonly id: string,
     readonly runtime: string,
+    readonly liveness: SandboxLiveness,
   ) {}
 
   async run(input: {
@@ -185,7 +201,56 @@ export function createVercelSandboxProvider(): SandboxProvider {
         persistent: false,
       });
 
-      return new VercelSandboxHandle(sandbox, sandbox.name, sandbox.runtime ?? SANDBOX_RESOURCES.image);
+      // Freshly created, so liveness is not in question — and asserting it here
+      // would turn a provider quirk in the status field into a failure to run
+      // at all. Reconnection is where liveness is a real question.
+      return new VercelSandboxHandle(
+        sandbox,
+        sandbox.name,
+        sandbox.runtime ?? SANDBOX_RESOURCES.image,
+        "running",
+      );
+    },
+
+    async reconnect(input: { name: string }): Promise<SandboxHandle | null> {
+      try {
+        const sandbox = await Sandbox.get({
+          name: input.name,
+          // A third SDK default that is wrong for this use case, alongside
+          // `networkPolicy` and `persistent`.
+          //
+          // `resume` defaults to **true**, which restores a stopped session —
+          // potentially from a snapshot. For validation that is the worst
+          // possible outcome: the next phase would silently continue on a
+          // filesystem that is not the one the previous phase built, and report
+          // a verdict about a tree that never existed. We want the opposite —
+          // observe that it is gone and refuse.
+          //
+          // The status check below is not redundant with this. It is a second,
+          // independent defence: `resume: false` states the intent to the
+          // provider, and the status assertion holds even if a future SDK
+          // version reinterprets it.
+          resume: false,
+        });
+
+        const liveness = toLiveness(sandbox.status);
+        if (liveness === "gone") return null;
+
+        return new VercelSandboxHandle(
+          sandbox,
+          sandbox.name,
+          sandbox.runtime ?? SANDBOX_RESOURCES.image,
+          liveness,
+        );
+      } catch {
+        // Not found is the ordinary answer here — an expired sandbox is a
+        // normal outcome, not an exception the caller should have to classify.
+        // Every other provider fault resolves the same way on purpose: a
+        // reconnect that cannot be confirmed must never be treated as success,
+        // because the next thing the caller does is run a command that assumes
+        // a filesystem.
+        return null;
+      }
     },
   };
 }

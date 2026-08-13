@@ -25,10 +25,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
  */
 
 const create = vi.fn();
+const get = vi.fn();
 
 vi.mock("@vercel/sandbox", () => ({
   Sandbox: {
     create: (...args: unknown[]) => create(...args),
+    get: (...args: unknown[]) => get(...args),
   },
 }));
 
@@ -36,6 +38,7 @@ vi.mock("server-only", () => ({}));
 
 beforeEach(() => {
   create.mockReset();
+  get.mockReset();
   create.mockResolvedValue({
     name: "vibe-validate-abc",
     runtime: "node24",
@@ -197,5 +200,105 @@ describe("command failures explain themselves (post-dogfood)", () => {
     // Described, never serialized: an arbitrary thrown object may carry anything.
     expect(result.output).toContain("non-error value");
     expect(result.output).not.toContain("ghs_");
+  });
+});
+
+describe("reconnecting across durable steps (§3, §12)", () => {
+  /**
+   * The seam the durable-phase refactor introduced, tested at the same depth as
+   * creation and for the same reason: an adapter mistake here is invisible to
+   * every test that fakes our own boundary, and this is the third time that
+   * class of bug would reach production.
+   */
+  function liveSandbox(overrides: Record<string, unknown> = {}) {
+    return {
+      name: "vibe-validate-abc",
+      runtime: "node24",
+      status: "running",
+      async runCommand() {
+        return { exitCode: 0, durationMs: 1, stdout: async () => "", stderr: async () => "" };
+      },
+      async stop() {
+        return { activeCpuDurationMs: 1, networkTransfer: { ingress: 1, egress: 1 } };
+      },
+      ...overrides,
+    };
+  }
+
+  async function reconnect() {
+    const { createVercelSandboxProvider } = await import("./provider");
+    return createVercelSandboxProvider().reconnect({ name: "vibe-validate-abc" });
+  }
+
+  it("asks for the sandbox by name, and nothing else", async () => {
+    get.mockResolvedValue(liveSandbox());
+
+    await reconnect();
+
+    // The whole reconnect key. No handle, no capability URL, no token — the
+    // name is recomputed from the validation run id, so there is nothing
+    // persisted to leak (§3).
+    expect(get).toHaveBeenCalledWith(expect.objectContaining({ name: "vibe-validate-abc" }));
+    const [params] = get.mock.calls[0] as [Record<string, unknown>];
+    expect(Object.keys(params).sort()).toEqual(["name", "resume"]);
+  });
+
+  it("never resumes a stopped session", async () => {
+    // The third SDK default that is wrong here. `resume` defaults to true and
+    // would restore a stopped session — potentially from a snapshot — handing
+    // the next phase a filesystem the previous phase did not build.
+    get.mockResolvedValue(liveSandbox());
+
+    await reconnect();
+
+    expect(get).toHaveBeenCalledWith(expect.objectContaining({ resume: false }));
+  });
+
+  it("returns a usable handle for a running sandbox", async () => {
+    get.mockResolvedValue(liveSandbox());
+
+    const handle = await reconnect();
+
+    expect(handle).not.toBeNull();
+    expect(handle?.liveness).toBe("running");
+    expect(handle?.id).toBe("vibe-validate-abc");
+  });
+
+  it.each(["stopped", "failed", "aborted", "pending", "stopping", "snapshotting"])(
+    "reports a %s sandbox as gone rather than usable",
+    async (status) => {
+      // Only `running` is usable. `pending` and `stopping` are the interesting
+      // ones: a sandbox that is merely *becoming* available is not the sandbox
+      // that installed node_modules.
+      get.mockResolvedValue(liveSandbox({ status }));
+
+      expect(await reconnect()).toBeNull();
+    },
+  );
+
+  it("reports a missing sandbox as gone rather than throwing", async () => {
+    // An expired sandbox is an ordinary outcome, not an exception the caller
+    // should have to classify.
+    get.mockRejectedValue(new Error("not_found"));
+
+    expect(await reconnect()).toBeNull();
+  });
+
+  it("never reports an unconfirmed reconnect as success", async () => {
+    // Any provider fault resolves the same way on purpose: the next thing the
+    // caller does is run a command that assumes a filesystem.
+    get.mockRejectedValue({ weird: "shape" });
+
+    expect(await reconnect()).toBeNull();
+  });
+
+  it("creates nothing when a reconnect fails", async () => {
+    get.mockRejectedValue(new Error("not_found"));
+
+    await reconnect();
+
+    // `Sandbox.getOrCreate` exists and is exactly the wrong function here: it
+    // would silently hand back a fresh, empty VM (§12).
+    expect(create).not.toHaveBeenCalled();
   });
 });

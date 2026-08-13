@@ -221,6 +221,106 @@ export async function setValidationStage(
 }
 
 /**
+ * Records one completed phase, as it completes (§4, §5, §11).
+ *
+ * The load-bearing write of the durable-phase refactor. Under the single-step
+ * design `steps` was written once, at the end, so a run that died mid-pipeline
+ * recorded nothing about the phases that had already succeeded — and the UI had
+ * nothing to show while minutes passed.
+ *
+ * Two properties follow from writing each phase immediately:
+ *
+ *  1. **Re-entry is idempotent.** A resumed workflow reads this row and skips
+ *     any phase already recorded, so a persistence or provider error after the
+ *     tests passed never re-runs the tests (§11, §20).
+ *  2. **Progress is real.** The panel renders persisted phase state, not a
+ *     workflow's internal step index and not a fabricated percentage (§4, §15).
+ *
+ * Read-modify-write on the `steps` object rather than a JSONB merge expression:
+ * phases within one run are strictly sequential — the workflow awaits each
+ * before starting the next — so there is no concurrent writer to lose. Scoped
+ * to `status = 'running'` so a replay cannot amend a finished run.
+ */
+export async function recordValidationPhase(
+  supabase: SupabaseClient,
+  params: {
+    validationRunId: string;
+    projectId: string;
+    step: ValidationStepName;
+    result: ValidationStepResult;
+    /** Recorded with the phase that established it, not at the end of the run. */
+    sourceIntegrity?: SourceIntegrity | null;
+    stage: ValidationStage;
+  },
+): Promise<boolean> {
+  const { data: current, error: readError } = await supabase
+    .from("validation_runs")
+    .select("steps")
+    .eq("id", params.validationRunId)
+    .eq("project_id", params.projectId)
+    .eq("status", "running")
+    .maybeSingle();
+
+  if (readError) throw readError;
+  if (!current) return false;
+
+  const steps = {
+    ...((current as { steps?: Record<string, unknown> }).steps ?? {}),
+    [params.step]: params.result,
+  };
+
+  const { data, error } = await supabase
+    .from("validation_runs")
+    .update({
+      steps,
+      stage: params.stage,
+      ...(params.sourceIntegrity !== undefined ? { source_integrity: params.sourceIntegrity } : {}),
+    })
+    .eq("id", params.validationRunId)
+    .eq("project_id", params.projectId)
+    .eq("status", "running")
+    .select("id");
+
+  if (error) throw error;
+  return (data ?? []).length > 0;
+}
+
+/**
+ * Records what the source-verification phase established, before any
+ * repository-controlled command runs.
+ *
+ * Separate from the phase writer because source integrity is not a `steps`
+ * entry: it has its own column and its own meaning. Persisting it here rather
+ * than at completion is what lets a later phase re-enter and know verification
+ * already happened (§11).
+ */
+export async function recordSourceIntegrity(
+  supabase: SupabaseClient,
+  params: {
+    validationRunId: string;
+    projectId: string;
+    sourceIntegrity: SourceIntegrity;
+    sandboxRuntime: string | null;
+    stage: ValidationStage;
+  },
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("validation_runs")
+    .update({
+      source_integrity: params.sourceIntegrity,
+      sandbox_runtime: params.sandboxRuntime,
+      stage: params.stage,
+    })
+    .eq("id", params.validationRunId)
+    .eq("project_id", params.projectId)
+    .eq("status", "running")
+    .select("id");
+
+  if (error) throw error;
+  return (data ?? []).length > 0;
+}
+
+/**
  * Writes the terminal result.
  *
  * Scoped to `status = 'running'` and reports whether it applied, so a workflow

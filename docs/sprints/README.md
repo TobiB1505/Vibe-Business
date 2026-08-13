@@ -32,4 +32,4 @@ Each sprint document should include:
 - **Acceptance Criteria** — how completion is judged.
 - **Validation** — what was run to confirm the work (tests, build, manual checks) per [CLAUDE.md](../../CLAUDE.md) rule 17.
 - **Risks / Notes** — known risks, open questions, or follow-ups surfaced during the sprint.
-- [Sprint 10A — Isolated Change Validation](0010-isolated-change-validation.md)
+- [Sprint 10A — Isolated Change Validation](0010-isolated-change-validation.md) — isolated sandbox validation of a prepared change (Implemented and dogfooded under policy v1; refactored into durable per-phase steps under policy v3, not yet dogfooded under v3)

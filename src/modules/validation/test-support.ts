@@ -1,8 +1,24 @@
 import type { RepositoryIntelligenceSnapshot } from "@/modules/repository-intelligence/schema";
-import type { ValidationTarget } from "./orchestrator";
+import {
+  buildSatisfiesProfile,
+  provisionSandbox,
+  runCheckPhase,
+  stopSandbox,
+  verifySource,
+  type CleanupStatus,
+  type SourceManifestPort,
+  type ValidationTarget,
+} from "./orchestrator";
+import type {
+  SourceIntegrity,
+  ValidationFailureCode,
+  ValidationStepName,
+  ValidationStepResult,
+} from "./schema";
 import type {
   CreateSandboxInput,
   SandboxHandle,
+  SandboxLiveness,
   SandboxNetworkPolicy,
   SandboxProvider,
   SandboxUsage,
@@ -25,6 +41,7 @@ import type {
 
 export type FakeEvent =
   | { kind: "create"; input: CreateSandboxInput }
+  | { kind: "reconnect"; name: string; found: boolean }
   | { kind: "policy"; policy: SandboxNetworkPolicy }
   | { kind: "command"; command: string; cwd: string }
   | { kind: "read"; path: string }
@@ -44,6 +61,17 @@ export type FakeSandboxOptions = {
   /** Throw on this exact command, for the unexpected-provider-error path. */
   throwOn?: string;
   usage?: Partial<SandboxUsage>;
+  /**
+   * Make the sandbox vanish before the Nth reconnect (1-based).
+   *
+   * Models the failure the durable-phase design has to survive: the VM expired,
+   * or the provider stopped it, between two steps. `node_modules` went with it,
+   * so the only correct answer is `sandbox_lost` — never a replacement sandbox
+   * and a continuation on a different filesystem (§12, §22).
+   */
+  loseSandboxBeforeReconnect?: number;
+  /** Reconnect reports a live sandbox whose session is no longer running. */
+  reconnectLiveness?: SandboxLiveness;
 };
 
 export type FakeSandboxProvider = SandboxProvider & {
@@ -54,6 +82,17 @@ export type FakeSandboxProvider = SandboxProvider & {
   policies(): SandboxNetworkPolicy[];
   createdWith(): CreateSandboxInput | null;
   stopped(): boolean;
+  /**
+   * How many sandboxes were created across the whole run.
+   *
+   * The single most important assertion in the durable-phase design: one
+   * ValidationRun must produce exactly one sandbox, however many steps it takes
+   * (§23). A second creation means install ran against a filesystem the build
+   * never saw.
+   */
+  createCount(): number;
+  /** Names passed to `reconnect`, in order. */
+  reconnects(): string[];
 };
 
 export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandboxProvider {
@@ -61,9 +100,13 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
   const files = { ...(options.files ?? {}) };
   let stopCount = 0;
 
+  let createCount = 0;
+  let reconnectCount = 0;
+
   const handle: SandboxHandle = {
     id: "sandbox_1",
     runtime: "vercel/sandbox/node:24",
+    liveness: "running",
 
     async run(input) {
       const rendered = [input.command.command, ...input.command.args].join(" ");
@@ -132,7 +175,31 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
     async create(input) {
       events.push({ kind: "create", input });
       if (options.failCreate) throw new Error("no capacity");
+      createCount += 1;
       return handle;
+    },
+
+    async reconnect(input) {
+      reconnectCount += 1;
+
+      // The sandbox is gone from this reconnect onwards, not just for one call:
+      // a VM that expired stays expired, and a fake that healed itself would
+      // let a "create a replacement and carry on" bug pass.
+      const lost =
+        options.loseSandboxBeforeReconnect !== undefined &&
+        reconnectCount >= options.loseSandboxBeforeReconnect;
+
+      if (lost || createCount === 0) {
+        events.push({ kind: "reconnect", name: input.name, found: false });
+        return null;
+      }
+
+      events.push({ kind: "reconnect", name: input.name, found: true });
+
+      const liveness = options.reconnectLiveness ?? "running";
+      // A non-running session is reported as such rather than swallowed here,
+      // so the domain's own liveness check is the thing under test.
+      return liveness === "running" ? handle : { ...handle, liveness };
     },
 
     commands() {
@@ -152,6 +219,14 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
 
     stopped() {
       return stopCount > 0;
+    },
+
+    createCount() {
+      return createCount;
+    },
+
+    reconnects() {
+      return events.filter((event) => event.kind === "reconnect").map((event) => event.name);
     },
   };
 }
@@ -199,6 +274,97 @@ export function fakeValidationTarget(overrides: Partial<ValidationTarget> = {}):
     preparedFiles: [],
     validationRunId: "11111111-2222-3333-4444-555555555555",
     ...overrides,
+  };
+}
+
+export type AggregatedValidationOutcome = {
+  status: "passed" | "failed";
+  failureCode: ValidationFailureCode | null;
+  failureDetail: string | null;
+  steps: Partial<Record<ValidationStepName, ValidationStepResult>>;
+  sourceIntegrity: SourceIntegrity | null;
+  cleanup: CleanupStatus;
+  usage: Awaited<ReturnType<typeof stopSandbox>>["usage"];
+  sandboxRuntime: string | null;
+};
+
+/** The phase order, mirroring the durable workflow. */
+const PHASES: readonly ValidationStepName[] = ["install", "typecheck", "test", "build"];
+
+/**
+ * Drives one whole validation through the real phase functions.
+ *
+ * ## Why a driver and not a call to a single function
+ *
+ * There is no longer a single function to call: each phase is entered
+ * independently from its own durable step. This helper is the *test's* stand-in
+ * for that orchestration — it provisions, verifies, runs each phase in order,
+ * fails fast, and always cleans up, exactly as the workflow does.
+ *
+ * What it deliberately does **not** do is short-circuit the seam under test.
+ * Every phase goes through `provider.reconnect()` just as it does in
+ * production, so assertions about ordering, network transitions and sandbox
+ * reuse are made against the same code path a real run takes — and a phase that
+ * forgot to reconnect, or that quietly created a second sandbox, fails here.
+ *
+ * The durable ordering itself is *not* proven by this helper. It is proven
+ * against the real workflow in `change-validation/execution.test.ts`, because a
+ * driver that agreed with a mistaken workflow would prove nothing.
+ */
+export async function runValidationPhases(
+  provider: SandboxProvider,
+  manifest: SourceManifestPort,
+  target: ValidationTarget,
+): Promise<AggregatedValidationOutcome> {
+  const steps: Partial<Record<ValidationStepName, ValidationStepResult>> = {};
+  let failureCode: ValidationFailureCode | null = null;
+  let failureDetail: string | null = null;
+  let sourceIntegrity: SourceIntegrity | null = null;
+
+  const provisioned = await provisionSandbox(provider, target);
+  if (!provisioned.ok) {
+    failureCode = provisioned.failureCode;
+    failureDetail = provisioned.failureDetail;
+  }
+
+  if (failureCode === null) {
+    const verified = await verifySource(provider, manifest, target);
+    sourceIntegrity = verified.ok ? verified.sourceIntegrity : verified.sourceIntegrity;
+    if (!verified.ok) {
+      failureCode = verified.failureCode;
+      failureDetail = verified.failureDetail;
+    }
+  }
+
+  if (failureCode === null) {
+    for (const phase of PHASES) {
+      const outcome = await runCheckPhase(provider, target, phase);
+      if (outcome.step) steps[phase] = outcome.step;
+      if (!outcome.ok) {
+        failureCode = outcome.failureCode;
+        failureDetail = outcome.failureDetail;
+        break;
+      }
+    }
+  }
+
+  // The build gate, applied where the finalize step applies it: a pipeline that
+  // ran to the end without a passing build has not established the claim.
+  if (failureCode === null && !buildSatisfiesProfile(steps)) {
+    failureCode = "validation_not_supported";
+  }
+
+  const cleanup = await stopSandbox(provider, target);
+
+  return {
+    status: failureCode === null ? "passed" : "failed",
+    failureCode,
+    failureDetail,
+    steps,
+    sourceIntegrity,
+    cleanup: cleanup.cleanup,
+    usage: cleanup.usage,
+    sandboxRuntime: cleanup.runtime,
   };
 }
 

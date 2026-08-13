@@ -156,7 +156,50 @@ Users still never see raw provider output. Internally, name and message are kept
 Refusing to *look* at untrusted data is a security property; being unable to
 *find out* what happened is a blind spot wearing the same clothes.
 
-### 10. Validation is not approval
+### 10. One sandbox per validation, reconnected by a name we can recompute
+
+A validation runs as several durable steps, each in its own function invocation
+with no shared memory, and they must all work in the **same** sandbox: the
+filesystem is the state, and `node_modules` has to survive from install to
+build.
+
+Something therefore has to carry the sandbox across a step boundary, and the
+obvious candidates are all refused. A serialized provider handle or a capability
+URL would put connection material — in the second case a bearer credential —
+into a third-party durable log (CLAUDE.md rule 52). An opaque provider id would
+be storage that has to be secured for no gain.
+
+**The reconnect key is derived, not stored:** `sandboxNameFor(validationRunId)`
+is a pure function of a row the database already holds, so nothing new is
+persisted at all. Reconnection is `Sandbox.get({ name, resume: false })`, and
+authorization comes from the provider credentials of the process doing the
+reconnecting, exactly as it does at creation.
+
+`resume` defaults to **true** and must be overridden. It restores a stopped
+session, potentially from a snapshot, which would hand a later phase a
+filesystem an earlier phase did not build. It joins `networkPolicy: allow-all`
+and `persistent: true` as an SDK default that is actively wrong for this use
+case.
+
+### 11. A lost sandbox fails the run; it is never replaced
+
+If no running sandbox answers to the name between phases, validation fails as
+`sandbox_lost`.
+
+It does not provision a replacement and continue. `Sandbox.getOrCreate` exists
+and is precisely the wrong function here: it would return a fresh, empty VM, and
+the remaining phases would report a verdict about a tree that never existed. A
+wrong `passed` is worse than an honest failure.
+
+Only `running` counts as usable. `pending`, `stopping` and `snapshotting` are
+treated as gone, because a sandbox that is merely *becoming* available is not
+the sandbox that installed the dependencies.
+
+Checkpoint or snapshot recovery could lift this, and is deliberately not built:
+it means persisting a customer's filesystem into provider storage, which is a
+decision of its own and would have to be reconciled with §4 of ADR 0006.
+
+### 12. Validation is not approval
 
 `sandbox_validation_passed` means the profile's commands exited zero in an isolated VM. It does not mean safe, correct, secure, reviewed, or production ready. These remain separate gates:
 
@@ -180,6 +223,8 @@ Only the first two exist.
 - **`--ignore-scripts` will fail some legitimate projects.** A repository that genuinely needs a postinstall step to build gets a false negative. Accepted deliberately: a false negative is a bad result, a supply-chain execution window during the networked step is a bad architecture.
 - **Coverage is narrow.** One profile — single-app Next.js on npm or pnpm. Everything else is `validation_not_supported`, which is a statement about Vibe rather than about the customer's repository.
 - **`iad1` only**, and Hobby plans cap runtime at 45 minutes with a monthly Active CPU allowance.
+- **A sandbox outlives any single step, so the leak bound is the sandbox's own timeout.** Cleanup is a durable step and runs on every path, including one where a phase step was killed outright — but a workflow that dies entirely still leaves a VM to expire on its own. Bounded at 15 minutes, well below the provider maximum.
+- **Sandbox loss between phases ends the run.** Correct, and a real cost: a long validation can be defeated by an infrastructure event that no repository caused, and the user's only recourse is to start again.
 
 ## Revisit when
 

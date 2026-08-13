@@ -80,6 +80,12 @@ export const OPERATION_FAILURE_MESSAGES: Record<OperationFailureCode, string> = 
   source_integrity_failed: "The code in the isolated environment did not match the prepared change, so nothing was run.",
   sandbox_unavailable: "The isolated environment could not be started. Nothing was run.",
   sandbox_timeout: "Validation ran out of time and was stopped.",
+  // Says what was lost, not just that something was. "The environment
+  // disappeared" invites the reasonable question "so start another one?" — and
+  // the answer is that the installed dependencies went with it, so a fresh
+  // machine would be answering a different question.
+  sandbox_lost:
+    "The isolated environment stopped being available part-way through, taking its installed dependencies with it. Vibe stopped rather than finishing on a different machine. Validating again starts a fresh environment.",
   credential_scrub_failed: "Vibe could not confirm the environment was safe to run code in, so it stopped.",
   validation_checks_failed: "Validation failed. See which step failed below.",
   build_failed_missing_environment: "The build needs environment variables that Vibe does not have. Validation cannot supply them yet.",

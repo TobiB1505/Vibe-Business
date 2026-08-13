@@ -24,6 +24,7 @@ import { buildBranchUrl } from "@/modules/execution/diff";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { getLatestValidation } from "@/modules/validation/service";
 import { SANDBOX_POLICY_VERSION } from "@/modules/validation/schema";
+import { buildValidationSummary } from "@/modules/validation/view";
 import { listPreparedChangesForProject } from "@/modules/execution/store";
 import { PreparedChangesSection, type PreparedChangeCard } from "./prepared-changes-section";
 import type { ValidationSummary } from "./validation-panel";
@@ -159,15 +160,12 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
       });
 
       if (validation) {
-        validationSummaries[summary.opportunityId] = {
-          status: validation.status,
-          steps: validation.steps,
+        validationSummaries[summary.opportunityId] = buildValidationSummary(validation, {
+          currentPolicyVersion: SANDBOX_POLICY_VERSION,
           failureMessage: validation.failureCode
             ? (OPERATION_FAILURE_MESSAGES[validation.failureCode] ?? null)
             : null,
-          sandboxDurationMs: validation.sandboxDurationMs,
-          underCurrentPolicy: validation.sandboxPolicyVersion === SANDBOX_POLICY_VERSION,
-        };
+        });
       }
     }
   }
@@ -192,15 +190,12 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
       createdAt: prepared.createdAt,
       branchUrl: repository ? buildBranchUrl(repository.fullName, prepared.branchName) : null,
       validation: validation
-        ? {
-            status: validation.status,
-            steps: validation.steps,
+        ? buildValidationSummary(validation, {
+            currentPolicyVersion: SANDBOX_POLICY_VERSION,
             failureMessage: validation.failureCode
               ? (OPERATION_FAILURE_MESSAGES[validation.failureCode] ?? null)
               : null,
-            sandboxDurationMs: validation.sandboxDurationMs,
-            underCurrentPolicy: validation.sandboxPolicyVersion === SANDBOX_POLICY_VERSION,
-          }
+          })
         : null,
     });
   }

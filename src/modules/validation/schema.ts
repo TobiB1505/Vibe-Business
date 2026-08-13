@@ -71,8 +71,30 @@ export const VALIDATION_PROFILE_VERSIONS: Record<ValidationProfile, string> = {
  * for. Run `61b8c9f1` remains historically v1 and is not rewritten; its
  * identity no longer matches, so it cannot be reused as though it had been
  * produced under v2.
+ *
+ * ## v2 → v3 (2026-08-13) — durable phases
+ *
+ * The commands did not change. What "validated" *means* did.
+ *
+ * Under v2 the whole pipeline ran inside one durable step, against one platform
+ * function ceiling. A repository whose real work exceeded that ceiling could
+ * only ever record `sandbox_timeout` — the verdict described our orchestration,
+ * not the artifact. Under v3 each phase is its own durable step with its own
+ * ceiling, so **a run that was terminally timed-out under v2 can legitimately
+ * pass under v3**.
+ *
+ * That is the exact condition for a version bump: a stored `failed` and a fresh
+ * `passed` would otherwise disagree about the same artifact with no recorded
+ * reason. The bump also means no v2 result is reused to answer a v3 question,
+ * which matters in the other direction too — v3 tolerates a longer sandbox
+ * lifetime, so its passes were checked under a measurably different resource
+ * policy.
+ *
+ * Timeouts are policy, not tuning. A budget decides which artifacts can pass at
+ * all, which is why it lives behind a version rather than in a constant someone
+ * can raise quietly.
  */
-export const SANDBOX_POLICY_VERSION = "sandbox-policy-v2" as const;
+export const SANDBOX_POLICY_VERSION = "sandbox-policy-v3" as const;
 
 export const SANDBOX_PROVIDERS = ["vercel_sandbox"] as const;
 export type SandboxProviderId = (typeof SANDBOX_PROVIDERS)[number];
@@ -129,6 +151,15 @@ export const VALIDATION_FAILURE_REASONS = [
   "source_integrity_failed",
   "sandbox_unavailable",
   "sandbox_timeout",
+  /**
+   * The sandbox stopped existing between two phases.
+   *
+   * Its filesystem went with it — `node_modules` above all — so continuing on a
+   * replacement VM would typecheck a different tree than the one that installed.
+   * Vibe refuses instead: a partial-state continuation is a result nobody can
+   * interpret, and a wrong "passed" is worse than an honest failure (§12).
+   */
+  "sandbox_lost",
   /** Credential scrubbing did not verifiably succeed — refuse rather than run. */
   "credential_scrub_failed",
   /** A required check failed. The ordinary outcome of validating a broken change. */

@@ -720,6 +720,296 @@ Three changes, in order of importance:
 If the work still does not fit, the answer is to split it across steps or move
 to a plan with a longer function limit — a decision, not a larger number.
 
+## The durable-phase refactor — sandbox policy v3
+
+The sentence above turned out to be the specification for the next piece of
+work. The work did not fit, and the answer taken is the first one: **split it
+across steps.**
+
+### Why the coarse execution had to go
+
+The single-step design was not merely slow to the limit. It failed in the one
+way a design must not:
+
+> The step was killed at the platform ceiling, and **because it was killed, its
+> cleanup never ran.** Every teardown guarantee in this sprint lived inside the
+> function that was killed.
+
+So the guarantee held for exactly the failures the function survived, which is
+the wrong set. A paid microVM stayed alive on its own timer with nothing
+responsible for it. Adding vCPUs and shortening the sandbox lifetime bought
+margin against the symptom and changed nothing about the shape.
+
+The second problem was product-visible. `steps` was written once, at the end,
+so for five minutes the panel could say only "validating…", and a run that died
+mid-pipeline recorded nothing about the phases that had already passed.
+
+### The step graph
+
+```
+prepare ─▶ provision ─▶ verify ─▶ install ─▶ typecheck ─▶ test ─▶ build
+               │           │         │           │          │       │
+               └───────────┴─────────┴───────────┴──────────┴───────┘
+                                     ▼
+                                  cleanup ─▶ finalize ─▶ complete / abort
+```
+
+Nine steps where there were three. The security sequence inside them is
+unchanged — pin, hash, scrub, narrow, install, close, run — and the ADR 0015
+trust boundary is untouched.
+
+**Verified against the SDK's own shipped documentation for the installed
+version, not recalled:** on Vercel the Workflow SDK deploys step execution as
+its own queue-consumer function with `maxDuration: max`, while the orchestrating
+workflow function is short-lived (`maxDuration: 60`) and suspended between
+steps. Each phase therefore gets a fresh invocation and a fresh ceiling. The
+measured baseline — install 18.4 s, typecheck 79.1 s, test 83.9 s, build 99.3 s —
+now sits four phases wide instead of stacked against one limit.
+
+### One sandbox, reconnected by name
+
+The filesystem *is* the state: `node_modules` must survive from install to
+build. So one ValidationRun creates exactly one sandbox, and every later phase
+reconnects to it.
+
+What crosses the step boundary to make that possible is the interesting part,
+because the tempting options are all wrong:
+
+| Option | Why not |
+| --- | --- |
+| a serialized provider handle | puts connection material in a third-party durable log |
+| a capability URL | a bearer credential, in that same log |
+| an opaque provider id | storage that has to be secured, for no gain |
+
+What is used instead is **`sandboxNameFor(validationRunId)`** — a pure function
+of a row the database already holds. Nothing new is persisted at all: not a
+token, not a URL, not an id. The reconnect key is recomputed, and authorization
+comes from the provider credentials of the process doing the reconnecting,
+exactly as it does at creation (§3, CLAUDE.md rule 52).
+
+`Sandbox.get({ name, resume: false })` is the SDK call. `resume` defaults to
+**true** — a third default that is actively wrong here, alongside
+`networkPolicy: allow-all` and `persistent: true`. It restores a stopped
+session, potentially from a snapshot, which would hand the next phase a
+filesystem the previous phase did not build. The status check that follows is
+not redundant with it: `resume: false` states the intent to the provider, and
+the assertion holds even if a future SDK version reinterprets it.
+
+### Sandbox loss is a refusal, never a replacement
+
+If the sandbox is gone between phases, the run fails as `sandbox_lost`.
+
+It does **not** provision a replacement and continue. `Sandbox.getOrCreate`
+exists and is exactly the wrong function: it would hand back a fresh, empty VM,
+and the build would then be answering a question about a tree that never
+existed. Only `running` counts as usable — `pending`, `stopping` and
+`snapshotting` are all treated as gone, because a sandbox that is merely
+*becoming* available is not the sandbox that installed the dependencies.
+
+The copy says what was lost rather than only that something was, since
+"the environment disappeared" invites the reasonable question *"so start another
+one?"*.
+
+### Re-entry, not retry
+
+`maxRetries = 0` on every sandbox-touching step. A platform retry cannot
+distinguish "the command never started" from "the command ran and its result was
+lost", and for repository-controlled commands that ambiguity must resolve to
+*not running it again*.
+
+Recovery comes from persisted state instead, which is a stronger guarantee
+because it holds regardless of how the previous attempt died: each phase reads
+the ValidationRun row first, and a phase with a recorded result is finished.
+
+| Step | Retries | Why |
+| --- | --- | --- |
+| `prepare` | default | a pure claim, guarded by a unique index |
+| `provision` | **0** | billable and ambiguous; a retry buys a second microVM |
+| `verify` | **0** | idempotent, but a retry cannot assume the sandbox it needs |
+| `install` · `typecheck` · `test` · `build` | **0** | repository-controlled; re-running a red suite to see if it fails differently is a coin toss |
+| `cleanup` | default | idempotent, and "already gone" is a success — a duplicate stop costs nothing, a leaked VM costs money for as long as it lives |
+| `finalize` | default | scoped to `status = 'running'`; a replay writes nothing |
+
+### Fail-fast, and cleanup that cannot be skipped
+
+Order: source → install → typecheck → test → build. The first required failure
+ends the run, and nothing downstream is attempted — there is nothing to learn
+from building a change whose types do not check, and a sandbox minute spent
+learning it is billed.
+
+Cleanup runs **unconditionally**, including after the catch, and deliberately
+*before* result collection rather than after it. Once the last phase returns the
+sandbox has no remaining purpose, and nothing about deciding a verdict should be
+able to keep a paid VM alive. Cleanup that depends on the correctness of
+result-collection logic is cleanup with a condition attached.
+
+The failure is carried in a local rather than by returning early, because an
+early `return` inside the try block is precisely the shape that leaked a VM the
+first time.
+
+### `deny-all`, re-asserted per phase
+
+Under the single-step design the closed network was three lines above the build
+command. Across durable steps that would be an assumption about a previous
+function invocation — and an assumption is not a control. Each
+repository-controlled phase now closes the network itself before running
+anything: idempotent, cheap, and locally true.
+
+The install phase still owns the whole networked window, and closes it *before
+returning* whatever the install did. A persisted `install: passed` therefore
+implies the network was closed — the security property is carried by the
+recorded state rather than by a later step remembering.
+
+### Progress the user can actually read
+
+Each phase is written to `validation_runs` as it completes, so the panel renders
+six named phases with real elapsed seconds:
+
+```
+Validation
+  ✓ Source integrity
+  ✓ Dependencies        18.4s
+  ✓ Typecheck           79.1s
+  ● Running tests…
+  ○ Production build
+  ○ Finalizing
+```
+
+Derived by one pure function from persisted state — status, stage, steps,
+source integrity, failure code. Deliberately **not** from the workflow's
+internal step index, which is a third-party execution detail and would report
+progress for work whose result was never recorded. No percentage: the phases
+have wildly different durations and any number would be invented.
+
+A failure names the phase it stopped at and marks the rest `not_run` rather than
+leaving empty circles that read as "still to come" on a run that is over.
+
+### Timeouts
+
+| Budget | Value | Rationale |
+| --- | --- | --- |
+| step ceiling | 300 s | platform, not ours; every command budget must fit inside it |
+| install / command | 240 s | 2.4× the longest measured command, leaving 60 s for the phase to persist its result |
+| source | 90 s | several small commands, none of them repository code |
+| sandbox lifetime | 900 s | must *outlive* any one step, because it spans all of them |
+
+The sandbox lifetime is the inversion of the v2 rule: v2 required the sandbox to
+die *before* the step, because a killed step ran no cleanup. v3 requires it to
+survive *between* steps, and buys the old protection back structurally — cleanup
+is its own step and runs on the paths that previously ran nothing.
+
+The leak bound is therefore looser (900 s vs 260 s) while the expected leak is
+smaller. It stays far below the provider's 45-minute maximum: a run needing
+longer than fifteen minutes is telling us something about the repository, and
+the honest answer is to stop and say so.
+
+Four vCPUs are kept, and the justification is rewritten rather than left stale.
+It was introduced as a *correctness* requirement against the single ceiling;
+that argument no longer holds. Re-tuning resources is deliberate work with a
+re-measurement attached, not a number to quietly lower during a refactor.
+
+### Why the policy version had to move
+
+`sandbox-policy-v2 → v3`. The commands did not change; what "validated" *means*
+did.
+
+Under v2 a repository whose real work exceeded one function ceiling could only
+ever record `sandbox_timeout` — a verdict about our orchestration, not about the
+artifact. **A run that was terminally timed-out under v2 can legitimately pass
+under v3.** That is the exact condition for a bump: otherwise a stored `failed`
+and a fresh `passed` would disagree about the same artifact with no recorded
+reason.
+
+No historical row was rewritten, and no v2 result is reused to answer a v3
+question — the version is part of the validation identity, so that follows by
+construction.
+
+### No migration was required, and this time it was proved
+
+The Sprint 9 lesson applied properly. The stages this refactor writes —
+`cleaning_up` in particular, now written by a step of its own — go into
+`operation_runs.stage`, which **does** carry an enumerated CHECK. That is the
+constraint that would have failed silently at INSERT while every test passed.
+
+It already permits all of them, and `finalizing` was deliberately not invented:
+`collecting_results` exists in both the type union and the constraint and means
+the same thing. `sandbox_policy_version` and `failure_code` carry no enumerated
+CHECK, so the version bump and the new `sandbox_lost` code need no DDL.
+
+None of that is asserted from memory. `schema.test.ts` parses the migrations and
+fails if the code can write a stage the SQL rejects, or if either column ever
+gains an enumerated constraint.
+
+### Tests and mutation validation
+
+1518 → **1640 tests**. Every existing security assertion was kept and now runs
+*through* the step boundaries: the orchestrator suite drives the real phase
+functions through the real `reconnect` path, so a phase that forgot to
+reconnect, or quietly created a second sandbox, fails there.
+
+Nineteen mutations, every one verified to break tests — including two that
+**survived** first:
+
+| Mutation | Result |
+| --- | --- |
+| re-entry guard removed (install/typecheck/test/build) | 5 tests fail |
+| a replacement sandbox is created mid-run | 4 fail |
+| build no longer required for a pass | 2 fail |
+| cleanup skipped after an intermediate failure | 2 fail |
+| adapter treats a non-running sandbox as usable | 5 fail |
+| UI collapses every phase to one generic state | 31 fail |
+| fail-fast removed — downstream phases still run | 5 fail |
+| `deny-all` not re-asserted per phase | 1 fail |
+| adapter resumes a stopped session | 1 fail |
+| phase result not persisted as it completes | 12 fail |
+| clone credential minted for every phase | 1 fail |
+| source re-verified on re-entry | 1 fail |
+| provision replays into a second sandbox | 1 fail |
+| cleanup reports success without stopping anything | 18 fail |
+| **policy version left at v2** | **survived → test added → 1 fail** |
+| **terminal-replay guard removed from finalize** | **survived → test added → 1 fail** |
+
+The first survivor was the important one, and it is the rule this sprint had
+been enforcing by memory for three versions. Nothing failed when the version was
+left behind — so every real run would have reused a v2 pass to answer a v3
+question and reported an old verdict as a current one.
+
+It cannot be fixed by pinning the version to a literal; that makes every
+legitimate bump look like a regression, which is why the earlier test
+deliberately asserted against the constant. What *can* be pinned is the
+relationship: the version against a **digest of the policy it names** — budgets,
+resources, network host lists, install flags. Changing the policy without the
+version now fails, and so does the reverse. Updating both is a deliberate act,
+which is the point.
+
+The second survivor was covered by the database rather than by the code: the
+terminal write is scoped to `status = 'running'`, so a replay writes nothing.
+What the database does not protect is the value the step *returns* — a finalize
+retried after a transient throw would have reported failure for a run recorded
+as passed, completing the operation as failed while its result said otherwise.
+
+### What did not change
+
+The trust boundary, the command profile, the network phases, the credential
+lifecycle, `--ignore-scripts`, the single supported profile, and the rule that
+there is no local execution path. This is an orchestration refactor; validation
+is not weakened anywhere. The build remains a required gate — a skipped build is
+never a pass, asserted in both the domain and the finalize step.
+
+### Not yet dogfooded
+
+**No sandbox has been provisioned under v3.** The refactor is proven by 1640
+tests and nineteen mutations; it is not proven by a real run, and this sprint's
+own record is unambiguous about what that distinction has cost — six of the
+seven earlier failures were found only by running it.
+
+The dogfood is one validation of the existing prepared change `2f05958` on
+`vibe/seo-foundations-cc32273131c5`, which must not be merged, modified or
+regenerated. Under v3 it computes a new validation identity, so it will run
+rather than reuse the v1 pass. A failure is still a successful result for this
+refactor, provided the correct phase is persisted, cleanup happens, and the
+failure is accurately observable.
+
 ## Known limitations
 
 - `--ignore-scripts` will fail repositories that genuinely need a postinstall
@@ -732,6 +1022,12 @@ to a plan with a longer function limit — a decision, not a larger number.
 - A passing validation says nothing about product quality. The first prepared
   change was byte-perfect, would have built cleanly, and still listed `/login`
   in a sitemap.
+- Sandbox loss between phases ends the run. Checkpoint or snapshot recovery
+  would let it resume, and is deliberately not built: it means persisting a
+  customer's filesystem into provider storage, which is a decision of its own.
+- The leak bound rose from 260 s to 15 minutes. Cleanup is now a durable step
+  and runs on paths that previously ran none, so the expected leak is smaller —
+  but a workflow that dies outright still leaves a sandbox to its own timeout.
 
 ## Next step
 

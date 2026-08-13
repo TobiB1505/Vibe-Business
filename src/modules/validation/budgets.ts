@@ -1,55 +1,87 @@
 /**
- * Resource budgets for one validation run (Sprint 10A §14).
+ * Resource budgets for one validation run (Sprint 10A §14, §8 refactor).
  *
  * Untrusted code decides how long it wants to run and how much it wants to
  * print. Neither of those may be its decision, so every number here is a hard
  * ceiling enforced by us, not a hint to the repository.
  *
- * Values are calibrated against the current Vercel Sandbox limits (checked at
- * implementation time, not recalled): 45 minutes maximum duration on Hobby,
- * 5-minute default session timeout, 2 vCPU / 4 GB by default, `iad1` only.
- * They sit well inside those so a budget breach is *our* refusal rather than a
- * platform error we have to interpret.
+ * ## The mistake these numbers are calibrated against
  *
- * Deliberately conservative. A run that needs longer than this is telling us
- * something about the repository, and the honest answer in V0.1 is to time out
- * and say so.
+ * Two independent limits govern a validation, and for two sprints they were
+ * conflated:
+ *
+ * ```
+ * the sandbox's own lifetime      45 minutes (provider maximum)
+ * the durable step's lifetime     the platform function ceiling
+ * ```
+ *
+ * The smaller one binds. The v2 budgets were sized against the sandbox and the
+ * step awaiting them died first, at exactly `Task timed out after 300 seconds`,
+ * with a paid VM still running and nothing responsible for it.
+ *
+ * The v3 answer is not a larger number. It is that **each phase is its own
+ * durable step**, so the pipeline is no longer one workload racing one ceiling:
+ * install, typecheck, test and build each get a fresh function invocation and a
+ * fresh ceiling. On Vercel the Workflow SDK deploys step execution as its own
+ * queue-consumer function (`maxDuration: max`), while the orchestrating workflow
+ * function is short-lived and suspended between steps — verified against the
+ * SDK's own shipped documentation for the installed version, not recalled.
+ *
+ * So per-command budgets no longer need to add up to anything. Each only has to
+ * fit inside one step.
  */
+
 /**
- * The hard ceiling on the durable step that awaits a validation.
+ * The platform ceiling on a single durable step.
  *
- * A Vercel Function is killed at 300 s. This is **not** the sandbox's limit —
- * a sandbox may live 45 minutes — and conflating the two is what the sixth
- * dogfood cost: budgets were calibrated against the sandbox and the function
- * awaiting them died first, at exactly `Task timed out after 300 seconds`.
- *
- * Everything below is derived from this number rather than chosen next to it.
+ * Not configurable by us and deliberately not raised: it is recorded here so
+ * every per-command budget below can be read against the limit it must fit
+ * inside. One phase, one step, one ceiling.
  */
 export const STEP_DEADLINE_MS = 300 * 1000;
 
+/**
+ * Headroom reserved inside a step for work that is not the command.
+ *
+ * A phase step reconnects to the sandbox, runs one command, and persists the
+ * result. The command must finish early enough that the persistence still
+ * happens — a phase that completes and fails to record itself is indistinguish-
+ * able from one that never ran, and would be re-run on re-entry.
+ */
+export const STEP_OVERHEAD_MS = 60 * 1000;
+
 export const SANDBOX_BUDGETS = {
   /**
-   * Whole-sandbox lifetime.
+   * Whole-sandbox lifetime, spanning every phase.
    *
-   * Deliberately **below** `STEP_DEADLINE_MS`, so the sandbox expires before
-   * the function that owns it. That ordering is the leak bound: if the step is
-   * killed anyway, its cleanup never runs, and the only thing left stopping a
-   * paid VM is the sandbox's own timeout. It must therefore be short enough to
-   * matter.
-   */
-  totalLifetimeMs: 260 * 1000,
-  /**
-   * When to stop starting new work.
+   * Sized to outlive the pipeline rather than to sit under one step: the
+   * measured baseline is ~290 s of real work, and the sandbox must survive
+   * provisioning, six phase steps, the queue latency between them, and cleanup.
    *
-   * Reaching this ends the run *ourselves*, with cleanup, rather than being
-   * killed mid-command with a sandbox still running.
+   * It is also the **leak bound**. If the workflow dies outright and its
+   * cleanup step never runs, this timeout is the only thing left stopping a
+   * paid VM. v2 set it to 260 s precisely because a killed step ran no cleanup;
+   * v3 raises it to 15 minutes and buys that back structurally instead — the
+   * cleanup step is a separate durable step that runs on the failure path too,
+   * including the path where a phase step was killed mid-command. The bound is
+   * looser, the expected leak is smaller.
+   *
+   * Not unbounded, and deliberately far below the provider's 45-minute maximum:
+   * a run that needs longer than this is telling us something about the
+   * repository, and the honest answer in V0.1 is to stop and say so.
    */
-  stopStartingWorkAfterMs: 240 * 1000,
+  totalLifetimeMs: 15 * 60 * 1000,
+
   /** Dependency install — the one step with network. */
-  installTimeoutMs: 120 * 1000,
-  /** Any single validation command. */
-  commandTimeoutMs: 180 * 1000,
-  /** Source acquisition and integrity verification, before any repository code. */
+  installTimeoutMs: STEP_DEADLINE_MS - STEP_OVERHEAD_MS,
+  /** Any single repository-controlled check: typecheck, test or build. */
+  commandTimeoutMs: STEP_DEADLINE_MS - STEP_OVERHEAD_MS,
+  /**
+   * Source acquisition and integrity verification.
+   *
+   * Runs entirely inside the verify step, several commands deep, so it is sized
+   * per-command rather than per-phase.
+   */
   sourceTimeoutMs: 90 * 1000,
 
   /** Bytes of combined stdout+stderr read back from any one command (§15). */
@@ -78,26 +110,21 @@ export const SANDBOX_BUDGETS = {
 
 /**
  * Sandbox shape.
- *
- * Two vCPUs is the platform default and enough for a Next.js build. Larger
- * would be faster and directly more expensive — `vcpus` multiplies both Active
- * CPU and Provisioned Memory billing, so this stays small until a real run
- * shows it needs to grow.
  */
 export const SANDBOX_RESOURCES = {
   /**
-   * Four vCPUs, not the platform default of two.
+   * Four vCPUs.
    *
-   * Not a performance preference — a correctness requirement. On two vCPUs the
-   * real workload measured 281 s of commands (install 18 s, typecheck 79 s,
-   * test 84 s, build 99 s) against a 300 s step ceiling, which is not a margin.
-   * More vCPUs cost more per second and finish sooner, so the bill is roughly
-   * unchanged while the run stops racing the platform.
+   * Introduced under v2 as a *correctness* requirement: 281 s of measured
+   * commands against a single 300 s ceiling was not a margin, and more vCPUs
+   * finish sooner for roughly the same bill.
    *
-   * Four is also the Hobby maximum, so this is the whole of the available
-   * headroom. If the work still does not fit, the answer is to split it across
-   * steps or move to a plan with a longer function limit — a decision, not a
-   * larger number.
+   * That argument no longer holds. Under v3 each phase has its own ceiling and
+   * the longest single command measured 99 s, so nothing is racing anything.
+   * The value is kept unchanged anyway, because dropping to two would change
+   * every measured timing in this sprint's record and re-tuning resources is
+   * not what this refactor is for. Revisiting it is real, deliberate work —
+   * with a re-measurement — not a number to quietly lower here.
    */
   vcpus: 4,
   /**

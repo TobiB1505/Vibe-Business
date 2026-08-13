@@ -91,9 +91,27 @@ export type SandboxUsage = {
   costUsd: number | null;
 };
 
+/**
+ * Whether a reconnected sandbox can still be worked in.
+ *
+ * Deliberately two values rather than the provider's six. The domain has
+ * exactly one decision to make — continue, or refuse — and a richer status
+ * would invite a future caller to treat `stopping` or `snapshotting` as
+ * "probably fine". Anything that is not demonstrably running is `gone` (§12).
+ */
+export type SandboxLiveness = "running" | "gone";
+
 export interface SandboxHandle {
   readonly id: string;
   readonly runtime: string;
+  /**
+   * Liveness as observed when this handle was obtained.
+   *
+   * A snapshot, not a subscription: it answers "was this sandbox usable when we
+   * reconnected", which is the only question a phase step needs before it
+   * commits to running a command.
+   */
+  readonly liveness: SandboxLiveness;
 
   /** Runs one Vibe-constructed command. Never a repository-supplied string. */
   run(input: {
@@ -120,6 +138,32 @@ export interface SandboxHandle {
 export interface SandboxProvider {
   readonly id: "vercel_sandbox";
   create(input: CreateSandboxInput): Promise<SandboxHandle>;
+
+  /**
+   * Reconnects to a sandbox created earlier in this run, by name.
+   *
+   * ## Why a name and not a handle
+   *
+   * Each validation phase is its own durable step, in its own function
+   * invocation, with no shared memory. Something has to carry the sandbox
+   * across that boundary — and the safe options are narrower than they look.
+   *
+   * A serialized provider handle would put connection material into a
+   * third-party durable log. A capability URL would be a bearer credential in
+   * the same place. Both are refused (§3, CLAUDE.md rule 52).
+   *
+   * What crosses instead is a **name derived from the validation run id** —
+   * `sandboxNameFor()`, a pure function of a row that is already persisted. So
+   * nothing new is stored at all: not a token, not a URL, not an opaque id.
+   * The reconnect key is recomputed from state the database already holds, and
+   * authorization comes from the provider credentials of the process doing the
+   * reconnecting, exactly as it does at creation.
+   *
+   * Returns `null` when no usable sandbox answers to that name — expired,
+   * stopped, or never created. The caller must treat that as `sandbox_lost` and
+   * must **not** create a replacement: the filesystem is the state (§12).
+   */
+  reconnect(input: { name: string }): Promise<SandboxHandle | null>;
 }
 
 /**
