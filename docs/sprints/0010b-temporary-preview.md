@@ -5,12 +5,21 @@
 | Slice | State |
 | --- | --- |
 | 10B-1 — ValidatedArtifact capture | ✅ Complete (`f18aef3`) |
-| 10B-2 — Preview runtime & lifecycle | ✅ Complete (this document) |
-| 10B-3 — UI + real preview dogfood | ⏳ Pending |
+| 10B-2 — Preview runtime & lifecycle | ✅ Complete (`b0817cb`) |
+| 10B-3 — Preview UI | ✅ Complete (`9152c46`) |
+| 10B-3 — Real preview dogfood | ⛔ Blocked — see [Dogfood](#real-dogfood-blocked) |
 
-**Sprint 10B is not complete.** No preview has been started against a real
-repository, and there is no customer-facing surface. See
-[Remaining work](#remaining-work).
+**Sprint 10B is NOT complete.** The capability is built, tested, deployed and
+reachable in the UI, but **no preview has ever been started against a real
+repository**. Until it has, four things remain claims rather than observations:
+
+- that loopback works under `deny-all` egress;
+- that the public preview edge actually serves;
+- that teardown really deletes the snapshot at the provider;
+- that the whole flow works end to end.
+
+The sprint stays open until those are observed. See
+[Real dogfood](#real-dogfood-blocked).
 
 ## Goal
 
@@ -44,9 +53,9 @@ turns that artifact into something a person can open.
 
 Full rationale: [ADR 0016](../decisions/0016-temporary-preview-isolation.md).
 
-## Scope (10B-2)
+## Scope
 
-Server-side only.
+### 10B-2 — runtime (server-side only)
 
 - `nextjs_preview_v1` profile and `preview-policy-v1`
 - `PreviewSession` persistence, plus `change_preview` as a durable operation
@@ -57,11 +66,22 @@ Server-side only.
 - 15-minute TTL, stop, expiry, cleanup and snapshot deletion
 - Preview spend recorded in `sandbox_usage_events`
 
+### 10B-3 — UI
+
+- A `Preview` section on every prepared change, with ten server-decided states
+- A public-exposure confirmation dialog, wired to the server's own requirement
+- Durable start UX with named stages, survivable across a page reload
+- `Open preview` (new tab) and `Stop preview`, with a countdown to expiry
+- An authorized origin read that refuses anything not running and unexpired
+- Honest re-validation copy wherever the artifact is gone
+
 ## Non-Goals
 
-- **UI.** No component, no page, no button (10B-3).
-- **Real dogfood.** No preview has been started against a real repository.
 - **Approval, merge, deploy.** None of these exist anywhere in the codebase.
+- **Preview history or a management dashboard.** The current state of the
+  current prepared change is the whole V0.1 need.
+- **Anything from the preview rendered inside Vibe.** No iframe, no proxy, no
+  screenshot, no HTML fetch — the URL opens in a new tab or not at all.
 - **Environment configuration.** An application that needs runtime config to
   boot fails honestly rather than being handed one.
 - **Public-edge verification.** The health check proves the server answers on
@@ -153,17 +173,19 @@ ValidatedArtifact  (validation_runs.artifact_snapshot_id)
 - [x] Stop and expiry both delete the artifact snapshot, idempotently
 - [x] DB-contract tests pin the TypeScript unions to the SQL CHECKs
 - [x] Migration deployed; live constraints verified
-- [ ] Real preview dogfood — **10B-3**
-- [ ] Customer-facing UI — **10B-3**
+- [x] Customer-facing UI, with server-decided state and honest cost copy
+- [x] Confirmation is server-enforced and cannot be satisfied by the modal alone
+- [x] Nothing in the panel spends money without an explicit click
+- [ ] **Real preview dogfood — blocked, see below**
 
 ## Validation
 
 ```
 pnpm lint         ✅
 pnpm typecheck    ✅
-pnpm test         ✅  1772 tests, 95 files
+pnpm test         ✅  1816 tests, 97 files
 pnpm build        ✅
-pnpm db:status    ✅  one pending migration, applied
+pnpm db:status    ✅  no pending migrations
 pnpm db:lint      ✅  no schema errors
 ```
 
@@ -249,13 +271,126 @@ loop is now bounded by attempt count as well as by the clock.
   policy, no timeout and no secret handling, and can fail nothing that
   previously passed.
 
-## Remaining work — 10B-3
+## Real dogfood — blocked
 
-1. Confirm the loopback health check works under `deny-all` in a real sandbox.
-2. Customer-facing UI: the preview panel, the public-exposure confirmation, live
-   stage progress, the origin, a countdown to expiry, and a stop control.
-3. Copy that states what a preview proves and — more importantly — what it does
-   not.
-4. Make the re-validation cost visible before a user asks for a second preview.
-5. Real dogfood against this repository, end to end.
-6. Only then mark Sprint 10B complete.
+**No preview has been started against a real repository. Nothing below is an
+observation; it is a plan.**
+
+### Why it is blocked
+
+The dogfood has to run against the deployed branch, through the real UI, as the
+real user. Three facts make that impossible from here:
+
+1. The branch deployment
+   (`vibe-business-930iwjc7c-planner-agent.vercel.app`, commit `9152c46`,
+   state `READY`) is behind **Vercel SSO** — `ssoProtection` is enabled for
+   `all_except_custom_domains`, and a branch deployment has no custom domain.
+2. Reaching the Vibe app behind it needs a **Supabase login**. Sessions are
+   per-origin cookies, so an existing session on production does not carry to a
+   branch deployment.
+3. Both gates are password entry, which this assistant does not do, and no
+   browser with an existing session was available.
+
+The alternative — writing rows directly, or calling the service outside the UI
+— was rejected. It would skip the confirmation flow, the durable workflow and
+the real provider, which are the three things the dogfood exists to exercise.
+A green result obtained that way would be a worse outcome than an honest gap.
+
+### Baseline, verified in the live database
+
+Confirmed before any dogfood, so the run starts from a known state:
+
+| Fact | Value |
+| --- | --- |
+| PreparedChange | `3480ad0a-db63-4b9d-8073-ea5ef9a72508` |
+| Branch | `vibe/seo-foundations-cc32273131c5` |
+| Commit | `2f05958e3410deaeb97029861abc05889139b4a7` |
+| Prepared status | `prepared` |
+| Latest passing ValidationRun | `33923863-5853-4aa4-ac27-7ffef2e08c17`, `sandbox-policy-v3` |
+| Artifacts ever captured | **0** |
+| PreviewSessions | **0** |
+| `change_preview` operations | **0** |
+| Preview usage rows | **0** |
+| Validation usage rows | 9 (historical) |
+
+Two consequences worth stating, because they are what makes the plan work:
+
+- The last pass ran under `sandbox-policy-v3` and the current policy is **v4**,
+  so the validation identity differs and a new validation genuinely runs rather
+  than reusing the stored pass. Exactly one new ValidationRun, as intended.
+- No historical run has `buildIdentityDigests` — that recording landed with
+  10B-2 — so the new run is also what makes the restore-time build-identity
+  comparison possible at all.
+
+Until the new run exists, the UI will correctly show **Preview artifact
+unavailable** with a **Validate again** button for this change. That is the
+first thing to confirm on screen, and it costs nothing.
+
+### The run, when someone can sign in
+
+1. Open the branch deployment, sign in, open the project.
+2. On the prepared change, confirm `Preview` reads *artifact unavailable* and
+   that opening the page started **nothing** (`operation_runs` unchanged).
+3. Click **Validate again**. One ValidationRun, `sandbox-policy-v4`. Record:
+   run id, operation id, result, `artifact_snapshot_id`, `artifact_expires_at`,
+   credential scrub, build-identity verification, sandbox usage, cleanup.
+4. Verify in the database, **before** previewing: run `passed`, artifact
+   present, belonging to that run and to commit `2f05958`, not deleted, expiry
+   in the future.
+5. Click **Start temporary preview** and confirm the public-exposure dialog.
+   Exactly one start. Record: session id, operation id, profile and policy
+   versions, runtime, integrity result, network policy, server start duration,
+   health result, time to ready, port, expiry, usage, AI calls (expect `0`).
+6. **Record the loopback result explicitly.** This is the one open technical
+   question in the sprint: does a loopback probe reach the local Next.js
+   process while egress is `deny-all`? If it fails, classify the provider
+   behaviour and **stop** — do not widen egress to make it pass.
+7. Click **Open preview**. This is the **first public-edge verification**, and
+   it is a separate observation from the loopback result. Check the homepage
+   renders, the origin is the sandbox preview origin, and `/robots.txt` and
+   `/sitemap.xml` respond. Do not automate a crawl.
+8. Note human observations as **observations**. Not approval — Sprint 10B has
+   no approval gate.
+9. Confirm no secrets reached the preview (GitHub token, Anthropic key,
+   Supabase service role, Browserbase key, Vercel management token, customer
+   production values). Record invariants, never values.
+10. Click **Stop preview** — do not just wait for expiry. Then verify
+    independently: session `stopped`, sandbox gone at the provider, snapshot
+    deleted, artifact marked deleted, **Open preview** gone, no origin
+    returned, PreparedChange still `prepared`, ValidationRun still `passed`,
+    repository unchanged.
+11. Record provider usage for both sandboxes. `provider_cost_usd` stays `null`
+    unless an exact attributable amount exists; any rate-card figure is labelled
+    an **estimate** and is not persisted as accounting truth.
+
+### Then, and only then
+
+Mark 10B-3 dogfood ✅ and Sprint 10B complete, recording failures honestly if
+any occur and preserving the intermediate findings above rather than tidying
+them away.
+
+## Known limitations carried into 10C
+
+- **Loopback under `deny-all` is still an assumption.** The provider documents
+  the network policy as governing egress and loopback never leaves the VM, but
+  no real preview has confirmed it. If it is wrong, the symptom is an honest
+  `preview_health_check_failed`, and the fix is a narrower provider mechanism —
+  never a wider egress policy.
+- **Public-edge reachability is unverified.** The health check plus the
+  provider's route is what `preview_available` claims; the edge itself has
+  never been opened.
+- **Expiry convergence is lazy.** A session nobody reads keeps a stale
+  `running` row until someone does. The VM stops regardless (provider timeout)
+  and the snapshot expires regardless (60-minute TTL), so nothing leaks — but
+  the row is not self-healing and the product does not pretend it is.
+- **A preview is usually a one-shot.** The artifact is deleted at teardown, so a
+  second preview normally costs a new validation. The UI says so; there is no
+  automatic refresh.
+- **`next start` may not suit every Next.js output mode.** `output: 'export'`
+  has no server and `standalone` has a different entrypoint. Both currently
+  fail as `preview_start_failed`, which is honest but unhelpful copy. Worth a
+  narrower code once a real repository hits it.
+- **No component tests.** The project has no React testing tooling, and the
+  convention is to test pure view functions instead — which the preview state
+  machine is. Adding a test renderer for one panel was not worth new
+  infrastructure.

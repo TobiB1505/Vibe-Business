@@ -1447,6 +1447,30 @@ Stellen, die nichts zur Übereinstimmung zwingt. 1376 grüne Tests, und jede ech
 Preparation wäre am INSERT gescheitert. Wo eine Regel doppelt existiert, muss ein
 Test die beiden Kopien vergleichen.
 
+**17. Ein validiertes Artefakt und ein laufender Preview beweisen Verschiedenes**
+Validierung stellt Ausführbarkeit unter einer definierten Policy fest. Preview
+stellt fest, dass dasselbe Artefakt für ein menschliches Review darstellbar ist.
+Keines von beiden ist eine Freigabe.
+
+```
+sandbox_validation_passed  → die Befehle liefen fehlerfrei in einer isolierten VM
+preview_available          → genau dieses Artefakt läuft und ist erreichbar
+human_approved             → jemand hat es angesehen und entschieden
+```
+
+Der Abstand zwischen der zweiten und der dritten Zeile ist der ganze Punkt: ein
+Preview, der eine schöne kaputte Seite rendert, ist ein erfolgreicher Preview.
+Deshalb steht neben jedem laufenden Preview weiterhin "Not merged · Not deployed
+· Not reviewed by a human" — genau dort, wo ein Nutzer am ehesten mehr annimmt,
+als passiert ist.
+
+Zweitens: ein Artefakt aufzubewahren ist eine Aufbewahrungsentscheidung, keine
+Bequemlichkeit. Das Dateisystem eines Kunden liegt dabei beim Provider. Es
+existiert für genau einen Zweck, hat eine explizite Frist, und wird gelöscht,
+sobald der Preview endet — mit der ehrlichen Folge, dass ein zweiter Preview
+meist eine neue Validierung kostet. Diese Kosten gehören sichtbar in die UI und
+niemals in einen automatischen "Refresh".
+
 ---
 
 ## 37. Aktueller Stand
