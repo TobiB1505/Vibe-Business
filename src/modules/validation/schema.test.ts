@@ -166,6 +166,9 @@ describe("the sandbox policy version tracks what it claims to (§9)", () => {
       SANDBOX_BUDGETS.sourceTimeoutMs,
       SANDBOX_BUDGETS.maxIntegrityFileBytes,
       SANDBOX_BUDGETS.maxBuildIdentityFileBytes,
+      // How long a successful validation's artifact is retained. Part of the
+      // policy because a stored pass now implies something was kept.
+      SANDBOX_BUDGETS.validatedArtifactTtlMs,
       SANDBOX_RESOURCES.vcpus,
       SANDBOX_RESOURCES.image,
       [...SOURCE_HOSTS],
@@ -186,6 +189,7 @@ describe("the sandbox policy version tracks what it claims to (§9)", () => {
    */
   const POLICY_DIGESTS: Record<string, string> = {
     "sandbox-policy-v3": "1516401ee57c583c",
+    "sandbox-policy-v4": "60c4a0790acd706c",
   };
 
   it("names a policy version that matches the policy actually in force", () => {

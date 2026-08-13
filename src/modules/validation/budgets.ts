@@ -92,6 +92,17 @@ export const SANDBOX_BUDGETS = {
   /** A single line longer than this is truncated rather than stored. */
   maxLineChars: 500,
 
+  /**
+   * How long a validated artifact may be retained (Sprint 10B §5).
+   *
+   * Sixty minutes, explicit. The provider's default is 30 days, which is not a
+   * retention policy anyone chose — it is what happens when nobody decides.
+   * A customer's built filesystem lives in provider storage for exactly as long
+   * as a preview might plausibly want it, and is deleted sooner when the
+   * preview ends.
+   */
+  validatedArtifactTtlMs: 60 * 60 * 1000,
+
   /** Files read back out of the sandbox for integrity checking (§29). */
   maxIntegrityFiles: 20,
   maxIntegrityFileBytes: 256 * 1024,

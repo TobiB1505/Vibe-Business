@@ -2,11 +2,13 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { recordAuditEvent } from "@/modules/audit-log/events";
+import { SANDBOX_BUDGETS } from "@/modules/validation/budgets";
 import { getPreparedChange } from "@/modules/execution/store";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import { computeValidationIdentity } from "@/modules/validation/identity";
 import {
   buildSatisfiesProfile,
+  captureValidatedArtifact,
   provisionSandbox,
   runCheckPhase,
   stopSandbox,
@@ -29,6 +31,7 @@ import {
   completeValidationRun,
   findValidationRunByOperation,
   recordSandboxUsage,
+  recordValidatedArtifact,
   recordSourceIntegrity,
   recordValidationPhase,
   setValidationStage,
@@ -562,6 +565,51 @@ export async function cleanupSandboxStep(
     validationRunId: run.id,
     stage: "cleaning_up",
   });
+
+  // A passing run keeps its filesystem as a bounded artifact instead of merely
+  // being torn down, so a preview can start from the exact validated bytes.
+  // Capture is terminal — it stops the sandbox itself — so it replaces cleanup
+  // rather than preceding it (§5).
+  const passing = buildSatisfiesProfile(run.steps);
+
+  if (passing) {
+    const captured = await captureValidatedArtifact(deps.provider, target);
+
+    if (captured.ok) {
+      await recordValidatedArtifact(deps.supabase, {
+        validationRunId: run.id,
+        projectId: operation.projectId,
+        snapshotId: captured.artifact.snapshotId,
+        sizeBytes: captured.artifact.sizeBytes,
+        // Vibe's own deadline, not the provider's report, so retention is a
+        // number we chose even if the provider declines to say.
+        expiresAt: new Date(Date.now() + SANDBOX_BUDGETS.validatedArtifactTtlMs).toISOString(),
+      });
+
+      const startedFrom = run.startedAt ? Date.parse(run.startedAt) : null;
+      return {
+        cleanup: "stopped",
+        runtime: run.sandboxRuntime,
+        sandboxDurationMs:
+          startedFrom !== null && Number.isFinite(startedFrom) ? Date.now() - startedFrom : null,
+        usage: captured.usage,
+      };
+    }
+
+    // Capture failed. The validation still passed — that verdict is about the
+    // commands, not about whether we kept a copy — so the run is not failed
+    // here. Preview will simply have nothing to resume and will say so.
+    await recordAuditEvent(deps.supabase, {
+      userId: operation.userId,
+      eventType: "change_validation.artifact_capture_failed",
+      metadata: {
+        projectId: operation.projectId,
+        operationId,
+        validationRunId: run.id,
+        reason: captured.reason,
+      },
+    });
+  }
 
   const outcome = await stopSandbox(deps.provider, target);
 

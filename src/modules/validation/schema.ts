@@ -49,6 +49,18 @@ export const VALIDATION_PROFILE_VERSIONS: Record<ValidationProfile, string> = {
  * validation identity and a previously passing run is never silently reused
  * under rules it was not checked against.
  *
+ * ## v3 → v4 (2026-08-13)
+ *
+ * A successful validation now captures its filesystem as a bounded, resumable
+ * artifact so a preview can start from the exact validated bytes rather than
+ * rebuilding them. That adds a **retention semantic** to what "validated"
+ * means: for up to an hour, a customer's built filesystem exists in provider
+ * storage. Failed validations never produce one, and the artifact is deleted
+ * when the preview using it ends.
+ *
+ * Nothing about the commands or the network changed. The claim did — a stored
+ * pass now implies something was kept — so the version did too.
+ *
  * ## v1 → v2 (2026-08-13)
  *
  * The first passing dogfood ran under v1 and recorded `pnpm-lock.yaml` as
@@ -94,7 +106,7 @@ export const VALIDATION_PROFILE_VERSIONS: Record<ValidationProfile, string> = {
  * all, which is why it lives behind a version rather than in a constant someone
  * can raise quietly.
  */
-export const SANDBOX_POLICY_VERSION = "sandbox-policy-v3" as const;
+export const SANDBOX_POLICY_VERSION = "sandbox-policy-v4" as const;
 
 export const SANDBOX_PROVIDERS = ["vercel_sandbox"] as const;
 export type SandboxProviderId = (typeof SANDBOX_PROVIDERS)[number];

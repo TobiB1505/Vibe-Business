@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { SANDBOX_BUDGETS, STEP_DEADLINE_MS } from "./budgets";
-import { inRepository, inSandbox, SANDBOX_ENVIRONMENT } from "./orchestrator";
+import { captureValidatedArtifact, inRepository, inSandbox, provisionSandbox, SANDBOX_ENVIRONMENT } from "./orchestrator";
 import {
   FIXTURE_COMMIT_SHA,
   fakeSandboxProvider,
@@ -200,7 +200,7 @@ describe("credential handling (§7, §37)", () => {
     await runValidationPhases(provider, noManifest, fakeValidationTarget());
 
     const created = provider.createdWith();
-    expect(created?.source.credential?.password).toBe("ghs_cloneTokenValue123456");
+    expect(created?.source.kind === "git" ? created.source.credential?.password : undefined).toBe("ghs_cloneTokenValue123456");
     // The environment is where repository code could read it. It must not be there.
     expect(JSON.stringify(created?.env)).not.toContain("ghs_cloneTokenValue123456");
   });
@@ -286,7 +286,9 @@ describe("source integrity (§6, §29)", () => {
     const provider = setup();
     await runValidationPhases(provider, noManifest, fakeValidationTarget());
 
-    expect(provider.createdWith()?.source.revision).toBe(FIXTURE_COMMIT_SHA);
+    const source = provider.createdWith()?.source;
+    expect(source?.kind).toBe("git");
+    expect(source?.kind === "git" ? source.revision : null).toBe(FIXTURE_COMMIT_SHA);
   });
 
   it("pins the revision instead of re-observing it (post-dogfood)", () => {
@@ -956,5 +958,126 @@ describe("the timeout model after the durable-phase refactor (§8)", () => {
 
     expect(outcome).toMatchObject({ status: "failed", failureCode: "sandbox_lost" });
     expect(outcome.cleanup).toBe("not_provisioned");
+  });
+});
+
+describe("validated artifact capture (Sprint 10B §5)", () => {
+  /**
+   * The alternative to this was making validation sandboxes persistent, which
+   * would snapshot *every* sandbox on stop — failed runs, runs that stopped
+   * mid-scrub — under the provider's 30-day default. That reverses ADR 0015 §5
+   * for the sake of preview convenience.
+   *
+   * Capture is the opposite shape: explicit, post-success, post-scrub, with an
+   * expiry Vibe chose. These tests pin that shape, because the difference
+   * between the two is the whole security argument.
+   */
+  /** The filesystem as it is when capture runs: checks done, `.git` gone. */
+  function scrubbed(options: FakeSandboxOptions = {}) {
+    return setup({ files: healthySandboxFiles({ "product/.git/config": null }), ...options });
+  }
+
+  it("captures the filesystem after a passing run", async () => {
+    const provider = scrubbed();
+
+    await provisionSandbox(provider, fakeValidationTarget());
+    const result = await captureValidatedArtifact(provider, fakeValidationTarget());
+
+    expect(result).toMatchObject({ ok: true });
+    expect(provider.snapshots()).toBe(1);
+  });
+
+  it("bounds retention explicitly rather than inheriting the provider default", async () => {
+    const provider = scrubbed();
+
+    await provisionSandbox(provider, fakeValidationTarget());
+    await captureValidatedArtifact(provider, fakeValidationTarget());
+
+    const snapshot = provider.events.find((event) => event.kind === "snapshot");
+    expect(snapshot?.kind === "snapshot" ? snapshot.expirationMs : null).toBe(
+      SANDBOX_BUDGETS.validatedArtifactTtlMs,
+    );
+    // An hour, not thirty days. The provider's default is what happens when
+    // nobody decides.
+    expect(SANDBOX_BUDGETS.validatedArtifactTtlMs).toBeLessThanOrEqual(60 * 60 * 1000);
+  });
+
+  it("re-verifies the credential scrub before keeping anything", async () => {
+    // The original scrub ran before the build, and a build executes
+    // repository-controlled code that could write anything — including a new
+    // `.git`. Checking again is checking the thing we are about to retain.
+    const provider = setup({ files: healthySandboxFiles() });
+
+    await provisionSandbox(provider, fakeValidationTarget());
+    await captureValidatedArtifact(provider, fakeValidationTarget());
+
+    const read = provider.events.find(
+      (event) => event.kind === "read" && event.path.endsWith(".git/config"),
+    );
+    expect(read).toBeDefined();
+  });
+
+  it("refuses to retain a filesystem that still holds a credential store", async () => {
+    const provider = setup();
+    const original = provider.create.bind(provider);
+    provider.create = async (input) => {
+      const handle = await original(input);
+      const readFile = handle.readFile.bind(handle);
+      handle.readFile = async (file) =>
+        file.path.endsWith(".git/config") ? "[remote]\n" : readFile(file);
+      return handle;
+    };
+    const reconnect = provider.reconnect.bind(provider);
+    provider.reconnect = async (input) => {
+      const handle = await reconnect(input);
+      if (!handle) return null;
+      const readFile = handle.readFile.bind(handle);
+      handle.readFile = async (file) =>
+        file.path.endsWith(".git/config") ? "[remote]\n" : readFile(file);
+      return handle;
+    };
+
+    await provisionSandbox(provider, fakeValidationTarget());
+    const result = await captureValidatedArtifact(provider, fakeValidationTarget());
+
+    expect(result).toEqual({ ok: false, reason: "credential_present" });
+    // Nothing kept, and the sandbox is gone anyway.
+    expect(provider.snapshots()).toBe(0);
+    expect(provider.stopped()).toBe(true);
+  });
+
+  it("reports a lost sandbox rather than inventing an artifact", async () => {
+    const provider = setup({ loseSandboxBeforeReconnect: 1 });
+
+    await provisionSandbox(provider, fakeValidationTarget()).catch(() => undefined);
+
+    expect(await captureValidatedArtifact(provider, fakeValidationTarget())).toEqual({
+      ok: false,
+      reason: "sandbox_lost",
+    });
+  });
+
+  it("still stops the sandbox when capture fails", async () => {
+    const provider = scrubbed({ failSnapshot: true });
+
+    await provisionSandbox(provider, fakeValidationTarget());
+    const result = await captureValidatedArtifact(provider, fakeValidationTarget());
+
+    expect(result).toEqual({ ok: false, reason: "capture_failed" });
+    expect(provider.stopped()).toBe(true);
+  });
+
+  it("still reports usage after capture terminates the sandbox", async () => {
+    // `snapshot()` shuts the sandbox down, so a later `stop()` would throw and
+    // take the accounting with it. Capturing an artifact must not cost us the
+    // ledger.
+    const provider = scrubbed();
+
+    await provisionSandbox(provider, fakeValidationTarget());
+    const result = await captureValidatedArtifact(provider, fakeValidationTarget());
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.usage?.activeCpuDurationMs).toBe(1234);
   });
 });

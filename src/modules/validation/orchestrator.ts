@@ -6,6 +6,7 @@ import { sanitizeCommandOutput } from "./logs";
 import {
   DEPENDENCY_HOSTS,
   SOURCE_HOSTS,
+  type SandboxArtifact,
   type SandboxHandle,
   type SandboxProvider,
   type SandboxUsage,
@@ -401,6 +402,7 @@ export async function provisionSandbox(
     const sandbox = await provider.create({
       name: sandboxNameFor(target.validationRunId),
       source: {
+        kind: "git",
         repositoryUrl: target.repositoryUrl,
         revision: target.preparedCommitSha,
         credential: target.cloneCredential,
@@ -793,6 +795,85 @@ export async function runCheckPhase(
  * "Already gone" is a success, not an error. Stopping is idempotent and this
  * step is safe to retry, which is why it is one of the few that may be.
  */
+/**
+ * Captures the validated filesystem as a bounded, resumable artifact (§5).
+ *
+ * ## Why this is not "make sandboxes persistent"
+ *
+ * ADR 0015 §5 keeps `persistent: false`, and this does not reverse it. A
+ * persistent sandbox snapshots itself on *every* stop — including failed runs,
+ * including runs that stopped mid-scrub — and inherits the provider's 30-day
+ * default retention. That would put arbitrary customer filesystems into
+ * provider storage as a side effect of validating.
+ *
+ * This is the opposite shape. Capture happens **only** when:
+ *
+ *  1. every configured check passed, and
+ *  2. the credential scrub is re-verified immediately beforehand.
+ *
+ * So what is retained is a known-clean artifact of a known-good run, with an
+ * explicit expiry, deleted when the preview that uses it ends. A failed
+ * validation never produces one.
+ *
+ * The re-verification is not paranoia about our own code: the scrub ran before
+ * the build, and a build executes repository-controlled code that could write
+ * anything, including a `.git` directory. Checking again is checking the thing
+ * we are about to keep.
+ */
+export async function captureValidatedArtifact(
+  provider: SandboxProvider,
+  target: ValidationTarget,
+): Promise<
+  | { ok: true; artifact: SandboxArtifact; usage: SandboxUsage | null }
+  | { ok: false; reason: "sandbox_lost" | "credential_present" | "capture_failed" }
+> {
+  const sandbox = await provider.reconnect({ name: sandboxNameFor(target.validationRunId) });
+  if (!sandbox) return { ok: false, reason: "sandbox_lost" };
+
+  // The build ran repository-controlled code after the original scrub. Verify
+  // the thing being kept, not the thing that was checked earlier.
+  const credentialStore = await sandbox.readFile({
+    path: inSandbox(target.sourceRoot, target.workspaceRoot, ".git/config"),
+    maxBytes: 4096,
+  });
+
+  if (credentialStore !== null) {
+    // Refuse to retain it, and leave no artifact behind.
+    try {
+      await sandbox.stop();
+    } catch {
+      // The verdict stands regardless of whether teardown could be confirmed.
+    }
+    return { ok: false, reason: "credential_present" };
+  }
+
+  try {
+    const artifact = await sandbox.snapshot({
+      expirationMs: SANDBOX_BUDGETS.validatedArtifactTtlMs,
+    });
+
+    // Snapshotting terminates the sandbox, so the usage read here is the whole
+    // run's. A later `stop()` reports the same numbers rather than throwing.
+    let usage: SandboxUsage | null = null;
+    try {
+      usage = await sandbox.stop();
+    } catch {
+      usage = null;
+    }
+
+    return { ok: true, artifact, usage };
+  } catch {
+    // A run that validated successfully but could not be captured is still a
+    // successful validation. Preview simply has nothing to resume.
+    try {
+      await sandbox.stop();
+    } catch {
+      // Nothing further to do; the sandbox's own timeout bounds it.
+    }
+    return { ok: false, reason: "capture_failed" };
+  }
+}
+
 export async function stopSandbox(
   provider: SandboxProvider,
   target: ValidationTarget,

@@ -47,6 +47,10 @@ export type StoredValidationRun = {
   failureCode: ValidationFailureCode | null;
   failureDetail: string | null;
   sourceIntegrity: SourceIntegrity | null;
+  /** Present only on a passing run whose filesystem was captured (§5). */
+  artifactSnapshotId: string | null;
+  artifactExpiresAt: string | null;
+  artifactDeletedAt: string | null;
   sandboxDurationMs: number | null;
   cleanupStatus: CleanupStatus | null;
   validationIdentity: string;
@@ -58,7 +62,7 @@ export type StoredValidationRun = {
 const COLUMNS =
   "id, project_id, prepared_change_id, operation_run_id, validation_profile, validation_profile_version, " +
   "sandbox_policy_version, sandbox_provider, sandbox_runtime, package_manager, prepared_commit_sha, " +
-  "status, stage, steps, failure_code, failure_detail, source_integrity, sandbox_duration_ms, cleanup_status, validation_identity, " +
+  "status, stage, steps, failure_code, failure_detail, source_integrity, artifact_snapshot_id, artifact_expires_at, artifact_deleted_at, sandbox_duration_ms, cleanup_status, validation_identity, " +
   "created_at, started_at, completed_at";
 
 type Row = Record<string, unknown>;
@@ -82,6 +86,9 @@ function mapRow(row: Row): StoredValidationRun {
     failureCode: (row.failure_code as ValidationFailureCode | null) ?? null,
     failureDetail: (row.failure_detail as string | null) ?? null,
     sourceIntegrity: (row.source_integrity as SourceIntegrity | null) ?? null,
+    artifactSnapshotId: (row.artifact_snapshot_id as string | null) ?? null,
+    artifactExpiresAt: (row.artifact_expires_at as string | null) ?? null,
+    artifactDeletedAt: (row.artifact_deleted_at as string | null) ?? null,
     sandboxDurationMs: (row.sandbox_duration_ms as number | null) ?? null,
     cleanupStatus: (row.cleanup_status as CleanupStatus | null) ?? null,
     validationIdentity: String(row.validation_identity),
@@ -204,6 +211,51 @@ export async function claimValidationRun(
   if (!data) return { ok: false, error: "persistence_failed" };
 
   return { ok: true, validationRun: mapRow(data as unknown as Row) };
+}
+
+/**
+ * Records a captured artifact against its run.
+ *
+ * Scoped to the project and to a passing run, because the service-role client
+ * bypasses RLS and because the database's own CHECK already refuses an artifact
+ * on a non-passing row — this is the same rule stated where the query lives.
+ */
+export async function recordValidatedArtifact(
+  supabase: SupabaseClient,
+  params: {
+    validationRunId: string;
+    projectId: string;
+    snapshotId: string;
+    sizeBytes: number | null;
+    expiresAt: string;
+  },
+): Promise<void> {
+  const { error } = await supabase
+    .from("validation_runs")
+    .update({
+      artifact_snapshot_id: params.snapshotId,
+      artifact_size_bytes: params.sizeBytes,
+      artifact_expires_at: params.expiresAt,
+    })
+    .eq("id", params.validationRunId)
+    .eq("project_id", params.projectId);
+
+  if (error) throw error;
+}
+
+/** Marks an artifact deleted. Expiry is the backstop; this is the plan. */
+export async function markArtifactDeleted(
+  supabase: SupabaseClient,
+  params: { validationRunId: string; projectId: string },
+): Promise<void> {
+  const { error } = await supabase
+    .from("validation_runs")
+    .update({ artifact_deleted_at: new Date().toISOString() })
+    .eq("id", params.validationRunId)
+    .eq("project_id", params.projectId)
+    .is("artifact_deleted_at", null);
+
+  if (error) throw error;
 }
 
 export async function setValidationStage(

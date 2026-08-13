@@ -57,6 +57,7 @@ async function createSandbox(overrides: Record<string, unknown> = {}) {
   await createVercelSandboxProvider().create({
     name: "vibe-validate-abc",
     source: {
+      kind: "git",
       repositoryUrl: "https://github.com/acme/product.git",
       revision: "2f05958e3410deaeb97029861abc05889139b4a7",
       credential: { username: "x-access-token", password: "ghs_token" },
@@ -152,7 +153,7 @@ describe("command failures explain themselves (post-dogfood)", () => {
     const { createVercelSandboxProvider } = await import("./provider");
     const sandbox = await createVercelSandboxProvider().create({
       name: "vibe-validate-abc",
-      source: { repositoryUrl: "https://github.com/acme/p.git", revision: "abc", credential: null },
+      source: { kind: "git", repositoryUrl: "https://github.com/acme/p.git", revision: "abc", credential: null },
       networkPolicy: { mode: "deny_all" },
       timeoutMs: 1000,
       env: {},
@@ -185,7 +186,7 @@ describe("command failures explain themselves (post-dogfood)", () => {
     const { createVercelSandboxProvider } = await import("./provider");
     const sandbox = await createVercelSandboxProvider().create({
       name: "vibe-validate-abc",
-      source: { repositoryUrl: "https://github.com/acme/p.git", revision: "abc", credential: null },
+      source: { kind: "git", repositoryUrl: "https://github.com/acme/p.git", revision: "abc", credential: null },
       networkPolicy: { mode: "deny_all" },
       timeoutMs: 1000,
       env: {},
@@ -300,5 +301,95 @@ describe("reconnecting across durable steps (§3, §12)", () => {
     // `Sandbox.getOrCreate` exists and is exactly the wrong function here: it
     // would silently hand back a fresh, empty VM (§12).
     expect(create).not.toHaveBeenCalled();
+  });
+});
+
+describe("capturing an artifact must not cost the ledger (Sprint 10B §5)", () => {
+  /**
+   * `sandbox.snapshot()` terminates the sandbox. A later `stop()` therefore
+   * throws — and `stop()` is where usage comes from. Without capturing usage at
+   * the moment of termination, retaining an artifact would silently cost us the
+   * accounting for the whole run.
+   */
+  it("reports usage from a stop() that the provider would refuse", async () => {
+    let stopped = false;
+    create.mockResolvedValue({
+      name: "vibe-validate-abc",
+      runtime: "node24",
+      totalActiveCpuDurationMs: 9876,
+      totalIngressBytes: 4242,
+      totalEgressBytes: 24,
+      async snapshot() {
+        stopped = true;
+        return { snapshotId: "snap_1", sizeBytes: 10, expiresAt: new Date(1) };
+      },
+      async stop() {
+        // Exactly what the real provider does once snapshotted.
+        if (stopped) throw new Error("sandbox is no longer running");
+        return { activeCpuDurationMs: 1, networkTransfer: { ingress: 1, egress: 1 } };
+      },
+    });
+
+    const { createVercelSandboxProvider } = await import("./provider");
+    const sandbox = await createVercelSandboxProvider().create({
+      name: "vibe-validate-abc",
+      source: { kind: "git", repositoryUrl: "https://github.com/a/b.git", revision: "abc", credential: null },
+      networkPolicy: { mode: "deny_all" },
+      timeoutMs: 1000,
+      env: {},
+    });
+
+    const artifact = await sandbox.snapshot({ expirationMs: 60_000 });
+    expect(artifact.snapshotId).toBe("snap_1");
+
+    // Would throw without the captured usage.
+    const usage = await sandbox.stop();
+    expect(usage.activeCpuDurationMs).toBe(9876);
+    expect(usage.networkIngressBytes).toBe(4242);
+  });
+
+  it("passes the explicit expiry through to the provider", async () => {
+    const snapshot = vi.fn(async () => ({ snapshotId: "s", sizeBytes: 1, expiresAt: null }));
+    create.mockResolvedValue({
+      name: "vibe-validate-abc",
+      runtime: "node24",
+      snapshot,
+      async stop() {
+        return { activeCpuDurationMs: 1, networkTransfer: { ingress: 1, egress: 1 } };
+      },
+    });
+
+    const { createVercelSandboxProvider } = await import("./provider");
+    const sandbox = await createVercelSandboxProvider().create({
+      name: "vibe-validate-abc",
+      source: { kind: "git", repositoryUrl: "https://github.com/a/b.git", revision: "abc", credential: null },
+      networkPolicy: { mode: "deny_all" },
+      timeoutMs: 1000,
+      env: {},
+    });
+
+    await sandbox.snapshot({ expirationMs: 60 * 60 * 1000 });
+
+    // Never the provider's 30-day default.
+    expect(snapshot).toHaveBeenCalledWith({ expiration: 60 * 60 * 1000 });
+  });
+
+  it("restores from a snapshot without re-imaging it", async () => {
+    const { createVercelSandboxProvider } = await import("./provider");
+    await createVercelSandboxProvider().create({
+      name: "vibe-preview-abc",
+      source: { kind: "snapshot", snapshotId: "snap_1" },
+      networkPolicy: { mode: "deny_all" },
+      timeoutMs: 1000,
+      env: {},
+      ports: [3000],
+    });
+
+    const options = create.mock.calls[0][0] as Record<string, unknown>;
+    expect(options.source).toEqual({ type: "snapshot", snapshotId: "snap_1" });
+    // A snapshot carries its own image; re-imaging would make it a different artifact.
+    expect(options).not.toHaveProperty("image");
+    expect(options.ports).toEqual([3000]);
+    expect(options.persistent).toBe(false);
   });
 });

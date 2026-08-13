@@ -59,12 +59,42 @@ export type SandboxCommandResult = {
   timedOut: boolean;
 };
 
-/** Where the source comes from. Credentials are used once and never persisted (§7). */
-export type SandboxSource = {
-  repositoryUrl: string;
-  /** The exact commit to check out. Never a branch name (§6). */
-  revision: string;
-  credential: { username: string; password: string } | null;
+/**
+ * Where a sandbox's filesystem comes from.
+ *
+ * Two shapes, and the difference is a trust boundary. `git` acquires source
+ * from GitHub with a credential; `snapshot` restores a filesystem Vibe already
+ * validated, needing no credential at all — which is why preview never touches
+ * GitHub (Sprint 10B §30).
+ */
+export type SandboxSource =
+  | {
+      kind: "git";
+      repositoryUrl: string;
+      /** The exact commit to check out. Never a branch name (§6). */
+      revision: string;
+      credential: { username: string; password: string } | null;
+    }
+  | {
+      kind: "snapshot";
+      /** A provider snapshot id Vibe created and stored. Never client-supplied. */
+      snapshotId: string;
+    };
+
+/**
+ * A filesystem Vibe captured after a validation succeeded (Sprint 10B §5).
+ *
+ * Created **only** after every check passed and the credential scrub was
+ * re-verified, so what is retained is a known-clean artifact rather than
+ * whatever a sandbox happened to contain. Expiry is always explicit — the
+ * provider's own default is 30 days, which is not a retention policy anyone
+ * chose.
+ */
+export type SandboxArtifact = {
+  snapshotId: string;
+  sizeBytes: number | null;
+  /** Provider-reported expiry. Null only if the provider declines to say. */
+  expiresAt: string | null;
 };
 
 export type CreateSandboxInput = {
@@ -73,6 +103,13 @@ export type CreateSandboxInput = {
   /** Applied at creation, so a sandbox never exists under a weaker policy. */
   networkPolicy: SandboxNetworkPolicy;
   timeoutMs: number;
+  /**
+   * Inbound ports to expose publicly.
+   *
+   * Empty for validation: an exposed port serves untrusted code on a public URL,
+   * which is a different exposure entirely and belongs to preview alone.
+   */
+  ports?: readonly number[];
   /**
    * Environment for every command.
    *
@@ -118,6 +155,13 @@ export interface SandboxHandle {
     command: SandboxCommand;
     cwd: string;
     timeoutMs: number;
+  /**
+   * Inbound ports to expose publicly.
+   *
+   * Empty for validation: an exposed port serves untrusted code on a public URL,
+   * which is a different exposure entirely and belongs to preview alone.
+   */
+  ports?: readonly number[];
   }): Promise<SandboxCommandResult>;
 
   /** Reads a bounded file back out, for integrity checks. Null when absent. */
@@ -130,6 +174,19 @@ export interface SandboxHandle {
    * network between dependency acquisition and repository execution.
    */
   applyNetworkPolicy(policy: SandboxNetworkPolicy): Promise<void>;
+
+  /**
+   * Captures the filesystem and terminates the sandbox.
+   *
+   * Terminating is the provider's behaviour, not ours: after a snapshot the
+   * sandbox is unreachable and `stop()` would fail. So this is a *terminal*
+   * operation, and `stop()` afterwards must still report usage rather than
+   * throw — otherwise capturing an artifact would cost us the accounting.
+   */
+  snapshot(input: { expirationMs: number }): Promise<SandboxArtifact>;
+
+  /** The public origin for an exposed port. Provider-derived, never assembled. */
+  publicOrigin(port: number): Promise<string>;
 
   /** Terminates the sandbox and reports usage. Safe to call more than once. */
   stop(): Promise<SandboxUsage>;
@@ -164,6 +221,16 @@ export interface SandboxProvider {
    * must **not** create a replacement: the filesystem is the state (§12).
    */
   reconnect(input: { name: string }): Promise<SandboxHandle | null>;
+
+  /**
+   * Deletes a stored artifact.
+   *
+   * Explicit rather than left to expiry. A preview that has ended should not
+   * leave a customer's filesystem sitting in provider storage for the remainder
+   * of its TTL — the TTL is a backstop for the cases where we cannot delete,
+   * not the plan.
+   */
+  deleteArtifact(snapshotId: string): Promise<void>;
 }
 
 /**

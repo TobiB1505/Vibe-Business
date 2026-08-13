@@ -830,7 +830,7 @@ describe("no secrets reach the sandbox (§8, §31, §37)", () => {
     await runPipeline();
 
     const created = provider.createdWith();
-    expect(created?.source.credential?.password).toBe(CLONE_TOKEN);
+    expect(created?.source.kind === "git" ? created.source.credential?.password : undefined).toBe(CLONE_TOKEN);
     expect(JSON.stringify(created?.env)).not.toContain(CLONE_TOKEN);
   });
 
@@ -847,5 +847,50 @@ describe("no secrets reach the sandbox (§8, §31, §37)", () => {
 
     expect(everything).not.toContain(CLONE_TOKEN);
     expect(everything).not.toContain("x-access-token");
+  });
+});
+
+describe("only a passing run keeps an artifact (Sprint 10B §5)", () => {
+  /**
+   * The whole reason capture is explicit rather than `persistent: true`. A
+   * persistent sandbox snapshots on every stop — including the run whose build
+   * just failed, and including one that stopped mid-scrub. Retaining a customer
+   * filesystem must be a consequence of success, never of stopping.
+   */
+  it("captures nothing when the build failed", async () => {
+    seed();
+    provider = fakeSandboxProvider({
+      files: healthySandboxFiles(),
+      results: { "pnpm run build": { exitCode: 1, output: "Build error" } },
+    });
+
+    await runPipeline();
+
+    expect(provider.snapshots()).toBe(0);
+    expect(db.rows("validation_runs")[0].status).toBe("failed");
+    expect(db.rows("validation_runs")[0].artifact_snapshot_id ?? null).toBeNull();
+  });
+
+  it("captures nothing when the tests failed", async () => {
+    seed();
+    provider = fakeSandboxProvider({
+      files: healthySandboxFiles(),
+      results: { "pnpm run test": { exitCode: 1 } },
+    });
+
+    await runPipeline();
+
+    expect(provider.snapshots()).toBe(0);
+  });
+
+  it("records the artifact against a passing run", async () => {
+    seed();
+    await runPipeline();
+
+    const run = db.rows("validation_runs")[0];
+    expect(run.status).toBe("passed");
+    expect(run.artifact_snapshot_id).toBe("snap_fake_1");
+    // A retained artifact always has a deadline Vibe chose.
+    expect(run.artifact_expires_at).toBeTruthy();
   });
 });

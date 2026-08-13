@@ -45,6 +45,9 @@ export type FakeEvent =
   | { kind: "policy"; policy: SandboxNetworkPolicy }
   | { kind: "command"; command: string; cwd: string }
   | { kind: "read"; path: string }
+  | { kind: "snapshot"; expirationMs: number }
+  | { kind: "origin"; port: number }
+  | { kind: "delete_artifact"; snapshotId: string }
   | { kind: "stop" };
 
 export type FakeSandboxOptions = {
@@ -60,6 +63,10 @@ export type FakeSandboxOptions = {
   failStop?: boolean;
   /** Throw on this exact command, for the unexpected-provider-error path. */
   throwOn?: string;
+  /** Make artifact capture fail, for the snapshot-failure path. */
+  failSnapshot?: boolean;
+  /** The snapshot id the fake hands back. */
+  snapshotId?: string;
   usage?: Partial<SandboxUsage>;
   /**
    * Make the sandbox vanish before the Nth reconnect (1-based).
@@ -93,6 +100,8 @@ export type FakeSandboxProvider = SandboxProvider & {
   createCount(): number;
   /** Names passed to `reconnect`, in order. */
   reconnects(): string[];
+  snapshots(): number;
+  deletedArtifacts(): string[];
 };
 
 export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandboxProvider {
@@ -102,6 +111,9 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
 
   let createCount = 0;
   let reconnectCount = 0;
+  let snapshotCount = 0;
+  let terminated = false;
+  const deletedArtifacts: string[] = [];
 
   const handle: SandboxHandle = {
     id: "sandbox_1",
@@ -154,9 +166,39 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
       events.push({ kind: "policy", policy });
     },
 
+    async snapshot(input) {
+      snapshotCount += 1;
+      events.push({ kind: "snapshot", expirationMs: input.expirationMs });
+      if (options.failSnapshot) throw new Error("snapshot failed");
+
+      // The real provider terminates the sandbox here, so the fake does too:
+      // a later `stop()` must still report usage rather than throw, and a test
+      // that let the fake stay alive would not prove that.
+      terminated = true;
+      return {
+        snapshotId: options.snapshotId ?? "snap_fake_1",
+        sizeBytes: 1024,
+        expiresAt: new Date(Date.now() + input.expirationMs).toISOString(),
+      };
+    },
+
+    async publicOrigin(port) {
+      events.push({ kind: "origin", port });
+      return `https://sandbox-${port}.example.invalid`;
+    },
+
     async stop() {
       stopCount += 1;
       events.push({ kind: "stop" });
+      // Terminated by a snapshot: report, never re-stop.
+      if (terminated) {
+        return {
+          activeCpuDurationMs: options.usage?.activeCpuDurationMs ?? 1234,
+          networkIngressBytes: options.usage?.networkIngressBytes ?? 5000,
+          networkEgressBytes: options.usage?.networkEgressBytes ?? 10,
+          costUsd: options.usage?.costUsd ?? null,
+        };
+      }
       if (options.failStop) throw new Error("stop failed");
 
       return {
@@ -177,6 +219,11 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
       if (options.failCreate) throw new Error("no capacity");
       createCount += 1;
       return handle;
+    },
+
+    async deleteArtifact(snapshotId) {
+      events.push({ kind: "delete_artifact", snapshotId });
+      deletedArtifacts.push(snapshotId);
     },
 
     async reconnect(input) {
@@ -223,6 +270,14 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
 
     createCount() {
       return createCount;
+    },
+
+    snapshots() {
+      return snapshotCount;
+    },
+
+    deletedArtifacts() {
+      return [...deletedArtifacts];
     },
 
     reconnects() {

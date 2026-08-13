@@ -2,8 +2,10 @@ import "server-only";
 
 import { Sandbox } from "@vercel/sandbox";
 import { SANDBOX_BUDGETS, SANDBOX_RESOURCES } from "../budgets";
+import { Snapshot } from "@vercel/sandbox";
 import type {
   CreateSandboxInput,
+  SandboxArtifact,
   SandboxHandle,
   SandboxLiveness,
   SandboxNetworkPolicy,
@@ -82,6 +84,15 @@ function toLiveness(status: string | undefined): SandboxLiveness {
 }
 
 class VercelSandboxHandle implements SandboxHandle {
+  /**
+   * Usage captured at termination.
+   *
+   * `sandbox.snapshot()` shuts the sandbox down, so a later `stop()` would
+   * throw and take the accounting with it. Capturing usage at the moment of
+   * termination keeps the ledger whole either way.
+   */
+  private terminalUsage: SandboxUsage | null = null;
+
   constructor(
     private readonly sandbox: Sandbox,
     readonly id: string,
@@ -155,7 +166,36 @@ class VercelSandboxHandle implements SandboxHandle {
     await this.sandbox.update({ networkPolicy: toProviderPolicy(policy) });
   }
 
+  async snapshot(input: { expirationMs: number }): Promise<SandboxArtifact> {
+    // Explicit expiry, never the provider's 30-day default — an unbounded
+    // retention of a customer's filesystem is not a policy anyone chose.
+    const snapshot = await this.sandbox.snapshot({ expiration: input.expirationMs });
+
+    // The sandbox is now unreachable, so read what it measured before losing it.
+    this.terminalUsage = {
+      activeCpuDurationMs: this.sandbox.totalActiveCpuDurationMs ?? null,
+      networkIngressBytes: this.sandbox.totalIngressBytes ?? null,
+      networkEgressBytes: this.sandbox.totalEgressBytes ?? null,
+      costUsd: null,
+    };
+
+    return {
+      snapshotId: snapshot.snapshotId,
+      sizeBytes: snapshot.sizeBytes ?? null,
+      expiresAt: snapshot.expiresAt ? snapshot.expiresAt.toISOString() : null,
+    };
+  }
+
+  async publicOrigin(port: number): Promise<string> {
+    // Derived by the provider. Vibe never assembles a preview host from parts,
+    // because a guessed origin is a guessed trust boundary.
+    return this.sandbox.domain(port);
+  }
+
   async stop(): Promise<SandboxUsage> {
+    // Already terminated by a snapshot: report, do not re-stop.
+    if (this.terminalUsage) return this.terminalUsage;
+
     const result = await this.sandbox.stop();
 
     return {
@@ -176,30 +216,47 @@ export function createVercelSandboxProvider(): SandboxProvider {
     id: "vercel_sandbox",
 
     async create(input: CreateSandboxInput): Promise<SandboxHandle> {
-      const sandbox = await Sandbox.create({
+      // Shared across both source kinds. `persistent: false` stays: a sandbox
+      // must never snapshot *itself* on stop. Artifacts are captured
+      // explicitly, only after a validation has actually succeeded and the
+      // credential scrub has been re-verified (Sprint 10B §5).
+      const common = {
         name: input.name,
-        source: {
-          type: "git",
-          url: input.source.repositoryUrl,
-          // The exact prepared commit, never a branch (§6).
-          revision: input.source.revision,
-          // A shallow clone: validation needs the tree, not the history.
-          depth: 1,
-          ...(input.source.credential
-            ? {
-                username: input.source.credential.username,
-                password: input.source.credential.password,
-              }
-            : {}),
-        },
-        image: SANDBOX_RESOURCES.image,
         resources: { vcpus: SANDBOX_RESOURCES.vcpus },
         timeout: input.timeoutMs,
         networkPolicy: toProviderPolicy(input.networkPolicy),
         env: input.env,
-        // See the file comment: persistence is the SDK default and must not be.
         persistent: false,
-      });
+        ...(input.ports && input.ports.length > 0 ? { ports: [...input.ports] } : {}),
+      };
+
+      // A snapshot carries its own image, and the SDK's types refuse the
+      // combination — restoring a validated artifact must not re-image it,
+      // because then it would not be the validated artifact.
+      const sandbox =
+        input.source.kind === "snapshot"
+          ? await Sandbox.create({
+              ...common,
+              source: { type: "snapshot", snapshotId: input.source.snapshotId },
+            })
+          : await Sandbox.create({
+              ...common,
+              image: SANDBOX_RESOURCES.image,
+              source: {
+                type: "git",
+                url: input.source.repositoryUrl,
+                // The exact prepared commit, never a branch (§6).
+                revision: input.source.revision,
+                // A shallow clone: validation needs the tree, not the history.
+                depth: 1,
+                ...(input.source.credential
+                  ? {
+                      username: input.source.credential.username,
+                      password: input.source.credential.password,
+                    }
+                  : {}),
+              },
+            });
 
       // Freshly created, so liveness is not in question — and asserting it here
       // would turn a provider quirk in the status field into a failure to run
@@ -250,6 +307,17 @@ export function createVercelSandboxProvider(): SandboxProvider {
         // because the next thing the caller does is run a command that assumes
         // a filesystem.
         return null;
+      }
+    },
+    async deleteArtifact(snapshotId: string): Promise<void> {
+      // Best effort by design. A snapshot that cannot be deleted still expires
+      // on the explicit TTL it was created with, and failing a preview teardown
+      // over storage housekeeping would trade a real outcome for a tidy one.
+      try {
+        const snapshot = await Snapshot.get({ snapshotId });
+        await snapshot.delete();
+      } catch {
+        return;
       }
     },
   };

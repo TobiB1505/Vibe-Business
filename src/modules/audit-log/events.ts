@@ -50,6 +50,7 @@ export type AuditEventType =
   | "change_validation.started"
   | "change_validation.passed"
   | "change_validation.failed"
+  | "change_validation.artifact_capture_failed"
   | "change_preparation.completed"
   | "change_preparation.failed";
 
