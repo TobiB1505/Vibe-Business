@@ -1578,6 +1578,53 @@ ein Mensch einen bestimmten Commit angesehen und ja gesagt hat — nicht, dass
 gemergt werden darf. Das prüft Sprint 11C unmittelbar vor dem Schreiben gegen
 den echten aktuellen Zustand.
 
+**21. Der erste echte Merge — und warum "merged" genau einen Satz bedeutet**
+Am 14.08.2026 hat Vibe zum ersten Mal einen Default-Branch bewegt:
+`main` von `246ac36` auf `78cbdac`, per Fast-Forward, autorisiert durch die
+Freigabe eines Menschen für genau diesen Commit, verifiziert durch einen
+unabhängigen Read-Back. Ein einziger Datensatz, 0 AI-Calls, ~10 Sekunden.
+
+Die zehn Sekunden sind das ganze Sicherheitsmodell:
+
+```
+requested              → Absicht
+preflight_passed       → frischer GitHub-Read: main steht noch auf 246ac36
+started_at gesetzt     → VOR dem Schreiben markiert
+default_branch_updated → der Write
+verified               → unabhängiger Read-Back, erst dann merged_at
+```
+
+`started_at` vor dem Write ist das, was einen abgebrochenen Merge lesbar macht:
+eine Zeile mit `started_at` und ohne Ergebnis ist der mehrdeutige Fall, und die
+einzige sichere Antwort darauf ist *lesen*, niemals nochmal schreiben.
+`merged_at` existiert nur, weil der Read-Back gleich war — der DB-CHECK dazu ist
+jetzt in Produktion tragend, nicht nur im Test.
+
+**`merged` heißt genau einen Satz: der Default-Branch zeigt auf den
+freigegebenen Commit, und Vibe hat es zurückgelesen.** Nicht deployed, nicht
+live, nicht "fertig". Aber auch nicht "keine Produktionswirkung" — das Bewegen
+von `main` hat in diesem Repository die eigene Vercel-Produktion ausgelöst.
+Genau deshalb steht das *vor* dem Klick in der Bestätigung.
+
+Zwei Dinge, die dieser Lauf zusätzlich gelehrt hat:
+
+*Der Block ist das häufigere Ergebnis, und das ist richtig so.* Der erste
+Merge-Versuch desselben Tages wurde mit `merge_repository_changed` abgelehnt,
+weil `main` seit der Vorbereitung weitergezogen war. Kein Rebase, kein Refresh,
+kein Aufweichen der Fast-Forward-Invariante — Vibe verweigert und sagt warum.
+Auf einem aktiven Repository ist Drift der Normalfall, nicht die Ausnahme.
+
+*Reihenfolge kostet Geld.* Preview → **Vergleich** → stoppen. Wer den Preview
+vor dem Vergleich stoppt, verliert das ValidatedArtifact an das Teardown und
+zahlt eine neue Validierung. Das ist jetzt zweimal passiert.
+
+Und die Pointe des Tages: der erste Vibe-Commit vom 12.08. listete `/login` im
+Sitemap — auf jeder Sicherheitsebene korrekt und inhaltlich falsch. Der Commit,
+der jetzt `main` ist, stammt aus derselben Capability eine Version später und
+listet nur noch die Startseite. Die Lücke, um die herum die ganze Pipeline
+gebaut wurde, ist die Lücke, die geschlossen wurde — und ein Mensch hat trotzdem
+genau diesen Commit freigegeben.
+
 ---
 
 ## 37. Aktueller Stand
@@ -1622,14 +1669,28 @@ Code changes                  ✅ (eine Capability)
 Isolated validation           ✅ (Sandbox, install/typecheck/test/build)
 Preview                       ✅ (15 Min, temporär, öffentlich-unlisted)
 Before/After Review           ✅ (erster echter Vergleich 14.08.2026)
-Approval                      planned
-Merge                         planned
+Approval                      ✅ (erste echte Freigabe 14.08.2026)
+Merge                         ✅ (erster echter Merge 14.08.2026)
+Deploy                        nicht gebaut
 ```
 
 Am 12.08.2026 hat Vibe zum ersten Mal Code in ein echtes Repository
 geschrieben: ein Branch, ein Commit, zwei Dateien, per Read-back verifiziert.
 Der Default-Branch wurde nie angefasst. 0 AI-Calls, $0 — die Ausführung selbst
 ist deterministisch, das Modell hat nur priorisiert, nicht geschrieben.
+
+Am **14.08.2026** wurde dieser Default-Branch zum ersten Mal bewegt — durch
+dieselbe deterministische Ausführung, autorisiert durch die Freigabe eines
+Menschen für genau einen Commit, per Fast-Forward, mit unabhängigem Read-Back.
+Die gesamte Kette lief an einem Tag durch:
+
+```
+Prepare → Validate → Preview → Review → Approve → Merge
+$0.228 AI · 598s Sandbox · 1 Browser-Session · Merge selbst: 0 AI-Calls
+```
+
+Der erste Merge-Versuch desselben Tages wurde korrekt abgelehnt
+(`merge_repository_changed`), weil `main` inzwischen weitergezogen war.
 
 Drei Versuche sind vorher fehlgeschlagen, an einem Tabellennamen, den kein Test
 finden konnte, weil jeder Workflow-Test genau diese Stelle durch ein Fake
@@ -1658,15 +1719,15 @@ Bis jetzt haben wir gebaut:
 
 > Vibe understands your product and business.
 
-und inzwischen auch:
+dann:
 
 > Vibe decides what should happen next.
 
-Der nächste Abschnitt ist:
+und seit dem 14.08.2026, an genau einem Commit bewiesen:
 
 > Vibe does it.
 
-Und zuletzt:
+Was noch fehlt:
 
 > Vibe measures whether it worked.
 

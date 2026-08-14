@@ -12,7 +12,7 @@
 | Migration deployed and verified | ✅ Deployed 14.08.2026 via the Supabase CLI |
 | Browser E2E of the merge UI | ✅ [Sprint 11C.1](0011c1-merge-ui-e2e.md) — 9 chromium tests |
 | Real dogfood — blocked case | ✅ Done 14.08.2026 — refused on drift, nothing written |
-| Real dogfood — successful merge | ⏳ Pending — needs a change prepared on the current head |
+| Real dogfood — successful merge | ✅ **Done 14.08.2026 — `main` moved by fast-forward and read back** |
 
 ## Goal
 
@@ -149,7 +149,18 @@ The confirmation says both halves before the click, because only one of them is 
 
 `pnpm lint` · `pnpm typecheck` · `pnpm test` (2135 tests, 112 files) · `pnpm build` — all green.
 
-### The migration is written but deliberately not deployed from here
+### The migration was deployed through the CLI workflow, 14.08.2026
+
+`pnpm db:status` → `pnpm db:push`, from the machine where the project is linked.
+One pending migration, no remote-only drift, version preserved. Verified live
+afterwards: the table exists, **INSERT and SELECT policies only** — no UPDATE,
+no DELETE — the `change_merges_written_identity_idx` write lock is present, and
+`operation_runs` now accepts `change_merge`.
+
+The section below is the original note, kept because its reasoning is what made
+the deployment correct rather than convenient.
+
+#### Why it was not applied from the implementation environment
 
 `pnpm db:status` / `pnpm db:push` / `pnpm db:lint` need a linked Supabase CLI, and the implementation environment has no CLI credentials and no `.env`. The migration must be deployed with the sanctioned workflow, from the machine where the project is linked:
 
@@ -163,7 +174,7 @@ The obvious shortcut — applying the SQL through the Supabase management connec
 
 What *was* done from here is the read half, which is safe and was required before writing the migration at all: the live constraints were inspected directly through the Supabase connection to the `Vibe-Business` project. `operation_runs_operation_type_check` listed seven values and did not include `change_merge`; `operation_runs_stage_check` listed twenty-eight and included none of the merge stages. Local migration history and the remote database agreed exactly (20/20, ending at `change_approvals`). `schema.test.ts` now pins both representations together.
 
-**Nothing can be merged until this migration is deployed.** Every insert would fail on `operation_runs_operation_type_check`.
+**Nothing could be merged until this migration was deployed.** Every insert would have failed on `operation_runs_operation_type_check`. It has since been deployed, as recorded above.
 
 ### Deliberate regressions — 19 applied and reverted, 18 killed
 
@@ -262,7 +273,107 @@ a row.
 
 So the safe case did **not** hold, and the outcome was `merge_repository_changed` — a successful safety result, not a successful first merge. §57 is explicit that the policy must not be loosened to finish the sprint, and it was not: no rebase, no refresh, no weakening of the fast-forward invariant.
 
-The successful merge dogfood therefore needs a change prepared against the *current* head, which is deliberately left until after this PR merges.
+The successful merge dogfood therefore needed a change prepared against the
+*current* head. That is what follows.
+
+## Real dogfood — the successful merge, 14.08.2026
+
+**Vibe moved a customer's default branch for the first time.** The customer was
+Vibe Business.
+
+### What was merged
+
+A fresh preparation against the head that existed after PR #29 merged:
+
+| | |
+| --- | --- |
+| PreparedChange | `1232a8f9` · branch `vibe/seo-foundations-ab0d865476a6` |
+| Commit | `78cbdac32ea660edd20af4a9dfcc74be6c388700` |
+| Base | `246ac362610aac828f35fc5dbfa8f67dde5ebbdd` — `main` at preparation time |
+| Capability | `nextjs_seo_foundations_v2` |
+| Files | `src/app/robots.ts`, `src/app/sitemap.ts` · 2 changed, +44, −0 |
+
+The commit had **exactly one parent, and it was the base** — so the
+fast-forward invariant held by construction rather than by policy, checked
+against the commit object itself.
+
+### The write, in ten seconds
+
+```
+14:40:46  change_merge.requested
+14:40:50  change_merge.preflight_passed        fresh GitHub read: main still at 246ac36
+14:40:53  started_at set                       marked BEFORE the write
+14:40:54  change_merge.default_branch_updated
+14:40:56  change_merge.verified                independent read-back, then merged_at
+```
+
+`started_at` preceding the write is what makes an interrupted merge legible;
+`merged_at` exists only because the read-back came back equal. The
+`change_merges_merged_matches_approved_commit` CHECK is now load-bearing in
+production rather than only in tests.
+
+### The record
+
+| Field | Value |
+| --- | --- |
+| ChangeMerge | `82e4980e` · `merged` · **one row, total** |
+| Strategy · policy | `fast_forward_exact_commit` · `merge-policy-v1` |
+| Observed head before | `246ac36…` |
+| Resulting head, read back | `78cbdac…` — **equals the approved commit** |
+| Authorized by | approval `968f8955`, still `approved`, bound to `78cbdac` |
+| OperationRun | `completed` |
+| AI calls in the merge path | **0** |
+
+### GitHub, verified independently
+
+```
+refs/heads/main                          246ac36…  →  78cbdac…
+new head's parent                        246ac36…              ← a true fast-forward
+refs/heads/vibe/seo-foundations-ab0d…    unchanged             ← no delete, no rewrite
+```
+
+### What the whole chain cost
+
+| Step | Cost |
+| --- | --- |
+| Audit + opportunities (twice) | **$0.228**, 4 AI calls |
+| Preparation | $0 · **0 AI calls** — deterministic |
+| Validation × 2 | 598 s of sandbox |
+| Preview × 2 | two sandboxes, both torn down |
+| Comparison | 1 browser session, 10.8 s, 2 captures |
+| Approval | $0 |
+| **Merge** | **$0 · 0 AI calls · ~10 s** |
+
+The second validation was avoidable and is the honest lesson of the run: the
+preview was stopped **before** the comparison was generated, teardown deleted
+the 1.16 GB ValidatedArtifact as designed, and the artifact had to be rebuilt.
+The sequencing trap — preview → *comparison* → stop, never preview → stop →
+comparison — has now cost a validation twice.
+
+### What it proved, and what it did not
+
+It proved that a human's approval of one exact commit can move a real default
+branch by fast-forward, and that the product can say afterwards *which* commit
+moved *which* branch *from* where, authorized by *which* decision, verified by
+an independent read.
+
+It did not prove anything about deployment. Vibe called no deployment provider.
+Moving `main` did trigger this repository's own Vercel production build — which
+is precisely why the confirmation says so before the click, and why `merged`
+never renders as "live".
+
+### The part worth remembering
+
+The first Vibe-authored commit, on 12.08., listed `/login` and `/signup` in a
+sitemap: correct at every safety layer and wrong in intent. It is the standing
+example in this project's history of why `repository_write_verified` is not
+`good`.
+
+The commit that just became `main` is the same capability one version later,
+with that defect designed out — the v2 sitemap lists only the homepage and
+documents omission as the intended default. The pipeline did not merely carry a
+change to production; the gap it was built around is the gap that got closed,
+and a human still approved the specific commit that closed it.
 
 ## Known limitations
 
