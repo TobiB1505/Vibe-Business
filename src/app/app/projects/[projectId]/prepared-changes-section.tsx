@@ -1,6 +1,8 @@
+import type { ApprovalCard } from "@/modules/approvals/view";
 import type { PreviewCard } from "@/modules/change-preview/view";
 import type { ReviewCard } from "@/modules/review/view";
 import type { ReviewImages } from "@/modules/review/service";
+import { ApprovalPanel } from "./approval-panel";
 import { PreviewPanel } from "./preview-panel";
 import { ReviewPanel } from "./review-panel";
 import { ValidationPanel, type ValidationSummary } from "./validation-panel";
@@ -51,6 +53,14 @@ export type PreparedChangeCard = {
   previewSessionId: string | null;
   /** Provider-resolved preview origin, for "Open". Null once the preview ends. */
   previewOrigin: string | null;
+  /**
+   * Approval state, decided on the server (Sprint 11B §24).
+   *
+   * Whether something is approved is a comparison between what a human approved
+   * and what is on screen now. A component holding props cannot make that
+   * comparison, and the one thing it must never do is answer it optimistically.
+   */
+  approval: ApprovalCard;
 };
 
 export function PreparedChangesSection({
@@ -138,6 +148,17 @@ export function PreparedChangesSection({
               branchUrl={change.branchUrl}
               commitSha={change.commitSha}
               filesChanged={change.filePaths.length}
+            />
+
+            {/* Last, because approval is the only thing here that records a
+                human decision, and it should follow the evidence rather than
+                sit beside it. There is no Merge, Deploy or Ship control after
+                it — none of those exist anywhere in the product. */}
+            <ApprovalPanel
+              projectId={projectId}
+              preparedChangeId={change.id}
+              card={change.approval}
+              reviewArtifactId={change.review.reviewArtifactId}
             />
           </li>
         ))}

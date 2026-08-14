@@ -70,6 +70,10 @@ This file governs how Claude Code (and any AI-assisted session) works in this re
 65. Validation semantics must be versioned. Network policy, command sequence, timeouts, install flags and secret handling together define what "validated" means, so they belong in the validation identity — a stored pass must never be reinterpreted under rules it was not checked against.
 66. A successful validation authorizes nothing. `sandbox_validation_passed` means a profile's commands exited zero in an isolated VM — never that a change is safe, correct, reviewed, mergeable or production ready. Never render it as any of those.
 
+67. A human approval binds to an immutable artifact identity — project, prepared change, commit, base, validation run, review artifact, policy version. Never `approved = true` on something that can change underneath it, and never a "latest" lookup. An approval of commit A must never come to apply to commit B — see [ADR 0018](docs/decisions/0018-human-approval-authority.md).
+68. `human_approved` authorizes nothing. It records that a person looked at one specific reviewed commit and said yes. Whether a merge is currently safe is a separate question, asked against live external state immediately before the write — and repository drift after an approval never rewrites what a human decided.
+69. Before shipping consequential user-visible state, ask all four: is the domain state tested, is the SQL/RLS contract tested, is the actual browser-visible state tested, and has it been dogfooded where provider semantics matter? Three greens and an untested screen is the failure mode this project keeps paying for.
+
 ## Related Documents
 
 - [PRODUCT.md](PRODUCT.md) — product vision, scope, and non-goals

@@ -69,7 +69,18 @@ export type AuditEventType =
   // audit log is exactly the durable place it must not reach (§16).
   | "change_review.started"
   | "change_review.ready"
-  | "change_review.failed";
+  | "change_review.failed"
+  // Human approval (Sprint 11B §17). These carry a commit SHA deliberately: an
+  // approval record that cannot say *what* was approved documents nothing, and
+  // a commit SHA identifies content rather than granting access to it. What
+  // they must never carry is the review's evidence — no signed screenshot URL,
+  // no image path, no page content.
+  | "change_approval.created"
+  | "change_approval.revoked"
+  // Written when a read notices the approved artifact has moved on. Not a user
+  // action, which is why it is its own event rather than a variant of revoked:
+  // "you withdrew this" and "this stopped applying" are different histories.
+  | "change_approval.invalidated";
 
 export type RecordAuditEventParams = {
   userId: string;

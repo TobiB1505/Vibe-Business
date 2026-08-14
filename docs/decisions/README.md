@@ -46,6 +46,8 @@ V0.1 foundational architecture decisions have been recorded:
 - [0014](0014-first-execution-safety.md) — First execution is isolated, premise-revalidated and capability-scoped (Accepted)
 - [0015](0015-untrusted-repository-execution-provider.md) — Untrusted Repository Execution Provider: Vercel Sandbox (Accepted)
 - [0016](0016-temporary-preview-isolation.md) — Temporary Preview Isolation (Accepted)
+- [0017](0017-visual-review-artifacts.md) — Visual Review Artifacts (Accepted; §9 corrected by the first dogfood)
+- [0018](0018-human-approval-authority.md) — Human Approval Authority (Accepted)
 
 Several architecture questions remain intentionally open — see [ARCHITECTURE.md §7](../../ARCHITECTURE.md#7-deferred--open-decisions).
 

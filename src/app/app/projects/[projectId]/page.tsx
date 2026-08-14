@@ -27,6 +27,8 @@ import { getPreviewCard, getPreviewStatus } from "@/modules/change-preview/servi
 import { createVercelSandboxProvider } from "@/modules/validation/vercel/provider";
 import { VercelWorkflowExecutor } from "@/modules/operations/vercel/executor";
 import { getReviewCard, getReviewImages } from "@/modules/review/service";
+import { getApprovalCard } from "@/modules/approvals/service";
+import { approvalBlockMessage } from "@/modules/approvals/messages";
 import { SANDBOX_POLICY_VERSION } from "@/modules/validation/schema";
 import { buildValidationSummary } from "@/modules/validation/view";
 import { listPreparedChangesForProject } from "@/modules/execution/store";
@@ -205,6 +207,15 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
         OPERATION_FAILURE_MESSAGES[code as keyof typeof OPERATION_FAILURE_MESSAGES] ?? null,
     });
 
+    // Approval state. Read-only, like every other card on this page: opening a
+    // project must never approve, revoke, validate, preview or capture anything.
+    const approval = await getApprovalCard(supabase, {
+      projectId,
+      userId: session.userId,
+      preparedChangeId: prepared.id,
+      resolveBlockMessage: approvalBlockMessage,
+    });
+
     // The preview's public origin, only while it is genuinely running. Fetched
     // from the provider rather than stored, because it is capability-like
     // (ADR 0016 §4) — and absent after teardown, which is expected: the
@@ -256,6 +267,10 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
       // stopped one would buy a browser session that fails (§6).
       previewSessionId: preview.state === "running" ? preview.previewSessionId : null,
       previewOrigin,
+      // Approval state, resolved from persisted rows (Sprint 11B §24, §27).
+      // Costs a handful of reads and no provider call of any kind: approval is
+      // a database action, and looking at it must stay free.
+      approval,
     });
   }
 

@@ -180,6 +180,54 @@ export class FakeDatabase {
       if (clash) return { code: POSTGRES_UNIQUE_VIOLATION, message: "one active preparation per identity" };
     }
 
+    // change_approvals_active_identity_idx (Sprint 11B §12). At most one
+    // *active* approval per exact artifact, so a double click loses its second
+    // insert here exactly as it would in Postgres. Without this the idempotency
+    // test would be proving the application's pre-check rather than the
+    // guarantee the database actually provides.
+    if (table === "change_approvals" && candidate.status === "approved") {
+      const clash = others.some(
+        (row) =>
+          row.project_id === candidate.project_id &&
+          row.approval_identity === candidate.approval_identity &&
+          row.status === "approved",
+      );
+      if (clash) {
+        return { code: POSTGRES_UNIQUE_VIOLATION, message: "one active approval per identity" };
+      }
+    }
+
+    // The approval table's CHECK constraints, modelled for the same reason the
+    // validation artifact ones are: a rule that exists only in SQL is a rule
+    // every in-memory test is blind to, and this one governs whether a
+    // withdrawn approval can still read as standing authority.
+    if (table === "change_approvals") {
+      if (candidate.status === "revoked" && candidate.revoked_at == null) {
+        return {
+          code: POSTGRES_CHECK_VIOLATION,
+          message: "change_approvals_revoked_has_timestamp",
+        };
+      }
+      if (
+        candidate.status === "invalidated" &&
+        (candidate.invalidated_at == null || candidate.invalidation_reason == null)
+      ) {
+        return {
+          code: POSTGRES_CHECK_VIOLATION,
+          message: "change_approvals_invalidated_has_reason",
+        };
+      }
+      if (
+        candidate.status === "approved" &&
+        (candidate.revoked_at != null || candidate.invalidated_at != null)
+      ) {
+        return {
+          code: POSTGRES_CHECK_VIOLATION,
+          message: "change_approvals_active_is_not_terminated",
+        };
+      }
+    }
+
     // The ledger's idempotency guarantee: one usage event per job.
     if (table === "ai_usage_events" && candidate.job_id != null) {
       const clash = others.some((row) => row.job_id === candidate.job_id);
@@ -276,6 +324,13 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
         const row: Row = { id: `${this.table}_${this.db.rows(this.table).length + 1}`, ...payload };
         row.created_at ??= new Date().toISOString();
         row.updated_at ??= new Date().toISOString();
+
+        // `approved_at timestamptz not null default now()`. The application
+        // deliberately does not send this column — a database default is what
+        // makes it impossible for the app to backdate an approval — so without
+        // the default modelled here the fake would report `undefined` for a
+        // value Postgres always fills.
+        if (this.table === "change_approvals") row.approved_at ??= row.created_at;
 
         const violation = this.db.checkConstraints(this.table, row);
         if (violation) return { data: null, error: violation };
