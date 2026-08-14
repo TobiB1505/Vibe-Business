@@ -1,10 +1,12 @@
 import type { ApprovalCard } from "@/modules/approvals/view";
 import type { MergeCard } from "@/modules/merge/view";
+import type { OutcomeCard } from "@/modules/outcome-verification/view";
 import type { PreviewCard } from "@/modules/change-preview/view";
 import type { ReviewCard } from "@/modules/review/view";
 import type { ReviewImages } from "@/modules/review/service";
 import { ApprovalPanel } from "./approval-panel";
 import { MergePanel } from "./merge-panel";
+import { OutcomePanel } from "./outcome-panel";
 import { PreviewPanel } from "./preview-panel";
 import { ReviewPanel } from "./review-panel";
 import { ValidationPanel, type ValidationSummary } from "./validation-panel";
@@ -72,6 +74,16 @@ export type PreparedChangeCard = {
    * the guess would be about a write to somebody's repository.
    */
   merge: MergeCard;
+  /**
+   * Production outcome state, decided on the server (Sprint 12A §29).
+   *
+   * The first card on this page that describes the customer's *product* rather
+   * than Vibe's own pipeline — and the one most likely to be misread, because a
+   * green tick after a merge invites the conclusion that the business improved.
+   * The card carries the delivery/product/business separation as data so a
+   * component cannot render one without the others.
+   */
+  outcome: OutcomeCard;
 };
 
 export function PreparedChangesSection({
@@ -179,6 +191,17 @@ export function PreparedChangesSection({
                 There is no Deploy, Ship or Publish control after it — none of
                 those exist anywhere in the product, and a merge is not one. */}
             <MergePanel projectId={projectId} preparedChangeId={change.id} card={change.merge} />
+
+            {/* After Merge, and only reachable through it: an outcome exists
+                only once a default branch actually moved. It is the first
+                panel here that asks about the customer's product rather than
+                about Vibe's own work — and the only one whose success state
+                has to explicitly say what it does *not* mean. */}
+            <OutcomePanel
+              projectId={projectId}
+              preparedChangeId={change.id}
+              card={change.outcome}
+            />
           </li>
         ))}
       </ul>

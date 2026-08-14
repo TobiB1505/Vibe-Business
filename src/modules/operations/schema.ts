@@ -44,6 +44,16 @@ export const OPERATION_TYPES = [
    * state in this product that must always be reconciled rather than forgotten.
    */
   "change_merge",
+  /**
+   * Observing the public product after a merge (Sprint 12A §18).
+   *
+   * Durable because the observation window is fifteen minutes with sleeps in
+   * it, and no browser request should be held open for that — but also because
+   * the authoritative result must be written by something the client cannot
+   * impersonate. A user requests the check; only durable execution says what
+   * was seen.
+   */
+  "change_outcome_verification",
 ] as const;
 export type OperationType = (typeof OPERATION_TYPES)[number];
 
@@ -109,6 +119,16 @@ export const OPERATION_STAGES = [
   "writing_default_ref",
   "verifying_default_ref",
   "converging",
+  /**
+   * Production outcome verification (Sprint 12A §18).
+   *
+   * Two stages, not seven. `observing` deliberately covers the whole bounded
+   * window including its sleeps: a stage that flickered once per attempt would
+   * turn a patient wait into a progress bar that lies about how much is left,
+   * and there is no honest percentage for "is their deployment done yet".
+   */
+  "observing",
+  "evaluating",
   "completed",
 ] as const;
 export type OperationStage = (typeof OPERATION_STAGES)[number];

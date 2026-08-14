@@ -25,6 +25,14 @@ const ACTIVE_OPERATION_STATUSES = ["queued", "running"];
 const IN_FLIGHT_AUDIT_STATUSES = ["pending", "analyzing"];
 const ACTIVE_VALIDATION_STATUSES = ["queued", "running"];
 const ACTIVE_PREVIEW_STATUSES = ["starting", "running"];
+/** Every outcome state that holds the identity lock — i.e. all but `failed`. */
+const OUTCOME_IDENTITY_LOCK_STATUSES = [
+  "queued",
+  "observing",
+  "verified",
+  "partial",
+  "not_observed",
+];
 
 type Filter =
   | { kind: "eq"; column: string; value: unknown }
@@ -137,6 +145,67 @@ export class FakeDatabase {
     if (table === "sandbox_usage_events" && candidate.preview_session_id != null) {
       const clash = others.some((row) => row.preview_session_id === candidate.preview_session_id);
       if (clash) return { code: POSTGRES_UNIQUE_VIOLATION, message: "usage already recorded for preview" };
+    }
+
+    // change_outcome_verifications_identity_idx (Sprint 12A §27). One
+    // verification per exact question — the merge, the commit, the profile and
+    // the two versions — in every state except `failed`. Modelled so a double
+    // click loses its second insert here exactly as it would in Postgres,
+    // rather than the test "proving" idempotency the database provides.
+    if (
+      table === "change_outcome_verifications" &&
+      OUTCOME_IDENTITY_LOCK_STATUSES.includes(String(candidate.status))
+    ) {
+      const clash = others.some(
+        (row) =>
+          row.project_id === candidate.project_id &&
+          row.verification_identity === candidate.verification_identity &&
+          OUTCOME_IDENTITY_LOCK_STATUSES.includes(String(row.status)),
+      );
+      if (clash) {
+        return { code: POSTGRES_UNIQUE_VIOLATION, message: "one verification per question" };
+      }
+    }
+
+    // outcome_verified_has_observations (Sprint 12A §36).
+    //
+    // Stated twice on purpose, for the same reason the validation artifact CHECK
+    // is: it is the constraint that stops a green outcome being stored without
+    // the evidence that produced it, and the in-memory database will otherwise
+    // never notice. A mutation that skips observation entirely must fail here as
+    // it would in production.
+    if (table === "change_outcome_verifications" && candidate.status === "verified") {
+      if (
+        candidate.check_results == null ||
+        Number(candidate.attempt_count ?? 0) <= 0 ||
+        candidate.observation_completed_at == null ||
+        candidate.completed_at == null ||
+        candidate.failure_code != null
+      ) {
+        return {
+          code: POSTGRES_CHECK_VIOLATION,
+          message: "outcome_verified_has_observations",
+        };
+      }
+    }
+
+    // outcome_product_answer_has_observations. `partial` and `not_observed` are
+    // statements about what was seen; without a recorded observation they would
+    // be statements about nothing.
+    if (
+      table === "change_outcome_verifications" &&
+      (candidate.status === "partial" || candidate.status === "not_observed")
+    ) {
+      if (
+        candidate.check_results == null ||
+        Number(candidate.attempt_count ?? 0) <= 0 ||
+        candidate.completed_at == null
+      ) {
+        return {
+          code: POSTGRES_CHECK_VIOLATION,
+          message: "outcome_product_answer_has_observations",
+        };
+      }
     }
 
     if (table === "business_readiness_audits" && IN_FLIGHT_AUDIT_STATUSES.includes(String(candidate.status))) {

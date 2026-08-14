@@ -135,3 +135,74 @@ export function selectSitemapRoutes(routes: readonly RouteSummary[]): string[] {
 
   return [...selected].sort();
 }
+
+/**
+ * Exclusion reasons that are a *claim about the surface*, not about our
+ * ability to enumerate it (Sprint 12A §5).
+ *
+ * The distinction matters for outcome verification. `/blog/[slug]` is left out
+ * of a sitemap because a template is not a URL — nobody is asserting it must
+ * never be indexed, and it cannot appear literally anyway. `/login` is left out
+ * because advertising a sign-in form to every crawler on the internet is the
+ * defect v2 exists to fix.
+ *
+ * Only the second kind is worth verifying in production, and only the second
+ * kind may be reported as a *failed* expectation if it shows up.
+ */
+const SURFACE_EXCLUSION_REASONS: ReadonlySet<SitemapExclusionReason> = new Set([
+  "authentication_surface",
+  "application_surface",
+  "account_surface",
+  "api_surface",
+  "administrative_surface",
+]);
+
+/**
+ * The private subtrees this capability asserts must not appear in the sitemap.
+ *
+ * Returned as **first-segment prefixes** rather than full route paths, because
+ * that is exactly what the exclusion rule above operates on: excluding `app`
+ * excludes `/app/projects/123` without anyone having enumerated it. Verifying
+ * the prefix therefore verifies the rule, while verifying twelve individual
+ * paths would verify twelve samples of it.
+ *
+ * Only segments the analyzed repository actually contains are returned. A
+ * repository with no `/admin` route gets no `/admin` expectation — asserting the
+ * absence of a page that never existed would manufacture a check that can only
+ * ever pass, which is worse than no check at all because it inflates the
+ * evidence list.
+ *
+ * Ordering is by exclusion reason (authentication first, because that is the
+ * defect this capability was version-bumped for) and then alphabetical, so the
+ * expectation snapshot is deterministic and a truncation drops the least
+ * consequential entries rather than an arbitrary tail.
+ */
+export function excludedSurfacePrefixes(routes: readonly RouteSummary[]): string[] {
+  const REASON_PRIORITY: readonly SitemapExclusionReason[] = [
+    "authentication_surface",
+    "account_surface",
+    "administrative_surface",
+    "application_surface",
+    "api_surface",
+  ];
+
+  const bySegment = new Map<string, SitemapExclusionReason>();
+
+  for (const route of routes) {
+    const segment = firstSegment(route.path);
+    if (segment === "") continue;
+
+    const reason = EXCLUDED_FIRST_SEGMENTS.get(segment);
+    if (reason === undefined || !SURFACE_EXCLUSION_REASONS.has(reason)) continue;
+
+    bySegment.set(segment, reason);
+  }
+
+  return [...bySegment.entries()]
+    .sort(([leftSegment, leftReason], [rightSegment, rightReason]) => {
+      const byReason =
+        REASON_PRIORITY.indexOf(leftReason) - REASON_PRIORITY.indexOf(rightReason);
+      return byReason !== 0 ? byReason : leftSegment.localeCompare(rightSegment);
+    })
+    .map(([segment]) => `/${segment}`);
+}

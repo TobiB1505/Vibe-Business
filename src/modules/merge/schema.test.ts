@@ -183,7 +183,28 @@ describe("a normal user cannot forge a merge result (§32, §43)", () => {
 
 describe("no other migration weakens this one", () => {
   it("is the only place change_merges policies are defined", () => {
-    const definitions = migrationSql().filter((sql) => /policy[^;]*change_merges/i.test(sql));
+    // Anchored on `create policy … on public.change_merges`, not on "a policy
+    // statement mentioning change_merges anywhere". The looser form was a false
+    // positive waiting to happen and duly fired in Sprint 12A: the outcome
+    // verification migration's insert policy *reads* `change_merges` in a
+    // subquery to prove the change was genuinely merged, which is the opposite
+    // of weakening this table — and the assertion flagged it as a second
+    // definition.
+    //
+    // The guarantee this test exists for is narrower and still exact: nothing
+    // else may create a policy **on** `change_merges`, which is what would let
+    // another migration grant the UPDATE that Sprint 11C deliberately withheld.
+    const definitions = migrationSql().filter((sql) =>
+      /create\s+policy[\s\S]*?\bon\s+public\.change_merges\b/i.test(sql),
+    );
     expect(definitions).toHaveLength(1);
+  });
+
+  it("no migration ever grants update or delete on change_merges", () => {
+    // The property the assertion above is a proxy for, stated directly across
+    // the whole history rather than by counting files.
+    for (const sql of migrationSql()) {
+      expect(sql).not.toMatch(/on\s+public\.change_merges\s+for\s+(update|delete)/i);
+    }
   });
 });

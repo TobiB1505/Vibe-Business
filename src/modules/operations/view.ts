@@ -130,5 +130,10 @@ export const OPERATION_STAGE_LABELS: Record<OperationStage, string> = {
   writing_default_ref: "Updating the default branch",
   verifying_default_ref: "Verifying the default branch",
   converging: "Recording the result",
+  // Outcome verification (Sprint 12A §29). Names the wait honestly: production
+  // may not have updated yet, and pretending to know how long that takes would
+  // be the same lie as a percentage.
+  observing: "Checking your public product",
+  evaluating: "Comparing what was expected with what was observed",
   completed: "Completed",
 };
