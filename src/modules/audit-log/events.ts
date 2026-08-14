@@ -63,7 +63,13 @@ export type AuditEventType =
   | "change_preview.failed"
   | "change_preview.stopped"
   | "change_preview.cleanup_incomplete"
-  | "change_preview.expired";
+  | "change_preview.expired"
+  // Visual review (Sprint 11A). None of these may carry a signed screenshot
+  // URL: it is a bearer credential for a customer's product image, and an
+  // audit log is exactly the durable place it must not reach (§16).
+  | "change_review.started"
+  | "change_review.ready"
+  | "change_review.failed";
 
 export type RecordAuditEventParams = {
   userId: string;

@@ -1471,6 +1471,79 @@ sobald der Preview endet — mit der ehrlichen Folge, dass ein zweiter Preview
 meist eine neue Validierung kostet. Diese Kosten gehören sichtbar in die UI und
 niemals in einen automatischen "Refresh".
 
+**18. Review ist ein eigenes Gate — und ein Vergleich ist nur dann ehrlich, wenn
+seine Vergleichbarkeit erzwungen wird**
+Ein Diff verlangt, Code zu lesen. Ein Preview-Link verlangt, zwei Tabs aus dem
+Gedächtnis nebeneinanderzuhalten, bevor der Preview abläuft. Beides ist
+Hausaufgabe, kein Review. Das Artefakt, das dazwischen fehlte, ist ein
+kontrollierter Vorher/Nachher-Vergleich:
+
+```
+preview_available          → genau dieses Artefakt läuft und ist erreichbar
+review_artifact_available  → ein kontrollierter Vergleich existiert
+human_approved             → jemand hat hingesehen und entschieden
+```
+
+Drei Dinge, die dieser Sprint gelehrt hat:
+
+*Vergleichbarkeit ist eine Datenbank-Invariante, keine Absicht.* Zwei Bilder in
+unterschiedlichen Größen sind kein Vorher/Nachher — jedes umgebrochene Element
+darin liest sich als Änderung, die nie stattgefunden hat. Deshalb erzwingt ein
+CHECK, dass ein `ready`-Artefakt **beide** Seiten und **identische** Maße hat.
+Und ein einseitiger Vergleich ist ein Fehler, kein Teilerfolg: ein Bild neben
+einem leeren Kasten liest sich als "die Änderung hat die Seite gelöscht".
+
+*"Vorher" ist das, was beobachtet wurde — nicht der Base-Commit.* Production
+konnte in dem Moment alles sein. Also wird `before_origin` mit Zeitstempel
+gespeichert und die ehrliche Semantik mitgeführt, statt eine Aussage über einen
+Commit zu erfinden, die niemand geprüft hat.
+
+*Das Review-Artefakt überlebt den Preview, den es fotografiert hat.* Sonst
+entsteht genau der falsche Anreiz: eine bezahlte Sandbox am Leben halten, damit
+ein Screenshot sichtbar bleibt. `ON DELETE SET NULL` statt `CASCADE` — der
+Aufräum-Pfad darf die Evidenz nicht mitnehmen.
+
+Und die Grenze bleibt: kein Score, kein "verbessert", 0 AI-Calls im gesamten
+Review-Pfad. Der erste echte Vergleich am 14.08.2026 zeigte eine Startseite, die
+vorher und nachher **bytegleich** war (`sha256 344c6793…`), weil die
+SEO-Änderung `robots.ts` und `sitemap.ts` betrifft. Das ist das ehrliche
+Ergebnis — ein visueller Vergleich beweist, dass die Review-Pipeline
+funktioniert, nicht dass jede Codeänderung in Pixeln sichtbar ist. Genau
+deshalb wurde es geprüft statt geglaubt: "identisch ist hier zu erwarten" ist
+exakt die Ausrede, unter der ein Same-URL-Bug unentdeckt bliebe.
+
+**19. Ein korrektes Backend, das sich nicht melden kann, ist von einem kaputten
+nicht zu unterscheiden**
+Der Capture-Pfad funktionierte beim ersten Versuch: beide Seiten in 15 s, ein
+Browser-Session, Ledger geschrieben, Artefakt `ready`. Trotzdem meldete der
+Dogfood dreimal "geht nicht" — und dreimal hatte die Domain recht:
+
+```
+Preview lief          → UI sagte "Preview required"
+Screenshots lagen da  → UI sagte "Loading comparison…"
+Sandbox war gestoppt  → UI sagte gar nichts
+```
+
+Die Ursachen waren verschieden (ein Refresh-Sturm, eine RLS-Policy, ein
+verworfenes Action-Ergebnis), das Muster war identisch: 1925 grüne Tests
+beweisen die Domain, und keiner davon rendert einen Bildschirm. Für den, der
+bezahlt, ist der Unterschied zwischen "funktioniert nicht" und "funktioniert und
+sagt es nicht" gleich null.
+
+Zwei Details, die es wert sind, einzeln erinnert zu werden:
+
+*Ein Panel, das seine eigenen veralteten Props kompensiert, verbirgt die
+Veraltung vor jedem Geschwister, das das nicht tut.* Das Preview-Panel bevorzugte
+seinen eigenen Poll und sah deshalb korrekt aus — während der Rest der Seite auf
+dem Stand von vor dem Preview stand.
+
+*Ein unqualifizierter Spaltenname ist eine Vermutung über Scope — und in einer
+RLS-Policy scheitert diese Vermutung lautlos.* `(storage.foldername(name))[1]`
+band innerhalb des Subquerys an `projects.name` statt an den Objektpfad. Gültiges
+SQL, richtiger Bucket, richtige Absicht, null Zeilen, kein Fehler. Dieselbe
+Lektion wie beim Contract-Test-Helper, nur an einer Stelle, an der nichts
+gewarnt hätte.
+
 ---
 
 ## 37. Aktueller Stand
@@ -1512,8 +1585,9 @@ Opportunity Engine            ✅
 ```
 Branch creation               ✅
 Code changes                  ✅ (eine Capability)
-Tests                         planned
-Preview                       planned
+Isolated validation           ✅ (Sandbox, install/typecheck/test/build)
+Preview                       ✅ (15 Min, temporär, öffentlich-unlisted)
+Before/After Review           ✅ (erster echter Vergleich 14.08.2026)
 Approval                      planned
 Merge                         planned
 ```

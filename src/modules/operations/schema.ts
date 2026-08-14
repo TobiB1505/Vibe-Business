@@ -33,6 +33,8 @@ export const OPERATION_TYPES = [
    * slow. Manual stop and expiry both converge here (ADR 0016 §14).
    */
   "preview_teardown",
+  /** Capturing a before/after visual comparison (Sprint 11A §21). */
+  "change_review",
 ] as const;
 export type OperationType = (typeof OPERATION_TYPES)[number];
 
@@ -82,6 +84,10 @@ export const OPERATION_STAGES = [
   "verifying_artifact",
   "starting_server",
   "checking_preview",
+  /** Visual review (Sprint 11A §21). Two captures, named plainly. */
+  "capturing_before",
+  "capturing_after",
+  "persisting_artifacts",
   "completed",
 ] as const;
 export type OperationStage = (typeof OPERATION_STAGES)[number];

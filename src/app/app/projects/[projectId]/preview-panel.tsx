@@ -10,6 +10,7 @@ import {
   startPreviewAction,
   stopPreviewAction,
   type StartPreviewActionState,
+  type StopPreviewActionState,
 } from "./preview-actions";
 
 /**
@@ -154,15 +155,25 @@ export function PreviewPanel({
   card,
   /** The passing validation whose artifact would be previewed, if there is one. */
   validatedArtifactId,
+  /** The origin this render already resolved, before the first poll returns. */
+  serverOrigin,
 }: {
   projectId: string;
   preparedChangeId: string;
   card: PreviewCard;
   validatedArtifactId: string | null;
+  serverOrigin: string | null;
 }) {
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
-  const [state, setState] = useState<StartPreviewActionState>(null);
+  /**
+   * The last action's answer, start or stop.
+   *
+   * One slot for both, because the panel shows one action's outcome at a time
+   * and a stop that was refused deserves a message exactly as much as a start
+   * that was.
+   */
+  const [state, setState] = useState<StartPreviewActionState | StopPreviewActionState>(null);
   const [, startTransition] = useTransition();
   /**
    * Which action is in flight, if any.
@@ -222,10 +233,26 @@ export function PreviewPanel({
     });
     setStage(result.stage as PreviewStage);
 
-    // Terminal, or newly ready. Either way the server-rendered card is now
-    // behind, and the verdict lives in the database rather than in this state.
-    if (result.status !== "starting") router.refresh();
-  }, [projectId, sessionId, router]);
+    /**
+     * Refresh only when the server render is genuinely behind (§7).
+     *
+     * Refreshing on every tick looked harmless and was not. This page render
+     * costs a provider call and several reads, so a refresh can outlast the two
+     * seconds until the next one — and the next `router.refresh()` supersedes
+     * the one still in flight. At two-second intervals for a fifteen-minute
+     * preview, that is ~450 re-renders of which one may never land.
+     *
+     * The preview panel hid this from itself: `previewState` prefers the poll,
+     * so it rendered a running preview correctly while the page around it kept
+     * the state from *before* the preview existed. The Review section, reading
+     * that same stale render, said "Preview required" beside a running preview.
+     *
+     * So compare against what the card already shows and refresh on the
+     * transition only. Once the card agrees, there is nothing to fetch until
+     * the status changes again.
+     */
+    if (result.status !== card.state) router.refresh();
+  }, [projectId, sessionId, router, card.state]);
 
   useEffect(() => {
     if (!shouldPoll || !sessionId) return;
@@ -284,7 +311,10 @@ export function PreviewPanel({
 
     setIntent("stop");
     startTransition(async () => {
-      await stopPreviewAction(projectId, sessionId);
+      // The result was previously discarded, so a refused stop produced no
+      // message, no state change and no clue — the button simply went back to
+      // "Stop preview" as though nothing had been asked.
+      setState(await stopPreviewAction(projectId, sessionId));
       // Never a faked "stopped" before the backend confirms: the sandbox and
       // the snapshot are the backend's to account for (§12).
       router.refresh();
@@ -295,6 +325,19 @@ export function PreviewPanel({
   const expiresAt = live?.expiresAt ?? card.expiresAt;
   const countdown = expiresAt ? remaining(expiresAt, now) : null;
   const starting = previewState === "starting" || intent === "start";
+  /**
+   * A stop the user has asked for, before the server render agrees.
+   *
+   * Symmetrical with `starting`, and it was missing: a click on **Stop
+   * preview** left the whole running block on screen — origin, countdown,
+   * "Anyone with the preview URL…" — with only the button's label changed. The
+   * first real stop looked to the user like nothing had happened at all.
+   *
+   * This claims an *intent*, never an outcome. The section below still says
+   * "Stopping…", because the sandbox, the snapshot and the ledger belong to the
+   * workflow and only it can report them finished (§12).
+   */
+  const stopping = previewState === "stopping" || intent === "stop";
 
   return (
     <section className="space-y-3 border-t border-zinc-800 pt-4">
@@ -311,14 +354,28 @@ export function PreviewPanel({
             You can leave this page. Vibe will continue starting the preview.
           </p>
         </div>
+      ) : stopping ? (
+        <div className="space-y-2">
+          <p className="text-sm text-zinc-300">Stopping preview…</p>
+          {/* The workflow owns the sandbox, the snapshot and the ledger from
+              here. Saying "stopped" before it confirms would be the one claim
+              this panel is in no position to make (§12). */}
+          <p className="text-xs text-zinc-500">
+            Vibe is stopping the environment and releasing the validated artifact.
+          </p>
+        </div>
       ) : previewState === "running" ? (
         <div className="space-y-3">
           <p className="text-sm text-emerald-400">Temporary public preview</p>
 
           <div className="flex flex-wrap gap-2">
-            {live?.origin ? (
+            {/* The poll's answer first, the server render's second. Both come
+                from `getPreviewStatus`; the poll is simply newer. Preferring
+                only the poll meant a freshly loaded page said "Resolving
+                preview address…" for an origin it had already resolved. */}
+            {(live?.origin ?? serverOrigin) ? (
               <a
-                href={live.origin}
+                href={live?.origin ?? serverOrigin ?? ""}
                 target="_blank"
                 // Not only convention: without `noreferrer` the preview would
                 // receive Vibe's project URL — and the project id in it — in a
@@ -341,7 +398,10 @@ export function PreviewPanel({
               disabled={intent !== null}
               className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-900 disabled:opacity-60"
             >
-              {intent === "stop" ? "Stopping preview…" : "Stop preview"}
+              {/* No "Stopping…" label here any more: a stop in flight renders
+                  the stopping section instead of this block, so this branch is
+                  only ever reached while the preview is genuinely running. */}
+              Stop preview
             </button>
           </div>
 
@@ -356,16 +416,6 @@ export function PreviewPanel({
             Anyone with the preview URL may be able to access it until it expires.
           </p>
           <NotApproved />
-        </div>
-      ) : previewState === "stopping" ? (
-        <div className="space-y-2">
-          <p className="text-sm text-zinc-300">Stopping preview…</p>
-          {/* The workflow owns the sandbox, the snapshot and the ledger from
-              here. Saying "stopped" before it confirms would be the one claim
-              this panel is in no position to make (§12). */}
-          <p className="text-xs text-zinc-500">
-            Vibe is stopping the environment and releasing the validated artifact.
-          </p>
         </div>
       ) : previewState === "needs_validation" || previewState === "not_available" ? (
         <div className="space-y-2">

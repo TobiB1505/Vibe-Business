@@ -23,7 +23,10 @@ import { buildOpportunityActionState } from "@/modules/execution/view";
 import { buildBranchUrl } from "@/modules/execution/diff";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { getLatestValidation } from "@/modules/validation/service";
-import { getPreviewCard } from "@/modules/change-preview/service";
+import { getPreviewCard, getPreviewStatus } from "@/modules/change-preview/service";
+import { createVercelSandboxProvider } from "@/modules/validation/vercel/provider";
+import { VercelWorkflowExecutor } from "@/modules/operations/vercel/executor";
+import { getReviewCard, getReviewImages } from "@/modules/review/service";
 import { SANDBOX_POLICY_VERSION } from "@/modules/validation/schema";
 import { buildValidationSummary } from "@/modules/validation/view";
 import { listPreparedChangesForProject } from "@/modules/execution/store";
@@ -193,6 +196,30 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
         OPERATION_FAILURE_MESSAGES[code as keyof typeof OPERATION_FAILURE_MESSAGES] ?? null,
     });
 
+    // Review state, read from persisted rows. Like the preview card, this costs
+    // no provider call: opening the page must never spend anything (§40).
+    const review = await getReviewCard(supabase, {
+      projectId,
+      preparedChangeId: prepared.id,
+      resolveFailureMessage: (code) =>
+        OPERATION_FAILURE_MESSAGES[code as keyof typeof OPERATION_FAILURE_MESSAGES] ?? null,
+    });
+
+    // The preview's public origin, only while it is genuinely running. Fetched
+    // from the provider rather than stored, because it is capability-like
+    // (ADR 0016 §4) — and absent after teardown, which is expected: the
+    // comparison images outlive the sandbox they photographed.
+    const previewOrigin =
+      preview.state === "running" && preview.previewSessionId
+        ? ((
+            await getPreviewStatus(supabase, createVercelSandboxProvider(), new VercelWorkflowExecutor(), {
+              projectId,
+              userId: session.userId,
+              previewSessionId: preview.previewSessionId,
+            })
+          )?.origin ?? null)
+        : null;
+
     preparedChangeCards.push({
       id: prepared.id,
       branchName: prepared.branchName,
@@ -213,6 +240,22 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
       // The artifact's id is its validation run's, and only a passing run can
       // have one. A failed run offers nothing for the client to name.
       validatedArtifactId: validation?.status === "passed" ? validation.id : null,
+      review,
+      // Signed on this render, after the service re-checked ownership, the
+      // ready state and the retention deadline. Never persisted, and short
+      // enough that a leaked URL is a small window (§16, §34).
+      reviewImages:
+        review.state === "ready" && review.reviewArtifactId
+          ? await getReviewImages(supabase, {
+              projectId,
+              userId: session.userId,
+              reviewArtifactId: review.reviewArtifactId,
+            })
+          : null,
+      // Only a *running* preview can be photographed. Offering the button for a
+      // stopped one would buy a browser session that fails (§6).
+      previewSessionId: preview.state === "running" ? preview.previewSessionId : null,
+      previewOrigin,
     });
   }
 
