@@ -8,7 +8,7 @@
 | Migration deployed and verified | ✅ Complete |
 | Tests + 12 deliberate regressions | ✅ Complete |
 | Browser E2E of the approval UI | ⛔ **Not done** — no harness exists (see below) |
-| Real dogfood | ⏳ Pending — needs the deployed branch |
+| Real dogfood | ✅ Done, 14.08.2026 — one exact approval, 0 spend, GitHub untouched |
 
 ## Goal
 
@@ -136,7 +136,7 @@ all.
 - [x] DB contract tests pin the TS unions to the SQL CHECKs
 - [x] Migration deployed; policies verified against the live database
 - [ ] **Browser E2E of the approval UI** — no harness exists
-- [ ] Real dogfood — needs the deployed branch
+- [x] Real dogfood: one exact approval, 0 provider spend, GitHub untouched
 
 ## Validation
 
@@ -215,7 +215,67 @@ because the wrong sentence there is about authority.
 
 Until a harness exists, the **real dogfood is the acceptance mechanism**.
 
-## Real dogfood — pending
+## Real dogfood — done, 14.08.2026
+
+Performed through the deployed branch, against the existing artifacts. **No new
+provider work, and none was started.**
+
+| Verified | Result |
+| --- | --- |
+| ChangeApproval rows | exactly **1** |
+| Approval id | `d7435956` |
+| Project / approver | matches the authenticated owner |
+| PreparedChange | `3480ad0a` |
+| ValidationRun | `b562cec4` |
+| ReviewArtifact | `eb255685` |
+| Approved commit / base | `2f05958…` / `528d372…` |
+| Policy | `approval-policy-v1` |
+| Status | `approved`, `approved_at 08:22:59Z` |
+| `revoked_at` / `invalidated_at` | both null |
+| Audit event | `change_approval.created`, carrying the commit and no URL |
+
+The UI showed **Change approved · Approved by you · This approval applies only
+to commit `2f05958` · Nothing has been merged or deployed**, with a single
+**Revoke approval** button and no merge or deploy control anywhere.
+
+### Spend
+
+| Window | Count |
+| --- | --- |
+| AI calls | **0** |
+| Sandbox usage events | **0** |
+| Browser usage events | **0** |
+| Operation runs | **0** |
+| Previews / validations started | **0** |
+
+### GitHub
+
+| Ref | Before and after |
+| --- | --- |
+| `refs/heads/main` | `4ac921c` — unchanged |
+| `refs/heads/vibe/seo-foundations-cc32273131c5` | `2f05958` — unchanged |
+
+No merge, no push, no write audit event. Approval is inert toward the
+repository, as designed.
+
+### The §14 case, live
+
+`main` is at `4ac921c` while the approved change was prepared against base
+`528d372`. **The default branch has already moved, and the approval is still
+`approved`** — exactly the intended semantics. The human's decision about commit
+`2f05958` stands; whether that commit can safely merge into today's `main` is a
+different question, and Sprint 11C is what asks it against live state.
+
+This also means the first real merge preflight will have something genuine to
+refuse or resolve, rather than a synthetic case.
+
+### What the dogfood did not cover
+
+Revocation was deliberately not exercised (§38), so the revoke path has service
+tests and no real-world run. Invalidation likewise: it needs a re-preparation or
+a second comparison, neither of which was worth the provider spend.
+
+## Original dogfood plan
 
 Uses the existing artifacts. No new provider work is needed and none should be
 started for this:
