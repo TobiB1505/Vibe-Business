@@ -37,3 +37,51 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+  # A separate, required job (Sprint 11C.1). Kept out of `pnpm test` on purpose:
+  # a unit suite that silently launches a browser is a unit suite people stop
+  # running locally. This one is never allowed to fail — an E2E failure means
+  # the Merge screen is showing something other than what it was given, which is
+  # the one defect class this layer exists to catch.
+  e2e:
+    name: Browser E2E (merge UI)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Chromium only. Nothing here is about rendering engines, so a browser
+      # matrix would double the runtime to re-answer the same question.
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      # The suite runs against a production build rather than `next dev`: the
+      # defects it exists to catch live at the server/client boundary, and a dev
+      # server is the worst place to reproduce them.
+      - name: Build
+        run: pnpm build
+
+      - name: Run browser E2E
+        run: pnpm test:e2e
+
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7

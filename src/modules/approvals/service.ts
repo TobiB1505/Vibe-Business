@@ -420,4 +420,34 @@ export async function getApprovalCard(
   });
 }
 
+/**
+ * The standing approval for exactly the artifact currently on screen (§24).
+ *
+ * Exported for the merge gate, which must not re-derive artifact identity for
+ * itself. Two identity resolutions would be two chances to disagree, and the
+ * disagreement would surface as a merge authorized by an approval of something
+ * else — the one failure ADR 0018 exists to make impossible.
+ *
+ * Returns null when the artifact is not approvable at all, when no approval
+ * exists for it, or when the approval that exists was revoked or invalidated.
+ * All three mean the same thing to a caller: **there is no standing human
+ * decision about these bytes.**
+ *
+ * Read-only. Unlike `getApprovalCard`, this never invalidates anything: a merge
+ * preflight asking a question must not have the side effect of changing an
+ * approval's state.
+ */
+export async function findActiveApprovalForCurrentArtifact(
+  supabase: SupabaseClient,
+  params: { projectId: string; preparedChangeId: string },
+): Promise<ChangeApproval | null> {
+  const target = await resolveApprovalTarget(supabase, params);
+  if (!target.ok) return null;
+
+  return findActiveApprovalByIdentity(supabase, {
+    projectId: params.projectId,
+    approvalIdentity: target.value.identity,
+  });
+}
+
 export type { ApprovalCard };

@@ -48,6 +48,7 @@ V0.1 foundational architecture decisions have been recorded:
 - [0016](0016-temporary-preview-isolation.md) — Temporary Preview Isolation (Accepted)
 - [0017](0017-visual-review-artifacts.md) — Visual Review Artifacts (Accepted; §9 corrected by the first dogfood)
 - [0018](0018-human-approval-authority.md) — Human Approval Authority (Accepted)
+- [0019](0019-safe-approved-change-merge.md) — Safe Approved Change Merge (Accepted)
 
 Several architecture questions remain intentionally open — see [ARCHITECTURE.md §7](../../ARCHITECTURE.md#7-deferred--open-decisions).
 

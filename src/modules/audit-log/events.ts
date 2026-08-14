@@ -80,7 +80,25 @@ export type AuditEventType =
   // Written when a read notices the approved artifact has moved on. Not a user
   // action, which is why it is its own event rather than a variant of revoked:
   // "you withdrew this" and "this stopped applying" are different histories.
-  | "change_approval.invalidated";
+  | "change_approval.invalidated"
+  // Safe merge (Sprint 11C §27). The first events in this log that describe a
+  // write to a customer's DEFAULT branch, so they carry both SHAs deliberately:
+  // "what moved from where to where" is the entire content of the record, and a
+  // commit SHA identifies content rather than granting access to it.
+  //
+  // What they must never carry: installation tokens, raw provider error text,
+  // diff content, or any claim about deployment.
+  | "change_merge.requested"
+  | "change_merge.preflight_passed"
+  // Refused before any write — from the request path or from the durable
+  // preflight. The most important events in this list, because they are the
+  // evidence that the safety checks fired.
+  | "change_merge.blocked"
+  /** The one event that means GitHub was asked to move the branch. */
+  | "change_merge.default_branch_updated"
+  /** The branch was read back independently and matched the approved commit. */
+  | "change_merge.verified"
+  | "change_merge.failed";
 
 export type RecordAuditEventParams = {
   userId: string;

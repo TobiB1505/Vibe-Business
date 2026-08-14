@@ -228,6 +228,63 @@ export class FakeDatabase {
       }
     }
 
+    // change_merges_written_identity_idx (Sprint 11C §20, §21). At most one
+    // merge per exact artifact that is writing or written. This is the
+    // guarantee "at most one consequential GitHub state transition" actually
+    // rests on, so a test that proved idempotency without it would be proving
+    // the application's own pre-check instead.
+    if (table === "change_merges" && ["merging", "merged"].includes(String(candidate.status))) {
+      const clash = others.some(
+        (row) =>
+          row.project_id === candidate.project_id &&
+          row.merge_identity === candidate.merge_identity &&
+          ["merging", "merged"].includes(String(row.status)),
+      );
+      if (clash) {
+        return { code: POSTGRES_UNIQUE_VIOLATION, message: "one written merge per identity" };
+      }
+    }
+
+    // The merge table's CHECK constraints. The first one is the most
+    // load-bearing constraint in the schema: it is the database refusing to
+    // store a successful merge whose independently observed result is anything
+    // other than the commit a human approved. Modelled here because a mutation
+    // that removes the application's read-back must fail a test rather than
+    // only fail in Postgres, months later, on somebody's default branch.
+    if (table === "change_merges") {
+      if (
+        candidate.status === "merged" &&
+        (candidate.merged_at == null ||
+          candidate.failure_code != null ||
+          candidate.resulting_default_head_sha !== candidate.prepared_commit_sha)
+      ) {
+        return {
+          code: POSTGRES_CHECK_VIOLATION,
+          message: "change_merges_merged_matches_approved_commit",
+        };
+      }
+      // `blocked` means the repository was never touched. A row that claims it
+      // while carrying a write attempt is the one lie this table must not be
+      // able to tell.
+      if (
+        candidate.status === "blocked" &&
+        (candidate.failure_code == null ||
+          candidate.failed_at == null ||
+          candidate.started_at != null)
+      ) {
+        return { code: POSTGRES_CHECK_VIOLATION, message: "change_merges_blocked_wrote_nothing" };
+      }
+      if (
+        candidate.status === "failed" &&
+        (candidate.failure_code == null || candidate.failed_at == null)
+      ) {
+        return { code: POSTGRES_CHECK_VIOLATION, message: "change_merges_failed_has_reason" };
+      }
+      if (candidate.started_at != null && candidate.preflight_checked_at == null) {
+        return { code: POSTGRES_CHECK_VIOLATION, message: "change_merges_write_follows_preflight" };
+      }
+    }
+
     // The ledger's idempotency guarantee: one usage event per job.
     if (table === "ai_usage_events" && candidate.job_id != null) {
       const clash = others.some((row) => row.job_id === candidate.job_id);

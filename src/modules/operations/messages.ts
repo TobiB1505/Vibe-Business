@@ -1,3 +1,4 @@
+import { MERGE_FAILURE_MESSAGES } from "@/modules/merge/messages";
 import type { OperationFailureCode } from "./failures";
 
 /**
@@ -133,4 +134,11 @@ export const OPERATION_FAILURE_MESSAGES: Record<OperationFailureCode, string> = 
   review_storage_failed: "The comparison images could not be saved.",
   review_expired: "This comparison has expired and its images were removed.",
   review_failed: "The comparison could not be created.",
+
+  // Safe merge (Sprint 11C §28). Spread rather than restated: the merge module
+  // owns the wording of its own refusals, and two copies of "the default branch
+  // changed" is two chances for one of them to grow a sentence the other does
+  // not have — on the one screen where the wrong sentence is about a write to
+  // somebody's repository.
+  ...MERGE_FAILURE_MESSAGES,
 };

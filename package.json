@@ -2,7 +2,7 @@
   "name": "vibe-business",
   "version": "0.1.0",
   "private": true,
-  "description": "Vibe Business — the business layer for AI-built products.",
+  "description": "Vibe Business \u2014 the business layer for AI-built products.",
   "engines": {
     "node": ">=20.9.0"
   },
@@ -17,7 +17,9 @@
     "ai:probe-audit-schema": "vitest run --config vitest.probe.config.mts",
     "db:status": "supabase migration list",
     "db:push": "supabase db push",
-    "db:lint": "supabase db lint --linked"
+    "db:lint": "supabase db lint --linked",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.115.0",
@@ -37,6 +39,7 @@
     "zod": "4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "1.62.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",

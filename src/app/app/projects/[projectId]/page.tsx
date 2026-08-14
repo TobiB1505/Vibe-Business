@@ -28,6 +28,10 @@ import { createVercelSandboxProvider } from "@/modules/validation/vercel/provide
 import { VercelWorkflowExecutor } from "@/modules/operations/vercel/executor";
 import { getReviewCard, getReviewImages } from "@/modules/review/service";
 import { getApprovalCard } from "@/modules/approvals/service";
+import { getMergeCard, resolveMergeTarget } from "@/modules/merge/service";
+import { createGithubMergePort } from "@/modules/merge/github/adapter";
+import { mergeFailureMessage } from "@/modules/merge/messages";
+import { buildMergeCard } from "@/modules/merge/view";
 import { approvalBlockMessage } from "@/modules/approvals/messages";
 import { SANDBOX_POLICY_VERSION } from "@/modules/validation/schema";
 import { buildValidationSummary } from "@/modules/validation/view";
@@ -176,6 +180,11 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
     }
   }
 
+  // The repository a merge would write to, resolved once for the whole page.
+  // Null when no repository is connected, which is also the answer that keeps
+  // the merge card from making any GitHub call at all.
+  const mergeTarget = repository ? await resolveMergeTarget(supabase, projectId) : null;
+
   // Prepared changes as artifacts, independent of the current opportunity set.
   // Looking them up through live opportunities made an existing branch vanish
   // from the UI whenever opportunities were regenerated (Sprint 10A §44).
@@ -215,6 +224,24 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
       preparedChangeId: prepared.id,
       resolveBlockMessage: approvalBlockMessage,
     });
+
+    // Merge state (Sprint 11C §17). Unlike every other card on this page this
+    // one may spend four read-only GitHub calls — but only for a change a human
+    // has already approved, because for anything else a live read could not
+    // tell the user something they can act on. Nothing billed, nothing written,
+    // and the answer authorizes nothing: the durable workflow re-runs every
+    // critical check immediately before it writes.
+    const merge = mergeTarget
+      ? await getMergeCard(supabase, createGithubMergePort(mergeTarget), {
+          projectId,
+          preparedChangeId: prepared.id,
+        })
+      : buildMergeCard({
+          latestMerge: null,
+          eligibility: { outcome: "blocked", reason: "merge_repository_unavailable" },
+          changeApprovalId: null,
+          resolveFailureMessage: mergeFailureMessage,
+        });
 
     // The preview's public origin, only while it is genuinely running. Fetched
     // from the provider rather than stored, because it is capability-like
@@ -271,6 +298,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
       // Costs a handful of reads and no provider call of any kind: approval is
       // a database action, and looking at it must stay free.
       approval,
+      merge,
     });
   }
 
