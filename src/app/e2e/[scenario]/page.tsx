@@ -1,0 +1,73 @@
+import { notFound } from "next/navigation";
+import {
+  PreparedChangesSection,
+  type PreparedChangeCard,
+} from "@/app/app/projects/[projectId]/prepared-changes-section";
+import { E2E_SCENARIOS, isE2eScenario } from "../scenarios";
+
+/**
+ * The browser harness's only entry point (Sprint 11C.1).
+ *
+ * ## Why this route exists
+ *
+ * Because the Merge panel is the most consequential screen this product has,
+ * and until now every claim about what it displays rested on assertions about
+ * its *source*. Sprint 11A ended with four defects in a row where the domain
+ * was correct and the screen was not — a running preview reported as absent,
+ * stored screenshots reported as loading, a completed stop reported as nothing.
+ * On a Merge panel that class of defect is a person pressing a button believing
+ * something different from what it does.
+ *
+ * ## Why it renders fixtures rather than a database
+ *
+ * Honestly: because there is no isolated database available here. The machine
+ * this was built on has no container runtime, so `supabase start` cannot run,
+ * and pointing the suite at the production database was ruled out and stays
+ * ruled out.
+ *
+ * So this route hands the **real** panels the same server-decided card objects
+ * the real page builds, and the browser does the rest for real: server render,
+ * hydration, the confirmation dialog, a full reload. What that proves is what
+ * the components do with a given state. What it does **not** prove is the
+ * wiring in `page.tsx` that produces the state, or RLS — and the 11A defects
+ * lived in exactly that wiring, so this is a floor, not a ceiling. See
+ * `docs/sprints/0011c1-merge-ui-e2e.md`.
+ *
+ * ## Why it cannot exist in production
+ *
+ * `VIBE_E2E_FIXTURES` is set by the Playwright web server and by nothing else —
+ * not in `.env`, not in Vercel, not in any deployment. Without it this route is
+ * a 404 on every scenario, so a deployed build has no fixture surface at all.
+ */
+
+export const dynamic = "force-dynamic";
+
+function fixturesEnabled(): boolean {
+  return process.env.VIBE_E2E_FIXTURES === "1";
+}
+
+export default async function E2eScenarioPage({
+  params,
+}: {
+  params: Promise<{ scenario: string }>;
+}) {
+  // Checked before the scenario is even read, so an unset flag produces the
+  // same 404 for a valid name and a probe.
+  if (!fixturesEnabled()) notFound();
+
+  const { scenario } = await params;
+  if (!isE2eScenario(scenario)) notFound();
+
+  const change: PreparedChangeCard = E2E_SCENARIOS[scenario]();
+
+  return (
+    <main className="mx-auto max-w-4xl p-8">
+      {/* The scenario name is rendered so a failing trace says which fixture
+          was on screen, rather than leaving that to be inferred. */}
+      <p className="mb-4 text-xs text-zinc-600" data-testid="e2e-scenario">
+        {scenario}
+      </p>
+      <PreparedChangesSection projectId="project_e2e" changes={[change]} />
+    </main>
+  );
+}

@@ -9,9 +9,10 @@
 | No-force / no-delete structural guarantee | ✅ Complete |
 | Ambiguous-write recovery + read-back verification | ✅ Complete |
 | Tests + 19 deliberate regressions | ✅ Complete (18 killed, 1 equivalent — see below) |
-| Migration deployed and verified | ⏳ Pending |
-| Browser E2E of the merge UI | ⛔ **Not done** — no harness exists (see below) |
-| Real dogfood | ⏳ Pending — awaiting explicit authorization |
+| Migration deployed and verified | ✅ Deployed 14.08.2026 via the Supabase CLI |
+| Browser E2E of the merge UI | ✅ [Sprint 11C.1](0011c1-merge-ui-e2e.md) — 9 chromium tests |
+| Real dogfood — blocked case | ✅ Done 14.08.2026 — refused on drift, nothing written |
+| Real dogfood — successful merge | ⏳ Pending — needs a change prepared on the current head |
 
 ## Goal
 
@@ -192,9 +193,20 @@ What *was* done from here is the read half, which is safe and was required befor
 
 Three of these (#15, #16, and the migration half of #6) are migration-**text** assertions. They catch drift in the file, not in a deployed database. That distinction cost this project real production time in Sprints 9 and 10B and is stated rather than glossed.
 
-## Browser E2E — not done
+## Browser E2E — done, in [Sprint 11C.1](0011c1-merge-ui-e2e.md)
 
-**There is no Playwright suite in this repository.** `playwright-core` is a product dependency used for the customer-facing browser analysis; there is no `test:e2e` script, no `playwright.config`, no `e2e/` directory, and no Sprint 11A.1 document. The sprint brief's pipeline lists *Critical Browser E2E ✅*; that is not the state of the repository, and the five E2E scenarios in §44 could not be written against a harness that does not exist.
+**Superseded.** A Playwright layer now exists: 9 chromium tests covering the
+confirmation dialog, both repository-changed refusals, merged rendering and
+reload recovery, with zero external requests. Three deliberate regressions to
+the merge panel each break it.
+
+What it still does not cover is the wiring in `page.tsx` and RLS, because there
+is no isolated database on this machine — see that sprint's *What this layer
+does NOT prove*.
+
+The original finding, kept for the record:
+
+**There was no Playwright suite in this repository.** `playwright-core` is a product dependency used for the customer-facing browser analysis; there is no `test:e2e` script, no `playwright.config`, no `e2e/` directory, and no Sprint 11A.1 document. The sprint brief's pipeline lists *Critical Browser E2E ✅*; that is not the state of the repository, and the five E2E scenarios in §44 could not be written against a harness that does not exist.
 
 Sprint 11A.1 — the harness sprint — was never implemented; it stopped at a blocking question about the test environment. This machine has no container runtime, so `supabase start` cannot run and there is no isolated database to seed fixtures into. Pointing Playwright at production was ruled out and stays ruled out.
 
@@ -202,16 +214,55 @@ So every claim about what a user *sees* rests on source assertions (`merge-ui.te
 
 One consequence worth recording: `approval-ui.test.ts` previously forbade the word **merge** in every action label on the project page. That assertion was deliberately narrowed — merging is now real, exactly one panel may offer it, and every other panel is still held to the original list, including the word merge.
 
-## Real dogfood — pending
+## Real dogfood — the blocked case, 14.08.2026
 
-Not started. §50 requires a manual checkpoint report and an explicit human authorization before the first default-branch write, and that authorization has not been given.
+Authorized explicitly, performed once, against the historical approved change.
+**The refusal is the result, and it is the right one.**
 
-The checkpoint report is in the pull request. Its headline, resolved from production data rather than from the brief:
+| Criterion | Outcome |
+| --- | --- |
+| Fresh GitHub preflight observed the drift | ✅ four live read-only calls at render |
+| Merge blocked | ✅ the action was never offered |
+| Zero GitHub writes attempted | ✅ |
+| `main` ref-identical to its pre-attempt SHA | ✅ `b8638ae…` before and after |
+| Prepared branch unchanged | ✅ `2f05958…` |
+| Historical approval still `approved` | ✅ |
+| ChangeMerge / OperationRun terminal blocked state | ❌ **no rows** — see below |
+
+### The seventh criterion, and why it was not met
+
+There is no `change_merges` row and no `change_merge` operation, because
+**nothing was ever attempted**. The render-time preflight found the drift and
+the panel rendered `not_eligible` — "Not available", with the reason — so the
+**Merge approved change** button was never drawn. There was nothing to click.
+
+That is the implementation behaving as designed, and the design is deliberate:
+`startMerge` records a refusal as an audit event rather than a row, on the
+reasoning that *a request refused at the door never touched GitHub and never
+became an attempt, so inventing a ChangeMerge for it would put junk in the table
+that documents writes.*
+
+The consequence is worth stating plainly rather than filing as a win: **a
+drift-refused merge currently leaves no durable trace at all.** Not a row,
+and — because the button is withheld before `startMerge` is reached — not even
+the `change_merge.blocked` audit event that path would write. A `blocked` row is
+reachable only when drift appears *between* the request and the durable write,
+which the workflow's own revalidation catches.
+
+Whether "refused before it was offered" deserves a record is a product decision,
+not a bug fix. It is not resolved here, and nothing was weakened to manufacture
+a row.
+
+### The state that produced it
+
+
 
 - the historical approved change is commit `2f05958`, prepared against base `528d372`;
 - `main` is now at `b8638ae`, **five commits** past that base, and `main` is not an ancestor of the approved commit — so a fast-forward is genuinely impossible, not merely refused by policy.
 
-So the safe case does **not** currently hold, and the honest expected outcome of a dogfood today is `merge_repository_changed` — a successful safety result, and not a successful first merge. §57 is explicit that the policy must not be loosened to finish the sprint.
+So the safe case did **not** hold, and the outcome was `merge_repository_changed` — a successful safety result, not a successful first merge. §57 is explicit that the policy must not be loosened to finish the sprint, and it was not: no rebase, no refresh, no weakening of the fast-forward invariant.
+
+The successful merge dogfood therefore needs a change prepared against the *current* head, which is deliberately left until after this PR merges.
 
 ## Known limitations
 
