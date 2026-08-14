@@ -209,7 +209,7 @@ Not started. §50 requires a manual checkpoint report and an explicit human auth
 The checkpoint report is in the pull request. Its headline, resolved from production data rather than from the brief:
 
 - the historical approved change is commit `2f05958`, prepared against base `528d372`;
-- `main` is now at `b8638ae`, eleven commits past that base.
+- `main` is now at `b8638ae`, **five commits** past that base, and `main` is not an ancestor of the approved commit — so a fast-forward is genuinely impossible, not merely refused by policy.
 
 So the safe case does **not** currently hold, and the honest expected outcome of a dogfood today is `merge_repository_changed` — a successful safety result, and not a successful first merge. §57 is explicit that the policy must not be loosened to finish the sprint.
 
