@@ -323,7 +323,30 @@ Two things made it worse than it needed to be, and both are also fixed:
   suggests a reload, because "captured but unopenable" is a real state and
   deserves its own sentence.
 
-### Dogfood finding 3 — "Resolving preview address…" for an origin already resolved
+### Dogfood finding 3 — Stop preview reported nothing
+
+The stop itself worked on the first click: the session reached `stopped` three
+minutes before its deadline, teardown ran, the artifact was released. The user
+saw none of it.
+
+Three separate causes, all in the panel:
+
+- **The running block stayed on screen.** There was a `starting` intent that
+  won over the server render, but no `stopping` one — so a click left the
+  origin, the countdown and "Anyone with the preview URL…" in place, with only
+  the button's label changed. Now symmetrical: an in-flight stop renders the
+  stopping section, which claims an *intent*, never an outcome.
+- **The action's result was discarded.** `stopPreviewAction` returns a typed
+  failure and the panel threw it away, so a refused stop produced no message and
+  no state change — indistinguishable from a click that never registered.
+- **The refresh could not land**, per finding 1.
+
+Worth stating plainly: the domain was correct all three times a dogfood said
+"it doesn't work". Sandbox stopped, ledger written, artifact released — and the
+screen said otherwise. A correct backend that cannot report itself is
+indistinguishable, to the person paying for it, from a broken one.
+
+### Dogfood finding 4 — "Resolving preview address…" for an origin already resolved
 
 Smaller, same family. The page resolves the preview origin server-side, but the
 preview panel read only its own poll, so a freshly loaded page showed
