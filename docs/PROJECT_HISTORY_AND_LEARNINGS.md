@@ -1544,6 +1544,40 @@ SQL, richtiger Bucket, richtige Absicht, null Zeilen, kein Fehler. Dieselbe
 Lektion wie beim Contract-Test-Helper, nur an einer Stelle, an der nichts
 gewarnt hätte.
 
+**20. Menschliche Zustimmung muss an eine unveränderliche Artefakt-Identität
+gebunden sein — die Freigabe eines Commits darf niemals auf einen anderen
+wandern**
+Ein `approved = true` beantwortet die einzige Frage nicht, auf die es beim Merge
+ankommt: **freigegeben was, genau?** Ein Boolean überlebt einen neu erzeugten
+Commit, eine zweite Validierung und einen frischen Vergleich — und bedeutet
+danach still "freigegeben, was gerade auf dem Branch liegt". Genau dieser Satz
+darf nie die Grundlage eines Merges sein.
+
+Deshalb ist eine Freigabe eine Zeile, die das exakte Artefakt benennt: Projekt,
+PreparedChange, **Commit**, **Base**, ValidationRun, ReviewArtifact,
+Policy-Version — als Hash, mit einem partiellen Unique-Index darauf. Ändert sich
+irgendetwas davon, ist es ein anderes Ding zur Freigabe; die alte Zustimmung
+deckt es nicht, und nur ein neuer bewusster Klick tut es.
+
+Zwei Richtungen, die man leicht verwechselt:
+
+```
+Artefakt ändert sich   → Zustimmung gilt nicht mehr   (invalidated)
+main bewegt sich       → Zustimmung bleibt gültig     (Merge wird unsicher)
+```
+
+Die zweite Zeile ist die schwierigere. Externe Repository-Bewegung macht einen
+*Merge* unsicher — sie macht die *Entscheidung eines Menschen* nicht ungeschehen.
+Würde man den aktuellen Stand von `main` in die Identität aufnehmen, widerriefe
+jeder fremde Push still eine Entscheidung, die niemand noch einmal angesehen hat.
+Freigabe-Identität und Merge-Berechtigung sind zwei Fragen, zu zwei Zeitpunkten,
+mit zwei Prüfungen.
+
+Und: eine erfolgreiche Freigabe autorisiert nichts. `human_approved` heißt, dass
+ein Mensch einen bestimmten Commit angesehen und ja gesagt hat — nicht, dass
+gemergt werden darf. Das prüft Sprint 11C unmittelbar vor dem Schreiben gegen
+den echten aktuellen Zustand.
+
 ---
 
 ## 37. Aktueller Stand
