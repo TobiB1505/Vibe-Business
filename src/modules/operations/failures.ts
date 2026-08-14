@@ -5,6 +5,7 @@ import type { ExecutionFailureCode } from "@/modules/execution/schema";
 import type { ValidationFailureCode } from "@/modules/validation/schema";
 import type { PreviewFailureCode } from "@/modules/change-preview/schema";
 import type { ReviewFailureCode } from "@/modules/review/schema";
+import type { MergeFailureCode } from "@/modules/merge/schema";
 
 /**
  * Every way a durable operation can end badly (Sprint 7 §21).
@@ -46,6 +47,7 @@ export type OperationFailureCode =
   | ValidationFailureCode
   | PreviewFailureCode
   | ReviewFailureCode
+  | MergeFailureCode
   | OperationExecutionFailure;
 
 /**

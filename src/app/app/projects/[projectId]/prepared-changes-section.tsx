@@ -1,8 +1,10 @@
 import type { ApprovalCard } from "@/modules/approvals/view";
+import type { MergeCard } from "@/modules/merge/view";
 import type { PreviewCard } from "@/modules/change-preview/view";
 import type { ReviewCard } from "@/modules/review/view";
 import type { ReviewImages } from "@/modules/review/service";
 import { ApprovalPanel } from "./approval-panel";
+import { MergePanel } from "./merge-panel";
 import { PreviewPanel } from "./preview-panel";
 import { ReviewPanel } from "./review-panel";
 import { ValidationPanel, type ValidationSummary } from "./validation-panel";
@@ -61,6 +63,15 @@ export type PreparedChangeCard = {
    * comparison, and the one thing it must never do is answer it optimistically.
    */
   approval: ApprovalCard;
+  /**
+   * Merge state, decided on the server (Sprint 11C §17).
+   *
+   * Whether a merge is possible is a comparison between an approval, a prepared
+   * commit and GitHub's *current* default branch. A component holding props has
+   * none of those three, and the one it must never do is guess optimistically —
+   * the guess would be about a write to somebody's repository.
+   */
+  merge: MergeCard;
 };
 
 export function PreparedChangesSection({
@@ -77,7 +88,8 @@ export function PreparedChangesSection({
       <div className="space-y-1">
         <h2 className="text-lg font-medium text-zinc-100">Prepared changes</h2>
         <p className="text-sm text-zinc-500">
-          Changes Vibe wrote to isolated branches. None has been merged or deployed.
+          Changes Vibe wrote to isolated branches. Merging updates the repository&apos;s default
+          branch; nothing here is deployed by Vibe.
         </p>
       </div>
 
@@ -150,16 +162,23 @@ export function PreparedChangesSection({
               filesChanged={change.filePaths.length}
             />
 
-            {/* Last, because approval is the only thing here that records a
-                human decision, and it should follow the evidence rather than
-                sit beside it. There is no Merge, Deploy or Ship control after
-                it — none of those exist anywhere in the product. */}
+            {/* Below the evidence, because approval is a human decision about
+                it rather than another measurement of it. */}
             <ApprovalPanel
               projectId={projectId}
               preparedChangeId={change.id}
               card={change.approval}
               reviewArtifactId={change.review.reviewArtifactId}
             />
+
+            {/* Last, and only reachable through everything above it: a merge
+                needs an approval, an approval needs a review, a review needs a
+                preview, a preview needs a validation. The order on screen is
+                the order of the gates.
+
+                There is no Deploy, Ship or Publish control after it — none of
+                those exist anywhere in the product, and a merge is not one. */}
+            <MergePanel projectId={projectId} preparedChangeId={change.id} card={change.merge} />
           </li>
         ))}
       </ul>

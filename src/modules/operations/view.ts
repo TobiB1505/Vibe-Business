@@ -123,5 +123,12 @@ export const OPERATION_STAGE_LABELS: Record<OperationStage, string> = {
   capturing_before: "Capturing current live product",
   capturing_after: "Capturing preview",
   persisting_artifacts: "Preparing comparison",
+  // Safe merge (Sprint 11C §18). Named so a user watching their default
+  // branch being written to can see which half is happening — the check that
+  // revalidates their approval, or the write itself.
+  authorizing: "Rechecking the repository and your approval",
+  writing_default_ref: "Updating the default branch",
+  verifying_default_ref: "Verifying the default branch",
+  converging: "Recording the result",
   completed: "Completed",
 };

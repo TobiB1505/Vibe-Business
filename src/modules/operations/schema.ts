@@ -35,6 +35,15 @@ export const OPERATION_TYPES = [
   "preview_teardown",
   /** Capturing a before/after visual comparison (Sprint 11A §21). */
   "change_review",
+  /**
+   * Moving a repository's default branch to an approved commit (Sprint 11C §18).
+   *
+   * Durable because the write, the independent read-back, the database
+   * convergence and the audit event must not depend on the initiating request
+   * staying open — and because an interrupted default-branch write is the one
+   * state in this product that must always be reconciled rather than forgotten.
+   */
+  "change_merge",
 ] as const;
 export type OperationType = (typeof OPERATION_TYPES)[number];
 
@@ -88,6 +97,18 @@ export const OPERATION_STAGES = [
   "capturing_before",
   "capturing_after",
   "persisting_artifacts",
+  /**
+   * Safe merge (Sprint 11C §18).
+   *
+   * `authorizing` is a stage of its own because it is the moment the merge
+   * revalidates a human's decision against live GitHub state. A user watching
+   * their default branch being written to deserves to see that this happened,
+   * rather than one opaque "working" covering both the check and the write.
+   */
+  "authorizing",
+  "writing_default_ref",
+  "verifying_default_ref",
+  "converging",
   "completed",
 ] as const;
 export type OperationStage = (typeof OPERATION_STAGES)[number];

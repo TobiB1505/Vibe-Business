@@ -74,6 +74,12 @@ This file governs how Claude Code (and any AI-assisted session) works in this re
 68. `human_approved` authorizes nothing. It records that a person looked at one specific reviewed commit and said yes. Whether a merge is currently safe is a separate question, asked against live external state immediately before the write — and repository drift after an approval never rewrites what a human decided.
 69. Before shipping consequential user-visible state, ask all four: is the domain state tested, is the SQL/RLS contract tested, is the actual browser-visible state tested, and has it been dogfooded where provider semantics matter? Three greens and an untested screen is the failure mode this project keeps paying for.
 
+70. Consequential writes must be authorized by **both** immutable human intent and fresh external state. An approval alone writes bytes onto a branch that has moved; live state alone writes bytes nobody approved. Neither substitutes for the other, and the external half is re-read immediately before the write — never inherited from the check that rendered the button — see [ADR 0019](docs/decisions/0019-safe-approved-change-merge.md).
+71. Vibe merges by fast-forward to one exact approved commit, or refuses. Never force-update, never rewrite history, never delete a branch, never merge/rebase/cherry-pick to resolve drift, and never let a model decide whether to merge. A moved default branch blocks; it does not trigger reasoning.
+72. Branch protection is the repository owner's authority. Classify a protection rejection honestly, never request Administration to bypass it, and never frame it as the user's error.
+73. Never retry a consequential external write on an ambiguous outcome. Mark the attempt before making it, then **read** the external state and let the observation decide; a third, unexpected state stops the operation rather than resolving it. And never mark a write successful from its own response — verify by an independent read, require exact equality, and enforce that in the database as well as in code.
+74. `merged` means one sentence: the default branch points at the approved commit and Vibe read it back. It never means deployed, released or live. Vibe calls no deployment provider — but never claim "no production effect" either, because moving a default branch can trigger the customer's own CI/CD, and the user must be told that before the click.
+
 ## Related Documents
 
 - [PRODUCT.md](PRODUCT.md) — product vision, scope, and non-goals
