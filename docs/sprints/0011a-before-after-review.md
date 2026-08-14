@@ -5,12 +5,17 @@
 | Slice | State |
 | --- | --- |
 | ReviewArtifact domain, capture, storage, UI | ✅ Complete |
-| Migration deployed and verified | ✅ Complete |
-| Real dogfood | ⏳ Pending — see [Dogfood](#real-dogfood--pending) |
+| Migrations deployed and verified | ✅ Complete |
+| Real dogfood | ✅ Done, 14.08.2026 |
 
-**Sprint 11A is not closed.** The capability is built, tested, mutation-checked
-and deployed, but no comparison has been captured against the real product. Per
-§54 this sprint is not complete from tests alone.
+**Sprint 11A is complete.** A real comparison was captured against the live
+product, survived the preview's teardown, and is viewable.
+
+The capture path worked on the first attempt. **Four defects surfaced anyway,
+and every one of them was the product failing to report what it had already
+done correctly** — a running preview reported as absent, stored screenshots
+reported as loading, a completed stop reported as nothing at all. The tests
+proved the domain; only the dogfood could prove the wiring.
 
 ## Goal
 
@@ -141,7 +146,7 @@ Only an explicit **Generate comparison**.
 - [x] Comparison survives preview teardown
 - [x] DB-contract tests pin the TypeScript unions to the SQL CHECKs
 - [x] Migration deployed; bucket and policies verified live
-- [ ] **Real dogfood — pending**
+- [x] Real dogfood: comparison captured, viewable, and surviving preview teardown
 
 ## Validation
 
@@ -205,15 +210,47 @@ A column name is not a unique key across a schema. The helper is now shared and
 **table-aware** (`migration-test-support.ts`), and both sprints' contract tests
 use it.
 
-## Real dogfood — pending
+## Real dogfood — done, 14.08.2026
 
-Not yet performed. Per §47 this needs the **existing historical SEO
-PreparedChange** and the minimum number of explicit, paid steps.
+Performed against the historical SEO PreparedChange
+`vibe/seo-foundations-cc32273131c5` (`2f05958`), through the deployed UI.
 
-### The spend this requires, stated before it is incurred
+**The capture path worked on the first attempt. Everything that failed was the
+product reporting it** — four findings, all below.
+
+| What | Result |
+| --- | --- |
+| ReviewArtifact `eb255685` | `ready` in 15 s |
+| Both sides | `captured`, 1440×1000 on both |
+| Before | `https://vibe-business-fawn.vercel.app/` at `23:55:03.196Z` |
+| After | preview session `58237e12` at `23:55:03.848Z` |
+| Storage | two PNGs, 55198 bytes each, private bucket |
+| Browser ledger | 1 session, 10083 ms, 2 captures, `provider_cost_usd` null |
+| AI calls | 0 |
+| Operation | `change_review` → `completed` |
+
+**Both images are byte-identical** (`sha256 344c6793…`), which is what §50
+predicted — and precisely why it was checked rather than accepted. Two
+independent confirmations that this is a real result and not a collapsed
+comparison:
+
+- the capture step builds the after URL from `resolvePreviewOrigin(...)` and the
+  before URL from `artifact.beforeOrigin`, so the two origins differ by
+  construction;
+- `src/app/page.tsx`, `layout.tsx` and `globals.css` are **byte-identical**
+  between `2f05958` and `origin/main`. Everything that differs lives under
+  `/app/…`, docs, or `robots.ts`/`sitemap.ts`. The logged-out homepage renders
+  from the same source on both sides.
+
+**§52 confirmed.** After the preview was stopped, the session row is `stopped`,
+the artifact is still `ready`, both images are still stored and still viewable.
+The comparison outlived the sandbox it photographed — the property the whole
+artifact separation exists for.
+
+### The spend this required, stated before it was incurred
 
 Sprint 10B's teardown deleted the ValidatedArtifact when the preview was
-stopped, so there is no artifact to preview and none will be created
+stopped, so there was no artifact to preview and none would be created
 automatically.
 
 | Step | Cost |
