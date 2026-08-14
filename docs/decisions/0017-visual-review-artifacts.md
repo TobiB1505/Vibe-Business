@@ -96,7 +96,17 @@ So `review_artifacts.preview_session_id` is `ON DELETE SET NULL`, and the compar
 
 ### 9. Private storage, authorized reads, bounded retention
 
-The bucket is private and carries no `storage.objects` policy, so an anon or authenticated token can neither read nor list these objects. The only route to an image is a short-lived signed URL minted server-side **after** the application confirmed the caller owns the project.
+The bucket is private. The only route to an image is a short-lived signed URL minted server-side **after** the application confirmed the caller owns the project.
+
+> **Corrected by the first real dogfood, 14.08.2026.** This section originally said the bucket carried *no* `storage.objects` policy at all, and called that the whole posture: the application authorizes, then signs, so RLS had nothing left to decide.
+>
+> That was wrong about the mechanism. `createSignedUrl` is itself an RLS-checked read of the object, performed with the caller's own token — so with no policy, the owner could not sign their own screenshots. The first comparison captured both sides, stored both PNGs, reached `ready`, and rendered "Loading comparison…" forever.
+>
+> Migrations `20260814100000` and `20260814101000` add a **SELECT-only** policy on that bucket for objects under a project the caller owns. Writes and deletes still have no policy and remain service-role-only. The application still authorizes before it signs; that check is simply no longer the only one.
+>
+> It took two migrations because the first one's predicate used an unqualified `name`, which bound to `projects.name` inside the subquery rather than to the object path — valid SQL that matched nothing, with no error to say so. Verified after the correction: the owner sees both objects, another authenticated user sees none, `anon` sees none.
+>
+> This is the mirror image of [ADR 0016 §14](0016-temporary-preview-isolation.md): there a write the application had authorized was refused by RLS and the error was swallowed. Both came from the same false premise — *the application checked, so the database does not need to.* A gate closed to everyone is closed to the owner too.
 
 The ordering is the authorization: **authorize, then sign**. A signed URL is a bearer credential, so it is never persisted, never logged, never placed in an audit event and never put into an AI prompt.
 

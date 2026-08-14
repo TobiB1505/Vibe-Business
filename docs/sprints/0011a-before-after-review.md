@@ -104,10 +104,14 @@ every path including failure.
 
 ### Storage and privacy
 
-Private bucket, **no `storage.objects` policy at all**: an anon or authenticated
-token can neither read nor list. The only route to an image is a short-lived
-signed URL minted server-side *after* ownership is confirmed. Authorize, then
-sign — the other order hands a capability to whoever asked.
+Private bucket whose only `storage.objects` policy is **SELECT**, for objects
+under a project the caller owns. No INSERT, UPDATE or DELETE policy exists, so
+writes and deletions stay service-role-only. The only route to an image is a
+short-lived signed URL minted server-side *after* ownership is confirmed.
+Authorize, then sign — the other order hands a capability to whoever asked.
+
+That SELECT policy was added by the dogfood, not designed in; see
+[finding 2](#dogfood-finding-2--a-ready-comparison-nobody-could-open).
 
 Signed URLs are never persisted, never logged, never in an audit event, never in
 an AI prompt. Retention is **7 days**, chosen: longer than the preview it came
@@ -263,6 +267,68 @@ the workaround, and is why the dogfood did not need a second paid preview.
 
 The general shape is worth keeping: *a panel that compensates for its own stale
 props hides the staleness from every sibling that does not.*
+
+### Dogfood finding 2 — a `ready` comparison nobody could open
+
+The capture itself worked on the first attempt: both sides captured in 15 s, one
+Browserbase session, 10.1 s billed, 2 captures, both PNGs stored, artifact
+`ready`, ledger row written. Then the panel said **"Loading comparison…"** and
+kept saying it.
+
+Nothing was loading. `getReviewImages` had returned null because
+`createSignedUrl` failed — and it failed because the bucket had **no**
+`storage.objects` policy. Signing is an RLS-checked read performed with the
+caller's own token, so "no policy" locked out the owner too. Verified directly:
+as the owning user, `select count(*) from storage.objects where bucket_id =
+'review-screenshots'` returned **0**.
+
+Fixed by `20260814100000` — a SELECT-only policy for objects under a project the
+caller owns. The write side is unchanged and still has no policy.
+
+**And the first fix silently did nothing.** Its predicate read
+`p.id::text = (storage.foldername(name))[1]` inside `select 1 from
+public.projects p`, and `public.projects` has a `name` column — so `name` bound
+to the *project's display name*, not the object path. The policy asked whether a
+project's name, split on `/`, began with its own id. It never does. Valid SQL,
+right bucket, right intent, zero rows. `20260814101000` qualifies it as
+`storage.objects.name`.
+
+An unqualified column name is a guess about scope, and inside a policy that
+guess fails silently — no error, just a row that never matches. The same lesson
+the contract-test helper taught earlier this sprint, in a place where nothing
+would have raised.
+
+Verified after the fix, by simulating each caller against the live database:
+
+| Caller | Objects visible |
+| --- | --- |
+| Owner (`auth.uid()` = the project's user) | **2** |
+| Another authenticated user | 0 |
+| `anon` | 0 |
+
+This is the mirror image of Sprint 10B's ledger bug. There, a write the
+application had authorized was refused by RLS and the error was swallowed. Here,
+a read the application had authorized was refused by RLS and the absence was
+rendered as a loading state. Same false premise: *the application checked, so
+the database does not need to.* A gate closed to everyone is closed to the owner
+too.
+
+Two things made it worse than it needed to be, and both are also fixed:
+
+- **The ADR asserted the wrong mechanism** and the code comments repeated it, so
+  three places confidently documented a posture that did not work. ADR 0017 §9
+  now carries the correction rather than the original claim.
+- **The UI called it "Loading…"** — a lie that never resolves. A `ready`
+  artifact whose images cannot be signed now says the images are unavailable and
+  suggests a reload, because "captured but unopenable" is a real state and
+  deserves its own sentence.
+
+### Dogfood finding 3 — "Resolving preview address…" for an origin already resolved
+
+Smaller, same family. The page resolves the preview origin server-side, but the
+preview panel read only its own poll, so a freshly loaded page showed
+"Resolving preview address…" until the first poll returned ~2 s later. The panel
+now prefers the poll and falls back to the server render.
 
 ## Known limitations
 

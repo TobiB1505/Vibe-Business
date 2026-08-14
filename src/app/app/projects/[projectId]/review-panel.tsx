@@ -216,7 +216,18 @@ export function ReviewPanel({
               </p>
             </>
           ) : (
-            <p className="text-sm text-zinc-400">Loading comparison…</p>
+            /* The artifact is `ready`, so the images exist — this render simply
+               could not produce a URL for them. Saying "loading" would be a
+               lie that never resolves: nothing is in flight, and the first
+               real comparison sat on that sentence while RLS silently refused
+               to sign. */
+            <div className="space-y-1">
+              <p className="text-sm text-zinc-400">Comparison images unavailable</p>
+              <p className="text-xs text-zinc-500">
+                The comparison was captured, but its images could not be opened for viewing.
+                Reload the page to try again.
+              </p>
+            </div>
           )}
 
           <div className="flex flex-wrap gap-2">

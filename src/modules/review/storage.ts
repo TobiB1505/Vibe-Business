@@ -12,10 +12,16 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  *
  * ## Why nothing here is public
  *
- * The bucket is private and carries no `storage.objects` policy, so an anon or
- * authenticated token cannot read or list these objects at all. The only route
+ * The bucket is private. Its only `storage.objects` policy is SELECT, for
+ * objects under a project the caller owns — there is no INSERT, UPDATE or
+ * DELETE policy, so writes and deletions stay service-role-only. The only route
  * to an image is a short-lived signed URL minted server-side *after* the
  * application has checked that the caller owns the project.
+ *
+ * That SELECT policy is not decoration. `createSignedUrl` is an RLS-checked
+ * read performed with the caller's own token, so without it the owner cannot
+ * sign their own screenshot — which is exactly how the first real comparison
+ * failed: captured, stored, `ready`, and unviewable (ADR 0017 §9).
  *
  * That ordering is the whole authorization story: **authorize, then sign**. A
  * signed URL is a bearer credential — anyone holding it can fetch the object

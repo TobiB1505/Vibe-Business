@@ -119,6 +119,10 @@ export function PreparedChangesSection({
               preparedChangeId={change.id}
               card={change.preview}
               validatedArtifactId={change.validatedArtifactId}
+              // Already resolved for this render. Without it the panel renders
+              // "Resolving preview address…" until its first poll, for an
+              // origin the server handed the page milliseconds earlier.
+              serverOrigin={change.previewOrigin}
             />
 
             {/* Below Preview, because a comparison photographs a running

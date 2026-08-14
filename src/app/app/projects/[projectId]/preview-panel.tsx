@@ -154,11 +154,14 @@ export function PreviewPanel({
   card,
   /** The passing validation whose artifact would be previewed, if there is one. */
   validatedArtifactId,
+  /** The origin this render already resolved, before the first poll returns. */
+  serverOrigin,
 }: {
   projectId: string;
   preparedChangeId: string;
   card: PreviewCard;
   validatedArtifactId: string | null;
+  serverOrigin: string | null;
 }) {
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
@@ -332,9 +335,13 @@ export function PreviewPanel({
           <p className="text-sm text-emerald-400">Temporary public preview</p>
 
           <div className="flex flex-wrap gap-2">
-            {live?.origin ? (
+            {/* The poll's answer first, the server render's second. Both come
+                from `getPreviewStatus`; the poll is simply newer. Preferring
+                only the poll meant a freshly loaded page said "Resolving
+                preview address…" for an origin it had already resolved. */}
+            {(live?.origin ?? serverOrigin) ? (
               <a
-                href={live.origin}
+                href={live?.origin ?? serverOrigin ?? ""}
                 target="_blank"
                 // Not only convention: without `noreferrer` the preview would
                 // receive Vibe's project URL — and the project id in it — in a
