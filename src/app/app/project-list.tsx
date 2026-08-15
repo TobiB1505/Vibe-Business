@@ -1,76 +1,124 @@
 import Link from "next/link";
 import { buttonClasses } from "@/components/ui/button";
-import { Metric } from "@/components/ui/metric";
 import { StatusDot } from "@/components/ui/status-pill";
 import { Surface } from "@/components/ui/surface";
-import type { ProjectListItem } from "@/modules/projects/queries";
+import { MonoLabel } from "@/components/ui/typography";
+import type { DashboardProject } from "@/modules/projects/dashboard";
 
 /**
- * The project list row (UI-0 reference migration).
+ * A project as a business object (Sprint UI-3).
  *
- * ## What this row does and does not show
+ * UI-0 migrated this row and could only show a name and a repository, because
+ * that was all the old project-list query returned. The dashboard read model
+ * now supplies the score and the counts, so the row can say what state the
+ * *business* is in rather than what the repository is called.
  *
- * The mockup's row carries four columns: score, next moves, last audit, and an
- * action. Three of those have no data behind them — `listProjectsForUser`
- * returns a project's name and its repository connection and nothing else, and
- * there is no per-project audit summary query.
+ * There is no "last activity" column: see `dashboard.ts` for why a per-project
+ * timestamp could not be read honestly without an N+1.
  *
- * They are therefore **not rendered**. Not as a placeholder, not as a dash in a
- * column headed SCORE, not as a zero. A score column showing `—` for every
- * project would be a worse lie than an absent column, because it implies the
- * product looked and found nothing.
+ * ## Two rules it holds
  *
- * Adding them is a data change (a new aggregate query per project), which is
- * UI-1 work with its own tests — not something a styling pass should invent.
- *
- * ## The two states that are real
- *
- * A project either has a repository connection or does not, and that
- * difference already changes what the user can do next. That is the state the
- * row reports, and it is derived from the data, not from a fixture.
+ * - **`null` is never `0`.** A project that was never audited says "Not
+ *   analysed"; one that was audited but had too little evidence says so
+ *   separately. Neither becomes a zero, and neither is styled as a bad score.
+ * - **The action follows the state.** A project with a prepared change offers
+ *   to review it; one with moves offers to review those; one never analysed
+ *   offers the audit. Only where nothing is pending does it fall back to
+ *   "Open". This is presentation choosing a destination, not a decision engine.
  */
-export function ProjectRow({ project }: { project: ProjectListItem }) {
-  const connected = project.repository !== null;
+
+function scoreDisplay(project: DashboardProject): { value: string; mono: boolean; tone: string } {
+  if (project.scoreState === "scored" && project.score !== null) {
+    const tone =
+      project.score >= 60 ? "text-mint" : project.score >= 35 ? "text-amber" : "text-coral";
+    return { value: `${project.score}`, mono: true, tone };
+  }
+  if (project.scoreState === "insufficient_coverage") {
+    // Vibe looked and could not say. A different sentence from "never looked",
+    // and neither of them is a number.
+    return { value: "Not enough evidence", mono: false, tone: "text-fg-muted" };
+  }
+  return { value: "Not analysed", mono: false, tone: "text-fg-muted" };
+}
+
+/** The most useful destination given what is actually pending. */
+function primaryAction(project: DashboardProject): { label: string; href: string; accent: boolean } {
+  const base = `/app/projects/${project.id}`;
+
+  if (project.repositoryFullName === null) {
+    return { label: "Finish setup", href: base, accent: true };
+  }
+  if (project.preparedCount > 0) {
+    return { label: "Review change", href: `${base}/prepared`, accent: false };
+  }
+  if (project.nextMovesCount !== null && project.nextMovesCount > 0) {
+    return { label: "Review moves", href: `${base}/moves`, accent: false };
+  }
+  if (project.scoreState === "not_audited") {
+    return { label: "Analyse project", href: `${base}/score`, accent: true };
+  }
+  return { label: "Open", href: base, accent: false };
+}
+
+export function ProjectRow({ project }: { project: DashboardProject }) {
+  const score = scoreDisplay(project);
+  const action = primaryAction(project);
+  const connected = project.repositoryFullName !== null;
 
   return (
     <li>
       <Surface
         as="article"
-        level={connected ? "panel" : "section"}
+        level="section"
         padding="none"
-        className="hover:border-line-4 transition-colors duration-150"
+        className="hover:border-line-4 transition-[border-color] duration-150"
       >
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-4 p-5 sm:p-6">
+        <div className="flex flex-wrap items-center gap-x-8 gap-y-4 p-5 sm:p-6">
           <div className="flex min-w-0 flex-[2] items-center gap-3.5">
             <StatusDot tone={connected ? "active" : "neutral"} />
             <div className="flex min-w-0 flex-col gap-1">
-              <h2 className="text-fg truncate text-base font-semibold tracking-[-0.02em]">
+              <h3 className="text-fg truncate text-base font-semibold tracking-[-0.02em]">
                 {project.name}
-              </h2>
-              {/* A repository is machine-owned identity — mono, and never
-                  truncated in the middle where an owner would become
-                  ambiguous. */}
+              </h3>
               <p className="text-fg-muted truncate font-mono text-xs">
-                {project.repository?.fullName ?? "No repository connected"}
+                {project.repositoryFullName ?? "No repository connected"}
               </p>
             </div>
           </div>
 
-          {connected && (
-            <Metric
-              label="Default branch"
-              value={project.repository?.defaultBranch}
-              mono
-              className="hidden w-40 flex-none sm:flex"
-            />
-          )}
+          <div className="flex flex-none flex-col gap-1">
+            <MonoLabel className="tracking-[0.14em]">Business score</MonoLabel>
+            <span
+              className={`${score.tone} ${score.mono ? "font-mono text-xl font-bold tabular-nums" : "text-sm"}`}
+            >
+              {score.value}
+              {score.mono && <span className="text-fg-muted text-xs font-normal"> / 100</span>}
+            </span>
+          </div>
+
+          <div className="flex flex-none flex-col gap-1">
+            <MonoLabel className="tracking-[0.14em]">Waiting</MonoLabel>
+            <span className="text-fg-body text-sm">
+              {/* Counts are shown only where there is something to count. A
+                  row of zeroes is noise, and "0 moves" reads as a problem. */}
+              {[
+                project.nextMovesCount ? `${project.nextMovesCount} moves` : null,
+                project.preparedCount ? `${project.preparedCount} prepared` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ") || <span className="text-fg-meta">Nothing pending</span>}
+            </span>
+          </div>
 
           <div className="ml-auto flex-none">
             <Link
-              href={`/app/projects/${project.id}`}
-              className={buttonClasses({ variant: connected ? "secondary" : "accent", size: "sm" })}
+              href={action.href}
+              className={buttonClasses({
+                variant: action.accent ? "accent" : "secondary",
+                size: "sm",
+              })}
             >
-              {connected ? "Open" : "Finish setup"}
+              {action.label}
               <span className="sr-only"> — {project.name}</span>
             </Link>
           </div>
