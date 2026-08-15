@@ -275,6 +275,7 @@ describe("the merge card is read-only and authorizes nothing (§17)", () => {
 
     const card = await getMergeCard(client(), new FakeMergePort(), {
       projectId: MERGE_FIXTURES.project,
+      userId: MERGE_FIXTURES.user,
       preparedChangeId: MERGE_FIXTURES.preparedChange,
     });
 
@@ -296,6 +297,7 @@ describe("the merge card is read-only and authorizes nothing (§17)", () => {
 
     const card = await getMergeCard(client(), port, {
       projectId: MERGE_FIXTURES.project,
+      userId: MERGE_FIXTURES.user,
       preparedChangeId: MERGE_FIXTURES.preparedChange,
     });
 
@@ -310,6 +312,7 @@ describe("the merge card is read-only and authorizes nothing (§17)", () => {
 
     await getMergeCard(client(), port, {
       projectId: MERGE_FIXTURES.project,
+      userId: MERGE_FIXTURES.user,
       preparedChangeId: MERGE_FIXTURES.preparedChange,
     });
 
@@ -323,6 +326,7 @@ describe("the merge card is read-only and authorizes nothing (§17)", () => {
 
     const card = await getMergeCard(client(), new FakeMergePort({ headSha: MERGE_THIRD_SHA }), {
       projectId: MERGE_FIXTURES.project,
+      userId: MERGE_FIXTURES.user,
       preparedChangeId: MERGE_FIXTURES.preparedChange,
     });
 
@@ -339,10 +343,192 @@ describe("the merge card is read-only and authorizes nothing (§17)", () => {
     for (const port of [new FakeMergePort(), new FakeMergePort({ headSha: MERGE_TARGET_SHA })]) {
       const card = await getMergeCard(client(), port, {
         projectId: MERGE_FIXTURES.project,
+        userId: MERGE_FIXTURES.user,
         preparedChangeId: MERGE_FIXTURES.preparedChange,
       });
 
       expect(card.deploymentVerified).toBe(false);
     }
+  });
+});
+
+describe("an approved change that cannot be merged is recorded once", () => {
+  /**
+   * The gap the first real merge dogfood exposed.
+   *
+   * `startMerge` records `change_merge.blocked` on every refusal it reaches —
+   * but the UI withholds the button when the render-time preflight already says
+   * no, so that path is never reached. `main` had moved, the product correctly
+   * declined, and nothing anywhere recorded that it had.
+   *
+   * These tests pin the two halves that make the fix safe: it records the state
+   * worth remembering, and it does **not** record one entry per page view.
+   */
+  function notEligibleEvents() {
+    return db.rows("audit_events").filter((row) => row.event_type === "change_merge.not_eligible");
+  }
+
+  const drifted = () => new FakeMergePort({ headSha: MERGE_THIRD_SHA });
+
+  /**
+   * A client whose `audit_events` reads fail but whose writes still work.
+   *
+   * Narrow on purpose: the store's dedup lookup is the only read of this table,
+   * so failing it exercises the "unknown" path without also disabling the write
+   * the test is checking for the absence of.
+   */
+  function withFailingAuditReads(base: ReturnType<typeof client>) {
+    const failing = {
+      select: () => failing,
+      eq: () => failing,
+      order: () => failing,
+      limit: () => failing,
+      maybeSingle: async () => ({ data: null, error: { message: "read failed" } }),
+    };
+
+    return new Proxy(base, {
+      get(target, property, receiver) {
+        if (property !== "from") return Reflect.get(target, property, receiver);
+        return (table: string) => {
+          const real = target.from(table);
+          if (table !== "audit_events") return real;
+          return Object.assign(Object.create(real as object), real, {
+            select: () => failing,
+          });
+        };
+      },
+    });
+  }
+
+  function render(port: FakeMergePort) {
+    return getMergeCard(client(), port, {
+      projectId: MERGE_FIXTURES.project,
+      userId: MERGE_FIXTURES.user,
+      preparedChangeId: MERGE_FIXTURES.preparedChange,
+    });
+  }
+
+  it("records the refusal, with what the branch was doing", async () => {
+    seedApprovedChange(db);
+
+    await render(drifted());
+
+    expect(notEligibleEvents()).toHaveLength(1);
+    expect(notEligibleEvents()[0].metadata).toMatchObject({
+      project_id: MERGE_FIXTURES.project,
+      prepared_change_id: MERGE_FIXTURES.preparedChange,
+      failure_code: "merge_repository_changed",
+      // Without both SHAs the entry cannot say what "changed" means.
+      observed_default_head_sha: MERGE_THIRD_SHA,
+      approved_commit_sha: MERGE_TARGET_SHA,
+    });
+  });
+
+  it("does not write one entry per render", async () => {
+    seedApprovedChange(db);
+
+    // Three page loads of the same unchanged situation.
+    await render(drifted());
+    await render(drifted());
+    await render(drifted());
+
+    // An audit log that grows with page views is a page-view log.
+    expect(notEligibleEvents()).toHaveLength(1);
+  });
+
+  it("records again when the reason changes", async () => {
+    seedApprovedChange(db);
+
+    await render(drifted());
+    // The branch is back where it belongs, but the app lost write permission:
+    // a different fact, and one a reader needs separately.
+    await render(new FakeMergePort({ hasWritePermission: false }));
+
+    expect(notEligibleEvents().map((row) => (row.metadata as Record<string, unknown>).failure_code))
+      .toEqual(["merge_repository_changed", "merge_permission_missing"]);
+  });
+
+  it("stays silent when nothing has been approved", async () => {
+    // The resting state of every change nobody has decided on. Recording it
+    // would mostly log the absence of a decision.
+    seedApprovedChange(db, { withApproval: false });
+
+    await render(drifted());
+
+    expect(notEligibleEvents()).toHaveLength(0);
+  });
+
+  it("stays silent when the change is mergeable", async () => {
+    seedApprovedChange(db);
+
+    await render(new FakeMergePort());
+
+    expect(notEligibleEvents()).toHaveLength(0);
+  });
+
+  it("stays silent when a previous attempt already failed", async () => {
+    // The card shows `failed` — an attempt that touched GitHub and did not end
+    // verified — and its failure code belongs to that attempt. Logging it as a
+    // fresh "cannot be merged" observation would record the old attempt's
+    // reason as though Vibe had just declined for it.
+    seedApprovedChange(db);
+    db.seed("change_merges", {
+      id: MERGE_FIXTURES.merge,
+      project_id: MERGE_FIXTURES.project,
+      user_id: MERGE_FIXTURES.user,
+      prepared_change_id: MERGE_FIXTURES.preparedChange,
+      change_approval_id: MERGE_FIXTURES.approval,
+      repository_connection_id: MERGE_FIXTURES.connection,
+      prepared_commit_sha: MERGE_TARGET_SHA,
+      prepared_base_sha: MERGE_BASE_SHA,
+      default_branch: "main",
+      merge_policy_version: "merge-policy-v1",
+      merge_strategy: "fast_forward_exact_commit",
+      merge_identity: "m".repeat(64),
+      status: "failed",
+      failure_code: "merge_write_unverified",
+      failed_at: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+    });
+
+    // Drifted, so the eligibility answer *is* a refusal — and the card still
+    // shows the earlier failed attempt, because "we tried and it did not
+    // finish" outranks "it cannot be merged right now".
+    const card = await render(drifted());
+
+    expect(card.state).toBe("failed");
+    expect(notEligibleEvents()).toHaveLength(0);
+  });
+
+  it("stays silent when the last reason could not be read", async () => {
+    // A failed dedup read must not be mistaken for "nothing recorded yet".
+    // Treating the two the same would write on every render for as long as the
+    // read keeps failing — the page-view log this guard exists to prevent,
+    // arriving through the error path instead of the happy one.
+    seedApprovedChange(db);
+    const blind = withFailingAuditReads(client());
+
+    await getMergeCard(blind, drifted(), {
+      projectId: MERGE_FIXTURES.project,
+      userId: MERGE_FIXTURES.user,
+      preparedChangeId: MERGE_FIXTURES.preparedChange,
+    });
+    await getMergeCard(blind, drifted(), {
+      projectId: MERGE_FIXTURES.project,
+      userId: MERGE_FIXTURES.user,
+      preparedChangeId: MERGE_FIXTURES.preparedChange,
+    });
+
+    expect(notEligibleEvents()).toHaveLength(0);
+  });
+
+  it("returns the same card whether or not it recorded anything", async () => {
+    seedApprovedChange(db);
+
+    const first = await render(drifted());
+    const second = await render(drifted());
+
+    // The second render records nothing, and the user must not be able to tell.
+    expect(second).toEqual(first);
   });
 });

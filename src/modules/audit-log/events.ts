@@ -94,6 +94,19 @@ export type AuditEventType =
   // preflight. The most important events in this list, because they are the
   // evidence that the safety checks fired.
   | "change_merge.blocked"
+  /**
+   * An approved change was observed to be unmergeable, recorded once.
+   *
+   * Deliberately **not** `change_merge.blocked`. That event means *a human
+   * asked for a merge and was refused*; this one means *Vibe looked and could
+   * not offer one*. Conflating them would make the log unable to answer the
+   * only question it is really asked here — whether anyone tried.
+   *
+   * Written from a read path, so it is deduplicated against the last recorded
+   * reason for the same prepared change: the preflight runs on every page load,
+   * and an event per render would log page views rather than events.
+   */
+  | "change_merge.not_eligible"
   /** The one event that means GitHub was asked to move the branch. */
   | "change_merge.default_branch_updated"
   /** The branch was read back independently and matched the approved commit. */

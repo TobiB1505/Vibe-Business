@@ -22,7 +22,12 @@ import {
   MERGE_POLICY_VERSION,
   type MergeFailureCode,
 } from "./schema";
-import { createChangeMerge, getLatestMergeForPreparedChange } from "./store";
+import {
+  UNKNOWN_LAST_REASON,
+  createChangeMerge,
+  findLastNotEligibleReason,
+  getLatestMergeForPreparedChange,
+} from "./store";
 import { buildMergeCard, type MergeCard } from "./view";
 
 /**
@@ -106,14 +111,29 @@ export async function evaluateMergeEligibility(
   supabase: SupabaseClient,
   port: MergeApprovedChangePort,
   params: { projectId: string; preparedChangeId: string },
-): Promise<{ result: MergePreflightResult; approvalId: string | null }> {
+): Promise<{
+  result: MergePreflightResult;
+  approvalId: string | null;
+  /**
+   * What the two sides were, whatever the verdict.
+   *
+   * Returned alongside the result rather than folded into it: `MergePreflightResult`
+   * is shared with the durable write step, where a blocked outcome deliberately
+   * carries nothing but a reason. These are for *describing* a refusal, never for
+   * acting on one.
+   */
+  observedDefaultHead: string | null;
+  targetSha: string | null;
+}> {
   const prepared = await getPreparedChange(supabase, {
     projectId: params.projectId,
     preparedChangeId: params.preparedChangeId,
   });
 
+  const unresolved = { approvalId: null, observedDefaultHead: null, targetSha: null } as const;
+
   if (!prepared || prepared.status !== "prepared" || !prepared.commitSha) {
-    return { result: { outcome: "blocked", reason: "merge_approval_required" }, approvalId: null };
+    return { ...unresolved, result: { outcome: "blocked", reason: "merge_approval_required" } };
   }
 
   const approval = await findActiveApprovalForCurrentArtifact(supabase, params);
@@ -121,7 +141,7 @@ export async function evaluateMergeEligibility(
     // No live GitHub read at all in this branch. Merging is not on the table
     // until a human has decided, so the round trip would be spent learning
     // something nobody can act on.
-    return { result: { outcome: "blocked", reason: "merge_approval_required" }, approvalId: null };
+    return { ...unresolved, result: { outcome: "blocked", reason: "merge_approval_required" } };
   }
 
   const targetSha = approval.preparedCommitSha;
@@ -139,6 +159,8 @@ export async function evaluateMergeEligibility(
 
   return {
     approvalId: approval.id,
+    observedDefaultHead: defaultBranch?.commitSha ?? null,
+    targetSha,
     result: runMergePreflight({
       approval: {
         id: approval.id,
@@ -407,18 +429,116 @@ export async function startMerge(
 export async function getMergeCard(
   supabase: SupabaseClient,
   port: MergeApprovedChangePort,
-  params: { projectId: string; preparedChangeId: string },
+  params: { projectId: string; userId: string; preparedChangeId: string },
 ): Promise<MergeCard> {
   const [latestMerge, evaluated] = await Promise.all([
     getLatestMergeForPreparedChange(supabase, params),
     evaluateMergeEligibility(supabase, port, params),
   ]);
 
-  return buildMergeCard({
+  const card = buildMergeCard({
     latestMerge,
     eligibility: evaluated.result,
     changeApprovalId: evaluated.approvalId,
     resolveFailureMessage: mergeFailureMessage,
+  });
+
+  await recordNotEligibleObservation(supabase, {
+    projectId: params.projectId,
+    userId: params.userId,
+    preparedChangeId: params.preparedChangeId,
+    changeApprovalId: evaluated.approvalId,
+    observedDefaultHead: evaluated.observedDefaultHead,
+    targetSha: evaluated.targetSha,
+    card,
+  });
+
+  return card;
+}
+
+/**
+ * Records, at most once per reason, that an approved change cannot be merged.
+ *
+ * ## The gap this closes
+ *
+ * `startMerge` records `change_merge.blocked` on every refusal it reaches — but
+ * the UI withholds the button when the render-time preflight already says no,
+ * so that path is never reached and a drift-refused merge left **no trace at
+ * all**. The first real merge dogfood ended exactly there: `main` had moved, the
+ * product correctly declined, and nothing anywhere recorded that it had.
+ *
+ * ## Why the condition is this narrow
+ *
+ * `not_eligible` is the ordinary resting state of every change nobody has
+ * approved yet, so recording it unconditionally would mostly log the absence of
+ * a decision. The state worth remembering is the *specific* one:
+ *
+ * > a human approved these exact bytes, and Vibe currently cannot merge them.
+ *
+ * That is a fact about a commitment already made, and the only version of this
+ * a user would ever go looking for.
+ *
+ * ## Why it deduplicates
+ *
+ * Because it runs on a **read**. The project page recomputes this preflight on
+ * every render, and an event per render would turn the audit log into a
+ * page-view log. Comparing against the last recorded reason yields one event per
+ * transition: the first time the change becomes unmergeable, and again only if
+ * the reason changes — `merge_repository_changed` becoming
+ * `merge_permission_missing` is a different fact and gets its own entry.
+ *
+ * Two concurrent renders can both observe "nothing recorded" and both write. The
+ * result is a duplicate line in an append-only log, which is untidy rather than
+ * wrong — and worth strictly less than the write barrier that would prevent it.
+ *
+ * ## What it never does
+ *
+ * Change what the user sees. The card is built before this runs and returned
+ * unchanged after it; a failed audit write must not turn a correct screen into a
+ * broken one (ADR 0007).
+ */
+async function recordNotEligibleObservation(
+  supabase: SupabaseClient,
+  params: {
+    projectId: string;
+    userId: string;
+    preparedChangeId: string;
+    changeApprovalId: string | null;
+    observedDefaultHead: string | null;
+    targetSha: string | null;
+    card: MergeCard;
+  },
+): Promise<void> {
+  const { card } = params;
+
+  // Not blocked, not approved, or blocked for no stated reason — nothing here
+  // is a fact about a commitment.
+  if (card.state !== "not_eligible") return;
+  if (!params.changeApprovalId) return;
+  if (!card.failureCode) return;
+
+  const lastReason = await findLastNotEligibleReason(supabase, {
+    projectId: params.projectId,
+    preparedChangeId: params.preparedChangeId,
+  });
+
+  // Already recorded, or the read failed and silence is the safe answer.
+  if (lastReason === card.failureCode || lastReason === UNKNOWN_LAST_REASON) return;
+
+  await recordAuditEvent(supabase, {
+    userId: params.userId,
+    eventType: "change_merge.not_eligible",
+    metadata: {
+      project_id: params.projectId,
+      prepared_change_id: params.preparedChangeId,
+      change_approval_id: params.changeApprovalId,
+      failure_code: card.failureCode,
+      merge_policy_version: MERGE_POLICY_VERSION,
+      // What the branch was doing when Vibe declined. Both are public content
+      // identifiers, and without them the entry cannot say what "changed".
+      observed_default_head_sha: params.observedDefaultHead,
+      approved_commit_sha: params.targetSha,
+    },
   });
 }
 
