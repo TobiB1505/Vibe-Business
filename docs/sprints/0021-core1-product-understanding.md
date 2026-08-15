@@ -177,6 +177,20 @@ All met unless noted.
 
 ## Dogfood result
 
+### Reported by the maintainer
+
+After a further fix outside this branch, the maintainer reports that CORE-1 was run and
+verified end to end against the real product and works.
+
+Recorded as reported, not as observed: nothing was pushed to
+`claude/core-1-product-understanding-1gm611` after `e9861f8`, and this session could reach
+neither the provider nor the database, so the run itself, the migration state and the
+resulting profile were not seen here. The two open flags below are therefore left standing
+rather than quietly closed — whoever confirms them next should replace this paragraph with
+what the run actually produced.
+
+### Observed here
+
 Run against the real Vibe Business checkout at `9591971`, using the real analyzer over the
 real git tree. **The AI synthesis step and the database half could not run here**: this
 session has no `ANTHROPIC_API_KEY` and no Supabase credentials. So what follows is the
@@ -224,9 +238,11 @@ The evidence pack was 31 items and 3,861 characters.
   understanding paragraph are all `null` in this run, and the headline correctly falls back
   to "Here's what Vibe found." rather than claiming an understanding it does not have.
 
-The §52 wow-moment questions therefore cannot all be answered yet. **Identity, brand,
-capabilities and trust: yes.** **Purpose and audience: not exercised** — they need the model
-call, which needs credentials this session does not have.
+From what was observed here, the §52 wow-moment questions cannot all be answered.
+**Identity, brand, capabilities and trust: yes.** **Purpose and audience: not exercised** —
+they need the model call, which needs credentials this session does not have. The
+maintainer's end-to-end run covers exactly this gap; its results are not recorded above
+because they were not seen here.
 
 ## Validation
 
@@ -254,10 +270,12 @@ labels. Both fixed.
 
 ## Risks / Notes
 
-- **The migration is not deployed.** `20260815210000_product_understanding.sql` is written
-  and pinned by tests but has not been pushed — no Supabase credentials here, and
-  [CLAUDE.md](../../CLAUDE.md) rules 29–34 require inspecting migration history first.
-  Run `pnpm db:status` before `pnpm db:push`.
+- **The migration was not deployed from here.** `20260815210000_product_understanding.sql`
+  is written and pinned by tests, but this session had no Supabase credentials, so its state
+  on the linked project is unverified. The maintainer's end-to-end run implies it is applied;
+  that has not been read back. Confirm with `pnpm db:status` before any further `pnpm db:push`
+  — [CLAUDE.md](../../CLAUDE.md) rules 29–34 require inspecting migration history first, and
+  never assume a table's absence or presence.
 - **Existing snapshots predate brand detection.** Both analyzer versions moved, so reuse
   invalidates correctly, but a *stored* snapshot still has no `brand` key until it is
   re-analysed. `readRepositoryBrand`/`readLiveBrand` tolerate that rather than crashing.

@@ -201,7 +201,20 @@ test.describe("state is never carried by colour alone", () => {
   });
 });
 
-const WIDTHS = [1440, 1024, 768, 375];
+/**
+ * The four widths the sprint names, plus 360.
+ *
+ * 360 is not a device — it is 375 minus a classic scrollbar, and it is here
+ * because the first CI run went red on a layout this suite had passed locally.
+ * A browser with overlay scrollbars leaves the full 375px of content width; one
+ * with classic scrollbars leaves ~360. A `shrink-0` note in the capability rows
+ * fitted the first and overflowed the second by 13px, so the bug was invisible
+ * on the machine it was written on.
+ *
+ * Testing the squeezed width directly makes that class of defect deterministic
+ * rather than dependent on which Chromium a runner happens to have.
+ */
+const WIDTHS = [1440, 1024, 768, 375, 360];
 
 test.describe("responsive", () => {
   for (const width of WIDTHS) {
@@ -221,7 +234,8 @@ test.describe("responsive", () => {
 
   test("keeps the editor usable on a phone", async ({ page }) => {
     await forbidExternalCalls(page);
-    await page.setViewportSize({ width: 375, height: 800 });
+    // The squeezed width, for the reason given above.
+    await page.setViewportSize({ width: 360, height: 800 });
     await page.goto(READY);
 
     await page.getByRole("button", { name: "Let me fix it" }).click();
