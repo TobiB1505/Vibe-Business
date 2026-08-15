@@ -46,7 +46,7 @@ function shortSha(sha: string | null): string | null {
  */
 function NotDeployed() {
   return (
-    <p className="text-xs text-zinc-500">
+    <p className="text-xs text-fg-muted">
       Not deployed by Vibe. Vibe does not call a deployment provider, and no deployment has been
       verified.
     </p>
@@ -75,22 +75,22 @@ function MergeDialog({
       aria-labelledby="merge-confirm-title"
       className="space-y-3 rounded-md border border-sky-800/60 bg-sky-950/20 p-4"
     >
-      <h5 id="merge-confirm-title" className="text-sm font-medium text-zinc-100">
+      <h5 id="merge-confirm-title" className="text-sm font-medium text-fg">
         Merge approved change?
       </h5>
 
-      <div className="space-y-2 text-sm text-zinc-300">
+      <div className="space-y-2 text-sm text-fg-prose">
         <p>You approved this exact change earlier.</p>
         <p>
           Vibe will now update the repository&apos;s default branch
           {defaultBranch ? (
             <>
               {" "}
-              <code className="text-zinc-200">{defaultBranch}</code>
+              <code className="text-fg-body">{defaultBranch}</code>
             </>
           ) : null}{" "}
-          from <code className="text-zinc-200">{shortSha(fromSha) ?? "its current commit"}</code> to{" "}
-          <code className="text-zinc-200">{shortSha(toSha) ?? "the approved commit"}</code>, only if
+          from <code className="text-fg-body">{shortSha(fromSha) ?? "its current commit"}</code> to{" "}
+          <code className="text-fg-body">{shortSha(toSha) ?? "the approved commit"}</code>, only if
           GitHub still matches the approved state.
         </p>
         <p>If the repository changed, Vibe will stop without modifying the default branch.</p>
@@ -98,7 +98,7 @@ function MergeDialog({
             default branch can still cause a deployment. Both sentences, before
             the click, because only one of them is reassuring. */}
         <p>This does not deploy your application. Vibe will not call a deployment provider.</p>
-        <p className="text-zinc-400">
+        <p className="text-fg-secondary">
           Updating the default branch may trigger your repository&apos;s existing CI/CD or hosting
           automation.
         </p>
@@ -109,7 +109,7 @@ function MergeDialog({
           type="button"
           onClick={onCancel}
           disabled={pending}
-          className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-900 disabled:opacity-60"
+          className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-prose hover:bg-surface-2 disabled:opacity-60"
         >
           Cancel
         </button>
@@ -166,8 +166,8 @@ export function MergePanel({
   }
 
   return (
-    <section className="space-y-3 border-t border-zinc-800 pt-4">
-      <h4 className="text-sm font-medium text-zinc-200">Merge</h4>
+    <section className="space-y-3 border-t border-line-2 pt-4">
+      <h4 className="text-sm font-medium text-fg-body">Merge</h4>
 
       {confirming ? (
         <MergeDialog
@@ -180,21 +180,21 @@ export function MergePanel({
         />
       ) : card.state === "merged" ? (
         <div className="space-y-2">
-          <p className="text-sm text-emerald-400">Merged</p>
-          <p className="text-sm text-zinc-400">
+          <p className="text-sm text-mint">Merged</p>
+          <p className="text-sm text-fg-secondary">
             Repository default branch updated successfully
             {card.mergedAt ? ` · ${localTime(card.mergedAt)}` : ""}
           </p>
           {card.resultingDefaultHeadSha && (
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-fg-muted">
               {card.defaultBranch ? (
                 <>
-                  <code className="text-zinc-300">{card.defaultBranch}</code> now points at{" "}
+                  <code className="text-fg-prose">{card.defaultBranch}</code> now points at{" "}
                 </>
               ) : (
                 "The default branch now points at "
               )}
-              <code className="text-zinc-300">{shortSha(card.resultingDefaultHeadSha)}</code>, read
+              <code className="text-fg-prose">{shortSha(card.resultingDefaultHeadSha)}</code>, read
               back from GitHub after the update.
             </p>
           )}
@@ -202,19 +202,19 @@ export function MergePanel({
         </div>
       ) : card.state === "merging" ? (
         <div className="space-y-2">
-          <p className="text-sm text-zinc-300">Merging…</p>
-          <p className="text-xs text-zinc-500">
+          <p className="text-sm text-fg-prose">Merging…</p>
+          <p className="text-xs text-fg-muted">
             Vibe is revalidating the repository state and updating the default branch.
           </p>
         </div>
       ) : card.state === "ready" ? (
         <div className="space-y-2">
-          <p className="text-sm text-zinc-300">Ready to merge</p>
-          <p className="text-xs text-zinc-500">
+          <p className="text-sm text-fg-prose">Ready to merge</p>
+          <p className="text-xs text-fg-muted">
             {card.defaultBranch ? (
               <>
-                <code className="text-zinc-300">{card.defaultBranch}</code> is still at{" "}
-                <code className="text-zinc-300">{shortSha(card.currentDefaultHeadSha)}</code>, the
+                <code className="text-fg-prose">{card.defaultBranch}</code> is still at{" "}
+                <code className="text-fg-prose">{shortSha(card.currentDefaultHeadSha)}</code>, the
                 commit this change was prepared on.
               </>
             ) : (
@@ -226,41 +226,41 @@ export function MergePanel({
             type="button"
             onClick={() => setConfirming(true)}
             disabled={pending || !card.canMerge}
-            className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-900 disabled:opacity-60"
+            className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2 disabled:opacity-60"
           >
             Merge approved change
           </button>
         </div>
       ) : card.state === "blocked" || card.state === "failed" ? (
         <div className="space-y-2">
-          <p className="text-sm text-amber-300">
+          <p className="text-sm text-amber">
             {card.state === "blocked" ? "Merge blocked" : "Merge did not complete"}
           </p>
-          {card.failureMessage && <p className="text-sm text-zinc-400">{card.failureMessage}</p>}
+          {card.failureMessage && <p className="text-sm text-fg-secondary">{card.failureMessage}</p>}
           {/* Said explicitly for the blocked case, because "we stopped" is the
               fact a user most needs after a refused write — and it is only true
               for `blocked`, which the database guarantees wrote nothing (§29). */}
           {card.state === "blocked" && (
-            <p className="text-xs text-zinc-500">Vibe did not modify the repository.</p>
+            <p className="text-xs text-fg-muted">Vibe did not modify the repository.</p>
           )}
           {card.state === "failed" && card.resultingDefaultHeadSha && (
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-fg-muted">
               The default branch was last observed at{" "}
-              <code className="text-zinc-300">{shortSha(card.resultingDefaultHeadSha)}</code>.
+              <code className="text-fg-prose">{shortSha(card.resultingDefaultHeadSha)}</code>.
             </p>
           )}
         </div>
       ) : (
         <div className="space-y-2">
-          <p className="text-sm text-zinc-400">Not available</p>
+          <p className="text-sm text-fg-secondary">Not available</p>
           {/* Never offers to fix the cause itself: re-preparing, re-validating
               and re-reviewing all cost provider time, and starting them on the
               user's behalf is what CLAUDE.md rule 60 forbids (§29). */}
-          {card.failureMessage && <p className="text-xs text-zinc-500">{card.failureMessage}</p>}
+          {card.failureMessage && <p className="text-xs text-fg-muted">{card.failureMessage}</p>}
         </div>
       )}
 
-      {state?.ok === false && <p className="text-sm text-red-400">{state.message}</p>}
+      {state?.ok === false && <p className="text-sm text-coral">{state.message}</p>}
     </section>
   );
 }

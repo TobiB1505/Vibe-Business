@@ -118,20 +118,21 @@ export function PreparedChangesSection({
 
   return (
     <section className="space-y-4">
-      <div className="space-y-1">
-        <h2 className="text-lg font-medium text-zinc-100">Prepared changes</h2>
-        <p className="text-sm text-zinc-500">
-          Changes Vibe wrote to isolated branches. Merging updates the repository&apos;s default
-          branch; nothing here is deployed by Vibe.
-        </p>
-      </div>
+      {/* No heading of its own: the workspace section that wraps this owns it
+          (UI-1), and a second "Prepared changes" `h2` inside "Prepared" put the
+          same level twice in the outline. The sentence stays — it is the one
+          that says merging is not deploying, and that is load-bearing. */}
+      <p className="text-fg-muted text-sm">
+        Changes Vibe wrote to isolated branches. Merging updates the repository&apos;s default
+        branch; nothing here is deployed by Vibe.
+      </p>
 
       <ul className="space-y-4">
         {changes.map((change) => (
-          <li key={change.id} className="space-y-3 rounded-lg border border-zinc-800 p-4">
+          <li key={change.id} className="space-y-3 rounded-lg border border-line-2 p-4">
             <div className="space-y-1">
-              <p className="font-mono text-sm text-zinc-200">{change.branchName}</p>
-              <p className="text-xs text-zinc-500">
+              <p className="font-mono text-sm text-fg-body">{change.branchName}</p>
+              <p className="text-xs text-fg-muted">
                 {change.commitSha ? `${change.commitSha.slice(0, 7)} on ${change.baseBranch}` : change.baseBranch}
                 {" · "}
                 {change.filePaths.length} file{change.filePaths.length === 1 ? "" : "s"}
@@ -141,7 +142,7 @@ export function PreparedChangesSection({
             {/* Paths only. File contents live on the branch, never in our rows. */}
             <ul className="space-y-0.5">
               {change.filePaths.map((path) => (
-                <li key={path} className="font-mono text-xs text-zinc-500">
+                <li key={path} className="font-mono text-xs text-fg-muted">
                   {path}
                 </li>
               ))}
@@ -152,7 +153,7 @@ export function PreparedChangesSection({
                 href={change.branchUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-block text-sm text-zinc-300 underline underline-offset-2 hover:text-zinc-50"
+                className="inline-block text-sm text-fg-prose underline underline-offset-2 hover:text-fg"
               >
                 Open branch on GitHub
               </a>

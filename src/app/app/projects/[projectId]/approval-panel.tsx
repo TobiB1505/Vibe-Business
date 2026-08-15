@@ -51,7 +51,7 @@ function shortSha(sha: string | null): string | null {
  */
 function NotMerged() {
   return (
-    <p className="text-xs text-zinc-500">Nothing has been merged or deployed.</p>
+    <p className="text-xs text-fg-muted">Nothing has been merged or deployed.</p>
   );
 }
 
@@ -71,20 +71,20 @@ function ApproveDialog({
       role="dialog"
       aria-modal="true"
       aria-labelledby="approve-confirm-title"
-      className="space-y-3 rounded-md border border-emerald-800/60 bg-emerald-950/20 p-4"
+      className="space-y-3 rounded-md border border-mint-line/60 bg-mint-tint-soft p-4"
     >
-      <h5 id="approve-confirm-title" className="text-sm font-medium text-zinc-100">
+      <h5 id="approve-confirm-title" className="text-sm font-medium text-fg">
         Approve this change?
       </h5>
 
-      <div className="space-y-2 text-sm text-zinc-300">
+      <div className="space-y-2 text-sm text-fg-prose">
         <p>You are approving this exact prepared change for a future merge.</p>
         <p>Vibe will not merge or deploy anything yet.</p>
         <p>Your approval is tied to this exact commit and review.</p>
         <p>If the change is modified, the approval will no longer be valid.</p>
         {commitSha && (
-          <p className="text-zinc-400">
-            Prepared commit: <code className="text-zinc-200">{shortSha(commitSha)}</code>
+          <p className="text-fg-secondary">
+            Prepared commit: <code className="text-fg-body">{shortSha(commitSha)}</code>
           </p>
         )}
       </div>
@@ -94,7 +94,7 @@ function ApproveDialog({
           type="button"
           onClick={onCancel}
           disabled={pending}
-          className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-900 disabled:opacity-60"
+          className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-prose hover:bg-surface-2 disabled:opacity-60"
         >
           Cancel
         </button>
@@ -102,7 +102,7 @@ function ApproveDialog({
           type="button"
           onClick={onConfirm}
           disabled={pending}
-          className="rounded-md border border-emerald-800 bg-emerald-950/40 px-3 py-1.5 text-sm text-emerald-200 hover:bg-emerald-900/40 disabled:opacity-60"
+          className="rounded-md border border-mint-line bg-mint-tint-soft px-3 py-1.5 text-sm text-mint hover:bg-mint-tint disabled:opacity-60"
         >
           {pending ? "Approving…" : "Approve change"}
         </button>
@@ -125,17 +125,17 @@ function RevokeDialog({
       role="dialog"
       aria-modal="true"
       aria-labelledby="revoke-confirm-title"
-      className="space-y-3 rounded-md border border-amber-800/60 bg-amber-950/20 p-4"
+      className="space-y-3 rounded-md border border-amber-line/60 bg-amber-tint-soft p-4"
     >
-      <h5 id="revoke-confirm-title" className="text-sm font-medium text-zinc-100">
+      <h5 id="revoke-confirm-title" className="text-sm font-medium text-fg">
         Revoke this approval?
       </h5>
 
-      <div className="space-y-2 text-sm text-zinc-300">
+      <div className="space-y-2 text-sm text-fg-prose">
         <p>This withdraws your approval of this change.</p>
         {/* Said plainly, because "revoke" can read as "undo" — and the record
             of who approved what is deliberately permanent (§16). */}
-        <p className="text-zinc-400">The approval record is kept for audit history.</p>
+        <p className="text-fg-secondary">The approval record is kept for audit history.</p>
       </div>
 
       <div className="flex gap-2">
@@ -143,7 +143,7 @@ function RevokeDialog({
           type="button"
           onClick={onCancel}
           disabled={pending}
-          className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-900 disabled:opacity-60"
+          className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-prose hover:bg-surface-2 disabled:opacity-60"
         >
           Cancel
         </button>
@@ -151,7 +151,7 @@ function RevokeDialog({
           type="button"
           onClick={onConfirm}
           disabled={pending}
-          className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-900 disabled:opacity-60"
+          className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2 disabled:opacity-60"
         >
           {pending ? "Revoking…" : "Revoke approval"}
         </button>
@@ -222,8 +222,8 @@ export function ApprovalPanel({
   const busy = intent !== null;
 
   return (
-    <section className="space-y-3 border-t border-zinc-800 pt-4">
-      <h4 className="text-sm font-medium text-zinc-200">Approval</h4>
+    <section className="space-y-3 border-t border-line-2 pt-4">
+      <h4 className="text-sm font-medium text-fg-body">Approval</h4>
 
       {confirming === "approve" ? (
         <ApproveDialog
@@ -240,16 +240,16 @@ export function ApprovalPanel({
         />
       ) : card.state === "approved" ? (
         <div className="space-y-2">
-          <p className="text-sm text-emerald-400">Change approved</p>
-          <p className="text-sm text-zinc-400">
+          <p className="text-sm text-mint">Change approved</p>
+          <p className="text-sm text-fg-secondary">
             Approved by you{card.approvedAt ? ` · ${localTime(card.approvedAt)}` : ""}
           </p>
           {/* The commit is the whole point of the record: an approval that
               cannot say what it applies to is not an approval (§3, §21). */}
           {card.approvedCommitSha && (
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-fg-muted">
               This approval applies only to commit{" "}
-              <code className="text-zinc-300">{shortSha(card.approvedCommitSha)}</code>.
+              <code className="text-fg-prose">{shortSha(card.approvedCommitSha)}</code>.
             </p>
           )}
           <NotMerged />
@@ -257,25 +257,25 @@ export function ApprovalPanel({
             type="button"
             onClick={() => setConfirming("revoke")}
             disabled={busy}
-            className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-900 disabled:opacity-60"
+            className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2 disabled:opacity-60"
           >
             Revoke approval
           </button>
         </div>
       ) : card.state === "invalidated" ? (
         <div className="space-y-2">
-          <p className="text-sm text-amber-300">Previous approval no longer applies</p>
-          <p className="text-sm text-zinc-400">
+          <p className="text-sm text-amber">Previous approval no longer applies</p>
+          <p className="text-sm text-fg-secondary">
             The prepared change has changed since it was approved.
           </p>
           {card.approvedCommitSha && (
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-fg-muted">
               That approval was for commit{" "}
-              <code className="text-zinc-300">{shortSha(card.approvedCommitSha)}</code>
+              <code className="text-fg-prose">{shortSha(card.approvedCommitSha)}</code>
               {card.currentCommitSha ? (
                 <>
                   ; this change is now at{" "}
-                  <code className="text-zinc-300">{shortSha(card.currentCommitSha)}</code>
+                  <code className="text-fg-prose">{shortSha(card.currentCommitSha)}</code>
                 </>
               ) : null}
               .
@@ -286,18 +286,18 @@ export function ApprovalPanel({
               type="button"
               onClick={() => setConfirming("approve")}
               disabled={busy || !reviewArtifactId}
-              className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-900 disabled:opacity-60"
+              className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2 disabled:opacity-60"
             >
               Approve change
             </button>
           ) : (
-            card.blockMessage && <p className="text-xs text-zinc-500">{card.blockMessage}</p>
+            card.blockMessage && <p className="text-xs text-fg-muted">{card.blockMessage}</p>
           )}
         </div>
       ) : card.state === "revoked" ? (
         <div className="space-y-2">
-          <p className="text-sm text-zinc-400">Approval revoked</p>
-          <p className="text-xs text-zinc-500">
+          <p className="text-sm text-fg-secondary">Approval revoked</p>
+          <p className="text-xs text-fg-muted">
             You withdrew your approval{card.revokedAt ? ` on ${localTime(card.revokedAt)}` : ""}.
           </p>
           {card.canApprove && (
@@ -305,7 +305,7 @@ export function ApprovalPanel({
               type="button"
               onClick={() => setConfirming("approve")}
               disabled={busy || !reviewArtifactId}
-              className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-900 disabled:opacity-60"
+              className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2 disabled:opacity-60"
             >
               Approve change
             </button>
@@ -313,30 +313,30 @@ export function ApprovalPanel({
         </div>
       ) : card.state === "not_approved" ? (
         <div className="space-y-2">
-          <p className="text-sm text-zinc-400">Not approved</p>
-          <p className="text-xs text-zinc-500">
+          <p className="text-sm text-fg-secondary">Not approved</p>
+          <p className="text-xs text-fg-muted">
             Approving records that you reviewed this exact change. Nothing is merged or deployed.
           </p>
           <button
             type="button"
             onClick={() => setConfirming("approve")}
             disabled={busy || !reviewArtifactId}
-            className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-900 disabled:opacity-60"
+            className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2 disabled:opacity-60"
           >
             Approve change
           </button>
         </div>
       ) : (
         <div className="space-y-2">
-          <p className="text-sm text-zinc-400">Not approved</p>
+          <p className="text-sm text-fg-secondary">Not approved</p>
           {/* Never offers to produce the missing evidence itself: a validation
               and a comparison both cost provider time, and the user starts
               those deliberately from their own sections (CLAUDE.md rule 60). */}
-          {card.blockMessage && <p className="text-xs text-zinc-500">{card.blockMessage}</p>}
+          {card.blockMessage && <p className="text-xs text-fg-muted">{card.blockMessage}</p>}
         </div>
       )}
 
-      {state?.ok === false && <p className="text-sm text-red-400">{state.message}</p>}
+      {state?.ok === false && <p className="text-sm text-coral">{state.message}</p>}
     </section>
   );
 }

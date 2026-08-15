@@ -137,6 +137,12 @@ export const OPERATION_STAGE_LABELS: Record<OperationStage, string> = {
   evaluating: "Comparing what was expected with what was observed",
   // Business measurement (Sprint 12B §23). Factual progress only — never
   // "looking good", which would be a conclusion drawn before the window closed.
+  // Product Understanding (CORE-1 §27, §45). The only stages a user reads
+  // verbatim rather than through a translation, so they are written in the
+  // product's voice and never mention analysis, snapshots, or models.
+  reading_code: "Reading what you built",
+  reading_public_product: "Looking at your public product",
+  understanding_product: "Putting it together",
   collecting_baseline: "Collecting the baseline period",
   collecting_post: "Collecting the post-change period",
   comparing: "Comparing the two periods",

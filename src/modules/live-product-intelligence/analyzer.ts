@@ -1,3 +1,4 @@
+import { buildBrandSignals } from "./brand";
 import type { CrawlBudgets } from "./budgets";
 import { crawlSite, type CrawlFailure } from "./crawler";
 import { LiveProductDomainError } from "./errors";
@@ -112,6 +113,7 @@ export async function analyzeLiveProduct(
       pages: outcome.pages,
       discoveredPaths: outcome.discoveredPaths,
     }),
+    brandSignals: buildBrandSignals({ homepage, effectiveOrigin: outcome.effectiveOrigin }),
     metrics: {
       pagesFetched: stats.pagesFetched,
       bytesFetched: stats.bytesFetched,

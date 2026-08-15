@@ -17,6 +17,8 @@ Turns a connected GitHub repository into a versioned, evidence-carrying snapshot
 | `detectors/` | Pure functions: `stack`, `integrations`, `routes`, `monorepo`, `business-surfaces`. |
 | `analyzer.ts` | Orchestrates the pipeline and builds the snapshot. |
 | `schema.ts` | The versioned output contract + `ANALYZER_VERSION`. |
+| `human-view.ts` | Presentation only: a deterministic translation of a snapshot into business capabilities ([Sprint UI-3.6](../../../docs/sprints/0020-ui36-repository-intelligence-human-first.md)). Reads the snapshot, changes nothing. |
+| `cross-check.ts` | Where the code and the live product disagree, said as a business finding. Four fixed comparisons, no inference. |
 | `store.ts` | Persistence, reuse lookup, run lifecycle. |
 | `service.ts` | Application entry point: ownership → reuse → analyze → persist → audit. |
 | `test-support.ts` | In-memory fixtures and a fake reader, so nothing touches the network in tests. |
@@ -29,3 +31,6 @@ Turns a connected GitHub repository into a versioned, evidence-carrying snapshot
 - **Never fetch sensitive paths.** Existence may be observed; contents may not be read.
 - Detectors stay pure and GitHub-free, so they remain testable without network access.
 - Every claimed detection must carry evidence. If there is no evidence, there is no detection.
+- **Repository evidence is never runtime truth.** The presentation layer may say a capability is
+  *likely*; only the live product check or Deep Scan can say it works. `CapabilityStatus` has no
+  `confirmed` member for that reason.

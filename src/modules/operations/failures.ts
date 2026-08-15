@@ -8,6 +8,7 @@ import type { ReviewFailureCode } from "@/modules/review/schema";
 import type { MergeFailureCode } from "@/modules/merge/schema";
 import type { OutcomeFailureCode } from "@/modules/outcome-verification/schema";
 import type { MeasurementFailureCode } from "@/modules/business-measurement/schema";
+import type { UnderstandingFailure } from "@/modules/product-understanding/runner";
 
 /**
  * Every way a durable operation can end badly (Sprint 7 §21).
@@ -52,6 +53,7 @@ export type OperationFailureCode =
   | MergeFailureCode
   | OutcomeFailureCode
   | MeasurementFailureCode
+  | UnderstandingFailure
   | OperationExecutionFailure;
 
 /**

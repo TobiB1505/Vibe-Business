@@ -2,6 +2,7 @@ import { BudgetTracker, DEFAULT_ANALYSIS_BUDGETS, type AnalysisBudgets } from ".
 import { selectCandidates } from "./candidates";
 import { buildDetectionContext, type FetchedFile } from "./context";
 import { isGeneratedPath, pathSegments } from "./path-policy";
+import { detectBrand } from "./detectors/brand";
 import { detectBusinessSurfaces } from "./detectors/business-surfaces";
 import { detectIntegrationSignals } from "./detectors/integrations";
 import { detectMonorepo } from "./detectors/monorepo";
@@ -138,6 +139,7 @@ export async function analyzeRepository(
     integrationSignals,
     routes,
     businessSurfaces: detectBusinessSurfaces(context, integrationSignals, routes),
+    brand: detectBrand(context),
     metrics: {
       treeEntriesConsidered: entries.length,
       candidatesSelected: selection.discovered.length,

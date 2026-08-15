@@ -27,11 +27,21 @@ export type DetectionContext = {
   allNodeDependencies: Set<string>;
   /** Lowercased text of parsed Python/other dependency manifests, by path. */
   textManifests: { path: string; content: string }[];
+  /**
+   * Stylesheet and theme-config text, by path (CORE-1 §12).
+   *
+   * Kept case-sensitive, unlike `textManifests`: a font family name is a
+   * proper noun and "space grotesk" is not what the product calls itself.
+   */
+  styleSheets: { path: string; content: string }[];
 };
 
 export type FetchedFile = { path: string; content: string };
 
 const PYTHON_MANIFESTS = new Set(["requirements.txt", "pyproject.toml", "Pipfile"]);
+
+/** Files whose text is read for design tokens rather than dependencies. */
+const STYLE_EXTENSIONS = /\.css$|^tailwind\.config\.(js|cjs|mjs|ts|mts)$/i;
 
 export function buildDetectionContext(
   entries: TreeEntry[],
@@ -47,9 +57,15 @@ export function buildDetectionContext(
 
   const packageJsons: { path: string; parsed: ParsedPackageJson }[] = [];
   const textManifests: { path: string; content: string }[] = [];
+  const styleSheets: { path: string; content: string }[] = [];
 
   for (const file of files) {
     const basename = pathBasename(file.path);
+
+    if (STYLE_EXTENSIONS.test(basename)) {
+      styleSheets.push({ path: file.path, content: file.content });
+      continue;
+    }
 
     if (basename === "package.json") {
       const parsed = parsePackageJson(file.content);
@@ -91,6 +107,7 @@ export function buildDetectionContext(
     rootPackageJson,
     allNodeDependencies,
     textManifests,
+    styleSheets,
   };
 
   return { context, warnings };

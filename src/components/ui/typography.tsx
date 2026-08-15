@@ -16,13 +16,22 @@ export function MonoLabel({
   children,
   className,
   as: Component = "span",
+  id,
 }: {
   children: ReactNode;
   className?: string;
+  /**
+   * Render as a real heading where the label *is* the section's heading.
+   * Visual weight and document structure are separate decisions: a section rule
+   * can look like a caption and still need to appear in the outline.
+   */
   as?: ElementType;
+  /** For `aria-labelledby` when this labels its surrounding section. */
+  id?: string;
 }) {
   return (
     <Component
+      id={id}
       className={cn(
         "text-fg-meta font-mono text-[0.65625rem] tracking-[0.16em] uppercase",
         className,

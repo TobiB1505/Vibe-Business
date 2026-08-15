@@ -73,6 +73,34 @@ const EXACT_BASENAMES: Record<string, Rule> = {
   "site.webmanifest": { priority: 3, fetchContent: false },
 };
 
+/**
+ * Stylesheets and theme files whose *contents* carry design tokens
+ * (CORE-1 §12, §13).
+ *
+ * These are the second family of files worth downloading, and for the same
+ * reason manifests are: a brand colour cannot be inferred from a filename.
+ * Priority 3 keeps them behind every dependency manifest, so a repository
+ * tight against `maxFileFetches` still gets its stack detected correctly and
+ * simply reports no brand tokens.
+ *
+ * Deliberately a short, named list rather than "every .css file": a design
+ * system's tokens live in one or two well-known files, and downloading a
+ * hundred component stylesheets would multiply cost for nothing.
+ */
+const STYLE_BASENAMES: Record<string, Rule> = {
+  "globals.css": { priority: 3, fetchContent: true },
+  "global.css": { priority: 3, fetchContent: true },
+  "app.css": { priority: 3, fetchContent: true },
+  "index.css": { priority: 3, fetchContent: true },
+  "main.css": { priority: 3, fetchContent: true },
+  "styles.css": { priority: 3, fetchContent: true },
+  "style.css": { priority: 3, fetchContent: true },
+  "theme.css": { priority: 3, fetchContent: true },
+  "tokens.css": { priority: 3, fetchContent: true },
+  "variables.css": { priority: 3, fetchContent: true },
+  "root.css": { priority: 3, fetchContent: true },
+};
+
 /** Basename patterns for families with variable extensions — all existence-only. */
 const PATTERN_RULES: { pattern: RegExp; rule: Rule }[] = [
   { pattern: /^next\.config\.(js|cjs|mjs|ts|mts)$/i, rule: { priority: 1, fetchContent: false } },
@@ -81,7 +109,9 @@ const PATTERN_RULES: { pattern: RegExp; rule: Rule }[] = [
   { pattern: /^svelte\.config\.(js|cjs|mjs|ts|mts)$/i, rule: { priority: 1, fetchContent: false } },
   { pattern: /^nuxt\.config\.(js|cjs|mjs|ts|mts)$/i, rule: { priority: 1, fetchContent: false } },
   { pattern: /^remix\.config\.(js|cjs|mjs|ts|mts)$/i, rule: { priority: 1, fetchContent: false } },
-  { pattern: /^tailwind\.config\.(js|cjs|mjs|ts|mts)$/i, rule: { priority: 3, fetchContent: false } },
+  // Fetched from CORE-1 onwards: a Tailwind config is where a project that
+  // does not use CSS custom properties declares its palette instead.
+  { pattern: /^tailwind\.config\.(js|cjs|mjs|ts|mts)$/i, rule: { priority: 3, fetchContent: true } },
   { pattern: /^drizzle\.config\.(js|cjs|mjs|ts|mts)$/i, rule: { priority: 2, fetchContent: false } },
   { pattern: /^docker-compose(\.[\w-]+)?\.(yml|yaml)$/i, rule: { priority: 2, fetchContent: false } },
   { pattern: /^readme(\.[\w]+)?$/i, rule: { priority: 2, fetchContent: false } },
@@ -101,6 +131,9 @@ function classify(path: string): Rule | null {
   const basename = pathBasename(path);
   const exact = EXACT_BASENAMES[basename];
   if (exact) return exact;
+
+  const style = STYLE_BASENAMES[basename.toLowerCase()];
+  if (style) return style;
 
   const pattern = PATTERN_RULES.find((entry) => entry.pattern.test(basename));
   return pattern ? pattern.rule : null;

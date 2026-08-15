@@ -159,9 +159,29 @@ describe("negative results are never hidden (§25)", () => {
   });
 
   it("gives degraded its own tone rather than rendering it as success", () => {
+    // Asserted against the *rule* rather than against two literal class names.
+    // The original spelled out `text-emerald-400` / `text-amber-300`, which tied
+    // a §25 guarantee to one palette and broke the moment the design system
+    // renamed its colours (UI-1) — while the guarantee itself was intact. What
+    // must never change is that a fall does not wear the colour of a rise.
     const tones = src.slice(src.indexOf("const RESULT_TONE"), src.indexOf("function BeforeAfter"));
-    expect(tones).toMatch(/improved: "text-emerald-400"/);
-    expect(tones).toMatch(/degraded: "text-amber-300"/);
+    const toneFor = (state: string): string | null =>
+      tones.match(new RegExp(`${state}:\\s*"([^"]+)"`))?.[1] ?? null;
+
+    const improved = toneFor("improved");
+    const degraded = toneFor("degraded");
+
+    expect(improved, "improved has no tone").not.toBeNull();
+    expect(degraded, "degraded has no tone").not.toBeNull();
+    expect(degraded).not.toBe(improved);
+  });
+
+  it("takes its result tones from the design system, not from raw colour", () => {
+    // A hex literal or a stray palette class here is how the two states drift
+    // back together: whoever adds the next one copies what they see.
+    const tones = src.slice(src.indexOf("const RESULT_TONE"), src.indexOf("function BeforeAfter"));
+    expect(tones).not.toMatch(/#[0-9a-fA-F]{3,8}/);
+    expect(tones).not.toMatch(/text-(zinc|emerald|red|green|slate|gray)-\d{2,3}/);
   });
 });
 
@@ -233,16 +253,32 @@ describe("the panel decides nothing (§44)", () => {
 });
 
 describe("opening a project page measures nothing (§36, §45)", () => {
-  const src = source("page.tsx");
+  // The prepared-change assembly moved out of `page.tsx` into the workspace
+  // read model (Sprint UI-2 Phase B). The rule is unchanged and is asserted
+  // across *both* files: whichever one performs the read, neither may start a
+  // measurement or create a plan.
+  const page = source("page.tsx");
+  const workspace = readFileSync(
+    join(process.cwd(), "src/modules/execution/workspace.ts"),
+    "utf8",
+  );
 
-  it("reads the card and never starts a measurement or creates a plan", () => {
-    expect(src).toContain("getBusinessImpactCard(supabase");
-    expect(src).not.toContain("startBusinessMeasurement");
-    expect(src).not.toContain("ensureMeasurementPlan");
+  it("reads the card", () => {
+    expect(workspace).toContain("getBusinessImpactCard(");
+  });
+
+  it("never starts a measurement or creates a plan, from either file", () => {
+    for (const [name, src] of [
+      ["page.tsx", page],
+      ["workspace.ts", workspace],
+    ] as const) {
+      expect(src, name).not.toContain("startBusinessMeasurement");
+      expect(src, name).not.toContain("ensureMeasurementPlan");
+    }
   });
 
   it("says in the code why that read is free", () => {
-    expect(src).toContain("zero provider calls");
+    expect(workspace).toContain("zero provider calls");
   });
 });
 

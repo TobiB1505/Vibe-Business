@@ -9,6 +9,8 @@ import { RUBRIC_VERSION } from "@/modules/business-audit/rubric";
 import { BUSINESS_AUDIT_SCHEMA_VERSION, BUSINESS_AUDIT_VERSION } from "@/modules/business-audit/schema";
 import { computeAuditInputHash, findReusableAudit } from "@/modules/business-audit/store";
 import { resolveOpportunityIdentity } from "@/modules/opportunities/service";
+import { findReusableProfile } from "@/modules/product-understanding/store";
+import { loadUnderstandingSources } from "./product-understanding/execution";
 import { findReusableOpportunitySet } from "@/modules/opportunities/store";
 import { getLatestSuccessfulAuthenticatedSnapshot } from "@/modules/authenticated-product-intelligence/store";
 import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intelligence/store";
@@ -341,6 +343,128 @@ export async function startOpportunityOperation(
   });
 
   return { kind: "started", operation: view(operation) };
+}
+
+/**
+ * Starting a durable Product Understanding run (CORE-1 §22).
+ *
+ * The same sequence of refusals as the audit — own the project, resolve
+ * evidence, reuse an identical profile, return a live operation, claim,
+ * enqueue — against the same database guarantees. This is the third consumer
+ * of one execution foundation, not a third mechanism.
+ *
+ * What differs is what counts as enough evidence. The audit refuses without
+ * both snapshots *and* business context; this runs on either snapshot alone,
+ * because a product with no public site yet is exactly the kind of product
+ * this flow exists to describe (CORE-1 §43).
+ */
+export async function startProductUnderstandingOperation(
+  supabase: SupabaseClient,
+  executor: OperationExecutor,
+  params: { projectId: string; userId: string; force?: boolean },
+): Promise<StartOperationOutcome> {
+  const { data: project } = await supabase
+    .from("projects")
+    .select("id")
+    .eq("id", params.projectId)
+    .eq("user_id", params.userId)
+    .maybeSingle();
+
+  if (!project) return { kind: "failed", error: "project_not_found" };
+
+  const identity = await loadUnderstandingSources(supabase, params.projectId);
+  if (!identity.ok) return { kind: "failed", error: identity.failureCode };
+
+  const inputHash = identity.identity.inputHash;
+
+  // Cheapest possible answer first: the work is already done. This is what
+  // stops a page render costing an inference call (CORE-1 §21).
+  if (!params.force) {
+    const reusable = await findReusableProfile(supabase, { projectId: params.projectId, inputHash });
+    if (reusable) {
+      await recordAuditEvent(supabase, {
+        userId: params.userId,
+        eventType: "product_understanding.reused",
+        metadata: { projectId: params.projectId, profileId: reusable.id },
+      });
+      return { kind: "reused", auditId: reusable.id };
+    }
+  }
+
+  // Second cheapest: the work is already happening. Checked even under
+  // `force`, so a re-run never starts a second simultaneous inference.
+  const alreadyActive = await findActiveOperationByIdentity(supabase, {
+    projectId: params.projectId,
+    operationType: "product_understanding",
+    inputIdentity: inputHash,
+  });
+  if (alreadyActive) return { kind: "active", operation: view(alreadyActive) };
+
+  const created = await createOperationRun(supabase, {
+    projectId: params.projectId,
+    userId: params.userId,
+    operationType: "product_understanding",
+    inputIdentity: inputHash,
+  });
+
+  if (!created.ok) {
+    if (created.error === "already_active") {
+      // Lost the race by milliseconds — the other click's operation is the
+      // right answer, not an error.
+      const existing = await findActiveOperationByIdentity(supabase, {
+        projectId: params.projectId,
+        operationType: "product_understanding",
+        inputIdentity: inputHash,
+      });
+      if (existing) return { kind: "active", operation: view(existing) };
+    }
+    return { kind: "failed", error: "understanding_failed" };
+  }
+
+  const operation = created.operation;
+  const started = await executor.start({
+    operationId: operation.id,
+    operationType: "product_understanding",
+  });
+
+  if (!started.ok) {
+    await failOperationRun(supabase, {
+      operationId: operation.id,
+      failureCode: "execution_start_failed",
+    });
+    return { kind: "failed", error: "execution_start_failed" };
+  }
+
+  await attachExecutionRun(supabase, {
+    operationId: operation.id,
+    workflowRunId: started.runId,
+    executionProvider: executor.name,
+  });
+
+  await recordAuditEvent(supabase, {
+    userId: params.userId,
+    eventType: "operation.started",
+    metadata: {
+      projectId: params.projectId,
+      operationId: operation.id,
+      operationType: "product_understanding",
+      executionProvider: executor.name,
+    },
+  });
+
+  return { kind: "started", operation: view(operation) };
+}
+
+/** The live understanding run a reloaded page should display. */
+export async function getActiveProductUnderstandingOperation(
+  supabase: SupabaseClient,
+  projectId: string,
+): Promise<OperationView | null> {
+  const operation = await findActiveOperation(supabase, {
+    projectId,
+    operationType: "product_understanding",
+  });
+  return operation ? view(operation) : null;
 }
 
 /** The live generation a reloaded project page should display (Sprint 7 §19). */

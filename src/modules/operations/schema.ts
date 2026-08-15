@@ -65,6 +65,15 @@ export const OPERATION_TYPES = [
    * was observed.
    */
   "business_measurement",
+  /**
+   * Working out what a product actually is (CORE-1 §22).
+   *
+   * Durable for the ordinary reason — it counts tokens, makes a paid call and
+   * persists a versioned document, which is tens of seconds — but also because
+   * this is the first thing a new user ever watches Vibe do. A flow that dies
+   * when a browser tab is closed would lose the one impression that matters.
+   */
+  "product_understanding",
 ] as const;
 export type OperationType = (typeof OPERATION_TYPES)[number];
 
@@ -151,6 +160,22 @@ export const OPERATION_STAGES = [
   "collecting_baseline",
   "collecting_post",
   "comparing",
+  /**
+   * Product Understanding (CORE-1 §27).
+   *
+   * Named for what the user is told, not for what the code does. Every other
+   * stage list in this file is internal vocabulary that a view model
+   * translates; these three exist because the understanding screen shows the
+   * steps themselves, and a stage called `running_ai` would either leak
+   * infrastructure onto the screen or need a translation that could drift.
+   *
+   * Three, not six: there is no honest way to subdivide "reading your code"
+   * for a user, and a finer list would only produce a progress bar that lies
+   * (CORE-1 §28).
+   */
+  "reading_code",
+  "reading_public_product",
+  "understanding_product",
   "completed",
 ] as const;
 export type OperationStage = (typeof OPERATION_STAGES)[number];
@@ -177,6 +202,8 @@ export function isActive(status: OperationStatus): boolean {
 export function hasEnteredPaidWork(stage: OperationStage): boolean {
   return (
     stage === "running_ai" ||
+    // Product Understanding's paid step, under the name the user sees.
+    stage === "understanding_product" ||
     stage === "prioritizing" ||
     stage === "writing_repository" ||
     stage === "validating" ||

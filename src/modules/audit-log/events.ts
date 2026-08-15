@@ -29,6 +29,16 @@ export type AuditEventType =
   | "business_audit.completed"
   | "business_audit.failed"
   | "business_audit.reused"
+  // Product Understanding (CORE-1 §22). `completed_without_synthesis` is its
+  // own event rather than a metadata flag: a profile derived with no model is
+  // a materially different thing to have produced, and it should be findable
+  // in the log without reading every completion's metadata.
+  | "product_understanding.started"
+  | "product_understanding.completed"
+  | "product_understanding.completed_without_synthesis"
+  | "product_understanding.reused"
+  | "product_understanding.confirmed"
+  | "product_understanding.corrected"
   | "deep_scan.started"
   | "deep_scan.completed"
   | "deep_scan.failed"
@@ -150,9 +160,46 @@ export type AuditEventType =
 export type RecordAuditEventParams = {
   userId: string;
   eventType: AuditEventType;
+  /**
+   * The project this event is about, when it is about one.
+   *
+   * Optional because several event types are genuinely account-level —
+   * `github.authorization.started` happens before any project exists. Passing
+   * it writes the real `project_id` column (Sprint UI-2.5), which is what the
+   * Activity read filters and indexes on.
+   */
+  projectId?: string | null;
   /** Never include secrets/tokens here — see ADR 0008 and ADR 0009. */
   metadata?: Record<string, unknown>;
 };
+
+/**
+ * Callers have carried the project id in `metadata` since Sprint 1, and most
+ * still do. Reading it back keeps every existing call site writing the column
+ * without being edited; an explicit `projectId` argument wins over it.
+ *
+ * **Both spellings are accepted, and that is not tidiness.** The earlier
+ * modules use `projectId`; merge, approval, outcome and measurement — added
+ * from Sprint 11B onwards — use `project_id`. Reading only one of them silently
+ * dropped 13 real events out of the Activity feed, including the merge that
+ * moved a default branch. That was found by querying the deployed table rather
+ * than by reading the writers, and it is exactly the class of bug a convention
+ * produces when nothing enforces it.
+ *
+ * The metadata keys are deliberately **not** removed on write. Other readers
+ * may rely on them, and dropping them would be a breaking change disguised as
+ * a refactor.
+ */
+function resolveProjectId(params: RecordAuditEventParams): string | null {
+  if (params.projectId !== undefined && params.projectId !== null) return params.projectId;
+
+  for (const key of ["projectId", "project_id"] as const) {
+    const value = params.metadata?.[key];
+    if (typeof value === "string" && value.length > 0) return value;
+  }
+
+  return null;
+}
 
 /**
  * Shared audit-log write path (ADR 0007) — route handlers and Server
@@ -172,6 +219,10 @@ export async function recordAuditEvent(
   const { error } = await supabase.from("audit_events").insert({
     user_id: params.userId,
     event_type: params.eventType,
+    // Null for account-level events. The column is nullable permanently: a
+    // NOT NULL would force `github.authorization.started` — which happens
+    // before any project exists — to invent a project id.
+    project_id: resolveProjectId(params),
     metadata: params.metadata ?? {},
   });
 

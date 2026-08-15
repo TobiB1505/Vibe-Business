@@ -71,10 +71,10 @@ export function RunAuditButton({
   if (running) {
     return (
       <div className="space-y-1">
-        <p className="text-sm text-zinc-300">
+        <p className="text-sm text-fg-prose">
           {operation.stalled ? "Still analyzing…" : `${OPERATION_STAGE_LABELS[operation.stage]}…`}
         </p>
-        <p className="text-sm text-zinc-500">
+        <p className="text-sm text-fg-muted">
           {operation.stalled
             ? "This is taking much longer than expected. You can start a new audit if it never finishes."
             : "You can leave this page. Vibe will continue the analysis."}
@@ -102,7 +102,7 @@ export function RunAuditButton({
 
       {failed && operation?.failureCode && (
         <div className="space-y-2">
-          <p className="text-sm text-amber-400">
+          <p className="text-sm text-amber">
             Business audit couldn&apos;t complete. {OPERATION_FAILURE_MESSAGES[operation.failureCode]}
           </p>
           {/* Only offered where starting again is honest — never after an
@@ -119,10 +119,10 @@ export function RunAuditButton({
         </div>
       )}
 
-      {state && !state.ok && <p className="text-sm text-amber-400">{OPERATION_FAILURE_MESSAGES[state.error]}</p>}
+      {state && !state.ok && <p className="text-sm text-amber">{OPERATION_FAILURE_MESSAGES[state.error]}</p>}
 
       {state?.ok && state.kind === "reused" && (
-        <p className="text-sm text-zinc-500">
+        <p className="text-sm text-fg-muted">
           Nothing has changed since the last audit, so the existing result is shown.
         </p>
       )}

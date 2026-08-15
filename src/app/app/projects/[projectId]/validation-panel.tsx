@@ -53,13 +53,13 @@ const PHASE_SYMBOLS: Record<ValidationPhaseView["state"], string> = {
 };
 
 const PHASE_TONES: Record<ValidationPhaseView["state"], string> = {
-  passed: "text-emerald-400",
-  failed: "text-red-400",
-  timed_out: "text-red-400",
-  skipped: "text-zinc-500",
+  passed: "text-mint",
+  failed: "text-coral",
+  timed_out: "text-coral",
+  skipped: "text-fg-muted",
   active: "text-sky-400",
-  pending: "text-zinc-600",
-  not_run: "text-zinc-600",
+  pending: "text-fg-meta",
+  not_run: "text-fg-meta",
 };
 
 export type { ValidationSummary };
@@ -72,14 +72,14 @@ function PhaseRow({ phase }: { phase: ValidationPhaseView }) {
     <li className="space-y-1">
       <div className="flex items-baseline gap-2 text-sm">
         <span className={PHASE_TONES[phase.state]}>{PHASE_SYMBOLS[phase.state]}</span>
-        <span className={muted ? "text-zinc-500" : "text-zinc-300"}>
+        <span className={muted ? "text-fg-muted" : "text-fg-prose"}>
           {active ? `${phase.activeLabel}…` : phase.label}
         </span>
         {phase.state === "skipped" && (
-          <span className="text-xs text-zinc-500">no script for this in the project</span>
+          <span className="text-xs text-fg-muted">no script for this in the project</span>
         )}
         {phase.durationMs !== null && (
-          <span className="text-xs text-zinc-600">{(phase.durationMs / 1000).toFixed(1)}s</span>
+          <span className="text-xs text-fg-meta">{(phase.durationMs / 1000).toFixed(1)}s</span>
         )}
       </div>
 
@@ -87,7 +87,7 @@ function PhaseRow({ phase }: { phase: ValidationPhaseView }) {
           text in a <pre>: the content is untrusted output from code Vibe did
           not write, already ANSI-stripped and secret-redacted at storage. */}
       {phase.outputTail && (
-        <pre className="overflow-x-auto rounded-md border border-zinc-800 bg-zinc-950 p-3 text-xs leading-relaxed text-zinc-400">
+        <pre className="overflow-x-auto rounded-md border border-line-2 bg-app p-3 text-xs leading-relaxed text-fg-secondary">
           {phase.outputTail}
           {phase.outputTruncated && "\n…output truncated"}
         </pre>
@@ -185,40 +185,54 @@ export function ValidationPanel({
   const failed = shown ? failedPhase(shown.phases) : null;
 
   return (
-    <section className="space-y-3 border-t border-zinc-800 pt-4">
-      <h4 className="text-sm font-medium text-zinc-200">Validation</h4>
+    <section className="space-y-3 border-t border-line-2 pt-4">
+      {/* "Safety checks" rather than "Validation" (Sprint UI-3.5). The
+          internal vocabulary is unchanged — the stored status is still
+          `passed`/`failed`, and it is shown verbatim in the details below. */}
+      <h4 className="text-sm font-medium text-fg-body">Safety checks</h4>
 
       {running ? (
         <div className="space-y-3">
-          <p className="text-sm text-zinc-300">Validating in an isolated environment…</p>
+          <p className="text-sm text-fg-prose">Vibe is checking the change in a safe, isolated copy of your project…</p>
           {/* Real phases, from the database, updating as each one finishes.
               Before the first phase records itself there is nothing truthful to
               show, so the panel says only that it has started. */}
           {liveSummary ? (
             <PhaseList phases={liveSummary.phases} />
           ) : (
-            <p className="text-sm text-zinc-400">Starting an isolated environment</p>
+            <p className="text-sm text-fg-secondary">Starting an isolated environment</p>
           )}
           {/* The Sprint 7 promise, restated where it matters: this runs for
               minutes and does not belong to the browser tab. */}
-          <p className="text-xs text-zinc-500">You can leave this page.</p>
+          <p className="text-xs text-fg-muted">You can leave this page.</p>
         </div>
       ) : shown?.status === "passed" ? (
         <div className="space-y-3">
-          <p className={shown.underCurrentPolicy ? "text-sm text-emerald-400" : "text-sm text-amber-400"}>
-            {shown.underCurrentPolicy ? "Validation passed" : "Validated under an earlier policy"}
-          </p>
-          <p className="text-sm text-zinc-400">
+          <p className={shown.underCurrentPolicy ? "text-sm text-mint" : "text-sm text-amber"}>
             {shown.underCurrentPolicy
-              ? "The application built successfully in an isolated environment."
+              ? "All safety checks passed"
+              : "Checked under earlier rules"}
+          </p>
+          <p className="text-sm text-fg-secondary">
+            {shown.underCurrentPolicy
+              ? "Your project still builds, and the change matches the exact commit Vibe prepared."
               : "This result was produced before Vibe's validation rules changed. It still describes what was checked at the time, but not what would be checked now."}
           </p>
           <PhaseList phases={shown.phases} />
           {/* Deliberately repeated after a pass. A green tick is exactly when
               someone is most likely to assume more happened than did. */}
-          <p className="text-xs text-zinc-500">
-            Not merged · Not deployed · Not reviewed by a human
-          </p>
+          {/* Deliberately repeated after a pass, and deliberately explicit
+              about what passing does *not* establish. A green tick is exactly
+              when someone is most likely to assume more happened than did. */}
+          <div className="flex flex-col gap-1">
+            <p className="text-xs text-fg-muted">
+              Not merged · Not deployed · Not reviewed by a human
+            </p>
+            <p className="text-fg-meta max-w-[70ch] text-xs">
+              Passing these checks means the change is technically sound. It is not a judgement
+              about whether the idea behind it will work for your business.
+            </p>
+          </div>
 
           {/* Always available, and always safe: validation identity plus
               artifact availability decide what happens. A current pass with a
@@ -228,22 +242,22 @@ export function ValidationPanel({
             type="button"
             onClick={validate}
             disabled={pending}
-            className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-900 disabled:opacity-60"
+            className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2 disabled:opacity-60"
           >
             {shown.underCurrentPolicy ? "Validate again" : "Validate under current policy"}
           </button>
         </div>
       ) : shown?.status === "failed" ? (
         <div className="space-y-3">
-          <p className="text-sm text-red-400">
-            {failed ? `Validation failed at ${failed.label.toLowerCase()}` : "Validation failed"}
+          <p className="text-sm text-coral">
+            {failed ? `A safety check did not pass: ${failed.label.toLowerCase()}` : "A safety check did not pass"}
           </p>
-          {shown.failureMessage && <p className="text-sm text-zinc-400">{shown.failureMessage}</p>}
+          {shown.failureMessage && <p className="text-sm text-fg-secondary">{shown.failureMessage}</p>}
           <PhaseList phases={shown.phases} />
           {/* Says which phases never happened, rather than leaving empty
               circles that read as "still to come" on a run that is over. */}
           {shown.phases.some((phase) => phase.state === "not_run") && (
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-fg-muted">
               Later checks were not run: Vibe stops at the first failure rather than spending
               sandbox time on a change that already needs work.
             </p>
@@ -252,15 +266,15 @@ export function ValidationPanel({
             type="button"
             onClick={validate}
             disabled={pending}
-            className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-900 disabled:opacity-60"
+            className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2 disabled:opacity-60"
           >
             Validate again
           </button>
         </div>
       ) : (
         <div className="space-y-3">
-          <p className="text-sm text-zinc-400">Not validated</p>
-          <p className="text-xs text-zinc-500">
+          <p className="text-sm text-fg-secondary">Not validated</p>
+          <p className="text-xs text-fg-muted">
             Vibe will check out this exact commit in an isolated environment, install dependencies,
             and build it. Your repository is not modified.
           </p>
@@ -268,7 +282,7 @@ export function ValidationPanel({
             type="button"
             onClick={validate}
             disabled={pending}
-            className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-900 disabled:opacity-60"
+            className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2 disabled:opacity-60"
           >
             Validate change
           </button>
@@ -276,14 +290,14 @@ export function ValidationPanel({
       )}
 
       {state?.ok === false && (
-        <p className="text-sm text-red-400">
+        <p className="text-sm text-coral">
           {OPERATION_FAILURE_MESSAGES[state.error as keyof typeof OPERATION_FAILURE_MESSAGES] ??
             "Validation could not be started."}
         </p>
       )}
 
       {state?.ok && state.kind === "reused" && (
-        <p className="text-xs text-zinc-500">
+        <p className="text-xs text-fg-muted">
           This commit already passed validation under the current policy — nothing was re-run.
         </p>
       )}

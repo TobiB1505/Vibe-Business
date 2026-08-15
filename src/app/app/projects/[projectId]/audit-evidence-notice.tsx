@@ -13,18 +13,18 @@ export function AuditEvidenceNotice({ notice }: { notice: AuditEvidenceNotice })
 
   if (notice.kind === "deep_scan_ready") {
     return (
-      <div className="flex items-baseline justify-between gap-3 rounded-md border border-zinc-800 px-3 py-2 text-sm">
-        <span className="text-zinc-400">Authenticated product evidence</span>
-        <span className="text-emerald-400">Ready</span>
+      <div className="flex items-baseline justify-between gap-3 rounded-md border border-line-2 px-3 py-2 text-sm">
+        <span className="text-fg-secondary">Authenticated product evidence</span>
+        <span className="text-mint">Ready</span>
       </div>
     );
   }
 
   if (notice.kind === "deep_scan_stale") {
     return (
-      <div className="space-y-2 rounded-md border border-zinc-800 px-3 py-2">
-        <p className="text-sm text-zinc-300">New product evidence available</p>
-        <p className="text-sm text-zinc-500">
+      <div className="space-y-2 rounded-md border border-line-2 px-3 py-2">
+        <p className="text-sm text-fg-prose">New product evidence available</p>
+        <p className="text-sm text-fg-muted">
           A Deep Scan has run since this audit was produced. Re-running the audit spends another AI
           call and may change the result in either direction.
         </p>
@@ -33,17 +33,17 @@ export function AuditEvidenceNotice({ notice }: { notice: AuditEvidenceNotice })
   }
 
   return (
-    <div className="space-y-2 rounded-md border border-zinc-800 px-3 py-2">
-      <p className="text-sm text-zinc-300">
+    <div className="space-y-2 rounded-md border border-line-2 px-3 py-2">
+      <p className="text-sm text-fg-prose">
         Vibe has not analyzed your signed-in product experience yet.
       </p>
-      <p className="text-sm text-zinc-500">
+      <p className="text-sm text-fg-muted">
         Your audit can still run, but a Deep Scan may provide additional product evidence.
       </p>
       {notice.canStartDeepScan && (
         <a
           href="#deep-scan"
-          className="inline-block text-sm text-zinc-300 underline underline-offset-2 hover:text-zinc-50"
+          className="inline-block text-sm text-fg-prose underline underline-offset-2 hover:text-fg"
         >
           Run included Deep Scan
         </a>

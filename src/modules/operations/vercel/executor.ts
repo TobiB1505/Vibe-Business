@@ -11,6 +11,7 @@ import { changePreparationWorkflow } from "../change-preparation/workflow";
 import { changeMergeWorkflow } from "../change-merge/workflow";
 import { changeOutcomeVerificationWorkflow } from "../change-outcome-verification/workflow";
 import { businessMeasurementWorkflow } from "../business-measurement/workflow";
+import { productUnderstandingWorkflow } from "../product-understanding/workflow";
 import type { OperationExecutor, StartOperationInput, StartOperationResult } from "../executor";
 import type { OperationType } from "../schema";
 
@@ -47,6 +48,7 @@ const WORKFLOWS: Record<OperationType, (operationId: string) => Promise<void>> =
   change_merge: changeMergeWorkflow,
   change_outcome_verification: changeOutcomeVerificationWorkflow,
   business_measurement: businessMeasurementWorkflow,
+  product_understanding: productUnderstandingWorkflow,
 };
 
 export class VercelWorkflowExecutor implements OperationExecutor {

@@ -55,7 +55,7 @@ function localTime(iso: string | null): string | null {
 /** Repeated wherever a comparison looks conclusive. That is when it is needed. */
 function NotApproved() {
   return (
-    <p className="text-xs text-zinc-500">
+    <p className="text-xs text-fg-muted">
       A comparison is evidence, not a verdict · Not approved · Not merged · Not deployed
     </p>
   );
@@ -75,7 +75,7 @@ function Panel({
   return (
     <figure className="min-w-0 space-y-2">
       <figcaption className="flex items-baseline justify-between gap-2">
-        <span className="text-xs font-medium uppercase tracking-wide text-zinc-300">{label}</span>
+        <span className="text-xs font-medium uppercase tracking-wide text-fg-prose">{label}</span>
         {href && (
           <a
             href={href}
@@ -83,7 +83,7 @@ function Panel({
             // Without this the opened page receives Vibe's project URL — and the
             // project id in it — in a Referer header.
             rel="noreferrer noopener"
-            className="text-xs text-zinc-400 underline underline-offset-2 hover:text-zinc-200"
+            className="text-xs text-fg-secondary underline underline-offset-2 hover:text-fg-body"
           >
             Open
           </a>
@@ -101,11 +101,11 @@ function Panel({
         <img
           src={src}
           alt={`${label} screenshot`}
-          className="w-full rounded-md border border-zinc-800 bg-zinc-950"
+          className="w-full rounded-md border border-line-2 bg-app"
         />
       </a>
 
-      {caption && <p className="text-xs text-zinc-500">{caption}</p>}
+      {caption && <p className="text-xs text-fg-muted">{caption}</p>}
     </figure>
   );
 }
@@ -168,16 +168,16 @@ export function ReviewPanel({
   const afterAt = localTime(card.afterCapturedAt);
 
   return (
-    <section className="space-y-3 border-t border-zinc-800 pt-4">
-      <h4 className="text-sm font-medium text-zinc-200">Review</h4>
+    <section className="space-y-3 border-t border-line-2 pt-4">
+      <h4 className="text-sm font-medium text-fg-body">Review</h4>
 
       {capturing ? (
         <div className="space-y-2">
-          <p className="text-sm text-zinc-300">Preparing comparison…</p>
-          <p className="text-sm text-zinc-400">
+          <p className="text-sm text-fg-prose">Preparing comparison…</p>
+          <p className="text-sm text-fg-secondary">
             Capturing your current live page and the preview.
           </p>
-          <p className="text-xs text-zinc-500">
+          <p className="text-xs text-fg-muted">
             You can leave this page. Vibe will finish the comparison.
           </p>
         </div>
@@ -209,7 +209,7 @@ export function ReviewPanel({
                 />
               </div>
 
-              <p className="text-xs text-zinc-500">
+              <p className="text-xs text-fg-muted">
                 Route {images.route}
                 {images.width && images.height ? ` · ${images.width}×${images.height}` : ""}
                 {" · validated · "}
@@ -223,8 +223,8 @@ export function ReviewPanel({
                real comparison sat on that sentence while RLS silently refused
                to sign. */
             <div className="space-y-1">
-              <p className="text-sm text-zinc-400">Comparison images unavailable</p>
-              <p className="text-xs text-zinc-500">
+              <p className="text-sm text-fg-secondary">Comparison images unavailable</p>
+              <p className="text-xs text-fg-muted">
                 The comparison was captured, but its images could not be opened for viewing.
                 Reload the page to try again.
               </p>
@@ -237,7 +237,7 @@ export function ReviewPanel({
                 href={branchUrl}
                 target="_blank"
                 rel="noreferrer noopener"
-                className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-900"
+                className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2"
               >
                 View code diff
               </a>
@@ -248,15 +248,15 @@ export function ReviewPanel({
         </div>
       ) : card.state === "failed" ? (
         <div className="space-y-2">
-          <p className="text-sm text-red-400">Comparison failed</p>
+          <p className="text-sm text-coral">Comparison failed</p>
           {/* Safe copy from a stable code. Never a provider message (§31). */}
-          {card.failureMessage && <p className="text-sm text-zinc-400">{card.failureMessage}</p>}
+          {card.failureMessage && <p className="text-sm text-fg-secondary">{card.failureMessage}</p>}
           {previewSessionId && (
             <button
               type="button"
               onClick={generate}
               disabled={pending}
-              className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-900 disabled:opacity-60"
+              className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2 disabled:opacity-60"
             >
               Try again
             </button>
@@ -264,15 +264,15 @@ export function ReviewPanel({
         </div>
       ) : card.state === "expired" ? (
         <div className="space-y-2">
-          <p className="text-sm text-zinc-400">Comparison expired</p>
-          <p className="text-xs text-zinc-500">
+          <p className="text-sm text-fg-secondary">Comparison expired</p>
+          <p className="text-xs text-fg-muted">
             Review images are kept for a limited time and this one has been removed.
           </p>
         </div>
       ) : previewSessionId ? (
         <div className="space-y-2">
-          <p className="text-sm text-zinc-400">Not generated</p>
-          <p className="text-xs text-zinc-500">
+          <p className="text-sm text-fg-secondary">Not generated</p>
+          <p className="text-xs text-fg-muted">
             Generate a visual before/after comparison of your current live page and the temporary
             preview. Vibe opens both in an isolated browser and stores two screenshots.
           </p>
@@ -280,24 +280,24 @@ export function ReviewPanel({
             type="button"
             onClick={generate}
             disabled={pending}
-            className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-900 disabled:opacity-60"
+            className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2 disabled:opacity-60"
           >
             Generate comparison
           </button>
         </div>
       ) : (
         <div className="space-y-2">
-          <p className="text-sm text-zinc-400">Preview required</p>
+          <p className="text-sm text-fg-secondary">Preview required</p>
           {/* Never offers to start one. A preview is provider spend, and the
               user starts it deliberately from its own section (§6, §23). */}
-          <p className="text-xs text-zinc-500">
+          <p className="text-xs text-fg-muted">
             Start a temporary preview above — a comparison photographs the running preview beside
             your current live page.
           </p>
         </div>
       )}
 
-      {state?.ok === false && <p className="text-sm text-red-400">{state.message}</p>}
+      {state?.ok === false && <p className="text-sm text-coral">{state.message}</p>}
     </section>
   );
 }

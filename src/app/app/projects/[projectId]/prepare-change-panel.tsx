@@ -49,9 +49,9 @@ function ConfirmDialog({
   formAction: (formData: FormData) => void;
 }) {
   return (
-    <div className="space-y-3 rounded-md border border-zinc-700 bg-zinc-900 p-4">
-      <h4 className="text-sm font-medium text-zinc-100">Prepare {capabilityLabel}?</h4>
-      <div className="space-y-2 text-sm text-zinc-400">
+    <div className="space-y-3 rounded-md border border-line-4 bg-surface-2 p-4">
+      <h4 className="text-sm font-medium text-fg">Prepare {capabilityLabel}?</h4>
+      <div className="space-y-2 text-sm text-fg-secondary">
         <p>Vibe will create an isolated GitHub branch and commit the proposed change.</p>
         <p>Your default branch and production site will not be changed.</p>
         {/* Deliberately not "nothing external can happen": creating a branch
@@ -72,7 +72,7 @@ function ConfirmDialog({
         <button
           type="button"
           onClick={onCancel}
-          className="text-sm text-zinc-400 underline underline-offset-2 hover:text-zinc-200"
+          className="text-sm text-fg-secondary underline underline-offset-2 hover:text-fg-body"
         >
           Cancel
         </button>
@@ -84,37 +84,37 @@ function ConfirmDialog({
 function DiffView({ diff }: { diff: PreparedDiff }) {
   return (
     <div className="space-y-3">
-      <dl className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-zinc-500">
+      <dl className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-fg-muted">
         <div className="flex gap-2">
           <dt>Base</dt>
-          <dd className="text-zinc-300">{diff.baseSha.slice(0, 7)}</dd>
+          <dd className="text-fg-prose">{diff.baseSha.slice(0, 7)}</dd>
         </div>
         <div className="flex gap-2">
           <dt>Prepared</dt>
-          <dd className="text-zinc-300">{diff.commitSha.slice(0, 7)}</dd>
+          <dd className="text-fg-prose">{diff.commitSha.slice(0, 7)}</dd>
         </div>
       </dl>
 
       {diff.files.map((file) => (
         <div key={file.path} className="space-y-1">
-          <p className="text-xs text-zinc-400">{file.path}</p>
+          <p className="text-xs text-fg-secondary">{file.path}</p>
           {/* Plain text in a <pre>. React escapes every line; nothing here
               parses, highlights or evaluates repository content. */}
-          <pre className="overflow-x-auto rounded-md border border-zinc-800 bg-zinc-950 p-3 text-xs leading-relaxed text-zinc-300">
+          <pre className="overflow-x-auto rounded-md border border-line-2 bg-app p-3 text-xs leading-relaxed text-fg-prose">
             {file.lines.map((line, index) => (
               <span key={index} className="block">
-                <span className="text-emerald-500">+ </span>
+                <span className="text-mint">+ </span>
                 {line}
               </span>
             ))}
           </pre>
           {file.truncated && (
-            <p className="text-xs text-zinc-500">This file was truncated for review.</p>
+            <p className="text-xs text-fg-muted">This file was truncated for review.</p>
           )}
         </div>
       ))}
 
-      {diff.truncated && <p className="text-xs text-zinc-500">Some files were omitted for review.</p>}
+      {diff.truncated && <p className="text-xs text-fg-muted">Some files were omitted for review.</p>}
     </div>
   );
 }
@@ -189,9 +189,9 @@ export function PrepareChangePanel({
 
   if (running && operation) {
     return (
-      <div className="space-y-1 border-t border-zinc-800 pt-3">
-        <p className="text-sm text-zinc-300">{OPERATION_STAGE_LABELS[operation.stage]}…</p>
-        <p className="text-sm text-zinc-500">
+      <div className="space-y-1 border-t border-line-2 pt-3">
+        <p className="text-sm text-fg-prose">{OPERATION_STAGE_LABELS[operation.stage]}…</p>
+        <p className="text-sm text-fg-muted">
           You can leave this page. Vibe will continue preparing the change.
         </p>
       </div>
@@ -200,11 +200,11 @@ export function PrepareChangePanel({
 
   if (preparedChangeId !== null) {
     return (
-      <div className="space-y-3 border-t border-zinc-800 pt-3">
-        <p className="text-sm text-zinc-300">Change prepared</p>
+      <div className="space-y-3 border-t border-line-2 pt-3">
+        <p className="text-sm text-fg-prose">Change prepared</p>
         {/* Stated plainly, because Vibe has not executed the customer's code
             and must not imply otherwise (§11, §27). */}
-        <p className="text-sm text-zinc-500">Not merged · Not deployed · Not runtime-tested</p>
+        <p className="text-sm text-fg-muted">Not merged · Not deployed · Not runtime-tested</p>
 
         <div className="flex flex-wrap items-center gap-3">
           <Button type="button" onClick={() => loadDiff(preparedChangeId)}>
@@ -215,14 +215,14 @@ export function PrepareChangePanel({
               href={branchUrl}
               target="_blank"
               rel="noreferrer"
-              className="text-sm text-zinc-300 underline underline-offset-2 hover:text-zinc-50"
+              className="text-sm text-fg-prose underline underline-offset-2 hover:text-fg"
             >
               Open branch on GitHub
             </a>
           )}
         </div>
 
-        {diffError && <p className="text-sm text-amber-400">{diffError}</p>}
+        {diffError && <p className="text-sm text-amber">{diffError}</p>}
         {diff && <DiffView diff={diff} />}
 
         {/* Isolated validation of this exact commit (Sprint 10A §44). Offered
@@ -239,8 +239,8 @@ export function PrepareChangePanel({
 
   if (actionState.kind === "failed") {
     return (
-      <div className="space-y-2 border-t border-zinc-800 pt-3">
-        <p className="text-sm text-amber-400">
+      <div className="space-y-2 border-t border-line-2 pt-3">
+        <p className="text-sm text-amber">
           Vibe couldn&apos;t prepare this change.{" "}
           {actionState.operation.failureCode
             ? OPERATION_FAILURE_MESSAGES[actionState.operation.failureCode]
@@ -261,12 +261,12 @@ export function PrepareChangePanel({
   if (actionState.kind === "blocked") {
     const action = blockedAction(actionState.reason);
     return (
-      <div className="space-y-2 border-t border-zinc-800 pt-3">
-        <p className="text-sm text-zinc-400">{BLOCKED_MESSAGES[actionState.reason]}</p>
+      <div className="space-y-2 border-t border-line-2 pt-3">
+        <p className="text-sm text-fg-secondary">{BLOCKED_MESSAGES[actionState.reason]}</p>
         {action.kind !== "none" && (
           <a
             href={action.kind === "enable_github_write" ? "#github-access" : "#business-audit"}
-            className="inline-block text-sm text-zinc-300 underline underline-offset-2 hover:text-zinc-50"
+            className="inline-block text-sm text-fg-prose underline underline-offset-2 hover:text-fg"
           >
             {BLOCKED_ACTION_LABELS[action.kind]}
           </a>
@@ -277,7 +277,7 @@ export function PrepareChangePanel({
 
   if (actionState.kind === "preparable") {
     return (
-      <div className="space-y-2 border-t border-zinc-800 pt-3">
+      <div className="space-y-2 border-t border-line-2 pt-3">
         {confirming ? (
           <ConfirmDialog
             capabilityLabel={CAPABILITY_LABELS[actionState.capability]}
@@ -292,7 +292,7 @@ export function PrepareChangePanel({
         )}
 
         {state && !state.ok && (
-          <p className="text-sm text-amber-400">{OPERATION_FAILURE_MESSAGES[state.error]}</p>
+          <p className="text-sm text-amber">{OPERATION_FAILURE_MESSAGES[state.error]}</p>
         )}
       </div>
     );
