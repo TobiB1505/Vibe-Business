@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 300 40" width="300" height="40" role="img" aria-label="Vibe Business">
+  <g transform="translate(0 4)">
+    <rect x="5" y="3" width="5.5" height="33" rx="2.75" fill="#4A453C" transform="rotate(-19 7.75 3)"></rect>
+    <rect x="26.5" y="3" width="5.5" height="33" rx="2.75" fill="#00E5A0" transform="rotate(19 29.25 3)"></rect>
+  </g>
+  <text x="50" y="27" font-family="&#39;Space Grotesk&#39;,system-ui,sans-serif" font-size="23" font-weight="700" letter-spacing="-0.5" fill="#F7F5F1">Vibe Business</text>
+</svg>
