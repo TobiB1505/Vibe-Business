@@ -49,6 +49,45 @@ describe("getGithubEnv", () => {
     ).toThrow(/PEM private key/);
   });
 
+  /**
+   * The regression this exists for, from a real local setup: a multiline PEM
+   * pasted into `.env.local` without surrounding quotes. The env parser keeps
+   * only the first line, the BEGIN check passes on it, and the failure surfaces
+   * much later as an unexplained "GitHub access unavailable" on the project
+   * screen. Validation has to reject it here, where the message can name the
+   * cause.
+   */
+  it("rejects a private key truncated to its BEGIN line", () => {
+    expect(() =>
+      getGithubEnv({
+        ...validSource,
+        GITHUB_APP_PRIVATE_KEY: "-----BEGIN RSA PRIVATE KEY-----",
+      }),
+    ).toThrow(/truncated/);
+  });
+
+  it("tells the reader how to store a multiline PEM correctly", () => {
+    // An error that only says "invalid" leaves the same person stuck. The
+    // message has to carry the fix, because the mistake is in a file the
+    // application cannot see.
+    expect(() =>
+      getGithubEnv({
+        ...validSource,
+        GITHUB_APP_PRIVATE_KEY: "-----BEGIN RSA PRIVATE KEY-----",
+      }),
+    ).toThrow(/double quotes/);
+  });
+
+  it("accepts a key whose END line names a different key type", () => {
+    // PKCS#8 keys say "BEGIN PRIVATE KEY", PKCS#1 "BEGIN RSA PRIVATE KEY".
+    // Both are legitimate; the check is for a footer, not for one algorithm.
+    const env = getGithubEnv({
+      ...validSource,
+      GITHUB_APP_PRIVATE_KEY: "-----BEGIN PRIVATE KEY-----\\nabc\\n-----END PRIVATE KEY-----",
+    });
+    expect(env.GITHUB_APP_PRIVATE_KEY).toContain("END PRIVATE KEY");
+  });
+
   it("caches the result across calls", () => {
     const first = getGithubEnv(validSource);
     const second = getGithubEnv({ ...validSource, GITHUB_APP_ID: "other" });

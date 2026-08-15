@@ -5,6 +5,7 @@ import { useEffect, useState, useTransition } from "react";
 import type { ReviewCard } from "@/modules/review/view";
 import type { ReviewImages } from "@/modules/review/service";
 import { startReviewAction, type StartReviewActionState } from "./review-actions";
+import { formatTimestamp } from "@/lib/utils/format-datetime";
 
 /**
  * Before/after review, as the user sees it (Sprint 11A §24, §25, §29, §30).
@@ -46,9 +47,9 @@ import { startReviewAction, type StartReviewActionState } from "./review-actions
 const POLL_INTERVAL_MS = 2500;
 
 function localTime(iso: string | null): string | null {
-  if (!iso) return null;
-  const parsed = new Date(iso);
-  return Number.isNaN(parsed.getTime()) ? null : parsed.toLocaleString();
+  // Deterministic across server and client — see format-datetime.ts. This
+  // caption is what produced the hydration mismatch that motivated it.
+  return formatTimestamp(iso);
 }
 
 /** Repeated wherever a comparison looks conclusive. That is when it is needed. */

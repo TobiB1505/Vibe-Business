@@ -21,6 +21,23 @@ const githubEnvSchema = z.object({
     .transform(normalizePrivateKey)
     .refine((key) => key.includes("BEGIN") && key.includes("PRIVATE KEY"), {
       message: "GITHUB_APP_PRIVATE_KEY does not look like a PEM private key.",
+    })
+    /**
+     * The BEGIN check alone passes on a key that is only its first line, which
+     * is exactly what a multiline PEM pasted into a `.env` file *without
+     * surrounding quotes* produces: the parser keeps `-----BEGIN RSA PRIVATE
+     * KEY-----` and drops the other 26 lines.
+     *
+     * That configuration then validates, and fails much later as an opaque
+     * GitHub error with no indication that the key was the problem. Requiring
+     * the footer turns a silent runtime failure into a startup message that
+     * names the actual mistake.
+     */
+    .refine((key) => key.includes("END") && /END[^\n]*PRIVATE KEY/.test(key), {
+      message:
+        "GITHUB_APP_PRIVATE_KEY is missing its END line — the value looks truncated. " +
+        "A multiline PEM must be wrapped in double quotes in a .env file, or written " +
+        "on one line with literal \\n escapes. See .env.example.",
     }),
 });
 

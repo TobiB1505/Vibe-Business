@@ -3,6 +3,7 @@ import type {
   BusinessReadinessAudit,
   DimensionAssessment,
 } from "@/modules/business-audit/schema";
+import { formatTimestamp } from "@/lib/utils/format-datetime";
 
 /**
  * Business Readiness Audit display (Sprint 4 §30).
@@ -110,7 +111,7 @@ export function BusinessAuditSummary({
     <div className="space-y-5 rounded-md border border-zinc-800 p-4">
       <div className="space-y-0.5">
         <h2 className="text-sm font-medium text-zinc-200">Business readiness</h2>
-        <p className="text-xs text-zinc-500">Analyzed {new Date(analyzedAt).toLocaleString()}</p>
+        <p className="text-xs text-zinc-500">Analyzed {formatTimestamp(analyzedAt) ?? analyzedAt}</p>
       </div>
 
       <div className="space-y-1">

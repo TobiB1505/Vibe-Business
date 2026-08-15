@@ -4,6 +4,7 @@ import type {
   ProductSurfaceSignal,
   SeoSignal,
 } from "@/modules/live-product-intelligence/schema";
+import { formatTimestamp } from "@/lib/utils/format-datetime";
 
 /**
  * Live product intelligence display (Sprint 3 §30).
@@ -99,7 +100,7 @@ export function LiveIntelligenceSummary({
       <div className="space-y-0.5">
         <h2 className="text-sm font-medium text-zinc-200">Live product intelligence</h2>
         <p className="text-xs text-zinc-500">
-          {snapshot.source.effectiveOrigin} · analyzed {new Date(analyzedAt).toLocaleString()}
+          {snapshot.source.effectiveOrigin} · analyzed {formatTimestamp(analyzedAt) ?? analyzedAt}
         </p>
         {snapshot.source.redirected && (
           <p className="text-xs text-zinc-500">

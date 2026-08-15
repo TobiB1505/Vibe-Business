@@ -66,7 +66,24 @@ export async function checkInstallationStillAccessible(installationId: number): 
   try {
     await listInstallationRepositories(installationId);
     return true;
-  } catch {
+  } catch (error) {
+    /**
+     * The boolean is the contract — a revoked installation is an ordinary,
+     * expected state and must not throw. But swallowing the cause entirely
+     * made every failure look identical: a misconfigured private key rendered
+     * as "GitHub access unavailable", the same words a genuinely revoked
+     * installation gets, with nothing anywhere to tell them apart.
+     *
+     * Logged, not surfaced: the distinction matters to whoever is operating
+     * the system, and not to the user, who can act on neither. No credential
+     * is included — only the shape of the failure.
+     */
+    console.error("[github.checkInstallationStillAccessible]", {
+      installationId,
+      name: error instanceof Error ? error.name : typeof error,
+      status: (error as { status?: number })?.status,
+      message: error instanceof Error ? error.message : undefined,
+    });
     return false;
   }
 }

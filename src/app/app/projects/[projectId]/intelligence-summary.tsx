@@ -5,6 +5,7 @@ import type {
   IntegrationSignal,
   RepositoryIntelligenceSnapshot,
 } from "@/modules/repository-intelligence/schema";
+import { formatTimestamp } from "@/lib/utils/format-datetime";
 
 /**
  * Repository intelligence display (Sprint 2 §23, §24).
@@ -102,7 +103,7 @@ export function IntelligenceSummary({
         <h2 className="text-sm font-medium text-zinc-200">Repository intelligence</h2>
         <p className="text-xs text-zinc-500">
           Analyzed at commit <code className="text-zinc-400">{shortSha}</code> on {snapshot.source.branch} ·{" "}
-          {new Date(analyzedAt).toLocaleString()}
+          {formatTimestamp(analyzedAt) ?? analyzedAt}
         </p>
       </div>
 

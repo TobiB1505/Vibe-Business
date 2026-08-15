@@ -9,6 +9,7 @@ import {
   type ApproveActionState,
   type RevokeActionState,
 } from "./approval-actions";
+import { formatTimestamp } from "@/lib/utils/format-datetime";
 
 /**
  * The approval section (Sprint 11B §7, §21, §22, §23).
@@ -160,9 +161,10 @@ function RevokeDialog({
 }
 
 function localTime(iso: string): string {
-  const parsed = Date.parse(iso);
-  if (!Number.isFinite(parsed)) return iso;
-  return new Date(parsed).toLocaleString();
+  // Deterministic across server and client — see format-datetime.ts. Falls
+  // back to the raw value so an unparseable timestamp is visible rather than
+  // silently blank.
+  return formatTimestamp(iso) ?? iso;
 }
 
 export function ApprovalPanel({

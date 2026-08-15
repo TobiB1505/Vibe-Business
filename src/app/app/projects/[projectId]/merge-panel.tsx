@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import type { MergeCard } from "@/modules/merge/view";
 import { mergeApprovedChangeAction, type MergeActionState } from "./merge-actions";
+import { formatTimestamp } from "@/lib/utils/format-datetime";
 
 /**
  * The merge section (Sprint 11C §15, §25, §26, §29, §30).
@@ -126,9 +127,10 @@ function MergeDialog({
 }
 
 function localTime(iso: string): string {
-  const parsed = Date.parse(iso);
-  if (!Number.isFinite(parsed)) return iso;
-  return new Date(parsed).toLocaleString();
+  // Deterministic across server and client — see format-datetime.ts. Falls
+  // back to the raw value so an unparseable timestamp is visible rather than
+  // silently blank.
+  return formatTimestamp(iso) ?? iso;
 }
 
 export function MergePanel({
