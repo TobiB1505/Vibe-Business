@@ -370,6 +370,36 @@ describe("an approved change that cannot be merged is recorded once", () => {
 
   const drifted = () => new FakeMergePort({ headSha: MERGE_THIRD_SHA });
 
+  /**
+   * A client whose `audit_events` reads fail but whose writes still work.
+   *
+   * Narrow on purpose: the store's dedup lookup is the only read of this table,
+   * so failing it exercises the "unknown" path without also disabling the write
+   * the test is checking for the absence of.
+   */
+  function withFailingAuditReads(base: ReturnType<typeof client>) {
+    const failing = {
+      select: () => failing,
+      eq: () => failing,
+      order: () => failing,
+      limit: () => failing,
+      maybeSingle: async () => ({ data: null, error: { message: "read failed" } }),
+    };
+
+    return new Proxy(base, {
+      get(target, property, receiver) {
+        if (property !== "from") return Reflect.get(target, property, receiver);
+        return (table: string) => {
+          const real = target.from(table);
+          if (table !== "audit_events") return real;
+          return Object.assign(Object.create(real as object), real, {
+            select: () => failing,
+          });
+        };
+      },
+    });
+  }
+
   function render(port: FakeMergePort) {
     return getMergeCard(client(), port, {
       projectId: MERGE_FIXTURES.project,
@@ -432,6 +462,62 @@ describe("an approved change that cannot be merged is recorded once", () => {
     seedApprovedChange(db);
 
     await render(new FakeMergePort());
+
+    expect(notEligibleEvents()).toHaveLength(0);
+  });
+
+  it("stays silent when a previous attempt already failed", async () => {
+    // The card shows `failed` — an attempt that touched GitHub and did not end
+    // verified — and its failure code belongs to that attempt. Logging it as a
+    // fresh "cannot be merged" observation would record the old attempt's
+    // reason as though Vibe had just declined for it.
+    seedApprovedChange(db);
+    db.seed("change_merges", {
+      id: MERGE_FIXTURES.merge,
+      project_id: MERGE_FIXTURES.project,
+      user_id: MERGE_FIXTURES.user,
+      prepared_change_id: MERGE_FIXTURES.preparedChange,
+      change_approval_id: MERGE_FIXTURES.approval,
+      repository_connection_id: MERGE_FIXTURES.connection,
+      prepared_commit_sha: MERGE_TARGET_SHA,
+      prepared_base_sha: MERGE_BASE_SHA,
+      default_branch: "main",
+      merge_policy_version: "merge-policy-v1",
+      merge_strategy: "fast_forward_exact_commit",
+      merge_identity: "m".repeat(64),
+      status: "failed",
+      failure_code: "merge_write_unverified",
+      failed_at: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+    });
+
+    // Drifted, so the eligibility answer *is* a refusal — and the card still
+    // shows the earlier failed attempt, because "we tried and it did not
+    // finish" outranks "it cannot be merged right now".
+    const card = await render(drifted());
+
+    expect(card.state).toBe("failed");
+    expect(notEligibleEvents()).toHaveLength(0);
+  });
+
+  it("stays silent when the last reason could not be read", async () => {
+    // A failed dedup read must not be mistaken for "nothing recorded yet".
+    // Treating the two the same would write on every render for as long as the
+    // read keeps failing — the page-view log this guard exists to prevent,
+    // arriving through the error path instead of the happy one.
+    seedApprovedChange(db);
+    const blind = withFailingAuditReads(client());
+
+    await getMergeCard(blind, drifted(), {
+      projectId: MERGE_FIXTURES.project,
+      userId: MERGE_FIXTURES.user,
+      preparedChangeId: MERGE_FIXTURES.preparedChange,
+    });
+    await getMergeCard(blind, drifted(), {
+      projectId: MERGE_FIXTURES.project,
+      userId: MERGE_FIXTURES.user,
+      preparedChangeId: MERGE_FIXTURES.preparedChange,
+    });
 
     expect(notEligibleEvents()).toHaveLength(0);
   });
