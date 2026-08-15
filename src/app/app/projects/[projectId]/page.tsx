@@ -1,5 +1,17 @@
 import { notFound } from "next/navigation";
-import { PageShell } from "@/components/layout/page-shell";
+import {
+  ProjectHeader,
+  ProjectShell,
+  ProjectSidebar,
+  WorkspaceSection,
+  type ProjectNavItem,
+} from "@/components/layout/project-shell";
+import { Metric } from "@/components/ui/metric";
+import { EmptyState, Notice } from "@/components/ui/states";
+import { StatusPill } from "@/components/ui/status-pill";
+import { Surface } from "@/components/ui/surface";
+import { MonoLabel } from "@/components/ui/typography";
+import { formatTimestamp } from "@/lib/utils/format-datetime";
 import { createClient } from "@/lib/supabase/server";
 import { requireSession } from "@/modules/auth/session";
 import { getProjectWithRepository } from "@/modules/projects/queries";
@@ -381,189 +393,376 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
     businessContext === null ? "business context" : null,
   ].filter((item): item is string => item !== null);
 
+  /**
+   * Evidence readiness (Sprint 3 §31), as one list rather than six ad-hoc rows.
+   * Each entry is derived from a snapshot that either exists or does not — no
+   * state here is inferred, and "not yet" is never dressed up as a problem.
+   */
+  const contextRows: { label: string; ready: boolean; detail: string }[] = [
+    {
+      label: "Repository intelligence",
+      ready: Boolean(latestSnapshot?.result),
+      detail: latestSnapshot?.result ? "Ready" : "Not analyzed yet",
+    },
+    {
+      label: "Live product intelligence",
+      ready: Boolean(latestLiveSnapshot?.result),
+      detail: latestLiveSnapshot?.result ? "Ready" : "Not inspected yet",
+    },
+    {
+      label: "Business context",
+      ready: Boolean(businessContext),
+      detail: businessContext ? "Ready" : "Missing",
+    },
+    {
+      label: "Deep Scan",
+      ready: Boolean(latestDeepScanSnapshot?.result),
+      detail: latestDeepScanSnapshot?.result ? "Ready" : "Not run yet",
+    },
+    {
+      label: "Opportunities",
+      ready: Boolean(opportunities),
+      detail: opportunities
+        ? `${opportunities.set.opportunities.length} identified`
+        : "Not identified yet",
+    },
+    {
+      label: "Business readiness",
+      ready: Boolean(latestAudit?.result),
+      detail: latestAudit?.result ? "Ready" : "Not analyzed yet",
+    },
+  ];
+
+  const opportunityCount = opportunities?.set.opportunities.length ?? null;
+
+  /**
+   * The workspace navigation. Counts come from data already loaded for this
+   * render — never a placeholder, and never a zero standing in for "unknown":
+   * a project with no opportunity set yet gets `null` and shows no badge at all.
+   *
+   * `href` is an in-page anchor. UI-1 deliberately keeps one route
+   * (`/app/projects/[projectId]`) and splits it into sections; the route split
+   * is a later sprint, and inventing `/score` here would produce dead links.
+   */
+  const navItems: ProjectNavItem[] = [
+    { id: "overview", label: "Overview", href: "#overview" },
+    { id: "business-audit", label: "Business score", href: "#business-audit" },
+    {
+      id: "next-moves",
+      label: "Next moves",
+      href: "#next-moves",
+      count: opportunityCount,
+      countTone: "accent",
+    },
+    {
+      id: "prepared",
+      label: "Prepared",
+      href: "#prepared",
+      count: preparedChangeCards.length > 0 ? preparedChangeCards.length : null,
+    },
+    { id: "deep-scan", label: "Deep Scan", href: "#deep-scan" },
+    { id: "impact", label: "Impact", href: "#impact" },
+    { id: "activity", label: "Activity", href: "#activity" },
+  ];
+
+  // Merged changes are where any outcome or business-impact evidence can exist
+  // at all. Derived from cards already built above — no extra query.
+  const mergedChanges = preparedChangeCards.filter((card) => card.merge?.state === "merged");
+
   return (
-    <PageShell>
-      <header>
-        <p className="text-sm font-medium tracking-wide text-zinc-500 uppercase">Vibe Business</p>
-      </header>
-      <main className="flex flex-1 flex-col justify-center gap-6">
-        <h1 className="text-2xl font-semibold tracking-tight">{project.name}</h1>
-
-        {repository ? (
-          <dl className="space-y-2 text-sm">
-            <div className="flex gap-2">
-              <dt className="w-40 shrink-0 text-zinc-500">Connected repository</dt>
-              <dd>
-                <a
-                  href={repository.htmlUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-zinc-200 underline underline-offset-2 hover:text-zinc-50"
-                >
-                  {repository.fullName}
-                </a>
-              </dd>
-            </div>
-            <div className="flex gap-2">
-              <dt className="w-40 shrink-0 text-zinc-500">Default branch</dt>
-              <dd className="text-zinc-200">{repository.defaultBranch}</dd>
-            </div>
-            <div className="flex gap-2">
-              <dt className="w-40 shrink-0 text-zinc-500">Connection status</dt>
-              <dd className={accessible ? "text-emerald-400" : "text-amber-400"}>
-                {accessible ? "Connected" : "GitHub access unavailable"}
-              </dd>
-            </div>
-          </dl>
-        ) : (
-          <p className="text-sm text-zinc-400">No repository connected.</p>
-        )}
-
-        {/* Project context (Sprint 3 §31) — what evidence exists so far. */}
-        <section className="space-y-2 rounded-md border border-zinc-800 p-4">
-          <h2 className="text-xs font-medium tracking-wide text-zinc-500 uppercase">Project context</h2>
-          <dl className="space-y-1 text-sm">
-            <div className="flex items-baseline justify-between gap-3">
-              <dt className="text-zinc-500">Repository intelligence</dt>
-              <dd className={latestSnapshot?.result ? "text-emerald-400" : "text-zinc-600"}>
-                {latestSnapshot?.result ? "Ready" : "Not analyzed yet"}
-              </dd>
-            </div>
-            <div className="flex items-baseline justify-between gap-3">
-              <dt className="text-zinc-500">Live product intelligence</dt>
-              <dd className={latestLiveSnapshot?.result ? "text-emerald-400" : "text-zinc-600"}>
-                {latestLiveSnapshot?.result ? "Ready" : "Not inspected yet"}
-              </dd>
-            </div>
-            <div className="flex items-baseline justify-between gap-3">
-              <dt className="text-zinc-500">Business context</dt>
-              <dd className={businessContext ? "text-emerald-400" : "text-zinc-600"}>
-                {businessContext ? "Ready" : "Missing"}
-              </dd>
-            </div>
-            <div className="flex items-baseline justify-between gap-3">
-              <dt className="text-zinc-500">Deep Scan</dt>
-              <dd className={latestDeepScanSnapshot?.result ? "text-emerald-400" : "text-zinc-600"}>
-                {latestDeepScanSnapshot?.result ? "Ready" : "Not run yet"}
-              </dd>
-            </div>
-            <div className="flex items-baseline justify-between gap-3">
-              <dt className="text-zinc-500">Opportunities</dt>
-              <dd className={opportunities ? "text-emerald-400" : "text-zinc-600"}>
-                {opportunities ? `${opportunities.set.opportunities.length} identified` : "Not identified yet"}
-              </dd>
-            </div>
-            <div className="flex items-baseline justify-between gap-3">
-              <dt className="text-zinc-500">Business readiness</dt>
-              <dd className={latestAudit?.result ? "text-emerald-400" : "text-zinc-600"}>
-                {latestAudit?.result ? "Ready" : "Not analyzed yet"}
-              </dd>
-            </div>
-          </dl>
-        </section>
-
-        <section className="space-y-2">
-          <h2 className="text-sm font-medium text-zinc-200">Business context</h2>
-          {businessContext === null && (
-            <p className="text-sm text-zinc-500">
-              Repository and website evidence cannot tell us who your product is for or what you are
-              trying to do next.
-            </p>
-          )}
-          <BusinessContextForm projectId={project.id} context={businessContext?.context ?? null} />
-        </section>
-
-        {/* `id` is the jump target for a blocked Opportunities section. */}
-        <section id="business-audit" className="space-y-3">
-          <AuditEvidenceNotice notice={auditEvidenceNotice} />
-
-          {latestAudit?.result ? (
-            <BusinessAuditSummary
-              audit={latestAudit.result}
-              analyzedAt={latestAudit.completedAt ?? latestAudit.createdAt}
-            />
-          ) : (
-            <div className="space-y-1">
-              <h2 className="text-sm font-medium text-zinc-200">Business readiness</h2>
-              <p className="text-sm text-zinc-500">Not analyzed yet</p>
-            </div>
-          )}
-
-          {!auditReady && (
-            <p className="text-sm text-zinc-500">
-              A business audit needs {missingPrerequisites.join(", ")} first.
-            </p>
-          )}
-
-          <RunAuditButton
-            projectId={project.id}
-            hasAudit={Boolean(latestAudit?.result)}
-            disabled={!auditReady}
-            activeOperation={activeAuditOperation}
-          />
-        </section>
-
-        <OpportunitiesPanel
-          projectId={project.id}
-          opportunities={opportunities?.set.opportunities ?? []}
-          executionStates={executionStates}
-          branchUrls={branchUrls}
-          validationSummaries={validationSummaries}
-          stale={opportunities?.stale ?? false}
-          activeOperation={activeOpportunityOperation}
-          blockedReason={opportunityReadiness.blockedReason}
+    <ProjectShell
+      sidebar={
+        <ProjectSidebar
+          projectName={project.name}
+          repositoryFullName={repository?.fullName ?? null}
+          tone={repository ? (accessible ? "active" : "waiting") : "neutral"}
+          items={navItems}
         />
+      }
+    >
+      <ProjectHeader
+        projectName={project.name}
+        title={project.name}
+        meta={
+          repository ? (
+            <>
+              <a
+                href={repository.htmlUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-fg-body hover:text-fg rounded-sm font-mono text-xs underline underline-offset-4 transition-colors"
+              >
+                {repository.fullName}
+              </a>
+              <span className="text-fg-muted font-mono text-xs">{repository.defaultBranch}</span>
+              {/* The word carries the state, so the colour is never the only
+                  signal — and "GitHub access unavailable" stays the product's
+                  existing wording rather than a friendlier, vaguer one. */}
+              <StatusPill tone={accessible ? "success" : "waiting"} dot>
+                {accessible ? "Connected" : "GitHub access unavailable"}
+              </StatusPill>
+            </>
+          ) : (
+            <StatusPill tone="neutral">No repository connected</StatusPill>
+          )
+        }
+      />
 
-        <PreparedChangesSection projectId={project.id} changes={preparedChangeCards} />
+      <div className="flex flex-col gap-14 px-5 py-8 sm:px-8 sm:py-10">
+        <WorkspaceSection
+          id="overview"
+          title="Overview"
+          description="What Vibe knows about this project so far, and where that knowledge came from."
+        >
+          <div className="flex flex-col gap-5">
+            <Surface level="panel" padding="lg" className="flex flex-col gap-4">
+              <MonoLabel>Project context</MonoLabel>
+              <dl className="grid gap-x-8 gap-y-3 sm:grid-cols-2">
+                {contextRows.map((row) => (
+                  <div
+                    key={row.label}
+                    className="border-line-1 flex items-baseline justify-between gap-3 border-b pb-3"
+                  >
+                    <dt className="text-fg-secondary text-sm">{row.label}</dt>
+                    <dd
+                      className={`font-mono text-xs ${row.ready ? "text-mint" : "text-fg-meta"}`}
+                    >
+                      {row.detail}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </Surface>
 
-        <section className="space-y-2">
-          <h2 className="text-sm font-medium text-zinc-200">Production website</h2>
-          {project.productionUrl === null && (
-            <p className="text-sm text-zinc-500">Not configured</p>
-          )}
-          <ProductionUrlForm projectId={project.id} currentUrl={project.productionUrl} />
-        </section>
+            <Surface level="section" padding="lg" className="flex flex-col gap-3">
+              <div className="flex flex-col gap-2">
+                <h3 className="text-fg text-base font-semibold">Business context</h3>
+                {businessContext === null && (
+                  <p className="text-fg-muted max-w-[70ch] text-sm">
+                    Repository and website evidence cannot tell us who your product is for or what
+                    you are trying to do next.
+                  </p>
+                )}
+              </div>
+              <BusinessContextForm
+                projectId={project.id}
+                context={businessContext?.context ?? null}
+              />
+            </Surface>
 
-        {project.productionUrl && (
-          <section className="space-y-3">
-            {latestLiveSnapshot?.result ? (
-              <LiveIntelligenceSummary
-                snapshot={latestLiveSnapshot.result}
-                analyzedAt={latestLiveSnapshot.completedAt ?? latestLiveSnapshot.createdAt}
+            <Surface level="section" padding="lg" className="flex flex-col gap-3">
+              <div className="flex flex-col gap-2">
+                <h3 className="text-fg text-base font-semibold">Production website</h3>
+                {project.productionUrl === null && (
+                  <p className="text-fg-muted text-sm">Not configured</p>
+                )}
+              </div>
+              <ProductionUrlForm projectId={project.id} currentUrl={project.productionUrl} />
+            </Surface>
+
+            {project.productionUrl && (
+              <Surface level="section" padding="lg" className="flex flex-col gap-4">
+                {latestLiveSnapshot?.result ? (
+                  <LiveIntelligenceSummary
+                    snapshot={latestLiveSnapshot.result}
+                    analyzedAt={latestLiveSnapshot.completedAt ?? latestLiveSnapshot.createdAt}
+                  />
+                ) : (
+                  <div className="flex flex-col gap-1">
+                    <h3 className="text-fg text-base font-semibold">Live product intelligence</h3>
+                    <p className="text-fg-muted text-sm">Not inspected yet</p>
+                  </div>
+                )}
+                <div>
+                  <InspectLiveButton
+                    projectId={project.id}
+                    hasSnapshot={Boolean(latestLiveSnapshot?.result)}
+                  />
+                </div>
+              </Surface>
+            )}
+
+            {repository && (
+              <Surface level="section" padding="lg" className="flex flex-col gap-4">
+                {latestSnapshot?.result ? (
+                  <IntelligenceSummary
+                    snapshot={latestSnapshot.result}
+                    analyzedAt={latestSnapshot.createdAt}
+                  />
+                ) : (
+                  <div className="flex flex-col gap-1">
+                    <h3 className="text-fg text-base font-semibold">Repository intelligence</h3>
+                    <p className="text-fg-muted text-sm">Not analyzed yet</p>
+                  </div>
+                )}
+                <div>
+                  <InspectButton
+                    projectId={project.id}
+                    hasSnapshot={Boolean(latestSnapshot?.result)}
+                  />
+                </div>
+              </Surface>
+            )}
+
+            <div className="border-line-1 flex flex-wrap items-center justify-between gap-4 border-t pt-6">
+              <p className="text-fg-muted text-xs">
+                Disconnecting removes Vibe&apos;s access to this repository.
+              </p>
+              <DisconnectButton projectId={project.id} />
+            </div>
+          </div>
+        </WorkspaceSection>
+
+        {/* The section id is the jump target a blocked Opportunities set links
+            to (`BUSINESS_AUDIT_ANCHOR`), supplied by `WorkspaceSection`. */}
+        <WorkspaceSection
+          id="business-audit"
+          title="Business score"
+          description="How business-ready this product is, per dimension, with the evidence behind each score."
+          actions={
+            <RunAuditButton
+              projectId={project.id}
+              hasAudit={Boolean(latestAudit?.result)}
+              disabled={!auditReady}
+              activeOperation={activeAuditOperation}
+            />
+          }
+        >
+          <div className="flex flex-col gap-4">
+            <AuditEvidenceNotice notice={auditEvidenceNotice} />
+
+            {!auditReady && (
+              <Notice tone="waiting" label="Why this is blocked">
+                A business audit needs {missingPrerequisites.join(", ")} first.
+              </Notice>
+            )}
+
+            {latestAudit?.result ? (
+              <BusinessAuditSummary
+                audit={latestAudit.result}
+                analyzedAt={latestAudit.completedAt ?? latestAudit.createdAt}
               />
             ) : (
-              <div className="space-y-1">
-                <h2 className="text-sm font-medium text-zinc-200">Live product intelligence</h2>
-                <p className="text-sm text-zinc-500">Not inspected yet</p>
-              </div>
+              // Not scored is not a score of zero. No meter, no number.
+              <EmptyState
+                title="Not analyzed yet"
+                description="Vibe scores five business dimensions from your repository, your public product and the context you gave it. Nothing is scored until that runs."
+              />
             )}
-            <InspectLiveButton
-              projectId={project.id}
-              hasSnapshot={Boolean(latestLiveSnapshot?.result)}
+          </div>
+        </WorkspaceSection>
+
+        <WorkspaceSection
+          id="next-moves"
+          title={opportunityCount ? "Next moves" : "Opportunities"}
+          description="A short, ranked list — not a report. The order is the engine's, and it is shown as produced."
+        >
+          <OpportunitiesPanel
+            projectId={project.id}
+            opportunities={opportunities?.set.opportunities ?? []}
+            executionStates={executionStates}
+            branchUrls={branchUrls}
+            validationSummaries={validationSummaries}
+            stale={opportunities?.stale ?? false}
+            activeOperation={activeOpportunityOperation}
+            blockedReason={opportunityReadiness.blockedReason}
+          />
+        </WorkspaceSection>
+
+        <WorkspaceSection
+          id="prepared"
+          title="Prepared"
+          description="Each change moves through validation, preview, review and your approval before anything can be merged."
+        >
+          {preparedChangeCards.length > 0 ? (
+            <PreparedChangesSection projectId={project.id} changes={preparedChangeCards} />
+          ) : (
+            <EmptyState
+              title="Nothing prepared yet"
+              description="When you let Vibe act on one of your next moves, the prepared change appears here with its validation, preview, review and approval state."
             />
-          </section>
-        )}
+          )}
+        </WorkspaceSection>
 
-        {deepScanModel && <DeepScanPanel projectId={project.id} model={deepScanModel} />}
+        <WorkspaceSection
+          id="deep-scan"
+          title="Deep Scan"
+          description="What your product looks like after signing in — the part repository and public-page evidence cannot reach."
+        >
+          {deepScanModel ? (
+            <DeepScanPanel projectId={project.id} model={deepScanModel} />
+          ) : (
+            <EmptyState
+              title="Deep Scan is unavailable for this project"
+              description="Deep Scan needs a connected repository and a configured production website before it can sign in to anything."
+            />
+          )}
+        </WorkspaceSection>
 
-        {repository && (
-          <section className="space-y-3">
-            {latestSnapshot?.result ? (
-              <IntelligenceSummary snapshot={latestSnapshot.result} analyzedAt={latestSnapshot.createdAt} />
-            ) : (
-              <div className="space-y-1">
-                <h2 className="text-sm font-medium text-zinc-200">Repository intelligence</h2>
-                <p className="text-sm text-zinc-500">Not analyzed yet</p>
-              </div>
-            )}
-            <InspectButton projectId={project.id} hasSnapshot={Boolean(latestSnapshot?.result)} />
-          </section>
-        )}
+        <WorkspaceSection
+          id="impact"
+          title="Impact"
+          description="What actually changed after a merge — and what Vibe refuses to claim it caused."
+        >
+          {mergedChanges.length > 0 ? (
+            <div className="flex flex-col gap-4">
+              <Surface level="section" padding="lg" className="flex flex-col gap-4">
+                <MonoLabel>Merged changes</MonoLabel>
+                <ul className="flex flex-col gap-3">
+                  {mergedChanges.map((card) => (
+                    <li
+                      key={card.id}
+                      className="border-line-1 flex flex-wrap items-center gap-x-6 gap-y-2 border-b pb-3 last:border-b-0 last:pb-0"
+                    >
+                      {/* `Metric` renders an em dash for an absent value, so a
+                          change without a recorded commit stays honest rather
+                          than showing a truncated empty string. */}
+                      <Metric label="Commit" value={card.commitSha?.slice(0, 7)} mono />
+                      <Metric label="Branch" value={card.baseBranch} mono />
+                      <Metric label="Prepared" value={formatTimestamp(card.createdAt)} mono />
+                      <a
+                        href="#prepared"
+                        className="text-fg-prose hover:text-fg ml-auto rounded-sm text-sm underline underline-offset-4 transition-colors"
+                      >
+                        See its outcome
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              </Surface>
+              {/* Deliberately a pointer rather than a copy: outcome
+                  verification and business measurement are rendered per
+                  prepared change, and duplicating those panels here would mean
+                  two places claiming the same result. */}
+              <p className="text-fg-muted text-sm">
+                Production outcome and business impact are shown on each prepared change, beside the
+                merge that produced them.
+              </p>
+            </div>
+          ) : (
+            <EmptyState
+              title="Nothing merged yet"
+              description="Impact can only be measured after a change of Vibe's has been approved and merged. Until then there is nothing to compare against, and Vibe will not estimate one."
+            />
+          )}
+        </WorkspaceSection>
 
-        <div>
-          <DisconnectButton projectId={project.id} />
-        </div>
-      </main>
-    </PageShell>
+        <WorkspaceSection
+          id="activity"
+          title="Activity"
+          description="The append-only record of what Vibe did, when, and with what result."
+        >
+          {/* Vibe writes `audit_events` (ADR 0007), but `src/modules/audit-log`
+              exposes only `recordAuditEvent` — there is no read path, and
+              building one is a data change, not a styling one. So this says so
+              instead of inventing a feed: an activity list assembled in the
+              browser would be fiction. */}
+          <EmptyState
+            title="Not available yet"
+            description="Vibe records every consequential action it takes — connections, audits, executions, approvals and merges — but this workspace cannot read that record back yet. Until it can, the state of each step is shown on the step itself."
+          />
+        </WorkspaceSection>
+      </div>
+    </ProjectShell>
   );
 }

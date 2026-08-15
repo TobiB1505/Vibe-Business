@@ -42,8 +42,14 @@ import { cn } from "@/lib/utils/cn";
  */
 export const PROJECT_SECTIONS = [
   { id: "overview", label: "Overview" },
-  { id: "score", label: "Business score" },
-  { id: "moves", label: "Next moves" },
+  // `business-audit`, not `business-score`: the Opportunity engine already
+  // publishes `BUSINESS_AUDIT_ANCHOR = "#business-audit"` and links a blocked
+  // set at it. The domain constant is tested and is not a styling concern, so
+  // the section takes the id the domain already points at and carries the
+  // product's word — "Business score" — as its label.
+  // `project-sections.test.ts` fails if the two ever drift apart.
+  { id: "business-audit", label: "Business score" },
+  { id: "next-moves", label: "Next moves" },
   { id: "prepared", label: "Prepared" },
   { id: "deep-scan", label: "Deep Scan" },
   { id: "impact", label: "Impact" },
@@ -83,7 +89,14 @@ export function ProjectSidebar({
   return (
     <nav
       aria-label="Project sections"
-      className="border-line-1 bg-surface-1 flex shrink-0 flex-col gap-7 border-b p-4 lg:w-62 lg:border-r lg:border-b-0 lg:p-5"
+      className={cn(
+        "border-line-1 bg-surface-1 flex shrink-0 flex-col gap-7 border-b p-4",
+        // Desktop: a full-height rail that stays put while the workspace
+        // scrolls. Below `lg` it becomes a horizontal strip at the top, which
+        // is why the list below switches from a column to a scrollable row —
+        // a 248px rail on a 375px screen would eat the content.
+        "lg:sticky lg:top-0 lg:h-dvh lg:w-62 lg:overflow-y-auto lg:border-r lg:border-b-0 lg:p-5",
+      )}
     >
       <div className="hidden px-1 lg:block">
         <Link href="/app" className="rounded-nav" aria-label="Vibe Business — your projects">
@@ -167,31 +180,88 @@ export function ProjectHeader({
   title,
   projectName,
   description,
+  meta,
   actions,
 }: {
   title: ReactNode;
   /** Rendered as the breadcrumb parent, so the project is always named. */
   projectName: string;
   description?: ReactNode;
+  /**
+   * The repository line — owner, branch, connection state. Only facts the
+   * project actually has; an absent repository renders nothing here rather
+   * than a placeholder.
+   */
+  meta?: ReactNode;
   actions?: ReactNode;
 }) {
   return (
-    <header className="border-line-1 flex flex-wrap items-end justify-between gap-4 border-b px-5 py-5 sm:px-8">
-      <div className="flex min-w-0 flex-col gap-2">
-        <p className="text-fg-meta flex items-center gap-2 font-mono text-[0.6875rem]">
-          <Link href="/app" className="hover:text-fg-muted rounded-sm transition-colors">
-            Projects
-          </Link>
-          <span aria-hidden className="text-fg-faint">
-            /
-          </span>
-          <span className="text-fg-muted truncate">{projectName}</span>
-        </p>
-        <h1 className="text-fg text-headline font-bold">{title}</h1>
-        {description && <p className="text-fg-muted max-w-[70ch] text-sm">{description}</p>}
+    <header className="border-line-1 bg-app/80 sticky top-0 z-20 border-b backdrop-blur-xl">
+      <div className="flex flex-wrap items-end justify-between gap-4 px-5 py-5 sm:px-8">
+        <div className="flex min-w-0 flex-col gap-2">
+          <p className="text-fg-meta flex items-center gap-2 font-mono text-[0.6875rem]">
+            <Link href="/app" className="hover:text-fg-muted rounded-sm transition-colors">
+              Projects
+            </Link>
+            <span aria-hidden className="text-fg-faint">
+              /
+            </span>
+            <span className="text-fg-muted truncate">{projectName}</span>
+          </p>
+          <h1 className="text-fg text-headline font-bold">{title}</h1>
+          {description && <p className="text-fg-muted max-w-[70ch] text-sm">{description}</p>}
+          {meta && <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-1">{meta}</div>}
+        </div>
+        {actions && <div className="flex shrink-0 flex-wrap items-center gap-3">{actions}</div>}
       </div>
-      {actions && <div className="flex shrink-0 flex-wrap items-center gap-3">{actions}</div>}
     </header>
+  );
+}
+
+/**
+ * One section of the workspace.
+ *
+ * The `id` is the anchor the sidebar links to. `scroll-mt` clears the sticky
+ * header, so a jump lands on the heading rather than under it — without that,
+ * anchor navigation looks broken in exactly the way that makes people stop
+ * using it.
+ *
+ * A `<section>` with an `aria-labelledby` pointing at its own heading, so the
+ * document outline matches the navigation a sighted user sees.
+ */
+export function WorkspaceSection({
+  id,
+  title,
+  description,
+  actions,
+  children,
+}: {
+  id: ProjectSectionId;
+  title: string;
+  description?: ReactNode;
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
+  return (
+    // `scroll-mt` has to clear the sticky header, which is taller than it
+    // looks: breadcrumb, title and the repository meta row measure ~135px on a
+    // 375px screen, where a long project name can also wrap. Measured, then
+    // given headroom — too little and an anchor jump lands *behind* the header,
+    // which reads as a broken link rather than a tight margin.
+    <section id={id} aria-labelledby={`${id}-heading`} className="scroll-mt-40 lg:scroll-mt-32">
+      <div className="flex flex-col gap-5">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="flex min-w-0 flex-col gap-2">
+            <h2 id={`${id}-heading`} className="text-fg text-title font-bold">
+              {title}
+            </h2>
+            {description && <p className="text-fg-muted max-w-[70ch] text-sm">{description}</p>}
+          </div>
+          {actions && <div className="flex shrink-0 flex-wrap items-center gap-3">{actions}</div>}
+        </div>
+        {children}
+      </div>
+    </section>
   );
 }
 
