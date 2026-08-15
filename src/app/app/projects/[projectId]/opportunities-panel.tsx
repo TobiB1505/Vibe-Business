@@ -159,6 +159,7 @@ export function OpportunitiesPanel({
   stale,
   activeOperation,
   blockedReason,
+  auditHref,
 }: {
   projectId: string;
   opportunities: BusinessOpportunity[];
@@ -171,6 +172,13 @@ export function OpportunitiesPanel({
   activeOperation: OperationView | null;
   /** Why generation cannot be offered, when it cannot (§34). */
   blockedReason: "audit_missing" | "audit_stale" | null;
+  /**
+   * Where the block notice's action points. The domain still decides *that*
+   * there is a way out and what it is called (`buildOpportunityBlockNotice`);
+   * which URL the audit view lives at is a routing fact, so the route supplies
+   * it. The domain's anchor is appended, so it still resolves on arrival.
+   */
+  auditHref: string;
 }) {
   const action = startOpportunitiesAction.bind(null, projectId);
   const [state, formAction, pending] = useActionState(action, initialState);
@@ -251,7 +259,7 @@ export function OpportunitiesPanel({
           label="Why this is blocked"
           action={
             <a
-              href={blockNotice.anchor}
+              href={`${auditHref}${blockNotice.anchor}`}
               className="text-fg-prose hover:text-fg rounded-sm text-sm underline underline-offset-4 transition-colors"
             >
               {blockNotice.actionLabel}
