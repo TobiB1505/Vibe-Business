@@ -128,7 +128,24 @@ export type AuditEventType =
   | "change_outcome.verified"
   | "change_outcome.partial"
   | "change_outcome.not_observed"
-  | "change_outcome.failed";
+  | "change_outcome.failed"
+  // Business outcome measurement (Sprint 12B §39). The first events describing
+  // the customer's *business* rather than their product.
+  //
+  // They carry the metric key, the classification, the sample sizes and the
+  // observed relative movement. They must never carry an OAuth token, a refresh
+  // token, an API key, a vendor account identifier, a raw analytics payload, or
+  // the daily series itself.
+  //
+  // `insufficient_data` is its own event rather than a field, for the same
+  // reason `not_observed` was in 12A: it is an honest non-result, and a log
+  // that could not distinguish it from a measured null would be unable to
+  // answer whether anyone ever had enough data.
+  | "business_measurement.created"
+  | "business_measurement.started"
+  | "business_measurement.completed"
+  | "business_measurement.insufficient_data"
+  | "business_measurement.failed";
 
 export type RecordAuditEventParams = {
   userId: string;

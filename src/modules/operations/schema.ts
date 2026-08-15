@@ -54,6 +54,17 @@ export const OPERATION_TYPES = [
    * was seen.
    */
   "change_outcome_verification",
+  /**
+   * Measuring a business metric across two elapsed windows (Sprint 12B §30).
+   *
+   * Durable for a different reason from every operation before it. The others
+   * are durable because they are *slow* — tens of seconds, or fifteen minutes.
+   * This one is durable because the authoritative numbers must be written by
+   * something a browser cannot impersonate, and because the windows it compares
+   * are measured in weeks. A user requests it; only durable execution says what
+   * was observed.
+   */
+  "business_measurement",
 ] as const;
 export type OperationType = (typeof OPERATION_TYPES)[number];
 
@@ -129,6 +140,17 @@ export const OPERATION_STAGES = [
    */
   "observing",
   "evaluating",
+  /**
+   * Business measurement (Sprint 12B §30).
+   *
+   * Named for the two halves of the comparison rather than one opaque
+   * "collecting", because they read very differently to a waiting user: the
+   * baseline is history and should be instant, while the post-change window is
+   * the recent data an analytics source is slowest to settle.
+   */
+  "collecting_baseline",
+  "collecting_post",
+  "comparing",
   "completed",
 ] as const;
 export type OperationStage = (typeof OPERATION_STAGES)[number];

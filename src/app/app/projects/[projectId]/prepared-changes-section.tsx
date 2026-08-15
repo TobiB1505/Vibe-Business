@@ -1,12 +1,14 @@
 import type { ApprovalCard } from "@/modules/approvals/view";
 import type { MergeCard } from "@/modules/merge/view";
 import type { OutcomeCard } from "@/modules/outcome-verification/view";
+import type { BusinessImpactCard } from "@/modules/business-measurement/view";
 import type { PreviewCard } from "@/modules/change-preview/view";
 import type { ReviewCard } from "@/modules/review/view";
 import type { ReviewImages } from "@/modules/review/service";
 import { ApprovalPanel } from "./approval-panel";
 import { MergePanel } from "./merge-panel";
 import { OutcomePanel } from "./outcome-panel";
+import { BusinessImpactPanel } from "./business-impact-panel";
 import { PreviewPanel } from "./preview-panel";
 import { ReviewPanel } from "./review-panel";
 import { ValidationPanel, type ValidationSummary } from "./validation-panel";
@@ -84,6 +86,15 @@ export type PreparedChangeCard = {
    * component cannot render one without the others.
    */
   outcome: OutcomeCard;
+  /**
+   * Business impact state, decided on the server (Sprint 12B §21).
+   *
+   * The last card in the chain and the only one about the customer's *business*
+   * rather than about their product or Vibe's own work. It is also the one most
+   * easily misread: four of its states are not results at all, and rendering
+   * any of them as "no impact" would blame a change for a gap in Vibe's setup.
+   */
+  businessImpact: BusinessImpactCard;
 };
 
 export function PreparedChangesSection({
@@ -201,6 +212,18 @@ export function PreparedChangesSection({
               projectId={projectId}
               preparedChangeId={change.id}
               card={change.outcome}
+              businessImpactLabel={change.businessImpact.ladderLabel}
+            />
+
+            {/* Last, and only reachable through a merge: delivery, then product
+                outcome, then — and only then — the business question. The order
+                on screen is the order of the claims, and each is weaker than
+                the one above it. There is no Revert, Roll back or Redeploy
+                control after it; none of those exist (§28). */}
+            <BusinessImpactPanel
+              projectId={projectId}
+              preparedChangeId={change.id}
+              card={change.businessImpact}
             />
           </li>
         ))}

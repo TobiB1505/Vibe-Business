@@ -1,5 +1,7 @@
 import type { PreparedChangeCard } from "@/app/app/projects/[projectId]/prepared-changes-section";
 import type { OutcomeCard, OutcomeCheckLine } from "@/modules/outcome-verification/view";
+import type { BusinessImpactCard } from "@/modules/business-measurement/view";
+import { OBSERVED_CHANGE_DISCLAIMER } from "@/modules/business-measurement/causality";
 
 /**
  * The states the browser suite renders (Sprint 11C.1).
@@ -23,7 +25,7 @@ const APPROVAL_ID = "approval_e2e";
 const APPROVED_AT = "2026-08-14T08:22:59.917Z";
 
 /** Everything except the merge card, which is what each scenario varies. */
-function baseChange(): Omit<PreparedChangeCard, "merge" | "outcome"> {
+function baseChange(): Omit<PreparedChangeCard, "merge" | "outcome" | "businessImpact"> {
   return {
     id: "prepared_e2e",
     branchName: "vibe/seo-foundations-cc32273131c5",
@@ -178,7 +180,89 @@ function outcomeCard(overrides: Partial<OutcomeCard> = {}): OutcomeCard {
 
 /** A merged change with an outcome card in whatever state the scenario needs. */
 function outcomeChange(outcome: OutcomeCard): PreparedChangeCard {
-  return { ...baseChange(), merge: mergedCard(), outcome };
+  return { ...baseChange(), merge: mergedCard(), outcome, businessImpact: businessImpactCard() };
+}
+
+
+/**
+ * Business impact fixtures (Sprint 12B §40).
+ *
+ * The windows are the SEO profile's real shape — a 28-day baseline, a 14-day
+ * settling gap and a 28-day measurement window — anchored on the real merge
+ * date, so the dates on screen are the dates the product would actually
+ * compute rather than round numbers invented for a screenshot.
+ */
+const BASELINE_WINDOW = {
+  start: "2026-07-17T00:00:00.000Z",
+  end: "2026-08-14T00:00:00.000Z",
+  timezone: "UTC",
+  days: 28,
+};
+const MEASUREMENT_WINDOW = {
+  start: "2026-08-29T00:00:00.000Z",
+  end: "2026-09-26T00:00:00.000Z",
+  timezone: "UTC",
+  days: 28,
+};
+
+function businessImpactCard(overrides: Partial<BusinessImpactCard> = {}): BusinessImpactCard {
+  return {
+    state: "unavailable",
+    headline: "Not measured",
+    ladderLabel: "Not measured",
+    measurementPlanId: null,
+    measurementId: null,
+    metricLabel: null,
+    businessGoal: null,
+    baselineWindow: null,
+    measurementWindow: null,
+    resultAvailableAt: null,
+    daysObserved: null,
+    daysExpected: null,
+    baselineValue: null,
+    observedValue: null,
+    observedRelativeChange: null,
+    sampleSizeBefore: null,
+    sampleSizeAfter: null,
+    minimumObservations: null,
+    dataQuality: null,
+    failureCode: null,
+    failureMessage: null,
+    canStartMeasuring: false,
+    canConnectSource: false,
+    observedChangeDisclaimer: null,
+    causalEvidence: false,
+    ...overrides,
+  };
+}
+
+/** A planned SEO measurement, before any state that varies. */
+function plannedImpact(overrides: Partial<BusinessImpactCard> = {}): BusinessImpactCard {
+  return businessImpactCard({
+    measurementPlanId: "plan_e2e",
+    metricLabel: "Search impressions",
+    businessGoal: "Be findable by people searching for what you do",
+    minimumObservations: 500,
+    ...overrides,
+  });
+}
+
+/** A merged change with an outcome verified and a business impact card. */
+function impactChange(businessImpact: BusinessImpactCard): PreparedChangeCard {
+  return {
+    ...baseChange(),
+    merge: mergedCard(),
+    outcome: outcomeCard({
+      state: "verified",
+      verificationId: "outcome_e2e",
+      publicOrigin: PUBLIC_ORIGIN,
+      mergedCommitSha: MERGED_COMMIT,
+      checks: checkLines(),
+      observedAt: "2026-08-14T14:52:11.000Z",
+      attemptCount: 1,
+    }),
+    businessImpact,
+  };
 }
 
 export const E2E_SCENARIOS = {
@@ -186,6 +270,7 @@ export const E2E_SCENARIOS = {
   merge_ready: (): PreparedChangeCard => ({
     ...baseChange(),
     outcome: outcomeCard(),
+    businessImpact: businessImpactCard(),
     merge: mergeCard({
       state: "ready",
       currentDefaultHeadSha: APPROVED_BASE,
@@ -204,6 +289,7 @@ export const E2E_SCENARIOS = {
   merge_not_eligible_repository_changed: (): PreparedChangeCard => ({
     ...baseChange(),
     outcome: outcomeCard(),
+    businessImpact: businessImpactCard(),
     merge: mergeCard({
       state: "not_eligible",
       failureCode: "merge_repository_changed",
@@ -224,6 +310,7 @@ export const E2E_SCENARIOS = {
   merge_blocked_repository_changed: (): PreparedChangeCard => ({
     ...baseChange(),
     outcome: outcomeCard(),
+    businessImpact: businessImpactCard(),
     merge: mergeCard({
       state: "blocked",
       changeMergeId: "merge_blocked_e2e",
@@ -239,6 +326,7 @@ export const E2E_SCENARIOS = {
   merge_merged: (): PreparedChangeCard => ({
     ...baseChange(),
     outcome: outcomeCard(),
+    businessImpact: businessImpactCard(),
     merge: mergeCard({
       state: "merged",
       changeMergeId: "merge_e2e",
@@ -372,6 +460,129 @@ export const E2E_SCENARIOS = {
         failureMessage:
           "Vibe could not reach your public product while checking, so it could not verify the outcome.",
         attemptCount: 7,
+      }),
+    ),
+
+  /**
+   * **The real dogfood state** (§48).
+   *
+   * Merged, production outcome verified, and Vibe has no analytics connector —
+   * so it says what it would measure and why it cannot. Never "no impact".
+   */
+  business_impact_source_required: (): PreparedChangeCard =>
+    impactChange(
+      plannedImpact({
+        state: "source_required",
+        headline: "Measurement source required",
+        ladderLabel: "Not measured — no source",
+        failureCode: "metric_source_required",
+        failureMessage:
+          "Connect an analytics source so Vibe can measure whether this change affected the business metric it was intended to improve.",
+      }),
+    ),
+
+  /** A merged change nobody has planned a measurement for yet. */
+  business_impact_not_planned: (): PreparedChangeCard =>
+    impactChange(businessImpactCard({ state: "not_planned", headline: "Not measured yet" })),
+
+  /** The window has not elapsed. Dates visible, no conclusion (§22). */
+  business_impact_scheduled: (): PreparedChangeCard =>
+    impactChange(
+      plannedImpact({
+        state: "scheduled",
+        headline: "Measurement scheduled",
+        ladderLabel: "Measurement scheduled",
+        measurementId: "measurement_e2e",
+        baselineWindow: BASELINE_WINDOW,
+        measurementWindow: MEASUREMENT_WINDOW,
+        resultAvailableAt: MEASUREMENT_WINDOW.end,
+        daysExpected: 28,
+      }),
+    ),
+
+  /** Collecting. Factual day count, never a verdict (§23). */
+  business_impact_measuring: (): PreparedChangeCard =>
+    impactChange(
+      plannedImpact({
+        state: "measuring",
+        headline: "Collecting post-change data",
+        ladderLabel: "Measuring",
+        measurementId: "measurement_e2e",
+        baselineWindow: BASELINE_WINDOW,
+        measurementWindow: MEASUREMENT_WINDOW,
+        resultAvailableAt: MEASUREMENT_WINDOW.end,
+        daysObserved: 3,
+        daysExpected: 28,
+      }),
+    ),
+
+  /** A positive observed movement, with the disclaimer that keeps it honest (§24). */
+  business_impact_improved: (): PreparedChangeCard =>
+    impactChange(
+      plannedImpact({
+        state: "improved",
+        headline: "Improved",
+        ladderLabel: "Improved",
+        measurementId: "measurement_e2e",
+        baselineWindow: BASELINE_WINDOW,
+        measurementWindow: MEASUREMENT_WINDOW,
+        resultAvailableAt: MEASUREMENT_WINDOW.end,
+        daysObserved: 28,
+        daysExpected: 28,
+        baselineValue: 420,
+        observedValue: 486,
+        observedRelativeChange: 0.157,
+        sampleSizeBefore: 420,
+        sampleSizeAfter: 486,
+        dataQuality: "complete",
+        observedChangeDisclaimer: OBSERVED_CHANGE_DISCLAIMER,
+      }),
+    ),
+
+  /**
+   * A negative observed movement (§25).
+   *
+   * Shown exactly as prominently as the positive one. A product that only
+   * reported its wins would be worth less than no measurement at all.
+   */
+  business_impact_degraded: (): PreparedChangeCard =>
+    impactChange(
+      plannedImpact({
+        state: "degraded",
+        headline: "Degraded",
+        ladderLabel: "Degraded",
+        measurementId: "measurement_e2e",
+        baselineWindow: BASELINE_WINDOW,
+        measurementWindow: MEASUREMENT_WINDOW,
+        resultAvailableAt: MEASUREMENT_WINDOW.end,
+        daysObserved: 28,
+        daysExpected: 28,
+        baselineValue: 1200,
+        observedValue: 1062,
+        observedRelativeChange: -0.115,
+        sampleSizeBefore: 1200,
+        sampleSizeAfter: 1062,
+        dataQuality: "complete",
+        observedChangeDisclaimer: OBSERVED_CHANGE_DISCLAIMER,
+      }),
+    ),
+
+  /** There was data, and not enough of it. Never "no impact" (§26). */
+  business_impact_insufficient: (): PreparedChangeCard =>
+    impactChange(
+      plannedImpact({
+        state: "insufficient_data",
+        headline: "Insufficient data",
+        ladderLabel: "Insufficient data",
+        measurementId: "measurement_e2e",
+        baselineWindow: BASELINE_WINDOW,
+        measurementWindow: MEASUREMENT_WINDOW,
+        resultAvailableAt: MEASUREMENT_WINDOW.end,
+        daysObserved: 28,
+        daysExpected: 28,
+        sampleSizeBefore: 10,
+        sampleSizeAfter: 8,
+        dataQuality: "insufficient",
       }),
     ),
 } as const;
