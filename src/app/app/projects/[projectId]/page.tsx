@@ -17,7 +17,7 @@ import { BusinessContextForm } from "./business-context-form";
 import { DisconnectButton } from "./disconnect-button";
 import { InspectButton } from "./inspect-button";
 import { InspectLiveButton } from "./inspect-live-button";
-import { IntelligenceSummary } from "./intelligence-summary";
+import { IntelligenceSummary, LIVE_PRODUCT_ANCHOR } from "./intelligence-summary";
 import { LiveIntelligenceSummary } from "./live-intelligence-summary";
 import { ProductionUrlForm } from "./production-url-form";
 
@@ -234,7 +234,15 @@ export default async function ProjectOverviewPage({
         </Surface>
 
         {project.productionUrl && (
-          <Surface level="section" padding="lg" className="flex flex-col gap-4">
+          <Surface
+            // The anchor repository findings link to when only a live check
+            // could settle the question (UI-3.6 §39). `scroll-mt` clears the
+            // sticky workspace header, as `WorkspaceSection` does.
+            id={LIVE_PRODUCT_ANCHOR}
+            level="section"
+            padding="lg"
+            className="scroll-mt-40 flex flex-col gap-4 lg:scroll-mt-32"
+          >
             {latestLiveSnapshot?.result ? (
               <LiveIntelligenceSummary
                 snapshot={latestLiveSnapshot.result}
@@ -242,8 +250,14 @@ export default async function ProjectOverviewPage({
               />
             ) : (
               <div className="flex flex-col gap-1">
-                <h3 className="text-fg text-base font-semibold">Live product intelligence</h3>
-                <p className="text-fg-muted text-sm">Not inspected yet</p>
+                <MonoLabel>What Vibe sees when it visits your product · Live product check</MonoLabel>
+                <h3 className="text-fg text-base font-semibold">
+                  Vibe hasn&apos;t visited your product yet.
+                </h3>
+                <p className="text-fg-muted max-w-[70ch] text-sm">
+                  A live check shows what a visitor can actually reach — which is the only way to
+                  confirm what your code suggests.
+                </p>
               </div>
             )}
             <div>
@@ -261,11 +275,21 @@ export default async function ProjectOverviewPage({
               <IntelligenceSummary
                 snapshot={latestSnapshot.result}
                 analyzedAt={latestSnapshot.createdAt}
+                projectId={project.id}
+                // Passed only so the two layers can be compared where they
+                // disagree (UI-3.6 §11). Live results are rendered above.
+                liveSnapshot={latestLiveSnapshot?.result ?? null}
               />
             ) : (
               <div className="flex flex-col gap-1">
-                <h3 className="text-fg text-base font-semibold">Repository intelligence</h3>
-                <p className="text-fg-muted text-sm">Not analyzed yet</p>
+                <MonoLabel>What Vibe learned from your code · Repository intelligence</MonoLabel>
+                <h3 className="text-fg text-base font-semibold">
+                  Vibe hasn&apos;t read your code yet.
+                </h3>
+                <p className="text-fg-muted max-w-[70ch] text-sm">
+                  Reading it is how Vibe works out what your product already does, and what it is
+                  missing.
+                </p>
               </div>
             )}
             <div>
