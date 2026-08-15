@@ -13,18 +13,18 @@ import type { AuditEventType } from "./events";
  * assembling a feed in the browser, and left building this as the smallest
  * genuinely useful data addition.
  *
- * ## Why the project filter looks the way it does
+ * ## The project filter
  *
- * The table is **user-scoped, not project-scoped** — its columns are
- * `user_id`, `event_type`, `metadata`, `created_at`, and there is no
- * `project_id`. That was correct for Sprint 1, where the log existed to record
- * account-level GitHub authorization, and it is why callers that belong to a
- * project put `projectId` in `metadata` instead.
+ * `project_id` is a real column as of Sprint UI-2.5, backed by
+ * `audit_events_project_id_created_at_idx` — `(project_id, created_at desc,
+ * id desc)`, which is this query's access path exactly.
  *
- * So a project's activity is the caller's own events whose metadata names that
- * project. Adding a real `project_id` column plus a matching index is the right
- * eventual fix; it is a migration and a backfill, which is a data change rather
- * than the read path this sprint needs. See the sprint doc's Remaining Risks.
+ * It used to filter `metadata->>'projectId'`, because the table was designed
+ * when the only events were account-level and had no project column. That was
+ * correctly scoped but could not use an index, which is why the page size was
+ * capped defensively. The cap is now a product decision rather than a
+ * mitigation: a feed is for orientation, and an unbounded read of an
+ * append-only log gets slower every day the product is used.
  *
  * ## Security
  *
@@ -101,7 +101,7 @@ export async function listAuditEventsForProject(
     .from("audit_events")
     .select("id, event_type, created_at, metadata")
     .eq("user_id", params.userId)
-    .eq("metadata->>projectId", params.projectId)
+    .eq("project_id", params.projectId)
     // `created_at` alone is not deterministic: several events are written
     // within the same statement and can share a timestamp, which makes their
     // relative order arbitrary and a paged read able to skip or repeat one.

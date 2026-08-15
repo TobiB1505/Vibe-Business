@@ -6,11 +6,13 @@ import { DEFAULT_ACTIVITY_LIMIT, listAuditEventsForProject } from "./queries";
  * The Activity read path (Sprint UI-2 Phase A).
  *
  * The property under test is **scoping**, and it is a security property rather
- * than a display one: `audit_events` is user-scoped with no `project_id`
- * column, so a project's feed is derived from `metadata->>projectId`. If that
- * filter is dropped or written wrongly, one project's page shows another
- * project's history — to the same user, but still a leak across a boundary the
- * product draws.
+ * than a display one: a project's feed is the caller's own events for that
+ * project. If either filter is dropped or written wrongly, one project's page
+ * shows another project's history — to the same user, but still a leak across a
+ * boundary the product draws.
+ *
+ * `project_id` became a real column in Sprint UI-2.5; the filter used to read
+ * `metadata->>'projectId'`. The rule these assert did not change with it.
  *
  * The double records the filters the query builder was given and applies them
  * itself, so a missing `.eq()` fails here instead of in production. RLS is the
@@ -20,6 +22,7 @@ import { DEFAULT_ACTIVITY_LIMIT, listAuditEventsForProject } from "./queries";
 type Row = {
   id: string;
   user_id: string;
+  project_id: string | null;
   event_type: string;
   created_at: string;
   metadata: Record<string, unknown>;
@@ -49,9 +52,7 @@ function fakeSupabase(rows: Row[]) {
       const filtered = rows.filter((row) =>
         seen.filters.every((filter) => {
           if (filter.column === "user_id") return row.user_id === filter.value;
-          if (filter.column === "metadata->>projectId") {
-            return row.metadata.projectId === filter.value;
-          }
+          if (filter.column === "project_id") return row.project_id === filter.value;
           return true;
         }),
       );
@@ -73,9 +74,10 @@ function fakeSupabase(rows: Row[]) {
 function row(overrides: Partial<Row> & Pick<Row, "id">): Row {
   return {
     user_id: "user-1",
+    project_id: "project-1",
     event_type: "change_merge.verified",
     created_at: "2026-08-14T13:00:00.000Z",
-    metadata: { projectId: "project-1" },
+    metadata: {},
     ...overrides,
   };
 }
@@ -87,16 +89,13 @@ describe("listAuditEventsForProject", () => {
 
     expect(seen.table).toBe("audit_events");
     expect(seen.filters).toContainEqual({ column: "user_id", value: "user-1" });
-    expect(seen.filters).toContainEqual({
-      column: "metadata->>projectId",
-      value: "project-1",
-    });
+    expect(seen.filters).toContainEqual({ column: "project_id", value: "project-1" });
   });
 
   it("never returns another project's events", async () => {
     const { client } = fakeSupabase([
-      row({ id: "mine", metadata: { projectId: "project-1" } }),
-      row({ id: "theirs", metadata: { projectId: "project-2" } }),
+      row({ id: "mine", project_id: "project-1" }),
+      row({ id: "theirs", project_id: "project-2" }),
     ]);
 
     const result = await listAuditEventsForProject(client, {
