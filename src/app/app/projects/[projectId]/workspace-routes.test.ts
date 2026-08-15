@@ -26,6 +26,10 @@ import { PROJECT_SECTIONS, projectSectionHref } from "@/components/layout/projec
 
 const ROUTE_DIR = join(process.cwd(), "src/app/app/projects/[projectId]");
 
+function layoutSource(): string {
+  return readFileSync(join(ROUTE_DIR, "layout.tsx"), "utf8");
+}
+
 /** Every `page.tsx` under the project route, including the index. */
 function routeFiles(): { name: string; source: string }[] {
   const files = [{ name: "page.tsx", source: readFileSync(join(ROUTE_DIR, "page.tsx"), "utf8") }];
@@ -172,6 +176,50 @@ describe("routes load only what they render", () => {
     for (const file of routeFiles()) {
       if (file.name === "deep-scan/page.tsx") continue;
       expect(file.source, `${file.name} declares maxDuration`).not.toContain("maxDuration");
+    }
+  });
+});
+
+describe("the shared layout stays cheap (UI-2.5 performance contract)", () => {
+  const layout = layoutSource();
+
+  /**
+   * The layout runs on every one of the seven routes, so anything it loads is
+   * multiplied by seven. UI-2 removed the navigation badges rather than put an
+   * opportunity read and a prepared read here; UI-2.5 brought them back as
+   * count-only queries. This is the boundary that keeps the second from
+   * turning back into the first.
+   */
+  it("loads nothing but project context and counts", () => {
+    const FORBIDDEN = [
+      "getPreparedChangeWorkspace",
+      "listPreparedChangeSummaries",
+      "getLatestOpportunities",
+      "getLatestSuccessfulAudit",
+      "getProjectImpact",
+      "getLatestValidation",
+      "getPreviewCard",
+      "getReviewCard",
+      "getReviewImages",
+      "getApprovalCard",
+      "getMergeCard",
+      "getOutcomeCard",
+      "getBusinessImpactCard",
+      "listAuditEventsForProject",
+    ];
+
+    for (const forbidden of FORBIDDEN) {
+      expect(layout, `layout calls ${forbidden}`).not.toContain(`${forbidden}(`);
+    }
+  });
+
+  it("uses the count-only read model for its badges", () => {
+    expect(layout).toContain("getProjectWorkspaceCounts");
+  });
+
+  it("never signs a review image or asks a provider for anything", () => {
+    for (const forbidden of ["createVercelSandboxProvider", "createGithubMergePort", "getPreviewStatus"]) {
+      expect(layout, `layout reaches for ${forbidden}`).not.toContain(forbidden);
     }
   });
 });
