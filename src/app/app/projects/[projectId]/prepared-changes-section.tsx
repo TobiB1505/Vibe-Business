@@ -1,4 +1,5 @@
 import type { ApprovalCard } from "@/modules/approvals/view";
+import type { BusinessRationale } from "@/modules/execution/business-rationale";
 import type { MergeCard } from "@/modules/merge/view";
 import type { OutcomeCard } from "@/modules/outcome-verification/view";
 import type { BusinessImpactCard } from "@/modules/business-measurement/view";
@@ -6,6 +7,7 @@ import type { PreviewCard } from "@/modules/change-preview/view";
 import type { ReviewCard } from "@/modules/review/view";
 import type { ReviewImages } from "@/modules/review/service";
 import { ApprovalPanel } from "./approval-panel";
+import { ChangeRationale } from "./change-rationale";
 import { MergePanel } from "./merge-panel";
 import { OutcomePanel } from "./outcome-panel";
 import { BusinessImpactPanel } from "./business-impact-panel";
@@ -95,6 +97,14 @@ export type PreparedChangeCard = {
    * any of them as "no impact" would blame a change for a gap in Vibe's setup.
    */
   businessImpact: BusinessImpactCard;
+  /**
+   * Why this change should matter (Cleanup §6, §7).
+   *
+   * Deterministic, capability-owned, and knowable before anything ran — the
+   * weakest claim on this page, and deliberately the first one a user reads
+   * after the change itself. Null for a capability with no written rationale.
+   */
+  rationale: BusinessRationale | null;
 };
 
 export function PreparedChangesSection({
@@ -208,6 +218,10 @@ export function PreparedChangesSection({
                 panel here that asks about the customer's product rather than
                 about Vibe's own work — and the only one whose success state
                 has to explicitly say what it does *not* mean. */}
+            {/* Before the verified checks, because the order a user needs is
+                what changed → why it matters → what was confirmed (§11). */}
+            <ChangeRationale rationale={change.rationale} />
+
             <OutcomePanel
               projectId={projectId}
               preparedChangeId={change.id}

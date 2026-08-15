@@ -53,8 +53,11 @@ describe("the panel offers only what this sprint implements (§28, §34)", () =>
       .map((label) => label.replace(/\{[\s\S]*?\}/g, " ").trim())
       .filter(Boolean);
 
+    // "Plan how this would be measured" is the demoted form of planning after
+    // the 12C cleanup: still free and deterministic, no longer a step a user
+    // has to take before their change counts as finished.
     for (const label of labels) {
-      expect(["Plan measurement", "Start measuring"]).toContain(label);
+      expect(["Plan how this would be measured", "Start measuring"]).toContain(label);
     }
   });
 
@@ -94,10 +97,20 @@ describe("the sentence that must never appear (§21, §48)", () => {
     expect(copy.toLowerCase()).not.toContain("unknown impact");
   });
 
-  it("frames a missing source as a missing connection, in the dogfood's words (§48)", () => {
-    expect(copy).toContain(
-      "Production behavior was verified, but Vibe does not yet have a connected data source to measure search or traffic impact.",
-    );
+  it("says nothing prominent at all when there is no measurement (Cleanup §8, §9)", () => {
+    // The 12C cleanup replaced the explanation of Vibe's missing connector with
+    // a quiet line. The old copy was true and useless: it explained a gap in
+    // Vibe's own setup at exactly the moment a user wants to know what happened
+    // to their product.
+    expect(copy).toContain("Long-term impact has not been measured.");
+    expect(copy).not.toContain("Measurement source required");
+    expect(copy).not.toContain("connected data source");
+  });
+
+  it("never asks the user to configure analytics to finish a change (Cleanup §9)", () => {
+    for (const demand of ["Connect Search Console", "Connect analytics", "Set up analytics"]) {
+      expect(copy).not.toContain(demand);
+    }
   });
 });
 

@@ -30,6 +30,7 @@ import { getReviewCard, getReviewImages } from "@/modules/review/service";
 import { getApprovalCard } from "@/modules/approvals/service";
 import { getMergeCard, resolveMergeTarget } from "@/modules/merge/service";
 import { getOutcomeCard } from "@/modules/outcome-verification/service";
+import { businessRationaleFor } from "@/modules/execution/business-rationale";
 import { getBusinessImpactCard } from "@/modules/business-measurement/service";
 import { NoConnectedMetricSources } from "@/modules/business-measurement/source";
 import { createGithubMergePort } from "@/modules/merge/github/adapter";
@@ -326,6 +327,9 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
       approval,
       merge,
       outcome,
+      // Deterministic and free: a lookup on the capability, no provider call
+      // and no model (§6).
+      rationale: businessRationaleFor(prepared.capability),
       businessImpact,
     });
   }

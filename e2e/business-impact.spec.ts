@@ -32,6 +32,20 @@ function impactSection(page: Page) {
 }
 
 /**
+ * The demoted section shown when no metric evidence exists (Cleanup §8, §9).
+ *
+ * A different heading on purpose: "Business impact" is reserved for sections
+ * that actually carry a measurement. Nothing without evidence may borrow it.
+ */
+function impactTrackingSection(page: Page) {
+  return page.locator('section:has(> h4:text-is("Impact tracking"))');
+}
+
+function rationaleSection(page: Page) {
+  return page.locator('section:has(> div > h4:text-is("What Vibe changed"))');
+}
+
+/**
  * Fails the test if the page reaches any external host.
  *
  * §45's "zero provider calls on render" has to be a counter rather than a
@@ -55,31 +69,53 @@ async function forbidExternalCalls(page: Page): Promise<string[]> {
 }
 
 test.describe("no source connected — the real state today", () => {
-  test("says a source is required, and never that there was no impact", async ({ page }) => {
+  test("shows a quiet tracking note, never a prominent failure state", async ({ page }) => {
     const external = await forbidExternalCalls(page);
     await page.goto("/e2e/business_impact_source_required");
 
-    const impact = impactSection(page);
-
-    await expect(impact.getByText("Measurement source required")).toBeVisible();
-    await expect(impact).toContainText("Connect an analytics source");
-    await expect(impact).toContainText(
-      "Production behavior was verified, but Vibe does not yet have a connected data source",
+    // The 12C cleanup: measurement is infrastructure and must not dominate.
+    // Every project in existence is in this state, and it is not news.
+    await expect(impactTrackingSection(page)).toContainText(
+      "Long-term impact has not been measured.",
     );
 
-    // The sentence this sprint exists to prevent.
-    await expect(impact).not.toContainText("No impact");
-    await expect(impact).not.toContainText("Unknown impact");
+    // No "Business impact" section at all — that heading is reserved for a
+    // section carrying actual evidence.
+    await expect(impactSection(page)).toHaveCount(0);
 
-    // And rendering it contacted nobody (§45).
+    // None of the sentences that would read as a result about the business.
+    const body = page.locator("body");
+    await expect(body).not.toContainText("Measurement source required");
+    await expect(body).not.toContainText("No impact");
+    await expect(body).not.toContainText("Unknown impact");
+    await expect(body).not.toContainText("Connect an analytics source");
+
     expect(external, "the business impact screen reached an external host").toEqual([]);
   });
 
-  test("still names what would be measured, so the screen is useful", async ({ page }) => {
+  test("explains the change instead, without any measurement", async ({ page }) => {
+    // §11's target: what changed → why it matters → what was verified. None of
+    // it needs an analytics connection to exist.
     await page.goto("/e2e/business_impact_source_required");
-    const impact = impactSection(page);
 
-    await expect(impact).toContainText("Search impressions");
+    const rationale = rationaleSection(page);
+    await expect(rationale).toContainText("sitemap");
+    await expect(rationale).toContainText("Why this matters");
+    await expect(rationale).toContainText("search engines");
+
+    // The limitation is never omitted — without it the paragraph is a promise.
+    await expect(rationale).toContainText("does not guarantee");
+
+    // And it states no measured outcome.
+    await expect(rationale).not.toContainText("%");
+  });
+
+  test("never asks the user to connect a provider to finish a change", async ({ page }) => {
+    await page.goto("/e2e/business_impact_source_required");
+
+    for (const cta of ["Connect Search Console", "Connect analytics", "Set up analytics"]) {
+      await expect(page.getByRole("button", { name: cta })).toHaveCount(0);
+    }
   });
 
   test("offers no connect button, because no connector exists", async ({ page }) => {
@@ -281,15 +317,15 @@ test.describe("reload recovery", () => {
     await expect(impact.getByTestId("business-impact-values")).toContainText("−11.5%");
   });
 
-  test("a source requirement is still a source requirement after a reload", async ({ page }) => {
+  test("an unmeasured change still explains itself after a reload", async ({ page }) => {
     await page.goto("/e2e/business_impact_source_required");
-    const impact = impactSection(page);
-    await expect(impact.getByText("Measurement source required")).toBeVisible();
+    await expect(rationaleSection(page)).toContainText("Why this matters");
 
     await page.reload();
 
-    await expect(impact.getByText("Measurement source required")).toBeVisible();
-    await expect(impact).not.toContainText("No impact");
+    await expect(rationaleSection(page)).toContainText("Why this matters");
+    await expect(impactTrackingSection(page)).toContainText("has not been measured");
+    await expect(page.locator("body")).not.toContainText("No impact");
   });
 });
 
