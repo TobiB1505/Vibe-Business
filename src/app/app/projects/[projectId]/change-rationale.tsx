@@ -32,20 +32,20 @@ export function ChangeRationale({ rationale }: { rationale: BusinessRationale | 
   if (!rationale) return null;
 
   return (
-    <section className="space-y-3 border-t border-zinc-800 pt-4">
+    <section className="space-y-3 border-t border-line-2 pt-4">
       <div className="space-y-1">
-        <h4 className="text-sm font-medium text-zinc-200">What Vibe changed</h4>
-        <p className="text-sm text-zinc-300">{rationale.changeSummary}</p>
+        <h4 className="text-sm font-medium text-fg-body">What Vibe changed</h4>
+        <p className="text-sm text-fg-prose">{rationale.changeSummary}</p>
       </div>
 
       <div className="space-y-1">
-        <h4 className="text-sm font-medium text-zinc-200">Why this matters</h4>
-        <p className="text-sm text-zinc-300">{rationale.whyItMatters}</p>
+        <h4 className="text-sm font-medium text-fg-body">Why this matters</h4>
+        <p className="text-sm text-fg-prose">{rationale.whyItMatters}</p>
       </div>
 
       {/* Never conditional, never collapsed behind a toggle: the sentence that
           stops the paragraph above from reading as a promise about traffic. */}
-      <p className="text-xs text-zinc-500">{rationale.limitations}</p>
+      <p className="text-xs text-fg-muted">{rationale.limitations}</p>
     </section>
   );
 }

@@ -59,12 +59,12 @@ const GOAL_LABELS: Record<(typeof PRIMARY_GOALS)[number], string> = {
 };
 
 const inputClass =
-  "w-full rounded-md border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-zinc-600 focus:outline-none";
+  "w-full rounded-md border border-line-strong bg-field px-3 py-1.5 text-sm text-fg-body placeholder:text-fg-meta focus:border-mint/60 focus:ring-mint/10 focus:ring-4 focus:outline-none";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block space-y-1">
-      <span className="text-xs text-zinc-500">{label}</span>
+      <span className="text-xs text-fg-muted">{label}</span>
       {children}
     </label>
   );
@@ -88,38 +88,38 @@ export function BusinessContextForm({
       <div className="space-y-2">
         <dl className="space-y-1 text-sm">
           <div className="flex gap-2">
-            <dt className="w-32 shrink-0 text-zinc-500">Product</dt>
-            <dd className="text-zinc-300">{context.productSummary}</dd>
+            <dt className="w-32 shrink-0 text-fg-muted">Product</dt>
+            <dd className="text-fg-prose">{context.productSummary}</dd>
           </div>
           {context.targetCustomer && (
             <div className="flex gap-2">
-              <dt className="w-32 shrink-0 text-zinc-500">Customer</dt>
-              <dd className="text-zinc-300">{context.targetCustomer}</dd>
+              <dt className="w-32 shrink-0 text-fg-muted">Customer</dt>
+              <dd className="text-fg-prose">{context.targetCustomer}</dd>
             </div>
           )}
           {context.stage && (
             <div className="flex gap-2">
-              <dt className="w-32 shrink-0 text-zinc-500">Stage</dt>
-              <dd className="text-zinc-300">{STAGE_LABELS[context.stage]}</dd>
+              <dt className="w-32 shrink-0 text-fg-muted">Stage</dt>
+              <dd className="text-fg-prose">{STAGE_LABELS[context.stage]}</dd>
             </div>
           )}
           {context.monetizationModel && (
             <div className="flex gap-2">
-              <dt className="w-32 shrink-0 text-zinc-500">Monetization</dt>
-              <dd className="text-zinc-300">{MONETIZATION_LABELS[context.monetizationModel]}</dd>
+              <dt className="w-32 shrink-0 text-fg-muted">Monetization</dt>
+              <dd className="text-fg-prose">{MONETIZATION_LABELS[context.monetizationModel]}</dd>
             </div>
           )}
           {context.primaryGoal && (
             <div className="flex gap-2">
-              <dt className="w-32 shrink-0 text-zinc-500">Goal</dt>
-              <dd className="text-zinc-300">{GOAL_LABELS[context.primaryGoal]}</dd>
+              <dt className="w-32 shrink-0 text-fg-muted">Goal</dt>
+              <dd className="text-fg-prose">{GOAL_LABELS[context.primaryGoal]}</dd>
             </div>
           )}
         </dl>
         <button
           type="button"
           onClick={() => setEditing(true)}
-          className="text-xs text-zinc-500 underline underline-offset-2 hover:text-zinc-300"
+          className="text-xs text-fg-muted underline underline-offset-2 hover:text-fg-prose"
         >
           Edit business context
         </button>
@@ -198,14 +198,14 @@ export function BusinessContextForm({
           <button
             type="button"
             onClick={() => setEditing(false)}
-            className="text-xs text-zinc-500 underline underline-offset-2 hover:text-zinc-300"
+            className="text-xs text-fg-muted underline underline-offset-2 hover:text-fg-prose"
           >
             Cancel
           </button>
         )}
       </div>
 
-      {state && !state.ok && <p className="text-sm text-amber-400">{ERROR_MESSAGES[state.error]}</p>}
+      {state && !state.ok && <p className="text-sm text-amber">{ERROR_MESSAGES[state.error]}</p>}
     </form>
   );
 }

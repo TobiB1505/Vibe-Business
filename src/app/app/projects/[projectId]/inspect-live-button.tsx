@@ -53,10 +53,10 @@ export function InspectLiveButton({
         </Button>
       </form>
 
-      {state && !state.ok && <p className="text-sm text-amber-400">{ERROR_MESSAGES[state.error]}</p>}
+      {state && !state.ok && <p className="text-sm text-amber">{ERROR_MESSAGES[state.error]}</p>}
 
       {state?.ok && state.reused && (
-        <p className="text-sm text-zinc-500">
+        <p className="text-sm text-fg-muted">
           Showing a recent inspection — the site was analysed within the last 24 hours.
         </p>
       )}

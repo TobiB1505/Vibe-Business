@@ -105,18 +105,18 @@ function ConfirmDialog({
       role="dialog"
       aria-modal="true"
       aria-labelledby="preview-confirm-title"
-      className="space-y-3 rounded-md border border-amber-800/60 bg-amber-950/20 p-4"
+      className="space-y-3 rounded-md border border-amber-line/60 bg-amber-tint-soft p-4"
     >
-      <h5 id="preview-confirm-title" className="text-sm font-medium text-zinc-100">
+      <h5 id="preview-confirm-title" className="text-sm font-medium text-fg">
         Start temporary preview?
       </h5>
 
-      <div className="space-y-2 text-sm text-zinc-300">
+      <div className="space-y-2 text-sm text-fg-prose">
         <p>
           Vibe will start the validated application in an isolated environment and make it
           temporarily available through a public, unlisted URL.
         </p>
-        <p className="text-amber-300">
+        <p className="text-amber">
           Anyone who has the URL may be able to open it until the preview expires.
         </p>
         <p>Vibe will not add production secrets or production data.</p>
@@ -129,7 +129,7 @@ function ConfirmDialog({
           type="button"
           onClick={onCancel}
           disabled={pending}
-          className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-300 hover:bg-zinc-900 disabled:opacity-60"
+          className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-prose hover:bg-surface-2 disabled:opacity-60"
         >
           Cancel
         </button>
@@ -137,7 +137,7 @@ function ConfirmDialog({
           type="button"
           onClick={onConfirm}
           disabled={pending}
-          className="rounded-md border border-amber-700 bg-amber-900/40 px-3 py-1.5 text-sm text-amber-100 hover:bg-amber-900/60 disabled:opacity-60"
+          className="rounded-md border border-amber-line bg-amber-tint px-3 py-1.5 text-sm text-amber hover:bg-amber-tint/70 disabled:opacity-60"
         >
           Start temporary preview
         </button>
@@ -148,7 +148,7 @@ function ConfirmDialog({
 
 /** Repeated wherever a preview looks like success. That is exactly when it is needed. */
 function NotApproved() {
-  return <p className="text-xs text-zinc-500">Not merged · Not deployed · Not reviewed by a human</p>;
+  return <p className="text-xs text-fg-muted">Not merged · Not deployed · Not reviewed by a human</p>;
 }
 
 export function PreviewPanel({
@@ -342,33 +342,33 @@ export function PreviewPanel({
   const stopping = previewState === "stopping" || intent === "stop";
 
   return (
-    <section className="space-y-3 border-t border-zinc-800 pt-4">
-      <h4 className="text-sm font-medium text-zinc-200">Preview</h4>
+    <section className="space-y-3 border-t border-line-2 pt-4">
+      <h4 className="text-sm font-medium text-fg-body">Preview</h4>
 
       {starting ? (
         <div className="space-y-2">
-          <p className="text-sm text-zinc-300">Starting temporary preview…</p>
-          <p className="text-sm text-zinc-400">
+          <p className="text-sm text-fg-prose">Starting temporary preview…</p>
+          <p className="text-sm text-fg-secondary">
             {PREVIEW_STAGE_LABELS[stage ?? "preflight"]}
           </p>
           {/* The Sprint 7 promise, restated where it matters. */}
-          <p className="text-xs text-zinc-500">
+          <p className="text-xs text-fg-muted">
             You can leave this page. Vibe will continue starting the preview.
           </p>
         </div>
       ) : stopping ? (
         <div className="space-y-2">
-          <p className="text-sm text-zinc-300">Stopping preview…</p>
+          <p className="text-sm text-fg-prose">Stopping preview…</p>
           {/* The workflow owns the sandbox, the snapshot and the ledger from
               here. Saying "stopped" before it confirms would be the one claim
               this panel is in no position to make (§12). */}
-          <p className="text-xs text-zinc-500">
+          <p className="text-xs text-fg-muted">
             Vibe is stopping the environment and releasing the validated artifact.
           </p>
         </div>
       ) : previewState === "running" ? (
         <div className="space-y-3">
-          <p className="text-sm text-emerald-400">Temporary public preview</p>
+          <p className="text-sm text-mint">Temporary public preview</p>
 
           <div className="flex flex-wrap gap-2">
             {/* The poll's answer first, the server render's second. Both come
@@ -384,12 +384,12 @@ export function PreviewPanel({
                 // Referer header, handing an internal identifier to code Vibe
                 // did not write.
                 rel="noreferrer noopener"
-                className="rounded-md border border-emerald-800 bg-emerald-950/40 px-3 py-1.5 text-sm text-emerald-200 hover:bg-emerald-900/40"
+                className="rounded-md border border-mint-line bg-mint-tint-soft px-3 py-1.5 text-sm text-mint hover:bg-mint-tint"
               >
                 Open preview
               </a>
             ) : (
-              <span className="rounded-md border border-zinc-800 px-3 py-1.5 text-sm text-zinc-500">
+              <span className="rounded-md border border-line-2 px-3 py-1.5 text-sm text-fg-muted">
                 Resolving preview address…
               </span>
             )}
@@ -398,7 +398,7 @@ export function PreviewPanel({
               type="button"
               onClick={stop}
               disabled={intent !== null}
-              className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-900 disabled:opacity-60"
+              className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2 disabled:opacity-60"
             >
               {/* No "Stopping…" label here any more: a stop in flight renders
                   the stopping section instead of this block, so this branch is
@@ -408,27 +408,27 @@ export function PreviewPanel({
           </div>
 
           {expiresAt && (
-            <p className="text-xs text-zinc-500">
+            <p className="text-xs text-fg-muted">
               Expires at {localTime(expiresAt)}
               {countdown ? ` · ${countdown}` : ""}
             </p>
           )}
 
-          <p className="text-xs text-amber-300/80">
+          <p className="text-xs text-amber/80">
             Anyone with the preview URL may be able to access it until it expires.
           </p>
           <NotApproved />
         </div>
       ) : previewState === "needs_validation" || previewState === "not_available" ? (
         <div className="space-y-2">
-          <p className="text-sm text-zinc-400">Validation required</p>
-          <p className="text-xs text-zinc-500">
+          <p className="text-sm text-fg-secondary">Validation required</p>
+          <p className="text-xs text-fg-muted">
             This change must pass isolated validation before Vibe can create a temporary preview.
           </p>
         </div>
       ) : previewState === "artifact_unavailable" || previewState === "artifact_expired" ? (
         <div className="space-y-2">
-          <p className="text-sm text-zinc-400">
+          <p className="text-sm text-fg-secondary">
             {previewState === "artifact_expired"
               ? "Preview artifact expired"
               : "Preview artifact unavailable"}
@@ -436,34 +436,34 @@ export function PreviewPanel({
           {/* Deliberately not phrased as a free refresh. A new validation
               provisions a paid sandbox, and the user starts it or nobody
               does (§15, CLAUDE.md rule 60). */}
-          <p className="text-xs text-zinc-500">
+          <p className="text-xs text-fg-muted">
             The previous validated artifact is no longer retained. Validate the change again to
             create a new preview artifact.
           </p>
           <button
             type="button"
             onClick={validateAgain}
-            className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-900"
+            className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2"
           >
             Validate again
           </button>
         </div>
       ) : previewState === "failed" ? (
         <div className="space-y-2">
-          <p className="text-sm text-red-400">Preview failed</p>
+          <p className="text-sm text-coral">Preview failed</p>
           {/* Safe copy from a stable code. Never a provider message, never a
               sandbox stack trace (§14). */}
-          {card.failureMessage && <p className="text-sm text-zinc-400">{card.failureMessage}</p>}
+          {card.failureMessage && <p className="text-sm text-fg-secondary">{card.failureMessage}</p>}
           {card.revalidationRequired && (
             <>
-              <p className="text-xs text-zinc-500">
+              <p className="text-xs text-fg-muted">
                 The validated artifact was released when the preview ended. Validate the change
                 again to create a new preview artifact.
               </p>
               <button
                 type="button"
                 onClick={validateAgain}
-                className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-900"
+                className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2"
               >
                 Validate again
               </button>
@@ -472,24 +472,24 @@ export function PreviewPanel({
         </div>
       ) : previewState === "stopped" || previewState === "expired" ? (
         <div className="space-y-2">
-          <p className="text-sm text-zinc-400">
+          <p className="text-sm text-fg-secondary">
             {previewState === "expired" ? "Preview expired" : "Preview stopped"}
           </p>
-          <p className="text-xs text-zinc-500">
+          <p className="text-xs text-fg-muted">
             {previewState === "expired"
               ? "The temporary preview has ended."
               : "The temporary preview was stopped and its environment was released."}
           </p>
           {card.revalidationRequired && (
             <>
-              <p className="text-xs text-zinc-500">
+              <p className="text-xs text-fg-muted">
                 The validated artifact was released when the preview ended. Validate the change
                 again to create a new preview artifact.
               </p>
               <button
                 type="button"
                 onClick={validateAgain}
-                className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-900"
+                className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2"
               >
                 Validate again
               </button>
@@ -507,8 +507,8 @@ export function PreviewPanel({
         />
       ) : (
         <div className="space-y-2">
-          <p className="text-sm text-zinc-400">Not started</p>
-          <p className="text-xs text-zinc-500">
+          <p className="text-sm text-fg-secondary">Not started</p>
+          <p className="text-xs text-fg-muted">
             Vibe will run the exact validated build in an isolated environment for 15 minutes, on a
             public, unlisted URL. Your repository and production site are not changed.
           </p>
@@ -516,17 +516,17 @@ export function PreviewPanel({
             type="button"
             onClick={() => setConfirming(true)}
             disabled={intent !== null || !validatedArtifactId}
-            className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-900 disabled:opacity-60"
+            className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2 disabled:opacity-60"
           >
             Start temporary preview
           </button>
         </div>
       )}
 
-      {state?.ok === false && <p className="text-sm text-red-400">{state.message}</p>}
+      {state?.ok === false && <p className="text-sm text-coral">{state.message}</p>}
 
       {state?.ok && state.kind === "reused" && (
-        <p className="text-xs text-zinc-500">
+        <p className="text-xs text-fg-muted">
           A preview of this exact artifact is already running — nothing new was started.
         </p>
       )}

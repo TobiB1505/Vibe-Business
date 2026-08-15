@@ -52,13 +52,13 @@ export function InspectButton({
 
       {state && !state.ok && (
         <div className="space-y-2">
-          <p className="text-sm text-amber-400">{ERROR_MESSAGES[state.error]}</p>
+          <p className="text-sm text-amber">{ERROR_MESSAGES[state.error]}</p>
           {permissionProblem && (
             <a
               href="https://github.com/settings/installations"
               target="_blank"
               rel="noreferrer"
-              className="inline-block text-sm text-zinc-300 underline underline-offset-2 hover:text-zinc-50"
+              className="inline-block text-sm text-fg-prose underline underline-offset-2 hover:text-fg"
             >
               Update GitHub access
             </a>
@@ -67,7 +67,7 @@ export function InspectButton({
       )}
 
       {state?.ok && state.reused && (
-        <p className="text-sm text-zinc-500">
+        <p className="text-sm text-fg-muted">
           Already up to date — the latest commit was inspected before.
         </p>
       )}

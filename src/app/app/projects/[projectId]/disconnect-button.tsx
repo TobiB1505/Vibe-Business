@@ -18,7 +18,7 @@ export function DisconnectButton({ projectId }: { projectId: string }) {
         }
       }}
     >
-      <button type="submit" className="text-sm text-red-400 underline underline-offset-2 hover:text-red-300">
+      <button type="submit" className="text-sm text-coral underline underline-offset-2 hover:text-coral">
         Disconnect project
       </button>
     </form>

@@ -159,9 +159,29 @@ describe("negative results are never hidden (§25)", () => {
   });
 
   it("gives degraded its own tone rather than rendering it as success", () => {
+    // Asserted against the *rule* rather than against two literal class names.
+    // The original spelled out `text-emerald-400` / `text-amber-300`, which tied
+    // a §25 guarantee to one palette and broke the moment the design system
+    // renamed its colours (UI-1) — while the guarantee itself was intact. What
+    // must never change is that a fall does not wear the colour of a rise.
     const tones = src.slice(src.indexOf("const RESULT_TONE"), src.indexOf("function BeforeAfter"));
-    expect(tones).toMatch(/improved: "text-emerald-400"/);
-    expect(tones).toMatch(/degraded: "text-amber-300"/);
+    const toneFor = (state: string): string | null =>
+      tones.match(new RegExp(`${state}:\\s*"([^"]+)"`))?.[1] ?? null;
+
+    const improved = toneFor("improved");
+    const degraded = toneFor("degraded");
+
+    expect(improved, "improved has no tone").not.toBeNull();
+    expect(degraded, "degraded has no tone").not.toBeNull();
+    expect(degraded).not.toBe(improved);
+  });
+
+  it("takes its result tones from the design system, not from raw colour", () => {
+    // A hex literal or a stray palette class here is how the two states drift
+    // back together: whoever adds the next one copies what they see.
+    const tones = src.slice(src.indexOf("const RESULT_TONE"), src.indexOf("function BeforeAfter"));
+    expect(tones).not.toMatch(/#[0-9a-fA-F]{3,8}/);
+    expect(tones).not.toMatch(/text-(zinc|emerald|red|green|slate|gray)-\d{2,3}/);
   });
 });
 

@@ -53,10 +53,10 @@ const CHECK_MARK: Record<OutcomeCheckStatus, string> = {
 };
 
 const CHECK_TONE: Record<OutcomeCheckStatus, string> = {
-  passed: "text-emerald-400",
-  failed: "text-amber-300",
-  not_observed: "text-zinc-500",
-  error: "text-zinc-500",
+  passed: "text-mint",
+  failed: "text-amber",
+  not_observed: "text-fg-muted",
+  error: "text-fg-muted",
 };
 
 const CHECK_SUFFIX: Record<OutcomeCheckStatus, string> = {
@@ -114,21 +114,21 @@ function OutcomeLadder({
   businessImpact?: string;
 }) {
   return (
-    <dl className="space-y-1 rounded-md border border-zinc-800 p-3" data-testid="outcome-ladder">
+    <dl className="space-y-1 rounded-md border border-line-2 p-3" data-testid="outcome-ladder">
       <div className="flex items-baseline justify-between gap-3">
-        <dt className="text-xs text-zinc-500">Merged</dt>
-        <dd className="text-xs text-emerald-400">Yes</dd>
+        <dt className="text-xs text-fg-muted">Merged</dt>
+        <dd className="text-xs text-mint">Yes</dd>
       </div>
       <div className="flex items-baseline justify-between gap-3">
-        <dt className="text-xs text-zinc-500">Production outcome</dt>
-        <dd className="text-xs text-zinc-300">{productOutcome}</dd>
+        <dt className="text-xs text-fg-muted">Production outcome</dt>
+        <dd className="text-xs text-fg-prose">{productOutcome}</dd>
       </div>
       <div className="flex items-baseline justify-between gap-3">
-        <dt className="text-xs text-zinc-500">Business impact</dt>
+        <dt className="text-xs text-fg-muted">Business impact</dt>
         {/* Not "pending" and not "0%". When nothing has been measured this
             says so plainly; when something has, it says what was observed —
             never a claim that the change caused it (Sprint 12B §33, §43). */}
-        <dd className="text-xs text-zinc-500">{businessImpact ?? "Not measured"}</dd>
+        <dd className="text-xs text-fg-muted">{businessImpact ?? "Not measured"}</dd>
       </div>
     </dl>
   );
@@ -137,7 +137,7 @@ function OutcomeLadder({
 /** Restated wherever an outcome is visible, for the same reason the merge panel restates its own. */
 function NotDeployed() {
   return (
-    <p className="text-xs text-zinc-500">
+    <p className="text-xs text-fg-muted">
       This verifies the intended public product behavior. It does not measure business impact, and
       Vibe has not verified a deployment.
     </p>
@@ -204,19 +204,19 @@ export function OutcomePanel({
   if (hidden) return null;
 
   return (
-    <section className="space-y-3 border-t border-zinc-800 pt-4">
-      <h4 className="text-sm font-medium text-zinc-200">Outcome</h4>
+    <section className="space-y-3 border-t border-line-2 pt-4">
+      <h4 className="text-sm font-medium text-fg-body">Outcome</h4>
 
       {current.state === "not_started" ? (
         <div className="space-y-2">
-          <p className="text-sm text-zinc-300">Merged</p>
-          <p className="text-sm text-zinc-400">Not yet verified in production</p>
-          <p className="text-xs text-zinc-500">
+          <p className="text-sm text-fg-prose">Merged</p>
+          <p className="text-sm text-fg-secondary">Not yet verified in production</p>
+          <p className="text-xs text-fg-muted">
             Vibe can check whether the intended change appears on your public product
             {current.publicOrigin ? (
               <>
                 {" at "}
-                <code className="text-zinc-300">{current.publicOrigin}</code>
+                <code className="text-fg-prose">{current.publicOrigin}</code>
               </>
             ) : null}
             . This reads public pages only, and changes nothing.
@@ -225,20 +225,20 @@ export function OutcomePanel({
             type="button"
             onClick={check}
             disabled={pending || !current.canVerify}
-            className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-900 disabled:opacity-60"
+            className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2 disabled:opacity-60"
           >
             Check production outcome
           </button>
         </div>
       ) : current.state === "observing" ? (
         <div className="space-y-2">
-          <p className="text-sm text-zinc-300">Checking production…</p>
-          <p className="text-sm text-zinc-400">
+          <p className="text-sm text-fg-prose">Checking production…</p>
+          <p className="text-sm text-fg-secondary">
             Vibe is checking whether the intended change appears on your public product.
           </p>
           {/* No percentage. Nobody knows how long somebody else's deployment
               takes, and a bar sitting at 60% would teach people to distrust it. */}
-          <p className="text-xs text-zinc-500">
+          <p className="text-xs text-fg-muted">
             Production may take a few minutes to update. Vibe will keep looking
             {current.windowEndsAt ? ` until ${localTime(current.windowEndsAt)}` : " for a short while"}.
             You can leave this page.
@@ -247,30 +247,30 @@ export function OutcomePanel({
         </div>
       ) : current.state === "verified" ? (
         <div className="space-y-2">
-          <p className="text-sm text-emerald-400">Production outcome verified</p>
+          <p className="text-sm text-mint">Production outcome verified</p>
           <CheckList checks={current.checks} />
           {current.observedAt && (
-            <p className="text-xs text-zinc-500">Observed at {localTime(current.observedAt)}</p>
+            <p className="text-xs text-fg-muted">Observed at {localTime(current.observedAt)}</p>
           )}
           <OutcomeLadder productOutcome="Verified" businessImpact={businessImpactLabel} />
           <NotDeployed />
         </div>
       ) : current.state === "partial" ? (
         <div className="space-y-2">
-          <p className="text-sm text-amber-300">Partially observed</p>
+          <p className="text-sm text-amber">Partially observed</p>
           {/* Every check, passing and not. Hiding the failures is how a partial
               outcome quietly becomes a verified one (§31). */}
           <CheckList checks={current.checks} />
           {current.observedAt && (
-            <p className="text-xs text-zinc-500">Observed at {localTime(current.observedAt)}</p>
+            <p className="text-xs text-fg-muted">Observed at {localTime(current.observedAt)}</p>
           )}
           <OutcomeLadder productOutcome="Partially observed" businessImpact={businessImpactLabel} />
           <NotDeployed />
         </div>
       ) : current.state === "not_observed" ? (
         <div className="space-y-2">
-          <p className="text-sm text-zinc-300">Not observed within verification window</p>
-          <p className="text-sm text-zinc-400">
+          <p className="text-sm text-fg-prose">Not observed within verification window</p>
+          <p className="text-sm text-fg-secondary">
             Vibe did not observe the expected production behavior within 15 minutes.
           </p>
           <CheckList checks={current.checks} />
@@ -278,7 +278,7 @@ export function OutcomePanel({
               deployment API and does not know why (§22, §32). And it offers no
               remerge, revalidate, rebuild or redeploy — there is no hidden
               recovery here (§32, CLAUDE.md rule 60). */}
-          <p className="text-xs text-zinc-500">
+          <p className="text-xs text-fg-muted">
             This does not mean a deployment failed. Vibe does not read your hosting provider, so it
             cannot say why the behavior was not visible.
           </p>
@@ -288,21 +288,21 @@ export function OutcomePanel({
         <div className="space-y-2">
           {/* "Vibe could not check" — a statement about Vibe, never about the
               customer's product (§23). */}
-          <p className="text-sm text-amber-300">Vibe could not check the production outcome</p>
-          {current.failureMessage && <p className="text-sm text-zinc-400">{current.failureMessage}</p>}
-          <p className="text-xs text-zinc-500">
+          <p className="text-sm text-amber">Vibe could not check the production outcome</p>
+          {current.failureMessage && <p className="text-sm text-fg-secondary">{current.failureMessage}</p>}
+          <p className="text-xs text-fg-muted">
             This says nothing about whether your product behaves as intended — only that Vibe could
             not observe it.
           </p>
         </div>
       ) : (
         <div className="space-y-2">
-          <p className="text-sm text-zinc-400">Not available</p>
-          {current.failureMessage && <p className="text-xs text-zinc-500">{current.failureMessage}</p>}
+          <p className="text-sm text-fg-secondary">Not available</p>
+          {current.failureMessage && <p className="text-xs text-fg-muted">{current.failureMessage}</p>}
         </div>
       )}
 
-      {state?.ok === false && <p className="text-sm text-red-400">{state.message}</p>}
+      {state?.ok === false && <p className="text-sm text-coral">{state.message}</p>}
     </section>
   );
 }

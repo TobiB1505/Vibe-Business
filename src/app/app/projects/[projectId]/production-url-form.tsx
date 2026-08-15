@@ -45,14 +45,14 @@ export function ProductionUrlForm({
           href={currentUrl}
           target="_blank"
           rel="noreferrer nofollow"
-          className="text-sm text-zinc-200 underline underline-offset-2 hover:text-zinc-50"
+          className="text-sm text-fg-body underline underline-offset-2 hover:text-fg"
         >
           {currentUrl}
         </a>
         <button
           type="button"
           onClick={() => setEditing(true)}
-          className="text-xs text-zinc-500 underline underline-offset-2 hover:text-zinc-300"
+          className="text-xs text-fg-muted underline underline-offset-2 hover:text-fg-prose"
         >
           Change
         </button>
@@ -69,7 +69,7 @@ export function ProductionUrlForm({
           defaultValue={currentUrl ?? ""}
           placeholder="https://example.com"
           required
-          className="min-w-64 flex-1 rounded-md border border-zinc-800 bg-zinc-950 px-3 py-1.5 text-sm text-zinc-200 placeholder:text-zinc-600 focus:border-zinc-600 focus:outline-none"
+          className="min-w-64 flex-1 rounded-md border border-line-strong bg-field px-3 py-1.5 text-sm text-fg-body placeholder:text-fg-meta focus:border-mint/60 focus:ring-mint/10 focus:ring-4 focus:outline-none"
         />
         <Button type="submit" disabled={pending}>
           {pending ? "Saving…" : currentUrl ? "Save" : "Add production URL"}
@@ -78,14 +78,14 @@ export function ProductionUrlForm({
           <button
             type="button"
             onClick={() => setEditing(false)}
-            className="text-xs text-zinc-500 underline underline-offset-2 hover:text-zinc-300"
+            className="text-xs text-fg-muted underline underline-offset-2 hover:text-fg-prose"
           >
             Cancel
           </button>
         )}
       </form>
 
-      {state && !state.ok && <p className="text-sm text-amber-400">{ERROR_MESSAGES[state.error]}</p>}
+      {state && !state.ok && <p className="text-sm text-amber">{ERROR_MESSAGES[state.error]}</p>}
     </div>
   );
 }
