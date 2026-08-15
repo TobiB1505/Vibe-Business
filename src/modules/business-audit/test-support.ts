@@ -126,6 +126,7 @@ export function fakeRepositorySnapshot(
     frameworks: [{ id: "nextjs", name: "Next.js", confidence: "high", evidence: [] }],
     packageManager: "pnpm",
     runtime: [],
+    brand: { assets: [], colors: [], typefaces: [], tokenSources: [] },
     integrationSignals: [
       { id: "supabase", name: "Supabase", category: "database", confidence: "high", evidence: [] },
     ],
@@ -221,6 +222,7 @@ export function fakeLiveSnapshot(
       { id: "canonical", name: "Canonical URL", present: false, evidence: [] },
       { id: "sitemap", name: "Sitemap", present: false, evidence: [] },
     ],
+    brandSignals: { siteName: null, assets: [], colors: [], typefaces: [] },
     conversionSignals: {
       primaryCta: {
         category: "get_started",

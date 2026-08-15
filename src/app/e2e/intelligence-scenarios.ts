@@ -152,6 +152,35 @@ function repositorySnapshot(): RepositoryIntelligenceSnapshot {
         evidence: [],
       },
     ],
+    brand: {
+      assets: [
+        {
+          role: "logo",
+          path: "public/logo.svg",
+          servedPath: "/logo.svg",
+          confidence: "high",
+          evidence: [{ kind: "file_path", path: "public/logo.svg", detail: "logo" }],
+        },
+      ],
+      colors: [
+        {
+          role: "primary",
+          value: "#00e5a0",
+          token: "--color-primary",
+          confidence: "high",
+          evidence: [{ kind: "config_file", path: "src/app/globals.css", detail: "--color-primary" }],
+        },
+      ],
+      typefaces: [
+        {
+          role: "body",
+          family: "Space Grotesk",
+          confidence: "high",
+          evidence: [{ kind: "config_file", path: "src/app/globals.css", detail: "--font-sans" }],
+        },
+      ],
+      tokenSources: ["src/app/globals.css"],
+    },
     metrics: {
       treeEntriesConsidered: 812,
       candidatesSelected: 12,

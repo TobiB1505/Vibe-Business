@@ -24,7 +24,7 @@ import type { CrawlCompleteness, CrawlCompletenessReason } from "./budgets";
 export const LIVE_PRODUCT_INTELLIGENCE_SCHEMA_VERSION = "live-product-intelligence.v1" as const;
 
 /** Bumped whenever detection rules change materially, invalidating reuse. */
-export const LIVE_PRODUCT_ANALYZER_VERSION = "live-product-analyzer-v1" as const;
+export const LIVE_PRODUCT_ANALYZER_VERSION = "live-product-analyzer-v2" as const;
 
 /** Deliberately coarse — no fake numeric precision (Sprint 3 §14). */
 export type Confidence = "high" | "medium" | "low";
@@ -158,6 +158,48 @@ export type SiteMetadata = {
   structuredDataTypes: string[];
 };
 
+/**
+ * What a served page says about its own brand (CORE-1 §11–§13).
+ *
+ * The counterpart to the repository's `BrandIntelligence`, and deliberately
+ * not the same shape: the repository knows what a design system *declares*,
+ * while this knows what a visitor is actually served. Where they agree, the
+ * claim is strong. Where they disagree — a logo in `/public` that no page
+ * references — that disagreement is itself the finding.
+ *
+ * Paths only, never bytes. No image, icon, or stylesheet is downloaded here;
+ * a URL recorded in this payload is a reference the page published, and
+ * whether it resolves is not something static HTML inspection can say.
+ */
+export type LiveBrandAsset = {
+  role: "favicon" | "app_icon" | "logo" | "open_graph_image" | "web_manifest";
+  /** Origin-relative path, query stripped (Sprint 3 §22). Absolute for off-origin. */
+  path: string;
+  /** The image's own alt text, when it had one. Untrusted third-party text. */
+  label: string | null;
+  confidence: Confidence;
+  evidence: LiveEvidence[];
+};
+
+export type LiveBrandColor = {
+  /** Where the value came from — a declaration, not an inference. */
+  source: "theme_color_meta" | "style_token";
+  value: string;
+  /** Custom-property name for a style token; null for `theme-color`. */
+  token: string | null;
+  confidence: Confidence;
+  evidence: LiveEvidence[];
+};
+
+export type LiveBrandSignals = {
+  /** The name the site gives itself, from og:site_name or application-name. */
+  siteName: string | null;
+  assets: LiveBrandAsset[];
+  colors: LiveBrandColor[];
+  /** Font families named in inline custom properties, e.g. "Space Grotesk". */
+  typefaces: string[];
+};
+
 export type LiveAnalysisSource = {
   /** The normalized URL the user configured. */
   configuredUrl: string;
@@ -208,6 +250,7 @@ export type LiveProductIntelligenceSnapshot = {
   productSurfaces: ProductSurfaceSignal[];
   seoSignals: SeoSignal[];
   conversionSignals: ConversionSignals;
+  brandSignals: LiveBrandSignals;
   metrics: LiveAnalysisMetrics;
   completeness: LiveCompleteness;
   warnings: LiveWarning[];

@@ -49,6 +49,21 @@ export type ParsedForm = {
 
 export type ParsedHeading = { level: 1 | 2 | 3; text: string };
 
+/** A declared icon: `rel` says what it is for, `href` where it lives. */
+export type ParsedIcon = { rel: string; href: string; sizes: string | null };
+
+/**
+ * An image the page presents as its mark.
+ *
+ * Only images whose own attributes say so — an `alt`, `class`, `id` or `src`
+ * naming a logo. A page's first `<img>` is not a logo, and treating it as one
+ * is how a product ends up revealed under a stock hero photo (CORE-1 §11).
+ */
+export type ParsedBrandImage = { src: string; alt: string | null; inNav: boolean };
+
+/** A CSS custom property declared in an inline `<style>` block. */
+export type ParsedStyleToken = { name: string; value: string };
+
 export type ParsedHtml = {
   title: string | null;
   metaDescription: string | null;
@@ -63,6 +78,12 @@ export type ParsedHtml = {
   links: ParsedLink[];
   buttons: string[];
   forms: ParsedForm[];
+  /** Brand signals (CORE-1 §11–§13). Derived facts only, never page source. */
+  icons: ParsedIcon[];
+  themeColor: string | null;
+  applicationName: string | null;
+  brandImages: ParsedBrandImage[];
+  styleTokens: ParsedStyleToken[];
 };
 
 const ENTITIES: Record<string, string> = {
@@ -178,6 +199,56 @@ function extractStructuredDataTypes(html: string): string[] {
   return [...types];
 }
 
+/** `rel` values worth recording. Anything else is not an icon we can use. */
+const ICON_RELS = new Set([
+  "icon",
+  "shortcut icon",
+  "apple-touch-icon",
+  "apple-touch-icon-precomposed",
+  "mask-icon",
+  "manifest",
+]);
+
+const MAX_ICONS = 8;
+const MAX_BRAND_IMAGES = 4;
+const MAX_STYLE_TOKENS = 200;
+
+/** Attribute shapes that make an image the page's own mark rather than content. */
+const LOGO_ATTRIBUTE = /(^|[\s\-_/])logo|wordmark|brandmark|site-?(mark|icon)/i;
+
+/**
+ * Custom-property declarations from inline `<style>` blocks.
+ *
+ * A page's linked stylesheets are deliberately **not** fetched: CORE-1 keeps
+ * live inspection to the static HTML the crawler already downloads, so brand
+ * colour on the live side is whatever the document itself declares. Frameworks
+ * that inline critical CSS (Next.js among them) put the token block right
+ * here; ones that do not simply contribute no colour evidence, and the
+ * repository side answers instead.
+ */
+function extractStyleTokens(html: string): ParsedStyleToken[] {
+  const tokens: ParsedStyleToken[] = [];
+  const blockPattern = /<style\b[^>]{0,1000}>([\s\S]{0,200000}?)<\/style>/gi;
+  const declarationPattern = /--([a-zA-Z0-9_-]{1,60})\s*:\s*([^;{}]{1,200})[;}]/g;
+
+  let block: RegExpExecArray | null;
+  let blocks = 0;
+  while ((block = blockPattern.exec(html)) !== null && blocks < 12) {
+    blocks += 1;
+    declarationPattern.lastIndex = 0;
+    let declaration: RegExpExecArray | null;
+    while (
+      (declaration = declarationPattern.exec(block[1])) !== null &&
+      tokens.length < MAX_STYLE_TOKENS
+    ) {
+      const value = declaration[2].trim();
+      if (value === "") continue;
+      tokens.push({ name: `--${declaration[1]}`, value });
+    }
+  }
+  return tokens;
+}
+
 function normalizeActionPath(action: string): string | null {
   const value = action.trim();
   if (value === "") return null;
@@ -257,6 +328,9 @@ export function parseHtml(html: string): ParsedHtml {
   const withoutComments = html.replace(/<!--[\s\S]{0,50000}?-->/g, " ");
 
   const structuredDataTypes = extractStructuredDataTypes(withoutComments);
+  // Read before `<style>` bodies are stripped below. Only custom-property
+  // *declarations* are taken — never the stylesheet text itself.
+  const styleTokens = extractStyleTokens(withoutComments);
   // Present counts as: parseable JSON-LD, an unparseable JSON-LD block
   // (the page still declares structured data), or Microdata markup.
   const hasStructuredData =
@@ -282,6 +356,8 @@ export function parseHtml(html: string): ParsedHtml {
   let metaDescription: string | null = null;
   let robotsMeta: string | null = null;
   let hasViewportMeta = false;
+  let themeColor: string | null = null;
+  let applicationName: string | null = null;
   const openGraph: Record<string, string> = {};
 
   const metaPattern = /<meta\b([^>]{0,2000})>/gi;
@@ -301,20 +377,38 @@ export function parseHtml(html: string): ParsedHtml {
       robotsMeta = contentValue.trim().slice(0, 120) || null;
     }
     if (name === "viewport") hasViewportMeta = true;
+    if (name === "theme-color" && themeColor === null) {
+      themeColor = contentValue.trim().slice(0, 40) || null;
+    }
+    if ((name === "application-name" || name === "apple-mobile-web-app-title") && applicationName === null) {
+      applicationName = toText(contentValue, MAX_LABEL_LENGTH) || null;
+    }
     if (property.startsWith("og:") && Object.keys(openGraph).length < 12) {
       openGraph[property] = toText(contentValue, MAX_DESCRIPTION_LENGTH);
     }
   }
 
   let canonical: string | null = null;
+  const icons: ParsedIcon[] = [];
   const linkTagPattern = /<link\b([^>]{0,2000})>/gi;
   let linkTagMatch: RegExpExecArray | null;
   let linkTagCount = 0;
   while ((linkTagMatch = linkTagPattern.exec(content)) !== null && linkTagCount < 200) {
     linkTagCount += 1;
     const attributes = parseAttributes(linkTagMatch[1]);
-    if ((attributes["rel"] ?? "").toLowerCase() === "canonical" && canonical === null) {
+    const rel = (attributes["rel"] ?? "").trim().toLowerCase();
+    if (rel === "canonical" && canonical === null) {
       canonical = (attributes["href"] ?? "").trim().slice(0, 500) || null;
+    }
+    if (ICON_RELS.has(rel) && icons.length < MAX_ICONS) {
+      const href = (attributes["href"] ?? "").trim();
+      if (href !== "" && !/^(javascript|data):/i.test(href)) {
+        icons.push({
+          rel,
+          href: href.slice(0, 500),
+          sizes: (attributes["sizes"] ?? "").trim().slice(0, 40) || null,
+        });
+      }
     }
   }
 
@@ -354,6 +448,31 @@ export function parseHtml(html: string): ParsedHtml {
     if (text !== "") buttons.push(text);
   }
 
+  // Images the page itself labels as its mark. `alt` first, because that is
+  // the one attribute a human wrote on purpose; class/id/src are corroborating.
+  const brandImages: ParsedBrandImage[] = [];
+  const imagePattern = /<img\b([^>]{0,2000})>/gi;
+  let imageMatch: RegExpExecArray | null;
+  let imagesSeen = 0;
+  while ((imageMatch = imagePattern.exec(content)) !== null && imagesSeen < 200) {
+    imagesSeen += 1;
+    if (brandImages.length >= MAX_BRAND_IMAGES) break;
+
+    const attributes = parseAttributes(imageMatch[1]);
+    const src = (attributes["src"] ?? attributes["data-src"] ?? "").trim();
+    if (src === "" || /^(javascript|data):/i.test(src)) continue;
+
+    const alt = attributes["alt"] ?? "";
+    const descriptor = `${alt} ${attributes["class"] ?? ""} ${attributes["id"] ?? ""} ${src}`;
+    if (!LOGO_ATTRIBUTE.test(descriptor)) continue;
+
+    brandImages.push({
+      src: src.slice(0, 500),
+      alt: toText(alt, MAX_LABEL_LENGTH) || null,
+      inNav: inAnyRegion(imageMatch.index, navRegions),
+    });
+  }
+
   const forms: ParsedForm[] = [];
   const formPattern = /<form\b([^>]{0,2000})>([\s\S]{0,40000}?)<\/form>/gi;
   let formMatch: RegExpExecArray | null;
@@ -375,5 +494,10 @@ export function parseHtml(html: string): ParsedHtml {
     links,
     buttons,
     forms,
+    icons,
+    themeColor,
+    applicationName,
+    brandImages,
+    styleTokens,
   };
 }

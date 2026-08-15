@@ -23,7 +23,7 @@ export const REPOSITORY_INTELLIGENCE_SCHEMA_VERSION = "repository_intelligence.v
  * always says which analyzer produced it and reuse can be invalidated.
  * Deliberately independent of the app/package version (Sprint 2 §30).
  */
-export const ANALYZER_VERSION = "repo-intelligence-v2" as const;
+export const ANALYZER_VERSION = "repo-intelligence-v3" as const;
 
 /** Deliberately coarse — see Sprint 2 §18, no fake precision. */
 export type Confidence = "high" | "medium" | "low";
@@ -168,6 +168,75 @@ export type Warning = {
   path?: string;
 };
 
+/**
+ * What role a brand asset plays. A closed set, because "some SVG in
+ * /public" is not a logo and must never be presented as one (CORE-1 §11).
+ */
+export type BrandAssetRole = "logo" | "logo_alternate" | "favicon" | "app_icon" | "open_graph_image";
+
+/**
+ * A file that *looks like* a brand asset by name and location. Never its
+ * bytes — the analyzer does not download images (`isBinaryPath`), so this
+ * is a path claim backed by naming convention, nothing more.
+ */
+export type BrandAssetSignal = {
+  role: BrandAssetRole;
+  /** Repository-relative path. */
+  path: string;
+  /** The public URL this would be served at, when it sits in a web root. */
+  servedPath: string | null;
+  confidence: Confidence;
+  evidence: Evidence[];
+};
+
+export type BrandColorRole = "primary" | "secondary" | "accent" | "background" | "foreground";
+
+/**
+ * A colour lifted from a design-token declaration.
+ *
+ * `token` is the custom-property name it was declared under, which is what
+ * makes the claim checkable: "#00e5a0, declared as --color-mint in
+ * src/app/globals.css" is a fact, while "the brand colour is mint" is a
+ * guess. `roleConfidence` is deliberately separate from the value: we can be
+ * certain the colour exists and unsure what job it does.
+ */
+export type BrandColorSignal = {
+  role: BrandColorRole;
+  /** Normalized CSS colour value, e.g. "#00e5a0". Never a gradient. */
+  value: string;
+  /** The custom property it was declared as, e.g. "--color-mint". */
+  token: string;
+  /** How sure we are that this colour plays this role. */
+  confidence: Confidence;
+  evidence: Evidence[];
+};
+
+export type BrandTypefaceRole = "display" | "body" | "mono";
+
+export type BrandTypefaceSignal = {
+  role: BrandTypefaceRole;
+  /** Human family name, e.g. "Space Grotesk". Never a font file. */
+  family: string;
+  confidence: Confidence;
+  evidence: Evidence[];
+};
+
+/**
+ * Brand signals a repository can supply (CORE-1 §11–§13).
+ *
+ * Deliberately signals, not a brand: this layer says "these colours are
+ * declared as design tokens", never "this is the brand". Deciding what the
+ * brand *is* happens in the Product Understanding layer, which can weigh
+ * these against what the live site actually serves.
+ */
+export type BrandIntelligence = {
+  assets: BrandAssetSignal[];
+  colors: BrandColorSignal[];
+  typefaces: BrandTypefaceSignal[];
+  /** Files whose declarations were read. Evidence for "we looked". */
+  tokenSources: string[];
+};
+
 export type RepositoryIntelligenceSnapshot = {
   schemaVersion: typeof REPOSITORY_INTELLIGENCE_SCHEMA_VERSION;
   source: AnalysisSource;
@@ -181,6 +250,7 @@ export type RepositoryIntelligenceSnapshot = {
   integrationSignals: IntegrationSignal[];
   routes: RouteIntelligence;
   businessSurfaces: BusinessSurfaceSignal[];
+  brand: BrandIntelligence;
   metrics: AnalysisMetrics;
   warnings: Warning[];
 };
