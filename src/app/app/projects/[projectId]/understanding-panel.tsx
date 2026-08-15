@@ -132,14 +132,23 @@ export function UnderstandingPanel({
           <MonoLabel>What people can do</MonoLabel>
           <ul className="flex flex-col gap-2.5">
             {view.capabilities.map((capability) => (
-              <li key={capability.id} className="flex items-baseline justify-between gap-4">
+              // Stacked on a phone, one line from `sm` up. The note is a full
+              // sentence ("Likely, based on several signals" measures 211px),
+              // so holding it on the same row as the label is what pushed a
+              // 375px screen sideways — a browser with a classic scrollbar
+              // leaves ~360px of content width, and `shrink-0` refused to give
+              // any of it back.
+              <li
+                key={capability.id}
+                className="flex flex-col gap-0.5 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4"
+              >
                 <span className={`${TONE_TEXT[capability.tone]} flex items-baseline gap-2.5 text-sm`}>
                   <span aria-hidden className={`${TONE_MARK[capability.tone]} text-xs`}>
                     {TONE_GLYPH[capability.tone]}
                   </span>
                   {capability.label}
                 </span>
-                <span className="text-fg-meta shrink-0 font-mono text-[0.6875rem]">
+                <span className="text-fg-meta pl-6 font-mono text-[0.6875rem] sm:shrink-0 sm:pl-0">
                   {capability.note}
                 </span>
               </li>
