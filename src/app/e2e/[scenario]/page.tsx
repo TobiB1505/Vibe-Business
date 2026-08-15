@@ -3,7 +3,9 @@ import {
   PreparedChangesSection,
   type PreparedChangeCard,
 } from "@/app/app/projects/[projectId]/prepared-changes-section";
+import { IntelligenceSummary } from "@/app/app/projects/[projectId]/intelligence-summary";
 import { E2E_SCENARIOS, isE2eScenario } from "../scenarios";
+import { E2E_INTELLIGENCE_SCENARIOS, isE2eIntelligenceScenario } from "../intelligence-scenarios";
 
 /**
  * The browser harness's only entry point (Sprint 11C.1).
@@ -56,17 +58,39 @@ export default async function E2eScenarioPage({
   if (!fixturesEnabled()) notFound();
 
   const { scenario } = await params;
+
+  /* The scenario name is rendered so a failing trace says which fixture was on
+     screen, rather than leaving that to be inferred. */
+  const label = (
+    <p className="mb-4 text-xs text-zinc-600" data-testid="e2e-scenario">
+      {scenario}
+    </p>
+  );
+
+  // Repository intelligence (UI-3.6): the same component the overview route
+  // renders, given the same snapshot shape a real analysis produces.
+  if (isE2eIntelligenceScenario(scenario)) {
+    const fixture = E2E_INTELLIGENCE_SCENARIOS[scenario]();
+    return (
+      <main className="mx-auto max-w-4xl p-8">
+        {label}
+        <IntelligenceSummary
+          snapshot={fixture.snapshot}
+          analyzedAt={fixture.analyzedAt}
+          projectId="project_e2e"
+          liveSnapshot={fixture.live}
+        />
+      </main>
+    );
+  }
+
   if (!isE2eScenario(scenario)) notFound();
 
   const change: PreparedChangeCard = E2E_SCENARIOS[scenario]();
 
   return (
     <main className="mx-auto max-w-4xl p-8">
-      {/* The scenario name is rendered so a failing trace says which fixture
-          was on screen, rather than leaving that to be inferred. */}
-      <p className="mb-4 text-xs text-zinc-600" data-testid="e2e-scenario">
-        {scenario}
-      </p>
+      {label}
       <PreparedChangesSection projectId="project_e2e" changes={[change]} />
     </main>
   );
