@@ -156,22 +156,49 @@ export class AnthropicProvider implements AIProvider {
   constructor(private readonly messages: AnthropicMessagesClient) {}
 
   /**
-   * Builds the request body once, so the token count is measured against
-   * the exact shape that will be billed. Counting a different payload than
-   * the one sent would make the budget gate meaningless.
+   * Everything both endpoints take, built once so the token count is measured
+   * against the exact shape that will be billed. Counting a different payload
+   * than the one sent would make the budget gate meaningless.
+   *
+   * `max_tokens` is the only field they differ on — the count endpoint does
+   * not accept an output budget — so it is added by `buildParams` rather than
+   * stripped here. Building up is safer than tearing down: a field added to
+   * the billable call cannot silently escape the count.
    */
-  private buildParams(request: StructuredRequest) {
+  private buildCountableParams(request: StructuredRequest) {
+    /**
+     * `thinking` and `output_config.effort` are sent **only** when the caller
+     * asked for adaptive reasoning, because they are not universal parameters.
+     * They arrived with one model generation, and an older model — Haiku 4.5,
+     * which Product Understanding runs on — rejects the request outright when
+     * either is present.
+     *
+     * This used to be unconditional, on the assumption that every model Vibe
+     * calls is Sonnet-5-shaped. Spreading empty objects rather than sending
+     * explicit `undefined` keeps the key absent from the serialized body,
+     * which is what the API distinguishes.
+     */
+    const thinking =
+      request.reasoning.mode === "adaptive"
+        ? // Adaptive is the only supported mode on this generation; manual
+          // `budget_tokens` is rejected with a 400. Depth is steered by
+          // `effort` instead.
+          { thinking: { type: "adaptive" as const } }
+        : {};
+
+    const effort =
+      request.reasoning.mode === "adaptive" ? { effort: request.reasoning.effort } : {};
+
     return {
       model: request.model,
-      max_tokens: request.maxOutputTokens,
       system: request.system,
       messages: [{ role: "user" as const, content: request.userContent }],
-      // Adaptive thinking is the only supported mode on Sonnet 5; manual
-      // `budget_tokens` is rejected with a 400 on this model generation.
-      // Depth is steered by `effort` instead.
-      thinking: { type: "adaptive" as const },
+      ...thinking,
       output_config: {
-        effort: request.effort,
+        ...effort,
+        // Structured output is required on every model, whatever its
+        // reasoning support — it is what makes a prose answer a typed
+        // failure rather than something to parse hopefully.
         format: {
           type: "json_schema" as const,
           schema: request.outputSchema,
@@ -183,16 +210,17 @@ export class AnthropicProvider implements AIProvider {
     };
   }
 
+  /** The countable body plus the one field only the billable call takes. */
+  private buildParams(request: StructuredRequest) {
+    return {
+      ...this.buildCountableParams(request),
+      max_tokens: request.maxOutputTokens,
+    };
+  }
+
   async countInputTokens(request: StructuredRequest): Promise<TokenCountResult> {
     try {
-      const params = this.buildParams(request);
-      const result = await this.messages.countTokens({
-        model: params.model,
-        system: params.system,
-        messages: params.messages,
-        thinking: params.thinking,
-        output_config: params.output_config,
-      });
+      const result = await this.messages.countTokens(this.buildCountableParams(request));
       return { ok: true, inputTokens: result.input_tokens };
     } catch (error) {
       // The count is free, but it reaches the same account and key as the

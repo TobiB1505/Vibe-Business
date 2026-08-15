@@ -112,7 +112,7 @@ export function buildAuditRequest(pack: EvidencePackV2, config: OperationConfig)
     userContent: renderEvidencePackV2(pack),
     outputSchema: ANTHROPIC_AUDIT_OUTPUT_SCHEMA,
     maxOutputTokens: config.maxOutputTokens,
-    effort: config.effort,
+    reasoning: config.reasoning,
   };
 }
 

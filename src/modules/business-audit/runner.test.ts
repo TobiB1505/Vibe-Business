@@ -77,7 +77,7 @@ describe("runBusinessReadinessAudit — happy path", () => {
     expect(request.outputSchema).toBeTruthy();
     expect("tools" in request).toBe(false);
     expect(request.model).toBe("claude-sonnet-5");
-    expect(request.effort).toBe("high");
+    expect(request.reasoning).toEqual({ mode: "adaptive", effort: "high" });
   });
 
   it("keeps customer content out of the system prompt", async () => {

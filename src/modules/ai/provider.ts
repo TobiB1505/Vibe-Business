@@ -36,6 +36,34 @@ export type AIOperation =
 /** Effort levels supported by the configured model family. */
 export type AIEffort = "low" | "medium" | "high";
 
+/**
+ * How much reasoning to ask a model for.
+ *
+ * A union rather than a plain `effort` field, because effort is **not
+ * universally available**: adaptive thinking and the effort control arrived
+ * together with one model generation, and a model from before it rejects both
+ * outright. Carrying `effort` unconditionally meant every request claimed a
+ * capability only some models have, and the request was built the same way
+ * whichever model it was addressed to.
+ *
+ * That is not hypothetical. Product Understanding runs on Haiku 4.5, a model
+ * from before that generation; the adapter sent it the newer shape anyway, the
+ * API rejected the payload, and the free token count that precedes every paid
+ * call failed with it — so the feature failed before it could spend anything.
+ * The failure surfaced as `token_count_failed`, which is the code for "we
+ * cannot attribute this", so nothing in the logs said *payload*.
+ *
+ * The two modes are therefore a capability statement, not a preference:
+ *
+ *  - `adaptive` — the model supports adaptive thinking, and `effort` steers it.
+ *  - `none` — no thinking parameter and no effort is sent. Either the model
+ *    predates them, or the task genuinely does not need reasoning depth.
+ *
+ * Making `effort` reachable only inside `adaptive` is the point: a config that
+ * pairs an effort level with a model that cannot honour one does not compile.
+ */
+export type AIReasoning = { mode: "adaptive"; effort: AIEffort } | { mode: "none" };
+
 export type StructuredRequest = {
   operation: AIOperation;
   model: string;
@@ -46,7 +74,7 @@ export type StructuredRequest = {
   /** JSON Schema the response must satisfy. */
   outputSchema: Record<string, unknown>;
   maxOutputTokens: number;
-  effort: AIEffort;
+  reasoning: AIReasoning;
 };
 
 export type AIUsage = {
