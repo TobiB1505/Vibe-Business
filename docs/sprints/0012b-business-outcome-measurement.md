@@ -13,8 +13,8 @@
 | Durable execution + `next_observation_at` scheduling contract | ✅ Complete |
 | Tests + 17 deliberate regressions | ✅ Complete (17 killed; 3 survived first pass, all closed) |
 | Browser E2E | ✅ 57 chromium tests (25 new), all green |
-| Real dogfood | ✅ **Source-required — the honest current state** (dry run; live click blocked on the migration) |
-| Migration deployed | ⛔ **Not deployed** — no linked Supabase CLI in this environment |
+| Real dogfood | ✅ **Done 15.08.2026 through the UI — `source_required`, the honest current state** |
+| Migration deployed | ✅ Deployed 15.08.2026 via the CLI from the linked machine |
 | Analytics connector | ⛔ Deliberately not built (§49) |
 
 ## Goal
@@ -265,15 +265,54 @@ The property that actually matters is stronger and exactly checkable: the measur
 
 **On `pnpm test:e2e`.** This container ships Chromium 1194 while `@playwright/test` 1.62 expects 1234, and `playwright install` is disabled. The suite was run through a scratchpad-only config pointing the repository's own config at the preinstalled binary; `playwright.config.ts` is unchanged, so CI and other machines are unaffected.
 
-**On the Supabase CLI.** Same position as 12A: no CLI credentials and no `.env` here. Alignment was verified read-only instead — 22 local migrations, 22 remote, exact version-for-version agreement, no drift. The live `operation_runs` constraints were read before this migration was written.
+**On the Supabase CLI.** Both database commands were later re-run from the linked machine after deployment: `pnpm db:status` reports 23/23 with nothing pending and no remote-only drift, and `pnpm db:lint` reports no schema errors. The whole gate was re-run there against the deployed schema — including `pnpm test:e2e`, which needed **no** scratchpad override on a machine with a matching Chromium, confirming that workaround was environmental rather than a defect in `playwright.config.ts`.
 
-## Migration — not deployed
+## Migration — deployed 15.08.2026
+
+Applied from the linked machine through the sanctioned workflow: `pnpm db:status`
+→ `pnpm db:push`. One pending migration, no remote-only drift, **version
+preserved**. History converged at 23/23.
+
+### The enum check, done first
+
+This migration drops and re-adds both `operation_runs` CHECKs, and a drop/re-add
+can silently *narrow* an enum — orphaning rows that already use a value the new
+list forgets. The re-added lists were diffed against the constraint **read live
+at deploy time**, not against notes:
+
+| Constraint | Live | After | Removed |
+| --- | --- | --- | --- |
+| `operation_type` | 9 | 10 | **none** — `business_measurement` added |
+| `stage` | 34 | 37 | **none** — `collecting_baseline`, `collecting_post`, `comparing` added |
+
+Purely additive, against a database now holding four sprints of real operation
+history.
+
+### Verified live after deploy
+
+- both tables present: `measurement_plans` (13 CHECKs) and
+  `business_outcome_measurements` (19 CHECKs);
+- **INSERT and SELECT policies only on both** — no UPDATE, no DELETE, so the
+  baseline, observed value, classification, sample sizes and timestamps are
+  unreachable from a browser by construction;
+- `measurement_plans` insert requires a genuinely `merged` merge whose read-back
+  head equals its prepared commit;
+- `business_outcome_measurements` insert requires a `ready` plan whose metric and
+  direction match, and refuses any row that already claims a result — status
+  confined to `waiting_for_source`/`waiting_for_window`, every value column null,
+  `provenance = '[]'`;
+- Postgres's normalized `with_check` on both confirms every outer reference is
+  qualified and every inner one aliased (`p`, `cm`, `mp`, `orn`).
+
+### The original note, kept
+
+#### Why it was not applied from the implementation environment
 
 `supabase/migrations/20260815120000_business_outcome_measurement.sql` is written, reviewed and pinned by contract tests. `to_regclass` confirms neither table exists on the remote database yet.
 
 The sanctioned path is `pnpm db:status` → `pnpm db:push` → `pnpm db:lint` from a linked machine, and that machine is not this one. Applying the DDL through the reachable management connection was rejected for the reason Sprints 11C and 12A rejected it: it stamps its own migration version, diverging local and remote history.
 
-**Until it is deployed, "Plan measurement" fails at INSERT** on `operation_runs_operation_type_check` and on the missing tables.
+**Until it was deployed, "Plan measurement" would have failed at INSERT** on `operation_runs_operation_type_check` and on the missing tables. It has since been deployed, as recorded above.
 
 ## Real SEO dogfood
 
@@ -288,7 +327,40 @@ Resolved from production state, not assumed:
 | Business context | stage `prototype`, primary goal `launch` |
 | Production URL | `https://vibe-business-fawn.vercel.app/` |
 
-The live click is blocked on the migration. But the plan is a **pure function of facts now known**, so it was computed against them exactly:
+### The live run, 15.08.2026
+
+Performed through the UI after the migration was deployed. **The plan the dry
+run predicted is the plan the product produced**, field for field:
+
+| | |
+| --- | --- |
+| MeasurementPlan | `ec4bb6f6` · `ready` · **one row** |
+| Bound to | merge `82e4980e` |
+| Primary metric | `search_impressions` · `higher_is_better` · `search_visibility` |
+| Compatible sources | `["search_console"]` |
+| Windows | 28-day baseline · 14-day settling gap · 28-day measurement |
+| Minimum per window | 500 observations |
+| Profile · policy | `nextjs-seo-foundations-measurement-v1` · `measurement-policy-v1` |
+| Business goal | "Reach the people looking for a product like yours" |
+| Audit | `business_measurement.created` |
+
+**Result: `source_required`.** The card reads *Measurement source required*, and
+the ladder's third line reads **"Not measured — no source"** — not "no impact".
+That distinction is the whole point of the state existing.
+
+What did **not** happen is as important as what did:
+
+| | |
+| --- | --- |
+| `business_outcome_measurements` rows | **0** — no source, so no measurement was opened |
+| `business_measurement` operations | **0** — nothing durable was needed |
+| AI calls | **0** |
+| Sandbox / browser usage | **0** / **0** |
+
+No windows are stored yet, because windows are computed and frozen when a
+*measurement* opens, not when a plan is made. The dates below are therefore what
+the product will compute once a source exists — they are a prediction, and the
+record says so rather than presenting them as stored facts:
 
 ```
 Primary metric        search_impressions   (higher_is_better, search_visibility)
