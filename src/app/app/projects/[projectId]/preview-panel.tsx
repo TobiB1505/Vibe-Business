@@ -12,6 +12,7 @@ import {
   type StartPreviewActionState,
   type StopPreviewActionState,
 } from "./preview-actions";
+import { formatTime } from "@/lib/utils/format-datetime";
 
 /**
  * Temporary preview, as the user sees it (Sprint 10B-3 §2, §4, §8, §10, §17).
@@ -73,8 +74,9 @@ function remaining(expiresAt: string, now: number): string | null {
 }
 
 function localTime(iso: string): string {
-  const parsed = new Date(iso);
-  return Number.isNaN(parsed.getTime()) ? iso : parsed.toLocaleTimeString();
+  // Clock only: the surrounding copy already establishes the day. Deterministic
+  // across server and client — see format-datetime.ts.
+  return formatTime(iso) ?? iso;
 }
 
 /**

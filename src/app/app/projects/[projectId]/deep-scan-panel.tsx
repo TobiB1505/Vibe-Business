@@ -10,6 +10,7 @@ import {
   getDeepScanLiveViewAction,
   startDeepScanAction,
 } from "./deep-scan-actions";
+import { formatTimestamp } from "@/lib/utils/format-datetime";
 
 /**
  * Deep Scan panel (Sprint 5 §3, §7, §16, §17).
@@ -199,7 +200,9 @@ function ResultSummary({ result }: { result: NonNullable<DeepScanViewModel["last
       <dl className="space-y-1 text-sm">
         <div className="flex items-baseline justify-between gap-3">
           <dt className="text-zinc-500">Last analyzed</dt>
-          <dd className="text-zinc-300">{new Date(result.analyzedAt).toLocaleString()}</dd>
+          <dd className="text-zinc-300">
+            {formatTimestamp(result.analyzedAt) ?? result.analyzedAt}
+          </dd>
         </div>
         <div className="flex items-baseline justify-between gap-3">
           <dt className="text-zinc-500">Pages inspected</dt>

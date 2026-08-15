@@ -9,6 +9,7 @@ import {
   readProductionOutcomeAction,
   type OutcomeActionState,
 } from "./outcome-actions";
+import { formatTimestamp } from "@/lib/utils/format-datetime";
 
 /**
  * The Outcome section (Sprint 12A §29–§34).
@@ -68,9 +69,10 @@ const CHECK_SUFFIX: Record<OutcomeCheckStatus, string> = {
 };
 
 function localTime(iso: string): string {
-  const parsed = Date.parse(iso);
-  if (!Number.isFinite(parsed)) return iso;
-  return new Date(parsed).toLocaleString();
+  // Deterministic across server and client — see format-datetime.ts. Falls
+  // back to the raw value so an unparseable timestamp is visible rather than
+  // silently blank.
+  return formatTimestamp(iso) ?? iso;
 }
 
 function CheckList({ checks }: { checks: OutcomeCheckLine[] }) {

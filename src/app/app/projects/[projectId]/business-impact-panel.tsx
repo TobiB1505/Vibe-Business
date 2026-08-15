@@ -8,6 +8,7 @@ import {
   startMeasurementAction,
   type BusinessImpactActionState,
 } from "./business-impact-actions";
+import { formatDate, formatNumber } from "@/lib/utils/format-datetime";
 
 /**
  * The Business impact section (Sprint 12B §21–§26, §28, §43).
@@ -42,13 +43,10 @@ import {
  */
 
 function localDate(iso: string): string {
-  const parsed = Date.parse(iso);
-  if (!Number.isFinite(parsed)) return iso;
-  return new Date(parsed).toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
+  // Deterministic across server and client — see format-datetime.ts. The
+  // window's own timezone is printed by `windowRange`, so the day shown here
+  // and the zone it was counted in are never conflated.
+  return formatDate(iso) ?? iso;
 }
 
 /** A window as a person reads it: two dates and the zone they were counted in. */
@@ -59,7 +57,9 @@ function windowRange(window: { start: string; end: string; timezone: string }): 
 }
 
 function formatValue(value: number): string {
-  return Number.isInteger(value) ? value.toLocaleString() : value.toFixed(2);
+  // `toLocaleString()` groups as `1,240` or `1.240` depending on the runtime's
+  // locale, which is not cosmetic when the number is a count of anything.
+  return formatNumber(value);
 }
 
 /** Signed, and never dressed up. A negative result reads as negative (§25). */
