@@ -27,6 +27,18 @@ const CAPABILITY_BASENAMES: Record<ExecutionCapability, readonly string[]> = {
 };
 
 /**
+ * The exact basenames a capability may create.
+ *
+ * Exported so the capability registry can report write scope without keeping a
+ * second copy of it. A registry that duplicated this list could disagree with
+ * the allowlist that actually enforces it, which is the precise class of drift
+ * the registry exists to remove.
+ */
+export function capabilityBasenames(capability: ExecutionCapability): readonly string[] {
+  return CAPABILITY_BASENAMES[capability] ?? [];
+}
+
+/**
  * Never written by any capability, now or later.
  *
  * These are the paths where a mistake stops being a bad commit and becomes a

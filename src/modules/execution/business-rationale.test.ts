@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { findCausalClaims } from "@/modules/business-measurement/causality";
+import {
+  findCausalClaims,
+  findPromissoryClaims,
+} from "@/modules/business-measurement/causality";
 import { businessRationaleFor, type BusinessRationale } from "./business-rationale";
 import { EXECUTION_CAPABILITIES } from "./schema";
 
@@ -49,6 +52,14 @@ describe("the SEO foundations rationale", () => {
     expect(findCausalClaims(everySentence(SEO))).toEqual([]);
   });
 
+  it("never promises a business outcome", () => {
+    // The failure mode a rationale is actually prone to. Its limitation says
+    // "does not guarantee rankings, traffic or revenue" — negation-aware, so
+    // the sentence that makes the paragraph honest does not trip the guard
+    // that exists to enforce it.
+    expect(findPromissoryClaims(everySentence(SEO))).toEqual([]);
+  });
+
   it("promises nothing measurable", () => {
     const copy = everySentence(SEO);
 
@@ -90,6 +101,7 @@ describe("coverage and absence", () => {
       if (!rationale) continue;
 
       expect(findCausalClaims(everySentence(rationale))).toEqual([]);
+      expect(findPromissoryClaims(everySentence(rationale))).toEqual([]);
       expect(rationale.limitations.trim().length).toBeGreaterThan(0);
       expect(everySentence(rationale)).not.toMatch(/\d+\s*%/);
     }
