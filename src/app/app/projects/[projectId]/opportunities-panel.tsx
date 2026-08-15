@@ -2,6 +2,10 @@
 
 import { useActionState, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { CategoryChip, StatusPill, type StatusTone } from "@/components/ui/status-pill";
+import { Surface } from "@/components/ui/surface";
+import { MonoLabel } from "@/components/ui/typography";
+import { Notice } from "@/components/ui/states";
 import { describeEvidenceId } from "@/modules/business-audit/evidence-labels";
 import { DIMENSION_LABELS } from "@/modules/business-audit/schema";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
@@ -44,19 +48,18 @@ import {
 
 const POLL_INTERVAL_MS = 3_000;
 
-const READINESS_TONE: Record<ExecutionReadiness, string> = {
-  ready: "border-emerald-800 text-emerald-400",
-  needs_user_input: "border-amber-800 text-amber-400",
-  not_supported_yet: "border-zinc-700 text-zinc-500",
+/**
+ * Readiness is a statement about a future capability, not an affordance — so
+ * `ready` is deliberately NOT mint. Mint is Vibe's primary action, and a badge
+ * that borrows it reads as a button that can be pressed. The tones say what the
+ * state is; whether anything can be done about it is decided by whether
+ * `PrepareChangePanel` renders at all.
+ */
+const READINESS_TONE: Record<ExecutionReadiness, StatusTone> = {
+  ready: "success",
+  needs_user_input: "waiting",
+  not_supported_yet: "neutral",
 };
-
-function Badge({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return (
-    <span className={`rounded-full border border-zinc-700 px-2 py-0.5 text-xs text-zinc-400 ${className}`}>
-      {children}
-    </span>
-  );
-}
 
 function OpportunityCard({
   projectId,
@@ -73,35 +76,38 @@ function OpportunityCard({
   validationSummary: ValidationSummary | null;
 }) {
   return (
-    <li className="space-y-3 rounded-md border border-zinc-800 p-4">
+    <Surface as="li" level="panel" padding="lg" className="flex flex-col gap-4">
       <div className="flex items-baseline gap-3">
-        <span className="text-sm text-zinc-500">#{opportunity.rank}</span>
-        <h3 className="text-sm font-medium text-zinc-100">{opportunity.title}</h3>
+        {/* The engine's own ordering. Shown, never recomputed on the client. */}
+        <span className="text-fg-meta font-mono text-sm">#{opportunity.rank}</span>
+        <h3 className="text-fg text-base font-semibold tracking-[-0.01em]">{opportunity.title}</h3>
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Badge>{IMPACT_LABELS[opportunity.impact]}</Badge>
-        <Badge>{EFFORT_LABELS[opportunity.effort]}</Badge>
-        <Badge>{CONFIDENCE_LABELS[opportunity.confidence]}</Badge>
-        <Badge>{DIMENSION_LABELS[opportunity.primaryDimension]}</Badge>
-        <Badge className={READINESS_TONE[opportunity.executionReadiness]}>
+        <CategoryChip>{IMPACT_LABELS[opportunity.impact]}</CategoryChip>
+        <CategoryChip>{EFFORT_LABELS[opportunity.effort]}</CategoryChip>
+        <CategoryChip>{CONFIDENCE_LABELS[opportunity.confidence]}</CategoryChip>
+        <CategoryChip>{DIMENSION_LABELS[opportunity.primaryDimension]}</CategoryChip>
+        <StatusPill tone={READINESS_TONE[opportunity.executionReadiness]}>
           {EXECUTION_READINESS_LABELS[opportunity.executionReadiness]}
-        </Badge>
+        </StatusPill>
       </div>
 
-      <p className="text-sm text-zinc-400">{opportunity.problem}</p>
+      <p className="text-fg-prose text-sm leading-relaxed">{opportunity.problem}</p>
 
-      <details>
-        <summary className="cursor-pointer text-xs text-zinc-500 hover:text-zinc-400">Why now?</summary>
-        <div className="mt-2 space-y-3">
-          <p className="text-sm text-zinc-400">{opportunity.whyNow}</p>
+      <details className="group">
+        <summary className="text-fg-muted hover:text-fg-body cursor-pointer rounded-sm text-xs transition-colors">
+          Why now?
+        </summary>
+        <div className="mt-3 flex flex-col gap-4">
+          <p className="text-fg-prose text-sm leading-relaxed">{opportunity.whyNow}</p>
 
           {opportunity.dependencies.length > 0 && (
-            <div className="space-y-1">
-              <p className="text-xs text-zinc-500">First</p>
-              <ul className="space-y-0.5 pl-3">
+            <div className="flex flex-col gap-1.5">
+              <MonoLabel className="tracking-[0.14em]">First</MonoLabel>
+              <ul className="flex flex-col gap-1">
                 {opportunity.dependencies.map((dependency) => (
-                  <li key={dependency} className="text-xs text-zinc-400">
+                  <li key={dependency} className="text-fg-secondary text-xs leading-relaxed">
                     {dependency}
                   </li>
                 ))}
@@ -110,14 +116,14 @@ function OpportunityCard({
           )}
 
           {opportunity.evidenceIds.length > 0 && (
-            <div className="space-y-1">
-              <p className="text-xs text-zinc-500">Why Vibe thinks this</p>
-              <ul className="space-y-0.5 pl-3">
+            <div className="flex flex-col gap-1.5">
+              <MonoLabel className="tracking-[0.14em]">Why Vibe thinks this</MonoLabel>
+              <ul className="flex flex-col gap-1">
                 {opportunity.evidenceIds.map((id) => {
                   const { source, detail } = describeEvidenceId(id);
                   return (
-                    <li key={id} className="text-xs text-zinc-500" title={id}>
-                      <span className="text-zinc-400">{source}:</span> {detail}
+                    <li key={id} className="text-fg-muted text-xs leading-relaxed" title={id}>
+                      <span className="text-fg-secondary font-mono">{source}:</span> {detail}
                     </li>
                   );
                 })}
@@ -138,7 +144,7 @@ function OpportunityCard({
           validationSummary={validationSummary}
         />
       )}
-    </li>
+    </Surface>
   );
 }
 
@@ -198,13 +204,12 @@ export function OpportunitiesPanel({
   const blockNotice = buildOpportunityBlockNotice(blockedReason);
 
   return (
-    <section className="space-y-3">
-      <h2 className="text-sm font-medium text-zinc-200">
-        {hasOpportunities ? "Your next moves" : "Opportunities"}
-      </h2>
-
+    // The heading now belongs to the workspace section that wraps this panel
+    // (UI-1), so it is not repeated here. Everything below — the action, the
+    // polling, the block notice — is unchanged.
+    <div className="flex flex-col gap-4">
       {hasOpportunities && (
-        <ol className="space-y-3">
+        <ol className="flex flex-col gap-4">
           {opportunities.map((opportunity) => (
             <OpportunityCard
               key={opportunity.id}
@@ -219,44 +224,46 @@ export function OpportunitiesPanel({
       )}
 
       {stale && hasOpportunities && (
-        <div className="space-y-2 rounded-md border border-zinc-800 px-3 py-2">
-          <p className="text-sm text-zinc-300">New business evidence is available</p>
-          <p className="text-sm text-zinc-500">
-            These were prioritized from an earlier audit. Refreshing spends another AI call and may
-            change the order.
-          </p>
-        </div>
+        <Notice tone="waiting" label="New business evidence is available">
+          These were prioritized from an earlier audit. Refreshing spends another AI call and may
+          change the order.
+        </Notice>
       )}
 
       {running && operation && (
-        <div className="space-y-1">
-          <p className="text-sm text-zinc-300">
+        <Surface level="section" padding="md" role="status" className="flex flex-col gap-1">
+          <p className="text-fg-body text-sm">
             {operation.stalled ? "Still working…" : `${OPERATION_STAGE_LABELS[operation.stage]}…`}
           </p>
-          <p className="text-sm text-zinc-500">
+          <p className="text-fg-muted text-sm">
             {operation.stalled
               ? "This is taking much longer than expected. You can start again if it never finishes."
               : "You can leave this page. Vibe will continue."}
           </p>
-        </div>
+        </Surface>
       )}
 
       {!running && blockNotice !== null && (
-        <div className="space-y-2">
-          <p className="text-sm text-zinc-500">{OPERATION_FAILURE_MESSAGES[blockNotice.reason]}</p>
-          {/* Never a heading with a disabled button and no way forward — that
-              dead end was reported as a broken feature twice in Deep Scan. */}
-          <a
-            href={blockNotice.anchor}
-            className="inline-block text-sm text-zinc-300 underline underline-offset-2 hover:text-zinc-50"
-          >
-            {blockNotice.actionLabel}
-          </a>
-        </div>
+        // Never a heading with a disabled button and no way forward — that
+        // dead end was reported as a broken feature twice in Deep Scan.
+        <Notice
+          tone="waiting"
+          label="Why this is blocked"
+          action={
+            <a
+              href={blockNotice.anchor}
+              className="text-fg-prose hover:text-fg rounded-sm text-sm underline underline-offset-4 transition-colors"
+            >
+              {blockNotice.actionLabel}
+            </a>
+          }
+        >
+          {OPERATION_FAILURE_MESSAGES[blockNotice.reason]}
+        </Notice>
       )}
 
       {!running && !hasOpportunities && blockedReason === null && (
-        <p className="text-sm text-zinc-500">
+        <p className="text-fg-muted text-sm">
           Vibe can work out the highest-impact things to do next from your business audit.
         </p>
       )}
@@ -264,27 +271,34 @@ export function OpportunitiesPanel({
       {!running && blockNotice === null && (
         <form action={formAction} className="flex items-center gap-3">
           <input type="hidden" name="force" value={hasOpportunities ? "true" : "false"} />
-          <Button type="submit" disabled={pending}>
+          {/* Refreshing an existing set is secondary — the primary action in
+              this section is whatever a move itself offers. Finding them the
+              first time is the section's own primary. */}
+          <Button
+            type="submit"
+            disabled={pending}
+            variant={hasOpportunities ? "secondary" : "primary"}
+          >
             {pending ? "Starting…" : hasOpportunities ? "Refresh opportunities" : "Find opportunities"}
           </Button>
         </form>
       )}
 
       {operation?.status === "failed" && operation.failureCode && (
-        <p className="text-sm text-amber-400">
+        <p className="text-amber text-sm">
           Vibe couldn&apos;t work out your opportunities. {OPERATION_FAILURE_MESSAGES[operation.failureCode]}
         </p>
       )}
 
       {state && !state.ok && (
-        <p className="text-sm text-amber-400">{OPERATION_FAILURE_MESSAGES[state.error]}</p>
+        <p className="text-amber text-sm">{OPERATION_FAILURE_MESSAGES[state.error]}</p>
       )}
 
       {state?.ok && state.kind === "reused" && (
-        <p className="text-sm text-zinc-500">
+        <p className="text-fg-muted text-sm">
           Nothing has changed since the last time, so the existing opportunities are shown.
         </p>
       )}
-    </section>
+    </div>
   );
 }
