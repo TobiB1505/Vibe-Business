@@ -214,6 +214,50 @@ escaping was wrong, so the file was unchanged and the run was measuring nothing.
 Applied properly it kills seven tests. A mutation that does not modify the file
 is not evidence of anything, and the check for that is cheap.
 
+### The wiring analysis — why "just register it" is not small
+
+Verified against the code, not estimated. Four concrete mismatches, each of
+which exists because **every capability so far has created files that did not
+exist, and metadata is the first that edits one the customer owns.**
+
+**1. The preflight actively blocks editing capabilities.**
+`runExecutionPreflight` contains:
+
+```
+if (probe.existingTargetPaths.length > 0) → blocked (conflicting_files_exist)
+```
+
+For SEO that rule is exactly right — never overwrite a `robots.ts` somebody
+wrote. For metadata it is inverted: the target file **must** exist, because the
+capability extends it. As written, an editing capability can never pass
+preflight. This is the sharpest of the four and needs the rule to become
+capability-aware rather than global.
+
+**2. The preflight probe is SEO-shaped.** It carries `liveRobotsServed` and
+`liveSitemapServed` — specific public checks for one capability's premise.
+Metadata's premise is "the framework-served export lacks `openGraph`", which
+that shape cannot express.
+
+**3. `paths.ts` models creation.** Its allowlist is *"exact basenames a
+capability may create"*. An editing capability needs an allowlist of paths it may
+**modify**, which is a different permission with a different risk profile.
+
+**4. The preparation probe cannot read file contents.** `ExecutionProbe` exposes
+`getHead`, `findExistingPaths`, `isServed` and `hasWritePermission`. The
+metadata generator needs the current source of `layout.tsx` to extend it. The
+underlying `git-port` *does* have `getFileContent`, so this is plumbing rather
+than new capability — but it is not currently reachable from preparation.
+
+Also required, and smaller: capability dispatch in
+`resolveExecutionCapability` (currently hard-coded to robots+sitemap absence
+evidence), and extending `computeExecutionIdentity` to include the trusted
+metadata values so a changed title cannot reuse an old PreparedChange identity
+(§8).
+
+None of this is difficult. All of it is in the repository-write path, which is
+the most consequential code in the product and the wrong place to work
+quickly.
+
 ### Not yet built in this slice
 
 Registry wiring for the new capability id, the `nextjs_metadata_outcome_v1`
