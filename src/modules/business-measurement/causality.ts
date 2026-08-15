@@ -138,6 +138,62 @@ export function findCausalClaims(copy: string): string[] {
 }
 
 /**
+ * Promises about a business outcome (Sprint 13A §2).
+ *
+ * ## Why this is separate from the causal phrases
+ *
+ * Because measurement copy and rationale copy fail in opposite directions.
+ * Measurement copy fails **retrospectively** — "this change increased signups"
+ * claims causation for something merely observed. Rationale copy fails
+ * **prospectively** — "this will increase signups" promises an outcome nobody
+ * has evidence for, and a rationale is written before anything has happened at
+ * all.
+ *
+ * `CAUSAL_PHRASES` was written for the first case and does not cover the
+ * second: a rationale reading *"This increases organic traffic"* passes it
+ * cleanly. That gap was found by a deliberate regression, not by reasoning.
+ *
+ * ## Why these are patterns rather than literal phrases
+ *
+ * Because the offence is a **verb aimed at a business noun**, and enumerating
+ * every conjugation against every metric would be a list nobody maintains.
+ * "Improves how the product can be described" is a factual statement about what
+ * a capability does; "improves conversion" is a promise. Only the second names
+ * an outcome the customer would hold Vibe to.
+ */
+const PROMISSORY_PATTERNS: readonly { label: string; pattern: RegExp }[] = [
+  {
+    label: "promises a business outcome",
+    // A growth verb pointed at a business noun, within one clause of it.
+    pattern:
+      /\b(increase|improve|boost|grow|raise|drive|lift)s?\b[^.]{0,40}\b(traffic|revenue|conversions?|rankings?|sales|customers|signups?|subscribers|users)\b/,
+  },
+  { label: "guarantees an outcome", pattern: /\bguarantees?\b/ },
+  { label: "promises certainty", pattern: /\bensures?\b/ },
+  { label: "predicts an outcome", pattern: /\bwill (increase|improve|boost|grow|convert|rank)\b/ },
+];
+
+/**
+ * Finds promissory claims in forward-looking copy.
+ *
+ * Negation-aware on the same terms as `findCausalClaims`, which is what lets a
+ * rationale say *"does not guarantee rankings, traffic or revenue"* — the
+ * sentence that stops the paragraph above it from being a promise — without
+ * tripping the very guard that sentence exists to satisfy.
+ */
+export function findPromissoryClaims(copy: string): string[] {
+  const normalized = copy.toLowerCase().replace(/\s+/g, " ");
+
+  return PROMISSORY_PATTERNS.filter(({ pattern }) => {
+    const match = normalized.match(pattern);
+    if (!match || match.index === undefined) return false;
+
+    const preceding = normalized.slice(Math.max(0, match.index - NEGATION_WINDOW), match.index);
+    return !NEGATIONS.some((negation) => preceding.includes(negation));
+  }).map(({ label }) => label);
+}
+
+/**
  * The disclaimer that must accompany every stated result (§24).
  *
  * Exported as a constant rather than written inline in the panel, so it cannot

@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { findCausalClaims } from "@/modules/business-measurement/causality";
+import {
+  findCausalClaims,
+  findPromissoryClaims,
+} from "@/modules/business-measurement/causality";
 import { businessRationaleFor } from "./business-rationale";
 import {
   allCapabilityDefinitions,
@@ -85,8 +88,12 @@ describe("every capability can explain itself", () => {
     ].join(" ");
 
     expect(findCausalClaims(copy)).toEqual([]);
-    // And promises nothing measurable — a rationale carrying a number would be
-    // indistinguishable from a result.
+    // And promises nothing either. A rationale is written before anything has
+    // happened, so a forward-looking promise is the failure mode it is actually
+    // prone to — "this increases organic traffic" passes the causal checker
+    // cleanly, which a deliberate regression found rather than reasoning did.
+    expect(findPromissoryClaims(copy)).toEqual([]);
+    // A rationale carrying a number would be indistinguishable from a result.
     expect(copy).not.toMatch(/\d+\s*%/);
   });
 });
