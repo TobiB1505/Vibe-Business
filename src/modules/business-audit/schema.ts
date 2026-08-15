@@ -34,6 +34,26 @@ export const DIMENSION_LABELS: Record<AuditDimensionId, string> = {
 };
 
 /**
+ * The same five dimensions, phrased as the question each one answers
+ * (Sprint UI-3.5).
+ *
+ * "Monetization: 28" is a category and a number. "Making money from it is
+ * still unclear" is the same finding said to someone who has to decide what to
+ * do about it — and this product's audience built something with an AI tool
+ * and is now trying to build a business, not read an analyst report.
+ *
+ * The ids, the scoring and the stored payload are untouched: this is a label
+ * table, and `DIMENSION_LABELS` above is still what technical views show.
+ */
+export const DIMENSION_QUESTIONS: Record<AuditDimensionId, string> = {
+  product: "Do people understand what you built?",
+  monetization: "Can you make money from it?",
+  distribution: "Can people discover you?",
+  conversion: "Do visitors become customers?",
+  retention: "Do people come back?",
+};
+
+/**
  * How much of a dimension the available evidence could actually support.
  *
  * `insufficient_evidence` is a legitimate, useful outcome — not a failure

@@ -45,14 +45,20 @@ export function ScoreMeter({
   return (
     <div
       className={cn(
+        // The label sits above the bar rather than in a fixed column beside
+        // it. UI-3.5 replaced the dimension names ("Monetization") with the
+        // questions they answer ("Can you make money from it?"), and every one
+        // of them was being truncated at the old 8rem — 260px of text in a
+        // 128px column. A question that cannot be read is worse than the
+        // category name it replaced.
         "grid grid-cols-[1fr_auto] items-center gap-x-4 gap-y-2",
-        "sm:grid-cols-[8rem_1fr_5rem_2.5rem]",
+        "sm:grid-cols-[1fr_auto_5rem_2.5rem]",
         className,
       )}
     >
       <span
         className={cn(
-          "truncate text-sm font-semibold",
+          "text-sm font-semibold text-balance",
           display.unscored ? "text-fg-secondary" : "text-fg",
         )}
       >
@@ -65,7 +71,7 @@ export function ScoreMeter({
       <div
         role="img"
         aria-label={`${typeof label === "string" ? label : "Score"}: ${display.text}`}
-        className="bg-line-track order-last col-span-2 h-[7px] overflow-hidden rounded-full sm:order-none sm:col-span-1"
+        className="bg-line-track order-last col-span-2 h-[7px] w-full overflow-hidden rounded-full sm:order-none sm:col-span-4 sm:w-full"
       >
         {!display.unscored && (
           <div
