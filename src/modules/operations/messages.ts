@@ -1,4 +1,5 @@
 import { MERGE_FAILURE_MESSAGES } from "@/modules/merge/messages";
+import { OUTCOME_FAILURE_MESSAGES } from "@/modules/outcome-verification/messages";
 import type { OperationFailureCode } from "./failures";
 
 /**
@@ -141,4 +142,10 @@ export const OPERATION_FAILURE_MESSAGES: Record<OperationFailureCode, string> = 
   // not have — on the one screen where the wrong sentence is about a write to
   // somebody's repository.
   ...MERGE_FAILURE_MESSAGES,
+
+  // Production outcome verification (Sprint 12A §22, §23). Spread for the same
+  // reason as the merge's: the module owns the wording of its own refusals, and
+  // two copies of "Vibe could not reach your public product" is two chances for
+  // one of them to grow into a claim about the customer's product being broken.
+  ...OUTCOME_FAILURE_MESSAGES,
 };

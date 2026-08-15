@@ -98,7 +98,24 @@ export type AuditEventType =
   | "change_merge.default_branch_updated"
   /** The branch was read back independently and matched the approved commit. */
   | "change_merge.verified"
-  | "change_merge.failed";
+  | "change_merge.failed"
+  // Production outcome verification (Sprint 12A §35). The first events in this
+  // log that describe the customer's *product* rather than Vibe's own pipeline.
+  //
+  // They carry the merged commit SHA and the public origin — a content
+  // identifier and a hostname, both already public — plus counts of how many
+  // checks landed in each status. They must never carry a response body, HTML,
+  // XML, a sitemap URL read out of a fetched document, a query string, a
+  // header, or any claim about deployment.
+  //
+  // Four terminal events rather than one with a field, because the difference
+  // between them is the whole product distinction this sprint exists to make:
+  // `not_observed` is about the product, `failed` is about Vibe.
+  | "change_outcome.started"
+  | "change_outcome.verified"
+  | "change_outcome.partial"
+  | "change_outcome.not_observed"
+  | "change_outcome.failed";
 
 export type RecordAuditEventParams = {
   userId: string;

@@ -1625,6 +1625,44 @@ listet nur noch die Startseite. Die Lücke, um die herum die ganze Pipeline
 gebaut wurde, ist die Lücke, die geschlossen wurde — und ein Mensch hat trotzdem
 genau diesen Commit freigegeben.
 
+**22. Lieferung, Produktwirkung und Geschäftswirkung sind drei Sätze — und
+genau nach dem Merge will man sie zu einem machen**
+Am 15.08.2026 hat Vibe zum ersten Mal etwas über das *Produkt eines Kunden*
+festgestellt statt über die eigene Pipeline: acht von acht Checks auf der
+öffentlichen Produktion, im ersten Versuch, in 2,5 Sekunden, 0 AI-Calls.
+
+```
+Merged              Yes           ← was Vibe getan hat
+Production outcome  Verified      ← was danach öffentlich sichtbar war
+Business impact     Not measured  ← wovon niemand etwas weiß
+```
+
+Acht grüne Haken direkt nach einem Merge sind exakt der Moment, in dem ein
+Produkt den Leser einlädt zu schließen, dass etwas *besser* geworden ist. Die
+Karte weigert sich — und wiederholt, dass Vibe kein Deployment verifiziert hat.
+Das bleibt wahr: beobachtet wurde eine öffentliche URL, nicht ein Deploy.
+
+Drei Dinge, die dieser Lauf gelehrt hat:
+
+*Die Erwartung wird eingefroren, bevor beobachtet wird.* `expected_outcome` ist
+`not null` und hat keinen Default. Eine Verifikation, deren Erwartungen erst
+nach dem Blick auf die Produktion feststehen, ist keine Verifikation, sondern
+eine Beschreibung.
+
+*Das Zeitfenster gehört dem Datensatz, nicht dem Prozess.*
+`verification_window_ends_at` wird einmal geschrieben und nie neu berechnet. Ein
+wiederholt eingespielter Workflow, der sein Deadline aus `now()` ableitet,
+verlängert das Fenster bei jedem Wiedereintritt — aus fünfzehn Minuten wird
+unbemerkt "unbegrenzt".
+
+*Gespeichert wird abgeleitete Evidenz, nie der Body.* Statuscodes, Byte-Zahlen,
+ein normalisierter Content-Type, Booleans. Der Check, der sagt "/login ist nicht
+enthalten", speichert `present: false` — nicht die Sitemap, aus der er das weiß.
+
+Und die eigentliche Pointe: **drei der acht bestandenen Checks prüfen genau,
+dass `/login`, `/signup` und `/app` *nicht* in der Sitemap stehen.** Der Fehler
+des allerersten Vibe-Commits ist zu dem geworden, was die Pipeline heute misst.
+
 ---
 
 ## 37. Aktueller Stand
@@ -1671,6 +1709,7 @@ Preview                       ✅ (15 Min, temporär, öffentlich-unlisted)
 Before/After Review           ✅ (erster echter Vergleich 14.08.2026)
 Approval                      ✅ (erste echte Freigabe 14.08.2026)
 Merge                         ✅ (erster echter Merge 14.08.2026)
+Outcome Verification          ✅ (erste echte Produktbeobachtung 15.08.2026)
 Deploy                        nicht gebaut
 ```
 

@@ -29,6 +29,7 @@ import { VercelWorkflowExecutor } from "@/modules/operations/vercel/executor";
 import { getReviewCard, getReviewImages } from "@/modules/review/service";
 import { getApprovalCard } from "@/modules/approvals/service";
 import { getMergeCard, resolveMergeTarget } from "@/modules/merge/service";
+import { getOutcomeCard } from "@/modules/outcome-verification/service";
 import { createGithubMergePort } from "@/modules/merge/github/adapter";
 import { mergeFailureMessage } from "@/modules/merge/messages";
 import { buildMergeCard } from "@/modules/merge/view";
@@ -243,6 +244,16 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
           resolveFailureMessage: mergeFailureMessage,
         });
 
+    // Production outcome state (Sprint 12A §29, §43). Two database reads and
+    // **no outbound HTTP at all**: opening a project page must never contact a
+    // customer's production website, and must never start an observation. The
+    // card is `unavailable` for everything that was not merged, which is most
+    // prepared changes.
+    const outcome = await getOutcomeCard(supabase, {
+      projectId,
+      preparedChangeId: prepared.id,
+    });
+
     // The preview's public origin, only while it is genuinely running. Fetched
     // from the provider rather than stored, because it is capability-like
     // (ADR 0016 §4) — and absent after teardown, which is expected: the
@@ -299,6 +310,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
       // a database action, and looking at it must stay free.
       approval,
       merge,
+      outcome,
     });
   }
 
