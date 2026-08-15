@@ -237,17 +237,29 @@ describe("the server action's surface is two identifiers (§11)", () => {
 });
 
 describe("opening a project page starts nothing (§43)", () => {
-  const src = source("page.tsx");
+  // The prepared-change assembly moved out of `page.tsx` into the workspace
+  // read model (Sprint UI-2 Phase B), so the read now lives there. The rule is
+  // unchanged and is asserted across *both* files: whichever one performs the
+  // read, neither may start a verification.
+  const page = source("page.tsx");
+  const workspace = readFileSync(
+    join(process.cwd(), "src/modules/execution/workspace.ts"),
+    "utf8",
+  );
 
-  it("reads the outcome card and never starts a verification", () => {
-    expect(src).toContain("getOutcomeCard(supabase");
-    expect(src).not.toContain("startOutcomeVerification");
+  it("reads the outcome card", () => {
+    expect(workspace).toContain("getOutcomeCard(supabase");
+  });
+
+  it("never starts a verification, from either the page or the read model", () => {
+    expect(page).not.toContain("startOutcomeVerification");
+    expect(workspace).not.toContain("startOutcomeVerification");
   });
 
   it("says in the code why that read is free", () => {
     // Load-bearing enough to be written down: a page render must never contact
     // a customer's production website.
-    expect(src).toContain("no outbound HTTP at all");
+    expect(workspace).toContain("no outbound HTTP at all");
   });
 });
 

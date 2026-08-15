@@ -253,16 +253,32 @@ describe("the panel decides nothing (§44)", () => {
 });
 
 describe("opening a project page measures nothing (§36, §45)", () => {
-  const src = source("page.tsx");
+  // The prepared-change assembly moved out of `page.tsx` into the workspace
+  // read model (Sprint UI-2 Phase B). The rule is unchanged and is asserted
+  // across *both* files: whichever one performs the read, neither may start a
+  // measurement or create a plan.
+  const page = source("page.tsx");
+  const workspace = readFileSync(
+    join(process.cwd(), "src/modules/execution/workspace.ts"),
+    "utf8",
+  );
 
-  it("reads the card and never starts a measurement or creates a plan", () => {
-    expect(src).toContain("getBusinessImpactCard(supabase");
-    expect(src).not.toContain("startBusinessMeasurement");
-    expect(src).not.toContain("ensureMeasurementPlan");
+  it("reads the card", () => {
+    expect(workspace).toContain("getBusinessImpactCard(");
+  });
+
+  it("never starts a measurement or creates a plan, from either file", () => {
+    for (const [name, src] of [
+      ["page.tsx", page],
+      ["workspace.ts", workspace],
+    ] as const) {
+      expect(src, name).not.toContain("startBusinessMeasurement");
+      expect(src, name).not.toContain("ensureMeasurementPlan");
+    }
   });
 
   it("says in the code why that read is free", () => {
-    expect(src).toContain("zero provider calls");
+    expect(workspace).toContain("zero provider calls");
   });
 });
 
