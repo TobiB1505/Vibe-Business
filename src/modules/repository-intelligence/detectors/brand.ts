@@ -285,6 +285,21 @@ const ROLE_RULES: { role: BrandColorRole; strong: RegExp; weak: RegExp }[] = [
 /** Token-name fragments that mark a colour as a state, not a brand. */
 const STATE_TOKEN = /(^|-)(success|warning|error|danger|destructive|info|muted|disabled|placeholder|border|ring|shadow|overlay|hover|focus|active|visited|tint|line|track|faint|meta)(-|$)/;
 
+/**
+ * Prefixes that make a token part of a *ramp* rather than a brand colour.
+ *
+ * The dogfood run against Vibe Business's own design system is why this
+ * exists. `--color-fg-secondary` is step four of an eight-step foreground
+ * ramp, and a naive `(^|-)secondary$` match reported that grey as the
+ * product's secondary brand colour. `--color-mint-ink` — the near-black text
+ * that sits *on* a mint fill — was likewise reported as the product's text
+ * colour, in place of `--color-fg`.
+ *
+ * Both are the same mistake: a compound name whose head says what family it
+ * belongs to, read as though the tail were the whole name.
+ */
+const RAMP_PREFIX = /^(fg|foreground|bg|background|text|surface|panel|card|well|field|border|line|ink|on)-/;
+
 /** Colour prefix of a token name — `--color-mint-tint` → `mint`. */
 export function colorFamily(tokenName: string): string {
   const stripped = tokenName
@@ -336,14 +351,42 @@ export function assignColorRoles(tokens: SourcedToken[]): BrandColorSignal[] {
   const signals: BrandColorSignal[] = [];
   const takenRoles = new Set<BrandColorRole>();
 
+  /** The token name with its `--` and any `color-`/`theme-` prefix removed. */
+  const bareName = (token: SourcedToken) =>
+    token.name.replace(/^--/, "").replace(/^(color|colour|theme|palette)-/, "");
+
+  /** Role words a bare name can equal outright, per role. */
+  const EXACT_WORDS: Record<BrandColorRole, string[]> = {
+    primary: ["primary", "brand"],
+    secondary: ["secondary"],
+    accent: ["accent", "highlight"],
+    background: ["background", "bg", "canvas"],
+    foreground: ["foreground", "fg", "text", "ink"],
+  };
+
   for (const rule of ROLE_RULES) {
     for (const strength of ["strong", "weak"] as const) {
       if (takenRoles.has(rule.role)) break;
-      const match = tokens.find((token) => {
-        const bare = token.name.replace(/^--/, "").replace(/^(color|colour|theme|palette)-/, "");
-        return rule[strength].test(bare) && resolved.has(token.name);
+
+      const candidates = tokens.filter((token) => {
+        const bare = bareName(token);
+        if (!resolved.has(token.name)) return false;
+        if (!rule[strength].test(bare)) return false;
+        // A ramp step is not a brand colour, whatever its tail says.
+        return !RAMP_PREFIX.test(bare);
       });
-      if (!match) continue;
+
+      if (candidates.length === 0) continue;
+
+      // Specificity, not file order. `--color-fg` names the foreground;
+      // `--color-mint-ink` merely ends in a word that also does, and it
+      // happens to be declared first.
+      const match = candidates.sort((a, b) => {
+        const exactness = (token: SourcedToken) =>
+          EXACT_WORDS[rule.role].includes(bareName(token)) ? 0 : 1;
+        return exactness(a) - exactness(b) || bareName(a).length - bareName(b).length;
+      })[0];
+
       takenRoles.add(rule.role);
       signals.push({
         role: rule.role,
@@ -403,15 +446,10 @@ export function assignColorRoles(tokens: SourcedToken[]): BrandColorSignal[] {
         evidence: tokenEvidence(leader.best.path, leader.best),
       });
 
-      if (runnerUp && !takenRoles.has("secondary")) {
-        signals.push({
-          role: "secondary",
-          value: runnerUp.hex,
-          token: runnerUp.best.name,
-          confidence: "low",
-          evidence: tokenEvidence(runnerUp.best.path, runnerUp.best),
-        });
-      }
+      // Deliberately no runner-up. The dogfood made the case: the second
+      // saturated family in Vibe Business's palette is amber, which is its
+      // *waiting* status colour — not a secondary brand colour by any reading.
+      // A guess at second place adds a claim without adding information.
     }
   }
 

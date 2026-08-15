@@ -171,6 +171,20 @@ function item(
 
 const MAX_ROUTES_LISTED = 20;
 
+/** Human names for asset roles. Assembled labels read as sentences, not enums. */
+const ASSET_ROLE_PHRASES: Record<string, string> = {
+  logo: "a logo",
+  logo_alternate: "an alternative logo",
+  favicon: "a favicon",
+  app_icon: "an app icon",
+  open_graph_image: "a social sharing image",
+  web_manifest: "a web manifest",
+};
+
+function assetPhrase(role: string): string {
+  return ASSET_ROLE_PHRASES[role] ?? `a ${role.replace(/_/g, " ")}`;
+}
+
 export function buildRepositoryEvidence(
   snapshot: RepositoryIntelligenceSnapshot,
 ): UnderstandingEvidenceItem[] {
@@ -263,9 +277,7 @@ export function buildRepositoryEvidence(
     // should not spend nine evidence lines saying so.
     const id = evidenceId.repoBrandAsset(asset.role);
     if (items.some((existing) => existing.id === id)) continue;
-    items.push(
-      item(id, "repository", `The code contains a ${asset.role.replace(/_/g, " ")} asset`, 3),
-    );
+    items.push(item(id, "repository", `The code contains ${assetPhrase(asset.role)}`, 3));
   }
   for (const color of brand.colors) {
     items.push(
@@ -444,8 +456,8 @@ export function buildLiveEvidence(
         id,
         "live_product",
         label
-          ? `The live site serves a ${asset.role.replace(/_/g, " ")}, described as "${label}"`
-          : `The live site serves a ${asset.role.replace(/_/g, " ")}`,
+          ? `The live site serves ${assetPhrase(asset.role)}, described as "${label}"`
+          : `The live site serves ${assetPhrase(asset.role)}`,
         3,
       ),
     );

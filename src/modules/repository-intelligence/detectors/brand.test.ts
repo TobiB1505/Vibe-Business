@@ -152,6 +152,52 @@ describe("colour roles", () => {
     expect(colors.find((color) => color.role === "primary")).toMatchObject({ confidence: "low" });
   });
 
+  it("does not read a foreground ramp step as a secondary brand colour", () => {
+    // Found by the dogfood run against Vibe Business's own design system:
+    // `--color-fg-secondary` is step four of an eight-step foreground ramp,
+    // and it was being reported as the product's secondary brand colour.
+    const colors = assignColorRoles([
+      token("--color-fg", "#f7f5f1"),
+      token("--color-fg-secondary", "#a5a19a"),
+    ]);
+
+    expect(colors.find((color) => color.role === "secondary")).toBeUndefined();
+    expect(colors.find((color) => color.role === "foreground")?.value).toBe("#f7f5f1");
+  });
+
+  it("prefers the token that names a role outright over one that merely ends in it", () => {
+    // Also from the dogfood: `--color-mint-ink` is declared before
+    // `--color-fg` in the file, and file order was winning over specificity —
+    // so the near-black ink that sits *on* a mint fill was reported as the
+    // product's text colour.
+    const colors = assignColorRoles([
+      token("--color-mint-ink", "#04150f"),
+      token("--color-fg", "#f7f5f1"),
+    ]);
+
+    expect(colors.find((color) => color.role === "foreground")).toMatchObject({
+      value: "#f7f5f1",
+      token: "--color-fg",
+    });
+  });
+
+  it("names one likely primary and does not guess at second place", () => {
+    // The runner-up saturated family in Vibe Business's palette is amber —
+    // its *waiting* status colour. Reporting it as a secondary brand colour
+    // adds a claim without adding information.
+    const colors = assignColorRoles([
+      token("--color-mint", "#00e5a0"),
+      token("--color-mint-deep", "#00a97a"),
+      token("--color-mint-dim", "#0e8c67"),
+      token("--color-amber", "#e8b54a"),
+      token("--color-amber-deep", "#9a7420"),
+      token("--color-coral", "#ff7a5c"),
+    ]);
+
+    expect(colors.map((color) => color.role)).toEqual(["primary"]);
+    expect(colors[0].value).toBe("#00e5a0");
+  });
+
   it("ignores greyscale and state tokens when guessing a brand colour", () => {
     const colors = assignColorRoles([
       token("--color-fg", "#f7f5f1"),
