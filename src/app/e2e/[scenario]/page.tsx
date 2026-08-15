@@ -6,6 +6,12 @@ import {
 import { IntelligenceSummary } from "@/app/app/projects/[projectId]/intelligence-summary";
 import { E2E_SCENARIOS, isE2eScenario } from "../scenarios";
 import { E2E_INTELLIGENCE_SCENARIOS, isE2eIntelligenceScenario } from "../intelligence-scenarios";
+import {
+  E2E_UNDERSTANDING_SCENARIOS,
+  isE2eUnderstandingScenario,
+} from "../understanding-scenarios";
+import { UnderstandingPanel } from "@/app/app/projects/[projectId]/understanding-panel";
+import { UnderstandingConfirm } from "@/app/app/projects/[projectId]/understanding-confirm";
 
 /**
  * The browser harness's only entry point (Sprint 11C.1).
@@ -79,6 +85,37 @@ export default async function E2eScenarioPage({
           analyzedAt={fixture.analyzedAt}
           projectId="project_e2e"
           liveSnapshot={fixture.live}
+        />
+      </main>
+    );
+  }
+
+  // Product understanding (CORE-1 §51): the same panel the understanding route
+  // renders, given a profile the real pipeline produced.
+  if (isE2eUnderstandingScenario(scenario)) {
+    const fixture = E2E_UNDERSTANDING_SCENARIOS[scenario]();
+    return (
+      <main className="mx-auto max-w-4xl p-8">
+        {label}
+        <UnderstandingPanel
+          view={fixture.view}
+          projectId="project_e2e"
+          confirmedAt={fixture.confirmedAt}
+          actions={
+            <UnderstandingConfirm
+              projectId="project_e2e"
+              profileId="profile_e2e"
+              values={{
+                name: fixture.view.headline.productName ?? "",
+                shortDescription: "",
+                understanding: fixture.view.headline.understanding ?? "",
+                mainPurpose: "",
+                mainPromise: "",
+                primaryAudience: "",
+                problemSolved: "",
+              }}
+            />
+          }
         />
       </main>
     );

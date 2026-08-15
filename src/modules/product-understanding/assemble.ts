@@ -21,6 +21,7 @@ import {
   type EvidenceSource,
   type ProductCapability,
   type ProductProfile,
+  type ProfileConfidence,
   type ProfileCorrections,
   type SourceStatus,
 } from "./schema";
@@ -37,9 +38,9 @@ import type { ValidatedUnderstanding } from "./validate";
  *   model inference  →  a reading of the evidence. Useful, and the weakest
  *                       thing in the room.
  *
- * `SOURCE_PRIORITY` encodes that order and `preferBySource` is the only place
- * it is applied, so "user-confirmed facts are not blindly overwritten" is one
- * function rather than a convention every caller has to remember.
+ * `preferBySource` is the only place that ordering is applied, so
+ * "user-confirmed facts are not blindly overwritten" is one function rather
+ * than a convention every caller has to remember.
  *
  * This module is pure. It takes snapshots, an optional validated synthesis and
  * optional corrections, and returns a profile — no database, no provider, no
@@ -50,11 +51,29 @@ const PRIORITY_RANK = new Map<EvidenceSource, number>(
   SOURCE_PRIORITY.map((source, index) => [source, index]),
 );
 
+const CONFIDENCE_RANK: Record<ProfileConfidence, number> = {
+  confirmed: 0,
+  likely: 1,
+  unclear: 2,
+  not_found: 3,
+};
+
 /**
- * Picks the claim from the most authoritative source that actually has one.
+ * Picks the strongest claim among candidates for one field.
  *
- * A candidate with a null value never wins: "the model had nothing to say"
- * must not beat "the site states its name", regardless of ranking.
+ * Three rules, applied in order, and the order is the whole design:
+ *
+ *  1. **A user's own words always win.** Nothing derived may displace them,
+ *     whatever it thinks it knows (CORE-1 §25).
+ *  2. **Then confidence.** A confirmed claim beats a likely one regardless of
+ *     which source it came from. Ranking purely by source would let a
+ *     repository's folder name — an unavoidably weak signal — beat a name the
+ *     live site states outright, which was exactly the defect this ordering
+ *     was written to avoid.
+ *  3. **Then source**, as a tie-break: served beats declared beats inferred.
+ *
+ * A candidate with a null value never wins at any step. "The model had nothing
+ * to say" must not beat "the site states its name".
  */
 export function preferBySource<T>(candidates: Attributed<T>[]): Attributed<T> {
   const usable = candidates.filter((candidate) => candidate.value !== null);
@@ -65,10 +84,16 @@ export function preferBySource<T>(candidates: Attributed<T>[]): Attributed<T> {
     return ambiguous ?? candidates[0] ?? unknown<T>();
   }
 
+  const authored = usable.find((candidate) => candidate.sources.includes("user_confirmed"));
+  if (authored) return authored;
+
+  const sourceRank = (entry: Attributed<T>) =>
+    Math.min(...entry.sources.map((source) => PRIORITY_RANK.get(source) ?? SOURCE_PRIORITY.length));
+
   return usable.reduce((best, candidate) => {
-    const rankOf = (entry: Attributed<T>) =>
-      Math.min(...entry.sources.map((source) => PRIORITY_RANK.get(source) ?? SOURCE_PRIORITY.length));
-    return rankOf(candidate) < rankOf(best) ? candidate : best;
+    const byConfidence = CONFIDENCE_RANK[candidate.confidence] - CONFIDENCE_RANK[best.confidence];
+    if (byConfidence !== 0) return byConfidence < 0 ? candidate : best;
+    return sourceRank(candidate) < sourceRank(best) ? candidate : best;
   });
 }
 
@@ -88,9 +113,10 @@ function fromCorrection(value: string | undefined): Attributed<string> | null {
  * The product's name, from the sources that actually state one.
  *
  * `og:site_name` and `application-name` exist to name a product, so they are
- * `confirmed`. A repository's own name is a much weaker claim — plenty of
- * repositories are called `web`, `app`, or `my-project` — so it is `unclear`
- * and carries no value, leaving the field to the model or the user.
+ * `confirmed`. A repository's own name is a real but much weaker claim —
+ * plenty of repositories are called `web`, `app`, or `my-project` — so it is
+ * offered as `likely`. It stands in when nothing better exists and loses to
+ * anything confirmed, including the user.
  */
 function nameCandidates(
   repository: RepositoryIntelligenceSnapshot | null,

@@ -35,6 +35,14 @@ import { cn } from "@/lib/utils/cn";
 export const PROJECT_SECTIONS = [
   { id: "overview", label: "Overview", segment: "" },
   {
+    // Second, immediately after Overview, because every section below reasons
+    // *from* this one: the audit, next moves and everything downstream all
+    // start from what the product is (CORE-1 §33).
+    id: "understanding",
+    label: "Product",
+    segment: "understanding",
+  },
+  {
     // The section keeps the id `business-audit` because the Opportunity engine
     // publishes `BUSINESS_AUDIT_ANCHOR = "#business-audit"` and links a blocked
     // set at it — that link is the only way out of that state. The route is

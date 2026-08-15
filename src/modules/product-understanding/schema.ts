@@ -47,16 +47,26 @@ export const PROFILE_BUILDER_VERSION = "product-understanding-v1" as const;
 /**
  * Where a claim came from, in descending authority (CORE-1 §25).
  *
- * The order is the point. A founder saying "my product is for restaurant
- * owners" outranks a model's reading of their homepage, permanently — a later
- * scan must never quietly replace it with "freelancers" because a hero
- * headline changed.
+ * The order is the point, and it says two things.
+ *
+ * First: a founder saying "my product is for restaurant owners" outranks
+ * everything derived, permanently. A later scan must never quietly replace it
+ * with "freelancers" because a hero headline changed.
+ *
+ * Second: **being served beats being declared.** The live product and the
+ * signed-in product sit above the repository because a customer only ever
+ * experiences what is served — the same asymmetry `deterministic.ts` uses to
+ * decide that code alone is `likely` and never `confirmed`. A repository is
+ * not a weak source; it is simply not evidence of what anyone can reach.
+ *
+ * This is a tie-break, not the whole rule. `preferBySource` weighs confidence
+ * first, so a confirmed repository fact still beats an unclear live one.
  */
 export const SOURCE_PRIORITY = [
   "user_confirmed",
-  "repository",
   "live_product",
   "deep_scan",
+  "repository",
   "ai_inferred",
 ] as const;
 
