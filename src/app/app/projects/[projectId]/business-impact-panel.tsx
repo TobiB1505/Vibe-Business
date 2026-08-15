@@ -163,48 +163,52 @@ export function BusinessImpactPanel({
     });
   }
 
-  return (
-    <section className="space-y-3 border-t border-zinc-800 pt-4">
-      <h4 className="text-sm font-medium text-zinc-200">Business impact</h4>
+  /**
+   * The states with no metric evidence behind them (Cleanup §8, §9).
+   *
+   * Previously each rendered a full section with a headline, a metric and an
+   * explanation — which meant every project in existence ended its post-change
+   * experience on a prominent block explaining a gap in Vibe's own setup.
+   *
+   * They are now one quiet line under a secondary heading. Nothing here is a
+   * failure, nothing is styled as one, and nothing asks the user to configure
+   * analytics before their change is considered finished. The measurement
+   * architecture is intact underneath; it simply has nothing to report yet, and
+   * that is not news.
+   */
+  const noEvidenceYet =
+    card.state === "not_planned" || card.state === "source_required" || card.state === "unsupported";
 
-      {card.state === "not_planned" ? (
-        <div className="space-y-2">
-          <p className="text-sm text-zinc-300">{card.headline}</p>
-          <p className="text-sm text-zinc-400">
-            Vibe can record which business metric this change was meant to move, and the periods it
-            would compare.
-          </p>
-          {/* Free and deterministic: no analytics connection, no provider call,
-              no model. It records the intent, not a result (§8, §36). */}
+  if (noEvidenceYet) {
+    return (
+      <section className="space-y-2 border-t border-zinc-800 pt-4">
+        <h4 className="text-sm font-medium text-zinc-400">Impact tracking</h4>
+        <p className="text-sm text-zinc-500">Long-term impact has not been measured.</p>
+
+        {/* Kept, but demoted: planning is free and deterministic — no analytics
+            connection, no provider call, no model — and it records the intent
+            rather than a result. It is an option, never a prerequisite. */}
+        {card.state === "not_planned" && (
           <button
             type="button"
             onClick={() => run(planMeasurementAction)}
             disabled={pending}
-            className="rounded-md border border-zinc-700 px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-900 disabled:opacity-60"
+            className="text-xs text-zinc-500 underline underline-offset-2 hover:text-zinc-300 disabled:opacity-60"
           >
-            Plan measurement
+            Plan how this would be measured
           </button>
-        </div>
-      ) : card.state === "source_required" ? (
-        <div className="space-y-2">
-          {/* Not "No impact". A missing connection is a gap in Vibe's setup,
-              not a result about the customer's business (§21, §48). */}
-          <p className="text-sm text-zinc-300">{card.headline}</p>
-          <Metric card={card} />
-          <p className="text-sm text-zinc-400">{card.failureMessage}</p>
-          <p className="text-xs text-zinc-500">
-            Production behavior was verified, but Vibe does not yet have a connected data source to
-            measure search or traffic impact.
-          </p>
-          {/* No "Connect analytics" button: no connector exists, and a control
-              that cannot do anything is worse than an honest sentence (§34). */}
-        </div>
-      ) : card.state === "unsupported" ? (
-        <div className="space-y-2">
-          <p className="text-sm text-zinc-300">{card.headline}</p>
-          <p className="text-sm text-zinc-400">{card.failureMessage}</p>
-        </div>
-      ) : card.state === "scheduled" ? (
+        )}
+
+        {state?.ok === false && <p className="text-sm text-red-400">{state.message}</p>}
+      </section>
+    );
+  }
+
+  return (
+    <section className="space-y-3 border-t border-zinc-800 pt-4">
+      <h4 className="text-sm font-medium text-zinc-200">Business impact</h4>
+
+      {card.state === "scheduled" ? (
         <div className="space-y-2">
           <p className="text-sm text-zinc-300">{card.headline}</p>
           <Metric card={card} />

@@ -1,6 +1,7 @@
 import type { PreparedChangeCard } from "@/app/app/projects/[projectId]/prepared-changes-section";
 import type { OutcomeCard, OutcomeCheckLine } from "@/modules/outcome-verification/view";
 import type { BusinessImpactCard } from "@/modules/business-measurement/view";
+import { businessRationaleFor } from "@/modules/execution/business-rationale";
 import { OBSERVED_CHANGE_DISCLAIMER } from "@/modules/business-measurement/causality";
 
 /**
@@ -34,6 +35,9 @@ function baseChange(): Omit<PreparedChangeCard, "merge" | "outcome" | "businessI
     filePaths: ["src/app/robots.ts", "src/app/sitemap.ts"],
     createdAt: "2026-08-13T18:00:00.000Z",
     branchUrl: null,
+    // The real SEO capability's rationale, not invented copy: the browser
+    // suite asserts against what the product would actually render.
+    rationale: businessRationaleFor("nextjs_seo_foundations_v2"),
     validation: {
       status: "passed",
       phases: [],
