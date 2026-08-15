@@ -242,31 +242,54 @@ Authorized explicitly, performed once, against the historical approved change.
 
 ### The seventh criterion, and why it was not met
 
-There is no `change_merges` row and no `change_merge` operation, because
+There was no `change_merges` row and no `change_merge` operation, because
 **nothing was ever attempted**. The render-time preflight found the drift and
 the panel rendered `not_eligible` — "Not available", with the reason — so the
 **Merge approved change** button was never drawn. There was nothing to click.
 
-That is the implementation behaving as designed, and the design is deliberate:
-`startMerge` records a refusal as an audit event rather than a row, on the
-reasoning that *a request refused at the door never touched GitHub and never
-became an attempt, so inventing a ChangeMerge for it would put junk in the table
-that documents writes.*
+That is the implementation behaving as designed: `startMerge` records a refusal
+as an audit event rather than a row, on the reasoning that *a request refused at
+the door never touched GitHub and never became an attempt, so inventing a
+ChangeMerge for it would put junk in the table that documents writes.*
 
-The consequence is worth stating plainly rather than filing as a win: **a
-drift-refused merge currently leaves no durable trace at all.** Not a row,
-and — because the button is withheld before `startMerge` is reached — not even
-the `change_merge.blocked` audit event that path would write. A `blocked` row is
-reachable only when drift appears *between* the request and the durable write,
-which the workflow's own revalidation catches.
+But the consequence was worse than the design intended, and it is now fixed.
+Because the button is withheld *before* `startMerge` is reached, that audit
+event was never written either — so a drift-refused merge left **no durable
+trace at all**.
 
-Whether "refused before it was offered" deserves a record is a product decision,
-not a bug fix. It is not resolved here, and nothing was weakened to manufacture
-a row.
+### The fix: `change_merge.not_eligible`
+
+Recorded from the read path, under a deliberately narrow condition:
+
+> a human approved these exact bytes, **and** Vibe currently cannot merge them.
+
+`not_eligible` is the resting state of every change nobody has approved, so
+recording it unconditionally would mostly log the absence of a decision. The
+state worth remembering is a fact about a commitment already made.
+
+It is **deduplicated against the last recorded reason**, because it runs on a
+render. One event per *transition*: the first time a change becomes unmergeable,
+and again only if the reason changes — `merge_repository_changed` becoming
+`merge_permission_missing` is a different fact and gets its own entry. An event
+per render would turn the audit log into a page-view log.
+
+Deliberately distinct from `change_merge.blocked`, which means *a human asked
+and was refused*. Conflating them would make the log unable to answer the only
+question it is really asked here: whether anyone tried.
+
+Two properties the tests pin, both of which survived a first round of mutation
+testing and needed extra coverage:
+
+- a card showing an **earlier failed attempt** records nothing, so an old
+  attempt's failure code is never re-logged as a fresh refusal;
+- a **failed dedup read** stays silent rather than writing, so a transient
+  error cannot produce the per-render flood through the error path.
+
+Six deliberate regressions, all killed.
 
 ### The state that produced it
 
-
+Resolved from production data rather than assumed:
 
 - the historical approved change is commit `2f05958`, prepared against base `528d372`;
 - `main` is now at `b8638ae`, **five commits** past that base, and `main` is not an ancestor of the approved commit — so a fast-forward is genuinely impossible, not merely refused by policy.
