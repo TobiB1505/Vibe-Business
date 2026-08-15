@@ -1,13 +1,16 @@
 import { describeEvidenceId } from "@/modules/business-audit/evidence-labels";
-import type {
-  BusinessReadinessAudit,
-  DimensionAssessment,
+import {
+  DIMENSION_LABELS,
+  DIMENSION_QUESTIONS,
+  type BusinessReadinessAudit,
+  type DimensionAssessment,
 } from "@/modules/business-audit/schema";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
 import { ScoreMeter } from "@/components/ui/score-meter";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Surface, Well } from "@/components/ui/surface";
 import { MonoLabel } from "@/components/ui/typography";
+import { TechnicalDetails } from "@/components/ui/disclosure";
 
 /**
  * Business Readiness Audit display (Sprint 4 §30, migrated to the design
@@ -95,8 +98,10 @@ function DimensionRow({ dimension }: { dimension: DimensionAssessment }) {
 
   return (
     <li className="border-line-1 flex flex-col gap-3 border-b py-5 last:border-b-0 last:pb-0">
+      {/* The question the dimension answers, not its category name. The
+          technical label stays available in the details below. */}
       <ScoreMeter
-        label={dimension.label}
+        label={DIMENSION_QUESTIONS[dimension.id] ?? dimension.label}
         value={dimension.score}
         // The domain's own word for how much evidence stood behind the score.
         confidence={unscored ? "none" : dimension.confidence}
@@ -120,6 +125,17 @@ function DimensionRow({ dimension }: { dimension: DimensionAssessment }) {
       )}
 
       <EvidenceDisclosure evidenceIds={dimension.evidenceIds} />
+
+      {/* The dimension's own name, for anyone who wants to line this up with
+          the stored audit or with `PRODUCT.md`. */}
+      <TechnicalDetails
+        entries={[
+          { key: "dimension", value: dimension.id },
+          { key: "label", value: DIMENSION_LABELS[dimension.id] ?? dimension.label },
+          { key: "score", value: dimension.score },
+          { key: "confidence", value: dimension.confidence },
+        ]}
+      />
     </li>
   );
 }

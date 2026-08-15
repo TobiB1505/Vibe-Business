@@ -29,7 +29,7 @@ function EvidenceList({ evidence }: { evidence: Evidence[] }) {
       <ul className="mt-1 space-y-0.5 pl-3">
         {evidence.slice(0, 6).map((item, index) => (
           <li key={`${item.path}-${index}`} className="text-xs text-fg-muted">
-            <code className="text-fg-secondary">{item.path}</code>
+            <code className="text-fg-secondary [overflow-wrap:anywhere]">{item.path}</code>
             {item.detail ? <span className="text-fg-meta"> · {item.detail}</span> : null}
           </li>
         ))}
@@ -102,7 +102,7 @@ export function IntelligenceSummary({
       <div className="space-y-0.5">
         <h3 className="text-fg-body text-sm font-medium">Repository intelligence</h3>
         <p className="text-xs text-fg-muted">
-          Analyzed at commit <code className="text-fg-secondary">{shortSha}</code> on {snapshot.source.branch} ·{" "}
+          Analyzed at commit <code className="text-fg-secondary [overflow-wrap:anywhere]">{shortSha}</code> on {snapshot.source.branch} ·{" "}
           {formatTimestamp(analyzedAt) ?? analyzedAt}
         </p>
       </div>
@@ -160,7 +160,7 @@ export function IntelligenceSummary({
             <ul className="pl-3">
               {snapshot.projectStructure.monorepo.apps.map((app) => (
                 <li key={app} className="text-xs text-fg-muted">
-                  <code className="text-fg-secondary">{app}</code>
+                  <code className="text-fg-secondary [overflow-wrap:anywhere]">{app}</code>
                 </li>
               ))}
             </ul>
@@ -180,7 +180,7 @@ export function IntelligenceSummary({
           <ul className="space-y-0.5">
             {pageRoutes.slice(0, 25).map((route) => (
               <li key={route.sourcePath} className="text-sm text-fg-prose">
-                <code>{route.path}</code>
+                <code className="[overflow-wrap:anywhere]">{route.path}</code>
               </li>
             ))}
             {pageRoutes.length > 25 && (

@@ -202,19 +202,19 @@ function ResultSummary({ result }: { result: NonNullable<DeepScanViewModel["last
     <div className="space-y-3">
       <dl className="space-y-1 text-sm">
         <div className="flex items-baseline justify-between gap-3">
-          <dt className="text-fg-muted">Last analyzed</dt>
+          <dt className="text-fg-muted">Last checked</dt>
           <dd className="text-fg-prose">
             {formatTimestamp(result.analyzedAt) ?? result.analyzedAt}
           </dd>
         </div>
         <div className="flex items-baseline justify-between gap-3">
-          <dt className="text-fg-muted">Pages inspected</dt>
+          <dt className="text-fg-muted">Pages Vibe looked at</dt>
           <dd className="text-fg-prose">{result.pagesInspected}</dd>
         </div>
         <div className="flex items-baseline justify-between gap-3">
-          <dt className="text-fg-muted">Completeness</dt>
+          <dt className="text-fg-muted">Check finished</dt>
           <dd className={result.completeness === "complete" ? "text-mint" : "text-amber"}>
-            {result.completeness === "complete" ? "Complete" : "Partial"}
+            {result.completeness === "complete" ? "Fully" : "Only partly"}
           </dd>
         </div>
       </dl>
@@ -222,7 +222,7 @@ function ResultSummary({ result }: { result: NonNullable<DeepScanViewModel["last
       {result.surfaces.length > 0 && (
         <div className="space-y-1">
           <p className="text-xs font-medium tracking-wide text-fg-muted uppercase">
-            Signed-in product surfaces
+            Pages Vibe found after signing in
           </p>
           <ul className="flex flex-wrap gap-1.5">
             {result.surfaces.map((surface) => (
@@ -352,7 +352,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
       <Section>
         {model.state === "completed" && model.lastResult ? (
           <>
-            <Heading title="Deep Scan" status="Ready" />
+            <Heading title="Look inside your signed-in product" status="Ready" />
             <ResultSummary result={model.lastResult} />
             <p className="text-xs text-fg-muted">
               Additional Deep Scans will use Vibe Credits.
@@ -382,7 +382,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
           </>
         ) : model.state === "analyzing" ? (
           <>
-            <Heading title="Deep Scan" status="Analyzing" />
+            <Heading title="Look inside your signed-in product" status="Vibe is looking around" />
             <p role="status" className="text-sm text-fg-secondary">
               Analyzing your signed-in product…
             </p>
@@ -392,7 +392,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
           </>
         ) : model.state === "waiting_for_login" ? (
           <>
-            <Heading title="Deep Scan" status="Waiting for sign-in" />
+            <Heading title="Look inside your signed-in product" status="Waiting for you to sign in" />
             <p className="text-sm text-fg-secondary">
               A temporary browser is open. Sign in to continue.
             </p>
@@ -447,7 +447,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
           </>
         ) : model.state === "recommended" ? (
           <>
-            <Heading title="Deep Scan recommended" />
+            <Heading title="Look inside your signed-in product" />
             <div className="space-y-1 text-sm text-fg-secondary">
               <p>
                 Vibe can see your code and public website, but some of your product is behind a

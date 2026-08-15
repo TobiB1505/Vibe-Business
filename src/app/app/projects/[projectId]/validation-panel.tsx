@@ -186,11 +186,14 @@ export function ValidationPanel({
 
   return (
     <section className="space-y-3 border-t border-line-2 pt-4">
-      <h4 className="text-sm font-medium text-fg-body">Validation</h4>
+      {/* "Safety checks" rather than "Validation" (Sprint UI-3.5). The
+          internal vocabulary is unchanged — the stored status is still
+          `passed`/`failed`, and it is shown verbatim in the details below. */}
+      <h4 className="text-sm font-medium text-fg-body">Safety checks</h4>
 
       {running ? (
         <div className="space-y-3">
-          <p className="text-sm text-fg-prose">Validating in an isolated environment…</p>
+          <p className="text-sm text-fg-prose">Vibe is checking the change in a safe, isolated copy of your project…</p>
           {/* Real phases, from the database, updating as each one finishes.
               Before the first phase records itself there is nothing truthful to
               show, so the panel says only that it has started. */}
@@ -206,19 +209,30 @@ export function ValidationPanel({
       ) : shown?.status === "passed" ? (
         <div className="space-y-3">
           <p className={shown.underCurrentPolicy ? "text-sm text-mint" : "text-sm text-amber"}>
-            {shown.underCurrentPolicy ? "Validation passed" : "Validated under an earlier policy"}
+            {shown.underCurrentPolicy
+              ? "All safety checks passed"
+              : "Checked under earlier rules"}
           </p>
           <p className="text-sm text-fg-secondary">
             {shown.underCurrentPolicy
-              ? "The application built successfully in an isolated environment."
+              ? "Your project still builds, and the change matches the exact commit Vibe prepared."
               : "This result was produced before Vibe's validation rules changed. It still describes what was checked at the time, but not what would be checked now."}
           </p>
           <PhaseList phases={shown.phases} />
           {/* Deliberately repeated after a pass. A green tick is exactly when
               someone is most likely to assume more happened than did. */}
-          <p className="text-xs text-fg-muted">
-            Not merged · Not deployed · Not reviewed by a human
-          </p>
+          {/* Deliberately repeated after a pass, and deliberately explicit
+              about what passing does *not* establish. A green tick is exactly
+              when someone is most likely to assume more happened than did. */}
+          <div className="flex flex-col gap-1">
+            <p className="text-xs text-fg-muted">
+              Not merged · Not deployed · Not reviewed by a human
+            </p>
+            <p className="text-fg-meta max-w-[70ch] text-xs">
+              Passing these checks means the change is technically sound. It is not a judgement
+              about whether the idea behind it will work for your business.
+            </p>
+          </div>
 
           {/* Always available, and always safe: validation identity plus
               artifact availability decide what happens. A current pass with a
@@ -236,7 +250,7 @@ export function ValidationPanel({
       ) : shown?.status === "failed" ? (
         <div className="space-y-3">
           <p className="text-sm text-coral">
-            {failed ? `Validation failed at ${failed.label.toLowerCase()}` : "Validation failed"}
+            {failed ? `A safety check did not pass: ${failed.label.toLowerCase()}` : "A safety check did not pass"}
           </p>
           {shown.failureMessage && <p className="text-sm text-fg-secondary">{shown.failureMessage}</p>}
           <PhaseList phases={shown.phases} />
