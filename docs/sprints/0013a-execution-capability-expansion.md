@@ -9,7 +9,8 @@ of the three capabilities are built.**
 | Capability registry with a completeness contract | ✅ Done, 18 tests |
 | Write budgets (§44) | ✅ Done |
 | Promissory-claims guard for rationale copy | ✅ Done — found by a deliberate regression |
-| `nextjs_metadata_foundations_v1` | ⛔ Not built |
+| `nextjs_metadata_foundations_v1` — detector + generator | ✅ Done, 36 tests |
+| `nextjs_metadata_foundations_v1` — registry wiring, outcome profile, UI, dogfood | ⛔ Not built |
 | `nextjs_primary_cta_v1` | ⛔ Not built |
 | `nextjs_pricing_foundation_v1` | ⛔ Not built |
 | Readiness states, input contract, review targets, UI, E2E | ⛔ Not built |
@@ -134,6 +135,92 @@ readiness states beyond what exists, the capability input contract, the review
 target model (§48 — the genuinely hard design question about new-route
 before/after semantics), the opportunity mapping, the input UI, browser E2E for
 the new flows, and the dogfood.
+
+## 13A.1 — Metadata capability (detector + generator)
+
+### Current state, re-resolved
+
+Checked against **both** the repository and the live homepage before writing
+anything, as §8 requires rather than trusting the earlier finding:
+
+```
+src/app/layout.tsx   title ✓   description ✓   openGraph ✗
+live homepage        <title> ✓  <meta name="description"> ✓   og:* ✗
+```
+
+The gap is real and unchanged. State D of §3 → **applicable**.
+
+### Detection — built on the Sprint 8 lesson
+
+Sprint 8 reported `robots.txt` as present because a *parser* contained the
+string. Metadata is the same trap with more surface: `openGraph`, `title` and
+`description` appear in type definitions, fixtures, docs, helpers and dead code,
+and none of those put a tag on a page.
+
+The rule is therefore structural rather than textual: the detector's only input
+is the **resolved framework-served metadata source**. A parser or a fixture
+cannot reach it, because there is no parameter it could arrive through.
+
+| Situation | Readiness |
+| --- | --- |
+| `title` + `description`, no Open Graph | `ready` |
+| Owned Open Graph fields already present | `not_applicable` |
+| No metadata export at all | `unsupported` — creating one is a structural edit, not a gap fill |
+| `generateMetadata()` factory | `unsupported` — editing it blind could override values computed per request |
+| No truthful title or description anywhere | `needs_user_input` |
+
+### Trusted content precedence
+
+`existing metadata → business context`, and **existing always wins**. A title
+already served by the framework is the customer's decision; rewriting it to
+something Vibe prefers would edit their product's voice under the guise of a
+fix. `og:url` and `siteName` are omitted entirely when unknown — an empty
+`og:url` is worse than none because it looks like an answer.
+
+No AI anywhere in the path, and no fallback copy: if nothing truthful exists,
+the answer is `needs_user_input`.
+
+### Generator — an edit, not a creation
+
+The SEO generator writes two new files. This one changes a file the customer
+owns, so the failure mode is not "an unwanted file appears" but "their layout is
+rewritten". The edit is therefore the narrowest that can work: the existing
+`metadata` export gains an `openGraph` block, the file's own indentation is
+matched, and nothing else is touched.
+
+Values are serialized with `JSON.stringify`, not interpolated. A product title
+is customer text and the output is **code** — a title containing a quote, a
+backtick or `"; process.exit()` must become a valid string literal. Nine hostile
+inputs are tested by round-tripping the emitted literal back through
+`JSON.parse`, which proves the value cannot leave its quotes rather than merely
+checking that suspicious substrings are absent.
+
+The generator refuses rather than guessing when the export is not the expected
+shape, and refuses to add a second `openGraph` key — two would be a
+syntax-valid file whose later key silently wins.
+
+### Deliberate regressions — 5 applied, 5 killed
+
+| # | Regression | Result |
+| --- | --- | --- |
+| 1 | Complete metadata becomes `ready` | ✅ fails |
+| 2 | Custom `generateMetadata()` factory edited anyway | ✅ fails |
+| 3 | Missing trusted copy invented instead of asking | ✅ fails |
+| 4 | Existing Open Graph overwritten instead of preserved | ✅ fails |
+| 5 | Hostile input interpolated instead of serialized | ✅ fails — **7 tests** |
+
+Regression 5 first appeared to survive. It had not applied: the substitution's
+escaping was wrong, so the file was unchanged and the run was measuring nothing.
+Applied properly it kills seven tests. A mutation that does not modify the file
+is not evidence of anything, and the check for that is cheap.
+
+### Not yet built in this slice
+
+Registry wiring for the new capability id, the `nextjs_metadata_outcome_v1`
+product-outcome profile, opportunity resolution, the user-facing UI, browser
+E2E, and the real dogfood. The detector and generator are the parts where a
+silent mistake is unrecoverable; the remainder is wiring onto contracts that
+already exist.
 
 ## Suggested split
 
