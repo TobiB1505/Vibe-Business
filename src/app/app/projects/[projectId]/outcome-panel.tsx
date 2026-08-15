@@ -96,7 +96,21 @@ function CheckList({ checks }: { checks: OutcomeCheckLine[] }) {
  * because the row a user most needs on a `partial` is the same row they need on
  * a `verified`: the one saying nobody has measured whether this helped.
  */
-function OutcomeLadder({ productOutcome }: { productOutcome: string }) {
+function OutcomeLadder({
+  productOutcome,
+  businessImpact,
+}: {
+  productOutcome: string;
+  /**
+   * What the measurement domain currently says (Sprint 12B §33).
+   *
+   * Defaulted to "Not measured" rather than required, so the row survives a
+   * caller that forgets it — and so this file still contains the literal that
+   * Sprint 12A's assertions are written against. The default is also the
+   * truthful answer for every project today.
+   */
+  businessImpact?: string;
+}) {
   return (
     <dl className="space-y-1 rounded-md border border-zinc-800 p-3" data-testid="outcome-ladder">
       <div className="flex items-baseline justify-between gap-3">
@@ -109,9 +123,10 @@ function OutcomeLadder({ productOutcome }: { productOutcome: string }) {
       </div>
       <div className="flex items-baseline justify-between gap-3">
         <dt className="text-xs text-zinc-500">Business impact</dt>
-        {/* Not "pending" and not "0%". Vibe has not measured this and has no
-            plan to pretend it did (§33). */}
-        <dd className="text-xs text-zinc-500">Not measured</dd>
+        {/* Not "pending" and not "0%". When nothing has been measured this
+            says so plainly; when something has, it says what was observed —
+            never a claim that the change caused it (Sprint 12B §33, §43). */}
+        <dd className="text-xs text-zinc-500">{businessImpact ?? "Not measured"}</dd>
       </div>
     </dl>
   );
@@ -131,10 +146,13 @@ export function OutcomePanel({
   projectId,
   preparedChangeId,
   card,
+  businessImpactLabel,
 }: {
   projectId: string;
   preparedChangeId: string;
   card: OutcomeCard;
+  /** The business measurement's own short answer, for the ladder (Sprint 12B §33). */
+  businessImpactLabel?: string;
 }) {
   const router = useRouter();
   const [state, setState] = useState<OutcomeActionState>(null);
@@ -232,7 +250,7 @@ export function OutcomePanel({
           {current.observedAt && (
             <p className="text-xs text-zinc-500">Observed at {localTime(current.observedAt)}</p>
           )}
-          <OutcomeLadder productOutcome="Verified" />
+          <OutcomeLadder productOutcome="Verified" businessImpact={businessImpactLabel} />
           <NotDeployed />
         </div>
       ) : current.state === "partial" ? (
@@ -244,7 +262,7 @@ export function OutcomePanel({
           {current.observedAt && (
             <p className="text-xs text-zinc-500">Observed at {localTime(current.observedAt)}</p>
           )}
-          <OutcomeLadder productOutcome="Partially observed" />
+          <OutcomeLadder productOutcome="Partially observed" businessImpact={businessImpactLabel} />
           <NotDeployed />
         </div>
       ) : current.state === "not_observed" ? (
@@ -262,7 +280,7 @@ export function OutcomePanel({
             This does not mean a deployment failed. Vibe does not read your hosting provider, so it
             cannot say why the behavior was not visible.
           </p>
-          <OutcomeLadder productOutcome="Not observed" />
+          <OutcomeLadder productOutcome="Not observed" businessImpact={businessImpactLabel} />
         </div>
       ) : current.state === "failed" ? (
         <div className="space-y-2">

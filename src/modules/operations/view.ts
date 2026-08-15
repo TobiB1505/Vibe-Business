@@ -135,5 +135,10 @@ export const OPERATION_STAGE_LABELS: Record<OperationStage, string> = {
   // be the same lie as a percentage.
   observing: "Checking your public product",
   evaluating: "Comparing what was expected with what was observed",
+  // Business measurement (Sprint 12B §23). Factual progress only — never
+  // "looking good", which would be a conclusion drawn before the window closed.
+  collecting_baseline: "Collecting the baseline period",
+  collecting_post: "Collecting the post-change period",
+  comparing: "Comparing the two periods",
   completed: "Completed",
 };

@@ -30,6 +30,8 @@ import { getReviewCard, getReviewImages } from "@/modules/review/service";
 import { getApprovalCard } from "@/modules/approvals/service";
 import { getMergeCard, resolveMergeTarget } from "@/modules/merge/service";
 import { getOutcomeCard } from "@/modules/outcome-verification/service";
+import { getBusinessImpactCard } from "@/modules/business-measurement/service";
+import { NoConnectedMetricSources } from "@/modules/business-measurement/source";
 import { createGithubMergePort } from "@/modules/merge/github/adapter";
 import { mergeFailureMessage } from "@/modules/merge/messages";
 import { buildMergeCard } from "@/modules/merge/view";
@@ -257,6 +259,16 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
       preparedChangeId: prepared.id,
     });
 
+    // Business impact state (Sprint 12B §36, §45). Up to four database reads
+    // and **zero provider calls**: rendering a project page must never contact
+    // an analytics vendor, must never create a measurement plan, and must never
+    // start a measurement. The registry is asked whether anything is
+    // *connected*, which today is a synchronous "no" for every project.
+    const businessImpact = await getBusinessImpactCard(supabase, new NoConnectedMetricSources(), {
+      projectId,
+      preparedChangeId: prepared.id,
+    });
+
     // The preview's public origin, only while it is genuinely running. Fetched
     // from the provider rather than stored, because it is capability-like
     // (ADR 0016 §4) — and absent after teardown, which is expected: the
@@ -314,6 +326,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
       approval,
       merge,
       outcome,
+      businessImpact,
     });
   }
 

@@ -1,5 +1,6 @@
 import { MERGE_FAILURE_MESSAGES } from "@/modules/merge/messages";
 import { OUTCOME_FAILURE_MESSAGES } from "@/modules/outcome-verification/messages";
+import { MEASUREMENT_FAILURE_MESSAGES } from "@/modules/business-measurement/messages";
 import type { OperationFailureCode } from "./failures";
 
 /**
@@ -148,4 +149,11 @@ export const OPERATION_FAILURE_MESSAGES: Record<OperationFailureCode, string> = 
   // two copies of "Vibe could not reach your public product" is two chances for
   // one of them to grow into a claim about the customer's product being broken.
   ...OUTCOME_FAILURE_MESSAGES,
+
+  // Business measurement (Sprint 12B §33). Spread for the same reason as the
+  // merge's and the outcome's: the module owns the wording of its own refusals.
+  // Two copies of "connect an analytics source" is two chances for one of them
+  // to grow into "no impact" — which is the one thing this sprint must never
+  // say when nothing is connected.
+  ...MEASUREMENT_FAILURE_MESSAGES,
 };
