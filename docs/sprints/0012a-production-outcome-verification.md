@@ -12,8 +12,8 @@
 | verified / partial / not_observed / failed distinctions | ✅ Complete |
 | Tests + 22 deliberate regressions | ✅ Complete (21 killed, 1 mis-targeted and retargeted — see below) |
 | Browser E2E of the outcome UI | ✅ 32 chromium tests (20 new + the 12 merge tests, all green) |
-| Migration deployed | ⛔ **Not deployed** — no linked Supabase CLI in this environment |
-| Real dogfood | ⛔ **Blocked on the migration** |
+| Migration deployed | ✅ Deployed 15.08.2026 via the CLI from the linked machine |
+| Real dogfood | ✅ **Done 15.08.2026 — production outcome verified, 8/8 checks, 1 attempt** |
 
 ## Goal
 
@@ -338,14 +338,57 @@ It is not redundant in production: a durable step reads, decides and writes as t
 | `pnpm test` | ✅ 2371 tests, 123 files |
 | `pnpm build` | ✅ |
 | `pnpm test:e2e` | ✅ 32 chromium tests — see note below |
-| `pnpm db:status` | ⛔ no linked Supabase CLI in this environment |
-| `pnpm db:lint` | ⛔ same |
+| `pnpm db:status` | ✅ 22/22, nothing pending, no remote-only drift |
+| `pnpm db:lint` | ✅ no schema errors |
+
+Both database commands were re-run from the linked machine after deployment,
+together with the whole gate: lint, typecheck, 2371 tests, build and 32 browser
+tests all green there against the deployed schema.
 
 **On `pnpm test:e2e`.** This container ships Chromium build 1194 at `/opt/pw-browsers`, while `@playwright/test` 1.62 expects 1234, and `playwright install` is disabled here. The suite was run with an environment-only config in the scratchpad that points the repository's own config at the preinstalled binary — nothing in `playwright.config.ts` was changed, so CI and other machines are unaffected. All 32 tests pass.
 
 **On the Supabase CLI.** The same position as Sprint 11C: this environment has no CLI credentials and no `.env`, so `supabase link` cannot run. Migration alignment was instead verified read-only through the Supabase connection to the `Vibe-Business` project: 21 local migrations, 21 remote, exact version-for-version agreement, no remote-only drift. The live `operation_runs` constraints were read before this migration was written — eight operation types, thirty-two stages, and neither `change_outcome_verification` nor `observing`/`evaluating` present. `schema.test.ts` now pins both representations together.
 
-## Migration — not deployed
+## Migration — deployed 15.08.2026
+
+Applied from the linked machine through the sanctioned workflow: `pnpm db:status`
+→ `pnpm db:push`. One pending migration, no remote-only drift, **version
+preserved**. History converged at 22/22.
+
+### The check that was worth doing first
+
+This migration drops and re-adds two `operation_runs` enum CHECKs, and a
+drop/re-add can silently *narrow* an enum — orphaning rows that already use a
+value the new list forgets. The re-added lists were diffed against the live
+constraint before applying:
+
+| Constraint | Live | After | Removed |
+| --- | --- | --- | --- |
+| `operation_type` | 8 | 9 | **none** — `change_outcome_verification` added |
+| `stage` | 32 | 34 | **none** — `observing`, `evaluating` added |
+
+Purely additive, which is what made it safe to apply to a database holding real
+operation history.
+
+### Verified live after deploy
+
+- table present, **17 CHECK constraints**;
+- **INSERT and SELECT policies only** — no UPDATE, no DELETE, so every
+  authoritative transition can only be written by the service-role client;
+- `change_outcome_verifications_identity_idx` present;
+- Postgres's own normalized `with_check` confirms every reference to the new row
+  is qualified `change_outcome_verifications.*` and every inner reference is
+  aliased (`p`, `cm`, `orn`) — the scoping bug from migration `20260814101000`
+  is structurally absent;
+- the insert policy requires a **`merged`** merge whose independently read-back
+  head equals the claimed commit.
+
+### The original note, kept
+
+The reasoning below is what made the deployment correct rather than convenient,
+so it stays on the record.
+
+#### Why it was not applied from the implementation environment
 
 `supabase/migrations/20260814170000_change_outcome_verifications.sql` is written, reviewed and pinned by contract tests. **It has not been applied.**
 
@@ -353,13 +396,98 @@ The sanctioned path (CLAUDE.md rule 29, [0002a](0002a-supabase-cli-workflow.md))
 
 The obvious shortcut — applying the DDL through the Supabase management connection that *is* reachable from here — was rejected for the same reason Sprint 11C rejected it: that path stamps its own migration version, so the remote history would record a version the local file does not have, and the next `pnpm db:push` would try to create a table that already exists. That is exactly the divergence rules 29, 30 and 34 exist to prevent.
 
-**Until it is deployed, every "Check production outcome" click fails at INSERT** on `operation_runs_operation_type_check`, before a single request is made.
+**Until it was deployed, every "Check production outcome" click would have failed at INSERT** on `operation_runs_operation_type_check`, before a single request was made. It has since been deployed, as recorded above.
 
-## Real dogfood — blocked
+## Real dogfood — done, 15.08.2026
 
-Not performed, and nothing was weakened to manufacture a result.
+**Vibe observed a customer's product for the first time.** The customer was Vibe
+Business, and the product was serving the change Vibe had merged into it the day
+before.
 
-The target was resolved from production data rather than assumed, exactly as §46 requires:
+### The answer
+
+`verified` — **8 of 8 checks passed on the first attempt**, in 2.5 seconds.
+
+| Check | Result |
+| --- | --- |
+| `robots.txt` reachable | ✅ 200 · `text/plain` · 115 bytes · 0 redirects |
+| `robots.txt` declares the sitemap | ✅ present |
+| `sitemap.xml` reachable | ✅ 200 · `application/xml` · 271 bytes |
+| `sitemap.xml` parses as a sitemap | ✅ 1 URL |
+| homepage included | ✅ present |
+| `/login` excluded | ✅ absent |
+| `/signup` excluded | ✅ absent |
+| `/app` excluded | ✅ absent |
+
+### The record
+
+| | |
+| --- | --- |
+| Verification | `b9efb2f7` · `verified` · **one row, total** |
+| About | merged commit `78cbdac…` · `nextjs_seo_foundations_v2` |
+| Profile · policy · evidence | `nextjs_seo_foundations_outcome_v1` · `outcome-policy-v1` · `outcome-evidence-v1` |
+| Origin | `https://vibe-business-fawn.vercel.app` — effective origin identical, **0 redirects** |
+| Attempts | **1** of a possible 32 |
+| Window | opened `01:45:50`, deadline `02:00:50`, concluded `01:45:53` |
+| Operation | `completed` · `change_outcome.started → change_outcome.verified` |
+| AI calls | **0** |
+
+The window is the part worth reading twice: `verification_window_ends_at` was
+written **once** at open and the run finished 2.5 s later. The deadline was a
+property of the record, not of a process that happened to still be running —
+which is exactly what §42 asks for and what a replayed workflow would otherwise
+quietly extend.
+
+### Independently checked, not taken on trust
+
+Every observation was re-run by hand against production afterwards and compared
+to the stored evidence:
+
+```
+/robots.txt    200 · text/plain       · 115 bytes   ← matches the record exactly
+/sitemap.xml   200 · application/xml  · 271 bytes   ← matches, 1 <url>, /login /signup /app absent
+```
+
+This is *not* the manual substitute §47 rules out. The observation happened
+through the product flow and produced a traceable verification record; the
+by-hand fetch came afterwards, as an audit of whether that record was true. A
+verification layer nobody ever checks against reality is a layer that can drift
+without anyone noticing.
+
+### What the stored evidence contains
+
+Statuses, byte counts, a normalized content type, redirect counts, booleans, a
+URL count. **No response body, no XML, no robots text, and no sitemap URL read
+out of a fetched document.** The check that reports `/login` absent stores
+`present: false` — not the sitemap it learned that from.
+
+### The three lines the panel refuses to collapse
+
+```
+Merged              Yes
+Production outcome  Verified
+Business impact     Not measured
+```
+
+Eight green ticks after a merge is precisely the moment a product invites the
+reader to conclude that something improved. The card declines to, and repeats
+that Vibe has not verified a deployment — which stays true: Vibe observed a
+public URL, it did not observe a deploy.
+
+### The closure
+
+The first Vibe-authored commit, on 12.08., listed `/login` and `/signup` in a
+sitemap: correct at every safety layer and wrong in intent. It is the standing
+example in this project's history of why `repository_write_verified` is not
+`good`.
+
+**Three of the eight checks that just passed in production are specifically that
+those paths are absent.** The defect the pipeline was built around is now the
+thing the pipeline measures.
+
+### The eligibility that made it possible
+
+Resolved from production data rather than assumed, exactly as §46 requires:
 
 | | |
 | --- | --- |
@@ -372,9 +500,7 @@ The target was resolved from production data rather than assumed, exactly as §4
 | Approval | `968f8955-d0f1-4619-ae3f-e2eaa23f12ff` |
 | Public origin | `https://vibe-business-fawn.vercel.app` |
 
-So eligibility holds on every axis §10 names. What is missing is the table to record the answer in.
-
-Deliberately **not** done as a substitute: the endpoints were not fetched by hand. §47 asks that the observation happen through the product flow, and a manual `curl` would produce a number nobody could trace to a verification record — which is the opposite of what this sprint is for.
+Eligibility held on every axis §10 names, and the table to record the answer in now exists.
 
 ## Known limitations
 
