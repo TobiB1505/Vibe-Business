@@ -235,6 +235,9 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
     const merge = mergeTarget
       ? await getMergeCard(supabase, createGithubMergePort(mergeTarget), {
           projectId,
+          // Only so an "approved but unmergeable" observation can be attributed
+          // when one is recorded. Never used to decide anything.
+          userId: session.userId,
           preparedChangeId: prepared.id,
         })
       : buildMergeCard({

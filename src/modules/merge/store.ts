@@ -200,6 +200,62 @@ export async function getLatestMergeForPreparedChange(
 }
 
 /**
+ * The reason the last recorded "cannot be merged" observation gave, if any.
+ *
+ * ## Why this reads the audit log rather than a table
+ *
+ * Because the thing being remembered is not an artifact. There is no attempt,
+ * no write and nothing to converge — only the fact that Vibe looked once and
+ * said why it could not offer a merge. Giving that its own table would create a
+ * row whose entire lifecycle is "exists", and giving it a `change_merges` row
+ * would put something that never touched GitHub into the table that documents
+ * writes.
+ *
+ * ## Why it is read at all
+ *
+ * To deduplicate. The preflight this feeds runs on **every** render of the
+ * project page, so recording unconditionally would log page views. Comparing
+ * against the last reason means one event per *transition* — the first time a
+ * change becomes unmergeable, and again only if the reason changes.
+ *
+ * The JSONB filter is unindexed and that is deliberate for now: it runs only
+ * for a change that is approved *and* currently blocked, which is a handful of
+ * rows per project. If that stops being true it wants an index, not a rewrite.
+ */
+export async function findLastNotEligibleReason(
+  supabase: SupabaseClient,
+  params: { projectId: string; preparedChangeId: string },
+): Promise<string | null> {
+  const { data, error } = await supabase
+    .from("audit_events")
+    .select("metadata")
+    .eq("event_type", "change_merge.not_eligible")
+    .eq("metadata->>project_id", params.projectId)
+    .eq("metadata->>prepared_change_id", params.preparedChangeId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  // A failed read must never *cause* a write. Returning null here would make a
+  // transient error look like "nothing recorded yet" and duplicate the event,
+  // so the sentinel is deliberately the opposite: unknown means stay quiet.
+  if (error) return UNKNOWN_LAST_REASON;
+
+  const metadata = (data as { metadata?: Record<string, unknown> } | null)?.metadata;
+  const reason = metadata?.failure_code;
+  return typeof reason === "string" ? reason : null;
+}
+
+/**
+ * Returned when the last reason could not be read.
+ *
+ * Distinct from `null` (nothing recorded) precisely so the caller can tell "we
+ * know there is nothing" from "we do not know", and only write in the first
+ * case.
+ */
+export const UNKNOWN_LAST_REASON = "__unknown__";
+
+/**
  * Records that the authoritative preflight passed (§9).
  *
  * Stores what GitHub said *now* — the branch name it resolved and the head it

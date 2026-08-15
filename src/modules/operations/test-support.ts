@@ -41,13 +41,36 @@ type Filter =
   | { kind: "not_is"; column: string; value: null }
   | { kind: "gt"; column: string; value: unknown };
 
+/**
+ * Reads a column, following PostgREST's `column->>key` JSON accessor.
+ *
+ * Modelled because a store that filters on `metadata->>project_id` is issuing a
+ * real query shape, and a fake that treats the whole string as a column name
+ * silently matches nothing. A dedup lookup that always returns "nothing found"
+ * does not fail — it just writes every time, which is exactly the bug the test
+ * was written to catch.
+ */
+function readColumn(row: Row, column: string): unknown {
+  const jsonAccessor = column.indexOf("->>");
+  if (jsonAccessor === -1) return row[column];
+
+  const container = row[column.slice(0, jsonAccessor)];
+  if (!container || typeof container !== "object") return undefined;
+
+  const value = (container as Record<string, unknown>)[column.slice(jsonAccessor + 3)];
+  // `->>` yields text in Postgres, so a numeric or boolean member compares as
+  // its string form rather than not at all.
+  return value === undefined || value === null ? value : String(value);
+}
+
 function matches(row: Row, filters: Filter[]): boolean {
   return filters.every((filter) => {
-    if (filter.kind === "eq") return row[filter.column] === filter.value;
-    if (filter.kind === "in") return filter.values.includes(row[filter.column]);
-    if (filter.kind === "is") return row[filter.column] === null || row[filter.column] === undefined;
-    if (filter.kind === "not_is") return row[filter.column] !== null && row[filter.column] !== undefined;
-    return String(row[filter.column] ?? "") > String(filter.value);
+    const value = readColumn(row, filter.column);
+    if (filter.kind === "eq") return value === filter.value;
+    if (filter.kind === "in") return filter.values.includes(value);
+    if (filter.kind === "is") return value === null || value === undefined;
+    if (filter.kind === "not_is") return value !== null && value !== undefined;
+    return String(value ?? "") > String(filter.value);
   });
 }
 
