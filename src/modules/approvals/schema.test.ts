@@ -68,7 +68,12 @@ describe("constraints the product depends on", () => {
   it("never allows an approval to be deleted through the product", () => {
     // Approval history is the record of who authorized what (§16). No delete
     // policy exists, so RLS refuses it even from a raw authenticated token.
-    expect(sql).not.toMatch(/create policy[^;]*on public\.change_approvals[\s\S]*?for delete/i);
+    // Scoped to the statement, as every other table's version of this
+    // assertion is. The earlier `[\s\S]*?` spanned the whole migration
+    // history, so it matched the *select* policy here plus any `for delete`
+    // in a later, unrelated migration — an assertion that passed only while no
+    // table added a delete policy after this one.
+    expect(sql).not.toMatch(/on public\.change_approvals\s+for delete/i);
   });
 
   it("verifies the commit and review linkage in the insert policy", () => {

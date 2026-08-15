@@ -52,6 +52,17 @@ const LABELS: Record<AuditEventType, string> = {
   "project.production_url.updated": "Production URL updated",
   "business_context.updated": "Business context updated",
 
+  // Written the way the flow speaks (CORE-1 §45): the Activity feed is the one
+  // place these events are read by a person, and "Product understanding
+  // synthesis succeeded" is infrastructure talking to itself.
+  "product_understanding.started": "Vibe started getting to know your product",
+  "product_understanding.completed": "Vibe understood your product",
+  "product_understanding.completed_without_synthesis":
+    "Vibe described your product from what it found",
+  "product_understanding.reused": "Product understanding reused",
+  "product_understanding.confirmed": "You confirmed Vibe understood your product",
+  "product_understanding.corrected": "You corrected what Vibe understood",
+
   "repository.intelligence.started": "Repository analysis started",
   "repository.intelligence.completed": "Repository analyzed",
   "repository.intelligence.failed": "Repository analysis failed",

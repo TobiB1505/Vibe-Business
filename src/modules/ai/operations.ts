@@ -68,9 +68,41 @@ export const OPPORTUNITY_GENERATION_CONFIG: OperationConfig = {
   maxInputTokens: 40_000,
 };
 
+/**
+ * Product Understanding (CORE-1 §21).
+ *
+ * The first operation configured for **cost** rather than for judgement, and
+ * the reason is a product decision, not a technical one: this runs inside the
+ * free understanding flow that every new project goes through. An operation
+ * every user hits before paying anything has to be cheap enough that the
+ * answer to "should we run it?" is always yes.
+ *
+ * Haiku 4.5 rather than Sonnet 5, because the task is genuinely easier than
+ * the audit's. The hard half of understanding a product — which surfaces
+ * exist, what a person can do, what the brand is — is answered
+ * deterministically before this call. What remains is reading a page of
+ * structured facts and writing three sentences about it: summarisation with
+ * a closed vocabulary, not judgement from mixed evidence.
+ *
+ * `medium` effort for the same reason. `high` exists for tasks where the
+ * model has to weigh things; this one has already been given the weighing.
+ *
+ * Budgets are smaller than the audit's on both sides. Input is a single
+ * product's evidence with no rubric and no prior audit attached; output is
+ * eleven short fields.
+ */
+export const PRODUCT_UNDERSTANDING_CONFIG: OperationConfig = {
+  operation: "product_understanding",
+  model: "claude-haiku-4-5-20251001",
+  effort: "medium",
+  maxOutputTokens: 6_000,
+  maxInputTokens: 24_000,
+};
+
 const CONFIGS: Record<AIOperation, OperationConfig> = {
   business_readiness_audit: BUSINESS_READINESS_AUDIT_CONFIG,
   opportunity_generation: OPPORTUNITY_GENERATION_CONFIG,
+  product_understanding: PRODUCT_UNDERSTANDING_CONFIG,
 };
 
 export function getOperationConfig(operation: AIOperation): OperationConfig {

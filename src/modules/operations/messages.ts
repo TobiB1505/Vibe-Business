@@ -35,6 +35,12 @@ export const OPERATION_FAILURE_MESSAGES: Record<OperationFailureCode, string> = 
   audit_input_budget_exceeded: "There is too much evidence to analyze in one audit. This is a bug — please report it.",
   opportunity_input_budget_exceeded:
     "There is too much evidence to prioritize in one pass. This is a bug — please report it.",
+  understanding_input_budget_exceeded:
+    "There is too much evidence to read in one pass. This is a bug — please report it.",
+  // Reached only when nothing at all could be produced. A model failure alone
+  // never surfaces here: it leaves a deterministic profile and a note on the
+  // screen instead (CORE-1 §43).
+  understanding_failed: "Vibe could not finish getting to know your product. Try again in a moment.",
   token_count_failed: "This could not be prepared. Try again in a moment.",
   provider_rate_limited: "The AI provider is rate limiting requests. Try again in a few minutes.",
   provider_auth_error: "Vibe Business is not correctly configured to reach the AI provider.",

@@ -29,6 +29,16 @@ export type AuditEventType =
   | "business_audit.completed"
   | "business_audit.failed"
   | "business_audit.reused"
+  // Product Understanding (CORE-1 §22). `completed_without_synthesis` is its
+  // own event rather than a metadata flag: a profile derived with no model is
+  // a materially different thing to have produced, and it should be findable
+  // in the log without reading every completion's metadata.
+  | "product_understanding.started"
+  | "product_understanding.completed"
+  | "product_understanding.completed_without_synthesis"
+  | "product_understanding.reused"
+  | "product_understanding.confirmed"
+  | "product_understanding.corrected"
   | "deep_scan.started"
   | "deep_scan.completed"
   | "deep_scan.failed"

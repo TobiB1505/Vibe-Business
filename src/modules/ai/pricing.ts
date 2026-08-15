@@ -57,6 +57,16 @@ export const MODEL_PRICING: ModelPricing[] = [
     inputNanoUsdPerToken: 3_000, // $3 / MTok
     outputNanoUsdPerToken: 15_000, // $15 / MTok
   },
+  {
+    // Product Understanding runs on Haiku 4.5 (CORE-1 §21). No introductory
+    // window applies to this model, so one open-ended row is the whole story.
+    pricingVersion: "claude-haiku-4-5-2025-10",
+    model: "claude-haiku-4-5-20251001",
+    effectiveFrom: "2025-10-01T00:00:00.000Z",
+    effectiveTo: null,
+    inputNanoUsdPerToken: 1_000, // $1 / MTok
+    outputNanoUsdPerToken: 5_000, // $5 / MTok
+  },
 ];
 
 export class UnpricedModelError extends Error {
