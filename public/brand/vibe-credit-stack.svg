@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96" role="img" aria-label="Vibe Credits">
+  <rect x="17" y="12" width="13" height="72" rx="6.5" fill="#00E5A0" transform="rotate(-19 23.5 48)"></rect>
+  <rect x="41.5" y="12" width="13" height="72" rx="6.5" fill="#00E5A0" opacity=".5" transform="rotate(-19 48 48)"></rect>
+  <rect x="66" y="12" width="13" height="72" rx="6.5" fill="#00E5A0" opacity=".2" transform="rotate(-19 72.5 48)"></rect>
+</svg>

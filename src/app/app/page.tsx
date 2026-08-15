@@ -1,10 +1,12 @@
 import Link from "next/link";
-import { PageShell } from "@/components/layout/page-shell";
-import { buttonClassName } from "@/components/ui/button";
+import { AppShell } from "@/components/layout/app-shell";
+import { buttonClasses } from "@/components/ui/button";
+import { EmptyState, Notice } from "@/components/ui/states";
+import { SectionHeader } from "@/components/ui/typography";
 import { createClient } from "@/lib/supabase/server";
 import { requireSession } from "@/modules/auth/session";
-import { signOut } from "@/modules/auth/actions";
 import { listProjectsForUser } from "@/modules/projects/queries";
+import { ProjectRow } from "./project-list";
 
 const CONNECT_ERROR_MESSAGES: Record<string, string> = {
   oauth_denied: "GitHub authorization was cancelled or denied.",
@@ -27,61 +29,48 @@ export default async function AppHomePage({
   const projects = await listProjectsForUser(supabase, session.userId);
 
   return (
-    <PageShell>
-      <header className="flex items-center justify-between">
-        <p className="text-sm font-medium tracking-wide text-zinc-500 uppercase">Vibe Business</p>
-        <form action={signOut}>
-          <button type="submit" className="text-sm text-zinc-500 underline underline-offset-2 hover:text-zinc-300">
-            Sign out
-          </button>
-        </form>
-      </header>
-      <main className="flex flex-1 flex-col justify-center gap-4">
+    <AppShell email={session.email}>
+      <div className="flex flex-col gap-7">
         {connectError && (
-          <p className="rounded-md border border-red-900/50 bg-red-950/40 px-4 py-3 text-sm text-red-300">
+          <Notice tone="problem" label="Connection failed">
             {CONNECT_ERROR_MESSAGES[connectError] ?? "GitHub connection failed. Please try again."}
-          </p>
+          </Notice>
         )}
 
-        <h1 className="text-2xl font-semibold tracking-tight">Your projects</h1>
-
-        {projects.length === 0 ? (
-          <>
-            <p className="text-zinc-400">No projects connected yet.</p>
-            <div>
-              <Link href="/app/connect/github" className={buttonClassName}>
-                Connect your first project
-              </Link>
-            </div>
-          </>
-        ) : (
-          <>
-            <ul className="divide-y divide-zinc-800 overflow-hidden rounded-md border border-zinc-800">
-              {projects.map((project) => (
-                <li key={project.id}>
-                  <Link
-                    href={`/app/projects/${project.id}`}
-                    className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-zinc-900"
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-medium text-zinc-50">{project.name}</span>
-                      <span className="block truncate text-xs text-zinc-500">
-                        {project.repository ? project.repository.fullName : "No repository connected"}
-                      </span>
-                    </span>
-                    <span className="shrink-0 text-xs text-emerald-400">Connected</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-            <div>
-              <Link href="/app/connect/github" className={buttonClassName}>
+        <SectionHeader
+          level={1}
+          title="Your projects"
+          description="One repository per project."
+          actions={
+            projects.length > 0 ? (
+              <Link href="/app/connect/github" className={buttonClasses()}>
                 Connect another project
               </Link>
-            </div>
-          </>
+            ) : null
+          }
+        />
+
+        {projects.length === 0 ? (
+          <EmptyState
+            title="No projects connected yet"
+            description="Connect a repository and Vibe reads it once to work out how business-ready it is. Read-only to start — nothing is written to your code until you approve a change."
+            action={
+              <>
+                <Link href="/app/connect/github" className={buttonClasses()}>
+                  Connect your first project
+                </Link>
+                <span className="text-fg-meta text-xs">Opens GitHub</span>
+              </>
+            }
+          />
+        ) : (
+          <ul className="flex flex-col gap-3.5">
+            {projects.map((project) => (
+              <ProjectRow key={project.id} project={project} />
+            ))}
+          </ul>
         )}
-      </main>
-    </PageShell>
+      </div>
+    </AppShell>
   );
 }

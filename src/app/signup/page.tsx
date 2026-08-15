@@ -1,24 +1,33 @@
 import Link from "next/link";
-import { PageShell } from "@/components/layout/page-shell";
+import { AuthShell } from "@/components/layout/auth-shell";
 import { SignupForm } from "./signup-form";
 
 export default function SignupPage() {
   return (
-    <PageShell>
-      <main className="flex max-w-sm flex-1 flex-col justify-center gap-6">
-        <div className="space-y-2">
-          <p className="text-sm font-medium tracking-wide text-zinc-500 uppercase">Vibe Business</p>
-          <h1 className="text-2xl font-semibold tracking-tight">Create account</h1>
-          <p className="text-sm text-zinc-400">For development. No elaborate onboarding.</p>
-        </div>
-        <SignupForm />
-        <p className="text-sm text-zinc-500">
-          Already have an account?{" "}
-          <Link href="/login" className="text-zinc-300 underline underline-offset-2 hover:text-zinc-50">
-            Sign in
-          </Link>
-        </p>
-      </main>
-    </PageShell>
+    <AuthShell
+      headline={
+        <>
+          You vibe-coded the product.
+          <br />
+          <span className="text-mint">Now vibe the business.</span>
+        </>
+      }
+      intro="Create an account, connect a repository, and Vibe reads it once to work out how business-ready it is."
+      assurances={["Read-only access to start", "Nothing merged without your approval"]}
+    >
+      <div className="flex flex-col gap-2">
+        <h1 className="text-fg text-headline font-bold">Create account</h1>
+        <p className="text-fg-muted text-sm">For development. No elaborate onboarding.</p>
+      </div>
+
+      <SignupForm />
+
+      <p className="text-fg-muted text-sm">
+        Already have an account?{" "}
+        <Link href="/login" className="text-mint hover:text-mint-hover rounded-sm">
+          Sign in
+        </Link>
+      </p>
+    </AuthShell>
   );
 }

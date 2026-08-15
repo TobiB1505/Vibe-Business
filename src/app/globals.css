@@ -1,9 +1,195 @@
 @import "tailwindcss";
 
-html {
-  color-scheme: dark;
+/**
+ * Vibe Business design tokens (UI-0).
+ *
+ * Every value here is lifted from the UI mockups' style sheet — the colour
+ * ramp, the four surface levels, the radii, the two type families. Nothing is
+ * invented and nothing is aspirational. Components must reference these
+ * tokens; a hex literal or an ad-hoc `rgba(255,255,255,.04)` in a component is
+ * a bug, because it is a value that can drift away from the system.
+ *
+ * The Tailwind v4 `@theme` block is additive: the default palette and scales
+ * still exist, so nothing that already compiled stops compiling. What this
+ * adds is the Vibe layer on top.
+ */
+@theme {
+  /* ── Ground ──────────────────────────────────────────────────────────
+     Two backgrounds, not a grey scale. `ground` is the board behind the
+     app frame; `app` is the frame itself. Everything above them is white
+     at low alpha, which is what keeps depth readable without solid greys. */
+  --color-ground: #050505;
+  --color-app: #0a0908;
+
+  /* ── Accent ──────────────────────────────────────────────────────────
+     Mint is Vibe: the primary action, the active state, the brand. It is
+     deliberately NOT the generic "good news" colour — see the status
+     tokens below, and `StatusPill` for how that separation is enforced. */
+  --color-mint: #00e5a0;
+  --color-mint-deep: #00a97a;
+  --color-mint-dim: #0e8c67;
+  /* Near-black text that sits on a mint fill. Never plain black. */
+  --color-mint-ink: #04150f;
+  --color-mint-hover: #7cf0c8;
+
+  /* ── Status ──────────────────────────────────────────────────────────
+     Amber = waiting, partial, needs attention. Coral = failure, gap,
+     destructive risk. Neither is decoration; if a colour appears, it is
+     reporting a state the domain actually produced. */
+  --color-amber: #e8b54a;
+  --color-amber-deep: #9a7420;
+  --color-coral: #ff7a5c;
+
+  /* ── Foreground ramp (on --color-app) ────────────────────────────────
+     Eight steps, each with a job. `fg` is headlines, `fg-body` values and
+     UI text, `fg-prose` long explanation, then down to `fg-disabled`
+     which is the only legitimate use of the bottom of the ramp. */
+  --color-fg: #f7f5f1;
+  --color-fg-body: #edebe7;
+  --color-fg-prose: #c9c5bd;
+  --color-fg-secondary: #a5a19a;
+  --color-fg-muted: #8c8880;
+  --color-fg-meta: #6e6a63;
+  --color-fg-disabled: #57534c;
+  --color-fg-faint: #3b3833;
+
+  /* ── Surfaces: white over the frame ──────────────────────────────────
+     Four levels, and they are a hierarchy, not a palette to pick from.
+       1 — chrome (sidebar, rails)
+       2 — section, note, footnote
+       3 — panel (the workhorse)
+       4 — primary card, modal
+     A deeper well *inside* a surface uses `--color-well` (black), never a
+     fifth white layer — that is what stops "card inside card inside card". */
+  --color-surface-1: rgb(255 255 255 / 0.022);
+  --color-surface-2: rgb(255 255 255 / 0.03);
+  --color-surface-3: rgb(255 255 255 / 0.04);
+  --color-surface-4: rgb(255 255 255 / 0.05);
+  --color-surface-hover: rgb(255 255 255 / 0.06);
+  --color-well: rgb(0 0 0 / 0.3);
+  --color-field: rgb(0 0 0 / 0.4);
+
+  /* Borders pair with the surface one level up. */
+  --color-line-1: rgb(255 255 255 / 0.07);
+  --color-line-2: rgb(255 255 255 / 0.08);
+  --color-line-3: rgb(255 255 255 / 0.09);
+  --color-line-4: rgb(255 255 255 / 0.11);
+  --color-line-strong: rgb(255 255 255 / 0.12);
+  --color-line-track: rgb(255 255 255 / 0.08);
+
+  /* Status tints: a fill and a border per status, so a tinted panel is one
+     token pair rather than two alpha values typed by hand. */
+  --color-mint-tint: rgb(0 229 160 / 0.12);
+  --color-mint-tint-soft: rgb(0 229 160 / 0.08);
+  --color-mint-line: rgb(0 229 160 / 0.26);
+  --color-amber-tint: rgb(232 181 74 / 0.13);
+  --color-amber-tint-soft: rgb(232 181 74 / 0.06);
+  --color-amber-line: rgb(232 181 74 / 0.24);
+  --color-coral-tint: rgb(255 122 92 / 0.13);
+  --color-coral-tint-soft: rgb(255 122 92 / 0.07);
+  --color-coral-line: rgb(255 122 92 / 0.26);
+
+  /* ── Type ────────────────────────────────────────────────────────────
+     Space Grotesk for everything a person wrote. JetBrains Mono for
+     everything a machine produced: SHAs, branches, timestamps, scores,
+     counts, credits, state labels. The `--font-*` variables are bound to
+     the next/font loaders in `layout.tsx`. */
+  --font-sans:
+    var(--font-space-grotesk), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-jetbrains-mono), ui-monospace, "SFMono-Regular", Menlo, monospace;
+
+  --text-hero: 3rem;
+  --text-hero--line-height: 1.04;
+  --text-hero--letter-spacing: -0.04em;
+  --text-display: 2.25rem;
+  --text-display--line-height: 1.08;
+  --text-display--letter-spacing: -0.038em;
+  --text-headline: 1.75rem;
+  --text-headline--line-height: 1.14;
+  --text-headline--letter-spacing: -0.035em;
+  --text-title: 1.1875rem;
+  --text-title--line-height: 1.3;
+  --text-title--letter-spacing: -0.02em;
+  --text-lead: 0.9375rem;
+  --text-lead--line-height: 1.7;
+  --text-caption: 0.78125rem;
+  --text-caption--line-height: 1.55;
+  --text-label: 0.65625rem;
+  --text-label--line-height: 1.4;
+  --text-label--letter-spacing: 0.16em;
+
+  /* ── Shape ───────────────────────────────────────────────────────────
+     Radii scale with the element. Every interactive control is a full
+     pill — that is a rule, not a preference, so `rounded-full` on buttons
+     is intentional everywhere it appears. */
+  --radius-nav: 10px;
+  --radius-well: 14px;
+  --radius-field: 12px;
+  --radius-panel: 18px;
+  --radius-card: 22px;
+
+  /* ── Elevation ───────────────────────────────────────────────────────
+     The inset highlight belongs to the primary card only. */
+  --shadow-panel: 0 24px 60px -30px rgb(0 0 0 / 0.8);
+  --shadow-card:
+    0 1px 0 rgb(255 255 255 / 0.08) inset, 0 30px 70px -30px rgb(0 0 0 / 0.8);
+  --shadow-mint: 0 14px 34px -12px rgb(0 229 160 / 0.6);
+  --shadow-dot-mint: 0 0 8px 1px rgb(0 229 160 / 0.6);
+  --shadow-dot-amber: 0 0 8px 1px rgb(232 181 74 / 0.5);
+
+  /* ── Motion ──────────────────────────────────────────────────────────
+     UI-0 ships the easing token and hover/focus transitions only. The
+     reveal and meter animations from the mockups belong to the separate
+     motion sprint; the token exists so that sprint has one curve to use. */
+  --ease-vibe: cubic-bezier(0.2, 0.7, 0.2, 1);
 }
 
-body {
-  min-height: 100dvh;
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    min-height: 100dvh;
+    background-color: var(--color-app);
+    color: var(--color-fg-body);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /**
+   * One focus ring for the whole product, defined once.
+   *
+   * `:focus-visible` rather than `:focus` so a mouse click on a button does
+   * not paint a ring, but a Tab key press always does. The offset is what
+   * keeps it legible against a pill button whose own fill is mint.
+   */
+  :focus-visible {
+    outline: 2px solid var(--color-mint);
+    outline-offset: 2px;
+  }
+
+  /**
+   * Long prose only. Headlines and short labels are left alone because
+   * `pretty` costs layout work and buys nothing on a two-word string.
+   */
+  p {
+    text-wrap: pretty;
+  }
+
+  /**
+   * Respecting the OS setting is table stakes even in a release that ships
+   * almost no motion — the mockups' ambient glow and meter fills land in the
+   * motion sprint, and this is already here when they do.
+   */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
 }
