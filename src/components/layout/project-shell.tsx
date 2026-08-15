@@ -3,33 +3,25 @@ import type { ReactNode } from "react";
 import { VibeLockup } from "@/components/brand/vibe-mark";
 import { StatusDot, type StatusTone } from "@/components/ui/status-pill";
 import { MonoLabel } from "@/components/ui/typography";
+import { ProjectNav } from "./project-nav";
 import { cn } from "@/lib/utils/cn";
 
 /**
- * The project workspace shell (UI-0 — foundation, not yet wired).
+ * The project workspace shell.
  *
- * ## Status
- *
- * This component is **built and unused**, deliberately. The project screen is
- * today a single 569-line route that assembles roughly twenty services into one
- * page, and splitting it into seven routes is a data-dependency and server-
- * boundary exercise, not a styling one. Doing that in the same change as the
- * design system would make a visual migration indistinguishable from a
- * behavioural one if anything broke.
- *
- * So the shell exists, and the route split is UI-1. When that happens, the
- * caller supplies `href` per section and this file should not need to change.
- *
- * Nothing here links anywhere on its own: a section without an `href` renders
- * as plain text rather than a link, so this component cannot produce a 404 for
- * a route that has not been built.
+ * UI-0 built it, UI-1 wired it onto one anchored route, and UI-2 Part 2 gave
+ * each section its own URL. The frame is the same in all three; what changed is
+ * that the navigation now points at routes rather than at fragments.
  */
 
 /**
  * The seven sections of a project, in navigation order.
  *
- * Each maps to work that already exists in the current single-page route — the
- * ids are the mapping, and they are what UI-1 should route on:
+ * `segment` is the URL segment under `/app/projects/[projectId]`. Overview is
+ * the index route and therefore has an empty segment — it is the project's own
+ * URL, not a child of it.
+ *
+ * Each maps to the work it owns:
  *
  *   overview   — connection, intelligence summaries, business context
  *   score      — `business-audit-summary`
@@ -37,32 +29,42 @@ import { cn } from "@/lib/utils/cn";
  *   prepared   — `prepared-changes-section` (validation, preview, review,
  *                approval and merge all live inside a prepared change)
  *   deep-scan  — `deep-scan-panel`
- *   impact     — `outcome-panel` + `business-impact-panel`
- *   activity   — the audit log, which has no UI yet
+ *   impact     — outcome + business measurement, via the project impact model
+ *   activity   — the audit log
  */
 export const PROJECT_SECTIONS = [
-  { id: "overview", label: "Overview" },
-  // `business-audit`, not `business-score`: the Opportunity engine already
-  // publishes `BUSINESS_AUDIT_ANCHOR = "#business-audit"` and links a blocked
-  // set at it. The domain constant is tested and is not a styling concern, so
-  // the section takes the id the domain already points at and carries the
-  // product's word — "Business score" — as its label.
-  // `project-sections.test.ts` fails if the two ever drift apart.
-  { id: "business-audit", label: "Business score" },
-  { id: "next-moves", label: "Next moves" },
-  { id: "prepared", label: "Prepared" },
-  { id: "deep-scan", label: "Deep Scan" },
-  { id: "impact", label: "Impact" },
-  { id: "activity", label: "Activity" },
+  { id: "overview", label: "Overview", segment: "" },
+  {
+    // The section keeps the id `business-audit` because the Opportunity engine
+    // publishes `BUSINESS_AUDIT_ANCHOR = "#business-audit"` and links a blocked
+    // set at it — that link is the only way out of that state. The route is
+    // `/score` (the product's word), and the anchor still resolves *on* that
+    // route, so the tested domain constant keeps working untouched.
+    // `project-sections.test.ts` fails if the two ever drift apart.
+    id: "business-audit",
+    label: "Business score",
+    segment: "score",
+  },
+  { id: "next-moves", label: "Next moves", segment: "moves" },
+  { id: "prepared", label: "Prepared", segment: "prepared" },
+  { id: "deep-scan", label: "Deep Scan", segment: "deep-scan" },
+  { id: "impact", label: "Impact", segment: "impact" },
+  { id: "activity", label: "Activity", segment: "activity" },
 ] as const;
 
 export type ProjectSectionId = (typeof PROJECT_SECTIONS)[number]["id"];
 
+/** The canonical URL of one workspace section. One place builds these. */
+export function projectSectionHref(projectId: string, sectionId: ProjectSectionId): string {
+  const section = PROJECT_SECTIONS.find((candidate) => candidate.id === sectionId);
+  const base = `/app/projects/${projectId}`;
+  return section && section.segment ? `${base}/${section.segment}` : base;
+}
+
 export type ProjectNavItem = {
   id: ProjectSectionId;
   label: string;
-  /** Omitted until the section has a route. Renders as text, never a dead link. */
-  href?: string;
+  href: string;
   /**
    * A count beside the label — waiting moves, prepared changes. Only pass a
    * number the domain actually produced; an absent count is absent, not zero.
@@ -78,13 +80,14 @@ export function ProjectSidebar({
   /** State of the project itself, mirrored by the text under the name. */
   tone = "neutral",
   items,
-  currentId,
+  // No `currentId`: the active section is derived from the URL inside
+  // `ProjectNav`, so it cannot disagree with the address bar after a refresh,
+  // a Back navigation, or a link opened in a new tab.
 }: {
   projectName: string;
   repositoryFullName: string | null;
   tone?: StatusTone;
   items: ProjectNavItem[];
-  currentId?: ProjectSectionId;
 }) {
   return (
     <nav
@@ -119,55 +122,8 @@ export function ProjectSidebar({
         </div>
       </div>
 
-      <ul className="flex gap-1 overflow-x-auto lg:flex-col lg:overflow-visible">
-        {items.map((item) => {
-          const current = item.id === currentId;
-          const content = (
-            <>
-              <span className="whitespace-nowrap">{item.label}</span>
-              {typeof item.count === "number" && (
-                <span
-                  className={cn(
-                    "ml-auto rounded-full px-2 py-0.5 font-mono text-[0.65625rem]",
-                    item.countTone === "accent"
-                      ? "bg-mint-tint text-mint"
-                      : "bg-surface-hover text-fg-prose",
-                  )}
-                >
-                  {item.count}
-                </span>
-              )}
-            </>
-          );
+      <ProjectNav items={items} />
 
-          const className = cn(
-            "rounded-nav flex items-center gap-3 px-3 py-2.5 text-sm transition-colors duration-150 ease-vibe",
-            current
-              ? "bg-mint-tint border-mint-line text-mint border font-semibold"
-              : "text-fg-secondary hover:bg-surface-2 hover:text-fg-body",
-          );
-
-          return (
-            <li key={item.id} className="lg:w-full">
-              {item.href ? (
-                <Link
-                  href={item.href}
-                  aria-current={current ? "page" : undefined}
-                  className={className}
-                >
-                  {content}
-                </Link>
-              ) : (
-                // No route yet. Rendered as text so the section is visible in
-                // the map of the product without pretending to be reachable.
-                <span aria-current={current ? "page" : undefined} className={className}>
-                  {content}
-                </span>
-              )}
-            </li>
-          );
-        })}
-      </ul>
     </nav>
   );
 }
