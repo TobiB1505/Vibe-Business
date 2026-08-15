@@ -1,12 +1,12 @@
-# Sprint UI-2 (Part 1) — Workspace Read Models
+# Sprint UI-2 — Workspace Read Models and Route Split
 
-**Status: Phases A–C complete. Phase D (route split) not started — see Scope Delivered.**
+**Status: complete. Phases A–C (read models) and Phase D (route split) both delivered.**
 
 ## Goal
 
 UI-2's brief states its own ordering: *better boundaries before more routes*, and *"the route
 split happens only after the required shared read models / services exist"*. This sprint built
-the three boundaries. The routes are the next, separately verifiable step.
+the three boundaries first, then the seven routes on top of them.
 
 ## Context
 
@@ -70,28 +70,21 @@ It aggregates nothing: no project total, no average, no overall impact number. N
 data model supports one, and a summed delta across unrelated metrics would be a fabrication.
 There is still no connected metric source, so business impact still answers `source_required`.
 
-## Data Loading — what is now possible
-
-Not yet realised as routes, but this is the point of the boundaries:
-
-| Consumer | Needs | Previously also paid for |
-|---|---|---|
-| Business score | audit, currency, evidence notice | review-image signing, preview origins, merge preflight, impact reads |
-| Activity | one bounded audit-log read | the entire prepared assembly |
-| Deep Scan | access, snapshot, session, surfaces | the entire prepared assembly |
-| Impact | merge state, outcome, measurement | preview, review, validation detail, signed URLs |
-| Prepared | all of it — legitimately | — |
-
 ## Validation
 
 - `pnpm lint` · `pnpm typecheck` — clean.
-- `pnpm test` — 137 files, 2647 tests (26 new: 11 for the read path's scoping/ordering/paging,
-  15 for the view model's allowlist and tones).
+- `pnpm test` — 138 files, 2660 tests (39 new: 11 for the read path's scoping/ordering/paging,
+  15 for the view model's allowlist and tones, 13 asserting the routes as a set).
 - `pnpm build` — succeeds.
 - `pnpm test:e2e` — 58 chromium tests, unchanged.
-- Browser, real signed-in session: Activity renders real recorded events (preview, review,
-  validation, operations) with real timestamps; Impact reads through its own model and shows
-  commit `78cbdac`, merged 14 Aug 2026 14:40 UTC, "Production outcome verified".
+- Browser, real signed-in session and real data: all seven routes render with 200; Activity
+  shows real recorded events; Impact shows commit `78cbdac`, merged 14 Aug 2026 14:40 UTC,
+  "Production outcome verified"; Overview shows 39/100, 3 opportunities, 2 prepared changes.
+- Security, verified in the browser: every route answers **404** for a project id that is not
+  the caller's and leaks no project data; every route **307**s to login without a session.
+- Navigation: exactly one entry carries `aria-current="page"`, correct after browser Back and
+  after a hard refresh.
+- Responsive: `scrollWidth === clientWidth` at 1440, 768 and 375.
 
 ### Two source assertions migrated, not weakened
 
@@ -100,23 +93,53 @@ and never starts a verification or a measurement. The reads moved to the read mo
 did not. They now assert across **both** files — whichever performs the read, neither may start
 anything. Strictly broader than the versions they replace.
 
-## Not Delivered — Phase D (route split)
+## Phase D — The route split
 
-The seven routes, the shared layout and the URL-based active state were **not** started.
+Seven routes under `/app/projects/[projectId]`: the index (Overview), `/score`, `/moves`,
+`/prepared`, `/deep-scan`, `/impact`, `/activity`.
 
-**Why:** a route split is only safe when it is finished. Half of it leaves two navigation models
-disagreeing, some sections reachable by URL and others only by anchor, and the approval/merge
-path — the most consequential screen in the product — served from a layout whose data
-dependencies have not been re-verified end to end. The current anchored workspace works, is
-tested and is dogfooded; replacing it partially would be a regression.
+### Shared layout
 
-What UI-2 Part 2 inherits is the part that made the split dangerous: the boundaries now exist,
-so each route can load only what it needs rather than copying the page's assembly.
+Loads the project's identity and repository connection, and nothing else. A layout runs on every
+route beneath it, so anything loaded there is paid for by all seven sections — the cost Part 1
+existed to escape.
 
-**Remaining before routes:** `PROJECT_SECTIONS` still carries anchor hrefs; `BUSINESS_AUDIT_ANCHOR`
-is a tested domain constant that must be migrated deliberately (a blocked opportunity set links
-at it, and that link is the only way out of that state); and the navigation needs `usePathname`
-with `aria-current="page"`.
+**The navigation lost its count badges.** UI-1 showed "3" beside Next moves and "2" beside
+Prepared; those came free because the page had already loaded both. In the layout they would
+cost an opportunity read and a prepared read on every route. They were removed rather than
+quietly re-introducing the coupling, and can return when a cheap counts query exists.
+
+### Security
+
+`requireProjectAccess` runs **per route**, not in the layout. An App Router layout does not gate
+the routes beneath it — layout and page render independently, and a page is reachable by direct
+URL whether or not its layout would have refused. Verified in the browser: every route answers
+404 for a project id that is not the caller's, and leaks nothing; every route 307s to login
+without a session.
+
+### Navigation
+
+`ProjectNav` derives the active section from `usePathname`. Verified: exactly one entry carries
+`aria-current="page"`, it follows browser Back, and it survives a hard refresh. Desktop keeps
+the rail; below `lg` it is a horizontal scrollable strip.
+
+### Data Loading Matrix
+
+| Route | Loads | No longer pays for |
+|---|---|---|
+| Overview | audit score, opportunity count, **prepared summaries**, evidence rows, 5 activity entries | prepared workspace, per-opportunity execution assembly |
+| `/score` | audit, currency, evidence flags, Deep Scan model | prepared workspace, impact |
+| `/moves` | opportunities, readiness, execution summaries + per-opportunity validation | preview, review images, approval, merge preflight, outcome, impact |
+| `/prepared` | the full workspace read model — legitimately | — |
+| `/deep-scan` | access, snapshot, session, surfaces | everything else; also the only route carrying `maxDuration = 120` |
+| `/impact` | merge state, outcome, measurement | preview, review images, validation detail |
+| `/activity` | one bounded audit-log read | everything else |
+
+`BUSINESS_AUDIT_ANCHOR` was **not** changed. It is a tested domain constant that a blocked
+opportunity set links at, and that link is the only way out of that state. The section keeps the
+id `business-audit` on the `/score` route, so the anchor still resolves; the route supplies the
+URL prefix as a prop, because which URL the audit lives at is a routing fact rather than a
+domain one.
 
 ## Remaining Risks
 
@@ -136,8 +159,16 @@ with `aria-current="page"`.
 
 ## Next Recommended Phase
 
-**UI-2 Part 2 — the route split**, in the order UI-1's readiness table implies: shared layout
-first, then the low-risk routes (`/score`, `/deep-scan`, `/activity`), then `/moves` and the
-Overview summary, then `/prepared`, and `/impact` last. Navigation switches to real links with
-`usePathname` in the same change as the first route, so there is never a moment with two
-navigation models. Motion remains its own sprint.
+**UI-3 — motion**, which has been deferred since UI-0 and now has a stable structure to animate.
+
+Two smaller pieces worth doing first or alongside:
+
+1. **A `project_id` column on `audit_events`**, with an index and a backfill. It removes the
+   Activity read's only real weakness and is a contained migration.
+2. **A cheap counts query**, which is what the navigation badges need to come back.
+
+A `/prepared/[executionId]` detail route was considered and **not** built. With two prepared
+changes the list is not expensive enough to justify it, and splitting approval and merge across
+a list and a detail view would put the most consequential controls behind an extra navigation
+step for no current benefit. It becomes worthwhile when a project routinely carries enough
+prepared changes that loading them all is the cost — that is the signal to revisit.
