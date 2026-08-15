@@ -12,6 +12,8 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { Surface } from "@/components/ui/surface";
 import { MonoLabel } from "@/components/ui/typography";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
+import { listAuditEventsForProject } from "@/modules/audit-log/queries";
+import { buildActivityFeed } from "@/modules/audit-log/view";
 import { createClient } from "@/lib/supabase/server";
 import { requireSession } from "@/modules/auth/session";
 import { getProjectWithRepository } from "@/modules/projects/queries";
@@ -35,23 +37,11 @@ import { buildOpportunityActionState } from "@/modules/execution/view";
 import { buildBranchUrl } from "@/modules/execution/diff";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { getLatestValidation } from "@/modules/validation/service";
-import { getPreviewCard, getPreviewStatus } from "@/modules/change-preview/service";
-import { createVercelSandboxProvider } from "@/modules/validation/vercel/provider";
-import { VercelWorkflowExecutor } from "@/modules/operations/vercel/executor";
-import { getReviewCard, getReviewImages } from "@/modules/review/service";
-import { getApprovalCard } from "@/modules/approvals/service";
-import { getMergeCard, resolveMergeTarget } from "@/modules/merge/service";
-import { getOutcomeCard } from "@/modules/outcome-verification/service";
-import { businessRationaleFor } from "@/modules/execution/business-rationale";
-import { getBusinessImpactCard } from "@/modules/business-measurement/service";
-import { NoConnectedMetricSources } from "@/modules/business-measurement/source";
-import { createGithubMergePort } from "@/modules/merge/github/adapter";
-import { mergeFailureMessage } from "@/modules/merge/messages";
-import { buildMergeCard } from "@/modules/merge/view";
-import { approvalBlockMessage } from "@/modules/approvals/messages";
 import { SANDBOX_POLICY_VERSION } from "@/modules/validation/schema";
 import { buildValidationSummary } from "@/modules/validation/view";
-import { listPreparedChangesForProject } from "@/modules/execution/store";
+import { getPreparedChangeWorkspace } from "@/modules/execution/workspace";
+import { getProjectImpact } from "@/modules/business-measurement/project-impact";
+import type { OutcomeCardState } from "@/modules/outcome-verification/view";
 import { PreparedChangesSection, type PreparedChangeCard } from "./prepared-changes-section";
 import type { ValidationSummary } from "./validation-panel";
 import { buildAuditEvidenceNotice } from "@/modules/business-audit/evidence-notice";
@@ -63,6 +53,7 @@ import {
 } from "@/modules/authenticated-product-intelligence/store";
 import { detectAuthenticatedSurfaces } from "@/modules/authenticated-product-intelligence/surface-detection";
 import { buildDeepScanViewModel } from "@/modules/authenticated-product-intelligence/view";
+import { ActivityFeed } from "./activity-feed";
 import { AuditEvidenceNotice } from "./audit-evidence-notice";
 import { OpportunitiesPanel } from "./opportunities-panel";
 import { BusinessAuditSummary } from "./business-audit-summary";
@@ -87,6 +78,24 @@ import { RunAuditButton } from "./run-audit-button";
  * scan, rather than the platform.
  */
 export const maxDuration = 120;
+
+/**
+ * Outcome states as one short phrase each, for the Impact summary row.
+ *
+ * Deliberately the same words the Outcome panel already uses, rather than new
+ * ones: two places describing one state differently is how a product starts
+ * disagreeing with itself. In particular `failed` stays a statement about
+ * *Vibe* — it never says the customer's product failed.
+ */
+const OUTCOME_LABELS: Record<OutcomeCardState, string> = {
+  unavailable: "Not applicable",
+  not_started: "Not yet verified in production",
+  observing: "Checking production…",
+  verified: "Production outcome verified",
+  partial: "Partly observed",
+  not_observed: "Not observed within verification window",
+  failed: "Vibe could not check",
+};
 
 /**
  * Project screen: connection status (Sprint 1), repository intelligence
@@ -196,155 +205,22 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
     }
   }
 
-  // The repository a merge would write to, resolved once for the whole page.
-  // Null when no repository is connected, which is also the answer that keeps
-  // the merge card from making any GitHub call at all.
-  const mergeTarget = repository ? await resolveMergeTarget(supabase, projectId) : null;
-
-  // Prepared changes as artifacts, independent of the current opportunity set.
-  // Looking them up through live opportunities made an existing branch vanish
-  // from the UI whenever opportunities were regenerated (Sprint 10A §44).
-  const preparedChangeCards: PreparedChangeCard[] = [];
-
-  for (const prepared of await listPreparedChangesForProject(supabase, projectId)) {
-    const validation = await getLatestValidation(supabase, {
-      projectId,
-      preparedChangeId: prepared.id,
-    });
-
-    // Preview state is the server's answer, not something the panel derives
-    // from validation plus a guess. This read costs three rows and no provider
-    // call: opening the page must never spend anything (Sprint 10B-3 §2, §22).
-    const preview = await getPreviewCard(supabase, {
-      projectId,
-      preparedChangeId: prepared.id,
-      validation: validation ? { id: validation.id, status: validation.status } : null,
-      resolveFailureMessage: (code) =>
-        OPERATION_FAILURE_MESSAGES[code as keyof typeof OPERATION_FAILURE_MESSAGES] ?? null,
-    });
-
-    // Review state, read from persisted rows. Like the preview card, this costs
-    // no provider call: opening the page must never spend anything (§40).
-    const review = await getReviewCard(supabase, {
-      projectId,
-      preparedChangeId: prepared.id,
-      resolveFailureMessage: (code) =>
-        OPERATION_FAILURE_MESSAGES[code as keyof typeof OPERATION_FAILURE_MESSAGES] ?? null,
-    });
-
-    // Approval state. Read-only, like every other card on this page: opening a
-    // project must never approve, revoke, validate, preview or capture anything.
-    const approval = await getApprovalCard(supabase, {
-      projectId,
-      userId: session.userId,
-      preparedChangeId: prepared.id,
-      resolveBlockMessage: approvalBlockMessage,
-    });
-
-    // Merge state (Sprint 11C §17). Unlike every other card on this page this
-    // one may spend four read-only GitHub calls — but only for a change a human
-    // has already approved, because for anything else a live read could not
-    // tell the user something they can act on. Nothing billed, nothing written,
-    // and the answer authorizes nothing: the durable workflow re-runs every
-    // critical check immediately before it writes.
-    const merge = mergeTarget
-      ? await getMergeCard(supabase, createGithubMergePort(mergeTarget), {
-          projectId,
-          // Only so an "approved but unmergeable" observation can be attributed
-          // when one is recorded. Never used to decide anything.
-          userId: session.userId,
-          preparedChangeId: prepared.id,
-        })
-      : buildMergeCard({
-          latestMerge: null,
-          eligibility: { outcome: "blocked", reason: "merge_repository_unavailable" },
-          changeApprovalId: null,
-          resolveFailureMessage: mergeFailureMessage,
-        });
-
-    // Production outcome state (Sprint 12A §29, §43). Two database reads and
-    // **no outbound HTTP at all**: opening a project page must never contact a
-    // customer's production website, and must never start an observation. The
-    // card is `unavailable` for everything that was not merged, which is most
-    // prepared changes.
-    const outcome = await getOutcomeCard(supabase, {
-      projectId,
-      preparedChangeId: prepared.id,
-    });
-
-    // Business impact state (Sprint 12B §36, §45). Up to four database reads
-    // and **zero provider calls**: rendering a project page must never contact
-    // an analytics vendor, must never create a measurement plan, and must never
-    // start a measurement. The registry is asked whether anything is
-    // *connected*, which today is a synchronous "no" for every project.
-    const businessImpact = await getBusinessImpactCard(supabase, new NoConnectedMetricSources(), {
-      projectId,
-      preparedChangeId: prepared.id,
-    });
-
-    // The preview's public origin, only while it is genuinely running. Fetched
-    // from the provider rather than stored, because it is capability-like
-    // (ADR 0016 §4) — and absent after teardown, which is expected: the
-    // comparison images outlive the sandbox they photographed.
-    const previewOrigin =
-      preview.state === "running" && preview.previewSessionId
-        ? ((
-            await getPreviewStatus(supabase, createVercelSandboxProvider(), new VercelWorkflowExecutor(), {
-              projectId,
-              userId: session.userId,
-              previewSessionId: preview.previewSessionId,
-            })
-          )?.origin ?? null)
-        : null;
-
-    preparedChangeCards.push({
-      id: prepared.id,
-      branchName: prepared.branchName,
-      commitSha: prepared.commitSha,
-      baseBranch: prepared.baseBranch,
-      filePaths: prepared.files.map((file) => file.path),
-      createdAt: prepared.createdAt,
-      branchUrl: repository ? buildBranchUrl(repository.fullName, prepared.branchName) : null,
-      validation: validation
-        ? buildValidationSummary(validation, {
-            currentPolicyVersion: SANDBOX_POLICY_VERSION,
-            failureMessage: validation.failureCode
-              ? (OPERATION_FAILURE_MESSAGES[validation.failureCode] ?? null)
-              : null,
-          })
-        : null,
-      preview,
-      // The artifact's id is its validation run's, and only a passing run can
-      // have one. A failed run offers nothing for the client to name.
-      validatedArtifactId: validation?.status === "passed" ? validation.id : null,
-      review,
-      // Signed on this render, after the service re-checked ownership, the
-      // ready state and the retention deadline. Never persisted, and short
-      // enough that a leaked URL is a small window (§16, §34).
-      reviewImages:
-        review.state === "ready" && review.reviewArtifactId
-          ? await getReviewImages(supabase, {
-              projectId,
-              userId: session.userId,
-              reviewArtifactId: review.reviewArtifactId,
-            })
-          : null,
-      // Only a *running* preview can be photographed. Offering the button for a
-      // stopped one would buy a browser session that fails (§6).
-      previewSessionId: preview.state === "running" ? preview.previewSessionId : null,
-      previewOrigin,
-      // Approval state, resolved from persisted rows (Sprint 11B §24, §27).
-      // Costs a handful of reads and no provider call of any kind: approval is
-      // a database action, and looking at it must stay free.
-      approval,
-      merge,
-      outcome,
-      // Deterministic and free: a lookup on the capability, no provider call
-      // and no model (§6).
-      rationale: businessRationaleFor(prepared.capability),
-      businessImpact,
-    });
-  }
+  /**
+   * Prepared changes, assembled by the workspace read model (Sprint UI-2
+   * Phase B) rather than inline here.
+   *
+   * This is the expensive read on this page: per change it touches validation,
+   * preview, review, approval, outcome and impact, plus — for an approved
+   * change — the read-only GitHub merge preflight, signed review-image URLs and
+   * a sandbox origin lookup. It stayed a page-level concern for as long as the
+   * workspace was one page. It is now callable on its own, which is what lets a
+   * future `/score` or `/activity` route not pay for it.
+   */
+  const preparedChangeCards: PreparedChangeCard[] = await getPreparedChangeWorkspace(supabase, {
+    projectId,
+    userId: session.userId,
+    repositoryFullName: repository?.fullName ?? null,
+  });
 
   // Deep Scan state is derived on the server (Sprint 5 §13): entitlement,
   // cooldown and eligibility are the domain's answers, not React's.
@@ -436,6 +312,18 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
   const opportunityCount = opportunities?.set.opportunities.length ?? null;
 
   /**
+   * Activity (Sprint UI-2 Phase A). One bounded, indexed read against the
+   * caller's own RLS-scoped client — no provider call, no AI, no GitHub.
+   * `session.userId` is the verified session's, and project ownership was
+   * already established above, so this cannot reach another account's log.
+   */
+  const activity = await listAuditEventsForProject(supabase, {
+    projectId: project.id,
+    userId: session.userId,
+  });
+  const activityEntries = buildActivityFeed(activity.events);
+
+  /**
    * The workspace navigation. Counts come from data already loaded for this
    * render — never a placeholder, and never a zero standing in for "unknown":
    * a project with no opportunity set yet gets `null` and shows no badge at all.
@@ -465,9 +353,20 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
     { id: "activity", label: "Activity", href: "#activity" },
   ];
 
-  // Merged changes are where any outcome or business-impact evidence can exist
-  // at all. Derived from cards already built above — no extra query.
-  const mergedChanges = preparedChangeCards.filter((card) => card.merge?.state === "merged");
+  /**
+   * Project impact (Sprint UI-2 Phase C). Its own read model rather than a
+   * filter over the prepared cards: Impact needs merge state, outcome and
+   * measurement, and none of the review images, preview origins or validation
+   * detail that the prepared workspace pays for.
+   *
+   * On this page both are loaded because both sections are rendered. The point
+   * of the separation is that a future `/impact` route can call only this one.
+   */
+  const projectImpact = await getProjectImpact(supabase, {
+    projectId,
+    userId: session.userId,
+    repositoryConnected: repository !== null,
+  });
 
   return (
     <ProjectShell
@@ -704,22 +603,23 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
           title="Impact"
           description="What actually changed after a merge — and what Vibe refuses to claim it caused."
         >
-          {mergedChanges.length > 0 ? (
+          {projectImpact.entries.length > 0 ? (
             <div className="flex flex-col gap-4">
               <Surface level="section" padding="lg" className="flex flex-col gap-4">
                 <MonoLabel>Merged changes</MonoLabel>
                 <ul className="flex flex-col gap-3">
-                  {mergedChanges.map((card) => (
+                  {projectImpact.entries.map((entry) => (
                     <li
-                      key={card.id}
+                      key={entry.preparedChangeId}
                       className="border-line-1 flex flex-wrap items-center gap-x-6 gap-y-2 border-b pb-3 last:border-b-0 last:pb-0"
                     >
                       {/* `Metric` renders an em dash for an absent value, so a
                           change without a recorded commit stays honest rather
                           than showing a truncated empty string. */}
-                      <Metric label="Commit" value={card.commitSha?.slice(0, 7)} mono />
-                      <Metric label="Branch" value={card.baseBranch} mono />
-                      <Metric label="Prepared" value={formatTimestamp(card.createdAt)} mono />
+                      <Metric label="Commit" value={entry.commitSha?.slice(0, 7)} mono />
+                      <Metric label="Branch" value={entry.baseBranch} mono />
+                      <Metric label="Merged" value={formatTimestamp(entry.mergedAt)} mono />
+                      <Metric label="Production outcome" value={OUTCOME_LABELS[entry.outcome.state]} />
                       <a
                         href="#prepared"
                         className="text-fg-prose hover:text-fg ml-auto rounded-sm text-sm underline underline-offset-4 transition-colors"
@@ -752,15 +652,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
           title="Activity"
           description="The append-only record of what Vibe did, when, and with what result."
         >
-          {/* Vibe writes `audit_events` (ADR 0007), but `src/modules/audit-log`
-              exposes only `recordAuditEvent` — there is no read path, and
-              building one is a data change, not a styling one. So this says so
-              instead of inventing a feed: an activity list assembled in the
-              browser would be fiction. */}
-          <EmptyState
-            title="Not available yet"
-            description="Vibe records every consequential action it takes — connections, audits, executions, approvals and merges — but this workspace cannot read that record back yet. Until it can, the state of each step is shown on the step itself."
-          />
+          <ActivityFeed entries={activityEntries} hasMore={activity.hasMore} />
         </WorkspaceSection>
       </div>
     </ProjectShell>
