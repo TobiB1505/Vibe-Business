@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   countAbsenceClauses,
   findEvidenceEnumeration,
+  findOrderingOverrides,
   findPriorityInversions,
   isActionable,
   rankLenses,
@@ -48,8 +49,15 @@ function lens(
   };
 }
 
-function blocker(headline: string, lenses: BusinessLens[], explanation = "A real problem."): BusinessConclusion {
+function blocker(
+  headline: string,
+  lenses: BusinessLens[],
+  explanation = "A real problem.",
+  /** Empty means the audit recorded no reason for where it placed this. */
+  rootProblem = "",
+): BusinessConclusion {
   return {
+    rootProblem,
     headline,
     explanation,
     whyItMatters: "It holds the business back.",
@@ -359,5 +367,141 @@ describe("a conclusion states a problem, not a list of absences (§21, §48)", (
     );
 
     expect(notes).toEqual([]);
+  });
+});
+
+describe("ordering must not silently reverse materiality (§9, §37, §48)", () => {
+  /**
+   * The exact v4 defect. Audience was `now`, revenue was `soon`, and the audit
+   * listed revenue first — a defensible call, possibly, but it said nothing
+   * about why. "Had a reason" and "ignored its own assessment" looked identical
+   * from the outside, which is what this note exists to end.
+   */
+  it("flags a soon problem placed above a now problem with no reason recorded", () => {
+    const notes = findOrderingOverrides(
+      synthesis(
+        [lens("audience", "weak", "now"), lens("revenue_economics", "weak", "soon")],
+        [
+          blocker("You haven't decided how this makes money.", ["revenue_economics"]),
+          blocker("Your first customer isn't defined.", ["audience"]),
+        ],
+      ),
+    );
+
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toContain("You haven't decided how this makes money.");
+    expect(notes[0]).toContain("Your first customer isn't defined.");
+  });
+
+  /**
+   * The override is permitted. This deliberately does not judge whether the
+   * stated reason is a good one — that is a human's call on reading the audit,
+   * and a validator that graded reasoning would be inventing authority it has
+   * no basis for.
+   */
+  it("accepts the same order once the audit records why", () => {
+    const notes = findOrderingOverrides(
+      synthesis(
+        [lens("audience", "weak", "now"), lens("revenue_economics", "weak", "soon")],
+        [
+          blocker(
+            "You haven't decided how this makes money.",
+            ["revenue_economics"],
+            "A real problem.",
+            "Placed first because the audience question cannot be answered without knowing who is being charged for what.",
+          ),
+          blocker("Your first customer isn't defined.", ["audience"]),
+        ],
+      ),
+    );
+
+    expect(notes).toEqual([]);
+  });
+
+  it("says nothing when the order already follows materiality", () => {
+    const notes = findOrderingOverrides(
+      synthesis(
+        [lens("audience", "weak", "now"), lens("revenue_economics", "weak", "soon")],
+        [
+          blocker("Your first customer isn't defined.", ["audience"]),
+          blocker("You haven't decided how this makes money.", ["revenue_economics"]),
+        ],
+      ),
+    );
+
+    expect(notes).toEqual([]);
+  });
+
+  /**
+   * §10 — a root problem spanning several lenses is as urgent as its most
+   * urgent part. "The economics aren't defined" resting on one `now` lens and
+   * two `later` ones is a `now` problem, not an average.
+   */
+  it("takes a multi-lens problem's urgency from its most urgent lens", () => {
+    const notes = findOrderingOverrides(
+      synthesis(
+        [
+          lens("revenue_economics", "weak", "now"),
+          lens("scalability", "unclear", "later"),
+          lens("conversion", "adequate", "later"),
+          lens("audience", "weak", "soon"),
+        ],
+        [
+          blocker("The economics of this business aren't defined.", [
+            "revenue_economics",
+            "scalability",
+            "conversion",
+          ]),
+          blocker("Your first customer isn't defined.", ["audience"]),
+        ],
+      ),
+    );
+
+    expect(notes).toEqual([]);
+  });
+
+  it("stays silent on a single blocker and on audits with no lenses", () => {
+    expect(
+      findOrderingOverrides(
+        synthesis([lens("audience", "weak", "now")], [blocker("Only one.", ["audience"])]),
+      ),
+    ).toEqual([]);
+    expect(findOrderingOverrides(synthesis([], [blocker("A.", []), blocker("B.", [])]))).toEqual([]);
+  });
+});
+
+/**
+ * §47, §52 — the legacy five dimensions must not drive business judgment.
+ *
+ * The mechanism is structural rather than a rule the model is asked to follow:
+ * the conclusions are generated before the dimensions exist, and nothing in the
+ * prioritization path reads a dimension score. These assert the structure,
+ * because a rule in a prompt is a hope and a schema order is a guarantee.
+ */
+describe("legacy dimension scores cannot drive blocker ranking (§47, §52)", () => {
+  it("ranks on lens materiality even when a dimension scores catastrophically", () => {
+    // Vibe Business's real numbers: monetization 10/100, and yet `audience` —
+    // which has no scored dimension at all — is what blocks the next milestone.
+    const notes = findPriorityInversions(
+      synthesis(
+        [lens("audience", "weak", "now"), lens("revenue_economics", "weak", "soon")],
+        [blocker("Your first customer isn't defined.", ["audience"])],
+      ),
+    );
+
+    expect(notes).toEqual([]);
+  });
+
+  it("reviews prioritization from lenses only — dimensions are not an input", () => {
+    // `findPriorityInversions` and `findOrderingOverrides` take a synthesis,
+    // which carries lenses and conclusions. There is no parameter through which
+    // a dimension score could reach either.
+    const withoutDimensionData = synthesis(
+      [lens("business_readiness", "weak", "later"), lens("audience", "weak", "now")],
+      [blocker("Some basics are missing.", ["business_readiness"])],
+    );
+
+    expect(findPriorityInversions(withoutDimensionData)).toHaveLength(1);
+    expect(findOrderingOverrides(withoutDimensionData)).toEqual([]);
   });
 });

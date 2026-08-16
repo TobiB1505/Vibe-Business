@@ -127,6 +127,73 @@ export function findPriorityInversions(synthesis: AuditSynthesis): string[] {
 }
 
 /**
+ * The most urgent materiality any of a conclusion's lenses carries.
+ *
+ * A root problem spanning several lenses is as urgent as its most urgent part —
+ * which is the correct reading of "the economics are not defined" resting on one
+ * `now` lens and two `later` ones (§10).
+ */
+function urgencyOf(
+  conclusion: BusinessConclusion,
+  materialityOf: Map<BusinessLens, LensMateriality>,
+): number {
+  const ranks = conclusion.lenses
+    .map((lens) => materialityOf.get(lens))
+    .filter((materiality): materiality is LensMateriality => materiality !== undefined)
+    .map((materiality) => MATERIALITY_RANK[materiality]);
+
+  return ranks.length === 0 ? Number.POSITIVE_INFINITY : Math.min(...ranks);
+}
+
+/**
+ * Where the blocker order reverses the audit's own materiality (§9, §37, §48).
+ *
+ * Separate from `findPriorityInversions`, which asks whether the right problems
+ * were *selected*. This asks whether they were *ordered* — the v4 dogfood
+ * selected correctly and then listed a `soon` root problem above a `now` one
+ * with nothing said about why.
+ *
+ * An override is permitted; the rubric names legitimate reasons. What is not
+ * permitted is an override that leaves no trace, because "the audit had a
+ * reason" and "the audit ignored itself" look identical from the outside. So
+ * the note fires only when the conclusion's own `rootProblem` is silent — a
+ * stated reason satisfies it, and this deliberately does not judge whether the
+ * reason is a good one. That is a human's call on reading the audit.
+ */
+export function findOrderingOverrides(synthesis: AuditSynthesis): string[] {
+  const { lenses, blockers } = synthesis;
+  if (lenses.length === 0 || blockers.length < 2) return [];
+
+  const materialityOf = new Map(lenses.map((entry) => [entry.lens, entry.materiality]));
+  const notes: string[] = [];
+
+  /*
+   * The conclusion that needs to justify itself is the one that **jumped the
+   * queue** — the less urgent problem placed higher — not the one it displaced.
+   * Getting this backwards would ask the demoted problem to explain someone
+   * else's promotion, and would accept a justification written in the wrong
+   * place as if it settled the question.
+   */
+  for (let promoted = 0; promoted < blockers.length; promoted += 1) {
+    const jumper = blockers[promoted]!;
+    if (jumper.rootProblem.trim() !== "") continue;
+
+    const displaced = blockers
+      .slice(promoted + 1)
+      .find((later) => urgencyOf(jumper, materialityOf) > urgencyOf(later, materialityOf));
+
+    if (displaced === undefined) continue;
+
+    notes.push(
+      `Prioritization to review: "${jumper.headline}" is listed above "${displaced.headline}", ` +
+        `which the audit judged more immediate, and no reason for the order was recorded.`,
+    );
+  }
+
+  return notes;
+}
+
+/**
  * How many "no <something>" clauses a sentence contains.
  *
  * The proxy for evidence enumeration (§19–§21). The real dogfood explanation

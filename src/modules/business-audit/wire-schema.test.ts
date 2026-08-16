@@ -249,3 +249,52 @@ describe("wire → domain, end to end", () => {
     expect(audit.notes.join(" ")).toContain("did not exist in the evidence pack");
   });
 });
+
+/**
+ * Generation order (CORE-2a.3.2).
+ *
+ * The v4 dogfood wrote the Monetization dimension's four gaps and then wrote
+ * the customer-facing explanation as those same four facts, in the same order,
+ * "monetization model" included. The dimensions were declared first, so the
+ * scanner inventory was the freshest thing in the model's own context at the
+ * moment it had to name a business problem.
+ *
+ * These assertions exist because that ordering is now load-bearing and looks
+ * arbitrary. Anyone tidying this schema alphabetically would silently
+ * reintroduce the defect, and no other test would notice.
+ */
+describe("judgment is generated before the scanner record", () => {
+  const properties = ANTHROPIC_AUDIT_OUTPUT_SCHEMA.properties as Record<string, unknown>;
+  const required = ANTHROPIC_AUDIT_OUTPUT_SCHEMA.required as string[];
+
+  it("declares lenses first and dimensions after the conclusions", () => {
+    expect(Object.keys(properties)).toEqual([
+      "lenses",
+      "overallConclusion",
+      "conclusions",
+      "dimensions",
+      "limitations",
+    ]);
+  });
+
+  /** Both orders are declared; a mismatch would leave the real one ambiguous. */
+  it("keeps the required list in the same order as the properties", () => {
+    expect(required).toEqual(Object.keys(properties));
+  });
+
+  it("asks for the root problem before any founder-facing prose", () => {
+    const conclusion = (properties.conclusions as { items: Record<string, unknown> }).items;
+    const keys = Object.keys(conclusion.properties as Record<string, unknown>);
+
+    expect(keys.indexOf("rootProblem")).toBe(0);
+    expect(keys.indexOf("rootProblem")).toBeLessThan(keys.indexOf("headline"));
+    expect(keys.indexOf("headline")).toBeLessThan(keys.indexOf("explanation"));
+  });
+
+  /** The five dimensions still exist in full — this sprint reorders, not deletes. */
+  it("still requires every scored dimension", () => {
+    const dimensions = properties.dimensions as { items: Record<string, unknown> };
+    expect(dimensions.items).toBeDefined();
+    expect(required).toContain("dimensions");
+  });
+});

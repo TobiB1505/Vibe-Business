@@ -108,6 +108,17 @@ const DIMENSION_ITEM_SCHEMA = {
 const CONCLUSION_ITEM_SCHEMA = {
   type: "object",
   properties: {
+    // Generated FIRST, and internal (CORE-2a.3.2 §11–§13). One sentence naming
+    // the underlying business problem, before any founder-facing prose exists
+    // to be anchored on. A separate `RootBusinessProblem` object was considered
+    // and rejected: §11 permits reusing an existing structure, a conclusion
+    // already carries the lenses and evidence a root problem would, and a fifth
+    // object shape costs compiled grammar this file exists to conserve.
+    rootProblem: {
+      type: "string",
+      description:
+        "INTERNAL, never shown. The underlying business problem in one sentence — the decision or gap itself, not what a scanner failed to find. 'The business has not decided what customers pay for or how usage becomes price', not 'no pricing or checkout exists'. Write this before the headline.",
+    },
     headline: {
       type: "string",
       description:
@@ -115,7 +126,8 @@ const CONCLUSION_ITEM_SCHEMA = {
     },
     explanation: {
       type: "string",
-      description: "One or two sentences on what was actually found. Plain language.",
+      description:
+        "One or two sentences saying what the rootProblem means for this founder, in plain language. This explains the PROBLEM, not the evidence — the missing surfaces belong in evidenceIds, not here.",
     },
     whyItMatters: {
       // A plain string rather than `anyOf: [string, null]`, and that is a
@@ -154,6 +166,7 @@ const CONCLUSION_ITEM_SCHEMA = {
     },
   },
   required: [
+    "rootProblem",
     "headline",
     "explanation",
     "whyItMatters",
@@ -213,29 +226,73 @@ const LENS_ITEM_SCHEMA = {
   additionalProperties: false,
 } as const;
 
+/**
+ * The response shape — and its property order is load-bearing (CORE-2a.3.2).
+ *
+ * ## What the v4 dogfood showed
+ *
+ * `dimensions` used to come first. The five dimension assessments are the
+ * scanner record and are written in technical language on purpose, so the model
+ * generated, as the Monetization gaps:
+ *
+ *   - No pricing surface on the live site or in the repository
+ *   - No checkout/billing surface detected anywhere
+ *   - No payment integration signal in the repository
+ *   - Founder states the monetization model is undecided
+ *
+ * …and then, with that inventory as the freshest thing in its own context,
+ * wrote the customer-facing explanation:
+ *
+ *   "There's no pricing shown anywhere, no way for a visitor to buy or pay, and
+ *    no payment system built into the code — and you've told Vibe directly that
+ *    the monetization model isn't decided yet."
+ *
+ * Four clauses, same four facts, same order, and "monetization model" carried
+ * up verbatim. That is not a wording slip; the audit was paraphrasing its own
+ * scanner notes because they were the nearest available material.
+ *
+ * It explains the priority defect too. `monetization` is a dimension scoring
+ * 10/100 written at the top of the response — while `audience`, the lens the
+ * same audit marked `now`, **is not a dimension at all** and therefore had no
+ * numeric presence to compete with it.
+ *
+ * ## The order now
+ *
+ * Judgment first, scanner record last:
+ *
+ *   lenses → overallConclusion → conclusions → dimensions → limitations
+ *
+ * The model reasons about the business, concludes, and only then writes the
+ * technical breakdown. Nothing is deleted: the five dimensions still exist,
+ * still score, and still carry their findings. They are just no longer the last
+ * thing read before the founder-facing sentence gets written.
+ *
+ * This costs nothing — one call, same fields — which is the argument for trying
+ * it before anything more elaborate.
+ */
 export const ANTHROPIC_AUDIT_OUTPUT_SCHEMA: Record<string, unknown> = {
   type: "object",
   properties: {
-    dimensions: {
-      type: "array",
-      description: `One entry per dimension, exactly ${AUDIT_DIMENSIONS.length}: ${AUDIT_DIMENSIONS.join(", ")}. No duplicates.`,
-      items: DIMENSION_ITEM_SCHEMA,
-    },
     lenses: {
       type: "array",
-      description: `Assess all ${BUSINESS_LENSES.length} lenses, each exactly once: ${BUSINESS_LENSES.join(", ")}. This is your reasoning, not the answer.`,
+      description: `FIRST: assess all ${BUSINESS_LENSES.length} lenses, each exactly once: ${BUSINESS_LENSES.join(", ")}. This is where you work out what the evidence means for the business. Everything below is derived from it.`,
       items: LENS_ITEM_SCHEMA,
     },
     overallConclusion: {
       type: "string",
       description:
-        "One concise sentence about the business as a whole, grounded in the assessment. Not generic encouragement.",
+        "One concise sentence about the business as a whole, grounded in the lens assessments above. Not generic encouragement.",
     },
     conclusions: {
       type: "array",
       description:
-        "The synthesis. 2-4 positive conclusions and AT MOST 3 negative ones (tone attention or critical). Group related evidence into one conclusion rather than listing each observation. Return fewer if fewer are justified; never pad to a count.",
+        "The answer, derived from the lenses above. 2-4 positive conclusions and AT MOST 3 negative ones (tone attention or critical). Select the negative ones by materiality: a lens you marked `now` normally outranks one you marked `soon`, and `later` normally stays out. Group related lenses into one root problem rather than listing each observation. Return fewer if fewer are justified; never pad to a count.",
       items: CONCLUSION_ITEM_SCHEMA,
+    },
+    dimensions: {
+      type: "array",
+      description: `LAST: the technical breakdown, one entry per dimension, exactly ${AUDIT_DIMENSIONS.length}: ${AUDIT_DIMENSIONS.join(", ")}. No duplicates. This is the scanner record for someone who wants the detail — it is not the source of the conclusions above, which are already written.`,
+      items: DIMENSION_ITEM_SCHEMA,
     },
     limitations: {
       type: "array",
@@ -243,7 +300,7 @@ export const ANTHROPIC_AUDIT_OUTPUT_SCHEMA: Record<string, unknown> = {
       description: "What this audit could not assess and why. At most 5 short phrases.",
     },
   },
-  required: ["dimensions", "lenses", "overallConclusion", "conclusions", "limitations"],
+  required: ["lenses", "overallConclusion", "conclusions", "dimensions", "limitations"],
   additionalProperties: false,
 };
 

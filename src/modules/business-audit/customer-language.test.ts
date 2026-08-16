@@ -128,6 +128,7 @@ describe("findInternalVocabulary", () => {
 
 function conclusion(overrides: Partial<BusinessConclusion> = {}): BusinessConclusion {
   return {
+    rootProblem: "The business has not decided how value becomes revenue.",
     headline: "People still don't have a clear way to pay you.",
     explanation: "Vibe couldn't find prices or anything to buy.",
     whyItMatters: null,

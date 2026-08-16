@@ -296,7 +296,7 @@ export type BusinessLensAssessment = {
  * improving are independent events, and an audit has to be able to say which
  * of them it carries.
  */
-export const AUDIT_SYNTHESIS_VERSION = "business-audit-synthesis-v3" as const;
+export const AUDIT_SYNTHESIS_VERSION = "business-audit-synthesis-v4" as const;
 
 /**
  * The **audit contract** version (CORE-2a.2 §21–§23).
@@ -314,7 +314,7 @@ export const AUDIT_SYNTHESIS_VERSION = "business-audit-synthesis-v3" as const;
  * "what does Vibe currently think about this business?" — which is exactly the
  * question the refresh decision asks.
  */
-export const AUDIT_CONTRACT_VERSION = "business-audit-contract-v4" as const;
+export const AUDIT_CONTRACT_VERSION = "business-audit-contract-v5" as const;
 
 /**
  * The oldest contract still treated as current.
@@ -328,7 +328,7 @@ export const AUDIT_CONTRACT_VERSION = "business-audit-contract-v4" as const;
  * answer this contract would give. The findings were fine; the ordering was
  * the product.
  */
-export const MIN_SUPPORTED_AUDIT_CONTRACT_VERSION = "business-audit-contract-v4" as const;
+export const MIN_SUPPORTED_AUDIT_CONTRACT_VERSION = "business-audit-contract-v5" as const;
 
 /**
  * How a conclusion reads, not how severe it is.
@@ -362,6 +362,20 @@ export type ConclusionTone = (typeof CONCLUSION_TONES)[number];
  * stay separate and unchanged.
  */
 export type BusinessConclusion = {
+  /**
+   * The underlying business problem, in one internal sentence (CORE-2a.3.2).
+   *
+   * **Never shown to the customer.** It exists to be written *before* the
+   * founder-facing prose, so the abstraction happens once, deliberately, rather
+   * than being attempted inside a sentence that also has to be readable.
+   *
+   * Also where an ordering override is justified: a `soon` root problem placed
+   * above a `now` one must say why here, so "the audit ignored its own
+   * materiality" and "the audit had a reason" stop looking identical.
+   *
+   * Empty on audits written before this contract.
+   */
+  rootProblem: string;
   /** The sentence a founder reads. Plain language, no product jargon. */
   headline: string;
   /** One or two sentences on what Vibe actually found. */

@@ -94,6 +94,7 @@ const VIBE_SYNTHESIS: AuditSynthesis = {
     "You have a real product that people can use, but nothing about it explains how anyone would pay you.",
   strengths: [
     {
+      rootProblem: "",
       headline: "People can understand and start using your product.",
       explanation:
         "Vibe found a consistent message about what you do, a clear way to sign up, and a real signed-in area with several working parts.",
@@ -110,6 +111,7 @@ const VIBE_SYNTHESIS: AuditSynthesis = {
       confidence: "high",
     },
     {
+      rootProblem: "",
       headline: "Customers already have something to come back to.",
       explanation:
         "There is a signed-in workspace with a dashboard and integrations, not just a landing page.",
@@ -123,6 +125,7 @@ const VIBE_SYNTHESIS: AuditSynthesis = {
   ],
   blockers: [
     {
+      rootProblem: "",
       headline: "People still don't have a clear way to pay you.",
       explanation:
         "Vibe couldn't find prices, a way to buy, or any payment step — on your site, in your code, or inside the signed-in product.",
@@ -141,6 +144,7 @@ const VIBE_SYNTHESIS: AuditSynthesis = {
       confidence: "high",
     },
     {
+      rootProblem: "",
       headline: "You may not be able to tell what is actually working.",
       explanation:
         "Vibe couldn't find anything measuring what people do, so there is no way to see where they drop off.",

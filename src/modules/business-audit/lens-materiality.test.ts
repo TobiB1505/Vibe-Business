@@ -355,3 +355,77 @@ describe("the rubric raises conclusions above the evidence under them (§19–§
     expect(flowed).toContain("it will rise on its own once the problems ahead of it are solved");
   });
 });
+
+/**
+ * The unification rules (CORE-2a.3.2 §13, §14, §17, §22).
+ *
+ * The prompt and schema carry the structural half of this sprint; these assert
+ * the instructional half is actually present, for the same reason as above —
+ * the v4 dogfood failed on ordering while every rule about ordering was missing
+ * from the rubric it was supposedly following.
+ */
+describe("the rubric keeps conclusions above the scanner record (§13, §14)", () => {
+  const flowed = BUSINESS_READINESS_RUBRIC.toLowerCase().replace(/\s+/g, " ");
+
+  it("states which half of the rubric is the audit", () => {
+    expect(flowed).toContain("the business reasoning is the audit");
+    expect(flowed).toContain("the five scored dimensions are the technical record");
+  });
+
+  it("forbids building a conclusion out of a dimension's gaps", () => {
+    expect(flowed).toContain("never build a conclusion out of a dimension's gaps");
+    expect(flowed).toContain("a gap says what a scanner did not detect");
+  });
+
+  /** §12, §13 — the abstraction step gets its own field and its own moment. */
+  it("asks for the root problem before the founder-facing sentence", () => {
+    expect(flowed).toContain("name the root problem before you write to the founder");
+    expect(flowed).toContain("not: \"pricing and payment are missing.\" that is the evidence again");
+  });
+
+  it("says what to do when a root problem cannot be stated without absences", () => {
+    expect(flowed).toContain("you are probably looking at a symptom");
+  });
+});
+
+describe("the rubric gives materiality real ordering semantics (§8, §9)", () => {
+  const flowed = BUSINESS_READINESS_RUBRIC.toLowerCase().replace(/\s+/g, " ");
+
+  it("says ordering follows materiality, not only membership", () => {
+    expect(flowed).toContain("ordering follows materiality too, not just membership");
+    expect(flowed).toContain("do not quietly reverse that when writing the list");
+  });
+
+  /** An override stays possible — this sprint constrains it, not bans it. */
+  it("permits an override but requires the reason to be recorded", () => {
+    expect(flowed).toContain("only for a reason you can state, and you must state it");
+    expect(flowed).toContain("immediate financial, legal or security exposure");
+  });
+
+  /** §22 — the specific reasoning that produced the v4 ordering defect. */
+  it("rules out severity and evidence volume as reasons", () => {
+    expect(flowed).toContain('"it scores worse" and "there is more evidence for it" are not reasons');
+    expect(flowed).toContain("how easy something was to detect");
+  });
+});
+
+describe("the prompt orders the work before the model starts (§24)", () => {
+  const prompt = buildSystemPrompt();
+  const flowed = prompt.toLowerCase().replace(/\s+/g, " ");
+
+  it("asks for the lenses first and the dimensions last", () => {
+    expect(flowed).toContain("assess the nine business lenses. this is where the thinking happens");
+    expect(flowed).toContain("only then record the technical breakdown");
+  });
+
+  it("explains why the order matters rather than just asserting it", () => {
+    expect(flowed).toContain(
+      "puts a list of undetected surfaces in front of you at the exact moment you should be naming a business problem",
+    );
+  });
+
+  it("forbids a conclusion that paraphrases a dimension's gaps", () => {
+    expect(flowed).toContain("never let a conclusion be a paraphrase of a dimension's gaps");
+    expect(flowed).toContain("you have written the evidence instead of the judgment");
+  });
+});

@@ -1,5 +1,9 @@
 import { checkCustomerLanguage } from "./customer-language";
-import { findEvidenceEnumeration, findPriorityInversions } from "./lens-priority";
+import {
+  findEvidenceEnumeration,
+  findOrderingOverrides,
+  findPriorityInversions,
+} from "./lens-priority";
 import {
   AUDIT_DIMENSIONS,
   AUDIT_SYNTHESIS_VERSION,
@@ -275,6 +279,10 @@ function parseConclusion(
   if (evidenceIds.length === 0) return null;
 
   return {
+    // Internal and never rendered, so an absent one degrades to empty rather
+    // than discarding an otherwise grounded conclusion. Audits written before
+    // this contract have none at all.
+    rootProblem: cleanText(raw.rootProblem, 400) ?? "",
     headline,
     explanation,
     whyItMatters: cleanText(raw.whyItMatters, 400),
@@ -491,7 +499,11 @@ export function validateAuditOutput(data: unknown, knownEvidenceIds: Set<string>
     // findings (§21). Both are notes for the same reason as the wording above:
     // they are strong signals about quality, not proof of a defect, and an
     // audit that reasons well is worth keeping even when it ranks imperfectly.
-    notes.push(...findPriorityInversions(synthesis), ...findEvidenceEnumeration(synthesis));
+    notes.push(
+      ...findPriorityInversions(synthesis),
+      ...findOrderingOverrides(synthesis),
+      ...findEvidenceEnumeration(synthesis),
+    );
   }
 
   const keyFindings: KeyFinding[] = [];

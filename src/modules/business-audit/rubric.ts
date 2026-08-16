@@ -43,14 +43,42 @@
  *     rubric answers them separately: how does this area look, and does it
  *     block the founder's next milestone. They are different questions, and
  *     collapsing them is what turns an audit into a checklist.
+ *
+ * v7 (CORE-2a.3.2) adds the fifth, and it is about where the words come from:
+ *
+ *  5. **A conclusion is never a paraphrase of the scanner record.** The v4
+ *     dogfood wrote the Monetization dimension's four gaps — no pricing
+ *     surface, no checkout surface, no payment integration, founder has not
+ *     decided — and then wrote the customer-facing explanation as those same
+ *     four facts in the same order, "monetization model" included.
+ *
+ *     The response schema now generates lenses and conclusions *before* the
+ *     dimensions, so the scanner inventory is no longer the freshest thing in
+ *     context when the founder's sentence gets written. This rubric adds the
+ *     other half: name the root problem first, and let materiality decide the
+ *     order rather than decorate it.
  */
 
-export const RUBRIC_VERSION = "business-readiness-rubric-v6" as const;
+export const RUBRIC_VERSION = "business-readiness-rubric-v7" as const;
 
 export const BUSINESS_READINESS_RUBRIC = `# Business Readiness Rubric (${RUBRIC_VERSION})
 
-Assess five dimensions. For each, decide what the evidence can actually
-support before deciding on a score.
+This rubric has two halves, and they are not equal.
+
+**The business reasoning is the audit.** Nine lenses, the materiality of each,
+the root problems they add up to, and the conclusions a founder reads. That
+section is further down and it is the one that decides whether this audit is
+worth anything.
+
+**The five scored dimensions are the technical record.** They exist for scoring
+and for a reader who wants the detail, and they are written last, after your
+conclusions are already fixed. They are described first here only because they
+are the simpler contract to state.
+
+Never build a conclusion out of a dimension's gaps. A gap says what a scanner
+did not detect; a conclusion says what that means for the business.
+
+## The five scored dimensions
 
 ## Assessment status — decide this FIRST
 
@@ -455,6 +483,18 @@ the lens assessments, it is real, and it will rise on its own once the problems
 ahead of it are solved. Promoting it today would push out something that
 actually blocks the next step.
 
+**Ordering follows materiality too, not just membership.** A root problem built
+on \`now\` lenses normally comes before one built on \`soon\` lenses. You
+already decided which one blocks the next milestone; do not quietly reverse that
+when writing the list.
+
+You may put a \`soon\` problem first — but only for a reason you can state, and
+you must state it, in that conclusion's \`rootProblem\`. A legitimate reason
+looks like immediate financial, legal or security exposure, or one problem being
+unsolvable until the other is settled. "It scores worse" and "there is more
+evidence for it" are not reasons: the first is severity, and the second measures
+how easy something was to detect.
+
 Then check your own work: **is any lens you marked \`now\` missing from all
 three blockers, while a \`later\` one took its place?** If so, you ranked by
 how bad things looked rather than by what matters, and the list is wrong.
@@ -463,6 +503,24 @@ Beyond that, weigh: how much this affects the business becoming viable; how
 confident the evidence makes you; and how relevant it is to what the founder
 said they are trying to do next. A high-impact problem you can barely evidence
 outranks a small one you can prove.
+
+### Name the root problem before you write to the founder
+
+Each conclusion starts with \`rootProblem\`: one internal sentence naming the
+underlying business problem. Write it first, and write it as the decision or gap
+itself rather than as what was not detected.
+
+- Not: "Pricing and payment are missing." That is the evidence again.
+- Instead: "The business has not decided what customers pay for, how usage
+  becomes a price, or where free ends and paid begins."
+
+Then the headline and the explanation say that same thing to the founder. If you
+cannot state a root problem without listing absences, you are probably looking
+at a symptom — go back to the lenses and find what it is a symptom of.
+
+The scored dimensions come **after** all of this, and they are a technical
+record. Never build a conclusion out of a dimension's gaps: those describe what
+a scanner did not find, and a founder needs to know what that means.
 
 Each conclusion records the lenses it came from. Most real blockers span
 several — that is expected, and a conclusion forced into one lens is usually a
