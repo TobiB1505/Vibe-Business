@@ -202,10 +202,21 @@ export function AuditConclusion({
   const fullCoverage = view.assessedDimensions === view.totalDimensions;
 
   return (
-    <div className="flex flex-col gap-5">
+    /*
+     * Bounded reading width (CORE-2a.1 §42).
+     *
+     * The panels used to span the full workspace — on a 1900px screen that is a
+     * 1700px card holding six short lines, with the text set to 62ch and the
+     * rest empty. Constraining the column instead of the paragraph keeps the
+     * card and its contents the same shape, which is what makes it read as a
+     * written answer rather than as a dashboard tile.
+     */
+    <div className="flex max-w-[68rem] flex-col gap-5">
       <Surface level="panel" padding="lg" className="flex flex-col gap-4">
         <h2 className="text-fg text-xl font-semibold">What Vibe thinks about the business</h2>
-        <p className="text-fg-prose max-w-[65ch] text-base leading-relaxed">{view.conclusion}</p>
+        {/* The conclusion is the sentence this whole screen exists to deliver,
+            so it is set larger than the supporting text beneath it. */}
+        <p className="text-fg-prose max-w-[62ch] text-lg leading-relaxed">{view.conclusion}</p>
 
         {/* Secondary by placement and by size — present, never the headline. */}
         <div className="flex flex-wrap items-center gap-3">
