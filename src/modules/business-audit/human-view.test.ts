@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  auditScoresComparable,
   blindSpotsFrom,
   blockersFrom,
   buildHumanAuditView,
@@ -383,5 +384,36 @@ describe("inline evidence citations", () => {
     expect(view.whyItMatters[0]!.finding).toBe("A finding");
     // The ids are not lost — they remain on the item for the "Why?" disclosure.
     expect(view.whyItMatters[0]!.evidenceIds).toEqual(["live.surface.pricing"]);
+  });
+});
+
+/**
+ * Score comparability (CORE-2a.2 §30).
+ *
+ * Vibe Business scored 39, then 43, then 45 across two days while the rubric
+ * changed twice. The business did not improve by six points.
+ */
+describe("auditScoresComparable", () => {
+  it("compares two audits from the same contract", () => {
+    expect(
+      auditScoresComparable({ contractVersion: "v2" }, { contractVersion: "v2" }),
+    ).toBe(true);
+  });
+
+  it("refuses to compare across a contract change", () => {
+    expect(
+      auditScoresComparable({ contractVersion: "v1" }, { contractVersion: "v2" }),
+    ).toBe(false);
+  });
+
+  /** Absence is not a match: nothing establishes that two unversioned audits agree. */
+  it.each([
+    [undefined, undefined],
+    [undefined, "v2"],
+    ["v2", undefined],
+  ])("refuses when a contract version is missing (%p, %p)", (left, right) => {
+    expect(
+      auditScoresComparable({ contractVersion: left }, { contractVersion: right }),
+    ).toBe(false);
   });
 });

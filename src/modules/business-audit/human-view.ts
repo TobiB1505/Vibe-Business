@@ -346,3 +346,30 @@ export function buildHumanAuditView(audit: BusinessReadinessAudit): HumanAuditVi
     insufficientCoverageReason: audit.overall.insufficientCoverageReason,
   };
 }
+
+/**
+ * Whether two audits' scores may be compared (CORE-2a.2 §30, §41).
+ *
+ * The trap this exists to close: Vibe Business went 39 → 43 → 45 across three
+ * audits in two days, and the product did not improve by six points. The
+ * *rubric* changed twice. Presenting that as a green "business improved"
+ * indicator would be the system congratulating the user on its own upgrade.
+ *
+ * There is no score-delta UI today. This is written before one exists, because
+ * the moment it does the question stops being obvious and the wrong answer
+ * looks like a feature.
+ *
+ * Comparable means: produced under the same audit contract. Everything a
+ * contract bump can change — what the model is asked, how findings are
+ * grouped, what counts as assessable — moves the number for reasons that have
+ * nothing to do with the business.
+ */
+export function auditScoresComparable(
+  a: Pick<BusinessReadinessAudit, "contractVersion">,
+  b: Pick<BusinessReadinessAudit, "contractVersion">,
+): boolean {
+  // Two audits with no recorded contract both predate the versioning, so
+  // nothing establishes that they are comparable. Absence is not a match.
+  if (!a.contractVersion || !b.contractVersion) return false;
+  return a.contractVersion === b.contractVersion;
+}
