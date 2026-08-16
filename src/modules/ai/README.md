@@ -4,7 +4,7 @@ The AI provider boundary ([ADR 0005](../../../docs/decisions/0005-ai-provider-ab
 
 ```
 provider.ts            AIProvider — domain-owned, no Anthropic types
-operations.ts          model / effort / token budgets, per operation
+operations.ts          model / reasoning / token budgets, per operation
 pricing.ts             effective-dated pricing + integer-exact cost
 usage.ts               internal provider-cost ledger (server-only)
 anthropic/adapter.ts   the ONLY file that imports the Anthropic SDK
@@ -20,12 +20,16 @@ anthropic/client.ts    key loading + client construction (server-only)
 - **Diagnostics are a closed set of identifiers, never prose.** `ProviderErrorDiagnostic` carries an HTTP status, the typed `error.type`, and a request id — each pattern-validated on the way in, so a provider returning a message where an identifier belongs gets it dropped. There is no field for a message, a body, a payload, a prompt, or evidence.
 - **No reasoning leaves the adapter.** Only `text` blocks are read. Thinking token *counts* are read because they are billed; thinking *text* is never returned, stored, or displayed.
 - **Every model identifier lives in `operations.ts`.** No route handler, action, or component may name a model, and nothing user-supplied may select one.
+- **A model and what you ask it for are one decision.** `reasoning` is a union — `{mode: "adaptive", effort}` or `{mode: "none"}` — so an effort level is only reachable for a model that supports one, and the adapter sends `thinking`/`output_config.effort` only for `adaptive`. These are not universal parameters: they arrived with one model generation, and an older model rejects a request carrying either. CORE-1 shipped Haiku 4.5 with `medium` effort, and every run failed on the *free* token count before spending anything, reporting `token_count_failed` — the code for "unattributable" — so nothing pointed at the payload. `operations.test.ts` now fails on that pairing instead.
 - **Every price lives in `pricing.ts`**, effective-dated, in integer nanodollars. No dollar constant belongs anywhere else, and floats have no place in a ledger.
 - **The key is server-only.** `ANTHROPIC_API_KEY` is parsed lazily so build, tests and CI never need it.
 
 ## Adding an AI operation
 
-1. Add an `AIOperation` and its `OperationConfig` (model, effort, budgets).
-2. Build the request in the *domain* module that owns the task, not here.
-3. Count tokens before calling; record usage after, success or failure.
-4. Validate the response independently — schema compliance is not truthfulness.
+1. Add an `AIOperation` and its `OperationConfig` (model, reasoning, budgets). Check the model
+   actually supports the `reasoning` mode you gave it, and list it in
+   `ADAPTIVE_CAPABLE_MODELS` (`operations.test.ts`) if it does.
+2. Add its pricing to `pricing.ts` — an unpriced model throws only *after* the call is paid for.
+3. Build the request in the *domain* module that owns the task, not here.
+4. Count tokens before calling; record usage after, success or failure.
+5. Validate the response independently — schema compliance is not truthfulness.
