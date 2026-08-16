@@ -31,8 +31,8 @@ test.describe("preparing claims nothing about the business (§31, §35, §36)", 
   test("names the nine areas without judging any of them", async ({ page }) => {
     await page.goto(PREPARING);
 
-    await expect(page.getByText("Revenue & Economics")).toBeVisible();
-    await expect(page.getByText("Business Readiness")).toBeVisible();
+    await expect(page.getByText("Revenue & Economics").filter({ visible: true })).toBeVisible();
+    await expect(page.getByText("Business Readiness").filter({ visible: true })).toBeVisible();
   });
 
   /**
@@ -143,7 +143,9 @@ test.describe("completed is the only state with verdicts (§37)", () => {
     await expect(page.getByRole("button", { name: /revenue & economics/i })).toContainText(
       /weak/i,
     );
-    await expect(page.getByRole("heading", { name: /needs attention now/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /revenue & economics/i })).toContainText(
+      /soon/i,
+    );
   });
 
   /** And carries none of the in-progress language with it. */

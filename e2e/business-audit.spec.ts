@@ -19,13 +19,14 @@ import { expect, test, type Page } from "@playwright/test";
  *
  * ## What only a browser proves here
  *
- * Reading order, and that the map is not the interface. `buildBusinessMap`
+ * Reading order, and that the map is not geometry alone. `buildBusinessMap`
  * returning nine nodes says nothing about whether a screen reader can reach
  * them, whether the conclusion lands above the diagram, or whether a founder
  * on a phone sees priority groups instead of an unreadable circle.
  */
 
 const SYNTHESIS = "/e2e/audit-synthesis";
+const NO_MOVES = "/e2e/audit-synthesis-no-moves";
 const COMPLETE = "/e2e/audit-complete";
 const PARTIAL = "/e2e/audit-partial";
 const UNCERTAIN = "/e2e/audit-uncertain";
@@ -56,14 +57,19 @@ test.describe("answer first (§6, §8, §9)", () => {
     expect(conclusion).toBeLessThan(map);
   });
 
-  test("reads conclusion → map → blockers → where I'd start", async ({ page }) => {
+  test("reads conclusion before the intelligence panel and technical detail", async ({ page }) => {
     await page.goto(SYNTHESIS);
+
+    const technical = await page
+      .locator("summary")
+      .filter({ hasText: /technical breakdown/i })
+      .boundingBox();
+    if (!technical) throw new Error("technical breakdown summary not visible");
 
     const order = [
       await topOf(page, /what vibe thinks/i),
-      await topOf(page, /how vibe sees your business/i),
-      await topOf(page, /what.s holding you back/i),
-      await topOf(page, /where i.d start/i),
+      await topOf(page, /business intelligence/i),
+      technical.y,
     ];
 
     expect(order).toEqual([...order].sort((a, b) => a - b));
@@ -73,7 +79,7 @@ test.describe("answer first (§6, §8, §9)", () => {
   test("keeps the score visible but small and below the conclusion", async ({ page }) => {
     await page.goto(SYNTHESIS);
 
-    const score = page.getByText(/readiness score/i).first();
+    const score = page.getByText(/\/ 100 readiness/i).first();
     await expect(score).toBeVisible();
 
     const scoreBox = await score.boundingBox();
@@ -95,12 +101,23 @@ test.describe("answer first (§6, §8, §9)", () => {
 
     // The outer disclosure's own summary — nested `<details>` inside it mean a
     // descendant selector matches a dozen elements.
-    await page.locator("summary").filter({ hasText: /full scored breakdown/i }).click();
+    await page.locator("summary").filter({ hasText: /technical breakdown/i }).click();
     await expect(question).toBeVisible();
   });
 });
 
-test.describe("the map shows nine areas, and is not the interface (§10, §18, §52)", () => {
+test.describe("the map shows nine areas and remains accessible (§10, §18, §52)", () => {
+  test("uses the radial map on desktop and interpretation instead of a duplicate lens list", async ({ page }) => {
+    await page.goto(SYNTHESIS);
+
+    await expect(page.getByTestId("business-map-radial")).toBeVisible();
+    await expect(page.getByTestId("business-map-list")).not.toBeVisible();
+    await expect(page.getByTestId("audit-interpretation").getByRole("button")).toHaveCount(0);
+    await expect(
+      page.getByRole("list", { name: /business lenses/i }).getByRole("listitem"),
+    ).toHaveCount(9);
+  });
+
   test("exposes every lens as a real control, not only as geometry", async ({ page }) => {
     await page.goto(SYNTHESIS);
 
@@ -128,12 +145,6 @@ test.describe("the map shows nine areas, and is not the interface (§10, §18, �
     await expect(lens).toContainText(/now|soon|later|not relevant|unknown/i);
   });
 
-  test("groups the lenses under when they matter", async ({ page }) => {
-    await page.goto(SYNTHESIS);
-
-    await expect(page.getByRole("heading", { name: /needs attention now/i })).toBeVisible();
-  });
-
   /** §16 — selecting a lens opens its detail and keeps the map in view. */
   test("opens a lens detail without leaving the map", async ({ page }) => {
     await page.goto(SYNTHESIS);
@@ -142,6 +153,34 @@ test.describe("the map shows nine areas, and is not the interface (§10, §18, �
 
     await expect(page.getByRole("heading", { name: /^revenue & economics$/i })).toBeVisible();
     await expect(page.getByRole("heading", { name: /how vibe sees your business/i })).toBeVisible();
+  });
+});
+
+test.describe("business interpretation uses the audit's truth", () => {
+  test("renders the actual strengths and exact blocker count", async ({ page }) => {
+    await page.goto(SYNTHESIS);
+
+    await expect(page.getByText("People can understand and start using your product.")).toBeVisible();
+    await expect(page.getByTestId("audit-blockers").locator("details")).toHaveCount(2);
+    await expect(page.getByTestId("audit-blockers").locator("details").first()).toHaveAttribute(
+      "data-primary",
+      "true",
+    );
+  });
+
+  test("keeps health independent from materiality", async ({ page }) => {
+    await page.goto(SYNTHESIS);
+
+    const revenue = page.getByRole("button", { name: /revenue & economics/i });
+    await expect(revenue).toHaveAttribute("aria-label", /health weak.*priority soon/i);
+  });
+
+  test("uses the audit's first blocker for where Vibe would start", async ({ page }) => {
+    await page.goto(SYNTHESIS);
+
+    await expect(page.getByTestId("audit-start")).toContainText(
+      "People still don't have a clear way to pay you.",
+    );
   });
 });
 
@@ -195,7 +234,7 @@ test.describe("missing evidence is never a weakness (CLAUDE.md rule 44)", () => 
   test("shows no score and no zero when nothing could be assessed", async ({ page }) => {
     await page.goto(UNCERTAIN);
 
-    await expect(page.getByText(/readiness score/i)).toHaveCount(0);
+    await expect(page.getByText(/\/ 100 readiness/i)).toHaveCount(0);
     await expect(page.getByText(/\b0\s*\/\s*100\b/)).toHaveCount(0);
   });
 
@@ -220,6 +259,13 @@ test.describe("next moves handoff (§39, §40)", () => {
     const cta = page.getByRole("link", { name: /what vibe would do first/i });
     await expect(cta).toBeVisible();
     await expect(cta).toHaveAttribute("href", /\/moves$/);
+  });
+
+  test("shows no CTA when no real moves exist", async ({ page }) => {
+    await page.goto(NO_MOVES);
+
+    await expect(page.getByRole("link", { name: /what vibe would do first/i })).toHaveCount(0);
+    await expect(page.getByText(/hasn.t worked out the next moves/i)).toBeVisible();
   });
 });
 
@@ -251,13 +297,28 @@ test.describe("accessibility (§52)", () => {
   test("does not carry lens state by colour alone", async ({ page }) => {
     await page.goto(SYNTHESIS);
 
-    // The map is decoration; the meaning lives in the buttons' text.
+    // The SVG is decoration; the meaning lives in the buttons' text.
     const svg = page.locator("svg").first();
     if (await svg.count()) await expect(svg).toHaveAttribute("aria-hidden", "true").catch(() => {});
 
     await expect(page.getByRole("button", { name: /audience/i })).toContainText(
       /strong|adequate|weak|unknown/i,
     );
+  });
+
+  test("honours reduced motion", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto(SYNTHESIS);
+
+    const durationMs = await page.locator(".audit-map-node-halo").first().evaluate(
+      (element) => {
+        const duration = getComputedStyle(element).animationDuration;
+        return duration.endsWith("ms")
+          ? Number.parseFloat(duration)
+          : Number.parseFloat(duration) * 1000;
+      },
+    );
+    expect(durationMs).toBeLessThanOrEqual(0.1);
   });
 });
 
@@ -279,10 +340,55 @@ test.describe("375px (§46, §64)", () => {
 
     await expect(page.getByRole("heading", { name: /needs attention now/i })).toBeVisible();
     await expect(page.getByRole("button", { name: /revenue & economics/i })).toBeVisible();
+    await expect(page.getByTestId("business-map-radial")).not.toBeVisible();
+    await expect(page.getByTestId("business-map-list")).toBeVisible();
   });
 
   test("reads the conclusion without expanding anything", async ({ page }) => {
     await page.goto(SYNTHESIS);
     await expect(page.getByRole("heading", { name: /what vibe thinks/i })).toBeVisible();
+  });
+
+  test("reads answer → blocker → ordered lenses", async ({ page }) => {
+    await page.goto(SYNTHESIS);
+
+    const order = [
+      await topOf(page, /what vibe thinks/i),
+      await topOf(page, /what.s holding you back/i),
+      await topOf(page, /needs attention now/i),
+    ];
+
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+  });
+});
+
+test.describe("responsive intelligence panel", () => {
+  for (const viewport of [
+    { width: 1440, height: 1000, label: "1440 desktop" },
+    { width: 1280, height: 900, label: "1280 desktop" },
+    { width: 1024, height: 900, label: "tablet" },
+  ]) {
+    test(`${viewport.label} keeps the Map readable without horizontal overflow`, async ({
+      page,
+    }) => {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await page.goto(SYNTHESIS);
+
+      await expect(page.getByTestId("business-map-radial")).toBeVisible();
+      await expect(page.getByRole("heading", { name: /what.s holding you back/i })).toBeVisible();
+      const overflow = await page.evaluate(
+        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      );
+      expect(overflow).toBeLessThanOrEqual(0);
+    });
+  }
+});
+
+test.describe("truthful lifecycle", () => {
+  test("analyzing engages all lenses without inventing 5/9 progress", async ({ page }) => {
+    await page.goto("/e2e/audit-analyzing");
+
+    await expect(page.getByText(/all nine areas are judged together/i)).toBeVisible();
+    await expect(page.getByText(/5\s*\/\s*9/i)).toHaveCount(0);
   });
 });

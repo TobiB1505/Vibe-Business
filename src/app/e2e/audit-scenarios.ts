@@ -227,6 +227,19 @@ export const E2E_AUDIT_SCENARIOS = {
       VIBE_SYNTHESIS,
     ),
 
+  /** Same truthful audit, with no Opportunity Engine output behind the CTA. */
+  "audit-synthesis-no-moves": () =>
+    audit(
+      [
+        dimension("product", { score: 68, strengths: ["A"], gaps: ["B"] }),
+        dimension("monetization", { score: 10, gaps: ["C", "D"] }),
+        dimension("distribution", { score: 38, gaps: ["E"] }),
+        dimension("conversion", { score: 55, strengths: ["F"] }),
+        dimension("retention", { score: 45, strengths: ["G"], gaps: ["H"] }),
+      ],
+      VIBE_SYNTHESIS,
+    ),
+
   /**
    * Every dimension assessed, at the **real audit's volume**: 10 strengths and
    * 15 gaps across five dimensions.

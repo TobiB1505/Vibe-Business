@@ -50,8 +50,8 @@ function SignalRow({ evidenceId }: { evidenceId: string }) {
   const source = evidenceSource(evidenceId);
 
   return (
-    <li className="flex items-baseline gap-3">
-      <span className="text-fg-meta w-[8.5rem] shrink-0 font-mono text-[0.625rem] tracking-[0.08em] uppercase">
+    <li className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-3">
+      <span className="text-fg-meta shrink-0 font-mono text-[0.625rem] tracking-[0.08em] uppercase sm:w-[8.5rem]">
         {source ?? described.source}
       </span>
       <span className="text-fg-secondary text-sm">{described.detail}</span>
@@ -67,8 +67,11 @@ export function ReasoningTrail({ conclusion }: { conclusion: BusinessConclusion 
 
   return (
     <div className="flex flex-col gap-4">
+      <MonoLabel as="h4" className="text-fg-secondary">
+        How Vibe reached this
+      </MonoLabel>
       <section className="flex flex-col gap-2">
-        <MonoLabel as="h4">
+        <MonoLabel as="h5">
           What Vibe saw · {signals.length} {signals.length === 1 ? "signal" : "signals"}
         </MonoLabel>
         <ul className="flex flex-col gap-1.5">
@@ -87,8 +90,8 @@ export function ReasoningTrail({ conclusion }: { conclusion: BusinessConclusion 
         <span className="bg-line-4 h-6 w-px" />
       </div>
 
-      <Well className="flex flex-col gap-3 p-5">
-        <MonoLabel as="h4">
+      <Well className="flex flex-col gap-3 p-4 sm:p-5">
+        <MonoLabel as="h5">
           One problem, not {signals.length} findings
         </MonoLabel>
 

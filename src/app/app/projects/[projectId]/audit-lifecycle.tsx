@@ -32,19 +32,85 @@ import { MonoLabel } from "@/components/ui/typography";
  */
 function LensConstellation({ active }: { active: boolean }) {
   return (
-    <ul className="flex flex-wrap gap-x-4 gap-y-2">
-      {BUSINESS_LENSES.map((lens, index) => (
-        <li
-          key={lens}
-          className={`text-fg-meta font-mono text-[0.6875rem] tracking-[0.08em] uppercase ${
-            active ? "motion-safe:animate-pulse" : ""
+    <>
+      <div
+        role="group"
+        className="relative mx-auto hidden aspect-square w-full max-w-[28rem] sm:block"
+        aria-label="Nine business lenses"
+      >
+        <span
+          aria-hidden="true"
+          className="border-line-2 absolute inset-[7%] rounded-full border"
+        />
+        <span
+          aria-hidden="true"
+          className="border-line-strong absolute inset-[23%] rounded-full border"
+        />
+        <span
+          aria-hidden="true"
+          className="border-mint/20 absolute inset-[39%] rounded-full border"
+        />
+        {active && (
+          <span
+            aria-hidden="true"
+            className="audit-map-sweep absolute inset-[7%] rounded-full"
+          />
+        )}
+        <span
+          aria-hidden="true"
+          className={`border-mint/30 bg-app absolute top-1/2 left-1/2 flex size-16 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border ${
+            active ? "text-mint" : "text-fg-meta"
           }`}
-          style={active ? { animationDelay: `${index * 140}ms`, animationDuration: "2.6s" } : undefined}
         >
-          {LENS_LABELS[lens]}
-        </li>
-      ))}
-    </ul>
+          <span className="font-mono text-[0.5625rem] tracking-[0.12em] uppercase">
+            {active ? "reading" : "forming"}
+          </span>
+        </span>
+
+        <ul>
+          {BUSINESS_LENSES.map((lens, index) => {
+            const radians = ((index * (360 / BUSINESS_LENSES.length) - 90) * Math.PI) / 180;
+            const left = 50 + Math.cos(radians) * 40;
+            const top = 50 + Math.sin(radians) * 40;
+            return (
+              <li
+                key={lens}
+                className={`border-line-2 bg-app/95 text-fg-secondary absolute -translate-x-1/2 -translate-y-1/2 rounded-lg border px-2.5 py-2 text-center text-[0.6875rem] leading-tight font-medium ${
+                  active ? "motion-safe:animate-pulse" : ""
+                }`}
+                style={{
+                  left: `${left}%`,
+                  top: `${top}%`,
+                  ...(active
+                    ? { animationDelay: `${index * 140}ms`, animationDuration: "2.6s" }
+                    : {}),
+                }}
+              >
+                {LENS_LABELS[lens]}
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+
+      <ul className="grid grid-cols-2 gap-2 sm:hidden" aria-label="Nine business lenses">
+        {BUSINESS_LENSES.map((lens, index) => (
+          <li
+            key={lens}
+            className={`border-line-2 bg-app/70 text-fg-secondary rounded-lg border px-3 py-2.5 text-sm ${
+              active ? "motion-safe:animate-pulse" : ""
+            }`}
+            style={
+              active
+                ? { animationDelay: `${index * 140}ms`, animationDuration: "2.6s" }
+                : undefined
+            }
+          >
+            {LENS_LABELS[lens]}
+          </li>
+        ))}
+      </ul>
+    </>
   );
 }
 
@@ -60,7 +126,7 @@ function Shell({
   return (
     <section
       aria-live="polite"
-      className="rounded-panel border-line-2 bg-surface-1 relative overflow-hidden border p-6"
+      className="rounded-panel border-line-2 bg-surface-2 relative overflow-hidden border p-6 sm:p-8"
     >
       {/* A single radial wash, not a glass panel (§58). */}
       <span
@@ -71,9 +137,13 @@ function Shell({
             "radial-gradient(circle at 50% 0%, rgb(0 229 160 / 0.06), transparent 62%)",
         }}
       />
-      <div className="relative flex flex-col gap-4">
-        <MonoLabel as="h2">{label}</MonoLabel>
-        <p className="text-fg max-w-[46ch] text-lg font-medium">{headline}</p>
+      <div className="relative flex flex-col gap-5">
+        <MonoLabel as="h2" className="text-fg-secondary">
+          {label}
+        </MonoLabel>
+        <p className="text-fg max-w-[38ch] text-2xl leading-tight font-semibold tracking-[-0.03em]">
+          {headline}
+        </p>
         {children}
       </div>
     </section>
@@ -133,9 +203,14 @@ export function AuditAnalyzing() {
  */
 export function AuditWaitingHeader() {
   return (
-    <div className="flex flex-col gap-2">
-      <MonoLabel as="h2">Business audit · waiting for you</MonoLabel>
-      <p className="text-fg-muted max-w-[58ch] text-sm">
+    <div className="flex flex-col gap-3 pt-2">
+      <MonoLabel as="h2" className="text-mint">
+        Vibe needs u · Business audit waiting for you
+      </MonoLabel>
+      <p className="text-fg max-w-[46ch] text-xl leading-snug font-semibold tracking-[-0.025em]">
+        Vibe found the one part of the business only you can clarify.
+      </p>
+      <p className="text-fg-muted max-w-[58ch] text-sm leading-relaxed">
         Vibe has everything else it needs. Answer this and the audit carries on — nothing has been
         spent while it waits.
       </p>

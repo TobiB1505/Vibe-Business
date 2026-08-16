@@ -35,9 +35,9 @@ import { HealthBar } from "./business-map";
 
 function Meta({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-1">
+    <div className="flex min-w-[7rem] flex-col gap-1.5">
       <MonoLabel>{label}</MonoLabel>
-      <div className="text-fg-body flex items-center gap-2 text-sm">{children}</div>
+      <div className="text-fg-body flex items-center gap-2 text-[0.8125rem]">{children}</div>
     </div>
   );
 }
@@ -51,15 +51,15 @@ export function LensDetail({ node, map }: { node: LensNode; map: BusinessMap }) 
   const sources = evidenceSources(node.evidenceIds);
 
   return (
-    <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-2">
-        <MonoLabel>
-          Lens {index} / {BUSINESS_LENSES.length}
+    <div className="flex flex-col gap-5">
+      <header className="flex flex-col gap-1.5 pr-16">
+        <MonoLabel as="h2">
+          Selected lens detail · Lens {index} / {BUSINESS_LENSES.length}
         </MonoLabel>
-        <h3 className="text-fg text-xl font-semibold">{node.label}</h3>
+        <h3 className="text-fg text-2xl font-semibold tracking-[-0.03em]">{node.label}</h3>
       </header>
 
-      <div className="border-line-1 flex flex-wrap gap-8 border-y py-4">
+      <div className="border-line-1 flex flex-wrap gap-x-9 gap-y-4 border-y py-3.5">
         <Meta label="Health">
           <HealthBar health={node.health} />
           {HEALTH_LABELS[node.health]}
@@ -74,46 +74,53 @@ export function LensDetail({ node, map }: { node: LensNode; map: BusinessMap }) 
         )}
       </div>
 
-      {node.summary && (
-        <p className="text-fg-prose max-w-[62ch] text-[0.9375rem] leading-relaxed">
-          {node.summary}
-        </p>
-      )}
+      <div className="grid gap-6 md:grid-cols-[minmax(0,1.35fr)_minmax(15rem,1fr)]">
+        {node.summary && (
+          <section className="flex flex-col gap-2">
+            <MonoLabel as="h4">Business assessment</MonoLabel>
+            <p className="text-fg-prose max-w-[56ch] text-[0.9375rem] leading-relaxed">
+              {node.summary}
+            </p>
+          </section>
+        )}
 
-      {/*
-        Deliberately not "what this lens holds up". The audit says these areas
-        are one problem; it does not say which way the arrow points, and a
-        confident arrow would be Vibe inventing causality (§15, §25).
-      */}
-      {connections.length > 0 && (
-        <section className="flex flex-col gap-2">
-          <MonoLabel as="h4">Judged together with</MonoLabel>
-          <ul className="flex flex-col gap-2">
-            {connections.map((edge) => {
-              const other = edge.from === node.lens ? edge.to : edge.from;
-              return (
-                <li key={`${edge.from}-${edge.to}`} className="flex flex-col gap-0.5">
-                  <span className="text-fg-body text-sm">{LENS_LABELS[other]}</span>
-                  <span className="text-fg-muted text-xs">{edge.reason}</span>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      )}
+        <div className="flex flex-col gap-5">
+          {/*
+            Deliberately not "what this lens holds up". The audit says these areas
+            are one problem; it does not say which way the arrow points, and a
+            confident arrow would be Vibe inventing causality (§15, §25).
+          */}
+          {connections.length > 0 && (
+            <section className="flex flex-col gap-2">
+              <MonoLabel as="h4">Judged together with</MonoLabel>
+              <ul className="flex flex-col gap-2">
+                {connections.map((edge) => {
+                  const other = edge.from === node.lens ? edge.to : edge.from;
+                  return (
+                    <li key={`${edge.from}-${edge.to}`} className="flex flex-col gap-0.5">
+                      <span className="text-fg-body text-sm">{LENS_LABELS[other]}</span>
+                      <span className="text-fg-muted text-xs leading-relaxed">{edge.reason}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
 
-      {node.missingContext.length > 0 && (
-        <section className="border-line-1 flex flex-col gap-2 border-t pt-4">
-          <MonoLabel as="h4">Only you can answer</MonoLabel>
-          <ul className="flex flex-col gap-1">
-            {node.missingContext.map((item) => (
-              <li key={item} className="text-fg-secondary text-sm">
-                {item}
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
+          {node.missingContext.length > 0 && (
+            <section className="border-line-1 flex flex-col gap-2 border-t pt-4">
+              <MonoLabel as="h4">Only you can answer</MonoLabel>
+              <ul className="flex flex-col gap-1">
+                {node.missingContext.map((item) => (
+                  <li key={item} className="text-fg-secondary text-sm">
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </div>
+      </div>
 
       {node.evidenceIds.length > 0 && (
         <details className="group">

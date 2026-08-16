@@ -183,13 +183,13 @@ export default async function E2eScenarioPage({
   if (isE2eAuditScenario(scenario)) {
     const auditResult = E2E_AUDIT_SCENARIOS[scenario]();
     return (
-      <main className="mx-auto max-w-4xl p-8">
+      <main className="mx-auto max-w-[90rem] p-8">
         {label}
         <AuditOverview
           audit={auditResult}
           generatedAt={auditResult.generatedAt}
           movesHref="/app/projects/project_e2e/moves"
-          hasMoves
+          hasMoves={scenario !== "audit-synthesis-no-moves"}
         />
       </main>
     );

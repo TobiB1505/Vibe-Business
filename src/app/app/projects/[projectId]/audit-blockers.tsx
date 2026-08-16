@@ -46,7 +46,7 @@ export function AuditBlockers({
   if (blockers.length === 0) {
     return (
       <section className="flex flex-col gap-2">
-        <MonoLabel as="h2">What&rsquo;s holding you back</MonoLabel>
+        <MonoLabel as="h3">What&rsquo;s holding you back</MonoLabel>
         {/*
           §48: no empty "top 3" scaffolding. Zero blockers is a real and good
           result, and rendering three placeholders would invent problems to
@@ -61,8 +61,13 @@ export function AuditBlockers({
   }
 
   return (
-    <section className="flex flex-col gap-3">
-      <MonoLabel as="h2">What&rsquo;s holding you back</MonoLabel>
+    <section className="flex flex-col gap-3.5" data-testid="audit-blockers">
+      <div className="flex items-center gap-3">
+        <MonoLabel as="h3" className="text-mint whitespace-nowrap">
+          What&rsquo;s holding you back
+        </MonoLabel>
+        <span aria-hidden="true" className="bg-mint-line h-px flex-1" />
+      </div>
 
       <ul className="flex flex-col gap-2">
         {blockers.map((blocker, index) => {
@@ -70,13 +75,24 @@ export function AuditBlockers({
 
           return (
             <li key={blocker.headline}>
-              <details className="rounded-panel border-line-2 bg-surface-1 group border">
-                <summary className="marker:content-none flex cursor-pointer items-start gap-4 p-5">
-                  <span className="bg-surface-4 text-fg-secondary mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full font-mono text-[0.6875rem]">
-                    {index + 1}
+              <details
+                data-primary={index === 0 ? "true" : undefined}
+                className={`rounded-panel group border ${
+                  index === 0
+                    ? "border-mint-line bg-mint-tint-soft"
+                    : "border-line-2 bg-surface-1"
+                }`}
+              >
+                <summary className="marker:content-none flex cursor-pointer items-start gap-3 p-4">
+                  <span
+                    className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-md font-mono text-[0.6875rem] ${
+                      index === 0 ? "bg-mint text-mint-ink font-bold" : "bg-surface-4 text-fg-meta"
+                    }`}
+                  >
+                    #{index + 1}
                   </span>
 
-                  <span className="flex min-w-0 flex-1 flex-col gap-2">
+                  <span className="flex min-w-0 flex-1 flex-col gap-1.5">
                     <span className="text-fg-meta flex flex-wrap items-center gap-2 font-mono text-[0.625rem] tracking-[0.08em] uppercase">
                       {blocker.lenses.map((lens) => (
                         <span key={lens}>{LENS_LABELS[lens]}</span>
@@ -84,12 +100,23 @@ export function AuditBlockers({
                       {priority && <span className="text-mint">{priority}</span>}
                     </span>
 
-                    <span className="text-fg max-w-[54ch] text-base font-semibold">
+                    <span
+                      className={`text-fg leading-snug font-semibold tracking-[-0.015em] ${
+                        index === 0 ? "text-[1.0625rem]" : "text-[0.9375rem]"
+                      }`}
+                    >
                       {blocker.headline}
                     </span>
 
-                    <span className="text-fg-prose max-w-[62ch] text-sm">
+                    <span className="text-fg-prose text-[0.8125rem] leading-relaxed">
                       {blocker.explanation}
+                    </span>
+
+                    <span className="text-fg-muted mt-1 flex items-center gap-2 text-xs">
+                      <span aria-hidden="true" className={index === 0 ? "text-mint" : "text-fg-meta"}>
+                        ›
+                      </span>
+                      Why Vibe thinks this
                     </span>
                   </span>
 
@@ -98,7 +125,7 @@ export function AuditBlockers({
                   </span>
                 </summary>
 
-                <div className="border-line-1 mx-5 mb-5 border-t pt-5">
+                <div className="border-line-1 mx-4 mb-4 border-t pt-4">
                   <ReasoningTrail conclusion={blocker} />
                 </div>
               </details>

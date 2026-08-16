@@ -73,10 +73,11 @@ export function NeedsUserPanel({
   return (
     <section
       aria-labelledby="needs-user-heading"
-      className="rounded-panel border-mint/40 bg-surface-3 flex flex-col gap-5 border p-6"
+      className="rounded-panel border-mint/40 bg-surface-3 relative flex flex-col gap-6 overflow-hidden border p-6 sm:p-8"
     >
-      <div className="flex flex-col gap-3">
-        <MonoLabel>Vibe needs u</MonoLabel>
+      <span aria-hidden="true" className="audit-intelligence-glow pointer-events-none absolute inset-0" />
+      <div className="relative flex flex-col gap-3">
+        <MonoLabel className="text-mint">Vibe needs u</MonoLabel>
 
         {/*
           What Vibe worked out on its own. Absent rather than invented when the
@@ -84,15 +85,20 @@ export function NeedsUserPanel({
           perceptive is worse than no premise at all.
         */}
         {question.context && (
-          <p className="text-fg-secondary max-w-[62ch] text-sm">{question.context}</p>
+          <p className="text-fg-secondary max-w-[62ch] text-sm leading-relaxed">
+            {question.context}
+          </p>
         )}
 
-        <h3 id="needs-user-heading" className="text-fg max-w-[52ch] text-lg font-semibold">
+        <h3
+          id="needs-user-heading"
+          className="text-fg max-w-[46ch] text-xl leading-snug font-semibold tracking-[-0.025em] sm:text-2xl"
+        >
           {question.prompt}
         </h3>
       </div>
 
-      <form action={formAction} className="flex flex-col gap-4">
+      <form action={formAction} className="relative flex max-w-[48rem] flex-col gap-4">
         <input type="hidden" name="intent" value={question.intent} />
 
         {options ? (
