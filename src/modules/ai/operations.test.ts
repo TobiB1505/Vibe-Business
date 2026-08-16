@@ -108,3 +108,49 @@ describe("every operation states how long it may take", () => {
     );
   });
 });
+
+/**
+ * The token ceiling and the time ceiling have to agree.
+ *
+ * Two real failures on the same audit, one after the other: a 120s timeout
+ * discarded a complete answer, and then a 16,000-token ceiling truncated one
+ * mid-object with $0.1965 already billed. Both were budgets set when the
+ * operation was smaller.
+ *
+ * Fixing them independently is how you get a third failure. Generation runs at
+ * a steady ~9.8 ms per output token across every measured audit, so a token
+ * budget implies a duration — and a token budget the timeout can never reach is
+ * not a budget, it is a number that looks like one.
+ */
+describe("output and time budgets are coherent", () => {
+  /** Measured across four real audits: 9.0, 9.7, 9.9 and 10.8 ms per token. */
+  const MS_PER_OUTPUT_TOKEN = 9.8;
+
+  it.each(["business_readiness_audit", "opportunity_generation", "product_understanding"] as const)(
+    "%s can generate its whole output budget before its timeout",
+    (operation) => {
+      const config = getOperationConfig(operation);
+      const implied = config.maxOutputTokens * MS_PER_OUTPUT_TOKEN;
+
+      expect(
+        implied,
+        `${operation} allows ${config.maxOutputTokens} tokens (~${Math.round(implied / 1000)}s) but times out at ${config.timeoutMs / 1000}s`,
+      ).toBeLessThanOrEqual(config.timeoutMs);
+    },
+  );
+
+  /**
+   * The other direction. The structured JSON alone is ~5,800 tokens at
+   * production cardinality, and under adaptive thinking reasoning shares the
+   * same budget — 11,172 tokens on the run that truncated. A ceiling without
+   * real room above the payload is the defect this test exists to catch.
+   */
+  it("leaves the audit's reasoning room well above the JSON it must also emit", () => {
+    const JSON_PAYLOAD_TOKENS = 5_800;
+    const HIGHEST_OBSERVED_THINKING = 11_172;
+
+    expect(BUSINESS_READINESS_AUDIT_CONFIG.maxOutputTokens).toBeGreaterThan(
+      JSON_PAYLOAD_TOKENS + HIGHEST_OBSERVED_THINKING,
+    );
+  });
+});

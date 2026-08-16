@@ -24,6 +24,18 @@ export type OperationConfig = {
    * counts toward this limit too, so it is set well above the size of the
    * expected JSON: the audit schema is compact, but truncating it mid-object
    * would waste the whole (paid) call.
+   *
+   * "Well above" is the part that has to be maintained. The audit's ceiling was
+   * chosen when it produced five dimension assessments and nothing else; four
+   * sprints later the same call also reasons through nine lenses, names a root
+   * problem per conclusion and checks its own prioritization. Reasoning grew
+   * with it — 8,236 thinking tokens on one run, 11,172 on the next — until a
+   * complete answer was truncated mid-object with $0.1965 already billed.
+   *
+   * The ceiling is not a cost control. Tokens are billed as generated, so a
+   * higher ceiling costs nothing until it is used, while a low one throws away
+   * everything spent reaching it. Cost is controlled by `effort` and by the
+   * size of the rubric, both of which are visible decisions elsewhere.
    */
   maxOutputTokens: number;
   /**
@@ -60,7 +72,27 @@ export const BUSINESS_READINESS_AUDIT_CONFIG: OperationConfig = {
   // cost optimization to make *after* there is a quality baseline to
   // compare against, not before.
   reasoning: { mode: "adaptive", effort: "high" },
-  maxOutputTokens: 16_000,
+  /*
+   * Paired with `timeoutMs`, and the pairing is the point.
+   *
+   * Generation runs at a strikingly steady ~9.8 ms per output token across
+   * every real audit measured (9.0–10.8 across four runs from 9.9k to 16k
+   * tokens). So a token ceiling implies a duration, and the two ceilings have
+   * to agree or one of them is decoration: at 240s the most that can physically
+   * be generated is ~24,000 tokens, and anything above that would be a limit
+   * the timeout reaches first.
+   *
+   * The structured JSON is roughly 5,800 tokens at production cardinality —
+   * nine lenses, six conclusions, five dimensions. The rest is reasoning,
+   * measured at 8.2k then 11.2k on consecutive runs and still trending up as
+   * the rubric asks for more checks. 24k keeps the JSON's space and lets
+   * reasoning grow by another ~60% before anything is discarded.
+   *
+   * Raising this further means raising `timeoutMs` first — and that runs into
+   * the platform step ceiling, which is unverified. At that point the honest
+   * move is to make the rubric ask for less, not to raise a number.
+   */
+  maxOutputTokens: 24_000,
   maxInputTokens: 30_000,
   /*
    * Measured, not guessed. Real audits have run 99.5s, 106.5s and 120s+ as the
