@@ -358,6 +358,31 @@ the same gate the server does.
 Also fixed: `audit_failed` read *"The business audit could not be completed."* under a heading
 already saying *"Business audit couldn't complete."*
 
+### 5. The backfill charged existing users for an entitlement that did not exist
+
+Found by trying to run the first v3 audit on Vibe Business itself, and being
+refused by the product.
+
+`20260816020000` marked the earliest completed audit per project as
+`included_first_audit`, reasoning that "those projects have already had a free audit". That
+was wrong. The free audit is a CORE-2 promise introduced *with this sprint*; at the time those
+audits ran the feature was ungated and freely repeatable — one project has ten of them. Nobody
+had been offered the free audit, so nobody could have consumed it.
+
+The Deep Scan's migration (`20260811190000`) *did* default existing rows to
+`included_first_scan`, correctly — that entitlement shipped with its feature, so there was no
+prior usage to mislabel. Copying the pattern without checking that difference is what caused
+this.
+
+`20260816160000_no_retroactive_entitlement_consumption.sql` reclassifies every pre-CORE-2
+audit as `legacy_pre_entitlement` and drops the grants derived from them, identified by
+evidence pack version rather than by date so it cannot catch a genuine v3 run. Every existing
+project keeps its free audit unspent.
+
+The one v3 row that stays `included_first_audit` is the *failed* run from defect 1 — correct,
+because §17 says a failed audit consumes nothing, and `failed` is outside both the unique
+index predicate and the consumption query.
+
 ### What the dogfood did not cover
 
 The v3 pack itself. Every audit on the live project predates it, so what was exercised is the
