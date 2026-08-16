@@ -47,14 +47,54 @@ const RING_LABELS: Record<MapRing, string> = {
 
 /** Outward, as a fraction of the map radius. NOW is intentionally substantial. */
 const RING_RADIUS: Record<MapRing, number> = {
-  now: 0.6,
-  soon: 0.77,
-  later: 0.96,
+  now: 0.56,
+  soon: 0.76,
+  later: 0.94,
 };
 
 const VIEWBOX = 760;
 const CENTRE = VIEWBOX / 2;
 const RADIUS = VIEWBOX / 2 - 54;
+
+
+/**
+ * Where a ring's name can sit without a card on top of it.
+ *
+ * Two wrong answers preceded this one, and both are worth keeping. A fixed
+ * bearing was clear for Soon and Later and buried Now, because Conversion
+ * happens to be a Now lens sitting almost exactly there — and which lenses land
+ * on which ring is the thing that changes between audits. Avoiding only the
+ * nodes *on the same ring* then failed too: the rings are about 60px apart and
+ * a lens card is wider than that, so a neighbouring ring's card reaches across.
+ *
+ * So every node counts, whatever its ring. The nine sit evenly, which leaves
+ * midpoints 20° from their neighbours — ample clearance at these radii — and
+ * the downward tie-break puts all three labels on one vertical, reading near to
+ * far like an axis.
+ */
+function labelBearing(map: BusinessMapModel): number {
+  const occupied = map.nodes.map((node) => node.angle);
+  if (occupied.length === 0) return 90;
+
+  let best = 90;
+  let bestGap = -1;
+
+  for (let bearing = 0; bearing < 360; bearing += 10) {
+    const gap = Math.min(
+      ...occupied.map((angle) => {
+        const delta = Math.abs(((bearing - angle) % 360) + 360) % 360;
+        return Math.min(delta, 360 - delta);
+      }),
+    );
+    // Ties break downward, where a label reads most naturally under the centre.
+    if (gap > bestGap || (gap === bestGap && Math.abs(bearing - 90) < Math.abs(best - 90))) {
+      bestGap = gap;
+      best = bearing;
+    }
+  }
+
+  return best;
+}
 
 function position(node: LensNode): { x: number; y: number } {
   const radians = (node.angle * Math.PI) / 180;
@@ -230,10 +270,12 @@ function MapNode({
 
 export function BusinessMap({
   map,
+  score,
   selected,
   onSelect,
 }: {
   map: BusinessMapModel;
+  score: number | null;
   selected: BusinessLens | null;
   onSelect: (lens: BusinessLens) => void;
 }) {
@@ -255,7 +297,7 @@ export function BusinessMap({
         while mobile swaps the whole geometry for the grouped list (§18).
       */}
       <div
-        className="relative mx-auto hidden aspect-square w-full max-w-[43rem] md:block"
+        className="relative mx-auto hidden aspect-square w-full max-w-[39rem] md:block"
         data-testid="business-map-radial"
       >
         <svg
@@ -284,6 +326,43 @@ export function BusinessMap({
               strokeDasharray={ring === "later" ? "4 7" : undefined}
             />
           ))}
+
+          {/*
+            The rings, named on the map itself.
+            Three unlabelled circles are a claim the reader has to reverse-
+            engineer. Placed straight down from the centre, which is the one
+            bearing with no lens on it: the nine sit every 40° from twelve
+            o'clock, so 190° very nearly *is* Business Readiness — the first
+            attempt put "NOW" underneath that card. Downward also reads in the
+            right order, near to far.
+          */}
+          {(["now", "soon", "later"] as const).map((ring) => {
+            const at = labelBearing(map);
+            /*
+             * Halfway between this ring and the next one inward.
+             *
+             * Cards are centred *on* a ring, so the ring line is the one radius
+             * guaranteed to be occupied — a label drawn there disappears under
+             * whichever card is nearest, which is what kept happening to NOW.
+             * The gap between two rings is the only band no card can sit in.
+             */
+            const inner = ring === "now" ? 0 : ring === "soon" ? RING_RADIUS.now : RING_RADIUS.soon;
+            const r = (RADIUS * (RING_RADIUS[ring] + inner)) / 2;
+            const radians = (at * Math.PI) / 180;
+            return (
+              <text
+                key={`label-${ring}`}
+                x={CENTRE + Math.cos(radians) * r}
+                y={CENTRE + Math.sin(radians) * r + 4}
+                textAnchor="middle"
+                className={`font-mono text-[13px] tracking-[0.16em] ${
+                  ring === "now" ? "fill-mint" : "fill-fg-meta"
+                }`}
+              >
+                {ring.toUpperCase()}
+              </text>
+            );
+          })}
 
           {map.nodes.map((node) => {
             const point = position(node);
@@ -351,11 +430,29 @@ export function BusinessMap({
           />
         </svg>
 
-        <div className="pointer-events-none absolute top-1/2 left-1/2 z-10 flex size-24 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center gap-1 rounded-full text-center">
-          <span className="text-fg-secondary font-mono text-[0.5625rem] tracking-[0.14em] uppercase">
-            closer
-          </span>
-          <span className="text-fg text-xs font-semibold">sooner</span>
+        {/*
+          The score belongs here rather than in a headline (§9). In the middle
+          of the map it reads as one reading among nine areas — which is what it
+          is — instead of answering a question the founder did not ask. The
+          panel's own "closer to centre = sooner" caption carries the geometry,
+          so the centre does not have to restate it.
+        */}
+        <div className="pointer-events-none absolute top-1/2 left-1/2 z-10 flex size-24 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-full text-center">
+          {score !== null ? (
+            <>
+              <span className="text-fg text-[1.75rem] leading-none font-semibold tracking-[-0.03em]">
+                {score}
+              </span>
+              <span className="text-fg-meta mt-1 font-mono text-[0.5625rem] tracking-[0.14em] uppercase">
+                readiness
+              </span>
+            </>
+          ) : (
+            // Not scored is not a score of zero (CLAUDE.md rule 44).
+            <span className="text-fg-meta font-mono text-[0.5625rem] tracking-[0.14em] uppercase">
+              not scored
+            </span>
+          )}
         </div>
 
         <ul className="contents" aria-label="Business lenses">
@@ -374,6 +471,50 @@ export function BusinessMap({
           })}
         </ul>
       </div>
+
+      {/*
+        The legend, and it is not decoration.
+        The map encodes two independent things at once — a bar for health, a
+        distance for priority — and without a key the reader has to infer that
+        from nine samples. Naming the health scale is also what keeps colour
+        from carrying meaning alone (§4, §18, §52).
+
+        The connection entry says "judged together", not the mockup's "holds
+        up": the audit records which lenses share a root problem, never which
+        one blocks which, and a directional word here would be the frontend
+        inventing causality.
+      */}
+      <ul
+        aria-hidden="true"
+        className="text-fg-meta mx-auto mt-2 hidden max-w-[39rem] flex-wrap items-center justify-center gap-x-5 gap-y-2 font-mono text-[0.625rem] tracking-[0.1em] uppercase md:flex"
+      >
+        {(
+          [
+            ["strong", "bg-fg", 4],
+            ["adequate", "bg-amber", 3],
+            ["weak", "bg-coral", 1],
+            ["unknown", "bg-fg-disabled", 0],
+          ] as const
+        ).map(([label, tone, filled]) => (
+          <li key={label} className="flex items-center gap-1.5">
+            <span className="flex gap-[2px]">
+              {[0, 1, 2, 3].map((index) => (
+                <span
+                  key={index}
+                  className={`h-2 w-[3px] rounded-[1px] ${
+                    index < filled ? tone : "bg-line-3"
+                  } ${filled === 0 ? "opacity-40" : ""}`}
+                />
+              ))}
+            </span>
+            {label}
+          </li>
+        ))}
+        <li className="flex items-center gap-1.5">
+          <span className="border-line-strong w-4 border-t border-dashed" />
+          judged together
+        </li>
+      </ul>
 
       {/*
         The interface. Grouped by when each area matters, which is the same

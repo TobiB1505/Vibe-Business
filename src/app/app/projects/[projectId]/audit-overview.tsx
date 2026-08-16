@@ -199,10 +199,14 @@ export function AuditOverview({
           at the top would answer a question nobody asked.
         */}
         <div className="text-fg-meta flex flex-wrap items-center gap-x-2.5 gap-y-1 font-mono text-[0.6875rem] tracking-[0.04em]">
-          {score !== null && <span>{score} / 100 readiness</span>}
+          {/*
+            The score moved into the map's centre, so repeating it here would
+            be the same number twice. It stays in this line only when there is
+            no map to hold it — a pre-lens audit.
+          */}
+          {score !== null && !map && <span>{score} / 100 readiness</span>}
           {map && (
             <>
-              {score !== null && <span aria-hidden="true">·</span>}
               <span>{map.assessedCount} lenses</span>
               <span aria-hidden="true">·</span>
               <span>{map.signalCount} signals</span>
@@ -226,7 +230,7 @@ export function AuditOverview({
       </header>
 
       {map && synthesis ? (
-        <AuditIntelligence map={map}>
+        <AuditIntelligence map={map} score={score}>
           <AuditInterpretation
             audit={audit}
             map={map}

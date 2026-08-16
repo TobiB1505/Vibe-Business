@@ -75,15 +75,25 @@ test.describe("answer first (§6, §8, §9)", () => {
     expect(order).toEqual([...order].sort((a, b) => a - b));
   });
 
-  /** §9 — the value is knowing what matters next, not receiving a number. */
-  test("keeps the score visible but small and below the conclusion", async ({ page }) => {
+  /**
+   * §9 — the value is knowing what matters next, not receiving a number.
+   *
+   * The score sits in the middle of the map, where it reads as one reading
+   * among nine areas rather than as the page's answer. Asserted as *below the
+   * conclusion* rather than by container, because that is the property §9
+   * actually cares about: a founder must meet the sentence first.
+   */
+  test("keeps the score below the conclusion, inside the map", async ({ page }) => {
     await page.goto(SYNTHESIS);
 
-    const score = page.getByText(/\/ 100 readiness/i).first();
+    const score = page.getByText("readiness", { exact: false }).first();
     await expect(score).toBeVisible();
 
     const scoreBox = await score.boundingBox();
     expect(scoreBox!.y).toBeGreaterThan(await topOf(page, /what vibe thinks/i));
+
+    // And never twice: repeating it in the header would make it a headline.
+    await expect(page.getByText(/\/ 100 readiness/i)).toHaveCount(0);
   });
 
   /**

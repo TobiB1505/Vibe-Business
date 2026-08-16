@@ -24,9 +24,12 @@ import { LensDetail } from "./lens-detail";
  */
 export function AuditIntelligence({
   map,
+  score,
   children,
 }: {
   map: BusinessMapModel;
+  /** Shown in the map's centre, where it reads as one reading among nine. */
+  score: number | null;
   children: ReactNode;
 }) {
   const [selected, setSelected] = useState<BusinessLens | null>(null);
@@ -67,7 +70,7 @@ export function AuditIntelligence({
                   ordered by priority
                 </span>
               </div>
-              <BusinessMap map={map} selected={selected} onSelect={setSelected} />
+              <BusinessMap map={map} score={score} selected={selected} onSelect={setSelected} />
             </section>
 
             <aside
