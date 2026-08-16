@@ -3,6 +3,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { AUDIT_START_LIMITS, type AuditAccessMode } from "./entitlement";
+import type { PendingQuestion } from "./needs-user";
 import type { BusinessReadinessAudit } from "./schema";
 
 /**
@@ -32,6 +33,15 @@ export type StoredAudit = {
   totalDimensions: number | null;
   failureCode: string | null;
   result: BusinessReadinessAudit | null;
+  /**
+   * The exact understanding and founder answers this run reasoned from.
+   *
+   * Read back so a later run can tell whether those facts have since moved —
+   * which is what decides whether this audit's lens assessments may still be
+   * treated as describing the current business (CORE-2a.4).
+   */
+  productProfileId: string | null;
+  founderIntentHash: string | null;
   createdAt: string;
   completedAt: string | null;
 };
@@ -47,12 +57,14 @@ type AuditRow = {
   total_dimensions: number | null;
   failure_code: string | null;
   result: BusinessReadinessAudit | null;
+  product_profile_id: string | null;
+  founder_intent_hash: string | null;
   created_at: string;
   completed_at: string | null;
 };
 
 const AUDIT_COLUMNS =
-  "id, project_id, status, access_mode, input_hash, overall_score, assessed_dimensions, total_dimensions, failure_code, result, created_at, completed_at";
+  "id, project_id, status, access_mode, input_hash, overall_score, assessed_dimensions, total_dimensions, failure_code, result, product_profile_id, founder_intent_hash, created_at, completed_at";
 
 function mapRow(row: AuditRow): StoredAudit {
   return {
@@ -66,6 +78,8 @@ function mapRow(row: AuditRow): StoredAudit {
     totalDimensions: row.total_dimensions,
     failureCode: row.failure_code,
     result: row.result,
+    productProfileId: row.product_profile_id,
+    founderIntentHash: row.founder_intent_hash,
     createdAt: row.created_at,
     completedAt: row.completed_at,
   };
@@ -318,6 +332,116 @@ export async function failAuditRun(
   if (error) {
     console.error("[business-audit] failed to record run failure", { auditId });
   }
+}
+
+// ---------------------------------------------------------------------
+// Pausing for the founder (CORE-2a.4)
+// ---------------------------------------------------------------------
+
+/**
+ * Stops the run in front of a question, before anything has been spent.
+ *
+ * `analyzing → needs_user`. The row keeps its claims — it is still the audit
+ * for this input hash, and still the one consuming the entitlement if that is
+ * how it was funded — so nothing else can start while a person is thinking.
+ *
+ * The intent is appended here, at the moment of *asking*, not when the answer
+ * arrives. A founder who honestly says "I haven't decided" leaves the
+ * underlying field empty, and without this record the gate would see an
+ * unresolved fact and ask the same question forever.
+ */
+export async function pauseAuditForQuestion(
+  supabase: SupabaseClient,
+  params: { auditId: string; question: PendingQuestion },
+): Promise<void> {
+  const asked = await getAskedIntents(supabase, params.auditId);
+
+  const { error } = await supabase
+    .from("business_readiness_audits")
+    .update({
+      status: "needs_user",
+      pending_question: params.question,
+      asked_intents: asked.includes(params.question.intent)
+        ? asked
+        : [...asked, params.question.intent],
+    })
+    .eq("id", params.auditId)
+    // Only a run that is actually working may be paused. Without this, a
+    // replayed step could re-pause an audit the founder has already answered
+    // and put the same question back in front of them.
+    .in("status", ["pending", "analyzing"]);
+
+  if (error) throw error;
+}
+
+/**
+ * Clears the question and lets the run continue.
+ *
+ * Idempotent by construction (§38, §53): it matches on `status = needs_user`,
+ * so a second submission of the same answer updates nothing and cannot start a
+ * second inference. The answer itself was already written to its canonical
+ * store before this is called — losing the answer while un-pausing would be
+ * the one unrecoverable failure here (§39).
+ */
+export async function resumeAuditAfterAnswer(
+  supabase: SupabaseClient,
+  auditId: string,
+): Promise<{ resumed: boolean }> {
+  const { data, error } = await supabase
+    .from("business_readiness_audits")
+    .update({ status: "analyzing", pending_question: null })
+    .eq("id", auditId)
+    .eq("status", "needs_user")
+    .select("id")
+    .maybeSingle();
+
+  if (error) throw error;
+  return { resumed: data !== null };
+}
+
+export type PausedAudit = {
+  auditId: string;
+  question: PendingQuestion;
+  askedIntents: string[];
+};
+
+/** The audit currently waiting on this project's founder, if any. */
+export async function getPausedAudit(
+  supabase: SupabaseClient,
+  projectId: string,
+): Promise<PausedAudit | null> {
+  const { data, error } = await supabase
+    .from("business_readiness_audits")
+    .select("id, pending_question, asked_intents")
+    .eq("project_id", projectId)
+    .eq("status", "needs_user")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (data === null || data.pending_question === null) return null;
+
+  return {
+    auditId: data.id as string,
+    question: data.pending_question as PendingQuestion,
+    askedIntents: (data.asked_intents as string[] | null) ?? [],
+  };
+}
+
+/** Which questions this run has already put to the founder. */
+export async function getAskedIntents(
+  supabase: SupabaseClient,
+  auditId: string,
+): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("business_readiness_audits")
+    .select("asked_intents")
+    .eq("id", auditId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return (data?.asked_intents as string[] | null) ?? [];
 }
 
 // ---------------------------------------------------------------------

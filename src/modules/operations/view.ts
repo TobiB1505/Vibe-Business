@@ -92,6 +92,8 @@ export function buildOperationView(
 export const OPERATION_STAGE_LABELS: Record<OperationStage, string> = {
   preparing: "Preparing evidence",
   counting_tokens: "Preparing evidence",
+  // Written to the person who is being waited on, not about them.
+  asking_founder: "Waiting for you",
   running_ai: "Analyzing business",
   prioritizing: "Finding your highest-impact opportunities",
   preflight: "Checking your current product state",

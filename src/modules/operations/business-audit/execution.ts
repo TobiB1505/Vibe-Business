@@ -21,9 +21,14 @@ import {
   computeAuditInputHash,
   createAuditRun,
   failAuditRun,
+  getAskedIntents,
   getAuditById,
+  getLatestSuccessfulAudit,
+  pauseAuditForQuestion,
   recordFreeAuditGrant,
 } from "@/modules/business-audit/store";
+import { selectBlockingQuestion } from "@/modules/business-audit/needs-user";
+import type { FounderQuestionIntent } from "@/modules/business-audit/founder-questions";
 import { authorizeProjectAudit, getConnectedRepositoryId } from "@/modules/business-audit/service";
 import { getLatestSuccessfulAuthenticatedSnapshot } from "@/modules/authenticated-product-intelligence/store";
 import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intelligence/store";
@@ -41,6 +46,7 @@ import {
   failOperationRun,
   getOperationRunById,
   markInferenceStarted,
+  pauseOperationForUser,
   setOperationStage,
   type StoredOperationRun,
 } from "../store";
@@ -312,7 +318,93 @@ export async function prepareEvidenceStep(
 }
 
 /**
- * Step 2 — count tokens.
+ * Step 2 — does this need the founder before it needs the model? (CORE-2a.4)
+ *
+ * Deliberately positioned here: after the audit row is claimed, and **before**
+ * anything is counted or spent. Everything the decision needs — the current
+ * profile, the founder's stated intent, and the previous audit's lens
+ * assessments — is already structured data, so this step makes no provider call
+ * and a pause therefore costs nothing.
+ *
+ * That ordering is what makes the whole feature affordable. Asking after
+ * inference would mean paying for an audit, discarding it, and paying again;
+ * asking during it is impossible, because all nine lenses come from a single
+ * structured response.
+ *
+ * Returns `paused` rather than a failure. A run waiting for its founder has not
+ * gone wrong, and routing it through the failure path would put an error on a
+ * screen that should be inviting an answer.
+ */
+export async function checkFounderQuestionStep(
+  deps: ExecutionDeps,
+  operationId: string,
+): Promise<StepOutcome<{ paused: boolean }>> {
+  const loaded = await loadOperation(deps.supabase, operationId);
+  if (!loaded.ok) return loaded;
+  const { operation } = loaded;
+
+  const auditId = operation.resultId;
+  if (auditId === null) return { ok: false, failureCode: "audit_failed" };
+
+  const [profile, founderIntent, previous, askedIntents] = await Promise.all([
+    getLatestProfile(deps.supabase, operation.projectId),
+    getFounderIntent(deps.supabase, operation.projectId),
+    getLatestSuccessfulAudit(deps.supabase, operation.projectId),
+    getAskedIntents(deps.supabase, auditId),
+  ]);
+
+  // The profile is a hard prerequisite of the audit itself, so its absence is
+  // handled upstream; there is simply nothing to reason from here.
+  if (profile === null) return { ok: true, paused: false };
+
+  /*
+   * Whether the previous audit's lens assessments still describe this business.
+   *
+   * They were assessed against one specific profile and one specific set of
+   * founder answers — and this feature exists to change both. Comparing the
+   * recorded identity rather than timestamps makes staleness a fact: a resumed
+   * run must not re-read a materiality that was decided before the answer it
+   * just received.
+   */
+  const lensesReflectCurrentFacts =
+    previous !== null &&
+    previous.productProfileId === profile.stored.id &&
+    previous.founderIntentHash === founderIntent.intentHash;
+
+  const decision = selectBlockingQuestion({
+    profile: profile.profile,
+    intent: founderIntent.intent,
+    lenses: previous?.result?.synthesis?.lenses ?? [],
+    lensesReflectCurrentFacts,
+    askedIntents: askedIntents as FounderQuestionIntent[],
+  });
+
+  if (!decision.ask) return { ok: true, paused: false };
+
+  await setOperationStage(deps.supabase, { operationId, stage: "asking_founder" });
+  await pauseAuditForQuestion(deps.supabase, { auditId, question: decision.question });
+  await pauseOperationForUser(deps.supabase, operationId);
+
+  await recordAuditEvent(deps.supabase, {
+    userId: operation.userId,
+    eventType: "business_audit.needs_user",
+    metadata: {
+      projectId: operation.projectId,
+      auditId,
+      operationId,
+      // The intent and the areas it affects, never the founder's own words —
+      // the audit log is not the place for free-form personal content.
+      questionIntent: decision.question.intent,
+      affectedLenses: decision.question.affectedLenses,
+      materiality: decision.question.materiality,
+    },
+  });
+
+  return { ok: true, paused: true };
+}
+
+/**
+ * Step 3 — count tokens.
  *
  * A budget gate that sits *before* the paid step, so an oversized pack fails
  * without the paid path ever being entered. The runner counts again for the

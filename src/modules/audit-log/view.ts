@@ -84,6 +84,10 @@ const LABELS: Record<AuditEventType, string> = {
   "business_audit.completed": "Business audit completed",
   "business_audit.failed": "Business audit failed",
   "business_audit.reused": "Business audit reused",
+  // Written from the founder's side: the audit is waiting on them, not stalled.
+  "business_audit.needs_user": "Business audit needs your answer",
+  "business_audit.question_answered": "You answered Vibe's question",
+  "business_audit.resumed": "Business audit resumed",
 
   "operation.started": "Operation started",
   "operation.completed": "Operation completed",
@@ -157,6 +161,8 @@ const EXPLICIT_TONES: Partial<Record<AuditEventType, ActivityTone>> = {
   "change_approval.invalidated": "waiting",
   "change_approval.revoked": "neutral",
   "change_preview.cleanup_incomplete": "waiting",
+  // Vibe is waiting on a person, which is neither success nor a problem.
+  "business_audit.needs_user": "waiting",
   // The one event that means bytes moved on the customer's default branch.
   "change_merge.default_branch_updated": "success",
 };

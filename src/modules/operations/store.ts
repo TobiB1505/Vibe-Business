@@ -276,6 +276,51 @@ export async function claimResultForOperation(
  * that billing state is ambiguous — and ambiguity must resolve to failure, not
  * to a second charge (§11).
  */
+/**
+ * Stops the operation in front of a question (CORE-2a.4).
+ *
+ * `running → needs_user`. The run keeps its claim on its inputs, so nothing
+ * else can start for the same work while a person is thinking, and it re-enters
+ * at `queued` when the answer arrives.
+ *
+ * Guarded on the current status so a replayed step cannot re-pause an
+ * operation the founder has already answered.
+ */
+export async function pauseOperationForUser(
+  supabase: SupabaseClient,
+  operationId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from("operation_runs")
+    .update({ status: "needs_user" })
+    .eq("id", operationId)
+    .in("status", ["queued", "running"]);
+
+  if (error) throw error;
+}
+
+/**
+ * Puts a paused operation back in the queue after its question is answered.
+ *
+ * Matches on `needs_user`, which is what makes a double submission harmless:
+ * the second one updates nothing and cannot start a second run (§38, §53).
+ */
+export async function requeueAnsweredOperation(
+  supabase: SupabaseClient,
+  operationId: string,
+): Promise<{ requeued: boolean }> {
+  const { data, error } = await supabase
+    .from("operation_runs")
+    .update({ status: "queued", stage: "preparing" })
+    .eq("id", operationId)
+    .eq("status", "needs_user")
+    .select("id")
+    .maybeSingle();
+
+  if (error) throw error;
+  return { requeued: data !== null };
+}
+
 export async function markInferenceStarted(
   supabase: SupabaseClient,
   operationId: string,

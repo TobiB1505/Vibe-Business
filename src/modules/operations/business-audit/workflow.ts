@@ -3,6 +3,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import type { OperationFailureCode } from "../failures";
 import {
   completeOperationStep,
+  checkFounderQuestionStep,
   countTokensStep,
   failOperationStep,
   prepareEvidenceStep,
@@ -54,6 +55,11 @@ async function prepareEvidence(operationId: string) {
   return prepareEvidenceStep(deps(), operationId);
 }
 
+async function checkFounderQuestion(operationId: string) {
+  "use step";
+  return checkFounderQuestionStep(deps(), operationId);
+}
+
 async function countTokens(operationId: string) {
   "use step";
   return countTokensStep(deps(), operationId);
@@ -85,6 +91,23 @@ export async function businessAuditWorkflow(operationId: string) {
       await abortOperation(operationId, prepared.failureCode);
       return;
     }
+
+    /*
+     * The pause (CORE-2a.4). Before anything is counted or spent, because the
+     * decision is deterministic and a run waiting for its founder must not be
+     * holding a paid call open.
+     *
+     * Returning here rather than looping is deliberate: a durable step may not
+     * wait hours for a human. Answering re-enters this workflow from the top,
+     * and every step above is already replay-safe, so re-entry reuses the
+     * claimed audit row and repeats only deterministic work.
+     */
+    const question = await checkFounderQuestion(operationId);
+    if (!question.ok) {
+      await abortOperation(operationId, question.failureCode);
+      return;
+    }
+    if (question.paused) return;
 
     const counted = await countTokens(operationId);
     if (!counted.ok) {

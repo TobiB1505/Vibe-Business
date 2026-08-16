@@ -35,6 +35,14 @@ export type AuditEventType =
   | "business_audit.completed"
   | "business_audit.failed"
   | "business_audit.reused"
+  /**
+   * The audit stopped and asked its founder something only they could answer
+   * (CORE-2a.4). Carries the question's intent and the areas it affects — never
+   * the founder's own words, which are not the audit log's business.
+   */
+  | "business_audit.needs_user"
+  | "business_audit.question_answered"
+  | "business_audit.resumed"
   // Product Understanding (CORE-1 §22). `completed_without_synthesis` is its
   // own event rather than a metadata flag: a profile derived with no model is
   // a materially different thing to have produced, and it should be findable
