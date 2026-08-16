@@ -5,6 +5,7 @@ import {
   buildHumanAuditView,
   conclusionFor,
   strengthsFrom,
+  withoutInlineEvidenceIds,
 } from "./human-view";
 import type { BusinessReadinessAudit, DimensionAssessment } from "./schema";
 
@@ -161,8 +162,42 @@ describe("the conclusion", () => {
       ]),
     );
 
-    expect(text).toContain("do people understand what you built?");
-    expect(text).toContain("can you make money from it?");
+    expect(text).toContain("explaining what you built");
+    expect(text).toContain("making money from it");
+  });
+
+  /**
+   * The defect the first dogfood found, and the reason `DIMENSION_TOPICS`
+   * exists. Interpolating `DIMENSION_QUESTIONS` produced "Where you're
+   * strongest: do people understand what you built? Where you're weakest: can
+   * you make money from it?" — a question mark mid-clause, in the single
+   * sentence a founder reads first.
+   *
+   * The old assertion checked for that exact string, so the test enforced the
+   * bug. This one checks the property instead: a sentence, not a quiz.
+   */
+  it("reads as a sentence rather than as interpolated questions", () => {
+    const text = conclusionFor(
+      audit([
+        dimension({ id: "product", score: 85 }),
+        dimension({ id: "monetization", score: 25 }),
+      ]),
+    );
+
+    expect(text).not.toContain("?");
+    expect(text.trim()).toMatch(/\.$/);
+  });
+
+  it("reads as a sentence when only one dimension was assessed", () => {
+    const text = conclusionFor(
+      audit([
+        dimension({ id: "monetization", score: 25 }),
+        dimension({ id: "retention", score: null, assessmentStatus: "insufficient_evidence" }),
+      ]),
+    );
+
+    expect(text).not.toContain("?");
+    expect(text.trim()).toMatch(/\.$/);
   });
 
   it("says there is not enough evidence rather than manufacturing a verdict", () => {
@@ -181,7 +216,7 @@ describe("the conclusion", () => {
       ]),
     );
 
-    expect(text).not.toContain("Where you're strongest");
+    expect(text).not.toContain("You're strongest at");
   });
 });
 
@@ -219,5 +254,64 @@ describe("buildHumanAuditView", () => {
     expect(view.whyItMatters).toEqual([
       { finding: "Understandable but not monetized.", evidenceIds: ["a"] },
     ]);
+  });
+});
+
+/**
+ * Model prose that cites its own evidence ids inline (CORE-2 §14).
+ *
+ * The strings here are verbatim from the first real audit, which is the point:
+ * this rule was written against what the model actually produced, not against
+ * what it was asked to produce.
+ */
+describe("inline evidence citations", () => {
+  it("strips a trailing id-only parenthetical", () => {
+    expect(
+      withoutInlineEvidenceIds(
+        "Authenticated area reached with Dashboard, Integrations, and Project workspace surfaces present (auth.area.reached, auth.surface.dashboard, auth.surface.integrations, auth.surface.project_workspace)",
+      ),
+    ).toBe(
+      "Authenticated area reached with Dashboard, Integrations, and Project workspace surfaces present",
+    );
+  });
+
+  it("strips a single id too", () => {
+    expect(withoutInlineEvidenceIds("No pricing page exists (live.surface.pricing)")).toBe(
+      "No pricing page exists",
+    );
+  });
+
+  /**
+   * Conservative on purpose. A parenthetical containing a real clause is the
+   * model saying something, not citing — removing it would delete content.
+   */
+  it("leaves a parenthetical that is actually prose alone", () => {
+    const text = "There is no pricing page (and no payment provider was detected)";
+    expect(withoutInlineEvidenceIds(text)).toBe(text);
+  });
+
+  it("leaves a sentence with no parenthetical untouched", () => {
+    expect(withoutInlineEvidenceIds("Nothing brings a signed-up user back.")).toBe(
+      "Nothing brings a signed-up user back.",
+    );
+  });
+
+  it("does not strip a mid-sentence citation, which would leave broken grammar", () => {
+    const text = "The homepage (live.site.title) is clear enough";
+    expect(withoutInlineEvidenceIds(text)).toBe(text);
+  });
+
+  it("applies to strengths, gaps and key findings alike", () => {
+    const view = buildHumanAuditView(
+      audit([dimension({ score: 40, strengths: ["A strength (live.site.title)"], gaps: ["A gap (repo.surface.payments)"] })], {
+        keyFindings: [{ finding: "A finding (live.surface.pricing)", evidenceIds: ["live.surface.pricing"] }],
+      }),
+    );
+
+    expect(view.working[0]!.text).toBe("A strength");
+    expect(view.blockers[0]!.text).toBe("A gap");
+    expect(view.whyItMatters[0]!.finding).toBe("A finding");
+    // The ids are not lost — they remain on the item for the "Why?" disclosure.
+    expect(view.whyItMatters[0]!.evidenceIds).toEqual(["live.surface.pricing"]);
   });
 });

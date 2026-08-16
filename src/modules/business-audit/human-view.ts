@@ -1,5 +1,6 @@
 import {
   DIMENSION_QUESTIONS,
+  DIMENSION_TOPICS,
   type AuditDimensionId,
   type BusinessReadinessAudit,
   type DimensionAssessment,
@@ -43,6 +44,32 @@ function isAssessed(dimension: DimensionAssessment): boolean {
   return dimension.score !== null && dimension.assessmentStatus !== "insufficient_evidence";
 }
 
+/**
+ * A parenthetical made entirely of evidence ids, which the model sometimes
+ * appends to its own prose.
+ *
+ * The first dogfood surfaced this on the real audit:
+ *
+ *   "Authenticated area reached with Dashboard, Integrations, and Project
+ *    workspace surfaces present (auth.area.reached, auth.surface.dashboard,
+ *    auth.surface.integrations, auth.surface.project_workspace)"
+ *
+ * Every id in it is real and already resolved, in the founder's own language,
+ * by the "Why?" disclosure directly underneath. Printing them inline as well
+ * puts machine identifiers in the first sentence a person reads, which is the
+ * opposite of "answer first, evidence second, tech last".
+ *
+ * Matched conservatively: only a trailing parenthetical whose entire contents
+ * are dotted identifiers. A parenthetical containing a real sentence is left
+ * alone, because it is the model saying something rather than citing.
+ */
+const TRAILING_EVIDENCE_CITATION = /\s*\((?:[a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+)(?:\s*,\s*(?:[a-z][a-z0-9_]*(?:\.[a-z0-9_]+)+))*\)\s*$/i;
+
+/** Strips a trailing id-only citation, leaving the sentence intact. */
+export function withoutInlineEvidenceIds(text: string): string {
+  return text.replace(TRAILING_EVIDENCE_CITATION, "").trimEnd();
+}
+
 export type AuditHighlight = {
   /** The dimension this came from, so the UI can group or link. */
   dimension: AuditDimensionId;
@@ -68,7 +95,7 @@ export function strengthsFrom(audit: BusinessReadinessAudit): AuditHighlight[] {
       dimension.strengths.map((text) => ({
         dimension: dimension.id,
         question: DIMENSION_QUESTIONS[dimension.id] ?? dimension.label,
-        text,
+        text: withoutInlineEvidenceIds(text),
         evidenceIds: dimension.evidenceIds,
       })),
     );
@@ -95,7 +122,7 @@ export function blockersFrom(audit: BusinessReadinessAudit): AuditHighlight[] {
       dimension.gaps.map((text) => ({
         dimension: dimension.id,
         question: DIMENSION_QUESTIONS[dimension.id] ?? dimension.label,
-        text,
+        text: withoutInlineEvidenceIds(text),
         evidenceIds: dimension.evidenceIds,
       })),
     );
@@ -142,14 +169,16 @@ export function conclusionFor(audit: BusinessReadinessAudit): string {
   const weakest = ordered[0]!;
   const strongest = ordered[ordered.length - 1]!;
 
-  const weakestQuestion = (DIMENSION_QUESTIONS[weakest.id] ?? weakest.label).toLowerCase();
+  // Topics, not questions. A question reads correctly as a standalone label and
+  // becomes nonsense inside a sentence — see `DIMENSION_TOPICS`.
+  const weakestTopic = DIMENSION_TOPICS[weakest.id] ?? weakest.label;
 
   if (assessed.length === 1 || weakest.id === strongest.id) {
-    return `The clearest thing Vibe can say right now: ${weakestQuestion}`;
+    return `The clearest thing Vibe can say right now is that ${weakestTopic} is where this is weakest.`;
   }
 
-  const strongestQuestion = (DIMENSION_QUESTIONS[strongest.id] ?? strongest.label).toLowerCase();
-  return `Where you're strongest: ${strongestQuestion} Where you're weakest: ${weakestQuestion}`;
+  const strongestTopic = DIMENSION_TOPICS[strongest.id] ?? strongest.label;
+  return `You're strongest at ${strongestTopic}. Where this is weakest is ${weakestTopic}.`;
 }
 
 /**
@@ -176,7 +205,10 @@ export function buildHumanAuditView(audit: BusinessReadinessAudit): HumanAuditVi
     conclusion: conclusionFor(audit),
     working: strengthsFrom(audit),
     blockers: blockersFrom(audit),
-    whyItMatters: audit.keyFindings,
+    whyItMatters: audit.keyFindings.map((finding) => ({
+      ...finding,
+      finding: withoutInlineEvidenceIds(finding.finding),
+    })),
     blindSpots: blindSpotsFrom(audit),
     score: audit.overall.score,
     assessedDimensions: audit.overall.assessedDimensions,

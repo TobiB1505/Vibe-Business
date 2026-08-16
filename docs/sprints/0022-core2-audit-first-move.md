@@ -272,15 +272,91 @@ Three defects a unit test could not:
 
 ## Dogfood
 
-**Not performed for this half, and that is a real gap rather than an omission to gloss.**
+**Performed for the audit leg, against the real product. It found four defects, one of which
+cost a billed model call.**
 
-The migration is now deployed, so the audit leg *can* be run against the real product — that
-was the blocker named here before. It has not been run.
+The remaining legs — Move, preparation, preview, merge — are the half that is not built.
+
+### 1. The entitlement gate was never called (cost real money)
+
+`authorizeAudit` existed as a tested pure function and **nothing on the write path invoked
+it**. `startAuditAction` called `startBusinessAuditOperation`, which checked prerequisites and
+reuse and then went straight to claiming a run.
+
+So pressing "Re-run business audit" on a project whose free audit was already consumed:
+
+1. started an operation,
+2. counted tokens, called the model, and was billed,
+3. then failed at stage `persisting` — because `completeAuditRun` set `status = 'completed'`
+   and collided with `business_readiness_audits_one_included_idx`.
+
+Operation `dac026a9-…`, `audit_failed`, `inference_started_at` set. The user saw
+*"Business audit couldn't complete."* and nothing else.
+
+Two things were wrong, and both are fixed:
+
+- **The gate is now enforced in `startBusinessAuditOperation`**, not in the Server Action, so
+  it covers every caller rather than the one that remembers. It sits *after* reuse resolution
+  — returning a stored audit costs nothing and must keep working once the entitlement is
+  spent — and *before* anything is claimed.
+- **The unique index now covers in-flight rows too**
+  (`20260816140000_included_audit_claim_guard.sql`). That moves the collision from *after*
+  inference to the INSERT that claims the run, so even a caller that skips the gate fails
+  before a single token is counted. Failed rows stay excluded, because a failed audit consumed
+  nothing and must not block its own retry.
+
+The regression test asserts the property that matters — not "it refuses", but that it refuses
+with **no operation row, no audit row, and the executor never started**.
+
+### 2. The conclusion sentence was not a sentence
+
+The screen read:
+
+> Where you're strongest: do people understand what you built? Where you're weakest: can you
+> make money from it?
+
+`DIMENSION_QUESTIONS` are questions, and interpolating them into a sentence produces question
+marks mid-clause. In the one sentence CORE-2 §14 makes a founder read first.
+
+**Every test was green, because the unit test asserted that exact broken string.** A test that
+pins the output rather than the property will happily enforce a defect. `DIMENSION_TOPICS` now
+holds the same five dimensions as noun phrases, and the tests assert the property instead: no
+`?`, ends in a full stop.
+
+### 3. Evidence ids leaked into the prose
+
+> Authenticated area reached with Dashboard, Integrations, and Project workspace surfaces
+> present (auth.area.reached, auth.surface.dashboard, auth.surface.integrations,
+> auth.surface.project_workspace)
+
+Model output citing its own ids inline, printed in "What's already working" — machine
+identifiers in the first thing a person reads, with the *same* ids already resolved into
+plain language by the "Why?" disclosure directly underneath.
+
+`withoutInlineEvidenceIds` strips a trailing parenthetical whose contents are entirely dotted
+identifiers, and nothing else: a parenthetical containing a real clause is the model saying
+something rather than citing, and removing it would delete content.
+
+### 4. The button contradicted the notice
+
+"Re-run business audit" rendered prominent and enabled directly above *"You've used the free
+audit for this project."* Pressing it is what triggered defect 1. All three start paths — the
+main button, "Start a new audit" after a stall, and "Try again" after a failure — now respect
+the same gate the server does.
+
+Also fixed: `audit_failed` read *"The business audit could not be completed."* under a heading
+already saying *"Business audit couldn't complete."*
+
+### What the dogfood did not cover
+
+The v3 pack itself. Every audit on the live project predates it, so what was exercised is the
+new screen rendering **old v2 audits** — which it does correctly, including the traceability
+columns being null on pre-CORE-2 rows. Whether v3 produces a *better* audit is still unproven,
+and needs a project whose free audit has not been spent.
 
 CORE-2 §57–§58 asks for the complete flow — Profile → Audit → Moves → First Move → Preview →
 Merge — to be run against Vibe Business itself. Most of that flow is the half that is not
-built. Running only the audit leg is now possible (the migration is
-applied), but has not been done.
+built. The audit leg was run; see below.
 
 What *was* verified end to end: 3000 unit tests, 106 browser tests, a green production build.
 What was **not** verified: that the v3 pack produces a better audit than v2 did against real

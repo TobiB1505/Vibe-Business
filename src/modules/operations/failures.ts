@@ -1,5 +1,6 @@
 import type { AuditRunFailure } from "@/modules/business-audit/runner";
 import type { AuditPrerequisite } from "@/modules/business-audit/service";
+import type { AuditDenialReason } from "@/modules/business-audit/entitlement";
 import type { OpportunityRunFailure } from "@/modules/opportunities/runner";
 import type { ExecutionFailureCode } from "@/modules/execution/schema";
 import type { ValidationFailureCode } from "@/modules/validation/schema";
@@ -47,6 +48,9 @@ export type OperationFailureCode =
   | OpportunityRunFailure
   | ExecutionFailureCode
   | AuditPrerequisite
+  // Why the entitlement refused to start a paid audit (CORE-2 §16). Distinct
+  // from a prerequisite: nothing is missing, the work is simply not funded.
+  | AuditDenialReason
   | ValidationFailureCode
   | PreviewFailureCode
   | ReviewFailureCode

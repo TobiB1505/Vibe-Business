@@ -131,6 +131,75 @@ describe("starting a business audit", () => {
   });
 });
 
+/**
+ * The entitlement gate (CORE-2 §16), and the defect the first dogfood found.
+ *
+ * The gate existed as a pure function and was never called on the write path.
+ * A re-run on a project whose free audit was already spent therefore started,
+ * paid for a model call, and only failed at `persisting` when the completed row
+ * collided with the one-included-audit unique index.
+ *
+ * So the property under test is not "it refuses" — it is **where** it refuses:
+ * before anything is claimed and before the executor is ever asked to start.
+ */
+describe("the free audit entitlement", () => {
+  function seedConsumedEntitlement(projectId = PROJECT) {
+    db.seed("repository_connections", {
+      id: "conn_1",
+      project_id: projectId,
+      github_repository_id: 12345,
+    });
+    db.seed("free_audit_grants", {
+      id: "grant_1",
+      user_id: USER,
+      github_repository_id: 12345,
+    });
+  }
+
+  it("refuses a paid run once the free audit is consumed", async () => {
+    seedConsumedEntitlement();
+
+    const outcome = await start({ force: true });
+
+    expect(outcome).toEqual({ kind: "failed", error: "credits_required" });
+  });
+
+  it("spends nothing: no operation row, and the executor is never started", async () => {
+    seedConsumedEntitlement();
+
+    await start({ force: true });
+
+    expect(db.rows("operation_runs")).toHaveLength(0);
+    expect(executor.starts).toHaveLength(0);
+    expect(db.rows("business_readiness_audits")).toHaveLength(0);
+  });
+
+  /**
+   * Reuse costs nothing, so it must keep working after the entitlement is
+   * spent. Refusing here would take away an audit the user already paid for.
+   */
+  it("still returns an existing identical audit for free", async () => {
+    seedConsumedEntitlement();
+    db.seed("business_readiness_audits", {
+      id: "audit_1",
+      project_id: PROJECT,
+      status: "completed",
+      access_mode: "included_first_audit",
+      input_hash: identityFor(),
+      result: { schemaVersion: "business-readiness-audit.v1" },
+      overall_score: 40,
+      created_at: "2026-08-02T00:00:00.000Z",
+    });
+
+    expect(await start()).toEqual({ kind: "reused", auditId: "audit_1" });
+  });
+
+  it("allows the first audit when nothing has been consumed", async () => {
+    expect((await start()).kind).toBe("started");
+    expect(executor.starts).toHaveLength(1);
+  });
+});
+
 describe("reuse", () => {
   it("reuses an identical completed audit and starts nothing", async () => {
     db.seed("business_readiness_audits", {

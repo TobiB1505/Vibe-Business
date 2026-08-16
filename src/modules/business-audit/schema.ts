@@ -54,6 +54,31 @@ export const DIMENSION_QUESTIONS: Record<AuditDimensionId, string> = {
 };
 
 /**
+ * The same five dimensions as **noun phrases**, for use inside a sentence.
+ *
+ * `DIMENSION_QUESTIONS` reads correctly as a standalone label above a meter and
+ * is wrong everywhere else. The first dogfood put one inside a sentence and got:
+ *
+ *   "Where you're strongest: do people understand what you built? Where you're
+ *    weakest: can you make money from it?"
+ *
+ * — a question mark mid-clause and a sentence that parses as nothing. The unit
+ * test asserted that exact string, so the test enforced the defect rather than
+ * catching it.
+ *
+ * Two label sets rather than one clever transformation: there is no rule that
+ * turns "Do people come back?" into "keeping people coming back" reliably, and
+ * a regex that tried would fail differently for each new dimension.
+ */
+export const DIMENSION_TOPICS: Record<AuditDimensionId, string> = {
+  product: "explaining what you built",
+  monetization: "making money from it",
+  distribution: "helping people discover you",
+  conversion: "turning visitors into customers",
+  retention: "bringing people back",
+};
+
+/**
  * How much of a dimension the available evidence could actually support.
  *
  * `insufficient_evidence` is a legitimate, useful outcome — not a failure

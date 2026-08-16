@@ -34,6 +34,27 @@ async function headingTop(page: Page, name: string | RegExp): Promise<number> {
   return box.y;
 }
 
+/**
+ * The conclusion is the single sentence a founder reads first, so it gets its
+ * own browser assertion. The first dogfood shipped "Where you're strongest: do
+ * people understand what you built? Where you're weakest: can you make money
+ * from it?" — question marks mid-clause — and every test was green, because the
+ * unit test asserted that exact string.
+ */
+test.describe("the conclusion reads as a sentence (CORE-2 §14)", () => {
+  test("contains no interpolated questions", async ({ page }) => {
+    await page.goto(COMPLETE);
+
+    const conclusion = await page
+      .getByRole("heading", { name: "What Vibe thinks about the business" })
+      .locator("xpath=following-sibling::p[1]")
+      .innerText();
+
+    expect(conclusion).not.toContain("?");
+    expect(conclusion.trim()).toMatch(/\.$/);
+  });
+});
+
 test.describe("answer first (CORE-2 §14)", () => {
   test("opens with what Vibe thinks, not with a score", async ({ page }) => {
     await page.goto(COMPLETE);
@@ -185,6 +206,6 @@ test.describe("responsive (CORE-2 §63)", () => {
     await expect(
       page.getByRole("heading", { name: "What Vibe thinks about the business" }),
     ).toBeVisible();
-    await expect(page.getByText(/Where you're strongest/)).toBeVisible();
+    await expect(page.getByText(/You're strongest at/)).toBeVisible();
   });
 });

@@ -8,6 +8,7 @@ import { PROMPT_VERSION } from "@/modules/business-audit/prompt";
 import { RUBRIC_VERSION } from "@/modules/business-audit/rubric";
 import { BUSINESS_AUDIT_SCHEMA_VERSION, BUSINESS_AUDIT_VERSION } from "@/modules/business-audit/schema";
 import { computeAuditInputHash, findReusableAudit } from "@/modules/business-audit/store";
+import { authorizeProjectAudit } from "@/modules/business-audit/service";
 import { resolveOpportunityIdentity } from "@/modules/opportunities/service";
 import { findReusableProfile } from "@/modules/product-understanding/store";
 import { loadUnderstandingSources } from "./product-understanding/execution";
@@ -139,6 +140,26 @@ export async function startBusinessAuditOperation(
   const identity = await resolveAuditIdentity(supabase, params.projectId);
   if (!identity.ok) return { kind: "failed", error: identity.error };
 
+  /*
+   * The entitlement gate (CORE-2 §16), enforced here rather than in the Server
+   * Action, so it covers every caller rather than the one that happens to
+   * remember.
+   *
+   * Its absence is what the first dogfood found, and the failure was the
+   * expensive shape rather than the harmless one: a re-run on a project whose
+   * free audit was already consumed started, paid for inference, and only then
+   * failed — at `persisting`, when the completed row collided with the
+   * one-included-audit unique index. Money spent, nothing produced.
+   *
+   * Placed after reuse resolution but before anything is claimed, and after
+   * `resolveAuditIdentity` so a missing prerequisite still reports as itself
+   * rather than as a billing refusal.
+   */
+  const authorization = await authorizeProjectAudit(supabase, {
+    projectId: params.projectId,
+    userId: params.userId,
+  });
+
   // Cheapest possible answer first: the work is already done (§9).
   if (!params.force) {
     const reusable = await findReusableAudit(supabase, {
@@ -170,6 +191,13 @@ export async function startBusinessAuditOperation(
     inputIdentity: identity.inputHash,
   });
   if (alreadyActive) return { kind: "active", operation: view(alreadyActive) };
+
+  // Everything above this line is free: reusing a stored audit costs nothing
+  // and must keep working after the entitlement is spent. Everything below it
+  // spends money, so the refusal goes exactly here.
+  if (!authorization.allowed) {
+    return { kind: "failed", error: authorization.reason };
+  }
 
   const created = await createOperationRun(supabase, {
     projectId: params.projectId,

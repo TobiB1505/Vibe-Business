@@ -1,4 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { PRODUCT_UNDERSTANDING_CONFIG } from "@/modules/ai/operations";
+import { UNDERSTANDING_EVIDENCE_VERSION } from "@/modules/product-understanding/evidence";
+import { PROMPT_VERSION as PROFILE_PROMPT_VERSION } from "@/modules/product-understanding/prompt";
+import {
+  PRODUCT_PROFILE_SCHEMA_VERSION,
+  PROFILE_BUILDER_VERSION,
+} from "@/modules/product-understanding/schema";
+import { computeProfileInputHash } from "@/modules/product-understanding/store";
 import { fakeProductProfile } from "@/modules/product-understanding/test-support";
 import type { OperationExecutor, StartOperationInput, StartOperationResult } from "./executor";
 
@@ -40,7 +48,8 @@ type Filter =
   | { kind: "in"; column: string; values: unknown[] }
   | { kind: "is"; column: string; value: null }
   | { kind: "not_is"; column: string; value: null }
-  | { kind: "gt"; column: string; value: unknown };
+  | { kind: "gt"; column: string; value: unknown }
+  | { kind: "gte"; column: string; value: unknown };
 
 /**
  * Reads a column, following PostgREST's `column->>key` JSON accessor.
@@ -71,6 +80,7 @@ function matches(row: Row, filters: Filter[]): boolean {
     if (filter.kind === "in") return filter.values.includes(value);
     if (filter.kind === "is") return value === null || value === undefined;
     if (filter.kind === "not_is") return value !== null && value !== undefined;
+    if (filter.kind === "gte") return String(value ?? "") >= String(filter.value);
     return String(value ?? "") > String(filter.value);
   });
 }
@@ -393,6 +403,8 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
   private orderColumn: string | null = null;
   private orderAscending = true;
   private limitCount: number | null = null;
+  private countMode = false;
+  private headOnly = false;
 
   constructor(
     private readonly db: FakeDatabase,
@@ -422,6 +434,10 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
     this.filters.push({ kind: "gt", column, value });
     return this;
   }
+  gte(column: string, value: unknown): this {
+    this.filters.push({ kind: "gte", column, value });
+    return this;
+  }
   order(column: string, options?: { ascending?: boolean }): this {
     this.orderColumn = column;
     this.orderAscending = options?.ascending ?? true;
@@ -431,7 +447,12 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
     this.limitCount = count;
     return this;
   }
-  select(): this {
+  select(_columns?: string, options?: { count?: "exact"; head?: boolean }): this {
+    // The entitlement's abuse window counts rows rather than reading them, so
+    // the double has to answer `count` too — otherwise the gate is untestable
+    // against it, which is how the gate went unwired in the first place.
+    if (options?.count === "exact") this.countMode = true;
+    if (options?.head) this.headOnly = true;
     return this;
   }
 
@@ -506,7 +527,16 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
       return { data: targets, error: null };
     }
 
-    return { data: this.resolveRows(), error: null };
+    const rows = this.resolveRows();
+    // A `head: true` count query returns no rows and a `count`, which is what
+    // the entitlement's abuse window reads.
+    if (this.countMode) {
+      return { data: this.headOnly ? null : rows, error: null, count: rows.length } as {
+        data: unknown;
+        error: QueryError;
+      };
+    }
+    return { data: rows, error: null };
   }
 
   async maybeSingle(): Promise<{ data: Row | null; error: QueryError }> {
@@ -575,15 +605,50 @@ export function seedProductUnderstanding(
     profileId?: string;
     intentHash?: string;
     createdAt?: string;
+    /** Override to seed a deliberately stale profile. */
+    inputHash?: string;
   },
 ): void {
   const profile = fakeProductProfile();
+
+  /*
+   * The profile's input hash is *computed* from whatever snapshots the caller
+   * already seeded, not invented.
+   *
+   * `getAuditReadiness` decides staleness by recomputing this hash and
+   * comparing, so a placeholder would make every seeded profile look stale and
+   * every audit refuse — which is exactly what happened when the entitlement
+   * gate was first wired in and 20 tests went red at once. Deriving it means a
+   * seeded profile is current by construction, and a test that *wants* a stale
+   * one can pass its own `inputHash`.
+   */
+  const latest = (table: string): string | null => {
+    const rows = db
+      .rows(table)
+      .filter((row) => row.project_id === options.projectId && row.status === "completed" && row.result);
+    const newest = rows[rows.length - 1];
+    return newest ? String(newest.id) : null;
+  };
+
+  const inputHash =
+    options.inputHash ??
+    computeProfileInputHash({
+      repositorySnapshotId: latest("repository_intelligence_snapshots"),
+      liveSnapshotId: latest("live_product_intelligence_snapshots"),
+      authenticatedSnapshotId: latest("authenticated_product_intelligence_snapshots"),
+      schemaVersion: PRODUCT_PROFILE_SCHEMA_VERSION,
+      builderVersion: PROFILE_BUILDER_VERSION,
+      evidenceVersion: UNDERSTANDING_EVIDENCE_VERSION,
+      promptVersion: PROFILE_PROMPT_VERSION,
+      provider: "anthropic",
+      model: PRODUCT_UNDERSTANDING_CONFIG.model,
+    });
 
   db.seed("product_profiles", {
     id: options.profileId ?? "profile_1",
     project_id: options.projectId,
     status: "completed",
-    input_hash: "p".repeat(64),
+    input_hash: inputHash,
     result: profile,
     synthesized: true,
     failure_code: null,

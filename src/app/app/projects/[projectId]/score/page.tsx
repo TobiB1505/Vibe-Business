@@ -124,13 +124,22 @@ export default async function ProjectScorePage({
     auditPredatesDeepScan: auditCurrency.newDeepScanEvidence,
   });
 
-  // Prerequisites now come from the audit service rather than being re-derived
-  // here (CORE-2 §3). One definition of "can this project be audited?", so the
-  // button and the server gate can never disagree about it.
-  const auditReady = auditReadiness.ready;
+  /*
+   * Prerequisites come from the audit service rather than being re-derived
+   * here (CORE-2 §3), so the button and the server gate cannot disagree.
+   *
+   * The entitlement is a *separate* reason the button must be off, and it is
+   * kept separate: the first dogfood showed a prominent, enabled "Re-run
+   * business audit" directly beneath a notice saying the free audit was already
+   * spent — and pressing it paid for a model call that then failed at
+   * persistence. Nothing is missing in that state, so it gets its own notice
+   * rather than being folded into the "needs … first" sentence.
+   */
   const missingPrerequisites = auditReadiness.missing.map(
     (prerequisite) => AUDIT_PREREQUISITE_LABELS[prerequisite],
   );
+  const blockedByCredits = auditAccess.blockedReason === "credits_required";
+  const auditReady = auditReadiness.ready && !blockedByCredits;
 
   return (
     // The section id stays `business-audit`: `BUSINESS_AUDIT_ANCHOR` is a tested
@@ -152,7 +161,7 @@ export default async function ProjectScorePage({
       <div className="flex flex-col gap-4">
         <AuditEvidenceNotice notice={auditEvidenceNotice} />
 
-        {!auditReady && (
+        {missingPrerequisites.length > 0 && (
           <Notice tone="waiting" label="Why this is blocked">
             A business audit needs {missingPrerequisites.join(", ")} first.
           </Notice>
@@ -169,7 +178,7 @@ export default async function ProjectScorePage({
           </Notice>
         )}
 
-        {auditAccess.blockedReason === "credits_required" && (
+        {blockedByCredits && (
           <Notice tone="waiting" label="Keep Vibe working">
             You&rsquo;ve used the free audit for this project. Running another one will need
             credits — they aren&rsquo;t available yet.
