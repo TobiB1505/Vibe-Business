@@ -327,7 +327,12 @@ export async function failAuditRun(
       failure_code: failureCode,
       completed_at: new Date().toISOString(),
     })
-    .eq("id", auditId);
+    .eq("id", auditId)
+    // Only a run still in flight can fail. Without this, a late failure on the
+    // operation carrying an audit that already completed would overwrite a
+    // real, paid-for result with `failed` — and the audit is now failed from
+    // two places, so the window is real rather than theoretical.
+    .in("status", ["pending", "analyzing", "needs_user"]);
 
   if (error) {
     console.error("[business-audit] failed to record run failure", { auditId });
@@ -397,6 +402,37 @@ export async function resumeAuditAfterAnswer(
 
   if (error) throw error;
   return { resumed: data !== null };
+}
+
+/**
+ * Re-stamps a resumed run with the identity its own question created.
+ *
+ * Both rows, because both carry the hash: the operation guards against a second
+ * run for the same inputs, and the audit's in-flight unique index does the same
+ * one layer down. Leaving either on the old value would keep the run blocked by
+ * the guard it just satisfied.
+ *
+ * Returns `ok: false` on a unique-index collision rather than throwing. A
+ * collision means another audit already holds this exact identity — which is
+ * the reuse path finding a real answer, not a failure to paper over.
+ */
+export async function adoptResumedAuditIdentity(
+  supabase: SupabaseClient,
+  params: { operationId: string; auditId: string; inputHash: string },
+): Promise<{ ok: boolean }> {
+  const audit = await supabase
+    .from("business_readiness_audits")
+    .update({ input_hash: params.inputHash })
+    .eq("id", params.auditId);
+
+  if (audit.error) return { ok: false };
+
+  const operation = await supabase
+    .from("operation_runs")
+    .update({ input_identity: params.inputHash })
+    .eq("id", params.operationId);
+
+  return { ok: operation.error === null };
 }
 
 export type PausedAudit = {

@@ -21,6 +21,7 @@ import {
   computeAuditInputHash,
   createAuditRun,
   failAuditRun,
+  adoptResumedAuditIdentity,
   getAskedIntents,
   getAuditById,
   getLatestSuccessfulAudit,
@@ -212,9 +213,46 @@ async function resolveInputs(
   const loaded = await loadAuditSources(supabase, operation.projectId);
   if (!loaded.ok) return loaded;
 
-  if (loaded.identity.inputHash !== operation.inputIdentity) {
-    return { ok: false, failureCode: "inputs_changed" };
-  }
+  if (loaded.identity.inputHash === operation.inputIdentity) return loaded;
+
+  /*
+   * The identity moved. Usually that ends the run — but not when this run is
+   * the reason it moved (CORE-2a.4).
+   *
+   * The audit's input hash includes the founder intent hash. So a run that
+   * pauses, asks the founder something, and receives an answer has *by
+   * construction* invalidated its own identity: the answer is stored, the hash
+   * changes, and the next step refuses to proceed. The first real interruption
+   * did exactly that — two questions answered, then `inputs_changed` at
+   * `counting_tokens`, with the founder's answers safely persisted and the
+   * audit they were collected for dead.
+   *
+   * The feature was self-defeating in the most literal way: the answer that
+   * makes the audit better is what stops it running.
+   *
+   * So a run that actually asked something adopts the new identity instead of
+   * failing on it. The guard still protects everything it was written for —
+   * a Deep Scan finishing mid-run, an unrelated edit — for every run that did
+   * not ask. What it deliberately no longer catches is evidence that changed
+   * while the founder was thinking, on a run they explicitly re-triggered by
+   * answering: using the newest evidence there is the better answer, and the
+   * user asked for the run to continue.
+   */
+  const askedSomething = operation.resultId
+    ? (await getAskedIntents(supabase, operation.resultId)).length > 0
+    : false;
+
+  if (!askedSomething) return { ok: false, failureCode: "inputs_changed" };
+
+  const adopted = await adoptResumedAuditIdentity(supabase, {
+    operationId: operation.id,
+    auditId: operation.resultId!,
+    inputHash: loaded.identity.inputHash,
+  });
+
+  // A collision means another audit already holds this exact identity — the
+  // reuse path, not an error to hide. Ending here leaves that one to answer.
+  if (!adopted.ok) return { ok: false, failureCode: "inputs_changed" };
 
   return loaded;
 }
@@ -618,6 +656,27 @@ export async function failOperationStep(
 
   const operation = await getOperationRunById(deps.supabase, operationId);
   if (!operation) return;
+
+  /*
+   * The audit row dies with the operation carrying it (CORE-2a.4 follow-up).
+   *
+   * `runInferenceStep` fails its own row, so failures *at* inference were
+   * always recorded. Everything between claiming the row and reaching
+   * inference was not: the operation failed, the audit stayed `analyzing`, and
+   * because both the in-flight and one-included indexes count that status, the
+   * project was left unable to start another audit at all.
+   *
+   * A real run found it. A resumed audit failed at `counting_tokens`, and the
+   * screen then offered "Run business audit" over a row that would refuse
+   * every attempt — the worst kind of stuck, because nothing on it looked
+   * broken.
+   *
+   * Idempotent: `failAuditRun` on an already-failed or completed row is a
+   * no-op, so the inference step failing its own row first changes nothing.
+   */
+  if (operation.resultId) {
+    await failAuditRun(deps.supabase, operation.resultId, failureCode);
+  }
 
   await recordAuditEvent(deps.supabase, {
     userId: operation.userId,

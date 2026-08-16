@@ -366,3 +366,114 @@ describe("guards", () => {
     expect(db.rows("audit_events").filter((row) => row.event_type === "operation.failed")).toHaveLength(1);
   });
 });
+
+/**
+ * Pausing for the founder, and the two defects a real run found (CORE-2a.4).
+ *
+ * Both were invisible to every existing test and to the browser suite, because
+ * both need a run that *pauses, is answered, and resumes* — which nothing
+ * exercised until a real project did it.
+ */
+describe("resuming after a founder answer", () => {
+  /**
+   * The self-defeating bug.
+   *
+   * The audit's input hash includes the founder intent hash, so a run that asks
+   * the founder something and receives an answer invalidates its own identity.
+   * The first real interruption did exactly this: two questions answered, then
+   * `inputs_changed` at `counting_tokens`, with the answers safely stored and
+   * the audit they were collected for dead.
+   */
+  it("adopts the identity its own question created instead of failing on it", async () => {
+    db = new FakeDatabase();
+    provider = new FakeProvider();
+    seed();
+
+    const prepared = await prepareEvidenceStep(deps(), operationId);
+    expect(prepared.ok).toBe(true);
+    if (!prepared.ok) return;
+
+    // The run asked something and the founder answered: the stored intent —
+    // and therefore the identity the audit hashes — has moved underneath it.
+    auditRows()[0].asked_intents = ["current_stage"];
+    operationRow().input_identity = "f".repeat(64);
+
+    const counted = await countTokensStep(deps(), operationId);
+    expect(counted.ok).toBe(true);
+    if (!counted.ok) return;
+
+    const inferred = await runInferenceStep(deps(), operationId, counted.estimatedInputTokens);
+
+    expect(inferred.ok).toBe(true);
+    // Both rows carry the new identity, or the guards they exist for would keep
+    // blocking the run that just satisfied them.
+    expect(auditRows()[0].input_hash).toBe(operationRow().input_identity);
+  });
+
+  /**
+   * The guard still does its job for a run that never asked anything. Evidence
+   * changing under an ordinary audit is exactly what it was written for.
+   */
+  it("still refuses when the identity moved and nothing was asked", async () => {
+    db = new FakeDatabase();
+    provider = new FakeProvider();
+    seed();
+
+    const prepared = await prepareEvidenceStep(deps(), operationId);
+    expect(prepared.ok).toBe(true);
+
+    // Same drift, but this run never asked the founder anything.
+    operationRow().input_identity = "f".repeat(64);
+
+    const counted = await countTokensStep(deps(), operationId);
+    expect(counted.ok).toBe(true);
+    if (!counted.ok) return;
+
+    const inferred = await runInferenceStep(deps(), operationId, counted.estimatedInputTokens);
+    expect(inferred).toEqual({ ok: false, failureCode: "inputs_changed" });
+    expect(provider.requests).toHaveLength(0);
+  });
+});
+
+describe("a failed operation does not strand its audit row", () => {
+  /**
+   * The second defect, and the one that left a project unable to audit at all.
+   *
+   * `runInferenceStep` fails its own row, so failures at inference were always
+   * recorded. Everything between claiming the row and reaching inference was
+   * not — the operation failed, the audit stayed `analyzing`, and because both
+   * the in-flight and one-included indexes count that status, every further
+   * attempt would be refused. Nothing on screen looked broken.
+   */
+  it("fails the claimed audit when the operation fails before inference", async () => {
+    db = new FakeDatabase();
+    provider = new FakeProvider();
+    seed();
+
+    await prepareEvidenceStep(deps(), operationId);
+    expect(auditRows()[0].status).toBe("analyzing");
+
+    await failOperationStep(deps(), operationId, "inputs_changed");
+
+    expect(auditRows()[0].status).toBe("failed");
+    expect(auditRows()[0].failure_code).toBe("inputs_changed");
+  });
+
+  /**
+   * And never the other way round: a late failure on the operation must not
+   * overwrite an audit that already completed and was paid for.
+   */
+  it("leaves a completed audit alone", async () => {
+    db = new FakeDatabase();
+    provider = new FakeProvider();
+    seed();
+
+    const outcome = await runPipeline();
+    expect(outcome.ok).toBe(true);
+    expect(auditRows()[0].status).toBe("completed");
+
+    await failOperationStep(deps(), operationId, "audit_failed");
+
+    expect(auditRows()[0].status).toBe("completed");
+  });
+});
