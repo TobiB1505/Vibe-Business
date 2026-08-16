@@ -274,10 +274,13 @@ Three defects a unit test could not:
 
 **Not performed for this half, and that is a real gap rather than an omission to gloss.**
 
+The migration is now deployed, so the audit leg *can* be run against the real product — that
+was the blocker named here before. It has not been run.
+
 CORE-2 §57–§58 asks for the complete flow — Profile → Audit → Moves → First Move → Preview →
 Merge — to be run against Vibe Business itself. Most of that flow is the half that is not
-built. Running only the audit leg would also require the migration to be deployed, and it is
-not (below).
+built. Running only the audit leg is now possible (the migration is
+applied), but has not been done.
 
 What *was* verified end to end: 3000 unit tests, 106 browser tests, a green production build.
 What was **not** verified: that the v3 pack produces a better audit than v2 did against real
@@ -288,18 +291,60 @@ judgements that need a real run, and neither is claimed here.
 
 `supabase/migrations/20260816020000_founder_intent_and_audit_traceability.sql`
 
-**Created locally. Not deployed. `pnpm db:status` confirms it is the one local migration with
-no remote counterpart; the 26 before it are applied.**
+**Applied to the linked project (`dcbwlctscooefwnivxzv`), verified by reading the database
+back rather than by trusting the CLI's own report.**
 
-Per CLAUDE.md rule 29–34 and CORE-2 §69, deployment stops here and is reported rather than
-performed. It is not a routine push:
+The ref was checked against `NEXT_PUBLIC_SUPABASE_URL` and `config.toml` before anything ran,
+per CLAUDE.md rules 32–33 — never guess a ref, and never the unrelated `Planner-Agent` project.
 
-- it **drops** `project_business_context` after copying its data
-- it adds a `not null` column with a default to `business_readiness_audits`
-- it creates two partial unique indexes and one new table
+### The defect inspecting first caught
 
-**The application code on this branch requires those tables.** Until the migration is applied,
-a deployed build of this branch cannot run an audit. Code and schema must land together.
+Rule 30 says inspect migration history and live state before pushing, and it paid for itself
+here. The live database had **20 audits, ten of them completed for a single project** — run
+while the audit was ungated and freely repeatable.
+
+`access_mode` was originally declared `not null default 'included_first_audit'`. That default
+would have written the value onto all ten, and then:
+
+```sql
+create unique index business_readiness_audits_one_included_idx
+  on public.business_readiness_audits (project_id)
+  where status = 'completed' and access_mode = 'included_first_audit';
+```
+
+...would have failed on creation with a unique violation, **aborting the migration partway**.
+
+The fix is not a weaker index. It is that neither existing enum value is *true* of those rows:
+they consumed no one-per-project entitlement, because none existed, and they spent no credits.
+Writing either would have put a false statement into the column whose entire purpose is to
+prevent that.
+
+So `legacy_pre_entitlement` was added — the honest description of a row written before the rule
+it would otherwise claim to have followed. Nothing writes it going forward. The earliest
+completed audit per project becomes `included_first_audit`, which is accurate: those projects
+have already had a free audit. And the `DEFAULT` is gone entirely, because a default is
+precisely how ten rows quietly acquired an entitlement claim.
+
+`free_audit_grants` is backfilled from those rows too. Without it the two halves would
+disagree for existing data — the audit rows saying the free audit was consumed, the grant table
+saying nothing — and the first disconnect/reconnect would have handed those projects a fresh
+free audit, the exact reset §16 exists to prevent.
+
+### Verified after applying
+
+| | |
+|---|---|
+| Migration in remote history | `20260816020000` local = remote |
+| `project_business_context` | dropped |
+| `project_founder_intent` | 2 rows, RLS on, 4 policies |
+| `product_profile_corrections` | 2 rows, each with `shortDescription` + `primaryAudience` |
+| `free_audit_grants` | 2 rows, RLS on, **1 policy (select only)** |
+| `access_mode` | 2 `included_first_audit`, 18 `legacy_pre_entitlement`, 0 null |
+| Both unique indexes | present |
+| Security advisors | no findings against either new table |
+
+Dry-run predictions before the push (2 included / 18 legacy / 2 grants) matched the result
+exactly.
 
 What it does, in order — step 2 runs *before* step 1 drops anything:
 
@@ -307,8 +352,8 @@ What it does, in order — step 2 runs *before* step 1 drops anything:
 2. intent rows copied; product fields merged into `product_profile_corrections`
 3. `project_business_context` dropped
 4. audit traceability columns + the v3 CHECK
-5. `access_mode` + the one-included-audit partial unique index
-6. `free_audit_grants` + select-only RLS
+5. `access_mode`, backfilled and then constrained, + the one-included-audit partial unique index
+6. `free_audit_grants` + select-only RLS, backfilled from the included audits
 
 `intent_hash` is back-filled with a padded literal rather than a computed digest. The real hash
 is a sha256 over a fixed-order JSON array built in TypeScript, and Postgres' own JSON text
