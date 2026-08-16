@@ -309,6 +309,69 @@ enums; no Business Context returned. No Action Planner, no execution suitability
 Move, no AI authoring, no `/score` redesign. Scoring still comes from the five dimensions and is
 deliberately unchanged — whether it should migrate to the lens model is a separate decision.
 
+## Final fix — binding the explanation to the root problem
+
+The v5 dogfood left one defect: the internal `rootProblem` was excellent and the customer-facing
+explanation fell back to an inventory. The audit's own validator flagged it.
+
+### The cause was in the rubric, and it was ours
+
+The v5 revenue explanation:
+
+> "there's no pricing shown anywhere, no way to pay, and no billing code in the product"
+
+The rubric, a few paragraphs above where the model was writing:
+
+> Not: "There is no pricing shown anywhere, no way for anyone to pay, and no payment system in
+> the code."
+
+A near-verbatim reproduction of the sentence the rubric forbids — quoted there, by this sprint,
+from the v4 failure in order to illustrate what not to do.
+
+**This is the third time this project has primed the exact output it was banning.** CORE-2a.2's
+forbidden-phrase list put "monetization model" in front of the model immediately before it wrote
+the phrase. CORE-2a.3 put the nine lens names in as prose headings and got them back in customer
+copy, at $0.146. And now this. A concrete forbidden sentence is a template, and nothing reliably
+stores the "not".
+
+Both negative examples are gone. What replaces them is a structural test the model applies to its
+own sentence — *could this explanation have been written before the scan?* If it names a decision
+still open, good; if only someone reading a detection list could have written it, it is layer 2 in
+layer 1's place. Positive examples stay.
+
+### The jargon leak, finally at source
+
+"Monetization model" was not in the v7 rubric string at all. It was in the **evidence id**:
+
+```
+intent.monetization_model | founder_intent | The founder told Vibe: They have not decided how the product will make money.
+```
+
+The pack renders every line as `id | source | fact`, so the model read the phrase on every single
+run, one underscore from prose, while the rubric asked it not to use it. CORE-2a.2 rewrote the
+label and left the id — which is exactly why the phrase survived three sprints of fixes aimed at
+the sentence beside it. The id is now `intent.how_it_earns`, and the absent-evidence note that
+used the same words is rephrased.
+
+### The contract
+
+`explanation` is now specified as a **translation** of `rootProblem` rather than a second
+analysis: same level, warmer words, and it must remain recognisably the root problem. The
+reasoning already happened one field earlier; the explanation's job is to carry it, not repeat it.
+
+No second model call, no frontend copy-mapping, no change to lenses, materiality, ranking or
+scoring.
+
+### Regression coverage
+
+A standing guard that the rubric never contains the enumerations it forbids, that the evidence
+pack carries no form-field vocabulary in either the id or the absent-evidence notes, plus
+fidelity fixtures: the v5 revenue explanation is flagged, the same root problem translated is
+accepted, and the audience, acquisition and broken-checkout conclusions all pass untouched so the
+fix cannot overcorrect into banning plain statements about missing surfaces.
+
+Contract v6, synthesis v5, rubric v9. 3249 unit / 117 e2e / lint / typecheck / build green.
+
 ## Next recommended phase
 
 **The Audit Business Map UI.** The reasoning contract is now worth freezing. Nine lenses, each

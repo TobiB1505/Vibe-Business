@@ -97,7 +97,14 @@ export function describeFounderIntent(intent: FounderIntent): Array<{ id: string
   }
   if (intent.monetizationModel) {
     described.push({
-      id: "intent.monetization_model",
+      // `intent.monetization_model` until CORE-2a.3.2's final fix, and it was
+      // the last live source of the leak this module exists to close. The pack
+      // renders every line as `id | source | fact`, so the model read the words
+      // "monetization model" on every single run — in an identifier, one
+      // underscore away from prose — while the rubric asked it not to use them.
+      // CORE-2a.2 rewrote the label and left the id, which is why the phrase
+      // survived three sprints of fixes aimed at the sentence next to it.
+      id: "intent.how_it_earns",
       text: MONETIZATION_SENTENCES[intent.monetizationModel],
     });
   }

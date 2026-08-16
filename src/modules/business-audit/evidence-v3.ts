@@ -330,7 +330,11 @@ export function buildEvidencePackV3(input: BuildEvidencePackV3Input): EvidencePa
   }
   if (!input.founderIntent.stage) absentSources.push("Founder did not state the product's stage.");
   if (!input.founderIntent.monetizationModel) {
-    absentSources.push("Founder did not state an intended monetization model.");
+    // Phrased as the founder would, not as the form field is named. This line
+    // is read by the model on every run where the field is blank, and an
+    // absent-evidence note is no more exempt from the language boundary than a
+    // present one.
+    absentSources.push("Founder did not say how they intend the product to make money.");
   }
   if (!input.founderIntent.primaryGoal) absentSources.push("Founder did not state a primary goal.");
   if (!input.authenticatedProduct) {

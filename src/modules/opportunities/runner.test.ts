@@ -164,7 +164,7 @@ describe("what the model is given (§14, §37)", () => {
 describe("evidence integrity end to end", () => {
   it("discards hallucinated evidence ids from a billed response", async () => {
     const provider = providerReturning([
-      fakeWireOpportunity({ evidenceIds: ["intent.monetization_model", "repo.invented.entirely"] }),
+      fakeWireOpportunity({ evidenceIds: ["intent.how_it_earns", "repo.invented.entirely"] }),
     ]);
 
     const outcome = await runOpportunityGeneration(inputFor(provider));

@@ -67,9 +67,23 @@
  * thing. So the rubric now teaches the replacement outright rather than
  * removing the temptation, which is the opposite of CORE-2a.2's approach and
  * the one the evidence supports.
+ *
+ * v9 removes two sentences this file was written to forbid. The v5 audit's
+ * revenue explanation read "there's no pricing shown anywhere, no way to pay,
+ * and no billing code in the product" — a near-verbatim reproduction of the
+ * negative example sitting a few paragraphs above it, which had been quoted
+ * from the v4 failure to illustrate what not to do.
+ *
+ * That is the **third** time this project has primed the exact output it was
+ * banning: CORE-2a.2's forbidden-phrase list, CORE-2a.3's lens names as prose
+ * headings, and now this. The rule that keeps being relearned is that a
+ * concrete forbidden sentence is a template, and the model has no way to store
+ * the "not". So the two examples are gone, replaced by a structural test the
+ * model can apply to its own sentence — could this have been written before the
+ * scan? — and positive examples only.
  */
 
-export const RUBRIC_VERSION = "business-readiness-rubric-v8" as const;
+export const RUBRIC_VERSION = "business-readiness-rubric-v9" as const;
 
 export const BUSINESS_READINESS_RUBRIC = `# Business Readiness Rubric (${RUBRIC_VERSION})
 
@@ -448,12 +462,20 @@ Keep three layers apart, and never let the lower ones do the top one's job.
 The customer-facing explanation is layer 1. It answers *what is the business
 problem?*, not *what did the scanner fail to find?*
 
-- Not: "There is no pricing shown anywhere, no way for anyone to pay, and no
-  payment system in the code." That is three findings, and the founder has to
-  work out what they mean.
-- Instead: **you haven't yet decided what people should pay for, how usage
-  turns into a price, or how the cost of running this becomes sustainable
-  income.**
+**The explanation is a translation of \`rootProblem\`, not a second analysis.**
+You already did the thinking when you wrote the root problem. The explanation's
+only job is to say that same thing to the founder in their own words — warmer,
+more concrete, easier to read, and at the *same level of abstraction*.
+
+So write it this way: read your own \`rootProblem\` back, and say it to a
+friend who runs this business. If your explanation makes a point the root
+problem does not make, one of the two is wrong.
+
+A test you can apply to your own sentence: **could this explanation have been
+written before the scan?** If it names a decision the founder has not made, a
+choice still open, or a consequence of that — good. If it could only have been
+written by someone reading a list of what a tool did or did not detect, you have
+written layer 2 in layer 1's place.
 
 The findings are not lost — they are the cited evidence, and they remain
 inspectable underneath the conclusion.
@@ -541,9 +563,10 @@ Each conclusion starts with \`rootProblem\`: one internal sentence naming the
 underlying business problem. Write it first, and write it as the decision or gap
 itself rather than as what was not detected.
 
-- Not: "Pricing and payment are missing." That is the evidence again.
-- Instead: "The business has not decided what customers pay for, how usage
-  becomes a price, or where free ends and paid begins."
+A root problem names a **decision, a choice or a gap in the business itself**:
+"The business has not decided what customers pay for, how usage becomes a
+price, or where free ends and paid begins." Notice that it contains no list of
+things a scanner looked for.
 
 Then the headline and the explanation say that same thing to the founder. If you
 cannot state a root problem without listing absences, you are probably looking
@@ -597,12 +620,11 @@ rather than a sentence about their business.
 - Not "no clear acquisition approach", but
   **Vibe couldn't see how the right people would find you.**
 
-One phrase keeps coming back, and it is worth naming because you will reach for
-it: when the founder has not settled how the product earns, say **how this will
-make money** or **what people would pay for**. Do not reach for the compact noun
-phrase "monetization model" — it is a category name from a form, not something a
-founder says about their own business, and reporting their own answer back to
-them in it is the version of this that slips through most easily.
+When the founder has not settled how the product earns, the words to use are
+**how this will make money**, or **what people would pay for**. Category names
+lifted from a form are not how a founder describes their own business, and
+reporting their own answer back to them in one is the version of this that slips
+through most easily.
 
 The customer-facing fields are: the overall conclusion, and every headline,
 explanation and why-it-matters in the conclusions.

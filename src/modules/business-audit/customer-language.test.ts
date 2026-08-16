@@ -46,7 +46,7 @@ describe("founder intent reaches the model as sentences, not taxonomy", () => {
   it("says what the value means rather than naming it", () => {
     const byId = new Map(describeFounderIntent(full).map((e) => [e.id, e.text]));
 
-    expect(byId.get("intent.monetization_model")).toBe(
+    expect(byId.get("intent.how_it_earns")).toBe(
       "They have not decided how the product will make money.",
     );
     expect(byId.get("intent.stage")).toContain("early prototype");

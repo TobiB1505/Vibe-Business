@@ -127,7 +127,7 @@ const CONCLUSION_ITEM_SCHEMA = {
     explanation: {
       type: "string",
       description:
-        "One or two sentences saying what the rootProblem means for this founder, in plain language. This explains the PROBLEM, not the evidence — the missing surfaces belong in evidenceIds, not here.",
+        "One or two sentences that TRANSLATE the rootProblem above into the founder's own words. Not a second analysis: say the same thing at the same level, warmer and more concrete. It must still be recognisably the rootProblem — if it makes a point the rootProblem does not make, one of them is wrong. Listing what was not detected belongs in evidenceIds, never here.",
     },
     whyItMatters: {
       // A plain string rather than `anyOf: [string, null]`, and that is a

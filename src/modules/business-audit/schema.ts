@@ -296,7 +296,7 @@ export type BusinessLensAssessment = {
  * improving are independent events, and an audit has to be able to say which
  * of them it carries.
  */
-export const AUDIT_SYNTHESIS_VERSION = "business-audit-synthesis-v4" as const;
+export const AUDIT_SYNTHESIS_VERSION = "business-audit-synthesis-v5" as const;
 
 /**
  * The **audit contract** version (CORE-2a.2 §21–§23).
@@ -314,7 +314,7 @@ export const AUDIT_SYNTHESIS_VERSION = "business-audit-synthesis-v4" as const;
  * "what does Vibe currently think about this business?" — which is exactly the
  * question the refresh decision asks.
  */
-export const AUDIT_CONTRACT_VERSION = "business-audit-contract-v5" as const;
+export const AUDIT_CONTRACT_VERSION = "business-audit-contract-v6" as const;
 
 /**
  * The oldest contract still treated as current.
@@ -328,7 +328,7 @@ export const AUDIT_CONTRACT_VERSION = "business-audit-contract-v5" as const;
  * answer this contract would give. The findings were fine; the ordering was
  * the product.
  */
-export const MIN_SUPPORTED_AUDIT_CONTRACT_VERSION = "business-audit-contract-v5" as const;
+export const MIN_SUPPORTED_AUDIT_CONTRACT_VERSION = "business-audit-contract-v6" as const;
 
 /**
  * How a conclusion reads, not how severe it is.

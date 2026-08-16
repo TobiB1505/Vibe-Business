@@ -149,7 +149,7 @@ describe("absence is stated, never implied", () => {
     const absent = pack.absentSources.join(" ");
 
     expect(absent).toContain("stage");
-    expect(absent).toContain("monetization");
+    expect(absent).toContain("how they intend the product to make money");
     expect(absent).toContain("primary goal");
   });
 
@@ -184,7 +184,7 @@ describe("founder intent", () => {
     const ids = evidenceIdSetV3(buildEvidencePackV3(input()));
 
     expect(ids).toContain("intent.stage");
-    expect(ids).toContain("intent.monetization_model");
+    expect(ids).toContain("intent.how_it_earns");
     expect(ids).toContain("intent.primary_goal");
   });
 
@@ -201,8 +201,8 @@ describe("founder intent", () => {
       input({ founderIntent: fakeFounderIntent({ monetizationModel: "none" }) }),
     );
 
-    expect(labelFor(planned, "intent.monetization_model")).toContain("intend to charge");
-    expect(labelFor(none, "intent.monetization_model")).toContain("not decided");
+    expect(labelFor(planned, "intent.how_it_earns")).toContain("intend to charge");
+    expect(labelFor(none, "intent.how_it_earns")).toContain("not decided");
   });
 
   /**

@@ -679,3 +679,117 @@ describe("lower-priority issues survive to rise later (§55, §56)", () => {
     expect(afterLaunch[0]!.lens).toBe("measurement");
   });
 });
+
+/**
+ * Root problem → explanation fidelity (CORE-2a.3.2 final fix, §14–§17).
+ *
+ * Semantic shape, not exact prose. What is checkable deterministically is
+ * whether the explanation stayed at the root problem's level or fell back to an
+ * inventory — which is precisely what `findEvidenceEnumeration` measures, and
+ * precisely what the v5 revenue blocker failed.
+ */
+describe("the explanation translates the root problem (§14)", () => {
+  const rootProblem =
+    "The business has not decided what customers would pay for, how usage would turn into a price, or where free stops and paid starts.";
+
+  /** The v5 failure, preserved as the case that must not come back. */
+  it("flags an explanation that abandons the root problem for an inventory", () => {
+    const notes = findEvidenceEnumeration(
+      synthesis(
+        [lens("revenue_economics", "weak", "soon")],
+        [
+          blocker(
+            "You haven't yet decided how this will make money.",
+            ["revenue_economics"],
+            "You told Vibe the model isn't decided, and there's no pricing shown anywhere, no way to pay, and no billing code in the product.",
+            rootProblem,
+          ),
+        ],
+      ),
+    );
+
+    expect(notes).toHaveLength(1);
+  });
+
+  /** The same root problem, translated rather than re-analysed. */
+  it("accepts an explanation that says the root problem in the founder's words", () => {
+    const notes = findEvidenceEnumeration(
+      synthesis(
+        [lens("revenue_economics", "weak", "soon")],
+        [
+          blocker(
+            "You haven't yet decided how this will make money.",
+            ["revenue_economics"],
+            "You still need to decide what people are actually paying for, how much someone's usage should affect what they pay, and where the free experience ends. Those choices define the business before any pricing page could.",
+            rootProblem,
+          ),
+        ],
+      ),
+    );
+
+    expect(notes).toEqual([]);
+  });
+
+  /**
+   * §15 — the counter-test. Overcorrection would make it impossible to say the
+   * plainly true thing about a business whose checkout is genuinely broken.
+   */
+  it("still accepts a surface problem when the surface is the root problem", () => {
+    const broken = synthesis(
+      [lens("conversion", "weak", "now"), lens("revenue_economics", "strong", "soon")],
+      [
+        blocker(
+          "Customers who want to buy can't complete the purchase.",
+          ["conversion"],
+          "People reach the payment step and the order never goes through, so demand you already have is being turned away.",
+          "A business with settled pricing and real demand cannot take the money it has already earned.",
+        ),
+      ],
+    );
+
+    expect(findEvidenceEnumeration(broken)).toEqual([]);
+    expect(findUnconfirmedAssertions(broken)).toEqual([]);
+    expect(findPriorityInversions(broken)).toEqual([]);
+  });
+
+  /** §16 — the audience conclusion was already right and must not degrade. */
+  it("leaves the audience conclusion alone", () => {
+    const audience = synthesis(
+      [lens("audience", "weak", "now"), lens("offer", "adequate", "soon")],
+      [
+        blocker(
+          "Vibe couldn't tell who your very first customers are meant to be.",
+          ["audience", "offer"],
+          "Right now the target is described broadly as software founders. That's a real market, but it isn't narrow enough to know exactly who to talk to first or what would make them say yes.",
+          "The product targets a broad market without a narrowed first customer segment.",
+        ),
+      ],
+    );
+
+    expect(findEvidenceEnumeration(audience)).toEqual([]);
+    expect(findOrderingOverrides(audience)).toEqual([]);
+  });
+
+  /**
+   * §17 — acquisition must not be pushed *more* abstract than useful either.
+   * "There is no clear way for the right people to discover this" is already a
+   * business problem; it should pass untouched.
+   */
+  it("leaves the acquisition conclusion alone", () => {
+    const acquisition = synthesis(
+      [lens("acquisition", "weak", "soon"), lens("audience", "weak", "now")],
+      [
+        blocker("Your first customer isn't defined.", ["audience"]),
+        blocker(
+          "Vibe couldn't see how new people would find out this exists.",
+          ["acquisition"],
+          "There's no blog, documentation, or other public content, and nothing in the evidence points to a plan for reaching people yet.",
+          "There is no visible channel or stated plan for how the right people would discover this once it's live.",
+        ),
+      ],
+    );
+
+    expect(findEvidenceEnumeration(acquisition)).toEqual([]);
+    expect(findOrderingOverrides(acquisition)).toEqual([]);
+  });
+});

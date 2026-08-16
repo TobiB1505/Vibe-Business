@@ -324,10 +324,18 @@ describe("the rubric raises conclusions above the evidence under them (§19–§
     expect(flowed).toContain("what did the scanner fail to find");
   });
 
-  /** The real rejected explanation, shown next to what it should have said. */
-  it("shows the enumeration it is replacing, and the replacement", () => {
-    expect(flowed).toContain("that is three findings, and the founder has to work out what they mean");
-    expect(flowed).toContain("how usage turns into a price");
+  /**
+   * The explanation is a translation, not a second analysis — and the rubric
+   * says so structurally rather than by quoting a sentence to avoid.
+   */
+  it("binds the explanation to the root problem above it", () => {
+    expect(flowed).toContain("the explanation is a translation of `rootproblem`, not a second analysis");
+    expect(flowed).toContain("if your explanation makes a point the root problem does not make");
+  });
+
+  /** A test the model can apply to its own sentence, with no example to copy. */
+  it("gives a structural test instead of a forbidden sentence", () => {
+    expect(flowed).toContain("could this explanation have been written before the scan?");
   });
 
   /** §22, §49 — context decides, so this never becomes a ban. */
@@ -380,7 +388,7 @@ describe("the rubric keeps conclusions above the scanner record (§13, §14)", (
   /** §12, §13 — the abstraction step gets its own field and its own moment. */
   it("asks for the root problem before the founder-facing sentence", () => {
     expect(flowed).toContain("name the root problem before you write to the founder");
-    expect(flowed).toContain("not: \"pricing and payment are missing.\" that is the evidence again");
+    expect(flowed).toContain("a root problem names a **decision, a choice or a gap in the business itself**");
   });
 
   it("says what to do when a root problem cannot be stated without absences", () => {
@@ -427,5 +435,86 @@ describe("the prompt orders the work before the model starts (§24)", () => {
   it("forbids a conclusion that paraphrases a dimension's gaps", () => {
     expect(flowed).toContain("never let a conclusion be a paraphrase of a dimension's gaps");
     expect(flowed).toContain("you have written the evidence instead of the judgment");
+  });
+});
+
+/**
+ * Anti-priming, the third occurrence (CORE-2a.3.2 final fix).
+ *
+ * The v5 audit's revenue explanation read "there's no pricing shown anywhere,
+ * no way to pay, and no billing code in the product" — a near-verbatim
+ * reproduction of a negative example that sat a few paragraphs above it in the
+ * rubric, quoted from the v4 failure to illustrate what *not* to do.
+ *
+ * This project has now made that mistake three times: CORE-2a.2's
+ * forbidden-phrase list, CORE-2a.3's lens names as prose headings, and this.
+ * A concrete forbidden sentence is a template, and nothing in the model stores
+ * the "not" reliably. These assertions are the standing guard, because the
+ * temptation to illustrate a rule with the exact failure it came from is
+ * enormous and has won every time so far.
+ */
+describe("the rubric never shows the sentence it is forbidding", () => {
+  const rubric = BUSINESS_READINESS_RUBRIC.toLowerCase();
+
+  it("does not contain the enumerations it exists to prevent", () => {
+    for (const enumeration of [
+      "no pricing shown anywhere",
+      "no way for anyone to pay",
+      "no payment system in the code",
+      "pricing and payment are missing",
+    ]) {
+      expect(rubric, `the rubric quotes "${enumeration}" as an example`).not.toContain(enumeration);
+    }
+  });
+
+  /**
+   * The positive examples must survive — the fix is to stop showing the bad
+   * sentence, not to stop teaching the good one.
+   */
+  it("still shows what to write instead", () => {
+    const flowed = rubric.replace(/\s+/g, " ");
+    expect(flowed).toContain("the business has not decided what customers pay for");
+    expect(flowed).toContain("people can't get from interested to actually paying you");
+  });
+
+  /** The taught replacement stays; the category name it replaces does not. */
+  it("teaches the founder's wording without naming the form field", () => {
+    const flowed = rubric.replace(/\s+/g, " ");
+    expect(flowed).toContain("how this will make money");
+    expect(flowed).toContain("what people would pay for");
+    expect(rubric).not.toContain("monetization model");
+  });
+});
+
+describe("the evidence pack carries no form-field vocabulary (§11)", () => {
+  /**
+   * The last live source of the leak, and the least visible one: the pack
+   * renders every line as `id | source | fact`, so an identifier containing
+   * "monetization_model" put the phrase in front of the model on every single
+   * run — one underscore from prose — while the rubric asked it not to use it.
+   *
+   * CORE-2a.2 rewrote the *label* and left the *id*, which is exactly why the
+   * phrase survived three sprints of fixes aimed at the sentence beside it.
+   */
+  it("names the founder-intent evidence without the taxonomy", () => {
+    for (const intent of [
+      { stage: null, monetizationModel: "none", primaryGoal: null },
+      { stage: null, monetizationModel: "subscription", primaryGoal: null },
+    ] as const) {
+      const rendered = packFor(fakeProductProfile(), fakeFounderIntent(intent));
+      expect(rendered).not.toContain("monetization_model");
+      expect(rendered.toLowerCase()).not.toContain("monetization model");
+    }
+  });
+
+  /** An absent-evidence note is no more exempt from the boundary than a present one. */
+  it("says nothing in taxonomy when the founder left the field blank", () => {
+    const rendered = packFor(
+      fakeProductProfile(),
+      fakeFounderIntent({ monetizationModel: null }),
+    );
+
+    expect(rendered).toContain("how they intend the product to make money");
+    expect(rendered.toLowerCase()).not.toContain("monetization model");
   });
 });

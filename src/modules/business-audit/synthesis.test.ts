@@ -24,7 +24,7 @@ const KNOWN = new Set([
   "profile.identity.description",
   "live.site.title",
   "profile.signal.pricing_surface",
-  "intent.monetization_model",
+  "intent.how_it_earns",
   "live.surface.pricing",
   "repo.surface.payments",
   "profile.journey.checkout_not_found",
@@ -76,7 +76,7 @@ describe("grouping related evidence (§8, §35)", () => {
         headline: "People still don't have a clear path to paying you.",
         evidenceIds: [
           "profile.signal.pricing_surface",
-          "intent.monetization_model",
+          "intent.how_it_earns",
           "live.surface.pricing",
           "repo.surface.payments",
           "profile.journey.checkout_not_found",

@@ -133,7 +133,7 @@ const VIBE_SYNTHESIS: AuditSynthesis = {
         "Someone can like what you built and still leave, because they never find out what it costs or how to start paying.",
       evidenceIds: [
         "profile.signal.pricing_surface",
-        "intent.monetization_model",
+        "intent.how_it_earns",
         "live.surface.pricing",
         "repo.surface.payments",
         "profile.journey.checkout_not_found",
