@@ -57,9 +57,19 @@
  *     context when the founder's sentence gets written. This rubric adds the
  *     other half: name the root problem first, and let materiality decide the
  *     order rather than decorate it.
+ *
+ * v8 is a single paragraph, added after "monetization model" appeared in a
+ * third consecutive real audit. The first two sightings were the dimension
+ * paraphrase above; the third was not — the dimensions are now written last,
+ * and the model still reached for the compact noun phrase while reporting the
+ * founder's own answer back to them. Two sprints of removing the words from its
+ * input did not help, because the phrase is simply the shortest way to say the
+ * thing. So the rubric now teaches the replacement outright rather than
+ * removing the temptation, which is the opposite of CORE-2a.2's approach and
+ * the one the evidence supports.
  */
 
-export const RUBRIC_VERSION = "business-readiness-rubric-v7" as const;
+export const RUBRIC_VERSION = "business-readiness-rubric-v8" as const;
 
 export const BUSINESS_READINESS_RUBRIC = `# Business Readiness Rubric (${RUBRIC_VERSION})
 
@@ -586,6 +596,13 @@ rather than a sentence about their business.
   **there's not much reason for anyone to come back next week.**
 - Not "no clear acquisition approach", but
   **Vibe couldn't see how the right people would find you.**
+
+One phrase keeps coming back, and it is worth naming because you will reach for
+it: when the founder has not settled how the product earns, say **how this will
+make money** or **what people would pay for**. Do not reach for the compact noun
+phrase "monetization model" — it is a category name from a form, not something a
+founder says about their own business, and reporting their own answer back to
+them in it is the version of this that slips through most easily.
 
 The customer-facing fields are: the overall conclusion, and every headline,
 explanation and why-it-matters in the conclusions.
