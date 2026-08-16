@@ -2,6 +2,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { AUDIT_START_LIMITS, type AuditAccessMode } from "./entitlement";
 import type { BusinessReadinessAudit } from "./schema";
 
 /**
@@ -61,13 +62,32 @@ function mapRow(row: AuditRow): StoredAudit {
 }
 
 /**
- * The identity of an audit's inputs (Sprint 4 §23).
+ * The identity of an audit's inputs (Sprint 4 §23, CORE-2 §7).
  *
  * Every input that can change the answer is included: the evidence
- * snapshots, the founder's context, and the full reproducibility set
- * (prompt, rubric, model, versions). Change any one and the hash changes,
- * which correctly invalidates reuse and buys a fresh audit. Change nothing
- * and the existing audit is returned for free.
+ * snapshots, the Product Profile the audit reasoned from, the founder's
+ * stated intent, and the full reproducibility set (prompt, rubric, model,
+ * versions). Change any one and the hash changes, which correctly invalidates
+ * reuse and buys a fresh audit. Change nothing and the existing audit is
+ * returned for free.
+ *
+ * ## Why the profile enters by id *and* by version
+ *
+ * `productProfileId` covers "the understanding changed" — a profile row is
+ * replaced wholesale whenever evidence moves, so a new commit produces a new
+ * profile with a new id and this hash follows.
+ *
+ * The two version fields cover something the id cannot: a profile carrying the
+ * *same* id means the same derivation only while the derivation itself is
+ * unchanged. Recording the schema and builder versions is what makes CORE-2 §7
+ * answerable later — "audit #X used Product Profile v4" — from the stored row
+ * rather than from a guess about what the code did that week.
+ *
+ * Corrections are deliberately absent, for the same reason they are absent
+ * from the profile's own hash: they are applied on read, so editing a
+ * description must not silently buy a new paid audit. What a correction
+ * changes is the *content* of the profile the audit is handed, and a user who
+ * wants that reflected re-runs the audit deliberately.
  *
  * `authenticatedSnapshotId` is part of that identity and `null` is a real
  * value, not a missing one (Sprint 6 §7). An audit run before any Deep Scan
@@ -81,7 +101,9 @@ function mapRow(row: AuditRow): StoredAudit {
 export function computeAuditInputHash(params: {
   repositorySnapshotId: string;
   liveSnapshotId: string;
-  businessContextHash: string;
+  /** The exact Product Profile this audit reasons from (CORE-2 §3). */
+  productProfileId: string;
+  founderIntentHash: string;
   /** The latest successful Deep Scan snapshot, or null when none exists. */
   authenticatedSnapshotId: string | null;
   schemaVersion: string;
@@ -89,13 +111,16 @@ export function computeAuditInputHash(params: {
   evidencePackVersion: string;
   promptVersion: string;
   rubricVersion: string;
+  profileSchemaVersion: string;
+  profileBuilderVersion: string;
   provider: string;
   model: string;
 }): string {
   const canonical = JSON.stringify([
     params.repositorySnapshotId,
     params.liveSnapshotId,
-    params.businessContextHash,
+    params.productProfileId,
+    params.founderIntentHash,
     // `null` is carried through as JSON null rather than mapped to a sentinel
     // string: JSON keeps null distinct from every possible id, so "no Deep
     // Scan" can never be forged by a snapshot whose id happens to match.
@@ -105,6 +130,8 @@ export function computeAuditInputHash(params: {
     params.evidencePackVersion,
     params.promptVersion,
     params.rubricVersion,
+    params.profileSchemaVersion,
+    params.profileBuilderVersion,
     params.provider,
     params.model,
   ]);
@@ -186,7 +213,11 @@ export async function createAuditRun(
     projectId: string;
     repositorySnapshotId: string;
     liveSnapshotId: string;
-    businessContextHash: string;
+    /** The Product Profile this audit reasons from (CORE-2 §7). */
+    productProfileId: string;
+    profileSchemaVersion: string;
+    profileBuilderVersion: string;
+    founderIntentHash: string;
     inputHash: string;
     schemaVersion: string;
     auditVersion: string;
@@ -195,6 +226,7 @@ export async function createAuditRun(
     rubricVersion: string;
     provider: string;
     model: string;
+    accessMode: AuditAccessMode;
   },
 ): Promise<CreateAuditRunResult> {
   const { data, error } = await supabase
@@ -203,7 +235,14 @@ export async function createAuditRun(
       project_id: params.projectId,
       repository_snapshot_id: params.repositorySnapshotId,
       live_snapshot_id: params.liveSnapshotId,
-      business_context_hash: params.businessContextHash,
+      product_profile_id: params.productProfileId,
+      product_profile_schema_version: params.profileSchemaVersion,
+      product_profile_builder_version: params.profileBuilderVersion,
+      founder_intent_hash: params.founderIntentHash,
+      // Historical column, kept `not null` for the rows that predate CORE-2.
+      // The business context it was named for no longer exists, so the
+      // founder-intent hash is what occupies it now — see the migration.
+      business_context_hash: params.founderIntentHash,
       input_hash: params.inputHash,
       schema_version: params.schemaVersion,
       audit_version: params.auditVersion,
@@ -212,6 +251,7 @@ export async function createAuditRun(
       rubric_version: params.rubricVersion,
       provider: params.provider,
       model: params.model,
+      access_mode: params.accessMode,
       status: "analyzing",
       started_at: new Date().toISOString(),
     })
@@ -267,5 +307,125 @@ export async function failAuditRun(
 
   if (error) {
     console.error("[business-audit] failed to record run failure", { auditId });
+  }
+}
+
+// ---------------------------------------------------------------------
+// Free audit entitlement (CORE-2 §16, §17)
+// ---------------------------------------------------------------------
+
+/**
+ * The project-scoped half of consumption.
+ *
+ * Derived, never a flag: a completed audit funded by the included entitlement
+ * *is* the proof it was spent. A failed or in-flight row proves nothing, which
+ * is exactly what makes an internal failure free (CORE-2 §17).
+ */
+export async function hasCompletedIncludedAudit(
+  supabase: SupabaseClient,
+  projectId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("business_readiness_audits")
+    .select("id")
+    .eq("project_id", projectId)
+    .eq("status", "completed")
+    .eq("access_mode", "included_first_audit")
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data !== null;
+}
+
+/** True while an audit is claimed but not finished. */
+export async function hasRunningAudit(
+  supabase: SupabaseClient,
+  projectId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("business_readiness_audits")
+    .select("id")
+    .eq("project_id", projectId)
+    .in("status", ["pending", "analyzing"])
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data !== null;
+}
+
+/**
+ * Audit starts inside the abuse window (CORE-2 §59).
+ *
+ * Counts every claimed run regardless of outcome, because the point is to
+ * bound how often inference can be *attempted*, not how often it succeeded.
+ * The entitlement is a separate question and is not touched by this number —
+ * an outage must not read as abuse.
+ */
+export async function countRecentAuditStarts(
+  supabase: SupabaseClient,
+  projectId: string,
+): Promise<number> {
+  const since = new Date(Date.now() - AUDIT_START_LIMITS.windowMs).toISOString();
+
+  const { count, error } = await supabase
+    .from("business_readiness_audits")
+    .select("id", { count: "exact", head: true })
+    .eq("project_id", projectId)
+    .gte("created_at", since);
+
+  if (error) throw error;
+  return count ?? 0;
+}
+
+/**
+ * The durable half of consumption, scoped to a GitHub repository rather than
+ * a project so disconnecting and reconnecting cannot mint a second free audit
+ * (CORE-2 §16).
+ */
+export async function hasFreeAuditGrant(
+  supabase: SupabaseClient,
+  params: { userId: string; githubRepositoryId: number },
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from("free_audit_grants")
+    .select("id")
+    .eq("user_id", params.userId)
+    .eq("github_repository_id", params.githubRepositoryId)
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data !== null;
+}
+
+/**
+ * Records that the free audit was consumed for one repository.
+ *
+ * Called from durable execution with the service-role client, immediately
+ * after an audit completes and never before — so an internal failure leaves no
+ * trace here and costs the user nothing.
+ *
+ * A duplicate is not an error. The unique constraint is the authority on
+ * "already granted", and a replayed step arriving second should be a no-op
+ * rather than a failure that would fail an audit which has already succeeded.
+ */
+export async function recordFreeAuditGrant(
+  supabase: SupabaseClient,
+  params: { userId: string; githubRepositoryId: number; auditId: string },
+): Promise<void> {
+  const { error } = await supabase.from("free_audit_grants").insert({
+    user_id: params.userId,
+    github_repository_id: params.githubRepositoryId,
+    audit_id: params.auditId,
+  });
+
+  if (error && error.code !== POSTGRES_UNIQUE_VIOLATION) {
+    // Deliberately not thrown. The audit itself is already committed and
+    // readable; losing the durable grant costs at most one extra free audit
+    // after a disconnect, which is a far better outcome than failing a run the
+    // user has already paid for in time.
+    console.error("[business-audit] failed to record free audit grant", { auditId: params.auditId });
   }
 }

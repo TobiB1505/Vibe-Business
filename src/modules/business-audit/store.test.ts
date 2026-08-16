@@ -12,7 +12,10 @@ import { computeAuditInputHash } from "./store";
 const base = {
   repositorySnapshotId: "11111111-1111-1111-1111-111111111111",
   liveSnapshotId: "22222222-2222-2222-2222-222222222222",
-  businessContextHash: "a".repeat(64),
+  productProfileId: "77777777-7777-7777-7777-777777777777",
+  founderIntentHash: "a".repeat(64),
+  profileSchemaVersion: "product-profile.v1",
+  profileBuilderVersion: "product-understanding-v1",
   authenticatedSnapshotId: null as string | null,
   schemaVersion: "business-readiness-audit.v1",
   auditVersion: "business-audit-v1",
@@ -35,7 +38,13 @@ describe("computeAuditInputHash", () => {
   it.each([
     ["a new repository snapshot", { repositorySnapshotId: "33333333-3333-3333-3333-333333333333" }],
     ["a new live product snapshot", { liveSnapshotId: "44444444-4444-4444-4444-444444444444" }],
-    ["edited business context", { businessContextHash: "b".repeat(64) }],
+    // CORE-2 §7: the profile is now part of the identity, by id *and* by the
+    // versions that produced it. A refreshed profile is new understanding, and
+    // an audit built on the old one is not a valid answer for it.
+    ["a refreshed Product Profile", { productProfileId: "88888888-8888-8888-8888-888888888888" }],
+    ["a new profile schema version", { profileSchemaVersion: "product-profile.v2" }],
+    ["a new profile builder version", { profileBuilderVersion: "product-understanding-v2" }],
+    ["edited founder intent", { founderIntentHash: "b".repeat(64) }],
     ["a new prompt version", { promptVersion: "business-audit-prompt-v2" }],
     ["a new rubric version", { rubricVersion: "business-readiness-rubric-v2" }],
     ["a new evidence pack version", { evidencePackVersion: "business-evidence.v2" }],
@@ -59,7 +68,10 @@ describe("computeAuditInputHash", () => {
       evidencePackVersion: base.evidencePackVersion,
       auditVersion: base.auditVersion,
       schemaVersion: base.schemaVersion,
-      businessContextHash: base.businessContextHash,
+      profileBuilderVersion: base.profileBuilderVersion,
+      profileSchemaVersion: base.profileSchemaVersion,
+      founderIntentHash: base.founderIntentHash,
+      productProfileId: base.productProfileId,
       authenticatedSnapshotId: base.authenticatedSnapshotId,
       liveSnapshotId: base.liveSnapshotId,
       repositorySnapshotId: base.repositorySnapshotId,

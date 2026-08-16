@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { BUSINESS_READINESS_AUDIT_CONFIG } from "@/modules/ai/operations";
-import { EVIDENCE_PACK_V2_VERSION } from "@/modules/business-audit/evidence-v2";
+import { EVIDENCE_PACK_V3_VERSION } from "@/modules/business-audit/evidence-v3";
 import { PROMPT_VERSION } from "@/modules/business-audit/prompt";
 import { RUBRIC_VERSION } from "@/modules/business-audit/rubric";
 import { BUSINESS_AUDIT_SCHEMA_VERSION, BUSINESS_AUDIT_VERSION } from "@/modules/business-audit/schema";
@@ -10,7 +10,7 @@ import {
   fakeLiveSnapshot,
   fakeRepositorySnapshot,
 } from "@/modules/business-audit/test-support";
-import { FakeDatabase, fakeSupabase } from "../test-support";
+import { FakeDatabase, fakeSupabase, seedProductUnderstanding } from "../test-support";
 import {
   completeOperationStep,
   countTokensStep,
@@ -37,11 +37,14 @@ function identity() {
   return computeAuditInputHash({
     repositorySnapshotId: "repo_snapshot_1",
     liveSnapshotId: "live_snapshot_1",
-    businessContextHash: CONTEXT_HASH,
+    productProfileId: "profile_1",
+    founderIntentHash: CONTEXT_HASH,
+    profileSchemaVersion: "product-profile.v1",
+    profileBuilderVersion: "product-understanding-v1",
     authenticatedSnapshotId: null,
     schemaVersion: BUSINESS_AUDIT_SCHEMA_VERSION,
     auditVersion: BUSINESS_AUDIT_VERSION,
-    evidencePackVersion: EVIDENCE_PACK_V2_VERSION,
+    evidencePackVersion: EVIDENCE_PACK_V3_VERSION,
     promptVersion: PROMPT_VERSION,
     rubricVersion: RUBRIC_VERSION,
     provider: "anthropic",
@@ -74,17 +77,7 @@ function seed(options: { inputIdentity?: string } = {}) {
     created_at: "2026-08-01T00:00:00.000Z",
     completed_at: "2026-08-01T00:00:00.000Z",
   });
-  db.seed("project_business_context", {
-    id: "context_1",
-    project_id: PROJECT,
-    product_summary: "Vibe Business helps people turn a built product into a business.",
-    target_customer: "Solo builders",
-    stage: "prototype",
-    monetization_model: "none",
-    primary_goal: "launch",
-    context_hash: CONTEXT_HASH,
-    updated_at: "2026-08-01T00:00:00.000Z",
-  });
+  seedProductUnderstanding(db, { projectId: PROJECT, intentHash: CONTEXT_HASH });
 
   const operation = db.seed("operation_runs", {
     id: "operation_1",

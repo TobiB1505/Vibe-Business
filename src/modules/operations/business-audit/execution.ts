@@ -6,11 +6,11 @@ import { BUSINESS_READINESS_AUDIT_CONFIG } from "@/modules/ai/operations";
 import { recordAIUsage } from "@/modules/ai/usage";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import {
-  EVIDENCE_PACK_V2_VERSION,
-  buildEvidencePackV2,
-  trimEvidencePackV2,
-  type BuildEvidencePackV2Input,
-} from "@/modules/business-audit/evidence-v2";
+  EVIDENCE_PACK_V3_VERSION,
+  buildEvidencePackV3,
+  trimEvidencePackV3,
+  type BuildEvidencePackV3Input,
+} from "@/modules/business-audit/evidence-v3";
 import { PROMPT_VERSION } from "@/modules/business-audit/prompt";
 import { RUBRIC_VERSION } from "@/modules/business-audit/rubric";
 import { buildAuditRequest, runBusinessReadinessAudit } from "@/modules/business-audit/runner";
@@ -21,10 +21,17 @@ import {
   createAuditRun,
   failAuditRun,
   getAuditById,
+  recordFreeAuditGrant,
 } from "@/modules/business-audit/store";
+import { getConnectedRepositoryId } from "@/modules/business-audit/service";
 import { getLatestSuccessfulAuthenticatedSnapshot } from "@/modules/authenticated-product-intelligence/store";
 import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intelligence/store";
-import { getBusinessContext } from "@/modules/projects/business-context-store";
+import {
+  PRODUCT_PROFILE_SCHEMA_VERSION,
+  PROFILE_BUILDER_VERSION,
+} from "@/modules/product-understanding/schema";
+import { getLatestProfile } from "@/modules/product-understanding/store";
+import { getFounderIntent } from "@/modules/projects/founder-intent-store";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import type { OperationFailureCode } from "../failures";
 import {
@@ -105,7 +112,9 @@ type AuditIdentity = {
   repositorySnapshotId: string;
   liveSnapshotId: string;
   authenticatedSnapshotId: string | null;
-  businessContextHash: string;
+  /** The Product Profile this audit reasons from (CORE-2 §3, §7). */
+  productProfileId: string;
+  founderIntentHash: string;
   inputHash: string;
 };
 
@@ -120,43 +129,59 @@ type AuditIdentity = {
 async function loadAuditSources(
   supabase: SupabaseClient,
   projectId: string,
-): Promise<StepOutcome<{ sources: BuildEvidencePackV2Input; identity: AuditIdentity }>> {
-  const [repositorySnapshot, liveSnapshot, businessContext, authenticatedSnapshot] = await Promise.all([
-    getLatestSuccessfulSnapshot(supabase, projectId),
-    getLatestSuccessfulLiveSnapshot(supabase, projectId),
-    getBusinessContext(supabase, projectId),
-    getLatestSuccessfulAuthenticatedSnapshot(supabase, projectId),
-  ]);
+): Promise<StepOutcome<{ sources: BuildEvidencePackV3Input; identity: AuditIdentity }>> {
+  const [repositorySnapshot, liveSnapshot, profile, founderIntent, authenticatedSnapshot] =
+    await Promise.all([
+      getLatestSuccessfulSnapshot(supabase, projectId),
+      getLatestSuccessfulLiveSnapshot(supabase, projectId),
+      getLatestProfile(supabase, projectId),
+      getFounderIntent(supabase, projectId),
+      getLatestSuccessfulAuthenticatedSnapshot(supabase, projectId),
+    ]);
 
   if (!repositorySnapshot?.result) return { ok: false, failureCode: "repository_intelligence_missing" };
   if (!liveSnapshot?.result) return { ok: false, failureCode: "live_product_intelligence_missing" };
-  if (!businessContext) return { ok: false, failureCode: "business_context_missing" };
+
+  // The CORE-2 contract, enforced where it cannot be routed around: no Product
+  // Profile, no audit. There is deliberately no fallback that would rebuild
+  // product understanding from raw evidence here — that second pipeline is
+  // exactly what CORE-2 §8 forbids, and a fallback is how it would arrive.
+  if (!profile) return { ok: false, failureCode: "product_profile_missing" };
 
   const authenticated = authenticatedSnapshot?.result ? authenticatedSnapshot : null;
 
   return {
     ok: true,
     sources: {
+      // The corrected profile, not the raw derived one. `getLatestProfile`
+      // overlays corrections on read, which is what carries a founder's
+      // "actually, my customers are solo founders who already launched" into
+      // the audit as a confirmed fact (CORE-2 §5).
+      productProfile: profile.profile,
+      founderIntent: founderIntent.intent,
       repository: repositorySnapshot.result,
       liveProduct: liveSnapshot.result,
-      businessContext: businessContext.context,
       authenticatedProduct: authenticated?.result ?? null,
     },
     identity: {
       repositorySnapshotId: repositorySnapshot.id,
       liveSnapshotId: liveSnapshot.id,
       authenticatedSnapshotId: authenticated?.id ?? null,
-      businessContextHash: businessContext.contextHash,
+      productProfileId: profile.stored.id,
+      founderIntentHash: founderIntent.intentHash,
       inputHash: computeAuditInputHash({
         repositorySnapshotId: repositorySnapshot.id,
         liveSnapshotId: liveSnapshot.id,
-        businessContextHash: businessContext.contextHash,
+        productProfileId: profile.stored.id,
+        founderIntentHash: founderIntent.intentHash,
         authenticatedSnapshotId: authenticated?.id ?? null,
         schemaVersion: BUSINESS_AUDIT_SCHEMA_VERSION,
         auditVersion: BUSINESS_AUDIT_VERSION,
-        evidencePackVersion: EVIDENCE_PACK_V2_VERSION,
+        evidencePackVersion: EVIDENCE_PACK_V3_VERSION,
         promptVersion: PROMPT_VERSION,
         rubricVersion: RUBRIC_VERSION,
+        profileSchemaVersion: PRODUCT_PROFILE_SCHEMA_VERSION,
+        profileBuilderVersion: PROFILE_BUILDER_VERSION,
         provider: "anthropic",
         model: BUSINESS_READINESS_AUDIT_CONFIG.model,
       }),
@@ -176,7 +201,7 @@ async function loadAuditSources(
 async function resolveInputs(
   supabase: SupabaseClient,
   operation: StoredOperationRun,
-): Promise<StepOutcome<{ sources: BuildEvidencePackV2Input; identity: AuditIdentity }>> {
+): Promise<StepOutcome<{ sources: BuildEvidencePackV3Input; identity: AuditIdentity }>> {
   const loaded = await loadAuditSources(supabase, operation.projectId);
   if (!loaded.ok) return loaded;
 
@@ -216,15 +241,22 @@ export async function prepareEvidenceStep(
     projectId: operation.projectId,
     repositorySnapshotId: resolved.identity.repositorySnapshotId,
     liveSnapshotId: resolved.identity.liveSnapshotId,
-    businessContextHash: resolved.identity.businessContextHash,
+    productProfileId: resolved.identity.productProfileId,
+    profileSchemaVersion: PRODUCT_PROFILE_SCHEMA_VERSION,
+    profileBuilderVersion: PROFILE_BUILDER_VERSION,
+    founderIntentHash: resolved.identity.founderIntentHash,
     inputHash: resolved.identity.inputHash,
     schemaVersion: BUSINESS_AUDIT_SCHEMA_VERSION,
     auditVersion: BUSINESS_AUDIT_VERSION,
-    evidencePackVersion: EVIDENCE_PACK_V2_VERSION,
+    evidencePackVersion: EVIDENCE_PACK_V3_VERSION,
     promptVersion: PROMPT_VERSION,
     rubricVersion: RUBRIC_VERSION,
     provider: "anthropic",
     model: config.model,
+    // The only executable mode. Credits do not exist, so there is nothing
+    // else this could be, and the gate that decided it may run lives in
+    // `authorizeProjectAudit` before the operation was ever created.
+    accessMode: "included_first_audit",
   });
 
   if (!run.ok) {
@@ -243,6 +275,13 @@ export async function prepareEvidenceStep(
       model: config.model,
       promptVersion: PROMPT_VERSION,
       rubricVersion: RUBRIC_VERSION,
+      // CORE-2 §52/§53: the activation funnel has to be measurable without a
+      // second analytics platform. `accessMode` is what makes "free audit
+      // started" answerable from the existing audit log, and the profile id is
+      // what makes an audit traceable back to the understanding it used (§7).
+      accessMode: "included_first_audit",
+      productProfileId: resolved.identity.productProfileId,
+      productProfileSchemaVersion: PRODUCT_PROFILE_SCHEMA_VERSION,
     },
   });
 
@@ -271,7 +310,7 @@ export async function countTokensStep(
   if (!sources.ok) return sources;
 
   const config = BUSINESS_READINESS_AUDIT_CONFIG;
-  const pack = buildEvidencePackV2(sources.sources);
+  const pack = buildEvidencePackV3(sources.sources);
   const counted = await deps.provider.countInputTokens(buildAuditRequest(pack, config));
   if (!counted.ok) return { ok: false, failureCode: counted.error };
 
@@ -280,7 +319,7 @@ export async function countTokensStep(
     // droppable is genuinely over budget. Checking the floor costs one extra
     // unbilled count, and only in the case that is already going wrong.
     const floor = await deps.provider.countInputTokens(
-      buildAuditRequest(trimEvidencePackV2(pack, 1), config),
+      buildAuditRequest(trimEvidencePackV3(pack, 1), config),
     );
     if (!floor.ok) return { ok: false, failureCode: floor.error };
     if (floor.inputTokens > config.maxInputTokens) {
@@ -382,6 +421,22 @@ export async function runInferenceStep(
   await setOperationStage(deps.supabase, { operationId, stage: "persisting" });
   await completeAuditRun(deps.supabase, operation.resultId, outcome.audit);
 
+  // Entitlement consumption, recorded *after* the audit is committed and only
+  // on success (CORE-2 §16, §17).
+  //
+  // The ordering is the policy. Everything above this line can fail — a
+  // provider outage, a validation rejection, our own persistence — and none of
+  // it reaches here, so none of it costs the user their free audit. There is
+  // no refund path because there is nothing to refund.
+  const repositoryId = await getConnectedRepositoryId(deps.supabase, operation.projectId);
+  if (repositoryId !== null) {
+    await recordFreeAuditGrant(deps.supabase, {
+      userId: operation.userId,
+      githubRepositoryId: repositoryId,
+      auditId: operation.resultId,
+    });
+  }
+
   await recordAuditEvent(deps.supabase, {
     userId: operation.userId,
     eventType: "business_audit.completed",
@@ -393,6 +448,10 @@ export async function runInferenceStep(
       promptVersion: PROMPT_VERSION,
       overallScore: outcome.audit.overall.score,
       coverage: `${outcome.audit.overall.assessedDimensions}/${outcome.audit.overall.totalDimensions}`,
+      // The completion half of the funnel step, and the point at which the
+      // free audit is provably consumed.
+      accessMode: "included_first_audit",
+      productProfileId: resolved.identity.productProfileId,
     },
   });
 

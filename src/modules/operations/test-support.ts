@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { fakeProductProfile } from "@/modules/product-understanding/test-support";
 import type { OperationExecutor, StartOperationInput, StartOperationResult } from "./executor";
 
 /**
@@ -556,4 +557,48 @@ export class FakeExecutor implements OperationExecutor {
     if (this.behaviour.fail) return { ok: false, error: "execution_start_failed" };
     return { ok: true, runId: `run_${this.starts.length}` };
   }
+}
+
+/**
+ * Seeds the two rows CORE-2 made prerequisites of an audit: a completed
+ * Product Profile and the project's founder intent.
+ *
+ * Shared rather than repeated per test file, because the profile has to be
+ * *structurally* valid — `getLatestProfile` overlays corrections on read, which
+ * walks `identity` and `audience` — and six copies of a hand-written profile
+ * would drift the first time the schema moves.
+ */
+export function seedProductUnderstanding(
+  db: FakeDatabase,
+  options: {
+    projectId: string;
+    profileId?: string;
+    intentHash?: string;
+    createdAt?: string;
+  },
+): void {
+  const profile = fakeProductProfile();
+
+  db.seed("product_profiles", {
+    id: options.profileId ?? "profile_1",
+    project_id: options.projectId,
+    status: "completed",
+    input_hash: "p".repeat(64),
+    result: profile,
+    synthesized: true,
+    failure_code: null,
+    confirmed_at: null,
+    created_at: options.createdAt ?? "2026-08-01T00:00:00.000Z",
+    completed_at: options.createdAt ?? "2026-08-01T00:00:00.000Z",
+  });
+
+  db.seed("project_founder_intent", {
+    id: "intent_1",
+    project_id: options.projectId,
+    stage: "prototype",
+    monetization_model: "none",
+    primary_goal: "launch",
+    intent_hash: options.intentHash ?? "c".repeat(64),
+    updated_at: "2026-08-01T00:00:00.000Z",
+  });
 }

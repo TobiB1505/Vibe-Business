@@ -3,7 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { BUSINESS_READINESS_AUDIT_CONFIG } from "@/modules/ai/operations";
 import { recordAuditEvent } from "@/modules/audit-log/events";
-import { EVIDENCE_PACK_V2_VERSION } from "@/modules/business-audit/evidence-v2";
+import { EVIDENCE_PACK_V3_VERSION } from "@/modules/business-audit/evidence-v3";
 import { PROMPT_VERSION } from "@/modules/business-audit/prompt";
 import { RUBRIC_VERSION } from "@/modules/business-audit/rubric";
 import { BUSINESS_AUDIT_SCHEMA_VERSION, BUSINESS_AUDIT_VERSION } from "@/modules/business-audit/schema";
@@ -14,7 +14,12 @@ import { loadUnderstandingSources } from "./product-understanding/execution";
 import { findReusableOpportunitySet } from "@/modules/opportunities/store";
 import { getLatestSuccessfulAuthenticatedSnapshot } from "@/modules/authenticated-product-intelligence/store";
 import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intelligence/store";
-import { getBusinessContext } from "@/modules/projects/business-context-store";
+import {
+  PRODUCT_PROFILE_SCHEMA_VERSION,
+  PROFILE_BUILDER_VERSION,
+} from "@/modules/product-understanding/schema";
+import { getLatestProfile } from "@/modules/product-understanding/store";
+import { getFounderIntent } from "@/modules/projects/founder-intent-store";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import type { OperationExecutor } from "./executor";
 import type { OperationFailureCode } from "./failures";
@@ -66,33 +71,38 @@ async function resolveAuditIdentity(
   supabase: SupabaseClient,
   projectId: string,
 ): Promise<{ ok: true; inputHash: string } | { ok: false; error: OperationFailureCode }> {
-  const [repositorySnapshot, liveSnapshot, businessContext, authenticatedSnapshot] = await Promise.all([
-    getLatestSuccessfulSnapshot(supabase, projectId),
-    getLatestSuccessfulLiveSnapshot(supabase, projectId),
-    getBusinessContext(supabase, projectId),
-    getLatestSuccessfulAuthenticatedSnapshot(supabase, projectId),
-  ]);
+  const [repositorySnapshot, liveSnapshot, profile, founderIntent, authenticatedSnapshot] =
+    await Promise.all([
+      getLatestSuccessfulSnapshot(supabase, projectId),
+      getLatestSuccessfulLiveSnapshot(supabase, projectId),
+      getLatestProfile(supabase, projectId),
+      getFounderIntent(supabase, projectId),
+      getLatestSuccessfulAuthenticatedSnapshot(supabase, projectId),
+    ]);
 
   if (!repositorySnapshot?.result) return { ok: false, error: "repository_intelligence_missing" };
   if (!liveSnapshot?.result) return { ok: false, error: "live_product_intelligence_missing" };
-  if (!businessContext) return { ok: false, error: "business_context_missing" };
+  if (!profile) return { ok: false, error: "product_profile_missing" };
 
   const authenticated = authenticatedSnapshot?.result ? authenticatedSnapshot : null;
 
   return {
     ok: true,
-    // The Business Audit's own identity, unchanged (§7). A second identity
-    // system would immediately disagree with audit reuse.
+    // The Business Audit's own identity, unchanged in principle (§7). A second
+    // identity system would immediately disagree with audit reuse.
     inputHash: computeAuditInputHash({
       repositorySnapshotId: repositorySnapshot.id,
       liveSnapshotId: liveSnapshot.id,
-      businessContextHash: businessContext.contextHash,
+      productProfileId: profile.stored.id,
+      founderIntentHash: founderIntent.intentHash,
       authenticatedSnapshotId: authenticated?.id ?? null,
       schemaVersion: BUSINESS_AUDIT_SCHEMA_VERSION,
       auditVersion: BUSINESS_AUDIT_VERSION,
-      evidencePackVersion: EVIDENCE_PACK_V2_VERSION,
+      evidencePackVersion: EVIDENCE_PACK_V3_VERSION,
       promptVersion: PROMPT_VERSION,
       rubricVersion: RUBRIC_VERSION,
+      profileSchemaVersion: PRODUCT_PROFILE_SCHEMA_VERSION,
+      profileBuilderVersion: PROFILE_BUILDER_VERSION,
       provider: "anthropic",
       model: BUSINESS_READINESS_AUDIT_CONFIG.model,
     }),

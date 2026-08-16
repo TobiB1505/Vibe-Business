@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { BUSINESS_READINESS_AUDIT_CONFIG } from "@/modules/ai/operations";
-import { EVIDENCE_PACK_V2_VERSION } from "@/modules/business-audit/evidence-v2";
+import { EVIDENCE_PACK_V3_VERSION } from "@/modules/business-audit/evidence-v3";
 import { PROMPT_VERSION } from "@/modules/business-audit/prompt";
 import { RUBRIC_VERSION } from "@/modules/business-audit/rubric";
 import { BUSINESS_AUDIT_SCHEMA_VERSION, BUSINESS_AUDIT_VERSION } from "@/modules/business-audit/schema";
@@ -10,7 +10,12 @@ import {
   getOperationStatus,
   startBusinessAuditOperation,
 } from "./service";
-import { FakeDatabase, FakeExecutor, fakeSupabase } from "./test-support";
+import {
+  FakeDatabase,
+  FakeExecutor,
+  fakeSupabase,
+  seedProductUnderstanding,
+} from "./test-support";
 
 /**
  * Starting a durable audit (Sprint 7 §8, §9, §29).
@@ -49,28 +54,23 @@ function seedEvidence(
     created_at: "2026-08-01T00:00:00.000Z",
     completed_at: "2026-08-01T00:00:00.000Z",
   });
-  db.seed("project_business_context", {
-    id: "context_1",
-    project_id: projectId,
-    product_summary: "A product summary long enough to be valid for the audit.",
-    target_customer: "Builders",
-    stage: "prototype",
-    monetization_model: "none",
-    primary_goal: "launch",
-    context_hash: options.contextHash ?? "c".repeat(64),
-    updated_at: "2026-08-01T00:00:00.000Z",
-  });
+  // CORE-2 §3: the audit's third prerequisite is the Product Profile, not a
+  // paragraph the founder typed.
+  seedProductUnderstanding(db, { projectId, intentHash: options.contextHash });
 }
 
 function identityFor(options: { repositoryId?: string; contextHash?: string } = {}) {
   return computeAuditInputHash({
     repositorySnapshotId: options.repositoryId ?? "repo_snapshot_1",
     liveSnapshotId: "live_snapshot_1",
-    businessContextHash: options.contextHash ?? "c".repeat(64),
+    productProfileId: "profile_1",
+    founderIntentHash: options.contextHash ?? "c".repeat(64),
+    profileSchemaVersion: "product-profile.v1",
+    profileBuilderVersion: "product-understanding-v1",
     authenticatedSnapshotId: null,
     schemaVersion: BUSINESS_AUDIT_SCHEMA_VERSION,
     auditVersion: BUSINESS_AUDIT_VERSION,
-    evidencePackVersion: EVIDENCE_PACK_V2_VERSION,
+    evidencePackVersion: EVIDENCE_PACK_V3_VERSION,
     promptVersion: PROMPT_VERSION,
     rubricVersion: RUBRIC_VERSION,
     provider: "anthropic",
