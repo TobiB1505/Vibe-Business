@@ -62,3 +62,44 @@ describe("business_readiness_audits.access_mode", () => {
     expect(PERMITTED()).toContain("legacy_pre_entitlement");
   });
 });
+
+/**
+ * The `AuditStatus` union, pinned to the SQL CHECK for the same reason.
+ *
+ * CORE-2a.4 adds `needs_user`, which is the fourth time a status or mode has
+ * had to cross this boundary. The in-memory test database does not evaluate
+ * CHECK constraints, so 3271 green unit tests would say nothing about whether a
+ * paused audit can actually be written.
+ */
+describe("audit status", () => {
+  /**
+   * Written out rather than imported from `AuditStatus`, so that adding a value
+   * in TypeScript alone fails here instead of both sides moving together.
+   */
+  const PERSISTABLE = ["pending", "analyzing", "needs_user", "completed", "failed"];
+
+  it("permits exactly the statuses the application can write", () => {
+    expect(checkedValues("business_readiness_audits", "status").sort()).toEqual(
+      [...PERSISTABLE].sort(),
+    );
+  });
+
+  /**
+   * A paused audit still holds both claims it took when it started. Losing
+   * either would let a second run start: one racing to spend a paid call, the
+   * other spending the customer's free entitlement twice.
+   */
+  it("keeps a paused audit inside both in-flight and entitlement guards", async () => {
+    const { readFileSync } = await import("node:fs");
+    const migration = readFileSync(
+      "supabase/migrations/20260816200000_audit_needs_user_pause.sql",
+      "utf8",
+    );
+
+    const inFlight = migration.slice(migration.indexOf("single_in_flight_idx\n"));
+    expect(inFlight.slice(0, 300)).toContain("'needs_user'");
+
+    const included = migration.slice(migration.indexOf("one_included_idx\n"));
+    expect(included.slice(0, 300)).toContain("'needs_user'");
+  });
+});

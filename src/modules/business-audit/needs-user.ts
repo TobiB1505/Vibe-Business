@@ -149,6 +149,24 @@ export type InterruptionInput = {
   intent: FounderIntent;
   /** From the previous audit. Empty before the first one. */
   lenses: BusinessLensAssessment[];
+  /**
+   * Whether those lens assessments still describe the current facts.
+   *
+   * The previous audit's lenses are a **historical hint, never authority.**
+   * They were assessed against one specific product profile and one specific
+   * set of founder answers, both of which may have changed since — and this
+   * whole feature exists to change them. An audit that paused, took an answer
+   * and resumed would otherwise be re-reading materiality that was decided
+   * before that answer existed.
+   *
+   * Determined by comparing the stored audit's `productProfileId` and
+   * `founderIntentHash` against the current ones, so it is a fact rather than
+   * a guess about age. When it is false, materiality is treated as unknown and
+   * the question stands or falls on the current profile and intent — the same
+   * position as a first audit, which is exactly what "the facts have moved"
+   * means.
+   */
+  lensesReflectCurrentFacts: boolean;
   /** Intents already asked in this audit run, answered or explicitly unsure. */
   askedIntents: readonly FounderQuestionIntent[];
 };
@@ -223,10 +241,16 @@ export function selectBlockingQuestion(input: InterruptionInput): InterruptionDe
     return { ask: false, reason: "budget_spent" };
   }
 
+  // Stale lens assessments still describe *something* — which areas exist and
+  // what they were once blocked on — but they may not describe this business
+  // any more. They are dropped from the ranking input rather than trusted,
+  // because a question's weight is a claim about now.
+  const lenses = input.lensesReflectCurrentFacts ? input.lenses : [];
+
   const candidates = selectFounderQuestions({
     profile: input.profile,
     intent: input.intent,
-    lenses: input.lenses,
+    lenses,
   });
 
   if (candidates.length === 0) return { ask: false, reason: "nothing_unresolved" };
@@ -266,7 +290,9 @@ export function selectBlockingQuestion(input: InterruptionInput): InterruptionDe
     }
 
     const affected = AFFECTED_LENSES[candidate.intent];
-    const materiality = materialityOf(input.lenses, affected);
+    // `lenses`, not `input.lenses`: materiality decided against facts that have
+    // since changed must not withhold a question or promote one.
+    const materiality = materialityOf(lenses, affected);
     if (!materialityPermitsInterrupting(materiality)) {
       note("not_material_yet");
       continue;

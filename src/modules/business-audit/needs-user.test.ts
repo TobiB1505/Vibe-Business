@@ -68,6 +68,7 @@ function decide(overrides: Partial<InterruptionInput> = {}) {
     profile: overrides.profile ?? fakeProductProfile(),
     intent: overrides.intent ?? COMPLETE_INTENT,
     lenses: overrides.lenses ?? [],
+    lensesReflectCurrentFacts: overrides.lensesReflectCurrentFacts ?? true,
     askedIntents: overrides.askedIntents ?? [],
   });
 }
@@ -322,5 +323,75 @@ describe("every interruption carries why it was worth it (§60)", () => {
     if (!decision.ask) return;
     expect(decision.question.intent).toBe("current_stage");
     expect(decision.question.context).toBeNull();
+  });
+});
+
+/**
+ * Previous lens data is a hint, not authority (CORE-2a.4, constraint 3).
+ *
+ * The lens assessments Vibe reasons from were produced against one specific
+ * product profile and one specific set of founder answers — and this feature
+ * exists to change both. An audit that paused, took an answer and resumed
+ * would otherwise re-read a materiality that was decided before the answer
+ * existed.
+ *
+ * Staleness is a fact here rather than a guess: every stored audit records the
+ * `product_profile_id` and `founder_intent_hash` it reasoned from, so "do these
+ * lenses still describe the current business?" has an exact answer.
+ */
+describe("current facts outrank the previous audit's lenses", () => {
+  /**
+   * The case that matters most, because it is the one this sprint creates: an
+   * old audit said these areas were a later stage's problem, and the founder
+   * has since changed the facts underneath it. That verdict cannot go on
+   * silencing a question about the new situation.
+   */
+  it("stops treating a stale 'later' as a reason to withhold", () => {
+    const staleLenses = [
+      lens("audience", "later"),
+      lens("offer", "later"),
+      lens("acquisition", "later"),
+      lens("conversion", "later"),
+    ];
+
+    const trusted = decide({ profile: inferredAudience(), lenses: staleLenses });
+    const stale = decide({
+      profile: inferredAudience(),
+      lenses: staleLenses,
+      lensesReflectCurrentFacts: false,
+    });
+
+    expect(trusted.ask).toBe(false);
+    expect(stale.ask).toBe(true);
+  });
+
+  /** And symmetrically: a stale `now` must not promote a question either. */
+  it("stops treating a stale 'now' as authority", () => {
+    const decision = decide({
+      profile: inferredAudience(),
+      lenses: [lens("audience", "now")],
+      lensesReflectCurrentFacts: false,
+    });
+
+    expect(decision.ask).toBe(true);
+    if (!decision.ask) return;
+    // Asked on the strength of the current profile, not of an old verdict.
+    expect(decision.question.materiality).toBeNull();
+  });
+
+  /**
+   * Precedence is not the same as pausing more. When the *current* profile and
+   * intent already settle everything, stale lenses change nothing — there is
+   * no question left for them to influence in either direction.
+   */
+  it("still asks nothing when current facts leave nothing unresolved", () => {
+    const decision = decide({
+      lenses: [lens("audience", "now"), lens("revenue_economics", "now")],
+      lensesReflectCurrentFacts: false,
+    });
+
+    expect(decision.ask).toBe(false);
+    if (decision.ask) return;
+    expect(decision.reason).toBe("nothing_unresolved");
   });
 });

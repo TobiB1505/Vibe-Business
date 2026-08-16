@@ -12,7 +12,13 @@ import type { BusinessReadinessAudit } from "./schema";
  * RLS is always in force — there is no service-role path here.
  */
 
-export type AuditStatus = "pending" | "analyzing" | "completed" | "failed";
+/**
+ * `needs_user` is a waiting state, not a failure: the run has claimed its slot
+ * and prepared its evidence, and has stopped before inference because a
+ * founder-only answer would change the result (CORE-2a.4). It has spent
+ * nothing, and it may wait for hours.
+ */
+export type AuditStatus = "pending" | "analyzing" | "needs_user" | "completed" | "failed";
 
 export type StoredAudit = {
   id: string;
@@ -342,7 +348,14 @@ export async function hasCompletedIncludedAudit(
   return data !== null;
 }
 
-/** True while an audit is claimed but not finished. */
+/**
+ * True while an audit is claimed but not finished.
+ *
+ * `needs_user` counts (CORE-2a.4). An audit paused for a founder-only question
+ * has claimed its slot and prepared its evidence; it is waiting, not finished.
+ * Excluding it would let a second run start while the first holds the answer
+ * it is about to receive, and both would then spend a paid call.
+ */
 export async function hasRunningAudit(
   supabase: SupabaseClient,
   projectId: string,
@@ -351,7 +364,7 @@ export async function hasRunningAudit(
     .from("business_readiness_audits")
     .select("id")
     .eq("project_id", projectId)
-    .in("status", ["pending", "analyzing"])
+    .in("status", ["pending", "analyzing", "needs_user"])
     .limit(1)
     .maybeSingle();
 
