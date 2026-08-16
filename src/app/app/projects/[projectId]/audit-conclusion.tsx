@@ -5,6 +5,7 @@ import {
   type AuditHighlightGroup,
   type AuditHighlightSection,
 } from "@/modules/business-audit/human-view";
+import type { BusinessConclusion } from "@/modules/business-audit/schema";
 import type { BusinessReadinessAudit } from "@/modules/business-audit/schema";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
 import { StatusPill } from "@/components/ui/status-pill";
@@ -142,6 +143,49 @@ function HighlightSection({
   );
 }
 
+/**
+ * One synthesized business conclusion (CORE-2a.1 §41).
+ *
+ * Rendered directly, with no further compression: these are already few because
+ * the model chose few, and re-truncating a synthesis would put the product back
+ * where CORE-2a.1 started — deciding in React what should have been decided in
+ * the judgment.
+ *
+ * The headline carries the weight, so it is the largest text in the section.
+ * Everything under it is support.
+ */
+function ConclusionCard({
+  conclusion,
+  tone,
+}: {
+  conclusion: BusinessConclusion;
+  tone: "strength" | "gap";
+}) {
+  const markerClass = tone === "strength" ? "bg-mint" : "bg-amber";
+
+  return (
+    <li data-testid="audit-conclusion" className="flex gap-3">
+      {/* Decorative: the section heading carries the meaning, so colour is
+          never the sole signal. */}
+      <span aria-hidden className={`mt-2 size-1.5 shrink-0 rounded-full ${markerClass}`} />
+      <div className="flex min-w-0 flex-col gap-1.5">
+        <p className="text-fg text-[0.9375rem] leading-snug font-medium text-balance">
+          {conclusion.headline}
+        </p>
+        <p className="text-fg-prose max-w-[62ch] text-sm leading-relaxed">
+          {conclusion.explanation}
+        </p>
+        {conclusion.whyItMatters && (
+          <p className="text-fg-muted max-w-[62ch] text-sm leading-relaxed">
+            {conclusion.whyItMatters}
+          </p>
+        )}
+        <EvidenceDisclosure evidenceIds={conclusion.evidenceIds} />
+      </div>
+    </li>
+  );
+}
+
 export function AuditConclusion({
   audit,
   analyzedAt,
@@ -183,36 +227,70 @@ export function AuditConclusion({
         )}
       </Surface>
 
-      {view.working.totalItems > 0 && (
-        <Surface
-          level="section"
-          padding="lg"
-          className="flex flex-col gap-3"
-          data-testid="audit-working"
-        >
-          <h3 className="text-fg text-base font-semibold">What&rsquo;s already working</h3>
-          <HighlightSection
-            section={view.working}
-            tone="strength"
-            moreLabel="Show everything else that's working"
-          />
-        </Surface>
-      )}
+      {view.mode === "synthesis" && view.synthesis !== null ? (
+        <>
+          {view.synthesis.strengths.length > 0 && (
+            <Surface
+              level="section"
+              padding="lg"
+              className="flex flex-col gap-4"
+              data-testid="audit-working"
+            >
+              <h3 className="text-fg text-base font-semibold">What&rsquo;s already working</h3>
+              <ul className="flex flex-col gap-5">
+                {view.synthesis.strengths.map((conclusion) => (
+                  <ConclusionCard key={conclusion.headline} conclusion={conclusion} tone="strength" />
+                ))}
+              </ul>
+            </Surface>
+          )}
 
-      {view.blockers.totalItems > 0 && (
-        <Surface
-          level="section"
-          padding="lg"
-          className="flex flex-col gap-3"
-          data-testid="audit-blockers"
-        >
-          <h3 className="text-fg text-base font-semibold">What&rsquo;s holding you back</h3>
-          <HighlightSection
-            section={view.blockers}
-            tone="gap"
-            moreLabel="Show the rest"
-          />
-        </Surface>
+          {view.synthesis.blockers.length > 0 && (
+            <Surface
+              level="section"
+              padding="lg"
+              className="flex flex-col gap-4"
+              data-testid="audit-blockers"
+            >
+              <h3 className="text-fg text-base font-semibold">What&rsquo;s holding you back</h3>
+              <ul className="flex flex-col gap-5">
+                {view.synthesis.blockers.map((conclusion) => (
+                  <ConclusionCard key={conclusion.headline} conclusion={conclusion} tone="gap" />
+                ))}
+              </ul>
+            </Surface>
+          )}
+        </>
+      ) : (
+        <>
+          {view.working.totalItems > 0 && (
+            <Surface
+              level="section"
+              padding="lg"
+              className="flex flex-col gap-3"
+              data-testid="audit-working"
+            >
+              <h3 className="text-fg text-base font-semibold">What&rsquo;s already working</h3>
+              <HighlightSection
+                section={view.working}
+                tone="strength"
+                moreLabel="Show everything else that's working"
+              />
+            </Surface>
+          )}
+
+          {view.blockers.totalItems > 0 && (
+            <Surface
+              level="section"
+              padding="lg"
+              className="flex flex-col gap-3"
+              data-testid="audit-blockers"
+            >
+              <h3 className="text-fg text-base font-semibold">What&rsquo;s holding you back</h3>
+              <HighlightSection section={view.blockers} tone="gap" moreLabel="Show the rest" />
+            </Surface>
+          )}
+        </>
       )}
 
       {view.whyItMatters.length > 0 && (

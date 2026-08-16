@@ -23,6 +23,7 @@ import { expect, test, type Page } from "@playwright/test";
  * understanding and repository-intelligence suites carry.
  */
 
+const SYNTHESIS = "/e2e/audit-synthesis";
 const COMPLETE = "/e2e/audit-complete";
 const PARTIAL = "/e2e/audit-partial";
 const UNCERTAIN = "/e2e/audit-uncertain";
@@ -191,6 +192,96 @@ test.describe("the default view is bounded (CORE-2 §14, PRODUCT.md §11)", () =
 
     const firstHeading = page.getByTestId("audit-blockers").getByTestId("audit-primary").locator("h4").first();
     await expect(firstHeading).toHaveText("Can you make money from it?");
+  });
+});
+
+/**
+ * A synthesized audit (CORE-2a.1 §41, §51).
+ *
+ * The compression is the model's, not React's: these conclusions are few
+ * because the judgment chose few. So the assertions are about there being no
+ * second compression layer — no "Show the rest", no truncation of an already
+ * bounded answer — and about a non-technical person being able to read it.
+ */
+test.describe("a synthesized audit renders its conclusions directly", () => {
+  test("shows the model's own overall conclusion, not a composed one", async ({ page }) => {
+    await page.goto(SYNTHESIS);
+
+    await expect(
+      page.getByText(/nothing about it explains how anyone would pay you/),
+    ).toBeVisible();
+    // The legacy composed sentence must not appear alongside it.
+    await expect(page.getByText(/You're strongest at/)).toHaveCount(0);
+  });
+
+  test("renders every conclusion with no 'Show the rest' compression", async ({ page }) => {
+    await page.goto(SYNTHESIS);
+
+    await expect(page.getByTestId("audit-conclusion")).toHaveCount(4);
+    await expect(page.getByText(/Show the rest/)).toHaveCount(0);
+    await expect(page.getByText(/Show everything else/)).toHaveCount(0);
+  });
+
+  test("leads each conclusion with a headline, then the detail", async ({ page }) => {
+    await page.goto(SYNTHESIS);
+
+    const blockers = page.getByTestId("audit-blockers");
+    await expect(
+      blockers.getByText("People still don't have a clear way to pay you."),
+    ).toBeVisible();
+    await expect(blockers.getByText(/Someone can like what you built and still leave/)).toBeVisible();
+  });
+
+  /**
+   * The grandma test (§51), as far as a browser can check it: no product jargon
+   * anywhere in the primary conclusions.
+   */
+  test("uses no jargon in the conclusions", async ({ page }) => {
+    await page.goto(SYNTHESIS);
+
+    for (const region of ["audit-working", "audit-blockers"]) {
+      const text = await page.getByTestId(region).innerText();
+      for (const jargon of [
+        "monetization",
+        "pricing surface",
+        "checkout surface",
+        "acquisition",
+        "retention architecture",
+        "canonical",
+        "structured data",
+        "funnel",
+        "instrumentation",
+      ]) {
+        expect(text.toLowerCase()).not.toContain(jargon);
+      }
+    }
+  });
+
+  test("keeps the full dimension breakdown available underneath", async ({ page }) => {
+    await page.goto(SYNTHESIS);
+
+    const disclosure = page.getByText("See the full breakdown by dimension");
+    await expect(disclosure).toBeVisible();
+    await disclosure.click();
+    await expect(page.getByText("Business readiness")).toBeVisible();
+  });
+
+  test("reads on a phone without opening anything", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 800 });
+    await page.goto(SYNTHESIS);
+
+    await expect(
+      page.getByText(/nothing about it explains how anyone would pay you/),
+    ).toBeVisible();
+    await expect(
+      page.getByText("People still don't have a clear way to pay you."),
+    ).toBeVisible();
+    await expect(page.getByRole("link", { name: "See what Vibe would do first" })).toBeVisible();
+
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
   });
 });
 

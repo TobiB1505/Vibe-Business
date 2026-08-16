@@ -119,6 +119,94 @@ export type KeyFinding = {
   evidenceIds: string[];
 };
 
+// ---------------------------------------------------------------------
+// Business synthesis (CORE-2a.1)
+// ---------------------------------------------------------------------
+
+/**
+ * The synthesis contract, versioned **separately** from the evidence pack
+ * (CORE-2a.1 §20).
+ *
+ * The two answer different questions and moved for different reasons.
+ * `business-evidence.v3` is about what the model was *told*; this is about what
+ * it is asked to *conclude*. Evidence quality improving and judgment quality
+ * improving are independent events, and an audit has to be able to say which
+ * of them it carries.
+ */
+export const AUDIT_SYNTHESIS_VERSION = "business-audit-synthesis-v1" as const;
+
+/**
+ * How a conclusion reads, not how severe it is.
+ *
+ * `positive` is what the product already has; `attention` and `critical` are
+ * both things holding it back, separated only so the UI can weight them. The
+ * split into strengths and blockers is derived from this rather than being a
+ * second field the model could contradict.
+ */
+export const CONCLUSION_TONES = ["positive", "attention", "critical"] as const;
+export type ConclusionTone = (typeof CONCLUSION_TONES)[number];
+
+/**
+ * One business-level conclusion drawn from several pieces of evidence.
+ *
+ * This is the layer CORE-2a.1 exists to add. The dimensions below it answer
+ * *"how does this business area look?"*; a conclusion answers *"what do these
+ * observations mean together?"* — which is the level a founder should read
+ * first, and the level the previous audit never produced.
+ *
+ * The real dogfood is the argument. It emitted, as five separate gaps: no
+ * monetization model stated, no pricing surface, no checkout surface, no
+ * payment capability, no paying journey stage. Those are five observations of
+ * **one** business problem — *people still don't have a clear path to paying
+ * you* — and listing them five times is enumeration wearing the costume
+ * of thoroughness.
+ *
+ * `dimensions` is a list on purpose (§12). A buying path that is unclear spans
+ * monetization, conversion and the customer journey, and forcing it into one
+ * scored dimension would be an artificial taxonomy boundary. Dimension scores
+ * stay separate and unchanged.
+ */
+export type BusinessConclusion = {
+  /** The sentence a founder reads. Plain language, no product jargon. */
+  headline: string;
+  /** One or two sentences on what Vibe actually found. */
+  explanation: string;
+  /**
+   * Why this matters commercially. Usually present on a blocker and often
+   * absent on a strength, which is why it is nullable rather than required
+   * (§28) — a strength that needs a paragraph of justification is usually not
+   * a strength.
+   */
+  whyItMatters: string | null;
+  /** At least one, validated against the pack. Never empty (§10). */
+  evidenceIds: string[];
+  /** Which scored dimensions this conclusion touches. May be several (§12). */
+  dimensions: AuditDimensionId[];
+  tone: ConclusionTone;
+  confidence: Confidence;
+};
+
+/**
+ * The concise judgment layer of an audit.
+ *
+ * Bounded by the contract rather than by the UI: these are few because the
+ * model chose the ones that matter, not because React hides the rest
+ * (DoD 8). Everything not chosen remains in the dimension assessments and in
+ * the evidence pack, both untouched.
+ */
+export type AuditSynthesis = {
+  version: typeof AUDIT_SYNTHESIS_VERSION;
+  /**
+   * One sentence about the business as a whole, grounded in the assessment
+   * below it — never generic encouragement (§25).
+   */
+  overall: string;
+  /** 2–4 when the evidence supports them; fewer when it does not (§6). */
+  strengths: BusinessConclusion[];
+  /** At most 3 (§6, §36). Fewer is a valid and common answer. */
+  blockers: BusinessConclusion[];
+};
+
 export type BusinessReadinessAudit = {
   schemaVersion: typeof BUSINESS_AUDIT_SCHEMA_VERSION;
   auditVersion: typeof BUSINESS_AUDIT_VERSION;
@@ -129,6 +217,21 @@ export type BusinessReadinessAudit = {
   model: string;
   dimensions: DimensionAssessment[];
   overall: OverallReadiness;
+  /**
+   * The business-level judgment (CORE-2a.1).
+   *
+   * Null on every audit written before this contract existed. Those rows keep
+   * their per-dimension findings and their `keyFindings`, and the renderer has
+   * a legacy path for them (§21) — back-filling a synthesis by re-reading old
+   * prose would be inventing a conclusion nobody's model actually drew.
+   */
+  synthesis: AuditSynthesis | null;
+  /**
+   * Historical. Superseded by `synthesis` for audits that carry one: a key
+   * finding *was* a cross-cutting conclusion, just without the grounding,
+   * cardinality or language rules the synthesis contract imposes. New audits
+   * leave this empty rather than producing the same judgment twice.
+   */
   keyFindings: KeyFinding[];
   /** What this audit could not assess, and why. */
   limitations: string[];

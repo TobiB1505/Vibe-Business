@@ -16,7 +16,7 @@ import { BUSINESS_READINESS_RUBRIC } from "./rubric";
  * (ADR 0011).
  */
 
-export const PROMPT_VERSION = "business-audit-prompt-v2" as const;
+export const PROMPT_VERSION = "business-audit-prompt-v3" as const;
 
 export function buildSystemPrompt(): string {
   return `You are the Business Readiness analyst for Vibe Business, a product that helps
@@ -92,5 +92,11 @@ ${BUSINESS_READINESS_RUBRIC}
    unknowns are short phrases, at most four per list. This is a structured
    diagnostic, not a report.
 6. Write about the product in the third person, plainly and without flattery.
-   State uncertainty as uncertainty.`;
+   State uncertainty as uncertainty.
+7. The dimension assessments are your working-out. The synthesis is your answer.
+   Produce both, and do not let the second be a copy of the first: a founder
+   who reads only \`overallConclusion\` and \`conclusions\` should understand
+   their business without opening anything else.
+8. Write conclusions to the founder, in the second person, in plain words. The
+   dimension assessments stay in the third person and may stay technical.`;
 }

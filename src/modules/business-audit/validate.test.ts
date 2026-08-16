@@ -120,14 +120,30 @@ describe("validateAuditOutput — evidence discipline", () => {
     expect(result.audit.dimensions.find((d) => d.id === "product")?.evidenceIds).toEqual(["live.site.title"]);
   });
 
-  it("drops a key finding whose evidence does not exist", () => {
+  it("drops a business conclusion whose evidence does not exist", () => {
     const result = validate(
       buildModelOutput(
         {},
         {
-          keyFindings: [
-            { finding: "Grounded finding", evidenceIds: ["live.site.title"] },
-            { finding: "Unsupported assertion", evidenceIds: ["not.a.real.id"] },
+          conclusions: [
+            {
+              headline: "Grounded conclusion",
+              explanation: "Backed by something real.",
+              whyItMatters: "",
+              tone: "critical",
+              confidence: "high",
+              dimensions: ["product"],
+              evidenceIds: ["live.site.title"],
+            },
+            {
+              headline: "Unsupported assertion",
+              explanation: "Backed by nothing.",
+              whyItMatters: "",
+              tone: "critical",
+              confidence: "high",
+              dimensions: ["product"],
+              evidenceIds: ["not.a.real.id"],
+            },
           ],
         },
       ),
@@ -135,8 +151,10 @@ describe("validateAuditOutput — evidence discipline", () => {
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.audit.keyFindings).toHaveLength(1);
-    expect(result.audit.keyFindings[0].finding).toBe("Grounded finding");
+    // A business judgment with nothing behind it is exactly what this layer
+    // exists to catch: it is discarded, not rendered as a conclusion.
+    expect(result.audit.synthesis?.blockers).toHaveLength(1);
+    expect(result.audit.synthesis?.blockers[0]!.headline).toBe("Grounded conclusion");
   });
 });
 

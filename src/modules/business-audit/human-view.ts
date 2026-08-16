@@ -2,6 +2,7 @@ import {
   DIMENSION_QUESTIONS,
   DIMENSION_TOPICS,
   type AuditDimensionId,
+  type AuditSynthesis,
   type BusinessReadinessAudit,
   type DimensionAssessment,
 } from "./schema";
@@ -257,8 +258,24 @@ export function conclusionFor(audit: BusinessReadinessAudit): string {
  * CORE-2 §14 says the score stays *secondary*, not that it disappears. Hiding a
  * number the product computed would be its own kind of dishonesty.
  */
+/**
+ * Which contract produced what is on screen (CORE-2a.1 §19, §21).
+ *
+ * `synthesis` renders the model's own business conclusions directly, with no
+ * further compression — they are already few because the model chose few.
+ * `legacy` is the CORE-2a path for audits written before the synthesis
+ * contract: per-dimension findings, grouped and bounded by this module, because
+ * those audits genuinely do contain 25 atomic findings and nothing can retro-fit
+ * a judgment nobody's model drew.
+ */
+export type AuditViewMode = "synthesis" | "legacy";
+
 export type HumanAuditView = {
+  mode: AuditViewMode;
   conclusion: string;
+  /** Present only in `synthesis` mode. */
+  synthesis: AuditSynthesis | null;
+  /** Populated only in `legacy` mode; empty sections in `synthesis` mode. */
   working: AuditHighlightSection;
   blockers: AuditHighlightSection;
   whyItMatters: BusinessReadinessAudit["keyFindings"];
@@ -269,9 +286,53 @@ export type HumanAuditView = {
   insufficientCoverageReason: string | null;
 };
 
+const EMPTY_SECTION: AuditHighlightSection = { primary: [], secondary: [], totalItems: 0 };
+
+/**
+ * A synthesized audit has a conclusion the model wrote; a legacy one gets the
+ * sentence this module composes from its strongest and weakest dimensions.
+ *
+ * The model's own sentence wins when it exists, because it was written knowing
+ * all five dimensions at once — which is more than `conclusionFor` can see.
+ */
 export function buildHumanAuditView(audit: BusinessReadinessAudit): HumanAuditView {
+  /*
+   * Nullish, not `!== null`. A historical audit read back from JSONB has no
+   * `synthesis` key at all, so it arrives as `undefined` — and `undefined !==
+   * null` is true, which would have sent every pre-CORE-2a.1 audit down the
+   * synthesis path and crashed on `.strengths`. The domain type says
+   * `AuditSynthesis | null`; stored JSON does not have to agree with it.
+   */
+  const synthesis = audit.synthesis ?? null;
+  const hasSynthesis =
+    synthesis !== null &&
+    (synthesis.strengths?.length > 0 ||
+      synthesis.blockers?.length > 0 ||
+      (synthesis.overall ?? "") !== "");
+
+  if (hasSynthesis) {
+    return {
+      mode: "synthesis",
+      conclusion: synthesis.overall !== "" ? synthesis.overall : conclusionFor(audit),
+      synthesis,
+      // Deliberately empty: re-deriving per-dimension highlights beside the
+      // synthesis would put the enumeration back on the page next to the answer
+      // that replaced it. The full detail lives in the dimension breakdown.
+      working: EMPTY_SECTION,
+      blockers: EMPTY_SECTION,
+      whyItMatters: [],
+      blindSpots: blindSpotsFrom(audit),
+      score: audit.overall.score,
+      assessedDimensions: audit.overall.assessedDimensions,
+      totalDimensions: audit.overall.totalDimensions,
+      insufficientCoverageReason: audit.overall.insufficientCoverageReason,
+    };
+  }
+
   return {
+    mode: "legacy",
     conclusion: conclusionFor(audit),
+    synthesis: null,
     working: strengthsFrom(audit),
     blockers: blockersFrom(audit),
     whyItMatters: audit.keyFindings.map((finding) => ({

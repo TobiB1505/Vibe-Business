@@ -15,9 +15,22 @@
  *     that payment integration exists — not that monetization is working.
  *     The rubric rewards demonstrated business capability, not package
  *     names.
+ *
+ * v2 (CORE-2a.1) adds a third, and it is the reason for the version bump:
+ *
+ *  3. **Evidence can be detailed; judgment must be concise.** The dimension
+ *     assessments are unchanged and still enumerate. What is new is a synthesis
+ *     layer above them that must *not*: it groups related observations into a
+ *     few business conclusions and says which ones matter.
+ *
+ *     The first real dogfood is the argument. It returned five separate gaps —
+ *     no monetization model stated, no pricing surface, no checkout surface, no
+ *     payment capability, no paying journey stage — which are five observations
+ *     of one problem: people have no clear path to paying. A founder reading
+ *     five bullets has to do the synthesis the audit was supposed to do.
  */
 
-export const RUBRIC_VERSION = "business-readiness-rubric-v1" as const;
+export const RUBRIC_VERSION = "business-readiness-rubric-v2" as const;
 
 export const BUSINESS_READINESS_RUBRIC = `# Business Readiness Rubric (${RUBRIC_VERSION})
 
@@ -100,9 +113,99 @@ be a false one.
 
 ## Evidence discipline
 
-Every strength, gap, and key finding must cite the evidence ids it rests on.
+Every strength, gap, and conclusion must cite the evidence ids it rests on.
 Cite only ids present in the evidence pack. Never invent an id. If you
 cannot cite evidence for a claim, do not make the claim.
+
+## Business synthesis — the part that decides whether this audit is useful
+
+Everything above produces a per-dimension diagnosis. That is the working-out,
+not the answer. Now step back and say what it MEANS.
+
+**Synthesize. Do not enumerate.** Do not return every valid observation as its
+own conclusion. Read all the evidence, find the patterns, and report only the
+conclusions a founder should act on. Leaving an observation out of the
+synthesis does not discard it — every dimension assessment and every evidence
+id is preserved and shown elsewhere.
+
+### Group related evidence into one conclusion
+
+Several observations that describe the same underlying problem are ONE
+conclusion citing all of them, never one conclusion each.
+
+- No pricing page + no purchase call to action + no checkout + payment code
+  present + a stated intent to charge → one conclusion about the buying path
+  being unclear, citing all five.
+- No analytics + no conversion events + no measurement surface → one conclusion
+  about not being able to tell what is working, citing all three.
+
+### Prefer the root problem over its symptoms
+
+"Pricing is not in the navigation", "there is no purchase button" and "no
+checkout exists" are three symptoms of one root problem. Report the root.
+
+### Do not over-compress
+
+The opposite failure is just as bad. Do not merge unrelated problems to reach a
+target count. "Growth needs work", covering analytics and pricing and retention
+at once, is too broad to act on. Conclusions must be distinct, specific and
+individually meaningful.
+
+### Do not pad to a count
+
+If the evidence supports two blockers, return two. Never invent a third.
+
+### Cardinality
+
+- 2 to 4 strengths, when the evidence supports them.
+- At most 3 blockers.
+- One overall conclusion about the business as a whole.
+
+### A conclusion is not an observation
+
+A strength is something a founder would be glad to hear about their business,
+not a fact about their markup.
+
+- Not a strength: "A title tag exists." That is evidence.
+- A strength: "People can understand what your product is for."
+
+A blocker must be something that could plausibly inform what to do next.
+
+- Not a blocker on its own: "Canonical URL missing." If it is genuinely one of
+  the three biggest business problems, express it as one: "Search engines are
+  missing signals that help them understand your pages." If it is not, leave it
+  in the dimension assessment where it belongs.
+
+### Language — write for the founder, not for an analyst
+
+Plain words. A non-technical person must understand every headline without
+opening evidence or technical details.
+
+Avoid in headlines and explanations: monetization model, pricing surface,
+checkout surface, acquisition strategy, retention architecture, canonical URL,
+structured data, funnel instrumentation, evidence bundle, conversion path,
+signal, surface.
+
+- Instead of "No pricing surface or checkout capability was detected":
+  **People still don't have a clear way to pay you.**
+- Instead of "No structured acquisition approach found":
+  **Vibe couldn't see a clear way new customers are finding you yet.**
+- Instead of "Retention capability detected":
+  **Customers already have something useful to come back to.**
+
+### Uncertainty survives the translation
+
+Plain language must not become more confident than the evidence. Absence of
+evidence is not evidence of absence. When something was not observed, say so:
+"Vibe couldn't find…", "…appears to…", "…is still unclear", "Vibe hasn't
+confirmed…". Never state an unobserved thing as a fact.
+
+### Every conclusion is grounded
+
+Each one cites at least one real evidence id, and names the dimensions it
+touches. A conclusion may span several dimensions — an unclear buying path is
+monetization and conversion at once — and that is correct, not a mistake to
+avoid.
 
 ## Out of scope
 

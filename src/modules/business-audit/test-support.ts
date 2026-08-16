@@ -56,7 +56,11 @@ export class FakeProvider implements AIProvider {
  */
 export function buildModelOutput(
   overrides: Partial<Record<(typeof AUDIT_DIMENSIONS)[number], Record<string, unknown>>> = {},
-  extras: { keyFindings?: unknown; limitations?: unknown } = {},
+  extras: {
+    overallConclusion?: unknown;
+    conclusions?: unknown;
+    limitations?: unknown;
+  } = {},
 ): Record<string, unknown> {
   const base = (score: number | null, status: string, evidenceIds: string[]) => ({
     assessmentStatus: status,
@@ -86,10 +90,32 @@ export function buildModelOutput(
       dimension,
       ...(dimensions[dimension] as Record<string, unknown>),
     })),
-    keyFindings: extras.keyFindings ?? [
+    overallConclusion:
+      extras.overallConclusion ??
+      "You have a real product, but the path from interest to revenue is still incomplete.",
+    // The synthesis, in the shape CORE-2a.1 asks for: one conclusion grouping
+    // several pieces of evidence, not one conclusion per observation.
+    conclusions: extras.conclusions ?? [
       {
-        finding: "The product is understandable but not monetized.",
-        evidenceIds: ["profile.identity.description"],
+        headline: "People can understand and start using your product.",
+        explanation:
+          "Vibe found a consistent product message and a clear way to sign up and get in.",
+        whyItMatters: null,
+        tone: "positive",
+        confidence: "high",
+        dimensions: ["product", "conversion"],
+        evidenceIds: ["profile.identity.description", "live.site.title"],
+      },
+      {
+        headline: "People still don't have a clear path to paying you.",
+        explanation:
+          "Vibe couldn't find a way to see prices or buy anything, on the site or in the product.",
+        whyItMatters:
+          "Someone can like what you built and still leave because they don't know what it costs.",
+        tone: "critical",
+        confidence: "high",
+        dimensions: ["monetization", "conversion"],
+        evidenceIds: ["profile.signal.pricing_surface", "intent.monetization_model"],
       },
     ],
     limitations: extras.limitations ?? ["No traffic or usage data is available."],

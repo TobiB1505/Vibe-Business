@@ -42,6 +42,32 @@ function renderAudit(audit: BusinessReadinessAudit): string {
     lines.push("");
   }
 
+  /*
+   * The synthesis, when the audit carries one (CORE-2a.1 §22, §23).
+   *
+   * Added *above* the dimension detail rather than instead of it. The customer-
+   * facing audit is now concise; this input deliberately is not. Prioritization
+   * benefits from both — the root-cause framing tells the engine which problems
+   * are one problem, and the per-dimension findings below still give it the
+   * specific observations to cite.
+   *
+   * Reducing this to three blockers would destroy opportunity generation to
+   * make a screen shorter, which is the mistake §24 names: small customer-facing
+   * judgment, not small model context.
+   */
+  if (audit.synthesis) {
+    lines.push("## Business conclusions");
+    if (audit.synthesis.overall !== "") lines.push(audit.synthesis.overall);
+    for (const conclusion of [...audit.synthesis.blockers, ...audit.synthesis.strengths]) {
+      lines.push(
+        `- [${conclusion.tone}] ${conclusion.headline} — ${conclusion.explanation}` +
+          ` (dimensions: ${conclusion.dimensions.join(", ") || "unspecified"})` +
+          ` [${conclusion.evidenceIds.join(", ")}]`,
+      );
+    }
+    lines.push("");
+  }
+
   if (audit.keyFindings.length > 0) {
     lines.push("## Key findings");
     for (const finding of audit.keyFindings) {

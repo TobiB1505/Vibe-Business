@@ -1,6 +1,8 @@
 import { computeOverallReadiness } from "@/modules/business-audit/scoring";
 import {
   AUDIT_DIMENSIONS,
+  AUDIT_SYNTHESIS_VERSION,
+  type AuditSynthesis,
   type BusinessReadinessAudit,
   type DimensionAssessment,
 } from "@/modules/business-audit/schema";
@@ -47,7 +49,10 @@ function dimension(
   };
 }
 
-function audit(dimensions: DimensionAssessment[]): BusinessReadinessAudit {
+function audit(
+  dimensions: DimensionAssessment[],
+  synthesis: AuditSynthesis | null = null,
+): BusinessReadinessAudit {
   return {
     schemaVersion: "business-readiness-audit.v1",
     auditVersion: "business-audit-v1",
@@ -64,13 +69,103 @@ function audit(dimensions: DimensionAssessment[]): BusinessReadinessAudit {
         evidenceIds: ["profile.identity.description", "profile.signal.pricing_surface"],
       },
     ],
+    synthesis,
     limitations: ["No traffic, revenue or usage data is available to Vibe."],
     validationNotes: [],
     generatedAt: "2026-08-16T09:00:00.000Z",
   };
 }
 
+/**
+ * The synthesis a good model returns for the real Vibe Business evidence
+ * (CORE-2a.1).
+ *
+ * Two strengths and two blockers, each grouping several observations — the
+ * shape the contract asks for, against the same underlying facts that produced
+ * 10 strengths and 15 gaps under the old rubric. Two blockers rather than three
+ * on purpose: the ceiling is not a quota, and a fixture that always fills it
+ * would quietly assert the opposite.
+ */
+const VIBE_SYNTHESIS: AuditSynthesis = {
+  version: AUDIT_SYNTHESIS_VERSION,
+  overall:
+    "You have a real product that people can use, but nothing about it explains how anyone would pay you.",
+  strengths: [
+    {
+      headline: "People can understand and start using your product.",
+      explanation:
+        "Vibe found a consistent message about what you do, a clear way to sign up, and a real signed-in area with several working parts.",
+      whyItMatters: null,
+      evidenceIds: [
+        "profile.identity.description",
+        "live.site.title",
+        "live.conversion.primary_cta",
+        "auth.area.reached",
+      ],
+      dimensions: ["product", "conversion"],
+      tone: "positive",
+      confidence: "high",
+    },
+    {
+      headline: "Customers already have something to come back to.",
+      explanation:
+        "There is a signed-in workspace with a dashboard and integrations, not just a landing page.",
+      whyItMatters: null,
+      evidenceIds: ["auth.surface.dashboard", "auth.area.reached"],
+      dimensions: ["retention"],
+      tone: "positive",
+      confidence: "medium",
+    },
+  ],
+  blockers: [
+    {
+      headline: "People still don't have a clear way to pay you.",
+      explanation:
+        "Vibe couldn't find prices, a way to buy, or any payment step — on your site, in your code, or inside the signed-in product.",
+      whyItMatters:
+        "Someone can like what you built and still leave, because they never find out what it costs or how to start paying.",
+      evidenceIds: [
+        "profile.signal.pricing_surface",
+        "intent.monetization_model",
+        "live.surface.pricing",
+        "repo.surface.payments",
+        "profile.journey.checkout_not_found",
+      ],
+      dimensions: ["monetization", "conversion"],
+      tone: "critical",
+      confidence: "high",
+    },
+    {
+      headline: "You may not be able to tell what is actually working.",
+      explanation:
+        "Vibe couldn't find anything measuring what people do, so there is no way to see where they drop off.",
+      whyItMatters:
+        "Without that, every change you make is a guess, and you won't know which ones helped.",
+      evidenceIds: ["repo.surface.analytics", "profile.signal.analytics"],
+      dimensions: ["retention", "distribution"],
+      tone: "attention",
+      confidence: "medium",
+    },
+  ],
+};
+
 export const E2E_AUDIT_SCENARIOS = {
+  /**
+   * The synthesis contract, on the real product's evidence. This is what a new
+   * audit looks like: four conclusions rather than twenty-five findings.
+   */
+  "audit-synthesis": () =>
+    audit(
+      [
+        dimension("product", { score: 68, strengths: ["A"], gaps: ["B"] }),
+        dimension("monetization", { score: 10, gaps: ["C", "D"] }),
+        dimension("distribution", { score: 38, gaps: ["E"] }),
+        dimension("conversion", { score: 55, strengths: ["F"] }),
+        dimension("retention", { score: 45, strengths: ["G"], gaps: ["H"] }),
+      ],
+      VIBE_SYNTHESIS,
+    ),
+
   /**
    * Every dimension assessed, at the **real audit's volume**: 10 strengths and
    * 15 gaps across five dimensions.

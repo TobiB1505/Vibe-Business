@@ -67,8 +67,12 @@ describe("runBusinessReadinessAudit — happy path", () => {
     expect(outcome.audit.overall.assessedDimensions).toBe(3);
     expect(outcome.audit.overall.totalDimensions).toBe(5);
 
-    // The model has no field to supply one.
-    expect(JSON.stringify(provider.requests[0].outputSchema)).not.toContain("overall");
+    // The model has no field to supply one. Asserted against the numeric field
+    // names rather than the word "overall": CORE-2a.1 added `overallConclusion`,
+    // which is a sentence, and the invariant here is that the *number* is ours.
+    const serialized = JSON.stringify(provider.requests[0].outputSchema);
+    expect(serialized).not.toContain("overallScore");
+    expect(serialized).not.toContain("totalScore");
   });
 
   it("sends no tools, and constrains the output with a schema", async () => {

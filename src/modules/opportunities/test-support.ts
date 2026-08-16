@@ -122,6 +122,7 @@ export function fakeAudit(overrides: Partial<BusinessReadinessAudit> = {}): Busi
         evidenceIds: ["intent.monetization_model"],
       },
     ],
+    synthesis: null,
     limitations: ["No analytics, traffic or revenue data is available."],
     validationNotes: [],
     generatedAt: "2026-08-12T00:00:00.000Z",

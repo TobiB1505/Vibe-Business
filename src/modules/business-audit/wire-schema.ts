@@ -1,4 +1,4 @@
-import { AUDIT_DIMENSIONS, type AuditDimensionId } from "./schema";
+import { AUDIT_DIMENSIONS, CONCLUSION_TONES, type AuditDimensionId } from "./schema";
 
 /**
  * The Anthropic **transport** representation of an audit response, and the
@@ -85,6 +85,73 @@ const DIMENSION_ITEM_SCHEMA = {
   additionalProperties: false,
 } as const;
 
+/**
+ * One synthesized business conclusion (CORE-2a.1).
+ *
+ * Declared **once** and used for strengths and blockers alike, with `tone`
+ * deciding which it is. Two separate arrays would serialize this shape twice
+ * and compile it twice, which is the grammar-size problem Sprint 4 already paid
+ * for — see the note at the top of this file.
+ *
+ * `keyFindings` was removed in the same change rather than kept alongside.
+ * A key finding *was* a cross-cutting conclusion; asking for both would spend
+ * grammar and tokens on the model saying the same thing twice, in two shapes,
+ * with only one of them subject to the cardinality and grounding rules.
+ */
+const CONCLUSION_ITEM_SCHEMA = {
+  type: "object",
+  properties: {
+    headline: {
+      type: "string",
+      description:
+        "One plain sentence a non-technical founder understands, written to them. No jargon.",
+    },
+    explanation: {
+      type: "string",
+      description: "One or two sentences on what was actually found. Plain language.",
+    },
+    whyItMatters: {
+      // A plain string rather than `anyOf: [string, null]`, and that is a
+      // grammar decision, not a modelling one. The union would be the second
+      // `anyOf` in this schema, and the compiled-grammar budget is the reason
+      // this file exists at all (see the header). An empty string means "no
+      // commercial note", and `cleanText` already maps empty to null on the way
+      // into the domain — so the domain type keeps its honest `string | null`.
+      type: "string",
+      description:
+        "Why this matters commercially. Usually set for a blocker. Return an empty string when there is nothing worth adding.",
+    },
+    tone: {
+      type: "string",
+      enum: [...CONCLUSION_TONES],
+      description:
+        "positive = something the business already has. attention/critical = something holding it back.",
+    },
+    confidence: { type: "string", enum: ["high", "medium", "low"] },
+    dimensions: {
+      type: "array",
+      items: { type: "string", enum: [...AUDIT_DIMENSIONS] },
+      description: "Which dimensions this conclusion touches. More than one is expected and correct.",
+    },
+    evidenceIds: {
+      type: "array",
+      items: { type: "string" },
+      description:
+        "Every evidence id this conclusion rests on. At least one, and often several — grouping related evidence is the point. Never invent an id.",
+    },
+  },
+  required: [
+    "headline",
+    "explanation",
+    "whyItMatters",
+    "tone",
+    "confidence",
+    "dimensions",
+    "evidenceIds",
+  ],
+  additionalProperties: false,
+} as const;
+
 export const ANTHROPIC_AUDIT_OUTPUT_SCHEMA: Record<string, unknown> = {
   type: "object",
   properties: {
@@ -93,18 +160,16 @@ export const ANTHROPIC_AUDIT_OUTPUT_SCHEMA: Record<string, unknown> = {
       description: `One entry per dimension, exactly ${AUDIT_DIMENSIONS.length}: ${AUDIT_DIMENSIONS.join(", ")}. No duplicates.`,
       items: DIMENSION_ITEM_SCHEMA,
     },
-    keyFindings: {
+    overallConclusion: {
+      type: "string",
+      description:
+        "One concise sentence about the business as a whole, grounded in the assessment. Not generic encouragement.",
+    },
+    conclusions: {
       type: "array",
-      description: "At most 5 cross-cutting findings, each grounded in cited evidence.",
-      items: {
-        type: "object",
-        properties: {
-          finding: { type: "string" },
-          evidenceIds: { type: "array", items: { type: "string" } },
-        },
-        required: ["finding", "evidenceIds"],
-        additionalProperties: false,
-      },
+      description:
+        "The synthesis. 2-4 positive conclusions and AT MOST 3 negative ones (tone attention or critical). Group related evidence into one conclusion rather than listing each observation. Return fewer if fewer are justified; never pad to a count.",
+      items: CONCLUSION_ITEM_SCHEMA,
     },
     limitations: {
       type: "array",
@@ -112,7 +177,7 @@ export const ANTHROPIC_AUDIT_OUTPUT_SCHEMA: Record<string, unknown> = {
       description: "What this audit could not assess and why. At most 5 short phrases.",
     },
   },
-  required: ["dimensions", "keyFindings", "limitations"],
+  required: ["dimensions", "overallConclusion", "conclusions", "limitations"],
   additionalProperties: false,
 };
 
@@ -183,7 +248,8 @@ export function normalizeAnthropicAuditOutput(data: unknown): NormalizeResult {
     ok: true,
     data: {
       dimensions: byId,
-      keyFindings: data.keyFindings,
+      overallConclusion: data.overallConclusion,
+      conclusions: data.conclusions,
       limitations: data.limitations,
     },
   };

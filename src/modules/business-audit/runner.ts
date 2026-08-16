@@ -204,7 +204,7 @@ export async function runBusinessReadinessAudit(input: RunAuditInput): Promise<A
     };
   }
 
-  const { dimensions, keyFindings, limitations, notes } = validation.audit;
+  const { dimensions, synthesis, keyFindings, limitations, notes } = validation.audit;
 
   const validationNotes = [...notes];
   if (pack.trimmed) {
@@ -222,6 +222,7 @@ export async function runBusinessReadinessAudit(input: RunAuditInput): Promise<A
     dimensions,
     // Computed here, never taken from the model (Sprint 4 §7).
     overall: computeOverallReadiness(dimensions),
+    synthesis,
     keyFindings,
     limitations,
     validationNotes,
