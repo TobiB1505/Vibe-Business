@@ -1,5 +1,8 @@
 # Sprint CORE-2a.4 — Interactive Audit & "Vibe needs u"
 
+**Status: complete.** Implemented and dogfooded on a real, unrelated project — which found two
+defects no test could have, and reverted one of this sprint's own decisions.
+
 The audit has known which facts only the founder holds since CORE-2a.3. It never asked.
 
 ## Problem
@@ -156,9 +159,10 @@ and a different device. Browser state is never authoritative.
 | | |
 |---|---|
 | `pnpm lint` / `pnpm typecheck` | clean |
-| `pnpm test` | 3276 passed / 166 files |
+| `pnpm test` | 3285 passed / 167 files |
 | `pnpm build` | production build green |
 | `pnpm test:e2e` | 131 passed, chromium (14 new) |
+| Real dogfood | a hotel's internal tool, end to end through the UI, no seeding |
 | Migrations | both deployed and read back from the live database |
 
 The browser suite covers what only a browser can: context above question, no context invented when
@@ -171,25 +175,125 @@ existed caught **Next's own route announcer**, which every route renders. The te
 the page rather than the panel — green-by-accident in reverse, and exactly the class of mistake
 this suite exists to catch in components.
 
+## Dogfood — a real project, and the two defects only it could find
+
+Not Vibe Business. A hotel's internal vacation planner, connected by the founder while this
+sprint was being written, with nothing stored: no stage, no goal, no charging decision.
+
+### The gate fired, and the run died
+
+It asked for the stage, took the answer, recalculated, asked for the goal, took that — and then
+failed at `inputs_changed`. Both answers safely stored; the audit they were collected for dead.
+
+**The audit's input hash includes the founder intent hash.** So a run that pauses, asks the
+founder something and receives an answer has *by construction* invalidated its own identity. The
+feature was self-defeating in the most literal way available: the answer that makes the audit
+better is what stops it running.
+
+Nothing could have caught this before a real run. It needs a run that pauses, is answered, and
+resumes — and no test, fixture or browser suite exercised that path, because until this sprint
+the path did not exist.
+
+Hiding behind it was a second, worse defect. `failOperationStep` never failed the audit row.
+Failures *at* inference were recorded, because that step fails its own row; everything between
+claiming the row and reaching inference was not. So the operation failed, the audit stayed
+`analyzing`, and since both the in-flight and one-included indexes count that status, **the
+project could no longer start any audit at all** — while the screen cheerfully offered "Run
+business audit" over a row that would refuse every attempt. The worst kind of stuck, because
+nothing on it looks broken.
+
+Both are fixed and covered: a run that actually asked something adopts the identity its own
+question created, and a failing operation now fails the audit it claimed — guarded on
+non-terminal status, so failing from two places cannot overwrite a completed, paid-for result.
+
+### The run that completed
+
+| | |
+|---|---|
+| Questions asked | one — `monetization_intent` (stage and goal were already stored from the failed run) |
+| Contract / rubric | `business-audit-contract-v6` / `business-readiness-rubric-v9` |
+| Conclusions | 3 blockers, 2 strengths |
+| Validation notes | **none** |
+| Access mode | `included_first_audit`, correctly consumed |
+| Cost | $0.1950 — 16,775 in / 16,149 out / 10,681 thinking |
+| Latency | 163.8 s |
+
+The pause cost nothing, as designed. One paid call for the whole interaction.
+
+### What the audit said, which is the real test
+
+The second blocker is the one worth recording:
+
+> This looks like it was built specifically for one hotel — it isn't clear yet whether the plan
+> is to sell it to other hotels too, or keep it as a single relationship.
+
+No rule produces that. Vibe inferred from the product's name and branding that this is a
+single-client build, derived the actual business question — *one hotel or many?* — and saw that
+the answer determines pricing, discovery and architecture at once. Three lenses, one root problem.
+
+The third blocker found no sign-in path at all, which for a product whose entire purpose is a
+signed-in staff area is the most urgent thing on the list — and it says so carefully ("couldn't
+find", "isn't established") rather than asserting absence as proof.
+
+Founder intent used: `prototype / none / grow_revenue`. The audit did not smooth over the
+contradiction in it and made it the headline of the first blocker — *"You want to grow what this
+earns, but there's currently no decided way for anyone to actually pay for it"* — which is
+CORE-2a.3.1's "intent guides judgment; it does not override reality" working on real data for
+the first time.
+
+## A cap that was added and reverted
+
+Diagnosing that first run, three questions in a row read as an onboarding form, so the budget was
+cut to one for any run with no prior assessment: *the less Vibe has established, the less standing
+it has to interrupt.*
+
+That was wrong twice over, and the founder said so.
+
+**The product logic runs the other way.** A new user has nothing stored, which is exactly when
+stage and goal are worth asking — they change materiality across every lens, and an audit
+reasoning without them reasons worse. Suppressing the questions there buys a smoother first
+minute at the cost of the result.
+
+**And the premise was false.** A first audit is not data-less: Product Understanding has already
+run, so Vibe knows what the product *is* and can ground every question in it. What is missing is
+the lens assessment, not the understanding.
+
+What actually made that run feel like a form was the wording — a generic prompt under a line
+explaining Vibe's own process, while the profile held "a vacation planning tool for hotel staff…
+instead of scattered emails or spreadsheets" one field away. That fix stayed. Three grounded
+questions are a conversation; one generic question is still a form.
+
+It is also a fix for something never reported: the founder's actual complaint was that nothing
+visible happened after answering, which was the crash. Both sides of the argument are kept in the
+source, because the next person to see three questions in a row will have the same instinct.
+
 ## Residuals — honestly
 
-**Not yet dogfooded, and the reason is itself a result.** Vibe Business has all three founder-intent
-fields set and a `user_confirmed` audience. Under the rules above, the correct behaviour is
-**zero questions** — the audit runs straight through. That is §10 working as specified, and it also
-means the interaction cannot be demonstrated on this project without changing something real. §59
-forbids seeding, so the honest options are for the founder to genuinely revise an answer, or to
-wait for a project where the gate fires on its own.
+**The questions are asked before the scan, not during it.** The nine lenses come from one
+structured response, so no moment exists mid-analysis at which a question could arise from real
+lens output. For the *result* this is equivalent — the answers reach the same call. For the
+*feel* it is a form followed by an audit, rather than an audit that pauses. The agreed direction
+is presentation: the nine areas visible from the start with the question attached to its own area
+via `affectedLenses`, rather than a timed walk through nine steps, which would be exactly the
+dishonest progress bar this project already rejected in UI-2. Interleaving with genuine lens
+output would need a second inference pass — costed at roughly +$0.06–0.09 and 60–80s per first
+audit, and deferred.
+
+**No visible running state after an answer.** The founder submitted, and the screen showed
+"Not analyzed yet" with a Run button. That was the crash, but the gap is real regardless: nothing
+tells you the audit resumed. Carried into the UI sprint.
 
 **Submission is not covered end to end in a browser.** The fixture route has no session and no
-database, so the panel's wiring to the canonical stores rests on unit tests. The same documented
-gap every suite here carries, for the same reason: no container runtime for an isolated database.
+database. Now partly answered by the dogfood, which exercised the whole path twice.
 
-**One question at a time is untested against a real second question.** The recalculation path is
-unit-tested, but no real audit has yet asked two.
+**Two questions in one run is still untested.** The first run asked two, but across a failure;
+no single successful run has yet asked more than one.
 
-**No cost figures.** §65 asks for initial, resume and total inference cost. A pause costs nothing
-by construction, and the resumed run is one ordinary audit — but that is an argument, not a
-measurement, until a real paused run completes.
+**The legacy score is misleading for this product type.** The hotel tool scored 25/100 because
+the five scored dimensions measure monetization and distribution, largely inapplicable to an
+internal tool. The lens layer handles this correctly — `not_material` exists — and the scoring
+layer does not. Not a new defect: the documented score debt, now with a concrete example.
+
 
 ## Next
 
