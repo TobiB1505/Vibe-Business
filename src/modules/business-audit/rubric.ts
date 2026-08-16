@@ -28,9 +28,24 @@
  *     payment capability, no paying journey stage — which are five observations
  *     of one problem: people have no clear path to paying. A founder reading
  *     five bullets has to do the synthesis the audit was supposed to do.
+ *
+ * v6 (CORE-2a.3.1) adds a fourth, from the first nine-lens dogfood:
+ *
+ *  4. **A weak area is not automatically an urgent area.** That audit reasoned
+ *     well and then ranked badly. It found the three things that actually
+ *     mattered — an undefined revenue model, a first customer too broad to aim
+ *     at, no repeatable way to reach anyone — and filed two of them as
+ *     `medium`, while a compliance checklist (no terms, no privacy policy, no
+ *     contact route) took a top slot at `high` on a prototype with nothing to
+ *     sell.
+ *
+ *     Health and materiality are now separate judgments in the schema, and this
+ *     rubric answers them separately: how does this area look, and does it
+ *     block the founder's next milestone. They are different questions, and
+ *     collapsing them is what turns an audit into a checklist.
  */
 
-export const RUBRIC_VERSION = "business-readiness-rubric-v5" as const;
+export const RUBRIC_VERSION = "business-readiness-rubric-v6" as const;
 
 export const BUSINESS_READINESS_RUBRIC = `# Business Readiness Rubric (${RUBRIC_VERSION})
 
@@ -161,22 +176,101 @@ from the label.
 9. \`scalability\` — What happens to cost, margin and the founder's own time if
    this grows?
 
-### Assess each lens
+### Assess each lens — two separate judgments
 
-For each: a state, how much it matters *for this product right now*, a short
-internal summary, the evidence ids behind it, and — when it is blocked — what
-only the founder could tell you.
+For each lens give: its **health**, its **materiality**, a short internal
+summary, the evidence ids behind it, and — when it is blocked — what only the
+founder could tell you.
 
-States: \`strong\`, \`adequate\`, \`unclear\`, \`not_material\`,
-\`blocked_by_missing_context\`.
+These two are independent, and keeping them apart is the single most important
+thing in this section.
+
+**\`health\`** — how this area of the business actually looks.
+\`strong\`, \`adequate\`, \`weak\`, \`unclear\`, \`blocked_by_missing_context\`.
+
+Use \`weak\` when something is genuinely poor. Do not reach for \`unclear\`
+to soften it — \`unclear\` means the evidence does not settle the question, not
+that the answer is uncomfortable. A business with no way to take payments has
+\`weak\` revenue health, not unclear.
+
+**\`materiality\`** — when this area needs attention.
+\`now\`, \`soon\`, \`later\`, \`not_material\`, \`unknown\`.
+
+- \`now\` — it blocks the next meaningful business milestone.
+- \`soon\` — it becomes material once that milestone is reached.
+- \`later\` — real, but a later stage's problem; its prerequisites do not exist.
+- \`not_material\` — does not apply to this kind of business, and will not.
+- \`unknown\` — cannot be judged without something only the founder knows.
+
+### A weak area is not automatically an urgent area
+
+This is the rule that decides whether this audit is worth reading.
+
+**Low health does not imply high materiality.** A lens can be \`weak\` and
+\`later\` at the same time, and saying so is one of the most useful things you
+can tell an early founder. "Not set up yet — and too early to be one of your
+biggest problems" is intelligent. Ranking it as urgent because it scored badly
+is a checklist wearing the costume of judgment.
+
+The reverse is equally true. A lens can be \`adequate\` and \`now\`: an
+audience that is *directionally* clear but too broad to aim at may be the thing
+blocking everything else, even though it is not the worst-looking area.
+
+If you find yourself raising materiality because something is bad, stop. Say it
+is bad in \`health\`. Materiality answers a different question.
+
+### The milestone rule — what actually decides materiality
+
+Ask: **what currently prevents this founder from reaching their next meaningful
+business milestone?**
+
+Not: what is missing from this business overall. Everything is missing from
+every early business. The audit's value is knowing which absence matters today.
+
+Work out the next milestone from the evidence and the founder's own words. As a
+rough guide, not a lookup table:
+
+- An early prototype needs to prove the problem, the customer and the business
+  are real at all.
+- Live but nobody using it needs its first meaningful users.
+- Users but no revenue needs a first paying customer and a decided model.
+- Early revenue needs it to become repeatable — acquisition, retention, margin.
+- Growing needs scale, efficiency and operations to hold.
+
+What blocks that milestone is \`now\`. What becomes relevant just after it is
+\`soon\`. What belongs to a milestone beyond that is \`later\`.
+
+### The prematurity rule
+
+**Do not prioritize downstream work before the stage it belongs to exists.**
+
+- No meaningful users → optimizing repeat use is premature.
+- No meaningful traffic → detailed funnel measurement is premature.
+- No decided revenue model → billing operations are premature.
+- No clarity on the first customer → scaling how you reach people is premature.
+- No payments taken → refund and cancellation operations are usually premature.
+
+This is a way of reasoning, not a fixed ordering. A regulated fintech prototype
+may genuinely need legal foundations on day one where an internal tool does not.
+Reason from this product's stage, type, risk and the prerequisites it actually
+has — never from a stage-to-priority table.
+
+### What to weigh for each lens
+
+Business impact. Relevance at this stage. Relevance to the founder's stated
+goal. Whether its prerequisites exist yet. How urgent it truly is. How
+confident the evidence makes you. What happens if it is ignored for three
+months. And whether another unresolved problem has to be solved first.
+
+Do not compute this. Judge it, and let the summary show the reasoning.
 
 ### Materiality is not fixed
 
 The same lens matters differently for different products and stages, and
 judging every product against one template is how an audit becomes useless.
 
-- A one-off digital product has little to retain. Retention is \`not_material\`,
-  not weak.
+- A one-off digital product has little to retain. That is \`not_material\`,
+  not weak — it is the business model working as intended.
 - A portfolio or service site may have no recurring revenue by design.
 - A pre-launch prototype with no users does not need funnel measurement yet;
   the same gap becomes material once real traffic exists.
@@ -185,12 +279,46 @@ judging every product against one template is how an audit becomes useless.
 
 Judge the product in front of you, at the stage it is actually at.
 
+### Calibrating the lenses that are easiest to get wrong
+
+\`business_readiness\` — do not make this material just because several
+expected items are absent. Missing terms, privacy wording, contact routes and
+billing screens are real gaps, and for a prototype that has not decided how it
+will charge and has no customers they are usually \`later\`. Ask instead
+whether their absence blocks the next milestone, creates immediate real risk,
+or is legally necessary *at this stage*. For a live product already taking
+money from consumers, the identical gap can be \`now\`. Same gap, different
+materiality — the stage is what changed.
+
+\`measurement\` — reflect whether there is yet anything meaningful to measure.
+Almost no traffic makes missing instrumentation a poor candidate for a top
+problem; the founder would be measuring noise. Once people are actually being
+acquired, or paying, visibility can quickly become \`now\`. Never treat having
+analytics installed as a proxy for business maturity.
+
+\`retention\` — depends on the business model, not on the calendar. Existential
+for a subscription with paying customers. Frequently \`not_material\` for a
+one-off purchase. Usually premature for a prototype with no users.
+
+\`acquisition\` — do not reflexively downgrade this just because a founder is
+early. If the product is clear, the offer credible and the model plausible, but
+there is no way to reach anyone, that may be the binding constraint. But if
+nobody yet knows who the first customer is, *scaling* how you reach people is
+premature — the audience question comes first.
+
+\`revenue_economics\` — this is not a question about pricing pages. Reason
+about what customers would actually pay for, whether a pricing logic exists at
+all, what it costs to deliver each use, whether income can grow faster than
+that cost, and where free stops and paid starts. A product whose delivery costs
+real money per use has an economics question even before it has a price.
+
 ### The founder's goal changes what matters
 
 Founder intent is in the evidence. Someone trying to win their first paying
 customer needs offer, audience and revenue attended to before retention
 tuning. Someone with paying customers trying to keep them has the reverse
-priority.
+priority. The same evidence should produce a different ordering for a different
+stated goal — if it would not, the goal is not being used.
 
 ### Intent guides judgment; it does not override reality
 
@@ -254,6 +382,51 @@ Technical gaps are rarely root problems. Missing search-engine signals are a
 business blocker only when discovery is genuinely what is holding this business
 back — not by default because they are easy to detect.
 
+### Ask whether several lenses are describing one problem
+
+Before writing the blockers, look across the lens assessments and ask: **are
+these separate problems, or symptoms of the same root business issue?**
+
+Undecided pricing, no path to pay, and unexamined cost-to-serve are three
+lenses pointing at one thing — *the economics of this business are not defined
+yet* — and that is one blocker citing all of it, not three.
+
+Others stay separate. An unclear first customer and no way to reach people are
+related, and one may be the prerequisite of the other, but they are still two
+distinct problems with two distinct answers. Relatedness is not sameness.
+
+A lens can also support another lens's conclusion without becoming its own
+blocker: not being able to see what users do may be part of why acquisition is
+unproven, rather than a third top problem.
+
+### Business conclusion, then the evidence for it
+
+Keep three layers apart, and never let the lower ones do the top one's job.
+
+1. **The conclusion** — what the underlying business problem *is*.
+2. **Why Vibe thinks this** — the evidence that supports that judgment.
+3. **Technical detail** — exactly what was and was not detected.
+
+The customer-facing explanation is layer 1. It answers *what is the business
+problem?*, not *what did the scanner fail to find?*
+
+- Not: "There is no pricing shown anywhere, no way for anyone to pay, and no
+  payment system in the code." That is three findings, and the founder has to
+  work out what they mean.
+- Instead: **you haven't yet decided what people should pay for, how usage
+  turns into a price, or how the cost of running this becomes sustainable
+  income.**
+
+The findings are not lost — they are the cited evidence, and they remain
+inspectable underneath the conclusion.
+
+**A missing product surface belongs in the evidence, not in the explanation —
+unless the absence itself is genuinely the business problem.** Context decides:
+for a business with a clear model, real demand and known economics, "customers
+literally cannot complete a purchase" *is* the problem and should be said
+plainly. For a founder who has not decided how to charge, a missing checkout is
+a symptom of the undecided model, and leading with it hides the real issue.
+
 ### Do not over-compress
 
 The opposite failure is just as bad. Do not merge unrelated problems to reach a
@@ -273,10 +446,23 @@ If the evidence supports two blockers, return two. Never invent a third.
 
 ### Choosing which blockers are primary
 
-Weigh, together: how much this affects the business becoming viable; how much
-it matters at this product's stage; how confident the evidence makes you; and
-how relevant it is to what the founder said they are trying to do next. A
-high-impact problem you can barely evidence outranks a small one you can prove.
+**Select for materiality, not for severity.** The blockers are the answer to
+"what should this founder work on now?", so they come from the lenses you
+marked \`now\` — and, where those do not fill the list, \`soon\`.
+
+A \`weak\` lens you marked \`later\` does not belong here. It is preserved in
+the lens assessments, it is real, and it will rise on its own once the problems
+ahead of it are solved. Promoting it today would push out something that
+actually blocks the next step.
+
+Then check your own work: **is any lens you marked \`now\` missing from all
+three blockers, while a \`later\` one took its place?** If so, you ranked by
+how bad things looked rather than by what matters, and the list is wrong.
+
+Beyond that, weigh: how much this affects the business becoming viable; how
+confident the evidence makes you; and how relevant it is to what the founder
+said they are trying to do next. A high-impact problem you can barely evidence
+outranks a small one you can prove.
 
 Each conclusion records the lenses it came from. Most real blockers span
 several — that is expected, and a conclusion forced into one lens is usually a

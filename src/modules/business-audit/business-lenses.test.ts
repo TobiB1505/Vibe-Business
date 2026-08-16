@@ -19,8 +19,8 @@ const KNOWN = new Set(["live.site.title", "profile.signal.pricing_surface", "rep
 function lens(overrides: Record<string, unknown> = {}) {
   return {
     lens: "offer",
-    state: "adequate",
-    materiality: "medium",
+    health: "adequate",
+    materiality: "soon",
     summary: "Internal reasoning.",
     evidenceIds: ["live.site.title"],
     missingContext: [],
@@ -84,11 +84,16 @@ describe("no forced coverage (§15, §44)", () => {
    * "This does not apply to this kind of product" is a result, not a gap.
    */
   it("preserves a lens marked not material rather than dropping it", () => {
-    const result = audit([lens({ lens: "retention", state: "not_material", materiality: "low" })]);
+    const result = audit([
+      lens({ lens: "retention", health: "adequate", materiality: "not_material" }),
+    ]);
     const retention = synthesisOf(result).lenses[0]!;
 
-    expect(retention.state).toBe("not_material");
-    expect(retention.materiality).toBe("low");
+    // Not applying is a materiality judgment, and after CORE-2a.3.1 it can only
+    // be expressed as one. The health stays honest: there is nothing wrong with
+    // a one-off product having nothing to come back to.
+    expect(retention.materiality).toBe("not_material");
+    expect(retention.health).toBe("adequate");
   });
 
   /**
@@ -99,15 +104,15 @@ describe("no forced coverage (§15, §44)", () => {
     const result = audit([
       lens({
         lens: "revenue_economics",
-        state: "blocked_by_missing_context",
-        materiality: "high",
+        health: "blocked_by_missing_context",
+        materiality: "now",
         evidenceIds: [],
         missingContext: ["Whether the founder intends to charge for this at all"],
       }),
     ]);
 
     const economics = synthesisOf(result).lenses[0]!;
-    expect(economics.state).toBe("blocked_by_missing_context");
+    expect(economics.health).toBe("blocked_by_missing_context");
     expect(economics.evidenceIds).toEqual([]);
     expect(economics.missingContext).toEqual([
       "Whether the founder intends to charge for this at all",
@@ -115,8 +120,8 @@ describe("no forced coverage (§15, §44)", () => {
   });
 
   it("keeps an unclear lens rather than forcing a verdict", () => {
-    const result = audit([lens({ lens: "acquisition", state: "unclear" })]);
-    expect(synthesisOf(result).lenses[0]!.state).toBe("unclear");
+    const result = audit([lens({ lens: "acquisition", health: "unclear" })]);
+    expect(synthesisOf(result).lenses[0]!.health).toBe("unclear");
   });
 });
 
@@ -141,9 +146,19 @@ describe("lens hygiene", () => {
     expect(synthesisOf(result).lenses[0]!.evidenceIds).toEqual(["live.site.title"]);
   });
 
-  it("falls back to unclear rather than inventing a state", () => {
-    const result = audit([lens({ state: "amazing" })]);
-    expect(synthesisOf(result).lenses[0]!.state).toBe("unclear");
+  it("falls back to unclear rather than inventing a health", () => {
+    const result = audit([lens({ health: "amazing" })]);
+    expect(synthesisOf(result).lenses[0]!.health).toBe("unclear");
+  });
+
+  /**
+   * `unknown`, not a middle value. An unreadable materiality is one the audit
+   * did not state, and quietly promoting it to "soon" would let a lens nobody
+   * assessed compete for one of three top-three slots.
+   */
+  it("falls back to unknown rather than guessing a materiality", () => {
+    const result = audit([lens({ materiality: "urgent-ish" })]);
+    expect(synthesisOf(result).lenses[0]!.materiality).toBe("unknown");
   });
 });
 

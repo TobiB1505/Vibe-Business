@@ -1,10 +1,11 @@
 import { checkCustomerLanguage } from "./customer-language";
+import { findEvidenceEnumeration, findPriorityInversions } from "./lens-priority";
 import {
   AUDIT_DIMENSIONS,
   AUDIT_SYNTHESIS_VERSION,
   BUSINESS_LENSES,
+  LENS_HEALTH,
   LENS_MATERIALITY,
-  LENS_STATES,
   CONCLUSION_TONES,
   DIMENSION_LABELS,
   type AssessmentStatus,
@@ -13,8 +14,8 @@ import {
   type BusinessConclusion,
   type BusinessLens,
   type BusinessLensAssessment,
+  type LensHealth,
   type LensMateriality,
-  type LensState,
   type Confidence,
   type ConclusionTone,
   type DimensionAssessment,
@@ -192,7 +193,10 @@ function cleanLensList(value: unknown): BusinessLens[] {
  *
  * Kept whole rather than filtered down: this is the audit's reasoning, and a
  * lens the model marked `not_material` or `blocked_by_missing_context` is a
- * *result*, not a gap to drop. An unknown lens name is discarded — the closed
+ * *result*, not a gap to drop. Keeping the ones that did not become blockers is
+ * also what makes the re-audit loop work (CORE-2a.3.1 §36): a real gap ranked
+ * `later` today has to still be here when the problems ahead of it are solved.
+ * An unknown lens name is discarded — the closed
  * vocabulary is the point — and a duplicate keeps the first, because reporting
  * one lens twice says nothing the first entry did not.
  *
@@ -215,10 +219,15 @@ function validateLenses(value: unknown, known: Set<string>, dropped: Set<string>
 
     assessments.push({
       lens,
-      state: LENS_STATES.includes(raw.state as LensState) ? (raw.state as LensState) : "unclear",
+      health: LENS_HEALTH.includes(raw.health as LensHealth)
+        ? (raw.health as LensHealth)
+        : "unclear",
+      // `unknown`, not a middle value. A materiality we could not read is a
+      // materiality we do not know, and defaulting it to something plausible
+      // would let an unparsed lens silently compete for a top-three slot.
       materiality: LENS_MATERIALITY.includes(raw.materiality as LensMateriality)
         ? (raw.materiality as LensMateriality)
-        : "medium",
+        : "unknown",
       summary: cleanText(raw.summary, 400) ?? "No reasoning was recorded for this lens.",
       evidenceIds: filterEvidenceIds(raw.evidenceIds, known, dropped),
       missingContext: cleanStringList(raw.missingContext, MAX_LIST_ITEMS),
@@ -476,6 +485,13 @@ export function validateAuditOutput(data: unknown, knownEvidenceIds: Set<string>
         `Wording to improve: ${language.discouraged.join(", ")}. The audit says this in Vibe's words rather than the founder's.`,
       );
     }
+
+    // Whether the top three agree with the audit's own lens assessments
+    // (CORE-2a.3.1 §62), and whether a conclusion states a problem or lists
+    // findings (§21). Both are notes for the same reason as the wording above:
+    // they are strong signals about quality, not proof of a defect, and an
+    // audit that reasons well is worth keeping even when it ranks imperfectly.
+    notes.push(...findPriorityInversions(synthesis), ...findEvidenceEnumeration(synthesis));
   }
 
   const keyFindings: KeyFinding[] = [];

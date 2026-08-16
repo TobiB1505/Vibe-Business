@@ -1,5 +1,6 @@
 import type { ProductProfile } from "@/modules/product-understanding/schema";
 import { isEmptyFounderIntent, type FounderIntent } from "@/modules/projects/founder-intent";
+import { isActionable } from "./lens-priority";
 import type { BusinessLensAssessment, BusinessLens } from "./schema";
 
 /**
@@ -98,12 +99,20 @@ function lensOf(
   return lenses.find((entry) => entry.lens === lens);
 }
 
-/** A lens that matters and could not be assessed is the strongest signal there is. */
+/**
+ * A lens that matters *now* and could not be assessed is the strongest signal
+ * there is — that is the audit saying it cannot judge the business without an
+ * answer only the founder has.
+ *
+ * Both halves are required. A blocked lens the audit ranked `later` is a
+ * question worth asking eventually, not one worth interrupting for, and asking
+ * it today is how a short adaptive prompt turns back into an onboarding form.
+ */
 function isBlockedAndMaterial(assessment: BusinessLensAssessment | undefined): boolean {
   if (!assessment) return false;
   const blocked =
-    assessment.state === "blocked_by_missing_context" || assessment.state === "unclear";
-  return blocked && assessment.materiality !== "low";
+    assessment.health === "blocked_by_missing_context" || assessment.health === "unclear";
+  return blocked && isActionable(assessment.materiality);
 }
 
 export type QuestionSelectionInput = {

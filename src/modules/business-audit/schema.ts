@@ -181,27 +181,74 @@ export const BUSINESS_LENSES = [
 export type BusinessLens = (typeof BUSINESS_LENSES)[number];
 
 /**
- * Where a lens currently stands.
+ * How healthy this area of the business is — and **only** that.
  *
- * `not_material` and `blocked_by_missing_context` are the two that keep this
- * honest. A one-off digital product has no recurring use to retain, and saying
- * "retention is weak" there would be criticising it for not being a different
- * product. And a lens that genuinely depends on something only the founder
- * knows must say so rather than guess — that is also what makes an adaptive
- * question worth asking.
+ * ## Why `weak` had to exist (CORE-2a.3.1 §29)
+ *
+ * The first version of this enum was `strong | adequate | unclear |
+ * not_material | blocked_by_missing_context`. It had no way to say *"this is
+ * genuinely poor"*. The real dogfood shows what that cost: business readiness
+ * — no privacy policy, no terms, no contact route, nothing found across three
+ * independent sources — came back as `unclear`, which is false. Nothing about
+ * it was unclear.
+ *
+ * The model wanted to express severity and the only lever left was
+ * `materiality: high`. That is how a compliance checklist displaced the
+ * business problems underneath it: **severity leaked into priority because
+ * health had no severity axis.** The fix is a vocabulary that lets a lens be
+ * bad and unimportant at the same time.
+ *
+ * `not_material` is gone from here on purpose. "This does not matter for this
+ * product" was never a statement about health — it is a priority judgment, and
+ * it now lives in `LENS_MATERIALITY` where it belongs.
  */
-export const LENS_STATES = [
+export const LENS_HEALTH = [
   "strong",
   "adequate",
+  /** Real, assessed, and poor. Says nothing about whether it matters yet. */
+  "weak",
+  /** The evidence genuinely does not settle it. Not a polite word for weak. */
   "unclear",
-  "not_material",
   "blocked_by_missing_context",
 ] as const;
-export type LensState = (typeof LENS_STATES)[number];
+export type LensHealth = (typeof LENS_HEALTH)[number];
 
-/** How much this lens matters *for this product, at this stage, right now*. */
-export const LENS_MATERIALITY = ["high", "medium", "low"] as const;
+/**
+ * When this area needs attention — a judgment about *time*, not about quality.
+ *
+ * Deliberately temporal rather than `high | medium | low`. A severity scale
+ * invites the reading "low means it is fine", which is exactly wrong: a lens is
+ * routinely `weak` and `later` at the same time, and that pairing is the most
+ * useful thing this audit can say to an early founder. "Not set up yet, and too
+ * early to be one of your biggest problems" is intelligent advice (§31); "low"
+ * is a shrug that could mean either.
+ *
+ * `not_material` sits here now: a one-off digital product has nothing to
+ * retain, and that is a permanent property of the business model rather than a
+ * stage it will grow out of — which is precisely what separates it from
+ * `later`.
+ */
+export const LENS_MATERIALITY = [
+  /** Blocks the next meaningful business milestone. */
+  "now",
+  /** Becomes material once the current milestone is reached. */
+  "soon",
+  /** Real, but a later stage's problem. Its prerequisites do not exist yet. */
+  "later",
+  /** Does not apply to this kind of business, and will not. */
+  "not_material",
+  /** Cannot be judged without something only the founder knows. */
+  "unknown",
+] as const;
 export type LensMateriality = (typeof LENS_MATERIALITY)[number];
+
+/**
+ * Materiality values that mean "this is a candidate for the top three".
+ *
+ * Exported so ranking, question selection and tests share one definition of
+ * "matters now" rather than each re-deriving it from string comparisons.
+ */
+export const ACTIONABLE_MATERIALITY: readonly LensMateriality[] = ["now", "soon"] as const;
 
 /**
  * One lens, assessed.
@@ -213,7 +260,15 @@ export type LensMateriality = (typeof LENS_MATERIALITY)[number];
  */
 export type BusinessLensAssessment = {
   lens: BusinessLens;
-  state: LensState;
+  /** How this area of the business actually looks. Never a priority claim. */
+  health: LensHealth;
+  /**
+   * When it needs attention.
+   *
+   * Independent of `health` by design (§3, §5). A lens may be `weak` and
+   * `later`, or `adequate` and `now` — the second is how a decent-but-vague
+   * audience becomes the thing to fix before anything else works.
+   */
   materiality: LensMateriality;
   /** Internal prose. May be technical; it is not shown to the founder. */
   summary: string;
@@ -241,7 +296,7 @@ export type BusinessLensAssessment = {
  * improving are independent events, and an audit has to be able to say which
  * of them it carries.
  */
-export const AUDIT_SYNTHESIS_VERSION = "business-audit-synthesis-v2" as const;
+export const AUDIT_SYNTHESIS_VERSION = "business-audit-synthesis-v3" as const;
 
 /**
  * The **audit contract** version (CORE-2a.2 §21–§23).
@@ -259,7 +314,7 @@ export const AUDIT_SYNTHESIS_VERSION = "business-audit-synthesis-v2" as const;
  * "what does Vibe currently think about this business?" — which is exactly the
  * question the refresh decision asks.
  */
-export const AUDIT_CONTRACT_VERSION = "business-audit-contract-v3" as const;
+export const AUDIT_CONTRACT_VERSION = "business-audit-contract-v4" as const;
 
 /**
  * The oldest contract still treated as current.
@@ -267,10 +322,13 @@ export const AUDIT_CONTRACT_VERSION = "business-audit-contract-v3" as const;
  * Separate from `AUDIT_CONTRACT_VERSION` so a bump does not automatically
  * obsolete every stored audit: a change that adds something without
  * invalidating older results can raise the current version and leave the
- * minimum alone. Today they are equal, because the synthesis contract genuinely
- * did invalidate the enumerate-everything audits before it.
+ * minimum alone. Today they are equal, and v4 is the second time that has been
+ * the right call: a v3 audit ranked a lens's importance on a scale that no
+ * longer exists, so its "these are your three biggest problems" is not an
+ * answer this contract would give. The findings were fine; the ordering was
+ * the product.
  */
-export const MIN_SUPPORTED_AUDIT_CONTRACT_VERSION = "business-audit-contract-v3" as const;
+export const MIN_SUPPORTED_AUDIT_CONTRACT_VERSION = "business-audit-contract-v4" as const;
 
 /**
  * How a conclusion reads, not how severe it is.

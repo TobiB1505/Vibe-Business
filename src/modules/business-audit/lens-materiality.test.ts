@@ -222,3 +222,136 @@ describe("the rubric does not prime the vocabulary it forbids", () => {
     }
   });
 });
+
+/**
+ * The calibration rules (CORE-2a.3.1 §7, §8, §14–§18).
+ *
+ * These assert the rubric *states* each rule. That is a weaker claim than "the
+ * model follows it", and deliberately so — the sprint's acceptance criterion is
+ * the real audit, not this file. What a test can guarantee is that a rule we
+ * believe we shipped is actually in the instructions, rather than in a sprint
+ * document nobody sends to the model. The first nine-lens dogfood failed on
+ * ordering while every rule about ordering was, in fact, absent from the rubric.
+ */
+describe("the rubric separates how bad something is from when it matters", () => {
+  const flowed = BUSINESS_READINESS_RUBRIC.toLowerCase().replace(/\s+/g, " ");
+
+  it("states the rule as a headline the model cannot miss", () => {
+    expect(flowed).toContain("a weak area is not automatically an urgent area");
+    expect(flowed).toContain("low health does not imply high materiality");
+  });
+
+  it("names both directions, so the rule is not read as 'weak means later'", () => {
+    // Weak but not urgent.
+    expect(flowed).toContain("`weak` and `later` at the same time");
+    // Healthy but urgent — the audience case from the real dogfood.
+    expect(flowed).toContain("`adequate` and `now`");
+  });
+
+  it("tells the model to say severity in health rather than in materiality", () => {
+    expect(flowed).toContain("if you find yourself raising materiality because something is bad");
+  });
+
+  it("gives `weak` a meaning, so severity has somewhere to go", () => {
+    expect(flowed).toContain("use `weak` when something is genuinely poor");
+    expect(flowed).toContain("do not reach for `unclear` to soften it");
+  });
+
+  /** §7 — the question that replaces "what is missing from this business?". */
+  it("states the milestone rule", () => {
+    expect(flowed).toContain(
+      "what currently prevents this founder from reaching their next meaningful business milestone",
+    );
+    expect(flowed).toContain("everything is missing from every early business");
+  });
+
+  /** §8 — with the prerequisite absent, the downstream work is premature. */
+  it("states the prematurity rule and its examples", () => {
+    expect(flowed).toContain("do not prioritize downstream work before the stage it belongs to");
+    expect(flowed).toContain("no meaningful traffic → detailed funnel measurement is premature");
+    expect(flowed).toContain("no decided revenue model → billing operations are premature");
+  });
+
+  /** §9 — reasoning, not a stage-to-priority lookup table. */
+  it("forbids the static stage matrix it would be easy to build instead", () => {
+    expect(flowed).toContain("never from a stage-to-priority table");
+    expect(flowed).toContain("regulated fintech prototype");
+  });
+});
+
+describe("the rubric calibrates the lenses that were miscalibrated (§14–§18)", () => {
+  const flowed = BUSINESS_READINESS_RUBRIC.toLowerCase().replace(/\s+/g, " ");
+
+  /** §14 — the lens that displaced two real business problems. */
+  it("stops readiness becoming material merely because items are absent", () => {
+    expect(flowed).toContain("do not make this material just because several expected items are absent");
+    // And the counterweight, in the same paragraph, so it cannot be read as
+    // "legal never matters".
+    expect(flowed).toContain("the identical gap can be `now`");
+    expect(flowed).toContain("same gap, different materiality");
+  });
+
+  /** §15 — measuring noise is not a top-three problem. */
+  it("ties measurement to there being something worth measuring", () => {
+    expect(flowed).toContain("whether there is yet anything meaningful to measure");
+    expect(flowed).toContain("never treat having analytics installed as a proxy for business maturity");
+  });
+
+  /** §16 — a one-off product is not failing at retention. */
+  it("ties retention to the business model rather than the calendar", () => {
+    expect(flowed).toContain("depends on the business model, not on the calendar");
+  });
+
+  /** §17 — cuts both ways, which is the part usually lost. */
+  it("keeps acquisition able to be the binding constraint", () => {
+    expect(flowed).toContain("do not reflexively downgrade this just because a founder is early");
+    expect(flowed).toContain("the audience question comes first");
+  });
+
+  /** §18 — the lens that must not collapse back to a pricing page. */
+  it("pushes revenue past pricing surfaces into economics", () => {
+    expect(flowed).toContain("this is not a question about pricing pages");
+    expect(flowed).toContain("what it costs to deliver each use");
+    expect(flowed).toContain("has an economics question even before it has a price");
+  });
+});
+
+describe("the rubric raises conclusions above the evidence under them (§19–§24)", () => {
+  const flowed = BUSINESS_READINESS_RUBRIC.toLowerCase().replace(/\s+/g, " ");
+
+  it("names the three layers and forbids mixing them", () => {
+    expect(flowed).toContain("business conclusion, then the evidence for it");
+    expect(flowed).toContain("what did the scanner fail to find");
+  });
+
+  /** The real rejected explanation, shown next to what it should have said. */
+  it("shows the enumeration it is replacing, and the replacement", () => {
+    expect(flowed).toContain("that is three findings, and the founder has to work out what they mean");
+    expect(flowed).toContain("how usage turns into a price");
+  });
+
+  /** §22, §49 — context decides, so this never becomes a ban. */
+  it("keeps a missing surface able to be the business problem itself", () => {
+    expect(flowed).toContain("unless the absence itself is genuinely the business problem");
+    expect(flowed).toContain("customers literally cannot complete a purchase");
+  });
+
+  /** §23, §24 — one root economic blocker rather than three symptoms. */
+  it("asks whether several lenses describe one problem", () => {
+    expect(flowed).toContain("are these separate problems, or symptoms of the same root business issue");
+    expect(flowed).toContain("the economics of this business are not defined yet");
+    // And the guard against over-merging, in the same section.
+    expect(flowed).toContain("relatedness is not sameness");
+  });
+
+  /** §25 — selection follows materiality, and the model checks its own work. */
+  it("tells the model to select for materiality and then verify it did", () => {
+    expect(flowed).toContain("select for materiality, not for severity");
+    expect(flowed).toContain("is any lens you marked `now` missing from all three blockers");
+  });
+
+  /** §36 — a `later` gap has to survive to rise in a future audit. */
+  it("promises the deprioritized problems are kept rather than discarded", () => {
+    expect(flowed).toContain("it will rise on its own once the problems ahead of it are solved");
+  });
+});

@@ -2,8 +2,8 @@ import {
   AUDIT_DIMENSIONS,
   BUSINESS_LENSES,
   CONCLUSION_TONES,
+  LENS_HEALTH,
   LENS_MATERIALITY,
-  LENS_STATES,
   type AuditDimensionId,
 } from "./schema";
 
@@ -171,24 +171,32 @@ const CONCLUSION_ITEM_SCHEMA = {
  *
  * Deliberately lean. This is the audit's working-out, not its output, and every
  * field added here is compiled into the grammar and generated on every run —
- * so it carries a state, a materiality, a short internal note and its
+ * so it carries its health, its materiality, a short internal note and its
  * grounding, and nothing else. No score: the five dimensions are the scored
  * layer and giving the lenses numbers too would invite the two to disagree.
+ *
+ * `health` and `materiality` are two fields rather than one because they are
+ * two questions (CORE-2a.3.1 §3). When there was only a state enum with no way
+ * to say "weak", the model expressed severity through materiality instead, and
+ * a prototype's missing privacy policy outranked its undefined revenue model.
+ * The descriptions below carry that separation to the model, since the field
+ * names alone did not.
  */
 const LENS_ITEM_SCHEMA = {
   type: "object",
   properties: {
     lens: { type: "string", enum: [...BUSINESS_LENSES] },
-    state: {
+    health: {
       type: "string",
-      enum: [...LENS_STATES],
+      enum: [...LENS_HEALTH],
       description:
-        "not_material when this lens genuinely does not apply to this kind of product; blocked_by_missing_context when only the founder could answer it.",
+        "How this area of the business ACTUALLY LOOKS. Say weak when it is genuinely poor; unclear means the evidence does not settle it, not that the answer is uncomfortable. Never a statement about priority.",
     },
     materiality: {
       type: "string",
       enum: [...LENS_MATERIALITY],
-      description: "How much this matters for THIS product at THIS stage — not in general.",
+      description:
+        "WHEN this needs attention, independent of how it looks. now blocks the founder's next milestone; soon follows it; later is a real gap whose prerequisites do not exist yet; not_material does not apply to this kind of business. A lens is routinely weak and later at once.",
     },
     summary: {
       type: "string",
@@ -201,7 +209,7 @@ const LENS_ITEM_SCHEMA = {
       description: "What only the founder could tell you. Empty unless the lens is blocked on it.",
     },
   },
-  required: ["lens", "state", "materiality", "summary", "evidenceIds", "missingContext"],
+  required: ["lens", "health", "materiality", "summary", "evidenceIds", "missingContext"],
   additionalProperties: false,
 } as const;
 

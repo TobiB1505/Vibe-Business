@@ -7,7 +7,7 @@ import {
   selectFounderQuestions,
   shouldAskBeforeAudit,
 } from "./founder-questions";
-import type { BusinessLensAssessment, BusinessLens } from "./schema";
+import type { BusinessLensAssessment, BusinessLens, LensMateriality } from "./schema";
 
 /**
  * Adaptive founder questions (CORE-2a.3 §22–§31, §74).
@@ -23,10 +23,13 @@ const FULL_INTENT: FounderIntent = {
   primaryGoal: "grow_revenue",
 };
 
-function blocked(lens: BusinessLens, materiality: "high" | "medium" | "low" = "high"): BusinessLensAssessment {
+function blocked(
+  lens: BusinessLens,
+  materiality: LensMateriality = "now",
+): BusinessLensAssessment {
   return {
     lens,
-    state: "blocked_by_missing_context",
+    health: "blocked_by_missing_context",
     materiality,
     summary: "Could not assess.",
     evidenceIds: [],
@@ -119,9 +122,17 @@ describe("uncertainty x impact, not emptiness (§23)", () => {
     );
   });
 
-  it("ignores a blocked lens that does not matter", () => {
-    const low = select({ lenses: [blocked("audience", "low")] });
-    expect(intentsOf(low)).not.toContain("first_customer");
+  /**
+   * A blocked lens the audit itself ranked as a later stage's problem is a
+   * question worth asking eventually, not one worth interrupting for.
+   */
+  it("ignores a blocked lens that does not matter yet", () => {
+    expect(intentsOf(select({ lenses: [blocked("audience", "later")] }))).not.toContain(
+      "first_customer",
+    );
+    expect(intentsOf(select({ lenses: [blocked("audience", "not_material")] }))).not.toContain(
+      "first_customer",
+    );
   });
 
   /**
