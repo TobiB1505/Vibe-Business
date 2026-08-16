@@ -6,7 +6,7 @@ import {
   getAuditReadiness,
   type AuditPrerequisite,
 } from "@/modules/business-audit/service";
-import { getLatestSuccessfulAudit } from "@/modules/business-audit/store";
+import { getLatestSuccessfulAudit, getPausedAudit } from "@/modules/business-audit/store";
 import { buildAuditEvidenceNotice } from "@/modules/business-audit/evidence-notice";
 import { getDeepScanAccessStatus } from "@/modules/authenticated-product-intelligence/service";
 import { isBrowserProviderConfigured } from "@/modules/authenticated-product-intelligence/browserbase/client";
@@ -24,6 +24,7 @@ import { requireProjectAccess } from "@/modules/projects/workspace-context";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import { AuditEvidenceNotice } from "../audit-evidence-notice";
 import { AuditConclusion } from "../audit-conclusion";
+import { NeedsUserPanel } from "../needs-user-panel";
 import { RunAuditButton } from "../run-audit-button";
 
 /**
@@ -72,6 +73,7 @@ export default async function ProjectScorePage({
     latestDeepScanSnapshot,
     latestDeepScanSession,
     opportunities,
+    pausedAudit,
   ] = await Promise.all([
     getLatestSuccessfulAudit(supabase, projectId),
     getAuditCurrency(supabase, projectId),
@@ -88,6 +90,10 @@ export default async function ProjectScorePage({
     // CORE-2 §18: "Where I'd start" links to the existing Opportunity Engine's
     // output. The audit never produces moves of its own.
     getLatestOpportunities(supabase, projectId),
+    // Read server-side so the question survives a reload, a navigation away,
+    // and a different device: browser state is never authoritative here
+    // (§33, §34, §35).
+    getPausedAudit(supabase, projectId),
   ]);
 
   const hasMoves = (opportunities?.set.opportunities.length ?? 0) > 0;
@@ -168,6 +174,16 @@ export default async function ProjectScorePage({
       }
     >
       <div className="flex flex-col gap-4">
+        {/*
+          Above everything else, including the evidence notice. When Vibe is
+          waiting on a person, that is the only thing on this screen worth
+          reading — and a question below a wall of status would be a question
+          nobody answers (§30, §31).
+        */}
+        {pausedAudit && (
+          <NeedsUserPanel projectId={project.id} question={pausedAudit.question} />
+        )}
+
         <AuditEvidenceNotice notice={auditEvidenceNotice} />
 
         {missingPrerequisites.length > 0 && (

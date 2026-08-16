@@ -30,6 +30,8 @@ import {
   failOperationRun,
   findActiveOperation,
   findActiveOperationByIdentity,
+  findPausedOperationForAudit,
+  requeueAnsweredOperation,
   getOperationRun,
   type StoredOperationRun,
 } from "./store";
@@ -121,6 +123,63 @@ function view(operation: StoredOperationRun): OperationView {
     completedAt: operation.completedAt,
     createdAt: operation.createdAt,
   });
+}
+
+/**
+ * Puts a paused audit back to work after its question is answered (CORE-2a.4).
+ *
+ * Not a new operation. The same run re-enters its workflow from the top, and
+ * every step above the pause is already replay-safe — `prepareEvidenceStep`
+ * returns the claimed audit row rather than claiming a second one — so nothing
+ * expensive is repeated and no second slot is taken.
+ *
+ * Idempotent through `requeueAnsweredOperation`, which matches on `needs_user`.
+ * A double submission finds the operation already re-queued, changes nothing,
+ * and starts no second workflow.
+ */
+export async function resumeAnsweredAuditOperation(
+  supabase: SupabaseClient,
+  executor: OperationExecutor,
+  params: { projectId: string; userId: string; auditId: string },
+): Promise<{ ok: boolean }> {
+  const { data: project } = await supabase
+    .from("projects")
+    .select("id")
+    .eq("id", params.projectId)
+    .eq("user_id", params.userId)
+    .maybeSingle();
+
+  if (!project) return { ok: false };
+
+  const paused = await findPausedOperationForAudit(supabase, {
+    projectId: params.projectId,
+    auditId: params.auditId,
+  });
+  if (!paused) return { ok: false };
+
+  const requeued = await requeueAnsweredOperation(supabase, paused.id);
+  if (!requeued.requeued) return { ok: true };
+
+  const started = await executor.start({
+    operationId: paused.id,
+    operationType: "business_audit",
+  });
+
+  if (!started.ok) {
+    await failOperationRun(supabase, {
+      operationId: paused.id,
+      failureCode: "execution_start_failed",
+    });
+    return { ok: false };
+  }
+
+  await attachExecutionRun(supabase, {
+    operationId: paused.id,
+    workflowRunId: started.runId,
+    executionProvider: executor.name,
+  });
+
+  return { ok: true };
 }
 
 export async function startBusinessAuditOperation(

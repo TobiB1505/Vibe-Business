@@ -276,6 +276,25 @@ export async function claimResultForOperation(
  * that billing state is ambiguous — and ambiguity must resolve to failure, not
  * to a second charge (§11).
  */
+/** The paused operation carrying a specific audit, if one is waiting. */
+export async function findPausedOperationForAudit(
+  supabase: SupabaseClient,
+  params: { projectId: string; auditId: string },
+): Promise<{ id: string } | null> {
+  const { data, error } = await supabase
+    .from("operation_runs")
+    .select("id")
+    .eq("project_id", params.projectId)
+    .eq("operation_type", "business_audit")
+    .eq("result_id", params.auditId)
+    .eq("status", "needs_user")
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? { id: data.id as string } : null;
+}
+
 /**
  * Stops the operation in front of a question (CORE-2a.4).
  *
