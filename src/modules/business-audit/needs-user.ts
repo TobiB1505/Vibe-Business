@@ -134,24 +134,32 @@ const PREREQUISITES: Partial<Record<FounderQuestionIntent, FounderQuestionIntent
 export const MAX_INTERRUPTIONS_PER_AUDIT = 3;
 
 /**
- * How many times a **first** audit may stop, before Vibe has assessed anything.
+ * ## Why there is no smaller budget for a first audit
  *
- * One. This is the correction to the first real interruption, which asked a
- * brand-new project three questions in a row — stage, then goal, then charging
- * model — and was, precisely, the onboarding questionnaire this whole sprint
- * exists to prevent. It arrived wearing better copy and a progress bar.
+ * There was one, briefly, and it was wrong.
  *
- * The cause was a gate that got the empty case backwards. With no prior audit
- * there is no materiality, so nothing could argue a question down, and "we know
- * nothing yet" became "ask everything". It should mean the opposite: **the less
- * Vibe has established, the less standing it has to interrupt.**
+ * The first real interruption asked a new project three questions in a row and
+ * read as an onboarding form, so the budget was cut to one for any run with no
+ * prior assessment — "the less Vibe has established, the less standing it has
+ * to interrupt."
  *
- * One question, then the audit runs and produces nine lens assessments. The
- * next run can ask something grounded in what it actually found — which is the
- * difference between "what would make the next few months a success?" and a
- * question a founder could only be asked about their own product.
+ * That got the product backwards. A new user has nothing stored, which is
+ * exactly when the answers are worth the most: stage and goal change materiality
+ * across every lens, and an audit reasoning without them reasons worse. **The
+ * fewer facts Vibe holds, the more each answer is worth** — suppressing the
+ * questions there optimises the feel of the first minute at the cost of the
+ * result.
+ *
+ * The premise was wrong too. A first audit is not data-less: Product
+ * Understanding has already run, so Vibe knows what the product *is* and can
+ * ground every question in it. What is missing is the lens assessment, not the
+ * understanding.
+ *
+ * What actually made that run feel like a form was the wording — a generic
+ * prompt under a line explaining Vibe's own process. That is fixed where it
+ * belongs, in the questions themselves. Three grounded questions are a
+ * conversation; one generic question is still a form.
  */
-export const MAX_INTERRUPTIONS_FIRST_AUDIT = 1;
 
 export type PendingQuestion = {
   intent: FounderQuestionIntent;
@@ -266,16 +274,7 @@ export function selectBlockingQuestion(input: InterruptionInput): InterruptionDe
   // because a question's weight is a claim about now.
   const lenses = input.lensesReflectCurrentFacts ? input.lenses : [];
 
-  /*
-   * A run with nothing assessed gets one question, not three.
-   *
-   * The budget is tied to what Vibe has actually established rather than to the
-   * run, because that is what "earning the right to interrupt" means here. Three
-   * questions before any analysis is a form; one question, then real work, then
-   * a grounded follow-up next time is the product.
-   */
-  const budget = lenses.length === 0 ? MAX_INTERRUPTIONS_FIRST_AUDIT : MAX_INTERRUPTIONS_PER_AUDIT;
-  if (input.askedIntents.length >= budget) {
+  if (input.askedIntents.length >= MAX_INTERRUPTIONS_PER_AUDIT) {
     return { ask: false, reason: "budget_spent" };
   }
 

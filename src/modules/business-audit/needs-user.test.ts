@@ -397,38 +397,34 @@ describe("current facts outrank the previous audit's lenses", () => {
 });
 
 /**
- * The first real interruption, and what it got wrong (CORE-2a.4 follow-up).
+ * Onboarding is when the questions matter most (CORE-2a.4 follow-up).
  *
- * A brand-new project — a hotel's internal vacation planner — was asked three
- * questions in a row before any analysis ran: stage, then goal, then charging
- * model. That is exactly the onboarding questionnaire this sprint exists to
- * prevent, arriving in better copy with a progress bar.
+ * A smaller first-audit budget was tried and reverted. A new user has nothing
+ * stored, which is precisely when stage and goal are worth asking: they change
+ * materiality across every lens, and an audit reasoning without them reasons
+ * worse. Suppressing the questions there buys a smoother first minute with a
+ * weaker result.
  *
- * The gate had the empty case backwards. With no prior audit there is no
- * materiality, so nothing could argue a question down, and "Vibe knows nothing
- * yet" became "ask everything". It has to mean the opposite: the less Vibe has
- * established, the less standing it has to interrupt.
+ * What made the first real run feel like a form was the wording, not the count
+ * — which is asserted separately below.
  */
-describe("a first audit earns one question, not three", () => {
+describe("a first audit may still ask its full budget", () => {
   const nothingKnown = {
     profile: inferredAudience(null),
     intent: EMPTY_FOUNDER_INTENT,
     lenses: [],
   };
 
-  it("asks once when it has assessed nothing", () => {
+  it("keeps asking while high-impact facts are unknown and unasked", () => {
     const first = decide(nothingKnown);
     expect(first.ask).toBe(true);
     if (!first.ask) return;
 
-    // Having asked it, the budget for this run is spent.
     const second = decide({ ...nothingKnown, askedIntents: [first.question.intent] });
-    expect(second.ask).toBe(false);
-    if (second.ask) return;
-    expect(second.reason).toBe("budget_spent");
+    expect(second.ask).toBe(true);
   });
 
-  it("spends that one question on the highest-impact unknown", () => {
+  it("asks the highest-impact unknown first", () => {
     const decision = decide(nothingKnown);
 
     expect(decision.ask).toBe(true);
@@ -436,19 +432,16 @@ describe("a first audit earns one question, not three", () => {
     expect(decision.question.intent).toBe("current_stage");
   });
 
-  /**
-   * Once an audit has run, Vibe has something to reason from and a larger
-   * budget is earned. The cap is not a blanket "one question ever".
-   */
-  it("allows the full budget once there is an assessment to reason from", () => {
+  /** The ceiling still holds — an onboarding is not an unbounded interview. */
+  it("stops at the budget however much is unknown", () => {
     const decision = decide({
-      profile: inferredAudience(),
-      intent: { stage: "prototype", monetizationModel: "none", primaryGoal: "launch" },
-      lenses: [lens("audience", "now")],
-      askedIntents: ["current_stage"],
+      ...nothingKnown,
+      askedIntents: ["current_stage", "primary_goal", "monetization_intent"],
     });
 
-    expect(decision.ask).toBe(true);
+    expect(decision.ask).toBe(false);
+    if (decision.ask) return;
+    expect(decision.reason).toBe("budget_spent");
   });
 });
 
