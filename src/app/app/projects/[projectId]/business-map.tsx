@@ -202,7 +202,14 @@ function MapNode({
   return (
     <li
       className={`absolute z-10 -translate-x-1/2 -translate-y-1/2 transition-opacity duration-200 ${
-        dimmed ? "opacity-30" : "opacity-100"
+        /*
+           Softened from 30% once a lens opens by default.
+           Selection is now the arrival state, so the map would otherwise
+           always be seen with eight of nine areas faded — the emphasis has to
+           come from the mint on the selected node and its connections, not
+           from making everything else hard to read.
+         */
+        dimmed ? "opacity-65" : "opacity-100"
       }`}
       style={{ left: `${(x / VIEWBOX) * 100}%`, top: `${(y / VIEWBOX) * 100}%` }}
     >

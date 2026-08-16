@@ -32,7 +32,22 @@ export function AuditIntelligence({
   score: number | null;
   children: ReactNode;
 }) {
-  const [selected, setSelected] = useState<BusinessLens | null>(null);
+  /*
+   * Opens on the lens the audit itself ranked first, falling back to whatever
+   * it marked `now`.
+   *
+   * Not decoration for an empty column. Left closed, the space beside the map
+   * is blank on arrival and the nodes read as labels rather than as something
+   * you can ask a question of. Opening the top-priority lens fills it with the
+   * one area the audit says matters most — which is the node a founder would
+   * click first anyway — and demonstrates the interaction without a tooltip.
+   */
+  const defaultLens =
+    map.nodes.find((entry) => entry.blockerRank === 1)?.lens ??
+    map.nodes.find((entry) => entry.ring === "now")?.lens ??
+    null;
+
+  const [selected, setSelected] = useState<BusinessLens | null>(defaultLens);
   const node = selected ? (map.nodes.find((entry) => entry.lens === selected) ?? null) : null;
 
   return (
@@ -71,6 +86,30 @@ export function AuditIntelligence({
                 </span>
               </div>
               <BusinessMap map={map} score={score} selected={selected} onSelect={setSelected} />
+
+              {/*
+                Directly under the map, in the same column.
+                A detail panel in the *other* column makes the eye cross the
+                page to read the answer to a click it made here, which is what
+                turns a map into decoration. It also fills the column: the map
+                is shorter than the conclusions beside it, and this is the
+                content that genuinely belongs in the difference.
+              */}
+              {node !== null && (
+                <div
+                  className="border-line-1 relative mt-2 border-t pt-5"
+                  data-testid="selected-lens-detail"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setSelected(null)}
+                    className="text-fg-meta hover:text-fg-body hover:border-line-2 absolute top-4 right-0 rounded-full border border-transparent px-3 py-1.5 font-mono text-[0.6875rem] transition-colors"
+                  >
+                    Close
+                  </button>
+                  <LensDetail node={node} map={map} />
+                </div>
+              )}
             </section>
 
             <aside
@@ -84,23 +123,6 @@ export function AuditIntelligence({
         </div>
       </Surface>
 
-      {node !== null && (
-        <Surface
-          level="section"
-          padding="lg"
-          className="relative max-w-[68rem]"
-          data-testid="selected-lens-detail"
-        >
-          <button
-            type="button"
-            onClick={() => setSelected(null)}
-            className="text-fg-meta hover:text-fg-body absolute top-4 right-4 rounded-full border border-transparent px-3 py-1.5 font-mono text-[0.6875rem] transition-colors hover:border-line-2"
-          >
-            Close
-          </button>
-          <LensDetail node={node} map={map} />
-        </Surface>
-      )}
     </div>
   );
 }

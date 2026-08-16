@@ -217,13 +217,23 @@ test.describe("how Vibe reached this (§21, §25, §26)", () => {
     expect(await first.count()).toBeGreaterThanOrEqual(0);
   });
 
-  /** §22 — every signal says where it came from. */
+  /**
+   * §22 — every signal says where it came from.
+   *
+   * Filtered to what is visible rather than taking `.first()`: the selected
+   * lens detail sits above the blockers in the DOM and carries its own closed
+   * "Why Vibe thinks this", so the first match is a hidden one. Asserting on
+   * the first node in document order would have tested a collapsed disclosure.
+   */
   test("labels each signal with its source", async ({ page }) => {
     await page.goto(SYNTHESIS);
     await page.locator("summary").filter({ hasText: /pay|money|customer/i }).first().click();
 
     await expect(
-      page.getByText(/from your (code|live site|answers|signed-in product)|from what vibe understood/i).first(),
+      page
+        .getByText(/from your (code|live site|answers|signed-in product)|from what vibe understood/i)
+        .filter({ visible: true })
+        .first(),
     ).toBeVisible();
   });
 
