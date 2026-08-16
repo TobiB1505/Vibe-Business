@@ -123,6 +123,17 @@ describe("consumesIncludedEntitlement", () => {
   it("does not consume the included entitlement when credits funded the run", () => {
     expect(consumesIncludedEntitlement({ accessMode: "credits", auditCompleted: true })).toBe(false);
   });
+
+  /**
+   * A pre-CORE-2 audit ran when nothing was gated and the audit was freely
+   * repeatable. It consumed no entitlement, because there was none — and this
+   * has to hold even though such a row *is* a completed audit.
+   */
+  it("does not consume anything for an audit that predates the entitlement", () => {
+    expect(
+      consumesIncludedEntitlement({ accessMode: "legacy_pre_entitlement", auditCompleted: true }),
+    ).toBe(false);
+  });
 });
 
 describe("retryAllowedAfterFailure", () => {

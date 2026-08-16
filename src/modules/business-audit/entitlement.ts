@@ -46,7 +46,17 @@ export type AuditAccessMode =
    * mode, and no balance, price, or purchase is represented anywhere
    * (CORE-2 §46).
    */
-  | "credits";
+  | "credits"
+  /**
+   * Historical. Audits written before the entitlement existed, when the audit
+   * was ungated and repeatable.
+   *
+   * Declared so a stored row can be read back honestly, and written by nothing:
+   * the migration sets it once and no code path produces it. It is neither of
+   * the other two values because neither is true of those rows — they consumed
+   * no one-per-project entitlement, and they spent no credits.
+   */
+  | "legacy_pre_entitlement";
 
 export type AuditDenialReason =
   /** The free audit is used and credits are not implemented yet. */

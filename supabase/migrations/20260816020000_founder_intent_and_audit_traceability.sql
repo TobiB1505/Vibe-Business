@@ -225,12 +225,55 @@ comment on column public.business_readiness_audits.business_context_hash is
 -- A failed or abandoned run therefore costs the user nothing, without any
 -- refund path having to exist (CORE-2 §17).
 -- ---------------------------------------------------------------------
+-- ## Why there is no DEFAULT, and why a third value exists
+--
+-- This project already has 20 audits, and one of its projects has **10
+-- completed** ones — they were run while the audit was ungated and nothing
+-- limited how often it could be repeated.
+--
+-- A `default 'included_first_audit'` would therefore have written that value
+-- onto all ten, and the partial unique index below would have failed on
+-- creation with a unique violation, aborting this migration partway. Checked
+-- against the live database rather than assumed (CLAUDE.md rule 30).
+--
+-- The fix is not to weaken the index. It is that neither existing enum value
+-- is *true* of those rows: they did not consume a one-per-project entitlement,
+-- because no entitlement existed, and they certainly did not spend credits.
+-- Writing either would put a false statement in the database, which is the one
+-- thing this column exists to prevent.
+--
+-- So `legacy_pre_entitlement` is the honest description of a row written before
+-- the rule it would otherwise be claiming to have followed. Nothing writes it
+-- going forward.
 alter table public.business_readiness_audits
-  add column access_mode text not null default 'included_first_audit'
-    check (access_mode in ('included_first_audit', 'credits'));
+  add column access_mode text;
+
+-- The earliest completed audit per project genuinely *was* that project's
+-- first, and these projects have in fact already had a free audit — so
+-- recording that is accurate, and it correctly leaves them without a second.
+update public.business_readiness_audits a
+set access_mode = 'included_first_audit'
+where a.id in (
+  select distinct on (project_id) id
+  from public.business_readiness_audits
+  where status = 'completed'
+  order by project_id, created_at asc, id asc
+);
+
+-- Everything else: later repeats, and every failed run. None consumed anything.
+update public.business_readiness_audits
+set access_mode = 'legacy_pre_entitlement'
+where access_mode is null;
+
+-- No default: the application always supplies this explicitly, and a default is
+-- precisely how ten rows would have quietly acquired an entitlement claim.
+alter table public.business_readiness_audits
+  alter column access_mode set not null,
+  add constraint business_readiness_audits_access_mode_check
+    check (access_mode in ('included_first_audit', 'credits', 'legacy_pre_entitlement'));
 
 comment on column public.business_readiness_audits.access_mode is
-  'Entitlement that funded the audit. A completed row with ''included_first_audit'' IS the proof that the project''s free audit was consumed (CORE-2 §16). Never a flag anyone can flip.';
+  'Entitlement that funded the audit. A completed row with ''included_first_audit'' IS the proof that the project''s free audit was consumed (CORE-2 §16). Never a flag anyone can flip. ''legacy_pre_entitlement'' marks rows written before the entitlement existed, which consumed nothing.';
 
 create unique index business_readiness_audits_one_included_idx
   on public.business_readiness_audits (project_id)
@@ -293,3 +336,27 @@ create policy "select own free_audit_grants"
 -- execution through the service-role client (ADR 0013), which bypasses RLS.
 -- A user therefore cannot clear, forge, or replay their own entitlement
 -- through the API at all — the absence of a policy is the enforcement.
+
+-- ---------------------------------------------------------------------
+-- 6. Backfill the durable half for audits that already happened.
+--
+-- Without this the two halves disagree for existing data: the audit rows say
+-- the free audit was consumed, and the grant table says nothing — so the very
+-- first disconnect/reconnect would hand those projects a fresh free audit,
+-- which is the reset CORE-2 §16 exists to prevent.
+--
+-- An inner join, deliberately. A project with no repository connection
+-- produces no grant rather than a row with an invented repository id: the
+-- grant is keyed on the repository precisely because that is what survives a
+-- project, and a grant that cannot name one would be meaningless.
+-- ---------------------------------------------------------------------
+insert into public.free_audit_grants (user_id, github_repository_id, audit_id, consumed_at)
+-- `consumed_at` is `not null`; `completed_at` is not guaranteed to be set on
+-- every historical completed row, so it falls back rather than failing.
+select p.user_id, rc.github_repository_id, a.id, coalesce(a.completed_at, a.created_at)
+from public.business_readiness_audits a
+join public.projects p on p.id = a.project_id
+join public.repository_connections rc on rc.project_id = a.project_id
+where a.status = 'completed'
+  and a.access_mode = 'included_first_audit'
+on conflict (user_id, github_repository_id) do nothing;
