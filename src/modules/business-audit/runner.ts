@@ -128,6 +128,7 @@ export function buildAuditRequest(pack: EvidencePackV3, config: OperationConfig)
     outputSchema: ANTHROPIC_AUDIT_OUTPUT_SCHEMA,
     maxOutputTokens: config.maxOutputTokens,
     reasoning: config.reasoning,
+    timeoutMs: config.timeoutMs,
   };
 }
 

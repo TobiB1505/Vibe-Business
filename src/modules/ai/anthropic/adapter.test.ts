@@ -16,6 +16,7 @@ const request: StructuredRequest = {
   outputSchema: { type: "object", properties: {}, required: [], additionalProperties: false },
   maxOutputTokens: 16_000,
   reasoning: { mode: "adaptive", effort: "high" },
+  timeoutMs: 240_000,
 };
 
 function messageWith(overrides: Partial<Anthropic.Message> = {}): Anthropic.Message {

@@ -33,6 +33,19 @@ export type OperationConfig = {
    * snapshot, not to trim normal ones.
    */
   maxInputTokens: number;
+  /**
+   * How long this operation may take before the call is abandoned.
+   *
+   * Here rather than on the transport for the same reason `model` is here: it
+   * is a per-operation decision, and one shared default has to be wrong for
+   * some of them. The client-level 120s default was 13 seconds above the real
+   * audit duration, so growing the rubric turned a complete run into a
+   * discarded one at exactly 120,003ms — with nothing to show for the tokens
+   * the provider had already generated.
+   *
+   * Set from measured duration plus real headroom, not from a round number.
+   */
+  timeoutMs: number;
 };
 
 export const BUSINESS_READINESS_AUDIT_CONFIG: OperationConfig = {
@@ -49,6 +62,15 @@ export const BUSINESS_READINESS_AUDIT_CONFIG: OperationConfig = {
   reasoning: { mode: "adaptive", effort: "high" },
   maxOutputTokens: 16_000,
   maxInputTokens: 30_000,
+  /*
+   * Measured, not guessed. Real audits have run 99.5s, 106.5s and 120s+ as the
+   * rubric grew, so the task genuinely sits near two minutes and the variance
+   * between runs is tens of seconds. Four minutes is roughly double the longest
+   * successful run — enough that ordinary variation cannot discard a finished
+   * answer, and still short enough that a hung call fails rather than hanging a
+   * durable step forever.
+   */
+  timeoutMs: 240_000,
 };
 
 /**
@@ -72,6 +94,8 @@ export const OPPORTUNITY_GENERATION_CONFIG: OperationConfig = {
   reasoning: { mode: "adaptive", effort: "high" },
   maxOutputTokens: 12_000,
   maxInputTokens: 40_000,
+  // Measured across 8 real runs: 39.5s average, 48.8s slowest.
+  timeoutMs: 120_000,
 };
 
 /**
@@ -111,6 +135,10 @@ export const PRODUCT_UNDERSTANDING_CONFIG: OperationConfig = {
   reasoning: { mode: "none" },
   maxOutputTokens: 6_000,
   maxInputTokens: 24_000,
+  // Measured across 5 real runs: 10.7s average, 14.7s slowest. Haiku with no
+  // thinking is a different order of magnitude from the audit, which is the
+  // whole argument for these being per-operation.
+  timeoutMs: 60_000,
 };
 
 const CONFIGS: Record<AIOperation, OperationConfig> = {

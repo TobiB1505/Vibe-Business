@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { getOperationConfig, PRODUCT_UNDERSTANDING_CONFIG } from "./operations";
+import {
+  BUSINESS_READINESS_AUDIT_CONFIG,
+  getOperationConfig,
+  PRODUCT_UNDERSTANDING_CONFIG,
+} from "./operations";
 import { resolvePricing } from "./pricing";
 import type { AIOperation } from "./provider";
 
@@ -63,5 +67,44 @@ describe("operation configs", () => {
     // are tempted to give this operation an effort level again.
     expect(PRODUCT_UNDERSTANDING_CONFIG.model).toBe("claude-haiku-4-5-20251001");
     expect(PRODUCT_UNDERSTANDING_CONFIG.reasoning).toEqual({ mode: "none" });
+  });
+});
+
+/**
+ * Timeouts are per operation (CORE-2a.3.2, after a real audit was discarded).
+ *
+ * A single client-level 120s default sat 13 seconds above the audit's real
+ * duration. Growing the rubric pushed a complete, correct run past it, and the
+ * whole call was thrown away at exactly 120,003ms — tokens generated, nothing
+ * kept, and the founder shown "this took too long to complete".
+ *
+ * These assert the shape of the fix rather than specific numbers where the
+ * number is a judgement call: every operation states its own, and the audit's
+ * has real headroom over what audits actually take.
+ */
+describe("every operation states how long it may take", () => {
+  it.each(["business_readiness_audit", "opportunity_generation", "product_understanding"] as const)(
+    "%s declares a timeout",
+    (operation) => {
+      expect(getOperationConfig(operation).timeoutMs).toBeGreaterThan(0);
+    },
+  );
+
+  /**
+   * The longest audit ever recorded is 106.5s. Anything close to that is not
+   * headroom — it is the same defect waiting for a slightly slower run.
+   */
+  it("gives the audit at least double its slowest observed run", () => {
+    expect(BUSINESS_READINESS_AUDIT_CONFIG.timeoutMs).toBeGreaterThanOrEqual(213_000);
+  });
+
+  /**
+   * The point of moving this off the transport. A shared default has to be
+   * wrong for one of them, and these two differ by an order of magnitude.
+   */
+  it("does not give a Haiku extraction the same budget as a nine-lens audit", () => {
+    expect(PRODUCT_UNDERSTANDING_CONFIG.timeoutMs).toBeLessThan(
+      BUSINESS_READINESS_AUDIT_CONFIG.timeoutMs,
+    );
   });
 });

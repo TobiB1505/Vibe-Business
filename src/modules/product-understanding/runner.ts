@@ -125,6 +125,7 @@ export function buildUnderstandingRequest(
     outputSchema: PRODUCT_UNDERSTANDING_OUTPUT_SCHEMA,
     maxOutputTokens: config.maxOutputTokens,
     reasoning: config.reasoning,
+    timeoutMs: config.timeoutMs,
   };
 }
 

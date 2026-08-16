@@ -105,6 +105,7 @@ export function buildOpportunityRequest(
     outputSchema: ANTHROPIC_OPPORTUNITY_OUTPUT_SCHEMA,
     maxOutputTokens: config.maxOutputTokens,
     reasoning: config.reasoning,
+    timeoutMs: config.timeoutMs,
   };
 }
 

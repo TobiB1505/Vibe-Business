@@ -26,6 +26,11 @@ export function getAIProvider(): AIProvider {
     // so retries are handled as an explicit product decision (currently:
     // not at all) rather than silently by the transport.
     maxRetries: 0,
+    // A backstop only. Every request overrides this from its operation's
+    // `timeoutMs`, because how long is too long depends on the task: the audit
+    // reasons through nine lenses in roughly two minutes, Product Understanding
+    // extracts structure in ten seconds. This value used to be the only one,
+    // and it silently discarded a complete audit at 120,003ms.
     timeout: 120_000,
   });
 

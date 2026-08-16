@@ -43,7 +43,15 @@ import { logRejectedProviderRequest } from "./provider-error-log";
  * the real client (`APIPromise` extends `Promise`) and by a one-line fake.
  */
 export type AnthropicMessagesClient = {
-  create(params: Anthropic.MessageCreateParamsNonStreaming): Promise<Anthropic.Message>;
+  create(
+    params: Anthropic.MessageCreateParamsNonStreaming,
+    /**
+     * Per-request options. Only `timeout` is used, and it overrides the
+     * client-level default so each operation waits for as long as that
+     * operation actually takes (see `StructuredRequest.timeoutMs`).
+     */
+    options?: { timeout?: number },
+  ): Promise<Anthropic.Message>;
   countTokens(params: Anthropic.MessageCountTokensParams): Promise<Anthropic.MessageTokensCount>;
 };
 
@@ -242,7 +250,9 @@ export class AnthropicProvider implements AIProvider {
 
     let response: Anthropic.Message;
     try {
-      response = await this.messages.create(this.buildParams(request));
+      response = await this.messages.create(this.buildParams(request), {
+        timeout: request.timeoutMs,
+      });
     } catch (error) {
       const classified = classifyError(error);
       const latencyMs = Date.now() - startedAt;

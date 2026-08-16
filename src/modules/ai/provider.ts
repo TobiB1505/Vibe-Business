@@ -75,6 +75,18 @@ export type StructuredRequest = {
   outputSchema: Record<string, unknown>;
   maxOutputTokens: number;
   reasoning: AIReasoning;
+  /**
+   * How long to wait for this operation, in milliseconds.
+   *
+   * Per request rather than per client, because "too long" is a property of
+   * the task. The audit reasons through nine business lenses and takes ~110s;
+   * Product Understanding extracts structure and takes seconds. One shared
+   * transport timeout has to be wrong for one of them, and it was: a single
+   * 120s client default sat 13 seconds above the audit's real duration until a
+   * larger rubric pushed a complete, correct run past it and threw the whole
+   * call away at exactly 120,003ms.
+   */
+  timeoutMs: number;
 };
 
 export type AIUsage = {
