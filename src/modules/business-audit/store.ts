@@ -18,6 +18,8 @@ export type StoredAudit = {
   id: string;
   projectId: string;
   status: AuditStatus;
+  /** How the run was funded. Decides whether completing it spends the grant. */
+  accessMode: AuditAccessMode;
   inputHash: string;
   overallScore: number | null;
   assessedDimensions: number | null;
@@ -32,6 +34,7 @@ type AuditRow = {
   id: string;
   project_id: string;
   status: AuditStatus;
+  access_mode: AuditAccessMode;
   input_hash: string;
   overall_score: number | null;
   assessed_dimensions: number | null;
@@ -43,13 +46,14 @@ type AuditRow = {
 };
 
 const AUDIT_COLUMNS =
-  "id, project_id, status, input_hash, overall_score, assessed_dimensions, total_dimensions, failure_code, result, created_at, completed_at";
+  "id, project_id, status, access_mode, input_hash, overall_score, assessed_dimensions, total_dimensions, failure_code, result, created_at, completed_at";
 
 function mapRow(row: AuditRow): StoredAudit {
   return {
     id: row.id,
     projectId: row.project_id,
     status: row.status,
+    accessMode: row.access_mode,
     inputHash: row.input_hash,
     overallScore: row.overall_score,
     assessedDimensions: row.assessed_dimensions,

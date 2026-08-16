@@ -15,6 +15,7 @@ import { PROMPT_VERSION } from "@/modules/business-audit/prompt";
 import { RUBRIC_VERSION } from "@/modules/business-audit/rubric";
 import { buildAuditRequest, runBusinessReadinessAudit } from "@/modules/business-audit/runner";
 import { BUSINESS_AUDIT_SCHEMA_VERSION, BUSINESS_AUDIT_VERSION } from "@/modules/business-audit/schema";
+import { consumesIncludedEntitlement } from "@/modules/business-audit/entitlement";
 import {
   completeAuditRun,
   computeAuditInputHash,
@@ -23,7 +24,7 @@ import {
   getAuditById,
   recordFreeAuditGrant,
 } from "@/modules/business-audit/store";
-import { getConnectedRepositoryId } from "@/modules/business-audit/service";
+import { authorizeProjectAudit, getConnectedRepositoryId } from "@/modules/business-audit/service";
 import { getLatestSuccessfulAuthenticatedSnapshot } from "@/modules/authenticated-product-intelligence/store";
 import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intelligence/store";
 import {
@@ -236,6 +237,22 @@ export async function prepareEvidenceStep(
   const resolved = await resolveInputs(deps.supabase, operation);
   if (!resolved.ok) return resolved;
 
+  /*
+   * Re-decided here rather than carried across the step boundary.
+   *
+   * The workflow step runs after the request that started it, and the mode
+   * decides how the run is funded — so it is read from current server state at
+   * the moment the row is claimed, exactly like every other input this step
+   * rebuilds instead of receiving (Sprint 7 §14).
+   */
+  const authorization = await authorizeProjectAudit(deps.supabase, {
+    projectId: operation.projectId,
+    userId: operation.userId,
+  });
+  if (!authorization.allowed) {
+    return { ok: false, failureCode: authorization.reason };
+  }
+
   const config = BUSINESS_READINESS_AUDIT_CONFIG;
   const run = await createAuditRun(deps.supabase, {
     projectId: operation.projectId,
@@ -253,10 +270,11 @@ export async function prepareEvidenceStep(
     rubricVersion: RUBRIC_VERSION,
     provider: "anthropic",
     model: config.model,
-    // The only executable mode. Credits do not exist, so there is nothing
-    // else this could be, and the gate that decided it may run lives in
-    // `authorizeProjectAudit` before the operation was ever created.
-    accessMode: "included_first_audit",
+    // Decided by the server-side gate, not assumed here. A refresh Vibe owes
+    // the user because its own contract moved is funded differently from the
+    // customer's included audit, and must not spend or restore it
+    // (CORE-2a.2 §19, §27).
+    accessMode: authorization.accessMode,
   });
 
   if (!run.ok) {
@@ -428,13 +446,21 @@ export async function runInferenceStep(
   // provider outage, a validation rejection, our own persistence — and none of
   // it reaches here, so none of it costs the user their free audit. There is
   // no refund path because there is nothing to refund.
-  const repositoryId = await getConnectedRepositoryId(deps.supabase, operation.projectId);
-  if (repositoryId !== null) {
-    await recordFreeAuditGrant(deps.supabase, {
-      userId: operation.userId,
-      githubRepositoryId: repositoryId,
-      auditId: operation.resultId,
-    });
+  const completedAudit = await getAuditById(deps.supabase, operation.resultId);
+  const accessMode = completedAudit?.accessMode ?? "included_first_audit";
+
+  // Only the included entitlement is spendable. A system refresh writes no
+  // grant, so the customer's free audit is neither consumed a second time nor
+  // handed back (CORE-2a.2 §19, §36).
+  if (consumesIncludedEntitlement({ accessMode, auditCompleted: true })) {
+    const repositoryId = await getConnectedRepositoryId(deps.supabase, operation.projectId);
+    if (repositoryId !== null) {
+      await recordFreeAuditGrant(deps.supabase, {
+        userId: operation.userId,
+        githubRepositoryId: repositoryId,
+        auditId: operation.resultId,
+      });
+    }
   }
 
   await recordAuditEvent(deps.supabase, {

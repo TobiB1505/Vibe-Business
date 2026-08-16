@@ -193,7 +193,7 @@ describe("founder intent", () => {
    * into the profile: evidence cannot see an intention, and "none, and none
    * planned" is a different business from "none yet, subscription planned".
    */
-  it("distinguishes a planned monetization model from an absent one", () => {
+  it("distinguishes a planned way of earning from an undecided one", () => {
     const planned = buildEvidencePackV3(
       input({ founderIntent: fakeFounderIntent({ monetizationModel: "planned" }) }),
     );
@@ -201,8 +201,21 @@ describe("founder intent", () => {
       input({ founderIntent: fakeFounderIntent({ monetizationModel: "none" }) }),
     );
 
-    expect(labelFor(planned, "intent.monetization_model")).toContain("planned");
-    expect(labelFor(none, "intent.monetization_model")).toContain("No monetization");
+    expect(labelFor(planned, "intent.monetization_model")).toContain("intend to charge");
+    expect(labelFor(none, "intent.monetization_model")).toContain("not decided");
+  });
+
+  /**
+   * CORE-2a.2 §2: the model must never be shown the domain vocabulary it is
+   * then asked not to use. The first synthesis dogfood copied "monetization
+   * model" out of this very line and into a customer-facing explanation.
+   */
+  it("hands the model sentences, not internal taxonomy", () => {
+    const rendered = renderEvidencePackV3(buildEvidencePackV3(input()));
+
+    expect(rendered).not.toContain("monetization model");
+    expect(rendered).not.toContain("primary goal is");
+    expect(rendered).toContain("The founder told Vibe:");
   });
 
   it("emits nothing at all when the founder stated nothing", () => {

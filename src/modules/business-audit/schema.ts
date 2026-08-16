@@ -136,6 +136,35 @@ export type KeyFinding = {
 export const AUDIT_SYNTHESIS_VERSION = "business-audit-synthesis-v1" as const;
 
 /**
+ * The **audit contract** version (CORE-2a.2 §21–§23).
+ *
+ * One identifier for "what a stored audit means", distinct from every version
+ * already tracked because none of them answers the question on its own:
+ *
+ * - `evidencePackVersion` says what the model was *told*. CORE-2a.1 changed the
+ *   contract while leaving the pack at v3, so this is provably not it (§22).
+ * - `promptVersion` and `rubricVersion` move for wording changes that do not
+ *   change what a result means.
+ * - `schemaVersion` describes the payload's shape, not its semantics.
+ *
+ * This is bumped only when a stored audit stops being an acceptable answer to
+ * "what does Vibe currently think about this business?" — which is exactly the
+ * question the refresh decision asks.
+ */
+export const AUDIT_CONTRACT_VERSION = "business-audit-contract-v2" as const;
+
+/**
+ * The oldest contract still treated as current.
+ *
+ * Separate from `AUDIT_CONTRACT_VERSION` so a bump does not automatically
+ * obsolete every stored audit: a change that adds something without
+ * invalidating older results can raise the current version and leave the
+ * minimum alone. Today they are equal, because the synthesis contract genuinely
+ * did invalidate the enumerate-everything audits before it.
+ */
+export const MIN_SUPPORTED_AUDIT_CONTRACT_VERSION = "business-audit-contract-v2" as const;
+
+/**
  * How a conclusion reads, not how severe it is.
  *
  * `positive` is what the product already has; `attention` and `critical` are
@@ -210,6 +239,14 @@ export type AuditSynthesis = {
 export type BusinessReadinessAudit = {
   schemaVersion: typeof BUSINESS_AUDIT_SCHEMA_VERSION;
   auditVersion: typeof BUSINESS_AUDIT_VERSION;
+  /**
+   * Which audit contract produced this (CORE-2a.2 §24).
+   *
+   * Absent on every audit written before CORE-2a.2, which is what makes them
+   * correctly obsolete without a back-fill: an audit that cannot say which
+   * contract it followed did not follow this one.
+   */
+  contractVersion?: string;
   evidencePackVersion: string;
   promptVersion: string;
   rubricVersion: string;

@@ -140,6 +140,15 @@ export default async function ProjectScorePage({
   );
   const blockedByCredits = auditAccess.blockedReason === "credits_required";
   const auditReady = auditReadiness.ready && !blockedByCredits;
+  /*
+   * Vibe owes a replacement because Vibe changed (CORE-2a.2 §32).
+   *
+   * Deliberately not auto-started on render. An automatic refresh in a server
+   * component is one failing contract away from starting a paid audit on every
+   * page load (§34); the server decides that a refresh is *permitted*, and the
+   * existing button is what starts it.
+   */
+  const systemRefresh = auditAccess.systemRefreshAvailable;
 
   return (
     // The section id stays `business-audit`: `BUSINESS_AUDIT_ANCHOR` is a tested
@@ -175,6 +184,13 @@ export default async function ProjectScorePage({
         {auditReady && !latestAudit?.result && auditAccess.freeAuditAvailable && (
           <Notice tone="info" label="Included">
             Your first business audit is free.
+          </Notice>
+        )}
+
+        {systemRefresh && (
+          <Notice tone="info" label="Vibe has improved">
+            Vibe has since improved how it reads a business, so this check is out of date.
+            Updating it is on us — it won&rsquo;t use up anything of yours.
           </Notice>
         )}
 

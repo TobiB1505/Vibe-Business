@@ -9,12 +9,8 @@ import {
   type ProductProfile,
   type ProfileConfidence,
 } from "@/modules/product-understanding/schema";
-import {
-  GOAL_LABELS,
-  MONETIZATION_LABELS,
-  STAGE_LABELS,
-  type FounderIntent,
-} from "@/modules/projects/founder-intent";
+import type { FounderIntent } from "@/modules/projects/founder-intent";
+import { describeFounderIntent } from "./customer-language";
 import { buildLiveEvidence, buildRepositoryEvidence, type EvidenceItem } from "./evidence";
 import { buildAuthenticatedEvidence, type EvidenceItemV2 } from "./evidence-v2";
 
@@ -265,30 +261,22 @@ export function buildProductProfileEvidence(profile: ProductProfile): EvidenceIt
  * the product *is*.
  */
 export function buildFounderIntentEvidence(intent: FounderIntent): EvidenceItemV3[] {
-  const items: EvidenceItemV3[] = [];
-
-  if (intent.stage) {
-    items.push(
-      item("intent.stage", "founder_intent", `Founder states the stage is: ${STAGE_LABELS[intent.stage]}`, 1),
-    );
-  }
-  if (intent.monetizationModel) {
-    items.push(
-      item(
-        "intent.monetization_model",
-        "founder_intent",
-        `Founder states the intended monetization model is: ${MONETIZATION_LABELS[intent.monetizationModel]}`,
-        1,
-      ),
-    );
-  }
-  if (intent.primaryGoal) {
-    items.push(
-      item("intent.primary_goal", "founder_intent", `Founder states the primary goal is: ${GOAL_LABELS[intent.primaryGoal]}`, 1),
-    );
-  }
-
-  return items;
+  /*
+   * Sentences, not `label: value` (CORE-2a.2 §4).
+   *
+   * This used to render "Founder states the intended monetization model is:
+   * No monetization", and the first synthesis dogfood copied the noun phrase
+   * straight into a customer-facing explanation. `describeFounderIntent` hands
+   * the model the *meaning* in language it can safely echo, so echoing becomes
+   * the correct behaviour rather than the leak.
+   *
+   * `MONETIZATION_LABELS` and friends are still right where they are used —
+   * above a form control, where the surrounding UI supplies the context a bare
+   * label needs. They are simply not a model input.
+   */
+  return describeFounderIntent(intent).map((entry) =>
+    item(entry.id, "founder_intent", `The founder told Vibe: ${entry.text}`, 1),
+  );
 }
 
 // ---------------------------------------------------------------------

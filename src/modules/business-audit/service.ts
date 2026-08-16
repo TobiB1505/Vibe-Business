@@ -152,13 +152,15 @@ export async function getAuditEntitlementFacts(
   supabase: SupabaseClient,
   params: { projectId: string; userId: string },
 ): Promise<AuditEntitlementFacts> {
-  const [readiness, completedIncluded, running, recentStarts, repositoryId] = await Promise.all([
-    getAuditReadiness(supabase, params.projectId),
-    hasCompletedIncludedAudit(supabase, params.projectId),
-    hasRunningAudit(supabase, params.projectId),
-    countRecentAuditStarts(supabase, params.projectId),
-    getConnectedRepositoryId(supabase, params.projectId),
-  ]);
+  const [readiness, completedIncluded, running, recentStarts, repositoryId, latestAudit] =
+    await Promise.all([
+      getAuditReadiness(supabase, params.projectId),
+      hasCompletedIncludedAudit(supabase, params.projectId),
+      hasRunningAudit(supabase, params.projectId),
+      countRecentAuditStarts(supabase, params.projectId),
+      getConnectedRepositoryId(supabase, params.projectId),
+      getLatestSuccessfulAudit(supabase, params.projectId),
+    ]);
 
   const grant =
     repositoryId === null
@@ -170,6 +172,9 @@ export async function getAuditEntitlementFacts(
     hasRepositoryGrant: grant,
     hasRunningAudit: running,
     recentStartCount: recentStarts,
+    // Read from the stored payload rather than a column: the contract version
+    // lives inside `result`, so no migration was needed (CORE-2a.2 §24, §42).
+    storedAudit: latestAudit ? { contractVersion: latestAudit.result?.contractVersion ?? null } : null,
     hasProductProfile: readiness.hasProductProfile,
     productProfileCurrent: readiness.productProfileCurrent,
   };

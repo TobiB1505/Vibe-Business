@@ -11,7 +11,12 @@ import {
 import { PROMPT_VERSION, buildSystemPrompt } from "./prompt";
 import { RUBRIC_VERSION } from "./rubric";
 import { computeOverallReadiness } from "./scoring";
-import { BUSINESS_AUDIT_SCHEMA_VERSION, BUSINESS_AUDIT_VERSION, type BusinessReadinessAudit } from "./schema";
+import {
+  AUDIT_CONTRACT_VERSION,
+  BUSINESS_AUDIT_SCHEMA_VERSION,
+  BUSINESS_AUDIT_VERSION,
+  type BusinessReadinessAudit,
+} from "./schema";
 import { validateAuditOutput, type ValidationReason } from "./validate";
 import {
   ANTHROPIC_AUDIT_OUTPUT_SCHEMA,
@@ -214,6 +219,7 @@ export async function runBusinessReadinessAudit(input: RunAuditInput): Promise<A
   const audit: BusinessReadinessAudit = {
     schemaVersion: BUSINESS_AUDIT_SCHEMA_VERSION,
     auditVersion: BUSINESS_AUDIT_VERSION,
+    contractVersion: AUDIT_CONTRACT_VERSION,
     evidencePackVersion: pack.version,
     promptVersion: PROMPT_VERSION,
     rubricVersion: RUBRIC_VERSION,

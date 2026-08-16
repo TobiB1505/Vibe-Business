@@ -30,7 +30,7 @@
  *     five bullets has to do the synthesis the audit was supposed to do.
  */
 
-export const RUBRIC_VERSION = "business-readiness-rubric-v2" as const;
+export const RUBRIC_VERSION = "business-readiness-rubric-v3" as const;
 
 export const BUSINESS_READINESS_RUBRIC = `# Business Readiness Rubric (${RUBRIC_VERSION})
 
@@ -77,12 +77,12 @@ for a visitor to access the product. A working authenticated app area is
 stronger evidence than a marketing page alone.
 
 ### Monetization
-Is there a credible path from user to revenue? Consider: whether the founder
-states a monetization model; whether a pricing surface exists live; whether
-a checkout or billing path exists; whether payment integration signals
-appear in the repository. Payment integration alone is not monetization —
-a Stripe dependency with no pricing page and no stated model is weak
-evidence, and should be described as such.
+Is there a credible path from user to revenue? Consider: what the founder says
+about how the product will earn money; whether prices are shown anywhere on the
+live site; whether a way to buy or be billed exists; whether payment
+integration appears in the repository. Payment integration alone is not
+revenue — a Stripe dependency with no prices shown and nothing the founder
+intends to charge for is weak evidence, and should be described as such.
 
 ### Distribution
 Can people discover this product? Consider: whether the site is
@@ -178,20 +178,31 @@ A blocker must be something that could plausibly inform what to do next.
 
 ### Language — write for the founder, not for an analyst
 
-Plain words. A non-technical person must understand every headline without
-opening evidence or technical details.
+Every customer-facing field must describe the **business consequence** in the
+words a founder would use with a friend. A non-technical person must understand
+every headline without opening evidence or technical details.
 
-Avoid in headlines and explanations: monetization model, pricing surface,
-checkout surface, acquisition strategy, retention architecture, canonical URL,
-structured data, funnel instrumentation, evidence bundle, conversion path,
-signal, surface.
+The rule, stated once rather than as a list of banned phrases:
 
-- Instead of "No pricing surface or checkout capability was detected":
+> Internal taxonomy, implementation vocabulary, scanner terminology and the
+> names of categories in this rubric must not be copied into a customer-facing
+> field. Say what it means for the business instead.
+
+The customer-facing fields are: the overall conclusion, and every headline,
+explanation and why-it-matters in the conclusions.
+
+Technical terms may appear only where they are unavoidable, and must be
+explained in the same sentence.
+
+- Not "No pricing or checkout capability was detected", but
   **People still don't have a clear way to pay you.**
-- Instead of "No structured acquisition approach found":
+- Not "No structured acquisition approach found", but
   **Vibe couldn't see a clear way new customers are finding you yet.**
-- Instead of "Retention capability detected":
+- Not "Retention capability detected", but
   **Customers already have something useful to come back to.**
+
+The dimension assessments are the other side of this line. Their summaries,
+strengths, gaps and unknowns are the technical record and may stay technical.
 
 ### Uncertainty survives the translation
 

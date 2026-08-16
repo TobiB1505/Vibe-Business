@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vitest";
+import { MIN_SUPPORTED_AUDIT_CONTRACT_VERSION } from "./schema";
 import {
   AUDIT_START_LIMITS,
   authorizeAudit,
+  isAuditContractCurrent,
   consumesIncludedEntitlement,
   retryAllowedAfterFailure,
   toAuditAccessStatus,
@@ -22,6 +24,9 @@ function facts(overrides: Partial<AuditEntitlementFacts> = {}): AuditEntitlement
     hasRepositoryGrant: false,
     hasRunningAudit: false,
     recentStartCount: 0,
+    // Current by default, so the refresh path stays out of the way of the
+    // entitlement cases below.
+    storedAudit: { contractVersion: MIN_SUPPORTED_AUDIT_CONTRACT_VERSION },
     hasProductProfile: true,
     productProfileCurrent: true,
     ...overrides,
@@ -170,6 +175,7 @@ describe("toAuditAccessStatus", () => {
       freeAuditAvailable: true,
       additionalAuditsRequireCredits: true,
       blockedReason: null,
+      systemRefreshAvailable: false,
     });
     // CORE-2 §46: no fake pricing, no invented balance.
     expect(JSON.stringify(status)).not.toMatch(/\$|price|balance|credits_remaining/i);
@@ -190,4 +196,115 @@ describe("toAuditAccessStatus", () => {
     expect(status.freeAuditAvailable).toBe(true);
     expect(status.blockedReason).toBe("product_profile_stale");
   });
+});
+
+/**
+ * System contract refresh (CORE-2a.2 §18–§20, §36–§39).
+ *
+ * The separation this whole half exists to make:
+ *
+ *   free entitlement  →  "has the customer received their included audit?"
+ *   contract refresh  →  "is the stored result still valid, given Vibe changed?"
+ *
+ * Conflating them is what left every existing user stranded on whichever audit
+ * version they first ran, fixable only by deleting a row by hand.
+ */
+describe("system contract refresh", () => {
+  const consumed = { hasCompletedIncludedAudit: true, hasRepositoryGrant: true };
+
+  it("permits a refresh when the stored audit predates the current contract", () => {
+    const decision = authorizeAudit(
+      facts({ ...consumed, storedAudit: { contractVersion: "business-audit-contract-v1" } }),
+    );
+
+    expect(decision).toEqual({ allowed: true, accessMode: "system_contract_refresh" });
+  });
+
+  /** An audit that cannot say which contract it followed did not follow this one. */
+  /**
+   * A grant with no stored audit is the disconnect/reconnect case, not an
+   * obsolete result. There is nothing to refresh, so the entitlement answer
+   * stands.
+   */
+  it("does not offer a refresh when no audit is stored at all", () => {
+    const decision = authorizeAudit(facts({ ...consumed, storedAudit: null }));
+    expect(decision).toEqual({ allowed: false, reason: "credits_required" });
+  });
+
+  it("treats an audit with no recorded contract version as obsolete", () => {
+    const decision = authorizeAudit(facts({ ...consumed, storedAudit: { contractVersion: null } }));
+    expect(decision).toEqual({ allowed: true, accessMode: "system_contract_refresh" });
+  });
+
+  it("does NOT refresh an audit already on the current contract (§37)", () => {
+    const decision = authorizeAudit(facts({ ...consumed }));
+    expect(decision).toEqual({ allowed: false, reason: "credits_required" });
+  });
+
+  /**
+   * §19, §36 — the load-bearing one. A refresh is Vibe paying for its own
+   * change; it must not hand the customer a second free audit.
+   */
+  it("never restores the free entitlement", () => {
+    expect(
+      consumesIncludedEntitlement({ accessMode: "system_contract_refresh", auditCompleted: true }),
+    ).toBe(false);
+
+    const status = toAuditAccessStatus(
+      facts({ ...consumed, storedAudit: { contractVersion: null } }),
+    );
+    expect(status.freeAuditAvailable).toBe(false);
+    expect(status.systemRefreshAvailable).toBe(true);
+  });
+
+  /**
+   * §32: the UI must not say "you've used your free audit" here. It is true
+   * and entirely beside the point — the reason an audit is available has
+   * nothing to do with the customer's entitlement.
+   */
+  it("reports a refresh rather than a credits block", () => {
+    const status = toAuditAccessStatus(facts({ ...consumed, storedAudit: { contractVersion: null } }));
+    expect(status.blockedReason).toBeNull();
+    expect(status.systemRefreshAvailable).toBe(true);
+  });
+
+  /** Prerequisites still come first: a refresh cannot run on a stale profile. */
+  it("does not bypass the Product Profile prerequisites", () => {
+    const decision = authorizeAudit(
+      facts({ ...consumed, storedAudit: { contractVersion: null }, productProfileCurrent: false }),
+    );
+    expect(decision).toEqual({ allowed: false, reason: "product_profile_stale" });
+  });
+
+  /** §34: a broken contract must not start an audit on every page load. */
+  it("stays bounded by the start window", () => {
+    const decision = authorizeAudit(
+      facts({
+        ...consumed,
+        storedAudit: { contractVersion: null },
+        recentStartCount: AUDIT_START_LIMITS.maxStartsPerWindow,
+      }),
+    );
+    expect(decision).toEqual({ allowed: false, reason: "start_attempts_exhausted" });
+  });
+
+  it("does not start a second refresh while one is running (§28)", () => {
+    const decision = authorizeAudit(
+      facts({ ...consumed, storedAudit: { contractVersion: null }, hasRunningAudit: true }),
+    );
+    expect(decision).toEqual({ allowed: false, reason: "audit_already_running" });
+  });
+});
+
+describe("isAuditContractCurrent", () => {
+  it("accepts exactly the supported minimum", () => {
+    expect(isAuditContractCurrent(MIN_SUPPORTED_AUDIT_CONTRACT_VERSION)).toBe(true);
+  });
+
+  it.each([null, undefined, "", "business-audit-contract-v1"])(
+    "treats %p as obsolete",
+    (version) => {
+      expect(isAuditContractCurrent(version)).toBe(false);
+    },
+  );
 });

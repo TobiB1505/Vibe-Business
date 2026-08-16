@@ -1,3 +1,5 @@
+import { MIN_SUPPORTED_AUDIT_CONTRACT_VERSION } from "./schema";
+
 /**
  * Free Business Audit entitlement (CORE-2 §16, §17).
  *
@@ -48,6 +50,20 @@ export type AuditAccessMode =
    */
   | "credits"
   /**
+   * A replacement Vibe owed the user because **Vibe** changed (CORE-2a.2 §18).
+   *
+   * Not an entitlement. It funds an audit that exists only because the stored
+   * one stopped being an acceptable answer when the audit contract moved — so
+   * it is free to the customer, costs us real money, and pointedly does **not**
+   * restore the included audit (§19). `consumesIncludedEntitlement` returns
+   * false for it, so no grant is written and the customer's one free audit
+   * stays spent.
+   *
+   * The authority is server state — a stored contract version below the
+   * minimum — never a caller-supplied flag (§26).
+   */
+  | "system_contract_refresh"
+  /**
    * Historical. Audits written before the entitlement existed, when the audit
    * was ungated and repeatable.
    *
@@ -95,6 +111,21 @@ export const AUDIT_START_LIMITS = {
   providerFailuresCountTowardLimit: false,
 } as const;
 
+/**
+ * Whether a stored audit is still an acceptable answer (CORE-2a.2 §25).
+ *
+ * A pure comparison, deliberately not "is it the newest version": an audit is
+ * obsolete only when its contract is *below the supported minimum*, so raising
+ * `AUDIT_CONTRACT_VERSION` alone does not invalidate anyone's result.
+ *
+ * An audit with no recorded contract version is obsolete. That is not a
+ * fallback — an audit that cannot say which contract it followed demonstrably
+ * did not follow the current one.
+ */
+export function isAuditContractCurrent(storedContractVersion: string | null | undefined): boolean {
+  return storedContractVersion === MIN_SUPPORTED_AUDIT_CONTRACT_VERSION;
+}
+
 /** Everything the decision needs, gathered by the caller. */
 export type AuditEntitlementFacts = {
   /**
@@ -111,6 +142,17 @@ export type AuditEntitlementFacts = {
   hasRunningAudit: boolean;
   /** Audit starts inside `windowMs`, excluding provider-caused failures. */
   recentStartCount: number;
+  /**
+   * The newest completed audit, or null when there is none at all.
+   *
+   * The nesting is load-bearing. A bare `contractVersion: string | null`
+   * cannot tell "an old audit that predates the contract" from "no audit
+   * exists" — and those need opposite answers. The second happens whenever a
+   * project is disconnected and reconnected: the durable grant survives, every
+   * audit row does not, and reading that as an obsolete audit would hand out a
+   * refresh of something that was never stored.
+   */
+  storedAudit: { contractVersion: string | null } | null;
   /** A completed Product Profile exists for this project (CORE-2 §3). */
   hasProductProfile: boolean;
   /**
@@ -141,24 +183,47 @@ export function authorizeAudit(facts: AuditEntitlementFacts): AuditAuthorization
     return { allowed: false, reason: "product_profile_stale" };
   }
 
-  // 2. Entitlement, before any spend is possible.
-  if (facts.hasCompletedIncludedAudit || facts.hasRepositoryGrant) {
+  /*
+   * 2. Who, if anyone, is paying — decided but not yet acted on.
+   *
+   * The two questions are separate (CORE-2a.2 §18): "has the customer received
+   * their included audit?" is about the customer, and "is the stored result
+   * still valid?" is about us. When the audit contract moves, the second
+   * changes while the first does not.
+   *
+   * Resolved here and *returned* below, after the guards. An earlier version
+   * returned the refresh straight from this branch, which let it skip the
+   * concurrency and rate limits entirely — so an obsolete audit could start a
+   * second run while one was already going, and could keep starting them. Both
+   * cases are now covered by the same guards as any other run (§28, §34).
+   */
+  const entitlementSpent = facts.hasCompletedIncludedAudit || facts.hasRepositoryGrant;
+  const refreshOwed =
+    entitlementSpent &&
+    facts.storedAudit !== null &&
+    !isAuditContractCurrent(facts.storedAudit.contractVersion);
+
+  if (entitlementSpent && !refreshOwed) {
     // Credits are not implemented. This is the honest terminal answer, not a
     // route into a checkout that does not exist (CORE-2 §45, §46).
     return { allowed: false, reason: "credits_required" };
   }
 
-  // 3. One audit at a time per project.
+  // 3. One audit at a time per project. Applies to refreshes too.
   if (facts.hasRunningAudit) {
     return { allowed: false, reason: "audit_already_running" };
   }
 
-  // 4. Bounded starts per window.
+  // 4. Bounded starts per window — what stops a contract that always fails
+  //    from starting an expensive audit on every attempt (§34).
   if (facts.recentStartCount >= AUDIT_START_LIMITS.maxStartsPerWindow) {
     return { allowed: false, reason: "start_attempts_exhausted" };
   }
 
-  return { allowed: true, accessMode: "included_first_audit" };
+  return {
+    allowed: true,
+    accessMode: refreshOwed ? "system_contract_refresh" : "included_first_audit",
+  };
 }
 
 /**
@@ -173,6 +238,9 @@ export function consumesIncludedEntitlement(run: {
   accessMode: AuditAccessMode;
   auditCompleted: boolean;
 }): boolean {
+  // `system_contract_refresh` is deliberately absent: a replacement Vibe owed
+  // the user must never spend the entitlement a second time, and must never
+  // restore it either (CORE-2a.2 §19, §36).
   return run.accessMode === "included_first_audit" && run.auditCompleted;
 }
 
@@ -206,6 +274,15 @@ export type AuditAccessStatus = {
   additionalAuditsRequireCredits: true;
   /** Present when an audit cannot start right now, so the UI can explain why. */
   blockedReason: AuditDenialReason | null;
+  /**
+   * Vibe owes a replacement because its own audit contract moved on
+   * (CORE-2a.2 §32).
+   *
+   * The UI must not say "you've used your free audit" in this state — that is
+   * true and completely beside the point, since the reason a new audit is
+   * available has nothing to do with the customer's entitlement.
+   */
+  systemRefreshAvailable: boolean;
 };
 
 export function toAuditAccessStatus(facts: AuditEntitlementFacts): AuditAccessStatus {
@@ -215,5 +292,6 @@ export function toAuditAccessStatus(facts: AuditEntitlementFacts): AuditAccessSt
     freeAuditAvailable: !facts.hasCompletedIncludedAudit && !facts.hasRepositoryGrant,
     additionalAuditsRequireCredits: true,
     blockedReason: decision.allowed ? null : decision.reason,
+    systemRefreshAvailable: decision.allowed && decision.accessMode === "system_contract_refresh",
   };
 }

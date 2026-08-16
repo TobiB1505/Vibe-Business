@@ -1,3 +1,4 @@
+import { checkCustomerLanguage } from "./customer-language";
 import {
   AUDIT_DIMENSIONS,
   AUDIT_SYNTHESIS_VERSION,
@@ -47,7 +48,24 @@ export type ValidationFailure = "structured_output_schema_invalid";
 export type ValidationReason =
   | "response_not_object"
   | "dimensions_missing"
-  | `dimension_missing_${AuditDimensionId}`;
+  | `dimension_missing_${AuditDimensionId}`
+  /**
+   * A customer-facing conclusion used our vocabulary instead of the founder's
+   * (CORE-2a.2 §12).
+   *
+   * A *rejection*, not a repair. The alternatives were both worse: silently
+   * rendering it is what this contract exists to stop, and a second model call
+   * to rewrite the prose would be the summarizer pipeline §13 forbids — it
+   * would also double the cost of every audit to fix a rare presentation
+   * defect.
+   *
+   * The cost of a rejection is one wasted audit, borne by us: a failed audit
+   * never consumes the free entitlement (CORE-2 §17). That is affordable only
+   * because the real fix is at the *input* — the model is no longer shown the
+   * vocabulary — so this should approach never firing. If it starts firing
+   * regularly, the input boundary has a hole and that is the thing to fix.
+   */
+  | "customer_language_violation";
 
 export type ValidatedAudit = {
   dimensions: DimensionAssessment[];
@@ -61,7 +79,13 @@ export type ValidatedAudit = {
 
 export type ValidateResult =
   | { ok: true; audit: ValidatedAudit }
-  | { ok: false; error: ValidationFailure; reason: ValidationReason };
+  | {
+      ok: false;
+      error: ValidationFailure;
+      reason: ValidationReason;
+      /** Which internal terms leaked, for `customer_language_violation` only. */
+      terms?: string[];
+    };
 
 /**
  * The synthesis cardinality (CORE-2a.1 §6, §36, §37).
@@ -360,6 +384,23 @@ export function validateAuditOutput(data: unknown, knownEvidenceIds: Set<string>
   }
 
   const synthesis = validateSynthesis(data, knownEvidenceIds, dropped, notes);
+
+  // The customer-language boundary, applied ONLY to the synthesis (§11, §16).
+  // Dimension summaries, strengths, gaps, limitations and evidence labels are
+  // the technical record and are supposed to say "canonical URL".
+  if (synthesis !== null) {
+    const language = checkCustomerLanguage(synthesis);
+    if (!language.ok) {
+      return {
+        ok: false,
+        error: "structured_output_schema_invalid",
+        reason: "customer_language_violation",
+        // Our own closed vocabulary, so it is safe to persist and log —
+        // unlike the model prose that contained it.
+        terms: language.terms,
+      };
+    }
+  }
 
   const keyFindings: KeyFinding[] = [];
   if (Array.isArray(data.keyFindings)) {
