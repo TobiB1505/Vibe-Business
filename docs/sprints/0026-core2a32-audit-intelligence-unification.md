@@ -1,5 +1,8 @@
 # Sprint CORE-2a.3.2 — Audit Intelligence Unification
 
+**Status: complete.** Implemented, dogfooded on the real product at contract v6, and closed with
+`validationNotes: []` — the first clean run since the lens framework was introduced.
+
 The nine-lens layer was already reasoning better than the audit a founder read. This sprint
 stopped the loss between them.
 
@@ -442,6 +445,43 @@ clause; three is the trigger. The detector is coarse by design, and a clean run 
 proof.
 
 Contract v6, synthesis v5, rubric v9. 3253 unit / 117 e2e / lint / typecheck / build green.
+
+## Closing the sprint
+
+Verified against the code rather than asserted:
+
+| | |
+|---|---|
+| One provider call per audit | one `generateStructured` in the runner; no rewrite pass was added |
+| Nine lenses, no tenth | `BUSINESS_LENSES` still has exactly nine entries |
+| Materiality untouched | the health/materiality enums are unchanged since CORE-2a.3.1 |
+| Ranking untouched | `lens-priority.ts` only gained detectors; nothing changed how lenses sort |
+| Legacy scoring untouched | no commit in this sprint touches `scoring.ts` |
+| No frontend copy-mapping | `rootProblem` appears in no component; it is internal and unrendered |
+| Entitlement intact | free audit grant still held, read back from the live database |
+| No manual row deletion | every dogfood ran through `system_contract_refresh` |
+
+### What this sprint cost
+
+Three discarded runs, and two of them were self-inflicted budget failures rather than model
+problems: a shared 120s timeout, then a 16,000-token output ceiling, both set when this call was
+a smaller operation. **$0.1965 billed for nothing**, plus the timeout run that billed nothing at
+all. Each time the entitlement protection held — one usage event, `maxRetries = 0`, no double
+charge, grant untouched.
+
+The lesson worth carrying forward is not "raise the ceiling". It is that a rubric which grows
+every sprint pushes against budgets that were sized for a smaller job, and those budgets are
+coupled to each other — a token limit implies a duration at ~9.8 ms per token. A test now enforces
+that coupling, but the next time reasoning outgrows the envelope, the honest move is a shorter
+rubric rather than a larger number.
+
+### Where the audit stands
+
+Three real business problems in the founder's language, ordered by when they matter, each
+carrying its root problem, its lenses, its evidence and its prerequisite relationships — and they
+reach the Opportunity Engine with materiality intact. Nothing further should be tuned in the
+audit's wording. The remaining residuals are detector calibration and compression taste, not
+reasoning defects.
 
 ## Next recommended phase
 
