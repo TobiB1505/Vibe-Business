@@ -5,7 +5,9 @@ import {
 } from "@/app/app/projects/[projectId]/prepared-changes-section";
 import { IntelligenceSummary } from "@/app/app/projects/[projectId]/intelligence-summary";
 import { AuditConclusion } from "@/app/app/projects/[projectId]/audit-conclusion";
+import { NeedsUserPanel } from "@/app/app/projects/[projectId]/needs-user-panel";
 import { E2E_AUDIT_SCENARIOS, isE2eAuditScenario } from "../audit-scenarios";
+import { E2E_NEEDS_USER_SCENARIOS, isE2eNeedsUserScenario } from "../needs-user-scenarios";
 import { E2E_SCENARIOS, isE2eScenario } from "../scenarios";
 import { E2E_INTELLIGENCE_SCENARIOS, isE2eIntelligenceScenario } from "../intelligence-scenarios";
 import {
@@ -119,6 +121,18 @@ export default async function E2eScenarioPage({
             />
           }
         />
+      </main>
+    );
+  }
+
+  // "Vibe needs u" (CORE-2a.4 §30): the same panel the score route renders,
+  // given a question the real gate produced.
+  if (isE2eNeedsUserScenario(scenario)) {
+    const question = E2E_NEEDS_USER_SCENARIOS[scenario]();
+    return (
+      <main className="mx-auto max-w-4xl p-8">
+        {label}
+        <NeedsUserPanel projectId="project_e2e" question={question} />
       </main>
     );
   }
