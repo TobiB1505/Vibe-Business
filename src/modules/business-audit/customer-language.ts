@@ -113,51 +113,91 @@ export function describeFounderIntent(intent: FounderIntent): Array<{ id: string
 // ---------------------------------------------------------------------
 
 /**
- * Vocabulary that is ours, not the founder's.
+ * Vocabulary that is ours, not the founder's — in two tiers.
  *
- * Deliberately short. A long blacklist is brittle, catches innocent prose, and
- * — the reason that matters here — the *rubric* used to carry one, which meant
- * the model was reading the phrase "monetization model" in its own
- * instructions immediately before writing it into an explanation. A general
- * rule in the rubric plus a small net here is both less brittle and less
- * suggestive.
+ * ## Why there are tiers now
  *
- * Every entry is a term this codebase actually uses as a domain or scanner
- * concept, and that was observed or is directly adjacent to something observed.
- * Not included: ordinary business English like "revenue", "customers",
- * "pricing" or "signup", which a founder uses too.
+ * CORE-2a.2 made one flat list and rejected the whole audit on any hit. Three
+ * consecutive real refreshes then failed on the same two words, at $0.25 total,
+ * while a fourth run containing the same reasoning passed — the model says
+ * "monetization model" sometimes and "how this will make money" other times.
+ * A coin flip that discards a $0.10 audit is a badly calibrated rule, not a
+ * misbehaving model.
+ *
+ * The deeper problem is structural: `monetization` is one of the five scored
+ * dimensions. The model is *required* to emit it five times per run and was
+ * then forbidden from writing the natural collocation of it. No amount of extra
+ * prompt pressure fixes being asked to hold a word and not use it.
+ *
+ * So the question the boundary actually asks — **would a founder understand
+ * this sentence?** — is now answered at two levels, because the terms were
+ * never equally harmful:
+ *
+ *   "no pricing surface was detected"    → genuinely opaque. Reject.
+ *   "no monetization model yet"          → corporate, but parseable. Note it.
+ *
+ * The rubric still teaches the better phrasing for both. What changed is only
+ * what happens when the model ignores it.
  */
-export const INTERNAL_VOCABULARY = [
-  "monetization model",
-  "monetisation model",
-  "monetization signal",
+
+/**
+ * Terms that leave a sentence meaningless to someone outside this codebase.
+ *
+ * Mostly scanner and internal artefacts: a founder has no idea what a "product
+ * surface" or an "evidence pack" is, and a conclusion built on one tells them
+ * nothing. These still reject the audit.
+ */
+export const BLOCKING_VOCABULARY = [
   "pricing surface",
   "checkout surface",
   "billing surface",
   "product surface",
   "acquisition surface",
-  "acquisition approach",
-  "retention capability",
-  "retention architecture",
-  "conversion path",
-  "customer journey stage",
-  "journey stage",
   "evidence pack",
   "evidence bundle",
   "evidence id",
   "repository signal",
   "business signal",
+  "monetization signal",
   "dimension score",
   "assessment status",
   "product profile",
   "founder intent",
   "deep scan",
+  "customer journey stage",
+  "journey stage",
+] as const;
+
+/**
+ * Startup-speak a founder will still parse, even though better words exist.
+ *
+ * Recorded as a validation note rather than thrown away. The note is what keeps
+ * this honest: if these start appearing constantly, the rubric is not teaching
+ * well enough and that is visible rather than silent.
+ */
+export const DISCOURAGED_VOCABULARY = [
+  "monetization model",
+  "monetisation model",
+  "conversion path",
+  "acquisition approach",
+  "retention capability",
+  "retention architecture",
+] as const;
+
+export const INTERNAL_VOCABULARY = [
+  ...BLOCKING_VOCABULARY,
+  ...DISCOURAGED_VOCABULARY,
 ] as const;
 
 /** Case-insensitive, whole-phrase. Returns each distinct term found. */
 export function findInternalVocabulary(text: string): string[] {
   const haystack = text.toLowerCase();
   return INTERNAL_VOCABULARY.filter((term) => haystack.includes(term));
+}
+
+function findIn(text: string, terms: readonly string[]): string[] {
+  const haystack = text.toLowerCase();
+  return terms.filter((term) => haystack.includes(term));
 }
 
 /**
@@ -181,24 +221,36 @@ export function customerFacingStrings(synthesis: AuditSynthesis): string[] {
   return strings;
 }
 
-export type CustomerLanguageCheck =
-  | { ok: true }
-  | { ok: false; terms: string[] };
+export type CustomerLanguageCheck = {
+  /** False only when a term that destroys meaning got through. */
+  ok: boolean;
+  /** Terms that reject the audit. Empty when `ok`. */
+  blocking: string[];
+  /** Terms worth recording but not worth discarding a good audit over. */
+  discouraged: string[];
+};
 
 /**
  * Checks only the synthesis, and only its customer-facing fields.
  *
- * Returns the offending terms rather than a boolean so the failure is
- * diagnosable from the stored record without replaying a paid call. The terms
- * are from our own closed list, so they are safe to persist — unlike the model
- * prose that contained them.
+ * Returns the offending terms rather than a boolean so a failure is
+ * diagnosable from the stored record without replaying a paid call — which is
+ * exactly what the first three real rejections could not do. The terms come
+ * from our own closed lists, so they are safe to persist; the prose that
+ * contained them is not.
  */
 export function checkCustomerLanguage(synthesis: AuditSynthesis): CustomerLanguageCheck {
-  const found = new Set<string>();
+  const blocking = new Set<string>();
+  const discouraged = new Set<string>();
 
   for (const text of customerFacingStrings(synthesis)) {
-    for (const term of findInternalVocabulary(text)) found.add(term);
+    for (const term of findIn(text, BLOCKING_VOCABULARY)) blocking.add(term);
+    for (const term of findIn(text, DISCOURAGED_VOCABULARY)) discouraged.add(term);
   }
 
-  return found.size === 0 ? { ok: true } : { ok: false, terms: [...found].sort() };
+  return {
+    ok: blocking.size === 0,
+    blocking: [...blocking].sort(),
+    discouraged: [...discouraged].sort(),
+  };
 }

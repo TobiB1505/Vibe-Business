@@ -454,6 +454,7 @@ export function validateAuditOutput(data: unknown, knownEvidenceIds: Set<string>
   // the technical record and are supposed to say "canonical URL".
   if (synthesis !== null) {
     const language = checkCustomerLanguage(synthesis);
+
     if (!language.ok) {
       return {
         ok: false,
@@ -461,8 +462,19 @@ export function validateAuditOutput(data: unknown, knownEvidenceIds: Set<string>
         reason: "customer_language_violation",
         // Our own closed vocabulary, so it is safe to persist and log —
         // unlike the model prose that contained it.
-        terms: language.terms,
+        terms: language.blocking,
       };
+    }
+
+    // Corporate but comprehensible. Recorded rather than thrown away: three
+    // real refreshes were discarded over exactly these words while the
+    // reasoning underneath them was good. The note is what stops that being
+    // silent — if it appears constantly, the rubric is not teaching well
+    // enough.
+    if (language.discouraged.length > 0) {
+      notes.push(
+        `Wording to improve: ${language.discouraged.join(", ")}. The audit says this in Vibe's words rather than the founder's.`,
+      );
     }
   }
 

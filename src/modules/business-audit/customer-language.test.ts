@@ -172,7 +172,7 @@ describe("the boundary covers customer-facing fields only", () => {
   });
 
   it.each([
-    ["the overall conclusion", { overall: "Your monetization model is unclear." }],
+    ["the overall conclusion", { overall: "There is no pricing surface here." }],
     ["a headline", { blockers: [conclusion({ headline: "No pricing surface exists." })] }],
     [
       "an explanation",
@@ -180,25 +180,44 @@ describe("the boundary covers customer-facing fields only", () => {
     ],
     [
       "why it matters",
-      { blockers: [conclusion({ whyItMatters: "Your conversion path is broken." })] },
+      { blockers: [conclusion({ whyItMatters: "The evidence pack says otherwise." })] },
     ],
     [
       "a strength",
       {
-        strengths: [conclusion({ tone: "positive", headline: "Retention capability detected." })],
+        strengths: [conclusion({ tone: "positive", headline: "A product surface was detected." })],
       },
     ],
-  ])("rejects internal vocabulary in %s", (_label, override) => {
-    const check = checkCustomerLanguage(synthesis(override));
-    expect(check.ok).toBe(false);
+  ])("rejects meaning-destroying vocabulary in %s", (_label, override) => {
+    expect(checkCustomerLanguage(synthesis(override)).ok).toBe(false);
+  });
+
+  /**
+   * The recalibration. Three real refreshes were discarded over exactly this
+   * phrase while the reasoning underneath was good — and `monetization` is a
+   * required dimension key the model must emit five times per run, so
+   * forbidding its natural collocation was a rule fighting the schema.
+   */
+  it.each([
+    ["monetization model", "You have no monetization model yet."],
+    ["conversion path", "Your conversion path is incomplete."],
+    ["retention capability", "Retention capability was detected."],
+  ])("records but does not reject startup-speak: %s", (term, text) => {
+    const check = checkCustomerLanguage(synthesis({ overall: text }));
+
+    expect(check.ok).toBe(true);
+    expect(check.discouraged).toContain(term);
   });
 
   it("reports which terms leaked, so the failure is diagnosable", () => {
-    const check = checkCustomerLanguage(synthesis({ overall: "No monetization model or pricing surface." }));
+    const check = checkCustomerLanguage(
+      synthesis({ overall: "No monetization model, and no pricing surface." }),
+    );
 
+    // Blocking rejects; discouraged is reported alongside rather than lost.
     expect(check.ok).toBe(false);
-    if (check.ok) return;
-    expect(check.terms).toEqual(["monetization model", "pricing surface"]);
+    expect(check.blocking).toEqual(["pricing surface"]);
+    expect(check.discouraged).toEqual(["monetization model"]);
   });
 
   it("passes prose written in the founder's language", () => {
@@ -380,13 +399,13 @@ describe("the contract holds at real audit cardinality", () => {
    * because it ran against rendered fixture markup rather than the boundary.
    */
   it.each([
-    ["the overall conclusion", (s: AuditSynthesis) => ({ ...s, overall: `${s.overall} The monetization model is unclear.` })],
+    ["the overall conclusion", (s: AuditSynthesis) => ({ ...s, overall: `${s.overall} No pricing surface exists.` })],
     [
       "a strength buried in the middle",
       (s: AuditSynthesis) => ({
         ...s,
         strengths: s.strengths.map((c, i) =>
-          i === 1 ? { ...c, explanation: `${c.explanation} Retention capability detected.` } : c,
+          i === 1 ? { ...c, explanation: `${c.explanation} The evidence pack says so.` } : c,
         ),
       }),
     ],
@@ -395,13 +414,12 @@ describe("the contract holds at real audit cardinality", () => {
       (s: AuditSynthesis) => ({
         ...s,
         blockers: s.blockers.map((c, i) =>
-          i === 2 ? { ...c, whyItMatters: "Your conversion path is unmeasured." } : c,
+          i === 2 ? { ...c, whyItMatters: "The checkout surface is absent." } : c,
         ),
       }),
     ],
-  ])("catches internal vocabulary in %s", (_label, mutate) => {
-    const check = checkCustomerLanguage(mutate(REAL_SHAPED));
-    expect(check.ok).toBe(false);
+  ])("catches meaning-destroying vocabulary in %s", (_label, mutate) => {
+    expect(checkCustomerLanguage(mutate(REAL_SHAPED)).ok).toBe(false);
   });
 
   /** Eighteen strings, and every one of them is checked. */
@@ -435,7 +453,7 @@ describe("a language rejection says which words leaked", () => {
         data: buildModelOutput(
           {},
           {
-            overallConclusion: "Your monetization model and conversion path are unclear.",
+            overallConclusion: "There is no pricing surface and no checkout surface.",
           },
         ),
         usage: { inputTokens: 100, outputTokens: 100, thinkingTokens: 0 },
@@ -458,7 +476,7 @@ describe("a language rejection says which words leaked", () => {
     if (outcome.ok) return;
 
     expect(outcome.diagnostic?.validationReason).toBe("customer_language_violation");
-    expect(outcome.diagnostic?.languageTerms).toEqual(["conversion path", "monetization model"]);
+    expect(outcome.diagnostic?.languageTerms).toEqual(["checkout surface", "pricing surface"]);
   });
 
   it("still reports the usage, because those tokens were billed", async () => {
