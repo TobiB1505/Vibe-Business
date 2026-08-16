@@ -6,6 +6,7 @@ import type {
   AuthenticatedProductIntelligenceSnapshot,
 } from "@/modules/authenticated-product-intelligence/schema";
 import type { BusinessContext } from "@/modules/projects/business-context";
+import type { FounderIntent } from "@/modules/projects/founder-intent";
 import { AUDIT_DIMENSIONS } from "./schema";
 
 /**
@@ -69,8 +70,8 @@ export function buildModelOutput(
   });
 
   const dimensions: Record<string, unknown> = {
-    product: base(78, "assessable", ["business.product_summary", "live.site.title"]),
-    monetization: base(35, "partial", ["live.surface.pricing", "business.monetization_model"]),
+    product: base(78, "assessable", ["profile.identity.description", "live.site.title"]),
+    monetization: base(35, "partial", ["profile.signal.pricing_surface", "intent.monetization_model"]),
     distribution: base(null, "insufficient_evidence", []),
     conversion: base(61, "assessable", ["live.conversion.primary_cta"]),
     retention: base(null, "insufficient_evidence", []),
@@ -86,12 +87,20 @@ export function buildModelOutput(
       ...(dimensions[dimension] as Record<string, unknown>),
     })),
     keyFindings: extras.keyFindings ?? [
-      { finding: "The product is understandable but not monetized.", evidenceIds: ["business.product_summary"] },
+      {
+        finding: "The product is understandable but not monetized.",
+        evidenceIds: ["profile.identity.description"],
+      },
     ],
     limitations: extras.limitations ?? ["No traffic or usage data is available."],
   };
 }
 
+/**
+ * Historical. Used only by `evidence.test.ts` and `evidence-v2.test.ts`, which
+ * pin what the v1 and v2 packs meant for audits already stored under those
+ * versions. Nothing new builds one — see `fakeFounderIntent`.
+ */
 export function fakeBusinessContext(overrides: Partial<BusinessContext> = {}): BusinessContext {
   return {
     productSummary: "Vibe Business helps people who vibe-coded a product turn it into a business.",
@@ -102,6 +111,21 @@ export function fakeBusinessContext(overrides: Partial<BusinessContext> = {}): B
     ...overrides,
   };
 }
+
+export function fakeFounderIntent(overrides: Partial<FounderIntent> = {}): FounderIntent {
+  return {
+    stage: "launched_no_users",
+    monetizationModel: "planned",
+    primaryGoal: "get_first_users",
+    ...overrides,
+  };
+}
+
+/**
+ * Re-exported so audit tests have one import for their fixtures while the
+ * profile itself keeps a single definition in the module that owns it.
+ */
+export { fakeProductProfile } from "@/modules/product-understanding/test-support";
 
 export function fakeRepositorySnapshot(
   overrides: Partial<RepositoryIntelligenceSnapshot> = {},

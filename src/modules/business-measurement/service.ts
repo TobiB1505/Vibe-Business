@@ -11,7 +11,7 @@ import {
   createOperationRun,
   failOperationRun,
 } from "@/modules/operations/store";
-import { getBusinessContext } from "@/modules/projects/business-context-store";
+import { getFounderIntent } from "@/modules/projects/founder-intent-store";
 import { metricDefinition } from "./metrics";
 import { computeMeasurementIdentity } from "./identity";
 import { measurementFailureMessage } from "./messages";
@@ -115,10 +115,10 @@ export async function ensureMeasurementPlan(
   });
   if (existing) return { kind: "exists", plan: existing };
 
-  const context = await getBusinessContext(supabase, params.projectId);
+  const founderIntent = await getFounderIntent(supabase, params.projectId);
   const contract = resolveMeasurementContract({
     capability: prepared.capability,
-    businessContext: context?.context ?? null,
+    founderIntent: founderIntent.intent,
   });
 
   if (!contract.supported) {

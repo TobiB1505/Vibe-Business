@@ -1,13 +1,13 @@
 import type { AIProvider, AIUsage, ProviderErrorDiagnostic, StructuredRequest } from "@/modules/ai/provider";
 import type { OperationConfig } from "@/modules/ai/operations";
 import {
-  buildEvidencePackV2,
-  evidenceIdSetV2,
-  renderEvidencePackV2,
-  trimEvidencePackV2,
-  type BuildEvidencePackV2Input,
-  type EvidencePackV2,
-} from "./evidence-v2";
+  buildEvidencePackV3,
+  evidenceIdSetV3,
+  renderEvidencePackV3,
+  trimEvidencePackV3,
+  type BuildEvidencePackV3Input,
+  type EvidencePackV3,
+} from "./evidence-v3";
 import { PROMPT_VERSION, buildSystemPrompt } from "./prompt";
 import { RUBRIC_VERSION } from "./rubric";
 import { computeOverallReadiness } from "./scoring";
@@ -92,7 +92,7 @@ export type AuditRunOutcome =
       latencyMs: number;
     };
 
-export type RunAuditInput = BuildEvidencePackV2Input & {
+export type RunAuditInput = BuildEvidencePackV3Input & {
   provider: AIProvider;
   config: OperationConfig;
 };
@@ -102,14 +102,14 @@ export type RunAuditInput = BuildEvidencePackV2Input & {
  * runner will send. A reconstruction would drift from the real one, and a
  * budget gate measuring the wrong payload is worse than none.
  */
-export function buildAuditRequest(pack: EvidencePackV2, config: OperationConfig): StructuredRequest {
+export function buildAuditRequest(pack: EvidencePackV3, config: OperationConfig): StructuredRequest {
   return {
     operation: config.operation,
     model: config.model,
     // Authored entirely by us. No customer content is ever interpolated
     // into the system prompt (ADR 0011).
     system: buildSystemPrompt(),
-    userContent: renderEvidencePackV2(pack),
+    userContent: renderEvidencePackV3(pack),
     outputSchema: ANTHROPIC_AUDIT_OUTPUT_SCHEMA,
     maxOutputTokens: config.maxOutputTokens,
     reasoning: config.reasoning,
@@ -119,7 +119,7 @@ export function buildAuditRequest(pack: EvidencePackV2, config: OperationConfig)
 export async function runBusinessReadinessAudit(input: RunAuditInput): Promise<AuditRunOutcome> {
   const { provider, config } = input;
 
-  let pack = buildEvidencePackV2(input);
+  let pack = buildEvidencePackV3(input);
   let request = buildAuditRequest(pack, config);
 
   // Cost gate: count before spending (Sprint 4 §14). The provider's own
@@ -139,7 +139,7 @@ export async function runBusinessReadinessAudit(input: RunAuditInput): Promise<A
   for (const maxPriority of [2, 1] as const) {
     if (estimatedInputTokens <= config.maxInputTokens) break;
 
-    const trimmed = trimEvidencePackV2(pack, maxPriority);
+    const trimmed = trimEvidencePackV3(pack, maxPriority);
     if (trimmed === pack) continue;
 
     pack = trimmed;
@@ -188,7 +188,7 @@ export async function runBusinessReadinessAudit(input: RunAuditInput): Promise<A
     };
   }
 
-  const validation = validateAuditOutput(normalized.data, evidenceIdSetV2(pack));
+  const validation = validateAuditOutput(normalized.data, evidenceIdSetV3(pack));
   if (!validation.ok) {
     // The tokens were still billed even though the output is unusable —
     // recording that honestly is the point of the usage ledger. The reason

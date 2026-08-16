@@ -6,6 +6,14 @@ import type {
 } from "@/modules/ai/provider";
 import type { LiveProductIntelligenceSnapshot } from "@/modules/live-product-intelligence/schema";
 import type { RepositoryIntelligenceSnapshot } from "@/modules/repository-intelligence/schema";
+import {
+  PRODUCT_PROFILE_SCHEMA_VERSION,
+  PROFILE_BUILDER_VERSION,
+  type Attributed,
+  type EvidenceSource,
+  type ProductProfile,
+  type ProfileConfidence,
+} from "./schema";
 import { SYNTHESIS_FIELDS } from "./wire-schema";
 
 /**
@@ -374,3 +382,181 @@ export function fakeLiveSnapshot(
 /** A fixed clock, so an assembled profile is byte-identical across runs. */
 export const FIXED_NOW = "2026-08-15T12:30:00.000Z";
 export const fixedNow = () => FIXED_NOW;
+
+/**
+ * A complete, plausible `product-profile.v1` (CORE-2).
+ *
+ * Exists here rather than in the audit's fixtures because the profile belongs
+ * to this module: one fixture, so a schema change breaks in one place instead
+ * of drifting between two definitions of what a profile looks like.
+ *
+ * Shaped to exercise the rules that matter downstream — a `user_confirmed`
+ * audience that must outrank inference, a `likely` code-only claim that must
+ * not read as confirmed, a `not_found` journey stage that must not read as a
+ * deficiency, and a business signal phrased as an observation rather than a
+ * verdict.
+ */
+export function fakeProductProfile(
+  overrides: Partial<ProductProfile> = {},
+): ProductProfile {
+  const attributed = <T,>(
+    value: T | null,
+    confidence: ProfileConfidence,
+    sources: EvidenceSource[],
+    evidence: string[] = [],
+  ): Attributed<T> => ({ value, confidence, sources, evidence });
+
+  return {
+    schemaVersion: PRODUCT_PROFILE_SCHEMA_VERSION,
+    builderVersion: PROFILE_BUILDER_VERSION,
+    promptVersion: "product-understanding-prompt-v1",
+    provider: "anthropic",
+    model: "claude-haiku-4-5-20251001",
+
+    identity: {
+      name: attributed("Acme", "confirmed", ["live_product"], ["live.site.title"]),
+      shortDescription: attributed(
+        "Acme helps small teams ship faster.",
+        "likely",
+        ["ai_inferred", "live_product"],
+        ["live.site.description"],
+      ),
+      understanding: attributed(
+        "Acme is a web application for small product teams. Visitors can create an account and reach a signed-in workspace. There is no pricing page and no payment capability yet.",
+        "likely",
+        ["ai_inferred"],
+        ["live.site.description"],
+      ),
+      category: attributed("saas_application", "likely", ["ai_inferred"], []),
+      mainPurpose: attributed(
+        "Help small teams ship product work faster.",
+        "likely",
+        ["ai_inferred"],
+        ["live.site.description"],
+      ),
+      mainPromise: attributed("Ship faster", "likely", ["live_product"], ["live.site.title"]),
+    },
+
+    audience: {
+      // The correction case CORE-2 §5 exists for: this must reach the audit
+      // as a confirmed fact, visibly stronger than anything inferred.
+      primaryAudience: attributed(
+        "Solo founders who already launched",
+        "confirmed",
+        ["user_confirmed"],
+        [],
+      ),
+      userType: attributed("Product teams", "unclear", ["ai_inferred"], []),
+      problemSolved: attributed(
+        "Shipping takes too long without a clear process.",
+        "likely",
+        ["ai_inferred"],
+        [],
+      ),
+      useCase: attributed<string>(null, "not_found", []),
+    },
+
+    capabilities: [
+      {
+        id: "create_account",
+        label: "Create an account",
+        confidence: "confirmed",
+        sources: ["live_product"],
+        evidence: ["live.surface.signup"],
+      },
+      {
+        id: "sign_in",
+        label: "Sign in",
+        confidence: "confirmed",
+        sources: ["live_product"],
+        evidence: ["live.surface.login"],
+      },
+      // Code-only, so `likely` and never `confirmed` — the asymmetry CORE-1
+      // §3 established and the audit must not flatten.
+      {
+        id: "use_dashboard",
+        label: "Use a signed-in workspace",
+        confidence: "likely",
+        sources: ["repository"],
+        evidence: ["repo.route.app"],
+      },
+    ],
+
+    journey: [
+      {
+        id: "entry_point",
+        detail: "A homepage with a single primary call to action.",
+        confidence: "confirmed",
+        sources: ["live_product"],
+        evidence: ["live.surface.homepage"],
+      },
+      {
+        id: "sign_up",
+        detail: "A signup surface is reachable.",
+        confidence: "confirmed",
+        sources: ["live_product"],
+        evidence: ["live.surface.signup"],
+      },
+      // Absence, which must never render as a deficiency.
+      { id: "pricing", detail: null, confidence: "not_found", sources: [], evidence: [] },
+      { id: "checkout", detail: null, confidence: "not_found", sources: [], evidence: [] },
+    ],
+
+    businessSignals: [
+      {
+        id: "pricing_surface",
+        statement: "No pricing surface was found on the public site",
+        confidence: "likely",
+        sources: ["live_product"],
+        evidence: ["live.surface.pricing"],
+      },
+      {
+        id: "account_system",
+        statement: "The product has accounts and a signed-in area",
+        confidence: "confirmed",
+        sources: ["live_product"],
+        evidence: ["live.surface.login"],
+      },
+      {
+        id: "analytics",
+        statement: "No analytics provider was detected",
+        confidence: "likely",
+        sources: ["repository"],
+        evidence: [],
+      },
+    ],
+
+    brand: {
+      assets: [],
+      colors: [],
+      typefaces: [],
+      voice: {
+        tone: attributed<string>(null, "not_found", []),
+        positioningLine: attributed("Ship faster", "likely", ["live_product"], []),
+        recurringPhrases: [],
+      },
+    },
+
+    technical: {
+      framework: "Next.js",
+      languages: ["TypeScript"],
+      database: "Supabase",
+      authProvider: "Supabase Auth",
+      paymentProvider: null,
+      analyticsProvider: null,
+      deployment: null,
+      integrations: ["Supabase"],
+      hasTestInfrastructure: true,
+    },
+
+    sources: [
+      { source: "repository", used: true, note: "Analyzed at commit abc1234." },
+      { source: "live_product", used: true, note: "Three pages inspected." },
+      { source: "deep_scan", used: false, note: "No Deep Scan has been run." },
+    ],
+    completeness: "partial",
+    limitations: ["Nothing behind the product's login has been inspected."],
+    generatedAt: FIXED_NOW,
+    ...overrides,
+  };
+}

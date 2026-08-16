@@ -1,12 +1,12 @@
 import type { AIProvider, AIUsage, ProviderErrorDiagnostic, StructuredRequest } from "@/modules/ai/provider";
 import type { OperationConfig } from "@/modules/ai/operations";
 import {
-  buildEvidencePackV2,
-  evidenceIdSetV2,
-  trimEvidencePackV2,
-  type BuildEvidencePackV2Input,
-  type EvidencePackV2,
-} from "@/modules/business-audit/evidence-v2";
+  buildEvidencePackV3,
+  evidenceIdSetV3,
+  trimEvidencePackV3,
+  type BuildEvidencePackV3Input,
+  type EvidencePackV3,
+} from "@/modules/business-audit/evidence-v3";
 import type { BusinessReadinessAudit } from "@/modules/business-audit/schema";
 import { OPPORTUNITY_PROMPT_VERSION, buildOpportunitySystemPrompt } from "./prompt";
 import { renderOpportunityInput } from "./render";
@@ -83,7 +83,7 @@ export type OpportunityRunOutcome =
       latencyMs: number;
     };
 
-export type RunOpportunityInput = BuildEvidencePackV2Input & {
+export type RunOpportunityInput = BuildEvidencePackV3Input & {
   audit: BusinessReadinessAudit;
   auditId: string;
   provider: AIProvider;
@@ -92,7 +92,7 @@ export type RunOpportunityInput = BuildEvidencePackV2Input & {
 
 export function buildOpportunityRequest(
   audit: BusinessReadinessAudit,
-  pack: EvidencePackV2,
+  pack: EvidencePackV3,
   config: OperationConfig,
 ): StructuredRequest {
   return {
@@ -113,7 +113,7 @@ export async function runOpportunityGeneration(
 ): Promise<OpportunityRunOutcome> {
   const { provider, config, audit } = input;
 
-  let pack = buildEvidencePackV2(input);
+  let pack = buildEvidencePackV3(input);
   let request = buildOpportunityRequest(audit, pack, config);
 
   // Cost gate: count before spending.
@@ -130,7 +130,7 @@ export async function runOpportunityGeneration(
   for (const maxPriority of [2, 1] as const) {
     if (estimatedInputTokens <= config.maxInputTokens) break;
 
-    const trimmed = trimEvidencePackV2(pack, maxPriority);
+    const trimmed = trimEvidencePackV3(pack, maxPriority);
     if (trimmed === pack) continue;
 
     pack = trimmed;
@@ -173,7 +173,7 @@ export async function runOpportunityGeneration(
     };
   }
 
-  const validation = validateOpportunityOutput(normalized.opportunities, evidenceIdSetV2(pack));
+  const validation = validateOpportunityOutput(normalized.opportunities, evidenceIdSetV3(pack));
   if (!validation.ok) {
     // Tokens were billed even though the output is unusable. Recording that
     // honestly is the point of the usage ledger, and the reason travels with

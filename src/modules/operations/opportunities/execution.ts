@@ -5,14 +5,15 @@ import { OPPORTUNITY_GENERATION_CONFIG } from "@/modules/ai/operations";
 import { recordAIUsage } from "@/modules/ai/usage";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import {
-  buildEvidencePackV2,
-  trimEvidencePackV2,
-  type BuildEvidencePackV2Input,
-} from "@/modules/business-audit/evidence-v2";
+  buildEvidencePackV3,
+  trimEvidencePackV3,
+  type BuildEvidencePackV3Input,
+} from "@/modules/business-audit/evidence-v3";
 import { getLatestSuccessfulAudit } from "@/modules/business-audit/store";
 import { getLatestSuccessfulAuthenticatedSnapshot } from "@/modules/authenticated-product-intelligence/store";
 import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intelligence/store";
-import { getBusinessContext } from "@/modules/projects/business-context-store";
+import { getLatestProfile } from "@/modules/product-understanding/store";
+import { getFounderIntent } from "@/modules/projects/founder-intent-store";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import { OPPORTUNITY_PROMPT_VERSION } from "@/modules/opportunities/prompt";
 import { OPPORTUNITY_RUBRIC_VERSION } from "@/modules/opportunities/rubric";
@@ -62,7 +63,7 @@ import type { BusinessReadinessAudit } from "@/modules/business-audit/schema";
 type OpportunitySources = {
   audit: BusinessReadinessAudit;
   auditId: string;
-  sources: BuildEvidencePackV2Input;
+  sources: BuildEvidencePackV3Input;
   inputHash: string;
 };
 
@@ -101,16 +102,21 @@ async function loadSources(
   const audit = await getLatestSuccessfulAudit(supabase, operation.projectId);
   if (!audit?.result) return { ok: false, failureCode: "audit_missing" };
 
-  const [repositorySnapshot, liveSnapshot, businessContext, authenticatedSnapshot] = await Promise.all([
-    getLatestSuccessfulSnapshot(supabase, operation.projectId),
-    getLatestSuccessfulLiveSnapshot(supabase, operation.projectId),
-    getBusinessContext(supabase, operation.projectId),
-    getLatestSuccessfulAuthenticatedSnapshot(supabase, operation.projectId),
-  ]);
+  const [repositorySnapshot, liveSnapshot, profile, founderIntent, authenticatedSnapshot] =
+    await Promise.all([
+      getLatestSuccessfulSnapshot(supabase, operation.projectId),
+      getLatestSuccessfulLiveSnapshot(supabase, operation.projectId),
+      getLatestProfile(supabase, operation.projectId),
+      getFounderIntent(supabase, operation.projectId),
+      getLatestSuccessfulAuthenticatedSnapshot(supabase, operation.projectId),
+    ]);
 
   if (!repositorySnapshot?.result) return { ok: false, failureCode: "repository_intelligence_missing" };
   if (!liveSnapshot?.result) return { ok: false, failureCode: "live_product_intelligence_missing" };
-  if (!businessContext) return { ok: false, failureCode: "business_context_missing" };
+  // The same profile requirement as the audit, and for a sharper reason: this
+  // rebuilds the audit's evidence pack so citations resolve against the same
+  // ids the audit saw. Without the profile the pack would be a different pack.
+  if (!profile) return { ok: false, failureCode: "product_profile_missing" };
 
   const inputHash = computeOpportunityInputHash({
     auditId: audit.id,
@@ -137,9 +143,10 @@ async function loadSources(
     auditId: audit.id,
     inputHash,
     sources: {
+      productProfile: profile.profile,
+      founderIntent: founderIntent.intent,
       repository: repositorySnapshot.result,
       liveProduct: liveSnapshot.result,
-      businessContext: businessContext.context,
       authenticatedProduct: authenticatedSnapshot?.result ?? null,
     },
   };
@@ -201,7 +208,7 @@ export async function countOpportunityTokensStep(
   if (!resolved.ok) return resolved;
 
   const config = OPPORTUNITY_GENERATION_CONFIG;
-  const pack = buildEvidencePackV2(resolved.sources);
+  const pack = buildEvidencePackV3(resolved.sources);
   const counted = await deps.provider.countInputTokens(
     buildOpportunityRequest(resolved.audit, pack, config),
   );
@@ -209,7 +216,7 @@ export async function countOpportunityTokensStep(
 
   if (counted.inputTokens > config.maxInputTokens) {
     const floor = await deps.provider.countInputTokens(
-      buildOpportunityRequest(resolved.audit, trimEvidencePackV2(pack, 1), config),
+      buildOpportunityRequest(resolved.audit, trimEvidencePackV3(pack, 1), config),
     );
     if (!floor.ok) return { ok: false, failureCode: floor.error };
     if (floor.inputTokens > config.maxInputTokens) {

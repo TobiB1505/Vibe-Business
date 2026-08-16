@@ -166,14 +166,12 @@ export function seedMergedForMeasurement(
   });
 
   if (options.withContext !== false) {
-    db.seed("project_business_context", {
+    db.seed("project_founder_intent", {
       project_id: MEASUREMENT_FIXTURES.project,
-      product_summary: "A business layer for AI-built products, for solo founders.",
-      target_customer: "Solo founders shipping with AI tools",
       stage: "active_users",
       monetization_model: "subscription",
       primary_goal: options.primaryGoal === undefined ? "get_first_users" : options.primaryGoal,
-      context_hash: "c".repeat(64),
+      intent_hash: "c".repeat(64),
       updated_at: "2026-08-10T00:00:00.000Z",
     });
   }

@@ -1,6 +1,6 @@
 import type { BusinessReadinessAudit } from "@/modules/business-audit/schema";
 import { DIMENSION_LABELS } from "@/modules/business-audit/schema";
-import { renderEvidencePackV2, type EvidencePackV2 } from "@/modules/business-audit/evidence-v2";
+import { renderEvidencePackV3, type EvidencePackV3 } from "@/modules/business-audit/evidence-v3";
 
 /**
  * The Opportunity Engine's user message (Sprint 8 §14, §15, §27).
@@ -60,7 +60,7 @@ function renderAudit(audit: BusinessReadinessAudit): string {
 
 export function renderOpportunityInput(input: {
   audit: BusinessReadinessAudit;
-  pack: EvidencePackV2;
+  pack: EvidencePackV3;
 }): string {
   return [
     "<audit>",
@@ -73,6 +73,6 @@ export function renderOpportunityInput(input: {
     renderAudit(input.audit),
     "</audit>",
     "",
-    renderEvidencePackV2(input.pack),
+    renderEvidencePackV3(input.pack),
   ].join("\n");
 }
