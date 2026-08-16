@@ -74,6 +74,16 @@ export type AuditRunDiagnostic = {
    * normalization (wrong dimension set) or domain validation.
    */
   validationReason?: ValidationReason | WireNormalizationReason;
+  /**
+   * For `customer_language_violation`: which internal terms leaked.
+   *
+   * Carried because the first real rejection cost $0.146 and could not be
+   * diagnosed from the stored record — CORE-2a.2 established that these terms
+   * are safe to persist, being our own closed vocabulary, and then failed to
+   * persist them. Without this, "the language net fired" is where the
+   * investigation stops.
+   */
+  languageTerms?: string[];
   /** Safe provider signals, when the API rejected the request. */
   provider?: ProviderErrorDiagnostic;
 };
@@ -203,7 +213,10 @@ export async function runBusinessReadinessAudit(input: RunAuditInput): Promise<A
       ok: false,
       error: validation.error,
       usage: result.usage,
-      diagnostic: { validationReason: validation.reason },
+      diagnostic: {
+        validationReason: validation.reason,
+        ...(validation.terms ? { languageTerms: validation.terms } : {}),
+      },
       estimatedInputTokens,
       latencyMs: result.latencyMs,
     };

@@ -413,3 +413,85 @@ describe("the contract holds at real audit cardinality", () => {
     expect(strings).toHaveLength(1 + 3 * 2 + 3 * 3);
   });
 });
+
+/**
+ * The diagnostic carries the terms (added after the first real rejection).
+ *
+ * A $0.146 failure that says only "the language net fired" is a failure you
+ * cannot act on. CORE-2a.2 established these terms are safe to persist — our
+ * own closed vocabulary, never model prose — and then did not persist them.
+ */
+describe("a language rejection says which words leaked", () => {
+  it("reports the terms through the runner's diagnostic", async () => {
+    const { runBusinessReadinessAudit } = await import("./runner");
+    const { BUSINESS_READINESS_AUDIT_CONFIG } = await import("@/modules/ai/operations");
+    const { FakeProvider, fakeFounderIntent, fakeLiveSnapshot, fakeRepositorySnapshot, buildModelOutput } =
+      await import("./test-support");
+    const { fakeProductProfile } = await import("@/modules/product-understanding/test-support");
+
+    const provider = new FakeProvider({
+      result: {
+        ok: true,
+        data: buildModelOutput(
+          {},
+          {
+            overallConclusion: "Your monetization model and conversion path are unclear.",
+          },
+        ),
+        usage: { inputTokens: 100, outputTokens: 100, thinkingTokens: 0 },
+        model: "claude-sonnet-5",
+        latencyMs: 10,
+      },
+    });
+
+    const outcome = await runBusinessReadinessAudit({
+      provider,
+      config: BUSINESS_READINESS_AUDIT_CONFIG,
+      productProfile: fakeProductProfile(),
+      founderIntent: fakeFounderIntent(),
+      repository: fakeRepositorySnapshot(),
+      liveProduct: fakeLiveSnapshot(),
+      authenticatedProduct: null,
+    });
+
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+
+    expect(outcome.diagnostic?.validationReason).toBe("customer_language_violation");
+    expect(outcome.diagnostic?.languageTerms).toEqual(["conversion path", "monetization model"]);
+  });
+
+  it("still reports the usage, because those tokens were billed", async () => {
+    // The rejection happens after generation. The money is spent either way and
+    // the ledger has to say so.
+    const { runBusinessReadinessAudit } = await import("./runner");
+    const { BUSINESS_READINESS_AUDIT_CONFIG } = await import("@/modules/ai/operations");
+    const { FakeProvider, fakeFounderIntent, fakeLiveSnapshot, fakeRepositorySnapshot, buildModelOutput } =
+      await import("./test-support");
+    const { fakeProductProfile } = await import("@/modules/product-understanding/test-support");
+
+    const provider = new FakeProvider({
+      result: {
+        ok: true,
+        data: buildModelOutput({}, { overallConclusion: "No pricing surface exists." }),
+        usage: { inputTokens: 4_000, outputTokens: 9_000, thinkingTokens: 3_000 },
+        model: "claude-sonnet-5",
+        latencyMs: 90_000,
+      },
+    });
+
+    const outcome = await runBusinessReadinessAudit({
+      provider,
+      config: BUSINESS_READINESS_AUDIT_CONFIG,
+      productProfile: fakeProductProfile(),
+      founderIntent: fakeFounderIntent(),
+      repository: fakeRepositorySnapshot(),
+      liveProduct: fakeLiveSnapshot(),
+      authenticatedProduct: null,
+    });
+
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    expect(outcome.usage).toEqual({ inputTokens: 4_000, outputTokens: 9_000, thinkingTokens: 3_000 });
+  });
+});

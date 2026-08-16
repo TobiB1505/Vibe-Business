@@ -30,7 +30,7 @@
  *     five bullets has to do the synthesis the audit was supposed to do.
  */
 
-export const RUBRIC_VERSION = "business-readiness-rubric-v4" as const;
+export const RUBRIC_VERSION = "business-readiness-rubric-v5" as const;
 
 export const BUSINESS_READINESS_RUBRIC = `# Business Readiness Rubric (${RUBRIC_VERSION})
 
@@ -127,33 +127,39 @@ The question is never "which business-related product features are missing?".
 It is **"what does this specific product still need in order to become a
 functioning business?"**
 
-### The lenses
+### The nine questions
 
-1. **OFFER** — Why should anyone want this? Is the problem real, the value
+Each has an internal key, given in \`code\`, which you use in the \`lens\` field
+and **nowhere else**. The key is a label for us. The question is the thing to
+think about, and the words you write for the founder come from the answer — not
+from the label.
+
+1. \`offer\` — Why should anyone want this? Is the problem real, the value
    clear, the promise specific? Is there a reason to choose it over what people
    do today?
-2. **AUDIENCE** — Who cares enough about this problem to act or pay? Is the
+2. \`audience\` — Who cares enough about this problem to act or pay? Is the
    first realistic customer clear enough to aim at? A product can serve a broad
    market and still need a much narrower first customer.
-3. **REVENUE & ECONOMICS** — How does the value created become sustainable
-   revenue? Consider the business model, what customers would pay for, the free
-   /paid boundary — and the cost of delivering it: variable provider costs,
-   cost to serve, whether revenue scales faster than cost.
-4. **ACQUISITION** — How do the right people discover this? Search, content,
-   communities, partnerships, marketplaces, referral, existing audience,
-   product-led, integrations, outbound, paid. Search is one of eleven, not the
-   definition.
-5. **CONVERSION** — How does someone move from interest to value, and to
-   paying? Landing, sign-up, onboarding, first value, and the buying path.
-6. **RETENTION** — Why would anyone come back, keep using this, or keep paying?
-   Recurring value, stored work, repeated need.
-7. **MEASUREMENT** — Can the founder tell what people do and what is actually
+3. \`revenue_economics\` — How does the value created become money that keeps
+   coming in? Consider what customers would pay for, where free stops and paid
+   starts — and the cost of delivering it: what each use costs you, and whether
+   income grows faster than that cost.
+4. \`acquisition\` — How do the right people find this? Search, writing,
+   communities, partnerships, marketplaces, word of mouth, an audience you
+   already have, the product spreading itself, integrations, reaching out,
+   paying for attention. Search is one of eleven, not the definition.
+5. \`conversion\` — How does someone get from interested to actually using it,
+   and to paying? Landing, signing up, getting started, first real value, and
+   being able to buy.
+6. \`retention\` — Why would anyone come back, keep using this, or keep paying?
+   Recurring value, work they have stored, a need that repeats.
+7. \`measurement\` — Can the founder tell what people do and what is actually
    working?
-8. **BUSINESS READINESS** — What still prevents this operating credibly as a
-   real business? Trust, support, billing readiness, the basics a customer
-   expects before paying.
-9. **SCALABILITY** — What happens to cost, margin and the founder's time if
-   this grows? Business scalability, not server capacity.
+8. \`business_readiness\` — What still stops this being something a stranger
+   would buy from with confidence? Trust, support, being able to bill, the
+   basics someone expects before handing over money.
+9. \`scalability\` — What happens to cost, margin and the founder's own time if
+   this grows?
 
 ### Assess each lens
 
@@ -300,8 +306,21 @@ every headline without opening evidence or technical details.
 The rule, stated once rather than as a list of banned phrases:
 
 > Internal taxonomy, implementation vocabulary, scanner terminology and the
-> names of categories in this rubric must not be copied into a customer-facing
-> field. Say what it means for the business instead.
+> names of the nine keys above must not be copied into a customer-facing field.
+> Say what it means for the business instead.
+
+The keys are the clearest trap, because you will have just used them. Words
+like \`conversion\`, \`retention\` and \`acquisition\` are ours, not the
+founder's — and a phrase built from one ("your conversion path", "retention
+capability", "your acquisition approach") reads as a report about a system
+rather than a sentence about their business.
+
+- Not "your conversion path is incomplete", but
+  **people can't get from interested to actually paying you.**
+- Not "retention capability is weak", but
+  **there's not much reason for anyone to come back next week.**
+- Not "no clear acquisition approach", but
+  **Vibe couldn't see how the right people would find you.**
 
 The customer-facing fields are: the overall conclusion, and every headline,
 explanation and why-it-matters in the conclusions.

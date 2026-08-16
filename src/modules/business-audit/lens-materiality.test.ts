@@ -164,3 +164,61 @@ describe("the system prompt asks for reasoning before conclusions (§16, §37)",
     expect(prompt).not.toContain("Solo founders who already launched");
   });
 });
+
+/**
+ * Anti-priming (CORE-2a.3, after the first refresh was rejected by our own
+ * language net).
+ *
+ * The first attempt cost $0.146 and failed with `customer_language_violation`.
+ * The cause was this file's own doing: the nine lenses were written into the
+ * rubric as prose headings — **CONVERSION**, **RETENTION**, **ACQUISITION** —
+ * which the model read immediately before writing conclusions. That is exactly
+ * the priming CORE-2a.2 removed when it deleted the forbidden-phrase list, and
+ * it came straight back in at nine times the size.
+ *
+ * The rule: the model may see the keys as machine identifiers, never as
+ * headings, and must be told in the same breath that they are ours.
+ */
+describe("the rubric does not prime the vocabulary it forbids", () => {
+  const rubric = BUSINESS_READINESS_RUBRIC;
+
+  it("does not shout the lens names as prose headings", () => {
+    for (const shouted of ["**OFFER**", "**AUDIENCE**", "**CONVERSION**", "**RETENTION**", "**ACQUISITION**", "**SCALABILITY**"]) {
+      expect(rubric).not.toContain(shouted);
+    }
+  });
+
+  it("marks the keys as internal labels rather than words to reuse", () => {
+    const flowed = rubric.replace(/\s+/g, " ");
+    expect(flowed).toContain("which you use in the `lens` field");
+    expect(flowed).toContain("and **nowhere else**");
+  });
+
+  /**
+   * Naming the trap is worth more than forbidding it: the model is shown the
+   * phrase it would otherwise build, and the sentence to write instead.
+   */
+  it("shows the founder-language replacement for each risky phrase", () => {
+    const flowed = rubric.replace(/\s+/g, " ");
+    expect(flowed).toContain("your conversion path");
+    expect(flowed).toContain("retention capability");
+    expect(flowed).toContain("acquisition approach");
+    expect(flowed).toContain("people can't get from interested to actually paying you");
+  });
+
+  /**
+   * Every replacement the rubric teaches must itself survive the net. A rubric
+   * that suggests wording the validator then rejects would fail every audit.
+   */
+  it("suggests only wording that passes the language check", async () => {
+    const { findInternalVocabulary } = await import("./customer-language");
+
+    for (const suggestion of [
+      "people can't get from interested to actually paying you.",
+      "there's not much reason for anyone to come back next week.",
+      "Vibe couldn't see how the right people would find you.",
+    ]) {
+      expect(findInternalVocabulary(suggestion)).toEqual([]);
+    }
+  });
+});
