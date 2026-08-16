@@ -305,6 +305,17 @@ Two things were wrong, and both are fixed:
   before a single token is counted. Failed rows stay excluded, because a failed audit consumed
   nothing and must not block its own retry.
 
+The first attempt at that migration **failed on push**, and it is worth recording why: it
+created the widened index before releasing the row stranded by the original defect, so the
+project had two rows matching the new predicate and Postgres refused with `23505`. The
+transaction rolled back cleanly and nothing was left half-applied.
+
+It is the same mistake as the `access_mode` default in `20260816020000`, made twice in one
+day: **constrain the data only after the data satisfies the constraint.** The migration now
+repairs first and enforces second. The lesson generalizes past this sprint — every migration
+here that adds a constraint to a live table needs its backfill ordered ahead of it, and a
+dry-run against real rows rather than against the shape they are assumed to have.
+
 The regression test asserts the property that matters — not "it refuses", but that it refuses
 with **no operation row, no audit row, and the executor never started**.
 
