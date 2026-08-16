@@ -23,7 +23,12 @@ import { getLatestOpportunities } from "@/modules/opportunities/service";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import { AuditEvidenceNotice } from "../audit-evidence-notice";
-import { AuditConclusion } from "../audit-conclusion";
+import { AuditOverview } from "../audit-overview";
+import {
+  AuditAnalyzing,
+  AuditPreparing,
+  AuditWaitingHeader,
+} from "../audit-lifecycle";
 import { NeedsUserPanel } from "../needs-user-panel";
 import { RunAuditButton } from "../run-audit-button";
 
@@ -156,6 +161,23 @@ export default async function ProjectScorePage({
    */
   const systemRefresh = auditAccess.systemRefreshAvailable;
 
+  /*
+   * Which lifecycle state this page is in (§28).
+   *
+   * Read from the operation the server already loaded, so a reload lands in the
+   * same state and no polling is needed to discover it. `needs_user` is not
+   * listed here because the pending question renders above and *is* that state;
+   * showing a "preparing" panel beside it would say Vibe is busy when it is
+   * waiting.
+   */
+  const auditStage: "preparing" | "analyzing" | null = pausedAudit
+    ? null
+    : activeAuditOperation?.stage === "running_ai"
+      ? "analyzing"
+      : activeAuditOperation
+        ? "preparing"
+        : null;
+
   return (
     // The section id stays `business-audit`: `BUSINESS_AUDIT_ANCHOR` is a tested
     // domain constant that a blocked opportunity set links at, and that link is
@@ -181,7 +203,10 @@ export default async function ProjectScorePage({
           nobody answers (§30, §31).
         */}
         {pausedAudit && (
-          <NeedsUserPanel projectId={project.id} question={pausedAudit.question} />
+          <div className="flex flex-col gap-4">
+            <AuditWaitingHeader />
+            <NeedsUserPanel projectId={project.id} question={pausedAudit.question} />
+          </div>
         )}
 
         <AuditEvidenceNotice notice={auditEvidenceNotice} />
@@ -217,16 +242,26 @@ export default async function ProjectScorePage({
           </Notice>
         )}
 
+        {/*
+          The lifecycle drawn as its own states rather than one completed map
+          with different headlines (AUDIT UI-1 §28). Each says something
+          different about what Vibe is doing, and only `completed` shows
+          judgments — nothing above it may imply a health or a priority that
+          has not been decided yet (§31, §35, §36).
+        */}
+        {auditStage === "preparing" && <AuditPreparing />}
+        {auditStage === "analyzing" && <AuditAnalyzing />}
+
         {latestAudit?.result ? (
           // Answer first, evidence second, tech last — all three owned by the
           // component, so the reading order cannot be reassembled here (§14).
-          <AuditConclusion
+          <AuditOverview
             audit={latestAudit.result}
-            analyzedAt={latestAudit.completedAt ?? latestAudit.createdAt}
+            generatedAt={latestAudit.completedAt ?? latestAudit.createdAt}
             movesHref={`/app/projects/${project.id}/moves`}
             hasMoves={hasMoves}
           />
-        ) : (
+        ) : auditStage !== null ? null : (
           // Not scored is not a score of zero. No meter, no number.
           <EmptyState
             title="Not analyzed yet"
