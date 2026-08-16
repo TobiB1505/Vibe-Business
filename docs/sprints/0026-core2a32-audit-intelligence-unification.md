@@ -370,7 +370,78 @@ fidelity fixtures: the v5 revenue explanation is flagged, the same root problem 
 accepted, and the audience, acquisition and broken-checkout conclusions all pass untouched so the
 fix cannot overcorrect into banning plain statements about missing surfaces.
 
-Contract v6, synthesis v5, rubric v9. 3249 unit / 117 e2e / lint / typecheck / build green.
+### Two budget failures before it could be measured
+
+The fix could not be dogfooded until two ceilings were raised, both set when this call was a
+smaller operation, and both discarded a finished answer.
+
+A shared client timeout took the first attempt at exactly **120,003 ms** — 13 seconds above the
+longest real audit, until this sprint's larger rubric crossed it. Nothing billed.
+
+Then the raised timeout let the call run, and it truncated mid-object at exactly **16,000 output
+tokens** with **$0.1965 already billed**. Under adaptive thinking, reasoning shares the output
+budget: the JSON is ~5,800 tokens and thinking went 8,236 → 11,172 between consecutive runs as
+this sprint added more checks per conclusion.
+
+The instinct was to raise the token ceiling to 40,000. That would have been a number that looks
+like a budget. Generation runs at a steady **~9.8 ms per output token** across every real audit
+measured (9.0–10.8 over four runs), so 40,000 tokens implies ~394s and the 240s timeout fires
+first. At 240s the most that can physically be generated is ~24,000 tokens — so that is the
+ceiling, and a test now enforces that every operation can generate its whole output budget before
+its own timeout. Fixing these independently is how you get a third failure.
+
+### Dogfood — contract v6
+
+Founder intent unchanged and re-read: `prototype` / `none` / `launch`.
+
+**`validationNotes: []`** — the first empty set since CORE-2a.3. Both standing notes cleared: no
+jargon leak, no abstraction regression.
+
+| | root problem (internal) | explanation (customer) |
+|---|---|---|
+| **1** | broad audience category, not narrowed to a first customer, and no visible channel through which that audience would find the product | "You know roughly who this is for — software founders trying to commercialize what they've built — but there's no sharper first-customer picture yet, and Vibe couldn't see any blog, content, or stated way for the right people to find you." |
+| **2** | has not decided what customers would pay for or how usage becomes revenue | "By your own account the pricing model isn't settled, and nothing on the site, in the code, or in the signed-in app shows a price or a way to pay — so the economics of the business are still an open question." |
+
+§24's question — *is the explanation saying the same thing as the root problem, just in simpler
+language?* — is **yes** for both. Each explanation carries the same two-part structure as the root
+problem above it and ends on the business statement rather than the observation.
+
+The `whyItMatters` on the revenue blocker is materiality expressed in the founder's own words,
+which nothing asked for explicitly: *"it's not blocking getting the product launched today, but
+it's the next real gap behind it."*
+
+Lens map: `offer` adequate/now · `audience` weak/now · `conversion` adequate/now · `acquisition`
+weak/soon · `revenue_economics` weak/soon · `scalability` unclear/later · `retention`
+adequate/later · `measurement` weak/later · `business_readiness` weak/later.
+
+| | v5 | v6 |
+|---|---|---|
+| Validation notes | 2 | **0** |
+| Output / thinking tokens | 14,018 / 8,236 | 14,200 / 9,111 |
+| Cost | $0.1761 | $0.1785 |
+| Latency | 138.1 s | 138.0 s |
+| Blockers | 3 | 2 |
+| Score | 44 | 43 |
+
+Free audit grant still held; no manual deletion. Scores are not comparable across contracts.
+
+### Residuals from this fix
+
+**The revenue root problem drifted toward the surface.** v5's read *"what customers would pay
+for, how usage would turn into a price, or where free stops and paid starts"*. v6's appends *"and
+no pricing, payment, or checkout mechanism exists anywhere in the product"*. Fidelity improved
+and the anchor weakened — the explanation is now faithful to a root problem that is itself half
+inventory. The headline picked it up too: *"…and right now there's no way for anyone to pay."*
+
+**Two blockers, not three.** Audience and acquisition merged into one root problem. Defensible —
+the model stated the prerequisite relationship — but "who is my first customer" and "no channel
+exists" are different pieces of work, and this reads slightly over-merged.
+
+**The empty note set is partly threshold luck.** The revenue explanation contains one absence
+clause; three is the trigger. The detector is coarse by design, and a clean run is evidence, not
+proof.
+
+Contract v6, synthesis v5, rubric v9. 3253 unit / 117 e2e / lint / typecheck / build green.
 
 ## Next recommended phase
 
