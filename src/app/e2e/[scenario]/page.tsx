@@ -6,6 +6,11 @@ import {
 import { IntelligenceSummary } from "@/app/app/projects/[projectId]/intelligence-summary";
 import { AuditOverview } from "@/app/app/projects/[projectId]/audit-overview";
 import { NeedsUserPanel } from "@/app/app/projects/[projectId]/needs-user-panel";
+import {
+  AuditAnalyzing,
+  AuditPreparing,
+  AuditWaitingHeader,
+} from "@/app/app/projects/[projectId]/audit-lifecycle";
 import { E2E_AUDIT_SCENARIOS, isE2eAuditScenario } from "../audit-scenarios";
 import { E2E_NEEDS_USER_SCENARIOS, isE2eNeedsUserScenario } from "../needs-user-scenarios";
 import { E2E_SCENARIOS, isE2eScenario } from "../scenarios";
@@ -121,6 +126,42 @@ export default async function E2eScenarioPage({
             />
           }
         />
+      </main>
+    );
+  }
+
+  // The audit's lifecycle states (AUDIT UI-1 §28–§37). Rendered from the same
+  // components the score route uses, so what a browser sees here is what a
+  // waiting or running audit actually shows.
+  if (scenario === "audit-preparing") {
+    return (
+      <main className="mx-auto max-w-4xl p-8">
+        {label}
+        <AuditPreparing />
+      </main>
+    );
+  }
+
+  if (scenario === "audit-analyzing") {
+    return (
+      <main className="mx-auto max-w-4xl p-8">
+        {label}
+        <AuditAnalyzing />
+      </main>
+    );
+  }
+
+  if (scenario === "audit-waiting") {
+    return (
+      <main className="mx-auto max-w-4xl p-8">
+        {label}
+        <div className="flex flex-col gap-4">
+          <AuditWaitingHeader />
+          <NeedsUserPanel
+            projectId="project_e2e"
+            question={E2E_NEEDS_USER_SCENARIOS.needs_user_first_customer()}
+          />
+        </div>
       </main>
     );
   }
