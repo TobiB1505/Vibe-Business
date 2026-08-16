@@ -5,6 +5,7 @@ import {
   type FounderQuestion,
   type FounderQuestionIntent,
 } from "./founder-questions";
+import { isStorable } from "./answer-routing";
 import { isActionable } from "./lens-priority";
 import type { BusinessLens, BusinessLensAssessment, LensMateriality } from "./schema";
 
@@ -89,6 +90,8 @@ export const WITHHELD_REASONS = [
   "already_asked",
   /** The interruption budget for one audit is spent. */
   "budget_spent",
+  /** No canonical store holds this kind of answer, so it must not be asked. */
+  "nowhere_to_store_it",
 ] as const;
 export type WithheldReason = (typeof WITHHELD_REASONS)[number];
 
@@ -264,6 +267,7 @@ export function selectBlockingQuestion(input: InterruptionInput): InterruptionDe
       "nothing_unresolved",
       "already_asked",
       "vibe_can_answer_this",
+      "nowhere_to_store_it",
       "blocked_by_prerequisite",
       "not_material_yet",
       "budget_spent",
@@ -278,6 +282,19 @@ export function selectBlockingQuestion(input: InterruptionInput): InterruptionDe
     }
     if (!isFounderOnly(candidate.intent)) {
       note("vibe_can_answer_this");
+      continue;
+    }
+    /*
+     * An answer with nowhere canonical to live cannot be asked for (§20).
+     *
+     * Structural rather than remembered: `operating_market` has no home —
+     * Founder Intent holds stage, charging direction and goal; profile
+     * corrections describe the product, not its jurisdiction — and inventing a
+     * store for it would rebuild the business-context blob CORE-2 deleted. The
+     * audit still reasons about that gap; it just cannot interrupt for it.
+     */
+    if (!isStorable(candidate.intent)) {
+      note("nowhere_to_store_it");
       continue;
     }
 
