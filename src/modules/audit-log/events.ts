@@ -24,7 +24,13 @@ export type AuditEventType =
   | "live_product.intelligence.completed"
   | "live_product.intelligence.failed"
   | "live_product.intelligence.reused"
+  // Historical. `project_business_context` was dropped in CORE-2 and nothing
+  // emits this any more, but existing rows carry it and the activity feed must
+  // still be able to render them.
   | "business_context.updated"
+  // CORE-2 §4. What replaced it: stage, intended monetization and primary
+  // goal, all closed enums.
+  | "founder_intent.updated"
   | "business_audit.started"
   | "business_audit.completed"
   | "business_audit.failed"

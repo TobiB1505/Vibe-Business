@@ -50,7 +50,9 @@ const LABELS: Record<AuditEventType, string> = {
   "project.created": "Project created",
   "project.disconnected": "Project disconnected",
   "project.production_url.updated": "Production URL updated",
+  // Historical: nothing emits this since CORE-2, but stored rows still do.
   "business_context.updated": "Business context updated",
+  "founder_intent.updated": "Updated what you're working toward",
 
   // Written the way the flow speaks (CORE-1 §45): the Activity feed is the one
   // place these events are read by a person, and "Product understanding
