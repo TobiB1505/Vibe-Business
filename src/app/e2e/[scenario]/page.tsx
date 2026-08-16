@@ -4,6 +4,8 @@ import {
   type PreparedChangeCard,
 } from "@/app/app/projects/[projectId]/prepared-changes-section";
 import { IntelligenceSummary } from "@/app/app/projects/[projectId]/intelligence-summary";
+import { AuditConclusion } from "@/app/app/projects/[projectId]/audit-conclusion";
+import { E2E_AUDIT_SCENARIOS, isE2eAuditScenario } from "../audit-scenarios";
 import { E2E_SCENARIOS, isE2eScenario } from "../scenarios";
 import { E2E_INTELLIGENCE_SCENARIOS, isE2eIntelligenceScenario } from "../intelligence-scenarios";
 import {
@@ -116,6 +118,23 @@ export default async function E2eScenarioPage({
               }}
             />
           }
+        />
+      </main>
+    );
+  }
+
+  // The human-first Business Audit (CORE-2 §14): the same component the score
+  // route renders, given an audit the real scoring produced.
+  if (isE2eAuditScenario(scenario)) {
+    const auditResult = E2E_AUDIT_SCENARIOS[scenario]();
+    return (
+      <main className="mx-auto max-w-4xl p-8">
+        {label}
+        <AuditConclusion
+          audit={auditResult}
+          analyzedAt={auditResult.generatedAt}
+          movesHref="/app/projects/project_e2e/moves"
+          hasMoves
         />
       </main>
     );
