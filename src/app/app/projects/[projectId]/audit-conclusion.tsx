@@ -1,0 +1,229 @@
+import Link from "next/link";
+import { describeEvidenceId } from "@/modules/business-audit/evidence-labels";
+import { buildHumanAuditView, type AuditHighlight } from "@/modules/business-audit/human-view";
+import type { BusinessReadinessAudit } from "@/modules/business-audit/schema";
+import { formatTimestamp } from "@/lib/utils/format-datetime";
+import { StatusPill } from "@/components/ui/status-pill";
+import { Surface, Well } from "@/components/ui/surface";
+import { MonoLabel } from "@/components/ui/typography";
+import { BusinessAuditSummary } from "./business-audit-summary";
+
+/**
+ * The human-first audit result (CORE-2 §14, §15).
+ *
+ * Reading order is the whole design, and it is the opposite of what came
+ * before: **answer first, evidence second, tech last.**
+ *
+ *   What Vibe thinks about the business
+ *   → What's already working
+ *   → What's holding you back
+ *   → Why it matters
+ *   → Where I'd start
+ *
+ * The score is still on the page and still true; it is just no longer the
+ * first thing a founder meets. `BusinessAuditSummary` still renders the full
+ * dimension breakdown, one disclosure down.
+ *
+ * Every string here originates from an AI response about untrusted customer
+ * content. React escapes it; nothing is rendered as markup.
+ */
+
+function EvidenceDisclosure({ evidenceIds }: { evidenceIds: string[] }) {
+  if (evidenceIds.length === 0) return null;
+
+  return (
+    <details className="mt-1.5">
+      <summary className="text-fg-meta hover:text-fg-muted cursor-pointer rounded-sm text-xs transition-colors">
+        Why?
+      </summary>
+      <ul className="mt-1.5 space-y-1 pl-3">
+        {evidenceIds.map((id) => {
+          const { source, detail } = describeEvidenceId(id);
+          return (
+            <li key={id} className="text-fg-muted text-xs" title={id}>
+              <span className="text-fg-secondary font-mono">{source}:</span> {detail}
+            </li>
+          );
+        })}
+      </ul>
+    </details>
+  );
+}
+
+function HighlightList({
+  items,
+  tone,
+}: {
+  items: AuditHighlight[];
+  tone: "strength" | "gap";
+}) {
+  const markerClass = tone === "strength" ? "bg-mint" : "bg-amber";
+
+  return (
+    <ul className="flex flex-col gap-3">
+      {items.map((item, index) => (
+        <li key={`${item.dimension}-${index}`} className="flex gap-2.5">
+          {/* Decorative only: the section heading already carries the meaning,
+              so colour is never the sole signal. */}
+          <span aria-hidden className={`mt-2 size-1.5 shrink-0 rounded-full ${markerClass}`} />
+          <div className="min-w-0">
+            <p className="text-fg-prose text-sm leading-relaxed">{item.text}</p>
+            <p className="text-fg-meta mt-0.5 text-xs">{item.question}</p>
+            <EvidenceDisclosure evidenceIds={item.evidenceIds} />
+          </div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export function AuditConclusion({
+  audit,
+  analyzedAt,
+  movesHref,
+  hasMoves,
+}: {
+  audit: BusinessReadinessAudit;
+  analyzedAt: string;
+  movesHref: string;
+  /** Whether the Opportunity Engine has produced moves yet (CORE-2 §18). */
+  hasMoves: boolean;
+}) {
+  const view = buildHumanAuditView(audit);
+  const fullCoverage = view.assessedDimensions === view.totalDimensions;
+
+  return (
+    <div className="flex flex-col gap-5">
+      <Surface level="panel" padding="lg" className="flex flex-col gap-4">
+        <h2 className="text-fg text-xl font-semibold">What Vibe thinks about the business</h2>
+        <p className="text-fg-prose max-w-[65ch] text-base leading-relaxed">{view.conclusion}</p>
+
+        {/* Secondary by placement and by size — present, never the headline. */}
+        <div className="flex flex-wrap items-center gap-3">
+          <StatusPill tone={fullCoverage ? "success" : "waiting"}>
+            {view.assessedDimensions} of {view.totalDimensions} areas assessed
+          </StatusPill>
+          {view.score !== null && (
+            <span className="text-fg-muted font-mono text-xs tabular-nums">
+              Readiness score {view.score}/100
+            </span>
+          )}
+          <span className="text-fg-meta font-mono text-[0.6875rem]">
+            {formatTimestamp(analyzedAt) ?? analyzedAt}
+          </span>
+        </div>
+
+        {view.score === null && view.insufficientCoverageReason && (
+          <p className="text-fg-muted max-w-[60ch] text-xs">{view.insufficientCoverageReason}</p>
+        )}
+      </Surface>
+
+      {view.working.length > 0 && (
+        <Surface
+          level="section"
+          padding="lg"
+          className="flex flex-col gap-3"
+          data-testid="audit-working"
+        >
+          <h3 className="text-fg text-base font-semibold">What&rsquo;s already working</h3>
+          <HighlightList items={view.working} tone="strength" />
+        </Surface>
+      )}
+
+      {view.blockers.length > 0 && (
+        <Surface
+          level="section"
+          padding="lg"
+          className="flex flex-col gap-3"
+          data-testid="audit-blockers"
+        >
+          <h3 className="text-fg text-base font-semibold">What&rsquo;s holding you back</h3>
+          <HighlightList items={view.blockers} tone="gap" />
+        </Surface>
+      )}
+
+      {view.whyItMatters.length > 0 && (
+        <Surface level="section" padding="lg" className="flex flex-col gap-3">
+          <h3 className="text-fg text-base font-semibold">Why it matters</h3>
+          <ul className="flex flex-col gap-3">
+            {view.whyItMatters.map((finding) => (
+              <li key={finding.finding} className="text-fg-prose text-sm leading-relaxed">
+                {finding.finding}
+                <EvidenceDisclosure evidenceIds={finding.evidenceIds} />
+              </li>
+            ))}
+          </ul>
+        </Surface>
+      )}
+
+      {/*
+        CORE-2 §18: the actual moves come from the Opportunity Engine, so this
+        section links to them rather than inventing its own. When none exist
+        yet it says so plainly instead of showing an empty promise.
+      */}
+      <Surface level="section" padding="lg" className="flex flex-col gap-3">
+        <h3 className="text-fg text-base font-semibold">Where I&rsquo;d start</h3>
+        {hasMoves ? (
+          <>
+            <p className="text-fg-prose max-w-[65ch] text-sm leading-relaxed">
+              Vibe has picked the things worth doing first, in order.
+            </p>
+            <Link
+              href={movesHref}
+              className="text-mint w-fit text-sm underline underline-offset-4 hover:no-underline"
+            >
+              See what Vibe would do first
+            </Link>
+          </>
+        ) : (
+          <p className="text-fg-muted max-w-[65ch] text-sm leading-relaxed">
+            Vibe hasn&rsquo;t worked out the next moves for this project yet.
+          </p>
+        )}
+      </Surface>
+
+      {/*
+        Tech last, and owned by this component rather than by the route.
+        "Answer first, evidence second, tech last" is a property of the audit
+        screen, so the screen holds all three — a route that assembled the
+        order itself could reorder it without any test noticing.
+      */}
+      <details>
+        <summary className="text-fg-muted hover:text-fg-prose cursor-pointer rounded-sm text-sm transition-colors">
+          See the full breakdown by dimension
+        </summary>
+        <div className="mt-4">
+          <BusinessAuditSummary audit={audit} analyzedAt={analyzedAt} />
+        </div>
+      </details>
+
+      {(view.blindSpots.unansweredQuestions.length > 0 ||
+        view.blindSpots.limitations.length > 0) && (
+        /* `Well` takes only children and a className, so the test hook lives
+           on a wrapper rather than widening a shared primitive for one caller. */
+        <div data-testid="audit-blind-spots">
+          <Well className="flex flex-col gap-2">
+          {/*
+            Its own section with its own heading, deliberately kept away from
+            "what's holding you back". Missing evidence is a limit on the
+            analysis, never a finding about the product (CLAUDE.md rule 44).
+          */}
+          <MonoLabel>What Vibe couldn&rsquo;t see</MonoLabel>
+          <ul className="flex flex-col gap-1.5">
+            {view.blindSpots.unansweredQuestions.map((question) => (
+              <li key={question} className="text-fg-muted text-xs leading-relaxed">
+                {question}
+              </li>
+            ))}
+            {view.blindSpots.limitations.map((limitation) => (
+              <li key={limitation} className="text-fg-muted text-xs leading-relaxed">
+                {limitation}
+              </li>
+            ))}
+            </ul>
+          </Well>
+        </div>
+      )}
+    </div>
+  );
+}
