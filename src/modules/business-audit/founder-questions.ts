@@ -135,6 +135,15 @@ export function selectFounderQuestions(input: QuestionSelectionInput): FounderQu
   const productName = profile.identity.name.value;
   const named = productName ? `${productName}` : "this";
 
+  /**
+   * What Vibe worked out about the product, when it holds it confidently
+   * enough to say out loud. Null rather than a hedge — an unconfident premise
+   * repeated back is worse than no premise (§12).
+   */
+  const understanding = isConfident(profile.identity.understanding)
+    ? profile.identity.understanding.value
+    : null;
+
   /*
    * 1. Stage. The highest-weight question when unknown, because materiality
    *    everywhere else depends on it: the same missing analytics is irrelevant
@@ -144,9 +153,17 @@ export function selectFounderQuestions(input: QuestionSelectionInput): FounderQu
     questions.push({
       intent: "current_stage",
       prompt: "Where are you actually with this today?",
-      context: isConfident(profile.identity.understanding)
-        ? "Vibe can see what you've built, but not how far along it is with real people."
-        : null,
+      /*
+       * The understanding sentence, quoted back.
+       *
+       * The first real interruption said "Vibe can see what you've built" to a
+       * founder whose profile read "a vacation planning tool for hotel staff
+       * … instead of scattered emails or spreadsheets". Vibe had the sentence
+       * and described it as *"what you've built"*. Saying the thing is the
+       * difference between a question that proves understanding and one that
+       * merely claims it (§11, §62).
+       */
+      context: understanding ? `${understanding} What Vibe can't tell is how far along it is with real people.` : null,
       allowsUnsure: false,
       weight: 100,
     });
@@ -159,8 +176,13 @@ export function selectFounderQuestions(input: QuestionSelectionInput): FounderQu
   if (intent.primaryGoal === null) {
     questions.push({
       intent: "primary_goal",
-      prompt: "What would make the next few months a success?",
-      context: "It changes which of these problems Vibe puts first.",
+      prompt: named === "this"
+        ? "What would make the next few months a success?"
+        : `What would make the next few months a success for ${named}?`,
+      // Meta-commentary about the audit ("it changes which problems Vibe puts
+      // first") is not context — it explains Vibe's process rather than
+      // showing what Vibe understood. Grounded where the profile allows it.
+      context: understanding,
       allowsUnsure: true,
       weight: 90,
     });

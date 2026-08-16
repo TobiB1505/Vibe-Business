@@ -133,6 +133,26 @@ const PREREQUISITES: Partial<Record<FounderQuestionIntent, FounderQuestionIntent
  */
 export const MAX_INTERRUPTIONS_PER_AUDIT = 3;
 
+/**
+ * How many times a **first** audit may stop, before Vibe has assessed anything.
+ *
+ * One. This is the correction to the first real interruption, which asked a
+ * brand-new project three questions in a row — stage, then goal, then charging
+ * model — and was, precisely, the onboarding questionnaire this whole sprint
+ * exists to prevent. It arrived wearing better copy and a progress bar.
+ *
+ * The cause was a gate that got the empty case backwards. With no prior audit
+ * there is no materiality, so nothing could argue a question down, and "we know
+ * nothing yet" became "ask everything". It should mean the opposite: **the less
+ * Vibe has established, the less standing it has to interrupt.**
+ *
+ * One question, then the audit runs and produces nine lens assessments. The
+ * next run can ask something grounded in what it actually found — which is the
+ * difference between "what would make the next few months a success?" and a
+ * question a founder could only be asked about their own product.
+ */
+export const MAX_INTERRUPTIONS_FIRST_AUDIT = 1;
+
 export type PendingQuestion = {
   intent: FounderQuestionIntent;
   prompt: string;
@@ -240,15 +260,24 @@ export function isFounderOnly(intent: FounderQuestionIntent): boolean {
  * question before it is ever shown.
  */
 export function selectBlockingQuestion(input: InterruptionInput): InterruptionDecision {
-  if (input.askedIntents.length >= MAX_INTERRUPTIONS_PER_AUDIT) {
-    return { ask: false, reason: "budget_spent" };
-  }
-
   // Stale lens assessments still describe *something* — which areas exist and
   // what they were once blocked on — but they may not describe this business
   // any more. They are dropped from the ranking input rather than trusted,
   // because a question's weight is a claim about now.
   const lenses = input.lensesReflectCurrentFacts ? input.lenses : [];
+
+  /*
+   * A run with nothing assessed gets one question, not three.
+   *
+   * The budget is tied to what Vibe has actually established rather than to the
+   * run, because that is what "earning the right to interrupt" means here. Three
+   * questions before any analysis is a form; one question, then real work, then
+   * a grounded follow-up next time is the product.
+   */
+  const budget = lenses.length === 0 ? MAX_INTERRUPTIONS_FIRST_AUDIT : MAX_INTERRUPTIONS_PER_AUDIT;
+  if (input.askedIntents.length >= budget) {
+    return { ask: false, reason: "budget_spent" };
+  }
 
   const candidates = selectFounderQuestions({
     profile: input.profile,

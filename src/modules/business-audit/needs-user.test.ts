@@ -395,3 +395,118 @@ describe("current facts outrank the previous audit's lenses", () => {
     expect(decision.reason).toBe("nothing_unresolved");
   });
 });
+
+/**
+ * The first real interruption, and what it got wrong (CORE-2a.4 follow-up).
+ *
+ * A brand-new project — a hotel's internal vacation planner — was asked three
+ * questions in a row before any analysis ran: stage, then goal, then charging
+ * model. That is exactly the onboarding questionnaire this sprint exists to
+ * prevent, arriving in better copy with a progress bar.
+ *
+ * The gate had the empty case backwards. With no prior audit there is no
+ * materiality, so nothing could argue a question down, and "Vibe knows nothing
+ * yet" became "ask everything". It has to mean the opposite: the less Vibe has
+ * established, the less standing it has to interrupt.
+ */
+describe("a first audit earns one question, not three", () => {
+  const nothingKnown = {
+    profile: inferredAudience(null),
+    intent: EMPTY_FOUNDER_INTENT,
+    lenses: [],
+  };
+
+  it("asks once when it has assessed nothing", () => {
+    const first = decide(nothingKnown);
+    expect(first.ask).toBe(true);
+    if (!first.ask) return;
+
+    // Having asked it, the budget for this run is spent.
+    const second = decide({ ...nothingKnown, askedIntents: [first.question.intent] });
+    expect(second.ask).toBe(false);
+    if (second.ask) return;
+    expect(second.reason).toBe("budget_spent");
+  });
+
+  it("spends that one question on the highest-impact unknown", () => {
+    const decision = decide(nothingKnown);
+
+    expect(decision.ask).toBe(true);
+    if (!decision.ask) return;
+    expect(decision.question.intent).toBe("current_stage");
+  });
+
+  /**
+   * Once an audit has run, Vibe has something to reason from and a larger
+   * budget is earned. The cap is not a blanket "one question ever".
+   */
+  it("allows the full budget once there is an assessment to reason from", () => {
+    const decision = decide({
+      profile: inferredAudience(),
+      intent: { stage: "prototype", monetizationModel: "none", primaryGoal: "launch" },
+      lenses: [lens("audience", "now")],
+      askedIntents: ["current_stage"],
+    });
+
+    expect(decision.ask).toBe(true);
+  });
+});
+
+describe("a question shows what Vibe understood (§11, §62)", () => {
+  const UNDERSTANDING =
+    "You've built a vacation planning tool for hotel staff. It lets team members submit time-off requests.";
+
+  function withUnderstanding() {
+    const profile = fakeProductProfile();
+    return {
+      ...profile,
+      identity: {
+        ...profile.identity,
+        name: { ...profile.identity.name, value: "Urlaubsplanung" },
+        understanding: {
+          value: UNDERSTANDING,
+          confidence: "confirmed" as const,
+          sources: ["ai_inferred" as const],
+          evidence: [],
+        },
+      },
+    };
+  }
+
+  /**
+   * The failure this replaces: a founder whose profile said "a vacation
+   * planning tool for hotel staff… instead of scattered emails or
+   * spreadsheets" was told "Vibe can see what you've built". Vibe had the
+   * sentence and described it instead of saying it.
+   */
+  it("quotes the understanding back rather than claiming to have one", () => {
+    const decision = decide({
+      profile: withUnderstanding(),
+      intent: { ...COMPLETE_INTENT, stage: null },
+    });
+
+    expect(decision.ask).toBe(true);
+    if (!decision.ask) return;
+    expect(decision.question.context).toContain("vacation planning tool for hotel staff");
+    expect(decision.question.context).not.toBe("Vibe can see what you've built, but not how far along it is with real people.");
+  });
+
+  /**
+   * §62's test: could this have been shown to almost any startup? The goal
+   * question used to answer yes twice over — a generic prompt and a context
+   * line that explained Vibe's own process rather than the product.
+   */
+  it("names the product in the goal question instead of asking it of anyone", () => {
+    const decision = decide({
+      profile: withUnderstanding(),
+      intent: { ...COMPLETE_INTENT, primaryGoal: null },
+      lenses: [lens("audience", "now")],
+    });
+
+    expect(decision.ask).toBe(true);
+    if (!decision.ask) return;
+    expect(decision.question.prompt).toContain("Urlaubsplanung");
+    expect(decision.question.context).toContain("vacation planning tool");
+    expect(decision.question.context).not.toContain("Vibe puts first");
+  });
+});
