@@ -13,7 +13,7 @@
  * "prioritize" will otherwise sort by whatever number it was shown.
  */
 
-export const OPPORTUNITY_RUBRIC_VERSION = "opportunity-rubric-v1" as const;
+export const OPPORTUNITY_RUBRIC_VERSION = "opportunity-rubric-v2" as const;
 
 export const OPPORTUNITY_RUBRIC = `# Prioritization Rubric (${OPPORTUNITY_RUBRIC_VERSION})
 
@@ -49,6 +49,24 @@ Specifically forbidden:
 Do NOT order by which dimension scored lowest.
 
 Order by what should genuinely happen first. Consider:
+
+0. **The audit already judged when each area matters.** Every business area in
+   the audit's lens map carries a materiality: \`now\` blocks the founder's next
+   milestone, \`soon\` follows it, \`later\` is a real gap whose prerequisites do
+   not exist yet, and \`not_material\` does not apply to this kind of business.
+
+   Start from that. An opportunity addressing a \`now\` area normally outranks
+   one addressing a \`later\` area, **even when the later area scored worse** —
+   a prototype with no privacy policy and no decided revenue model has a worse
+   readiness score and a more urgent revenue question. A low dimension score is
+   severity; materiality is timing, and this list is about timing.
+
+   You may still deviate where the evidence justifies it. Say so in the
+   opportunity's rationale rather than reordering silently.
+
+   An area the audit marked \`blocked_by_missing_context\` is waiting on
+   something only the founder knows. That is a question, not a piece of work,
+   and an opportunity that guesses the answer is worse than none.
 
 1. **Prerequisites.** If one opportunity is wasted effort until another is
    done, the enabler ranks higher. A pricing page on a product whose value

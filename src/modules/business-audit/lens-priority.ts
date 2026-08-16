@@ -194,6 +194,69 @@ export function findOrderingOverrides(synthesis: AuditSynthesis): string[] {
 }
 
 /**
+ * Blockers that assert a deficiency the audit said it could not assess (§31).
+ *
+ * The distinction the audit has to keep is between a problem the evidence
+ * establishes and a decision only the founder can make. Both can matter; only
+ * one is a finding. When every lens under a blocker came back
+ * `blocked_by_missing_context`, the audit stated it could not judge that area —
+ * so a conclusion asserting the business *lacks* something there is Vibe's own
+ * blind spot dressed as a diagnosis. CLAUDE.md rule 44 in the synthesis layer.
+ *
+ * A note rather than a rejection, and the reason is that the fix is usually
+ * wording. "Your unit economics don't work" and "what this costs you to run is
+ * still an open question" can rest on identical evidence; the second is honest.
+ * The hedging vocabulary below is the rubric's own, so a conclusion that took
+ * the instruction passes without a human ever seeing this.
+ */
+const OPEN_QUESTION_PHRASES = [
+  "open question",
+  "couldn't see",
+  "could not see",
+  "couldn't find",
+  "could not find",
+  "haven't decided",
+  "have not decided",
+  "hasn't been decided",
+  "you'll need to decide",
+  "still unclear",
+  "isn't clear",
+  "is unclear",
+  "unknown",
+  "vibe hasn't",
+  "vibe has not",
+];
+
+function readsAsOpenQuestion(conclusion: BusinessConclusion): boolean {
+  const text =
+    `${conclusion.headline} ${conclusion.explanation} ${conclusion.whyItMatters ?? ""}`.toLowerCase();
+  return OPEN_QUESTION_PHRASES.some((phrase) => text.includes(phrase));
+}
+
+export function findUnconfirmedAssertions(synthesis: AuditSynthesis): string[] {
+  const { lenses, blockers } = synthesis;
+  if (lenses.length === 0) return [];
+
+  const healthOf = new Map(lenses.map((entry) => [entry.lens, entry.health]));
+  const notes: string[] = [];
+
+  for (const blocker of blockers) {
+    if (blocker.lenses.length === 0) continue;
+
+    const allBlocked = blocker.lenses.every(
+      (lens) => healthOf.get(lens) === "blocked_by_missing_context",
+    );
+    if (!allBlocked || readsAsOpenQuestion(blocker)) continue;
+
+    notes.push(
+      `Wording to improve: "${blocker.headline}" is stated as a confirmed problem, but every area behind it was one the audit could not assess — it is an open question rather than a finding.`,
+    );
+  }
+
+  return notes;
+}
+
+/**
  * How many "no <something>" clauses a sentence contains.
  *
  * The proxy for evidence enumeration (§19–§21). The real dogfood explanation

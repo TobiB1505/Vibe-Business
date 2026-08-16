@@ -4,6 +4,7 @@ import {
   findEvidenceEnumeration,
   findOrderingOverrides,
   findPriorityInversions,
+  findUnconfirmedAssertions,
   isActionable,
   rankLenses,
 } from "./lens-priority";
@@ -503,5 +504,178 @@ describe("legacy dimension scores cannot drive blocker ranking (§47, §52)", ()
 
     expect(findPriorityInversions(withoutDimensionData)).toHaveLength(1);
     expect(findOrderingOverrides(withoutDimensionData)).toEqual([]);
+  });
+});
+
+describe("an unanswered question is not a confirmed problem (§31)", () => {
+  /**
+   * Vibe cannot see what an audit run costs to deliver. If that absence gets
+   * written as "your unit economics don't work", the audit has turned its own
+   * blind spot into a diagnosis — CLAUDE.md rule 44, in the synthesis layer.
+   */
+  it("flags a deficiency asserted on an area the audit could not assess", () => {
+    const notes = findUnconfirmedAssertions(
+      synthesis(
+        [lens("scalability", "blocked_by_missing_context", "now")],
+        [
+          blocker("Your unit economics don't work at scale.", ["scalability"], "Costs will outrun revenue."),
+        ],
+      ),
+    );
+
+    expect(notes).toHaveLength(1);
+    expect(notes[0]).toContain("open question rather than a finding");
+  });
+
+  /** The same evidence, written honestly, passes untouched. */
+  it("accepts the same conclusion framed as the open question it is", () => {
+    const notes = findUnconfirmedAssertions(
+      synthesis(
+        [lens("scalability", "blocked_by_missing_context", "now")],
+        [
+          blocker(
+            "What this costs you to run is still an open question.",
+            ["scalability"],
+            "Vibe couldn't see what each run costs to deliver.",
+          ),
+        ],
+      ),
+    );
+
+    expect(notes).toEqual([]);
+  });
+
+  /** One assessable lens is enough to ground an assertion. */
+  it("says nothing when any lens behind the blocker was actually assessed", () => {
+    const notes = findUnconfirmedAssertions(
+      synthesis(
+        [
+          lens("revenue_economics", "weak", "now"),
+          lens("scalability", "blocked_by_missing_context", "later"),
+        ],
+        [blocker("The economics aren't defined.", ["revenue_economics", "scalability"])],
+      ),
+    );
+
+    expect(notes).toEqual([]);
+  });
+});
+
+describe("root-cause synthesis across lenses (§49, §50, §51)", () => {
+  /**
+   * §49 — undecided monetization, no pricing, no checkout, unexamined cost to
+   * serve. One economic root problem spanning three lenses, not three blockers.
+   * The machinery must accept that shape without complaint.
+   */
+  it("accepts one economic root problem carrying revenue, conversion and scalability", () => {
+    const economics = synthesis(
+      [
+        lens("revenue_economics", "weak", "now"),
+        lens("conversion", "adequate", "later"),
+        lens("scalability", "unclear", "later"),
+      ],
+      [
+        blocker(
+          "You haven't decided what people are paying for.",
+          ["revenue_economics", "conversion", "scalability"],
+          "The choice of what to charge for, and how usage becomes a price, hasn't been made.",
+          "The economics of this business are not defined.",
+        ),
+      ],
+    );
+
+    expect(findPriorityInversions(economics)).toEqual([]);
+    expect(findOrderingOverrides(economics)).toEqual([]);
+    expect(findEvidenceEnumeration(economics)).toEqual([]);
+    expect(findUnconfirmedAssertions(economics)).toEqual([]);
+  });
+
+  /**
+   * §50 — the counterexample. Established pricing, real paying demand, broken
+   * checkout. Here the surface *is* the business problem and must survive every
+   * check, or the abstraction rule becomes a ban on saying plain things.
+   */
+  it("leaves a broken-checkout blocker intact for a business that already sells", () => {
+    const broken = synthesis(
+      [lens("conversion", "weak", "now"), lens("revenue_economics", "strong", "soon")],
+      [
+        blocker(
+          "Customers who want to buy can't complete the purchase.",
+          ["conversion"],
+          "People reach the payment step and the order never completes.",
+          "A working business cannot take the money it has already earned.",
+        ),
+      ],
+    );
+
+    expect(findPriorityInversions(broken)).toEqual([]);
+    expect(findEvidenceEnumeration(broken)).toEqual([]);
+    expect(findUnconfirmedAssertions(broken)).toEqual([]);
+  });
+
+  /**
+   * §51 — audience absorbs acquisition evidence rather than spawning a second,
+   * premature "no acquisition channel" blocker.
+   */
+  it("accepts audience absorbing acquisition without a separate premature blocker", () => {
+    const audience = synthesis(
+      [
+        lens("audience", "weak", "now"),
+        lens("acquisition", "weak", "later"),
+        lens("measurement", "weak", "later"),
+      ],
+      [
+        blocker(
+          "It's still unclear who your first real customer is.",
+          ["audience", "acquisition"],
+          "The product is aimed broadly and nothing narrows it to a first group.",
+          "Nobody has chosen who to win first.",
+        ),
+      ],
+    );
+
+    expect(findPriorityInversions(audience)).toEqual([]);
+    expect(findOrderingOverrides(audience)).toEqual([]);
+  });
+});
+
+/**
+ * §55, §56 — the re-audit loop.
+ *
+ * A gap ranked `later` today has to survive to rise later, and materiality has
+ * to be free to change when the business does. Both are properties of the data
+ * rather than of the ranking, so they are asserted where they can be: nothing
+ * here filters a lens out, and the same lens with a different materiality sorts
+ * differently.
+ */
+describe("lower-priority issues survive to rise later (§55, §56)", () => {
+  it("keeps every lens regardless of whether it became a blocker", () => {
+    const early = synthesis(
+      [
+        lens("audience", "weak", "now"),
+        lens("measurement", "weak", "later"),
+        lens("business_readiness", "weak", "later"),
+        lens("retention", "adequate", "not_material"),
+      ],
+      [blocker("Your first customer isn't defined.", ["audience"])],
+    );
+
+    expect(rankLenses(early.lenses)).toHaveLength(4);
+    expect(rankLenses(early.lenses).map((entry) => entry.lens)).toContain("measurement");
+  });
+
+  it("reprioritizes the same lens when the business moves on", () => {
+    const beforeLaunch = rankLenses([
+      lens("audience", "weak", "now"),
+      lens("measurement", "weak", "later"),
+    ]);
+    // Same product later: the first customer is settled, traffic is real.
+    const afterLaunch = rankLenses([
+      lens("audience", "adequate", "later"),
+      lens("measurement", "weak", "now"),
+    ]);
+
+    expect(beforeLaunch[0]!.lens).toBe("audience");
+    expect(afterLaunch[0]!.lens).toBe("measurement");
   });
 });

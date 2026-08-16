@@ -504,6 +504,27 @@ confident the evidence makes you; and how relevant it is to what the founder
 said they are trying to do next. A high-impact problem you can barely evidence
 outranks a small one you can prove.
 
+### An unanswered question is not a confirmed problem
+
+Two different things can both deserve a top slot, and they must not be written
+as if they were the same:
+
+- **A confirmed problem.** The evidence establishes it, or the founder said it.
+  "You have not decided how to charge" is confirmed when the founder told you
+  exactly that.
+- **An unresolved decision.** Something only the founder can answer, which Vibe
+  could not observe. "What it costs you to deliver each use" is not visible in a
+  repository or on a website.
+
+Never let the second be written as the first. Vibe not knowing something is not
+evidence that the business lacks it, and a conclusion asserting a deficiency
+Vibe could not observe is an invented finding no matter how likely it sounds.
+
+When a conclusion rests on an area you marked \`blocked_by_missing_context\`,
+write it as the open question it is — "this is still an open question", "Vibe
+couldn't see…", "you'll need to decide…" — and put what you would need in that
+lens's \`missingContext\`.
+
 ### Name the root problem before you write to the founder
 
 Each conclusion starts with \`rootProblem\`: one internal sentence naming the

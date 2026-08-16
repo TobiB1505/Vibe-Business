@@ -275,3 +275,53 @@ describe("shouldAskBeforeAudit (§45)", () => {
     expect(shouldAskBeforeAudit({ ...FULL_INTENT, monetizationModel: null })).toBe(false);
   });
 });
+
+/**
+ * The contract the future Founder Questions UX depends on (CORE-2a.3.2 §30).
+ *
+ * That experience is deliberately not built in this sprint. What must hold now
+ * is that the audit keeps *producing* what it will need: which fact is missing,
+ * which area of the business is waiting on it, and how much that area matters
+ * — so the UX can be built later without another audit contract change.
+ *
+ * Asserted here rather than left implicit because `missingContext` is the kind
+ * of field that gets quietly dropped in a refactor when nothing reads it, and
+ * nothing in production reads it yet.
+ */
+describe("the audit exposes what only the founder can answer (§30)", () => {
+  it("carries the missing fact, its lens and its materiality together", () => {
+    const assessment = blocked("revenue_economics", "now");
+
+    expect(assessment.lens).toBe("revenue_economics");
+    expect(assessment.materiality).toBe("now");
+    expect(assessment.missingContext).not.toEqual([]);
+  });
+
+  /** All three are needed: the question, where it belongs, and whether to ask now. */
+  it("raises a question only when the waiting area actually matters now", () => {
+    const urgent = select({
+      intent: { monetizationModel: null },
+      lenses: [blocked("revenue_economics", "now")],
+    });
+    const premature = select({
+      intent: { monetizationModel: null },
+      lenses: [blocked("revenue_economics", "later")],
+    });
+
+    const urgentWeight = urgent.find((q) => q.intent === "monetization_intent")?.weight ?? 0;
+    const prematureWeight = premature.find((q) => q.intent === "monetization_intent")?.weight ?? 0;
+
+    // Both are asked — the field is empty either way — but the audit saying it
+    // cannot judge the business without this is what makes it urgent.
+    expect(urgentWeight).toBeGreaterThan(prematureWeight);
+  });
+
+  it("explains why the answer matters rather than just naming the field", () => {
+    const question = select({
+      intent: { monetizationModel: null },
+      lenses: [blocked("revenue_economics", "now")],
+    }).find((q) => q.intent === "monetization_intent");
+
+    expect(question?.context).toContain("can't infer");
+  });
+});

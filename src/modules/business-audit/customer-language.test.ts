@@ -514,3 +514,60 @@ describe("a language rejection says which words leaked", () => {
     expect(outcome.usage).toEqual({ inputTokens: 4_000, outputTokens: 9_000, thinkingTokens: 3_000 });
   });
 });
+
+/**
+ * Where "monetization model" actually came from (CORE-2a.3.2 §25, §54).
+ *
+ * It leaked twice after CORE-2a.2 supposedly fixed it, and the fix each time
+ * was suspected to be the founder-intent serialization. It was not. The phrase
+ * is *legitimate* in a dimension assessment — that layer is the technical
+ * record and is explicitly exempt — and the v4 audit wrote it there, in the
+ * Monetization gaps, and then paraphrased its own gaps into the customer-facing
+ * explanation.
+ *
+ * So the leak was never a vocabulary problem. It was a generation-order
+ * problem, and the fix is in `wire-schema.ts`: conclusions are written before
+ * the dimensions exist. These tests pin the two halves of that reasoning so the
+ * next sighting is not misdiagnosed a third time.
+ */
+describe("the jargon leak path, not just the jargon (§25, §54)", () => {
+  it("still permits the phrase in a dimension finding, which is why it existed to be copied", () => {
+    // The real v4 Monetization gap, verbatim. This is correct output for the
+    // technical layer and must not start failing.
+    const gap = "Founder states the monetization model is undecided";
+    expect(findInternalVocabulary(gap)).toEqual(["monetization model"]);
+
+    // …and the language check never sees it, because it reads the synthesis only.
+    const clean = checkCustomerLanguage({
+      version: AUDIT_SYNTHESIS_VERSION,
+      lenses: [],
+      overall: "You haven't decided how this will make money yet.",
+      strengths: [],
+      blockers: [],
+    });
+    expect(clean.ok).toBe(true);
+    expect(clean.discouraged).toEqual([]);
+  });
+
+  it("catches it in a customer-facing field, where copying it up lands", () => {
+    const leaked = checkCustomerLanguage({
+      version: AUDIT_SYNTHESIS_VERSION,
+      lenses: [],
+      overall: "There is no monetization model yet.",
+      strengths: [],
+      blockers: [],
+    });
+
+    expect(leaked.discouraged).toEqual(["monetization model"]);
+    // Still not a rejection: the founder understands the sentence.
+    expect(leaked.ok).toBe(true);
+  });
+
+  /** The structural half. Order is the fix; the blocklist is only the alarm. */
+  it("generates the conclusions before the dimensions that carry the phrase", async () => {
+    const { ANTHROPIC_AUDIT_OUTPUT_SCHEMA } = await import("./wire-schema");
+    const keys = Object.keys(ANTHROPIC_AUDIT_OUTPUT_SCHEMA.properties as Record<string, unknown>);
+
+    expect(keys.indexOf("conclusions")).toBeLessThan(keys.indexOf("dimensions"));
+  });
+});

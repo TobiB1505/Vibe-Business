@@ -10,6 +10,7 @@ import {
 } from "@/modules/business-audit/test-support";
 import { runOpportunityGeneration } from "./runner";
 import { MAX_OPPORTUNITIES } from "./schema";
+import { OPPORTUNITY_RUBRIC_VERSION } from "./rubric";
 import { fakeAudit, fakeWireOpportunity } from "./test-support";
 
 /**
@@ -68,7 +69,7 @@ describe("the happy path", () => {
     expect(outcome.set.schemaVersion).toBe("business-opportunity-set.v1");
     expect(outcome.set.engineVersion).toBe("opportunity-engine-v1");
     expect(outcome.set.promptVersion).toBe("opportunity-prompt-v1");
-    expect(outcome.set.rubricVersion).toBe("opportunity-rubric-v1");
+    expect(outcome.set.rubricVersion).toBe(OPPORTUNITY_RUBRIC_VERSION);
     expect(outcome.set.auditId).toBe("audit_1");
     expect(outcome.set.opportunities).toHaveLength(3);
     // Exactly one billable call.

@@ -3,6 +3,7 @@ import {
   findEvidenceEnumeration,
   findOrderingOverrides,
   findPriorityInversions,
+  findUnconfirmedAssertions,
 } from "./lens-priority";
 import {
   AUDIT_DIMENSIONS,
@@ -502,6 +503,7 @@ export function validateAuditOutput(data: unknown, knownEvidenceIds: Set<string>
     notes.push(
       ...findPriorityInversions(synthesis),
       ...findOrderingOverrides(synthesis),
+      ...findUnconfirmedAssertions(synthesis),
       ...findEvidenceEnumeration(synthesis),
     );
   }
