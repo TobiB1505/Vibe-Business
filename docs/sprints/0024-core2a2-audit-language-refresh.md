@@ -200,13 +200,29 @@ The overall conclusion:
 Cheaper, and not for a reason worth generalising from one sample — the model simply reasoned
 less on this run. No optimisation was attempted; this sprint is correctness first (§43).
 
+## Usage and events
+
+A refresh is free to the customer and is **not** free to Vibe, so it is metered like any other
+run (§27). `recordAIUsage` is unchanged and fires for successes and failures alike.
+
+The *reason* is carried by the existing conventions rather than a new column: the audit row's
+own `access_mode`, and `accessMode` on the `business_audit.started` / `.completed` events. That
+is what makes "how much did Vibe spend on its own contract upgrades?" answerable without a
+second analytics platform (§35).
+
+Both event sites originally hardcoded `"included_first_audit"` — a literal inherited from
+CORE-2, written when only one mode existed. Left alone, every refresh would have been logged
+as the customer's included audit: false, and it would have quietly corrupted the one number
+this section exists to make available. Caught while checking the sprint against its own
+definition of done, not by a test.
+
 ## Validation
 
 | | |
 |---|---|
 | `pnpm lint` | clean |
 | `pnpm typecheck` | clean |
-| `pnpm test` | 3082 passed / 160 files |
+| `pnpm test` | 3087 passed / 160 files |
 | `pnpm build` | production build green |
 | `pnpm test:e2e` | 117 passed, chromium |
 | Real dogfood | refresh ran with no manual row deletion, read back from the database |
@@ -225,9 +241,32 @@ data)". Within contract, and arguably still too technical for the audience. Deli
 tightened by adding the term to the blocklist — that is a threshold judgement that should be
 made with more than one example.
 
+**No production-cardinality jargon test existed at first.** The language cases were written
+against one or two synthetic conclusions, which tests the rule but not the shape a real audit
+has. Added afterwards: an eighteen-string fixture matching the real synthesis — three
+strengths, three blockers, multi-evidence, realistic prose — with a single jargon word planted
+in the middle of it. That is the case the E2E assertion could never catch, because it ran
+against rendered markup rather than the boundary.
+
 **The grammar probe still cannot run locally.** `ANTHROPIC_API_KEY` exists only in Vercel. The
 schema compiled in production across three successful audits, so the risk is retired by
 evidence rather than by the probe.
+
+## Definition of done
+
+All 35 items met. The ones worth naming because they were verified rather than assumed:
+
+| | how it was checked |
+|---|---|
+| Client cannot force a refresh (§26, §39) | `forceRefresh` exists nowhere; refresh is never a caller parameter |
+| No refresh loop on render (§23, §34) | `startBusinessAuditOperation` is unreachable from any component; bounded by the start window |
+| Historical audit not destroyed (§21, §29) | no delete path in the audit store; the superseded audit is still stored and still readable |
+| Entitlement stays consumed (§15, §36) | read back from the live database after the refresh: grant still held |
+| Current audits do not rerun (§17, §37) | `isAuditContractCurrent` returns true, so the decision falls through to `credits_required` |
+| Real dogfood without manual deletion (§26, §35) | the refresh ran on a genuinely obsolete stored audit |
+
+Not in scope and untouched, as required (§45, §46): Action Planner, First Free Move, execution
+suitability, AI authoring, Credits, Pro, paywall, Rule 57, ADR 0014.
 
 ## Next Recommended Phase
 

@@ -297,7 +297,12 @@ export async function prepareEvidenceStep(
       // second analytics platform. `accessMode` is what makes "free audit
       // started" answerable from the existing audit log, and the profile id is
       // what makes an audit traceable back to the understanding it used (§7).
-      accessMode: "included_first_audit",
+      //
+      // Taken from the decision rather than hardcoded (CORE-2a.2 §27, §35).
+      // A literal here would log every system contract refresh as if it were
+      // the customer's included audit — false, and it would quietly corrupt
+      // the one number that says how much Vibe spends on its own upgrades.
+      accessMode: authorization.accessMode,
       productProfileId: resolved.identity.productProfileId,
       productProfileSchemaVersion: PRODUCT_PROFILE_SCHEMA_VERSION,
     },
@@ -475,8 +480,10 @@ export async function runInferenceStep(
       overallScore: outcome.audit.overall.score,
       coverage: `${outcome.audit.overall.assessedDimensions}/${outcome.audit.overall.totalDimensions}`,
       // The completion half of the funnel step, and the point at which the
-      // free audit is provably consumed.
-      accessMode: "included_first_audit",
+      // free audit is provably consumed — for an included run. A refresh
+      // completes here too and consumes nothing, which is why the mode is read
+      // from the row rather than assumed (CORE-2a.2 §27).
+      accessMode,
       productProfileId: resolved.identity.productProfileId,
     },
   });
