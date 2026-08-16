@@ -41,7 +41,17 @@ export const OPERATION_FAILURE_MESSAGES: Record<OperationFailureCode, string> = 
   // never surfaces here: it leaves a deterministic profile and a note on the
   // screen instead (CORE-1 §43).
   understanding_failed: "Vibe could not finish getting to know your product. Try again in a moment.",
-  token_count_failed: "This could not be prepared. Try again in a moment.",
+  // Shared by every AI operation — the audit, next moves and product
+  // understanding all reach it. It used to read "This could not be prepared",
+  // which is Change Preparation's vocabulary and simply wrong on the other
+  // two screens: a founder waiting to hear about their product was told
+  // something could not be prepared, about a step that prepares nothing.
+  //
+  // "Nothing was charged" is a fact, not reassurance. This failure comes from
+  // the free token count that gates every paid call, so it always happens
+  // before any billable request.
+  token_count_failed:
+    "Vibe could not start this, so nothing ran and nothing was charged. Try again in a moment.",
   provider_rate_limited: "The AI provider is rate limiting requests. Try again in a few minutes.",
   provider_auth_error: "Vibe Business is not correctly configured to reach the AI provider.",
   provider_billing_error: "The AI provider account has no available usage credit or has a billing issue.",

@@ -124,7 +124,7 @@ export function buildUnderstandingRequest(
     userContent: renderUnderstandingPack(pack),
     outputSchema: PRODUCT_UNDERSTANDING_OUTPUT_SCHEMA,
     maxOutputTokens: config.maxOutputTokens,
-    effort: config.effort,
+    reasoning: config.reasoning,
   };
 }
 

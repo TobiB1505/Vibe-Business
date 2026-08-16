@@ -1,4 +1,4 @@
-import type { AIEffort, AIOperation } from "./provider";
+import type { AIOperation, AIReasoning } from "./provider";
 
 /**
  * Central configuration for every AI operation (Sprint 4 §10).
@@ -12,7 +12,13 @@ import type { AIEffort, AIOperation } from "./provider";
 export type OperationConfig = {
   operation: AIOperation;
   model: string;
-  effort: AIEffort;
+  /**
+   * Reasoning depth, stated as a capability of the chosen model rather than as
+   * a free-standing preference — see `AIReasoning`. It lives beside `model`
+   * deliberately: the two are one decision, and separating them is what let a
+   * model that cannot take an effort level be configured with one.
+   */
+  reasoning: AIReasoning;
   /**
    * Hard ceiling on generated tokens. Under adaptive thinking, reasoning
    * counts toward this limit too, so it is set well above the size of the
@@ -40,7 +46,7 @@ export const BUSINESS_READINESS_AUDIT_CONFIG: OperationConfig = {
   // where we are about to measure quality: stepping down to `medium` is a
   // cost optimization to make *after* there is a quality baseline to
   // compare against, not before.
-  effort: "high",
+  reasoning: { mode: "adaptive", effort: "high" },
   maxOutputTokens: 16_000,
   maxInputTokens: 30_000,
 };
@@ -63,7 +69,7 @@ export const BUSINESS_READINESS_AUDIT_CONFIG: OperationConfig = {
 export const OPPORTUNITY_GENERATION_CONFIG: OperationConfig = {
   operation: "opportunity_generation",
   model: "claude-sonnet-5",
-  effort: "high",
+  reasoning: { mode: "adaptive", effort: "high" },
   maxOutputTokens: 12_000,
   maxInputTokens: 40_000,
 };
@@ -84,8 +90,16 @@ export const OPPORTUNITY_GENERATION_CONFIG: OperationConfig = {
  * structured facts and writing three sentences about it: summarisation with
  * a closed vocabulary, not judgement from mixed evidence.
  *
- * `medium` effort for the same reason. `high` exists for tasks where the
- * model has to weigh things; this one has already been given the weighing.
+ * No thinking and no effort, and that is a fact about the model before it is a
+ * preference. Haiku 4.5 predates adaptive thinking and the effort control:
+ * it rejects both, so a request carrying them is refused outright rather than
+ * degraded. This config originally asked for `medium` effort, which made every
+ * Product Understanding run fail on its first call to the API — including the
+ * free token count, so the feature broke before it could spend anything.
+ *
+ * The task also does not want them. The hard half of understanding a product
+ * is answered deterministically before this call; what remains is summarising
+ * a page of structured facts, which is the work `none` describes.
  *
  * Budgets are smaller than the audit's on both sides. Input is a single
  * product's evidence with no rubric and no prior audit attached; output is
@@ -94,7 +108,7 @@ export const OPPORTUNITY_GENERATION_CONFIG: OperationConfig = {
 export const PRODUCT_UNDERSTANDING_CONFIG: OperationConfig = {
   operation: "product_understanding",
   model: "claude-haiku-4-5-20251001",
-  effort: "medium",
+  reasoning: { mode: "none" },
   maxOutputTokens: 6_000,
   maxInputTokens: 24_000,
 };

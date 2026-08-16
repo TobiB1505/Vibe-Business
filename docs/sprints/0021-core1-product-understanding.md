@@ -98,9 +98,19 @@ Nothing reaches `confirmed` from repository evidence alone.
 
 ### 4. AI synthesis
 
-One call, on Haiku 4.5 at `medium` effort. It is the first operation configured for **cost**
-rather than judgement, and that is a product decision: this runs inside the free flow every
-new project goes through, so the answer to "should we run it?" has to always be yes.
+One call, on Haiku 4.5, with **no thinking and no effort level**. It is the first operation
+configured for **cost** rather than judgement, and that is a product decision: this runs
+inside the free flow every new project goes through, so the answer to "should we run it?"
+has to always be yes.
+
+The absent reasoning parameters are a fact about the model before they are a preference.
+Haiku 4.5 predates adaptive thinking and the effort control and rejects a request carrying
+either — which this sprint shipped and had to fix; see *Dogfood result*. The task does not
+want them either: the hard half of understanding a product is answered deterministically
+before the call, and what remains is summarisation. `OperationConfig.reasoning` is therefore
+a union — `{mode: "adaptive", effort}` or `{mode: "none"}` — so an effort level is only
+reachable for a model that can honour one, and the pairing is checked by a test rather than
+by a comment.
 
 - Input minimization: URL paths are forwarded, **repository file paths are not**.
   `src/app/pricing/page.tsx` tells the model nothing `/pricing` does not, and file paths are
@@ -172,24 +182,67 @@ All met unless noted.
 30. Scanner raw data stays secondary ✅
 31–34. Audit untouched, no credits, no paywall, no fake data ✅
 35–38. Partial failure, mobile, accessibility ✅
-39–43. lint / typecheck / 2926 tests / build / 88 E2E ✅
-44. Vibe Business understood as a dogfood product — **partially**, see below.
+39–43. lint / typecheck / 2935 tests / build / 88 E2E ✅
+44. Vibe Business understood as a dogfood product ✅ — end to end, after the fix below.
 
 ## Dogfood result
 
-### Reported by the maintainer
+### The defect the dogfood found: the model could not be called at all
 
-After a further fix outside this branch, the maintainer reports that CORE-1 was run and
-verified end to end against the real product and works.
+The first real run of CORE-1 against the live product failed, every time, before it could
+spend anything. Four attempts are in `product_profiles`, all `status: failed`,
+`failure_code: token_count_failed`, with `provider`, `model` and `prompt_version` all null.
 
-Recorded as reported, not as observed: nothing was pushed to
-`claude/core-1-product-understanding-1gm611` after `e9861f8`, and this session could reach
-neither the provider nor the database, so the run itself, the migration state and the
-resulting profile were not seen here. The two open flags below are therefore left standing
-rather than quietly closed — whoever confirms them next should replace this paragraph with
-what the run actually produced.
+The cause was the parameter shape, not the account. The Anthropic adapter sent
+`thinking: {type: "adaptive"}` and `output_config.effort` on **every** request, on the
+assumption that every model Vibe calls is Sonnet-5-shaped. This sprint then pointed Product
+Understanding at Haiku 4.5, which predates both and rejects the payload outright.
 
-### Observed here
+Two things made it hard to see, and both are worth keeping:
+
+- **It failed on the free call.** The token count that gates every paid call is built from
+  the same body as the billable one — deliberately, so the budget gate measures what will
+  actually be charged. That correct design meant a bad payload took out the free call first,
+  so the feature broke before reaching inference and never wrote a usage event.
+- **The reported code pointed nowhere.** `countInputTokens` collapses a rejected payload and
+  an unattributable error into the same `token_count_failed`, which reads as "transient,
+  try again" — the exact failure mode Sprint 4 already paid for once with billing errors.
+  The generation path distinguishes the two (`provider_request_rejected`, with a safe
+  diagnostic); the counting path does not.
+
+Two individually reasonable facts — a model chosen for cost, an effort level chosen for the
+task — were jointly impossible, and nothing tied them together. `OperationConfig.reasoning`
+is now that tie (see §4), with `operations.test.ts` failing if a config asks a model for
+reasoning it cannot do. The user-facing copy for `token_count_failed` was also wrong on this
+screen: it read "This could not be prepared", Change Preparation's vocabulary, on a step that
+prepares nothing.
+
+### Verified end to end
+
+Confirmed by reading the deployed database rather than by re-running the pipeline here:
+
+| | |
+|---|---|
+| Migration `20260815210000_product_understanding` | applied on the linked project |
+| Profiles before the fix | 4 × `failed` / `token_count_failed`, 22:20–22:22 UTC |
+| Profiles after the fix | 2 × `completed`, `synthesized: true`, 22:43 and 22:45 UTC |
+| Model actually used | `claude-haiku-4-5-20251001`, `product-understanding-prompt-v1` |
+| Cost | $0.009523 and $0.008479 per run |
+| `thinking_tokens` | 0 in both runs |
+| `estimated_input_tokens` vs `input_tokens` | 4563 / 4563 and 4404 / 4404 |
+| Usage events for the 4 failures | none |
+
+The last three rows are the ones worth reading twice. Zero thinking tokens is `{mode: "none"}`
+doing what it says. The estimate matching the billed count **exactly**, twice, is the budget
+gate measuring the same payload that was sent — the property the shared request builder
+exists to guarantee, now confirmed against the real API rather than against a fake provider.
+And no usage event for a failed count is what makes the new copy's "nothing was charged"
+a fact rather than a reassurance.
+
+Latency was 14.7 s and 8.5 s for the model call, inside operations that took 20 s and 13 s
+end to end.
+
+### Observed before the fix, from code alone
 
 Run against the real Vibe Business checkout at `9591971`, using the real analyzer over the
 real git tree. **The AI synthesis step and the database half could not run here**: this
@@ -238,11 +291,14 @@ The evidence pack was 31 items and 3,861 characters.
   understanding paragraph are all `null` in this run, and the headline correctly falls back
   to "Here's what Vibe found." rather than claiming an understanding it does not have.
 
-From what was observed here, the §52 wow-moment questions cannot all be answered.
-**Identity, brand, capabilities and trust: yes.** **Purpose and audience: not exercised** —
-they need the model call, which needs credentials this session does not have. The
-maintainer's end-to-end run covers exactly this gap; its results are not recorded above
-because they were not seen here.
+**Identity, brand, capabilities and trust** were answered by that deterministic run.
+**Purpose and audience** need the model call, and that call is now confirmed to run and
+persist a synthesized profile — but one limit is worth stating precisely rather than
+rounding away: what was verified is that synthesis *happened*, from operation and usage
+records. The resulting paragraph was not read back and judged here, so the §52 criterion
+that matters most — a founder reads it and thinks *yes, that's my product* — remains a
+human judgement, made by the maintainer on the live screen and not re-derived from the
+database.
 
 ## Validation
 
@@ -250,7 +306,7 @@ because they were not seen here.
 |---|---|
 | `pnpm lint` | clean |
 | `pnpm typecheck` | clean |
-| `pnpm test` | 2926 passed / 153 files |
+| `pnpm test` | 2935 passed / 154 files |
 | `pnpm build` | production build green, `/app/projects/[projectId]/understanding` routed |
 | Playwright | 88 passed, chromium |
 
@@ -270,12 +326,19 @@ labels. Both fixed.
 
 ## Risks / Notes
 
-- **The migration was not deployed from here.** `20260815210000_product_understanding.sql`
-  is written and pinned by tests, but this session had no Supabase credentials, so its state
-  on the linked project is unverified. The maintainer's end-to-end run implies it is applied;
-  that has not been read back. Confirm with `pnpm db:status` before any further `pnpm db:push`
-  — [CLAUDE.md](../../CLAUDE.md) rules 29–34 require inspecting migration history first, and
-  never assume a table's absence or presence.
+- **The migration is deployed.** `20260815210000_product_understanding` was read back from
+  the linked project's migration history and is applied, as are all 25 before it. This
+  replaces an earlier note in this file that recorded its state as unverified. Still confirm
+  with `pnpm db:status` before any further `pnpm db:push` — [CLAUDE.md](../../CLAUDE.md)
+  rules 29–34 require inspecting migration history first, and never assume a table's
+  absence or presence.
+- **The counting path cannot report a rejected payload.** `countInputTokens` maps a 4xx to
+  the same `token_count_failed` as an unattributable error, while `generateStructured` maps
+  it to `provider_request_rejected` with a safe diagnostic. That asymmetry is what made this
+  sprint's defect read as transient. Left as-is rather than widened here, because
+  `TokenCountFailureCode` is a deliberately narrow union and changing it touches every AI
+  operation's failure handling — but it is the next thing to fix in this module, and the
+  reason is now written down instead of rediscovered.
 - **Existing snapshots predate brand detection.** Both analyzer versions moved, so reuse
   invalidates correctly, but a *stored* snapshot still has no `brand` key until it is
   re-analysed. `readRepositoryBrand`/`readLiveBrand` tolerate that rather than crashing.

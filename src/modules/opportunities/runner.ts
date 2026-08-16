@@ -104,7 +104,7 @@ export function buildOpportunityRequest(
     userContent: renderOpportunityInput({ audit, pack }),
     outputSchema: ANTHROPIC_OPPORTUNITY_OUTPUT_SCHEMA,
     maxOutputTokens: config.maxOutputTokens,
-    effort: config.effort,
+    reasoning: config.reasoning,
   };
 }
 

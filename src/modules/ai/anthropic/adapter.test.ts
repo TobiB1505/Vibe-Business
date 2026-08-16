@@ -15,7 +15,7 @@ const request: StructuredRequest = {
   userContent: "<evidence>x</evidence>",
   outputSchema: { type: "object", properties: {}, required: [], additionalProperties: false },
   maxOutputTokens: 16_000,
-  effort: "high",
+  reasoning: { mode: "adaptive", effort: "high" },
 };
 
 function messageWith(overrides: Partial<Anthropic.Message> = {}): Anthropic.Message {
@@ -80,6 +80,56 @@ describe("AnthropicProvider — request shape", () => {
     expect(params.temperature).toBeUndefined();
     expect(params.top_p).toBeUndefined();
     expect(params.top_k).toBeUndefined();
+  });
+
+  /**
+   * The production defect this file now guards.
+   *
+   * The adapter sent `thinking` and `output_config.effort` on every request,
+   * regardless of model. Haiku 4.5 — which Product Understanding runs on —
+   * predates both and rejects the payload, so the feature failed on its first
+   * call to the API. Because that first call is the *free* token count, the
+   * failure surfaced as `token_count_failed`: the code for "we cannot
+   * attribute this", which pointed nowhere near the request body.
+   *
+   * Both call paths are asserted. Counting is the one that broke.
+   */
+  describe("a model without adaptive reasoning", () => {
+    const noReasoning: StructuredRequest = { ...request, reasoning: { mode: "none" } };
+
+    it("omits thinking and effort from the billable call", async () => {
+      let sent: Record<string, unknown> | undefined;
+      const create = vi.fn(async (body: Anthropic.MessageCreateParamsNonStreaming) => {
+        sent = body as unknown as Record<string, unknown>;
+        return messageWith();
+      });
+
+      await new AnthropicProvider(clientWith({ create })).generateStructured(noReasoning);
+
+      // Absent, not present-and-undefined: the key must not be serialized.
+      expect(sent!).not.toHaveProperty("thinking");
+      expect(sent!.output_config).toEqual({
+        format: { type: "json_schema", schema: request.outputSchema },
+      });
+    });
+
+    it("omits them from the free token count too", async () => {
+      let counted: Record<string, unknown> | undefined;
+      const countTokens = vi.fn(async (body: Anthropic.MessageCountTokensParams) => {
+        counted = body as unknown as Record<string, unknown>;
+        return { input_tokens: 900 };
+      });
+
+      const result = await new AnthropicProvider(clientWith({ countTokens })).countInputTokens(
+        noReasoning,
+      );
+
+      expect(result).toEqual({ ok: true, inputTokens: 900 });
+      expect(counted!).not.toHaveProperty("thinking");
+      expect(counted!.output_config).toEqual({
+        format: { type: "json_schema", schema: request.outputSchema },
+      });
+    });
   });
 
   it("counts tokens against the same shape it would send", async () => {
