@@ -7,7 +7,7 @@ import type {
 } from "@/modules/authenticated-product-intelligence/schema";
 import type { BusinessContext } from "@/modules/projects/business-context";
 import type { FounderIntent } from "@/modules/projects/founder-intent";
-import { AUDIT_DIMENSIONS } from "./schema";
+import { AUDIT_DIMENSIONS, BUSINESS_LENSES } from "./schema";
 
 /**
  * Fixtures and a fake provider (Sprint 4 §35, §36).
@@ -57,6 +57,7 @@ export class FakeProvider implements AIProvider {
 export function buildModelOutput(
   overrides: Partial<Record<(typeof AUDIT_DIMENSIONS)[number], Record<string, unknown>>> = {},
   extras: {
+    lenses?: unknown;
     overallConclusion?: unknown;
     conclusions?: unknown;
     limitations?: unknown;
@@ -90,6 +91,17 @@ export function buildModelOutput(
       dimension,
       ...(dimensions[dimension] as Record<string, unknown>),
     })),
+    // Every lens assessed exactly once, which is what the contract asks for.
+    lenses:
+      extras.lenses ??
+      BUSINESS_LENSES.map((lens) => ({
+        lens,
+        state: "adequate",
+        materiality: "medium",
+        summary: `Internal reasoning for ${lens}.`,
+        evidenceIds: ["live.site.title"],
+        missingContext: [],
+      })),
     overallConclusion:
       extras.overallConclusion ??
       "You have a real product, but the path from interest to revenue is still incomplete.",
@@ -104,6 +116,7 @@ export function buildModelOutput(
         tone: "positive",
         confidence: "high",
         dimensions: ["product", "conversion"],
+        lenses: ["offer", "conversion"],
         evidenceIds: ["profile.identity.description", "live.site.title"],
       },
       {
@@ -115,6 +128,7 @@ export function buildModelOutput(
         tone: "critical",
         confidence: "high",
         dimensions: ["monetization", "conversion"],
+        lenses: ["revenue_economics", "conversion"],
         evidenceIds: ["profile.signal.pricing_surface", "intent.monetization_model"],
       },
     ],

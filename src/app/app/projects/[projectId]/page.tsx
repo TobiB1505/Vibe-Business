@@ -216,9 +216,20 @@ export default async function ProjectOverviewPage({
           </Surface>
         )}
 
+        {/*
+          CORE-2a.3 §32, §33: this influences every audit, so it cannot be
+          invisible. The split in the heading is the one that matters — the
+          Product Profile is what Vibe *worked out*, and this is what only the
+          founder can say. Keeping them apart in the UI is what stops the two
+          collapsing back into one "business context" blob.
+        */}
         <Surface level="section" padding="lg" className="flex flex-col gap-3">
           <div className="flex flex-col gap-2">
-            <h3 className="text-fg text-base font-semibold">What you&rsquo;re working toward</h3>
+            <h3 className="text-fg text-base font-semibold">What you told Vibe</h3>
+            <p className="text-fg-muted max-w-[65ch] text-sm">
+              Vibe works out what your product is on its own. This is the part only you know —
+              and it changes which problems Vibe puts first.
+            </p>
           </div>
           <FounderIntentForm projectId={project.id} intent={founderIntent.intent} />
         </Surface>

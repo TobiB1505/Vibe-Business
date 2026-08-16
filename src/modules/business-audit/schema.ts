@@ -120,6 +120,114 @@ export type KeyFinding = {
 };
 
 // ---------------------------------------------------------------------
+// Business reasoning lenses (CORE-2a.3)
+// ---------------------------------------------------------------------
+
+/**
+ * The nine lenses the audit reasons through before it concludes anything.
+ *
+ * ## Why these exist on top of the five dimensions
+ *
+ * The five dimensions are the *scored* layer and are unchanged — they are
+ * PRODUCT.md §10's contract and every stored score means what it always meant.
+ * What they are not is a complete way to think about a business, and the audit
+ * had drifted toward answering the question its scanners could answer most
+ * easily: *which business-related product features are missing?*
+ *
+ * That produced honest, useless conclusions. "No pricing page", "no checkout",
+ * "no analytics" are three observations about surfaces. The question a founder
+ * actually needs answered is *what does this product still need in order to
+ * become a functioning business?* — and "we have not decided how value becomes
+ * revenue" is a different problem from "the pricing page is missing", with a
+ * different fix, even though the same scanner evidence sits underneath both.
+ *
+ * ## What they are not
+ *
+ * Not UI cards, not scores, not nine mandatory findings. They are an internal
+ * reasoning pass whose output is a handful of synthesized conclusions. A single
+ * blocker routinely spans several lenses — an unclear path from usage to
+ * revenue is offer, revenue and scalability at once — and forcing it into one
+ * would be the artificial taxonomy this framework exists to avoid.
+ *
+ * ## Why they are universal
+ *
+ * Nine lenses, one framework, every product type. There is deliberately no
+ * `SaaSAudit` or `MarketplaceAudit`: a portfolio site and a marketplace both
+ * have an offer, an audience and economics, and what differs is which lenses
+ * *matter* — which is `materiality`, a property of the assessment rather than
+ * of the framework.
+ */
+export const BUSINESS_LENSES = [
+  /** Why should anyone want this? Value, promise, differentiation. */
+  "offer",
+  /** Who cares enough about this problem to act or pay? */
+  "audience",
+  /** How does the value created become sustainable revenue — including cost to serve? */
+  "revenue_economics",
+  /** How do the right people discover it? Every channel, not just search. */
+  "acquisition",
+  /** How does someone move from interest to value, and to paying? */
+  "conversion",
+  /** Why would anyone come back, keep using it, or keep paying? */
+  "retention",
+  /** Can the founder tell what users do and what is actually working? */
+  "measurement",
+  /** What still prevents this operating credibly as a real business? */
+  "business_readiness",
+  /** What happens to costs, margin and operations if this grows? */
+  "scalability",
+] as const;
+
+export type BusinessLens = (typeof BUSINESS_LENSES)[number];
+
+/**
+ * Where a lens currently stands.
+ *
+ * `not_material` and `blocked_by_missing_context` are the two that keep this
+ * honest. A one-off digital product has no recurring use to retain, and saying
+ * "retention is weak" there would be criticising it for not being a different
+ * product. And a lens that genuinely depends on something only the founder
+ * knows must say so rather than guess — that is also what makes an adaptive
+ * question worth asking.
+ */
+export const LENS_STATES = [
+  "strong",
+  "adequate",
+  "unclear",
+  "not_material",
+  "blocked_by_missing_context",
+] as const;
+export type LensState = (typeof LENS_STATES)[number];
+
+/** How much this lens matters *for this product, at this stage, right now*. */
+export const LENS_MATERIALITY = ["high", "medium", "low"] as const;
+export type LensMateriality = (typeof LENS_MATERIALITY)[number];
+
+/**
+ * One lens, assessed.
+ *
+ * Internal. This never reaches the customer-facing screen — it is the audit's
+ * working-out, and the reason it is structured rather than left in the model's
+ * head is that "did the audit actually consider economics?" should be a
+ * question a test can answer.
+ */
+export type BusinessLensAssessment = {
+  lens: BusinessLens;
+  state: LensState;
+  materiality: LensMateriality;
+  /** Internal prose. May be technical; it is not shown to the founder. */
+  summary: string;
+  evidenceIds: string[];
+  /**
+   * What only the founder could tell us, when the lens is blocked on it.
+   *
+   * Feeds adaptive question selection: a question is worth asking exactly when
+   * a material lens cannot be assessed without it (CORE-2a.3 §23).
+   */
+  missingContext: string[];
+};
+
+// ---------------------------------------------------------------------
 // Business synthesis (CORE-2a.1)
 // ---------------------------------------------------------------------
 
@@ -133,7 +241,7 @@ export type KeyFinding = {
  * improving are independent events, and an audit has to be able to say which
  * of them it carries.
  */
-export const AUDIT_SYNTHESIS_VERSION = "business-audit-synthesis-v1" as const;
+export const AUDIT_SYNTHESIS_VERSION = "business-audit-synthesis-v2" as const;
 
 /**
  * The **audit contract** version (CORE-2a.2 §21–§23).
@@ -151,7 +259,7 @@ export const AUDIT_SYNTHESIS_VERSION = "business-audit-synthesis-v1" as const;
  * "what does Vibe currently think about this business?" — which is exactly the
  * question the refresh decision asks.
  */
-export const AUDIT_CONTRACT_VERSION = "business-audit-contract-v2" as const;
+export const AUDIT_CONTRACT_VERSION = "business-audit-contract-v3" as const;
 
 /**
  * The oldest contract still treated as current.
@@ -162,7 +270,7 @@ export const AUDIT_CONTRACT_VERSION = "business-audit-contract-v2" as const;
  * minimum alone. Today they are equal, because the synthesis contract genuinely
  * did invalidate the enumerate-everything audits before it.
  */
-export const MIN_SUPPORTED_AUDIT_CONTRACT_VERSION = "business-audit-contract-v2" as const;
+export const MIN_SUPPORTED_AUDIT_CONTRACT_VERSION = "business-audit-contract-v3" as const;
 
 /**
  * How a conclusion reads, not how severe it is.
@@ -211,6 +319,14 @@ export type BusinessConclusion = {
   evidenceIds: string[];
   /** Which scored dimensions this conclusion touches. May be several (§12). */
   dimensions: AuditDimensionId[];
+  /**
+   * Which reasoning lenses this conclusion came from (CORE-2a.3 §40).
+   *
+   * Routinely more than one. "You have not turned usage into revenue" is
+   * offer, revenue and scalability together, and recording that is what lets a
+   * later reader see *why* it was judged a root problem rather than a symptom.
+   */
+  lenses: BusinessLens[];
   tone: ConclusionTone;
   confidence: Confidence;
 };
@@ -225,6 +341,14 @@ export type BusinessConclusion = {
  */
 export type AuditSynthesis = {
   version: typeof AUDIT_SYNTHESIS_VERSION;
+  /**
+   * The reasoning behind the conclusions (CORE-2a.3 §38).
+   *
+   * Kept with the synthesis rather than beside it, because the conclusions are
+   * only defensible in terms of the lenses that produced them. Empty on audits
+   * written before this framework existed.
+   */
+  lenses: BusinessLensAssessment[];
   /**
    * One sentence about the business as a whole, grounded in the assessment
    * below it — never generic encouragement (§25).

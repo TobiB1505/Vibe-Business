@@ -30,7 +30,7 @@
  *     five bullets has to do the synthesis the audit was supposed to do.
  */
 
-export const RUBRIC_VERSION = "business-readiness-rubric-v3" as const;
+export const RUBRIC_VERSION = "business-readiness-rubric-v4" as const;
 
 export const BUSINESS_READINESS_RUBRIC = `# Business Readiness Rubric (${RUBRIC_VERSION})
 
@@ -117,10 +117,98 @@ Every strength, gap, and conclusion must cite the evidence ids it rests on.
 Cite only ids present in the evidence pack. Never invent an id. If you
 cannot cite evidence for a claim, do not make the claim.
 
+## Business reasoning — nine lenses, before you conclude anything
+
+The dimensions above are what the scanners can see. They are not a way to think
+about a business. Before synthesizing, assess this product as a business
+through all nine lenses below.
+
+The question is never "which business-related product features are missing?".
+It is **"what does this specific product still need in order to become a
+functioning business?"**
+
+### The lenses
+
+1. **OFFER** — Why should anyone want this? Is the problem real, the value
+   clear, the promise specific? Is there a reason to choose it over what people
+   do today?
+2. **AUDIENCE** — Who cares enough about this problem to act or pay? Is the
+   first realistic customer clear enough to aim at? A product can serve a broad
+   market and still need a much narrower first customer.
+3. **REVENUE & ECONOMICS** — How does the value created become sustainable
+   revenue? Consider the business model, what customers would pay for, the free
+   /paid boundary — and the cost of delivering it: variable provider costs,
+   cost to serve, whether revenue scales faster than cost.
+4. **ACQUISITION** — How do the right people discover this? Search, content,
+   communities, partnerships, marketplaces, referral, existing audience,
+   product-led, integrations, outbound, paid. Search is one of eleven, not the
+   definition.
+5. **CONVERSION** — How does someone move from interest to value, and to
+   paying? Landing, sign-up, onboarding, first value, and the buying path.
+6. **RETENTION** — Why would anyone come back, keep using this, or keep paying?
+   Recurring value, stored work, repeated need.
+7. **MEASUREMENT** — Can the founder tell what people do and what is actually
+   working?
+8. **BUSINESS READINESS** — What still prevents this operating credibly as a
+   real business? Trust, support, billing readiness, the basics a customer
+   expects before paying.
+9. **SCALABILITY** — What happens to cost, margin and the founder's time if
+   this grows? Business scalability, not server capacity.
+
+### Assess each lens
+
+For each: a state, how much it matters *for this product right now*, a short
+internal summary, the evidence ids behind it, and — when it is blocked — what
+only the founder could tell you.
+
+States: \`strong\`, \`adequate\`, \`unclear\`, \`not_material\`,
+\`blocked_by_missing_context\`.
+
+### Materiality is not fixed
+
+The same lens matters differently for different products and stages, and
+judging every product against one template is how an audit becomes useless.
+
+- A one-off digital product has little to retain. Retention is \`not_material\`,
+  not weak.
+- A portfolio or service site may have no recurring revenue by design.
+- A pre-launch prototype with no users does not need funnel measurement yet;
+  the same gap becomes material once real traffic exists.
+- A marketplace needs both supply and demand — reason about that through
+  audience and acquisition rather than inventing a tenth lens.
+
+Judge the product in front of you, at the stage it is actually at.
+
+### The founder's goal changes what matters
+
+Founder intent is in the evidence. Someone trying to win their first paying
+customer needs offer, audience and revenue attended to before retention
+tuning. Someone with paying customers trying to keep them has the reverse
+priority.
+
+### Intent guides judgment; it does not override reality
+
+If the founder's stated goal is not supported by what exists, say so plainly
+and kindly. "Growing faster is the goal, but the foundations that make growth
+repeatable are not in place yet" is a more useful answer than silently
+prioritizing acquisition.
+
+The same applies in reverse: if Vibe's understanding of the product is weak and
+a conclusion would depend heavily on it, lower your confidence rather than
+asserting.
+
+### Unknown stays unknown
+
+If evidence and founder intent together cannot answer a lens, mark it
+\`unclear\` or \`blocked_by_missing_context\` and name what is missing. Never
+invent a business fact. Never state a legal, tax or regulatory conclusion —
+company structure, jurisdiction, VAT and regulated-industry rules cannot be
+read from a repository or a website. You may say that such a question will need
+answering before taking payments; you may not answer it.
+
 ## Business synthesis — the part that decides whether this audit is useful
 
-Everything above produces a per-dimension diagnosis. That is the working-out,
-not the answer. Now step back and say what it MEANS.
+The lenses are the working-out. Now step back and say what it MEANS.
 
 **Synthesize. Do not enumerate.** Do not return every valid observation as its
 own conclusion. Read all the evidence, find the patterns, and report only the
@@ -144,6 +232,22 @@ conclusion citing all of them, never one conclusion each.
 "Pricing is not in the navigation", "there is no purchase button" and "no
 checkout exists" are three symptoms of one root problem. Report the root.
 
+And go one level further than the product surface. A missing pricing page is a
+symptom; the root may be that the business has not yet decided how the value it
+creates becomes revenue — especially where delivering the product costs real
+money per use. Those are different problems with different answers, and only
+the evidence tells you which one this is:
+
+- No prices shown, no way to pay, and the founder has not decided how to
+  charge → the **revenue model** is the open question.
+- A business model already decided, prices configured in the code, but nothing
+  a visitor can see or buy → the model exists and the **buying path** is the
+  problem. Do not call this a missing revenue model.
+
+Technical gaps are rarely root problems. Missing search-engine signals are a
+business blocker only when discovery is genuinely what is holding this business
+back — not by default because they are easy to detect.
+
 ### Do not over-compress
 
 The opposite failure is just as bad. Do not merge unrelated problems to reach a
@@ -160,6 +264,17 @@ If the evidence supports two blockers, return two. Never invent a third.
 - 2 to 4 strengths, when the evidence supports them.
 - At most 3 blockers.
 - One overall conclusion about the business as a whole.
+
+### Choosing which blockers are primary
+
+Weigh, together: how much this affects the business becoming viable; how much
+it matters at this product's stage; how confident the evidence makes you; and
+how relevant it is to what the founder said they are trying to do next. A
+high-impact problem you can barely evidence outranks a small one you can prove.
+
+Each conclusion records the lenses it came from. Most real blockers span
+several — that is expected, and a conclusion forced into one lens is usually a
+symptom rather than a root problem.
 
 ### A conclusion is not an observation
 

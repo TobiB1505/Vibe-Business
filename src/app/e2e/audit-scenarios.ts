@@ -88,6 +88,8 @@ function audit(
  */
 const VIBE_SYNTHESIS: AuditSynthesis = {
   version: AUDIT_SYNTHESIS_VERSION,
+  // The reasoning behind the conclusions. Internal — never rendered.
+  lenses: [],
   overall:
     "You have a real product that people can use, but nothing about it explains how anyone would pay you.",
   strengths: [
@@ -103,6 +105,7 @@ const VIBE_SYNTHESIS: AuditSynthesis = {
         "auth.area.reached",
       ],
       dimensions: ["product", "conversion"],
+      lenses: ["offer", "conversion"],
       tone: "positive",
       confidence: "high",
     },
@@ -113,6 +116,7 @@ const VIBE_SYNTHESIS: AuditSynthesis = {
       whyItMatters: null,
       evidenceIds: ["auth.surface.dashboard", "auth.area.reached"],
       dimensions: ["retention"],
+      lenses: ["retention"],
       tone: "positive",
       confidence: "medium",
     },
@@ -132,6 +136,7 @@ const VIBE_SYNTHESIS: AuditSynthesis = {
         "profile.journey.checkout_not_found",
       ],
       dimensions: ["monetization", "conversion"],
+      lenses: ["revenue_economics", "conversion", "scalability"],
       tone: "critical",
       confidence: "high",
     },
@@ -143,6 +148,7 @@ const VIBE_SYNTHESIS: AuditSynthesis = {
         "Without that, every change you make is a guess, and you won't know which ones helped.",
       evidenceIds: ["repo.surface.analytics", "profile.signal.analytics"],
       dimensions: ["retention", "distribution"],
+      lenses: ["measurement"],
       tone: "attention",
       confidence: "medium",
     },

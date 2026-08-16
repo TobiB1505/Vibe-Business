@@ -45,10 +45,20 @@ describe("ANTHROPIC_AUDIT_OUTPUT_SCHEMA", () => {
   it("declares the dimension assessment shape exactly once", () => {
     const metrics = measureSchema(ANTHROPIC_AUDIT_OUTPUT_SCHEMA);
     // Root, the single dimension item, and the key-finding item.
-    expect(metrics.objectCount).toBe(3);
+    /*
+     * Four shapes: the dimension item, the lens item, the conclusion item, and
+     * the root. CORE-2a.3 added the third of those.
+     *
+     * The number that matters is not this one — it is that each is declared
+     * ONCE. The Sprint 4 failure was five copies of a single shape, one per
+     * dimension key, and the guard below on `unionCount` is the other half of
+     * the same lesson. Grow this deliberately, not by accident.
+     */
+    expect(metrics.objectCount).toBe(4);
     // One per dimension key would be 5. The single union is `score`'s
     // integer-or-null: CORE-2a.1 deliberately did NOT add a second one for
-    // `whyItMatters`, which is a plain string with "" meaning absent.
+    // `whyItMatters`, and CORE-2a.3 added nine lens assessments without adding
+    // one either — every lens field is a plain string, enum or array.
     expect(metrics.unionCount).toBe(1);
   });
 

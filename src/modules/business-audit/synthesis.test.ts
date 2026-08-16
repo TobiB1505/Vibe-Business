@@ -280,8 +280,12 @@ describe("the synthesis document", () => {
   });
 
   it("is null when the model returned nothing usable at this layer", () => {
+    // Nothing at all: no conclusions, no overall, and no lens reasoning
+    // either. Lens assessments alone would be a real result — the audit
+    // thought about the business and could not conclude — so they have to be
+    // absent too for the synthesis to be genuinely empty.
     const normalized = normalizeAnthropicAuditOutput(
-      buildModelOutput({}, { conclusions: [], overallConclusion: "" }),
+      buildModelOutput({}, { conclusions: [], overallConclusion: "", lenses: [] }),
     );
     if (!normalized.ok) throw new Error("fixture failed normalization");
 

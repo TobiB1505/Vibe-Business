@@ -2,12 +2,19 @@ import { checkCustomerLanguage } from "./customer-language";
 import {
   AUDIT_DIMENSIONS,
   AUDIT_SYNTHESIS_VERSION,
+  BUSINESS_LENSES,
+  LENS_MATERIALITY,
+  LENS_STATES,
   CONCLUSION_TONES,
   DIMENSION_LABELS,
   type AssessmentStatus,
   type AuditDimensionId,
   type AuditSynthesis,
   type BusinessConclusion,
+  type BusinessLens,
+  type BusinessLensAssessment,
+  type LensMateriality,
+  type LensState,
   type Confidence,
   type ConclusionTone,
   type DimensionAssessment,
@@ -169,6 +176,58 @@ function normalizeScore(value: unknown): number | null {
 
 const TONES: ConclusionTone[] = [...CONCLUSION_TONES];
 
+function cleanLensList(value: unknown): BusinessLens[] {
+  if (!Array.isArray(value)) return [];
+  const kept: BusinessLens[] = [];
+  for (const entry of value) {
+    if (typeof entry !== "string") continue;
+    const id = entry.trim() as BusinessLens;
+    if (BUSINESS_LENSES.includes(id) && !kept.includes(id)) kept.push(id);
+  }
+  return kept;
+}
+
+/**
+ * The lens assessments (CORE-2a.3 §38).
+ *
+ * Kept whole rather than filtered down: this is the audit's reasoning, and a
+ * lens the model marked `not_material` or `blocked_by_missing_context` is a
+ * *result*, not a gap to drop. An unknown lens name is discarded — the closed
+ * vocabulary is the point — and a duplicate keeps the first, because reporting
+ * one lens twice says nothing the first entry did not.
+ *
+ * Unlike a conclusion, a lens with no surviving evidence is **not** discarded.
+ * "Vibe could not assess this and here is what it would need" is a legitimate,
+ * useful outcome that by definition cites nothing.
+ */
+function validateLenses(value: unknown, known: Set<string>, dropped: Set<string>): BusinessLensAssessment[] {
+  if (!Array.isArray(value)) return [];
+
+  const seen = new Set<BusinessLens>();
+  const assessments: BusinessLensAssessment[] = [];
+
+  for (const raw of value) {
+    if (!isRecord(raw)) continue;
+
+    const lens = typeof raw.lens === "string" ? (raw.lens.trim() as BusinessLens) : null;
+    if (lens === null || !BUSINESS_LENSES.includes(lens) || seen.has(lens)) continue;
+    seen.add(lens);
+
+    assessments.push({
+      lens,
+      state: LENS_STATES.includes(raw.state as LensState) ? (raw.state as LensState) : "unclear",
+      materiality: LENS_MATERIALITY.includes(raw.materiality as LensMateriality)
+        ? (raw.materiality as LensMateriality)
+        : "medium",
+      summary: cleanText(raw.summary, 400) ?? "No reasoning was recorded for this lens.",
+      evidenceIds: filterEvidenceIds(raw.evidenceIds, known, dropped),
+      missingContext: cleanStringList(raw.missingContext, MAX_LIST_ITEMS),
+    });
+  }
+
+  return assessments;
+}
+
 function cleanDimensionList(value: unknown): AuditDimensionId[] {
   if (!Array.isArray(value)) return [];
   const kept: AuditDimensionId[] = [];
@@ -212,6 +271,7 @@ function parseConclusion(
     whyItMatters: cleanText(raw.whyItMatters, 400),
     evidenceIds,
     dimensions: cleanDimensionList(raw.dimensions),
+    lenses: cleanLensList(raw.lenses),
     tone: TONES.includes(raw.tone as ConclusionTone) ? (raw.tone as ConclusionTone) : "attention",
     confidence: CONFIDENCES.includes(raw.confidence as Confidence)
       ? (raw.confidence as Confidence)
@@ -302,10 +362,14 @@ function validateSynthesis(
     .filter((entry) => entry.tone !== "positive")
     .slice(0, MAX_SYNTHESIZED_BLOCKERS);
 
-  if (overall === null && strengths.length === 0 && blockers.length === 0) return null;
+  const lenses = validateLenses(data.lenses, known, dropped);
+  if (overall === null && strengths.length === 0 && blockers.length === 0 && lenses.length === 0) {
+    return null;
+  }
 
   return {
     version: AUDIT_SYNTHESIS_VERSION,
+    lenses,
     overall: overall ?? "",
     strengths,
     blockers,

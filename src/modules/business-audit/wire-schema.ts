@@ -1,4 +1,11 @@
-import { AUDIT_DIMENSIONS, CONCLUSION_TONES, type AuditDimensionId } from "./schema";
+import {
+  AUDIT_DIMENSIONS,
+  BUSINESS_LENSES,
+  CONCLUSION_TONES,
+  LENS_MATERIALITY,
+  LENS_STATES,
+  type AuditDimensionId,
+} from "./schema";
 
 /**
  * The Anthropic **transport** representation of an audit response, and the
@@ -133,6 +140,12 @@ const CONCLUSION_ITEM_SCHEMA = {
       items: { type: "string", enum: [...AUDIT_DIMENSIONS] },
       description: "Which dimensions this conclusion touches. More than one is expected and correct.",
     },
+    lenses: {
+      type: "array",
+      items: { type: "string", enum: [...BUSINESS_LENSES] },
+      description:
+        "Which reasoning lenses produced this. Most real blockers span several; one lens usually means you found a symptom.",
+    },
     evidenceIds: {
       type: "array",
       items: { type: "string" },
@@ -147,8 +160,48 @@ const CONCLUSION_ITEM_SCHEMA = {
     "tone",
     "confidence",
     "dimensions",
+    "lenses",
     "evidenceIds",
   ],
+  additionalProperties: false,
+} as const;
+
+/**
+ * One reasoning lens, assessed (CORE-2a.3).
+ *
+ * Deliberately lean. This is the audit's working-out, not its output, and every
+ * field added here is compiled into the grammar and generated on every run —
+ * so it carries a state, a materiality, a short internal note and its
+ * grounding, and nothing else. No score: the five dimensions are the scored
+ * layer and giving the lenses numbers too would invite the two to disagree.
+ */
+const LENS_ITEM_SCHEMA = {
+  type: "object",
+  properties: {
+    lens: { type: "string", enum: [...BUSINESS_LENSES] },
+    state: {
+      type: "string",
+      enum: [...LENS_STATES],
+      description:
+        "not_material when this lens genuinely does not apply to this kind of product; blocked_by_missing_context when only the founder could answer it.",
+    },
+    materiality: {
+      type: "string",
+      enum: [...LENS_MATERIALITY],
+      description: "How much this matters for THIS product at THIS stage — not in general.",
+    },
+    summary: {
+      type: "string",
+      description: "One or two sentences of internal reasoning. Not shown to the founder.",
+    },
+    evidenceIds: { type: "array", items: { type: "string" } },
+    missingContext: {
+      type: "array",
+      items: { type: "string" },
+      description: "What only the founder could tell you. Empty unless the lens is blocked on it.",
+    },
+  },
+  required: ["lens", "state", "materiality", "summary", "evidenceIds", "missingContext"],
   additionalProperties: false,
 } as const;
 
@@ -159,6 +212,11 @@ export const ANTHROPIC_AUDIT_OUTPUT_SCHEMA: Record<string, unknown> = {
       type: "array",
       description: `One entry per dimension, exactly ${AUDIT_DIMENSIONS.length}: ${AUDIT_DIMENSIONS.join(", ")}. No duplicates.`,
       items: DIMENSION_ITEM_SCHEMA,
+    },
+    lenses: {
+      type: "array",
+      description: `Assess all ${BUSINESS_LENSES.length} lenses, each exactly once: ${BUSINESS_LENSES.join(", ")}. This is your reasoning, not the answer.`,
+      items: LENS_ITEM_SCHEMA,
     },
     overallConclusion: {
       type: "string",
@@ -177,7 +235,7 @@ export const ANTHROPIC_AUDIT_OUTPUT_SCHEMA: Record<string, unknown> = {
       description: "What this audit could not assess and why. At most 5 short phrases.",
     },
   },
-  required: ["dimensions", "overallConclusion", "conclusions", "limitations"],
+  required: ["dimensions", "lenses", "overallConclusion", "conclusions", "limitations"],
   additionalProperties: false,
 };
 
@@ -248,6 +306,7 @@ export function normalizeAnthropicAuditOutput(data: unknown): NormalizeResult {
     ok: true,
     data: {
       dimensions: byId,
+      lenses: data.lenses,
       overallConclusion: data.overallConclusion,
       conclusions: data.conclusions,
       limitations: data.limitations,

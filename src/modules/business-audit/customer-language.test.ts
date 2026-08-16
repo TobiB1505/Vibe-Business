@@ -133,6 +133,7 @@ function conclusion(overrides: Partial<BusinessConclusion> = {}): BusinessConclu
     whyItMatters: null,
     evidenceIds: ["live.surface.pricing"],
     dimensions: ["monetization"],
+    lenses: ["revenue_economics"],
     tone: "critical",
     confidence: "high",
     ...overrides,
@@ -142,6 +143,7 @@ function conclusion(overrides: Partial<BusinessConclusion> = {}): BusinessConclu
 function synthesis(overrides: Partial<AuditSynthesis> = {}): AuditSynthesis {
   return {
     version: AUDIT_SYNTHESIS_VERSION,
+    lenses: [],
     overall: "You have a real product, but nobody can pay for it.",
     strengths: [],
     blockers: [conclusion()],
@@ -302,6 +304,7 @@ describe("raw evidence and technical detail are not censored", () => {
 describe("the contract holds at real audit cardinality", () => {
   const REAL_SHAPED: AuditSynthesis = {
     version: AUDIT_SYNTHESIS_VERSION,
+    lenses: [],
     overall:
       "Vibe Business is a working early-stage prototype with a clear message and a real " +
       "signed-in area people can log into and use, but right now there is no way for anyone " +
