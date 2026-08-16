@@ -46,7 +46,7 @@ export function AuditBlockers({
   if (blockers.length === 0) {
     return (
       <section className="flex flex-col gap-2">
-        <MonoLabel>What&rsquo;s holding you back</MonoLabel>
+        <MonoLabel as="h2">What&rsquo;s holding you back</MonoLabel>
         {/*
           §48: no empty "top 3" scaffolding. Zero blockers is a real and good
           result, and rendering three placeholders would invent problems to
@@ -62,7 +62,7 @@ export function AuditBlockers({
 
   return (
     <section className="flex flex-col gap-3">
-      <MonoLabel>What&rsquo;s holding you back</MonoLabel>
+      <MonoLabel as="h2">What&rsquo;s holding you back</MonoLabel>
 
       <ul className="flex flex-col gap-2">
         {blockers.map((blocker, index) => {

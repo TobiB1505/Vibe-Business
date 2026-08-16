@@ -87,7 +87,7 @@ export function LensDetail({ node, map }: { node: LensNode; map: BusinessMap }) 
       */}
       {connections.length > 0 && (
         <section className="flex flex-col gap-2">
-          <MonoLabel>Judged together with</MonoLabel>
+          <MonoLabel as="h4">Judged together with</MonoLabel>
           <ul className="flex flex-col gap-2">
             {connections.map((edge) => {
               const other = edge.from === node.lens ? edge.to : edge.from;
@@ -104,7 +104,7 @@ export function LensDetail({ node, map }: { node: LensNode; map: BusinessMap }) 
 
       {node.missingContext.length > 0 && (
         <section className="border-line-1 flex flex-col gap-2 border-t pt-4">
-          <MonoLabel>Only you can answer</MonoLabel>
+          <MonoLabel as="h4">Only you can answer</MonoLabel>
           <ul className="flex flex-col gap-1">
             {node.missingContext.map((item) => (
               <li key={item} className="text-fg-secondary text-sm">

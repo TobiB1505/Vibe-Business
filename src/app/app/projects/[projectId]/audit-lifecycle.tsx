@@ -72,7 +72,7 @@ function Shell({
         }}
       />
       <div className="relative flex flex-col gap-4">
-        <MonoLabel>{label}</MonoLabel>
+        <MonoLabel as="h2">{label}</MonoLabel>
         <p className="text-fg max-w-[46ch] text-lg font-medium">{headline}</p>
         {children}
       </div>
@@ -134,7 +134,7 @@ export function AuditAnalyzing() {
 export function AuditWaitingHeader() {
   return (
     <div className="flex flex-col gap-2">
-      <MonoLabel>Business audit · waiting for you</MonoLabel>
+      <MonoLabel as="h2">Business audit · waiting for you</MonoLabel>
       <p className="text-fg-muted max-w-[58ch] text-sm">
         Vibe has everything else it needs. Answer this and the audit carries on — nothing has been
         spent while it waits.

@@ -29,7 +29,7 @@ export function AuditIntelligence({ map }: { map: BusinessMapModel }) {
   return (
     <div className="flex flex-col gap-5">
       <div className="flex flex-wrap items-baseline justify-between gap-3">
-        <MonoLabel>How Vibe sees your business</MonoLabel>
+        <MonoLabel as="h2">How Vibe sees your business</MonoLabel>
         <span className="text-fg-meta font-mono text-[0.6875rem]">
           {map.assessedCount} lenses · {map.signalCount} signals
         </span>

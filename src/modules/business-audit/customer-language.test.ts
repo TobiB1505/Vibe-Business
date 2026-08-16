@@ -571,3 +571,55 @@ describe("the jargon leak path, not just the jargon (§25, §54)", () => {
     expect(keys.indexOf("conclusions")).toBeLessThan(keys.indexOf("dimensions"));
   });
 });
+
+/**
+ * `rootProblem` is internal, and the UI must keep it that way (AUDIT UI-1).
+ *
+ * The audit UI sprint rendered it in "How Vibe reached this" — the obvious
+ * choice, since it is the audit's own sentence about what is actually wrong.
+ * It also silently bypassed both guards this module and `lens-priority`
+ * provide: the language check reads `customerFacingStrings`, and the
+ * abstraction check reads `explanation`. Neither has ever seen `rootProblem`.
+ *
+ * So the field can legitimately contain internal vocabulary and an inventory of
+ * absences — it is written for the model's own reasoning, one step before the
+ * prose that *is* checked. Putting it on screen ships text nothing validated.
+ */
+describe("the internal root problem never reaches a screen", () => {
+  it("is excluded from the strings the language check covers", () => {
+    const withJargon = checkCustomerLanguage({
+      version: AUDIT_SYNTHESIS_VERSION,
+      lenses: [],
+      overall: "A clean sentence.",
+      strengths: [],
+      blockers: [
+        conclusion({
+          rootProblem: "No pricing surface and no checkout surface were detected.",
+          headline: "You haven't decided how this makes money.",
+          explanation: "The choice of what to charge for hasn't been made.",
+        }),
+      ],
+    });
+
+    // Jargon in `rootProblem` alone is fine, because it is never displayed.
+    expect(withJargon.ok).toBe(true);
+    expect(withJargon.blocking).toEqual([]);
+  });
+
+  /**
+   * A source assertion, because this boundary is invisible in the rendered
+   * output: showing the wrong field looks perfectly reasonable on screen, and
+   * only the absence of a validation error would ever hint at it.
+   */
+  it("is not referenced by the component that shows the reasoning trail", async () => {
+    const { readFileSync } = await import("node:fs");
+    const source = readFileSync(
+      "src/app/app/projects/[projectId]/reasoning-trail.tsx",
+      "utf8",
+    );
+
+    // The doc comment explains why it is absent; the JSX must not use it.
+    const jsx = source.slice(source.indexOf("export function ReasoningTrail"));
+    expect(jsx).not.toContain("conclusion.rootProblem");
+  });
+});

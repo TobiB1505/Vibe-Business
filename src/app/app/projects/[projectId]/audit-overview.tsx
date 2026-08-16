@@ -37,7 +37,7 @@ function Conclusion({ audit }: { audit: BusinessReadinessAudit }) {
 
   return (
     <section className="flex flex-col gap-3">
-      <MonoLabel>What Vibe thinks</MonoLabel>
+      <MonoLabel as="h2">What Vibe thinks</MonoLabel>
       <p className="text-fg max-w-[46ch] text-2xl leading-[1.35] font-semibold text-balance sm:text-[1.75rem]">
         {overall}
       </p>
@@ -51,7 +51,7 @@ function Strengths({ audit }: { audit: BusinessReadinessAudit }) {
 
   return (
     <section className="flex flex-col gap-3">
-      <MonoLabel>What&rsquo;s already working</MonoLabel>
+      <MonoLabel as="h2">What&rsquo;s already working</MonoLabel>
       <ul className="flex flex-col gap-3">
         {strengths.map((strength) => (
           <li key={strength.headline} className="flex flex-col gap-1">
@@ -85,7 +85,7 @@ function WhereIdStart({
 
   return (
     <Surface level="panel" padding="lg" className="flex flex-col gap-3">
-      <MonoLabel>Where I&rsquo;d start</MonoLabel>
+      <MonoLabel as="h2">Where I&rsquo;d start</MonoLabel>
       <p className="text-fg max-w-[54ch] text-lg font-medium">{first.headline}</p>
       {first.whyItMatters && (
         <p className="text-fg-muted max-w-[62ch] text-sm">{first.whyItMatters}</p>

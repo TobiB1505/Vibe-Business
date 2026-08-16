@@ -23,13 +23,26 @@ import { Well } from "@/components/ui/surface";
  * selected blocker, not as a permanent wall of evidence — which would be the
  * enumeration this whole layer exists to replace, only in a nicer typeface.
  *
+ * ## Why `rootProblem` is not shown here
+ *
+ * It was the obvious thing to render — the audit's own sentence about what is
+ * actually wrong — and it would have quietly broken a boundary two sprints
+ * paid for. `rootProblem` is **internal**: `customerFacingStrings` covers the
+ * conclusion, the headlines, the explanations and the why-it-matters lines, and
+ * nothing else. So the field passes through neither the customer-language check
+ * nor the abstraction check, and putting it on screen would ship prose that was
+ * never held to either.
+ *
+ * The founder needs the truth of the root problem, not the internal field that
+ * holds it. So the arrow lands on the validated conclusion instead, which says
+ * the same thing in words that were checked.
+ *
  * ## One thing the mockup shows that the data does not carry
  *
- * 1b ends with "what Vibe did not say, and why" — the symptoms that were merged
- * into the root. Near-duplicate conclusions genuinely are dropped during
- * validation, but the dropped ones are not persisted, so there is nothing
- * truthful to render. The closing line states the property that *is* true:
- * nothing was discarded, and every signal is still cited.
+ * 1b ends with "what Vibe did not say, and why" — the symptoms merged into the
+ * root. Near-duplicate conclusions genuinely are dropped during validation, but
+ * the dropped ones are not persisted, so there is nothing truthful to render.
+ * The closing line states the narrower property that *is* true.
  */
 
 function SignalRow({ evidenceId }: { evidenceId: string }) {
@@ -55,7 +68,7 @@ export function ReasoningTrail({ conclusion }: { conclusion: BusinessConclusion 
   return (
     <div className="flex flex-col gap-4">
       <section className="flex flex-col gap-2">
-        <MonoLabel>
+        <MonoLabel as="h4">
           What Vibe saw · {signals.length} {signals.length === 1 ? "signal" : "signals"}
         </MonoLabel>
         <ul className="flex flex-col gap-1.5">
@@ -75,21 +88,19 @@ export function ReasoningTrail({ conclusion }: { conclusion: BusinessConclusion 
       </div>
 
       <Well className="flex flex-col gap-3 p-5">
-        <MonoLabel>
+        <MonoLabel as="h4">
           One problem, not {signals.length} findings
         </MonoLabel>
 
         {/*
-          The internal root problem, shown here and nowhere else. It is the
-          audit's own sentence about what is actually wrong, written before any
-          founder-facing prose existed — which is precisely why it belongs in
-          the place that answers "how did you get here?".
+          The validated conclusion, not the internal `rootProblem`. Restating
+          the headline here is deliberate rather than redundant: it is the
+          terminus of the arrow, and the whole section exists to show that these
+          many observations resolve into this one sentence.
         */}
-        {conclusion.rootProblem !== "" && (
-          <p className="text-fg max-w-[62ch] text-[0.9375rem] leading-relaxed">
-            {conclusion.rootProblem}
-          </p>
-        )}
+        <p className="text-fg max-w-[62ch] text-[0.9375rem] leading-relaxed">
+          {conclusion.headline}
+        </p>
 
         {conclusion.whyItMatters && (
           <p className="text-fg-muted max-w-[62ch] text-sm">
@@ -109,9 +120,15 @@ export function ReasoningTrail({ conclusion }: { conclusion: BusinessConclusion 
         </div>
       </Well>
 
+      {/*
+        Precise rather than reassuring. Validation *can* drop a near-duplicate
+        conclusion, so "nothing was discarded" would be a claim the pipeline
+        does not make. What is true is narrower and still the point: the
+        evidence survives, and the grouping is what changed.
+      */}
       <p className="text-fg-meta max-w-[62ch] text-xs">
-        Nothing was discarded. Every signal above is still stored, still cited, and still visible
-        in the full breakdown.
+        No supporting evidence was lost. Related signals were grouped into one business
+        conclusion, and every one of them is still cited in the full breakdown.
       </p>
     </div>
   );

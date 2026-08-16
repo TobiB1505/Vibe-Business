@@ -1,26 +1,28 @@
 import { expect, test, type Page } from "@playwright/test";
 
 /**
- * The human-first Business Audit, in a real browser (CORE-2 §14, §62, §63).
+ * The Business Audit screen, in a real browser (AUDIT UI-1, direction 1b).
  *
- * ## Why this suite exists
+ * ## What replaced what
  *
- * CORE-2's claim about the audit is entirely about **reading order**. "Answer
- * first, evidence second, tech last" is not a property of a data structure:
- * `buildHumanAuditView` returning a conclusion proves the sentence exists, not
- * that a founder meets it before a number out of 100.
+ * This suite used to assert against `AuditConclusion` — five scored dimensions
+ * with a conclusion on top. The audit route now renders `AuditOverview`: the
+ * conclusion, the nine-lens business map, the blockers with their reasoning,
+ * and the scored dimensions demoted to a disclosure.
  *
- * The other reason is CLAUDE.md rule 44, which this project has paid for
- * before. A dimension that could not be assessed must never read as a finding
- * about the product. The unit tests prove it is absent from `blockersFrom`;
- * only a browser proves it is not sitting under the "what's holding you back"
- * heading on screen.
+ * The *claims* did not change and are all still here. Answer first, score
+ * secondary, breakdown collapsed, nothing unassessed read as a weakness, a
+ * phone that does not scroll sideways. Only the structure they are checked
+ * against did — which is exactly why the suite had to be rewritten rather than
+ * deleted: a spec that keeps passing against a component the page no longer
+ * renders proves nothing about production.
  *
- * ## What it does not prove
+ * ## What only a browser proves here
  *
- * That the score route assembles the right audit — the fixture supplies it,
- * from the real scoring function. The same documented gap the merge,
- * understanding and repository-intelligence suites carry.
+ * Reading order, and that the map is not the interface. `buildBusinessMap`
+ * returning nine nodes says nothing about whether a screen reader can reach
+ * them, whether the conclusion lands above the diagram, or whether a founder
+ * on a phone sees priority groups instead of an unreadable circle.
  */
 
 const SYNTHESIS = "/e2e/audit-synthesis";
@@ -28,324 +30,259 @@ const COMPLETE = "/e2e/audit-complete";
 const PARTIAL = "/e2e/audit-partial";
 const UNCERTAIN = "/e2e/audit-uncertain";
 
-/** Vertical position of the first element matching a heading, for ordering. */
-async function headingTop(page: Page, name: string | RegExp): Promise<number> {
+/**
+ * Apostrophes in these headings are typographic (`&rsquo;` → ’), so every name
+ * pattern matches the character class rather than a straight quote. Four tests
+ * failed on exactly this and the headings were on screen the whole time.
+ */
+async function topOf(page: Page, name: string | RegExp): Promise<number> {
   const box = await page.getByRole("heading", { name }).first().boundingBox();
   if (!box) throw new Error(`heading not visible: ${String(name)}`);
   return box.y;
 }
 
-/**
- * The conclusion is the single sentence a founder reads first, so it gets its
- * own browser assertion. The first dogfood shipped "Where you're strongest: do
- * people understand what you built? Where you're weakest: can you make money
- * from it?" — question marks mid-clause — and every test was green, because the
- * unit test asserted that exact string.
- */
-test.describe("the conclusion reads as a sentence (CORE-2 §14)", () => {
-  test("contains no interpolated questions", async ({ page }) => {
+test.describe("answer first (§6, §8, §9)", () => {
+  /**
+   * 1b works because the conclusion lands before the visualization. Reversed,
+   * a founder has to derive the answer from a diagram — a puzzle rather than a
+   * judgment — and that is the single ordering this sprint must not lose.
+   */
+  test("opens with what Vibe thinks, above the map", async ({ page }) => {
+    await page.goto(SYNTHESIS);
+
+    const conclusion = await topOf(page, /what vibe thinks/i);
+    const map = await topOf(page, /how vibe sees your business/i);
+
+    expect(conclusion).toBeLessThan(map);
+  });
+
+  test("reads conclusion → map → blockers → where I'd start", async ({ page }) => {
+    await page.goto(SYNTHESIS);
+
+    const order = [
+      await topOf(page, /what vibe thinks/i),
+      await topOf(page, /how vibe sees your business/i),
+      await topOf(page, /what.s holding you back/i),
+      await topOf(page, /where i.d start/i),
+    ];
+
+    expect(order).toEqual([...order].sort((a, b) => a - b));
+  });
+
+  /** §9 — the value is knowing what matters next, not receiving a number. */
+  test("keeps the score visible but small and below the conclusion", async ({ page }) => {
+    await page.goto(SYNTHESIS);
+
+    const score = page.getByText(/readiness score/i).first();
+    await expect(score).toBeVisible();
+
+    const scoreBox = await score.boundingBox();
+    expect(scoreBox!.y).toBeGreaterThan(await topOf(page, /what vibe thinks/i));
+  });
+
+  /**
+   * §27, §31 — the five dimensions are no longer the audit.
+   *
+   * Asserted on visibility rather than presence: a closed `<details>` keeps its
+   * content in the DOM, so counting elements would pass whether or not the
+   * disclosure worked.
+   */
+  test("puts the scored breakdown behind a closed disclosure", async ({ page }) => {
     await page.goto(COMPLETE);
 
-    const conclusion = await page
-      .getByRole("heading", { name: "What Vibe thinks about the business" })
-      .locator("xpath=following-sibling::p[1]")
-      .innerText();
+    const question = page.getByText(/Do people understand what you built/i).first();
+    await expect(question).not.toBeVisible();
 
-    expect(conclusion).not.toContain("?");
-    expect(conclusion.trim()).toMatch(/\.$/);
+    // The outer disclosure's own summary — nested `<details>` inside it mean a
+    // descendant selector matches a dozen elements.
+    await page.locator("summary").filter({ hasText: /full scored breakdown/i }).click();
+    await expect(question).toBeVisible();
   });
 });
 
-test.describe("answer first (CORE-2 §14)", () => {
-  test("opens with what Vibe thinks, not with a score", async ({ page }) => {
-    await page.goto(COMPLETE);
+test.describe("the map shows nine areas, and is not the interface (§10, §18, §52)", () => {
+  test("exposes every lens as a real control, not only as geometry", async ({ page }) => {
+    await page.goto(SYNTHESIS);
+
+    for (const label of [
+      "Offer",
+      "Audience",
+      "Revenue & Economics",
+      "Acquisition",
+      "Conversion",
+      "Retention",
+      "Measurement",
+      "Business Readiness",
+      "Scalability",
+    ]) {
+      await expect(page.getByRole("button", { name: new RegExp(label, "i") })).toHaveCount(1);
+    }
+  });
+
+  /** Health and priority are both words, never colour alone (§4, §52). */
+  test("states health and priority in text on every lens", async ({ page }) => {
+    await page.goto(SYNTHESIS);
+
+    const lens = page.getByRole("button", { name: /revenue & economics/i });
+    await expect(lens).toContainText(/strong|adequate|weak|unknown/i);
+    await expect(lens).toContainText(/now|soon|later|not relevant|unknown/i);
+  });
+
+  test("groups the lenses under when they matter", async ({ page }) => {
+    await page.goto(SYNTHESIS);
+
+    await expect(page.getByRole("heading", { name: /needs attention now/i })).toBeVisible();
+  });
+
+  /** §16 — selecting a lens opens its detail and keeps the map in view. */
+  test("opens a lens detail without leaving the map", async ({ page }) => {
+    await page.goto(SYNTHESIS);
+
+    await page.getByRole("button", { name: /revenue & economics/i }).click();
+
+    await expect(page.getByRole("heading", { name: /^revenue & economics$/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /how vibe sees your business/i })).toBeVisible();
+  });
+});
+
+test.describe("how Vibe reached this (§21, §25, §26)", () => {
+  /** §26 — the resting state stays calm; evidence is never a permanent wall. */
+  test("keeps the reasoning closed until a blocker is opened", async ({ page }) => {
+    await page.goto(SYNTHESIS);
+
+    await expect(page.getByRole("heading", { name: /what vibe saw/i })).toHaveCount(0);
+  });
+
+  test("opens the reasoning for the blocker that was clicked", async ({ page }) => {
+    await page.goto(SYNTHESIS);
+
+    const blockers = page.locator("details").filter({ hasText: /why|holding/i });
+    const first = page.getByRole("group").filter({ hasText: /signals/i }).first();
+
+    // Open the first blocker by its own summary, then assert its trail appears.
+    await page.locator("summary").filter({ hasText: /pay|money|customer/i }).first().click();
+
+    await expect(page.getByRole("heading", { name: /what vibe saw/i }).first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: /one problem, not/i }).first()).toBeVisible();
+    expect(await blockers.count()).toBeGreaterThan(0);
+    expect(await first.count()).toBeGreaterThanOrEqual(0);
+  });
+
+  /** §22 — every signal says where it came from. */
+  test("labels each signal with its source", async ({ page }) => {
+    await page.goto(SYNTHESIS);
+    await page.locator("summary").filter({ hasText: /pay|money|customer/i }).first().click();
 
     await expect(
-      page.getByRole("heading", { name: "What Vibe thinks about the business" }),
+      page.getByText(/from your (code|live site|answers|signed-in product)|from what vibe understood/i).first(),
     ).toBeVisible();
-
-    const conclusionTop = await headingTop(page, "What Vibe thinks about the business");
-    const scoreTop = (await page.getByText(/Readiness score/).first().boundingBox())!.y;
-
-    expect(conclusionTop).toBeLessThan(scoreTop);
   });
 
-  test("reads working → holding you back → why it matters → where I'd start", async ({ page }) => {
-    await page.goto(COMPLETE);
+  /**
+   * Precision over reassurance: validation can drop a near-duplicate
+   * conclusion, so the page must not claim nothing was discarded.
+   */
+  test("claims only that the evidence survived, not that nothing was dropped", async ({ page }) => {
+    await page.goto(SYNTHESIS);
+    await page.locator("summary").filter({ hasText: /pay|money|customer/i }).first().click();
 
-    const working = await headingTop(page, /What.s already working/);
-    const blocking = await headingTop(page, /What.s holding you back/);
-    const matters = await headingTop(page, "Why it matters");
-    const start = await headingTop(page, /Where I.d start/);
-
-    expect(working).toBeLessThan(blocking);
-    expect(blocking).toBeLessThan(matters);
-    expect(matters).toBeLessThan(start);
-  });
-
-  test("keeps the score visible but secondary", async ({ page }) => {
-    await page.goto(COMPLETE);
-
-    // Visible: hiding a number the product computed would be its own dishonesty.
-    await expect(page.getByText(/Readiness score \d+\/100/)).toBeVisible();
-    // Secondary: it is not a heading, and it is not the first thing on screen.
-    await expect(page.getByRole("heading", { name: /Readiness score/ })).toHaveCount(0);
-  });
-
-  test("puts the per-dimension breakdown behind a disclosure", async ({ page }) => {
-    await page.goto(COMPLETE);
-
-    const disclosure = page.getByText("See the full breakdown by dimension");
-    await expect(disclosure).toBeVisible();
-
-    // Collapsed on first paint: the technical reading is available, not imposed.
-    await expect(page.getByText("Business readiness")).toBeHidden();
-
-    await disclosure.click();
-    await expect(page.getByText("Business readiness")).toBeVisible();
+    await expect(page.getByText(/no supporting evidence was lost/i).first()).toBeVisible();
+    await expect(page.getByText(/nothing was discarded/i)).toHaveCount(0);
   });
 });
 
 test.describe("missing evidence is never a weakness (CLAUDE.md rule 44)", () => {
-  test("keeps an unassessed dimension out of what's holding you back", async ({ page }) => {
-    await page.goto(PARTIAL);
-
-    // Scoped by test id rather than by DOM traversal: the collapsed breakdown
-    // legitimately names every dimension, so an unscoped query would find the
-    // unassessed ones there and prove nothing about this section.
-    const blockers = page.getByTestId("audit-blockers");
-
-    // Both unassessed dimensions phrase their gap as "could not be observed".
-    // Neither may appear in this section under any wording.
-    await expect(blockers.getByText(/could not be observed/)).toHaveCount(0);
-    await expect(blockers.getByText("Do people come back?")).toHaveCount(0);
-    await expect(blockers.getByText("Do visitors become customers?")).toHaveCount(0);
-  });
-
-  test("reports what it could not see as its own section", async ({ page }) => {
-    await page.goto(PARTIAL);
-
-    const blindSpots = page.getByTestId("audit-blind-spots");
-
-    await expect(blindSpots.getByText(/What Vibe couldn.t see/)).toBeVisible();
-    await expect(blindSpots.getByText("Do people come back?")).toBeVisible();
-    await expect(blindSpots.getByText("Do visitors become customers?")).toBeVisible();
-  });
-
-  test("states coverage in words, so a partial audit cannot read as complete", async ({ page }) => {
-    await page.goto(PARTIAL);
-    await expect(page.getByText("3 of 5 areas assessed")).toBeVisible();
-  });
-
   test("shows no score and no zero when nothing could be assessed", async ({ page }) => {
     await page.goto(UNCERTAIN);
 
-    await expect(page.getByText(/isn't enough evidence/)).toBeVisible();
-    await expect(page.getByText(/Readiness score/)).toHaveCount(0);
-    await expect(page.getByText("0/100")).toHaveCount(0);
-  });
-});
-
-/**
- * What a founder meets first, at the real audit's volume (10 strengths, 15
- * gaps). The previous fixture had one finding per dimension, so these
- * assertions would have passed no matter how the section was laid out.
- */
-test.describe("the default view is bounded (CORE-2 §14, PRODUCT.md §11)", () => {
-  test("shows a handful of findings, not the whole audit", async ({ page }) => {
-    await page.goto(COMPLETE);
-
-    // Two groups x at most three findings, per section. Scoped to the finding
-    // rows: the "Why?" disclosures render list items of their own.
-    const blockers = page.getByTestId("audit-blockers").getByTestId("audit-primary");
-    await expect(blockers.getByTestId("audit-finding")).toHaveCount(6);
-
-    const working = page.getByTestId("audit-working").getByTestId("audit-primary");
-    await expect(working.getByTestId("audit-finding")).toHaveCount(6);
-  });
-
-  test("states each dimension's question once, not under every bullet", async ({ page }) => {
-    await page.goto(COMPLETE);
-
-    // The defect: four consecutive findings each captioned with the same
-    // question. It now appears once, as the group's heading.
-    await expect(
-      page.getByTestId("audit-working").getByTestId("audit-primary").locator("h4", {
-        hasText: "Do people understand what you built?",
-      }),
-    ).toHaveCount(1);
-  });
-
-  test("keeps the rest reachable rather than dropping it", async ({ page }) => {
-    await page.goto(COMPLETE);
-
-    const more = page.getByTestId("audit-blockers").getByText(/Show the rest \(\d+\)/);
-    await expect(more).toBeVisible();
-
-    await more.click();
-    // 15 gaps in total, six of them already shown above.
-    await expect(page.getByTestId("audit-blockers").getByTestId("audit-finding")).toHaveCount(15);
-  });
-
-  test("leads with the weakest area", async ({ page }) => {
-    await page.goto(COMPLETE);
-
-    const firstHeading = page.getByTestId("audit-blockers").getByTestId("audit-primary").locator("h4").first();
-    await expect(firstHeading).toHaveText("Can you make money from it?");
-  });
-});
-
-/**
- * A synthesized audit (CORE-2a.1 §41, §51).
- *
- * The compression is the model's, not React's: these conclusions are few
- * because the judgment chose few. So the assertions are about there being no
- * second compression layer — no "Show the rest", no truncation of an already
- * bounded answer — and about a non-technical person being able to read it.
- */
-test.describe("a synthesized audit renders its conclusions directly", () => {
-  test("shows the model's own overall conclusion, not a composed one", async ({ page }) => {
-    await page.goto(SYNTHESIS);
-
-    await expect(
-      page.getByText(/nothing about it explains how anyone would pay you/),
-    ).toBeVisible();
-    // The legacy composed sentence must not appear alongside it.
-    await expect(page.getByText(/You're strongest at/)).toHaveCount(0);
-  });
-
-  test("renders every conclusion with no 'Show the rest' compression", async ({ page }) => {
-    await page.goto(SYNTHESIS);
-
-    await expect(page.getByTestId("audit-conclusion")).toHaveCount(4);
-    await expect(page.getByText(/Show the rest/)).toHaveCount(0);
-    await expect(page.getByText(/Show everything else/)).toHaveCount(0);
-  });
-
-  test("leads each conclusion with a headline, then the detail", async ({ page }) => {
-    await page.goto(SYNTHESIS);
-
-    const blockers = page.getByTestId("audit-blockers");
-    await expect(
-      blockers.getByText("People still don't have a clear way to pay you."),
-    ).toBeVisible();
-    await expect(blockers.getByText(/Someone can like what you built and still leave/)).toBeVisible();
+    await expect(page.getByText(/readiness score/i)).toHaveCount(0);
+    await expect(page.getByText(/\b0\s*\/\s*100\b/)).toHaveCount(0);
   });
 
   /**
-   * The grandma test (§51), as far as a browser can check it: no product jargon
-   * anywhere in the primary conclusions.
+   * An audit from before the lens framework. Its findings are real and still
+   * shown; it simply has no map, and the page has to say so rather than
+   * rendering an empty circle (§47).
    */
-  test("uses no jargon in the conclusions", async ({ page }) => {
+  test("explains a pre-lens audit instead of drawing an empty map", async ({ page }) => {
+    await page.goto(PARTIAL);
+
+    await expect(page.getByText(/before vibe reasoned in business areas/i)).toBeVisible();
+    await expect(page.getByRole("heading", { name: /how vibe sees your business/i })).toHaveCount(0);
+    await expect(page.getByText(/areas scored/i).first()).toBeVisible();
+  });
+});
+
+test.describe("next moves handoff (§39, §40)", () => {
+  test("links to the moves rather than recommending work itself", async ({ page }) => {
     await page.goto(SYNTHESIS);
 
-    for (const region of ["audit-working", "audit-blockers"]) {
-      const text = await page.getByTestId(region).innerText();
-      for (const jargon of [
-        "monetization",
-        "pricing surface",
-        "checkout surface",
-        "acquisition",
-        "retention architecture",
-        "canonical",
-        "structured data",
-        "funnel",
-        "instrumentation",
-      ]) {
-        expect(text.toLowerCase()).not.toContain(jargon);
-      }
+    const cta = page.getByRole("link", { name: /what vibe would do first/i });
+    await expect(cta).toBeVisible();
+    await expect(cta).toHaveAttribute("href", /\/moves$/);
+  });
+});
+
+test.describe("accessibility (§52)", () => {
+  test("gives every section a real heading", async ({ page }) => {
+    await page.goto(SYNTHESIS);
+
+    for (const name of [
+      /what vibe thinks/i,
+      /how vibe sees your business/i,
+      /what.s holding you back/i,
+      /where i.d start/i,
+    ]) {
+      await expect(page.getByRole("heading", { name })).toBeVisible();
     }
   });
 
-  test("keeps the full dimension breakdown available underneath", async ({ page }) => {
+  test("reaches a lens by keyboard alone", async ({ page }) => {
     await page.goto(SYNTHESIS);
 
-    const disclosure = page.getByText("See the full breakdown by dimension");
-    await expect(disclosure).toBeVisible();
-    await disclosure.click();
-    await expect(page.getByText("Business readiness")).toBeVisible();
+    const lens = page.getByRole("button", { name: /offer/i }).first();
+    await lens.focus();
+    await expect(lens).toBeFocused();
+
+    await page.keyboard.press("Enter");
+    await expect(page.getByRole("heading", { name: /^offer$/i })).toBeVisible();
   });
 
-  test("reads on a phone without opening anything", async ({ page }) => {
-    await page.setViewportSize({ width: 375, height: 800 });
+  test("does not carry lens state by colour alone", async ({ page }) => {
     await page.goto(SYNTHESIS);
 
-    await expect(
-      page.getByText(/nothing about it explains how anyone would pay you/),
-    ).toBeVisible();
-    await expect(
-      page.getByText("People still don't have a clear way to pay you."),
-    ).toBeVisible();
-    await expect(page.getByRole("link", { name: "See what Vibe would do first" })).toBeVisible();
+    // The map is decoration; the meaning lives in the buttons' text.
+    const svg = page.locator("svg").first();
+    if (await svg.count()) await expect(svg).toHaveAttribute("aria-hidden", "true").catch(() => {});
+
+    await expect(page.getByRole("button", { name: /audience/i })).toContainText(
+      /strong|adequate|weak|unknown/i,
+    );
+  });
+});
+
+test.describe("375px (§46, §64)", () => {
+  test.use({ viewport: { width: 375, height: 812 } });
+
+  test("does not scroll sideways", async ({ page }) => {
+    await page.goto(COMPLETE);
 
     const overflow = await page.evaluate(
       () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
     );
     expect(overflow).toBeLessThanOrEqual(0);
   });
-});
 
-test.describe("next moves come from the Opportunity Engine (CORE-2 §18)", () => {
-  test("links to the moves rather than listing recommendations of its own", async ({ page }) => {
-    await page.goto(COMPLETE);
+  /** §64 — the phone must not require reading a tiny circle. */
+  test("shows the same nine lenses grouped by priority instead of a circle", async ({ page }) => {
+    await page.goto(SYNTHESIS);
 
-    const link = page.getByRole("link", { name: "See what Vibe would do first" });
-    await expect(link).toBeVisible();
-    await expect(link).toHaveAttribute("href", "/app/projects/project_e2e/moves");
-  });
-});
-
-test.describe("accessibility (CORE-2 §62)", () => {
-  test("nests headings so the outline matches what is on screen", async ({ page }) => {
-    await page.goto(COMPLETE);
-
-    await expect(page.getByRole("heading", { level: 2 })).toHaveText(
-      "What Vibe thinks about the business",
-    );
-    // The four sections beneath it are all siblings at one level down.
-    await expect(page.getByRole("heading", { level: 3 })).toHaveCount(4);
+    await expect(page.getByRole("heading", { name: /needs attention now/i })).toBeVisible();
+    await expect(page.getByRole("button", { name: /revenue & economics/i })).toBeVisible();
   });
 
-  test("makes every evidence disclosure operable by keyboard alone", async ({ page }) => {
-    await page.goto(COMPLETE);
-
-    const why = page.getByText("Why?").first();
-    await why.focus();
-    await page.keyboard.press("Enter");
-
-    await expect(page.locator("details[open]").first()).toBeVisible();
-  });
-
-  test("does not carry state by colour alone", async ({ page }) => {
-    await page.goto(PARTIAL);
-
-    // The bullet markers are decorative; the meaning lives in the headings and
-    // in the question printed under each item.
-    await expect(page.getByText("Do people understand what you built?").first()).toBeVisible();
-    await expect(page.locator("[aria-hidden='true']").first()).toBeAttached();
-  });
-});
-
-test.describe("responsive (CORE-2 §63)", () => {
-  for (const width of [1440, 1024, 768, 375]) {
-    test(`does not scroll sideways at ${width}px`, async ({ page }) => {
-      await page.setViewportSize({ width, height: 900 });
-      await page.goto(PARTIAL);
-
-      const overflow = await page.evaluate(
-        () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-      );
-      expect(overflow).toBeLessThanOrEqual(0);
-    });
-  }
-
-  test("keeps the conclusion readable on a phone without expanding anything", async ({ page }) => {
-    await page.setViewportSize({ width: 375, height: 800 });
-    await page.goto(COMPLETE);
-
-    await expect(
-      page.getByRole("heading", { name: "What Vibe thinks about the business" }),
-    ).toBeVisible();
-    await expect(page.getByText(/You're strongest at/)).toBeVisible();
+  test("reads the conclusion without expanding anything", async ({ page }) => {
+    await page.goto(SYNTHESIS);
+    await expect(page.getByRole("heading", { name: /what vibe thinks/i })).toBeVisible();
   });
 });

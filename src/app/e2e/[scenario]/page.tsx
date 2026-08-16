@@ -4,7 +4,7 @@ import {
   type PreparedChangeCard,
 } from "@/app/app/projects/[projectId]/prepared-changes-section";
 import { IntelligenceSummary } from "@/app/app/projects/[projectId]/intelligence-summary";
-import { AuditConclusion } from "@/app/app/projects/[projectId]/audit-conclusion";
+import { AuditOverview } from "@/app/app/projects/[projectId]/audit-overview";
 import { NeedsUserPanel } from "@/app/app/projects/[projectId]/needs-user-panel";
 import { E2E_AUDIT_SCENARIOS, isE2eAuditScenario } from "../audit-scenarios";
 import { E2E_NEEDS_USER_SCENARIOS, isE2eNeedsUserScenario } from "../needs-user-scenarios";
@@ -144,9 +144,9 @@ export default async function E2eScenarioPage({
     return (
       <main className="mx-auto max-w-4xl p-8">
         {label}
-        <AuditConclusion
+        <AuditOverview
           audit={auditResult}
-          analyzedAt={auditResult.generatedAt}
+          generatedAt={auditResult.generatedAt}
           movesHref="/app/projects/project_e2e/moves"
           hasMoves
         />

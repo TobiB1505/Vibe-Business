@@ -3,6 +3,7 @@ import {
   AUDIT_DIMENSIONS,
   AUDIT_SYNTHESIS_VERSION,
   type AuditSynthesis,
+  type BusinessLensAssessment,
   type BusinessReadinessAudit,
   type DimensionAssessment,
 } from "@/modules/business-audit/schema";
@@ -86,10 +87,60 @@ function audit(
  * on purpose: the ceiling is not a quota, and a fixture that always fills it
  * would quietly assert the opposite.
  */
+/**
+ * One lens the audit assessed. `missingContext` is empty unless a case needs
+ * it, because most lenses are judged rather than blocked.
+ */
+function lensAssessment(
+  lens: BusinessLensAssessment["lens"],
+  health: BusinessLensAssessment["health"],
+  materiality: BusinessLensAssessment["materiality"],
+  evidenceIds: string[],
+  missingContext: string[] = [],
+): BusinessLensAssessment {
+  return {
+    lens,
+    health,
+    materiality,
+    summary: `What Vibe worked out about ${lens.replace(/_/g, " ")}.`,
+    evidenceIds,
+    missingContext,
+  };
+}
+
 const VIBE_SYNTHESIS: AuditSynthesis = {
   version: AUDIT_SYNTHESIS_VERSION,
-  // The reasoning behind the conclusions. Internal — never rendered.
-  lenses: [],
+  /*
+   * Nine lens assessments, at the shape a real audit produces.
+   *
+   * This was `[]` until AUDIT UI-1, which was correct when the fixture was
+   * written and became a hole the moment the map existed: every node rendered
+   * as unknown, in one flat outer ring, and the browser suite was green over a
+   * screen that could not have shipped. The same failure CORE-2a.3.1 paid for,
+   * with a different field.
+   *
+   * The mix is taken from the real Vibe Business audit: three areas that matter
+   * now, two soon, four later, and a deliberate `weak`+`later` pairing so the
+   * map is forced to show health and priority as independent axes.
+   */
+  lenses: [
+    lensAssessment("audience", "weak", "now", [
+      "live.site.title",
+      "profile.audience.primary",
+    ]),
+    lensAssessment("offer", "adequate", "now", ["profile.identity.description"]),
+    lensAssessment("conversion", "adequate", "now", ["live.conversion.primary_cta"]),
+    lensAssessment("revenue_economics", "weak", "soon", [
+      "intent.how_it_earns",
+      "live.surface.pricing_not_observed",
+      "repo.payments.none",
+    ]),
+    lensAssessment("acquisition", "weak", "soon", ["live.seo.canonical_not_observed"]),
+    lensAssessment("business_readiness", "weak", "later", ["live.surface.terms_not_observed"]),
+    lensAssessment("measurement", "weak", "later", ["repo.analytics.none"]),
+    lensAssessment("retention", "adequate", "later", ["auth.surface.dashboard"]),
+    lensAssessment("scalability", "unclear", "later", []),
+  ],
   overall:
     "You have a real product that people can use, but nothing about it explains how anyone would pay you.",
   strengths: [
