@@ -145,6 +145,55 @@ test.describe("missing evidence is never a weakness (CLAUDE.md rule 44)", () => 
   });
 });
 
+/**
+ * What a founder meets first, at the real audit's volume (10 strengths, 15
+ * gaps). The previous fixture had one finding per dimension, so these
+ * assertions would have passed no matter how the section was laid out.
+ */
+test.describe("the default view is bounded (CORE-2 §14, PRODUCT.md §11)", () => {
+  test("shows a handful of findings, not the whole audit", async ({ page }) => {
+    await page.goto(COMPLETE);
+
+    // Two groups x at most three findings, per section. Scoped to the finding
+    // rows: the "Why?" disclosures render list items of their own.
+    const blockers = page.getByTestId("audit-blockers").getByTestId("audit-primary");
+    await expect(blockers.getByTestId("audit-finding")).toHaveCount(6);
+
+    const working = page.getByTestId("audit-working").getByTestId("audit-primary");
+    await expect(working.getByTestId("audit-finding")).toHaveCount(6);
+  });
+
+  test("states each dimension's question once, not under every bullet", async ({ page }) => {
+    await page.goto(COMPLETE);
+
+    // The defect: four consecutive findings each captioned with the same
+    // question. It now appears once, as the group's heading.
+    await expect(
+      page.getByTestId("audit-working").getByTestId("audit-primary").locator("h4", {
+        hasText: "Do people understand what you built?",
+      }),
+    ).toHaveCount(1);
+  });
+
+  test("keeps the rest reachable rather than dropping it", async ({ page }) => {
+    await page.goto(COMPLETE);
+
+    const more = page.getByTestId("audit-blockers").getByText(/Show the rest \(\d+\)/);
+    await expect(more).toBeVisible();
+
+    await more.click();
+    // 15 gaps in total, six of them already shown above.
+    await expect(page.getByTestId("audit-blockers").getByTestId("audit-finding")).toHaveCount(15);
+  });
+
+  test("leads with the weakest area", async ({ page }) => {
+    await page.goto(COMPLETE);
+
+    const firstHeading = page.getByTestId("audit-blockers").getByTestId("audit-primary").locator("h4").first();
+    await expect(firstHeading).toHaveText("Can you make money from it?");
+  });
+});
+
 test.describe("next moves come from the Opportunity Engine (CORE-2 §18)", () => {
   test("links to the moves rather than listing recommendations of its own", async ({ page }) => {
     await page.goto(COMPLETE);

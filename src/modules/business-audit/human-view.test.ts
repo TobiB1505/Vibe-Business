@@ -4,6 +4,8 @@ import {
   blockersFrom,
   buildHumanAuditView,
   conclusionFor,
+  MAX_ITEMS_PER_GROUP,
+  MAX_PRIMARY_GROUPS,
   strengthsFrom,
   withoutInlineEvidenceIds,
 } from "./human-view";
@@ -62,38 +64,107 @@ function audit(dimensions: DimensionAssessment[], overrides: Partial<BusinessRea
   } as BusinessReadinessAudit;
 }
 
+/** Every finding across both halves of a section, in display order. */
+function texts(section: { primary: { items: { text: string }[] }[]; secondary: { items: { text: string }[] }[] }) {
+  return [...section.primary, ...section.secondary].flatMap((group) =>
+    group.items.map((item) => item.text),
+  );
+}
+
 describe("what's already working", () => {
-  it("collects strengths, strongest dimension first", () => {
-    const result = strengthsFrom(
+  it("groups by dimension, strongest first", () => {
+    const section = strengthsFrom(
       audit([
         dimension({ id: "monetization", score: 30, strengths: ["Weak but real"] }),
         dimension({ id: "product", score: 90, strengths: ["Clear value"] }),
       ]),
     );
 
-    expect(result.map((entry) => entry.text)).toEqual(["Clear value", "Weak but real"]);
+    expect(section.primary.map((group) => group.dimension)).toEqual(["product", "monetization"]);
+    expect(section.primary[0]!.items.map((item) => item.text)).toEqual(["Clear value"]);
   });
 
-  it("phrases each entry with the question its dimension answers", () => {
-    const result = strengthsFrom(audit([dimension({ id: "conversion", strengths: ["Good CTA"] })]));
-    expect(result[0]!.question).toBe("Do visitors become customers?");
+  it("states each dimension's question once, on the group", () => {
+    const section = strengthsFrom(audit([dimension({ id: "conversion", strengths: ["a", "b"] })]));
+
+    expect(section.primary[0]!.question).toBe("Do visitors become customers?");
+    // The question lives on the group, not on every item — the repetition the
+    // first dogfood showed is structurally impossible now.
+    expect(Object.keys(section.primary[0]!.items[0]!)).toEqual(["text", "evidenceIds"]);
   });
 
   it("is empty rather than padded when nothing was established", () => {
-    expect(strengthsFrom(audit([dimension()]))).toEqual([]);
+    const section = strengthsFrom(audit([dimension()]));
+    expect(section.primary).toEqual([]);
+    expect(section.totalItems).toBe(0);
+  });
+});
+
+/**
+ * The volume defect the first dogfood showed.
+ *
+ * The real audit produced 10 strengths and 15 gaps across five dimensions — and
+ * that is not a v3 regression: the v1 audit produced exactly the same 10 and 15.
+ * What made it read as a scan report was flattening all 25 into two lists.
+ */
+describe("bounding what a founder meets first", () => {
+  const wide = audit([
+    dimension({ id: "monetization", score: 10, gaps: ["m1", "m2", "m3", "m4"] }),
+    dimension({ id: "distribution", score: 38, gaps: ["d1", "d2", "d3"] }),
+    dimension({ id: "retention", score: 45, gaps: ["r1", "r2"] }),
+    dimension({ id: "conversion", score: 55, gaps: ["c1", "c2", "c3"] }),
+    dimension({ id: "product", score: 68, gaps: ["p1", "p2", "p3"] }),
+  ]);
+
+  it("shows at most two dimension groups by default", () => {
+    expect(blockersFrom(wide).primary).toHaveLength(MAX_PRIMARY_GROUPS);
+  });
+
+  it("shows at most three findings per group", () => {
+    for (const group of blockersFrom(wide).primary) {
+      expect(group.items.length).toBeLessThanOrEqual(MAX_ITEMS_PER_GROUP);
+    }
+  });
+
+  it("leads with the weakest dimensions", () => {
+    expect(blockersFrom(wide).primary.map((group) => group.dimension)).toEqual([
+      "monetization",
+      "distribution",
+    ]);
+  });
+
+  /**
+   * The property that makes the cap honest: it changes what is met first, never
+   * what Vibe is willing to show.
+   */
+  it("discards nothing — every finding is still reachable", () => {
+    const section = blockersFrom(wide);
+    const all = texts(section);
+
+    expect(section.totalItems).toBe(15);
+    expect(all).toHaveLength(15);
+    expect(new Set(all).size).toBe(15);
+  });
+
+  it("keeps a truncated group's remainder rather than dropping it", () => {
+    const section = blockersFrom(wide);
+
+    // monetization has four gaps; three are primary, the fourth must survive.
+    expect(section.primary[0]!.items.map((item) => item.text)).toEqual(["m1", "m2", "m3"]);
+    expect(texts(section)).toContain("m4");
   });
 });
 
 describe("what's holding you back", () => {
-  it("collects gaps, weakest dimension first — the ordering is the prioritization", () => {
-    const result = blockersFrom(
+  it("groups gaps weakest dimension first — the ordering is the prioritization", () => {
+    const section = blockersFrom(
       audit([
         dimension({ id: "product", score: 80, gaps: ["Minor wording issue"] }),
         dimension({ id: "monetization", score: 20, gaps: ["No way to pay"] }),
       ]),
     );
 
-    expect(result.map((entry) => entry.text)).toEqual(["No way to pay", "Minor wording issue"]);
+    expect(texts(section)).toEqual(["No way to pay", "Minor wording issue"]);
   });
 
   /**
@@ -104,7 +175,7 @@ describe("what's holding you back", () => {
    * the single biggest thing holding their business back.
    */
   it("excludes an unassessed dimension entirely, however its gaps are phrased", () => {
-    const result = blockersFrom(
+    const section = blockersFrom(
       audit([
         dimension({ id: "product", score: 80, gaps: ["Minor wording issue"] }),
         dimension({
@@ -116,20 +187,19 @@ describe("what's holding you back", () => {
       ]),
     );
 
-    expect(result.map((entry) => entry.text)).toEqual(["Minor wording issue"]);
-    expect(JSON.stringify(result)).not.toContain("returning users");
+    expect(texts(section)).toEqual(["Minor wording issue"]);
+    expect(JSON.stringify(section)).not.toContain("returning users");
   });
 
   it("never counts a missing score as zero", () => {
-    const result = blockersFrom(
+    const section = blockersFrom(
       audit([
         dimension({ id: "retention", score: null, assessmentStatus: "insufficient_evidence", gaps: ["x"] }),
         dimension({ id: "product", score: 10, gaps: ["Real problem"] }),
       ]),
     );
 
-    expect(result).toHaveLength(1);
-    expect(result[0]!.text).toBe("Real problem");
+    expect(texts(section)).toEqual(["Real problem"]);
   });
 });
 
@@ -308,8 +378,8 @@ describe("inline evidence citations", () => {
       }),
     );
 
-    expect(view.working[0]!.text).toBe("A strength");
-    expect(view.blockers[0]!.text).toBe("A gap");
+    expect(view.working.primary[0]!.items[0]!.text).toBe("A strength");
+    expect(view.blockers.primary[0]!.items[0]!.text).toBe("A gap");
     expect(view.whyItMatters[0]!.finding).toBe("A finding");
     // The ids are not lost — they remain on the item for the "Why?" disclosure.
     expect(view.whyItMatters[0]!.evidenceIds).toEqual(["live.surface.pricing"]);

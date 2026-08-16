@@ -1,6 +1,10 @@
 import Link from "next/link";
 import { describeEvidenceId } from "@/modules/business-audit/evidence-labels";
-import { buildHumanAuditView, type AuditHighlight } from "@/modules/business-audit/human-view";
+import {
+  buildHumanAuditView,
+  type AuditHighlightGroup,
+  type AuditHighlightSection,
+} from "@/modules/business-audit/human-view";
 import type { BusinessReadinessAudit } from "@/modules/business-audit/schema";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
 import { StatusPill } from "@/components/ui/status-pill";
@@ -50,30 +54,91 @@ function EvidenceDisclosure({ evidenceIds }: { evidenceIds: string[] }) {
   );
 }
 
-function HighlightList({
-  items,
+/**
+ * One dimension's findings, under one heading.
+ *
+ * The heading is what the previous version got wrong: it captioned *every*
+ * bullet with its dimension's question, so four consecutive findings each
+ * repeated "Do people understand what you built?". Said once, it orients; said
+ * four times, it is noise that buries the finding it was meant to frame.
+ */
+function HighlightGroup({
+  group,
   tone,
 }: {
-  items: AuditHighlight[];
+  group: AuditHighlightGroup;
   tone: "strength" | "gap";
 }) {
   const markerClass = tone === "strength" ? "bg-mint" : "bg-amber";
 
   return (
-    <ul className="flex flex-col gap-3">
-      {items.map((item, index) => (
-        <li key={`${item.dimension}-${index}`} className="flex gap-2.5">
-          {/* Decorative only: the section heading already carries the meaning,
-              so colour is never the sole signal. */}
-          <span aria-hidden className={`mt-2 size-1.5 shrink-0 rounded-full ${markerClass}`} />
-          <div className="min-w-0">
-            <p className="text-fg-prose text-sm leading-relaxed">{item.text}</p>
-            <p className="text-fg-meta mt-0.5 text-xs">{item.question}</p>
-            <EvidenceDisclosure evidenceIds={item.evidenceIds} />
+    <div className="flex flex-col gap-2">
+      <h4 className="text-fg-secondary text-sm font-medium">{group.question}</h4>
+      <ul className="flex flex-col gap-2.5">
+        {group.items.map((item, index) => (
+          <li
+            key={`${group.dimension}-${index}`}
+            data-testid="audit-finding"
+            className="flex gap-2.5"
+          >
+            {/* Decorative only: the heading above carries the meaning, so
+                colour is never the sole signal. */}
+            <span aria-hidden className={`mt-2 size-1.5 shrink-0 rounded-full ${markerClass}`} />
+            <div className="min-w-0">
+              <p className="text-fg-prose text-sm leading-relaxed">{item.text}</p>
+              <EvidenceDisclosure evidenceIds={item.evidenceIds} />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * A whole section: the few groups worth reading, then the rest one click away.
+ *
+ * Nothing is dropped. `secondary` holds every remaining group, and the
+ * per-dimension breakdown further down the page holds every finding regardless
+ * — so the cap is about what a founder meets first, never about what Vibe will
+ * show them.
+ */
+function HighlightSection({
+  section,
+  tone,
+  moreLabel,
+}: {
+  section: AuditHighlightSection;
+  tone: "strength" | "gap";
+  moreLabel: string;
+}) {
+  const shown = section.primary.reduce((sum, group) => sum + group.items.length, 0);
+  const remaining = section.totalItems - shown;
+
+  return (
+    <div className="flex flex-col gap-5">
+      {/* Marked so a test can assert on what is actually met first: a collapsed
+          <details> still renders its children into the DOM, so an unscoped
+          query counts the hidden groups too. */}
+      <div data-testid="audit-primary" className="flex flex-col gap-5">
+        {section.primary.map((group) => (
+          <HighlightGroup key={group.dimension} group={group} tone={tone} />
+        ))}
+      </div>
+
+      {remaining > 0 && (
+        <details>
+          <summary className="text-fg-muted hover:text-fg-prose cursor-pointer rounded-sm text-sm transition-colors">
+            {moreLabel} ({remaining})
+          </summary>
+          <div className="mt-4 flex flex-col gap-5">
+            {section.secondary.map((group) => (
+              <HighlightGroup key={`${group.dimension}-more`} group={group} tone={tone} />
+            ))}
           </div>
-        </li>
-      ))}
-    </ul>
+        </details>
+      )}
+    </div>
   );
 }
 
@@ -118,7 +183,7 @@ export function AuditConclusion({
         )}
       </Surface>
 
-      {view.working.length > 0 && (
+      {view.working.totalItems > 0 && (
         <Surface
           level="section"
           padding="lg"
@@ -126,11 +191,15 @@ export function AuditConclusion({
           data-testid="audit-working"
         >
           <h3 className="text-fg text-base font-semibold">What&rsquo;s already working</h3>
-          <HighlightList items={view.working} tone="strength" />
+          <HighlightSection
+            section={view.working}
+            tone="strength"
+            moreLabel="Show everything else that's working"
+          />
         </Surface>
       )}
 
-      {view.blockers.length > 0 && (
+      {view.blockers.totalItems > 0 && (
         <Surface
           level="section"
           padding="lg"
@@ -138,7 +207,11 @@ export function AuditConclusion({
           data-testid="audit-blockers"
         >
           <h3 className="text-fg text-base font-semibold">What&rsquo;s holding you back</h3>
-          <HighlightList items={view.blockers} tone="gap" />
+          <HighlightSection
+            section={view.blockers}
+            tone="gap"
+            moreLabel="Show the rest"
+          />
         </Surface>
       )}
 

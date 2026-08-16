@@ -70,42 +70,117 @@ export function withoutInlineEvidenceIds(text: string): string {
   return text.replace(TRAILING_EVIDENCE_CITATION, "").trimEnd();
 }
 
-export type AuditHighlight = {
-  /** The dimension this came from, so the UI can group or link. */
-  dimension: AuditDimensionId;
-  /** The question that dimension answers, in the founder's language. */
-  question: string;
+/**
+ * How many dimension groups a section shows before the rest goes behind a
+ * disclosure, and how many findings each group shows.
+ *
+ * The first dogfood is the argument for both numbers. The real audit produced
+ * 10 strengths and 15 gaps across five dimensions — and that is not a v3
+ * regression, the v1 audit produced exactly the same 10 and 15. What changed
+ * was that this module flattened all 25 into two undifferentiated lists, so a
+ * screen meant to read as *"here is what I think"* read as a scan report.
+ *
+ * PRODUCT.md §11 already said it about opportunities: prioritize as
+ * aggressively as possible rather than presenting an exhaustive list. The same
+ * applies here. Nothing is discarded — `secondary` keeps every remaining group,
+ * and the per-dimension breakdown below it keeps every item regardless.
+ */
+export const MAX_PRIMARY_GROUPS = 2;
+export const MAX_ITEMS_PER_GROUP = 3;
+
+export type AuditFinding = {
   text: string;
   evidenceIds: string[];
 };
 
 /**
- * What is already working.
+ * Findings from one dimension, under one heading.
  *
- * Strongest first, because this section exists to be read quickly and then
- * left. Only assessed dimensions contribute: a strength Vibe could not
- * establish is not a strength.
+ * Grouping rather than a flat list is what removes the repetition the dogfood
+ * showed: four consecutive bullets each captioned "Do people understand what
+ * you built?". The question belongs to the group, and is said once.
  */
-export function strengthsFrom(audit: BusinessReadinessAudit): AuditHighlight[] {
-  return audit.dimensions
-    .filter(isAssessed)
-    .slice()
-    .sort((a, b) => (b.score ?? 0) - (a.score ?? 0))
-    .flatMap((dimension) =>
-      dimension.strengths.map((text) => ({
-        dimension: dimension.id,
-        question: DIMENSION_QUESTIONS[dimension.id] ?? dimension.label,
+export type AuditHighlightGroup = {
+  dimension: AuditDimensionId;
+  /** The question this dimension answers. The group's heading. */
+  question: string;
+  score: number | null;
+  items: AuditFinding[];
+};
+
+/**
+ * A section of the audit, split into what is shown and what is one click away.
+ *
+ * The split lives here rather than in the component so it is testable, and so
+ * "nothing was thrown away" is a property of the data rather than a claim about
+ * the markup.
+ */
+export type AuditHighlightSection = {
+  primary: AuditHighlightGroup[];
+  secondary: AuditHighlightGroup[];
+  /** Every individual finding across both, for an honest "show all (N)". */
+  totalItems: number;
+};
+
+function toGroups(
+  dimensions: DimensionAssessment[],
+  pick: (dimension: DimensionAssessment) => string[],
+): AuditHighlightGroup[] {
+  return dimensions
+    .map((dimension) => ({
+      dimension: dimension.id,
+      question: DIMENSION_QUESTIONS[dimension.id] ?? dimension.label,
+      score: dimension.score,
+      items: pick(dimension).map((text) => ({
         text: withoutInlineEvidenceIds(text),
         evidenceIds: dimension.evidenceIds,
       })),
-    );
+    }))
+    .filter((group) => group.items.length > 0);
+}
+
+function split(groups: AuditHighlightGroup[]): AuditHighlightSection {
+  const totalItems = groups.reduce((sum, group) => sum + group.items.length, 0);
+
+  const primary = groups.slice(0, MAX_PRIMARY_GROUPS).map((group) => ({
+    ...group,
+    items: group.items.slice(0, MAX_ITEMS_PER_GROUP),
+  }));
+
+  // A group that was truncated keeps its remainder in `secondary`, so the count
+  // stays honest and no finding is reachable from nowhere.
+  const secondary: AuditHighlightGroup[] = [];
+  groups.forEach((group, index) => {
+    if (index >= MAX_PRIMARY_GROUPS) {
+      secondary.push(group);
+      return;
+    }
+    const overflow = group.items.slice(MAX_ITEMS_PER_GROUP);
+    if (overflow.length > 0) secondary.push({ ...group, items: overflow });
+  });
+
+  return { primary, secondary, totalItems };
 }
 
 /**
- * What is holding the business back.
+ * What is already working, strongest dimension first.
  *
- * Weakest assessed dimension first — that ordering *is* the prioritization
- * this section offers, and it is deterministic rather than asked of a model.
+ * Only assessed dimensions contribute: a strength Vibe could not establish is
+ * not a strength.
+ */
+export function strengthsFrom(audit: BusinessReadinessAudit): AuditHighlightSection {
+  return split(
+    toGroups(
+      audit.dimensions.filter(isAssessed).slice().sort((a, b) => (b.score ?? 0) - (a.score ?? 0)),
+      (dimension) => dimension.strengths,
+    ),
+  );
+}
+
+/**
+ * What is holding the business back, weakest assessed dimension first — that
+ * ordering *is* the prioritization this section offers, and it is deterministic
+ * rather than asked of a model.
  *
  * An unassessed dimension is absent entirely. That is the rule this function
  * exists to hold: "Vibe could not tell whether people come back" must never
@@ -113,19 +188,13 @@ export function strengthsFrom(audit: BusinessReadinessAudit): AuditHighlight[] {
  * reasonably read it as a finding about their product rather than about the
  * evidence.
  */
-export function blockersFrom(audit: BusinessReadinessAudit): AuditHighlight[] {
-  return audit.dimensions
-    .filter(isAssessed)
-    .slice()
-    .sort((a, b) => (a.score ?? 0) - (b.score ?? 0))
-    .flatMap((dimension) =>
-      dimension.gaps.map((text) => ({
-        dimension: dimension.id,
-        question: DIMENSION_QUESTIONS[dimension.id] ?? dimension.label,
-        text: withoutInlineEvidenceIds(text),
-        evidenceIds: dimension.evidenceIds,
-      })),
-    );
+export function blockersFrom(audit: BusinessReadinessAudit): AuditHighlightSection {
+  return split(
+    toGroups(
+      audit.dimensions.filter(isAssessed).slice().sort((a, b) => (a.score ?? 0) - (b.score ?? 0)),
+      (dimension) => dimension.gaps,
+    ),
+  );
 }
 
 /**
@@ -190,8 +259,8 @@ export function conclusionFor(audit: BusinessReadinessAudit): string {
  */
 export type HumanAuditView = {
   conclusion: string;
-  working: AuditHighlight[];
-  blockers: AuditHighlight[];
+  working: AuditHighlightSection;
+  blockers: AuditHighlightSection;
   whyItMatters: BusinessReadinessAudit["keyFindings"];
   blindSpots: AuditBlindSpots;
   score: number | null;

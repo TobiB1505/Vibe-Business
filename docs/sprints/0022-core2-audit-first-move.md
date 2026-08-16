@@ -383,12 +383,70 @@ The one v3 row that stays `included_first_audit` is the *failed* run from defect
 because §17 says a failed audit consumes nothing, and `failed` is outside both the unique
 index predicate and the consumption query.
 
-### What the dogfood did not cover
+### 6. The human-first view was still a scan report
 
-The v3 pack itself. Every audit on the live project predates it, so what was exercised is the
-new screen rendering **old v2 audits** — which it does correctly, including the traceability
-columns being null on pre-CORE-2 rows. Whether v3 produces a *better* audit is still unproven,
-and needs a project whose free audit has not been spent.
+The v3 audit ran successfully. The content was better (below). The screen was not.
+
+Twenty-five findings — 10 strengths, 15 gaps — in two flat lists, each bullet captioned with
+its dimension's question, so four consecutive items all read *"Do people understand what you
+built?"*. Twenty-five "Why?" disclosures. The conclusion scrolled off the top.
+
+**And it was not a v3 regression.** The v1 audit produced exactly the same 10 and 15. What
+changed was this module: the old screen grouped findings under dimension meters, and the
+"human-first" rewrite removed that structure while keeping the volume. Structure was the only
+thing making 25 findings legible, and I deleted it.
+
+Two fixes, both in the view:
+
+- **Grouped by dimension.** The question belongs to the group and is said once. Said four
+  times it is noise burying the finding it was meant to frame.
+- **Bounded default.** Two dimension groups, at most three findings each — six per section
+  instead of ten and fifteen. `PRODUCT.md` §11 already said this about opportunities:
+  prioritize aggressively rather than presenting an exhaustive list. Nothing is discarded:
+  `secondary` holds every remaining group behind *"Show the rest (9)"*, and the per-dimension
+  breakdown below holds all 25 regardless. A test asserts the total is preserved.
+
+### Why the browser suite did not catch it
+
+Because the fixture was smaller than reality. `audit-complete` carried **one finding per
+dimension**, so every assertion about layout passed no matter how the section was arranged —
+a volume problem is invisible to a fixture with no volume.
+
+The fixture now carries the real audit's shape, 10 strengths and 15 gaps, taken from the live
+run. That is the generalizable lesson from this dogfood, and it is worth more than the four
+defects: **a fixture that is easier than production tests the code against a world that does
+not exist.** The same applies to the CORE-1 fixtures, which are also one-item-per-field.
+
+### Is v3 actually better? Yes, and here is the evidence
+
+The v3 audit ran on Vibe Business. Comparing its key findings against the v1 audit of 11
+August, on the same product:
+
+| | v1 | v3 |
+|---|---|---|
+| Monetization | "across both the live site and the repository" | "across the live site, repository, **and signed-in application**" |
+| Signed-in area | "consistent with these being behind a login **the crawler did not access**" | "dashboard, integrations, project workspace **observed across 6 inspected signed-in pages**" |
+| Journey | *(no equivalent)* | "no **'seeing what it costs'** or **'paying'** stage" |
+| Description | "reads as placeholder" | "placeholder statement, **consistent with a self-declared prototype stage**" |
+
+The first two rows are the sprint's thesis, visible in one run. v1 reasoned about **Vibe's own
+blind spots** — it could see that routes existed in code but not in the crawl, and said so. v3
+reasons about **the product**, because Deep Scan evidence is first-class in the pack.
+
+The third row is the Product Profile reaching the audit intact: *"seeing what it costs"* and
+*"paying"* are `JOURNEY_STAGE_LABELS`, verbatim. The audit is describing a gap in the customer
+journey using the journey model CORE-1 built, which v1 had no way to express.
+
+The fourth correlates a *founder-intent* field with an *observed* one — the cross-source
+reasoning the pack was restructured to enable.
+
+Overall 34 → 43 (product 50→68, distribution 28→38, conversion 50→55, retention 35→45), with
+monetization essentially flat at 8→10 — correctly, because nothing about monetization changed.
+
+Not covered: the volume of strengths and gaps is unchanged between versions, so v3 is a better
+*analysis* without being a shorter one. Whether the model can be asked for fewer, better
+findings — rather than the view bounding them after the fact — is an open question for the
+rubric, not for this sprint.
 
 CORE-2 §57–§58 asks for the complete flow — Profile → Audit → Moves → First Move → Preview →
 Merge — to be run against Vibe Business itself. Most of that flow is the half that is not
