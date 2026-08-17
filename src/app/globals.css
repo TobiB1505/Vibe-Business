@@ -93,10 +93,23 @@
      Space Grotesk for everything a person wrote. JetBrains Mono for
      everything a machine produced: SHAs, branches, timestamps, scores,
      counts, credits, state labels. The `--font-*` variables are bound to
-     the next/font loaders in `layout.tsx`. */
+     the next/font loaders in `fonts.ts`, which self-hosts both families so
+     a build needs no network access.
+
+     Each typeface appears once per writing system, because every self-hosted
+     face declares a single `unicode-range` and is therefore its own family.
+     Listing only the first would quietly drop Polish, Czech, Turkish, Greek,
+     Cyrillic and Vietnamese text to a system font. Only the leading faces are
+     preloaded; the rest are fetched on first use, as they were before. */
   --font-sans:
-    var(--font-space-grotesk), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: var(--font-jetbrains-mono), ui-monospace, "SFMono-Regular", Menlo, monospace;
+    var(--font-space-grotesk), var(--font-space-grotesk-latin-ext),
+    var(--font-space-grotesk-vietnamese), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", sans-serif;
+  --font-mono:
+    var(--font-jetbrains-mono), var(--font-jetbrains-mono-latin-ext),
+    var(--font-jetbrains-mono-cyrillic), var(--font-jetbrains-mono-cyrillic-ext),
+    var(--font-jetbrains-mono-greek), var(--font-jetbrains-mono-vietnamese), ui-monospace,
+    "SFMono-Regular", Menlo, monospace;
 
   --text-hero: 3rem;
   --text-hero--line-height: 1.04;
