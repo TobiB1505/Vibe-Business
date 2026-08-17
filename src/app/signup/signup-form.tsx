@@ -9,7 +9,7 @@ import { VibeCard } from "@/components/ui/surface";
 
 const initialState: SignUpResult | null = null;
 
-export function SignupForm() {
+export function SignupForm({ next }: { next: string }) {
   const [state, formAction, pending] = useActionState(signUp, initialState);
 
   if (state?.ok && state.needsConfirmation) {
@@ -26,6 +26,8 @@ export function SignupForm() {
     <VibeCard padding="md">
       {/* Action, state shape and pending handling unchanged from before UI-0. */}
       <form action={formAction} className="flex flex-col gap-4">
+        <input type="hidden" name="next" value={next} />
+
         <Field id="email" label="Email address">
           <Input
             id="email"

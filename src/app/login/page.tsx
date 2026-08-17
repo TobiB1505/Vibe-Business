@@ -1,8 +1,45 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { AuthShell } from "@/components/layout/auth-shell";
+import { authFailureMessage, parseFailureParam } from "@/modules/auth/errors";
+import { sanitizeNextPath } from "@/modules/auth/redirects";
+import { getSession } from "@/modules/auth/session";
 import { LoginForm } from "./login-form";
 
-export default function LoginPage() {
+/**
+ * The sign-in screen.
+ *
+ * Two things happen server-side before anything renders, and both are on
+ * purpose:
+ *
+ * 1. An already-authenticated visitor is redirected away, so nobody is asked
+ *    to sign in twice. `src/lib/supabase/proxy.ts` normally catches this
+ *    first; the check is repeated here because a route matcher is a
+ *    configuration file, and this page should be correct on its own.
+ * 2. `next` is sanitized once, here, and only the sanitized value reaches the
+ *    client component. An untrusted redirect target never becomes part of a
+ *    rendered form.
+ */
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string; error?: string }>;
+}) {
+  const params = await searchParams;
+  const next = sanitizeNextPath(params.next);
+
+  const session = await getSession();
+  if (session) {
+    redirect(next);
+  }
+
+  // The only thing an `?error=` parameter can do is select one of our own
+  // sentences — `parseFailureParam` refuses anything outside the known set,
+  // so a crafted link cannot put text on this screen.
+  const error = params.error
+    ? authFailureMessage(parseFailureParam(params.error), "sign_in")
+    : null;
+
   return (
     <AuthShell
       headline={
@@ -20,10 +57,12 @@ export default function LoginPage() {
     >
       <div className="flex flex-col gap-2">
         <h1 className="text-fg text-headline font-bold">Sign in</h1>
-        <p className="text-fg-muted text-sm">With the email and password you signed up with.</p>
+        <p className="text-fg-muted text-sm">
+          With Google, or the email and password you signed up with.
+        </p>
       </div>
 
-      <LoginForm />
+      <LoginForm next={next} initialError={error} />
 
       <p className="text-fg-muted text-sm">
         No account yet?{" "}
