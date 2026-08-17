@@ -154,6 +154,8 @@ Each stage below is described as a logical layer/responsibility inside the modul
 
 **[Confirmed — ADR 0008]** Secrets (GitHub App private key/secret, Supabase service credentials, Anthropic API key, webhook secrets) are managed server-side via the hosting environment — **Vercel Environment Variables / Secret Configuration** for V0.1. Secrets must never be committed to Git, sent to client components, stored in public environment variables, written to application logs, included in AI prompts (unless unavoidable and specifically designed to be safe), or stored unencrypted as plain application fields. Any future persisted third-party/user credentials require a separate, dedicated secrets design. See [0008-secrets-management.md](docs/decisions/0008-secrets-management.md).
 
+**[Confirmed — ADR 0022]** Application error monitoring and baseline tracing use **Sentry** through `@sentry/nextjs` across the browser, Node.js, and Edge runtimes. Default PII collection is disabled; Session Replay, Logs, Profiling, Metrics, and AI monitoring are not enabled by this decision. Production source maps and releases are uploaded only from authenticated builds. See [0022-sentry-observability.md](docs/decisions/0022-sentry-observability.md).
+
 **[Confirmed principle]** Security-sensitive integrations (GitHub auth, tokens, webhooks, credentials) use least privilege and are never committed to the repository. See [CLAUDE.md](CLAUDE.md).
 
 **[Confirmed principle]** Background/asynchronous work (e.g. long-running analysis, execution jobs, isolated builds) is required as a concept — the pipeline in [§2](#2-core-flow) cannot run fully synchronously within a single request. The specific queue/background-job technology is explicitly **not decided** (see [§7](#7-deferred--open-decisions)); no such technology should be introduced before that decision is made, per [CLAUDE.md](CLAUDE.md).
@@ -164,7 +166,7 @@ Each stage below is described as a logical layer/responsibility inside the modul
 
 **[Confirmed — ADR 0001]** Logical modules, living together in one Next.js/TypeScript codebase per ADR 0001:
 
-`auth` · `projects` · `github` · `audits` · `opportunities` · `execution` · `previews` · `approvals` · `usage` · `credits` · `audit-log`
+`auth` · `projects` · `onboarding` · `github` · `audits` · `opportunities` · `execution` · `previews` · `approvals` · `usage` · `credits` · `audit-log`
 
 These are code-organization boundaries, not process/network boundaries, for as long as the modular monolith holds (see ADR 0001 "Revisit when").
 
@@ -176,6 +178,7 @@ These are code-organization boundaries, not process/network boundaries, for as l
 
 - `User`
 - `Project`
+- `ProjectOnboarding`
 - `GitHubInstallation`
 - `RepositoryConnection`
 - `ProductAudit`
@@ -203,7 +206,7 @@ The following are explicitly **not decided** and should not be assumed by implem
 4. **Final database schema** — entities are named conceptually (§6); fields, types, and migrations are not defined.
 5. **Credit pricing / credit-to-provider-cost conversion** — the ledger schema is confirmed (PRODUCT.md §12); the actual pricing/conversion is not.
 6. **Analytics provider** — not chosen.
-7. **Error monitoring / observability provider** — not chosen.
+7. ~~**Error monitoring / observability provider** — not chosen.~~ Resolved by [ADR 0022](docs/decisions/0022-sentry-observability.md): Sentry for error monitoring and baseline tracing.
 8. **Production hosting migration as a possible future product feature** — not scoped, not committed to.
 9. **Long-term storage for large build artifacts** — not chosen.
 10. **Background job / queue technology** — required as a concept (§4), but the specific technology is not decided. Do not introduce one before this decision is made.

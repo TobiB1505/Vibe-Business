@@ -1,8 +1,7 @@
 allowBuilds:
-  # The Workflow SDK's compiler ships native binaries whose install scripts
-  # must run; without them `next build` cannot compile the workflow routes.
-  # These are our own build tools, never customer repository scripts
-  # (CLAUDE.md rule 19).
+  # Trusted application build tools only. This never approves install scripts
+  # from customer repositories (CLAUDE.md rule 19).
+  '@sentry/cli': true
   '@swc/core': true
   cbor-extract: true
   esbuild: true

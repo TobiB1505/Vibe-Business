@@ -4,7 +4,7 @@ import type { ExecutionProbePort, GitWritePort } from "@/modules/execution/git-p
 import { computeExecutionIdentity } from "@/modules/execution/identity";
 import { capabilityVersionFor } from "@/modules/execution/schema";
 import { FIXTURE_SNAPSHOT_SHA, fakeRepositorySnapshotFor, fakeRoute } from "@/modules/execution/test-support";
-import { FakeDatabase, fakeSupabase } from "../test-support";
+import { FakeDatabase, fakeSupabase, seedProductUnderstanding } from "../test-support";
 import {
   completePreparationStep,
   failPreparationStep,
@@ -151,13 +151,7 @@ function seed() {
     created_at: "2026-08-01T00:00:00.000Z",
     completed_at: "2026-08-01T00:00:00.000Z",
   });
-  db.seed("project_business_context", {
-    id: "context_1",
-    project_id: PROJECT,
-    product_summary: "A summary long enough to be valid.",
-    context_hash: "c".repeat(64),
-    updated_at: "2026-08-01T00:00:00.000Z",
-  });
+  seedProductUnderstanding(db, { projectId: PROJECT });
 
   const audit = db.seed("business_readiness_audits", {
     id: "audit_1",
@@ -236,7 +230,7 @@ async function makeAuditCurrent() {
   const { BUSINESS_AUDIT_SCHEMA_VERSION, BUSINESS_AUDIT_VERSION } = await import(
     "@/modules/business-audit/schema"
   );
-  const { EVIDENCE_PACK_V2_VERSION } = await import("@/modules/business-audit/evidence-v2");
+  const { EVIDENCE_PACK_V3_VERSION } = await import("@/modules/business-audit/evidence-v3");
   const { PROMPT_VERSION } = await import("@/modules/business-audit/prompt");
   const { RUBRIC_VERSION } = await import("@/modules/business-audit/rubric");
   const { BUSINESS_READINESS_AUDIT_CONFIG } = await import("@/modules/ai/operations");
@@ -244,11 +238,14 @@ async function makeAuditCurrent() {
   db.rows("business_readiness_audits")[0].input_hash = computeAuditInputHash({
     repositorySnapshotId: SNAPSHOT,
     liveSnapshotId: "live_1",
-    businessContextHash: "c".repeat(64),
+    productProfileId: "profile_1",
+    founderIntentHash: "c".repeat(64),
+    profileSchemaVersion: "product-profile.v1",
+    profileBuilderVersion: "product-understanding-v1",
     authenticatedSnapshotId: null,
     schemaVersion: BUSINESS_AUDIT_SCHEMA_VERSION,
     auditVersion: BUSINESS_AUDIT_VERSION,
-    evidencePackVersion: EVIDENCE_PACK_V2_VERSION,
+    evidencePackVersion: EVIDENCE_PACK_V3_VERSION,
     promptVersion: PROMPT_VERSION,
     rubricVersion: RUBRIC_VERSION,
     provider: "anthropic",

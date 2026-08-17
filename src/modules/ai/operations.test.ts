@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { getOperationConfig, PRODUCT_UNDERSTANDING_CONFIG } from "./operations";
+import {
+  BUSINESS_READINESS_AUDIT_CONFIG,
+  getOperationConfig,
+  PRODUCT_UNDERSTANDING_CONFIG,
+} from "./operations";
 import { resolvePricing } from "./pricing";
 import type { AIOperation } from "./provider";
 
@@ -63,5 +67,90 @@ describe("operation configs", () => {
     // are tempted to give this operation an effort level again.
     expect(PRODUCT_UNDERSTANDING_CONFIG.model).toBe("claude-haiku-4-5-20251001");
     expect(PRODUCT_UNDERSTANDING_CONFIG.reasoning).toEqual({ mode: "none" });
+  });
+});
+
+/**
+ * Timeouts are per operation (CORE-2a.3.2, after a real audit was discarded).
+ *
+ * A single client-level 120s default sat 13 seconds above the audit's real
+ * duration. Growing the rubric pushed a complete, correct run past it, and the
+ * whole call was thrown away at exactly 120,003ms — tokens generated, nothing
+ * kept, and the founder shown "this took too long to complete".
+ *
+ * These assert the shape of the fix rather than specific numbers where the
+ * number is a judgement call: every operation states its own, and the audit's
+ * has real headroom over what audits actually take.
+ */
+describe("every operation states how long it may take", () => {
+  it.each(["business_readiness_audit", "opportunity_generation", "product_understanding"] as const)(
+    "%s declares a timeout",
+    (operation) => {
+      expect(getOperationConfig(operation).timeoutMs).toBeGreaterThan(0);
+    },
+  );
+
+  /**
+   * The longest audit ever recorded is 106.5s. Anything close to that is not
+   * headroom — it is the same defect waiting for a slightly slower run.
+   */
+  it("gives the audit at least double its slowest observed run", () => {
+    expect(BUSINESS_READINESS_AUDIT_CONFIG.timeoutMs).toBeGreaterThanOrEqual(213_000);
+  });
+
+  /**
+   * The point of moving this off the transport. A shared default has to be
+   * wrong for one of them, and these two differ by an order of magnitude.
+   */
+  it("does not give a Haiku extraction the same budget as a nine-lens audit", () => {
+    expect(PRODUCT_UNDERSTANDING_CONFIG.timeoutMs).toBeLessThan(
+      BUSINESS_READINESS_AUDIT_CONFIG.timeoutMs,
+    );
+  });
+});
+
+/**
+ * The token ceiling and the time ceiling have to agree.
+ *
+ * Two real failures on the same audit, one after the other: a 120s timeout
+ * discarded a complete answer, and then a 16,000-token ceiling truncated one
+ * mid-object with $0.1965 already billed. Both were budgets set when the
+ * operation was smaller.
+ *
+ * Fixing them independently is how you get a third failure. Generation runs at
+ * a steady ~9.8 ms per output token across every measured audit, so a token
+ * budget implies a duration — and a token budget the timeout can never reach is
+ * not a budget, it is a number that looks like one.
+ */
+describe("output and time budgets are coherent", () => {
+  /** Measured across four real audits: 9.0, 9.7, 9.9 and 10.8 ms per token. */
+  const MS_PER_OUTPUT_TOKEN = 9.8;
+
+  it.each(["business_readiness_audit", "opportunity_generation", "product_understanding"] as const)(
+    "%s can generate its whole output budget before its timeout",
+    (operation) => {
+      const config = getOperationConfig(operation);
+      const implied = config.maxOutputTokens * MS_PER_OUTPUT_TOKEN;
+
+      expect(
+        implied,
+        `${operation} allows ${config.maxOutputTokens} tokens (~${Math.round(implied / 1000)}s) but times out at ${config.timeoutMs / 1000}s`,
+      ).toBeLessThanOrEqual(config.timeoutMs);
+    },
+  );
+
+  /**
+   * The other direction. The structured JSON alone is ~5,800 tokens at
+   * production cardinality, and under adaptive thinking reasoning shares the
+   * same budget — 11,172 tokens on the run that truncated. A ceiling without
+   * real room above the payload is the defect this test exists to catch.
+   */
+  it("leaves the audit's reasoning room well above the JSON it must also emit", () => {
+    const JSON_PAYLOAD_TOKENS = 5_800;
+    const HIGHEST_OBSERVED_THINKING = 11_172;
+
+    expect(BUSINESS_READINESS_AUDIT_CONFIG.maxOutputTokens).toBeGreaterThan(
+      JSON_PAYLOAD_TOKENS + HIGHEST_OBSERVED_THINKING,
+    );
   });
 });

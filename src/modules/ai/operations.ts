@@ -24,6 +24,18 @@ export type OperationConfig = {
    * counts toward this limit too, so it is set well above the size of the
    * expected JSON: the audit schema is compact, but truncating it mid-object
    * would waste the whole (paid) call.
+   *
+   * "Well above" is the part that has to be maintained. The audit's ceiling was
+   * chosen when it produced five dimension assessments and nothing else; four
+   * sprints later the same call also reasons through nine lenses, names a root
+   * problem per conclusion and checks its own prioritization. Reasoning grew
+   * with it — 8,236 thinking tokens on one run, 11,172 on the next — until a
+   * complete answer was truncated mid-object with $0.1965 already billed.
+   *
+   * The ceiling is not a cost control. Tokens are billed as generated, so a
+   * higher ceiling costs nothing until it is used, while a low one throws away
+   * everything spent reaching it. Cost is controlled by `effort` and by the
+   * size of the rubric, both of which are visible decisions elsewhere.
    */
   maxOutputTokens: number;
   /**
@@ -33,6 +45,19 @@ export type OperationConfig = {
    * snapshot, not to trim normal ones.
    */
   maxInputTokens: number;
+  /**
+   * How long this operation may take before the call is abandoned.
+   *
+   * Here rather than on the transport for the same reason `model` is here: it
+   * is a per-operation decision, and one shared default has to be wrong for
+   * some of them. The client-level 120s default was 13 seconds above the real
+   * audit duration, so growing the rubric turned a complete run into a
+   * discarded one at exactly 120,003ms — with nothing to show for the tokens
+   * the provider had already generated.
+   *
+   * Set from measured duration plus real headroom, not from a round number.
+   */
+  timeoutMs: number;
 };
 
 export const BUSINESS_READINESS_AUDIT_CONFIG: OperationConfig = {
@@ -47,8 +72,37 @@ export const BUSINESS_READINESS_AUDIT_CONFIG: OperationConfig = {
   // cost optimization to make *after* there is a quality baseline to
   // compare against, not before.
   reasoning: { mode: "adaptive", effort: "high" },
-  maxOutputTokens: 16_000,
+  /*
+   * Paired with `timeoutMs`, and the pairing is the point.
+   *
+   * Generation runs at a strikingly steady ~9.8 ms per output token across
+   * every real audit measured (9.0–10.8 across four runs from 9.9k to 16k
+   * tokens). So a token ceiling implies a duration, and the two ceilings have
+   * to agree or one of them is decoration: at 240s the most that can physically
+   * be generated is ~24,000 tokens, and anything above that would be a limit
+   * the timeout reaches first.
+   *
+   * The structured JSON is roughly 5,800 tokens at production cardinality —
+   * nine lenses, six conclusions, five dimensions. The rest is reasoning,
+   * measured at 8.2k then 11.2k on consecutive runs and still trending up as
+   * the rubric asks for more checks. 24k keeps the JSON's space and lets
+   * reasoning grow by another ~60% before anything is discarded.
+   *
+   * Raising this further means raising `timeoutMs` first — and that runs into
+   * the platform step ceiling, which is unverified. At that point the honest
+   * move is to make the rubric ask for less, not to raise a number.
+   */
+  maxOutputTokens: 24_000,
   maxInputTokens: 30_000,
+  /*
+   * Measured, not guessed. Real audits have run 99.5s, 106.5s and 120s+ as the
+   * rubric grew, so the task genuinely sits near two minutes and the variance
+   * between runs is tens of seconds. Four minutes is roughly double the longest
+   * successful run — enough that ordinary variation cannot discard a finished
+   * answer, and still short enough that a hung call fails rather than hanging a
+   * durable step forever.
+   */
+  timeoutMs: 240_000,
 };
 
 /**
@@ -72,6 +126,8 @@ export const OPPORTUNITY_GENERATION_CONFIG: OperationConfig = {
   reasoning: { mode: "adaptive", effort: "high" },
   maxOutputTokens: 12_000,
   maxInputTokens: 40_000,
+  // Measured across 8 real runs: 39.5s average, 48.8s slowest.
+  timeoutMs: 120_000,
 };
 
 /**
@@ -111,6 +167,10 @@ export const PRODUCT_UNDERSTANDING_CONFIG: OperationConfig = {
   reasoning: { mode: "none" },
   maxOutputTokens: 6_000,
   maxInputTokens: 24_000,
+  // Measured across 5 real runs: 10.7s average, 14.7s slowest. Haiku with no
+  // thinking is a different order of magnitude from the audit, which is the
+  // whole argument for these being per-operation.
+  timeoutMs: 60_000,
 };
 
 const CONFIGS: Record<AIOperation, OperationConfig> = {

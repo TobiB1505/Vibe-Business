@@ -3,18 +3,24 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { BUSINESS_READINESS_AUDIT_CONFIG } from "@/modules/ai/operations";
 import { recordAuditEvent } from "@/modules/audit-log/events";
-import { EVIDENCE_PACK_V2_VERSION } from "@/modules/business-audit/evidence-v2";
+import { EVIDENCE_PACK_V3_VERSION } from "@/modules/business-audit/evidence-v3";
 import { PROMPT_VERSION } from "@/modules/business-audit/prompt";
 import { RUBRIC_VERSION } from "@/modules/business-audit/rubric";
 import { BUSINESS_AUDIT_SCHEMA_VERSION, BUSINESS_AUDIT_VERSION } from "@/modules/business-audit/schema";
 import { computeAuditInputHash, findReusableAudit } from "@/modules/business-audit/store";
+import { authorizeProjectAudit } from "@/modules/business-audit/service";
 import { resolveOpportunityIdentity } from "@/modules/opportunities/service";
 import { findReusableProfile } from "@/modules/product-understanding/store";
 import { loadUnderstandingSources } from "./product-understanding/execution";
 import { findReusableOpportunitySet } from "@/modules/opportunities/store";
 import { getLatestSuccessfulAuthenticatedSnapshot } from "@/modules/authenticated-product-intelligence/store";
 import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intelligence/store";
-import { getBusinessContext } from "@/modules/projects/business-context-store";
+import {
+  PRODUCT_PROFILE_SCHEMA_VERSION,
+  PROFILE_BUILDER_VERSION,
+} from "@/modules/product-understanding/schema";
+import { getLatestProfile } from "@/modules/product-understanding/store";
+import { getFounderIntent } from "@/modules/projects/founder-intent-store";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import type { OperationExecutor } from "./executor";
 import type { OperationFailureCode } from "./failures";
@@ -24,6 +30,8 @@ import {
   failOperationRun,
   findActiveOperation,
   findActiveOperationByIdentity,
+  findPausedOperationForAudit,
+  requeueAnsweredOperation,
   getOperationRun,
   type StoredOperationRun,
 } from "./store";
@@ -66,33 +74,38 @@ async function resolveAuditIdentity(
   supabase: SupabaseClient,
   projectId: string,
 ): Promise<{ ok: true; inputHash: string } | { ok: false; error: OperationFailureCode }> {
-  const [repositorySnapshot, liveSnapshot, businessContext, authenticatedSnapshot] = await Promise.all([
-    getLatestSuccessfulSnapshot(supabase, projectId),
-    getLatestSuccessfulLiveSnapshot(supabase, projectId),
-    getBusinessContext(supabase, projectId),
-    getLatestSuccessfulAuthenticatedSnapshot(supabase, projectId),
-  ]);
+  const [repositorySnapshot, liveSnapshot, profile, founderIntent, authenticatedSnapshot] =
+    await Promise.all([
+      getLatestSuccessfulSnapshot(supabase, projectId),
+      getLatestSuccessfulLiveSnapshot(supabase, projectId),
+      getLatestProfile(supabase, projectId),
+      getFounderIntent(supabase, projectId),
+      getLatestSuccessfulAuthenticatedSnapshot(supabase, projectId),
+    ]);
 
   if (!repositorySnapshot?.result) return { ok: false, error: "repository_intelligence_missing" };
   if (!liveSnapshot?.result) return { ok: false, error: "live_product_intelligence_missing" };
-  if (!businessContext) return { ok: false, error: "business_context_missing" };
+  if (!profile) return { ok: false, error: "product_profile_missing" };
 
   const authenticated = authenticatedSnapshot?.result ? authenticatedSnapshot : null;
 
   return {
     ok: true,
-    // The Business Audit's own identity, unchanged (§7). A second identity
-    // system would immediately disagree with audit reuse.
+    // The Business Audit's own identity, unchanged in principle (§7). A second
+    // identity system would immediately disagree with audit reuse.
     inputHash: computeAuditInputHash({
       repositorySnapshotId: repositorySnapshot.id,
       liveSnapshotId: liveSnapshot.id,
-      businessContextHash: businessContext.contextHash,
+      productProfileId: profile.stored.id,
+      founderIntentHash: founderIntent.intentHash,
       authenticatedSnapshotId: authenticated?.id ?? null,
       schemaVersion: BUSINESS_AUDIT_SCHEMA_VERSION,
       auditVersion: BUSINESS_AUDIT_VERSION,
-      evidencePackVersion: EVIDENCE_PACK_V2_VERSION,
+      evidencePackVersion: EVIDENCE_PACK_V3_VERSION,
       promptVersion: PROMPT_VERSION,
       rubricVersion: RUBRIC_VERSION,
+      profileSchemaVersion: PRODUCT_PROFILE_SCHEMA_VERSION,
+      profileBuilderVersion: PROFILE_BUILDER_VERSION,
       provider: "anthropic",
       model: BUSINESS_READINESS_AUDIT_CONFIG.model,
     }),
@@ -112,6 +125,63 @@ function view(operation: StoredOperationRun): OperationView {
   });
 }
 
+/**
+ * Puts a paused audit back to work after its question is answered (CORE-2a.4).
+ *
+ * Not a new operation. The same run re-enters its workflow from the top, and
+ * every step above the pause is already replay-safe — `prepareEvidenceStep`
+ * returns the claimed audit row rather than claiming a second one — so nothing
+ * expensive is repeated and no second slot is taken.
+ *
+ * Idempotent through `requeueAnsweredOperation`, which matches on `needs_user`.
+ * A double submission finds the operation already re-queued, changes nothing,
+ * and starts no second workflow.
+ */
+export async function resumeAnsweredAuditOperation(
+  supabase: SupabaseClient,
+  executor: OperationExecutor,
+  params: { projectId: string; userId: string; auditId: string },
+): Promise<{ ok: boolean }> {
+  const { data: project } = await supabase
+    .from("projects")
+    .select("id")
+    .eq("id", params.projectId)
+    .eq("user_id", params.userId)
+    .maybeSingle();
+
+  if (!project) return { ok: false };
+
+  const paused = await findPausedOperationForAudit(supabase, {
+    projectId: params.projectId,
+    auditId: params.auditId,
+  });
+  if (!paused) return { ok: false };
+
+  const requeued = await requeueAnsweredOperation(supabase, paused.id);
+  if (!requeued.requeued) return { ok: true };
+
+  const started = await executor.start({
+    operationId: paused.id,
+    operationType: "business_audit",
+  });
+
+  if (!started.ok) {
+    await failOperationRun(supabase, {
+      operationId: paused.id,
+      failureCode: "execution_start_failed",
+    });
+    return { ok: false };
+  }
+
+  await attachExecutionRun(supabase, {
+    operationId: paused.id,
+    workflowRunId: started.runId,
+    executionProvider: executor.name,
+  });
+
+  return { ok: true };
+}
+
 export async function startBusinessAuditOperation(
   supabase: SupabaseClient,
   executor: OperationExecutor,
@@ -128,6 +198,26 @@ export async function startBusinessAuditOperation(
 
   const identity = await resolveAuditIdentity(supabase, params.projectId);
   if (!identity.ok) return { kind: "failed", error: identity.error };
+
+  /*
+   * The entitlement gate (CORE-2 §16), enforced here rather than in the Server
+   * Action, so it covers every caller rather than the one that happens to
+   * remember.
+   *
+   * Its absence is what the first dogfood found, and the failure was the
+   * expensive shape rather than the harmless one: a re-run on a project whose
+   * free audit was already consumed started, paid for inference, and only then
+   * failed — at `persisting`, when the completed row collided with the
+   * one-included-audit unique index. Money spent, nothing produced.
+   *
+   * Placed after reuse resolution but before anything is claimed, and after
+   * `resolveAuditIdentity` so a missing prerequisite still reports as itself
+   * rather than as a billing refusal.
+   */
+  const authorization = await authorizeProjectAudit(supabase, {
+    projectId: params.projectId,
+    userId: params.userId,
+  });
 
   // Cheapest possible answer first: the work is already done (§9).
   if (!params.force) {
@@ -160,6 +250,13 @@ export async function startBusinessAuditOperation(
     inputIdentity: identity.inputHash,
   });
   if (alreadyActive) return { kind: "active", operation: view(alreadyActive) };
+
+  // Everything above this line is free: reusing a stored audit costs nothing
+  // and must keep working after the entitlement is spent. Everything below it
+  // spends money, so the refusal goes exactly here.
+  if (!authorization.allowed) {
+    return { kind: "failed", error: authorization.reason };
+  }
 
   const created = await createOperationRun(supabase, {
     projectId: params.projectId,

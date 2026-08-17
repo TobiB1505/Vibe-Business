@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { FakeDatabase, FakeExecutor, fakeSupabase } from "@/modules/operations/test-support";
+import {
+  FakeDatabase,
+  FakeExecutor,
+  fakeSupabase,
+  seedProductUnderstanding,
+} from "@/modules/operations/test-support";
 import { fakeAudit } from "@/modules/opportunities/test-support";
 import { computeExecutionIdentity } from "./identity";
 import { capabilityVersionFor } from "./schema";
@@ -67,13 +72,7 @@ function seedEvidence(options: { snapshotId?: string; commitSha?: string } = {})
     created_at: "2026-08-01T00:00:00.000Z",
     completed_at: "2026-08-01T00:00:00.000Z",
   });
-  db.seed("project_business_context", {
-    id: "context_1",
-    project_id: PROJECT,
-    product_summary: "A summary long enough to be valid for the audit fixture.",
-    context_hash: "c".repeat(64),
-    updated_at: "2026-08-01T00:00:00.000Z",
-  });
+  seedProductUnderstanding(db, { projectId: PROJECT });
 }
 
 /**
@@ -139,7 +138,7 @@ async function alignAuditCurrency() {
     const { BUSINESS_AUDIT_SCHEMA_VERSION, BUSINESS_AUDIT_VERSION } = await import(
       "@/modules/business-audit/schema"
     );
-    const { EVIDENCE_PACK_V2_VERSION } = await import("@/modules/business-audit/evidence-v2");
+    const { EVIDENCE_PACK_V3_VERSION } = await import("@/modules/business-audit/evidence-v3");
     const { PROMPT_VERSION } = await import("@/modules/business-audit/prompt");
     const { RUBRIC_VERSION } = await import("@/modules/business-audit/rubric");
     const { BUSINESS_READINESS_AUDIT_CONFIG } = await import("@/modules/ai/operations");
@@ -147,11 +146,14 @@ async function alignAuditCurrency() {
     probe.input_hash = computeAuditInputHash({
       repositorySnapshotId: SNAPSHOT,
       liveSnapshotId: "live_1",
-      businessContextHash: "c".repeat(64),
+      productProfileId: "profile_1",
+      founderIntentHash: "c".repeat(64),
+      profileSchemaVersion: "product-profile.v1",
+      profileBuilderVersion: "product-understanding-v1",
       authenticatedSnapshotId: null,
       schemaVersion: BUSINESS_AUDIT_SCHEMA_VERSION,
       auditVersion: BUSINESS_AUDIT_VERSION,
-      evidencePackVersion: EVIDENCE_PACK_V2_VERSION,
+      evidencePackVersion: EVIDENCE_PACK_V3_VERSION,
       promptVersion: PROMPT_VERSION,
       rubricVersion: RUBRIC_VERSION,
       provider: "anthropic",

@@ -8,12 +8,13 @@ import { getLatestSuccessfulAudit } from "@/modules/business-audit/store";
 import { listPreparedChangeSummaries } from "@/modules/execution/workspace";
 import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intelligence/store";
 import { getLatestOpportunities } from "@/modules/opportunities/service";
-import { getBusinessContext } from "@/modules/projects/business-context-store";
+import { getLatestProfile } from "@/modules/product-understanding/store";
+import { getFounderIntent } from "@/modules/projects/founder-intent-store";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import { getLatestSuccessfulAuthenticatedSnapshot } from "@/modules/authenticated-product-intelligence/store";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
-import { BusinessContextForm } from "./business-context-form";
+import { FounderIntentForm } from "./founder-intent-form";
 import { DisconnectButton } from "./disconnect-button";
 import { InspectButton } from "./inspect-button";
 import { InspectLiveButton } from "./inspect-live-button";
@@ -56,7 +57,8 @@ export default async function ProjectOverviewPage({
   const [
     latestSnapshot,
     latestLiveSnapshot,
-    businessContext,
+    productProfile,
+    founderIntent,
     latestAudit,
     latestDeepScanSnapshot,
     opportunities,
@@ -65,7 +67,8 @@ export default async function ProjectOverviewPage({
   ] = await Promise.all([
     getLatestSuccessfulSnapshot(supabase, projectId),
     getLatestSuccessfulLiveSnapshot(supabase, projectId),
-    getBusinessContext(supabase, projectId),
+    getLatestProfile(supabase, projectId),
+    getFounderIntent(supabase, projectId),
     getLatestSuccessfulAudit(supabase, projectId),
     getLatestSuccessfulAuthenticatedSnapshot(supabase, projectId),
     getLatestOpportunities(supabase, projectId),
@@ -99,9 +102,12 @@ export default async function ProjectOverviewPage({
       detail: latestLiveSnapshot?.result ? "Ready" : "Not inspected yet",
     },
     {
-      label: "Business context",
-      ready: Boolean(businessContext),
-      detail: businessContext ? "Ready" : "Missing",
+      // CORE-2 §3: the audit reasons from Vibe's understanding of the product,
+      // not from a paragraph the founder typed. This row reports that
+      // understanding, and it is never "Missing" — only "Not built yet".
+      label: "Product understanding",
+      ready: productProfile !== null,
+      detail: productProfile ? "Ready" : "Not built yet",
     },
     {
       label: "Deep Scan",
@@ -210,17 +216,22 @@ export default async function ProjectOverviewPage({
           </Surface>
         )}
 
+        {/*
+          CORE-2a.3 §32, §33: this influences every audit, so it cannot be
+          invisible. The split in the heading is the one that matters — the
+          Product Profile is what Vibe *worked out*, and this is what only the
+          founder can say. Keeping them apart in the UI is what stops the two
+          collapsing back into one "business context" blob.
+        */}
         <Surface level="section" padding="lg" className="flex flex-col gap-3">
           <div className="flex flex-col gap-2">
-            <h3 className="text-fg text-base font-semibold">Business context</h3>
-            {businessContext === null && (
-              <p className="text-fg-muted max-w-[70ch] text-sm">
-                Repository and website evidence cannot tell us who your product is for or what you
-                are trying to do next.
-              </p>
-            )}
+            <h3 className="text-fg text-base font-semibold">What you told Vibe</h3>
+            <p className="text-fg-muted max-w-[65ch] text-sm">
+              Vibe works out what your product is on its own. This is the part only you know —
+              and it changes which problems Vibe puts first.
+            </p>
           </div>
-          <BusinessContextForm projectId={project.id} context={businessContext?.context ?? null} />
+          <FounderIntentForm projectId={project.id} intent={founderIntent.intent} />
         </Surface>
 
         <Surface level="section" padding="lg" className="flex flex-col gap-3">

@@ -82,7 +82,7 @@ export function RunAuditButton({
         {operation.stalled && (
           <form action={formAction}>
             <input type="hidden" name="force" value="true" />
-            <Button type="submit" disabled={pending}>
+            <Button type="submit" disabled={pending || disabled}>
               Start a new audit
             </Button>
           </form>
@@ -111,7 +111,7 @@ export function RunAuditButton({
           {operation.retryAllowed && (
             <form action={formAction}>
               <input type="hidden" name="force" value="true" />
-              <Button type="submit" disabled={pending}>
+              <Button type="submit" disabled={pending || disabled}>
                 Try again
               </Button>
             </form>

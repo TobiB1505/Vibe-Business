@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs";
 import { withWorkflow } from "workflow/next";
 
 const nextConfig: NextConfig = {
@@ -32,4 +33,26 @@ const nextConfig: NextConfig = {
  * Without it those directives are inert and an audit would silently run
  * in-request again.
  */
-export default withWorkflow(nextConfig);
+export default withSentryConfig(withWorkflow(nextConfig), {
+  // Build-time metadata only. The auth token remains a server-side Vercel
+  // secret and is never bundled into the application.
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+
+  // Keep production stack traces readable. Without a build token, source-map
+  // work is disabled explicitly so local and CI builds remain deterministic.
+  widenClientFileUpload: true,
+  sourcemaps: { disable: !process.env.SENTRY_AUTH_TOKEN },
+
+  // The plugin injects this exact release into every runtime and creates the
+  // matching Sentry release during an authenticated production build.
+  release: {
+    name: process.env.SENTRY_RELEASE ?? process.env.VERCEL_GIT_COMMIT_SHA,
+  },
+
+  // Do not send build-tool usage telemetry. Application events and traces are
+  // governed separately by the runtime DSN and the sampling policy in ADR 0022.
+  telemetry: false,
+  silent: !process.env.CI,
+});

@@ -3,15 +3,34 @@
 The diagnostic Business Readiness Audit — the first feature that spends money on inference. See [docs/sprints/0004-business-readiness-audit.md](../../../docs/sprints/0004-business-readiness-audit.md) and [ADR 0011](../../../docs/decisions/0011-ai-inference-and-evidence-trust-boundary.md).
 
 ```
-evidence.ts   deterministic EvidencePack from repo + live + founder context
-rubric.ts     versioned rubric (product logic, in source control)
-prompt.ts     versioned system prompt + response JSON Schema
-runner.ts     count tokens → ONE paid call → validate → score
-validate.ts   evidence verification and the unknown-stays-unknown invariants
-scoring.ts    deterministic overall score, computed by us and never by the model
-store.ts      persistence, input-hash reuse, in-flight guard
-service.ts    prerequisites, orchestration, audit events, usage accounting
+evidence-v3.ts  the current pack: Product Profile + founder intent + scanner evidence
+evidence-v2.ts  historical (Deep Scan added). Its authenticated builder is still used
+evidence.ts     historical (Sprint 4). Describes what a v1 pack contained
+rubric.ts       versioned rubric (product logic, in source control)
+prompt.ts       versioned system prompt + response JSON Schema
+runner.ts       count tokens → ONE paid call → validate → score
+validate.ts     evidence verification and the unknown-stays-unknown invariants
+scoring.ts      deterministic overall score, computed by us and never by the model
+entitlement.ts  the free-audit policy, as a pure decision function
+human-view.ts   the human-first reading: conclusion → working → blockers → why
+store.ts        persistence, input-hash reuse, in-flight guard, entitlement queries
+service.ts      prerequisites, entitlement facts, audit currency
 ```
+
+## The CORE-2 contract
+
+**The Product Profile is a required input.** The audit reasons from Vibe's understanding of
+the product; it does not re-derive that understanding from raw scanner output, and there is
+no fallback that would (CORE-2 §8). Scanner evidence stays in the pack beside it, because the
+"Why?" disclosure resolves cited ids back to concrete observations.
+
+`business_context` is gone — see [the sprint doc](../../../docs/sprints/0022-core2-audit-first-move.md).
+What a founder typed about their *product* now lives in the profile as a user-confirmed
+correction; what they said about their *own position* lives in `projects/founder-intent.ts`.
+
+**The first qualified audit is free**, and consumption is derived from a completed audit
+rather than from a flag — so an outage, a timeout, or our own persistence failing costs the
+user nothing.
 
 ## Non-negotiables
 

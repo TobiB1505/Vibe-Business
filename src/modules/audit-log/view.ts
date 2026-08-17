@@ -50,7 +50,9 @@ const LABELS: Record<AuditEventType, string> = {
   "project.created": "Project created",
   "project.disconnected": "Project disconnected",
   "project.production_url.updated": "Production URL updated",
+  // Historical: nothing emits this since CORE-2, but stored rows still do.
   "business_context.updated": "Business context updated",
+  "founder_intent.updated": "Updated what you're working toward",
 
   // Written the way the flow speaks (CORE-1 §45): the Activity feed is the one
   // place these events are read by a person, and "Product understanding
@@ -82,6 +84,10 @@ const LABELS: Record<AuditEventType, string> = {
   "business_audit.completed": "Business audit completed",
   "business_audit.failed": "Business audit failed",
   "business_audit.reused": "Business audit reused",
+  // Written from the founder's side: the audit is waiting on them, not stalled.
+  "business_audit.needs_user": "Business audit needs your answer",
+  "business_audit.question_answered": "You answered Vibe's question",
+  "business_audit.resumed": "Business audit resumed",
 
   "operation.started": "Operation started",
   "operation.completed": "Operation completed",
@@ -135,6 +141,27 @@ const LABELS: Record<AuditEventType, string> = {
   "business_measurement.completed": "Measurement completed",
   "business_measurement.insufficient_data": "Not enough data to measure",
   "business_measurement.failed": "Measurement failed",
+
+  // Activation (ONBOARDING-1). Prefixed rather than phrased like the domain
+  // events they shadow: "Vibe understood your product" already exists and means
+  // the work happened, so these have to say *the setup flow got this far*
+  // without reading as the same sentence twice in one feed.
+  "onboarding.started": "Setup started",
+  "onboarding.github_connected": "Setup: GitHub connected",
+  "onboarding.repository_selected": "Setup: repository chosen",
+  "onboarding.live_site_added": "Setup: you added your live product",
+  "onboarding.live_site_skipped": "Setup: no live product yet",
+  "onboarding.product_scan_started": "Setup: Vibe started reading your product",
+  "onboarding.product_scan_completed": "Setup: Vibe finished reading your product",
+  "onboarding.product_understanding_started": "Setup: Vibe started working out what you built",
+  "onboarding.product_understanding_completed": "Setup: Vibe worked out what you built",
+  "onboarding.product_confirmed": "Setup: you confirmed what Vibe understood",
+  "onboarding.audit_started": "Setup: your first audit started",
+  "onboarding.audit_needs_user": "Setup: the audit asked you a question",
+  "onboarding.audit_completed": "Setup: your first audit finished",
+  "onboarding.first_move_started": "Setup: Vibe started working out your first move",
+  "onboarding.first_move_viewed": "Setup: you saw your first move",
+  "onboarding.completed": "Setup finished",
 };
 
 /**
@@ -152,9 +179,14 @@ const EXPLICIT_TONES: Partial<Record<AuditEventType, ActivityTone>> = {
   // safety property doing its job rather than an error.
   "change_merge.blocked": "waiting",
   "change_merge.not_eligible": "waiting",
+  // The setup stopped and handed the question back to the founder. Waiting on a
+  // person is not a failure, and the suffix would otherwise read as neutral.
+  "onboarding.audit_needs_user": "waiting",
   "change_approval.invalidated": "waiting",
   "change_approval.revoked": "neutral",
   "change_preview.cleanup_incomplete": "waiting",
+  // Vibe is waiting on a person, which is neither success nor a problem.
+  "business_audit.needs_user": "waiting",
   // The one event that means bytes moved on the customer's default branch.
   "change_merge.default_branch_updated": "success",
 };

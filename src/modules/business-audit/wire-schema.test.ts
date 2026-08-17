@@ -24,7 +24,18 @@ function wireDimension(dimension: string, overrides: Record<string, unknown> = {
 function wireResponse(overrides: Record<string, unknown> = {}) {
   return {
     dimensions: AUDIT_DIMENSIONS.map((dimension) => wireDimension(dimension)),
-    keyFindings: [{ finding: "A cross-cutting finding.", evidenceIds: ["repo:1"] }],
+    overallConclusion: "One sentence about the business.",
+    conclusions: [
+      {
+        headline: "People can start using it.",
+        explanation: "Signup and login are reachable.",
+        whyItMatters: "",
+        tone: "positive",
+        confidence: "high",
+        dimensions: ["product"],
+        evidenceIds: ["repo:1"],
+      },
+    ],
     limitations: ["One limitation."],
     ...overrides,
   };
@@ -34,8 +45,20 @@ describe("ANTHROPIC_AUDIT_OUTPUT_SCHEMA", () => {
   it("declares the dimension assessment shape exactly once", () => {
     const metrics = measureSchema(ANTHROPIC_AUDIT_OUTPUT_SCHEMA);
     // Root, the single dimension item, and the key-finding item.
-    expect(metrics.objectCount).toBe(3);
-    // One per dimension key would be 5.
+    /*
+     * Four shapes: the dimension item, the lens item, the conclusion item, and
+     * the root. CORE-2a.3 added the third of those.
+     *
+     * The number that matters is not this one — it is that each is declared
+     * ONCE. The Sprint 4 failure was five copies of a single shape, one per
+     * dimension key, and the guard below on `unionCount` is the other half of
+     * the same lesson. Grow this deliberately, not by accident.
+     */
+    expect(metrics.objectCount).toBe(4);
+    // One per dimension key would be 5. The single union is `score`'s
+    // integer-or-null: CORE-2a.1 deliberately did NOT add a second one for
+    // `whyItMatters`, and CORE-2a.3 added nine lens assessments without adding
+    // one either — every lens field is a plain string, enum or array.
     expect(metrics.unionCount).toBe(1);
   });
 
@@ -47,8 +70,17 @@ describe("ANTHROPIC_AUDIT_OUTPUT_SCHEMA", () => {
 
   it("still gives the model no field for an overall score", () => {
     const serialized = JSON.stringify(ANTHROPIC_AUDIT_OUTPUT_SCHEMA);
-    expect(serialized).not.toContain("overall");
+    expect(serialized).not.toContain("overallScore");
     expect(serialized).not.toContain("totalScore");
+
+    // CORE-2a.1 added `overallConclusion`, which is a *sentence*. The invariant
+    // this test protects is that the model never produces the headline number
+    // (Sprint 4 §7), so it is asserted against the field's type rather than
+    // against the substring "overall".
+    const properties = (ANTHROPIC_AUDIT_OUTPUT_SCHEMA as { properties: Record<string, { type?: string }> })
+      .properties;
+    expect(properties.overallConclusion.type).toBe("string");
+    expect(Object.keys(properties)).not.toContain("score");
   });
 
   it("enumerates the dimension ids from the domain, not a duplicate list", () => {
@@ -70,7 +102,9 @@ describe("normalizeAnthropicAuditOutput", () => {
     expect(dimensions.product!.summary).toBe("Summary for product.");
     // The routing key is not part of the assessment; the validator sets id/label.
     expect(dimensions.product).not.toHaveProperty("dimension");
-    expect(data.keyFindings).toHaveLength(1);
+    // CORE-2a.1: `keyFindings` was replaced by the synthesis pair.
+    expect(data.conclusions).toHaveLength(1);
+    expect(data.overallConclusion).toBe("One sentence about the business.");
     expect(data.limitations).toEqual(["One limitation."]);
   });
 
@@ -213,5 +247,54 @@ describe("wire → domain, end to end", () => {
 
     expect(audit.dimensions[0]!.evidenceIds).toEqual(["repo:1"]);
     expect(audit.notes.join(" ")).toContain("did not exist in the evidence pack");
+  });
+});
+
+/**
+ * Generation order (CORE-2a.3.2).
+ *
+ * The v4 dogfood wrote the Monetization dimension's four gaps and then wrote
+ * the customer-facing explanation as those same four facts, in the same order,
+ * "monetization model" included. The dimensions were declared first, so the
+ * scanner inventory was the freshest thing in the model's own context at the
+ * moment it had to name a business problem.
+ *
+ * These assertions exist because that ordering is now load-bearing and looks
+ * arbitrary. Anyone tidying this schema alphabetically would silently
+ * reintroduce the defect, and no other test would notice.
+ */
+describe("judgment is generated before the scanner record", () => {
+  const properties = ANTHROPIC_AUDIT_OUTPUT_SCHEMA.properties as Record<string, unknown>;
+  const required = ANTHROPIC_AUDIT_OUTPUT_SCHEMA.required as string[];
+
+  it("declares lenses first and dimensions after the conclusions", () => {
+    expect(Object.keys(properties)).toEqual([
+      "lenses",
+      "overallConclusion",
+      "conclusions",
+      "dimensions",
+      "limitations",
+    ]);
+  });
+
+  /** Both orders are declared; a mismatch would leave the real one ambiguous. */
+  it("keeps the required list in the same order as the properties", () => {
+    expect(required).toEqual(Object.keys(properties));
+  });
+
+  it("asks for the root problem before any founder-facing prose", () => {
+    const conclusion = (properties.conclusions as { items: Record<string, unknown> }).items;
+    const keys = Object.keys(conclusion.properties as Record<string, unknown>);
+
+    expect(keys.indexOf("rootProblem")).toBe(0);
+    expect(keys.indexOf("rootProblem")).toBeLessThan(keys.indexOf("headline"));
+    expect(keys.indexOf("headline")).toBeLessThan(keys.indexOf("explanation"));
+  });
+
+  /** The five dimensions still exist in full — this sprint reorders, not deletes. */
+  it("still requires every scored dimension", () => {
+    const dimensions = properties.dimensions as { items: Record<string, unknown> };
+    expect(dimensions.items).toBeDefined();
+    expect(required).toContain("dimensions");
   });
 });

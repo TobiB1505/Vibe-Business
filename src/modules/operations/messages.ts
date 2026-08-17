@@ -18,7 +18,19 @@ export const OPERATION_FAILURE_MESSAGES: Record<OperationFailureCode, string> = 
   operation_not_found: "That analysis could not be found.",
   repository_intelligence_missing: "Inspect the repository first — this needs that evidence.",
   live_product_intelligence_missing: "Inspect the live product first — this needs that evidence.",
-  business_context_missing: "Complete your business context first.",
+  // CORE-2 §8: two prerequisites, two different remedies. A missing profile
+  // needs a first analysis; a stale one needs a refresh. Collapsing them into
+  // one message would leave the user guessing which.
+  product_profile_missing: "Vibe needs to understand your product first.",
+  // CORE-2 §45/§46: the honest terminal answer. No price, no balance, and no
+  // route into a checkout that does not exist.
+  credits_required:
+    "You've used the free audit for this project. Running another one will need credits — they aren't available yet.",
+  audit_already_running: "An audit is already running for this project. Give it a moment.",
+  start_attempts_exhausted:
+    "That's been started several times in the last hour. Give it a little while before trying again.",
+  product_profile_stale:
+    "Your code or site changed since Vibe last looked. Refresh what Vibe knows, then audit.",
   already_running: "This is already running for the project. Give it a moment.",
   // The evidence moved under the operation's feet — a Deep Scan finished, or
   // the context was edited. Starting again picks up the new evidence.
@@ -64,7 +76,7 @@ export const OPERATION_FAILURE_MESSAGES: Record<OperationFailureCode, string> = 
   structured_output_json_invalid: "The AI provider returned an invalid format.",
   structured_output_schema_invalid: "The response did not pass Vibe's validation.",
   output_truncated: "The result was cut short. Nothing was saved.",
-  audit_failed: "The business audit could not be completed.",
+  audit_failed: "Something went wrong on Vibe's side. Nothing was saved.",
   opportunity_generation_failed: "Vibe could not work out your next opportunities.",
 
   // Change preparation (Sprint 9B §21). Each says what happened and, where it

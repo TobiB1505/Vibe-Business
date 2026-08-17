@@ -1,4 +1,4 @@
-import type { BusinessContext } from "@/modules/projects/business-context";
+import type { FounderIntent, PrimaryGoal } from "@/modules/projects/founder-intent";
 import { sourceKindsFor, metricDefinition } from "@/modules/business-measurement/metrics";
 import type {
   MetricCategory,
@@ -130,13 +130,13 @@ const CAPABILITY_MEASUREMENT_PROFILES: Record<ExecutionCapability, MeasurementPr
  */
 function businessGoalFor(
   profile: MeasurementProfile,
-  context: BusinessContext | null,
+  intent: FounderIntent | null,
 ): string {
-  const goal = context?.primaryGoal ?? null;
+  const goal = intent?.primaryGoal ?? null;
 
-  // Structured field only. `productSummary` is free text a user typed and would
-  // put arbitrary prose into a stored plan.
-  const GOAL_PHRASES: Record<NonNullable<BusinessContext["primaryGoal"]>, string> = {
+  // A closed enum only. Since CORE-2 there is no free text in this layer at
+  // all, so arbitrary prose can no longer reach a stored plan by construction.
+  const GOAL_PHRASES: Record<PrimaryGoal, string> = {
     launch: "Reach the people looking for a product like yours",
     get_first_users: "Be findable by people searching for what you do",
     monetize: "Bring more qualified visitors to your pricing",
@@ -150,8 +150,8 @@ function businessGoalFor(
 
 export type MeasurementContractInput = {
   capability: string;
-  /** The project's recorded context. Null when none has been saved. */
-  businessContext: BusinessContext | null;
+  /** The founder's stated intent. Null when none has been saved. */
+  founderIntent: FounderIntent | null;
 };
 
 export function measurementProfileForCapability(capability: string): MeasurementProfile | null {
@@ -181,6 +181,6 @@ export function resolveMeasurementContract(
   return {
     supported: true,
     profile,
-    businessGoal: businessGoalFor(profile, input.businessContext),
+    businessGoal: businessGoalFor(profile, input.founderIntent),
   };
 }

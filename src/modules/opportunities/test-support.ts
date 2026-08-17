@@ -22,7 +22,7 @@ export function fakeWireOpportunity(overrides: Partial<WireOpportunity> = {}): W
     category: "monetization",
     primaryDimension: "monetization",
     secondaryDimensions: ["conversion"],
-    evidenceIds: ["business.monetization_model", "live.surface.pricing"],
+    evidenceIds: ["intent.monetization_model", "live.surface.pricing"],
     executionType: "business_decision",
     executionReadiness: "needs_user_input",
     dependencies: [],
@@ -32,8 +32,8 @@ export function fakeWireOpportunity(overrides: Partial<WireOpportunity> = {}): W
 
 /** The evidence ids the fixtures cite, as a validated pack would expose them. */
 export const FAKE_EVIDENCE_IDS = new Set([
-  "business.monetization_model",
-  "business.product_summary",
+  "intent.monetization_model",
+  "profile.identity.description",
   "business.stage",
   "live.surface.pricing",
   "live.site.title",
@@ -64,7 +64,7 @@ export function fakeAudit(overrides: Partial<BusinessReadinessAudit> = {}): Busi
         strengths: ["Authenticated app area reached"],
         gaps: ["Product description reads as placeholder"],
         unknowns: [],
-        evidenceIds: ["auth.area.reached", "business.product_summary"],
+        evidenceIds: ["auth.area.reached", "profile.identity.description"],
       },
       {
         id: "monetization",
@@ -76,7 +76,7 @@ export function fakeAudit(overrides: Partial<BusinessReadinessAudit> = {}): Busi
         strengths: [],
         gaps: ["No pricing surface", "No payment integration"],
         unknowns: [],
-        evidenceIds: ["business.monetization_model", "live.surface.pricing", "repo.surface.payments"],
+        evidenceIds: ["intent.monetization_model", "live.surface.pricing", "repo.surface.payments"],
       },
       {
         id: "distribution",
@@ -119,9 +119,10 @@ export function fakeAudit(overrides: Partial<BusinessReadinessAudit> = {}): Busi
     keyFindings: [
       {
         finding: "Monetization is a stated non-goal and no revenue infrastructure exists.",
-        evidenceIds: ["business.monetization_model"],
+        evidenceIds: ["intent.monetization_model"],
       },
     ],
+    synthesis: null,
     limitations: ["No analytics, traffic or revenue data is available."],
     validationNotes: [],
     generatedAt: "2026-08-12T00:00:00.000Z",

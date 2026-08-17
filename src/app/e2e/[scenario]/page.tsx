@@ -4,6 +4,15 @@ import {
   type PreparedChangeCard,
 } from "@/app/app/projects/[projectId]/prepared-changes-section";
 import { IntelligenceSummary } from "@/app/app/projects/[projectId]/intelligence-summary";
+import { AuditOverview } from "@/app/app/projects/[projectId]/audit-overview";
+import { NeedsUserPanel } from "@/app/app/projects/[projectId]/needs-user-panel";
+import {
+  AuditAnalyzing,
+  AuditPreparing,
+  AuditWaitingHeader,
+} from "@/app/app/projects/[projectId]/audit-lifecycle";
+import { E2E_AUDIT_SCENARIOS, isE2eAuditScenario } from "../audit-scenarios";
+import { E2E_NEEDS_USER_SCENARIOS, isE2eNeedsUserScenario } from "../needs-user-scenarios";
 import { E2E_SCENARIOS, isE2eScenario } from "../scenarios";
 import { E2E_INTELLIGENCE_SCENARIOS, isE2eIntelligenceScenario } from "../intelligence-scenarios";
 import {
@@ -116,6 +125,71 @@ export default async function E2eScenarioPage({
               }}
             />
           }
+        />
+      </main>
+    );
+  }
+
+  // The audit's lifecycle states (AUDIT UI-1 §28–§37). Rendered from the same
+  // components the score route uses, so what a browser sees here is what a
+  // waiting or running audit actually shows.
+  if (scenario === "audit-preparing") {
+    return (
+      <main className="mx-auto max-w-4xl p-8">
+        {label}
+        <AuditPreparing />
+      </main>
+    );
+  }
+
+  if (scenario === "audit-analyzing") {
+    return (
+      <main className="mx-auto max-w-4xl p-8">
+        {label}
+        <AuditAnalyzing />
+      </main>
+    );
+  }
+
+  if (scenario === "audit-waiting") {
+    return (
+      <main className="mx-auto max-w-4xl p-8">
+        {label}
+        <div className="flex flex-col gap-4">
+          <AuditWaitingHeader />
+          <NeedsUserPanel
+            projectId="project_e2e"
+            question={E2E_NEEDS_USER_SCENARIOS.needs_user_first_customer()}
+          />
+        </div>
+      </main>
+    );
+  }
+
+  // "Vibe needs u" (CORE-2a.4 §30): the same panel the score route renders,
+  // given a question the real gate produced.
+  if (isE2eNeedsUserScenario(scenario)) {
+    const question = E2E_NEEDS_USER_SCENARIOS[scenario]();
+    return (
+      <main className="mx-auto max-w-4xl p-8">
+        {label}
+        <NeedsUserPanel projectId="project_e2e" question={question} />
+      </main>
+    );
+  }
+
+  // The human-first Business Audit (CORE-2 §14): the same component the score
+  // route renders, given an audit the real scoring produced.
+  if (isE2eAuditScenario(scenario)) {
+    const auditResult = E2E_AUDIT_SCENARIOS[scenario]();
+    return (
+      <main className="mx-auto max-w-[90rem] p-8">
+        {label}
+        <AuditOverview
+          audit={auditResult}
+          generatedAt={auditResult.generatedAt}
+          movesHref="/app/projects/project_e2e/moves"
+          hasMoves={scenario !== "audit-synthesis-no-moves"}
         />
       </main>
     );

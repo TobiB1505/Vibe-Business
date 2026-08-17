@@ -26,6 +26,7 @@
     "@browserbasehq/sdk": "2.16.0",
     "@octokit/auth-app": "8.3.0",
     "@octokit/oauth-methods": "6.0.2",
+    "@sentry/nextjs": "10.70.0",
     "@supabase/ssr": "0.12.4",
     "@supabase/supabase-js": "2.112.2",
     "@vercel/sandbox": "^3.0.0",

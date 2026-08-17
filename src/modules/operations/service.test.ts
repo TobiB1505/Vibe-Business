@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { BUSINESS_READINESS_AUDIT_CONFIG } from "@/modules/ai/operations";
-import { EVIDENCE_PACK_V2_VERSION } from "@/modules/business-audit/evidence-v2";
+import { EVIDENCE_PACK_V3_VERSION } from "@/modules/business-audit/evidence-v3";
 import { PROMPT_VERSION } from "@/modules/business-audit/prompt";
 import { RUBRIC_VERSION } from "@/modules/business-audit/rubric";
 import { BUSINESS_AUDIT_SCHEMA_VERSION, BUSINESS_AUDIT_VERSION } from "@/modules/business-audit/schema";
@@ -10,7 +10,12 @@ import {
   getOperationStatus,
   startBusinessAuditOperation,
 } from "./service";
-import { FakeDatabase, FakeExecutor, fakeSupabase } from "./test-support";
+import {
+  FakeDatabase,
+  FakeExecutor,
+  fakeSupabase,
+  seedProductUnderstanding,
+} from "./test-support";
 
 /**
  * Starting a durable audit (Sprint 7 §8, §9, §29).
@@ -49,28 +54,23 @@ function seedEvidence(
     created_at: "2026-08-01T00:00:00.000Z",
     completed_at: "2026-08-01T00:00:00.000Z",
   });
-  db.seed("project_business_context", {
-    id: "context_1",
-    project_id: projectId,
-    product_summary: "A product summary long enough to be valid for the audit.",
-    target_customer: "Builders",
-    stage: "prototype",
-    monetization_model: "none",
-    primary_goal: "launch",
-    context_hash: options.contextHash ?? "c".repeat(64),
-    updated_at: "2026-08-01T00:00:00.000Z",
-  });
+  // CORE-2 §3: the audit's third prerequisite is the Product Profile, not a
+  // paragraph the founder typed.
+  seedProductUnderstanding(db, { projectId, intentHash: options.contextHash });
 }
 
 function identityFor(options: { repositoryId?: string; contextHash?: string } = {}) {
   return computeAuditInputHash({
     repositorySnapshotId: options.repositoryId ?? "repo_snapshot_1",
     liveSnapshotId: "live_snapshot_1",
-    businessContextHash: options.contextHash ?? "c".repeat(64),
+    productProfileId: "profile_1",
+    founderIntentHash: options.contextHash ?? "c".repeat(64),
+    profileSchemaVersion: "product-profile.v1",
+    profileBuilderVersion: "product-understanding-v1",
     authenticatedSnapshotId: null,
     schemaVersion: BUSINESS_AUDIT_SCHEMA_VERSION,
     auditVersion: BUSINESS_AUDIT_VERSION,
-    evidencePackVersion: EVIDENCE_PACK_V2_VERSION,
+    evidencePackVersion: EVIDENCE_PACK_V3_VERSION,
     promptVersion: PROMPT_VERSION,
     rubricVersion: RUBRIC_VERSION,
     provider: "anthropic",
@@ -128,6 +128,75 @@ describe("starting a business audit", () => {
     expect(outcome.operation.status).toBe("queued");
     expect(outcome.operation.stage).toBe("preparing");
     expect(outcome.operation.shouldPoll).toBe(true);
+  });
+});
+
+/**
+ * The entitlement gate (CORE-2 §16), and the defect the first dogfood found.
+ *
+ * The gate existed as a pure function and was never called on the write path.
+ * A re-run on a project whose free audit was already spent therefore started,
+ * paid for a model call, and only failed at `persisting` when the completed row
+ * collided with the one-included-audit unique index.
+ *
+ * So the property under test is not "it refuses" — it is **where** it refuses:
+ * before anything is claimed and before the executor is ever asked to start.
+ */
+describe("the free audit entitlement", () => {
+  function seedConsumedEntitlement(projectId = PROJECT) {
+    db.seed("repository_connections", {
+      id: "conn_1",
+      project_id: projectId,
+      github_repository_id: 12345,
+    });
+    db.seed("free_audit_grants", {
+      id: "grant_1",
+      user_id: USER,
+      github_repository_id: 12345,
+    });
+  }
+
+  it("refuses a paid run once the free audit is consumed", async () => {
+    seedConsumedEntitlement();
+
+    const outcome = await start({ force: true });
+
+    expect(outcome).toEqual({ kind: "failed", error: "credits_required" });
+  });
+
+  it("spends nothing: no operation row, and the executor is never started", async () => {
+    seedConsumedEntitlement();
+
+    await start({ force: true });
+
+    expect(db.rows("operation_runs")).toHaveLength(0);
+    expect(executor.starts).toHaveLength(0);
+    expect(db.rows("business_readiness_audits")).toHaveLength(0);
+  });
+
+  /**
+   * Reuse costs nothing, so it must keep working after the entitlement is
+   * spent. Refusing here would take away an audit the user already paid for.
+   */
+  it("still returns an existing identical audit for free", async () => {
+    seedConsumedEntitlement();
+    db.seed("business_readiness_audits", {
+      id: "audit_1",
+      project_id: PROJECT,
+      status: "completed",
+      access_mode: "included_first_audit",
+      input_hash: identityFor(),
+      result: { schemaVersion: "business-readiness-audit.v1" },
+      overall_score: 40,
+      created_at: "2026-08-02T00:00:00.000Z",
+    });
+
+    expect(await start()).toEqual({ kind: "reused", auditId: "audit_1" });
+  });
+
+  it("allows the first audit when nothing has been consumed", async () => {
+    expect((await start()).kind).toBe("started");
+    expect(executor.starts).toHaveLength(1);
   });
 });
 

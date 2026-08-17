@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { PageShell } from "@/components/layout/page-shell";
 import { createClient } from "@/lib/supabase/server";
 import { requireSession } from "@/modules/auth/session";
 import { listInstallationRepositories } from "@/modules/github/repositories";
@@ -13,6 +12,7 @@ import {
   type PickableRepository,
 } from "@/modules/projects/connected-repositories";
 import { RepositoryPicker } from "./repository-picker";
+import { OnboardingShell } from "../../../onboarding/onboarding-shell";
 
 /**
  * Repository selection. Reached either straight from "Connect a project"
@@ -57,27 +57,25 @@ export default async function ConnectGithubRepositoriesPage({
   const canSelect = hasSelectableRepository(repositories);
 
   return (
-    <PageShell>
-      <header>
-        <p className="text-sm font-medium tracking-wide text-zinc-500 uppercase">Vibe Business</p>
-      </header>
-      <main className="flex flex-1 flex-col justify-center gap-4">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Choose a repository</h1>
-          <p className="text-sm text-zinc-400">
-            From <span className="text-zinc-300">{installation.accountLogin}</span>. You can connect one
+    <OnboardingShell email={session.email} state="connect_source">
+      <section className="flex max-w-[52rem] flex-col gap-5 py-4 sm:py-10">
+        <div className="space-y-2">
+          <p className="text-mint font-mono text-xs tracking-[0.12em] uppercase">Connect · Choose product</p>
+          <h1 className="text-fg text-[2.25rem] leading-tight font-semibold tracking-[-0.04em] sm:text-[3rem]">Which product should Vibe get to know?</h1>
+          <p className="text-fg-muted text-sm">
+            From <span className="text-fg-body">{installation.accountLogin}</span>. You can connect one
             repository per project.
           </p>
         </div>
 
         {accessUnavailable && (
           <div className="space-y-2">
-            <p className="text-sm text-amber-400">
+            <p className="text-amber text-sm">
               GitHub access unavailable. The installation may have been suspended or revoked.
             </p>
             <Link
               href="/app/connect/github?new=1"
-              className="inline-block text-sm text-zinc-300 underline underline-offset-2 hover:text-zinc-50"
+              className="text-fg-body hover:text-fg inline-block text-sm underline underline-offset-2"
             >
               Reconnect GitHub
             </Link>
@@ -85,14 +83,14 @@ export default async function ConnectGithubRepositoriesPage({
         )}
 
         {!accessUnavailable && repositories.length === 0 && (
-          <p className="text-sm text-zinc-400">
+          <p className="text-fg-muted text-sm">
             No repositories are available through this installation. Grant Vibe Business access to a
             repository on GitHub, then refresh this page.
           </p>
         )}
 
         {!accessUnavailable && repositories.length > 0 && !canSelect && (
-          <p className="text-sm text-zinc-400">
+          <p className="text-fg-muted text-sm">
             Every repository from this account is already connected to a project.
           </p>
         )}
@@ -108,18 +106,18 @@ export default async function ConnectGithubRepositoriesPage({
         {/* Distinct from connecting a project: this changes which
             repositories GitHub grants the App, rather than picking from
             what Vibe Business can already see. */}
-        <p className="text-sm text-zinc-500">
+        <p className="text-fg-meta text-sm">
           Don&apos;t see your repository?{" "}
           <a
             href={manageAccessUrl}
             target="_blank"
             rel="noreferrer"
-            className="text-zinc-300 underline underline-offset-2 hover:text-zinc-50"
+            className="text-fg-body hover:text-fg underline underline-offset-2"
           >
             Manage GitHub repository access
           </a>
         </p>
-      </main>
-    </PageShell>
+      </section>
+    </OnboardingShell>
   );
 }

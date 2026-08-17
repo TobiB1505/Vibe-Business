@@ -11,7 +11,7 @@ import { OPPORTUNITY_ENGINE_VERSION, OPPORTUNITY_SET_SCHEMA_VERSION } from "@/mo
 import { computeOpportunityInputHash } from "@/modules/opportunities/store";
 import { fakeAudit, fakeWireOpportunity } from "@/modules/opportunities/test-support";
 import type { ExecutionDeps } from "../business-audit/execution";
-import { FakeDatabase, fakeSupabase } from "../test-support";
+import { FakeDatabase, fakeSupabase, seedProductUnderstanding } from "../test-support";
 import {
   completeOpportunityOperationStep,
   countOpportunityTokensStep,
@@ -84,17 +84,7 @@ function seed(options: { inputIdentity?: string } = {}) {
     created_at: "2026-08-01T00:00:00.000Z",
     completed_at: "2026-08-01T00:00:00.000Z",
   });
-  db.seed("project_business_context", {
-    id: "context_1",
-    project_id: PROJECT,
-    product_summary: "Vibe Business helps people turn a built product into a business.",
-    target_customer: "Solo builders",
-    stage: "prototype",
-    monetization_model: "none",
-    primary_goal: "launch",
-    context_hash: "c".repeat(64),
-    updated_at: "2026-08-01T00:00:00.000Z",
-  });
+  seedProductUnderstanding(db, { projectId: PROJECT });
   db.seed("business_readiness_audits", {
     id: AUDIT,
     project_id: PROJECT,

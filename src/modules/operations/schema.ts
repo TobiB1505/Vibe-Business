@@ -77,12 +77,32 @@ export const OPERATION_TYPES = [
 ] as const;
 export type OperationType = (typeof OPERATION_TYPES)[number];
 
-export const OPERATION_STATUSES = ["queued", "running", "completed", "failed", "cancelled"] as const;
+export const OPERATION_STATUSES = [
+  "queued",
+  "running",
+  /**
+   * Stopped, holding its claims, waiting for an answer only the user can give
+   * (CORE-2a.4).
+   *
+   * Deliberately not modelled as `completed`. A run that paused before doing
+   * its actual work has not succeeded, and reporting it as success would put
+   * "your audit is ready" on screen when no audit exists.
+   *
+   * Re-enters at `queued` when the answer arrives: nothing may hold a provider
+   * request or a durable step open across a human's coffee break.
+   */
+  "needs_user",
+  "completed",
+  "failed",
+  "cancelled",
+] as const;
 export type OperationStatus = (typeof OPERATION_STATUSES)[number];
 
 export const OPERATION_STAGES = [
   "preparing",
   "counting_tokens",
+  /** Waiting on a founder-only answer, before anything is spent (CORE-2a.4). */
+  "asking_founder",
   /** The audit's paid step. */
   "running_ai",
   /** The Opportunity Engine's paid step (Sprint 8 §25). */
@@ -187,8 +207,21 @@ export function isTerminal(status: OperationStatus): boolean {
   return TERMINAL_STATUSES.includes(status);
 }
 
-/** True while an operation still owns its input identity and must not be duplicated. */
+/**
+ * True while an operation still owns its input identity and must not be
+ * duplicated.
+ *
+ * `needs_user` is active (CORE-2a.4). A run waiting for an answer still holds
+ * the claim on its inputs, and treating it as inactive would let a second run
+ * start for the same audit — one of them about to receive the answer the other
+ * is waiting for, and both about to spend a paid call.
+ */
 export function isActive(status: OperationStatus): boolean {
+  return status === "queued" || status === "running" || status === "needs_user";
+}
+
+/** True while an operation is doing work rather than waiting on a person. */
+export function isWorking(status: OperationStatus): boolean {
   return status === "queued" || status === "running";
 }
 

@@ -1,166 +1,64 @@
-import { createHash } from "node:crypto";
-
 /**
- * Business Context (Sprint 4 §2).
+ * Business Context — **retired as a model in CORE-2 §4.**
  *
- * Repository and website evidence describe what was *built* and what is
- * *served*. Neither can tell us who the product is for, what stage it is
- * at, or what the founder is actually trying to do next — and an audit that
- * guesses those is worse than one that asks.
+ * ## What happened to it
  *
- * Deliberately small: five fields, four of them closed enums. This is not a
- * founder questionnaire, and it asks for nothing sensitive — no revenue, no
- * financial data, no personal information (Sprint 4 §2).
+ * Sprint 4 introduced this as the answer to "who is this product for, and what
+ * is the founder trying to do?", because nothing else could answer it. CORE-1
+ * built the Product Profile, which answers the product half from evidence
+ * before anyone is asked anything, and CORE-2 removed the duplication:
  *
- * Every free-text value here is UNTRUSTED DATA. It reaches an AI model as
- * evidence, never as instruction (ADR 0011).
+ *     productSummary    →  Product Profile correction `shortDescription`
+ *     targetCustomer    →  Product Profile correction `primaryAudience`
+ *     stage             →  Founder Intent
+ *     monetizationModel →  Founder Intent
+ *     primaryGoal       →  Founder Intent
+ *
+ * The table is dropped, the store is deleted, the form is gone, and no code
+ * path can write one. See `founder-intent.ts` for what survived and why, and
+ * the migration `20260816020000_founder_intent_and_audit_traceability.sql` for
+ * how existing rows were carried across.
+ *
+ * ## Why this file still exists
+ *
+ * Evidence packs `business-evidence.v1` and `.v2` are the contracts that
+ * previously stored audits were produced under. Their builders still describe
+ * what those packs contained, and describing it requires this shape. Rewriting
+ * them would silently change what an old `evidencePackVersion` means, which is
+ * the one thing versioned contracts exist to prevent.
+ *
+ * So this is a **frozen record of a shape that no longer has a home**: a type
+ * and nothing else. The parser and the content hash are deleted rather than
+ * kept, because those were the write path, and a write path is exactly what
+ * CORE-2 §4 requires not to survive.
+ *
+ * Do not build anything new on this type.
  */
 
-export const PROJECT_STAGES = ["prototype", "launched_no_users", "active_users", "paid_customers"] as const;
-export type ProjectStage = (typeof PROJECT_STAGES)[number];
+export type ProjectStage = "prototype" | "launched_no_users" | "active_users" | "paid_customers";
 
-export const MONETIZATION_MODELS = [
-  "none",
-  "planned",
-  "free",
-  "subscription",
-  "one_time",
-  "usage_based",
-  "marketplace",
-  "other",
-] as const;
-export type MonetizationModel = (typeof MONETIZATION_MODELS)[number];
+export type MonetizationModel =
+  | "none"
+  | "planned"
+  | "free"
+  | "subscription"
+  | "one_time"
+  | "usage_based"
+  | "marketplace"
+  | "other";
 
-export const PRIMARY_GOALS = [
-  "launch",
-  "get_first_users",
-  "monetize",
-  "improve_conversion",
-  "improve_retention",
-  "grow_revenue",
-] as const;
-export type PrimaryGoal = (typeof PRIMARY_GOALS)[number];
-
-/** Bounded so a pasted document cannot become the prompt (Sprint 4 §2). */
-export const PRODUCT_SUMMARY_MAX_LENGTH = 600;
-export const PRODUCT_SUMMARY_MIN_LENGTH = 20;
-export const TARGET_CUSTOMER_MAX_LENGTH = 300;
+export type PrimaryGoal =
+  | "launch"
+  | "get_first_users"
+  | "monetize"
+  | "improve_conversion"
+  | "improve_retention"
+  | "grow_revenue";
 
 export type BusinessContext = {
-  /** Required before a first audit — the one field nothing else can supply. */
   productSummary: string;
   targetCustomer: string | null;
   stage: ProjectStage | null;
   monetizationModel: MonetizationModel | null;
   primaryGoal: PrimaryGoal | null;
 };
-
-export type BusinessContextRejection =
-  | "product_summary_required"
-  | "product_summary_too_short"
-  | "product_summary_too_long"
-  | "target_customer_too_long"
-  | "invalid_stage"
-  | "invalid_monetization_model"
-  | "invalid_primary_goal";
-
-export type ParseBusinessContextResult =
-  | { ok: true; context: BusinessContext }
-  | { ok: false; error: BusinessContextRejection };
-
-/**
- * Collapses whitespace and trims.
- *
- * C0/C1 control characters are stripped rather than escaped: this text is
- * rendered into a fenced evidence block for a model, and a stray newline or
- * control byte is the cheapest way to try to fake a fence boundary.
- */
-function normalizeText(value: string): string {
-  return value
-    .replace(/[\u0000-\u001F\u007F-\u009F]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function optionalEnum<T extends readonly string[]>(
-  value: unknown,
-  allowed: T,
-): { ok: true; value: T[number] | null } | { ok: false } {
-  if (value === undefined || value === null || value === "") return { ok: true, value: null };
-  if (typeof value !== "string") return { ok: false };
-  return allowed.includes(value) ? { ok: true, value: value as T[number] } : { ok: false };
-}
-
-/**
- * Validates raw form input into a `BusinessContext`.
- *
- * Pure and synchronous so it is fully unit-testable, and so the same rules
- * apply wherever context enters the system.
- */
-export function parseBusinessContext(input: {
-  productSummary: unknown;
-  targetCustomer?: unknown;
-  stage?: unknown;
-  monetizationModel?: unknown;
-  primaryGoal?: unknown;
-}): ParseBusinessContextResult {
-  if (typeof input.productSummary !== "string") return { ok: false, error: "product_summary_required" };
-
-  const productSummary = normalizeText(input.productSummary);
-  if (productSummary.length === 0) return { ok: false, error: "product_summary_required" };
-  if (productSummary.length < PRODUCT_SUMMARY_MIN_LENGTH) {
-    return { ok: false, error: "product_summary_too_short" };
-  }
-  if (productSummary.length > PRODUCT_SUMMARY_MAX_LENGTH) {
-    return { ok: false, error: "product_summary_too_long" };
-  }
-
-  let targetCustomer: string | null = null;
-  if (typeof input.targetCustomer === "string") {
-    const normalized = normalizeText(input.targetCustomer);
-    if (normalized.length > TARGET_CUSTOMER_MAX_LENGTH) {
-      return { ok: false, error: "target_customer_too_long" };
-    }
-    targetCustomer = normalized.length === 0 ? null : normalized;
-  }
-
-  const stage = optionalEnum(input.stage, PROJECT_STAGES);
-  if (!stage.ok) return { ok: false, error: "invalid_stage" };
-
-  const monetizationModel = optionalEnum(input.monetizationModel, MONETIZATION_MODELS);
-  if (!monetizationModel.ok) return { ok: false, error: "invalid_monetization_model" };
-
-  const primaryGoal = optionalEnum(input.primaryGoal, PRIMARY_GOALS);
-  if (!primaryGoal.ok) return { ok: false, error: "invalid_primary_goal" };
-
-  return {
-    ok: true,
-    context: {
-      productSummary,
-      targetCustomer,
-      stage: stage.value,
-      monetizationModel: monetizationModel.value,
-      primaryGoal: primaryGoal.value,
-    },
-  };
-}
-
-/**
- * Content hash of a business context, used as part of an audit's input
- * identity (Sprint 4 §23).
- *
- * Field order is fixed rather than taken from object key order, so the hash
- * depends only on the values — an edit that changes nothing produces the
- * same hash and correctly reuses the existing audit, while any real change
- * invalidates it.
- */
-export function hashBusinessContext(context: BusinessContext): string {
-  const canonical = JSON.stringify([
-    context.productSummary,
-    context.targetCustomer,
-    context.stage,
-    context.monetizationModel,
-    context.primaryGoal,
-  ]);
-  return createHash("sha256").update(canonical).digest("hex");
-}

@@ -193,3 +193,67 @@
     }
   }
 }
+
+/* AUDIT UI-1.1 — restrained depth and motion for the intelligence system. */
+.audit-intelligence-glow {
+  background:
+    radial-gradient(
+      circle at 30% 34%,
+      color-mix(in srgb, var(--color-mint) 9%, transparent),
+      transparent 46%
+    ),
+    radial-gradient(
+      circle at 88% 92%,
+      color-mix(in srgb, var(--color-amber) 3%, transparent),
+      transparent 36%
+    );
+}
+
+.audit-map-node-halo {
+  background: radial-gradient(
+    circle,
+    color-mix(in srgb, var(--color-mint) 15%, transparent),
+    transparent 68%
+  );
+  animation: audit-node-breathe 3.6s var(--ease-vibe) infinite;
+}
+
+.audit-map-connection-active {
+  animation: audit-line-flow 1.8s linear infinite;
+}
+
+.audit-map-sweep {
+  background: conic-gradient(
+    from 0deg,
+    transparent 0deg,
+    color-mix(in srgb, var(--color-mint) 12%, transparent) 18deg,
+    transparent 46deg
+  );
+  -webkit-mask: radial-gradient(circle, transparent 58%, black 59%, black 61%, transparent 62%);
+  mask: radial-gradient(circle, transparent 58%, black 59%, black 61%, transparent 62%);
+  animation: audit-radial-sweep 5.5s linear infinite;
+}
+
+@keyframes audit-node-breathe {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(0.9);
+    opacity: 0.42;
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.08);
+    opacity: 0.78;
+  }
+}
+
+@keyframes audit-line-flow {
+  to {
+    stroke-dashoffset: -28;
+  }
+}
+
+@keyframes audit-radial-sweep {
+  to {
+    transform: rotate(360deg);
+  }
+}

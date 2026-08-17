@@ -6,7 +6,8 @@ import type {
   AuthenticatedProductIntelligenceSnapshot,
 } from "@/modules/authenticated-product-intelligence/schema";
 import type { BusinessContext } from "@/modules/projects/business-context";
-import { AUDIT_DIMENSIONS } from "./schema";
+import type { FounderIntent } from "@/modules/projects/founder-intent";
+import { AUDIT_DIMENSIONS, BUSINESS_LENSES } from "./schema";
 
 /**
  * Fixtures and a fake provider (Sprint 4 §35, §36).
@@ -55,7 +56,12 @@ export class FakeProvider implements AIProvider {
  */
 export function buildModelOutput(
   overrides: Partial<Record<(typeof AUDIT_DIMENSIONS)[number], Record<string, unknown>>> = {},
-  extras: { keyFindings?: unknown; limitations?: unknown } = {},
+  extras: {
+    lenses?: unknown;
+    overallConclusion?: unknown;
+    conclusions?: unknown;
+    limitations?: unknown;
+  } = {},
 ): Record<string, unknown> {
   const base = (score: number | null, status: string, evidenceIds: string[]) => ({
     assessmentStatus: status,
@@ -69,8 +75,8 @@ export function buildModelOutput(
   });
 
   const dimensions: Record<string, unknown> = {
-    product: base(78, "assessable", ["business.product_summary", "live.site.title"]),
-    monetization: base(35, "partial", ["live.surface.pricing", "business.monetization_model"]),
+    product: base(78, "assessable", ["profile.identity.description", "live.site.title"]),
+    monetization: base(35, "partial", ["profile.signal.pricing_surface", "intent.monetization_model"]),
     distribution: base(null, "insufficient_evidence", []),
     conversion: base(61, "assessable", ["live.conversion.primary_cta"]),
     retention: base(null, "insufficient_evidence", []),
@@ -85,13 +91,56 @@ export function buildModelOutput(
       dimension,
       ...(dimensions[dimension] as Record<string, unknown>),
     })),
-    keyFindings: extras.keyFindings ?? [
-      { finding: "The product is understandable but not monetized.", evidenceIds: ["business.product_summary"] },
+    // Every lens assessed exactly once, which is what the contract asks for.
+    lenses:
+      extras.lenses ??
+      BUSINESS_LENSES.map((lens) => ({
+        lens,
+        health: "adequate",
+        materiality: "soon",
+        summary: `Internal reasoning for ${lens}.`,
+        evidenceIds: ["live.site.title"],
+        missingContext: [],
+      })),
+    overallConclusion:
+      extras.overallConclusion ??
+      "You have a real product, but the path from interest to revenue is still incomplete.",
+    // The synthesis, in the shape CORE-2a.1 asks for: one conclusion grouping
+    // several pieces of evidence, not one conclusion per observation.
+    conclusions: extras.conclusions ?? [
+      {
+        headline: "People can understand and start using your product.",
+        explanation:
+          "Vibe found a consistent product message and a clear way to sign up and get in.",
+        whyItMatters: null,
+        tone: "positive",
+        confidence: "high",
+        dimensions: ["product", "conversion"],
+        lenses: ["offer", "conversion"],
+        evidenceIds: ["profile.identity.description", "live.site.title"],
+      },
+      {
+        headline: "People still don't have a clear path to paying you.",
+        explanation:
+          "Vibe couldn't find a way to see prices or buy anything, on the site or in the product.",
+        whyItMatters:
+          "Someone can like what you built and still leave because they don't know what it costs.",
+        tone: "critical",
+        confidence: "high",
+        dimensions: ["monetization", "conversion"],
+        lenses: ["revenue_economics", "conversion"],
+        evidenceIds: ["profile.signal.pricing_surface", "intent.monetization_model"],
+      },
     ],
     limitations: extras.limitations ?? ["No traffic or usage data is available."],
   };
 }
 
+/**
+ * Historical. Used only by `evidence.test.ts` and `evidence-v2.test.ts`, which
+ * pin what the v1 and v2 packs meant for audits already stored under those
+ * versions. Nothing new builds one — see `fakeFounderIntent`.
+ */
 export function fakeBusinessContext(overrides: Partial<BusinessContext> = {}): BusinessContext {
   return {
     productSummary: "Vibe Business helps people who vibe-coded a product turn it into a business.",
@@ -102,6 +151,21 @@ export function fakeBusinessContext(overrides: Partial<BusinessContext> = {}): B
     ...overrides,
   };
 }
+
+export function fakeFounderIntent(overrides: Partial<FounderIntent> = {}): FounderIntent {
+  return {
+    stage: "launched_no_users",
+    monetizationModel: "planned",
+    primaryGoal: "get_first_users",
+    ...overrides,
+  };
+}
+
+/**
+ * Re-exported so audit tests have one import for their fixtures while the
+ * profile itself keeps a single definition in the module that owns it.
+ */
+export { fakeProductProfile } from "@/modules/product-understanding/test-support";
 
 export function fakeRepositorySnapshot(
   overrides: Partial<RepositoryIntelligenceSnapshot> = {},

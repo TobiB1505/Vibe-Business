@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { PageShell } from "@/components/layout/page-shell";
 import { createClient } from "@/lib/supabase/server";
 import { requireSession } from "@/modules/auth/session";
 import { listVerifiedInstallations } from "@/modules/github/connections";
+import { OnboardingShell } from "../../../onboarding/onboarding-shell";
 
 /**
  * Shown only when a user has more than one verified installation — for
@@ -25,48 +25,46 @@ export default async function ChooseGithubAccountPage() {
   }
 
   return (
-    <PageShell>
-      <header>
-        <p className="text-sm font-medium tracking-wide text-zinc-500 uppercase">Vibe Business</p>
-      </header>
-      <main className="flex flex-1 flex-col justify-center gap-4">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Choose a GitHub account</h1>
-          <p className="text-sm text-zinc-400">
+    <OnboardingShell email={session.email} state="connect_source">
+      <section className="flex max-w-[48rem] flex-col gap-5 py-4 sm:py-10">
+        <div className="space-y-2">
+          <p className="text-mint font-mono text-xs tracking-[0.12em] uppercase">Connect · Product source</p>
+          <h1 className="text-fg text-[2.25rem] leading-tight font-semibold tracking-[-0.04em] sm:text-[3rem]">Where is the product you built?</h1>
+          <p className="text-fg-muted text-sm">
             You have connected more than one GitHub account or organization.
           </p>
         </div>
 
-        <ul className="divide-y divide-zinc-800 overflow-hidden rounded-md border border-zinc-800">
+        <ul className="border-line-2 divide-line-2 overflow-hidden rounded-xl border divide-y">
           {installations.map((installation) => (
             <li key={installation.id}>
               <Link
                 href={`/app/connect/github/repositories?installation=${installation.id}`}
-                className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-zinc-900"
+                className="hover:bg-surface-hover flex items-center justify-between gap-4 px-4 py-3"
               >
                 <span className="min-w-0">
-                  <span className="block truncate text-sm font-medium text-zinc-50">
+                  <span className="text-fg-body block truncate text-sm font-medium">
                     {installation.accountLogin}
                   </span>
-                  <span className="block text-xs text-zinc-500">
+                  <span className="text-fg-meta block text-xs">
                     {installation.accountType === "Organization" ? "Organization" : "Personal account"}
                   </span>
                 </span>
-                <span className="shrink-0 text-xs text-zinc-500">Choose</span>
+                <span className="text-fg-meta shrink-0 text-xs">Choose</span>
               </Link>
             </li>
           ))}
         </ul>
 
-        <p className="text-sm text-zinc-500">
+        <p className="text-fg-meta text-sm">
           <Link
             href="/app/connect/github?new=1"
-            className="text-zinc-300 underline underline-offset-2 hover:text-zinc-50"
+            className="text-fg-body hover:text-fg underline underline-offset-2"
           >
             Connect a different GitHub account or organization
           </Link>
         </p>
-      </main>
-    </PageShell>
+      </section>
+    </OnboardingShell>
   );
 }

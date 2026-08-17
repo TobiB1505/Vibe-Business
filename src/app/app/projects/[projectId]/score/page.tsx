@@ -1,7 +1,12 @@
 import { EmptyState, Notice } from "@/components/ui/states";
 import { WorkspaceSection } from "@/components/layout/project-shell";
-import { getAuditCurrency } from "@/modules/business-audit/service";
-import { getLatestSuccessfulAudit } from "@/modules/business-audit/store";
+import {
+  getAuditAccessStatus,
+  getAuditCurrency,
+  getAuditReadiness,
+  type AuditPrerequisite,
+} from "@/modules/business-audit/service";
+import { getLatestSuccessfulAudit, getPausedAudit } from "@/modules/business-audit/store";
 import { buildAuditEvidenceNotice } from "@/modules/business-audit/evidence-notice";
 import { getDeepScanAccessStatus } from "@/modules/authenticated-product-intelligence/service";
 import { isBrowserProviderConfigured } from "@/modules/authenticated-product-intelligence/browserbase/client";
@@ -13,12 +18,31 @@ import { detectAuthenticatedSurfaces } from "@/modules/authenticated-product-int
 import { buildDeepScanViewModel } from "@/modules/authenticated-product-intelligence/view";
 import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intelligence/store";
 import { getActiveBusinessAuditOperation } from "@/modules/operations/service";
-import { getBusinessContext } from "@/modules/projects/business-context-store";
+import { getLatestOpportunities } from "@/modules/opportunities/service";
+
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import { AuditEvidenceNotice } from "../audit-evidence-notice";
-import { BusinessAuditSummary } from "../business-audit-summary";
+import { AuditOverview } from "../audit-overview";
+import {
+  AuditAnalyzing,
+  AuditPreparing,
+  AuditWaitingHeader,
+} from "../audit-lifecycle";
+import { NeedsUserPanel } from "../needs-user-panel";
 import { RunAuditButton } from "../run-audit-button";
+
+/**
+ * How a missing prerequisite reads in the sentence "A business audit needs
+ * … first." Phrased as things rather than as error codes, and the two
+ * profile cases stay distinct because their remedies are (CORE-2 §8).
+ */
+const AUDIT_PREREQUISITE_LABELS: Record<AuditPrerequisite, string> = {
+  repository_intelligence_missing: "repository intelligence",
+  live_product_intelligence_missing: "live product intelligence",
+  product_profile_missing: "Vibe to understand your product",
+  product_profile_stale: "an up-to-date understanding of your product",
+};
 
 /**
  * Business score (Sprint UI-2 Part 2).
@@ -48,10 +72,13 @@ export default async function ProjectScorePage({
     activeAuditOperation,
     latestSnapshot,
     latestLiveSnapshot,
-    businessContext,
+    auditReadiness,
+    auditAccess,
     deepScanAccess,
     latestDeepScanSnapshot,
     latestDeepScanSession,
+    opportunities,
+    pausedAudit,
   ] = await Promise.all([
     getLatestSuccessfulAudit(supabase, projectId),
     getAuditCurrency(supabase, projectId),
@@ -60,11 +87,21 @@ export default async function ProjectScorePage({
     getActiveBusinessAuditOperation(supabase, projectId),
     getLatestSuccessfulSnapshot(supabase, projectId),
     getLatestSuccessfulLiveSnapshot(supabase, projectId),
-    getBusinessContext(supabase, projectId),
+    getAuditReadiness(supabase, projectId),
+    getAuditAccessStatus(supabase, { projectId, userId }),
     getDeepScanAccessStatus(supabase, { projectId, userId }),
     getLatestSuccessfulAuthenticatedSnapshot(supabase, projectId),
     getLatestSession(supabase, projectId),
+    // CORE-2 §18: "Where I'd start" links to the existing Opportunity Engine's
+    // output. The audit never produces moves of its own.
+    getLatestOpportunities(supabase, projectId),
+    // Read server-side so the question survives a reload, a navigation away,
+    // and a different device: browser state is never authoritative here
+    // (§33, §34, §35).
+    getPausedAudit(supabase, projectId),
   ]);
+
+  const hasMoves = (opportunities?.set.opportunities.length ?? 0) > 0;
 
   const deepScanModel = deepScanAccess
     ? buildDeepScanViewModel({
@@ -98,19 +135,48 @@ export default async function ProjectScorePage({
     auditPredatesDeepScan: auditCurrency.newDeepScanEvidence,
   });
 
-  // All three evidence sources are required before a first audit
-  // (Sprint 4 §29), so the UI can say exactly what is still missing rather
-  // than failing after the click.
-  const hasRepositoryIntelligence = Boolean(latestSnapshot?.result);
-  const hasLiveProductIntelligence = Boolean(latestLiveSnapshot?.result);
-  const auditReady =
-    hasRepositoryIntelligence && hasLiveProductIntelligence && businessContext !== null;
+  /*
+   * Prerequisites come from the audit service rather than being re-derived
+   * here (CORE-2 §3), so the button and the server gate cannot disagree.
+   *
+   * The entitlement is a *separate* reason the button must be off, and it is
+   * kept separate: the first dogfood showed a prominent, enabled "Re-run
+   * business audit" directly beneath a notice saying the free audit was already
+   * spent — and pressing it paid for a model call that then failed at
+   * persistence. Nothing is missing in that state, so it gets its own notice
+   * rather than being folded into the "needs … first" sentence.
+   */
+  const missingPrerequisites = auditReadiness.missing.map(
+    (prerequisite) => AUDIT_PREREQUISITE_LABELS[prerequisite],
+  );
+  const blockedByCredits = auditAccess.blockedReason === "credits_required";
+  const auditReady = auditReadiness.ready && !blockedByCredits;
+  /*
+   * Vibe owes a replacement because Vibe changed (CORE-2a.2 §32).
+   *
+   * Deliberately not auto-started on render. An automatic refresh in a server
+   * component is one failing contract away from starting a paid audit on every
+   * page load (§34); the server decides that a refresh is *permitted*, and the
+   * existing button is what starts it.
+   */
+  const systemRefresh = auditAccess.systemRefreshAvailable;
 
-  const missingPrerequisites = [
-    hasRepositoryIntelligence ? null : "repository intelligence",
-    hasLiveProductIntelligence ? null : "live product intelligence",
-    businessContext === null ? "business context" : null,
-  ].filter((item): item is string => item !== null);
+  /*
+   * Which lifecycle state this page is in (§28).
+   *
+   * Read from the operation the server already loaded, so a reload lands in the
+   * same state and no polling is needed to discover it. `needs_user` is not
+   * listed here because the pending question renders above and *is* that state;
+   * showing a "preparing" panel beside it would say Vibe is busy when it is
+   * waiting.
+   */
+  const auditStage: "preparing" | "analyzing" | null = pausedAudit
+    ? null
+    : activeAuditOperation?.stage === "running_ai"
+      ? "analyzing"
+      : activeAuditOperation
+        ? "preparing"
+        : null;
 
   return (
     // The section id stays `business-audit`: `BUSINESS_AUDIT_ANCHOR` is a tested
@@ -118,8 +184,8 @@ export default async function ProjectScorePage({
     // the only way out of that state. It now resolves on this route.
     <WorkspaceSection
       id="business-audit"
-      title="Business score"
-      description="How business-ready this product is, per dimension, with the evidence behind each score."
+      title="Business audit"
+      description="What Vibe makes of this product as a business, and what it would do about it."
       actions={
         <RunAuditButton
           projectId={project.id}
@@ -130,24 +196,76 @@ export default async function ProjectScorePage({
       }
     >
       <div className="flex flex-col gap-4">
+        {/*
+          Above everything else, including the evidence notice. When Vibe is
+          waiting on a person, that is the only thing on this screen worth
+          reading — and a question below a wall of status would be a question
+          nobody answers (§30, §31).
+        */}
+        {pausedAudit && (
+          <div className="flex flex-col gap-4">
+            <AuditWaitingHeader />
+            <NeedsUserPanel projectId={project.id} question={pausedAudit.question} />
+          </div>
+        )}
+
         <AuditEvidenceNotice notice={auditEvidenceNotice} />
 
-        {!auditReady && (
+        {missingPrerequisites.length > 0 && (
           <Notice tone="waiting" label="Why this is blocked">
             A business audit needs {missingPrerequisites.join(", ")} first.
           </Notice>
         )}
 
+        {/*
+          CORE-2 §16: the first qualified audit is free, and the entitlement is
+          decided server-side. This only reports the decision — no price, no
+          balance, no checkout that does not exist (§45, §46).
+        */}
+        {auditReady && !latestAudit?.result && auditAccess.freeAuditAvailable && (
+          <Notice tone="info" label="Included">
+            Your first business audit is free.
+          </Notice>
+        )}
+
+        {systemRefresh && (
+          <Notice tone="info" label="Vibe has improved">
+            Vibe has since improved how it reads a business, so this check is out of date.
+            Updating it is on us — it won&rsquo;t use up anything of yours.
+          </Notice>
+        )}
+
+        {blockedByCredits && (
+          <Notice tone="waiting" label="Keep Vibe working">
+            You&rsquo;ve used the free audit for this project. Running another one will need
+            credits — they aren&rsquo;t available yet.
+          </Notice>
+        )}
+
+        {/*
+          The lifecycle drawn as its own states rather than one completed map
+          with different headlines (AUDIT UI-1 §28). Each says something
+          different about what Vibe is doing, and only `completed` shows
+          judgments — nothing above it may imply a health or a priority that
+          has not been decided yet (§31, §35, §36).
+        */}
+        {auditStage === "preparing" && <AuditPreparing />}
+        {auditStage === "analyzing" && <AuditAnalyzing />}
+
         {latestAudit?.result ? (
-          <BusinessAuditSummary
+          // Answer first, evidence second, tech last — all three owned by the
+          // component, so the reading order cannot be reassembled here (§14).
+          <AuditOverview
             audit={latestAudit.result}
-            analyzedAt={latestAudit.completedAt ?? latestAudit.createdAt}
+            generatedAt={latestAudit.completedAt ?? latestAudit.createdAt}
+            movesHref={`/app/projects/${project.id}/moves`}
+            hasMoves={hasMoves}
           />
-        ) : (
+        ) : auditStage !== null ? null : (
           // Not scored is not a score of zero. No meter, no number.
           <EmptyState
             title="Not analyzed yet"
-            description="Vibe scores five business dimensions from your repository, your public product and the context you gave it. Nothing is scored until that runs."
+            description="Vibe reads what it understands about your product, your repository and your public site, and works out what that means for the business. Nothing is judged until that runs."
           />
         )}
       </div>

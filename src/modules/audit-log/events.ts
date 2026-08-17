@@ -24,11 +24,25 @@ export type AuditEventType =
   | "live_product.intelligence.completed"
   | "live_product.intelligence.failed"
   | "live_product.intelligence.reused"
+  // Historical. `project_business_context` was dropped in CORE-2 and nothing
+  // emits this any more, but existing rows carry it and the activity feed must
+  // still be able to render them.
   | "business_context.updated"
+  // CORE-2 §4. What replaced it: stage, intended monetization and primary
+  // goal, all closed enums.
+  | "founder_intent.updated"
   | "business_audit.started"
   | "business_audit.completed"
   | "business_audit.failed"
   | "business_audit.reused"
+  /**
+   * The audit stopped and asked its founder something only they could answer
+   * (CORE-2a.4). Carries the question's intent and the areas it affects — never
+   * the founder's own words, which are not the audit log's business.
+   */
+  | "business_audit.needs_user"
+  | "business_audit.question_answered"
+  | "business_audit.resumed"
   // Product Understanding (CORE-1 §22). `completed_without_synthesis` is its
   // own event rather than a metadata flag: a profile derived with no model is
   // a materially different thing to have produced, and it should be findable
@@ -155,7 +169,37 @@ export type AuditEventType =
   | "business_measurement.started"
   | "business_measurement.completed"
   | "business_measurement.insufficient_data"
-  | "business_measurement.failed";
+  | "business_measurement.failed"
+  /**
+   * Project activation (ONBOARDING-1).
+   *
+   * Deliberately parallel to the domain events rather than a replacement for
+   * them. `product_understanding.started` says Vibe began deriving a profile;
+   * `onboarding.product_understanding_started` says the activation flow reached
+   * that step for this project. The same moment, but two different questions —
+   * "what did Vibe do" and "how far did this founder get" — and a log that
+   * collapsed them could answer neither where activation stalled nor why.
+   *
+   * They carry the project and the step. Never a URL the founder typed, never a
+   * repository's contents, never the founder's own words.
+   */
+  | "onboarding.started"
+  | "onboarding.github_connected"
+  | "onboarding.repository_selected"
+  | "onboarding.live_site_added"
+  /** A real answer, not an absence: "there is no live product yet" is state. */
+  | "onboarding.live_site_skipped"
+  | "onboarding.product_scan_started"
+  | "onboarding.product_scan_completed"
+  | "onboarding.product_understanding_started"
+  | "onboarding.product_understanding_completed"
+  | "onboarding.product_confirmed"
+  | "onboarding.audit_started"
+  | "onboarding.audit_needs_user"
+  | "onboarding.audit_completed"
+  | "onboarding.first_move_started"
+  | "onboarding.first_move_viewed"
+  | "onboarding.completed";
 
 export type RecordAuditEventParams = {
   userId: string;
