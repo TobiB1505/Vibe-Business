@@ -45,29 +45,6 @@ const RING_LABELS: Record<MapRing, string> = {
   later: "Later",
 };
 
-/**
- * Outward, as a fraction of the map radius.
- *
- * Pushed out in UI-1.2 (§2), and the numbers are not taste.
- *
- * Nine lenses sit at fixed angles 40° apart, so two cards on one ring are
- * `2r·sin20°` apart along the chord — but they only overlap when they are close
- * on *both* axes, so the binding constraint is the pair whose separation splits
- * evenly between x and y. At the radii this shipped with, that pair's clearance
- * was negative and the Now ring overlapped itself on every audit.
- *
- * Which lenses land on which ring changes between audits, so these were chosen
- * to clear the worst arrangement the data can produce — all nine lenses on one
- * ring — rather than the arrangement in one fixture. That is also what the
- * browser test asserts, because none of this is visible to a unit test: the
- * view model was right the whole time and the geometry lives in CSS.
- */
-const RING_RADIUS: Record<MapRing, number> = {
-  now: 0.68,
-  soon: 0.78,
-  later: 0.94,
-};
-
 const VIEWBOX = 760;
 const CENTRE = VIEWBOX / 2;
 const RADIUS = VIEWBOX / 2 - 54;
@@ -77,16 +54,15 @@ const RADIUS = VIEWBOX / 2 - 54;
  * Where a ring's name can sit without a card on top of it.
  *
  * Two wrong answers preceded this one, and both are worth keeping. A fixed
- * bearing was clear for Soon and Later and buried Now, because Conversion
- * happens to be a Now lens sitting almost exactly there — and which lenses land
- * on which ring is the thing that changes between audits. Avoiding only the
- * nodes *on the same ring* then failed too: the rings are about 60px apart and
- * a lens card is wider than that, so a neighbouring ring's card reaches across.
+ * bearing was clear for Soon and Later and buried Now, because whichever lens
+ * happens to sit there changes between audits. Avoiding only the nodes *on the
+ * same ring* then failed too: a lens card is wider than the gap between two
+ * rings, so a neighbouring ring's card reaches across.
  *
- * So every node counts, whatever its ring. The nine sit evenly, which leaves
- * midpoints 20° from their neighbours — ample clearance at these radii — and
- * the downward tie-break puts all three labels on one vertical, reading near to
- * far like an axis.
+ * So every node counts, whatever its ring — the largest gap in the whole
+ * arrangement, which puts all three labels on one bearing reading near to far
+ * like an axis. Since UI-1.4 each ring is spread over the full circle, so that
+ * gap is found per audit rather than assumed from a fixed 40° spacing.
  */
 function labelBearing(map: BusinessMapModel): number {
   const occupied = map.nodes.map((node) => node.angle);
@@ -119,7 +95,7 @@ function labelBearing(map: BusinessMapModel): number {
 
 function position(node: LensNode): { x: number; y: number } {
   const radians = (node.angle * Math.PI) / 180;
-  const distance = RADIUS * RING_RADIUS[node.ring];
+  const distance = RADIUS * node.radius;
   return { x: CENTRE + Math.cos(radians) * distance, y: CENTRE + Math.sin(radians) * distance };
 }
 
@@ -328,6 +304,9 @@ export function BusinessMap({
   const glowId = useId();
   const groups = lensesByRing(map);
 
+  /** This audit's radius for a ring, or 0 when no lens landed on it. */
+  const ringRadius = (ring: MapRing) => map.nodes.find((node) => node.ring === ring)?.radius ?? 0;
+
   const highlighted = selected
     ? new Set(
         map.connections
@@ -360,40 +339,49 @@ export function BusinessMap({
 
           <circle cx={CENTRE} cy={CENTRE} r={RADIUS} fill={`url(#${glowId})`} />
 
-          {(["later", "soon", "now"] as const).map((ring) => (
-            <circle
-              key={ring}
-              cx={CENTRE}
-              cy={CENTRE}
-              r={RADIUS * RING_RADIUS[ring]}
-              fill="none"
-              stroke={ring === "now" ? "var(--color-mint)" : "var(--color-line-strong)"}
-              strokeOpacity={ring === "now" ? 0.24 : ring === "soon" ? 0.62 : 0.45}
-              strokeDasharray={ring === "later" ? "4 7" : undefined}
-            />
-          ))}
+          {/*
+            Only rings that hold something are drawn.
+            A ring's radius is chosen per audit (`map-layout.ts`) so that Now
+            can sit close to the centre — which is the map's entire claim, and
+            was unreadable while all three sat at nearly the same distance.
+          */}
+          {(["later", "soon", "now"] as const).map((ring) =>
+            ringRadius(ring) === 0 ? null : (
+              <circle
+                key={ring}
+                cx={CENTRE}
+                cy={CENTRE}
+                r={RADIUS * ringRadius(ring)}
+                fill="none"
+                stroke={ring === "now" ? "var(--color-mint)" : "var(--color-line-strong)"}
+                strokeOpacity={ring === "now" ? 0.24 : ring === "soon" ? 0.62 : 0.45}
+                strokeDasharray={ring === "later" ? "4 7" : undefined}
+              />
+            ),
+          )}
 
           {/*
-            The rings, named on the map itself.
-            Three unlabelled circles are a claim the reader has to reverse-
-            engineer. Placed straight down from the centre, which is the one
-            bearing with no lens on it: the nine sit every 40° from twelve
-            o'clock, so 190° very nearly *is* Business Readiness — the first
-            attempt put "NOW" underneath that card. Downward also reads in the
-            right order, near to far.
+            The rings, named on the map itself. Three unlabelled circles are a
+            claim the reader has to reverse-engineer.
           */}
           {(["now", "soon", "later"] as const).map((ring) => {
+            if (ringRadius(ring) === 0) return null;
             const at = labelBearing(map);
             /*
-             * Halfway between this ring and the next one inward.
+             * Halfway between this ring and the next occupied one inward.
              *
              * Cards are centred *on* a ring, so the ring line is the one radius
              * guaranteed to be occupied — a label drawn there disappears under
-             * whichever card is nearest, which is what kept happening to NOW.
-             * The gap between two rings is the only band no card can sit in.
+             * whichever card is nearest. The band between two rings is the only
+             * place no card can sit.
              */
-            const inner = ring === "now" ? 0 : ring === "soon" ? RING_RADIUS.now : RING_RADIUS.soon;
-            const r = (RADIUS * (RING_RADIUS[ring] + inner)) / 2;
+            const inner =
+              ring === "now"
+                ? 0
+                : ring === "soon"
+                  ? ringRadius("now")
+                  : ringRadius("soon") || ringRadius("now");
+            const r = (RADIUS * (ringRadius(ring) + inner)) / 2;
             const radians = (at * Math.PI) / 180;
             return (
               <text

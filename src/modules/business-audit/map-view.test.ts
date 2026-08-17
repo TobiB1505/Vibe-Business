@@ -114,23 +114,53 @@ describe("position carries when, never how bad (§3, §11)", () => {
   });
 });
 
-describe("the layout is identity, the distance is judgment", () => {
+describe("the distance is the judgment", () => {
   /**
-   * A map that reshuffled as materiality changed would make two audits of the
-   * same business unrecognisable — and the re-audit loop depends on a founder
-   * seeing a node move *inward*.
+   * This used to assert a fixed angle per lens, and UI-1.4 gave that up.
+   *
+   * The reason is worth keeping in the file. A fixed angle meant nine cards 40°
+   * apart, which forced the inner ring far enough out that Now, Soon and Later
+   * sat at nearly the same distance — and *distance* is the map's actual claim.
+   * A stable bearing is a nice-to-have; a legible ring is the whole point, so
+   * the bearing lost.
+   *
+   * What is kept is what a returning reader really uses: the lenses run
+   * clockwise from the top in canonical order within their ring, and a lens
+   * that improves moves visibly *inward*. That second property is what the
+   * re-audit loop depends on, and it is the one asserted here.
    */
-  it("gives a lens the same angle whatever the audit concluded", () => {
-    const early = buildBusinessMap(synthesis([lens("audience", "weak", "now")]));
-    const later = buildBusinessMap(synthesis([lens("audience", "strong", "later")]));
+  it("moves a lens inward when it stops being urgent — and outward when it starts", () => {
+    const urgent = buildBusinessMap(synthesis([lens("audience", "weak", "now")]));
+    const settled = buildBusinessMap(synthesis([lens("audience", "strong", "later")]));
 
-    const angleOf = (map: ReturnType<typeof buildBusinessMap>) =>
-      map.nodes.find((entry) => entry.lens === "audience")!.angle;
+    const radiusOf = (map: ReturnType<typeof buildBusinessMap>) =>
+      map.nodes.find((entry) => entry.lens === "audience")!.radius;
 
-    expect(angleOf(early)).toBe(angleOf(later));
-    expect(angleOf(early)).not.toBe(
-      early.nodes.find((entry) => entry.lens === "offer")!.angle,
+    expect(radiusOf(urgent)).toBeLessThan(radiusOf(settled));
+  });
+
+  it("orders a ring's lenses clockwise from the top in canonical order", () => {
+    const map = buildBusinessMap(
+      synthesis([
+        lens("offer", "weak", "now"),
+        lens("audience", "weak", "now"),
+        lens("retention", "weak", "now"),
+      ]),
     );
+
+    const onNow = map.nodes.filter((entry) => entry.ring === "now");
+    // Offer, Audience and Retention are 1st, 2nd and 6th in the canonical
+    // order, so that is the order they appear in going clockwise.
+    expect(onNow.map((entry) => entry.lens)).toEqual(["offer", "audience", "retention"]);
+
+    /*
+     * Evenly spaced and ascending — the ring's absolute rotation is chosen per
+     * audit to stagger it against the other rings, so asserting exact bearings
+     * would be asserting the solver's arithmetic rather than the property.
+     */
+    const angles = onNow.map((entry) => entry.angle);
+    expect(angles[1]! - angles[0]!).toBeCloseTo(120);
+    expect(angles[2]! - angles[1]!).toBeCloseTo(120);
   });
 
   it("always renders all nine lenses, assessed or not", () => {

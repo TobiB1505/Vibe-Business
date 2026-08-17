@@ -1,3 +1,4 @@
+import { layoutRings, nodeAngle } from "./map-layout";
 import {
   BUSINESS_LENSES,
   type AuditSynthesis,
@@ -76,8 +77,17 @@ export type LensNode = {
   /** What only the founder could answer here. Usually empty. */
   missingContext: string[];
   evidenceIds: string[];
-  /** Angle in degrees around the centre, for the radial layout. */
+  /**
+   * Angle in degrees around the centre, measured from straight up.
+   *
+   * Assigned per *ring* rather than per lens (see `map-layout.ts`). A ring
+   * spreads its own nodes evenly, which is what lets Now sit close to the
+   * centre without its cards touching — and the rings can only mean "sooner"
+   * if they are actually at different distances.
+   */
   angle: number;
+  /** Distance from the centre, as a fraction of the map radius. */
+  radius: number;
 };
 
 export const LENS_LABELS: Record<BusinessLens, string> = {
@@ -223,15 +233,19 @@ export type BusinessMap = {
 };
 
 /**
- * Angles are fixed per lens, not derived from the data.
+ * Distance from the centre is the judgment.
  *
- * A layout that reshuffled as materiality changed would make two audits of the
- * same business unrecognisable to each other — and the re-audit loop depends on
- * a founder seeing a node *move inward*. Position around the circle is
- * identity; distance from the centre is the judgment.
+ * Angles used to be fixed per lens, on the argument that a reshuffling layout
+ * makes two audits of the same business unrecognisable. UI-1.4 gave that up,
+ * because it was costing the thing it was protecting: nine cards 40° apart
+ * forced the inner ring so far out that Now, Soon and Later sat at nearly the
+ * same distance, and *distance* is what the re-audit loop actually depends on —
+ * a founder seeing a node move inward.
+ *
+ * So each ring now spreads its own lenses evenly (`map-layout.ts`), keeping
+ * canonical order clockwise from the top within the ring. The sequence is
+ * stable; the bearing is not; the radius means what it says.
  */
-const ANGLE_STEP = 360 / BUSINESS_LENSES.length;
-
 export function buildBusinessMap(synthesis: AuditSynthesis): BusinessMap {
   const byLens = new Map(synthesis.lenses.map((entry) => [entry.lens, entry]));
   const connections = connectionsFrom([...synthesis.blockers, ...synthesis.strengths]);
@@ -256,9 +270,28 @@ export function buildBusinessMap(synthesis: AuditSynthesis): BusinessMap {
     }
   });
 
-  const nodes = BUSINESS_LENSES.map((lens, index): LensNode => {
+  /*
+   * Ring membership first, because the layout depends on how many lenses
+   * landed on each ring — not on which lens they are.
+   */
+  const ringOf = new Map<BusinessLens, MapRing>(
+    BUSINESS_LENSES.map((lens) => [lens, ringFor(byLens.get(lens)?.materiality ?? "unknown")]),
+  );
+  const counts = { now: 0, soon: 0, later: 0 } satisfies Record<MapRing, number>;
+  for (const ring of ringOf.values()) counts[ring] += 1;
+
+  const layout = layoutRings(counts);
+  // Position within its own ring, clockwise from the top in canonical lens
+  // order. The sequence is what a returning reader recognises; the absolute
+  // bearing is not stable and never really was.
+  const positionInRing = { now: 0, soon: 0, later: 0 } satisfies Record<MapRing, number>;
+
+  const nodes = BUSINESS_LENSES.map((lens): LensNode => {
     const assessment: BusinessLensAssessment | undefined = byLens.get(lens);
     const materiality = assessment?.materiality ?? "unknown";
+    const ring = ringOf.get(lens)!;
+    const index = positionInRing[ring];
+    positionInRing[ring] += 1;
 
     return {
       lens,
@@ -267,7 +300,7 @@ export function buildBusinessMap(synthesis: AuditSynthesis): BusinessMap {
       // areas are the framework, and a missing one is information too.
       health: assessment?.health ?? "unclear",
       materiality,
-      ring: ringFor(materiality),
+      ring,
       summary: assessment?.summary ?? "",
       blockerRank: blockerRankOf.get(lens) ?? null,
       blockerPrimary: blockerPrimaryLens.has(lens),
@@ -276,9 +309,8 @@ export function buildBusinessMap(synthesis: AuditSynthesis): BusinessMap {
         .map((edge) => (edge.from === lens ? edge.to : edge.from)),
       missingContext: assessment?.missingContext ?? [],
       evidenceIds: assessment?.evidenceIds ?? [],
-      // Starts at the top and runs clockwise, so the first lens is where a
-      // reader's eye already is.
-      angle: index * ANGLE_STEP - 90,
+      angle: nodeAngle(index, counts[ring], layout[ring].phase),
+      radius: layout[ring].radius,
     };
   });
 

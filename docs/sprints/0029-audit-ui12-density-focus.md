@@ -108,6 +108,44 @@ Plus two contrast fixes raised by the same review: the ring names and the card's
 row were the lowest-contrast text on the page, and that row is the *word* half of a channel that
 must never be colour alone.
 
+## UI-1.4 — the rings had stopped meaning anything
+
+Second live look, one sentence from the founder: the three rings sit so close together that the
+distance says nothing.
+
+Correct, and the cause was not a design choice. `now 0.68 · soon 0.78 · later 0.94` were the
+*smallest* radii at which nine cards on fixed per-lens angles stop overlapping — two neighbours
+40° apart are `2r·sin20°` apart, so a small inner ring guarantees a collision. The geometry was
+dictating the meaning, and the meaning is the whole map: **closer to the centre = sooner**.
+
+**The trade.** Lenses no longer keep a fixed absolute angle. Each ring spreads *its own* nodes
+evenly over the full circle, so a ring holding three lenses gets 120° of clearance instead of 40°
+and can sit far inside without its cards touching. The typical audit now lays out at
+`0.40 · 0.66 · 0.92`.
+
+What is kept is the property a returning reader actually uses: lenses run clockwise from the top
+in canonical order *within their ring*, and a lens that improves moves visibly inward. The fixed
+bearing was defended on exactly that re-audit argument — and it was costing the thing it claimed
+to protect.
+
+**How a layout is chosen** (`src/modules/business-audit/map-layout.ts`): outward, one ring at a
+time. Start at the ring's preferred radius raised to the minimum its own node count needs; of the
+rotations that clear both the score at the centre and every card already placed, take the one with
+the most room to spare; otherwise push outward; if the outermost ring runs out of room, compress
+the preferred radii and start over — pulling the inner rings in rather than letting the outer one
+collide.
+
+Two things that only showed up on screen. Taking the *first* rotation that fits left every ring
+starting at twelve o'clock, so all three put a node straight up and the map read as a vertical
+list with circles behind it — hence "the most room to spare". And the readiness score is not a
+card, so nothing in the collision maths protected it: it is an explicit obstacle now.
+
+**The test is the guarantee, not the algebra.** Which lens lands on which ring changes with every
+audit, so `map-layout.test.ts` checks **all 55 distributions** of nine lenses across three rings —
+no overlapping cards, no card over the score, rings strictly ordered, layout deterministic. The
+browser suite checks the same two claims against real bounding boxes at 1440 and 1280, because the
+card sizing lives in CSS and the layout maths does not know about it.
+
 ## Residuals
 
 - **The right column is still shorter than the map.** The handoff button closed some of it, but a
@@ -115,10 +153,11 @@ must never be colour alone.
   available: the radii are already the minimum that keeps nine cards from overlapping. Closing it
   properly means giving the leftover width to the detail panel, which is a layout change rather
   than a density one.
-- The ring names sit at the largest gap between lenses rather than on a clean left axis. The
-  placement is collision-safe by construction and reads as a diagonal, which looks accidental.
-  A fixed left axis is not safe for every ring assignment — three attempts are recorded in
-  `business-map.tsx`.
+- The ring names still sit at the largest gap in the arrangement rather than on a chosen axis.
+  With the rings spread apart they now read as a near-horizontal axis, but that is a consequence
+  of this audit's data, not a guarantee.
+- The map's constellation can sit off-centre within its square, because each ring's rotation is
+  chosen for clearance rather than for balance.
 - Two `<details>` disclosures now sit in the detail panel — the lens's own evidence and the
   problem's reasoning trail. They are scoped differently and labelled differently, but a founder
   seeing both for the first time is worth watching during the dogfood.

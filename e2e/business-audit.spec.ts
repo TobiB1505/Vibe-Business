@@ -479,6 +479,39 @@ test.describe("the map is legible, not just correct (§2)", () => {
 
       expect(overlapping).toEqual([]);
     });
+
+    test(`${width}: no lens card covers the readiness score`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 1100 });
+      await page.goto(SYNTHESIS);
+
+      /*
+       * UI-1.4 pulled the Now ring in so the rings would read as distance, and
+       * the centre of the map is where that runs out of room first. The score
+       * is not a card, so nothing in the layout maths protects it by accident.
+       */
+      const score = await page.getByText("Readiness", { exact: false }).first().boundingBox();
+      const cards = await page
+        .getByTestId("business-map-radial")
+        .getByRole("button")
+        .evaluateAll((nodes) =>
+          nodes.map((node) => {
+            const box = node.getBoundingClientRect();
+            return { label: node.textContent ?? "", x: box.x, y: box.y, w: box.width, h: box.height };
+          }),
+        );
+
+      const covering = cards
+        .filter(
+          (card) =>
+            card.x < score!.x + score!.width &&
+            score!.x < card.x + card.w &&
+            card.y < score!.y + score!.height &&
+            score!.y < card.y + card.h,
+        )
+        .map((card) => card.label);
+
+      expect(covering).toEqual([]);
+    });
   }
 
   /**
