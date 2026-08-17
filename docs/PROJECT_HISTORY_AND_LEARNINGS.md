@@ -1774,6 +1774,35 @@ Damit entwickelt sich Vibe Business Schritt für Schritt von einem Analyseproduk
 
 ---
 
+## 39. Billing vor dem Agenten, nicht danach
+
+Am 17.08.2026 kam Billing Core 1 auf `main` — Vibe Credits, Usage Ledger, Rating,
+Reservierungen. Bewusst **vor** dem Coding Agent, nicht danach.
+
+Der Grund ist der gleiche wie bei "Kein Unlimited AI" (§27), nur eine Ebene
+höher: ein Agent-Lauf ist keine einzelne, vorhersagbare AI-Anfrage, sondern eine
+unbekannte Zahl von Inferenz-Turns plus Sandbox plus Repair-Loops plus optionale
+Browser-Verifikation. Ein System zu bauen, das unbegrenzt Provider-Spend
+verursachen kann, bevor eine Budget-Ökonomie existiert, heißt: die Obergrenze
+erst dadurch zu entdecken, dass man sie überschreitet.
+
+Direkt danach — im selben Bogen, nicht als separates Projekt — kam **Billing
+Product 1**: keine Implementierung, sondern die Wirtschaftlichkeits-Entscheidung
+darüber, was ein Vibe Credit eigentlich bedeuten soll. Wichtigster Fund dabei,
+real gemessen statt vermutet: **43 % der Business-Audit-Läufe schlagen fehl,
+nachdem sie bereits echtes Geld beim Provider gekostet haben** — wer nur den
+Mittelwert der *erfolgreichen* Aufrufe als Kostenbasis nimmt, unterschätzt die
+tatsächlichen Kosten pro ausgeliefertem Audit um ein Drittel. Das ist die Art
+von Fakt, die man nur durch echte Nutzungsdaten findet, nicht durch Intuition —
+genau das Prinzip aus §17/§18, jetzt auf die Preisfrage angewendet statt auf die
+Kostenmessung selbst.
+
+Details: [`docs/sprints/0037-billing-core1-credits-ledger.md`](sprints/0037-billing-core1-credits-ledger.md),
+[ADR 0024](decisions/0024-vibe-credits-economic-layer.md),
+[`docs/business/CREDIT_ECONOMICS.md`](business/CREDIT_ECONOMICS.md).
+
+---
+
 ## Empfohlene zusätzliche Dokumentstruktur
 
 Ich würde neben diesem History-Dokument künftig zusätzlich pflegen:
