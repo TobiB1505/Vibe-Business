@@ -71,6 +71,7 @@ type OpportunityRow = {
   id: string;
   opportunity_set_id: string;
   rank: number;
+  source_conclusion_key: string | null;
   title: string;
   problem: string;
   why_now: string;
@@ -90,7 +91,7 @@ const SET_COLUMNS =
   "id, project_id, business_audit_id, input_hash, status, opportunity_count, validation_notes, failure_code, engine_version, prompt_version, rubric_version, evidence_pack_version, provider, model, created_at, completed_at";
 
 const OPPORTUNITY_COLUMNS =
-  "id, opportunity_set_id, rank, title, problem, why_now, impact, effort, confidence, category, primary_dimension, secondary_dimensions, evidence_ids, execution_type, execution_readiness, dependencies";
+  "id, opportunity_set_id, rank, source_conclusion_key, title, problem, why_now, impact, effort, confidence, category, primary_dimension, secondary_dimensions, evidence_ids, execution_type, execution_readiness, dependencies";
 
 function mapSet(row: SetRow, opportunities: BusinessOpportunity[] = []): StoredOpportunitySet {
   return {
@@ -118,6 +119,7 @@ function mapOpportunity(row: OpportunityRow): BusinessOpportunity {
   return {
     id: row.id,
     rank: row.rank,
+    sourceConclusionKey: row.source_conclusion_key,
     title: row.title,
     problem: row.problem,
     whyNow: row.why_now,
@@ -309,6 +311,8 @@ export async function completeOpportunitySetRun(
     set.opportunities.map((opportunity) => ({
       opportunity_set_id: setId,
       rank: opportunity.rank,
+      // The canonical Move → Conclusion relationship (CORE-2b FIX §1, §3).
+      source_conclusion_key: opportunity.sourceConclusionKey,
       title: opportunity.title,
       problem: opportunity.problem,
       why_now: opportunity.whyNow,

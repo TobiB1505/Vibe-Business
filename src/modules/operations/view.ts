@@ -96,6 +96,8 @@ export const OPERATION_STAGE_LABELS: Record<OperationStage, string> = {
   asking_founder: "Waiting for you",
   running_ai: "Analyzing business",
   prioritizing: "Finding your highest-impact opportunities",
+  // Names the work as the founder would describe it, not as the code does.
+  planning: "Working out how to do this",
   preflight: "Checking your current product state",
   generating_change: "Preparing the change",
   writing_repository: "Creating an isolated branch",

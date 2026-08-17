@@ -15,11 +15,26 @@ import type { AuditDimensionId, Confidence } from "@/modules/business-audit/sche
  * precision the model does not have and the user would reasonably act on.
  */
 
-export const OPPORTUNITY_SCHEMA_VERSION = "business-opportunity.v1" as const;
-export const OPPORTUNITY_SET_SCHEMA_VERSION = "business-opportunity-set.v1" as const;
+/**
+ * v2 records **which audit conclusion each Move came from** (CORE-2b FIX §1, §2).
+ *
+ * The engine has always known this — it reads the audit's conclusions and decides what
+ * to do about them — and it always threw the answer away. The Action Planner then had to
+ * reconstruct it from evidence overlap, which is a reasonable way to recover a fact and
+ * a bad way to hold one: reconstruction can be ambiguous, and a strategic plan built on
+ * a guessed root problem is exactly the failure this product exists not to have.
+ *
+ * So the relationship is now stated at creation time by the layer that knows it. The
+ * version moves because a stored v1 set genuinely cannot answer the question a v2 set
+ * can — and because `OPPORTUNITY_SET_SCHEMA_VERSION` feeds the reuse identity, so a v1
+ * set is correctly no longer an acceptable answer to "what should this founder do next,
+ * and what problem does it solve?".
+ */
+export const OPPORTUNITY_SCHEMA_VERSION = "business-opportunity.v2" as const;
+export const OPPORTUNITY_SET_SCHEMA_VERSION = "business-opportunity-set.v2" as const;
 
 /** Bumped when prioritization behaviour changes materially (§22). */
-export const OPPORTUNITY_ENGINE_VERSION = "opportunity-engine-v1" as const;
+export const OPPORTUNITY_ENGINE_VERSION = "opportunity-engine-v2" as const;
 
 /**
  * Focus is the product (§1, §21).
@@ -90,6 +105,23 @@ export type OpportunityCategory = (typeof OPPORTUNITY_CATEGORIES)[number];
 export type BusinessOpportunity = {
   /** Stable within a set. Deterministic, derived from category and rank. */
   id: string;
+  /**
+   * The audit conclusion this Move exists to address (CORE-2b FIX §1).
+   *
+   * A key into the set's own audit — see `business-audit/conclusions.ts` for why a
+   * conclusion is addressed by `(business_audit_id, conclusion_key)` rather than by a
+   * single foreign key. The audit id lives on the set, so together they are a complete,
+   * canonical reference.
+   *
+   * **This is the authoritative relationship** (§3). The Action Planner's evidence-overlap
+   * reconciliation is a legacy fallback for sets written before v2, and is never
+   * consulted when this is present.
+   *
+   * Null on legacy sets, and on a Move whose cited key did not exist in the audit — a
+   * fabricated reference is dropped rather than stored, exactly as a fabricated evidence
+   * id is (Rule 45). Null means "unknown", never "none".
+   */
+  sourceConclusionKey: string | null;
   /** 1-based, unique and contiguous within the set (§12). */
   rank: number;
   title: string;

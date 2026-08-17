@@ -18,6 +18,7 @@ export function fakeSeoOpportunity(
   return {
     id: "3-seo-fix-missing-technical-seo-foundations",
     rank: 3,
+    sourceConclusionKey: "blocker-2",
     title: "Fix missing technical SEO foundations",
     problem: "The live site is missing canonical URL, robots.txt, a sitemap and structured data.",
     whyNow: "These are low-effort fixes that do not depend on positioning or monetization.",

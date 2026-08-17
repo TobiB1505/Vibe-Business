@@ -10,6 +10,8 @@ import { BUSINESS_AUDIT_SCHEMA_VERSION, BUSINESS_AUDIT_VERSION } from "@/modules
 import { computeAuditInputHash, findReusableAudit } from "@/modules/business-audit/store";
 import { authorizeProjectAudit } from "@/modules/business-audit/service";
 import { resolveOpportunityIdentity } from "@/modules/opportunities/service";
+import { resolveActionPlanIdentity } from "@/modules/action-plans/service";
+import { findReusableActionPlan } from "@/modules/action-plans/store";
 import { findReusableProfile } from "@/modules/product-understanding/store";
 import { loadUnderstandingSources } from "./product-understanding/execution";
 import { findReusableOpportunitySet } from "@/modules/opportunities/store";
@@ -560,6 +562,134 @@ export async function getActiveProductUnderstandingOperation(
   const operation = await findActiveOperation(supabase, {
     projectId,
     operationType: "product_understanding",
+  });
+  return operation ? view(operation) : null;
+}
+
+/**
+ * Starting a durable Action Plan run (CORE-2b §53, §54).
+ *
+ * The same sequence of refusals as every operation before it — own the project,
+ * resolve identity, reuse an identical plan, return a live operation, claim,
+ * enqueue — against the same database guarantees. This is the fourth consumer
+ * of one execution foundation, not a fourth mechanism.
+ *
+ * What identity means here is the interesting part: a plan is identified by the
+ * *Move* it carries through as well as the audit behind it. Planning a
+ * different Move from the same audit is correctly a different plan, and
+ * replanning the same Move from the same evidence is correctly a reuse rather
+ * than a second paid call (§53, §86, §87).
+ */
+export async function startActionPlanOperation(
+  supabase: SupabaseClient,
+  executor: OperationExecutor,
+  params: { projectId: string; userId: string; force?: boolean },
+): Promise<StartOperationOutcome> {
+  const { data: project } = await supabase
+    .from("projects")
+    .select("id")
+    .eq("id", params.projectId)
+    .eq("user_id", params.userId)
+    .maybeSingle();
+
+  if (!project) return { kind: "failed", error: "project_not_found" };
+
+  // Refuses outright when the audit or the Moves are missing or stale: planning
+  // from a judgment we already know is out of date produces a confident plan
+  // for a business that has since changed, and nothing on screen would say so.
+  const identity = await resolveActionPlanIdentity(supabase, params.projectId);
+  if (!identity.ok) return { kind: "failed", error: identity.error };
+
+  if (!params.force) {
+    const reusable = await findReusableActionPlan(supabase, {
+      projectId: params.projectId,
+      inputHash: identity.inputHash,
+    });
+    if (reusable) {
+      await recordAuditEvent(supabase, {
+        userId: params.userId,
+        eventType: "action_plan.reused",
+        metadata: {
+          projectId: params.projectId,
+          actionPlanId: reusable.id,
+          auditId: identity.auditId,
+          opportunityId: identity.opportunityId,
+        },
+      });
+      return { kind: "reused", auditId: reusable.id };
+    }
+  }
+
+  const alreadyActive = await findActiveOperationByIdentity(supabase, {
+    projectId: params.projectId,
+    operationType: "action_planning",
+    inputIdentity: identity.inputHash,
+  });
+  if (alreadyActive) return { kind: "active", operation: view(alreadyActive) };
+
+  const created = await createOperationRun(supabase, {
+    projectId: params.projectId,
+    userId: params.userId,
+    operationType: "action_planning",
+    inputIdentity: identity.inputHash,
+  });
+
+  if (!created.ok) {
+    if (created.error === "already_active") {
+      // Lost the race by milliseconds — the other click's operation is the
+      // right answer, not an error.
+      const existing = await findActiveOperationByIdentity(supabase, {
+        projectId: params.projectId,
+        operationType: "action_planning",
+        inputIdentity: identity.inputHash,
+      });
+      if (existing) return { kind: "active", operation: view(existing) };
+    }
+    return { kind: "failed", error: "action_planning_failed" };
+  }
+
+  const operation = created.operation;
+  const started = await executor.start({
+    operationId: operation.id,
+    operationType: "action_planning",
+  });
+
+  if (!started.ok) {
+    await failOperationRun(supabase, {
+      operationId: operation.id,
+      failureCode: "execution_start_failed",
+    });
+    return { kind: "failed", error: "execution_start_failed" };
+  }
+
+  await attachExecutionRun(supabase, {
+    operationId: operation.id,
+    workflowRunId: started.runId,
+    executionProvider: executor.name,
+  });
+
+  await recordAuditEvent(supabase, {
+    userId: params.userId,
+    eventType: "operation.started",
+    metadata: {
+      projectId: params.projectId,
+      operationId: operation.id,
+      operationType: "action_planning",
+      executionProvider: executor.name,
+    },
+  });
+
+  return { kind: "started", operation: view(operation) };
+}
+
+/** The live planning run a reloaded page should display. */
+export async function getActiveActionPlanOperation(
+  supabase: SupabaseClient,
+  projectId: string,
+): Promise<OperationView | null> {
+  const operation = await findActiveOperation(supabase, {
+    projectId,
+    operationType: "action_planning",
   });
   return operation ? view(operation) : null;
 }
