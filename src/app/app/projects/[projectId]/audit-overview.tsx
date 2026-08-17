@@ -94,11 +94,14 @@ export function AuditOverview({
   generatedAt,
   movesHref,
   hasMoves,
+  movesByConclusion,
 }: {
   audit: BusinessReadinessAudit;
   generatedAt: string | null;
   movesHref: string;
   hasMoves: boolean;
+  /** Moves addressing each conclusion of this audit (UI-S2 §8). */
+  movesByConclusion: Record<string, number>;
 }) {
   const synthesis = audit.synthesis ?? null;
   const map = synthesis ? buildBusinessMap(synthesis) : null;
@@ -152,6 +155,7 @@ export function AuditOverview({
           blockers={synthesis.blockers}
           movesHref={movesHref}
           hasMoves={hasMoves}
+          movesByConclusion={movesByConclusion}
         />
       ) : (
         // An audit from before the lens framework. Its conclusion is real and

@@ -18,6 +18,7 @@ import { detectAuthenticatedSurfaces } from "@/modules/authenticated-product-int
 import { buildDeepScanViewModel } from "@/modules/authenticated-product-intelligence/view";
 import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intelligence/store";
 import { getActiveBusinessAuditOperation } from "@/modules/operations/service";
+import { movesPerConclusion, resolveMoveLineage } from "@/modules/opportunities/lineage";
 import { getLatestOpportunities } from "@/modules/opportunities/service";
 
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
@@ -102,6 +103,27 @@ export default async function ProjectScorePage({
   ]);
 
   const hasMoves = (opportunities?.set.opportunities.length ?? 0) > 0;
+
+  /*
+   * Which of *this* audit's findings have Moves behind them (UI-S2 §7, §8).
+   *
+   * Guarded on the set's own audit id rather than computed unconditionally.
+   * A conclusion key addresses a position inside one immutable audit document,
+   * so reading a set's keys against a newer audit would silently rebind every
+   * Move to whatever finding now sits at that position — a link the founder
+   * would reasonably read as causal and that nothing ever asserted.
+   *
+   * Costs no extra query: both halves are already loaded above.
+   */
+  const contextualMoves =
+    latestAudit?.result && opportunities && opportunities.set.businessAuditId === latestAudit.id
+      ? movesPerConclusion(
+          resolveMoveLineage({
+            sourceAudit: latestAudit.result,
+            opportunities: opportunities.set.opportunities,
+          }),
+        )
+      : {};
 
   const deepScanModel = deepScanAccess
     ? buildDeepScanViewModel({
@@ -260,6 +282,7 @@ export default async function ProjectScorePage({
             generatedAt={latestAudit.completedAt ?? latestAudit.createdAt}
             movesHref={`/app/projects/${project.id}/moves`}
             hasMoves={hasMoves}
+            movesByConclusion={contextualMoves}
           />
         ) : auditStage !== null ? null : (
           // Not scored is not a score of zero. No meter, no number.

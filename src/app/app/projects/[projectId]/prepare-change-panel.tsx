@@ -1,7 +1,9 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useEffect, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Button, buttonClasses } from "@/components/ui/button";
+import { preparedChangeHref } from "@/components/layout/project-shell";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { OPERATION_STAGE_LABELS, type OperationView } from "@/modules/operations/view";
 import {
@@ -127,6 +129,7 @@ export function PrepareChangePanel({
   actionState,
   branchUrl,
   validationSummary,
+  preparedHref,
 }: {
   projectId: string;
   opportunityId: string;
@@ -136,6 +139,8 @@ export function PrepareChangePanel({
   branchUrl: string | null;
   /** The latest isolated validation for this artifact (Sprint 10A §44). */
   validationSummary: ValidationSummary | null;
+  /** Where the prepared change lives, so preparing leads somewhere (UI-S2 §26). */
+  preparedHref: string;
 }) {
   const action = prepareChangeAction.bind(null, projectId, opportunityId);
   const [state, formAction, pending] = useActionState(action, initialState);
@@ -206,10 +211,30 @@ export function PrepareChangePanel({
             and must not imply otherwise (§11, §27). */}
         <p className="text-sm text-fg-muted">Not merged · Not deployed · Not runtime-tested</p>
 
+        {/*
+          Where preparing leads (UI-S2 §26, §27).
+
+          The id is the one this exact preparation resolved — from the action's
+          own result, the stored prepared change for this opportunity, or the
+          completed operation's `resultId`. Never "the newest change", which
+          would hand a founder somebody else's work the moment two preparations
+          finish close together (§46).
+        */}
         <div className="flex flex-wrap items-center gap-3">
-          <Button type="button" onClick={() => loadDiff(preparedChangeId)}>
-            Review change
-          </Button>
+          <Link
+            href={preparedChangeHref(preparedHref, preparedChangeId)}
+            className={buttonClasses()}
+            data-testid="review-prepared-change"
+          >
+            Review prepared change
+          </Link>
+          <button
+            type="button"
+            onClick={() => loadDiff(preparedChangeId)}
+            className="text-sm text-fg-prose underline underline-offset-2 hover:text-fg"
+          >
+            Preview the diff here
+          </button>
           {branchUrl && (
             <a
               href={branchUrl}

@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { conclusionKey } from "@/modules/business-audit/conclusions";
 import { LENS_LABELS, MATERIALITY_LABELS } from "@/modules/business-audit/map-view";
 import type { BusinessMap } from "@/modules/business-audit/map-view";
 import type { BusinessConclusion, BusinessLens } from "@/modules/business-audit/schema";
+import { movesContextHref } from "@/modules/opportunities/lineage";
 import { MonoLabel } from "@/components/ui/typography";
 
 /**
@@ -54,6 +56,7 @@ export function CurrentPriorities({
   onSelect,
   movesHref,
   hasMoves,
+  movesByConclusion,
 }: {
   blockers: BusinessConclusion[];
   map: BusinessMap;
@@ -61,6 +64,15 @@ export function CurrentPriorities({
   onSelect: (lens: BusinessLens) => void;
   movesHref: string;
   hasMoves: boolean;
+  /**
+   * How many Moves address each conclusion of **this** audit (UI-S2 §8, §24).
+   *
+   * Empty when the current Move set was prioritized from an older audit: its
+   * keys address that audit's conclusions, and reading them against this one
+   * would attach a founder's Moves to findings they were never made for (§7).
+   * The link then falls back to the plain ranked list, which is honest.
+   */
+  movesByConclusion: Record<string, number>;
 }) {
   if (blockers.length === 0) {
     return (
@@ -88,6 +100,14 @@ export function CurrentPriorities({
           const isPrimary = index === 0;
           const isSelected = lens !== null && lens === selected;
           const materiality = materialityOf(blocker, map);
+
+          /*
+           * The key is asked for rather than rebuilt (§4, §5). It never reaches
+           * the screen — it is the address the Moves page resolves, and what a
+           * founder reads is the conclusion's own headline.
+           */
+          const key = conclusionKey("blocker", index);
+          const addressing = movesByConclusion[key] ?? 0;
 
           return (
             <li key={blocker.headline}>
@@ -154,26 +174,58 @@ export function CurrentPriorities({
 
               {/*
                 Outside the button, because a link inside a button is neither.
-                Only on the primary, and only when there is something behind it
-                (§12) — a CTA into an empty screen is a promise the audit did
-                not keep.
+
+                UI-S2 turned this from one inert-feeling link into the seam
+                between diagnosis and action (§8). When Vibe has Moves for
+                *this* finding the link carries its key, so the Moves page opens
+                already knowing what the founder came to solve. Everything below
+                the first priority stays a quiet link: one primary action per
+                screen area (§3, §23).
               */}
-              {isPrimary && (
+              {isPrimary ? (
                 <div className="mt-2 pl-2">
-                  {hasMoves ? (
+                  {addressing > 0 ? (
                     <Link
-                      href={movesHref}
+                      href={movesContextHref(movesHref, key)}
                       className="text-mint hover:text-mint-hover rounded-sm text-sm underline underline-offset-4"
                     >
                       See what Vibe would do
                     </Link>
+                  ) : hasMoves ? (
+                    // Moves exist but none names this finding — usually because
+                    // they were prioritized from an earlier audit. The list is
+                    // still worth opening; the claim that it answers *this* is
+                    // the part that would be untrue.
+                    <Link
+                      href={movesHref}
+                      className="text-mint hover:text-mint-hover rounded-sm text-sm underline underline-offset-4"
+                    >
+                      See your next moves
+                    </Link>
                   ) : (
-                    // The honest sentence is shorter than the excuse would be.
-                    <p className="text-fg-meta text-[0.8125rem] leading-relaxed">
-                      Vibe hasn&rsquo;t worked out the next moves for this project yet.
-                    </p>
+                    // Was a dead end: a sentence stating the absence, with
+                    // nowhere to go (§19). Generation is a paid, explicit
+                    // action, so this links to where that action lives rather
+                    // than starting anything (§20, §21).
+                    <Link
+                      href={movesHref}
+                      className="text-mint hover:text-mint-hover rounded-sm text-sm underline underline-offset-4"
+                    >
+                      Find my next moves
+                    </Link>
                   )}
                 </div>
+              ) : (
+                addressing > 0 && (
+                  <div className="mt-2 pl-2">
+                    <Link
+                      href={movesContextHref(movesHref, key)}
+                      className="text-fg-muted hover:text-fg-body rounded-sm text-[0.8125rem] underline underline-offset-4"
+                    >
+                      {addressing === 1 ? "See the move for this" : `See the ${addressing} moves for this`}
+                    </Link>
+                  </div>
+                )
               )}
             </li>
           );

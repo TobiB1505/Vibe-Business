@@ -312,20 +312,37 @@ test.describe("missing evidence is never a weakness (CLAUDE.md rule 44)", () => 
   });
 });
 
-test.describe("next moves handoff (§39, §40)", () => {
-  test("links to the moves rather than recommending work itself", async ({ page }) => {
+test.describe("next moves handoff (§39, §40; reworked in UI-S2 §8, §19)", () => {
+  /**
+   * The audit still recommends nothing itself — it links to the Moves, which
+   * is what these assertions were always about. What UI-S2 changed is that the
+   * link now carries *which finding* the founder is acting on, so the Moves
+   * page opens on the two Moves that answer it rather than on everything.
+   */
+  test("links to the moves that answer the finding, rather than recommending work itself", async ({
+    page,
+  }) => {
     await page.goto(SYNTHESIS);
 
     const cta = page.getByRole("link", { name: /what vibe would do/i });
     await expect(cta).toBeVisible();
-    await expect(cta).toHaveAttribute("href", /\/moves$/);
+    await expect(cta).toHaveAttribute("href", /\/moves\?from=blocker-1$/);
   });
 
-  test("shows no CTA when no real moves exist", async ({ page }) => {
+  /**
+   * Previously: no CTA and a sentence stating the absence — which read as
+   * honest and behaved as a dead end (UI-S2 §19). The honesty is unchanged;
+   * what was added is somewhere to go. Generation stays an explicit, paid
+   * action on the Moves page, so this links there rather than starting it.
+   */
+  test("offers a way forward when no real moves exist", async ({ page }) => {
     await page.goto(NO_MOVES);
 
     await expect(page.getByRole("link", { name: /what vibe would do/i })).toHaveCount(0);
-    await expect(page.getByText(/hasn.t worked out the next moves/i)).toBeVisible();
+
+    const findMoves = page.getByRole("link", { name: "Find my next moves" });
+    await expect(findMoves).toBeVisible();
+    await expect(findMoves).toHaveAttribute("href", /\/moves$/);
   });
 });
 

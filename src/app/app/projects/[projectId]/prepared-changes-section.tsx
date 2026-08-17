@@ -1,3 +1,4 @@
+import { preparedChangeAnchorId } from "@/components/layout/project-shell";
 import type { ApprovalCard } from "@/modules/approvals/view";
 import type { BusinessRationale } from "@/modules/execution/business-rationale";
 import type { MergeCard } from "@/modules/merge/view";
@@ -129,7 +130,22 @@ export function PreparedChangesSection({
 
       <ul className="space-y-4">
         {changes.map((change) => (
-          <li key={change.id} className="space-y-3 rounded-lg border border-line-2 p-4">
+          <li
+            key={change.id}
+            /*
+             * Addressable, so "I prepared this" can lead to *this* (UI-S2 §27,
+             * §28). `scroll-mt` keeps the card clear of the sticky workspace
+             * header when the browser jumps to it — without it the fragment
+             * lands with the heading hidden behind the chrome.
+             *
+             * The card itself is unchanged: no new state, no new layout, no
+             * redesign (§53).
+             */
+            id={preparedChangeAnchorId(change.id)}
+            className="scroll-mt-24 space-y-3 rounded-lg border border-line-2 p-4 target:border-mint/50"
+            data-testid="prepared-change"
+            data-prepared-change-id={change.id}
+          >
             <div className="space-y-1">
               <p className="font-mono text-sm text-fg-body">{change.branchName}</p>
               <p className="text-xs text-fg-muted">

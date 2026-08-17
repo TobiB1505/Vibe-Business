@@ -40,6 +40,7 @@ export function AuditIntelligence({
   blockers,
   movesHref,
   hasMoves,
+  movesByConclusion,
 }: {
   map: BusinessMapModel;
   /** Shown in the map's centre, where it reads as one reading among nine. */
@@ -47,6 +48,8 @@ export function AuditIntelligence({
   blockers: BusinessConclusion[];
   movesHref: string;
   hasMoves: boolean;
+  /** Moves addressing each conclusion of this audit (UI-S2 §8). */
+  movesByConclusion: Record<string, number>;
 }) {
   /*
    * Opens on the lens the audit itself ranked first, falling back to whatever
@@ -130,6 +133,7 @@ export function AuditIntelligence({
                 onSelect={setSelected}
                 movesHref={movesHref}
                 hasMoves={hasMoves}
+                movesByConclusion={movesByConclusion}
               />
             </aside>
           </div>

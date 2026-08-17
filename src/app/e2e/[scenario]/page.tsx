@@ -28,7 +28,9 @@ import {
 } from "@/app/app/onboarding/[projectId]/operation-states";
 import { RetryProductScan } from "@/app/app/onboarding/[projectId]/phase-actions";
 import { UnderstandingStatus } from "@/app/app/onboarding/[projectId]/understanding-status";
+import { OpportunitiesPanel } from "@/app/app/projects/[projectId]/opportunities-panel";
 import { ProductLogo } from "@/components/brand/product-logo";
+import { E2E_MOVES_SCENARIOS, isE2eMovesScenario } from "../moves-scenarios";
 import {
   E2E_ONBOARDING_SCENARIOS,
   isE2eOnboardingScenario,
@@ -107,6 +109,32 @@ export default async function E2eScenarioPage({
           analyzedAt={fixture.analyzedAt}
           projectId="project_e2e"
           liveSnapshot={fixture.live}
+        />
+      </main>
+    );
+  }
+
+  // The Moves surface (UI-S2 §41, §42): the same panel the moves route renders,
+  // given lineage the real resolver produced from a real audit shape.
+  if (isE2eMovesScenario(scenario)) {
+    const fixture = E2E_MOVES_SCENARIOS[scenario]();
+    return (
+      <main className="mx-auto max-w-4xl p-8">
+        {label}
+        <OpportunitiesPanel
+          projectId="project_e2e"
+          opportunities={fixture.opportunities}
+          executionStates={fixture.executionStates}
+          branchUrls={{}}
+          validationSummaries={{}}
+          stale={fixture.stale}
+          activeOperation={null}
+          blockedReason={fixture.blockedReason}
+          auditHref="/app/projects/project_e2e/score"
+          lineage={fixture.lineage}
+          movesContext={fixture.movesContext}
+          movesHref="/app/projects/project_e2e/moves"
+          preparedHref="/app/projects/project_e2e/prepared"
         />
       </main>
     );
@@ -244,6 +272,7 @@ export default async function E2eScenarioPage({
   // route renders, given an audit the real scoring produced.
   if (isE2eAuditScenario(scenario)) {
     const auditResult = E2E_AUDIT_SCENARIOS[scenario]();
+    const hasMoves = scenario !== "audit-synthesis-no-moves";
     return (
       <main className="mx-auto max-w-[90rem] p-8">
         {label}
@@ -251,7 +280,15 @@ export default async function E2eScenarioPage({
           audit={auditResult}
           generatedAt={auditResult.generatedAt}
           movesHref="/app/projects/project_e2e/moves"
-          hasMoves={scenario !== "audit-synthesis-no-moves"}
+          hasMoves={hasMoves}
+          /*
+           * The lineage the real page computes (UI-S2 §8). Two Moves on the
+           * top blocker and one on the second, so the browser can check that
+           * the primary priority carries its key, that a secondary priority
+           * gets a quieter link, and that a blocker with nothing behind it
+           * gets no link at all.
+           */
+          movesByConclusion={hasMoves ? { "blocker-1": 2, "blocker-2": 1 } : {}}
         />
       </main>
     );
