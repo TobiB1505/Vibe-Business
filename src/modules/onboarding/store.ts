@@ -122,7 +122,17 @@ export async function markOnboardingMilestone(
 
 export async function completeProjectOnboarding(
   supabase: SupabaseClient,
-  params: { projectId: string; userId: string },
+  params: {
+    projectId: string;
+    userId: string;
+    /**
+     * Whether setup finished with the Business Audit set aside for want of a
+     * live product (UI-S1 §12). Recorded because "finished" and "finished with
+     * an audit" are different outcomes, and the trail should not read as though
+     * an audit ran when none did.
+     */
+    auditParked?: boolean;
+  },
 ): Promise<void> {
   const completedAt = new Date().toISOString();
   const { data, error } = await supabase
@@ -139,7 +149,7 @@ export async function completeProjectOnboarding(
       userId: params.userId,
       projectId: params.projectId,
       eventType: "onboarding.completed",
-      metadata: { projectId: params.projectId },
+      metadata: { projectId: params.projectId, auditParked: params.auditParked === true },
     });
   }
 }

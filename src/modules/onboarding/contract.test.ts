@@ -108,11 +108,26 @@ describe("onboarding orchestrates canonical domains", () => {
     expect(ACTIONS).not.toContain("onboarding_business_context");
   });
 
+  /**
+   * The guard moved out of this function in UI-S1 and did not weaken.
+   *
+   * It used to be an inline condition allowing exactly one terminal path, which
+   * is what made a founder with no live product unable to ever finish. It is
+   * now `canCompleteOnboarding` — a pure predicate with its own tests, shared
+   * with the screen so the button and the action cannot disagree.
+   *
+   * What this asserts is unchanged in substance: completion is decided on the
+   * server, from records reconciled by `getProjectOnboarding`, and never from
+   * anything the browser sent.
+   */
   it("guards completion with reconciled server state", () => {
-    const completion = ACTIONS.slice(ACTIONS.indexOf("completeOnboardingAction"));
+    const completion = ACTIONS.slice(ACTIONS.indexOf("export async function completeOnboardingAction"));
     expect(completion).toContain("getProjectOnboarding");
-    expect(completion).toContain('onboarding.state !== "first_move"');
-    expect(completion).toContain("onboarding.firstMoveViewedAt === null");
+    expect(completion).toContain("canCompleteOnboarding");
+    expect(completion).toContain("onboarding.firstMoveViewedAt !== null");
+    // The parked path is re-derived here, not trusted from the request.
+    expect(completion).toContain("auditSurface(");
+    expect(completion).toContain("if (!allowed) redirect(onboardingHref(projectId))");
   });
 
   it("renders only real opportunity data and an honest no-move fallback", () => {

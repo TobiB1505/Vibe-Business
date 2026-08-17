@@ -10,9 +10,11 @@ import { buttonClasses } from "@/components/ui/button";
  * a quiet footer. The wash and grid are decorative and `aria-hidden`; the grid
  * is drawn with a gradient rather than an asset so it costs no request.
  *
- * The nav carries the sign-in route only. Marketing pages beyond the landing
- * page — pricing, legal, the trust page — exist in the mockups but not in the
- * application, and this shell does not link to routes that would 404.
+ * The nav carries the two ways in. The footer carries the legal surfaces, which
+ * exist as real routes as of UI-S1 — a product that asks for access to
+ * someone's repository has to say what it does with it somewhere reachable.
+ * Nothing here links to a route that does not exist; pricing and the trust page
+ * are still mockup-only and still absent.
  */
 export function MarketingShell({ children }: { children: ReactNode }) {
   return (
@@ -56,9 +58,30 @@ export function MarketingShell({ children }: { children: ReactNode }) {
       <main className="mx-auto w-full max-w-[80rem] px-5 sm:px-10">{children}</main>
 
       <footer className="border-line-1 mt-20 border-t">
-        <div className="text-fg-meta mx-auto flex w-full max-w-[80rem] flex-wrap items-center gap-4 px-5 py-8 text-xs sm:px-10">
-          <span className="font-mono">Vibe Business</span>
-          <span className="ml-auto">The business layer for AI-built products.</span>
+        {/*
+          One row of links, one line of identity, in that order at every width.
+          The tagline had an `ml-auto` variant for phones, which on a 390px
+          screen pushed itself between "Vibe Business" and "Privacy" and left
+          the links wrapping around it.
+        */}
+        <div className="mx-auto flex w-full max-w-[80rem] flex-col gap-4 px-5 py-8 sm:px-10">
+          <nav aria-label="Footer" className="flex flex-wrap items-center gap-x-6 gap-y-3 text-xs">
+            <span className="text-fg-muted font-mono">Vibe Business</span>
+            {[
+              ["Privacy", "/privacy"],
+              ["Terms", "/terms"],
+              ["Sign in", "/login"],
+            ].map(([label, href]) => (
+              <Link
+                key={href}
+                href={href}
+                className="text-fg-muted hover:text-fg-body rounded-sm transition-colors duration-150"
+              >
+                {label}
+              </Link>
+            ))}
+          </nav>
+          <p className="text-fg-muted text-xs">The business layer for AI-built products.</p>
         </div>
       </footer>
     </div>

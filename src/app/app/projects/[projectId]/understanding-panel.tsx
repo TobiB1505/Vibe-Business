@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ProductLogo } from "@/components/brand/product-logo";
 import { VibeMark } from "@/components/brand/vibe-mark";
 import { buttonClasses } from "@/components/ui/button";
 import { Disclosure, TechnicalDetails } from "@/components/ui/disclosure";
@@ -65,16 +66,10 @@ export function UnderstandingPanel({
       {/* ── The conclusion ─────────────────────────────────────────── */}
       <Surface level="card" padding="lg" className="flex flex-col items-center gap-6 text-center">
         {brand.logo ? (
-          // A real asset, or nothing. `next/image` is deliberately not used:
-          // the host is the customer's own origin and is not known at build
-          // time, so a plain img with no referrer is the honest primitive.
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={brand.logo.url}
-            alt={brand.logo.alt}
-            referrerPolicy="no-referrer"
-            className="h-12 max-w-[220px] object-contain"
-          />
+          // A real asset, or the Vibe mark if the browser cannot load it. The
+          // fallback lives in `ProductLogo` because only the browser knows
+          // whether a URL on the customer's own origin resolves (UI-S1 §18).
+          <ProductLogo src={brand.logo.url} alt={brand.logo.alt} size={40} />
         ) : (
           <VibeMark size={40} />
         )}

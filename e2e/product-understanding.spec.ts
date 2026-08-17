@@ -95,13 +95,44 @@ test.describe("the conclusion comes first", () => {
 });
 
 test.describe("the logo reveal", () => {
-  test("renders the real asset with a name, not a generic label", async ({ page }) => {
-    await forbidExternalCalls(page);
-    await page.goto(READY);
+  /**
+   * Rewritten in UI-S1, because what this asserted stopped being desirable.
+   *
+   * It used to check that an unreachable logo still sat in the DOM with the
+   * right `src` and alt — which is precisely the broken-image glyph the audit
+   * found sitting above "I understand what you built". The naming rule it was
+   * really about (`${productName} logo`, never "logo") is a property of the
+   * view model and is unit-tested there; what a browser can uniquely prove is
+   * that the attributes are correct **while the asset is still loading**, and
+   * that a failure degrades rather than persists.
+   */
+  test("requests the real asset, named after the product, without a referrer", async ({ page }) => {
+    // Held open rather than aborted: this is about the request Vibe makes, so
+    // the image must stay in-flight long enough to be inspected.
+    const released: (() => void)[] = [];
+    await page.route("https://acme.test/**", async (route) => {
+      await new Promise<void>((resolve) => released.push(resolve));
+      await route.abort();
+    });
+    // `load` would wait for the very image being held open, so the assertion
+    // runs against the parsed document instead.
+    await page.goto(READY, { waitUntil: "domcontentloaded" });
 
     const logo = page.getByAltText("Acme logo");
     await expect(logo).toHaveAttribute("src", "https://acme.test/logo.svg");
     await expect(logo).toHaveAttribute("referrerpolicy", "no-referrer");
+
+    for (const release of released) release();
+  });
+
+  /** The trust failure this sprint fixed: a dead asset must not stay broken. */
+  test("falls back to a neutral mark when the asset cannot load", async ({ page }) => {
+    await forbidExternalCalls(page);
+    await page.goto(READY);
+
+    await expect(page.getByAltText("Acme logo")).toHaveCount(0);
+    await expect(page.locator("img[src*='vibe-mark']").first()).toBeVisible();
+    await expect(page.getByRole("heading", { name: "I understand what you built." })).toBeVisible();
   });
 
   test("shows a neutral mark and says why when no logo can be shown", async ({ page }) => {

@@ -31,7 +31,9 @@ export default async function SignupPage({
     >
       <div className="flex flex-col gap-2">
         <h1 className="text-fg text-headline font-bold">Create account</h1>
-        <p className="text-fg-muted text-sm">For development. No elaborate onboarding.</p>
+        <p className="text-fg-muted text-sm">
+          With Google, or an email address and password.
+        </p>
       </div>
 
       <SignupForm next={next} />
@@ -41,6 +43,20 @@ export default async function SignupPage({
         <Link href="/login" className="text-mint hover:text-mint-hover rounded-sm">
           Sign in
         </Link>
+      </p>
+
+      {/* The one place a legal link genuinely has to be: this is the moment
+          someone agrees to something (UI-S1 §7, §8). */}
+      <p className="text-fg-muted text-xs leading-relaxed">
+        By creating an account you agree to the{" "}
+        <Link href="/terms" className="text-fg-muted hover:text-fg-body underline underline-offset-4">
+          terms
+        </Link>{" "}
+        and the{" "}
+        <Link href="/privacy" className="text-fg-muted hover:text-fg-body underline underline-offset-4">
+          privacy notice
+        </Link>
+        .
       </p>
     </AuthShell>
   );

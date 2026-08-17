@@ -21,6 +21,19 @@ import {
 } from "../understanding-scenarios";
 import { UnderstandingPanel } from "@/app/app/projects/[projectId]/understanding-panel";
 import { UnderstandingConfirm } from "@/app/app/projects/[projectId]/understanding-confirm";
+import { AuditLivePrerequisite } from "@/app/app/onboarding/[projectId]/audit-live-prerequisite";
+import {
+  OnboardingOperationFailure,
+  OnboardingStalled,
+} from "@/app/app/onboarding/[projectId]/operation-states";
+import { RetryProductScan } from "@/app/app/onboarding/[projectId]/phase-actions";
+import { UnderstandingStatus } from "@/app/app/onboarding/[projectId]/understanding-status";
+import { ProductLogo } from "@/components/brand/product-logo";
+import {
+  E2E_ONBOARDING_SCENARIOS,
+  isE2eOnboardingScenario,
+  isE2eOnboardingStaticScenario,
+} from "../onboarding-scenarios";
 
 /**
  * The browser harness's only entry point (Sprint 11C.1).
@@ -95,6 +108,55 @@ export default async function E2eScenarioPage({
           projectId="project_e2e"
           liveSnapshot={fixture.live}
         />
+      </main>
+    );
+  }
+
+  // Onboarding's changed states (UI-S1 §23). The same components the setup
+  // flow renders, given operation views the real builder produced.
+  if (isE2eOnboardingScenario(scenario)) {
+    const { operation } = E2E_ONBOARDING_SCENARIOS[scenario]();
+    const failed = operation.status === "failed";
+    return (
+      <main className="mx-auto max-w-4xl p-8">
+        {label}
+        <div className="flex flex-col gap-4">
+          {failed ? (
+            <OnboardingOperationFailure
+              what="getting to know your product"
+              operation={operation}
+              action={<RetryProductScan projectId="project_e2e" />}
+            />
+          ) : (
+            <>
+              <UnderstandingStatus operation={operation} liveSiteStatus="provided" />
+              {operation.stalled && (
+                <OnboardingStalled
+                  what="getting to know your product"
+                  action={<RetryProductScan projectId="project_e2e" />}
+                />
+              )}
+            </>
+          )}
+        </div>
+      </main>
+    );
+  }
+
+  if (isE2eOnboardingStaticScenario(scenario)) {
+    return (
+      <main className="mx-auto max-w-4xl p-8">
+        {label}
+        {scenario === "onboarding_logo_broken" ? (
+          // The host does not exist, so the browser's load genuinely fails —
+          // which is the only way to prove the fallback rather than assert it.
+          <ProductLogo src="https://acme.test/logo.png" alt="Acme logo" size={44} />
+        ) : (
+          <AuditLivePrerequisite
+            projectId="project_e2e"
+            mode={scenario === "onboarding_audit_parked" ? "parked" : "awaiting"}
+          />
+        )}
       </main>
     );
   }

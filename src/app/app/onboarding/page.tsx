@@ -34,15 +34,22 @@ export default async function NewProjectOnboardingPage() {
             Show Vibe what you built.
           </h1>
           <p className="text-fg-prose max-w-[58ch] text-base leading-relaxed sm:text-lg">
-            Vibe reads your product, works out the business around it, and tells you where to start. Connect the code you already built — read-only to begin.
+            Vibe reads your product, works out the business around it, and tells you where to
+            start. Connect the code you already built.
           </p>
         </header>
 
+        {/* Says what the next click does before it happens (UI-S1 §17). The
+            founder is about to be handed to GitHub's own screen, and being
+            told that in advance is the difference between a hand-off and a
+            surprise. It describes the choice they will make rather than
+            characterising the permissions the App holds. */}
         <Surface level="card" padding="lg" className="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-col gap-1.5">
-            <h2 className="text-fg text-lg font-semibold">Your product source</h2>
-            <p className="text-fg-muted max-w-[42ch] text-sm">
-              GitHub is the current source. You choose one repository; Vibe never asks for write access here.
+            <h2 className="text-fg text-lg font-semibold">Connect your code</h2>
+            <p className="text-fg-muted max-w-[44ch] text-sm">
+              GitHub will ask which repositories Vibe may access. You choose — Vibe only ever sees
+              the ones you pick, and you can change that in GitHub at any time.
             </p>
           </div>
           <Link href="/app/connect/github" className={buttonClasses()}>
