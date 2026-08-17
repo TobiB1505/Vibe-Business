@@ -1,10 +1,9 @@
 # Sprint CORE-2b — Action Planner Intelligence
 
-**Status: implemented and hardened; real-product dogfood outstanding.** Contract, reasoning,
-persistence, durable execution, validation and the dogfood harness are built and green, and
-the CORE-2b FIX pass below closed four architectural gaps before any real planner quality is
-evaluated. The one thing not done is the thing that needs credentials and a billable call —
-see *What is not done* at the bottom, which is deliberately not buried.
+**Status: complete.** Built, hardened by the CORE-2b FIX pass, migrations deployed and read
+back, and dogfooded on a real product — one plan, $0.0471, clean validation, and the canonical
+lineage working on its first real use. What is left is not CORE-2b: the planner still has no
+trigger in the product, which belongs to the UI sprint.
 
 Branch: `claude/core-2b-action-planner-m5xkwm`, from `352662d` (merge of PR #41 —
 CORE-2a.4 Interactive Audit and the audit/onboarding work on top of it).
@@ -326,6 +325,7 @@ action, and until then the planner reads existing Moves through the legacy path.
 | build | green |
 | E2E | unchanged — this sprint ships no UI, so no browser assertion changed |
 | migrations | **deployed and read back** — see below |
+| dogfood | **done** — one real plan, $0.0471, clean validation |
 
 ## Migration deployment
 
@@ -364,39 +364,83 @@ Verified by reading the database back rather than by trusting the apply:
   (`set_updated_at` search_path, `rls_auto_enable` being callable, leaked-password
   protection off).
 
+## Dogfood — the first real Action Plan
+
+Run 2026-08-17 against **Jandia-Arena**, a resort's internal staff vacation planner. Not
+Vibe Business itself: its own chain is frozen (see *Residuals*), and CORE-2a.4 set the
+precedent that a real unrelated project is a legitimate dogfood — that run found two
+defects no test could have.
+
+Nothing was seeded (§75). The Move planned is whichever ranked first, and it happened to
+be `needs_user_input` rather than the executable SEO one — so §83 was tested rather than
+demonstrated.
+
+```
+Audit 51fb3840 → blocker-1 → Move rank 1 → Action Plan
+                              via lineage: direct
+```
+
+**The lineage worked on its first real use.** The Move carried
+`source_conclusion_key = blocker-1`, written by `opportunity-engine-v2` an hour earlier,
+so the planner read it and the legacy reconstruction never ran.
+
+### The five questions
+
+| | |
+|---|---|
+| §92 — written for *this* business? | Yes. "resort staff and managers", "the calendar, the requests", "FastAPI backend", "manager-provisioned shared login". No sentence transfers to another product. |
+| §93 — could Vibe have prepared more? | No. Step 1 derives two-to-three access models with trade-offs; step 2 asks the founder to choose between them. |
+| §94 — execution honesty | No step claimed `vibe_executes_now`. Both `product_change` steps: `not_yet_supported`, capability `none`, **and** `approval: required` — the pair a boolean could not express (§50). |
+| §95 — first actionable step | Step 1, `vibe_prepares`. Unblocked, and Vibe's own work. |
+| §96 — coherence | Root problem was "nobody can find a way in". After all five steps: login exists, dashboard behind it, homepage links to it, path verified. Materially resolved. |
+
+`Findings: none`, `Notes: none` — no repair was needed on the first run.
+
+### Cost
+
+| | Planner | Audit |
+|---|---|---|
+| Input tokens | 8,190 (of 20,000 allowed) | far larger |
+| Output / reasoning | 3,069 / 1,401 (of 10,000) | ~5,800 / 8–11k |
+| Latency | **39.5s** | ~100–120s |
+| Provider cost | **$0.0471** | ~$0.1950 |
+
+**About a quarter of an audit**, which settles §98: the focused context selection in
+`evidence.ts` is doing what it was built for. `ACTION_PLANNING_CONFIG.timeoutMs` is no
+longer provisional — it is now held up by a measurement of this operation, and stays at
+120s for the headroom reason recorded in its comment.
+
+## Residuals
+
+**`whyNow` truncates mid-word.** `validate.ts` caps it at 400 characters, and the real
+plan hit the cap: the report ends "…every other gap (pricing, legal, acquisition…". Fine
+in a developer report, wrong on a screen. The UI sprint has to pick a real limit for this
+field rather than inheriting the completion-criteria cap it currently shares.
+
+**A vocabulary stretch.** The final step — walking the path end to end to confirm nothing
+dead-ends — was classified `changeKind: measurement`, whose contract says "a signal is
+*defined*". Verifying is not defining. It routed correctly (`founder_action` →
+`founder_acts`), so nothing downstream is wrong, but the vocabulary has no value for
+"check that it worked". Worth one on the next contract revision, not a fix now.
+
+**Vibe Business itself cannot be dogfooded.** Its audit is stale, its free entitlement is
+spent, its stored contract is already current so no `system_contract_refresh` is owed, and
+credits do not exist — so the audit cannot re-run, and the Moves are gated on audit
+currency. This is CORE-2a.1's recorded residual reaching its conclusion: the entitlement
+covers *Vibe* changing, never the *customer's evidence* changing. The first project to hit
+it is our own.
+
 ## What is not done
 
-**The real dogfood has not been run.** §92–§98 require planning Vibe Business's own current
-top Move and reviewing the result by hand, which needs an Anthropic key and a billable
-inference call against the user's account. The harness is built and is one command:
-
-```
-NEXT_PUBLIC_SUPABASE_URL=… SUPABASE_SERVICE_ROLE_KEY=… \
-ANTHROPIC_API_KEY=sk-ant-… VIBE_DOGFOOD_PROJECT_ID=<uuid> \
-pnpm ai:dogfood-action-plan
-```
-
-It reads the project's real current audit and Moves, plans **whichever Move actually ranks
-first** — nothing is seeded to manufacture an easy executable result (§75) — writes
-nothing, and prints the report with measured tokens, latency and provider cost.
-
-One thing to expect from it: every existing Move predates `business-opportunity.v2`, so the
-first dogfood will resolve its source conclusion through the **legacy** path, and the
-report will say `via legacy_reconciled`. If the top Move is one the conservative rule
-cannot resolve unambiguously, the harness refuses before spending — which is the gate
-working, not a failure. Regenerating Moves (a paid run, and the user's action) is what
-produces direct lineage.
-
-Until the dogfood runs, these remain open: the five dogfood questions (§92–§96), the
-measured cost comparison against the audit (§97–§98), and
-`ACTION_PLANNING_CONFIG.timeoutMs`, which is the only budget in `ai/operations.ts` set from
-a comparable operation rather than from measurement and is marked provisional in its own
-comment.
+Nothing in CORE-2b remains unvalidated. What remains is scope that was never in it: the
+Action Planner has **no trigger in the product**. The durable path, the store, the
+readiness gate and the workflow all exist and are exercised, but the only way to start a
+plan today is `pnpm ai:dogfood-action-plan` from a shell. A Server Action and a button are
+the whole gap, and they belong to the UI sprint.
 
 ## Next
 
-1. Dogfood the real top Move.
-2. Re-set the planning timeout from measured duration.
+1. Give the planner a trigger in the product — a Server Action and a button.
 3. CORE-2b UI — the Action Planner experience, once the intelligence has been read and judged.
 4. Then bounded Execution / Prepare / Preview, which is where `vibe_executes_now` stops being
    a label and starts being a button.

@@ -205,12 +205,21 @@ export const ACTION_PLANNING_CONFIG: OperationConfig = {
   maxOutputTokens: 10_000,
   maxInputTokens: 20_000,
   /*
-   * Provisional, and marked as such rather than presented as measured.
+   * Measured, on one real run — and the count is stated because one is not a
+   * distribution.
    *
-   * Every other timeout in this file was set from real runs. This one cannot be
-   * until the first dogfood, so it starts at the Opportunity Engine's — the
-   * nearest comparable operation, a single structured judgement call on a
-   * smaller input — and is to be re-set from measured duration afterwards.
+   * The first dogfood planned a real Move end to end in **39.5s**, generating
+   * 3,069 output plus 1,401 reasoning tokens from an 8,190-token input. That
+   * sits almost exactly where the Opportunity Engine does (39.5s average across
+   * eight runs), which is what this ceiling was provisionally borrowed from —
+   * so the number stays, but it is now held up by a measurement of this
+   * operation rather than by an analogy to a neighbouring one.
+   *
+   * Three times the observed duration. Kept at that rather than tightened
+   * toward the measurement, because a single run says nothing about variance
+   * and the audit's own history is the argument: its duration grew from 99s to
+   * past 120s as the rubric grew, and the tight ceiling threw away a finished,
+   * paid answer. Headroom costs nothing until it is used.
    */
   timeoutMs: 120_000,
 };
