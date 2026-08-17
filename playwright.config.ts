@@ -54,7 +54,24 @@ export default defineConfig({
     // `VIBE_E2E_FIXTURES` is what makes the fixture route exist at all. It is
     // set here and nowhere else — not in `.env`, not in Vercel — so a deployed
     // build has no fixture surface.
-    command: "VIBE_E2E_FIXTURES=1 pnpm exec next start --port 3311",
+    //
+    // The Supabase values are deliberate placeholders for a project that does
+    // not exist. They are not credentials and they are not a test account:
+    // they exist so the auth proxy *runs* (without them it passes every
+    // request through unconfigured, and the guard redirects can't be observed
+    // at all), while every call to Supabase fails at DNS. That makes the
+    // signed-out half of auth fully exercisable and completely deterministic.
+    //
+    // What it cannot exercise is anything requiring a real session — a
+    // successful sign-in, session persistence across a restart, or the
+    // neutral password-reset confirmation. Those are covered by unit tests and
+    // must be dogfooded against a real project; see
+    // docs/setup/supabase-auth.md.
+    command:
+      "VIBE_E2E_FIXTURES=1 " +
+      "NEXT_PUBLIC_SUPABASE_URL=https://e2e-placeholder.supabase.co " +
+      "NEXT_PUBLIC_SUPABASE_ANON_KEY=e2e-placeholder-anon-key " +
+      "pnpm exec next start --port 3311",
     url: "http://127.0.0.1:3311/e2e/merge_ready",
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
