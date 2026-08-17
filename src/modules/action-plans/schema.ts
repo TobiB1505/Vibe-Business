@@ -48,8 +48,25 @@ export const ACTION_PLAN_STEP_SCHEMA_VERSION = "business-action-plan-step.v1" as
  */
 export const ACTION_PLANNER_CONTRACT_VERSION = "action-planner-contract-v1" as const;
 
-/** Bumped when planning behaviour changes materially. */
-export const ACTION_PLANNER_VERSION = "action-planner-v1" as const;
+/**
+ * Bumped when planning behaviour changes materially.
+ *
+ * v2 (CORE-2b MINI VERIFICATION) is `whyNow`, `expectedOutcome` and
+ * `addressesRootProblem` no longer sharing their length ceiling with
+ * per-step `completionCriteria`. The real dogfood proved the shared 400-char
+ * limit cut legitimate narrative content mid-word during normalization —
+ * before persistence, not merely on display — so a plan generated under v1
+ * can carry a `whyNow` truncated in a way v2 would not have produced from the
+ * identical model response. Bumping this is what makes replanning the same
+ * Move pick up the fix rather than reusing a v1 plan that may have lost text
+ * (§53's reuse key includes `plannerVersion`).
+ *
+ * Not a `contractVersion` bump: a v1 plan with a truncated `whyNow` is
+ * degraded, not wrong — it remains a usable answer to "how would Vibe
+ * approach this Move?", which is the bar `ACTION_PLANNER_CONTRACT_VERSION`
+ * exists to guard.
+ */
+export const ACTION_PLANNER_VERSION = "action-planner-v2" as const;
 
 /**
  * Plan size (§29, §30).
@@ -114,11 +131,37 @@ export const STEP_CHANGE_KINDS = [
   /** Something outside the product is set up: an account, an integration, a listing. */
   "external_setup",
   /**
-   * A signal is *defined* so the outcome becomes observable.
+   * The outcome becomes observable — a signal is *defined*, an existing one
+   * is *read*, or someone *confirms* a just-built thing behaves as intended.
    *
-   * Defining it, not building it. Wiring analytics into the product is a
-   * `product_change` — the distinction matters because it decides whether the
-   * step is Vibe's reasoning work or a change to someone's repository.
+   * Broadened by the CORE-2b MINI VERIFICATION pass, which traced a real
+   * dogfood step — "sign in as staff and confirm the path from homepage to
+   * dashboard works end to end" — through every place `changeKind` drives
+   * behaviour before deciding whether the original, narrower wording
+   * ("defining a signal") was still accurate. It was not: a model had
+   * already reached for `measurement` to describe *confirming* something,
+   * not only *defining* something, and the routing consequences of that turn
+   * out to already be correct for both readings — `classifyStep` never
+   * routes on `changeKind` for `founder_action`/`founder_decision`/
+   * `external_party` steps at all, and no registry capability's
+   * `changeKinds` lists `measurement`, so it can never wrongly resolve to
+   * `vibe_executes_now` either way. What was wrong was only the sentence
+   * describing the type, not anything it caused.
+   *
+   * The boundary that *is* load-bearing is unchanged and still absolute:
+   * wiring analytics into the product, or writing an automated check that
+   * runs against it, is a `product_change` — never `measurement`, whichever
+   * of the three readings above applies. That distinction is what decides
+   * whether a step is Vibe's reasoning/observation work or a change to
+   * someone's repository, and it is the one thing a future model must not
+   * blur.
+   *
+   * A distinct `verification` kind was considered and rejected: the
+   * checklist for adding one is a *system* reason — a materially different
+   * actor, capability match, routing, approval, or executor consequence —
+   * and none exists here. `actor` already answers who confirms it; adding a
+   * fourth-ish concept to `changeKind` for the same fact `actor` already
+   * carries would be linguistic neatness, not new behaviour.
    */
   "measurement",
   /** Information is gathered from people or the market, not from the product. */

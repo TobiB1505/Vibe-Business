@@ -67,7 +67,7 @@ const STEP_ITEM_SCHEMA = {
       type: "string",
       enum: [...STEP_CHANGE_KINDS],
       description:
-        "What kind of changed state this produces. product_change means the product itself ends up different; measurement means a signal is defined, not built.",
+        "What kind of changed state this produces. product_change means the product itself ends up different — including wiring up analytics or an automated check. measurement means the outcome becomes observable without changing the product: a signal is defined, an existing one is read, or someone confirms a just-built thing behaves as intended.",
     },
     completionCriteria: {
       type: "string",

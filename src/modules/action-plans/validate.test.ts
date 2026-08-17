@@ -306,3 +306,115 @@ describe("plan quality", () => {
     expect(result.result.findings).not.toContain("no_changed_state");
   });
 });
+
+/**
+ * Plan-level narrative fields (CORE-2b MINI VERIFICATION §1).
+ *
+ * The residual traced to one line: `whyNow` shared `MAX_CRITERIA` (400) with
+ * per-step `completionCriteria` purely because both called `text()` with the
+ * same second argument, and the real dogfood's two-sentence `whyNow` was cut
+ * mid-word the moment it was normalized — before persistence, not on
+ * display. `PERSISTED CONTRACT ISSUE`, not `DISPLAY-ONLY`: `validate.ts` is
+ * upstream of `runner.ts`'s `ActionPlan` and `store.ts`'s `why_now` column,
+ * so whatever these tests see leaving validation is exactly what a founder
+ * would eventually read back.
+ */
+describe("narrative fields (whyNow, expectedOutcome, addressesRootProblem)", () => {
+  /**
+   * Shaped like the real dogfood response: two sentences of ordinary business
+   * reasoning that land past the old 400-char ceiling but comfortably under
+   * the new 600-char one. This is the regression test for the residual —
+   * before the fix, this exact shape of content was cut mid-word.
+   */
+  const REALISTIC_WHY_NOW =
+    "The audit found no login, signup, or dashboard surface anywhere on the live site or in the repository, so the customer journey it derived stops at arrival on the homepage. The founder's stated priority is to get this launched, and launching cannot mean anything if the resort's own staff have no path from the homepage into the calendar and request tool — every other gap, including pricing, legal and acquisition, is downstream of this one and does not matter until it is closed.";
+
+  it("carries realistic whyNow prose through unmodified", () => {
+    expect(REALISTIC_WHY_NOW.length).toBeGreaterThan(400);
+    expect(REALISTIC_WHY_NOW.length).toBeLessThanOrEqual(600);
+
+    const result = validate(fakeWirePlan({ whyNow: REALISTIC_WHY_NOW }));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // Byte-for-byte: no slice, no appended ellipsis, no dropped tail.
+    expect(result.result.whyNow).toBe(REALISTIC_WHY_NOW);
+    expect(result.result.whyNow.endsWith("…")).toBe(false);
+    expect(result.result.findings).not.toContain("narrative_field_truncated");
+  });
+
+  it("carries realistic expectedOutcome and addressesRootProblem through unmodified", () => {
+    const value = REALISTIC_WHY_NOW.replace("audit found", "outcome shows");
+    const result = validate(
+      fakeWirePlan({ expectedOutcome: value, addressesRootProblem: value }),
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.result.expectedOutcome).toBe(value);
+    expect(result.result.addressesRootProblem).toBe(value);
+  });
+
+  /** The full round-trip the residual asked for: schema → normalize → domain object. */
+  it("survives from wire input to the ActionPlan-shaped result with nothing lost", () => {
+    const result = validate(fakeWirePlan({ whyNow: REALISTIC_WHY_NOW }));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // ValidatedPlan.whyNow is exactly what runner.ts assigns to ActionPlan.whyNow
+    // and what store.ts persists as why_now — there is no further transform
+    // between here and the database.
+    expect(result.result.whyNow).toHaveLength(REALISTIC_WHY_NOW.length);
+  });
+
+  /**
+   * The safety net still exists — Rule 27 forbids an unbounded field — but it
+   * is a last resort for pathological output now, not a ceiling ordinary
+   * prose collides with. When it fires, the plan says so.
+   */
+  it("still caps truly runaway narrative content, and records that it did", () => {
+    const pathological = "This business problem is real and it matters. ".repeat(20);
+    expect(pathological.length).toBeGreaterThan(600);
+
+    const result = validate(fakeWirePlan({ whyNow: pathological }));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.result.whyNow.length).toBeLessThanOrEqual(601);
+    expect(result.result.whyNow.endsWith("…")).toBe(true);
+    expect(result.result.findings).toContain("narrative_field_truncated");
+    expect(result.result.notes.some((note) => note.includes("whyNow"))).toBe(true);
+  });
+
+  /**
+   * Per-step fields are deliberately unaffected. `completionCriteria` and
+   * `purpose` are meant to stay compact — one observable state, not a
+   * paragraph (§20) — so they keep the original 400-char ceiling this fix
+   * did not touch.
+   */
+  it("leaves the per-step completion-criteria ceiling where it was", () => {
+    const longCriteria = "A specific, observable, and fully confirmed result. ".repeat(10);
+    expect(longCriteria.length).toBeGreaterThan(400);
+    expect(longCriteria.length).toBeLessThan(600);
+
+    const result = validate(
+      fakeWirePlan({
+        steps: [
+          fakeWirePlanStep({ order: 1, completionCriteria: longCriteria }),
+          fakeWirePlanStep({
+            order: 2,
+            title: "Choose which segment the business will pursue",
+            completionCriteria: "One segment is chosen and recorded as the current audience.",
+            dependsOn: [1],
+          }),
+        ],
+      }),
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // Unlike whyNow at the same length, this is still cut — the two fields'
+    // ceilings are independent, exactly as intended.
+    expect(result.result.steps[0].completionCriteria.endsWith("…")).toBe(true);
+  });
+});

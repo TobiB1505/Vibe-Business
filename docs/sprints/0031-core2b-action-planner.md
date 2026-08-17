@@ -412,23 +412,103 @@ longer provisional — it is now held up by a measurement of this operation, and
 
 ## Residuals
 
-**`whyNow` truncates mid-word.** `validate.ts` caps it at 400 characters, and the real
-plan hit the cap: the report ends "…every other gap (pricing, legal, acquisition…". Fine
-in a developer report, wrong on a screen. The UI sprint has to pick a real limit for this
-field rather than inheriting the completion-criteria cap it currently shares.
-
-**A vocabulary stretch.** The final step — walking the path end to end to confirm nothing
-dead-ends — was classified `changeKind: measurement`, whose contract says "a signal is
-*defined*". Verifying is not defining. It routed correctly (`founder_action` →
-`founder_acts`), so nothing downstream is wrong, but the vocabulary has no value for
-"check that it worked". Worth one on the next contract revision, not a fix now.
-
 **Vibe Business itself cannot be dogfooded.** Its audit is stale, its free entitlement is
 spent, its stored contract is already current so no `system_contract_refresh` is owed, and
 credits do not exist — so the audit cannot re-run, and the Moves are gated on audit
 currency. This is CORE-2a.1's recorded residual reaching its conclusion: the entitlement
 covers *Vibe* changing, never the *customer's evidence* changing. The first project to hit
-it is our own.
+it is our own. Not fixed here — it needs a financing path (credits, or an admin grant),
+which is its own scope and its own decision.
+
+The other two residuals from the dogfood were verified and closed below.
+
+## CORE-2b MINI VERIFICATION — the two residuals, traced to ground
+
+A narrow pass, run before freezing CORE-2b, to answer one question per residual: is this
+presentation, or is it a persisted-contract problem? Nothing else in CORE-2b was touched —
+no UI, no audit logic, no re-run of the paid dogfood.
+
+### 1. `whyNow` — **PERSISTED CONTRACT ISSUE**, fixed
+
+Traced the field through every step between the provider response and a future UI read:
+
+```
+provider response → wire-schema (unbounded) → validate.ts: text(v, MAX_CRITERIA=400)
+  → ValidatedPlan.whyNow (already cut) → runner.ts: ActionPlan.whyNow (unchanged)
+  → store.ts: why_now column (plain text, no further bound) → read back unchanged
+  → dogfood report: prints plan.whyNow verbatim
+```
+
+The cut happens exactly once, in `validate.ts`, at the moment the billed response becomes
+domain data — before persistence, not on display. `whyNow`, `expectedOutcome` and
+`addressesRootProblem` shared `MAX_CRITERIA` (400) with per-step `purpose` and
+`completionCriteria` only because all five calls happened to pass the same second argument
+to the same helper — never a deliberate choice that these plan-level narrative fields
+should be as compact as a one-line completion criterion. `store.ts`'s `why_now` column is
+plain `text`, so there is no second, database-level truncation to find.
+
+**Fix:** a new `MAX_NARRATIVE = 600` for the three plan-level fields, matching the
+Opportunity Engine's own `whyNow` field (`opportunities/validate.ts`'s `MAX_TEXT_LENGTH`) —
+consistency with an existing sibling contract for the same kind of content, not a number
+picked to fit one observed string. Step-level `purpose`/`completionCriteria` are untouched
+at 400; they are deliberately compact per §20 and nothing evidenced a problem there. The
+safety-net truncation still exists (Rule 27 — no field is unbounded) but now only for
+genuinely pathological output, and when it fires it is no longer silent: a new
+`narrative_field_truncated` finding and a note name the field and its length, the same way
+every other repair in this file already announces itself.
+
+`ACTION_PLANNER_VERSION` moved `v1 → v2`. This is a genuine behaviour change — the same
+billed response can now produce a materially different stored `whyNow` than it would have
+under v1 — so it belongs in the "planning behaviour changed materially" version, which
+feeds the reuse key: replanning a Move today no longer reuses a v1 plan that may have lost
+text. Not a `contractVersion` bump: a v1 plan with a truncated `whyNow` is degraded, not an
+unacceptable answer to "how would Vibe approach this Move?" — the bar that version guards.
+
+Regression coverage: a realistic two-sentence `whyNow` (480 chars — over the old ceiling,
+under the new one) survives `validate.ts` byte-for-byte and survives a full
+create-run → complete → read-back cycle through the store unmodified; a deliberately
+pathological string still gets capped and now also produces the note and finding; the
+per-step ceiling is pinned unchanged by a test that shows the same length still gets cut
+there, on purpose.
+
+### 2. `changeKind: measurement` — **SEMANTICS BROADENED**, documented; no new enum value
+
+Mapped every place `changeKind` drives behaviour: `capability-registry.ts` (only
+`product_change` capabilities exist, so `measurement` can never spuriously match one),
+`classify.ts`'s `requiresApproval` (only `product_change`/`external_setup` need it —
+`measurement` doesn't, correctly, whichever reading applies), `classify.ts`'s
+`vibe`-actor branch (`analysis`/`measurement` → `vibe_prepares`, reached only when
+`actor: vibe`), and `validate.ts`'s `no_changed_state` check (`measurement` counts as
+"changes something," alongside `decision`/`product_change`/`external_setup`).
+
+The real step — *"sign in as staff and confirm the path from homepage to dashboard works
+end to end"* — has `actor: founder_action`, and `classifyStep` never reads `changeKind` at
+all for `founder_action`/`founder_decision`/`external_party` steps beyond the approval
+check. So the classification produced exactly the right routing (`founder_acts`, no
+capability, no approval) regardless of whether "measurement" meant "define a signal" or
+"confirm one." **Nothing routed incorrectly** — the only thing wrong was the sentence
+describing the type, which said "a signal is *defined*" while a model had already, and
+correctly, reached for the same value to mean "confirmed."
+
+A distinct `verification` kind was considered and rejected against the checklist's own
+bar: adding one needs a *system* reason — a materially different actor, capability match,
+routing, approval, or executor consequence — and none exists. `actor` already carries who
+confirms it; a fourth-ish `changeKind` for the same fact would be linguistic neatness, not
+new behaviour.
+
+**Fix:** broadened the documented meaning in `schema.ts`'s `STEP_CHANGE_KINDS` comment and
+in `wire-schema.ts`'s model-facing description — "the outcome becomes observable: a signal
+is defined, an existing one is read, or someone confirms a just-built thing behaves as
+intended" — while keeping the one boundary that is load-bearing exactly where it was:
+wiring analytics into the product, or writing an automated check, is `product_change`,
+never `measurement`, under any reading. No version bump: the model's actual behaviour is
+unchanged (it already made this choice correctly under the old, narrower text), so no
+stored plan's meaning changed and nothing needs to stop being reused.
+
+Regression coverage: a `founder_action` + `measurement` step (the real shape) routes to
+`founder_acts` with no capability and no approval; a `vibe` + `measurement` step citing the
+SEO capability's own evidence ids still never resolves to `vibe_executes_now` — pinning
+that the broadened wording cannot be read as license for a capability to match on it.
 
 ## What is not done
 

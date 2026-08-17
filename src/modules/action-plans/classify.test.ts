@@ -130,3 +130,52 @@ describe("classifyStep", () => {
     }
   });
 });
+
+/**
+ * `measurement` beyond "define a signal" (CORE-2b MINI VERIFICATION §2).
+ *
+ * The real dogfood produced a step meaning "sign in as staff and confirm the
+ * path from homepage to dashboard works end to end", classified
+ * `changeKind: measurement`, `actor: founder_action` — a verification, not a
+ * metric definition. Traced through every place `changeKind` drives
+ * behaviour (`classify.ts`, `capability-registry.ts`,
+ * `validate.ts`'s `no_changed_state` check) before broadening the
+ * documented meaning: `classifyStep` never reads `changeKind` at all for
+ * `founder_action`/`founder_decision`/`external_party` steps, and no
+ * registry capability lists `measurement` among the `changeKinds` it can
+ * match — so nothing routed incorrectly. This pins that finding as a
+ * regression: the exact real shape, reproduced.
+ */
+describe("measurement beyond 'define a signal'", () => {
+  it("routes a founder-performed verification exactly like any other founder_action step", () => {
+    const result = classifyStep(
+      { actor: "founder_action", changeKind: "measurement", evidenceIds: [] },
+      CONTEXT,
+    );
+
+    expect(result.executionSupport).toBe("founder_acts");
+    expect(result.capability).toBeNull();
+    // Confirming a built thing works is not itself a change with consequences
+    // requiring sign-off — the founder doing the confirming is the check.
+    expect(result.requiresApproval).toBe(false);
+  });
+
+  /**
+   * The one thing that must never happen regardless of which reading of
+   * `measurement` a model intends: it must never resolve to the SEO
+   * capability, or any future one, by coincidence of enum value.
+   */
+  it("never lets a verification-shaped measurement step match a registry capability", () => {
+    const result = classifyStep(
+      {
+        actor: "vibe",
+        changeKind: "measurement",
+        evidenceIds: ["live.seo.robots_txt_missing", "live.seo.sitemap_missing"],
+      },
+      CONTEXT,
+    );
+
+    expect(result.executionSupport).not.toBe("vibe_executes_now");
+    expect(result.capability).toBeNull();
+  });
+});

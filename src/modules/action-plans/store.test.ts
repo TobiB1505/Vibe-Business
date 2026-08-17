@@ -67,8 +67,8 @@ function runParams(inputHash: string) {
   };
 }
 
-function builtPlan(): ActionPlan {
-  const validation = validateActionPlanOutput(fakeWirePlan(), FAKE_PLAN_EVIDENCE_IDS, {
+function builtPlan(wire: Parameters<typeof fakeWirePlan>[0] = {}): ActionPlan {
+  const validation = validateActionPlanOutput(fakeWirePlan(wire), FAKE_PLAN_EVIDENCE_IDS, {
     repository: fakeRepositorySnapshotFor(),
   });
   if (!validation.ok) throw new Error("fixture did not validate");
@@ -197,6 +197,38 @@ describe("completing a run", () => {
     expect(stored?.validationFindings).toEqual(["plan_inflation"]);
     expect(stored?.steps.map((step) => step.order)).toEqual([1, 2, 3, 4]);
     expect(stored?.steps[1].executionSupport).toBe("founder_decides");
+  });
+
+  /**
+   * The persistence half of the whyNow round-trip (CORE-2b MINI
+   * VERIFICATION §1.5).
+   *
+   * `validate.test.ts` proves the value survives normalization; this proves
+   * it survives the write and the read after it. The `why_now` column is
+   * plain `text` — no varchar bound, no second truncation waiting at the
+   * database layer — so whatever left `validateActionPlanOutput` is exactly
+   * what a founder reloading the plan would see.
+   */
+  it("persists realistic whyNow prose without a second truncation at the database", async () => {
+    const db = new FakeDatabase();
+    const supabase = fakeSupabase(db);
+    const hash = computeActionPlanInputHash(IDENTITY);
+
+    const realisticWhyNow =
+      "The audit found no login, signup, or dashboard surface anywhere on the live site or in the repository, so the customer journey it derived stops at arrival on the homepage. The founder's stated priority is to get this launched, and launching cannot mean anything if the resort's own staff have no path from the homepage into the calendar and request tool — every other gap, including pricing, legal and acquisition, is downstream of this one and does not matter until it is closed.";
+    expect(realisticWhyNow.length).toBeGreaterThan(400);
+
+    const created = await createActionPlanRun(supabase, runParams(hash));
+    if (!created.ok) throw new Error("setup failed");
+
+    const plan = builtPlan({ whyNow: realisticWhyNow });
+    expect(plan.whyNow).toBe(realisticWhyNow);
+
+    await completeActionPlanRun(supabase, created.planId, plan, []);
+    const stored = await getLatestCompletedActionPlan(supabase, "project-1");
+
+    expect(stored?.whyNow).toBe(realisticWhyNow);
+    expect(stored?.whyNow?.endsWith("…")).toBe(false);
   });
 
   /** §53, §86 — identical inputs find the stored answer instead of buying one. */

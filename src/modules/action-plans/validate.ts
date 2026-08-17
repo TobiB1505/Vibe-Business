@@ -78,6 +78,19 @@ export const PLAN_VALIDATION_FINDINGS = [
   "no_changed_state",
   /** More steps than a Move of this shape should need (§29, §30). */
   "plan_inflation",
+  /**
+   * A plan-level narrative field was cut to fit its length ceiling
+   * (CORE-2b MINI VERIFICATION §1.4).
+   *
+   * The real dogfood's `whyNow` proved this can fire: two sentences of
+   * legitimate reasoning were cut mid-word because `whyNow` shared its length
+   * ceiling with `completionCriteria` — a compact, single-purpose field — by
+   * accident of both calling the same helper with the same second argument,
+   * not by any deliberate contract choice. `MAX_NARRATIVE` (below) is
+   * generous enough that this is not expected to fire in practice; when it
+   * does, the plan says so instead of silently losing the tail of a sentence.
+   */
+  "narrative_field_truncated",
 ] as const;
 export type PlanValidationFinding = (typeof PLAN_VALIDATION_FINDINGS)[number];
 
@@ -99,6 +112,30 @@ export type PlanValidateResult =
 const MAX_TITLE = 120;
 const MAX_PROSE = 600;
 const MAX_CRITERIA = 400;
+/**
+ * Plan-level narrative fields — `whyNow`, `expectedOutcome`,
+ * `addressesRootProblem` — get their own ceiling rather than sharing
+ * `MAX_CRITERIA` with per-step `purpose`/`completionCriteria`.
+ *
+ * Those step fields are deliberately compact: a completion criterion is one
+ * observable state, not a paragraph (§20). A plan's `whyNow` is explanatory
+ * business reasoning carried from the audit — routinely two or three
+ * sentences — and the real dogfood's response proved the shared 400-char
+ * limit was too small for it: legitimate content was cut mid-word the moment
+ * it was normalized, before it ever reached the database.
+ *
+ * 600 matches the Opportunity Engine's own `whyNow` field
+ * (`opportunities/validate.ts`'s `MAX_TEXT_LENGTH`), which already carries
+ * the same kind of content under the same "why this, now" framing — so this
+ * is consistency with an existing sibling contract, not a new number picked
+ * to fit one observed string.
+ *
+ * Still a hard ceiling, not its removal (Rule 27): a pathological response is
+ * still capped. What changed is that ordinary prose no longer collides with
+ * it, and `narrativeField` below records it in `notes`/`findings` on the rare
+ * run where it still fires, rather than losing the fact silently.
+ */
+const MAX_NARRATIVE = 600;
 const MAX_EVIDENCE_IDS = 4;
 const MAX_DEPENDENCIES = 4;
 const MAX_ASSUMPTIONS = 4;
@@ -116,6 +153,34 @@ function text(value: unknown, maxLength = MAX_PROSE): string | null {
   const collapsed = value.replace(/\s+/g, " ").trim();
   if (collapsed === "") return null;
   return collapsed.length > maxLength ? `${collapsed.slice(0, maxLength)}…` : collapsed;
+}
+
+/**
+ * Reads a plan-level narrative field, and records it if `MAX_NARRATIVE` (a
+ * safety net, not an expected ceiling — see its comment) actually fires.
+ *
+ * Everywhere else a repair happens silently in this file *except* where the
+ * repair changes what a field means to a reader — dropping an unverifiable
+ * evidence id is invisible because the sentence around it still reads
+ * correctly; cutting a sentence in half is not. So this is `text()` plus the
+ * one thing `text()` cannot do on its own: say when it had to act.
+ */
+function narrativeField(
+  value: unknown,
+  field: string,
+  notes: string[],
+  findings: Set<PlanValidationFinding>,
+): string | null {
+  if (typeof value !== "string") return null;
+  const collapsed = value.replace(/\s+/g, " ").trim();
+  if (collapsed === "") return null;
+  if (collapsed.length <= MAX_NARRATIVE) return collapsed;
+
+  notes.push(
+    `"${field}" was ${collapsed.length} characters and was cut to fit the ${MAX_NARRATIVE}-character limit.`,
+  );
+  findings.add("narrative_field_truncated");
+  return `${collapsed.slice(0, MAX_NARRATIVE)}…`;
 }
 
 function oneOf<T extends string>(value: unknown, allowed: readonly T[]): T | null {
@@ -309,9 +374,14 @@ export function validateActionPlanOutput(
   const findings = new Set<PlanValidationFinding>();
 
   const goal = text(wire.goal, 300);
-  const whyNow = text(wire.whyNow, MAX_CRITERIA);
-  const expectedOutcome = text(wire.expectedOutcome, MAX_CRITERIA);
-  const addressesRootProblem = text(wire.addressesRootProblem, MAX_CRITERIA);
+  const whyNow = narrativeField(wire.whyNow, "whyNow", notes, findings);
+  const expectedOutcome = narrativeField(wire.expectedOutcome, "expectedOutcome", notes, findings);
+  const addressesRootProblem = narrativeField(
+    wire.addressesRootProblem,
+    "addressesRootProblem",
+    notes,
+    findings,
+  );
 
   // A plan without a goal is a list. Rejected rather than repaired: there is
   // nothing to infer a goal from that would not be us writing the plan.
