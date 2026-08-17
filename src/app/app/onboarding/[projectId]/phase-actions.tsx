@@ -16,18 +16,28 @@ export function RetryProductScan({ projectId }: { projectId: string }) {
   const retry = retryProductScanAction.bind(null, projectId);
   const [state, action, pending] = useActionState<BeginUnderstandingState, FormData>(retry, null);
   useEffect(() => {
-    if (state?.ok) router.refresh();
+    // Only a genuinely new run changes what the page should show. Refreshing
+    // after "the same run is still going" would redraw the identical screen and
+    // read as a button that did nothing (UI-S1 §14).
+    if (state?.ok && !state.alreadyRunning) router.refresh();
   }, [router, state]);
   return (
     <div className="flex flex-col gap-3">
       <form action={action}>
         <Button type="submit" disabled={pending}>
-          {pending ? "Vibe is reading your product…" : "Try Product Understanding again"}
+          {pending ? "Vibe is reading your product…" : "Try again"}
         </Button>
       </form>
+      {state?.ok && state.alreadyRunning && (
+        <p className="text-fg-muted text-sm">
+          The run already in progress is still going, so Vibe has not started a second one. Leave
+          this page and come back — it will be here when it finishes.
+        </p>
+      )}
       {state && !state.ok && (
-        <Notice tone="problem" label="Vibe couldn't finish">
-          Your source connection and project are safe. Check access, then retry.
+        <Notice tone="problem" label="Vibe couldn't start it again">
+          Your project and your connected repository are unchanged. Check that Vibe still has
+          access to the repository, then try once more.
         </Notice>
       )}
     </div>

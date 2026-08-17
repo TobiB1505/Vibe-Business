@@ -129,6 +129,33 @@ export async function findActiveOperation(
   return data ? mapRow(data as OperationRow) : null;
 }
 
+/**
+ * The most recent attempt of a type, whatever became of it.
+ *
+ * `findActiveOperation` answers "is something happening"; this answers "what
+ * happened last". Onboarding needs the second question because a failed
+ * operation stops being active the moment it fails, and a screen that only ever
+ * asked the first question responded to a failure by quietly redrawing the
+ * start button — which is indistinguishable, to the person looking at it, from
+ * having never pressed it (UI-S1 §15).
+ */
+export async function findLatestOperation(
+  supabase: SupabaseClient,
+  params: { projectId: string; operationType: OperationType },
+): Promise<StoredOperationRun | null> {
+  const { data, error } = await supabase
+    .from("operation_runs")
+    .select(OPERATION_COLUMNS)
+    .eq("project_id", params.projectId)
+    .eq("operation_type", params.operationType)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? mapRow(data as OperationRow) : null;
+}
+
 /** One operation the caller owns. Ownership is the query, not a later check. */
 export async function getOperationRun(
   supabase: SupabaseClient,

@@ -5,9 +5,12 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import { requireSession } from "@/modules/auth/session";
+import { getAuditReadiness } from "@/modules/business-audit/service";
 import { inspectLiveProduct, type InspectLiveFailureCode } from "@/modules/live-product-intelligence/service";
+import { auditSurface, canCompleteOnboarding } from "@/modules/onboarding/audit-surface";
 import {
   completeProjectOnboarding,
+  getProjectOnboarding,
   markOnboardingMilestone,
   setLiveSiteStatus,
 } from "@/modules/onboarding/store";
@@ -31,7 +34,14 @@ import { inspectRepository, type InspectFailureCode } from "@/modules/repository
 const onboardingHref = (projectId: string) => `/app/onboarding/${projectId}`;
 
 export type BeginUnderstandingState =
-  | { ok: true }
+  /**
+   * `alreadyRunning` distinguishes "a new run started" from "the run you were
+   * already waiting on is still the one you are waiting on" (UI-S1 §14). Both
+   * are successes, but only one of them is worth telling a founder who has just
+   * pressed Try again on a run that appeared to have stopped — otherwise the
+   * screen redraws identically and the button looks broken.
+   */
+  | { ok: true; alreadyRunning?: boolean }
   | { ok: false; step: "url"; error: SetProductionUrlFailure }
   | { ok: false; step: "repository"; error: InspectFailureCode }
   | { ok: false; step: "live"; error: InspectLiveFailureCode }
@@ -60,7 +70,7 @@ async function startUnderstandingFromStoredSources(
     metadata: { projectId, reused: outcome.kind === "reused" },
   });
   revalidatePath(onboardingHref(projectId));
-  return { ok: true };
+  return { ok: true, alreadyRunning: outcome.kind === "active" };
 }
 
 export async function beginUnderstandingAction(
@@ -145,6 +155,43 @@ export async function continueWithoutLiveSiteAction(
     metadata: { projectId, reason: "scan_unavailable" },
   });
   return startUnderstandingFromStoredSources(projectId);
+}
+
+/**
+ * "I don't have a live product yet", said at the audit step (UI-S1 §10).
+ *
+ * ## Why this is not `continueWithoutLiveSiteAction`
+ *
+ * Because that one starts Product Understanding, and by the time a founder
+ * reaches the audit step their product is already understood and confirmed.
+ * Reusing it would spend an inference call on work that is already done, to
+ * answer a question about a *different* step — and Vibe never starts paid work
+ * on the user's behalf as a side effect of them saying "not yet".
+ *
+ * So this writes one canonical fact and nothing else. What it means for the
+ * audit is then derived by `auditSurface`, not stored: no second flag, no
+ * completion boolean, nothing that can disagree with the record.
+ */
+export async function parkLiveProductAction(projectId: string): Promise<void> {
+  const session = await requireSession();
+  const supabase = await createClient();
+
+  const { data: project } = await supabase
+    .from("projects")
+    .select("id")
+    .eq("id", projectId)
+    .eq("user_id", session.userId)
+    .maybeSingle();
+  if (!project) return;
+
+  await setLiveSiteStatus(supabase, { projectId, status: "no_live_site_yet" });
+  await recordAuditEvent(supabase, {
+    userId: session.userId,
+    projectId,
+    eventType: "onboarding.live_site_skipped",
+    metadata: { projectId, reason: "audit_parked" },
+  });
+  revalidatePath(onboardingHref(projectId));
 }
 
 export async function retryProductScanAction(
@@ -319,21 +366,54 @@ export async function revealAuditAndFindFirstMoveAction(projectId: string): Prom
   revalidatePath(onboardingHref(projectId));
 }
 
+/**
+ * Finishing setup (UI-S1 §12).
+ *
+ * ## Two terminal paths, not one
+ *
+ * The original guard allowed exactly one: the founder saw their first Move.
+ * That made a founder with no live product permanently ineligible to finish,
+ * because the audit their first Move comes from cannot run without a live
+ * product to compare against — so the guard, not the screen, was the trap.
+ *
+ * The second path is a parked audit, and it is re-derived here from the
+ * canonical records rather than trusted from the page. A button is a request;
+ * whether it is allowed is decided on the server, against the same predicate
+ * that decided whether to draw it.
+ */
 export async function completeOnboardingAction(projectId: string): Promise<void> {
   const session = await requireSession();
   const supabase = await createClient();
-  const { getProjectOnboarding } = await import("@/modules/onboarding/store");
   const onboarding = await getProjectOnboarding(supabase, {
     projectId,
     userId: session.userId,
   });
-  if (
-    !onboarding ||
-    (onboarding.state !== "first_move" && onboarding.state !== "complete") ||
-    (onboarding.state === "first_move" && onboarding.firstMoveViewedAt === null)
-  ) {
-    redirect(onboardingHref(projectId));
-  }
-  await completeProjectOnboarding(supabase, { projectId, userId: session.userId });
+  if (!onboarding) redirect(onboardingHref(projectId));
+
+  const surface =
+    onboarding.state === "audit_preparing"
+      ? auditSurface({
+          auditOperationActive: onboarding.auditOperation !== null,
+          liveSiteStatus: onboarding.liveSiteStatus,
+          hasLiveProductIntelligence: (await getAuditReadiness(supabase, projectId))
+            .hasLiveProductIntelligence,
+        })
+      : null;
+
+  const allowed = canCompleteOnboarding({
+    state: onboarding.state,
+    firstMoveViewed: onboarding.firstMoveViewedAt !== null,
+    surface,
+  });
+  if (!allowed) redirect(onboardingHref(projectId));
+
+  await completeProjectOnboarding(supabase, {
+    projectId,
+    userId: session.userId,
+    // Recorded so the activity trail distinguishes "finished with an audit"
+    // from "finished with the audit parked". They are different outcomes and
+    // the log should not flatten them into one.
+    auditParked: surface === "parked_no_live_product",
+  });
   redirect(`/app/projects/${projectId}`);
 }

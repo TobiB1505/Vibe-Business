@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireSession } from "@/modules/auth/session";
 import { listVerifiedInstallations } from "@/modules/github/connections";
+import { hasCompletedAnyOnboarding } from "@/modules/onboarding/store";
 import { OnboardingShell } from "../../../onboarding/onboarding-shell";
 
 /**
@@ -24,8 +25,18 @@ export default async function ChooseGithubAccountPage() {
     redirect("/app/connect/github");
   }
 
+  /*
+   * Whether leaving leads anywhere (UI-S1 §16).
+   *
+   * This screen wears the onboarding shell, and the shell only draws an exit
+   * when one exists. A founder with finished projects connecting a second
+   * GitHub account is not onboarding — they took a detour, and until now the
+   * detour had no way back.
+   */
+  const canLeave = await hasCompletedAnyOnboarding(supabase, session.userId);
+
   return (
-    <OnboardingShell email={session.email} state="connect_source">
+    <OnboardingShell email={session.email} state="connect_source" canLeave={canLeave}>
       <section className="flex max-w-[48rem] flex-col gap-5 py-4 sm:py-10">
         <div className="space-y-2">
           <p className="text-mint font-mono text-xs tracking-[0.12em] uppercase">Connect · Product source</p>

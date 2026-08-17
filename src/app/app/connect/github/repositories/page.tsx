@@ -11,6 +11,7 @@ import {
   markConnectedRepositories,
   type PickableRepository,
 } from "@/modules/projects/connected-repositories";
+import { hasCompletedAnyOnboarding } from "@/modules/onboarding/store";
 import { RepositoryPicker } from "./repository-picker";
 import { OnboardingShell } from "../../../onboarding/onboarding-shell";
 
@@ -56,8 +57,15 @@ export default async function ConnectGithubRepositoriesPage({
   const manageAccessUrl = buildInstallationSettingsUrl(installation);
   const canSelect = hasSelectableRepository(repositories);
 
+  /*
+   * Whether leaving leads anywhere (UI-S1 §16). Same predicate the dashboard
+   * uses to decide whether to redirect *into* setup, so an exit drawn here can
+   * never bounce off `/app` and land straight back.
+   */
+  const canLeave = await hasCompletedAnyOnboarding(supabase, session.userId);
+
   return (
-    <OnboardingShell email={session.email} state="connect_source">
+    <OnboardingShell email={session.email} state="connect_source" canLeave={canLeave}>
       <section className="flex max-w-[52rem] flex-col gap-5 py-4 sm:py-10">
         <div className="space-y-2">
           <p className="text-mint font-mono text-xs tracking-[0.12em] uppercase">Connect · Choose product</p>
@@ -68,10 +76,15 @@ export default async function ConnectGithubRepositoriesPage({
           </p>
         </div>
 
+        {/* Translated from the internal condition, not renamed (UI-S1 §17).
+            "Installation suspended or revoked" is precise and means nothing to
+            a founder; what they need to know is that GitHub stopped letting
+            Vibe look, and that reconnecting is what fixes it. */}
         {accessUnavailable && (
           <div className="space-y-2">
             <p className="text-amber text-sm">
-              GitHub access unavailable. The installation may have been suspended or revoked.
+              Vibe can&apos;t see this account&apos;s repositories right now. GitHub may have paused
+              or removed Vibe&apos;s access — reconnecting will ask GitHub for it again.
             </p>
             <Link
               href="/app/connect/github?new=1"

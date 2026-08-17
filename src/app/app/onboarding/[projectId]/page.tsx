@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
+import { ProductLogo } from "@/components/brand/product-logo";
 import { VibeMark } from "@/components/brand/vibe-mark";
 import { buttonClasses } from "@/components/ui/button";
 import { Notice } from "@/components/ui/states";
@@ -9,7 +10,11 @@ import { createClient } from "@/lib/supabase/server";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import { requireSession } from "@/modules/auth/session";
 import { getAuditReadiness } from "@/modules/business-audit/service";
-import { getActiveOpportunityOperation } from "@/modules/operations/service";
+import {
+  getActiveOpportunityOperation,
+  getLastFailedOperation,
+} from "@/modules/operations/service";
+import { auditSurface } from "@/modules/onboarding/audit-surface";
 import {
   markOnboardingMilestone,
   getProjectOnboarding,
@@ -24,6 +29,7 @@ import { OnboardingAuditReveal } from "./audit-reveal";
 import { AuditLivePrerequisite } from "./audit-live-prerequisite";
 import { LiveSiteStep } from "./live-site-step";
 import { OperationWatcher } from "./operation-watcher";
+import { OnboardingOperationFailure, OnboardingStalled } from "./operation-states";
 import { ProductConfirmation } from "./product-confirmation";
 import { RetryProductScan, StartAudit } from "./phase-actions";
 import { UnderstandingStatus } from "./understanding-status";
@@ -47,6 +53,42 @@ export default async function ProjectOnboardingPage({
   const opportunityOperation =
     onboarding.state === "first_move"
       ? await getActiveOpportunityOperation(supabase, projectId)
+      : null;
+
+  /*
+   * What the audit step should show (UI-S1 §9–§12).
+   *
+   * Derived from the canonical records — what the founder said about a live
+   * product, and whether Vibe holds a successful reading of one — rather than
+   * from a stored flag. The completion action re-derives the same thing from
+   * the same predicate, so "the screen offered it" and "the server allowed it"
+   * cannot disagree.
+   */
+  const surface =
+    onboarding.state === "audit_preparing" || onboarding.state === "audit_running"
+      ? auditSurface({
+          auditOperationActive: onboarding.auditOperation !== null,
+          liveSiteStatus: onboarding.liveSiteStatus,
+          hasLiveProductIntelligence: auditReadiness?.hasLiveProductIntelligence ?? false,
+        })
+      : null;
+
+  /*
+   * The last attempt, when it failed and the founder has not been told
+   * (UI-S1 §15). Read only for the step that is on screen: a failed
+   * understanding run is irrelevant once a profile exists, and a failed audit
+   * is irrelevant while one is running.
+   */
+  const understandingFailure =
+    onboarding.state === "product_scanning" && !onboarding.understandingOperation
+      ? await getLastFailedOperation(supabase, {
+          projectId,
+          operationType: "product_understanding",
+        })
+      : null;
+  const auditFailure =
+    surface === "ready_to_start"
+      ? await getLastFailedOperation(supabase, { projectId, operationType: "business_audit" })
       : null;
 
   if (
@@ -97,7 +139,8 @@ export default async function ProjectOnboardingPage({
           <MonoLabel>Connect</MonoLabel>
           <h1 className="text-fg text-display font-bold">Show Vibe what you built.</h1>
           <p className="text-fg-prose max-w-[55ch] leading-relaxed">
-            Connect the product source. GitHub is the current read-only source; the onboarding lifecycle stays independent of the provider.
+            Connect the code behind your product. GitHub will ask which repositories Vibe may
+            access — you choose, and Vibe only sees the ones you pick.
           </p>
           <div>
             <Link href="/app/connect/github" className={buttonClasses()}>
@@ -150,13 +193,28 @@ export default async function ProjectOnboardingPage({
                 operation={onboarding.understandingOperation}
                 liveSiteStatus={onboarding.liveSiteStatus}
               />
+              {onboarding.understandingOperation.stalled && (
+                <OnboardingStalled
+                  what="getting to know your product"
+                  action={<RetryProductScan projectId={projectId} />}
+                />
+              )}
             </>
+          ) : understandingFailure ? (
+            <OnboardingOperationFailure
+              what="getting to know your product"
+              operation={understandingFailure}
+              action={<RetryProductScan projectId={projectId} />}
+            />
           ) : (
             <Surface level="card" padding="lg" className="flex flex-col gap-5">
               <VibeMark size={40} />
               <div className="flex flex-col gap-2">
-                <h2 className="text-fg text-xl font-semibold">Your source is still connected.</h2>
-                <p className="text-fg-muted text-sm">The previous attempt did not produce a Product Profile. Nothing else needs repeating.</p>
+                <h2 className="text-fg text-xl font-semibold">Your product is still connected.</h2>
+                <p className="text-fg-muted text-sm">
+                  Vibe does not yet have a picture of your product. Nothing else needs repeating —
+                  your repository stays connected.
+                </p>
               </div>
               <RetryProductScan projectId={projectId} />
             </Surface>
@@ -168,8 +226,11 @@ export default async function ProjectOnboardingPage({
         <section className="flex flex-col gap-8">
           <Surface level="card" padding="lg" className="flex flex-col items-center gap-7 text-center">
             {understanding.brand.logo ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={understanding.brand.logo.url} alt={understanding.brand.logo.alt} className="h-12 max-w-[220px] object-contain" referrerPolicy="no-referrer" />
+              <ProductLogo
+                src={understanding.brand.logo.url}
+                alt={understanding.brand.logo.alt}
+                size={44}
+              />
             ) : (
               <VibeMark size={44} />
             )}
@@ -218,16 +279,50 @@ export default async function ProjectOnboardingPage({
           <header className="flex flex-col gap-3">
             <MonoLabel>Audit</MonoLabel>
             <h1 className="text-fg text-[2.25rem] leading-tight font-semibold tracking-[-0.04em] sm:text-[3rem]">
-              Now Vibe is looking at the business around it.
+              {surface === "parked_no_live_product"
+                ? "Vibe knows your product."
+                : "Now Vibe is looking at the business around it."}
             </h1>
+            {surface === "parked_no_live_product" && (
+              <p className="text-fg-prose max-w-[58ch] leading-relaxed">
+                Your setup is done. One part of the business audit is waiting on a live product, and
+                it will be there when you have one.
+              </p>
+            )}
           </header>
-          {onboarding.auditOperation ? (
+
+          {surface === "running" && onboarding.auditOperation ? (
             <>
               <OperationWatcher projectId={projectId} operation={onboarding.auditOperation} />
               {onboarding.auditOperation.stage === "running_ai" ? <AuditAnalyzing /> : <AuditPreparing />}
+              {onboarding.auditOperation.stalled && (
+                <OnboardingStalled
+                  what="looking at your business"
+                  action={
+                    onboarding.productProfile ? (
+                      <StartAudit
+                        projectId={projectId}
+                        profileId={onboarding.productProfile.stored.id}
+                      />
+                    ) : undefined
+                  }
+                />
+              )}
             </>
-          ) : auditReadiness && !auditReadiness.hasLiveProductIntelligence ? (
-            <AuditLivePrerequisite projectId={projectId} />
+          ) : surface === "parked_no_live_product" ? (
+            <AuditLivePrerequisite projectId={projectId} mode="parked" />
+          ) : surface === "awaiting_live_product" ? (
+            <AuditLivePrerequisite projectId={projectId} mode="awaiting" />
+          ) : auditFailure ? (
+            <OnboardingOperationFailure
+              what="looking at your business"
+              operation={auditFailure}
+              action={
+                onboarding.productProfile ? (
+                  <StartAudit projectId={projectId} profileId={onboarding.productProfile.stored.id} />
+                ) : undefined
+              }
+            />
           ) : onboarding.productProfile ? (
             <StartAudit projectId={projectId} profileId={onboarding.productProfile.stored.id} />
           ) : null}
@@ -279,10 +374,19 @@ export default async function ProjectOnboardingPage({
           {!opportunityOperation && (
             <Surface level="section" padding="lg" className="flex flex-col gap-4">
               <h2 className="text-fg text-xl font-semibold">Vibe knows your product.</h2>
-              <p className="text-fg-prose">Your Product Profile is confirmed and your first Business Audit is ready. You can now enter the normal workspace.</p>
+              <p className="text-fg-prose">
+                Vibe understands what you built and your first business audit is ready. Setup is
+                done — your workspace is where everything lives from here.
+              </p>
+              {/*
+                Named for where it goes. This completes setup and opens this
+                project's workspace, not the global dashboard, and calling it
+                "Go to dashboard" sent people looking for a screen they had not
+                been taken to (UI-S1 §16).
+              */}
               <form action={completeOnboardingAction.bind(null, projectId)}>
                 <button type="submit" className={buttonClasses()}>
-                  Go to dashboard
+                  Go to your workspace
                 </button>
               </form>
             </Surface>

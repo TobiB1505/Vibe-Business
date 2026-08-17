@@ -26,12 +26,14 @@ import { getFounderIntent } from "@/modules/projects/founder-intent-store";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import type { OperationExecutor } from "./executor";
 import type { OperationFailureCode } from "./failures";
+import type { OperationType } from "./schema";
 import {
   attachExecutionRun,
   createOperationRun,
   failOperationRun,
   findActiveOperation,
   findActiveOperationByIdentity,
+  findLatestOperation,
   findPausedOperationForAudit,
   requeueAnsweredOperation,
   getOperationRun,
@@ -564,6 +566,24 @@ export async function getActiveProductUnderstandingOperation(
     operationType: "product_understanding",
   });
   return operation ? view(operation) : null;
+}
+
+/**
+ * The last attempt of a type, but only if it ended badly (UI-S1 §15).
+ *
+ * Returns null when the latest attempt is live or succeeded, so a caller can
+ * treat a non-null result as "the last thing this founder tried did not work,
+ * and they have not been told". Anything older than the latest attempt is
+ * deliberately invisible: a failure two runs ago that a later run fixed is
+ * history, not a state to render.
+ */
+export async function getLastFailedOperation(
+  supabase: SupabaseClient,
+  params: { projectId: string; operationType: OperationType },
+): Promise<OperationView | null> {
+  const operation = await findLatestOperation(supabase, params);
+  if (!operation || operation.status !== "failed") return null;
+  return view(operation);
 }
 
 /**

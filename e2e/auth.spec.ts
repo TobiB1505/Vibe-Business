@@ -294,9 +294,12 @@ test.describe("email confirmation links", () => {
 test.describe("public pages stay public", () => {
   test("the marketing page does not require a session", async ({ page }) => {
     await page.goto("/");
-    // Scoped to main: the header carries a second "Get started" link.
+    // Scoped to main because the header carries its own "Get started", and to
+    // the first match because UI-S1 gave the page a closing call to action as
+    // well. What is being asserted is that an unauthenticated visitor reaches
+    // the page at all — not how many ways in it offers.
     await expect(
-      page.getByRole("main").getByRole("link", { name: "Get started" }),
+      page.getByRole("main").getByRole("link", { name: "Get started" }).first(),
     ).toBeVisible();
   });
 

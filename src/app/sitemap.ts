@@ -12,13 +12,30 @@ import type { MetadataRoute } from "next";
  *
  * Prepared by Vibe Business. Review before merging.
  */
+const ORIGIN = "https://vibe-business-fawn.vercel.app";
+
 export default function sitemap(): MetadataRoute.Sitemap {
+  const lastModified = new Date();
   return [
     {
-      url: "https://vibe-business-fawn.vercel.app",
-      lastModified: new Date(),
+      url: ORIGIN,
+      lastModified,
       changeFrequency: "weekly",
       priority: 1,
+    },
+    // Legal surfaces (UI-S1 §7). Public, stable, and worth being findable — a
+    // privacy notice nobody can reach from a search is half a privacy notice.
+    {
+      url: `${ORIGIN}/privacy`,
+      lastModified,
+      changeFrequency: "yearly",
+      priority: 0.3,
+    },
+    {
+      url: `${ORIGIN}/terms`,
+      lastModified,
+      changeFrequency: "yearly",
+      priority: 0.3,
     },
   ];
 }
