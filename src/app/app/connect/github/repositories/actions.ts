@@ -7,6 +7,7 @@ import { recordAuditEvent } from "@/modules/audit-log/events";
 import { listInstallationRepositories } from "@/modules/github/repositories";
 import { getVerifiedInstallation } from "@/modules/github/connections";
 import { createProjectWithRepository } from "@/modules/projects/connect";
+import { createProjectOnboarding } from "@/modules/onboarding/store";
 
 export type SelectRepositoryResult = { ok: true } | { ok: false; error: string };
 
@@ -90,5 +91,16 @@ export async function selectRepository(
     metadata: { projectId: result.projectId },
   });
 
-  redirect(`/app/projects/${result.projectId}`);
+  await createProjectOnboarding(supabase, {
+    projectId: result.projectId,
+    userId: session.userId,
+  });
+  await recordAuditEvent(supabase, {
+    userId: session.userId,
+    projectId: result.projectId,
+    eventType: "onboarding.repository_selected",
+    metadata: { projectId: result.projectId, sourceProvider: "github" },
+  });
+
+  redirect(`/app/onboarding/${result.projectId}`);
 }

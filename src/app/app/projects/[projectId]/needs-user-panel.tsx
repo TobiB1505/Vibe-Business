@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { MonoLabel } from "@/components/ui/typography";
 import {
@@ -61,9 +62,17 @@ export function NeedsUserPanel({
   projectId: string;
   question: PendingQuestion;
 }) {
+  const router = useRouter();
   const action = submitFounderAnswerAction.bind(null, projectId);
   const [state, formAction, pending] = useActionState(action, initialState);
   const [value, setValue] = useState("");
+
+  // The same persisted question is used in the workspace and focused
+  // onboarding. Once it is answered, refresh the current route so either shell
+  // resolves the resumed operation from server state.
+  useEffect(() => {
+    if (state?.ok) router.refresh();
+  }, [router, state]);
 
   const destination = routeAnswer(question.intent);
   const options =

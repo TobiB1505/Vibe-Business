@@ -169,7 +169,37 @@ export type AuditEventType =
   | "business_measurement.started"
   | "business_measurement.completed"
   | "business_measurement.insufficient_data"
-  | "business_measurement.failed";
+  | "business_measurement.failed"
+  /**
+   * Project activation (ONBOARDING-1).
+   *
+   * Deliberately parallel to the domain events rather than a replacement for
+   * them. `product_understanding.started` says Vibe began deriving a profile;
+   * `onboarding.product_understanding_started` says the activation flow reached
+   * that step for this project. The same moment, but two different questions —
+   * "what did Vibe do" and "how far did this founder get" — and a log that
+   * collapsed them could answer neither where activation stalled nor why.
+   *
+   * They carry the project and the step. Never a URL the founder typed, never a
+   * repository's contents, never the founder's own words.
+   */
+  | "onboarding.started"
+  | "onboarding.github_connected"
+  | "onboarding.repository_selected"
+  | "onboarding.live_site_added"
+  /** A real answer, not an absence: "there is no live product yet" is state. */
+  | "onboarding.live_site_skipped"
+  | "onboarding.product_scan_started"
+  | "onboarding.product_scan_completed"
+  | "onboarding.product_understanding_started"
+  | "onboarding.product_understanding_completed"
+  | "onboarding.product_confirmed"
+  | "onboarding.audit_started"
+  | "onboarding.audit_needs_user"
+  | "onboarding.audit_completed"
+  | "onboarding.first_move_started"
+  | "onboarding.first_move_viewed"
+  | "onboarding.completed";
 
 export type RecordAuditEventParams = {
   userId: string;

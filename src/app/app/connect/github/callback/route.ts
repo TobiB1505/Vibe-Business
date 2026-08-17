@@ -131,6 +131,13 @@ export async function GET(request: NextRequest) {
       eventType: "github.installation.connected",
       metadata: { accountLogin: verifiedInstallation.accountLogin },
     });
+    await recordAuditEvent(supabase, {
+      userId: session.userId,
+      eventType: "onboarding.github_connected",
+      // Account-level by necessity: the canonical Project does not exist
+      // until the founder chooses one repository on the next screen.
+      metadata: { accountType: verifiedInstallation.accountType },
+    });
 
     const repositoriesUrl = new URL("/app/connect/github/repositories", origin);
     repositoriesUrl.searchParams.set("installation", installationRow.id);

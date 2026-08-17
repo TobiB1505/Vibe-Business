@@ -67,5 +67,6 @@ export async function submitFounderAnswerAction(
   }
 
   revalidatePath(`/app/projects/${projectId}/score`);
+  revalidatePath(`/app/onboarding/${projectId}`);
   return { ok: true, resumed: answered.resumed };
 }

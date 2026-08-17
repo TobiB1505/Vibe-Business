@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { buttonClasses } from "@/components/ui/button";
 import { Notice } from "@/components/ui/states";
@@ -9,6 +10,7 @@ import { requireSession } from "@/modules/auth/session";
 import { buildActivityEntry } from "@/modules/audit-log/view";
 import { buildAttentionItems } from "@/modules/projects/attention";
 import { getDashboardOverview } from "@/modules/projects/dashboard";
+import { getResumableOnboardingProjectId } from "@/modules/onboarding/store";
 import { AttentionList } from "./attention-list";
 import { DashboardActivity, type DashboardActivityEntry } from "./dashboard-activity";
 import { ProjectRow } from "./project-list";
@@ -25,8 +27,9 @@ import { ProjectRow } from "./project-list";
  *
  * ## Cost
  *
- * One read model, a constant eight queries regardless of how many projects
- * exist. It never builds a prepared workspace, signs a review image, asks a
+ * Two constant-cost read models regardless of how many projects exist: the
+ * dashboard summary and one resumable-onboarding lookup. Neither ever builds a
+ * prepared workspace, signs a review image, asks a
  * sandbox provider for anything, runs a GitHub merge preflight, or reads an
  * audit's JSONB document. `dashboard-contract.test.ts` asserts that.
  */
@@ -79,6 +82,18 @@ export default async function AppHomePage({
 
   const supabase = await createClient();
   const { projects, recentActivity } = await getDashboardOverview(supabase, session.userId);
+
+  // First login and interrupted activation resolve on the server. The normal
+  // dashboard remains unchanged for completed projects, and connection errors
+  // stay visible instead of being swallowed by a redirect loop.
+  if (!connectError) {
+    if (projects.length === 0) redirect("/app/onboarding");
+    const resumable = await getResumableOnboardingProjectId(
+      supabase,
+      projects.map((project) => project.id),
+    );
+    if (resumable) redirect(`/app/onboarding/${resumable}`);
+  }
 
   const attention = buildAttentionItems(projects);
   const projectNames = new Map(projects.map((project) => [project.id, project.name]));

@@ -166,7 +166,7 @@ Each stage below is described as a logical layer/responsibility inside the modul
 
 **[Confirmed — ADR 0001]** Logical modules, living together in one Next.js/TypeScript codebase per ADR 0001:
 
-`auth` · `projects` · `github` · `audits` · `opportunities` · `execution` · `previews` · `approvals` · `usage` · `credits` · `audit-log`
+`auth` · `projects` · `onboarding` · `github` · `audits` · `opportunities` · `execution` · `previews` · `approvals` · `usage` · `credits` · `audit-log`
 
 These are code-organization boundaries, not process/network boundaries, for as long as the modular monolith holds (see ADR 0001 "Revisit when").
 
@@ -178,6 +178,7 @@ These are code-organization boundaries, not process/network boundaries, for as l
 
 - `User`
 - `Project`
+- `ProjectOnboarding`
 - `GitHubInstallation`
 - `RepositoryConnection`
 - `ProductAudit`

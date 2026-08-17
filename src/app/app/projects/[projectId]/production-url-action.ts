@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireSession } from "@/modules/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { setProductionUrl, type SetProductionUrlFailure } from "@/modules/projects/production-url";
+import { setLiveSiteStatus } from "@/modules/onboarding/store";
 
 export type ProductionUrlActionState =
   | { ok: true; url: string }
@@ -35,6 +36,11 @@ export async function setProductionUrlAction(
   });
 
   if (!result.ok) return { ok: false, error: result.error };
+
+  // If this project is still onboarding, a later canonical URL update clears
+  // the earlier no-site intent. For mature projects the scoped update is a
+  // harmless no-op when no onboarding row exists.
+  await setLiveSiteStatus(supabase, { projectId, status: "provided" });
 
   revalidatePath(`/app/projects/${projectId}`);
   return { ok: true, url: result.url };
