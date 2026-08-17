@@ -108,6 +108,7 @@ type Candidate = {
 function readCandidate(
   entry: WireOpportunity,
   knownEvidenceIds: Set<string>,
+  knownConclusionKeys: Set<string>,
   notes: string[],
 ): Candidate | null {
   const title = text(entry.title, 120);
@@ -160,10 +161,33 @@ function readCandidate(
 
   const rank = typeof entry.rank === "number" && Number.isFinite(entry.rank) ? entry.rank : Number.MAX_SAFE_INTEGER;
 
+  /*
+   * The conclusion this Move addresses (CORE-2b FIX §1, §2).
+   *
+   * Verified against the audit's own keys and dropped otherwise, exactly as an evidence
+   * id is. Unlike an evidence id, a missing one is **not** grounds for discarding the
+   * opportunity: a Move that genuinely addresses no single conclusion is a legitimate,
+   * if unusual, output, and the Action Planner is the layer that decides whether it can
+   * plan without one. Enforcing it here would put a planning prerequisite inside
+   * prioritization.
+   */
+  const citedConclusion = text(entry.sourceConclusionKey, 64);
+  let sourceConclusionKey: string | null = null;
+  if (citedConclusion !== null) {
+    if (knownConclusionKeys.has(citedConclusion)) {
+      sourceConclusionKey = citedConclusion;
+    } else {
+      notes.push(
+        `"${title}" cited an audit conclusion that does not exist; its source conclusion was not recorded.`,
+      );
+    }
+  }
+
   return {
     rank,
     key: semanticKey(category, primaryDimension),
     opportunity: {
+      sourceConclusionKey,
       title,
       problem,
       whyNow,
@@ -184,11 +208,20 @@ function readCandidate(
 export function validateOpportunityOutput(
   entries: WireOpportunity[],
   knownEvidenceIds: Set<string>,
+  /**
+   * The conclusion keys this audit actually offers (CORE-2b FIX §2).
+   *
+   * Optional so every existing caller and fixture keeps working; an omitted set means
+   * "no conclusion keys are verifiable", and every cited key is therefore dropped. That
+   * is the honest degradation: an unverified lineage is worse than a missing one, since
+   * the planner would trust it.
+   */
+  knownConclusionKeys: Set<string> = new Set(),
 ): OpportunityValidateResult {
   const notes: string[] = [];
 
   const candidates = entries
-    .map((entry) => readCandidate(entry, knownEvidenceIds, notes))
+    .map((entry) => readCandidate(entry, knownEvidenceIds, knownConclusionKeys, notes))
     .filter((candidate): candidate is Candidate => candidate !== null);
 
   if (candidates.length === 0) {

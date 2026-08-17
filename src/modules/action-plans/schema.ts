@@ -166,6 +166,61 @@ export type ExecutionSupport = (typeof EXECUTION_SUPPORT)[number];
 /** Support values that mean "Vibe has an executor". Exactly one, and it is checked. */
 export const EXECUTABLE_SUPPORT: readonly ExecutionSupport[] = ["vibe_executes_now"] as const;
 
+/**
+ * The two axes, and why neither collapses into the other (CORE-2b FIX §11–§13).
+ *
+ * ```
+ * actor             — RESPONSIBILITY.  Who conceptually owns this work.        model
+ * executionSupport  — PLATFORM.        What Vibe can actually perform today.   server
+ * ```
+ *
+ * They are not the same question and they are not the same authority. A step can be
+ * unambiguously Vibe's responsibility and unambiguously beyond what Vibe can perform —
+ * *"prepare a positioning direction for the chosen segment"* is Vibe's work and needs no
+ * executor at all, while *"apply that positioning to the production website"* is also
+ * Vibe's work and needs one that does not exist.
+ *
+ * `executionSupport` therefore mirrors `actor` for every non-Vibe case
+ * (`founder_decides`, `founder_acts`, `external_dependency`) and **splits** it for Vibe:
+ * `vibe_prepares`, `vibe_executes_now`, `not_yet_supported`. That mirroring is a
+ * projection of one server-owned answer, not a second source of truth — the server
+ * derives the whole field from `actor` plus `changeKind` plus the registry, and there is
+ * no wire field through which a model could disagree with it.
+ *
+ * The renaming §11 offers is not taken, for that reason: the current enums already
+ * separate responsibility from capability cleanly, and renaming them would churn a
+ * migration, a CHECK constraint and every label for no change in meaning.
+ */
+
+/**
+ * True only when Vibe has a real, registry-backed executor for this step.
+ *
+ * The one predicate any caller — report, future UI, future execution routing — should
+ * ask. It exists so that "can Vibe do this?" is answered in one place rather than by
+ * each caller re-deriving it, and so that `vibe_prepares` can never be mistaken for a
+ * yes: preparing is Vibe's *responsibility*, never its *capability* (§12).
+ */
+export function isExecutableByVibe(step: {
+  executionSupport: ExecutionSupport;
+  capability: ExecutionCapability | null;
+}): boolean {
+  // Both halves, because either alone would be a weaker claim than the product makes:
+  // the support value is the classifier's answer, and the capability is the thing that
+  // would actually run. The database enforces the same pairing.
+  return step.executionSupport === "vibe_executes_now" && step.capability !== null;
+}
+
+/**
+ * True when Vibe owns the work, whether or not it can automate any of it.
+ *
+ * Deliberately not the same predicate as `isExecutableByVibe`, and deliberately not
+ * derived from `executionSupport` alone — this is the responsibility question, so it
+ * reads the responsibility field.
+ */
+export function isVibesResponsibility(step: { actor: StepActor }): boolean {
+  return step.actor === "vibe";
+}
+
 export type ActionPlanStep = {
   /** Deterministic, derived from position and title. Never model-supplied. */
   id: string;

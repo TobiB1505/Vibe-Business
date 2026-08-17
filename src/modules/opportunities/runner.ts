@@ -8,6 +8,7 @@ import {
   type EvidencePackV3,
 } from "@/modules/business-audit/evidence-v3";
 import type { BusinessReadinessAudit } from "@/modules/business-audit/schema";
+import { conclusionKeySet } from "@/modules/business-audit/conclusions";
 import { OPPORTUNITY_PROMPT_VERSION, buildOpportunitySystemPrompt } from "./prompt";
 import { renderOpportunityInput } from "./render";
 import { OPPORTUNITY_RUBRIC_VERSION } from "./rubric";
@@ -174,7 +175,13 @@ export async function runOpportunityGeneration(
     };
   }
 
-  const validation = validateOpportunityOutput(normalized.opportunities, evidenceIdSetV3(pack));
+  // The conclusion keys are derived from the audit the model was shown, so a cited
+  // lineage is verified against the same document the citation came from (§2).
+  const validation = validateOpportunityOutput(
+    normalized.opportunities,
+    evidenceIdSetV3(pack),
+    conclusionKeySet(audit),
+  );
   if (!validation.ok) {
     // Tokens were billed even though the output is unusable. Recording that
     // honestly is the point of the usage ledger, and the reason travels with

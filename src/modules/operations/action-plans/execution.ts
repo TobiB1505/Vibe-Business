@@ -142,11 +142,24 @@ async function loadSources(
   const move = defaultPlannedOpportunity(opportunitySet.opportunities);
   if (!move) return { ok: false, failureCode: "move_missing" };
 
+  /*
+   * The source gate, re-checked inside the durable step (FIX §7, §9).
+   *
+   * Readiness already refused an unresolvable Move before this operation was created,
+   * and this is not that check repeated for tidiness: the audit or the Move set can be
+   * superseded between the click and the step, and a plan must never be produced for a
+   * Move whose business problem cannot be named. It runs in step 1, before token
+   * counting and long before the paid call.
+   */
+  const source = resolvePlannerSource(audit.result, move);
+  if (!source.resolved) return { ok: false, failureCode: "planner_source_unresolved" };
+
   const inputHash = computeActionPlanInputHash({
     auditId: audit.id,
     auditInputHash: audit.inputHash,
     opportunitySetId: opportunitySet.id,
     opportunityId: move.id,
+    conclusionKey: source.source.conclusionKey,
     productProfileId: profile.stored.id,
     founderIntentHash: founderIntent.intentHash,
     evidencePackVersion: audit.result.evidencePackVersion,
@@ -176,7 +189,7 @@ async function loadSources(
 
   return {
     ok: true,
-    source: resolvePlannerSource(audit.result, move),
+    source: source.source,
     pack: buildEvidencePackV3(sources),
     repository: repositorySnapshot.result,
     auditId: audit.id,
@@ -210,8 +223,12 @@ export async function prepareActionPlanStep(
     opportunitySetId: resolved.opportunitySetId,
     opportunityId: resolved.source.opportunity.id,
     inputHash: resolved.inputHash,
-    rootProblem: resolved.source.conclusion?.rootProblem ?? null,
-    lenses: resolved.source.conclusion?.lenses ?? [],
+    rootProblem: resolved.source.conclusion.rootProblem,
+    lenses: resolved.source.conclusion.lenses,
+    // The exact conclusion this plan was built to move, and how it was established.
+    // Recorded at claim time so the chain is queryable even for a run that fails (§24).
+    sourceConclusionKey: resolved.source.conclusionKey,
+    sourceConclusionLineage: resolved.source.lineage,
     productProfileId: resolved.productProfileId,
     founderIntentHash: resolved.founderIntentHash,
     schemaVersion: ACTION_PLAN_SCHEMA_VERSION,
@@ -362,6 +379,8 @@ export async function runPlanningStep(
       operationId,
       auditId: resolved.auditId,
       opportunityId: resolved.source.opportunity.id,
+      conclusionKey: resolved.source.conclusionKey,
+      conclusionLineage: resolved.source.lineage,
       model: config.model,
       promptVersion: ACTION_PLANNER_PROMPT_VERSION,
       stepCount: outcome.plan.steps.length,

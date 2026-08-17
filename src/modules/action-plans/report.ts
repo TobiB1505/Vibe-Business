@@ -1,5 +1,10 @@
 import type { AIUsage } from "@/modules/ai/provider";
-import { ACTOR_LABELS, EXECUTION_SUPPORT_LABELS, type ActionPlan } from "./schema";
+import {
+  ACTOR_LABELS,
+  EXECUTION_SUPPORT_LABELS,
+  isExecutableByVibe,
+  type ActionPlan,
+} from "./schema";
 import { firstActionableStep, planProgress } from "./sequence";
 import type { PlannerSource } from "./source";
 import type { PlanValidationFinding } from "./validate";
@@ -57,13 +62,17 @@ export function renderActionPlanReport(input: PlanReportInput): string {
   lines.push(`Move: ${source.opportunity.title} (rank ${source.opportunity.rank})`);
   lines.push(`  problem: ${source.opportunity.problem}`);
   lines.push(`  why now: ${source.opportunity.whyNow}`);
+  // The lineage line answers "did the system know this, or work it out?" — which is the
+  // first thing to check when a plan reads as though it solved the wrong problem.
   lines.push(
-    `Root business problem: ${source.conclusion?.rootProblem ?? "— none matched to this Move —"}`,
+    `Conclusion: {${source.conclusionKey}} via ${source.lineage}` +
+      (source.lineage === "legacy_reconciled"
+        ? "  ← pre-v2 Move; source recovered by bounded reconciliation"
+        : ""),
   );
-  if (source.conclusion) {
-    lines.push(`  headline: ${source.conclusion.headline}`);
-    lines.push(`  lenses: ${source.conclusion.lenses.join(", ") || "—"}`);
-  }
+  lines.push(`Root business problem: ${source.conclusion.rootProblem}`);
+  lines.push(`  headline: ${source.conclusion.headline}`);
+  lines.push(`  lenses: ${source.conclusion.lenses.join(", ") || "—"}`);
   for (const lens of source.lenses) {
     lines.push(`  ${lens.lens}: ${lens.health}, ${lens.materiality}`);
   }
@@ -94,6 +103,7 @@ export function renderActionPlanReport(input: PlanReportInput): string {
     lines.push(
       `   execution:  ${EXECUTION_SUPPORT_LABELS[step.executionSupport]} (${step.executionSupport})` +
         ` · capability: ${step.capability ?? "none"}` +
+        ` · Vibe can apply: ${isExecutableByVibe(step) ? "yes" : "no"}` +
         ` · approval: ${step.requiresApproval ? "required" : "not required"}`,
     );
     lines.push(`   evidence:   ${step.evidenceIds.join(", ") || "—"}`);

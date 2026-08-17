@@ -84,6 +84,10 @@ export const OPERATION_FAILURE_MESSAGES: Record<OperationFailureCode, string> = 
   move_missing: "Vibe needs a next move before it can plan one. Work out your next moves first.",
   move_stale:
     "Your next moves were worked out from an older audit than the one Vibe now has. Refresh them first.",
+  // Says what is missing without blaming the user for it, and points at the one
+  // action that fixes it — which they start, never Vibe (Rule 60).
+  planner_source_unresolved:
+    "Vibe could not tell which business problem this move solves, so it won't plan one. Refresh your next moves and it will.",
   action_plan_input_budget_exceeded:
     "There is too much context to plan in one pass. This is a bug — please report it.",
   action_planning_failed: "Vibe could not work out how to carry out this move.",

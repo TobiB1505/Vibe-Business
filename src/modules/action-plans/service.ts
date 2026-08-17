@@ -18,7 +18,12 @@ import {
   type PlanStalenessReason,
 } from "./schema";
 import { firstActionableStep, planProgress } from "./sequence";
-import { defaultPlannedOpportunity } from "./source";
+import {
+  defaultPlannedOpportunity,
+  resolvePlannerSource,
+  type ConclusionLineage,
+  type SourceUnresolvedReason,
+} from "./source";
 import {
   computeActionPlanInputHash,
   getLatestCompletedActionPlan,
@@ -50,7 +55,15 @@ export type ActionPlanBlockReason =
   /** The Moves were prioritized from an older audit than the current one. */
   | "move_stale"
   /** Vibe has no understanding of the product to plan against. */
-  | "product_profile_missing";
+  | "product_profile_missing"
+  /**
+   * The business problem behind the Move could not be established (FIX §7, §8).
+   *
+   * The Move exists and is current; what is missing is its link back to an audit
+   * conclusion. Planning anyway would produce a task list with no problem to check it
+   * against, so readiness refuses and no inference is ever reached (§9).
+   */
+  | "planner_source_unresolved";
 
 export type ActionPlanReadiness = {
   ready: boolean;
@@ -58,7 +71,29 @@ export type ActionPlanReadiness = {
   auditId: string | null;
   /** The Move a plan would be built for, when there is one (§6, §83). */
   opportunityId: string | null;
+  /** The conclusion that Move addresses, once it has been established (FIX §7). */
+  conclusionKey: string | null;
+  /** How it was established — stated, or recovered for a legacy Move (FIX §4). */
+  conclusionLineage: ConclusionLineage | null;
+  /** Why the source could not be established, when that is the blocker. */
+  unresolvedSourceReason: SourceUnresolvedReason | null;
 };
+
+function blocked(
+  reason: ActionPlanBlockReason,
+  auditId: string | null,
+  unresolvedSourceReason: SourceUnresolvedReason | null = null,
+): ActionPlanReadiness {
+  return {
+    ready: false,
+    blockedReason: reason,
+    auditId,
+    opportunityId: null,
+    conclusionKey: null,
+    conclusionLineage: null,
+    unresolvedSourceReason,
+  };
+}
 
 export async function getActionPlanReadiness(
   supabase: SupabaseClient,
@@ -71,42 +106,44 @@ export async function getActionPlanReadiness(
     getLatestProfile(supabase, projectId),
   ]);
 
-  if (!audit?.result) {
-    return { ready: false, blockedReason: "audit_missing", auditId: null, opportunityId: null };
-  }
+  if (!audit?.result) return blocked("audit_missing", null);
 
   // Refusing rather than warning, for the reason prioritization refuses: a plan
   // built from a diagnosis we know is out of date reads exactly like one built
   // from current evidence, and nothing on screen would say otherwise.
-  if (!currency.upToDate) {
-    return { ready: false, blockedReason: "audit_stale", auditId: audit.id, opportunityId: null };
-  }
-
-  if (!profile) {
-    return {
-      ready: false,
-      blockedReason: "product_profile_missing",
-      auditId: audit.id,
-      opportunityId: null,
-    };
-  }
-
-  if (!opportunities) {
-    return { ready: false, blockedReason: "move_missing", auditId: audit.id, opportunityId: null };
-  }
-
-  if (opportunities.stale) {
-    return { ready: false, blockedReason: "move_stale", auditId: audit.id, opportunityId: null };
-  }
+  if (!currency.upToDate) return blocked("audit_stale", audit.id);
+  if (!profile) return blocked("product_profile_missing", audit.id);
+  if (!opportunities) return blocked("move_missing", audit.id);
+  if (opportunities.stale) return blocked("move_stale", audit.id);
 
   // Rank 1. Never "whichever Move Vibe could most easily execute" — that trade
   // is exactly what §83 forbids.
   const move = defaultPlannedOpportunity(opportunities.set.opportunities);
-  if (!move) {
-    return { ready: false, blockedReason: "move_missing", auditId: audit.id, opportunityId: null };
+  if (!move) return blocked("move_missing", audit.id);
+
+  /*
+   * The source gate (FIX §7, §9).
+   *
+   * Deliberately part of *readiness* rather than of the planning step, so the refusal
+   * happens where every caller already asks "may this run?" — and therefore before the
+   * operation row exists, before token counting, and a long way before any provider
+   * call. Placing it later would leave the ordering correct today and one refactor away
+   * from a paid call on an unresolvable Move.
+   */
+  const source = resolvePlannerSource(audit.result, move);
+  if (!source.resolved) {
+    return blocked("planner_source_unresolved", audit.id, source.reason);
   }
 
-  return { ready: true, blockedReason: null, auditId: audit.id, opportunityId: move.id };
+  return {
+    ready: true,
+    blockedReason: null,
+    auditId: audit.id,
+    opportunityId: move.id,
+    conclusionKey: source.source.conclusionKey,
+    conclusionLineage: source.source.lineage,
+    unresolvedSourceReason: null,
+  };
 }
 
 /** Resolves the identity a planning run would carry, or why it cannot. */
@@ -119,6 +156,8 @@ export async function resolveActionPlanIdentity(
       auditId: string;
       opportunitySetId: string;
       opportunityId: string;
+      conclusionKey: string;
+      conclusionLineage: ConclusionLineage;
       inputHash: string;
     }
   | { ok: false; error: ActionPlanBlockReason }
@@ -140,16 +179,24 @@ export async function resolveActionPlanIdentity(
   const move = defaultPlannedOpportunity(opportunities.set.opportunities);
   if (!move) return { ok: false, error: "move_missing" };
 
+  // Already checked by readiness above; re-derived here because the identity needs the
+  // key, and re-deriving is free while passing it through two layers is a chance to drift.
+  const source = resolvePlannerSource(audit.result, move);
+  if (!source.resolved) return { ok: false, error: "planner_source_unresolved" };
+
   return {
     ok: true,
     auditId: audit.id,
     opportunitySetId: opportunities.set.id,
     opportunityId: move.id,
+    conclusionKey: source.source.conclusionKey,
+    conclusionLineage: source.source.lineage,
     inputHash: computeActionPlanInputHash({
       auditId: audit.id,
       auditInputHash: audit.inputHash,
       opportunitySetId: opportunities.set.id,
       opportunityId: move.id,
+      conclusionKey: source.source.conclusionKey,
       productProfileId: profile.stored.id,
       founderIntentHash: founderIntent.intentHash,
       evidencePackVersion: audit.result.evidencePackVersion,

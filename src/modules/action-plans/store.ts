@@ -3,6 +3,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { BusinessLens } from "@/modules/business-audit/schema";
+import type { ConclusionLineage } from "./source";
 import type { ExecutionCapability } from "@/modules/execution/schema";
 import type { PlanValidationFinding } from "./validate";
 import type {
@@ -53,6 +54,15 @@ export type StoredActionPlan = {
   assumptions: string[];
   /** The internal root problem this plan was built to solve (§37). */
   rootProblem: string | null;
+  /**
+   * The exact conclusion this plan was built to move (FIX §24).
+   *
+   * With `businessAuditId` this is a complete canonical reference, which makes the whole
+   * chain queryable: audit → conclusion → move → plan.
+   */
+  sourceConclusionKey: string | null;
+  /** Whether that conclusion was stated by the engine or recovered for a legacy Move. */
+  sourceConclusionLineage: ConclusionLineage | null;
   lenses: BusinessLens[];
 
   stepCount: number | null;
@@ -92,6 +102,8 @@ type PlanRow = {
   addresses_root_problem: string | null;
   assumptions: string[] | null;
   root_problem: string | null;
+  source_conclusion_key: string | null;
+  source_conclusion_lineage: ConclusionLineage | null;
   lenses: BusinessLens[] | null;
   step_count: number | null;
   validation_notes: string[] | null;
@@ -129,7 +141,7 @@ type StepRow = {
 };
 
 const PLAN_COLUMNS =
-  "id, project_id, business_audit_id, opportunity_set_id, opportunity_id, input_hash, status, goal, why_now, expected_outcome, addresses_root_problem, assumptions, root_problem, lenses, step_count, validation_notes, validation_findings, failure_code, contract_version, planner_version, prompt_version, rubric_version, evidence_pack_version, provider, model, product_profile_id, founder_intent_hash, created_at, completed_at";
+  "id, project_id, business_audit_id, opportunity_set_id, opportunity_id, input_hash, status, goal, why_now, expected_outcome, addresses_root_problem, assumptions, root_problem, source_conclusion_key, source_conclusion_lineage, lenses, step_count, validation_notes, validation_findings, failure_code, contract_version, planner_version, prompt_version, rubric_version, evidence_pack_version, provider, model, product_profile_id, founder_intent_hash, created_at, completed_at";
 
 const STEP_COLUMNS =
   "id, action_plan_id, step_key, step_order, title, description, purpose, actor, change_kind, completion_criteria, depends_on, evidence_ids, execution_support, capability, requires_approval";
@@ -149,6 +161,8 @@ function mapPlan(row: PlanRow, steps: StoredActionPlanStep[] = []): StoredAction
     addressesRootProblem: row.addresses_root_problem,
     assumptions: row.assumptions ?? [],
     rootProblem: row.root_problem,
+    sourceConclusionKey: row.source_conclusion_key,
+    sourceConclusionLineage: row.source_conclusion_lineage,
     lenses: row.lenses ?? [],
     stepCount: row.step_count,
     validationNotes: row.validation_notes ?? [],
@@ -208,6 +222,14 @@ export function computeActionPlanInputHash(params: {
   auditInputHash: string;
   opportunitySetId: string;
   opportunityId: string;
+  /**
+   * The conclusion the plan will be built to move (FIX §24).
+   *
+   * Part of the identity because it is part of the question: the same Move re-linked to
+   * a different conclusion is a different planning problem, and reusing the old plan for
+   * it would answer a question nobody asked.
+   */
+  conclusionKey: string;
   productProfileId: string;
   founderIntentHash: string;
   evidencePackVersion: string;
@@ -224,6 +246,7 @@ export function computeActionPlanInputHash(params: {
     params.auditInputHash,
     params.opportunitySetId,
     params.opportunityId,
+    params.conclusionKey,
     params.productProfileId,
     params.founderIntentHash,
     params.evidencePackVersion,
@@ -348,6 +371,8 @@ export async function createActionPlanRun(
     opportunityId: string;
     inputHash: string;
     rootProblem: string | null;
+    sourceConclusionKey: string;
+    sourceConclusionLineage: ConclusionLineage;
     lenses: BusinessLens[];
     productProfileId: string;
     founderIntentHash: string;
@@ -370,6 +395,8 @@ export async function createActionPlanRun(
       opportunity_id: params.opportunityId,
       input_hash: params.inputHash,
       root_problem: params.rootProblem,
+      source_conclusion_key: params.sourceConclusionKey,
+      source_conclusion_lineage: params.sourceConclusionLineage,
       lenses: params.lenses,
       product_profile_id: params.productProfileId,
       founder_intent_hash: params.founderIntentHash,

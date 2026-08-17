@@ -30,6 +30,8 @@ function storedPlan(overrides: Partial<StoredActionPlan> = {}): StoredActionPlan
     addressesRootProblem: "…",
     assumptions: [],
     rootProblem: "The business has not decided who its first customer is.",
+    sourceConclusionKey: "blocker-1",
+    sourceConclusionLineage: "direct",
     lenses: ["audience"],
     stepCount: 4,
     validationNotes: [],

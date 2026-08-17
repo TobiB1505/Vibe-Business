@@ -62,27 +62,26 @@ function renderMove(source: PlannerSource): string {
 
 function renderAudit(source: PlannerSource): string {
   const lines: string[] = [];
+  const conclusion = source.conclusion;
 
-  if (source.conclusion) {
-    const conclusion = source.conclusion;
-    lines.push("## The business problem underneath this Move");
-    // The internal root problem, which is what the plan must actually solve.
-    // Never rendered to a customer anywhere; here it is the planner's target.
-    if (conclusion.rootProblem !== "") lines.push(`Root problem: ${conclusion.rootProblem}`);
-    lines.push(`What the founder was told: ${conclusion.headline}`);
-    lines.push(conclusion.explanation);
-    if (conclusion.whyItMatters) lines.push(`Why it matters: ${conclusion.whyItMatters}`);
-    lines.push(`Confidence: ${conclusion.confidence}`);
-    lines.push("");
-  } else {
-    // Said plainly rather than papered over. A planner that thinks it has a
-    // root problem when it does not will plan confidently against nothing.
-    lines.push("## The business problem underneath this Move");
-    lines.push(
-      "The audit's conclusions could not be matched to this Move. Plan from the Move itself and the evidence, and do not assume a root problem that was not given to you.",
-    );
-    lines.push("");
-  }
+  /*
+   * There is no "conclusion unknown" branch here any more (CORE-2b FIX §7, §8).
+   *
+   * There used to be one, and it told the model to plan from the Move alone. That is a
+   * generic task generator with extra steps: without the root problem, nothing in the
+   * response can be checked against the problem it claims to solve. A Move whose source
+   * cannot be established now fails readiness before this function is ever reached, and
+   * `PlannerSource.conclusion` is non-nullable so the branch is not expressible.
+   */
+  lines.push("## The business problem underneath this Move");
+  // The internal root problem, which is what the plan must actually solve.
+  // Never rendered to a customer anywhere; here it is the planner's target.
+  if (conclusion.rootProblem !== "") lines.push(`Root problem: ${conclusion.rootProblem}`);
+  lines.push(`What the founder was told: ${conclusion.headline}`);
+  lines.push(conclusion.explanation);
+  if (conclusion.whyItMatters) lines.push(`Why it matters: ${conclusion.whyItMatters}`);
+  lines.push(`Confidence: ${conclusion.confidence}`);
+  lines.push("");
 
   if (source.lenses.length > 0) {
     lines.push("## How the areas this Move touches currently stand");

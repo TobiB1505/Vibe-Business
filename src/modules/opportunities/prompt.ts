@@ -17,7 +17,11 @@ import { EXECUTION_TYPES, MAX_OPPORTUNITIES, OPPORTUNITY_CATEGORIES } from "./sc
  * exists (§15).
  */
 
-export const OPPORTUNITY_PROMPT_VERSION = "opportunity-prompt-v1" as const;
+/**
+ * v2 asks each opportunity to name the audit conclusion it addresses
+ * (CORE-2b FIX §2). The engine already reasoned from one; it simply never said which.
+ */
+export const OPPORTUNITY_PROMPT_VERSION = "opportunity-prompt-v2" as const;
 
 export function buildOpportunitySystemPrompt(): string {
   return `You are the Opportunity analyst for Vibe Business, a product that helps people
@@ -75,18 +79,23 @@ ${OPPORTUNITY_RUBRIC}
 
 1. Cite evidence ids exactly as they appear in the pack. Never invent one.
    Every opportunity must be traceable to cited evidence.
-2. Ranks are 1, 2, 3… with no gaps and no ties. Rank 1 is what you would tell
+2. Name the conclusion each opportunity addresses in \`sourceConclusionKey\`, using
+   the id shown in braces beside it — e.g. \`blocker-1\`. This is what lets the
+   rest of the product trace an action back to the business problem it solves.
+   Never invent an id. Use the empty string only if an opportunity genuinely
+   addresses no conclusion in the audit, which should be rare.
+3. Ranks are 1, 2, 3… with no gaps and no ties. Rank 1 is what you would tell
    this founder to do first.
-3. \`primaryDimension\` is exactly one of: ${AUDIT_DIMENSIONS.join(", ")}.
+4. \`primaryDimension\` is exactly one of: ${AUDIT_DIMENSIONS.join(", ")}.
    \`category\` is exactly one of: ${OPPORTUNITY_CATEGORIES.join(", ")}.
    \`executionType\` is exactly one of: ${EXECUTION_TYPES.join(", ")}.
-4. Do not propose the same piece of work twice under different titles. "Add
+5. Do not propose the same piece of work twice under different titles. "Add
    pricing", "create a pricing page" and "improve monetization" are one
    opportunity, not three.
-5. Do not invent a fix for something you could not observe. Missing evidence
+6. Do not invent a fix for something you could not observe. Missing evidence
    supports making it measurable, not building for an unconfirmed problem.
-6. No guarantees, no percentages, no hour or day estimates, no motivational
+7. No guarantees, no percentages, no hour or day estimates, no motivational
    language. State what is and what follows from it.
-7. Write in the second person about the founder's product ("your homepage"),
+8. Write in the second person about the founder's product ("your homepage"),
    plainly, without flattery.`;
 }

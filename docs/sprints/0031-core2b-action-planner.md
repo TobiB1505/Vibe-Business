@@ -1,9 +1,10 @@
 # Sprint CORE-2b — Action Planner Intelligence
 
-**Status: implemented; real-product dogfood outstanding.** Contract, reasoning, persistence,
-durable execution, validation and the dogfood harness are built and green. The one thing not
-done is the thing that needs credentials and a billable call — see *What is not done* at the
-bottom, which is deliberately not buried.
+**Status: implemented and hardened; real-product dogfood outstanding.** Contract, reasoning,
+persistence, durable execution, validation and the dogfood harness are built and green, and
+the CORE-2b FIX pass below closed four architectural gaps before any real planner quality is
+evaluated. The one thing not done is the thing that needs credentials and a billable call —
+see *What is not done* at the bottom, which is deliberately not buried.
 
 Branch: `claude/core-2b-action-planner-m5xkwm`, from `352662d` (merge of PR #41 —
 CORE-2a.4 Interactive Audit and the audit/onboarding work on top of it).
@@ -47,10 +48,12 @@ Two facts from that trace shaped the whole sprint:
 
 **There is no stored link from a Move to the conclusion it answers.** The Opportunity Engine
 reads the audit and returns a ranked list; which conclusion each entry addresses is never
-recorded. §37 requires the chain `Root Problem → Move → Plan → Steps` to hold, so the link is
-recovered in `source.ts` from **structured fields only** — shared evidence ids weighted above
-shared dimensions — and a miss returns `null` rather than a guess. Attaching the first blocker
-to a Move that does not address it would be the fidelity claim quietly becoming false.
+recorded. §37 requires the chain `Root Problem → Move → Plan → Steps` to hold, so the first
+implementation recovered the link in `source.ts` from structured fields only.
+
+That was the right recovery mechanism and the wrong canonical relationship, and the FIX pass
+below replaces it: the engine now states the conclusion at creation time, and reconstruction
+survives only for Moves written before it.
 
 **Execution capability is already server-owned, and already refuses to read model prose.**
 `execution/capabilities.ts` opens by explaining why `title.includes("SEO")` is the worst
@@ -182,6 +185,126 @@ to win — the bar is "nothing blocks it", not "Vibe can do it". The test that m
 the inverse: a downstream product change is never offered while the decision it depends on is
 open, even when it is the only step Vibe could technically act on.
 
+
+## CORE-2b FIX — canonical lineage and boundary hardening
+
+A narrow architecture pass before any real planner quality is judged. Four issues, all of
+them things that would have been much harder to change after a dogfood had been read.
+
+### 1. The Move → Conclusion relationship is now stated, not reconstructed
+
+The Opportunity Engine has always known which audit conclusion each Move addresses — it
+reads the conclusions and decides what to do about them — and it discarded the answer. The
+planner then rebuilt it from evidence overlap.
+
+That is a reasonable way to *recover* a fact and a poor way to *hold* one. So the engine
+records it: `business-opportunity.v2` carries `sourceConclusionKey`, the model cites it
+from ids rendered beside each conclusion, and validation verifies the citation against the
+audit's own key set exactly as it verifies an evidence id. A fabricated key is dropped
+rather than stored — an unverified lineage is worse than a missing one, because the planner
+trusts a stored key completely.
+
+**Why a key rather than a foreign key.** A conclusion is not a row: it lives inside
+`business_readiness_audits.result`, a JSONB document written once and never updated. Its
+canonical address is therefore the pair `(business_audit_id, conclusion_key)`, and the audit
+id is already a real FK on both tables. Normalizing conclusions into their own table would
+buy a single-column FK at the cost of rewriting how the audit persists its judgment, for a
+relationship that is already unambiguous — so it was not done, and
+`business-audit/conclusions.ts` is the single place that would have to learn about it if
+that changes. The headline is explicitly not identity: it is prose written for a customer to
+read.
+
+**One source of truth.** `business_opportunities.source_conclusion_key` is authoritative.
+The planner reads it first and, when it is present, runs no reconstruction at all — pinned
+by a test where the stated conclusion is the one overlap would score *lowest*, so a
+regression to the old path fails loudly instead of silently disagreeing.
+
+**No backfill.** Deliberately. Backfilling would mean re-deriving each historical Move's
+source by the same reconstruction this change exists to demote — writing a guess into the
+column that is supposed to hold a fact, with nothing downstream able to tell the two apart.
+Legacy Moves resolve at runtime instead.
+
+### 2. Reconstruction became conservative, and unresolved became a real answer
+
+The legacy path used to return the highest-scoring candidate whenever any overlap existed.
+That is a best guess dressed as a fact: a Move plausibly answering two conclusions would
+silently get one of them, and every downstream claim about "the business problem this plan
+solves" would inherit a coin flip.
+
+Now a match must rest on **shared evidence** rather than a shared dimension — two unrelated
+conclusions routinely touch the same dimension; that is what a dimension is for — and a tie
+resolves to unresolved. Four distinct reasons are reported:
+`audit_has_no_conclusions`, `conclusion_not_in_audit`, `no_legacy_match`,
+`ambiguous_legacy_match`.
+
+**And unresolved means no inference.** `planner_source_unresolved` is refused in
+*readiness*, before an operation row exists, before token counting, and long before any
+provider call.
+
+The enforcement is a **type, not an ordering**. `PlannerSource.conclusion` is non-nullable
+and `resolvePlannerSource` returns a discriminated result, so a planner source cannot be
+constructed without a conclusion, `runActionPlanning` cannot be called without one, and no
+code path to the provider skips it. The render's "plan from the Move alone" branch — a
+generic task generator with extra steps — is gone because it is no longer expressible.
+
+`no-spend-without-source.test.ts` runs all four unresolvable shapes through the production
+sequence and asserts the fake provider records **zero** calls, including the free token
+count: reaching even that would mean the gate sits in the wrong place.
+
+### 3. Prepare is not execute, and now says so in code
+
+The two axes were already clean, so they were not renamed — renaming would churn a
+migration, a CHECK constraint and every label for no change in meaning. What was missing was
+a way to *ask*:
+
+```
+actor             RESPONSIBILITY — who owns the work          model
+executionSupport  PLATFORM       — what Vibe can perform      server
+```
+
+`isExecutableByVibe(step)` is now the one predicate, and it requires both the support value
+and a real capability — the same pairing the database enforces. `isVibesResponsibility(step)`
+answers the other question separately.
+
+The regression test is §14's own example: *"prepare homepage positioning around the selected
+segment"* and *"apply that positioning to the live homepage"* are both `actor: vibe`, and
+resolve to `vibe_prepares` / `not_yet_supported` with no capability on either. The SEO
+contrast stays green beside it. A copy test also asserts no non-executable label contains
+"apply", "publish", "deploy" or "ship" — the label is the last place the distinction can be
+lost and the first place a user would act on losing it.
+
+### 4. The context-size test stopped being a permanent constraint
+
+There was one assertion: the planner pack is strictly smaller than the audit's. The intent
+was right and the shape was wrong. "Smaller than an audit, forever, for every Move" is not a
+property of a correct planner — a Move spanning four lenses with heavy evidence could
+legitimately need more context than a thin audit of a small product, and the test would have
+made that a failure. A test that fires on correct behaviour eventually gets satisfied by
+making the behaviour worse.
+
+It is replaced by the architectural property: uncited evidence is excluded, unrelated lenses'
+evidence is excluded, the audit's broad reasoning is not resent, and the request stays inside
+the configured input budget. The smaller-than-audit comparison survives as a clearly labelled
+**fixture** expectation. Cost observability is untouched — context size, tokens, latency and
+provider cost are all still recorded and printed by the dogfood report, which is where the
+economic answer actually comes from.
+
+### Staleness
+
+Unchanged, and checked rather than expanded. Conclusions live inside the audit document, so
+"the source conclusion is no longer current" cannot happen independently of
+`audit_superseded`; a Move re-linked to a different conclusion is `move_superseded`. What
+changed is that the conclusion key is now part of the plan's input identity, so re-linking
+correctly produces a different plan rather than reusing the old one.
+
+### Version bumps this forced
+
+`business-opportunity.v2`, `business-opportunity-set.v2`, `opportunity-engine-v2`,
+`opportunity-prompt-v2`. The set schema version feeds the reuse identity, so **existing
+opportunity sets are no longer reusable** — correctly, since a v1 set cannot answer the
+question a v2 set can. Nothing regenerates automatically; the next Moves run is the user's
+action, and until then the planner reads existing Moves through the legacy path.
+
 ## Boundaries this sprint did not cross
 
 - **Rule 57** — intact, and now enforced by a schema walk rather than by wording.
@@ -199,7 +322,7 @@ open, even when it is the only step Vibe could technically act on.
 |---|---|
 | lint | green (4 pre-existing warnings, unrelated) |
 | typecheck | green |
-| unit tests | green — 3357 before, 3485 after (+128 in this module) |
+| unit tests | green — 3357 before CORE-2b, 3530 after the FIX pass (+173) |
 | build | green |
 | E2E | unchanged — this sprint ships no UI, so no browser assertion changed |
 | migration | **not deployed** — see below |
@@ -209,10 +332,17 @@ open, even when it is the only step Vibe could technically act on.
 Two things, both requiring credentials this session does not have, and both being reported
 rather than quietly dropped.
 
-**The migration is not deployed.** `20260817120000_action_plans.sql` is written and its
-constraints are pinned by tests against the migration source, but it has not been applied to
-the remote database. Per Rule 30 the next step is `pnpm db:status` before `pnpm db:push` —
-never assume table absence, never blindly rerun.
+**Two migrations are not deployed.** `20260817120000_action_plans.sql` creates the plan
+tables; `20260817140000_move_conclusion_lineage.sql` adds the lineage columns to
+`business_opportunities` and `action_plans`. Both are written and their constraints are
+pinned by tests against the migration source; neither has been applied. Per Rule 30 the next
+step is `pnpm db:status` before `pnpm db:push` — never assume table absence, never blindly
+rerun.
+
+The second migration is additive to `business_opportunities`, which holds production rows,
+and its two CHECK constraints land on `action_plans`, which has never held any. That is why
+they are plain CHECKs rather than `not valid` plus a backfill; if `action_plans` ever holds
+rows before deployment, that is the thing to change.
 
 **The real dogfood has not been run.** §92–§98 require planning Vibe Business's own current top
 Move and reviewing the result by hand, which needs a Supabase service key, an Anthropic key and
@@ -235,7 +365,7 @@ and is marked as provisional in its own comment.
 
 ## Next
 
-1. Deploy the migration and dogfood the real top Move.
+1. Deploy both migrations and dogfood the real top Move.
 2. Re-set the planning timeout from measured duration.
 3. CORE-2b UI — the Action Planner experience, once the intelligence has been read and judged.
 4. Then bounded Execution / Prepare / Preview, which is where `vibe_executes_now` stops being

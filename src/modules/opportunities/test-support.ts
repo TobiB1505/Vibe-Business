@@ -13,6 +13,7 @@ import type { WireOpportunity } from "./wire-schema";
 export function fakeWireOpportunity(overrides: Partial<WireOpportunity> = {}): WireOpportunity {
   return {
     rank: 1,
+    sourceConclusionKey: "blocker-1",
     title: "Clarify your monetization path",
     problem: "Your product is live and users can sign up, but no pricing or payment path is evidenced.",
     whyNow: "Acquisition has limited value until there is a defined way to capture revenue.",

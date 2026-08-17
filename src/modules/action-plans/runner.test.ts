@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { ACTION_PLANNING_CONFIG } from "@/modules/ai/operations";
+import {
+  ACTION_PLANNING_CONFIG,
+  BUSINESS_READINESS_AUDIT_CONFIG,
+} from "@/modules/ai/operations";
 import { buildEvidencePackV3 } from "@/modules/business-audit/evidence-v3";
 import {
   FakeProvider,
@@ -157,14 +160,98 @@ describe("the request", () => {
     expect(request.userContent).toContain("UNTRUSTED DATA");
   });
 
-  /**
-   * §34, §98 — the planner's context is a focused selection, not the audit's.
+  /*
+   * §34, §98 and FIX §16–§18 — what the context tests are actually for.
    *
-   * If this ever fails because the planner started receiving the whole pack,
-   * the cost target in §98 has been lost and the plan is about to become an
-   * inventory of what the scanner did not find (§36).
+   * There used to be one assertion here: the planner pack is strictly smaller than the
+   * audit's. The intent was right and the assertion was the wrong shape — "smaller than
+   * an audit, forever, for every Move" is not a property of a correct planner. A Move
+   * spanning four lenses with heavy evidence behind each could legitimately need more
+   * context than a thin audit of a small product, and the test would have made that a
+   * failure rather than a finding. A test that fires on correct behaviour eventually
+   * gets satisfied by making the behaviour worse.
+   *
+   * So the invariants below are the **architectural** property instead — the planner
+   * receives the source judgment and the product's own understanding, and nothing else
+   * — plus one fixture-scoped size expectation, clearly labelled as a fixture
+   * expectation rather than a product rule.
    */
-  it("sends less evidence than the audit read", () => {
+
+  it("excludes evidence the source judgment never cited", () => {
+    const source = fakePlannerSource({
+      citedEvidenceIds: ["profile.identity.description"],
+    });
+    const full = buildEvidencePackV3(sources());
+    const focused = buildPlannerPack({ source, pack: full });
+
+    const scanner = focused.items.filter(
+      (item) => item.category !== "product_profile" && item.category !== "founder_intent",
+    );
+
+    // Every surviving scanner line is one the Move, the conclusion or its lenses
+    // pointed at. Nothing arrives because it happened to be in the pack (§36).
+    for (const item of scanner) {
+      expect(source.citedEvidenceIds).toContain(item.id);
+    }
+    // …and the audit genuinely held scanner evidence that did not survive, so the
+    // assertion above is not vacuously true.
+    const droppedScannerLines = full.items.filter(
+      (item) =>
+        item.category !== "product_profile" &&
+        item.category !== "founder_intent" &&
+        !source.citedEvidenceIds.includes(item.id),
+    );
+    expect(droppedScannerLines.length).toBeGreaterThan(0);
+  });
+
+  it("excludes evidence belonging to lenses this Move does not touch", () => {
+    const source = fakePlannerSource({ citedEvidenceIds: ["profile.identity.description"] });
+    const focused = buildPlannerPack({ source, pack: buildEvidencePackV3(sources()) });
+    const ids = new Set(focused.items.map((item) => item.id));
+
+    // An unrelated lens's evidence — payments, for an audience Move — must not travel.
+    expect(ids.has("repo.surface.payments")).toBe(false);
+  });
+
+  it("does not resend the audit's broad business reasoning", () => {
+    const source = fakePlannerSource();
+    const request = buildActionPlanRequest(
+      source,
+      buildPlannerPack({ source, pack: buildEvidencePackV3(sources()) }),
+      ACTION_PLANNING_CONFIG,
+    );
+
+    // The five scored dimensions and the audit's other conclusions are the audit's
+    // work, already done. Sending them invites the planner to re-audit (§4).
+    expect(request.userContent).not.toContain("Technical breakdown");
+    expect(request.userContent).not.toContain("Overall business readiness");
+  });
+
+  it("stays within the operation's configured input budget", async () => {
+    const provider = planProvider();
+    await runActionPlanning(input(provider));
+
+    // The budget is the real, enforced constraint — it refuses a request rather than
+    // trimming silently — so this is the size assertion that belongs in the suite.
+    const counted = provider.countRequests.length;
+    expect(counted).toBe(1);
+    expect(ACTION_PLANNING_CONFIG.maxInputTokens).toBeLessThan(
+      // Smaller than the audit's own ceiling, which is the economic intent stated as a
+      // configuration fact rather than as a per-run invariant.
+      BUSINESS_READINESS_AUDIT_CONFIG.maxInputTokens,
+    );
+  });
+
+  /**
+   * A **fixture** expectation, not a product invariant (FIX §17).
+   *
+   * On this fixture the focused pack is smaller than the audit's, and it should be —
+   * that is the whole reason `evidence.ts` exists. If it ever stops being true, the
+   * right response is to read the diff and decide, not to assume a regression: the real
+   * economic answer comes from the dogfood's measured cost (§18), which is recorded and
+   * has not been removed.
+   */
+  it("is smaller than the audit pack on this fixture", () => {
     const source = fakePlannerSource();
     const full = buildEvidencePackV3(sources());
     const focused = buildPlannerPack({ source, pack: full });

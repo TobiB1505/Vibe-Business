@@ -22,6 +22,56 @@ that work already happened, on more evidence, and re-doing it here would make
 the ranked list decorative. It plans **one** Move at a time (§6), which is what
 keeps a plan bounded, measurable and later executable.
 
+## Canonical planner lineage
+
+```
+Business Audit → Business Conclusion → Next Move → Action Plan → Plan Steps
+```
+
+Every link is **stated**, not inferred.
+
+- **New Moves** (`business-opportunity.v2` and later) persist
+  `sourceConclusionKey` at creation time — the Opportunity Engine already reasoned from a
+  conclusion, so it records which one. A conclusion is addressed by the pair
+  `(business_audit_id, conclusion_key)`, because a conclusion lives inside the audit's
+  immutable JSONB document rather than in its own table; see
+  `business-audit/conclusions.ts`. **This field is the authoritative relationship.**
+- **Legacy Moves** (pre-v2, no key) fall back to bounded reconciliation in `source.ts`,
+  which is a compatibility path and nothing more. It runs *only* when no key is present,
+  and it is willing to fail: a match must rest on shared evidence rather than a shared
+  dimension, and a tie resolves to unresolved. "Highest score wins" is explicitly not the
+  rule — a ranking is a decision only when the gap means something.
+- **Unresolved** is a real outcome. Planning is refused with
+  `planner_source_unresolved`, and refused in *readiness* — before an operation row
+  exists, before token counting, and a long way before any provider call.
+
+That refusal is enforced by a type, not by ordering: `PlannerSource.conclusion` is
+non-nullable and `resolvePlannerSource` returns a discriminated result, so a planner
+source cannot be constructed without a conclusion, and `runActionPlanning` cannot be
+called without one. There is no code path to the provider that skips it.
+
+A successful plan stores the exact `source_conclusion_key` it used and whether that came
+from `direct` or `legacy_reconciled` lineage, which makes the whole chain queryable.
+
+## Vibe prepares vs Vibe executes
+
+Two axes, and neither collapses into the other:
+
+| | Means | Decided by |
+|---|---|---|
+| `actor` | **Responsibility** — who conceptually owns this work | model |
+| `executionSupport` | **Platform** — what Vibe can actually perform today | server |
+
+`vibe_prepares` says *this is Vibe's work, not yours*. It says **nothing** about an
+executor existing, and it must never be rendered as a button. "Prepare a positioning
+direction for the chosen segment" is truthful with no repository executor anywhere;
+"apply that positioning to the production website" is the same responsibility and needs
+one that does not exist, which is `not_yet_supported`.
+
+Only server capability reconciliation establishes `vibe_executes_now`. Ask
+`isExecutableByVibe(step)` — it requires both the support value *and* a real capability,
+and the database enforces the same pairing.
+
 ## The one architectural rule
 
 **A model may describe a business action. Only the server may say whether Vibe
@@ -77,15 +127,24 @@ loses those values in normalization. Adding such a field is meant to be hard.
 
 Durable execution lives in `src/modules/operations/action-plans/`.
 
-## Cost
+## Context policy
 
-Planning receives less context than any other reasoning operation in the
-product: one Move, the conclusion under it, the lenses that conclusion spans,
-and only the evidence any of them cited — plus the product profile, which is
-what stops the plan being a template. That is a design target, not an accident
-(§98): if planning ever approaches the cost of an audit, the selection in
-`evidence.ts` has regressed and the plan is about to become an inventory of what
-the scanner did not find.
+The planner receives one Move, the conclusion under it, the lenses that conclusion
+spans, and only the evidence any of them cited — plus the product profile, always,
+because that is what stops the plan being a template. Everything else the audit read is
+excluded: the five scored dimensions, the other conclusions, the limitations, and every
+evidence line no part of the source judgment pointed at.
+
+The property is **focused and source-relevant**, not *universally smaller than every
+audit payload forever*. A Move spanning four lenses with heavy evidence behind each could
+legitimately need more context than a thin audit of a small product, and a test asserting
+otherwise would turn correct behaviour into a failure — and eventually get satisfied by
+making the behaviour worse. So the suite asserts exclusion (uncited evidence, unrelated
+lenses, the audit's broad reasoning) and the configured input budget, and keeps the
+smaller-than-audit comparison as a clearly-labelled fixture expectation.
+
+The economic answer comes from measurement, not from an invariant. Context size, token
+usage, latency and provider cost are all recorded, and the dogfood report prints them.
 
 ## What this module does not do
 

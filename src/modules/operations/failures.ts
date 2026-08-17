@@ -46,7 +46,16 @@ export type OperationExecutionFailure =
   /** Planning needs a Move to plan (CORE-2b §6). */
   | "move_missing"
   /** The Moves were prioritized from an older audit than the current one. */
-  | "move_stale";
+  | "move_stale"
+  /**
+   * The business problem behind the Move could not be established (CORE-2b FIX §8).
+   *
+   * Its own code rather than a variant of `move_missing`, because the Move is fine —
+   * what is missing is the chain from it back to a root business problem. Planning
+   * without that produces a generic task list, so it is refused **before** anything is
+   * spent (§9).
+   */
+  | "planner_source_unresolved";
 
 export type OperationFailureCode =
   | AuditRunFailure

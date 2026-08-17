@@ -99,7 +99,21 @@ describe("action planner — real product dogfood", () => {
       const move = defaultPlannedOpportunity(opportunitySet!.opportunities);
       expect(move, "the Move set is empty").toBeTruthy();
 
-      const source = resolvePlannerSource(audit!.result!, move!);
+      /*
+       * The source gate, exactly as production applies it (FIX §7, §9).
+       *
+       * The probe refuses here rather than planning anyway, so a dogfood run can never
+       * spend on a Move whose business problem could not be named — and so the harness
+       * cannot accidentally prove the planner works on input production would reject.
+       */
+      const resolution = resolvePlannerSource(audit!.result!, move!);
+      expect(
+        resolution.resolved,
+        `source conclusion unresolved: ${resolution.resolved ? "" : resolution.reason}`,
+      ).toBe(true);
+      if (!resolution.resolved) return;
+
+      const source = resolution.source;
       const pack = buildEvidencePackV3({
         productProfile: profile!.profile,
         founderIntent: founderIntent.intent,

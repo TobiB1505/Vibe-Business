@@ -102,6 +102,8 @@ export function fakeOpportunity(overrides: Partial<BusinessOpportunity> = {}): B
   return {
     id: "1-positioning-narrow-your-first-customer",
     rank: 1,
+    // Direct lineage, which is what every Move created since v2 carries (FIX §1).
+    sourceConclusionKey: "blocker-1",
     title: "Narrow your first customer",
     problem: "The product describes a broad founder audience and no single first customer.",
     whyNow: "Positioning and acquisition both depend on knowing who this is for.",
@@ -169,6 +171,8 @@ export function fakePlannerSource(overrides: Partial<PlannerSource> = {}): Plann
   return {
     opportunity: fakeOpportunity(),
     conclusion: fakeConclusion(),
+    conclusionKey: "blocker-1",
+    lineage: "direct",
     lenses: [fakeLens()],
     citedEvidenceIds: ["profile.identity.description", "live.site.title"],
     ...overrides,

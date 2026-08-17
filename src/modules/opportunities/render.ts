@@ -1,5 +1,6 @@
 import type { BusinessReadinessAudit } from "@/modules/business-audit/schema";
 import { DIMENSION_LABELS } from "@/modules/business-audit/schema";
+import { identifiedConclusions } from "@/modules/business-audit/conclusions";
 import { renderEvidencePackV3, type EvidencePackV3 } from "@/modules/business-audit/evidence-v3";
 
 /**
@@ -51,10 +52,20 @@ function renderAudit(audit: BusinessReadinessAudit): string {
 
   if (audit.synthesis) {
     lines.push("## What the audit concluded about this business");
+    lines.push(
+      "Each conclusion carries an id in braces. Every opportunity must name the id of the " +
+        "conclusion it exists to address.",
+    );
     if (audit.synthesis.overall !== "") lines.push(audit.synthesis.overall);
-    for (const conclusion of [...audit.synthesis.blockers, ...audit.synthesis.strengths]) {
+    /*
+     * Keys are rendered so the Move can name its own source (CORE-2b FIX §2).
+     *
+     * Derived server-side by `identifiedConclusions`, so the model is choosing among ids
+     * we established rather than minting one — the same discipline as evidence ids.
+     */
+    for (const { key, conclusion } of identifiedConclusions(audit)) {
       lines.push(
-        `- [${conclusion.tone}] ${conclusion.headline} — ${conclusion.explanation}` +
+        `- {${key}} [${conclusion.tone}] ${conclusion.headline} — ${conclusion.explanation}` +
           ` (lenses: ${conclusion.lenses.join(", ") || "unspecified"})` +
           ` (dimensions: ${conclusion.dimensions.join(", ") || "unspecified"})` +
           ` [${conclusion.evidenceIds.join(", ")}]`,

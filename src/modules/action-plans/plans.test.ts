@@ -348,12 +348,42 @@ describe("priority is not execution suitability", () => {
   });
 });
 
+
 /**
- * §82 — source fidelity. A plan for the audience blocker stays about the
- * audience blocker, even when other areas of the business are also weak.
+ * The canonical lineage (CORE-2b FIX §19–§23).
+ *
+ * ```
+ * Business Audit → Business Conclusion → Next Move → Action Plan → Plan Steps
+ * ```
+ *
+ * The property under test throughout is that the chain is **stated** for new Moves and
+ * only *recovered* — conservatively, and refusably — for old ones.
  */
-describe("source binding", () => {
-  it("binds a Move to the conclusion it actually answers", () => {
+describe("Move → Conclusion lineage", () => {
+  /** §19 — a Move created since v2 carries its source, and nothing reconstructs it. */
+  it("reads the conclusion a new Move states", () => {
+    const resolution = resolvePlannerSource(
+      fakePlannedAudit(),
+      fakeOpportunity({ sourceConclusionKey: "blocker-1" }),
+    );
+
+    expect(resolution.resolved).toBe(true);
+    if (!resolution.resolved) return;
+    expect(resolution.source.conclusionKey).toBe("blocker-1");
+    expect(resolution.source.lineage).toBe("direct");
+    expect(resolution.source.conclusion.rootProblem).toBe(
+      "The business has not decided who its first customer is.",
+    );
+  });
+
+  /**
+   * §4 — direct lineage is authoritative, not merely preferred.
+   *
+   * The stated conclusion here is the one the evidence-overlap heuristic would score
+   * *lowest*. If reconstruction were still consulted, this test would return the other
+   * conclusion — which is exactly the silent disagreement the FIX exists to remove.
+   */
+  it("does not reconstruct when the Move already states its source", () => {
     const audit = fakePlannedAudit({
       synthesis: {
         version: "business-audit-synthesis-v5",
@@ -361,10 +391,167 @@ describe("source binding", () => {
         overall: "…",
         strengths: [],
         blockers: [
-          // Weak, and about something else entirely.
+          // Would win on overlap: it cites exactly what the Move cites.
+          fakeConclusion({
+            rootProblem: "The overlap-heavy conclusion.",
+            evidenceIds: ["profile.identity.description", "live.site.title"],
+            dimensions: ["product", "conversion"],
+          }),
+          fakeConclusion({
+            rootProblem: "The conclusion the engine actually reasoned from.",
+            evidenceIds: ["repo.surface.payments"],
+            dimensions: ["monetization"],
+          }),
+        ],
+      },
+    });
+
+    const resolution = resolvePlannerSource(
+      audit,
+      fakeOpportunity({ sourceConclusionKey: "blocker-2" }),
+    );
+
+    expect(resolution.resolved).toBe(true);
+    if (!resolution.resolved) return;
+    expect(resolution.source.conclusion.rootProblem).toBe(
+      "The conclusion the engine actually reasoned from.",
+    );
+  });
+
+  /** §20 — a pre-v2 Move still resolves, when the mapping is unambiguous. */
+  it("recovers a legacy Move's source, and says that it did", () => {
+    const resolution = resolvePlannerSource(
+      fakePlannedAudit(),
+      fakeOpportunity({ sourceConclusionKey: null }),
+    );
+
+    expect(resolution.resolved).toBe(true);
+    if (!resolution.resolved) return;
+    expect(resolution.source.lineage).toBe("legacy_reconciled");
+    expect(resolution.source.conclusionKey).toBe("blocker-1");
+  });
+
+  /**
+   * §5, §21 — the behaviour change that matters most.
+   *
+   * Two conclusions cite the same fact and touch the same dimension. The old rule
+   * returned whichever sorted first; the plan would then have claimed to solve a problem
+   * chosen by array order. Now it refuses.
+   */
+  it("refuses an ambiguous legacy match rather than picking the top score", () => {
+    const audit = fakePlannedAudit({
+      synthesis: {
+        version: "business-audit-synthesis-v5",
+        lenses: [],
+        overall: "…",
+        strengths: [],
+        blockers: [
+          fakeConclusion({ rootProblem: "First candidate." }),
+          fakeConclusion({ rootProblem: "Equally plausible second candidate." }),
+        ],
+      },
+    });
+
+    const resolution = resolvePlannerSource(audit, fakeOpportunity({ sourceConclusionKey: null }));
+
+    expect(resolution).toMatchObject({ resolved: false, reason: "ambiguous_legacy_match" });
+  });
+
+  /**
+   * §5 — a shared dimension is not a match.
+   *
+   * Two unrelated conclusions routinely touch the same dimension; that is what a
+   * dimension is for. Only shared evidence is a statement that they are about the same
+   * thing, so a dimension-only overlap resolves to nothing.
+   */
+  it("does not resolve on a shared dimension alone", () => {
+    const audit = fakePlannedAudit({
+      synthesis: {
+        version: "business-audit-synthesis-v5",
+        lenses: [],
+        overall: "…",
+        strengths: [],
+        blockers: [
+          fakeConclusion({ evidenceIds: ["repo.surface.payments"], dimensions: ["product"] }),
+        ],
+      },
+    });
+
+    const resolution = resolvePlannerSource(
+      audit,
+      fakeOpportunity({
+        sourceConclusionKey: null,
+        evidenceIds: ["live.site.title"],
+        primaryDimension: "product",
+        secondaryDimensions: [],
+      }),
+    );
+
+    expect(resolution).toMatchObject({ resolved: false, reason: "no_legacy_match" });
+  });
+
+  /** §22 — no lineage, no legacy match, no plan. */
+  it("refuses a legacy Move that matches nothing", () => {
+    const resolution = resolvePlannerSource(
+      fakePlannedAudit(),
+      fakeOpportunity({
+        sourceConclusionKey: null,
+        evidenceIds: ["repo.surface.payments"],
+        primaryDimension: "distribution",
+        secondaryDimensions: [],
+      }),
+    );
+
+    expect(resolution).toMatchObject({ resolved: false, reason: "no_legacy_match" });
+  });
+
+  /**
+   * A Move naming a conclusion the current audit does not contain — it was prioritized
+   * from a different audit. Reconstructing a substitute would be guessing on top of a
+   * known mismatch, so it refuses.
+   */
+  it("refuses a stated key the audit does not contain", () => {
+    const resolution = resolvePlannerSource(
+      fakePlannedAudit(),
+      fakeOpportunity({ sourceConclusionKey: "blocker-9" }),
+    );
+
+    expect(resolution).toMatchObject({ resolved: false, reason: "conclusion_not_in_audit" });
+  });
+
+  /** An audit predating the synthesis contract has nothing to point at. */
+  it("refuses an audit with no conclusions at all", () => {
+    const resolution = resolvePlannerSource(
+      fakePlannedAudit({ synthesis: null }),
+      fakeOpportunity(),
+    );
+
+    expect(resolution).toMatchObject({ resolved: false, reason: "audit_has_no_conclusions" });
+  });
+
+  it("carries the lenses behind the matched conclusion", () => {
+    const resolution = resolvePlannerSource(fakePlannedAudit(), fakeOpportunity());
+
+    expect(resolution.resolved).toBe(true);
+    if (!resolution.resolved) return;
+    expect(resolution.source.lenses.map((lens) => lens.lens)).toContain("audience");
+    expect(resolution.source.citedEvidenceIds).toContain("profile.identity.description");
+  });
+
+  /**
+   * §82 — source fidelity. A plan for the audience blocker stays about the audience
+   * blocker, even when other areas of the business are also weak.
+   */
+  it("binds to the audience blocker rather than an unrelated weak one", () => {
+    const audit = fakePlannedAudit({
+      synthesis: {
+        version: "business-audit-synthesis-v5",
+        lenses: [],
+        overall: "…",
+        strengths: [],
+        blockers: [
           fakeConclusion({
             rootProblem: "Nothing about this business is legally set up.",
-            headline: "There is no privacy policy or terms of service.",
             evidenceIds: ["repo.surface.payments"],
             dimensions: ["monetization"],
             lenses: ["business_readiness"],
@@ -374,53 +561,15 @@ describe("source binding", () => {
       },
     });
 
-    const source = resolvePlannerSource(audit, fakeOpportunity());
+    const resolution = resolvePlannerSource(
+      audit,
+      fakeOpportunity({ sourceConclusionKey: "blocker-2" }),
+    );
 
-    expect(source.conclusion?.rootProblem).toBe(
+    expect(resolution.resolved).toBe(true);
+    if (!resolution.resolved) return;
+    expect(resolution.source.conclusion.rootProblem).toBe(
       "The business has not decided who its first customer is.",
     );
-  });
-
-  it("admits when no conclusion matches rather than guessing", () => {
-    const audit = fakePlannedAudit({
-      synthesis: {
-        version: "business-audit-synthesis-v5",
-        lenses: [],
-        overall: "…",
-        strengths: [],
-        blockers: [
-          fakeConclusion({
-            evidenceIds: ["repo.surface.payments"],
-            dimensions: ["monetization"],
-            lenses: ["revenue_economics"],
-          }),
-        ],
-      },
-    });
-
-    const source = resolvePlannerSource(
-      audit,
-      fakeOpportunity({ evidenceIds: ["live.site.title"], primaryDimension: "distribution", secondaryDimensions: [] }),
-    );
-
-    // No overlap at all. Attaching the only blocker would put a root problem on
-    // a plan that does not address it (§37).
-    expect(source.conclusion).toBeNull();
-  });
-
-  it("carries the lenses behind the matched conclusion", () => {
-    const source = resolvePlannerSource(fakePlannedAudit(), fakeOpportunity());
-
-    expect(source.lenses.map((lens) => lens.lens)).toContain("audience");
-    expect(source.citedEvidenceIds).toContain("profile.identity.description");
-  });
-
-  it("has no conclusion to bind for an audit without a synthesis", () => {
-    const source = resolvePlannerSource(fakePlannedAudit({ synthesis: null }), fakeOpportunity());
-
-    expect(source.conclusion).toBeNull();
-    expect(source.lenses).toEqual([]);
-    // The Move's own evidence still travels; a plan is still possible.
-    expect(source.citedEvidenceIds.length).toBeGreaterThan(0);
   });
 });
