@@ -1,5 +1,6 @@
 import type { ActionPlanStep } from "@/modules/action-plans/schema";
 import type { ActionPlanReadiness, ActionPlanView } from "@/modules/action-plans/service";
+import { firstActionableStep, planProgress } from "@/modules/action-plans/sequence";
 import type { StoredActionPlan } from "@/modules/action-plans/store";
 import type { OperationView } from "@/modules/operations/view";
 
@@ -53,11 +54,32 @@ function planStep(overrides: Partial<ActionPlanStep>): ActionPlanStep {
  * One step per `StepActor` / `ExecutionSupport` pairing this plan reasonably
  * produces, plus a dependency chain so "Start Here" and the waiting-state
  * badge both have something real to point at.
+ *
+ * Order 1 ("Draft the search-facing copy") deliberately depends on order 2
+ * ("Decide which segment") rather than the other way around — narratively
+ * backwards on purpose. It is the one arrangement that makes
+ * `firstActionableStep` genuinely diverge from `steps[0]`: with the natural
+ * ordering (decide, then draft), the array's first element and the domain's
+ * actionable step are the same step, and a screen that quietly defaulted to
+ * `steps[0]` would still pass. Here they disagree, so only a screen that
+ * actually reads the server-derived first actionable step gets it right.
  */
 const STEPS: ActionPlanStep[] = [
   planStep({
-    id: "step-decide-segment",
+    id: "step-draft-copy",
     order: 1,
+    title: "Draft the search-facing copy for that segment",
+    description: "Vibe writes page titles and descriptions aimed at what that segment searches for.",
+    purpose: "Search engines and visitors both need language that matches how people actually search.",
+    actor: "vibe",
+    changeKind: "analysis",
+    completionCriteria: "A drafted set of titles and descriptions exists.",
+    dependsOn: [2],
+    executionSupport: "vibe_prepares",
+  }),
+  planStep({
+    id: "step-decide-segment",
+    order: 2,
     title: "Decide which segment to target first",
     description: "Choose the one customer segment this move is aimed at.",
     purpose: "Every later step depends on knowing who this is for.",
@@ -65,18 +87,6 @@ const STEPS: ActionPlanStep[] = [
     changeKind: "decision",
     completionCriteria: "You have named one segment.",
     executionSupport: "founder_decides",
-  }),
-  planStep({
-    id: "step-draft-copy",
-    order: 2,
-    title: "Draft the search-facing copy for that segment",
-    description: "Vibe writes page titles and descriptions aimed at what that segment searches for.",
-    purpose: "Search engines and visitors both need language that matches how people actually search.",
-    actor: "vibe",
-    changeKind: "analysis",
-    completionCriteria: "A drafted set of titles and descriptions exists.",
-    dependsOn: [1],
-    executionSupport: "vibe_prepares",
   }),
   planStep({
     id: "step-seo-foundations",
@@ -87,7 +97,7 @@ const STEPS: ActionPlanStep[] = [
     actor: "vibe",
     changeKind: "product_change",
     completionCriteria: "robots.txt and sitemap.xml are both reachable.",
-    dependsOn: [2],
+    dependsOn: [1],
     evidenceIds: ["live.seo.robots_txt_missing", "live.seo.sitemap_missing"],
     executionSupport: "vibe_executes_now",
     capability: "nextjs_seo_foundations_v2",
@@ -174,13 +184,19 @@ function plan(overrides: Partial<StoredActionPlan> = {}): StoredActionPlan {
   };
 }
 
+/**
+ * `firstActionableStep` / `planProgress` are the real, already-unit-tested
+ * `sequence.ts` functions — not a guess at what they'd return. A hand-picked
+ * value here could quietly drift from what the domain actually computes; the
+ * real function can't.
+ */
 function planView(overrides: Partial<ActionPlanView> = {}): ActionPlanView {
   const storedPlan = overrides.plan ?? plan();
   return {
     plan: storedPlan,
     staleness: [],
-    firstActionableStep: storedPlan.steps.find((step) => step.order === 1) ?? null,
-    progress: "needs_founder",
+    firstActionableStep: firstActionableStep(storedPlan.steps),
+    progress: planProgress(storedPlan.steps),
     ...overrides,
   };
 }

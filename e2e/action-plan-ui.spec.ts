@@ -1,16 +1,20 @@
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 
 /**
- * The Action Plan panel, in a real browser (ACTION PLANNER UI-1).
+ * The Action Plan panel, in a real browser (ACTION PLANNER UI-1, density
+ * pass UI-1.1).
  *
  * ## What this suite exists to prove
  *
  * That the honesty CORE-2b built into the domain — `vibe_prepares` is not a
  * button, an unsupported step stays in the plan rather than being hidden, an
  * unassessable "first actionable step" never defaults to array position —
- * survives being rendered. A domain test proves `firstActionableStep` picks
- * the right step; only a browser proves the screen actually labels *that*
- * step "Start here" and not `steps[0]`.
+ * survives being rendered, and survives being made scannable. A domain test
+ * proves `firstActionableStep` picks the right step; only a browser proves
+ * the screen actually labels *that* step "Start here" and not `steps[0]`.
+ * UI-1.1 adds a second class of thing only a browser can prove: that
+ * secondary detail is genuinely collapsed by default rather than merely
+ * reordered, and that collapsing it did not quietly drop it.
  *
  * ## The one constraint every test here ultimately serves
  *
@@ -30,10 +34,13 @@ import { expect, test } from "@playwright/test";
 const FORBIDDEN_ACTION_LABELS = [
   "Let Vibe prepare this",
   "Prepare this",
+  "Prepare now",
+  "Start preparation",
   "Apply",
   "Execute",
   "Ship",
   "Deploy",
+  "Publish",
   "Merge",
 ];
 
@@ -73,6 +80,15 @@ const FORBIDDEN_INTERNAL_IDS = [
   "move_e2e",
   "plan_e2e",
 ];
+
+/** Forces every `<details>` open — the reveal-everything pass a leak sweep needs. */
+async function expandEverything(page: Page) {
+  await page.evaluate(() => {
+    document.querySelectorAll("details").forEach((element) => {
+      (element as HTMLDetailsElement).open = true;
+    });
+  });
+}
 
 test.describe("no plan yet", () => {
   test("offers to plan the current move, naming it", async ({ page }) => {
@@ -116,8 +132,8 @@ test.describe("planning", () => {
   });
 });
 
-test.describe("ready plan", () => {
-  test("shows the goal, the full why-now text, and the expected outcome", async ({ page }) => {
+test.describe("ready plan — hero", () => {
+  test("shows the goal, a progressive why-now, and the restrained meta line", async ({ page }) => {
     await page.goto("/e2e/action_plan_ready");
 
     await expect(
@@ -126,64 +142,199 @@ test.describe("ready plan", () => {
       }),
     ).toBeVisible();
 
-    // The full sentence, not a truncated prefix — CORE-2b MINI VERIFICATION's
-    // whole finding was that this must never be cut mid-word.
-    await expect(
-      page.getByText(
-        "qualified visitors who are actively searching cannot find the product at all",
-        { exact: false },
-      ),
-    ).toBeVisible();
+    // 6 steps in the fixture, 1 of them a founder decision.
+    await expect(page.getByText("6 steps · 1 founder decision")).toBeVisible();
 
+    await expect(page.getByRole("button", { name: "More context" }).first()).toBeVisible();
+  });
+
+  /**
+   * §7: no destructive truncation, ever. The clamp is visual only — the full
+   * sentence is already in the DOM before anything is clicked, and expanding
+   * must not rewrite it into something shorter.
+   */
+  test("keeps the full why-now text intact through the expand toggle", async ({ page }) => {
+    await page.goto("/e2e/action_plan_ready");
+
+    const fullSentence =
+      "qualified visitors who are actively searching cannot find the product at all";
+    await expect(page.getByText(fullSentence, { exact: false })).toBeAttached();
+
+    await page.getByRole("button", { name: "More context" }).first().click();
+    await expect(page.getByText(fullSentence, { exact: false })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Show less" }).first()).toBeVisible();
+  });
+
+  test("shows the outcome reframed as the plan's destination", async ({ page }) => {
+    await page.goto("/e2e/action_plan_ready");
+
+    await expect(page.getByText("If this plan works")).toBeVisible();
     await expect(
       page.getByText("Search engines can find, index and rank the product's pages", {
         exact: false,
       }),
     ).toBeVisible();
   });
+});
 
+test.describe("ready plan — Start Here", () => {
   /**
-   * The load-bearing assertion in this whole suite. `firstActionableStep` in
-   * this fixture resolves to order 1 ("Decide which segment") — a founder
-   * decision, not `steps[0]`'s neighbour and not the Vibe-executable step
-   * three positions later. A screen that defaulted to array position would
-   * still pass every domain test and fail exactly here.
+   * The load-bearing assertion in this whole suite. The fixture's order 1
+   * ("Draft the search-facing copy") depends on order 2 ("Decide which
+   * segment"), so the array's first element and the domain's actionable step
+   * are deliberately different steps. A screen that quietly defaulted to
+   * `steps[0]` would show the draft step here and would still pass every
+   * domain-level test — only this assertion catches it.
    */
-  test("Start Here names the server-derived first actionable step, not steps[0]", async ({
-    page,
-  }) => {
+  test("names the server-derived first actionable step, not steps[0]", async ({ page }) => {
     await page.goto("/e2e/action_plan_ready");
 
     const startHere = page.getByText("Start here").first();
     await expect(startHere).toBeVisible();
 
-    // Rendered twice by design — once in the prominent "Start Here" card,
-    // once in its place within the full ordered list — so this asserts at
-    // least one is visible rather than picking a single strict match.
     await expect(
       page.getByRole("heading", { name: "Decide which segment to target first" }).first(),
     ).toBeVisible();
   });
 
-  test("shows dependency waiting-state in plain language", async ({ page }) => {
+  /**
+   * §38 — the duplication regression this whole pass exists to fix. The
+   * Start Here card may repeat the step's title and one short sentence (its
+   * `description`) — that much overlap with the timeline row is by design —
+   * but it must never also render the step's full detail (`purpose`,
+   * completion criteria) a second time outside that step's own collapsed
+   * Details section.
+   */
+  test("does not duplicate the full step detail outside its own Details", async ({ page }) => {
+    await page.goto("/e2e/action_plan_ready");
+
+    // "Decide which segment" is Start Here. Its purpose sentence is real
+    // detail that belongs only behind its own Details toggle.
+    const purposeSentence = "Every later step depends on knowing who this is for";
+    await expect(page.getByText(purposeSentence, { exact: false })).not.toBeVisible();
+  });
+});
+
+test.describe("ready plan — timeline", () => {
+  test("shows every step title by default, with secondary detail collapsed", async ({ page }) => {
+    await page.goto("/e2e/action_plan_ready");
+
+    const titles = [
+      "Draft the search-facing copy for that segment",
+      "Decide which segment to target first",
+      "Publish the missing robots.txt and sitemap",
+      "Submit the sitemap to Search Console",
+      "Wait for Google to index the new pages",
+      "Build a dedicated pricing page",
+    ];
+    for (const title of titles) {
+      await expect(page.getByRole("heading", { name: title }).first()).toBeVisible();
+    }
+
+    // Purpose text lives only inside each step's own collapsed Details.
+    await expect(
+      page.getByText("Registering the sitemap directly speeds up how quickly pages get indexed", {
+        exact: false,
+      }),
+    ).not.toBeVisible();
+  });
+
+  test("expanding Details reveals why the step exists, done-when, and dependencies", async ({
+    page,
+  }) => {
+    await page.goto("/e2e/action_plan_ready");
+
+    // "Submit the sitemap to Search Console" — has a real dependency and no
+    // approval, so this also proves empty sections (Approval) stay absent.
+    //
+    // Scoped by the step's own heading rather than `hasText`: a closed
+    // `<details>` still has its content in the DOM (only CSS hides it), so a
+    // plain text filter would also match whichever *other* row's hidden
+    // "Depends on" section happens to cite this title.
+    const row = page.locator("li").filter({
+      has: page.getByRole("heading", { name: "Submit the sitemap to Search Console", exact: true }),
+    });
+    await row.getByText("Details").click();
+
+    await expect(row.getByText("Why this step exists")).toBeVisible();
+    await expect(
+      row.getByText("Registering the sitemap directly speeds up how quickly pages get indexed", {
+        exact: false,
+      }),
+    ).toBeVisible();
+    await expect(row.getByText("Done when")).toBeVisible();
+    await expect(row.getByText("The sitemap shows as submitted in Search Console")).toBeVisible();
+    await expect(row.getByText("Depends on")).toBeVisible();
+    // Scoped to this row: the same text is also this dependency's own
+    // (always-visible) step title elsewhere on the page, so an unscoped
+    // locator would match twice.
+    await expect(row.getByText("Publish the missing robots.txt and sitemap", { exact: true })).toBeVisible();
+  });
+
+  test("shows a blocked step's dependency in plain language without expanding it", async ({
+    page,
+  }) => {
     await page.goto("/e2e/action_plan_ready");
 
     await expect(
-      page.getByText("Waiting on: Submit the sitemap to Search Console"),
+      page.getByText("Waiting for step 4: Submit the sitemap to Search Console"),
     ).toBeVisible();
   });
 
-  test("keeps an unsupported step in the plan rather than hiding it", async ({ page }) => {
+  test("shows Ready now for every unblocked step, including a founder decision", async ({
+    page,
+  }) => {
+    await page.goto("/e2e/action_plan_ready");
+
+    // "Decide which segment" (Start Here, a founder decision) and "Build a
+    // dedicated pricing page" (also_ready, no dependencies) — the fixture's
+    // two zero-dependency steps.
+    await expect(page.getByText("Ready now")).toHaveCount(2);
+  });
+
+  test("distinguishes every responsibility without exposing an internal enum", async ({
+    page,
+  }) => {
+    await page.goto("/e2e/action_plan_ready");
+
+    await expect(page.getByText("Vibe can prepare this").first()).toBeVisible();
+    await expect(page.getByText("Vibe can do this").first()).toBeVisible();
+    await expect(page.getByText("Needs your decision").first()).toBeVisible();
+    await expect(page.getByText("You'll need to do this").first()).toBeVisible();
+    await expect(page.getByText("Depends on something else").first()).toBeVisible();
+  });
+
+  test("keeps an unsupported step in the plan, distinct from failure", async ({ page }) => {
     await page.goto("/e2e/action_plan_ready");
 
     await expect(page.getByText("Build a dedicated pricing page")).toBeVisible();
+    await expect(page.getByText("Vibe's work").first()).toBeVisible();
     await expect(page.getByText("Not automated yet")).toBeVisible();
   });
 
+  test("shows approval as secondary metadata inside Details, not a header pill", async ({
+    page,
+  }) => {
+    await page.goto("/e2e/action_plan_ready");
+
+    // The SEO step is the one fixture step that requires approval.
+    const row = page.locator("li").filter({
+      has: page.getByRole("heading", {
+        name: "Publish the missing robots.txt and sitemap",
+        exact: true,
+      }),
+    });
+    await expect(row.getByText("Approval required")).not.toBeVisible();
+    await row.getByText("Details").click();
+    await expect(row.getByText("Approval required before Vibe acts on this.")).toBeVisible();
+  });
+});
+
+test.describe("ready plan — reasoning disclosure", () => {
   test("discloses reasoning and evidence behind a collapsed section", async ({ page }) => {
     await page.goto("/e2e/action_plan_ready");
 
-    const disclosure = page.getByText("How Vibe reasoned about this");
+    const disclosure = page.getByText("Why Vibe planned this");
     await expect(disclosure).toBeVisible();
 
     const evidenceLine = page.getByText("robots txt missing", { exact: false });
@@ -191,11 +342,12 @@ test.describe("ready plan", () => {
     await disclosure.click();
     await expect(evidenceLine).toBeVisible();
   });
+});
 
+test.describe("ready plan — regressions", () => {
   test("never renders a fake execution affordance", async ({ page }) => {
     await page.goto("/e2e/action_plan_ready");
-    // Open the disclosure too, so nothing hidden inside it escapes the sweep.
-    await page.getByText("How Vibe reasoned about this").click();
+    await expandEverything(page);
 
     for (const label of FORBIDDEN_ACTION_LABELS) {
       await expect(page.getByRole("button", { name: label, exact: true })).toHaveCount(0);
@@ -205,7 +357,7 @@ test.describe("ready plan", () => {
 
   test("never leaks a raw enum value or an internal id into the page text", async ({ page }) => {
     await page.goto("/e2e/action_plan_ready");
-    await page.getByText("How Vibe reasoned about this").click();
+    await expandEverything(page);
 
     const body = await page.locator("body").innerText();
     for (const raw of FORBIDDEN_RAW_STRINGS) {

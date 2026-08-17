@@ -2,34 +2,35 @@
 
 import { useActionState, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { CategoryChip, StatusPill, type StatusTone } from "@/components/ui/status-pill";
+import { StatusPill, type StatusTone } from "@/components/ui/status-pill";
 import { Surface } from "@/components/ui/surface";
 import { Disclosure } from "@/components/ui/disclosure";
 import { MonoLabel, SectionHeader } from "@/components/ui/typography";
 import { Notice } from "@/components/ui/states";
+import { cn } from "@/lib/utils/cn";
 import { describeEvidenceId } from "@/modules/business-audit/evidence-labels";
 import { BUSINESS_AUDIT_ANCHOR } from "@/modules/opportunities/view";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { OPERATION_STAGE_LABELS, type OperationView } from "@/modules/operations/view";
-import {
-  ACTOR_LABELS,
-  EXECUTION_SUPPORT_LABELS,
-  type ActionPlanStep,
-  type ExecutionSupport,
-} from "@/modules/action-plans/schema";
+import type { ActionPlanStep, ExecutionSupport, PlanProgress } from "@/modules/action-plans/schema";
 import type { ActionPlanReadiness, ActionPlanView } from "@/modules/action-plans/service";
 import {
   PLAN_PROGRESS_LABELS,
   PLAN_STALENESS_LABELS,
+  RESPONSIBILITY_HEADLINES,
+  RESPONSIBILITY_SUBLABELS,
   buildActionPlanBlockNotice,
+  planMetaSummary,
   stepDependencyTitles,
   stepDisplayState,
+  stepSequenceStatus,
+  type StepDisplayState,
 } from "@/modules/action-plans/view";
 import { getOperationStatusAction } from "./run-audit-action";
 import { startPlanAction, type StartPlanActionState } from "./plan-action";
 
 /**
- * The Action Plan section (ACTION PLANNER UI-1).
+ * The Action Plan section (ACTION PLANNER UI-1, density pass UI-1.1).
  *
  * Three things it must never do, same as the Opportunities panel above it on
  * this page, plus one more that is this feature's whole reason for existing:
@@ -45,11 +46,16 @@ import { startPlanAction, type StartPlanActionState } from "./plan-action";
  *    planner version, provider or model ever reaches JSX.
  *  - **Assume the first step is first.** "Start Here" renders whatever
  *    `firstActionableStep` computed server-side — never `steps[0]`.
+ *
+ * UI-1.1 changes presentation only: scan first, expand second. The plan's own
+ * content — descriptions, purpose, completion criteria, dependencies,
+ * evidence — is unchanged and un-truncated; only how much of it is visible
+ * without asking moved. See `docs/sprints/0034-action-planner-ui11.md`.
  */
 
 const POLL_INTERVAL_MS = 3_000;
 
-const EXECUTION_SUPPORT_TONE: Record<ExecutionSupport, StatusTone> = {
+const RESPONSIBILITY_TONE: Record<ExecutionSupport, StatusTone> = {
   // A real registry match — informational only, since no button is attached
   // to it in this phase either.
   vibe_executes_now: "success",
@@ -62,197 +68,267 @@ const EXECUTION_SUPPORT_TONE: Record<ExecutionSupport, StatusTone> = {
   not_yet_supported: "neutral",
 };
 
-function StepCard({
-  step,
-  allSteps,
-  firstActionableOrder,
-}: {
-  step: ActionPlanStep;
-  allSteps: ActionPlanStep[];
-  firstActionableOrder: number | null;
-}) {
-  const display = stepDisplayState(step, firstActionableOrder);
-  const dependencies = stepDependencyTitles(step, allSteps);
+/**
+ * A "read more" toggle over text that is never mutated or sliced (§7).
+ *
+ * The full string is always in the DOM — CSS `line-clamp` hides overflow
+ * visually without removing it, so a screen reader already gets the whole
+ * thing regardless of the toggle's state. What the toggle changes is only
+ * whether a sighted reader sees it without asking.
+ */
+function ExpandableText({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
 
   return (
-    <Surface
-      as="li"
-      level="panel"
-      padding="lg"
-      tone={display === "start_here" ? "mint" : "neutral"}
-      className="flex flex-col gap-3"
-    >
-      <div className="flex flex-wrap items-baseline gap-3">
-        <span className="text-fg-meta font-mono text-sm">#{step.order}</span>
-        <h4 className="text-fg text-base font-semibold tracking-[-0.01em]">{step.title}</h4>
-        {display === "start_here" && (
-          <StatusPill tone="active" dot>
-            Start here
-          </StatusPill>
-        )}
-      </div>
+    <div className="flex flex-col gap-1.5">
+      <p className={cn("text-fg-prose text-sm leading-relaxed", !expanded && "line-clamp-2")}>
+        {text}
+      </p>
+      <button
+        type="button"
+        onClick={() => setExpanded((value) => !value)}
+        aria-expanded={expanded}
+        className="text-fg-muted hover:text-fg-body self-start text-xs underline underline-offset-4 transition-colors"
+      >
+        {expanded ? "Show less" : "More context"}
+      </button>
+    </div>
+  );
+}
 
-      <div className="flex flex-wrap gap-2">
-        <CategoryChip>{ACTOR_LABELS[step.actor]}</CategoryChip>
-        <StatusPill tone={EXECUTION_SUPPORT_TONE[step.executionSupport]}>
-          {EXECUTION_SUPPORT_LABELS[step.executionSupport]}
-        </StatusPill>
-        {step.requiresApproval && <StatusPill tone="waiting">Needs your sign-off</StatusPill>}
-      </div>
-
-      <p className="text-fg-prose text-sm leading-relaxed">{step.description}</p>
-      <p className="text-fg-muted text-sm leading-relaxed">{step.purpose}</p>
-
-      <div className="border-line-2 flex flex-col gap-1.5 border-t pt-3">
-        <MonoLabel className="tracking-[0.14em]">Done when</MonoLabel>
-        <p className="text-fg-secondary text-sm leading-relaxed">{step.completionCriteria}</p>
-      </div>
-
-      {display === "waiting_on_steps" && dependencies.length > 0 && (
-        <p className="text-fg-muted text-xs leading-relaxed">
-          Waiting on: {dependencies.join(", ")}
-        </p>
+function PlanHero({
+  goal,
+  whyNow,
+  steps,
+}: {
+  goal: string | null;
+  whyNow: string | null;
+  steps: ActionPlanStep[];
+}) {
+  return (
+    <div className="flex flex-col gap-3">
+      <MonoLabel className="tracking-[0.16em]">Action plan</MonoLabel>
+      {goal && (
+        <h4 className="text-fg text-xl leading-snug font-semibold tracking-[-0.01em] sm:text-2xl">
+          {goal}
+        </h4>
       )}
+      {whyNow && (
+        <div className="flex flex-col gap-1">
+          <MonoLabel className="tracking-[0.14em]">Why now</MonoLabel>
+          <ExpandableText text={whyNow} />
+        </div>
+      )}
+      <p className="text-fg-meta font-mono text-xs">{planMetaSummary(steps)}</p>
+    </div>
+  );
+}
+
+function StartHere({ step }: { step: ActionPlanStep }) {
+  return (
+    <Surface level="card" padding="md" tone="mint" className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <StatusPill tone="active" dot>
+          Start here
+        </StatusPill>
+        <StatusPill tone={RESPONSIBILITY_TONE[step.executionSupport]}>
+          {RESPONSIBILITY_HEADLINES[step.executionSupport]}
+        </StatusPill>
+      </div>
+      <h5 className="text-fg text-lg leading-snug font-semibold">{step.title}</h5>
+      <p className="text-fg-prose text-sm leading-relaxed">{step.description}</p>
     </Surface>
   );
 }
 
-function StartHereCard({ step }: { step: ActionPlanStep }) {
+function PlanStatusNotice({ progress }: { progress: PlanProgress }) {
+  if (progress !== "finished" && progress !== "blocked") return null;
   return (
-    <Surface level="card" padding="lg" tone="mint" className="flex flex-col gap-4">
-      <div className="flex items-center gap-2">
-        <StatusPill tone="active" dot>
-          Start here
-        </StatusPill>
+    <Notice tone={progress === "finished" ? "info" : "waiting"} label="Where this plan stands">
+      {PLAN_PROGRESS_LABELS[progress]}
+    </Notice>
+  );
+}
+
+function TimelineStep({
+  step,
+  allSteps,
+  display,
+  isLast,
+}: {
+  step: ActionPlanStep;
+  allSteps: ActionPlanStep[];
+  display: StepDisplayState;
+  isLast: boolean;
+}) {
+  const sequence = stepSequenceStatus(step, allSteps, display);
+  const dependencyTitles = stepDependencyTitles(step, allSteps);
+  const isCurrent = display === "start_here";
+  const sublabel = RESPONSIBILITY_SUBLABELS[step.executionSupport];
+
+  return (
+    <li className="relative flex gap-4">
+      {/* The connecting line — presentation only. The list stays a real
+          `<ol>`; nothing about sequence is expressed through this line. */}
+      {!isLast && <span aria-hidden className="bg-line-3 absolute top-8 bottom-0 left-[13px] w-px" />}
+      <span
+        aria-hidden
+        className={cn(
+          "relative z-10 mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full border font-mono text-[0.6875rem]",
+          isCurrent
+            ? "bg-mint-tint border-mint-line text-mint"
+            : "bg-surface-3 border-line-3 text-fg-meta",
+        )}
+      >
+        {step.order}
+      </span>
+
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5 pb-7">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <StatusPill tone={RESPONSIBILITY_TONE[step.executionSupport]}>
+            {RESPONSIBILITY_HEADLINES[step.executionSupport]}
+          </StatusPill>
+          {/* Text-first, never colour-only: waiting reads amber *and* says
+              "Waiting for step N" — never just a tinted dot. */}
+          <span
+            className={cn(
+              "font-mono text-[0.65625rem] tracking-[0.1em] uppercase",
+              sequence.state === "waiting" ? "text-amber" : "text-fg-meta",
+            )}
+          >
+            {sequence.label}
+          </span>
+        </div>
+
+        {sublabel && <p className="text-fg-muted text-xs">{sublabel}</p>}
+
+        <h5 className="text-fg text-base leading-snug font-semibold">{step.title}</h5>
+        <p className="text-fg-prose text-sm leading-relaxed">{step.description}</p>
+
+        <Disclosure label="Details" className="pt-0.5">
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1">
+              <MonoLabel className="tracking-[0.14em]">Why this step exists</MonoLabel>
+              <p className="text-fg-secondary text-sm leading-relaxed">{step.purpose}</p>
+            </div>
+            <div className="flex flex-col gap-1">
+              <MonoLabel className="tracking-[0.14em]">Done when</MonoLabel>
+              <p className="text-fg-secondary text-sm leading-relaxed">{step.completionCriteria}</p>
+            </div>
+            {dependencyTitles.length > 0 && (
+              <div className="flex flex-col gap-1">
+                <MonoLabel className="tracking-[0.14em]">Depends on</MonoLabel>
+                <p className="text-fg-secondary text-sm leading-relaxed">
+                  {dependencyTitles.join(", ")}
+                </p>
+              </div>
+            )}
+            {step.requiresApproval && (
+              <p className="text-fg-muted text-xs">Approval required before Vibe acts on this.</p>
+            )}
+          </div>
+        </Disclosure>
       </div>
-      <h3 className="text-fg text-xl font-semibold">{step.title}</h3>
-      <p className="text-fg-prose leading-relaxed">{step.description}</p>
-      <div className="flex flex-wrap gap-2">
-        <CategoryChip>{ACTOR_LABELS[step.actor]}</CategoryChip>
-        <StatusPill tone={EXECUTION_SUPPORT_TONE[step.executionSupport]}>
-          {EXECUTION_SUPPORT_LABELS[step.executionSupport]}
-        </StatusPill>
-      </div>
-    </Surface>
+    </li>
   );
 }
 
 function ReadyPlan({ planView }: { planView: ActionPlanView }) {
   const { plan, staleness, firstActionableStep, progress } = planView;
   const orderedSteps = [...plan.steps].sort((a, b) => a.order - b.order);
+  const firstActionableOrder = firstActionableStep?.order ?? null;
 
   const evidenceIds = [...new Set(orderedSteps.flatMap((step) => step.evidenceIds))];
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       {staleness.length > 0 && (
         <Notice tone="waiting" label="This plan may be out of date">
           {staleness.map((reason) => PLAN_STALENESS_LABELS[reason]).join(" ")}
         </Notice>
       )}
 
-      <div className="flex flex-col gap-3">
-        <StatusPill
-          tone={
-            progress === "finished" ? "success" : progress === "blocked" ? "waiting" : "active"
-          }
-        >
-          {PLAN_PROGRESS_LABELS[progress]}
-        </StatusPill>
-        {plan.goal && <h3 className="text-fg text-2xl font-semibold tracking-[-0.01em]">{plan.goal}</h3>}
-      </div>
+      <Surface level="section" padding="lg" className="flex flex-col gap-7">
+        <PlanHero goal={plan.goal} whyNow={plan.whyNow} steps={orderedSteps} />
 
-      {plan.whyNow && (
-        <div className="flex flex-col gap-1.5">
-          <MonoLabel className="tracking-[0.14em]">Why now</MonoLabel>
-          <p className="text-fg-prose leading-relaxed">{plan.whyNow}</p>
-        </div>
-      )}
+        {firstActionableStep ? (
+          <StartHere step={firstActionableStep} />
+        ) : (
+          <PlanStatusNotice progress={progress} />
+        )}
 
-      {firstActionableStep ? (
-        <StartHereCard step={firstActionableStep} />
-      ) : (
-        <Notice tone="info" label="Nothing can start yet">
-          Every remaining step is waiting on another one that has not happened.
-        </Notice>
-      )}
-
-      <div className="flex flex-col gap-4">
-        {/* A caption, not a heading: each step below carries its own `<h4>`,
-            and a heading here would sit at the same depth as its own list
-            items rather than above them. */}
-        <MonoLabel className="tracking-[0.14em]">The full plan</MonoLabel>
-        <ol className="flex flex-col gap-4">
-          {orderedSteps.map((step) => (
-            <StepCard
+        <ol className="flex flex-col">
+          {orderedSteps.map((step, index) => (
+            <TimelineStep
               key={step.id}
               step={step}
               allSteps={orderedSteps}
-              firstActionableOrder={firstActionableStep?.order ?? null}
+              display={stepDisplayState(step, firstActionableOrder)}
+              isLast={index === orderedSteps.length - 1}
             />
           ))}
         </ol>
-      </div>
 
-      {plan.expectedOutcome && (
-        <Surface level="section" padding="md" className="flex flex-col gap-1.5">
-          <MonoLabel className="tracking-[0.14em]">If every step succeeds</MonoLabel>
-          <p className="text-fg-prose text-sm leading-relaxed">{plan.expectedOutcome}</p>
-        </Surface>
-      )}
+        {plan.expectedOutcome && (
+          <div className="border-line-2 flex flex-col gap-2 border-t pt-6">
+            <MonoLabel className="tracking-[0.14em]">If this plan works</MonoLabel>
+            <p className="text-fg-body text-base leading-relaxed">{plan.expectedOutcome}</p>
+          </div>
+        )}
 
-      <Disclosure label="How Vibe reasoned about this">
-        <div className="flex flex-col gap-4">
-          {plan.addressesRootProblem && (
-            <div className="flex flex-col gap-1.5">
-              <MonoLabel className="tracking-[0.14em]">The problem this addresses</MonoLabel>
-              <p className="text-fg-secondary text-sm leading-relaxed">{plan.addressesRootProblem}</p>
-            </div>
-          )}
+        <Disclosure label="Why Vibe planned this">
+          <div className="flex flex-col gap-4">
+            {plan.addressesRootProblem && (
+              <div className="flex flex-col gap-1.5">
+                <MonoLabel className="tracking-[0.14em]">The problem this addresses</MonoLabel>
+                <p className="text-fg-secondary text-sm leading-relaxed">{plan.addressesRootProblem}</p>
+              </div>
+            )}
 
-          {plan.assumptions.length > 0 && (
-            <div className="flex flex-col gap-1.5">
-              <MonoLabel className="tracking-[0.14em]">What this plan assumes</MonoLabel>
-              <ul className="flex flex-col gap-1">
-                {plan.assumptions.map((assumption) => (
-                  <li key={assumption} className="text-fg-secondary text-xs leading-relaxed">
-                    {assumption}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {evidenceIds.length > 0 && (
-            <div className="flex flex-col gap-1.5">
-              <MonoLabel className="tracking-[0.14em]">Why Vibe thinks this</MonoLabel>
-              <ul className="flex flex-col gap-1">
-                {evidenceIds.map((id) => {
-                  const { source, detail } = describeEvidenceId(id);
-                  return (
-                    <li key={id} className="text-fg-muted text-xs leading-relaxed" title={id}>
-                      <span className="text-fg-secondary font-mono">{source}:</span> {detail}
+            {plan.assumptions.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <MonoLabel className="tracking-[0.14em]">What this plan assumes</MonoLabel>
+                <ul className="flex flex-col gap-1">
+                  {plan.assumptions.map((assumption) => (
+                    <li key={assumption} className="text-fg-secondary text-xs leading-relaxed">
+                      {assumption}
                     </li>
-                  );
-                })}
-              </ul>
-            </div>
-          )}
+                  ))}
+                </ul>
+              </div>
+            )}
 
-          {plan.validationNotes.length > 0 && (
-            <div className="flex flex-col gap-1.5">
-              <MonoLabel className="tracking-[0.14em]">Notes</MonoLabel>
-              <ul className="flex flex-col gap-1">
-                {plan.validationNotes.map((note) => (
-                  <li key={note} className="text-fg-muted text-xs leading-relaxed">
-                    {note}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      </Disclosure>
+            {evidenceIds.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <MonoLabel className="tracking-[0.14em]">Why Vibe thinks this</MonoLabel>
+                <ul className="flex flex-col gap-1">
+                  {evidenceIds.map((id) => {
+                    const { source, detail } = describeEvidenceId(id);
+                    return (
+                      <li key={id} className="text-fg-muted text-xs leading-relaxed" title={id}>
+                        <span className="text-fg-secondary font-mono">{source}:</span> {detail}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+
+            {plan.validationNotes.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <MonoLabel className="tracking-[0.14em]">Notes</MonoLabel>
+                <ul className="flex flex-col gap-1">
+                  {plan.validationNotes.map((note) => (
+                    <li key={note} className="text-fg-muted text-xs leading-relaxed">
+                      {note}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </Disclosure>
+      </Surface>
     </div>
   );
 }

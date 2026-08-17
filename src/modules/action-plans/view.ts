@@ -1,5 +1,10 @@
 import type { ActionPlanBlockReason } from "./service";
-import type { ActionPlanStep, PlanProgress, PlanStalenessReason } from "./schema";
+import type {
+  ActionPlanStep,
+  ExecutionSupport,
+  PlanProgress,
+  PlanStalenessReason,
+} from "./schema";
 
 /**
  * The Action Plan presentation layer (ACTION PLANNER UI-1).
@@ -101,4 +106,91 @@ export function stepDependencyTitles(step: ActionPlanStep, allSteps: ActionPlanS
   return step.dependsOn
     .map((order) => byOrder.get(order))
     .filter((title): title is string => Boolean(title));
+}
+
+/**
+ * The one-line responsibility statement a scanning founder reads first
+ * (ACTION PLANNER UI-1.1 §20–§25).
+ *
+ * Keyed by `ExecutionSupport` alone rather than by `(actor, executionSupport)`
+ * — the six values already carry the actor distinction the density pass asks
+ * for (`vibe_prepares` / `vibe_executes_now` / `not_yet_supported` are the
+ * three ways "Vibe" can read; `founder_decides` / `founder_acts` are the two
+ * ways "you" can), so a second key would only be able to disagree with the
+ * first, never add information.
+ */
+export const RESPONSIBILITY_HEADLINES: Record<ExecutionSupport, string> = {
+  vibe_executes_now: "Vibe can do this",
+  vibe_prepares: "Vibe can prepare this",
+  founder_decides: "Needs your decision",
+  founder_acts: "You'll need to do this",
+  external_dependency: "Depends on something else",
+  not_yet_supported: "Vibe's work",
+};
+
+/**
+ * The one case the headline alone reads as ambiguous: "Vibe's work" says
+ * whose it is, not whether it runs. This is not a second name for
+ * `not_yet_supported` — it is the reason `isExecutableByVibe` exists at all
+ * — and it must never soften into something that could be misread as "this
+ * is happening automatically."
+ */
+export const RESPONSIBILITY_SUBLABELS: Partial<Record<ExecutionSupport, string>> = {
+  not_yet_supported: "Not automated yet",
+};
+
+/** Where a step's compact sequence status lands — three states, each a distinct visual weight. */
+export type StepSequenceState = "ready" | "waiting" | "done";
+
+export type StepSequenceStatus = {
+  label: string;
+  state: StepSequenceState;
+};
+
+/**
+ * The scannable answer to "can this happen right now?" (§16, §17).
+ *
+ * A blocked step says exactly what it is waiting for — by title, never by a
+ * bare order number — so the founder understands sequencing without opening
+ * anything. `also_ready` and `start_here` both read "Ready now": the
+ * distinction between "the" entry point and "an" unblocked step is carried
+ * by `StepDisplayState`/highlighting, not by this label.
+ */
+export function stepSequenceStatus(
+  step: ActionPlanStep,
+  allSteps: ActionPlanStep[],
+  display: StepDisplayState,
+): StepSequenceStatus {
+  if (display === "done") return { label: "Done", state: "done" };
+  if (display !== "waiting_on_steps") return { label: "Ready now", state: "ready" };
+
+  const byOrder = new Map(allSteps.map((entry) => [entry.order, entry]));
+  const prerequisites = step.dependsOn
+    .map((order) => byOrder.get(order))
+    .filter((entry): entry is ActionPlanStep => Boolean(entry));
+
+  if (prerequisites.length === 0) return { label: "Ready now", state: "ready" };
+  if (prerequisites.length === 1) {
+    const [only] = prerequisites;
+    return { label: `Waiting for step ${only.order}: ${only.title}`, state: "waiting" };
+  }
+  return { label: `Waiting for ${prerequisites.length} earlier steps`, state: "waiting" };
+}
+
+/**
+ * The plan's own restrained meta line (§33): "5 steps · 1 founder decision".
+ *
+ * Nothing here is provider, model, cost or token data — those never reach a
+ * screen at all — and nothing is invented beyond a count of the plan's own
+ * steps and how many of them are the founder's to decide.
+ */
+export function planMetaSummary(steps: ActionPlanStep[]): string {
+  const stepCount = steps.length;
+  const decisionCount = steps.filter((step) => step.actor === "founder_decision").length;
+
+  const parts = [`${stepCount} ${stepCount === 1 ? "step" : "steps"}`];
+  if (decisionCount > 0) {
+    parts.push(`${decisionCount} ${decisionCount === 1 ? "founder decision" : "founder decisions"}`);
+  }
+  return parts.join(" · ");
 }

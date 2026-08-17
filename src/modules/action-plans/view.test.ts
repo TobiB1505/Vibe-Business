@@ -1,10 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { ActionPlanBlockReason } from "./service";
-import type { ActionPlanStep } from "./schema";
+import { EXECUTION_SUPPORT, type ActionPlanStep } from "./schema";
 import {
+  RESPONSIBILITY_HEADLINES,
+  RESPONSIBILITY_SUBLABELS,
   buildActionPlanBlockNotice,
+  planMetaSummary,
   stepDependencyTitles,
   stepDisplayState,
+  stepSequenceStatus,
 } from "./view";
 
 /**
@@ -137,5 +141,99 @@ describe("stepDependencyTitles", () => {
   it("returns an empty list for a step with no prerequisites", () => {
     const first = step({ order: 1, dependsOn: [] });
     expect(stepDependencyTitles(first, [first])).toEqual([]);
+  });
+});
+
+/**
+ * ACTION PLANNER UI-1.1 — density pass helpers.
+ *
+ * `RESPONSIBILITY_HEADLINES` is the one place a step's actor/executionSupport
+ * pairing becomes the single scannable statement the collapsed row shows —
+ * so every value the enum can take must resolve to real, non-empty copy, and
+ * `not_yet_supported` must never read as if something is happening
+ * automatically.
+ */
+describe("RESPONSIBILITY_HEADLINES", () => {
+  it("gives every ExecutionSupport value a non-empty headline", () => {
+    for (const value of EXECUTION_SUPPORT) {
+      expect(RESPONSIBILITY_HEADLINES[value].length).toBeGreaterThan(0);
+    }
+  });
+
+  it("never lets 'not yet supported' read as automatic", () => {
+    const headline = RESPONSIBILITY_HEADLINES.not_yet_supported.toLowerCase();
+    expect(headline).not.toContain("automat");
+    expect(RESPONSIBILITY_SUBLABELS.not_yet_supported).toBe("Not automated yet");
+  });
+
+  it("reserves the sublabel for the one value that needs disambiguating", () => {
+    for (const value of EXECUTION_SUPPORT) {
+      if (value === "not_yet_supported") continue;
+      expect(RESPONSIBILITY_SUBLABELS[value]).toBeUndefined();
+    }
+  });
+});
+
+describe("stepSequenceStatus", () => {
+  it("reads Ready now for the current entry point", () => {
+    const current = step({ order: 1, dependsOn: [] });
+    expect(stepSequenceStatus(current, [current], "start_here")).toEqual({
+      label: "Ready now",
+      state: "ready",
+    });
+  });
+
+  it("reads Ready now for an also-ready step, same as Start Here", () => {
+    const first = step({ order: 1, dependsOn: [] });
+    const second = step({ order: 2, dependsOn: [] });
+    expect(stepSequenceStatus(second, [first, second], "also_ready").label).toBe("Ready now");
+  });
+
+  it("names the single prerequisite by title, not just its order", () => {
+    const decision = step({ order: 1, title: "Choose a segment" });
+    const dependent = step({ order: 2, dependsOn: [1] });
+    const status = stepSequenceStatus(dependent, [decision, dependent], "waiting_on_steps");
+
+    expect(status.state).toBe("waiting");
+    expect(status.label).toBe("Waiting for step 1: Choose a segment");
+  });
+
+  it("summarizes rather than lists every prerequisite when there is more than one", () => {
+    const a = step({ order: 1, title: "A" });
+    const b = step({ order: 2, title: "B" });
+    const dependent = step({ order: 3, dependsOn: [1, 2] });
+    const status = stepSequenceStatus(dependent, [a, b, dependent], "waiting_on_steps");
+
+    expect(status.label).toBe("Waiting for 2 earlier steps");
+  });
+
+  it("reads Done for a completed step regardless of its dependencies", () => {
+    const finished = step({ order: 1, dependsOn: [] });
+    expect(stepSequenceStatus(finished, [finished], "done")).toEqual({
+      label: "Done",
+      state: "done",
+    });
+  });
+});
+
+describe("planMetaSummary", () => {
+  it("counts steps and pluralizes correctly", () => {
+    expect(planMetaSummary([step({ order: 1 })])).toBe("1 step");
+    expect(planMetaSummary([step({ order: 1 }), step({ order: 2 })])).toBe("2 steps");
+  });
+
+  it("adds a founder-decision count only when one exists, pluralized", () => {
+    const noDecision = [step({ order: 1, actor: "vibe" })];
+    expect(planMetaSummary(noDecision)).toBe("1 step");
+
+    const oneDecision = [step({ order: 1, actor: "founder_decision" }), step({ order: 2 })];
+    expect(planMetaSummary(oneDecision)).toBe("2 steps · 1 founder decision");
+
+    const twoDecisions = [
+      step({ order: 1, actor: "founder_decision" }),
+      step({ order: 2, actor: "founder_decision" }),
+      step({ order: 3 }),
+    ];
+    expect(planMetaSummary(twoDecisions)).toBe("3 steps · 2 founder decisions");
   });
 });
