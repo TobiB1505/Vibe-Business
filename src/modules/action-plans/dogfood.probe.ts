@@ -100,6 +100,37 @@ describe("action planner — real product dogfood", () => {
       expect(move, "the Move set is empty").toBeTruthy();
 
       /*
+       * The chain check production gets for free (FIX §7).
+       *
+       * `getActionPlanReadiness` refuses with `move_stale` when the Move set was
+       * prioritized from a different audit than the current one, so production can never
+       * pair a Move with an audit it did not come from. This harness deliberately
+       * bypasses readiness — that is how it can evaluate planner quality on data the
+       * product would gate — and without this check that bypass silently mispairs them.
+       *
+       * The failure it produced was worse than useless: resolving a Move against a
+       * foreign audit yields `no_legacy_match`, which reads as "the planner cannot find
+       * the problem" when the truth is "these two rows are not part of the same chain".
+       * The first real run hit exactly this — a Move set built from an evidence-pack-v2
+       * audit, resolved against a v3 one, where the two vocabularies share no ids at all
+       * and an overlap of zero was arithmetically guaranteed.
+       */
+      if (opportunitySet!.businessAuditId !== audit!.id) {
+        process.stdout.write(
+          "\nCHAIN STALE — not a planner failure.\n" +
+            `  latest audit:            ${audit!.id}\n` +
+            `  audit the Moves came from: ${opportunitySet!.businessAuditId}\n` +
+            "  The Moves were prioritized from a different audit, so no Move here can be\n" +
+            "  traced to a conclusion in the current one. Refresh the Moves (a paid run,\n" +
+            "  and the user's action) before dogfooding this project.\n\n",
+        );
+      }
+      expect(
+        opportunitySet!.businessAuditId,
+        "the Move set was prioritized from a different audit than the current one — refresh Moves first",
+      ).toBe(audit!.id);
+
+      /*
        * The source gate, exactly as production applies it (FIX §7, §9).
        *
        * The probe refuses here rather than planning anyway, so a dogfood run can never
