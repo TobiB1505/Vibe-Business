@@ -325,28 +325,50 @@ action, and until then the planner reads existing Moves through the legacy path.
 | unit tests | green — 3357 before CORE-2b, 3530 after the FIX pass (+173) |
 | build | green |
 | E2E | unchanged — this sprint ships no UI, so no browser assertion changed |
-| migration | **not deployed** — see below |
+| migrations | **deployed and read back** — see below |
+
+## Migration deployment
+
+Both migrations are applied to the live project (`Vibe-Business`,
+`dcbwlctscooefwnivxzv` — the only project on the account, and not `Planner-Agent`).
+History was inspected before writing, per Rule 30: the remote was at
+`20260817090000_project_onboarding` with exactly the 33 migrations that existed locally,
+so neither of the new ones had been partially applied.
+
+| Migration | Status |
+|---|---|
+| `20260817120000_action_plans.sql` | applied |
+| `20260817140000_move_conclusion_lineage.sql` | applied |
+
+**One thing had to be reconciled, and it is worth recording.** The CLI workflow was not
+usable — this session has no Supabase credentials in its shell — so the migrations were
+applied through the Supabase management API, which stamps each one with a *wall-clock*
+version rather than the filename's. They landed as `20260817112506` and `20260817112531`.
+That is precisely the drift Rule 30 warns about and Rule 34 forbids: the migration files
+are the source of truth and the remote converges to them, not the other way round. The two
+ledger rows were updated to the filename versions, which preserves ordering
+(`090000 < 120000 < 140000`) and leaves local and remote history identical — 35 files, 35
+entries, matching versions.
+
+Verified by reading the database back rather than by trusting the apply:
+
+- `action_plans` and `action_plan_steps` exist, RLS enabled, 4 and 3 policies respectively
+  — three on steps because there is deliberately no update policy.
+- `action_plan_steps_capability_matches_support`, `action_plans_completed_has_conclusion`
+  and `action_plans_completed_has_lineage` are all present and read as written.
+- `operation_runs_operation_type_check` permits `action_planning`.
+- `business_opportunities` has its `source_conclusion_key` column: **29 existing Moves,
+  0 with lineage.** Exactly as designed — nothing was backfilled, and those 29 are the
+  population the conservative legacy path exists for.
+- Security advisors report four warnings, all pre-existing and none from these migrations
+  (`set_updated_at` search_path, `rls_auto_enable` being callable, leaked-password
+  protection off).
 
 ## What is not done
 
-Two things, both requiring credentials this session does not have, and both being reported
-rather than quietly dropped.
-
-**Two migrations are not deployed.** `20260817120000_action_plans.sql` creates the plan
-tables; `20260817140000_move_conclusion_lineage.sql` adds the lineage columns to
-`business_opportunities` and `action_plans`. Both are written and their constraints are
-pinned by tests against the migration source; neither has been applied. Per Rule 30 the next
-step is `pnpm db:status` before `pnpm db:push` — never assume table absence, never blindly
-rerun.
-
-The second migration is additive to `business_opportunities`, which holds production rows,
-and its two CHECK constraints land on `action_plans`, which has never held any. That is why
-they are plain CHECKs rather than `not valid` plus a backfill; if `action_plans` ever holds
-rows before deployment, that is the thing to change.
-
-**The real dogfood has not been run.** §92–§98 require planning Vibe Business's own current top
-Move and reviewing the result by hand, which needs a Supabase service key, an Anthropic key and
-a billable inference call against the user's account. The harness is built and is one command:
+**The real dogfood has not been run.** §92–§98 require planning Vibe Business's own current
+top Move and reviewing the result by hand, which needs an Anthropic key and a billable
+inference call against the user's account. The harness is built and is one command:
 
 ```
 NEXT_PUBLIC_SUPABASE_URL=… SUPABASE_SERVICE_ROLE_KEY=… \
@@ -355,17 +377,25 @@ pnpm ai:dogfood-action-plan
 ```
 
 It reads the project's real current audit and Moves, plans **whichever Move actually ranks
-first** — nothing is seeded to manufacture an easy executable result (§75) — writes nothing,
-and prints the report with measured tokens, latency and provider cost.
+first** — nothing is seeded to manufacture an easy executable result (§75) — writes
+nothing, and prints the report with measured tokens, latency and provider cost.
 
-Until it runs, these remain open: the five dogfood questions (§92–§96), the measured cost
-comparison against the audit (§97–§98), and `ACTION_PLANNING_CONFIG.timeoutMs`, which is the
-only budget in `ai/operations.ts` set from a comparable operation rather than from measurement
-and is marked as provisional in its own comment.
+One thing to expect from it: every existing Move predates `business-opportunity.v2`, so the
+first dogfood will resolve its source conclusion through the **legacy** path, and the
+report will say `via legacy_reconciled`. If the top Move is one the conservative rule
+cannot resolve unambiguously, the harness refuses before spending — which is the gate
+working, not a failure. Regenerating Moves (a paid run, and the user's action) is what
+produces direct lineage.
+
+Until the dogfood runs, these remain open: the five dogfood questions (§92–§96), the
+measured cost comparison against the audit (§97–§98), and
+`ACTION_PLANNING_CONFIG.timeoutMs`, which is the only budget in `ai/operations.ts` set from
+a comparable operation rather than from measurement and is marked provisional in its own
+comment.
 
 ## Next
 
-1. Deploy both migrations and dogfood the real top Move.
+1. Dogfood the real top Move.
 2. Re-set the planning timeout from measured duration.
 3. CORE-2b UI — the Action Planner experience, once the intelligence has been read and judged.
 4. Then bounded Execution / Prepare / Preview, which is where `vibe_executes_now` stops being
