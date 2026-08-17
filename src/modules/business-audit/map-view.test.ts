@@ -316,3 +316,89 @@ describe("the mobile representation carries the same judgment (§17, §64)", () 
     expect(lensesByRing(map).map((group) => group.ring)).toEqual(["later"]);
   });
 });
+
+/**
+ * One rank per problem (dogfood fix).
+ *
+ * A blocker spans several lenses, and the first version stamped its rank on
+ * every one of them. On the real map that drew two "1"s and two "2"s, which is
+ * the only thing in that screenshot a founder would read as a bug rather than
+ * a judgment. The rank belongs to the problem; this says which lens carries it.
+ */
+describe("blocker rank belongs to one lens", () => {
+  const assessed = [
+    lens("offer", "adequate", "now"),
+    lens("audience", "weak", "now"),
+    lens("revenue_economics", "weak", "soon"),
+    lens("acquisition", "weak", "soon"),
+    lens("conversion", "adequate", "now"),
+    lens("retention", "adequate", "later"),
+    lens("measurement", "weak", "later"),
+    lens("business_readiness", "weak", "later"),
+    lens("scalability", "unclear", "later"),
+  ];
+
+  it("marks only the lens a blocker leads with", () => {
+    const map = buildBusinessMap(
+      synthesis(assessed, [
+        conclusion("Nobody can pay you.", ["revenue_economics", "conversion", "scalability"]),
+      ]),
+    );
+
+    expect(map.nodes.filter((node) => node.blockerPrimary).map((node) => node.lens)).toEqual([
+      "revenue_economics",
+    ]);
+
+    // The other two are still *part of* the blocker — they keep the rank, and
+    // the interface uses that to say so without printing the number again.
+    const ranked = map.nodes
+      .filter((node) => node.blockerRank === 1)
+      .map((node) => node.lens)
+      .sort();
+    expect(ranked).toEqual(["conversion", "revenue_economics", "scalability"]);
+  });
+
+  it("gives each blocker exactly one primary lens", () => {
+    const map = buildBusinessMap(
+      synthesis(assessed, [
+        conclusion("First.", ["audience", "acquisition"]),
+        conclusion("Second.", ["revenue_economics", "business_readiness"]),
+      ]),
+    );
+
+    expect(map.nodes.filter((node) => node.blockerPrimary).map((node) => node.lens)).toEqual([
+      "audience",
+      "revenue_economics",
+    ]);
+  });
+
+  /**
+   * A later blocker that reuses an earlier blocker's lens must not steal it —
+   * and must not lose its own number in the process.
+   *
+   * Writing this test is what caught it: leading with `lenses[0]` unconditionally
+   * meant blocker #2, whose first lens was already spoken for, had no primary
+   * lens at all and its rank was drawn nowhere on the map.
+   */
+  it("leads with the first lens it can still claim, so every rank is drawn once", () => {
+    const map = buildBusinessMap(
+      synthesis(assessed, [
+        conclusion("First.", ["audience", "conversion"]),
+        conclusion("Second.", ["conversion", "retention"]),
+      ]),
+    );
+
+    const conversion = map.nodes.find((node) => node.lens === "conversion")!;
+    expect(conversion.blockerRank).toBe(1);
+    expect(conversion.blockerPrimary).toBe(false);
+
+    const retention = map.nodes.find((node) => node.lens === "retention")!;
+    expect(retention.blockerRank).toBe(2);
+    expect(retention.blockerPrimary).toBe(true);
+
+    // Every blocker's number appears exactly once on the map.
+    expect(map.nodes.filter((node) => node.blockerPrimary).map((node) => node.blockerRank)).toEqual(
+      [1, 2],
+    );
+  });
+});

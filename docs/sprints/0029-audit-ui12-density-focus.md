@@ -75,12 +75,50 @@ lens name now legitimately appears in two places — the map node and the priori
 — so unscoped `getByRole("button", { name: /revenue/i })` became ambiguous *by design*. Every lens
 assertion is now scoped to the map panel.
 
+## UI-1.3 — what the first live dogfood found
+
+Screenshot of the real `/score` on the deployed build, four things wrong. Three of them were
+introduced by this sprint's own density pass.
+
+**The lens cards were too narrow.** Cut to 5.5–5.75rem to buy overlap clearance, which made
+"Revenue & Economics" wrap to three lines and left the health bar cramped against the edge.
+Fixed by trading width for height rather than accepting less of both: cards are 7rem wide and
+shorter, and the radii were re-solved for the new aspect (`now 0.68 · soon 0.78 · later 0.94`).
+Wider-and-shorter clears the same worst case as narrower-and-taller, because the binding pair is
+the one whose separation splits evenly between x and y.
+
+**The Next Moves handoff had shrunk to a text link** wedged between priority #1 and priority #2,
+belonging to neither. The one place the audit hands work over was the quietest thing in the
+column. It is a primary button after the list now, which is also where it belongs in the
+argument: *these are the priorities, here is what Vibe would do about them.*
+
+**Two "1"s and two "2"s on the map.** A blocker spans several lenses and the rank was stamped on
+each, so the map looked like it could not count. The rank belongs to the *problem*; `blockerPrimary`
+says which lens carries it, and the others are marked by mint and by the line that ties them
+together. Writing the test for it caught a second defect in the first fix: leading with
+`lenses[0]` unconditionally meant a blocker whose first lens was already claimed by a
+higher-ranked one had its number drawn nowhere at all.
+
+**Mint had stopped meaning one thing.** It marked the Now ring, the selection and the rank at
+once, so a healthy "Adequate / Now" lens wore the same colour as the problem the audit wanted
+read first. Reserved for the top-three blockers; when a lens matters is already carried by its
+radius, the ring's name and the word in the card.
+
+Plus two contrast fixes raised by the same review: the ring names and the card's health/materiality
+row were the lowest-contrast text on the page, and that row is the *word* half of a channel that
+must never be colour alone.
+
 ## Residuals
 
-- **Real dogfood on a signed-in project is still outstanding.** Every check above ran against
-  fixtures.
-- The `/score` route returned a server error on the last deployed build. Never diagnosed, and not
-  touched by this sprint.
+- **The right column is still shorter than the map.** The handoff button closed some of it, but a
+  square map beside two priorities leaves dead space at wide viewports. Shrinking the map is not
+  available: the radii are already the minimum that keeps nine cards from overlapping. Closing it
+  properly means giving the leftover width to the detail panel, which is a layout change rather
+  than a density one.
+- The ring names sit at the largest gap between lenses rather than on a clean left axis. The
+  placement is collision-safe by construction and reads as a diagonal, which looks accidental.
+  A fixed left axis is not safe for every ring assignment — three attempts are recorded in
+  `business-map.tsx`.
 - Two `<details>` disclosures now sit in the detail panel — the lens's own evidence and the
   problem's reasoning trail. They are scoped differently and labelled differently, but a founder
   seeing both for the first time is worth watching during the dogfood.

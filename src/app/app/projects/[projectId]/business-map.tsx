@@ -63,9 +63,9 @@ const RING_LABELS: Record<MapRing, string> = {
  * view model was right the whole time and the geometry lives in CSS.
  */
 const RING_RADIUS: Record<MapRing, number> = {
-  now: 0.66,
-  soon: 0.8,
-  later: 0.98,
+  now: 0.68,
+  soon: 0.78,
+  later: 0.94,
 };
 
 const VIEWBOX = 760;
@@ -220,6 +220,18 @@ function MapNode({
   const isNow = node.ring === "now";
   const isSoon = node.ring === "soon";
 
+  /*
+   * Mint is Vibe's attention, and after the first real dogfood it had stopped
+   * meaning only that: it marked the Now ring, the selection and the rank all
+   * at once, so a healthy "Adequate / Now" lens wore the same colour as the
+   * problem the audit wanted read first.
+   *
+   * It is reserved here for the top-three blockers. When a lens matters is
+   * already carried three ways — its radius, the ring's own name, and the word
+   * in the card — so the ring does not need the colour too.
+   */
+  const isBlocker = node.blockerRank !== null;
+
   return (
     <li
       className={`absolute z-10 -translate-x-1/2 -translate-y-1/2 transition-opacity duration-200 ${
@@ -234,7 +246,7 @@ function MapNode({
       }`}
       style={{ left: `${(x / VIEWBOX) * 100}%`, top: `${(y / VIEWBOX) * 100}%` }}
     >
-      {isNow && (
+      {isBlocker && (
         <span
           aria-hidden="true"
           className={`audit-map-node-halo pointer-events-none absolute top-1/2 left-1/2 size-32 -translate-x-1/2 -translate-y-1/2 rounded-full ${
@@ -246,47 +258,53 @@ function MapNode({
         type="button"
         onClick={() => onSelect(node.lens)}
         aria-pressed={selected}
-        aria-label={`${node.label}. Health ${HEALTH_LABELS[node.health]}. Priority ${MATERIALITY_LABELS[node.materiality]}.`}
-        className={`relative flex flex-col text-left transition-[color,background-color,border-color,box-shadow,transform] duration-200 ease-vibe ${
-          isNow
-            ? "w-[5.75rem] gap-2 rounded-[0.8rem] border border-mint/45 bg-app/95 px-2 py-2.5 shadow-[0_0_34px_-14px_rgb(0_229_160/0.65)] hover:-translate-y-0.5 hover:border-mint/70"
-            : isSoon
-              ? "border-line-strong bg-app/95 w-[5.75rem] gap-1.5 rounded-[0.7rem] border px-2 py-2 hover:border-white/20"
-              : "border-line-2 bg-app/90 w-[5.5rem] gap-1.5 rounded-[0.65rem] border px-2 py-1.5 hover:border-line-strong"
+        aria-label={`${node.label}. Health ${HEALTH_LABELS[node.health]}. Priority ${MATERIALITY_LABELS[node.materiality]}.${
+          node.blockerRank === null ? "" : ` Part of priority ${node.blockerRank}.`
+        }`}
+        className={`relative flex w-[7rem] flex-col gap-1.5 rounded-[0.7rem] border px-2.5 py-2 text-left transition-[color,background-color,border-color,box-shadow,transform] duration-200 ease-vibe ${
+          isBlocker
+            ? "border-mint/45 bg-app/95 shadow-[0_0_34px_-14px_rgb(0_229_160/0.65)] hover:-translate-y-0.5 hover:border-mint/70"
+            : isNow || isSoon
+              ? "border-line-strong bg-app/95 hover:border-white/20"
+              : "border-line-2 bg-app/90 hover:border-line-strong"
         } ${selected ? "border-mint! bg-mint-tint-soft shadow-[0_0_42px_-12px_rgb(0_229_160/0.75)]" : ""}`}
       >
-        <span className="flex w-full items-start gap-2">
-          {node.blockerRank !== null && (
-            <span
-              className={`mt-px flex size-5 shrink-0 items-center justify-center rounded-sm font-mono text-[0.625rem] font-bold ${
-                isNow ? "bg-mint text-mint-ink" : "bg-surface-4 text-fg-secondary"
-              }`}
-            >
+        {/*
+          The rank sits on the lens the blocker leads with, and only there.
+          A blocker spans several lenses, so drawing it on each one put two
+          "1"s on the map — the one thing in the first dogfood that read as a
+          bug rather than a judgment. The others are marked by the mint and by
+          the line that ties them together.
+        */}
+        <span className="flex w-full items-start gap-1.5">
+          {node.blockerPrimary && node.blockerRank !== null && (
+            <span className="bg-mint text-mint-ink mt-px flex size-4 shrink-0 items-center justify-center rounded-[0.25rem] font-mono text-[0.5625rem] font-bold">
               {node.blockerRank}
             </span>
           )}
           <span
-            className={`min-w-0 leading-[1.2] font-semibold tracking-[-0.015em] ${
-              isNow
-                ? "text-fg text-[0.875rem]"
-                : isSoon
-                  ? "text-fg-body text-[0.8125rem]"
-                  : "text-fg-secondary text-[0.75rem]"
+            className={`min-w-0 flex-1 text-[0.8125rem] leading-[1.15] font-semibold tracking-[-0.015em] ${
+              isBlocker ? "text-fg" : isNow || isSoon ? "text-fg-body" : "text-fg-secondary"
             }`}
           >
             {node.label}
           </span>
         </span>
 
-        <span className="flex w-full flex-col gap-1.5">
+        <span className="flex w-full flex-col gap-1">
           <HealthBar health={node.health} />
           <span
-            className={`flex items-center justify-between gap-2 font-mono text-[0.5625rem] tracking-[0.09em] uppercase ${
-              isNow ? "text-fg-secondary" : "text-fg-meta"
+            /*
+              10px, not 9px. This row is the *word* half of health and
+              materiality — the guarantee that neither is carried by colour
+              alone — so it cannot be the smallest text on the screen.
+            */
+            className={`flex items-center justify-between gap-1.5 font-mono text-[0.625rem] tracking-[0.04em] uppercase ${
+              isBlocker ? "text-fg-secondary" : "text-fg-muted"
             }`}
           >
             <span>{HEALTH_LABELS[node.health]}</span>
-            <span className={isNow ? "text-mint" : undefined}>
+            <span className={node.ring === "now" ? "text-fg-body" : undefined}>
               {MATERIALITY_LABELS[node.materiality]}
             </span>
           </span>
@@ -384,7 +402,10 @@ export function BusinessMap({
                 y={CENTRE + Math.sin(radians) * r + 4}
                 textAnchor="middle"
                 className={`font-mono text-[11px] tracking-[0.14em] ${
-                  ring === "now" ? "fill-mint" : "fill-fg-meta"
+                  // Raised off `fill-fg-meta`: at 11px uppercase on near-black
+                  // these were the lowest-contrast text on the page, and they
+                  // are the map's key rather than decoration.
+                  ring === "now" ? "fill-mint" : "fill-fg-secondary"
                 }`}
               >
                 {ring.toUpperCase()}

@@ -5,6 +5,7 @@ import { LENS_LABELS, MATERIALITY_LABELS } from "@/modules/business-audit/map-vi
 import type { BusinessMap } from "@/modules/business-audit/map-view";
 import type { BusinessConclusion, BusinessLens } from "@/modules/business-audit/schema";
 import { MonoLabel } from "@/components/ui/typography";
+import { buttonClasses } from "@/components/ui/button";
 
 /**
  * Current priorities (AUDIT UI-1.2 §5, §6, §11, §30).
@@ -30,6 +31,9 @@ import { MonoLabel } from "@/components/ui/typography";
  * Into the first item (§11). It was a large card repeating blocker #1 verbatim
  * one screen below blocker #1, which is the clearest case of the same thing
  * said twice on one viewport.
+ *
+ * The handoff to Next Moves is the one thing that did *not* survive that cut
+ * well, and the first real dogfood said so: see `MovesHandoff` below.
  */
 
 /** The lens a priority selects. First is the audit's own primary. */
@@ -151,34 +155,52 @@ export function CurrentPriorities({
                   </span>
                 )}
               </button>
-
-              {/*
-                Outside the button, because a link inside a button is neither.
-                Only on the primary, and only when there is something behind it
-                (§12) — a CTA into an empty screen is a promise the audit did
-                not keep.
-              */}
-              {isPrimary && (
-                <div className="mt-2 pl-2">
-                  {hasMoves ? (
-                    <Link
-                      href={movesHref}
-                      className="text-mint hover:text-mint-hover rounded-sm text-sm underline underline-offset-4"
-                    >
-                      See what Vibe would do
-                    </Link>
-                  ) : (
-                    // The honest sentence is shorter than the excuse would be.
-                    <p className="text-fg-meta text-[0.8125rem] leading-relaxed">
-                      Vibe hasn&rsquo;t worked out the next moves for this project yet.
-                    </p>
-                  )}
-                </div>
-              )}
             </li>
           );
         })}
       </ol>
+
+      <MovesHandoff movesHref={movesHref} hasMoves={hasMoves} />
     </section>
+  );
+}
+
+/**
+ * The handoff to Next Moves.
+ *
+ * ## Why it is a button again
+ *
+ * UI-1.2 shrank it to a text link tucked between the first and second
+ * priority, where the first dogfood showed exactly what that costs: it read as
+ * a stray link belonging to neither card, and the one place the audit hands
+ * work over was the quietest thing in the column.
+ *
+ * It sits after the list instead, which is also where it belongs in the
+ * argument — *these are the priorities, here is what Vibe would do about
+ * them.* The audit's job still ends at "this is what matters"; recommending
+ * the work is Next Moves' job, and this is the seam between them.
+ */
+function MovesHandoff({ movesHref, hasMoves }: { movesHref: string; hasMoves: boolean }) {
+  return (
+    <div className="border-line-1 mt-1 flex flex-col gap-3 border-t pt-5">
+      {hasMoves ? (
+        <>
+          <p className="text-fg-body text-sm leading-relaxed">
+            Vibe has worked out what it would do about this first.
+          </p>
+          <div>
+            <Link href={movesHref} className={buttonClasses({ variant: "primary", size: "sm" })}>
+              See what Vibe would do first
+            </Link>
+          </div>
+        </>
+      ) : (
+        // No CTA into an empty screen. The honest sentence is shorter than the
+        // excuse would be.
+        <p className="text-fg-meta text-sm leading-relaxed">
+          Vibe hasn&rsquo;t worked out the next moves for this project yet.
+        </p>
+      )}
+    </div>
   );
 }

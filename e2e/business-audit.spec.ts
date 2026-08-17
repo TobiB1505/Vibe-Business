@@ -321,6 +321,27 @@ test.describe("next moves handoff (§39, §40)", () => {
     await expect(cta).toHaveAttribute("href", /\/moves$/);
   });
 
+  /**
+   * UI-1.3 — it was a text link wedged between priority #1 and priority #2,
+   * belonging to neither, and the live screenshot showed the one place the
+   * audit hands work over as the quietest thing in the column.
+   */
+  test("puts the handoff after the priorities, not between them", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1100 });
+    await page.goto(SYNTHESIS);
+
+    const priorities = page.getByTestId("current-priorities").getByRole("button");
+    const cta = page.getByRole("link", { name: /what vibe would do/i });
+
+    const last = await priorities.last().boundingBox();
+    const button = await cta.boundingBox();
+    expect(button!.y).toBeGreaterThan(last!.y);
+
+    // A real control, not a line of text: it carries a filled background.
+    const background = await cta.evaluate((node) => getComputedStyle(node).backgroundColor);
+    expect(background).not.toMatch(/rgba\(0, 0, 0, 0\)|transparent/);
+  });
+
   test("shows no CTA when no real moves exist", async ({ page }) => {
     await page.goto(NO_MOVES);
 
@@ -490,6 +511,77 @@ test.describe("the map is legible, not just correct (§2)", () => {
       );
       expect(covered, `${ring} is underneath a lens card`).toBe(false);
     }
+  });
+});
+
+/**
+ * What the first real dogfood found (AUDIT UI-1.3).
+ *
+ * Three defects, none of which any unit test could see: a rank drawn on every
+ * lens of a blocker, a handoff to Next Moves shrunk to a text link floating
+ * between two cards, and mint doing three jobs at once.
+ */
+test.describe("the map says each thing once (UI-1.3)", () => {
+  test("draws each priority's number exactly once", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1100 });
+    await page.goto(SYNTHESIS);
+
+    /*
+     * The fixture's two blockers span five lenses between them. Before this,
+     * all five wore a number and the map showed two "1"s and two "2"s — the one
+     * thing in the live screenshot that read as a bug rather than a judgment.
+     */
+    const numbers = await page
+      .getByTestId("business-map-radial")
+      .getByRole("button")
+      .evaluateAll((nodes) =>
+        nodes
+          .map((node) => node.textContent?.match(/^(\d)/)?.[1])
+          .filter((value): value is string => value !== undefined),
+      );
+
+    expect(numbers.sort()).toEqual(["1", "2"]);
+  });
+
+  /** Part of a problem without being its headline, said by mint and by the line. */
+  test("still tells a screen reader which priority a lens belongs to", async ({ page }) => {
+    await page.goto(SYNTHESIS);
+
+    const conversion = page
+      .getByTestId("business-map-radial")
+      .getByRole("button", { name: /conversion/i });
+
+    await expect(conversion).toHaveAttribute("aria-label", /part of priority 1/i);
+    // And carries no number of its own — Revenue & Economics leads that one.
+    await expect(conversion).not.toContainText(/^1/);
+  });
+
+  /**
+   * Mint means Vibe's attention and nothing else. A healthy lens that happens
+   * to be material now wore the same colour as the problem the audit wanted
+   * read first, which is the distinction two sprints were spent protecting.
+   */
+  test("keeps mint for the priorities, not for the Now ring", async ({ page }) => {
+    await page.goto(SYNTHESIS);
+
+    const map = page.getByTestId("business-map-radial");
+    const mintBordered = await map.getByRole("button").evaluateAll((nodes) =>
+      nodes
+        .filter((node) => {
+          const colour = getComputedStyle(node).borderTopColor;
+          const [r, g, b] = colour.match(/\d+/g)?.map(Number) ?? [0, 0, 0];
+          // Mint is strongly green-dominant; the neutral lines are grey.
+          return g > r + 30 && g > b + 30;
+        })
+        .map((node) => node.textContent ?? ""),
+    );
+
+    // Offer and Conversion are "Adequate / Now" in this fixture and must not
+    // be mint. Every mint node belongs to a blocker.
+    for (const label of mintBordered) {
+      expect(label).toMatch(/revenue|conversion|scalability|measurement/i);
+    }
+    expect(mintBordered.some((label) => /^Offer/.test(label))).toBe(false);
   });
 });
 

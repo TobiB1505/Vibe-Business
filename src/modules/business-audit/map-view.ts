@@ -62,6 +62,15 @@ export type LensNode = {
   summary: string;
   /** 1-based position in the blocker list, when this lens produced one. */
   blockerRank: number | null;
+  /**
+   * Whether this lens is the one the blocker leads with.
+   *
+   * A blocker spans several lenses, so a rank drawn on all of them puts two
+   * "1"s on the map and reads as a numbering bug — which is exactly how it
+   * looked in the first real dogfood. The rank belongs to the *problem*; this
+   * says which lens carries it, and the rest are shown as part of it.
+   */
+  blockerPrimary: boolean;
   /** Lenses the audit placed inside the same root problem as this one. */
   relatedLenses: BusinessLens[];
   /** What only the founder could answer here. Usually empty. */
@@ -228,7 +237,20 @@ export function buildBusinessMap(synthesis: AuditSynthesis): BusinessMap {
   const connections = connectionsFrom([...synthesis.blockers, ...synthesis.strengths]);
 
   const blockerRankOf = new Map<BusinessLens, number>();
+  const blockerPrimaryLens = new Set<BusinessLens>();
   synthesis.blockers.forEach((blocker, index) => {
+    /*
+     * The first lens this blocker can still claim leads it.
+     *
+     * Not simply `blocker.lenses[0]`: a lens already spoken for by a
+     * higher-ranked blocker keeps that rank, so leading with it would have left
+     * this blocker's number nowhere on the map at all. Nothing here reorders —
+     * the audit chose both the blocker order and the lens order inside each
+     * one; this only picks which of its own lenses carries the number.
+     */
+    const leads = blocker.lenses.find((lens) => !blockerRankOf.has(lens));
+    if (leads !== undefined) blockerPrimaryLens.add(leads);
+
     for (const lens of blocker.lenses) {
       if (!blockerRankOf.has(lens)) blockerRankOf.set(lens, index + 1);
     }
@@ -248,6 +270,7 @@ export function buildBusinessMap(synthesis: AuditSynthesis): BusinessMap {
       ring: ringFor(materiality),
       summary: assessment?.summary ?? "",
       blockerRank: blockerRankOf.get(lens) ?? null,
+      blockerPrimary: blockerPrimaryLens.has(lens),
       relatedLenses: connections
         .filter((edge) => edge.from === lens || edge.to === lens)
         .map((edge) => (edge.from === lens ? edge.to : edge.from)),
