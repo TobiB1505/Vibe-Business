@@ -68,6 +68,12 @@ export type AuditEventType =
   | "opportunities.completed"
   | "opportunities.failed"
   | "opportunities.reused"
+  // Action planning (CORE-2b). Its own lifecycle, for the same reason the
+  // Opportunity Engine has one: the operation records execution, the domain
+  // records what was concluded.
+  | "action_plan.completed"
+  | "action_plan.failed"
+  | "action_plan.reused"
   // Change preparation (Sprint 9B §17). Domain lifecycle, distinct from the
   // generic operation.* execution events.
   | "change_preparation.started"

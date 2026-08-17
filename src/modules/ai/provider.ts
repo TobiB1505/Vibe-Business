@@ -31,7 +31,9 @@
 export type AIOperation =
   | "business_readiness_audit"
   | "opportunity_generation"
-  | "product_understanding";
+  | "product_understanding"
+  /** Turning one Move into an ordered, concrete plan (CORE-2b §45). */
+  | "action_planning";
 
 /** Effort levels supported by the configured model family. */
 export type AIEffort = "low" | "medium" | "high";

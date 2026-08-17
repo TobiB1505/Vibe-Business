@@ -74,6 +74,15 @@ export const OPERATION_TYPES = [
    * when a browser tab is closed would lose the one impression that matters.
    */
   "product_understanding",
+  /**
+   * Turning one Move into an ordered, concrete plan (CORE-2b §45).
+   *
+   * Durable for the ordinary reason — a token count, one paid call and a
+   * versioned document, which is tens of seconds — and for the same reason
+   * Product Understanding is: this runs at the end of onboarding, where a
+   * browser tab closing must not lose the answer.
+   */
+  "action_planning",
 ] as const;
 export type OperationType = (typeof OPERATION_TYPES)[number];
 
@@ -107,6 +116,8 @@ export const OPERATION_STAGES = [
   "running_ai",
   /** The Opportunity Engine's paid step (Sprint 8 §25). */
   "prioritizing",
+  /** The Action Planner's paid step (CORE-2b §45). */
+  "planning",
   /** Change preparation: revalidating the premise against live state. */
   "preflight",
   "generating_change",
@@ -238,6 +249,8 @@ export function hasEnteredPaidWork(stage: OperationStage): boolean {
     // Product Understanding's paid step, under the name the user sees.
     stage === "understanding_product" ||
     stage === "prioritizing" ||
+    // The Action Planner's paid step (CORE-2b §55).
+    stage === "planning" ||
     stage === "writing_repository" ||
     stage === "validating" ||
     stage === "persisting" ||

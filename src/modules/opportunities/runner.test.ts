@@ -66,9 +66,9 @@ describe("the happy path", () => {
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;
 
-    expect(outcome.set.schemaVersion).toBe("business-opportunity-set.v1");
-    expect(outcome.set.engineVersion).toBe("opportunity-engine-v1");
-    expect(outcome.set.promptVersion).toBe("opportunity-prompt-v1");
+    expect(outcome.set.schemaVersion).toBe("business-opportunity-set.v2");
+    expect(outcome.set.engineVersion).toBe("opportunity-engine-v2");
+    expect(outcome.set.promptVersion).toBe("opportunity-prompt-v2");
     expect(outcome.set.rubricVersion).toBe(OPPORTUNITY_RUBRIC_VERSION);
     expect(outcome.set.auditId).toBe("audit_1");
     expect(outcome.set.opportunities).toHaveLength(3);

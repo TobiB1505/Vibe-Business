@@ -173,10 +173,53 @@ export const PRODUCT_UNDERSTANDING_CONFIG: OperationConfig = {
   timeoutMs: 60_000,
 };
 
+/**
+ * Action planning (CORE-2b §45, §97, §98).
+ *
+ * Same model and effort as the audit and the Opportunity Engine, and for the
+ * same reason: working out the sequence of moves that resolves a business
+ * problem — including which decisions are the founder's — is judgement from
+ * mixed evidence, not extraction. Stepping down is a cost optimization to make
+ * once there is a quality baseline, not before there is one.
+ *
+ * The budgets are where this operation differs, and both differences are
+ * deliberate.
+ *
+ * **Input is the smallest of the three reasoning operations.** The audit reads
+ * everything; prioritization reads the audit *and* the pack it came from; this
+ * reads one Move, the conclusion under it, the lenses that conclusion spans,
+ * and only the evidence any of them cited — plus the product profile, which is
+ * what stops the plan being generic. §98 makes that a design target rather than
+ * an accident: if planning ever approaches the cost of an audit, the context
+ * selection in `evidence.ts` has regressed and that is the thing to fix.
+ *
+ * **Output is small and firmly bounded.** At most nine steps of a few sentences
+ * each. The ceiling is set well above that for reasoning headroom, because
+ * truncating a finished plan mid-object throws away everything spent reaching
+ * it — the lesson the audit's ceiling records.
+ */
+export const ACTION_PLANNING_CONFIG: OperationConfig = {
+  operation: "action_planning",
+  model: "claude-sonnet-5",
+  reasoning: { mode: "adaptive", effort: "high" },
+  maxOutputTokens: 10_000,
+  maxInputTokens: 20_000,
+  /*
+   * Provisional, and marked as such rather than presented as measured.
+   *
+   * Every other timeout in this file was set from real runs. This one cannot be
+   * until the first dogfood, so it starts at the Opportunity Engine's — the
+   * nearest comparable operation, a single structured judgement call on a
+   * smaller input — and is to be re-set from measured duration afterwards.
+   */
+  timeoutMs: 120_000,
+};
+
 const CONFIGS: Record<AIOperation, OperationConfig> = {
   business_readiness_audit: BUSINESS_READINESS_AUDIT_CONFIG,
   opportunity_generation: OPPORTUNITY_GENERATION_CONFIG,
   product_understanding: PRODUCT_UNDERSTANDING_CONFIG,
+  action_planning: ACTION_PLANNING_CONFIG,
 };
 
 export function getOperationConfig(operation: AIOperation): OperationConfig {

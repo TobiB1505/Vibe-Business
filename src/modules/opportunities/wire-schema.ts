@@ -32,6 +32,19 @@ const OPPORTUNITY_ITEM_SCHEMA = {
       type: "integer",
       description: "1 is what to do first. Unique and contiguous across the array. No ties.",
     },
+    /*
+     * The conclusion this Move addresses (CORE-2b FIX §1, §2).
+     *
+     * A citation, not an assertion of authority — the same shape as `evidenceIds`. The
+     * keys are supplied to the model in the rendered audit, and `validate.ts` checks the
+     * cited one against the set the audit actually offers, dropping anything else. So the
+     * model chooses among facts the server established; it cannot invent one.
+     */
+    sourceConclusionKey: {
+      type: "string",
+      description:
+        "The id of the audit conclusion this opportunity exists to address, exactly as shown in the audit section (e.g. 'blocker-1'). Never invent one. Use the empty string only if this opportunity genuinely addresses no conclusion in the audit.",
+    },
     title: { type: "string", description: "Short imperative phrase, e.g. 'Clarify your monetization path'." },
     problem: { type: "string", description: "One to three sentences describing what is, in the present tense." },
     whyNow: {
@@ -84,6 +97,7 @@ const OPPORTUNITY_ITEM_SCHEMA = {
   },
   required: [
     "rank",
+    "sourceConclusionKey",
     "title",
     "problem",
     "whyNow",
@@ -123,6 +137,7 @@ export type WireNormalizationReason =
 
 export type WireOpportunity = {
   rank: unknown;
+  sourceConclusionKey: unknown;
   title: unknown;
   problem: unknown;
   whyNow: unknown;

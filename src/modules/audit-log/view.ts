@@ -97,6 +97,10 @@ const LABELS: Record<AuditEventType, string> = {
   "opportunities.failed": "Opportunity analysis failed",
   "opportunities.reused": "Opportunities reused",
 
+  "action_plan.completed": "Action plan created",
+  "action_plan.failed": "Action planning failed",
+  "action_plan.reused": "Action plan reused",
+
   "change_preparation.started": "Change preparation started",
   "change_preparation.completed": "Change prepared",
   "change_preparation.failed": "Change preparation failed",

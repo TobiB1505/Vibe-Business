@@ -10,6 +10,7 @@ import type { MergeFailureCode } from "@/modules/merge/schema";
 import type { OutcomeFailureCode } from "@/modules/outcome-verification/schema";
 import type { MeasurementFailureCode } from "@/modules/business-measurement/schema";
 import type { UnderstandingFailure } from "@/modules/product-understanding/runner";
+import type { ActionPlanRunFailure } from "@/modules/action-plans/runner";
 
 /**
  * Every way a durable operation can end badly (Sprint 7 §21).
@@ -41,7 +42,20 @@ export type OperationExecutionFailure =
   /** Prioritization needs a diagnosis to prioritize from (Sprint 8 §34). */
   | "audit_missing"
   /** The audit is older than the evidence that exists now (Sprint 8 §34). */
-  | "audit_stale";
+  | "audit_stale"
+  /** Planning needs a Move to plan (CORE-2b §6). */
+  | "move_missing"
+  /** The Moves were prioritized from an older audit than the current one. */
+  | "move_stale"
+  /**
+   * The business problem behind the Move could not be established (CORE-2b FIX §8).
+   *
+   * Its own code rather than a variant of `move_missing`, because the Move is fine —
+   * what is missing is the chain from it back to a root business problem. Planning
+   * without that produces a generic task list, so it is refused **before** anything is
+   * spent (§9).
+   */
+  | "planner_source_unresolved";
 
 export type OperationFailureCode =
   | AuditRunFailure
@@ -58,6 +72,7 @@ export type OperationFailureCode =
   | OutcomeFailureCode
   | MeasurementFailureCode
   | UnderstandingFailure
+  | ActionPlanRunFailure
   | OperationExecutionFailure;
 
 /**
@@ -82,6 +97,9 @@ const RETRYABLE: readonly OperationFailureCode[] = [
   // the button is honest because the user can act on it.
   "audit_missing",
   "audit_stale",
+  // Same shape: the user can generate Moves, or refresh them, and then plan.
+  "move_missing",
+  "move_stale",
 ];
 
 export function isRetryable(code: OperationFailureCode): boolean {
