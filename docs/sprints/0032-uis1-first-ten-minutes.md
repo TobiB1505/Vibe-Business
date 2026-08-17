@@ -103,7 +103,7 @@ for (rule 69) and the reason the browser layer is not optional.
 
 ## Validation
 
-- **Unit:** 3,753 green (38 new). New pure tests for the parked-audit rule and the completion rule;
+- **Unit:** 3,761 green (46 new). New pure tests for the parked-audit rule and the completion rule;
   contract tests for the landing page's claims and destinations, and for the first-journey wiring.
 - **Browser:** 205 green (28 new), Chromium, production build, fixtures only — no GitHub call, no
   AI call, no provider spend, no database.
