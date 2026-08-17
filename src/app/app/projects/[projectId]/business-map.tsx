@@ -45,11 +45,27 @@ const RING_LABELS: Record<MapRing, string> = {
   later: "Later",
 };
 
-/** Outward, as a fraction of the map radius. NOW is intentionally substantial. */
+/**
+ * Outward, as a fraction of the map radius.
+ *
+ * Pushed out in UI-1.2 (§2), and the numbers are not taste.
+ *
+ * Nine lenses sit at fixed angles 40° apart, so two cards on one ring are
+ * `2r·sin20°` apart along the chord — but they only overlap when they are close
+ * on *both* axes, so the binding constraint is the pair whose separation splits
+ * evenly between x and y. At the radii this shipped with, that pair's clearance
+ * was negative and the Now ring overlapped itself on every audit.
+ *
+ * Which lenses land on which ring changes between audits, so these were chosen
+ * to clear the worst arrangement the data can produce — all nine lenses on one
+ * ring — rather than the arrangement in one fixture. That is also what the
+ * browser test asserts, because none of this is visible to a unit test: the
+ * view model was right the whole time and the geometry lives in CSS.
+ */
 const RING_RADIUS: Record<MapRing, number> = {
-  now: 0.56,
-  soon: 0.76,
-  later: 0.94,
+  now: 0.66,
+  soon: 0.8,
+  later: 0.98,
 };
 
 const VIEWBOX = 760;
@@ -74,9 +90,9 @@ const RADIUS = VIEWBOX / 2 - 54;
  */
 function labelBearing(map: BusinessMapModel): number {
   const occupied = map.nodes.map((node) => node.angle);
-  if (occupied.length === 0) return 90;
+  if (occupied.length === 0) return 180;
 
-  let best = 90;
+  let best = 180;
   let bestGap = -1;
 
   for (let bearing = 0; bearing < 360; bearing += 10) {
@@ -86,8 +102,13 @@ function labelBearing(map: BusinessMapModel): number {
         return Math.min(delta, 360 - delta);
       }),
     );
-    // Ties break downward, where a label reads most naturally under the centre.
-    if (gap > bestGap || (gap === bestGap && Math.abs(bearing - 90) < Math.abs(best - 90))) {
+    /*
+     * Ties break to the left (§2). Nine evenly spaced nodes leave nine equal
+     * gaps, so the tie-break is what actually chooses — and the left flank is
+     * the far side from the priorities column, which keeps the axis away from
+     * the densest reading on the panel.
+     */
+    if (gap > bestGap || (gap === bestGap && Math.abs(bearing - 180) < Math.abs(best - 180))) {
       bestGap = gap;
       best = bearing;
     }
@@ -228,10 +249,10 @@ function MapNode({
         aria-label={`${node.label}. Health ${HEALTH_LABELS[node.health]}. Priority ${MATERIALITY_LABELS[node.materiality]}.`}
         className={`relative flex flex-col text-left transition-[color,background-color,border-color,box-shadow,transform] duration-200 ease-vibe ${
           isNow
-            ? "w-[7.75rem] gap-2.5 rounded-[0.9rem] border border-mint/45 bg-app/95 px-3 py-3 shadow-[0_0_34px_-14px_rgb(0_229_160/0.65)] hover:-translate-y-0.5 hover:border-mint/70"
+            ? "w-[5.75rem] gap-2 rounded-[0.8rem] border border-mint/45 bg-app/95 px-2 py-2.5 shadow-[0_0_34px_-14px_rgb(0_229_160/0.65)] hover:-translate-y-0.5 hover:border-mint/70"
             : isSoon
-              ? "border-line-strong bg-app/95 w-[8.25rem] gap-2 rounded-[0.8rem] border px-3 py-2.5 hover:border-white/20"
-              : "border-line-2 bg-app/90 w-[7.75rem] gap-1.5 rounded-[0.7rem] border px-2.5 py-2 hover:border-line-strong"
+              ? "border-line-strong bg-app/95 w-[5.75rem] gap-1.5 rounded-[0.7rem] border px-2 py-2 hover:border-white/20"
+              : "border-line-2 bg-app/90 w-[5.5rem] gap-1.5 rounded-[0.65rem] border px-2 py-1.5 hover:border-line-strong"
         } ${selected ? "border-mint! bg-mint-tint-soft shadow-[0_0_42px_-12px_rgb(0_229_160/0.75)]" : ""}`}
       >
         <span className="flex w-full items-start gap-2">
@@ -362,7 +383,7 @@ export function BusinessMap({
                 x={CENTRE + Math.cos(radians) * r}
                 y={CENTRE + Math.sin(radians) * r + 4}
                 textAnchor="middle"
-                className={`font-mono text-[13px] tracking-[0.16em] ${
+                className={`font-mono text-[11px] tracking-[0.14em] ${
                   ring === "now" ? "fill-mint" : "fill-fg-meta"
                 }`}
               >

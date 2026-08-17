@@ -1,38 +1,32 @@
-import Link from "next/link";
-import {
-  buildBusinessMap,
-  type BusinessMap as BusinessMapModel,
-} from "@/modules/business-audit/map-view";
+import { buildBusinessMap } from "@/modules/business-audit/map-view";
 import type { BusinessReadinessAudit } from "@/modules/business-audit/schema";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
-import { buttonClasses } from "@/components/ui/button";
 import { MonoLabel } from "@/components/ui/typography";
-import { Surface } from "@/components/ui/surface";
-import { AuditBlockers } from "./audit-blockers";
 import { AuditIntelligence } from "./audit-intelligence";
-import { BusinessAuditSummary } from "./business-audit-summary";
 
 /**
- * The completed audit (AUDIT UI-1, direction 1b).
+ * The completed audit (AUDIT UI-1, direction 1b; density pass AUDIT UI-1.2).
  *
  * ## The reading order is the design
  *
  *   What Vibe thinks          the answer, in one sentence
- *   → Business map + blockers what the business looks like, and what to fix
- *   → Where I'd start         the single next thing
- *   → How Vibe reached this   inside each blocker, one click down
- *   → Technical breakdown     the five scored dimensions, collapsed
+ *   → Map + current priorities what the business looks like, and what matters
+ *   → The selected area        why, at full width
+ *   → What's already working   the ground the founder is standing on
  *
  * The map is deliberately **not** the hero. 1b works because the conclusion
  * lands first and the visualization explains it — reversed, a founder has to
  * derive the answer from a diagram, which is a puzzle rather than a judgment.
  *
- * ## What moved
+ * ## What UI-1.2 removed, and why removing was the fix
  *
- * The five scored dimensions used to be the audit. They are now a disclosure at
- * the bottom labelled as the technical record. Nothing was deleted: the scores,
- * the per-dimension findings and the evidence are all still rendered by
- * `BusinessAuditSummary`, one click below the intelligence that replaced them.
+ * Three things said the same thing on one screen: full blocker explanations in
+ * the right column, a "Where I'd start" card repeating blocker #1 one screen
+ * later, and a collapsed technical breakdown of the five legacy dimensions that
+ * the nine lenses replaced. The dimensions are still measured and still stored;
+ * they are simply no longer a second, competing verdict in the customer's face.
+ * The lenses are the business-judgment layer, and a page that offers two
+ * answers has not made one.
  */
 
 function Conclusion({ audit }: { audit: BusinessReadinessAudit }) {
@@ -42,7 +36,13 @@ function Conclusion({ audit }: { audit: BusinessReadinessAudit }) {
   return (
     <section className="flex flex-col gap-4" data-testid="audit-hero">
       <MonoLabel as="h2">What Vibe thinks</MonoLabel>
-      <p className="text-fg max-w-[38ch] text-[2rem] leading-[1.2] font-semibold tracking-[-0.035em] text-balance sm:text-[2.25rem] lg:text-[2.5rem]">
+      {/*
+        §3 — still the first and largest thing on the page, but a sentence
+        rather than a billboard. At the old size a three-line conclusion pushed
+        the map below the fold on a 1280 laptop, which cost the reader the very
+        connection this layout exists to make.
+      */}
+      <p className="text-fg max-w-[46ch] text-[1.75rem] leading-[1.25] font-semibold tracking-[-0.03em] text-balance sm:text-[2rem] lg:text-[2.125rem]">
         {overall}
       </p>
     </section>
@@ -61,15 +61,24 @@ function Strengths({ audit }: { audit: BusinessReadinessAudit }) {
         </MonoLabel>
         <span aria-hidden="true" className="bg-line-2 h-px flex-1" />
       </div>
-      <ul className="flex flex-col gap-3.5">
+
+      {/*
+        A row below the panel, not a column beside it (§9, §10).
+        Strengths are the ground a founder is standing on, not the work — they
+        should reassure at a glance and never compete with the priorities for
+        the narrow measure. Two lines of supporting text each, and no more.
+      */}
+      <ul className="grid gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3">
         {strengths.map((strength) => (
-          <li key={strength.headline} className="flex gap-3">
-            <span aria-hidden="true" className="bg-fg-body mt-2 size-1.5 shrink-0 rounded-full" />
-            <span className="flex min-w-0 flex-col gap-1.5">
-              <span className="text-fg text-[0.9375rem] leading-snug font-semibold">
+          <li key={strength.headline} className="flex gap-2.5">
+            <span aria-hidden="true" className="text-mint mt-px shrink-0 text-sm">
+              ✓
+            </span>
+            <span className="flex min-w-0 flex-col gap-1">
+              <span className="text-fg-body text-sm leading-snug font-medium">
                 {strength.headline}
               </span>
-              <span className="text-fg-muted text-[0.8125rem] leading-relaxed">
+              <span className="text-fg-muted line-clamp-2 text-[0.8125rem] leading-relaxed">
                 {strength.explanation}
               </span>
             </span>
@@ -77,99 +86,6 @@ function Strengths({ audit }: { audit: BusinessReadinessAudit }) {
         ))}
       </ul>
     </section>
-  );
-}
-
-/**
- * Where I'd start (§39, §40).
- *
- * The audit's job ends at "this is what matters"; recommending the work is
- * Next Moves' job, and merging the two would collapse a boundary the product
- * depends on. So this names the top blocker and hands off.
- */
-function WhereIdStart({
-  audit,
-  movesHref,
-  hasMoves,
-}: {
-  audit: BusinessReadinessAudit;
-  movesHref: string;
-  hasMoves: boolean;
-}) {
-  const first = audit.synthesis?.blockers[0];
-  if (!first) return null;
-
-  return (
-    <Surface
-      level="section"
-      tone="mint"
-      padding="md"
-      className="flex flex-col gap-3.5"
-      data-testid="audit-start"
-    >
-      <MonoLabel as="h3" className="text-mint">
-        Where I&rsquo;d start
-      </MonoLabel>
-      <p className="text-fg text-lg leading-snug font-semibold tracking-[-0.02em]">
-        {first.headline}
-      </p>
-      {first.whyItMatters && (
-        <p className="text-fg-prose text-sm leading-relaxed">{first.whyItMatters}</p>
-      )}
-
-      {/*
-        The link only appears when there is something behind it. A CTA that
-        leads to an empty screen is a promise the audit did not keep, and the
-        honest sentence is shorter than the excuse would be.
-      */}
-      {hasMoves ? (
-        <div>
-          <Link
-            href={movesHref}
-            className={buttonClasses({ variant: "primary", size: "sm" })}
-          >
-            See what Vibe would do first
-          </Link>
-        </div>
-      ) : (
-        <p className="text-fg-meta text-sm">
-          Vibe hasn&rsquo;t worked out the next moves for this project yet.
-        </p>
-      )}
-    </Surface>
-  );
-}
-
-function AuditInterpretation({
-  audit,
-  map,
-  movesHref,
-  hasMoves,
-}: {
-  audit: BusinessReadinessAudit;
-  map: BusinessMapModel;
-  movesHref: string;
-  hasMoves: boolean;
-}) {
-  const synthesis = audit.synthesis;
-  if (!synthesis) return null;
-
-  return (
-    <div className="contents xl:flex xl:flex-col xl:gap-6">
-      {synthesis.strengths.length > 0 && (
-        <div className="order-3 xl:order-1">
-          <Strengths audit={audit} />
-        </div>
-      )}
-      <div className="order-1 xl:order-2">
-        <AuditBlockers blockers={synthesis.blockers} map={map} />
-      </div>
-      {synthesis.blockers.length > 0 && (
-        <div className="order-4">
-          <WhereIdStart audit={audit} movesHref={movesHref} hasMoves={hasMoves} />
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -189,12 +105,12 @@ export function AuditOverview({
   const score = audit.overall.score;
 
   return (
-    <div className="flex flex-col gap-10 lg:gap-12">
-      <header className="flex flex-col gap-6 pt-2">
+    <div className="flex flex-col gap-9 lg:gap-10">
+      <header className="flex flex-col gap-5 pt-2">
         <Conclusion audit={audit} />
 
         {/*
-          §9 — the score stays visible and stays small. The product's value is
+          The score stays visible and stays small. The product's value is
           knowing what matters next, not receiving a number, and a large number
           at the top would answer a question nobody asked.
         */}
@@ -230,35 +146,23 @@ export function AuditOverview({
       </header>
 
       {map && synthesis ? (
-        <AuditIntelligence map={map} score={score}>
-          <AuditInterpretation
-            audit={audit}
-            map={map}
-            movesHref={movesHref}
-            hasMoves={hasMoves}
-          />
-        </AuditIntelligence>
+        <AuditIntelligence
+          map={map}
+          score={score}
+          blockers={synthesis.blockers}
+          movesHref={movesHref}
+          hasMoves={hasMoves}
+        />
       ) : (
-        // An audit from before the lens framework. Its findings are real and
-        // still shown; it simply has no map to draw (§47).
+        // An audit from before the lens framework. Its conclusion is real and
+        // still shown above; it simply has no areas to map (§47).
         <p className="text-fg-muted max-w-[62ch] text-sm">
           This audit was produced before Vibe reasoned in business areas, so there is no map for
-          it. Its findings are in the breakdown below.
+          it.
         </p>
       )}
 
-      <details className="border-line-1 group border-t pt-5" data-testid="audit-technical-breakdown">
-        <summary className="text-fg-muted hover:text-fg-body marker:content-none flex cursor-pointer items-center gap-2 text-sm">
-          <span className="text-fg-meta transition-transform group-open:rotate-90">›</span>
-          Technical breakdown
-          <span className="text-fg-meta font-mono text-[0.6875rem]">
-            {audit.dimensions.length} measured areas
-          </span>
-        </summary>
-        <div className="mt-5">
-          <BusinessAuditSummary audit={audit} analyzedAt={generatedAt ?? audit.generatedAt} />
-        </div>
-      </details>
+      <Strengths audit={audit} />
     </div>
   );
 }

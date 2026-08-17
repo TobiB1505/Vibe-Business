@@ -67,9 +67,11 @@ export function ReasoningTrail({ conclusion }: { conclusion: BusinessConclusion 
 
   return (
     <div className="flex flex-col gap-4">
-      <MonoLabel as="h4" className="text-fg-secondary">
-        How Vibe reached this
-      </MonoLabel>
+      {/*
+        No heading of its own. This always renders inside a disclosure that is
+        already labelled "How Vibe reached this", and repeating it would be the
+        same words twice one line apart.
+      */}
       <section className="flex flex-col gap-2">
         <MonoLabel as="h5">
           What Vibe saw · {signals.length} {signals.length === 1 ? "signal" : "signals"}

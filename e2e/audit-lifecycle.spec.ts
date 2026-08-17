@@ -140,12 +140,16 @@ test.describe("completed is the only state with verdicts (§37)", () => {
   test("resolves into real health and priority values", async ({ page }) => {
     await page.goto(COMPLETED);
 
-    await expect(page.getByRole("button", { name: /revenue & economics/i })).toContainText(
-      /weak/i,
-    );
-    await expect(page.getByRole("button", { name: /revenue & economics/i })).toContainText(
-      /soon/i,
-    );
+    /*
+     * Scoped to the map: since UI-1.2 a lens name also appears on the priority
+     * that spans it, and the health/priority words are the map node's claim.
+     */
+    const revenue = page
+      .getByTestId("audit-map-panel")
+      .getByRole("button", { name: /revenue & economics/i });
+
+    await expect(revenue).toContainText(/weak/i);
+    await expect(revenue).toContainText(/soon/i);
   });
 
   /** And carries none of the in-progress language with it. */

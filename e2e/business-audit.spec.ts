@@ -1,21 +1,28 @@
 import { expect, test, type Page } from "@playwright/test";
 
 /**
- * The Business Audit screen, in a real browser (AUDIT UI-1, direction 1b).
+ * The Business Audit screen, in a real browser (AUDIT UI-1 · UI-1.2).
  *
  * ## What replaced what
  *
  * This suite used to assert against `AuditConclusion` — five scored dimensions
  * with a conclusion on top. The audit route now renders `AuditOverview`: the
- * conclusion, the nine-lens business map, the blockers with their reasoning,
- * and the scored dimensions demoted to a disclosure.
+ * conclusion, the nine-lens business map beside the current priorities, and the
+ * selected area's full argument below both.
  *
  * The *claims* did not change and are all still here. Answer first, score
- * secondary, breakdown collapsed, nothing unassessed read as a weakness, a
- * phone that does not scroll sideways. Only the structure they are checked
- * against did — which is exactly why the suite had to be rewritten rather than
- * deleted: a spec that keeps passing against a component the page no longer
- * renders proves nothing about production.
+ * secondary, nothing unassessed read as a weakness, a phone that does not
+ * scroll sideways. Only the structure they are checked against did — which is
+ * exactly why the suite had to be rewritten rather than deleted: a spec that
+ * keeps passing against a component the page no longer renders proves nothing
+ * about production.
+ *
+ * ## What UI-1.2 deleted, and what now asserts it stays deleted
+ *
+ * The five scored dimensions are no longer rendered to a customer at all, not
+ * even collapsed. Two tests here used to open that disclosure; they now assert
+ * it does not exist, because a page that offers a second, competing verdict has
+ * not made one.
  *
  * ## What only a browser proves here
  *
@@ -57,19 +64,18 @@ test.describe("answer first (§6, §8, §9)", () => {
     expect(conclusion).toBeLessThan(map);
   });
 
-  test("reads conclusion before the intelligence panel and technical detail", async ({ page }) => {
+  /**
+   * UI-1.2 §9, §10 — strengths are the ground the founder stands on, not the
+   * work. They stay on the page and move below the panel, so the reading order
+   * is answer → what matters → what is already fine.
+   */
+  test("reads conclusion, then the panel, then what is already working", async ({ page }) => {
     await page.goto(SYNTHESIS);
-
-    const technical = await page
-      .locator("summary")
-      .filter({ hasText: /technical breakdown/i })
-      .boundingBox();
-    if (!technical) throw new Error("technical breakdown summary not visible");
 
     const order = [
       await topOf(page, /what vibe thinks/i),
       await topOf(page, /business intelligence/i),
-      technical.y,
+      await topOf(page, /what.s already working/i),
     ];
 
     expect(order).toEqual([...order].sort((a, b) => a - b));
@@ -97,35 +103,55 @@ test.describe("answer first (§6, §8, §9)", () => {
   });
 
   /**
-   * §27, §31 — the five dimensions are no longer the audit.
+   * UI-1.2 §20 — the five legacy dimensions are gone from the customer UI.
    *
-   * Asserted on visibility rather than presence: a closed `<details>` keeps its
-   * content in the DOM, so counting elements would pass whether or not the
-   * disclosure worked.
+   * Asserted by count rather than by visibility, which is the stronger claim:
+   * a closed `<details>` is invisible but still shipped, and this test has to
+   * fail the moment the old breakdown is rendered again in any state. The
+   * dimensions are still measured, still stored and still cited — they are
+   * simply no longer a second verdict competing with the nine lenses.
    */
-  test("puts the scored breakdown behind a closed disclosure", async ({ page }) => {
+  test("does not ship the legacy five-dimension breakdown at all", async ({ page }) => {
     await page.goto(COMPLETE);
 
-    const question = page.getByText(/Do people understand what you built/i).first();
-    await expect(question).not.toBeVisible();
-
-    // The outer disclosure's own summary — nested `<details>` inside it mean a
-    // descendant selector matches a dozen elements.
-    await page.locator("summary").filter({ hasText: /technical breakdown/i }).click();
-    await expect(question).toBeVisible();
+    await expect(page.locator("summary").filter({ hasText: /technical breakdown/i })).toHaveCount(
+      0,
+    );
+    await expect(page.getByText(/Do people understand what you built/i)).toHaveCount(0);
+    await expect(page.getByTestId("audit-technical-breakdown")).toHaveCount(0);
   });
 });
 
+/**
+ * Lens queries are scoped to the map panel throughout.
+ *
+ * UI-1.2 made a lens name appear in two legitimate places — the map node and
+ * the priority that spans that lens — so an unscoped `getByRole("button", {
+ * name: /revenue/i })` is now ambiguous by design rather than by mistake.
+ * Scoping keeps each assertion pointed at the surface it is actually about.
+ */
+function mapLens(page: Page, label: string | RegExp) {
+  return page
+    .getByTestId("audit-map-panel")
+    .getByRole("button", { name: typeof label === "string" ? new RegExp(label, "i") : label });
+}
+
 test.describe("the map shows nine areas and remains accessible (§10, §18, §52)", () => {
-  test("uses the radial map on desktop and interpretation instead of a duplicate lens list", async ({ page }) => {
+  test("uses the radial map on desktop, with priorities beside it rather than a second lens list", async ({ page }) => {
     await page.goto(SYNTHESIS);
 
     await expect(page.getByTestId("business-map-radial")).toBeVisible();
     await expect(page.getByTestId("business-map-list")).not.toBeVisible();
-    await expect(page.getByTestId("audit-interpretation").getByRole("button")).toHaveCount(0);
     await expect(
       page.getByRole("list", { name: /business lenses/i }).getByRole("listitem"),
     ).toHaveCount(9);
+
+    /*
+     * UI-1.2 §5 — the right column carries the audit's own priorities and
+     * nothing else. One control per blocker: a column that grew a control per
+     * lens would be the duplicate list the map already is.
+     */
+    await expect(page.getByTestId("current-priorities").getByRole("button")).toHaveCount(2);
   });
 
   test("exposes every lens as a real control, not only as geometry", async ({ page }) => {
@@ -142,7 +168,7 @@ test.describe("the map shows nine areas and remains accessible (§10, §18, §52
       "Business Readiness",
       "Scalability",
     ]) {
-      await expect(page.getByRole("button", { name: new RegExp(label, "i") })).toHaveCount(1);
+      await expect(mapLens(page, label)).toHaveCount(1);
     }
   });
 
@@ -150,7 +176,7 @@ test.describe("the map shows nine areas and remains accessible (§10, §18, §52
   test("states health and priority in text on every lens", async ({ page }) => {
     await page.goto(SYNTHESIS);
 
-    const lens = page.getByRole("button", { name: /revenue & economics/i });
+    const lens = mapLens(page, /revenue & economics/i);
     await expect(lens).toContainText(/strong|adequate|weak|unknown/i);
     await expect(lens).toContainText(/now|soon|later|not relevant|unknown/i);
   });
@@ -159,7 +185,7 @@ test.describe("the map shows nine areas and remains accessible (§10, §18, §52
   test("opens a lens detail without leaving the map", async ({ page }) => {
     await page.goto(SYNTHESIS);
 
-    await page.getByRole("button", { name: /revenue & economics/i }).click();
+    await mapLens(page, /revenue & economics/i).click();
 
     await expect(page.getByRole("heading", { name: /^revenue & economics$/i })).toBeVisible();
     await expect(page.getByRole("heading", { name: /how vibe sees your business/i })).toBeVisible();
@@ -171,26 +197,35 @@ test.describe("business interpretation uses the audit's truth", () => {
     await page.goto(SYNTHESIS);
 
     await expect(page.getByText("People can understand and start using your product.")).toBeVisible();
-    await expect(page.getByTestId("audit-blockers").locator("details")).toHaveCount(2);
-    await expect(page.getByTestId("audit-blockers").locator("details").first()).toHaveAttribute(
-      "data-primary",
-      "true",
-    );
+
+    const priorities = page.getByTestId("current-priorities").getByRole("button");
+    await expect(priorities).toHaveCount(2);
+    // Rank is the audit's ordering, not the list's — nothing here re-sorts.
+    await expect(priorities.first()).toHaveAttribute("data-primary", "true");
+    await expect(priorities.nth(1)).not.toHaveAttribute("data-primary", "true");
   });
 
   test("keeps health independent from materiality", async ({ page }) => {
     await page.goto(SYNTHESIS);
 
-    const revenue = page.getByRole("button", { name: /revenue & economics/i });
+    const revenue = mapLens(page, /revenue & economics/i);
     await expect(revenue).toHaveAttribute("aria-label", /health weak.*priority soon/i);
   });
 
-  test("uses the audit's first blocker for where Vibe would start", async ({ page }) => {
+  /**
+   * UI-1.2 §11 — "Where I'd start" was a large card repeating blocker #1 one
+   * screen below blocker #1. The claim it was making is still made, by the
+   * first priority marking itself as the place to start.
+   */
+  test("marks the audit's first blocker as where to start, once", async ({ page }) => {
     await page.goto(SYNTHESIS);
 
-    await expect(page.getByTestId("audit-start")).toContainText(
-      "People still don't have a clear way to pay you.",
-    );
+    const primary = page.getByTestId("current-priorities").getByRole("button").first();
+    await expect(primary).toContainText("People still don't have a clear way to pay you.");
+    await expect(primary).toContainText(/start here/i);
+
+    // Said once. The duplicate card is what this sprint removed.
+    await expect(page.getByText(/where i.d start/i)).toHaveCount(0);
   });
 });
 
@@ -202,32 +237,37 @@ test.describe("how Vibe reached this (§21, §25, §26)", () => {
     await expect(page.getByRole("heading", { name: /what vibe saw/i })).toHaveCount(0);
   });
 
-  test("opens the reasoning for the blocker that was clicked", async ({ page }) => {
+  /**
+   * UI-1.2 §13 — the trail moved out of the narrow column and under the
+   * selected area, which is where the width to read it is. Selecting the second
+   * priority and opening its trail proves the disclosure is scoped to the
+   * selection rather than to the page.
+   */
+  test("opens the reasoning for the priority that was selected", async ({ page }) => {
     await page.goto(SYNTHESIS);
 
-    const blockers = page.locator("details").filter({ hasText: /why|holding/i });
-    const first = page.getByRole("group").filter({ hasText: /signals/i }).first();
+    await page.getByTestId("current-priorities").getByRole("button").nth(1).click();
+    await expect(page.getByTestId("selected-problem")).toContainText(
+      "You may not be able to tell what is actually working.",
+    );
 
-    // Open the first blocker by its own summary, then assert its trail appears.
-    await page.locator("summary").filter({ hasText: /pay|money|customer/i }).first().click();
+    await page.getByTestId("selected-problem").locator("summary").click();
 
-    await expect(page.getByRole("heading", { name: /what vibe saw/i }).first()).toBeVisible();
-    await expect(page.getByRole("heading", { name: /one problem, not/i }).first()).toBeVisible();
-    expect(await blockers.count()).toBeGreaterThan(0);
-    expect(await first.count()).toBeGreaterThanOrEqual(0);
+    await expect(page.getByRole("heading", { name: /what vibe saw/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /one problem, not/i })).toBeVisible();
   });
 
   /**
    * §22 — every signal says where it came from.
    *
    * Filtered to what is visible rather than taking `.first()`: the selected
-   * lens detail sits above the blockers in the DOM and carries its own closed
-   * "Why Vibe thinks this", so the first match is a hidden one. Asserting on
-   * the first node in document order would have tested a collapsed disclosure.
+   * lens carries its own closed "Why Vibe thinks this" above this trail, so the
+   * first match in document order is a hidden one. Asserting on it would have
+   * tested a collapsed disclosure.
    */
   test("labels each signal with its source", async ({ page }) => {
     await page.goto(SYNTHESIS);
-    await page.locator("summary").filter({ hasText: /pay|money|customer/i }).first().click();
+    await page.getByTestId("selected-problem").locator("summary").click();
 
     await expect(
       page
@@ -243,7 +283,7 @@ test.describe("how Vibe reached this (§21, §25, §26)", () => {
    */
   test("claims only that the evidence survived, not that nothing was dropped", async ({ page }) => {
     await page.goto(SYNTHESIS);
-    await page.locator("summary").filter({ hasText: /pay|money|customer/i }).first().click();
+    await page.getByTestId("selected-problem").locator("summary").click();
 
     await expect(page.getByText(/no supporting evidence was lost/i).first()).toBeVisible();
     await expect(page.getByText(/nothing was discarded/i)).toHaveCount(0);
@@ -276,7 +316,7 @@ test.describe("next moves handoff (§39, §40)", () => {
   test("links to the moves rather than recommending work itself", async ({ page }) => {
     await page.goto(SYNTHESIS);
 
-    const cta = page.getByRole("link", { name: /what vibe would do first/i });
+    const cta = page.getByRole("link", { name: /what vibe would do/i });
     await expect(cta).toBeVisible();
     await expect(cta).toHaveAttribute("href", /\/moves$/);
   });
@@ -284,7 +324,7 @@ test.describe("next moves handoff (§39, §40)", () => {
   test("shows no CTA when no real moves exist", async ({ page }) => {
     await page.goto(NO_MOVES);
 
-    await expect(page.getByRole("link", { name: /what vibe would do first/i })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: /what vibe would do/i })).toHaveCount(0);
     await expect(page.getByText(/hasn.t worked out the next moves/i)).toBeVisible();
   });
 });
@@ -296,8 +336,8 @@ test.describe("accessibility (§52)", () => {
     for (const name of [
       /what vibe thinks/i,
       /how vibe sees your business/i,
-      /what.s holding you back/i,
-      /where i.d start/i,
+      /current priorities/i,
+      /what.s already working/i,
     ]) {
       await expect(page.getByRole("heading", { name })).toBeVisible();
     }
@@ -306,7 +346,7 @@ test.describe("accessibility (§52)", () => {
   test("reaches a lens by keyboard alone", async ({ page }) => {
     await page.goto(SYNTHESIS);
 
-    const lens = page.getByRole("button", { name: /offer/i }).first();
+    const lens = mapLens(page, /offer/i).first();
     await lens.focus();
     await expect(lens).toBeFocused();
 
@@ -321,7 +361,7 @@ test.describe("accessibility (§52)", () => {
     const svg = page.locator("svg").first();
     if (await svg.count()) await expect(svg).toHaveAttribute("aria-hidden", "true").catch(() => {});
 
-    await expect(page.getByRole("button", { name: /audience/i })).toContainText(
+    await expect(mapLens(page, /audience/i)).toContainText(
       /strong|adequate|weak|unknown/i,
     );
   });
@@ -359,7 +399,7 @@ test.describe("375px (§46, §64)", () => {
     await page.goto(SYNTHESIS);
 
     await expect(page.getByRole("heading", { name: /needs attention now/i })).toBeVisible();
-    await expect(page.getByRole("button", { name: /revenue & economics/i })).toBeVisible();
+    await expect(mapLens(page, /revenue & economics/i)).toBeVisible();
     await expect(page.getByTestId("business-map-radial")).not.toBeVisible();
     await expect(page.getByTestId("business-map-list")).toBeVisible();
   });
@@ -369,16 +409,87 @@ test.describe("375px (§46, §64)", () => {
     await expect(page.getByRole("heading", { name: /what vibe thinks/i })).toBeVisible();
   });
 
-  test("reads answer → blocker → ordered lenses", async ({ page }) => {
+  test("reads answer → priorities → ordered lenses", async ({ page }) => {
     await page.goto(SYNTHESIS);
 
     const order = [
       await topOf(page, /what vibe thinks/i),
-      await topOf(page, /what.s holding you back/i),
+      await topOf(page, /current priorities/i),
       await topOf(page, /needs attention now/i),
     ];
 
     expect(order).toEqual([...order].sort((a, b) => a - b));
+  });
+});
+
+/**
+ * UI-1.2 §2 — the map has to be *readable*, which is a browser fact.
+ *
+ * Nine cards sit 40° apart, so two neighbours on one ring are `2r·sin20°`
+ * apart; at the radii this map shipped with, that was less than a card's width
+ * and the Now ring overlapped itself. No unit test could have caught it — the
+ * view model was correct the whole time and the geometry lives in CSS.
+ */
+test.describe("the map is legible, not just correct (§2)", () => {
+  for (const width of [1440, 1280]) {
+    test(`${width}: no two lens cards overlap`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 1100 });
+      await page.goto(SYNTHESIS);
+
+      const cards = page.getByTestId("business-map-radial").getByRole("button");
+      const boxes = await cards.evaluateAll((nodes) =>
+        nodes.map((node) => {
+          const box = node.getBoundingClientRect();
+          return { label: node.textContent ?? "", x: box.x, y: box.y, w: box.width, h: box.height };
+        }),
+      );
+      expect(boxes).toHaveLength(9);
+
+      const overlapping: string[] = [];
+      for (let i = 0; i < boxes.length; i += 1) {
+        for (let j = i + 1; j < boxes.length; j += 1) {
+          const a = boxes[i];
+          const b = boxes[j];
+          const overlaps =
+            a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+          if (overlaps) overlapping.push(`${a.label} / ${b.label}`);
+        }
+      }
+
+      expect(overlapping).toEqual([]);
+    });
+  }
+
+  /**
+   * The three ring names are the map's key. A label sitting under a card is
+   * the same as no label — and that is exactly how this shipped twice.
+   */
+  test("keeps the ring names clear of every card", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1100 });
+    await page.goto(SYNTHESIS);
+
+    const radial = page.getByTestId("business-map-radial");
+    const cards = await radial.getByRole("button").evaluateAll((nodes) =>
+      nodes.map((node) => {
+        const box = node.getBoundingClientRect();
+        return { x: box.x, y: box.y, w: box.width, h: box.height };
+      }),
+    );
+
+    for (const ring of ["NOW", "SOON", "LATER"]) {
+      const label = radial.locator("text", { hasText: new RegExp(`^${ring}$`) }).first();
+      const box = await label.boundingBox();
+      if (!box) throw new Error(`ring label not rendered: ${ring}`);
+
+      const covered = cards.some(
+        (card) =>
+          box.x < card.x + card.w &&
+          card.x < box.x + box.width &&
+          box.y < card.y + card.h &&
+          card.y < box.y + box.height,
+      );
+      expect(covered, `${ring} is underneath a lens card`).toBe(false);
+    }
   });
 });
 
@@ -395,7 +506,7 @@ test.describe("responsive intelligence panel", () => {
       await page.goto(SYNTHESIS);
 
       await expect(page.getByTestId("business-map-radial")).toBeVisible();
-      await expect(page.getByRole("heading", { name: /what.s holding you back/i })).toBeVisible();
+      await expect(page.getByRole("heading", { name: /current priorities/i })).toBeVisible();
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
       );
