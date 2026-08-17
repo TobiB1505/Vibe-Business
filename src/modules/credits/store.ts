@@ -511,13 +511,38 @@ export async function claimReservation(
 /**
  * How many times a contended hold is re-attempted before giving up.
  *
- * Contention is resolved by re-reading and trying again, so this only bounds
- * pathological cases. Three is enough for any realistic number of simultaneous
- * starts on one account, and a caller that exhausts it is told the truth
- * (`insufficient_credits` only when the balance genuinely cannot cover the
- * hold) rather than being retried forever.
+ * Found too low at 3 by the PR #46 merge-verification stress test: 20 truly
+ * concurrent 100-credit requests against an exact 1000-credit balance should
+ * admit exactly 10, and with no backoff between immediate retries, only 8 did
+ * — 12 callers were told `insufficient_credits` while 200 credits of their own
+ * genuine, fundable demand sat unclaimed. That is not a safety violation
+ * (nothing overspent, nothing double-reserved), but it is a liveness defect
+ * with a customer-facing consequence: a caller who *did* have enough Credits
+ * was told they did not.
+ *
+ * Ten attempts, combined with the jittered backoff in {@link admitHold}, was
+ * verified against the same live-database scenario that found the bug: 20
+ * concurrent requests against an exact 1000-credit balance now admit exactly
+ * 10, repeatably.
  */
-const HOLD_ATTEMPTS = 3;
+const HOLD_ATTEMPTS = 10;
+
+/**
+ * Jittered delay before a retry, in milliseconds.
+ *
+ * The bug this exists to fix was not "too few attempts" alone — it was
+ * immediate, unstaggered retries against the same contended row, which lets
+ * many callers keep colliding with each other in near lockstep. A small
+ * random delay that grows with the attempt number desynchronizes them, the
+ * same reasoning behind backoff in any compare-and-swap loop.
+ */
+function retryDelayMs(attempt: number): number {
+  return Math.round(Math.random() * 15 * (attempt + 1));
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 /**
  * Takes the hold against the account row, atomically (§12, §48).
@@ -536,11 +561,16 @@ const HOLD_ATTEMPTS = 3;
  * "insufficient credits" because somebody else was quick. So a failed swap
  * re-reads the account and distinguishes the two causes: if available is now
  * genuinely below the request, that is a real refusal; otherwise it was
- * contention and the attempt is repeated against the fresh value.
+ * contention and the attempt is repeated against the fresh value, after a
+ * short jittered delay ({@link retryDelayMs}) so many simultaneous losers do
+ * not immediately collide with each other again in lockstep.
  *
- * The safety direction never depends on the retry. Overspending is prevented
- * by the swap and, underneath it, by
- * `billing_credit_accounts_available_non_negative`.
+ * The safety direction never depends on the retry or the backoff. Overspending
+ * is prevented by the swap itself and, underneath it, by
+ * `billing_credit_accounts_available_non_negative` — a caller that somehow
+ * retried zero times, or a thousand, could never post a reservation the
+ * account could not cover. What the retry count and backoff affect is only
+ * *liveness*: whether a genuinely fundable request is told so.
  */
 async function admitHold(
   supabase: SupabaseClient,
@@ -578,7 +608,9 @@ async function admitHold(
     }
 
     if (updated && updated.length > 0) return { ok: true };
-    // Lost the swap. Re-read and decide again.
+    // Lost the swap. Back off briefly so we don't immediately collide with
+    // the same losers again, then re-read and decide again.
+    await sleep(retryDelayMs(attempt));
   }
 
   // Sustained contention rather than a balance problem. Refusing is safe and
