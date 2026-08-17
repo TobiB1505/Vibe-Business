@@ -1,8 +1,22 @@
 import Link from "next/link";
 import { AuthShell } from "@/components/layout/auth-shell";
+import { sanitizeNextPath } from "@/modules/auth/redirects";
 import { SignupForm } from "./signup-form";
 
-export default function SignupPage() {
+/**
+ * `next` is sanitized here, once, so the value that reaches the form — and
+ * from there the email confirmation link — is already known to be an internal
+ * path. Someone who hit a protected page before having an account should land
+ * on it after creating one.
+ */
+export default async function SignupPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string }>;
+}) {
+  const params = await searchParams;
+  const next = sanitizeNextPath(params.next);
+
   return (
     <AuthShell
       headline={
@@ -20,7 +34,7 @@ export default function SignupPage() {
         <p className="text-fg-muted text-sm">For development. No elaborate onboarding.</p>
       </div>
 
-      <SignupForm />
+      <SignupForm next={next} />
 
       <p className="text-fg-muted text-sm">
         Already have an account?{" "}

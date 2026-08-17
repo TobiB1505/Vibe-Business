@@ -13,22 +13,33 @@ export async function createClient() {
   const cookieStore = await cookies();
   const env = getPublicEnv();
 
-  return createServerClient(env.NEXT_PUBLIC_SUPABASE_URL, env.NEXT_PUBLIC_SUPABASE_ANON_KEY, {
-    cookies: {
-      getAll() {
-        return cookieStore.getAll();
-      },
-      setAll(cookiesToSet) {
-        try {
-          cookiesToSet.forEach(({ name, value, options }) => {
-            cookieStore.set(name, value, options);
-          });
-        } catch {
-          // Called from a Server Component during render, where cookies
-          // cannot be written. Safe to ignore: src/proxy.ts refreshes the
-          // session on every request (see src/lib/supabase/proxy.ts).
-        }
+  return createServerClient(
+    env.NEXT_PUBLIC_SUPABASE_URL,
+    env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    {
+      cookies: {
+        getAll() {
+          return cookieStore.getAll();
+        },
+        /**
+         * The second argument is the cache headers @supabase/ssr wants on any
+         * response that carries a refreshed token. They are intentionally not
+         * applied here: this client runs where there is no response object to
+         * set headers on. `src/lib/supabase/proxy.ts` applies them on every
+         * matched request, which is the response that actually reaches a CDN.
+         */
+        setAll(cookiesToSet, _headers) {
+          try {
+            cookiesToSet.forEach(({ name, value, options }) => {
+              cookieStore.set(name, value, options);
+            });
+          } catch {
+            // Called from a Server Component during render, where cookies
+            // cannot be written. Safe to ignore: src/proxy.ts refreshes the
+            // session on every request (see src/lib/supabase/proxy.ts).
+          }
+        },
       },
     },
-  });
+  );
 }
