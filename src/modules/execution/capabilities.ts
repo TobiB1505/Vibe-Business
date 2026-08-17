@@ -25,9 +25,16 @@ import { CURRENT_SEO_FOUNDATIONS_CAPABILITY, type ExecutionCapability } from "./
  * button it cannot honour.
  */
 
-/** Evidence ids that assert the absence this capability exists to fix. */
-const ROBOTS_ABSENCE_EVIDENCE = ["live.seo.robots_txt_missing", "repo.surface.robots"];
-const SITEMAP_ABSENCE_EVIDENCE = ["live.seo.sitemap_missing", "repo.surface.sitemap"];
+/**
+ * Evidence ids that assert the absence this capability exists to fix.
+ *
+ * Exported since CORE-2b: the Action Planner's capability registry reconciles
+ * plan steps against the same capability, and a second private copy of these
+ * ids would be a second definition of what `nextjs_seo_foundations_v2`
+ * addresses — free to drift, and drifting silently.
+ */
+export const ROBOTS_ABSENCE_EVIDENCE = ["live.seo.robots_txt_missing", "repo.surface.robots"];
+export const SITEMAP_ABSENCE_EVIDENCE = ["live.seo.sitemap_missing", "repo.surface.sitemap"];
 
 export type CapabilityResolutionInput = {
   opportunity: BusinessOpportunity;

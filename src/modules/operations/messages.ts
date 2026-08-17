@@ -79,6 +79,15 @@ export const OPERATION_FAILURE_MESSAGES: Record<OperationFailureCode, string> = 
   audit_failed: "Something went wrong on Vibe's side. Nothing was saved.",
   opportunity_generation_failed: "Vibe could not work out your next opportunities.",
 
+  // Action planning (CORE-2b). Each says what is missing and what fixes it —
+  // and none of them starts a paid refresh on the user's behalf (Rule 60).
+  move_missing: "Vibe needs a next move before it can plan one. Work out your next moves first.",
+  move_stale:
+    "Your next moves were worked out from an older audit than the one Vibe now has. Refresh them first.",
+  action_plan_input_budget_exceeded:
+    "There is too much context to plan in one pass. This is a bug — please report it.",
+  action_planning_failed: "Vibe could not work out how to carry out this move.",
+
   // Change preparation (Sprint 9B §21). Each says what happened and, where it
   // is true, what the user can do about it.
   stale_opportunity: "This opportunity is no longer current. Refresh your opportunities first.",

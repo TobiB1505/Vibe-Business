@@ -45,6 +45,7 @@ const OUTCOME_IDENTITY_LOCK_STATUSES = [
 
 type Filter =
   | { kind: "eq"; column: string; value: unknown }
+  | { kind: "neq"; column: string; value: unknown }
   | { kind: "in"; column: string; values: unknown[] }
   | { kind: "is"; column: string; value: null }
   | { kind: "not_is"; column: string; value: null }
@@ -77,6 +78,7 @@ function matches(row: Row, filters: Filter[]): boolean {
   return filters.every((filter) => {
     const value = readColumn(row, filter.column);
     if (filter.kind === "eq") return value === filter.value;
+    if (filter.kind === "neq") return value !== filter.value;
     if (filter.kind === "in") return filter.values.includes(value);
     if (filter.kind === "is") return value === null || value === undefined;
     if (filter.kind === "not_is") return value !== null && value !== undefined;
@@ -272,6 +274,44 @@ export class FakeDatabase {
       if (clash) return { code: POSTGRES_UNIQUE_VIOLATION, message: "one in-flight set per input" };
     }
 
+    // action_plans_single_in_flight_idx (CORE-2b §54). At most one in-flight
+    // plan per project + input, so a double submission loses its second insert
+    // here exactly as it would in Postgres. Without this the idempotency test
+    // would prove the application's pre-check rather than the guarantee the
+    // database actually provides.
+    if (table === "action_plans" && candidate.status === "planning") {
+      const clash = others.some(
+        (row) =>
+          row.project_id === candidate.project_id &&
+          row.input_hash === candidate.input_hash &&
+          row.status === "planning",
+      );
+      if (clash) return { code: POSTGRES_UNIQUE_VIOLATION, message: "one in-flight plan per input" };
+    }
+
+    // action_plan_steps_capability_matches_support (CORE-2b §67).
+    //
+    // Stated twice on purpose, for the reason the validation-artifact CHECK is:
+    // it is the constraint that stops a step claiming Vibe can act with nothing
+    // behind it, and the in-memory database would otherwise never notice a bug
+    // in the classifier that produced one.
+    if (table === "action_plan_steps") {
+      const executable = candidate.execution_support === "vibe_executes_now";
+      if (executable !== (candidate.capability != null)) {
+        return {
+          code: POSTGRES_CHECK_VIOLATION,
+          message: "action_plan_steps_capability_matches_support",
+        };
+      }
+
+      const clash = others.some(
+        (row) =>
+          row.action_plan_id === candidate.action_plan_id &&
+          row.step_order === candidate.step_order,
+      );
+      if (clash) return { code: POSTGRES_UNIQUE_VIOLATION, message: "duplicate order in plan" };
+    }
+
     // At most one live-or-successful preparation per execution identity.
     if (table === "prepared_changes" && ["preparing", "prepared"].includes(String(candidate.status))) {
       const clash = others.some(
@@ -415,6 +455,10 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
 
   eq(column: string, value: unknown): this {
     this.filters.push({ kind: "eq", column, value });
+    return this;
+  }
+  neq(column: string, value: unknown): this {
+    this.filters.push({ kind: "neq", column, value });
     return this;
   }
   in(column: string, values: unknown[]): this {
