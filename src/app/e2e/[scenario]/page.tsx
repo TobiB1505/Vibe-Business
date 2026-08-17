@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { ActionPlanPanel } from "@/app/app/projects/[projectId]/action-plan-panel";
 import {
   PreparedChangesSection,
   type PreparedChangeCard,
@@ -11,6 +12,10 @@ import {
   AuditPreparing,
   AuditWaitingHeader,
 } from "@/app/app/projects/[projectId]/audit-lifecycle";
+import {
+  E2E_ACTION_PLAN_SCENARIOS,
+  isE2eActionPlanScenario,
+} from "../action-plan-scenarios";
 import { E2E_AUDIT_SCENARIOS, isE2eAuditScenario } from "../audit-scenarios";
 import { E2E_NEEDS_USER_SCENARIOS, isE2eNeedsUserScenario } from "../needs-user-scenarios";
 import { E2E_SCENARIOS, isE2eScenario } from "../scenarios";
@@ -252,6 +257,28 @@ export default async function E2eScenarioPage({
           generatedAt={auditResult.generatedAt}
           movesHref="/app/projects/project_e2e/moves"
           hasMoves={scenario !== "audit-synthesis-no-moves"}
+        />
+      </main>
+    );
+  }
+
+  // The Action Plan panel (ACTION PLANNER UI-1): the same component the
+  // /moves route renders, given the exact read-model shape
+  // `getActionPlanReadiness` / `getLatestActionPlan` /
+  // `getActiveActionPlanOperation` produce. No AI call backs any of it.
+  if (isE2eActionPlanScenario(scenario)) {
+    const fixture = E2E_ACTION_PLAN_SCENARIOS[scenario]();
+    return (
+      <main className="mx-auto max-w-4xl p-8">
+        {label}
+        <ActionPlanPanel
+          projectId="project_e2e"
+          moveTitle={fixture.moveTitle}
+          readiness={fixture.readiness}
+          planView={fixture.planView}
+          activeOperation={fixture.activeOperation}
+          auditHref="/app/projects/project_e2e/score"
+          understandingHref="/app/projects/project_e2e/understanding"
         />
       </main>
     );

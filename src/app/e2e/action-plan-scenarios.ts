@@ -1,0 +1,284 @@
+import type { ActionPlanStep } from "@/modules/action-plans/schema";
+import type { ActionPlanReadiness, ActionPlanView } from "@/modules/action-plans/service";
+import type { StoredActionPlan } from "@/modules/action-plans/store";
+import type { OperationView } from "@/modules/operations/view";
+
+/**
+ * Action Plan panel fixtures (ACTION PLANNER UI-1).
+ *
+ * Same reasoning as `scenarios.ts`: the panel is handed the exact shape the
+ * real page assembles from `getActionPlanReadiness` / `getLatestActionPlan` /
+ * `getActiveActionPlanOperation`, so the browser suite exercises the real
+ * component rather than a stand-in, and cannot tell a fixture from
+ * production. No AI call is made to produce any of this — it is written by
+ * hand from the domain's own types, which is what keeps this suite free
+ * (Rule 60 applies to test fixtures too: nothing here spends anything).
+ */
+
+const MOVE_TITLE = "Make your product findable in search";
+
+function readiness(overrides: Partial<ActionPlanReadiness> = {}): ActionPlanReadiness {
+  return {
+    ready: true,
+    blockedReason: null,
+    auditId: "audit_e2e",
+    opportunityId: "move_e2e",
+    conclusionKey: "blocker-1",
+    conclusionLineage: "direct",
+    unresolvedSourceReason: null,
+    ...overrides,
+  };
+}
+
+function planStep(overrides: Partial<ActionPlanStep>): ActionPlanStep {
+  return {
+    id: "step",
+    order: 1,
+    title: "Step",
+    description: "Description.",
+    purpose: "Purpose.",
+    actor: "vibe",
+    changeKind: "analysis",
+    completionCriteria: "Done when this is true.",
+    dependsOn: [],
+    evidenceIds: [],
+    executionSupport: "vibe_prepares",
+    capability: null,
+    requiresApproval: false,
+    ...overrides,
+  };
+}
+
+/**
+ * One step per `StepActor` / `ExecutionSupport` pairing this plan reasonably
+ * produces, plus a dependency chain so "Start Here" and the waiting-state
+ * badge both have something real to point at.
+ */
+const STEPS: ActionPlanStep[] = [
+  planStep({
+    id: "step-decide-segment",
+    order: 1,
+    title: "Decide which segment to target first",
+    description: "Choose the one customer segment this move is aimed at.",
+    purpose: "Every later step depends on knowing who this is for.",
+    actor: "founder_decision",
+    changeKind: "decision",
+    completionCriteria: "You have named one segment.",
+    executionSupport: "founder_decides",
+  }),
+  planStep({
+    id: "step-draft-copy",
+    order: 2,
+    title: "Draft the search-facing copy for that segment",
+    description: "Vibe writes page titles and descriptions aimed at what that segment searches for.",
+    purpose: "Search engines and visitors both need language that matches how people actually search.",
+    actor: "vibe",
+    changeKind: "analysis",
+    completionCriteria: "A drafted set of titles and descriptions exists.",
+    dependsOn: [1],
+    executionSupport: "vibe_prepares",
+  }),
+  planStep({
+    id: "step-seo-foundations",
+    order: 3,
+    title: "Publish the missing robots.txt and sitemap",
+    description: "Vibe generates a robots.txt and sitemap so search engines can find and index the product.",
+    purpose: "Search engines cannot index pages they are never told about.",
+    actor: "vibe",
+    changeKind: "product_change",
+    completionCriteria: "robots.txt and sitemap.xml are both reachable.",
+    dependsOn: [2],
+    evidenceIds: ["live.seo.robots_txt_missing", "live.seo.sitemap_missing"],
+    executionSupport: "vibe_executes_now",
+    capability: "nextjs_seo_foundations_v2",
+    requiresApproval: true,
+  }),
+  planStep({
+    id: "step-submit-search-console",
+    order: 4,
+    title: "Submit the sitemap to Search Console",
+    description: "Register the sitemap with Google Search Console once it is live.",
+    purpose: "Registering the sitemap directly speeds up how quickly pages get indexed.",
+    actor: "founder_action",
+    changeKind: "external_setup",
+    completionCriteria: "The sitemap shows as submitted in Search Console.",
+    dependsOn: [3],
+    executionSupport: "founder_acts",
+  }),
+  planStep({
+    id: "step-wait-indexing",
+    order: 5,
+    title: "Wait for Google to index the new pages",
+    description: "Indexing happens on Google's own schedule once the sitemap is submitted.",
+    purpose: "Nothing changes what a visitor finds until this happens.",
+    actor: "external_party",
+    changeKind: "external_setup",
+    completionCriteria: "The pages appear in Google's index.",
+    dependsOn: [4],
+    executionSupport: "external_dependency",
+  }),
+  planStep({
+    id: "step-add-pricing-page",
+    order: 6,
+    title: "Build a dedicated pricing page",
+    description: "A pricing page that explains the plans to a prospective customer.",
+    purpose: "Vibe cannot yet write and ship a new page like this automatically.",
+    actor: "vibe",
+    changeKind: "product_change",
+    completionCriteria: "A pricing page exists at a public URL.",
+    executionSupport: "not_yet_supported",
+  }),
+];
+
+function plan(overrides: Partial<StoredActionPlan> = {}): StoredActionPlan {
+  return {
+    id: "plan_e2e",
+    projectId: "project_e2e",
+    businessAuditId: "audit_e2e",
+    opportunitySetId: "set_e2e",
+    opportunityId: "move_e2e",
+    inputHash: "hash_e2e",
+    status: "completed",
+    goal: "Make the product discoverable to people already searching for what it does.",
+    whyNow:
+      "The audit found this is the single largest gap between the business and its market: qualified visitors who are actively searching cannot find the product at all, and every other Move assumes there is traffic to convert.",
+    expectedOutcome:
+      "Search engines can find, index and rank the product's pages, and Search Console confirms it.",
+    addressesRootProblem:
+      "The business has no inbound channel from search, which this move directly opens.",
+    assumptions: [
+      "The chosen segment searches for a recognizable term related to the product.",
+      "No existing robots.txt or sitemap is intentionally blocking indexing.",
+    ],
+    rootProblem: "No inbound channel from organic search",
+    sourceConclusionKey: "blocker-1",
+    sourceConclusionLineage: "direct",
+    lenses: ["acquisition", "offer"],
+    stepCount: STEPS.length,
+    validationNotes: [],
+    validationFindings: [],
+    failureCode: null,
+    contractVersion: "action-planner-contract-v1",
+    plannerVersion: "action-planner-v2",
+    promptVersion: "action-planner-prompt-v1",
+    rubricVersion: "action-planner-rubric-v1",
+    evidencePackVersion: "evidence-pack-v1",
+    provider: "anthropic",
+    model: "claude-opus-4",
+    productProfileId: "profile_e2e",
+    founderIntentHash: "intent_e2e",
+    createdAt: "2026-08-14T18:00:00.000Z",
+    completedAt: "2026-08-14T18:00:42.000Z",
+    steps: STEPS,
+    ...overrides,
+  };
+}
+
+function planView(overrides: Partial<ActionPlanView> = {}): ActionPlanView {
+  const storedPlan = overrides.plan ?? plan();
+  return {
+    plan: storedPlan,
+    staleness: [],
+    firstActionableStep: storedPlan.steps.find((step) => step.order === 1) ?? null,
+    progress: "needs_founder",
+    ...overrides,
+  };
+}
+
+function operation(overrides: Partial<OperationView> = {}): OperationView {
+  return {
+    operationId: "operation_e2e",
+    status: "running",
+    stage: "planning",
+    startedAt: "2026-08-17T10:00:00.000Z",
+    completedAt: null,
+    failureCode: null,
+    resultId: null,
+    shouldPoll: true,
+    retryAllowed: false,
+    stalled: false,
+    ...overrides,
+  };
+}
+
+export type ActionPlanFixture = {
+  moveTitle: string | null;
+  readiness: ActionPlanReadiness;
+  planView: ActionPlanView | null;
+  activeOperation: OperationView | null;
+};
+
+export const E2E_ACTION_PLAN_SCENARIOS = {
+  /** No plan exists yet, and nothing blocks starting one. */
+  action_plan_ready_to_start: (): ActionPlanFixture => ({
+    moveTitle: MOVE_TITLE,
+    readiness: readiness(),
+    planView: null,
+    activeOperation: null,
+  }),
+
+  /** No Move exists yet — the block a founder sees before ever reaching this move. */
+  action_plan_blocked_move_missing: (): ActionPlanFixture => ({
+    moveTitle: null,
+    readiness: readiness({ ready: false, blockedReason: "move_missing", opportunityId: null }),
+    planView: null,
+    activeOperation: null,
+  }),
+
+  /** The audit itself is missing — routes at the business audit, not next moves. */
+  action_plan_blocked_audit_missing: (): ActionPlanFixture => ({
+    moveTitle: null,
+    readiness: readiness({
+      ready: false,
+      blockedReason: "audit_missing",
+      auditId: null,
+      opportunityId: null,
+    }),
+    planView: null,
+    activeOperation: null,
+  }),
+
+  /** A plan is being generated. Ambient copy only — no fake percentage. */
+  action_plan_planning: (): ActionPlanFixture => ({
+    moveTitle: MOVE_TITLE,
+    readiness: readiness(),
+    planView: null,
+    activeOperation: operation(),
+  }),
+
+  /** A completed plan, covering every actor and every execution-support value. */
+  action_plan_ready: (): ActionPlanFixture => ({
+    moveTitle: MOVE_TITLE,
+    readiness: readiness(),
+    planView: planView(),
+    activeOperation: null,
+  }),
+
+  /** The same plan, but the audit has since moved. */
+  action_plan_stale: (): ActionPlanFixture => ({
+    moveTitle: MOVE_TITLE,
+    readiness: readiness(),
+    planView: planView({ staleness: ["audit_superseded", "move_superseded"] }),
+    activeOperation: null,
+  }),
+
+  /** Planning failed. No provider internals reach the screen. */
+  action_plan_failed: (): ActionPlanFixture => ({
+    moveTitle: MOVE_TITLE,
+    readiness: readiness(),
+    planView: null,
+    activeOperation: operation({
+      status: "failed",
+      stage: "planning",
+      failureCode: "action_planning_failed",
+      shouldPoll: false,
+      retryAllowed: true,
+    }),
+  }),
+} as const;
+
+export type E2eActionPlanScenario = keyof typeof E2E_ACTION_PLAN_SCENARIOS;
+
+export function isE2eActionPlanScenario(value: string): value is E2eActionPlanScenario {
+  return Object.hasOwn(E2E_ACTION_PLAN_SCENARIOS, value);
+}

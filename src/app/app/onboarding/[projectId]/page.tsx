@@ -10,6 +10,11 @@ import { createClient } from "@/lib/supabase/server";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import { requireSession } from "@/modules/auth/session";
 import { getAuditReadiness } from "@/modules/business-audit/service";
+import { getOnboardingFirstMove } from "@/modules/action-plans/service";
+import {
+  ACTOR_LABELS,
+  EXECUTION_SUPPORT_LABELS,
+} from "@/modules/action-plans/schema";
 import {
   getActiveOpportunityOperation,
   getLastFailedOperation,
@@ -54,6 +59,16 @@ export default async function ProjectOnboardingPage({
     onboarding.state === "first_move"
       ? await getActiveOpportunityOperation(supabase, projectId)
       : null;
+  /*
+   * A plan cannot exist yet the first time anyone reaches this state — it
+   * requires an explicit, paid "Plan this move" click from the workspace,
+   * which is reachable only after onboarding completes. This read exists for
+   * whoever returns to onboarding with one already in place (Rule 60: this
+   * page never starts that paid call itself), and every field it produces is
+   * nullable by design — nothing here is a completion prerequisite.
+   */
+  const firstMovePlan =
+    onboarding.state === "first_move" ? await getOnboardingFirstMove(supabase, projectId) : null;
 
   /*
    * What the audit step should show (UI-S1 §9–§12).
@@ -359,6 +374,18 @@ export default async function ProjectOnboardingPage({
                 <p className="text-fg-meta mb-1 text-xs">Why this comes first</p>
                 <p className="text-fg-secondary text-sm leading-relaxed">{onboarding.opportunities.set.opportunities[0].whyNow}</p>
               </div>
+              {firstMovePlan?.firstActionableStep && (
+                <div className="border-line-2 border-t pt-4">
+                  <p className="text-fg-meta mb-1 text-xs">Vibe already has a plan — starting with</p>
+                  <p className="text-fg-body text-sm font-medium">
+                    {firstMovePlan.firstActionableStep.title}
+                  </p>
+                  <p className="text-fg-muted mt-1 text-xs">
+                    {ACTOR_LABELS[firstMovePlan.firstActionableStep.actor]} ·{" "}
+                    {EXECUTION_SUPPORT_LABELS[firstMovePlan.firstActionableStep.executionSupport]}
+                  </p>
+                </div>
+              )}
             </Surface>
           ) : opportunityOperation ? (
             <Surface level="card" padding="lg" className="flex flex-col gap-3" role="status">

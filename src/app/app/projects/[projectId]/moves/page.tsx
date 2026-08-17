@@ -7,12 +7,18 @@ import {
 } from "@/modules/execution/service";
 import { buildOpportunityActionState } from "@/modules/execution/view";
 import { getLatestOpportunities, getOpportunityReadiness } from "@/modules/opportunities/service";
-import { getActiveOpportunityOperation } from "@/modules/operations/service";
+import {
+  getActiveActionPlanOperation,
+  getActiveOpportunityOperation,
+} from "@/modules/operations/service";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
+import { getActionPlanReadiness, getLatestActionPlan } from "@/modules/action-plans/service";
+import { defaultPlannedOpportunity } from "@/modules/action-plans/source";
 import { SANDBOX_POLICY_VERSION } from "@/modules/validation/schema";
 import { getLatestValidation } from "@/modules/validation/service";
 import { buildValidationSummary } from "@/modules/validation/view";
+import { ActionPlanPanel } from "../action-plan-panel";
 import { OpportunitiesPanel } from "../opportunities-panel";
 import type { ValidationSummary } from "../validation-panel";
 
@@ -40,13 +46,31 @@ export default async function ProjectMovesPage({
   const { projectId } = await params;
   const { supabase, project } = await requireProjectAccess(projectId);
 
-  const [opportunities, opportunityReadiness, activeOpportunityOperation, executionSummaries] =
-    await Promise.all([
-      getLatestOpportunities(supabase, projectId),
-      getOpportunityReadiness(supabase, projectId),
-      getActiveOpportunityOperation(supabase, projectId),
-      getOpportunityExecutionSummaries(supabase, projectId),
-    ]);
+  const [
+    opportunities,
+    opportunityReadiness,
+    activeOpportunityOperation,
+    executionSummaries,
+    actionPlanReadiness,
+    actionPlanView,
+    activeActionPlanOperation,
+  ] = await Promise.all([
+    getLatestOpportunities(supabase, projectId),
+    getOpportunityReadiness(supabase, projectId),
+    getActiveOpportunityOperation(supabase, projectId),
+    getOpportunityExecutionSummaries(supabase, projectId),
+    getActionPlanReadiness(supabase, projectId),
+    getLatestActionPlan(supabase, projectId),
+    getActiveActionPlanOperation(supabase, projectId),
+  ]);
+
+  // The Action Plan can only ever be for the current #1 Move — the planner
+  // has no concept of planning any other one (§83). This is why plan detail
+  // lives on this same page rather than at a `/moves/[opportunityId]` route:
+  // that route would imply a selection the backend cannot actually serve.
+  const plannedMove = opportunities
+    ? defaultPlannedOpportunity(opportunities.set.opportunities)
+    : null;
 
   // Execution state per opportunity, resolved here so the browser renders an
   // answer rather than deciding whether Vibe has an executor (Sprint 9C §2).
@@ -126,6 +150,25 @@ export default async function ProjectMovesPage({
         // it is supplied here rather than hard-coded in the domain.
         auditHref={projectSectionHref(project.id, "business-audit")}
       />
+
+      {/*
+       * The Action Plan for the current #1 Move, on the same section rather
+       * than a section of its own — there is only ever one Move being
+       * planned, and it is this list's own rank-1 entry, so a separate nav
+       * item would name a place with nothing else to distinguish it.
+       */}
+      <div className="border-line-2 flex flex-col gap-5 border-t pt-8">
+        <h3 className="text-fg text-title font-bold">Plan this move</h3>
+        <ActionPlanPanel
+          projectId={project.id}
+          moveTitle={plannedMove?.title ?? null}
+          readiness={actionPlanReadiness}
+          planView={actionPlanView}
+          activeOperation={activeActionPlanOperation}
+          auditHref={projectSectionHref(project.id, "business-audit")}
+          understandingHref={projectSectionHref(project.id, "understanding")}
+        />
+      </div>
     </WorkspaceSection>
   );
 }
