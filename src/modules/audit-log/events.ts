@@ -205,7 +205,34 @@ export type AuditEventType =
   | "onboarding.audit_completed"
   | "onboarding.first_move_started"
   | "onboarding.first_move_viewed"
-  | "onboarding.completed";
+  | "onboarding.completed"
+
+  /*
+   * Billing (BILLING CORE-1 §34).
+   *
+   * Every event that moves money or holds it. Deliberately absent: balances in
+   * the event name, payment instruments, provider identifiers, and anything
+   * about *why* a provider charged what it did — the metadata carries ids and
+   * credit amounts only.
+   *
+   * There is no `credit_charge.attempted`. An attempt that did not post a
+   * ledger entry did not happen, and an audit log that recorded intentions
+   * alongside facts would make "was this customer charged?" ambiguous.
+   */
+  | "credit_account.created"
+  | "credit_grant.posted"
+  | "credit_reservation.created"
+  | "credit_reservation.released"
+  | "credit_charge.settled"
+  | "credit_refund.posted";
+
+/*
+ * There is deliberately no `credit_usage.reconciled`. Shadow reconciliation
+ * sweeps every project at once and has no single user to attribute an event
+ * to, and `audit_events` is a per-user record — so the honest place for that
+ * signal is structured server logging, not this log. An event type with no
+ * caller is exactly what ADR 0007 and rule 15 exist to prevent.
+ */
 
 export type RecordAuditEventParams = {
   userId: string;
