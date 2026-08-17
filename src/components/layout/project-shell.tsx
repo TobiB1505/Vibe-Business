@@ -69,6 +69,26 @@ export function projectSectionHref(projectId: string, sectionId: ProjectSectionI
   return section && section.segment ? `${base}/${section.segment}` : base;
 }
 
+/**
+ * One prepared change, addressed within the Prepared page (UI-S2 §27).
+ *
+ * A fragment rather than a route, because a prepared change is not a page — it
+ * is one card in a list whose whole point is that every artifact stays
+ * reachable. The fragment is enough for the browser to scroll to it and for the
+ * page to say which one was just prepared, and it costs no new route, no new
+ * read model and no change to the card itself.
+ *
+ * Built here so the link and the anchor cannot drift: one function produces the
+ * id, one produces the URL that targets it.
+ */
+export function preparedChangeAnchorId(preparedChangeId: string): string {
+  return `prepared-change-${preparedChangeId}`;
+}
+
+export function preparedChangeHref(preparedHref: string, preparedChangeId: string): string {
+  return `${preparedHref}#${preparedChangeAnchorId(preparedChangeId)}`;
+}
+
 export type ProjectNavItem = {
   id: ProjectSectionId;
   label: string;

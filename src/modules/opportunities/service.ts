@@ -3,7 +3,8 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { OPPORTUNITY_GENERATION_CONFIG } from "@/modules/ai/operations";
 import { getAuditCurrency } from "@/modules/business-audit/service";
-import { getLatestSuccessfulAudit } from "@/modules/business-audit/store";
+import { getLatestSuccessfulAudit, getProjectAuditById } from "@/modules/business-audit/store";
+import { resolveMoveLineage, type MoveLineageMap } from "./lineage";
 import { OPPORTUNITY_PROMPT_VERSION } from "./prompt";
 import { OPPORTUNITY_RUBRIC_VERSION } from "./rubric";
 import { OPPORTUNITY_ENGINE_VERSION, OPPORTUNITY_SET_SCHEMA_VERSION } from "./schema";
@@ -85,6 +86,32 @@ export async function getLatestOpportunities(
     set,
     stale: latestAudit !== null && latestAudit.id !== set.businessAuditId,
   };
+}
+
+/**
+ * Which audit finding each Move in a set answers (UI-S2 §6, §51).
+ *
+ * **One query for the whole list**, not one per Move. The set already names the
+ * audit it was prioritized from, and every conclusion lives inside that single
+ * stored document — so resolving twenty Moves costs exactly the same as
+ * resolving one, and the N+1 this could easily have been never exists.
+ *
+ * The audit is read by the set's own `businessAuditId`, which is what keeps a
+ * historical set bound to the diagnosis it actually came from (§7).
+ */
+export async function getMoveLineage(
+  supabase: SupabaseClient,
+  params: { projectId: string; set: StoredOpportunitySet },
+): Promise<MoveLineageMap> {
+  const audit = await getProjectAuditById(supabase, {
+    projectId: params.projectId,
+    auditId: params.set.businessAuditId,
+  });
+
+  return resolveMoveLineage({
+    sourceAudit: audit?.result ?? null,
+    opportunities: params.set.opportunities,
+  });
 }
 
 /** Resolves the identity a generation run would carry, or why it cannot. */

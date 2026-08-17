@@ -50,7 +50,7 @@ import { startPlanAction, type StartPlanActionState } from "./plan-action";
  * UI-1.1 changes presentation only: scan first, expand second. The plan's own
  * content — descriptions, purpose, completion criteria, dependencies,
  * evidence — is unchanged and un-truncated; only how much of it is visible
- * without asking moved. See `docs/sprints/0034-action-planner-ui11.md`.
+ * without asking moved. See `docs/sprints/0036-action-planner-ui11.md`.
  */
 
 const POLL_INTERVAL_MS = 3_000;

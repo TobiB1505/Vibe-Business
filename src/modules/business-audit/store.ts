@@ -204,6 +204,34 @@ export async function findReusableAudit(
 }
 
 /** One audit row by id. Used by durable execution to detect a replay. */
+/**
+ * One audit, scoped to the project that must own it (UI-S2 §32).
+ *
+ * `getAuditById` takes an id alone, which is correct for its callers — they
+ * hold an id they already resolved from a row they own. Move lineage is a new
+ * lookup boundary: it reads an audit named by a *different* record, so the
+ * project is stated in the query rather than assumed from the caller's context.
+ *
+ * RLS would already refuse another user's audit. This additionally refuses
+ * another **project's** audit belonging to the same user, which RLS does not,
+ * and which is the failure mode that would let one project's finding appear
+ * under another project's Move.
+ */
+export async function getProjectAuditById(
+  supabase: SupabaseClient,
+  params: { projectId: string; auditId: string },
+): Promise<StoredAudit | null> {
+  const { data, error } = await supabase
+    .from("business_readiness_audits")
+    .select(AUDIT_COLUMNS)
+    .eq("id", params.auditId)
+    .eq("project_id", params.projectId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? mapRow(data as AuditRow) : null;
+}
+
 export async function getAuditById(
   supabase: SupabaseClient,
   auditId: string,

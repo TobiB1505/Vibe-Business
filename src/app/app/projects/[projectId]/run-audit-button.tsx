@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
@@ -31,9 +32,39 @@ export function RunAuditButton({
    */
   activeOperation: OperationView | null;
 }) {
+  const router = useRouter();
   const action = startAuditAction.bind(null, projectId);
   const [state, formAction, pending] = useActionState(action, initialState);
   const [polled, setPolled] = useState<OperationView | null>(activeOperation);
+
+  /*
+   * Enter the lifecycle the moment a run is accepted (UI-S2 §22, §47).
+   *
+   * This button knew an audit had started; the page did not. So the control
+   * said "Preparing evidence…" while the entire completed audit below it — the
+   * verdict, the map, the priorities — stayed on screen, presented as current,
+   * until something happened to re-render the route. A founder reading a
+   * headline verdict has no reason to suspect it is about to be replaced.
+   *
+   * `router.refresh()` re-runs the server component, which discovers the active
+   * operation it already knows how to find and swaps the stale result for the
+   * preparing/analyzing state. Nothing new is started and nothing is spent —
+   * the run is already enqueued by the time this fires.
+   */
+  const startedOperationId = state?.ok && state.kind === "running" ? state.operation.operationId : null;
+  useEffect(() => {
+    if (startedOperationId !== null) router.refresh();
+  }, [router, startedOperationId]);
+
+  /*
+   * A reused audit changes nothing to look at, but the server has already
+   * revalidated the path — so the route is refreshed for the same reason:
+   * whatever is on screen may predate what the action just confirmed.
+   */
+  const reused = state?.ok && state.kind === "reused";
+  useEffect(() => {
+    if (reused) router.refresh();
+  }, [router, reused]);
 
   // Two sources describe the same thing: what the server rendered or the
   // poller last saw, and what the start action just returned. Derive which is
