@@ -6,7 +6,15 @@ import {
   getOpportunityExecutionSummaries,
 } from "@/modules/execution/service";
 import { buildOpportunityActionState } from "@/modules/execution/view";
-import { getLatestOpportunities, getOpportunityReadiness } from "@/modules/opportunities/service";
+import {
+  MOVES_CONTEXT_PARAM,
+  resolveMovesContext,
+} from "@/modules/opportunities/lineage";
+import {
+  getLatestOpportunities,
+  getMoveLineage,
+  getOpportunityReadiness,
+} from "@/modules/opportunities/service";
 import { getActiveOpportunityOperation } from "@/modules/operations/service";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
@@ -34,8 +42,10 @@ import type { ValidationSummary } from "../validation-panel";
  */
 export default async function ProjectMovesPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ projectId: string }>;
+  searchParams: Promise<{ [MOVES_CONTEXT_PARAM]?: string }>;
 }) {
   const { projectId } = await params;
   const { supabase, project } = await requireProjectAccess(projectId);
@@ -47,6 +57,28 @@ export default async function ProjectMovesPage({
       getActiveOpportunityOperation(supabase, projectId),
       getOpportunityExecutionSummaries(supabase, projectId),
     ]);
+
+  /*
+   * Which audit finding each Move answers, and which one the founder arrived
+   * for (UI-S2 §6, §9, §31).
+   *
+   * One query for the whole list — the set names its own audit and every
+   * conclusion lives inside that one document, so this does not scale with the
+   * number of Moves.
+   *
+   * The requested key is untrusted text and is never used as a lookup. It
+   * becomes a context only by matching a key that this project's own Moves
+   * cite, so a malformed value, a stale key, or a key belonging to another
+   * project all degrade to the ordinary ranked page rather than to an error.
+   */
+  const lineage = opportunities
+    ? await getMoveLineage(supabase, { projectId, set: opportunities.set })
+    : {};
+  const movesContext = resolveMovesContext({
+    requested: (await searchParams)[MOVES_CONTEXT_PARAM],
+    lineage,
+    opportunities: opportunities?.set.opportunities ?? [],
+  });
 
   // Execution state per opportunity, resolved here so the browser renders an
   // answer rather than deciding whether Vibe has an executor (Sprint 9C §2).
@@ -110,7 +142,13 @@ export default async function ProjectMovesPage({
     <WorkspaceSection
       id="next-moves"
       title={opportunityCount ? "Next moves" : "Opportunities"}
-      description="A short, ranked list — not a report. The order is the engine's, and it is shown as produced."
+      /*
+       * Was: "The order is the engine's, and it is shown as produced." True,
+       * and written about the implementation rather than to the founder
+       * (UI-S2 §29, §30). What they need to know is that this is a short list
+       * in priority order, which is what it now says.
+       */
+      description="The few things worth doing next, in the order Vibe would do them."
     >
       <OpportunitiesPanel
         projectId={project.id}
@@ -121,6 +159,10 @@ export default async function ProjectMovesPage({
         stale={opportunities?.stale ?? false}
         activeOperation={activeOpportunityOperation}
         blockedReason={opportunityReadiness.blockedReason}
+        lineage={lineage}
+        movesContext={movesContext}
+        movesHref={projectSectionHref(project.id, "next-moves")}
+        preparedHref={projectSectionHref(project.id, "prepared")}
         // Where a blocked set sends the user. The domain still owns the anchor
         // (`BUSINESS_AUDIT_ANCHOR`); the route it now lives on is a UI fact, so
         // it is supplied here rather than hard-coded in the domain.

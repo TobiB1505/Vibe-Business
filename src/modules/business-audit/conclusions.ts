@@ -49,8 +49,21 @@ export type IdentifiedConclusion = {
   conclusion: BusinessConclusion;
 };
 
-function key(kind: ConclusionKind, index: number): string {
+/**
+ * The key format, in one place.
+ *
+ * Exported in UI-S2 because the audit screen needs a conclusion's key while
+ * holding only its position in `synthesis.blockers` — and a screen that
+ * rebuilt `blocker-${index + 1}` for itself would be a second copy of an
+ * identity format, which is exactly how two systems start disagreeing about
+ * what a Move addresses.
+ */
+export function conclusionKey(kind: ConclusionKind, index: number): string {
   return `${kind}-${index + 1}`;
+}
+
+function key(kind: ConclusionKind, index: number): string {
+  return conclusionKey(kind, index);
 }
 
 /**

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { CategoryChip, StatusPill, type StatusTone } from "@/components/ui/status-pill";
@@ -7,10 +8,14 @@ import { Surface } from "@/components/ui/surface";
 import { MonoLabel } from "@/components/ui/typography";
 import { Notice } from "@/components/ui/states";
 import { describeEvidenceId } from "@/modules/business-audit/evidence-labels";
-import { DIMENSION_LABELS } from "@/modules/business-audit/schema";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { OPERATION_STAGE_LABELS, type OperationView } from "@/modules/operations/view";
 import { buildOpportunityBlockNotice } from "@/modules/opportunities/view";
+import {
+  partitionByContext,
+  type MoveLineageMap,
+  type MovesContext,
+} from "@/modules/opportunities/lineage";
 import type { OpportunityActionState } from "@/modules/execution/view";
 import { PrepareChangePanel } from "./prepare-change-panel";
 import type { ValidationSummary } from "./validation-panel";
@@ -29,18 +34,29 @@ import {
 } from "./opportunities-action";
 
 /**
- * The Opportunities section (Sprint 8 §30, §31).
+ * The Moves section (Sprint 8 §30, §31; reworked in UI-S2 §12–§18).
  *
- * Functional, not a redesign. Three things it must not do:
+ * Three rules it must not break:
  *
- *  - **Promise execution.** Nothing here executes anything, and there is no
- *    "Let Vibe do it" button, because Vibe cannot do it yet. The readiness
- *    badge is a statement about a future capability, not an affordance.
- *  - **Show internals.** Evidence ids are resolved into the product's own
- *    language; a founder reads "Public product: Pricing not detected", never
- *    `live.surface.pricing`.
- *  - **Imply certainty.** Impact, effort and confidence are shown as the
- *    coarse labels they are. No percentages, no time estimates.
+ *  - **Promise nothing.** The readiness badge is a statement about a
+ *    capability, not an affordance. Whether anything can be done is decided by
+ *    whether `PrepareChangePanel` renders at all, which is decided on the
+ *    server from a real executor.
+ *  - **Show no internals.** Evidence ids are resolved into the product's own
+ *    language, and `sourceConclusionKey` never reaches the screen — a founder
+ *    reads the audit's own headline, never `blocker-1` (§5).
+ *  - **Imply no certainty.** Impact, effort and confidence stay the coarse
+ *    labels they are. No percentages, no time estimates.
+ *
+ * ## What UI-S2 changed, and why
+ *
+ * A card carried five chips of equal visual weight — impact, effort,
+ * confidence, business dimension and readiness — so the one that decides what
+ * a founder can actually do sat in a row with four that do not. Worse, the
+ * dimension chip competed with the audit lineage for the same job: *why is this
+ * here?* Now readiness leads, impact keeps it company, and effort and
+ * confidence moved under "Why now?" where they inform rather than compete.
+ * The dimension is unchanged in the domain and simply no longer drawn (§14).
  *
  * Every string rendered here originates from an AI response about untrusted
  * customer content. React escapes it; nothing is rendered as markup.
@@ -51,9 +67,7 @@ const POLL_INTERVAL_MS = 3_000;
 /**
  * Readiness is a statement about a future capability, not an affordance — so
  * `ready` is deliberately NOT mint. Mint is Vibe's primary action, and a badge
- * that borrows it reads as a button that can be pressed. The tones say what the
- * state is; whether anything can be done about it is decided by whether
- * `PrepareChangePanel` renders at all.
+ * that borrows it reads as a button that can be pressed.
  */
 const READINESS_TONE: Record<ExecutionReadiness, StatusTone> = {
   ready: "success",
@@ -67,6 +81,9 @@ function OpportunityCard({
   execution,
   branchUrl,
   validationSummary,
+  lineageHeadline,
+  preparedHref,
+  emphasis,
 }: {
   projectId: string;
   opportunity: BusinessOpportunity;
@@ -74,26 +91,63 @@ function OpportunityCard({
   execution: OpportunityActionState | null;
   branchUrl: string | null;
   validationSummary: ValidationSummary | null;
+  /** The audit finding this Move answers, in the audit's words. Null if unresolved. */
+  lineageHeadline: string | null;
+  preparedHref: string;
+  /** The engine's rank 1, or the top of a contextual group. */
+  emphasis: boolean;
 }) {
   return (
-    <Surface as="li" level="panel" padding="lg" className="flex flex-col gap-4">
-      <div className="flex items-baseline gap-3">
-        {/* The engine's own ordering. Shown, never recomputed on the client. */}
+    <Surface
+      as="li"
+      level="panel"
+      padding="lg"
+      className={`flex flex-col gap-4 ${emphasis ? "border-mint/35" : ""}`}
+      data-testid="move-card"
+      data-rank={opportunity.rank}
+    >
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        {/* The engine's own ordering. Shown, never recomputed on the client,
+            and identical whether or not the page was entered from the audit
+            (§44). */}
         <span className="text-fg-meta font-mono text-sm">#{opportunity.rank}</span>
-        <h3 className="text-fg text-base font-semibold tracking-[-0.01em]">{opportunity.title}</h3>
+        {emphasis && (
+          <MonoLabel className="text-mint">Best next move</MonoLabel>
+        )}
+        <h3 className="text-fg w-full text-base font-semibold tracking-[-0.01em]">
+          {opportunity.title}
+        </h3>
       </div>
 
+      {/* The seam this sprint exists for: a Move is the continuation of a
+          finding, and saying which one is what makes the two screens one
+          story (§4). The key that resolved it is never shown (§5). */}
+      {lineageHeadline && (
+        <p className="text-fg-muted text-xs leading-relaxed" data-testid="move-lineage">
+          <span className="text-fg-meta">From your audit: </span>
+          <span className="text-fg-secondary">{lineageHeadline}</span>
+        </p>
+      )}
+
+      {/* Two, not five (§13). Readiness decides what a founder can do; impact
+          is the one other signal worth reading at a glance. */}
       <div className="flex flex-wrap gap-2">
-        <CategoryChip>{IMPACT_LABELS[opportunity.impact]}</CategoryChip>
-        <CategoryChip>{EFFORT_LABELS[opportunity.effort]}</CategoryChip>
-        <CategoryChip>{CONFIDENCE_LABELS[opportunity.confidence]}</CategoryChip>
-        <CategoryChip>{DIMENSION_LABELS[opportunity.primaryDimension]}</CategoryChip>
         <StatusPill tone={READINESS_TONE[opportunity.executionReadiness]}>
           {EXECUTION_READINESS_LABELS[opportunity.executionReadiness]}
         </StatusPill>
+        <CategoryChip>{IMPACT_LABELS[opportunity.impact]}</CategoryChip>
       </div>
 
       <p className="text-fg-prose text-sm leading-relaxed">{opportunity.problem}</p>
+
+      {/* Visible rather than buried: a founder should not discover an ordering
+          constraint only after pressing a button (§18). */}
+      {opportunity.dependencies.length > 0 && (
+        <p className="text-fg-secondary text-xs leading-relaxed" data-testid="move-dependencies">
+          <span className="text-fg-meta">Do this after: </span>
+          {opportunity.dependencies.join(" · ")}
+        </p>
+      )}
 
       <details className="group">
         <summary className="text-fg-muted hover:text-fg-body cursor-pointer rounded-sm text-xs transition-colors">
@@ -102,18 +156,18 @@ function OpportunityCard({
         <div className="mt-3 flex flex-col gap-4">
           <p className="text-fg-prose text-sm leading-relaxed">{opportunity.whyNow}</p>
 
-          {opportunity.dependencies.length > 0 && (
-            <div className="flex flex-col gap-1.5">
-              <MonoLabel className="tracking-[0.14em]">First</MonoLabel>
-              <ul className="flex flex-col gap-1">
-                {opportunity.dependencies.map((dependency) => (
-                  <li key={dependency} className="text-fg-secondary text-xs leading-relaxed">
-                    {dependency}
-                  </li>
-                ))}
-              </ul>
+          {/* Demoted from the chip row (§13, §17). Still here, still exact —
+              they inform a decision rather than competing to be the headline. */}
+          <dl className="flex flex-wrap gap-x-6 gap-y-1 text-xs">
+            <div className="flex gap-2">
+              <dt className="text-fg-meta">Effort</dt>
+              <dd className="text-fg-secondary">{EFFORT_LABELS[opportunity.effort]}</dd>
             </div>
-          )}
+            <div className="flex gap-2">
+              <dt className="text-fg-meta">Confidence</dt>
+              <dd className="text-fg-secondary">{CONFIDENCE_LABELS[opportunity.confidence]}</dd>
+            </div>
+          </dl>
 
           {opportunity.evidenceIds.length > 0 && (
             <div className="flex flex-col gap-1.5">
@@ -134,7 +188,7 @@ function OpportunityCard({
       </details>
 
       {/* The execution affordance renders only where Vibe genuinely has an
-          executor. A "ready" badge alone never produces a button (§2). */}
+          executor. A "ready" badge alone never produces a button (§2, §35). */}
       {execution && (
         <PrepareChangePanel
           projectId={projectId}
@@ -142,6 +196,7 @@ function OpportunityCard({
           actionState={execution}
           branchUrl={branchUrl}
           validationSummary={validationSummary}
+          preparedHref={preparedHref}
         />
       )}
     </Surface>
@@ -160,6 +215,10 @@ export function OpportunitiesPanel({
   activeOperation,
   blockedReason,
   auditHref,
+  lineage,
+  movesContext,
+  movesHref,
+  preparedHref,
 }: {
   projectId: string;
   opportunities: BusinessOpportunity[];
@@ -172,13 +231,13 @@ export function OpportunitiesPanel({
   activeOperation: OperationView | null;
   /** Why generation cannot be offered, when it cannot (§34). */
   blockedReason: "audit_missing" | "audit_stale" | null;
-  /**
-   * Where the block notice's action points. The domain still decides *that*
-   * there is a way out and what it is called (`buildOpportunityBlockNotice`);
-   * which URL the audit view lives at is a routing fact, so the route supplies
-   * it. The domain's anchor is appended, so it still resolves on arrival.
-   */
   auditHref: string;
+  /** Which audit finding each Move answers. Resolved server-side (UI-S2 §6). */
+  lineage: MoveLineageMap;
+  /** The finding the founder arrived for, when they came from the audit (§9). */
+  movesContext: MovesContext | null;
+  movesHref: string;
+  preparedHref: string;
 }) {
   const action = startOpportunitiesAction.bind(null, projectId);
   const [state, formAction, pending] = useActionState(action, initialState);
@@ -211,30 +270,100 @@ export function OpportunitiesPanel({
   const hasOpportunities = opportunities.length > 0;
   const blockNotice = buildOpportunityBlockNotice(blockedReason);
 
+  // Elevation, never reranking. Both groups keep the engine's order and every
+  // card keeps its persisted number (§44).
+  const { addressing, others } = partitionByContext(opportunities, movesContext);
+
+  /*
+   * `inContext` suppresses the card's own lineage line (§5).
+   *
+   * Found by looking at it: in a contextual entry the header already states the
+   * finding, so every elevated card repeated the same sentence directly under
+   * its title — three copies of one line on one screen. The label earns its
+   * place on the default list, where each card answers a different finding,
+   * and nowhere else.
+   */
+  const renderCard = (
+    opportunity: BusinessOpportunity,
+    { emphasis, inContext }: { emphasis: boolean; inContext: boolean },
+  ) => (
+    <OpportunityCard
+      key={opportunity.id}
+      projectId={projectId}
+      opportunity={opportunity}
+      execution={executionStates[opportunity.id] ?? null}
+      branchUrl={branchUrls[opportunity.id] ?? null}
+      validationSummary={validationSummaries[opportunity.id] ?? null}
+      lineageHeadline={inContext ? null : (lineage[opportunity.id]?.headline ?? null)}
+      preparedHref={preparedHref}
+      emphasis={emphasis}
+    />
+  );
+
   return (
-    // The heading now belongs to the workspace section that wraps this panel
-    // (UI-1), so it is not repeated here. Everything below — the action, the
-    // polling, the block notice — is unchanged.
     <div className="flex flex-col gap-4">
+      {/*
+        Arrived from one audit finding (§10).
+        Orientation, not a second audit surface: the finding in the audit's own
+        words, how many Moves answer it, and a way back to the whole list.
+      */}
+      {movesContext && (
+        <Surface
+          level="section"
+          padding="md"
+          className="border-mint/25 flex flex-col gap-2"
+          data-testid="moves-context"
+        >
+          <MonoLabel className="text-mint">From your audit</MonoLabel>
+          <p className="text-fg-body text-sm leading-relaxed">{movesContext.headline}</p>
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <p className="text-fg-muted text-xs">
+              {movesContext.moveIds.length === 1
+                ? "1 way Vibe can help"
+                : `${movesContext.moveIds.length} ways Vibe can help`}
+            </p>
+            <Link
+              href={movesHref}
+              className="text-fg-muted hover:text-fg-body rounded-sm text-xs underline underline-offset-4"
+            >
+              See all next moves
+            </Link>
+          </div>
+        </Surface>
+      )}
+
       {hasOpportunities && (
         <ol className="flex flex-col gap-4">
-          {opportunities.map((opportunity) => (
-            <OpportunityCard
-              key={opportunity.id}
-              projectId={projectId}
-              opportunity={opportunity}
-              execution={executionStates[opportunity.id] ?? null}
-              branchUrl={branchUrls[opportunity.id] ?? null}
-              validationSummary={validationSummaries[opportunity.id] ?? null}
-            />
-          ))}
+          {movesContext
+            ? addressing.map((opportunity, index) =>
+                renderCard(opportunity, { emphasis: index === 0, inContext: true }),
+              )
+            : others.map((opportunity) =>
+                renderCard(opportunity, { emphasis: opportunity.rank === 1, inContext: false }),
+              )}
         </ol>
+      )}
+
+      {/* The rest of the ranked list stays reachable when the page was entered
+          from a finding — filtered away would be a smaller product, not a
+          clearer one (§11). */}
+      {movesContext && others.length > 0 && (
+        <div className="flex flex-col gap-3 pt-2">
+          <MonoLabel as="h3" className="text-fg-secondary">
+            Your other moves
+          </MonoLabel>
+          <ol className="flex flex-col gap-4">
+            {others.map((opportunity) =>
+              renderCard(opportunity, { emphasis: false, inContext: false }),
+            )}
+          </ol>
+        </div>
       )}
 
       {stale && hasOpportunities && (
         <Notice tone="waiting" label="New business evidence is available">
-          These were prioritized from an earlier audit. Refreshing spends another AI call and may
-          change the order.
+          These were prioritized from an earlier audit, and still say what they addressed then.
+          Refreshing spends another AI call and may change the order.
         </Notice>
       )}
 
@@ -252,8 +381,7 @@ export function OpportunitiesPanel({
       )}
 
       {!running && blockNotice !== null && (
-        // Never a heading with a disabled button and no way forward — that
-        // dead end was reported as a broken feature twice in Deep Scan.
+        // Never a heading with a disabled button and no way forward.
         <Notice
           tone="waiting"
           label="Why this is blocked"
@@ -287,14 +415,18 @@ export function OpportunitiesPanel({
             disabled={pending}
             variant={hasOpportunities ? "secondary" : "primary"}
           >
-            {pending ? "Starting…" : hasOpportunities ? "Refresh opportunities" : "Find opportunities"}
+            {pending
+              ? "Starting…"
+              : hasOpportunities
+                ? "Refresh my next moves"
+                : "Find my next moves"}
           </Button>
         </form>
       )}
 
       {operation?.status === "failed" && operation.failureCode && (
         <p className="text-amber text-sm">
-          Vibe couldn&apos;t work out your opportunities. {OPERATION_FAILURE_MESSAGES[operation.failureCode]}
+          Vibe couldn&apos;t work out your next moves. {OPERATION_FAILURE_MESSAGES[operation.failureCode]}
         </p>
       )}
 
@@ -304,7 +436,7 @@ export function OpportunitiesPanel({
 
       {state?.ok && state.kind === "reused" && (
         <p className="text-fg-muted text-sm">
-          Nothing has changed since the last time, so the existing opportunities are shown.
+          Nothing has changed since the last time, so your existing moves are shown.
         </p>
       )}
     </div>

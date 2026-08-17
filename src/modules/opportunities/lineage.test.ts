@@ -14,7 +14,10 @@ import { FAKE_EVIDENCE_IDS, fakeWireOpportunity } from "./test-support";
 import { validateOpportunityOutput } from "./validate";
 
 /**
- * Where the Move → Conclusion lineage is created (CORE-2b FIX §2, §19).
+ * Where the Move → Conclusion lineage is **created** (CORE-2b FIX §2, §19).
+ *
+ * Its sibling `lineage-resolution.test.ts` covers where it is **read** — which
+ * finding each stored Move answers, and what the screen does with that.
  *
  * The engine has always known which conclusion each Move addresses; it simply never
  * recorded it. These tests hold the two halves of recording it honestly: the keys are
