@@ -10,7 +10,7 @@ import { requireSession } from "@/modules/auth/session";
 import { buildActivityEntry } from "@/modules/audit-log/view";
 import { buildAttentionItems } from "@/modules/projects/attention";
 import { getDashboardOverview } from "@/modules/projects/dashboard";
-import { getResumableOnboardingProjectId } from "@/modules/onboarding/store";
+import { getOnboardingRouting } from "@/modules/onboarding/store";
 import { AttentionList } from "./attention-list";
 import { DashboardActivity, type DashboardActivityEntry } from "./dashboard-activity";
 import { ProjectRow } from "./project-list";
@@ -83,17 +83,28 @@ export default async function AppHomePage({
   const supabase = await createClient();
   const { projects, recentActivity } = await getDashboardOverview(supabase, session.userId);
 
-  // First login and interrupted activation resolve on the server. The normal
-  // dashboard remains unchanged for completed projects, and connection errors
-  // stay visible instead of being swallowed by a redirect loop.
-  if (!connectError) {
+  /*
+   * First login and interrupted activation resolve on the server. Connection
+   * errors stay visible instead of being swallowed by a redirect loop.
+   *
+   * The takeover ends the moment a founder has finished setup once. Before
+   * that there is nothing else to show them, so resuming is the only sensible
+   * destination; after it, unfinished setup on a second project is an offer —
+   * it is rendered below rather than routed to. The first version redirected on
+   * any unfinished project, which made the workspace unreachable for exactly
+   * the person who least needed the flow.
+   */
+  const routing =
+    projects.length === 0
+      ? { resumableProjectId: null, hasCompleted: false }
+      : await getOnboardingRouting(supabase, projects.map((project) => project.id));
+
+  if (!connectError && !routing.hasCompleted) {
     if (projects.length === 0) redirect("/app/onboarding");
-    const resumable = await getResumableOnboardingProjectId(
-      supabase,
-      projects.map((project) => project.id),
-    );
-    if (resumable) redirect(`/app/onboarding/${resumable}`);
+    if (routing.resumableProjectId) redirect(`/app/onboarding/${routing.resumableProjectId}`);
   }
+
+  const unfinishedSetup = routing.hasCompleted ? routing.resumableProjectId : null;
 
   const attention = buildAttentionItems(projects);
   const projectNames = new Map(projects.map((project) => [project.id, project.name]));
@@ -125,6 +136,23 @@ export default async function AppHomePage({
         {connectError && (
           <Notice tone="problem" label="Connection failed">
             {CONNECT_ERROR_MESSAGES[connectError] ?? "GitHub connection failed. Please try again."}
+          </Notice>
+        )}
+
+        {unfinishedSetup && (
+          <Notice
+            label="Setup not finished"
+            action={
+              <Link
+                href={`/app/onboarding/${unfinishedSetup}`}
+                className={buttonClasses({ variant: "secondary", size: "sm" })}
+              >
+                Continue setup
+              </Link>
+            }
+          >
+            {projectNames.get(unfinishedSetup) ?? "One of your projects"} hasn&rsquo;t finished
+            setup. You can pick it up whenever you want — nothing is lost in the meantime.
           </Notice>
         )}
 

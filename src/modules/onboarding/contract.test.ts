@@ -13,6 +13,14 @@ const MIGRATION = readFileSync(
 const ACTIONS = readFileSync(join(ONBOARDING_APP, "[projectId]/actions.ts"), "utf8");
 const PAGE = readFileSync(join(ONBOARDING_APP, "[projectId]/page.tsx"), "utf8");
 const APP_HOME = readFileSync(join(ROOT, "src/app/app/page.tsx"), "utf8");
+const ONBOARDING_SHELL = readFileSync(
+  join(ONBOARDING_APP, "onboarding-shell.tsx"),
+  "utf8",
+);
+const PROJECT_ONBOARDING_PAGE = readFileSync(
+  join(ONBOARDING_APP, "[projectId]/page.tsx"),
+  "utf8",
+);
 const REPOSITORY_ACTION = readFileSync(
   join(ROOT, "src/app/app/connect/github/repositories/actions.ts"),
   "utf8",
@@ -56,9 +64,32 @@ describe("project onboarding persistence", () => {
 describe("onboarding orchestrates canonical domains", () => {
   it("routes first login, resume and repository selection into onboarding", () => {
     expect(APP_HOME).toContain('projects.length === 0) redirect("/app/onboarding")');
-    expect(APP_HOME).toContain("getResumableOnboardingProjectId");
+    expect(APP_HOME).toContain("getOnboardingRouting");
     expect(REPOSITORY_ACTION).toContain("createProjectOnboarding");
     expect(REPOSITORY_ACTION).toContain("/app/onboarding/${result.projectId}");
+  });
+
+  /**
+   * The flow may take over, and then it must let go.
+   *
+   * Found by dogfooding: the redirect fired on any unfinished project, so a
+   * founder with working projects who started a second one could never reach
+   * the workspace again — and the shell's own link to `/app` bounced straight
+   * back, which made the exit look present and be a loop.
+   *
+   * Asserted here rather than only in `routing.test.ts` because the defect was
+   * never in the query. It was in the route deciding to redirect on it.
+   */
+  it("stops redirecting into onboarding once any project has finished setup", () => {
+    expect(APP_HOME).toContain("!routing.hasCompleted");
+    expect(APP_HOME).toContain("routing.hasCompleted ? routing.resumableProjectId : null");
+    expect(APP_HOME).toContain("Continue setup");
+  });
+
+  it("offers a way out of the shell exactly when leaving leads somewhere", () => {
+    expect(ONBOARDING_SHELL).toContain("canLeave");
+    expect(ONBOARDING_SHELL).toContain("Back to your projects");
+    expect(PROJECT_ONBOARDING_PAGE).toContain("hasCompletedAnyOnboarding");
   });
 
   it("reuses source, Product Profile, Audit and Opportunity services", () => {

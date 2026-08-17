@@ -42,7 +42,15 @@ The migration creates a lifecycle row for every existing project. Any project wi
 - Added pure state-machine tests for canonical reconciliation, explicit no-live intent and completion.
 - Added migration/contract tests for TypeScript/SQL state alignment, project-scoped RLS, no browser-storage authority, canonical service reuse, guarded completion and no fake Move data.
 - `git diff --check` is green.
-- Repository scripts were intentionally not executed in this session under the repository’s untrusted-execution working agreement. Lint, typecheck, unit, integration, build and E2E remain required in the approved isolated validation environment.
+- Added `routing.test.ts` for the dashboard routing decision found by the dogfood below.
+- Run since: `tsc --noEmit` green, `eslint` 0 errors, **3357 unit tests** green, `next build`
+  green, **151 Playwright tests** green.
+- The migration is deployed and read back from the live database: 4 projects, 4 rows, 3
+  backfilled `complete` (each with a completed audit and a `completed_at`), 1 in progress, RLS
+  enabled with 3 policies.
+- Sixteen `onboarding.*` events were emitted without existing in `AuditEventType`, which left
+  the tree unable to typecheck. Added with labels, deliberately parallel to the domain events
+  they shadow rather than replacing them.
 
 ## Manual QA plan
 
@@ -57,8 +65,36 @@ At 1440, 1280, tablet and ~375 mobile:
 7. First Move is real when available, honest when absent, and completion enters the existing workspace.
 8. A second project gets an independent row; a mature pre-existing project is not replayed.
 
+## Dogfood: the flow had no exit
+
+Run on the real account, which already had three activated projects and a fourth mid-setup.
+The flow worked — and could not be left.
+
+`/app` redirected into onboarding whenever *any* project was unfinished, so a founder with
+working projects who starts a second one loses the workspace permanently: every visit bounces
+back into the new project's setup. The shell's logo already linked to `/app`, which means the
+exit was present on screen and was a loop.
+
+The fix is one predicate, read in two places as itself and its negation:
+
+- `/app` redirects into onboarding only while `!hasCompleted` — before a founder has finished
+  setup once there is genuinely nothing else to show, and that is the resumability this ADR
+  asked for. After it, unfinished setup is rendered as an offer (`Continue setup`) instead.
+- `OnboardingShell` shows *Back to your projects* exactly when `hasCompleted`.
+
+Tying both to the same fact is what makes a loop impossible rather than merely unlikely: the
+exit is visible precisely when the destination will not send the founder back.
+
+`routing.test.ts` covers the query — including that a failed read throws rather than reporting
+a clean slate, which would silently strand someone mid-setup — and the contract test asserts
+the route's decision, because the defect was never in the query.
+
 ## Residuals
 
 - The existing Business Audit requires a successful live-product snapshot. A founder can complete repository-only Product Understanding, but cannot complete activation without a reachable live product under the current CORE-2 contract. This sprint reports that boundary rather than inventing a snapshot or changing Audit reasoning.
 - GitHub’s external installation authorization remains GitHub-owned. The internal account/repository choosers use the focused four-phase shell, while persisted project state begins only after the canonical Project exists.
-- Migration deployment, real provider dogfood, production screenshots and full automated validation are outstanding.
+- Production screenshots of the flow are outstanding.
+- A founder still cannot leave their *first* onboarding, because there is no workspace behind
+  it yet. That is deliberate and recorded here rather than fixed: giving them an exit means
+  deciding what `/app` shows a founder with one half-set-up project, which is a product
+  question this sprint did not ask.

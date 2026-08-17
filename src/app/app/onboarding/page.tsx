@@ -5,7 +5,7 @@ import { Surface } from "@/components/ui/surface";
 import { MonoLabel } from "@/components/ui/typography";
 import { createClient } from "@/lib/supabase/server";
 import { requireSession } from "@/modules/auth/session";
-import { getResumableOnboardingProjectId } from "@/modules/onboarding/store";
+import { getOnboardingRouting } from "@/modules/onboarding/store";
 import { OnboardingShell } from "./onboarding-shell";
 
 export default async function NewProjectOnboardingPage() {
@@ -19,8 +19,10 @@ export default async function NewProjectOnboardingPage() {
   if (error) throw error;
 
   const projectIds = (projects ?? []).map((project) => project.id);
-  const resumable = await getResumableOnboardingProjectId(supabase, projectIds);
-  if (resumable) redirect(`/app/onboarding/${resumable}`);
+  const { resumableProjectId } = await getOnboardingRouting(supabase, projectIds);
+  if (resumableProjectId) redirect(`/app/onboarding/${resumableProjectId}`);
+  // Reached with no projects at all, so there is no exit to offer and none is
+  // rendered — `canLeave` stays false.
   if (projectIds.length > 0) redirect("/app");
 
   return (

@@ -14,11 +14,21 @@ export function OnboardingShell({
   email,
   state,
   projectName,
+  canLeave = false,
 }: {
   children: ReactNode;
   email: string | null;
   state: OnboardingState;
   projectName?: string;
+  /**
+   * Whether leaving actually leads somewhere.
+   *
+   * True once any project has finished setup, which is exactly when `/app`
+   * stops redirecting back here. Tying the two to one predicate is what keeps
+   * a visible exit from being a loop — the logo already linked to `/app` and
+   * bounced straight back, which is the defect this answers.
+   */
+  canLeave?: boolean;
 }) {
   const active = onboardingPhase(state);
   const position = phasePosition(active);
@@ -36,6 +46,14 @@ export function OnboardingShell({
             </span>
           )}
           <div className="ml-auto flex items-center gap-4">
+            {canLeave && (
+              <Link
+                href="/app"
+                className="text-fg-muted hover:text-fg-body text-xs underline underline-offset-4"
+              >
+                Back to your projects
+              </Link>
+            )}
             {email && <span className="text-fg-meta hidden text-xs sm:inline">{email}</span>}
             <form action={signOut}>
               <button className="text-fg-muted hover:text-fg-body text-xs underline underline-offset-4">

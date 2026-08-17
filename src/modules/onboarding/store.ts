@@ -145,24 +145,80 @@ export async function completeProjectOnboarding(
 }
 
 /**
- * The latest incomplete project is the one a returning founder resumes. A
- * single query keeps first-login routing independent of project count.
+ * What the dashboard needs to know about unfinished setup.
+ *
+ * ## Why this returns two facts instead of one
+ *
+ * It used to return only the resumable project, and `/app` redirected whenever
+ * there was one. That made the flow inescapable for exactly the person least in
+ * need of it: a founder with working projects starts a second one, and from
+ * then on every visit to the workspace bounces back into that project's setup.
+ * The shell's logo already linked to `/app`, so the exit existed — it was a
+ * loop.
+ *
+ * `hasCompleted` is what breaks it. A founder who has finished setup once has
+ * a workspace to be in, so unfinished setup becomes an offer rather than a
+ * destination. Before that, there is genuinely nothing else to show, and the
+ * takeover is the ADR's resumability doing its job.
+ *
+ * The two consumers read it as one predicate and its negation — `/app`
+ * redirects when `!hasCompleted`, the shell offers a way out when
+ * `hasCompleted` — which is what makes a loop impossible rather than merely
+ * unlikely.
  */
-export async function getResumableOnboardingProjectId(
+export type OnboardingRouting = {
+  /** The latest project whose setup is unfinished, if any. */
+  resumableProjectId: string | null;
+  /** Whether any project has ever finished setup. */
+  hasCompleted: boolean;
+};
+
+/**
+ * Whether this founder has finished setup at least once.
+ *
+ * Scoped by RLS rather than by a project id list, because the caller inside the
+ * flow has one project in hand and the question is about all of them. The
+ * `select own project_onboarding` policy already restricts the read to rows
+ * whose project belongs to the caller.
+ */
+export async function hasCompletedAnyOnboarding(
   supabase: SupabaseClient,
-  projectIds: string[],
-): Promise<string | null> {
-  if (projectIds.length === 0) return null;
+  userId: string,
+): Promise<boolean> {
   const { data, error } = await supabase
     .from("project_onboarding")
-    .select("project_id")
-    .in("project_id", projectIds)
-    .neq("state", "complete")
-    .order("updated_at", { ascending: false })
+    .select("project_id, projects!inner(user_id)")
+    .eq("state", "complete")
+    .eq("projects.user_id", userId)
     .limit(1)
     .maybeSingle();
   if (error) throw error;
-  return (data as { project_id: string } | null)?.project_id ?? null;
+  return data !== null;
+}
+
+export async function getOnboardingRouting(
+  supabase: SupabaseClient,
+  projectIds: string[],
+): Promise<OnboardingRouting> {
+  if (projectIds.length === 0) return { resumableProjectId: null, hasCompleted: false };
+
+  // One query for both facts. Ordering incomplete rows first, then by recency,
+  // makes the head of the list the project to resume when there is one.
+  const { data, error } = await supabase
+    .from("project_onboarding")
+    .select("project_id, state, updated_at")
+    .in("project_id", projectIds);
+  if (error) throw error;
+
+  const rows = (data ?? []) as { project_id: string; state: string; updated_at: string }[];
+  const incomplete = rows
+    .filter((row) => row.state !== "complete")
+    .sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+
+  return {
+    resumableProjectId: incomplete[0]?.project_id ?? null,
+    hasCompleted: rows.some((row) => row.state === "complete"),
+  };
 }
 
 /**

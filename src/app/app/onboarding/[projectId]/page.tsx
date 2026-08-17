@@ -10,7 +10,11 @@ import { recordAuditEvent } from "@/modules/audit-log/events";
 import { requireSession } from "@/modules/auth/session";
 import { getAuditReadiness } from "@/modules/business-audit/service";
 import { getActiveOpportunityOperation } from "@/modules/operations/service";
-import { markOnboardingMilestone, getProjectOnboarding } from "@/modules/onboarding/store";
+import {
+  markOnboardingMilestone,
+  getProjectOnboarding,
+  hasCompletedAnyOnboarding,
+} from "@/modules/onboarding/store";
 import { buildUnderstandingView } from "@/modules/product-understanding/view";
 import { AuditAnalyzing, AuditPreparing, AuditWaitingHeader } from "../../projects/[projectId]/audit-lifecycle";
 import { NeedsUserPanel } from "../../projects/[projectId]/needs-user-panel";
@@ -67,6 +71,13 @@ export default async function ProjectOnboardingPage({
     }
   }
 
+  /*
+   * Whether this founder has a workspace to go back to. The same predicate the
+   * dashboard uses to decide whether to redirect here, so a visible exit can
+   * never bounce off `/app` and land back on this page.
+   */
+  const canLeave = await hasCompletedAnyOnboarding(supabase, session.userId);
+
   const understanding = onboarding.productProfile
     ? buildUnderstandingView(
         onboarding.productProfile.profile,
@@ -79,6 +90,7 @@ export default async function ProjectOnboardingPage({
       email={session.email}
       state={onboarding.state}
       projectName={onboarding.projectName}
+      canLeave={canLeave}
     >
       {onboarding.state === "connect_source" && (
         <section className="flex max-w-[44rem] flex-col gap-6 py-8">
