@@ -1,0 +1,358 @@
+import { calculateProviderCost, UnpricedModelError } from "@/modules/ai/pricing";
+import type { BillableUsage, CostStatus, UsageSku } from "./schema";
+
+/**
+ * Provider-neutral usage projection (BILLING CORE-1 §16, §37, §38–§42).
+ *
+ * Pure functions. Each takes a row as one of Vibe's canonical provider ledgers
+ * already stores it and returns normalized {@link BillableUsage} — no database,
+ * no clock, no provider SDK, so every projection rule is a unit test.
+ *
+ * ## Why projection rather than a second ledger
+ *
+ * `ai_usage_events`, `deep_scan_provider_usage`, `sandbox_usage_events` and
+ * `review_browser_usage` each stay authoritative for their own domain. Billing
+ * references them by `(source_kind, source_id)` and never copies their token
+ * counts as a second source of truth. That reference is also the idempotency
+ * key: `billing_usage_events_source_sku_idx` makes one source row project to at
+ * most one event per SKU, which is what lets reconciliation run twice.
+ *
+ * ## The rule every projector below obeys
+ *
+ * **A cost Vibe does not know is `cost_unknown`, never zero.** Three of the
+ * four ledgers store `provider_cost_usd` as null on purpose — Browserbase and
+ * Vercel do not return an attributable price, and the existing code refuses to
+ * derive one from a public rate card. Billing carries that forward rather than
+ * quietly turning "we don't know" into "it was free".
+ */
+
+/** One AI usage row, in the shape `ai_usage_events` stores it. */
+export type AiUsageRow = {
+  id: string;
+  user_id: string;
+  project_id: string;
+  operation: string;
+  provider: string;
+  model: string;
+  job_id: string | null;
+  status: string;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  thinking_tokens: number | null;
+  provider_cost_usd: string | number | null;
+  pricing_version: string | null;
+  created_at: string;
+};
+
+/** Nanodollars per USD, matching the integer arithmetic in `ai/pricing.ts`. */
+const NANO_USD_PER_USD = 1_000_000_000;
+
+/**
+ * Recomputes provider cost from token counts using the authoritative module.
+ *
+ * Deliberately **recomputed rather than read** from `provider_cost_usd`, then
+ * reconciled against the stored value by the caller (§69). The stored figure is
+ * a decimal string in a `numeric(18,9)` column; parsing it back into a float
+ * would reintroduce exactly the imprecision `pricing.ts` exists to avoid. The
+ * recomputation runs at the row's own `created_at`, so an effective-dated price
+ * change does not re-price history.
+ */
+function costForAiRow(row: AiUsageRow): {
+  rawCostNanoUsd: number | null;
+  costStatus: CostStatus;
+  pricingVersion: string | null;
+} {
+  // A call that failed before any tokens were billed genuinely cost nothing,
+  // and `recordAIUsage` records that by omitting the token counts entirely.
+  // This is the one case where zero is the honest answer — and it is
+  // `not_billable`, not `costed`, so it can never be confused with a price.
+  if (row.input_tokens === null && row.output_tokens === null) {
+    return { rawCostNanoUsd: null, costStatus: "not_billable", pricingVersion: null };
+  }
+
+  try {
+    const cost = calculateProviderCost({
+      model: row.model,
+      inputTokens: row.input_tokens ?? 0,
+      outputTokens: row.output_tokens ?? 0,
+      at: new Date(row.created_at),
+    });
+    return {
+      rawCostNanoUsd: cost.totalNanoUsd,
+      costStatus: "costed",
+      pricingVersion: cost.pricingVersion,
+    };
+  } catch (error) {
+    // A model with no configured price is a real gap, and saying so is the
+    // point. Returning zero here would make an unpriced model look free.
+    if (error instanceof UnpricedModelError) {
+      return { rawCostNanoUsd: null, costStatus: "rate_unavailable", pricingVersion: null };
+    }
+    throw error;
+  }
+}
+
+/**
+ * Splits one AI usage row into per-SKU billable usage (§17, §62).
+ *
+ * The row becomes up to three events — input, output, thinking — because the
+ * billing model is per-SKU and a future rate card may price input and output
+ * differently, as every provider already does.
+ *
+ * ## Where the cost lands, and why only once
+ *
+ * `calculateProviderCost` returns one figure for the whole call. Attributing
+ * the input portion to the input SKU and the output portion to the output SKU
+ * would be inventing a split the pricing module does not expose. So the whole
+ * cost is attached to the **input** row and the others carry `not_billable` —
+ * the total per source row is therefore exactly the provider cost, never a
+ * multiple of it. Summing `raw_cost_nano_usd` across billing usage reproduces
+ * the AI ledger exactly, which is what §69 requires.
+ */
+export function projectAiUsage(
+  row: AiUsageRow,
+  options: { operationRunId?: string | null } = {},
+): BillableUsage[] {
+  const { rawCostNanoUsd, costStatus, pricingVersion } = costForAiRow(row);
+
+  const base = {
+    sourceKind: "ai_usage_event" as const,
+    sourceId: row.id,
+    operationRunId: options.operationRunId ?? null,
+    projectId: row.project_id,
+    userId: row.user_id,
+    provider: row.provider,
+    occurredAt: row.created_at,
+    providerPricingVersion: null as string | null,
+  };
+
+  const events: BillableUsage[] = [];
+
+  if (row.input_tokens !== null) {
+    events.push({
+      ...base,
+      sku: "anthropic_input_tokens",
+      quantity: row.input_tokens,
+      // The call's whole cost rides here, once.
+      rawCostNanoUsd,
+      costStatus,
+      providerPricingVersion: pricingVersion,
+    });
+  }
+
+  if (row.output_tokens !== null) {
+    events.push({
+      ...base,
+      sku: "anthropic_output_tokens",
+      quantity: row.output_tokens,
+      rawCostNanoUsd: null,
+      // Measured, and its cost is already counted on the input row.
+      costStatus: "not_billable",
+      providerPricingVersion: pricingVersion,
+    });
+  }
+
+  if (row.thinking_tokens !== null && row.thinking_tokens > 0) {
+    events.push({
+      ...base,
+      sku: "anthropic_thinking_tokens",
+      quantity: row.thinking_tokens,
+      rawCostNanoUsd: null,
+      // Already inside the output count the provider billed for.
+      costStatus: "not_billable",
+      providerPricingVersion: pricingVersion,
+    });
+  }
+
+  return events;
+}
+
+/**
+ * The provider cost the AI ledger recorded, in nanodollars, for reconciliation.
+ *
+ * Parses the stored decimal via string manipulation rather than `parseFloat`,
+ * so a value like `0.000042000` converts exactly. This is only ever used to
+ * *compare* against a recomputed figure (§69) — never as an input to a charge.
+ */
+export function storedCostToNanoUsd(value: string | number | null): number | null {
+  if (value === null) return null;
+
+  const text = typeof value === "number" ? value.toFixed(9) : value.trim();
+  const negative = text.startsWith("-");
+  const body = negative ? text.slice(1) : text;
+  const [whole, fraction = ""] = body.split(".");
+
+  const nano = Number(whole) * NANO_USD_PER_USD + Number(fraction.padEnd(9, "0").slice(0, 9));
+  return negative ? -nano : nano;
+}
+
+/** One Deep Scan browser usage row, as `deep_scan_provider_usage` stores it. */
+export type DeepScanUsageRow = {
+  id: string;
+  project_id: string;
+  duration_ms: number;
+  created_at: string;
+};
+
+/**
+ * Projects Deep Scan browser time (§41).
+ *
+ * The cost is **always** unknown, and that is not a gap in this function — it
+ * is the state of the world. Browserbase does not return a price with a
+ * session, and `buildDeepScanUsage` pins `providerCostUsd: null` as a literal
+ * type so no code path can invent one. Billing records the measured
+ * milliseconds and says the cost is unknown.
+ */
+export function projectDeepScanUsage(
+  row: DeepScanUsageRow,
+  owner: { userId: string },
+): BillableUsage[] {
+  return [
+    {
+      sourceKind: "deep_scan_provider_usage",
+      sourceId: row.id,
+      operationRunId: null,
+      projectId: row.project_id,
+      userId: owner.userId,
+      provider: "browserbase",
+      sku: "browser_duration_ms",
+      quantity: row.duration_ms,
+      occurredAt: row.created_at,
+      rawCostNanoUsd: null,
+      costStatus: "cost_unknown",
+      providerPricingVersion: null,
+    },
+  ];
+}
+
+/** One sandbox usage row, as `sandbox_usage_events` stores it. */
+export type SandboxUsageRow = {
+  id: string;
+  user_id: string;
+  project_id: string;
+  provider: string;
+  sandbox_duration_ms: number | null;
+  active_cpu_ms: number | null;
+  network_ingress_bytes: number | null;
+  network_egress_bytes: number | null;
+  provider_cost_usd: string | number | null;
+  created_at: string;
+};
+
+/**
+ * Projects sandbox compute (§42).
+ *
+ * Every measurable unit Vercel actually reports becomes its own SKU, and a
+ * column that is null produces no event at all rather than an event of zero —
+ * "we did not measure this" and "this was zero" are different facts, and only
+ * one of them is safe to sum.
+ *
+ * Cost is `cost_unknown` unless the provider genuinely reported one. Vercel
+ * currently does not, and no rate is derived from a public price list.
+ */
+export function projectSandboxUsage(row: SandboxUsageRow): BillableUsage[] {
+  const stored = storedCostToNanoUsd(row.provider_cost_usd);
+  const costStatus: CostStatus = stored === null ? "cost_unknown" : "costed";
+
+  const measurements: [UsageSku, number | null][] = [
+    ["sandbox_duration_ms", row.sandbox_duration_ms],
+    ["sandbox_active_cpu_ms", row.active_cpu_ms],
+    ["sandbox_ingress_bytes", row.network_ingress_bytes],
+    ["sandbox_egress_bytes", row.network_egress_bytes],
+  ];
+
+  const present = measurements.filter(([, quantity]) => quantity !== null);
+
+  return present.map(([sku, quantity], index) => ({
+    sourceKind: "sandbox_usage_event" as const,
+    sourceId: row.id,
+    operationRunId: null,
+    projectId: row.project_id,
+    userId: row.user_id,
+    provider: row.provider,
+    sku,
+    quantity: quantity ?? 0,
+    occurredAt: row.created_at,
+    // As with AI, any known cost rides on exactly one of the row's SKUs so a
+    // sum over billing usage equals the provider ledger rather than a multiple.
+    rawCostNanoUsd: index === 0 ? stored : null,
+    costStatus: index === 0 ? costStatus : "not_billable",
+    providerPricingVersion: null,
+  }));
+}
+
+/** One visual-review browser usage row, as `review_browser_usage` stores it. */
+export type ReviewBrowserUsageRow = {
+  id: string;
+  user_id: string;
+  project_id: string;
+  provider: string;
+  duration_ms: number;
+  created_at: string;
+};
+
+/** Projects visual-review browser time. Cost unknown, same as Deep Scan (§41). */
+export function projectReviewBrowserUsage(row: ReviewBrowserUsageRow): BillableUsage[] {
+  return [
+    {
+      sourceKind: "review_browser_usage",
+      sourceId: row.id,
+      operationRunId: null,
+      projectId: row.project_id,
+      userId: row.user_id,
+      provider: row.provider,
+      sku: "browser_duration_ms",
+      quantity: row.duration_ms,
+      occurredAt: row.created_at,
+      rawCostNanoUsd: null,
+      costStatus: "cost_unknown",
+      providerPricingVersion: null,
+    },
+  ];
+}
+
+/**
+ * Totals that keep known and unknown apart (§18, §70).
+ *
+ * There is deliberately no single "total cost" figure. Adding a known
+ * $0.047 to an unknown browser session and reporting $0.047 would be a
+ * measurement-shaped lie, so the caller gets both numbers and the count of
+ * things Vibe cannot price.
+ */
+export type CostSummary = {
+  knownCostNanoUsd: number;
+  costedEvents: number;
+  unknownCostEvents: number;
+  rateUnavailableEvents: number;
+  notBillableEvents: number;
+};
+
+export function summarizeCost(usage: readonly BillableUsage[]): CostSummary {
+  const summary: CostSummary = {
+    knownCostNanoUsd: 0,
+    costedEvents: 0,
+    unknownCostEvents: 0,
+    rateUnavailableEvents: 0,
+    notBillableEvents: 0,
+  };
+
+  for (const event of usage) {
+    switch (event.costStatus) {
+      case "costed":
+        summary.knownCostNanoUsd += event.rawCostNanoUsd ?? 0;
+        summary.costedEvents += 1;
+        break;
+      case "cost_unknown":
+        summary.unknownCostEvents += 1;
+        break;
+      case "rate_unavailable":
+        summary.rateUnavailableEvents += 1;
+        break;
+      case "not_billable":
+        summary.notBillableEvents += 1;
+        break;
+    }
+  }
+
+  return summary;
+}

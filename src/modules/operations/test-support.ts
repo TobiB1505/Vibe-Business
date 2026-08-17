@@ -50,7 +50,8 @@ type Filter =
   | { kind: "is"; column: string; value: null }
   | { kind: "not_is"; column: string; value: null }
   | { kind: "gt"; column: string; value: unknown }
-  | { kind: "gte"; column: string; value: unknown };
+  | { kind: "gte"; column: string; value: unknown }
+  | { kind: "lte"; column: string; value: unknown };
 
 /**
  * Reads a column, following PostgREST's `column->>key` JSON accessor.
@@ -83,6 +84,19 @@ function matches(row: Row, filters: Filter[]): boolean {
     if (filter.kind === "is") return value === null || value === undefined;
     if (filter.kind === "not_is") return value !== null && value !== undefined;
     if (filter.kind === "gte") return String(value ?? "") >= String(filter.value);
+    // Numeric when both sides are numbers, lexical otherwise.
+    //
+    // `gt`/`gte` above compare as strings, which is correct for the ISO
+    // timestamps they are used on and wrong for numbers — `"500" >= "1000"`
+    // is true. `lte` is used by the billing reservation predicate, where the
+    // column is a credit balance, so it has to compare as arithmetic. The
+    // older two are left alone deliberately rather than "fixed": changing how
+    // every existing timestamp filter compares is not this sprint's business.
+    if (filter.kind === "lte") {
+      return typeof value === "number" && typeof filter.value === "number"
+        ? value <= filter.value
+        : String(value ?? "") <= String(filter.value);
+    }
     return String(value ?? "") > String(filter.value);
   });
 }
@@ -434,6 +448,137 @@ export class FakeDatabase {
       if (clash) return { code: POSTGRES_UNIQUE_VIOLATION, message: "usage already recorded for job" };
     }
 
+    /*
+     * Billing (BILLING CORE-1 §47, §48, §49).
+     *
+     * These are modelled for the same reason every constraint above is: the
+     * guarantees are the database's, and a test that only exercised the
+     * application's pre-checks would prove the weaker half. On billing the
+     * distinction is the whole sprint — an overspend prevented by an `if` is
+     * prevented until two requests arrive at once.
+     */
+
+    // billing_credit_accounts_available_non_negative. The backstop that makes
+    // an overspend impossible even if the reservation predicate were written
+    // wrong. Without this the concurrency test would pass against a fake that
+    // happily stores a negative available balance.
+    if (table === "billing_credit_accounts") {
+      const posted = Number(candidate.posted_credits ?? 0);
+      const reserved = Number(candidate.reserved_credits ?? 0);
+      if (reserved < 0) {
+        return { code: POSTGRES_CHECK_VIOLATION, message: "reserved_credits >= 0" };
+      }
+      if (posted - reserved < 0) {
+        return {
+          code: POSTGRES_CHECK_VIOLATION,
+          message: "billing_credit_accounts_available_non_negative",
+        };
+      }
+    }
+
+    // billing_credit_ledger_idempotency_idx (§26). One posted entry per
+    // (account, key), so a retried settlement, a replayed workflow step and a
+    // double-clicked button all post exactly one charge.
+    if (table === "billing_credit_ledger") {
+      const clash = others.some(
+        (row) =>
+          row.credit_account_id === candidate.credit_account_id &&
+          row.idempotency_key === candidate.idempotency_key,
+      );
+      if (clash) {
+        return { code: POSTGRES_UNIQUE_VIOLATION, message: "billing_credit_ledger_idempotency_idx" };
+      }
+
+      // billing_credit_ledger_sign_matches_kind. A positive charge or a
+      // negative grant is a bug the database refuses independently of TS.
+      const delta = Number(candidate.credit_delta ?? 0);
+      if (delta === 0) {
+        return { code: POSTGRES_CHECK_VIOLATION, message: "credit_delta <> 0" };
+      }
+      if (candidate.kind === "charge" && delta > 0) {
+        return { code: POSTGRES_CHECK_VIOLATION, message: "billing_credit_ledger_sign_matches_kind" };
+      }
+      if (["grant", "purchase", "refund"].includes(String(candidate.kind)) && delta < 0) {
+        return { code: POSTGRES_CHECK_VIOLATION, message: "billing_credit_ledger_sign_matches_kind" };
+      }
+      // billing_credit_ledger_refund_references_charge.
+      if ((candidate.kind === "refund") !== (candidate.refunds_ledger_entry_id != null)) {
+        return {
+          code: POSTGRES_CHECK_VIOLATION,
+          message: "billing_credit_ledger_refund_references_charge",
+        };
+      }
+    }
+
+    if (table === "billing_credit_reservations") {
+      // billing_credit_reservations_idempotency_idx (§49).
+      const clash = others.some(
+        (row) =>
+          row.credit_account_id === candidate.credit_account_id &&
+          row.idempotency_key === candidate.idempotency_key,
+      );
+      if (clash) {
+        return {
+          code: POSTGRES_UNIQUE_VIOLATION,
+          message: "billing_credit_reservations_idempotency_idx",
+        };
+      }
+
+      // billing_credit_reservations_single_active_operation_idx. A second
+      // concurrent start for one operation loses here, exactly as
+      // operation_runs_single_active_idx does for the run itself.
+      if (candidate.operation_run_id != null && candidate.status === "active") {
+        const active = others.some(
+          (row) => row.operation_run_id === candidate.operation_run_id && row.status === "active",
+        );
+        if (active) {
+          return {
+            code: POSTGRES_UNIQUE_VIOLATION,
+            message: "billing_credit_reservations_single_active_operation_idx",
+          };
+        }
+      }
+
+      // billing_credit_reservations_settled_within_reserved (§28). The ceiling
+      // the customer approved, enforced by the database and not only by
+      // decideSettlement.
+      if (
+        candidate.settled_credits != null &&
+        Number(candidate.settled_credits) > Number(candidate.reserved_credits ?? 0)
+      ) {
+        return {
+          code: POSTGRES_CHECK_VIOLATION,
+          message: "billing_credit_reservations_settled_within_reserved",
+        };
+      }
+    }
+
+    // billing_usage_events_source_sku_idx (§43). One source row projects to at
+    // most one event per SKU, which is what makes reconciliation safe to run
+    // twice — and what a "no duplicates on a second pass" test must be proving
+    // rather than assuming.
+    if (table === "billing_usage_events") {
+      const clash = others.some(
+        (row) =>
+          row.source_kind === candidate.source_kind &&
+          row.source_id === candidate.source_id &&
+          row.sku === candidate.sku,
+      );
+      if (clash) {
+        return { code: POSTGRES_UNIQUE_VIOLATION, message: "billing_usage_events_source_sku_idx" };
+      }
+
+      // billing_usage_events_rated_has_credits (§18). This is what makes
+      // "unknown cost became zero credits" unrepresentable rather than merely
+      // discouraged.
+      if ((candidate.rating_status === "rated") !== (candidate.rated_credits != null)) {
+        return { code: POSTGRES_CHECK_VIOLATION, message: "billing_usage_events_rated_has_credits" };
+      }
+      if ((candidate.cost_status === "costed") !== (candidate.raw_cost_nano_usd != null)) {
+        return { code: POSTGRES_CHECK_VIOLATION, message: "billing_usage_events_costed_has_amount" };
+      }
+    }
+
     return null;
   }
 }
@@ -480,6 +625,10 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
   }
   gte(column: string, value: unknown): this {
     this.filters.push({ kind: "gte", column, value });
+    return this;
+  }
+  lte(column: string, value: unknown): this {
+    this.filters.push({ kind: "lte", column, value });
     return this;
   }
   order(column: string, options?: { ascending?: boolean }): this {

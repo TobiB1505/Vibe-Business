@@ -16,6 +16,7 @@
     "test": "vitest run",
     "ai:probe-audit-schema": "vitest run --config vitest.probe.config.mts src/modules/ai/probe",
     "ai:dogfood-action-plan": "vitest run --config vitest.probe.config.mts src/modules/action-plans",
+    "billing:dogfood": "vitest run --config vitest.probe.config.mts src/modules/credits",
     "db:status": "supabase migration list",
     "db:push": "supabase db push",
     "db:lint": "supabase db lint --linked",

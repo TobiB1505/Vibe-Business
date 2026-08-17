@@ -166,6 +166,17 @@ const LABELS: Record<AuditEventType, string> = {
   "onboarding.first_move_started": "Setup: Vibe started working out your first move",
   "onboarding.first_move_viewed": "Setup: you saw your first move",
   "onboarding.completed": "Setup finished",
+
+  // Billing (BILLING CORE-1 §34). Written in the customer's terms — "Credits",
+  // never "ledger entry" or "posted delta" — because these are the only
+  // financial events a founder will ever read. No amount appears in the label
+  // itself; the safe fact allowlist decides what detail is shown beside it.
+  "credit_account.created": "Credit account created",
+  "credit_grant.posted": "Credits added",
+  "credit_reservation.created": "Credits reserved for an operation",
+  "credit_reservation.released": "Reserved Credits released",
+  "credit_charge.settled": "Credits charged",
+  "credit_refund.posted": "Credits refunded",
 };
 
 /**
