@@ -184,6 +184,7 @@ export function fakeBudgetPolicy(
       maxChangedFiles: 15,
       maxChangedBytes: 200_000,
       maxNetworkRequests: 0,
+      maxProviderSpendUsd: 5,
       ...overrides,
     },
   };

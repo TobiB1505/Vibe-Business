@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { checkedValues, migrationSql } from "@/modules/operations/migration-test-support";
-import { EXECUTION_CAPABILITIES } from "@/modules/execution/schema";
+import { DETERMINISTIC_EXECUTION_CAPABILITIES } from "@/modules/execution/schema";
 import { OPERATION_STAGES, OPERATION_TYPES } from "@/modules/operations/schema";
 import {
   ACTION_PLAN_STATUSES,
@@ -45,10 +45,17 @@ describe("action_plan_steps constraints", () => {
    * Includes the historical v1: a step never resolves to it, but the column's
    * vocabulary is the execution module's, and narrowing it here would make the
    * two definitions of "a capability" disagree.
+   *
+   * Excludes the agentic capability (EXECUTION CORE-4), and that exclusion is
+   * load-bearing rather than an oversight. A plan step's `capability` means "a
+   * registry-backed generator matched this" — the resolver leaves it null for
+   * every agentic step, because there is no generator. The agentic capability
+   * lives on the `PreparedChange`, where it records what produced the bytes.
+   * Permitting it here would let a step claim an executor it does not have.
    */
-  it("permits exactly the known execution capabilities", () => {
+  it("permits exactly the deterministic execution capabilities", () => {
     expect(checkedValues("action_plan_steps", "capability").sort()).toEqual(
-      [...EXECUTION_CAPABILITIES].sort(),
+      [...DETERMINISTIC_EXECUTION_CAPABILITIES].sort(),
     );
   });
 });

@@ -34,6 +34,14 @@ const ACTIVE_OPERATION_STATUSES = ["queued", "running"];
 const IN_FLIGHT_AUDIT_STATUSES = ["pending", "analyzing"];
 const ACTIVE_VALIDATION_STATUSES = ["queued", "running"];
 const ACTIVE_PREVIEW_STATUSES = ["starting", "running"];
+/**
+ * Statuses that hold an agent run's identity (EXECUTION CORE-4 §56).
+ *
+ * `succeeded` is inside the lock, mirroring the migration: a finished run still
+ * owns its identity, so repeating the same work is a deliberate new spec rather
+ * than a second attempt at this one.
+ */
+const ACTIVE_AGENT_RUN_STATUSES = ["queued", "running", "needs_user_input", "succeeded"];
 /** Every outcome state that holds the identity lock — i.e. all but `failed`. */
 const OUTCOME_IDENTITY_LOCK_STATUSES = [
   "queued",
@@ -736,6 +744,108 @@ export class FakeDatabase {
       }
     }
 
+    /*
+     * agent_execution_runs (EXECUTION CORE-4 §56).
+     *
+     * `agent_execution_runs_single_active_idx` is the guarantee that a double
+     * click buys one coding agent rather than two. Modelled here for the reason
+     * every index above is: without it a test would be proving the
+     * application's pre-check rather than the guarantee Postgres provides, and
+     * the pre-check is precisely what two clicks 20 ms apart both pass.
+     *
+     * `succeeded` is inside the lock deliberately — it mirrors the migration.
+     * A finished run still owns its identity, so re-running the same work is a
+     * deliberate new spec rather than a second attempt at this one.
+     */
+    if (
+      table === "agent_execution_runs" &&
+      ACTIVE_AGENT_RUN_STATUSES.includes(String(candidate.status))
+    ) {
+      const clash = others.some(
+        (row) =>
+          row.project_id === candidate.project_id &&
+          row.run_identity === candidate.run_identity &&
+          ACTIVE_AGENT_RUN_STATUSES.includes(String(row.status)),
+      );
+      if (clash) {
+        return { code: POSTGRES_UNIQUE_VIOLATION, message: "one live agent run per identity" };
+      }
+    }
+
+    /*
+     * The agent run's CHECK constraints, stated twice for the reason the merge
+     * table's are: a "succeeded" run with no prepared change behind it is the
+     * row that would let a report claim work that never landed, and the
+     * in-memory database would otherwise never notice a bug that produced one.
+     */
+    if (table === "agent_execution_runs") {
+      if (candidate.status === "succeeded" && candidate.prepared_change_id == null) {
+        return {
+          code: POSTGRES_CHECK_VIOLATION,
+          message: "agent_execution_runs_succeeded_has_change",
+        };
+      }
+      if (candidate.status === "failed" && candidate.failure_code == null) {
+        return {
+          code: POSTGRES_CHECK_VIOLATION,
+          message: "agent_execution_runs_failed_has_code",
+        };
+      }
+    }
+
+    /*
+     * execution_interrupts_one_open_per_run_idx (§25).
+     *
+     * One open question per run. A run that could accumulate open questions
+     * would be a chat, which CORE-3 §21 refuses — and a test asserting "the
+     * second question finds the first" must be proving the index rather than
+     * the lookup that precedes it.
+     */
+    if (table === "execution_interrupts" && candidate.status === "open") {
+      const clash = others.some(
+        (row) =>
+          row.agent_execution_run_id === candidate.agent_execution_run_id &&
+          row.status === "open",
+      );
+      if (clash) {
+        return { code: POSTGRES_UNIQUE_VIOLATION, message: "one open question per run" };
+      }
+    }
+
+    if (table === "execution_interrupts") {
+      if (candidate.status === "answered" && (candidate.answer == null || candidate.answered_at == null)) {
+        return {
+          code: POSTGRES_CHECK_VIOLATION,
+          message: "execution_interrupts_answered_has_answer",
+        };
+      }
+      if (candidate.status === "open" && candidate.answer != null) {
+        return {
+          code: POSTGRES_CHECK_VIOLATION,
+          message: "execution_interrupts_open_has_no_answer",
+        };
+      }
+    }
+
+    /*
+     * prepared_changes_opportunity_required_for_generators (§29).
+     *
+     * The columns became nullable so an agentic change — which traces to a plan
+     * step, not to an opportunity set — is representable. A generator-produced
+     * change must still name both, and this is what stops the nullability from
+     * quietly becoming permission.
+     */
+    if (
+      table === "prepared_changes" &&
+      candidate.execution_capability !== "agentic_execution_v1" &&
+      (candidate.opportunity_set_id == null || candidate.opportunity_id == null)
+    ) {
+      return {
+        code: POSTGRES_CHECK_VIOLATION,
+        message: "prepared_changes_opportunity_required_for_generators",
+      };
+    }
+
     return null;
   }
 }
@@ -899,29 +1009,46 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
       const failure = this.failure();
       if (failure) return { data: null, error: failure };
 
-      const payload = this.payload as Row;
-      const conflictColumn = this.onConflict;
-      const existing = conflictColumn
-        ? this.db.rows(this.table).find((row) => row[conflictColumn] === payload[conflictColumn])
-        : undefined;
+      // Arrays and composite conflict targets, both because a real caller uses
+      // them: the agent tool trail upserts a whole run's events at once, keyed
+      // on `(agent_execution_run_id, sequence)`. Without either, a replayed
+      // durable step would appear to store one opaque row and every assertion
+      // about the trail would be about the double rather than about Postgres.
+      const payloads = (Array.isArray(this.payload) ? this.payload : [this.payload ?? {}]) as Row[];
+      const conflictColumns = this.onConflict
+        ? this.onConflict.split(",").map((column) => column.trim())
+        : [];
+      const results: Row[] = [];
 
-      if (existing) {
-        const candidate = { ...existing, ...payload, updated_at: new Date().toISOString() };
-        const violation = this.db.checkConstraints(this.table, candidate, existing.id);
+      for (const payload of payloads) {
+        const existing =
+          conflictColumns.length > 0
+            ? this.db
+                .rows(this.table)
+                .find((row) => conflictColumns.every((column) => row[column] === payload[column]))
+            : undefined;
+
+        if (existing) {
+          const candidate = { ...existing, ...payload, updated_at: new Date().toISOString() };
+          const violation = this.db.checkConstraints(this.table, candidate, existing.id);
+          if (violation) return { data: null, error: violation };
+          Object.assign(existing, candidate);
+          results.push(existing);
+          continue;
+        }
+
+        const row: Row = {
+          id: `${this.table}_${this.db.rows(this.table).length + 1}`,
+          created_at: new Date().toISOString(),
+          ...payload,
+        };
+        const violation = this.db.checkConstraints(this.table, row);
         if (violation) return { data: null, error: violation };
-        Object.assign(existing, candidate);
-        return { data: [existing], error: null };
+        this.db.rows(this.table).push(row);
+        results.push(row);
       }
 
-      const row: Row = {
-        id: `${this.table}_${this.db.rows(this.table).length + 1}`,
-        created_at: new Date().toISOString(),
-        ...payload,
-      };
-      const violation = this.db.checkConstraints(this.table, row);
-      if (violation) return { data: null, error: violation };
-      this.db.rows(this.table).push(row);
-      return { data: [row], error: null };
+      return { data: results, error: null };
     }
 
     const rows = this.resolveRows();
@@ -968,7 +1095,7 @@ export function fakeSupabase(db: FakeDatabase): SupabaseClient {
         insert: (payload: Row | Row[]) => new FakeQuery(db, table, "insert", payload),
         update: (payload: Row) => new FakeQuery(db, table, "update", payload),
         delete: () => new FakeQuery(db, table, "delete"),
-        upsert: (payload: Row, options?: { onConflict?: string }) =>
+        upsert: (payload: Row | Row[], options?: { onConflict?: string }) =>
           new FakeQuery(db, table, "upsert", payload, options?.onConflict),
       };
     },

@@ -1,4 +1,5 @@
-import type { ExecutionCapability } from "./schema";
+import { isForbiddenExecutionPath } from "@/modules/execution-contract/policy";
+import { AGENTIC_EXECUTION_CAPABILITY, type ExecutionCapability } from "./schema";
 
 /**
  * Where a capability is allowed to write (Sprint 9 §13, §32).
@@ -18,8 +19,22 @@ import type { ExecutionCapability } from "./schema";
  *     so a future capability that forgets rule 1 still cannot escape.
  */
 
-/** Exact basenames a capability may create, per capability. */
-const CAPABILITY_BASENAMES: Record<ExecutionCapability, readonly string[]> = {
+/**
+ * Exact basenames a *deterministic* capability may create.
+ *
+ * A generator knows every file it emits before it runs, so an exact allowlist
+ * is the honest description of its scope — and the strictest rule available.
+ *
+ * Agentic execution is deliberately absent, and cannot be added: an agent
+ * cannot know which files a step needs before it has read the repository, so a
+ * predicted basename list would be either wrong or so broad it says nothing.
+ * Its scope is expressed as *classes it may never touch* instead — see
+ * {@link checkWritePath}.
+ */
+const CAPABILITY_BASENAMES: Record<
+  Exclude<ExecutionCapability, typeof AGENTIC_EXECUTION_CAPABILITY>,
+  readonly string[]
+> = {
   nextjs_seo_foundations_v1: ["robots.ts", "sitemap.ts"],
   // v2 refined *what the sitemap lists*, not which files exist. The capability
   // scope is unchanged: two files, same names, same places.
@@ -77,6 +92,32 @@ export function checkWritePath(path: string, capability: ExecutionCapability): P
     return { ok: false, reason: "forbidden_location" };
   }
 
+  /*
+   * Agentic execution (EXECUTION CORE-4 §28, §30).
+   *
+   * The shape checks and `FORBIDDEN_PATTERNS` above already ran, and they are
+   * the substance of the rule: an agent may not touch CI, env files, manifests,
+   * lockfiles, workspace configuration, migrations, `vercel.json`, the Next.js
+   * config, middleware or the proxy. Those are the paths where a bad edit stops
+   * being a bad commit and becomes a privilege escalation, a supply-chain
+   * change or a data migration.
+   *
+   * `isForbiddenExecutionPath` is applied on top, so the credential and git
+   * classes Core-3 defined are refused here too — one policy, checked in both
+   * the tool gateway (at write time) and here (immediately before the branch is
+   * written), which is the same two-independent-refusals discipline this file
+   * already documents.
+   *
+   * What is deliberately *not* required is a basename or a directory. The whole
+   * point of agentic execution is that Vibe does not know in advance which file
+   * a customer's individual product needs changed (§3), and a scope that
+   * pretended otherwise would either block real work or be a name for nothing.
+   * Blast radius is bounded by count and bytes instead — `checkWriteScope`.
+   */
+  if (capability === AGENTIC_EXECUTION_CAPABILITY) {
+    return isForbiddenExecutionPath(path) ? { ok: false, reason: "forbidden_location" } : { ok: true };
+  }
+
   const basename = segments[segments.length - 1];
   if (!CAPABILITY_BASENAMES[capability].includes(basename)) {
     return { ok: false, reason: "not_allowed_for_capability" };
@@ -90,6 +131,18 @@ export function checkWritePath(path: string, capability: ExecutionCapability): P
   }
 
   return { ok: true };
+}
+
+/**
+ * The write-path rule an agent's tool gateway applies, by the same code.
+ *
+ * Exported so the gateway refuses a forbidden write *at the moment the agent
+ * asks*, rather than letting it discover at the end that everything it did was
+ * out of scope. Same predicate, two moments — the second one, immediately
+ * before the branch is written, is the control.
+ */
+export function isAgenticWritablePath(path: string): boolean {
+  return checkWritePath(path, AGENTIC_EXECUTION_CAPABILITY).ok;
 }
 
 /** Every path must pass. One rejection fails the whole change. */

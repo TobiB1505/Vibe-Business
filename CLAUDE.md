@@ -80,6 +80,11 @@ This file governs how Claude Code (and any AI-assisted session) works in this re
 73. Never retry a consequential external write on an ambiguous outcome. Mark the attempt before making it, then **read** the external state and let the observation decide; a third, unexpected state stops the operation rather than resolving it. And never mark a write successful from its own response — verify by an independent read, require exact equality, and enforce that in the database as well as in code.
 74. `merged` means one sentence: the default branch points at the approved commit and Vibe read it back. It never means deployed, released or live. Vibe calls no deployment provider — but never claim "no production effect" either, because moving a default branch can trigger the customer's own CI/CD, and the user must be told that before the click.
 
+75. Agentic coding goes through the `CodingAgentProvider` boundary in `src/modules/coding-agent/provider.ts`. Only `src/modules/coding-agent/claude/` may import an agent SDK, and an agent harness must never be given built-in filesystem, shell or network tools — see [ADR 0027](docs/decisions/0027-coding-agent-provider-and-tool-gateway.md).
+76. Every effect an agent can have passes through the tool gateway, and the gateway's job is to refuse. An effect that must never happen is an **absent method** on `AgentWorkspace`, not a denied capability — there is nothing to grant, revoke or get wrong. A tool name that maps to no capability is denied by lookup, so a forgotten check fails closed.
+77. Never read the agent's account of its own work. The changed paths come from the gateway's record of the writes it brokered, the bytes from reading the workspace back, and the baseline from the pinned commit — and the result is verified against the compiled policy before any branch exists.
+78. An agent's own checks are advisory; Vibe's independent validation is the verdict. Never let a run self-certify, and never activate a customer-facing Agent price without a measured cost behind it — the internal dogfood ceiling is reachable only for a project on an operator-managed allowlist, and an unset allowlist authorizes nobody.
+
 ## Related Documents
 
 - [PRODUCT.md](PRODUCT.md) — product vision, scope, and non-goals

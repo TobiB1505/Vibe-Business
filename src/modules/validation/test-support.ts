@@ -65,6 +65,15 @@ export type FakeSandboxOptions = {
   failStop?: boolean;
   /** Throw on this exact command, for the unexpected-provider-error path. */
   throwOn?: string;
+  /**
+   * Paths `rm -rf .git` cannot remove.
+   *
+   * Drives the credential-scrub failure path, which is otherwise unreachable
+   * because the fake genuinely deletes. `rm -f` reports success whether or not
+   * it removed anything, so the orchestrator verifies rather than assumes — and
+   * that verification needs a case where the file survives.
+   */
+  unremovablePaths?: readonly string[];
   /** Make artifact capture fail, for the snapshot-failure path. */
   failSnapshot?: boolean;
   /** The snapshot id the fake hands back. */
@@ -204,6 +213,46 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
       // is the point: `rm -rf <repo>/.git` run from inside `<repo>` targets a
       // path that does not exist, and `-f` reports success while the real
       // `.git` survives. A fake that ignored cwd would have hidden that.
+      /*
+       * Workspace writes and deletes, as real mutations to the fake's
+       * filesystem (EXECUTION CORE-4 §27).
+       *
+       * Modelled rather than stubbed, for the same reason `rm -rf .git` is:
+       * the property under test is that Vibe reads the change *back off the
+       * filesystem* rather than believing what the agent said it wrote. A fake
+       * that acknowledged writes without performing them would make that
+       * distinction invisible — extraction would find nothing and the test
+       * would pass for the wrong reason.
+       *
+       * Matched against the exact shape `sandbox-workspace.ts` produces: a
+       * quoted here-document piped into `base64 -d`, which is how content
+       * reaches the filesystem without ever appearing on a command line.
+       */
+      const resolve = (path: string) =>
+        input.cwd === "." || input.cwd === "" ? path : `${input.cwd}/${path}`;
+
+      if (input.command.command === "sh" && input.command.args[0] === "-c") {
+        const script = input.command.args[1] ?? "";
+        const write = /^base64 -d > '(.+)' <<'VIBE_EOF'\n([\s\S]*)\nVIBE_EOF$/.exec(script);
+        if (write) {
+          files[resolve(write[1])] = Buffer.from(write[2], "base64").toString("utf8");
+          return { exitCode: 0, durationMs: 5, output: "", timedOut: false };
+        }
+      }
+
+      if (
+        input.command.command === "rm" &&
+        input.command.args[0] === "-f" &&
+        input.command.args[1] === "--"
+      ) {
+        delete files[resolve(input.command.args[2] ?? "")];
+        return { exitCode: 0, durationMs: 5, output: "", timedOut: false };
+      }
+
+      if (input.command.command === "mkdir") {
+        return { exitCode: 0, durationMs: 5, output: "", timedOut: false };
+      }
+
       const argument = input.command.args.at(-1) ?? "";
       if (input.command.command === "rm" && argument.endsWith(".git")) {
         const removed = argument.startsWith("/") || input.cwd === "." || input.cwd === ""
@@ -211,7 +260,13 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
           : `${input.cwd}/${argument}`;
 
         for (const path of Object.keys(files)) {
-          if (path === removed || path.startsWith(`${removed}/`)) delete files[path];
+          if (path !== removed && !path.startsWith(`${removed}/`)) continue;
+          // A path the removal cannot reach, modelling the failure the scrub
+          // exists for: `rm -f` reports success whether or not it removed
+          // anything, so "the credential store is gone" must be *verified*
+          // rather than inferred from an exit code (Sprint 10A §7).
+          if (options.unremovablePaths?.includes(path)) continue;
+          delete files[path];
         }
       }
 

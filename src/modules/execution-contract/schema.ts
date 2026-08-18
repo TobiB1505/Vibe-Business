@@ -408,10 +408,26 @@ export type ExecutionInterruptAnswer =
  */
 export const EXECUTION_ACTIVITY_EVENTS = [
   "inspecting_repository",
+  /**
+   * Added in Core-4, alongside the runtime that emits it (§23).
+   *
+   * Core-3 could not know which of these a real gateway would observe, so it
+   * shipped the ones it could name. These three are the ones the first agent
+   * loop actually produced: a bounded content search is a distinct action from
+   * reading a file, a build is a distinct check from a test, and re-running a
+   * check after a failure is the loop §16 exists to prove.
+   *
+   * `repairing` in particular is derived from what Vibe observed — the previous
+   * check it brokered exited non-zero — never from a model saying it is fixing
+   * something.
+   */
+  "searching_code",
   "found_existing_pattern",
   "editing_files",
   "running_typecheck",
   "running_tests",
+  "running_build",
+  "repairing",
   "validating",
   "needs_user_input",
   "waiting_for_budget",

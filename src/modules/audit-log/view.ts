@@ -192,6 +192,16 @@ const LABELS: Record<AuditEventType, string> = {
   // not that a versioned document exists. Nothing about this event means work
   // started — no agent exists to start it.
   "execution.spec_created": "Execution prepared for a plan step",
+  // Agentic execution (EXECUTION CORE-4). Written in the founder's terms, not
+  // ours: "Vibe started making a change" is what happened; "an agent execution
+  // run was claimed" is how it was implemented.
+  "agent_execution.started": "Vibe started making a change to your app",
+  "agent_execution.needs_user_input": "Vibe stopped to ask you something",
+  // Says plainly that a safety check fired and nothing was written. A user
+  // reading their own log should be able to tell this apart from a crash.
+  "agent_execution.change_rejected": "Vibe refused its own change and wrote nothing",
+  "agent_execution.completed": "Vibe finished a change, ready for review",
+  "agent_execution.failed": "Vibe stopped without changing anything",
 };
 
 /**

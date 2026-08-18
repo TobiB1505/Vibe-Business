@@ -118,6 +118,23 @@ const SEO_FOUNDATIONS_PROFILE: MeasurementProfile = {
 const CAPABILITY_MEASUREMENT_PROFILES: Record<ExecutionCapability, MeasurementProfile | null> = {
   nextjs_seo_foundations_v1: SEO_FOUNDATIONS_PROFILE,
   nextjs_seo_foundations_v2: SEO_FOUNDATIONS_PROFILE,
+  /**
+   * Agentic execution has no measurement profile, and this null is a real
+   * answer rather than a gap.
+   *
+   * A profile names one metric, one direction and one settling window — facts
+   * about *what a specific change does to a business*. A generator has those
+   * because it always emits the same thing. The agentic capability deliberately
+   * does not: it is "a bounded change to application source", and the business
+   * effect of one belongs to the Action Plan step it implements, not to the
+   * mechanism that implemented it.
+   *
+   * Attaching a profile here would mean claiming that every agent-produced
+   * change moves the same metric, which is the kind of confident-sounding
+   * wrong answer Sprint 8 taught this codebase to refuse. Measuring individual
+   * plan steps is real work with its own contract, and it is not this sprint's.
+   */
+  agentic_execution_v1: null,
 };
 
 /**

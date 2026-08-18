@@ -31,6 +31,22 @@ export type ModelPricing = {
   inputNanoUsdPerToken: number;
   /** Nanodollars per output token. Thinking tokens are billed as output. */
   outputNanoUsdPerToken: number;
+  /**
+   * Nanodollars per cached input token read back (EXECUTION CORE-4 §19).
+   *
+   * Anthropic's published multiplier is 0.1× the base input rate. Stored as its
+   * own integer rather than computed from `inputNanoUsdPerToken` for the reason
+   * this file already gives about floats: a multiplier applied at read time is
+   * one more place a rounding rule could differ between callers, and the
+   * multiplier is itself a provider decision that could change independently.
+   *
+   * Only agentic execution reads these. Every prior operation is a single
+   * request with no cache breakpoint, so its cache counts are zero and the
+   * arithmetic is unchanged.
+   */
+  cacheReadNanoUsdPerToken: number;
+  /** Nanodollars per input token written to the cache. Published as 1.25× input. */
+  cacheWriteNanoUsdPerToken: number;
 };
 
 /**
@@ -48,6 +64,8 @@ export const MODEL_PRICING: ModelPricing[] = [
     effectiveTo: "2026-09-01T00:00:00.000Z",
     inputNanoUsdPerToken: 2_000, // $2 / MTok
     outputNanoUsdPerToken: 10_000, // $10 / MTok
+    cacheReadNanoUsdPerToken: 200, // 0.1× input
+    cacheWriteNanoUsdPerToken: 2_500, // 1.25× input
   },
   {
     pricingVersion: "claude-sonnet-5-standard-2026-09",
@@ -56,6 +74,8 @@ export const MODEL_PRICING: ModelPricing[] = [
     effectiveTo: null,
     inputNanoUsdPerToken: 3_000, // $3 / MTok
     outputNanoUsdPerToken: 15_000, // $15 / MTok
+    cacheReadNanoUsdPerToken: 300, // 0.1× input
+    cacheWriteNanoUsdPerToken: 3_750, // 1.25× input
   },
   {
     // Product Understanding runs on Haiku 4.5 (CORE-1 §21). No introductory
@@ -66,6 +86,8 @@ export const MODEL_PRICING: ModelPricing[] = [
     effectiveTo: null,
     inputNanoUsdPerToken: 1_000, // $1 / MTok
     outputNanoUsdPerToken: 5_000, // $5 / MTok
+    cacheReadNanoUsdPerToken: 100, // 0.1× input
+    cacheWriteNanoUsdPerToken: 1_250, // 1.25× input
   },
 ];
 
@@ -101,6 +123,9 @@ export type CostBreakdown = {
   totalUsd: string;
   inputNanoUsd: number;
   outputNanoUsd: number;
+  /** Zero for every operation without a cache breakpoint. */
+  cacheReadNanoUsd: number;
+  cacheWriteNanoUsd: number;
 };
 
 /** Renders integer nanodollars as a fixed-point USD decimal string, without floats. */
@@ -121,6 +146,21 @@ export function calculateProviderCost(params: {
   model: string;
   inputTokens: number;
   outputTokens: number;
+  /**
+   * Cached input tokens, when the operation used a cache breakpoint.
+   *
+   * Optional and defaulting to zero, deliberately. Every operation before
+   * agentic execution is a single request with no cache, so omitting them
+   * leaves that arithmetic byte-identical to what it was — a cost book whose
+   * numbers move when a field is added would invalidate every historical
+   * comparison this ledger exists to support.
+   *
+   * These are **in addition to** `inputTokens`, matching how the provider
+   * reports them: an API response counts cache reads and cache writes
+   * separately from the uncached input it charges at the base rate.
+   */
+  cacheReadInputTokens?: number;
+  cacheCreationInputTokens?: number;
   at?: Date;
 }): CostBreakdown {
   const pricing = resolvePricing(params.model, params.at ?? new Date());
@@ -129,7 +169,13 @@ export function calculateProviderCost(params: {
   // Thinking tokens are already included in `outputTokens` by the provider,
   // and are billed at the output rate — so they must not be added again.
   const outputNanoUsd = Math.round(params.outputTokens * pricing.outputNanoUsdPerToken);
-  const totalNanoUsd = inputNanoUsd + outputNanoUsd;
+  const cacheReadNanoUsd = Math.round(
+    (params.cacheReadInputTokens ?? 0) * pricing.cacheReadNanoUsdPerToken,
+  );
+  const cacheWriteNanoUsd = Math.round(
+    (params.cacheCreationInputTokens ?? 0) * pricing.cacheWriteNanoUsdPerToken,
+  );
+  const totalNanoUsd = inputNanoUsd + outputNanoUsd + cacheReadNanoUsd + cacheWriteNanoUsd;
 
   return {
     pricingVersion: pricing.pricingVersion,
@@ -137,5 +183,7 @@ export function calculateProviderCost(params: {
     totalUsd: nanoUsdToUsdString(totalNanoUsd),
     inputNanoUsd,
     outputNanoUsd,
+    cacheReadNanoUsd,
+    cacheWriteNanoUsd,
   };
 }

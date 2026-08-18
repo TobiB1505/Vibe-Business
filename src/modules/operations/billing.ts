@@ -10,7 +10,7 @@ import {
 } from "@/modules/credits/operation-billing";
 import { resolveBillingOwner } from "@/modules/credits/service";
 import { retailChargeFor, type RetailOperationKind } from "@/modules/credits/retail";
-import { ensureCreditAccount } from "@/modules/credits/store";
+import { findCreditAccountByUser } from "@/modules/credits/store";
 import { ZERO_CREDITS, type CreditUnits } from "@/modules/credits/units";
 
 /**
@@ -51,6 +51,49 @@ export type OperationBillingHold =
   | { billable: false }
   | { billable: true; reservationId: string; requiredCredits: CreditUnits; policyVersion: string };
 
+/** What an operation costs and whether the wallet covers it, right now. */
+export type OperationCreditCost = {
+  requiredCredits: CreditUnits;
+  availableCredits: CreditUnits;
+  affordable: boolean;
+};
+
+/**
+ * The price of an operation and the balance behind it, or null when it is free.
+ *
+ * Both numbers, unconditionally — which is the difference between this and
+ * {@link checkOperationAffordability}. A screen that can only learn the price
+ * at the moment it is refused cannot say "another one costs 35 Credits" while
+ * the customer can still afford it, and that gap is exactly what produced a
+ * disabled button claiming Credits were unavailable next to a funded account.
+ *
+ * Deliberately **read-only**: it looks the wallet up rather than ensuring one.
+ * This runs during page render, and rendering a price must not mint a billing
+ * account as a side effect — a customer who has never spent anything simply has
+ * a balance of zero, which is the true answer and the one the start path will
+ * reach anyway.
+ */
+export async function resolveOperationCreditCost(
+  supabase: SupabaseClient,
+  params: { projectId: string; operation: RetailOperationKind; now?: Date },
+): Promise<OperationCreditCost | null> {
+  const now = params.now ?? new Date();
+  const price = retailChargeFor(params.operation, now);
+  if (!price) return null;
+
+  const owner = await resolveBillingOwner(supabase, params.projectId);
+  const account = owner ? await findCreditAccountByUser(supabase, owner.userId) : null;
+  const availableCredits = account
+    ? await availableSpendableCredits(supabase, account.id, now)
+    : ZERO_CREDITS;
+
+  return {
+    requiredCredits: price.creditUnits,
+    availableCredits,
+    affordable: availableCredits >= price.creditUnits,
+  };
+}
+
 /**
  * Whether a customer can afford an operation, before anything is created.
  *
@@ -63,31 +106,14 @@ export async function checkOperationAffordability(
   supabase: SupabaseClient,
   params: { projectId: string; operation: RetailOperationKind; now?: Date },
 ): Promise<{ ok: true } | OperationBillingRefusal> {
-  const now = params.now ?? new Date();
-  const price = retailChargeFor(params.operation, now);
-  if (!price) return { ok: true };
+  const cost = await resolveOperationCreditCost(supabase, params);
+  if (!cost || cost.affordable) return { ok: true };
 
-  const owner = await resolveBillingOwner(supabase, params.projectId);
-  if (!owner) {
-    return {
-      refusal: "insufficient_credits",
-      requiredCredits: price.creditUnits,
-      availableCredits: ZERO_CREDITS,
-    };
-  }
-
-  const { account } = await ensureCreditAccount(supabase, owner.userId);
-  const available = await availableSpendableCredits(supabase, account.id, now);
-
-  if (available < price.creditUnits) {
-    return {
-      refusal: "insufficient_credits",
-      requiredCredits: price.creditUnits,
-      availableCredits: available,
-    };
-  }
-
-  return { ok: true };
+  return {
+    refusal: "insufficient_credits",
+    requiredCredits: cost.requiredCredits,
+    availableCredits: cost.availableCredits,
+  };
 }
 
 /**
@@ -136,6 +162,27 @@ export async function holdOperationCredits(
       policyVersion: authorized.policyVersion,
     },
   };
+}
+
+/**
+ * Whether Credits are currently held for this operation (§39, §43).
+ *
+ * The durable, server-side proof that a customer already paid to run something
+ * their entitlement does not include. A workflow step revalidates its premises
+ * against live state rather than trusting anything carried across the step
+ * boundary — and re-asking the *entitlement* alone gets the wrong answer for a
+ * paid run, because the entitlement is genuinely spent and saying so would fail
+ * an operation whose price is already reserved.
+ *
+ * `active` and nothing else: a released hold funded nothing, and a settled one
+ * belongs to work that already completed.
+ */
+export async function operationHasCreditHold(
+  supabase: SupabaseClient,
+  operationRunId: string,
+): Promise<boolean> {
+  const reservation = await findOperationReservation(supabase, operationRunId);
+  return reservation?.status === "active";
 }
 
 /**

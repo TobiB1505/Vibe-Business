@@ -224,13 +224,55 @@ export const ACTION_PLANNING_CONFIG: OperationConfig = {
   timeoutMs: 120_000,
 };
 
-const CONFIGS: Record<AIOperation, OperationConfig> = {
+/**
+ * The coding agent's model (EXECUTION CORE-4 §39, Rule 46).
+ *
+ * Its own type rather than an `OperationConfig`, because almost none of that
+ * shape applies: an agent loop has no single request to count input tokens for,
+ * no output schema to size a ceiling against, and no one duration to time out.
+ * Forcing it into `OperationConfig` would mean three fields that are either
+ * ignored or quietly wrong, and `getOperationConfig` would start returning a
+ * config nothing can send.
+ *
+ * What it shares — and the reason it lives in this file at all — is Rule 46:
+ * model identifiers and effort levels live here and nowhere else. No adapter,
+ * route handler, workflow or component may name a model, and no user may
+ * select one.
+ *
+ * ## Why Sonnet 5 for the first experiment
+ *
+ * §39 asks for one explicitly configured model, no automatic Opus escalation,
+ * and an interpretable first result. Sonnet 5 is already this codebase's
+ * judgement model, so its cost behaviour is the one Vibe has the most
+ * measurement of — which makes the first agent bill readable against something
+ * rather than against nothing. Escalation is a decision to make *after* there
+ * is a baseline, and adding it now would mean the first cost distribution
+ * described two models at once.
+ *
+ * `high` effort for the same reason the audit uses it: stepping down is a cost
+ * optimization to make once quality has been measured, not before.
+ */
+export type AgentModelConfig = {
+  operation: Extract<AIOperation, "agentic_execution">;
+  model: string;
+  effort: "low" | "medium" | "high";
+};
+
+export const AGENTIC_EXECUTION_CONFIG: AgentModelConfig = {
+  operation: "agentic_execution",
+  model: "claude-sonnet-5",
+  effort: "high",
+};
+
+const CONFIGS: Record<Exclude<AIOperation, "agentic_execution">, OperationConfig> = {
   business_readiness_audit: BUSINESS_READINESS_AUDIT_CONFIG,
   opportunity_generation: OPPORTUNITY_GENERATION_CONFIG,
   product_understanding: PRODUCT_UNDERSTANDING_CONFIG,
   action_planning: ACTION_PLANNING_CONFIG,
 };
 
-export function getOperationConfig(operation: AIOperation): OperationConfig {
+export function getOperationConfig(
+  operation: Exclude<AIOperation, "agentic_execution">,
+): OperationConfig {
   return CONFIGS[operation];
 }

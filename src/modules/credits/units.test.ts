@@ -6,6 +6,7 @@ import {
   creditsToUnits,
   creditUnits,
   formatCreditUnits,
+  formatCreditsForDisplay,
   subtractCredits,
   sumCredits,
   ZERO_CREDITS,
@@ -105,5 +106,33 @@ describe("display", () => {
 
   it("preserves the sign of a refund or charge", () => {
     expect(formatCreditUnits(creditUnits(-1500))).toBe("-1.5");
+  });
+
+  /**
+   * Grouping is not cosmetic. The billing screen and the audit's credit notice
+   * were formatting one balance two ways — "6,080" on one page and "6080" on
+   * the other — because each had picked a different formatter. A browser test
+   * found it; this pins the shared one.
+   */
+  describe("formatCreditsForDisplay", () => {
+    it("groups thousands so a large balance is readable", () => {
+      expect(formatCreditsForDisplay(creditUnits(6_080_000))).toBe("6,080");
+      expect(formatCreditsForDisplay(creditUnits(1_000_000))).toBe("1,000");
+      expect(formatCreditsForDisplay(creditUnits(1_234_567_000))).toBe("1,234,567");
+    });
+
+    it("leaves anything under a thousand alone", () => {
+      expect(formatCreditsForDisplay(creditUnits(35_000))).toBe("35");
+      expect(formatCreditsForDisplay(ZERO_CREDITS)).toBe("0");
+    });
+
+    /** The fraction is never grouped — it is not a thousands position. */
+    it("groups the whole part only", () => {
+      expect(formatCreditsForDisplay(creditUnits(1_000_500))).toBe("1,000.5");
+    });
+
+    it("preserves the sign", () => {
+      expect(formatCreditsForDisplay(creditUnits(-6_080_000))).toBe("-6,080");
+    });
   });
 });
