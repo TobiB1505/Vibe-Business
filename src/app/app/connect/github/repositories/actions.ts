@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { requireSession } from "@/modules/auth/session";
 import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import { listInstallationRepositories } from "@/modules/github/repositories";
 import { getVerifiedInstallation } from "@/modules/github/connections";
@@ -108,9 +109,16 @@ export async function selectRepository(
    * Deliberately not allowed to fail the connect flow. A customer who
    * connected their repository successfully has connected it; a billing hiccup
    * must not undo that, and the billing page can reconcile the grant later.
+   *
+   * Its own service-role client, separate from `supabase` above: billing
+   * tables have no write policy for any authenticated client, by design
+   * (§64), so the cookie-scoped client used for the rest of this action could
+   * never succeed here. Ownership stays session-derived — `session.userId`,
+   * never a value this client could be tricked into writing on someone
+   * else's behalf.
    */
   try {
-    await ensureWelcomeGrant(supabase, { userId: session.userId });
+    await ensureWelcomeGrant(createServiceClient(), { userId: session.userId });
   } catch (error) {
     console.error("[billing] welcome grant failed during project connect", {
       userId: session.userId,

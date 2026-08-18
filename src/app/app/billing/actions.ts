@@ -2,7 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { hasStripeConfiguration } from "@/lib/env/stripe";
-import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { requireSession } from "@/modules/auth/session";
 import { parseCreditPackKey, parsePaidPlanKey } from "@/modules/billing/catalog";
 import {
@@ -28,6 +28,18 @@ import { ensureWelcomeGrant } from "@/modules/credits/grants";
  * and refuses anything that does not match. There is no field for a price, a
  * currency, a Credit amount, a Stripe Price id or a user id — so `credits=500000`
  * and a forged `priceId` have nowhere to land (§23).
+ *
+ * ## Why the service-role client, here specifically
+ *
+ * Every billing table has a select policy and deliberately no write policy at
+ * all (§64) — that absence is what makes "no client-writable financial
+ * surface" true. It also means the ordinary cookie-scoped client can never
+ * write a wallet, a grant or a Stripe customer mapping, on purpose. These
+ * actions are the trusted server-side path that is supposed to write them, so
+ * they use `createServiceClient()` — the same client the Stripe webhook uses,
+ * for the same reason (ADR 0025 §9): ownership is taken from
+ * `requireSession()`'s verified JWT claim, never from a client-supplied
+ * parameter, so bypassing RLS here does not reopen the hole RLS closes.
  */
 
 export type BillingActionState = { error: string } | null;
@@ -57,7 +69,7 @@ export async function startCreditPackCheckoutAction(
   const packKey = parseCreditPackKey(formData.get("pack"));
   if (!packKey) return { error: MESSAGES.unknown_sku };
 
-  const supabase = await createClient();
+  const supabase = createServiceClient();
 
   let destination: string;
   try {
@@ -71,10 +83,17 @@ export async function startCreditPackCheckoutAction(
       return { error: result.refusal === "sku_not_configured" ? MESSAGES.sku_not_configured : MESSAGES.failed };
     }
     destination = result.url;
-  } catch {
-    // Deliberately swallowing the provider error. A Stripe failure message can
-    // carry account and request detail that has no business on a customer's
-    // screen or in a log line (§21, §95).
+  } catch (error) {
+    // The failure detail is never shown to the customer (§21, §95) — a Stripe
+    // error can carry account and request detail that has no business on a
+    // screen. It is still logged by name only, so "why did this fail" is
+    // answerable from Vercel logs instead of unanswerable from a swallowed
+    // exception, which is what made the first production failure invisible.
+    console.error("[billing] credit pack checkout failed", {
+      userId: session.userId,
+      packKey,
+      error: error instanceof Error ? error.name : "unknown",
+    });
     return { error: MESSAGES.failed };
   }
 
@@ -95,7 +114,7 @@ export async function startPlanCheckoutAction(
   const planKey = parsePaidPlanKey(formData.get("plan"));
   if (!planKey) return { error: MESSAGES.unknown_sku };
 
-  const supabase = await createClient();
+  const supabase = createServiceClient();
 
   let destination: string;
   try {
@@ -109,7 +128,12 @@ export async function startPlanCheckoutAction(
       return { error: result.refusal === "sku_not_configured" ? MESSAGES.sku_not_configured : MESSAGES.failed };
     }
     destination = result.url;
-  } catch {
+  } catch (error) {
+    console.error("[billing] plan checkout failed", {
+      userId: session.userId,
+      planKey,
+      error: error instanceof Error ? error.name : "unknown",
+    });
     return { error: MESSAGES.failed };
   }
 
@@ -124,14 +148,18 @@ export async function openBillingPortalAction(
   const session = await requireSession();
   if (!hasStripeConfiguration()) return { error: MESSAGES.unavailable };
 
-  const supabase = await createClient();
+  const supabase = createServiceClient();
 
   let destination: string;
   try {
     const result = await startCustomerPortal(supabase, { userId: session.userId });
     if (!result.ok) return { error: MESSAGES.no_customer };
     destination = result.url;
-  } catch {
+  } catch (error) {
+    console.error("[billing] customer portal session failed", {
+      userId: session.userId,
+      error: error instanceof Error ? error.name : "unknown",
+    });
     return { error: MESSAGES.failed };
   }
 
@@ -161,12 +189,16 @@ export async function claimWelcomeCreditsAction(
   _formData: FormData,
 ): Promise<BillingActionState> {
   const session = await requireSession();
-  const supabase = await createClient();
+  const supabase = createServiceClient();
 
   try {
     // Ownership is the session's own user id, never a form field (§65).
     await ensureWelcomeGrant(supabase, { userId: session.userId });
-  } catch {
+  } catch (error) {
+    console.error("[billing] welcome grant claim failed", {
+      userId: session.userId,
+      error: error instanceof Error ? error.name : "unknown",
+    });
     return { error: MESSAGES.failed };
   }
 
