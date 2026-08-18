@@ -57,6 +57,8 @@ V0.1 foundational architecture decisions have been recorded:
 - [0025](0025-stripe-payment-rail-and-credit-grants.md) — Stripe as Payment Rail, and Credit Grants as Provenance (Accepted)
 - [0026](0026-agentic-execution-contract.md) — Agentic Execution Contract (Accepted)
 - [0027](0027-coding-agent-provider-and-tool-gateway.md) — Agentic Coding: Provider Abstraction, Tool Gateway, and Independent Validation (Accepted)
+- [0028](0028-founder-selectable-action-plan-move.md) — Founder-Selectable Action Plan Move (Accepted)
+- [0029](0029-agent-runtime-placement-and-credential-broker.md) — Agent Runtime Placement: the Harness in the Sandbox, the Key Behind a Gateway (Accepted, amends 0027)
 
 Several architecture questions remain intentionally open — see [ARCHITECTURE.md §7](../../ARCHITECTURE.md#7-deferred--open-decisions).
 

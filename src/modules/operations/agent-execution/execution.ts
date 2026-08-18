@@ -22,6 +22,7 @@ import {
 import {
   AGENT_RUNTIME_DIRNAME,
   installAgentRuntime,
+  type SandboxAgentRuntimeDeps,
 } from "@/modules/coding-agent/sandbox-runtime/provider";
 import {
   extractCandidateChange,
@@ -165,14 +166,7 @@ export type AgentExecutionRuntime =
     };
 
 /** Everything the sandbox-hosted harness needs. None of it agent-chosen. */
-export type SandboxAgentContext = {
-  sandbox: SandboxHandle;
-  runtimeDir: string;
-  workspaceDir: string;
-  workspaceCwd: string;
-  gatewayBaseUrl: string;
-  gatewayToken: string;
-};
+export type SandboxAgentContext = SandboxAgentRuntimeDeps;
 
 export type AgentExecutionDeps = {
   /** Service-role client: workflow steps have no user session (ADR 0013). */
@@ -430,6 +424,17 @@ export async function provisionAgentWorkspaceStep(
     gateway ? { mode: "allow_domains", domains: [gateway.host] } : { mode: "deny_all" },
   );
 
+  // The other half of the runtime trail. Which sandbox, and what it may reach
+  // from here — the two facts a person needs before asking why a run behaved
+  // the way it did. No credential, and no host the operator did not configure.
+  console.info("[agent-runtime]", {
+    kind: "workspace_ready",
+    operationId,
+    agentExecutionRunId: run.id,
+    sandboxId: sandbox.id,
+    egress: gateway ? gateway.host : "deny_all",
+  });
+
   if (installed.exitCode !== 0) {
     return { ok: false, failureCode: "validation_checks_failed" };
   }
@@ -547,6 +552,26 @@ async function buildRunProvider(
 
   const provider = deps.runtime.build({
     sandbox: input.sandbox,
+    /*
+     * Runtime lifecycle, to the operator's log rather than to the audit trail.
+     *
+     * The audit log is a founder's activity feed — "Vibe started making a change
+     * to your app" — and "the CLI exited 127" is not a sentence that belongs in
+     * it. What the customer's records already carry is the outcome: turns on the
+     * run row, tokens and latency per sampling call in `ai_usage_events`, CPU
+     * and egress in `sandbox_usage_events`, and the reservation's own status.
+     *
+     * These three lines close the one gap those leave: a run that produced zero
+     * turns says nothing about *how far* it got, which is exactly the question
+     * the 44 ms failure could not answer.
+     */
+    onEvent: (event) => {
+      console.info("[agent-runtime]", {
+        operationId: input.run.operationRunId,
+        agentExecutionRunId: input.run.id,
+        ...event,
+      });
+    },
     runtimeDir,
     workspaceDir: workspaceCwd === "." ? sandboxHome : `${sandboxHome}/${workspaceCwd}`,
     workspaceCwd,
