@@ -569,3 +569,79 @@ No execution UI was built (§60). The runtime produces everything a live
 execution screen needs — ordered activity events with counts and paths, run
 status, the open interrupt with its structured response schema, and the
 prepared change — and rendering them is the next sprint's.
+
+## Addendum — the website dogfood gate
+
+The runtime above had no way for a founder to reach it: no route, no server
+action, no button. This continuation adds exactly enough of one for a real
+authenticated click to exercise it, gated to stay invisible outside the
+dogfood — **not** EXECUTION UI-1, and explicitly not that sprint's UI.
+
+**`src/modules/coding-agent/website-preflight.ts`** is the one new domain
+function: `previewDogfoodStep(supabase, {projectId, userId, stepKey})` re-runs
+Core-3's resolver and Core-4's own preflight against *live* state — including
+a real GitHub HEAD probe through the caller's own installation, which
+`dogfood.probe.ts` deliberately never does — and persists a real
+`ExecutionSpec` when the step is genuinely agentic and admissible. Called
+twice on a real run: once to render the preview, once more inside the start
+action, so "do not trust the preflight rendered seconds earlier" (§14) is
+structural rather than a comment.
+
+**`src/app/app/projects/[projectId]/agent-dogfood/`** is the surface itself —
+an index listing the current plan's steps with their server-resolved routes,
+and a per-step page with the preflight summary and the one `Run with Vibe`
+button. Gated by `isDogfoodEligibleProject` (the same
+`VIBE_INTERNAL_AGENT_DOGFOOD_PROJECT_IDS` allowlist Core-4 already defined) —
+an ineligible project gets `notFound()` before anything else is read, so the
+route's existence is not observable from outside the allowlist. Deliberately
+**not** added to `action-plan-panel.tsx`: that file's own header documents "no
+`Apply`/`Execute` button anywhere in this file" as a hard invariant with an
+E2E test behind it, and this sprint does not touch either.
+
+`startDogfoodRunAction(projectId, stepKey)` is the only mutating entry point,
+and its whole parameter list is a project id and a step key — no mode, risk,
+repository, SHA, model, policy or budget is client-suppliable, which is
+asserted by reading the function's own signature in
+`agent-dogfood/security.test.ts`. On success it redirects to
+`?run=<operationId>`, so the URL — not React state — is what a reload
+recovers from (§18); `startAgentExecution`'s own identity-scoped claim makes a
+double submission resolve to the one active run regardless (§13, §56).
+
+The status view renders only what Core-4 already produces: `OperationView`'s
+stage and failure code through the existing `operations/{view,messages}.ts`,
+and each activity line through `EXECUTION_ACTIVITY_LABELS` — no new state, no
+narration field, nothing fabricated. An open interrupt renders Core-3's own
+`EXECUTION_INTERRUPT_QUESTIONS` plus the model-authored option *labels*
+(bounded, never free prose) and posts back through
+`answerExecutionInterrupt`, which is already scoped to project and user and
+already validates the answer against the stored schema.
+
+### What this addendum does not do
+
+It does not select a step. **No project in the database currently has a
+completed Action Plan whose repository also has a supported validation
+profile** — Jandia-Arena's one completed plan is FastAPI + React with no
+detected package manager (Core-3's own finding, unchanged); Vibe Business's
+own project gained a real Next.js snapshot since the base sprint was written,
+but has zero Action Plans, in any status. Planning a Move is a founder product
+action needing `ANTHROPIC_API_KEY`, which is absent from every environment
+this work has been done in — so the index page's honest empty state, not a
+selected step, is what a founder reaches first. See *Runway* below.
+
+### Runway for the founder
+
+```
+1. Open /app/projects/<vibe-business-project-id>/moves and plan a Move.
+   (Repository analysis is already done — 8 successful snapshots exist.)
+2. Open /app/projects/<vibe-business-project-id>/agent-dogfood.
+   Only reachable because this project is on VIBE_INTERNAL_AGENT_DOGFOOD_PROJECT_IDS.
+3. Pick the step that resolved "Vibe could build this" and open it.
+4. Read the preflight — route, risk, validation profile, ceilings, done-when.
+5. Press "Run with Vibe".
+```
+
+Nothing in steps 2–5 spends a Credit or contacts a provider until step 5's
+click clears server-side admission a second time.
+
+**REAL CLAUDE AGENT RUN: NOT STARTED BY THIS CONTINUATION.**
+**PRODUCTION AGENT CREDIT PRICE: NOT ACTIVATED.**
