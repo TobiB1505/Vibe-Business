@@ -1,6 +1,6 @@
 # EXECUTION CORE-3 — Agentic Execution Contract
 
-Status: implemented, not merged. No agent, no model call, no provider spend, no UI change. Migration written and **not deployed** (no linked Supabase project in this environment).
+Status: implemented, not merged. No agent, no model call, no provider spend, no UI change. Both migrations **deployed and verified against real Postgres** via the Supabase MCP.
 
 The hard contract that will sit between the Action Planner and the future Coding Agent.
 
@@ -210,7 +210,7 @@ Every line is an executable assertion in `security.test.ts`.
 
 ## Tests
 
-**149 new tests across 12 files**, all in the standard suite (4307 total, up from 4158 on `main`):
+**150 new tests across 12 files**, all in the standard suite (4308 total, up from 4158 on `main`):
 
 `resolver.test.ts` (§41–§46, §52) · `policy.test.ts` (§15, §17, §18, §50, §51) · `spec.test.ts` (§9–§11, §47, §48) · `budget.test.ts` (§24–§26, §49) · `freshness.test.ts` (§29, §52) · `validation-requirements.test.ts` (§30, §31, §53) · `interrupts.test.ts` (§21–§23, §34) · `proposed-change.test.ts` (§31, §32) · `schema.test.ts` (SQL/TS agreement, §5 copy) · `store.test.ts` (§10, §35, §55) · `security.test.ts` (§54) · `real-plan-dogfood.test.ts` (§38, §39).
 
@@ -220,18 +220,55 @@ Every line is an executable assertion in `security.test.ts`.
 | --- | --- |
 | `pnpm lint` | clean — 0 errors, 9 pre-existing warnings, all on files this branch does not touch |
 | `pnpm typecheck` | clean |
-| `pnpm test` | **4307 passed** (225 files), up from 4158 on `main` |
+| `pnpm test` | **4308 passed** (225 files), up from 4158 on `main` |
 | `pnpm build` | clean |
 | `pnpm test:e2e` | **283 passed** |
-| `pnpm db:status` | cannot run — no linked Supabase project |
+| `pnpm db:status` | cannot run — no linked Supabase project; deployment went through the Supabase MCP instead |
 
 The E2E suite initially failed 283/283 on this branch **and identically on `origin/main`**, which is what identified it as environmental rather than a regression: the pinned `@playwright/test` 1.62.1 looks for a headless-shell build the sandbox image does not carry. Aliasing the pre-installed browser into the expected path made the whole suite pass on both. No repository file was changed to achieve that, and `playwright.config.ts` is untouched.
 
 ## Migration status
 
-`supabase/migrations/20260818170000_execution_specs.sql` — **written, not deployed.** `pnpm db:status` reports `LegacyProjectNotLinkedError`; no access token exists in this environment, so linking and pushing are not possible and were not attempted (rules 29, 30, 32, 33). Local migrations remain the source of truth (rule 34); the remote must converge to them.
+**Deployed and verified against real Postgres.**
 
-Every table the migration references was verified to exist on the Vibe Business database (project ref derived from `NEXT_PUBLIC_SUPABASE_URL`, never guessed): `projects`, `action_plans`, `business_readiness_audits`, `repository_connections`, `repository_intelligence_snapshots`, `billing_credit_quotes`. `execution_specs` itself is absent, as expected. The migration is therefore known-deployable rather than assumed so.
+The Supabase CLI could not be used — `pnpm db:status` reports `LegacyProjectNotLinkedError` and no access token exists in this environment — so deployment went through the Supabase MCP's `apply_migration`, which registers in the same `supabase_migrations` ledger the CLI reads. This is not the SQL Editor copy/paste that rule 29 forbids.
+
+The project was confirmed rather than guessed (rules 32, 33): `list_projects` returned exactly one, `dcbwlctscooefwnivxzv` / **Vibe-Business**, matching the ref derived from `NEXT_PUBLIC_SUPABASE_URL`. Migration history was inspected first (rule 30) — 37 rows, all matching local files, no `execution_specs`.
+
+| Version | Name |
+| --- | --- |
+| `20260818131106` | `execution_specs` |
+| `20260818131334` | `execution_spec_guard_security_invoker` |
+
+Local filenames were renamed to the versions the management API stamped, so `db:status` reconciles rather than reporting them unapplied. (The pre-existing billing migration still carries the same drift, `20260818120000` local vs `20260818090300` remote; not touched — it is not this sprint's change.)
+
+### The advisor caught something real
+
+`get_advisors --type security`, run immediately after the first deploy, found a finding **this sprint introduced**:
+
+> Function `public.reject_execution_spec_mutation()` can be executed by the `anon` role as a `SECURITY DEFINER` function via `/rest/v1/rpc/`.
+
+`security definer` had been copied from the shape of the schema's existing privileged helpers without asking what privilege the function needs. The answer is none — it takes no arguments, reads nothing, writes nothing and does exactly one thing: raise. A `before update or delete` trigger fires regardless of the function's security context, so the elevation bought nothing and left a `SECURITY DEFINER` function reachable by `anon`.
+
+Fixed forward in `20260818131334`: `security invoker`, plus `revoke execute` from `public`, `anon` and `authenticated`. Both findings are gone. A test now pins the posture by reading the *newest* definition across the migration history, so a future `create or replace` cannot quietly re-elevate it.
+
+Four advisor findings remain, all pre-dating this branch and none introduced here: `billing_stripe_events` has RLS with no policy, `set_updated_at` has a mutable `search_path`, `rls_auto_enable` is an `anon`-callable `SECURITY DEFINER` function, and leaked-password protection is off. Out of scope, recorded rather than fixed.
+
+### Verified behaviourally, not just structurally
+
+The residual this sprint originally carried — *the trigger and RLS policy have never been exercised against Postgres* — is closed. Both check runs inserted a genuine row against this project's real plan, audit, connection and snapshot inside a transaction that was then aborted, so **nothing was left in the production database** (`rows_remaining = 0`, confirmed by an independent read).
+
+| Check | Result |
+| --- | --- |
+| Table, RLS on, exactly one policy (`SELECT` only), 1 trigger, 4 indexes | ✅ |
+| Valid agentic insert | ✅ |
+| `UPDATE` refused | ✅ `23001` |
+| `DELETE` refused | ✅ `23001` |
+| Duplicate `spec_identity` refused | ✅ `23505` |
+| Agentic row also naming a capability refused | ✅ `23514` |
+| `mode = 'blocked'` not storable | ✅ `23514` |
+| Truncated `base_sha` refused | ✅ `23514` |
+| Guard still blocks after the security fix; `prosecdef = false`; `anon`/`authenticated` cannot execute | ✅ |
 
 Its CHECK constraints are asserted against the TypeScript unions by `schema.test.ts` reading the migration history, and its unique index and mode/authority constraint are modelled in `FakeDatabase` — because the in-memory database evaluates neither, and this project has been bitten by that twice.
 
@@ -252,7 +289,6 @@ Its CHECK constraints are asserted against the TypeScript unions by `schema.test
 
 ## Residuals
 
-- **No migration deployed.** The table does not exist remotely, so nothing has exercised the immutability trigger or the RLS policy against Postgres. Both are asserted against the migration text only.
 - **No production writer.** `createExecutionSpec` is tested and called by nothing in the product. Core-4 supplies the caller.
 - **The live HEAD is not probed in the dogfood.** It would need an installation token in a dev harness; unread is modelled as unknown, and admission refuses accordingly.
 - **The V1 execution class is one entry.** That is honest today and will need a structured routing signal before it becomes two.

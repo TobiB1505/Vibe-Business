@@ -45,16 +45,37 @@ function moduleSources(): string[] {
     .map((name) => readFileSync(join(MODULE_DIR, name), "utf8"));
 }
 
-const MIGRATION = readFileSync(
-  join(
-    process.cwd(),
-    "supabase/migrations",
-    readdirSync(join(process.cwd(), "supabase/migrations")).find((name) =>
-      name.endsWith("_execution_specs.sql"),
-    )!,
-  ),
-  "utf8",
-);
+const MIGRATIONS_DIR = join(process.cwd(), "supabase/migrations");
+
+function migration(suffix: string): string {
+  const name = readdirSync(MIGRATIONS_DIR)
+    .sort()
+    .find((entry) => entry.endsWith(suffix));
+  if (!name) throw new Error(`no migration ending in ${suffix}`);
+  return readFileSync(join(MIGRATIONS_DIR, name), "utf8");
+}
+
+const MIGRATION = migration("_execution_specs.sql");
+
+/**
+ * The newest definition of the immutability guard.
+ *
+ * Read across the whole history rather than from one file, because a `create
+ * or replace` in a later migration is the definition that is live — reading
+ * only the original would assert against a function Postgres no longer has.
+ */
+function guardDefinition(): string {
+  const definitions = readdirSync(MIGRATIONS_DIR)
+    .sort()
+    .map((name) => readFileSync(join(MIGRATIONS_DIR, name), "utf8"))
+    // Comments stripped first, and that is not cosmetic: the follow-up
+    // migration *explains* why `security definer` was wrong, so a naive scan
+    // would find the phrase in the prose that removed it.
+    .map((sql) => sql.replace(/--[^\n]*/g, ""))
+    .filter((sql) => sql.includes("function public.reject_execution_spec_mutation()"));
+
+  return definitions[definitions.length - 1];
+}
 
 describe("§54 — the Planner cannot grant execution authority", () => {
   it("resolves independently of the plan's own executionSupport and capability", () => {
@@ -92,6 +113,21 @@ describe("§54 — a client cannot forge what a spec says", () => {
   it("rejects every mutation of a stored spec at the database level (§10, §47)", () => {
     expect(MIGRATION).toContain("before update or delete on public.execution_specs");
     expect(MIGRATION).toContain("execution_specs rows are immutable");
+  });
+
+  it("leaves the immutability guard unelevated and off the REST surface", () => {
+    // Found by Supabase's security advisor immediately after the first deploy:
+    // the guard shipped as `security definer`, which made it callable by `anon`
+    // over `/rest/v1/rpc/`. It needs no privilege — it only raises — so the
+    // elevation was removed rather than justified.
+    //
+    // Asserted against the *newest* definition, which is how a `create or
+    // replace` in a later migration is read: the last one wins, exactly as it
+    // does in Postgres.
+    const definition = guardDefinition();
+    expect(definition).toContain("security invoker");
+    expect(definition).not.toContain("security definer");
+    expect(definition).toContain("revoke execute on function");
   });
 
   it("constrains the mode column to executable modes only", () => {
