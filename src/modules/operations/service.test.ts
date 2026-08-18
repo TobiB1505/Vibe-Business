@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { BUSINESS_READINESS_AUDIT_CONFIG } from "@/modules/ai/operations";
 import { EVIDENCE_PACK_V3_VERSION } from "@/modules/business-audit/evidence-v3";
 import { PROMPT_VERSION } from "@/modules/business-audit/prompt";
@@ -7,16 +7,29 @@ import { BUSINESS_AUDIT_SCHEMA_VERSION, BUSINESS_AUDIT_VERSION } from "@/modules
 import { computeAuditInputHash } from "@/modules/business-audit/store";
 import { creditsToUnits } from "@/modules/credits/units";
 import {
-  getActiveBusinessAuditOperation,
-  getOperationStatus,
-  startBusinessAuditOperation,
-} from "./service";
-import {
   FakeDatabase,
   FakeExecutor,
   fakeSupabase,
   seedProductUnderstanding,
 } from "./test-support";
+
+/*
+ * The credit hold is taken with the service-role client (§53, §64) — see the
+ * comment in `service.ts` next to `createServiceClient()` for why. The double
+ * shares the same in-memory database as the cookie-scoped `supabase` these
+ * tests pass in directly, which is what production does too: one Postgres
+ * database, two clients with different write access to it.
+ */
+const serviceDb = { current: new FakeDatabase() };
+vi.mock("@/lib/supabase/service", () => ({
+  createServiceClient: () => fakeSupabase(serviceDb.current),
+}));
+
+const {
+  getActiveBusinessAuditOperation,
+  getOperationStatus,
+  startBusinessAuditOperation,
+} = await import("./service");
 
 /**
  * Starting a durable audit (Sprint 7 §8, §9, §29).
@@ -84,6 +97,7 @@ let executor: FakeExecutor;
 
 beforeEach(() => {
   db = new FakeDatabase();
+  serviceDb.current = db;
   executor = new FakeExecutor();
   seedProject(db);
   seedEvidence(db);

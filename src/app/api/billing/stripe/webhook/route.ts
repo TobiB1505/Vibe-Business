@@ -1,9 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
+import type Stripe from "stripe";
 import { hasStripeConfiguration } from "@/lib/env/stripe";
 import { createServiceClient } from "@/lib/supabase/service";
 import { catalogPriceIds } from "@/modules/billing/checkout";
 import { getStripeClient, verifyStripeWebhook } from "@/modules/billing/stripe/client";
-import { normalizeStripeEvent } from "@/modules/billing/stripe/normalize";
+import { normalizeStripeEvent, normalizeSubscription } from "@/modules/billing/stripe/normalize";
 import { processStripeEvent } from "@/modules/billing/webhook-service";
 
 /**
@@ -77,11 +78,49 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
   }
 
+  /*
+   * Subscription events are re-fetched live rather than trusted from the
+   * webhook payload (§29, §33).
+   *
+   * Stripe does not guarantee delivery order between two subscription events
+   * fired close together — a "cancel at period end" click can produce two
+   * `customer.subscription.updated` deliveries whose *payloads* disagree about
+   * which one is current, because each is a snapshot from the instant Stripe
+   * built it. Trusting whichever payload happens to finish processing last is
+   * exactly the out-of-order bug this guards against: it already produced a
+   * stored subscription with `canceled_at` set but `cancel_at_period_end`
+   * false, a combination Stripe itself never produces.
+   *
+   * The fix is not to guess which payload is newer. It is to never trust a
+   * payload for this at all — a live `retrieve` by id returns Stripe's current
+   * truth regardless of which delivery triggered it, so two deliveries for the
+   * same subscription now always converge on writing the same, correct row.
+   */
+  let liveSubscription: Stripe.Subscription | undefined;
+  if (
+    event.type === "customer.subscription.created" ||
+    event.type === "customer.subscription.updated" ||
+    event.type === "customer.subscription.deleted"
+  ) {
+    const subscription = event.data.object as { id: string };
+    try {
+      liveSubscription = await getStripeClient().subscriptions.retrieve(subscription.id);
+    } catch {
+      // Could not confirm the subscription's current state, so nothing is
+      // synced from a possibly-stale payload. 500 lets Stripe retry.
+      return NextResponse.json({ error: "subscription_unavailable" }, { status: 500 });
+    }
+  }
+
   const supabase = createServiceClient();
 
   try {
+    const normalized = normalizeStripeEvent(event, checkoutPriceIds);
+
     const result = await processStripeEvent(supabase, {
-      event: normalizeStripeEvent(event, checkoutPriceIds),
+      event: liveSubscription
+        ? { ...normalized, subscription: normalizeSubscription(liveSubscription) }
+        : normalized,
       catalogPriceIds: catalogPriceIds(),
     });
 
