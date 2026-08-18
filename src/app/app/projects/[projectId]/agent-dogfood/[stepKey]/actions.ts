@@ -13,7 +13,7 @@ import {
 import { getAgentExecutionStatus, startAgentExecution } from "@/modules/coding-agent/service";
 import type { AgentStartRefusal } from "@/modules/coding-agent/service";
 import { previewDogfoodStep } from "@/modules/coding-agent/website-preflight";
-import { persistAgentExecutionSpec } from "@/modules/operations/agent-execution/spec";
+import { persistAgentExecutionSpec } from "@/modules/operations/agent-execution/server-writes";
 import { VercelWorkflowExecutor } from "@/modules/operations/vercel/executor";
 import type { OperationView } from "@/modules/operations/view";
 import type { ExecutionInterruptAnswer } from "@/modules/execution-contract/schema";
