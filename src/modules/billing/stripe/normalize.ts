@@ -199,6 +199,26 @@ function subscriptionPeriod(subscription: Stripe.Subscription): {
   return { start, end };
 }
 
+/**
+ * Whether a subscription will not renew — the thing the billing page actually
+ * needs to know.
+ *
+ * `cancel_at_period_end` is not the only way Stripe schedules a subscription
+ * to stop renewing. The Customer Portal can instead set `cancel_at` — a
+ * specific future timestamp — while leaving `cancel_at_period_end` false the
+ * entire time. A real cancellation through the Portal was seen live setting
+ * exactly that: `cancel_at` moved from `null` to the current period's end,
+ * and `cancel_at_period_end` never changed. Reading only the boolean missed
+ * it completely and silently kept showing "Renews on...".
+ *
+ * So this is not "prefer one field over the other" — both are checked,
+ * because either one, alone, means the same thing: no further invoice is
+ * coming.
+ */
+function willNotRenew(subscription: Stripe.Subscription): boolean {
+  return (subscription.cancel_at_period_end ?? false) || subscription.cancel_at != null;
+}
+
 export function normalizeSubscription(subscription: Stripe.Subscription): NormalizedSubscription {
   const period = subscriptionPeriod(subscription);
 
@@ -211,7 +231,7 @@ export function normalizeSubscription(subscription: Stripe.Subscription): Normal
     id: subscription.id,
     customerId: idOf(subscription.customer),
     status: subscription.status,
-    cancelAtPeriodEnd: subscription.cancel_at_period_end ?? false,
+    cancelAtPeriodEnd: willNotRenew(subscription),
     canceledAt: subscription.canceled_at ?? null,
     currentPeriodStart: period.start,
     currentPeriodEnd: period.end,
