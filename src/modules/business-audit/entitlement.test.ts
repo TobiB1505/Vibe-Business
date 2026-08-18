@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { MIN_SUPPORTED_AUDIT_CONTRACT_VERSION } from "./schema";
+import { creditsToUnits } from "@/modules/credits/units";
 import {
   AUDIT_START_LIMITS,
+  auditBlockedByCredits,
   authorizeAudit,
   isAuditContractCurrent,
   consumesIncludedEntitlement,
+  resolveAuditCreditGate,
   retryAllowedAfterFailure,
   toAuditAccessStatus,
+  type AuditAccessStatus,
   type AuditEntitlementFacts,
 } from "./entitlement";
 
@@ -168,17 +172,25 @@ describe("retryAllowedAfterFailure", () => {
 });
 
 describe("toAuditAccessStatus", () => {
-  it("reports availability and never a price", () => {
+  /**
+   * The pure function still resolves no price — but for a different reason
+   * than it used to. It is no longer that Credits do not exist; it is that a
+   * wallet is not an entitlement fact, so this function has nothing to read a
+   * balance from. `getAuditAccessStatus` fills `creditCost` in, and only on the
+   * path where the customer is actually the one paying.
+   */
+  it("reports availability and resolves no price of its own", () => {
     const status = toAuditAccessStatus(facts());
 
     expect(status).toEqual({
       freeAuditAvailable: true,
       additionalAuditsRequireCredits: true,
+      creditCost: null,
       blockedReason: null,
       systemRefreshAvailable: false,
     });
-    // CORE-2 §46: no fake pricing, no invented balance.
-    expect(JSON.stringify(status)).not.toMatch(/\$|price|balance|credits_remaining/i);
+    // CORE-2 §46: no invented balance, and no amount this module made up.
+    expect(JSON.stringify(status)).not.toMatch(/\$|balance|credits_remaining/i);
   });
 
   it("reports the free audit as spent once it is consumed", () => {
@@ -305,6 +317,81 @@ describe("isAuditContractCurrent", () => {
     "treats %p as obsolete",
     (version) => {
       expect(isAuditContractCurrent(version)).toBe(false);
+    },
+  );
+});
+
+/**
+ * What a screen is allowed to do with `credits_required`
+ * (BILLING CORE-2 §39, §43).
+ *
+ * These exist because the failure this replaces was not a wrong value — it was
+ * two surfaces reading one correct value differently. The score page disabled
+ * its button and said Credits "aren't available yet"; the button beside it
+ * rendered the 35-Credit price; the account held thousands. Every test passed.
+ *
+ * So the classification is a function now, and these are its cases.
+ */
+describe("resolveAuditCreditGate", () => {
+  const status = (overrides: Partial<AuditAccessStatus> = {}): AuditAccessStatus => ({
+    freeAuditAvailable: false,
+    additionalAuditsRequireCredits: true,
+    creditCost: null,
+    blockedReason: "credits_required",
+    systemRefreshAvailable: false,
+    ...overrides,
+  });
+
+  const cost = (required: number, available: number) => ({
+    requiredCredits: creditsToUnits(required),
+    availableCredits: creditsToUnits(available),
+    affordable: creditsToUnits(available) >= creditsToUnits(required),
+  });
+
+  it("calls an affordable re-run payable, and does not block on it", () => {
+    const gate = resolveAuditCreditGate(status({ creditCost: cost(35, 6080) }));
+
+    expect(gate).toEqual({
+      kind: "payable",
+      requiredCredits: creditsToUnits(35),
+      availableCredits: creditsToUnits(6080),
+    });
+    // The regression, stated directly: a price does not disable a button.
+    expect(auditBlockedByCredits(gate)).toBe(false);
+  });
+
+  it("carries both numbers when the wallet is short, so the screen can name them", () => {
+    const gate = resolveAuditCreditGate(status({ creditCost: cost(35, 20) }));
+
+    expect(gate).toEqual({
+      kind: "unaffordable",
+      requiredCredits: creditsToUnits(35),
+      availableCredits: creditsToUnits(20),
+    });
+    expect(auditBlockedByCredits(gate)).toBe(true);
+  });
+
+  /** Exact change is enough. A boundary that blocks here is money kept for nothing. */
+  it("treats an exactly-sufficient balance as payable", () => {
+    expect(resolveAuditCreditGate(status({ creditCost: cost(35, 35) })).kind).toBe("payable");
+  });
+
+  it("distinguishes an unpriced audit from an unaffordable one", () => {
+    const gate = resolveAuditCreditGate(status({ creditCost: null }));
+
+    expect(gate).toEqual({ kind: "unpriced" });
+    expect(auditBlockedByCredits(gate)).toBe(true);
+  });
+
+  it.each([null, "audit_already_running", "product_profile_missing"] as const)(
+    "says nothing about Credits when the refusal is %p",
+    (blockedReason) => {
+      const gate = resolveAuditCreditGate(status({ blockedReason, creditCost: cost(35, 0) }));
+
+      expect(gate).toEqual({ kind: "not_applicable" });
+      // Every other refusal keeps its own meaning — this only reclassifies the
+      // one that stopped being terminal.
+      expect(auditBlockedByCredits(gate)).toBe(false);
     },
   );
 });

@@ -1,10 +1,13 @@
+import type { CreditUnits } from "@/modules/credits/units";
 import { MIN_SUPPORTED_AUDIT_CONTRACT_VERSION } from "./schema";
 
 /**
  * Free Business Audit entitlement (CORE-2 §16, §17).
  *
  * The product rule: **the first qualified Business Audit is free.** Additional
- * audits are credit-gated, and Vibe Credits do not exist yet.
+ * audits are credit-gated, and since Billing Core-2 that gate is one a customer
+ * can actually pass — Credits exist, the audit has an approved price, and the
+ * start path reserves against a real balance.
  *
  * This module is a **pure decision function**, deliberately mirroring
  * `authenticated-product-intelligence/entitlement.ts`. It holds no Supabase
@@ -41,12 +44,18 @@ import { MIN_SUPPORTED_AUDIT_CONTRACT_VERSION } from "./schema";
 
 /** How an audit run is paid for. Persisted with the run. */
 export type AuditAccessMode =
-  /** The project's one included audit. The only executable mode today. */
+  /** The project's one included audit. */
   | "included_first_audit"
   /**
-   * Reserved. Vibe Credits do not exist yet: nothing in CORE-2 returns this
-   * mode, and no balance, price, or purchase is represented anywhere
-   * (CORE-2 §46).
+   * The customer paid for this one (BILLING CORE-2 §39).
+   *
+   * No longer reserved. `authorizeAudit` still never returns it — a wallet is
+   * not an entitlement fact, and this function decides entitlement only. It is
+   * chosen where the payment actually is: the audit's prepare step reads the
+   * live Credit hold on the operation and records the run as Credit-funded.
+   *
+   * `consumesIncludedEntitlement` is false for it, so a paid audit writes no
+   * free-audit grant and the included one stays exactly as spent as it was.
    */
   | "credits"
   /**
@@ -75,7 +84,18 @@ export type AuditAccessMode =
   | "legacy_pre_entitlement";
 
 export type AuditDenialReason =
-  /** The free audit is used and credits are not implemented yet. */
+  /**
+   * The included audit is spent, so another one is payable with Credits.
+   *
+   * **No longer terminal** (BILLING CORE-2 §39). It was, when it was written:
+   * Credits did not exist, so "you have used your free audit" was the end of
+   * the road. Core-2 made it a route into paying, and `operations/service.ts`
+   * has treated it as one ever since — it checks affordability and reserves.
+   *
+   * The name is kept because a stored operation failure may carry it and must
+   * keep meaning what it meant. What changed is what a caller does with it: a
+   * start path routes it to Credits, and a UI must not render it as a wall.
+   */
   | "credits_required"
   /** An audit for this exact input is already running. */
   | "audit_already_running"
@@ -204,8 +224,19 @@ export function authorizeAudit(facts: AuditEntitlementFacts): AuditAuthorization
     !isAuditContractCurrent(facts.storedAudit.contractVersion);
 
   if (entitlementSpent && !refreshOwed) {
-    // Credits are not implemented. This is the honest terminal answer, not a
-    // route into a checkout that does not exist (CORE-2 §45, §46).
+    /*
+     * Not terminal (BILLING CORE-2 §39).
+     *
+     * This function answers one question — *is another audit included?* — and
+     * the answer here is no. It deliberately does not answer "can this
+     * customer pay for one", because that is a question about a wallet at an
+     * instant, and folding it in would make an entitlement decision go stale.
+     *
+     * `startBusinessAudit` reads this refusal and routes it into Credits. Any
+     * other caller must do the same or say why not; rendering it as a wall is
+     * what put "credits aren't available yet" on a screen beside a working
+     * 6,080-Credit balance.
+     */
     return { allowed: false, reason: "credits_required" };
   }
 
@@ -268,10 +299,44 @@ export function retryAllowedAfterFailure(facts: {
  * Contains no provider detail, no cost, and no key — by construction, because
  * there is no field for any of them.
  */
+/**
+ * What another audit costs, and whether this customer can fund it now
+ * (BILLING CORE-2 §43).
+ *
+ * Null when no payment applies — the included audit is still available, or
+ * Vibe owes a contract refresh. Present means the customer is being asked to
+ * spend, and then both numbers are required: §43 wants the UI able to say
+ * "you need 35, you have 20" rather than an unexplained refusal.
+ *
+ * `affordable` is a read, not authority. It can be stale by the time it is
+ * rendered; the reservation in the start path is the real gate. It exists so
+ * the screen can be honest before the click, not so it can decide.
+ */
+export type AuditCreditCost = {
+  requiredCredits: CreditUnits;
+  availableCredits: CreditUnits;
+  affordable: boolean;
+};
+
 export type AuditAccessStatus = {
   freeAuditAvailable: boolean;
-  /** Always true while credits are unimplemented; the UI explains, never sells. */
+  /**
+   * True once the included audit is spent.
+   *
+   * The name still reads correctly and the value is unchanged — what moved is
+   * what it implies. It used to mean "and therefore nothing more can happen";
+   * since Billing Core-2 it means "and therefore this one is payable". See
+   * {@link AuditAccessStatus.creditCost}.
+   */
   additionalAuditsRequireCredits: true;
+  /**
+   * The price and the balance, when the customer is the one paying.
+   *
+   * Null on the free and Vibe-owed paths. Resolved by the service, because
+   * this module is a pure function of entitlement facts and a wallet is not
+   * one of them.
+   */
+  creditCost: AuditCreditCost | null;
   /** Present when an audit cannot start right now, so the UI can explain why. */
   blockedReason: AuditDenialReason | null;
   /**
@@ -291,7 +356,58 @@ export function toAuditAccessStatus(facts: AuditEntitlementFacts): AuditAccessSt
   return {
     freeAuditAvailable: !facts.hasCompletedIncludedAudit && !facts.hasRepositoryGrant,
     additionalAuditsRequireCredits: true,
+    // Left null here on purpose: this function is pure over entitlement facts,
+    // and a balance is not one. `getAuditAccessStatus` fills it in.
+    creditCost: null,
     blockedReason: decision.allowed ? null : decision.reason,
     systemRefreshAvailable: decision.allowed && decision.accessMode === "system_contract_refresh",
   };
+}
+
+/**
+ * What `credits_required` means for a surface that has to draw it.
+ *
+ * One function, so a button's `disabled`, a notice's wording and any future
+ * surface cannot disagree about the same refusal. The screenshot that started
+ * this had them disagreeing in the worst possible way: a disabled control, a
+ * sentence saying Credits were unavailable, and the 35-Credit price rendered
+ * between them, on an account holding thousands.
+ *
+ * The split is on the **balance**, not the entitlement. A spent entitlement
+ * that the customer can afford to replace is a purchase; only an empty wallet
+ * is still a wall.
+ */
+export type AuditCreditGate =
+  /** Nothing to pay: the audit is included, Vibe owes a refresh, or something else blocks. */
+  | { kind: "not_applicable" }
+  /** Payable now. The control stays enabled. */
+  | { kind: "payable"; requiredCredits: CreditUnits; availableCredits: CreditUnits }
+  /** Payable in principle, not today. Both numbers, so the screen can say which. */
+  | { kind: "unaffordable"; requiredCredits: CreditUnits; availableCredits: CreditUnits }
+  /**
+   * The included audit is spent and no retail price resolved.
+   *
+   * Reachable only if the audit is removed from the price policy, or a policy
+   * gap opens. Represented rather than collapsed into "unaffordable" because
+   * "you cannot afford 0 Credits" is not a sentence anyone should be shown.
+   */
+  | { kind: "unpriced" };
+
+export function resolveAuditCreditGate(status: AuditAccessStatus): AuditCreditGate {
+  if (status.blockedReason !== "credits_required") return { kind: "not_applicable" };
+  if (!status.creditCost) return { kind: "unpriced" };
+
+  const { requiredCredits, availableCredits, affordable } = status.creditCost;
+  return { kind: affordable ? "payable" : "unaffordable", requiredCredits, availableCredits };
+}
+
+/**
+ * Whether Credits are the reason an audit cannot start *right now*.
+ *
+ * True only for the two states a customer cannot act their way out of on this
+ * screen. `payable` is deliberately false: it is a price, and a price does not
+ * disable a button.
+ */
+export function auditBlockedByCredits(gate: AuditCreditGate): boolean {
+  return gate.kind === "unaffordable" || gate.kind === "unpriced";
 }

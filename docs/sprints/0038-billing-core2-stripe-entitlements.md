@@ -341,3 +341,67 @@ Outstanding before this is genuinely done, not before it was safe to merge:
 - Webhook replay/retry, cancellation, and spending Credits on a real operation are still unexercised against a live account (see the dogfood section).
 - No test exists at the Server-Action layer, so the class of bug PR #49 fixed has no regression guard yet — the domain functions are fully tested, the thin routing layer that chooses which Supabase client to hand them is not.
 - The production activation checklist (legal, VAT, live Products/Prices, live webhook secret, `STRIPE_ALLOW_LIVE_MODE`) is entirely unstarted, by design — live mode remains **NOT ACTIVATED**.
+
+---
+
+## Follow-up: the audit screen never got the Core-2 memo (2026-08-18)
+
+**Reported from the deployed app.** A founder opened the Business score page on a
+project whose included audit was spent, with 6,080 Credits in the account, and saw:
+
+```
+[ Re-run business audit ]  (disabled)   35 Credits
+KEEP VIBE WORKING — … credits — they aren’t available yet.
+```
+
+Three elements on one screen, mutually contradictory. Every layer beneath them
+was correct: the price was right, the balance was right, and
+`startBusinessAudit` had been routing `credits_required` into a reservation
+since this sprint shipped. The screen was the only thing that was wrong.
+
+### Why nothing caught it
+
+`credits_required` stopped being terminal in §39, but nothing propagated that to
+the two places that read it as a wall:
+
+1. **The score page** disabled the button on the bare refusal, with no price and
+   no balance available to say anything better — `AuditAccessStatus` carried
+   neither.
+2. **The audit's prepare step** re-asked `authorizeProjectAudit` and returned
+   `credits_required` as a failure. So even with the button fixed, a paid re-run
+   would have reserved 35 Credits and then been refused one step later, by the
+   workflow, for not being included. No test could see that, because the start
+   path had already returned `started`.
+
+Both are the same mistake in two places: asking an *entitlement* question and
+treating its answer as the whole economic picture.
+
+### What changed
+
+| Where | Change |
+| --- | --- |
+| `operations/billing.ts` | `resolveOperationCreditCost` — price and balance unconditionally, read-only (never mints an account on a render). `checkOperationAffordability` now expressed over it. `operationHasCreditHold` — the durable proof a run was paid for |
+| `business-audit/service.ts` | `getAuditAccessStatus` joins the entitlement decision to the wallet, and only on the path where the customer is the one paying |
+| `business-audit/entitlement.ts` | `AuditCreditGate` / `resolveAuditCreditGate` / `auditBlockedByCredits` — one classification, so a button's `disabled` and a notice's wording cannot disagree. `credits` stopped being a reserved access mode |
+| `operations/business-audit/execution.ts` | The prepare step accepts a live Credit hold as authority for a paid re-run and records `access_mode = 'credits'` |
+| `audit-credit-notice.tsx` | The sentence, as a component — so a browser can read it |
+| `credits/units.ts` | `formatCreditsForDisplay` promoted out of `billing/overview.ts`; the audit notice was printing "6080" beside billing's "6,080" |
+
+No schema change. `access_mode = 'credits'` was already an allowed value, and
+the one-included-audit unique index is scoped to `included_first_audit`, so a
+paid audit sits outside it by construction.
+
+### Rule 69, applied
+
+The defect was invisible to unit tests by nature: nothing was individually
+wrong, only mutually. So the regression guard is a browser suite
+(`e2e/audit-credits.spec.ts`) that renders the button, the price and the notice
+together and asserts they **agree** — including the literal sentence from the
+screenshot, so nothing reintroduces it while the balance is sufficient. It found
+the thousands-separator inconsistency on its first run.
+
+Domain coverage alongside it: `business-audit/access-status.test.ts` (the
+service/wallet seam, including reserved Credits and the no-wallet case) and a
+`Credit-funded re-run` block in `operations/business-audit/execution.test.ts`
+(a held operation runs and is recorded as Credit-funded; an unheld or released
+one is still refused).
