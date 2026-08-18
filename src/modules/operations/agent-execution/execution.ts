@@ -525,6 +525,30 @@ export async function runAgentStep(
   }
 
   if (result.outcome === "provider_error") {
+    /*
+     * The one string that says *why*, written where a person can read it.
+     *
+     * `failureDetail` was computed by the adapter and then dropped: the run row
+     * has no column for it, the customer-facing copy is deliberately vague
+     * ("the AI provider could not be reached"), and nothing logged it. The
+     * first real dogfood therefore failed in 44ms with zero turns and left no
+     * evidence of what had happened — the cause had to be reconstructed from
+     * the SDK's package manifest.
+     *
+     * This is an infrastructure error string, not model output: no prompt, no
+     * response, no reasoning, so Rules 43 and 47 have nothing to say about it.
+     * `change-validation/execution.ts` already records the same class of detail
+     * for the same reason.
+     */
+    console.error("[agent-execution] the coding-agent provider failed", {
+      operationId,
+      agentExecutionRunId: run.id,
+      provider: deps.provider.id,
+      durationMs: result.durationMs,
+      turns: result.turns,
+      detail: result.failureDetail,
+    });
+
     return { ok: false, failureCode: "provider_unavailable" };
   }
 
