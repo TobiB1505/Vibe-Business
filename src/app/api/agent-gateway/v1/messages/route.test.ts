@@ -24,11 +24,11 @@ const SECRET = "test-gateway-secret-not-a-real-one";
 const REAL_KEY = "sk-ant-vibe-real-key-do-not-leak";
 
 const readAgentRunGatewayState = vi.fn<() => Promise<AgentRunGatewayState | null>>();
-const recordGatewayUsage = vi.fn(async () => {});
+const recordGatewayUsage = vi.fn(async (_params: unknown) => {});
 
 vi.mock("@/modules/operations/agent-execution/gateway-state", () => ({
   readAgentRunGatewayState: () => readAgentRunGatewayState(),
-  recordGatewayUsage: (params: unknown) => recordGatewayUsage(params as never),
+  recordGatewayUsage: (params: unknown) => recordGatewayUsage(params),
 }));
 
 const { POST } = await import("./route");

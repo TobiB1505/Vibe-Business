@@ -43,7 +43,15 @@ export type FakeEvent =
   | { kind: "create"; input: CreateSandboxInput }
   | { kind: "reconnect"; name: string; found: boolean }
   | { kind: "policy"; policy: SandboxNetworkPolicy }
-  | { kind: "command"; command: string; cwd: string }
+  /**
+   * `env` is recorded because its *absence* is the assertion.
+   *
+   * Validation passes none, and a test that could not see that would not
+   * notice the day something started passing one. The agent runtime passes
+   * exactly one thing — a scoped gateway token — and the same visibility is
+   * what proves no provider key travels with it.
+   */
+  | { kind: "command"; command: string; cwd: string; env?: Record<string, string> }
   | { kind: "read"; path: string }
   | { kind: "snapshot"; expirationMs: number }
   | { kind: "origin"; port: number }
@@ -175,7 +183,12 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
 
     async run(input) {
       const rendered = [input.command.command, ...input.command.args].join(" ");
-      events.push({ kind: "command", command: rendered, cwd: input.cwd });
+      events.push({
+        kind: "command",
+        command: rendered,
+        cwd: input.cwd,
+        ...(input.env ? { env: input.env } : {}),
+      });
 
       if (options.throwOn === rendered) throw new Error("provider exploded");
 

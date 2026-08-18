@@ -1,0 +1,181 @@
+import type { AgentModelUsage } from "../provider";
+
+/**
+ * The contract between Vibe and the program that runs inside the agent sandbox
+ * (EXECUTION CORE-4 runtime placement).
+ *
+ * ## Why there is a protocol at all
+ *
+ * Because the two sides are in different trust domains. The Claude Agent SDK
+ * spawns a ~325 MB native binary and needs real file, edit and shell tools, so
+ * it runs in an ephemeral microVM; Vibe's orchestrator, its Credits, its GitHub
+ * credential and its Anthropic key stay outside. Everything that crosses that
+ * line crosses as JSON described here, and every field is a count, an
+ * identifier or a Vibe-authored string.
+ *
+ * ## What deliberately has no field
+ *
+ * The agent's account of its own work (Rule 77). There is no `summary`, no
+ * `finalMessage`, no `filesChanged` and no `reasoning` — not "we ignore them",
+ * but no place to put them. What the run changed is established afterwards by
+ * reading the workspace back against the pinned base commit, which is a fact
+ * about the filesystem rather than a claim by the model.
+ *
+ * Reasoning text likewise never crosses (Rule 43). Token counts do, because
+ * they are billed.
+ */
+
+/**
+ * The runtime identity, bumped whenever the program's semantics change.
+ *
+ * Both sides carry it and Vibe refuses a result that does not match. A stale
+ * program left in a reused sandbox would otherwise answer a request it never
+ * understood — and the reply would look perfectly well-formed.
+ */
+export const AGENT_RUNTIME_VERSION = "vibe-agent-runtime-v1" as const;
+
+/**
+ * The SDK version installed in the sandbox, pinned rather than floating.
+ *
+ * Kept equal to the version in `package.json` so the harness Vibe develops
+ * against is the harness that runs. `npm install <name>@latest` inside a
+ * customer's execution would make "what did this run actually use" a question
+ * with no answer.
+ */
+export const AGENT_SDK_VERSION = "0.3.233" as const;
+
+/**
+ * Built-in tools the agent may use inside its workspace.
+ *
+ * The complete list, and every entry is local. There is no `WebFetch`, no
+ * `WebSearch`, no `Task` and no MCP server: Rule 41 says capabilities — not
+ * prompt wording — are what bound prompt injection, and the sandbox's egress
+ * policy allows exactly one host, so a network tool would have nothing to reach
+ * even if it existed.
+ *
+ * `Bash` is here because the user's instruction is explicit that the agent runs
+ * local build and test commands. It is the reason the whole runtime moved into
+ * a VM: a shell is precisely what must not exist on Vibe's own machine.
+ */
+export const AGENT_RUNTIME_TOOLS: readonly string[] = [
+  "Read",
+  "Write",
+  "Edit",
+  "Glob",
+  "Grep",
+  "Bash",
+];
+
+/** What Vibe writes into the sandbox before starting the program. */
+export type AgentRuntimeRequest = {
+  version: typeof AGENT_RUNTIME_VERSION;
+  /** Vibe-authored policy and role. Never third-party content (Rule 42). */
+  systemPrompt: string;
+  /** The task, with all third-party content fenced and labelled untrusted. */
+  userMessage: string;
+  model: string;
+  effort: "low" | "medium" | "high";
+  maxTurns: number;
+  maxBudgetUsd: number;
+  tools: readonly string[];
+  /** Absolute path of the repository workspace inside the sandbox. */
+  cwd: string;
+};
+
+/**
+ * What the program writes back.
+ *
+ * `subtype` is the SDK's own terminal classification, carried through rather
+ * than translated inside the sandbox: a mapping performed by untrusted-adjacent
+ * code is a mapping Vibe cannot audit. Vibe maps it in `provider.ts`.
+ */
+export type AgentRuntimeResult = {
+  version: string;
+  subtype: string;
+  turns: number;
+  sessionId: string | null;
+  permissionDenials: number;
+  /** Per-model token counts, keyed by model id. Never a cost claim. */
+  modelUsage: Record<string, unknown>;
+  /** A bounded description of a failure inside the program. Never model text. */
+  error: string | null;
+};
+
+const MAX_ERROR_CHARS = 400;
+
+function nonNegativeInt(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0 ? Math.trunc(value) : 0;
+}
+
+/**
+ * Parses what came back out of the sandbox.
+ *
+ * Every field is re-derived rather than trusted: this JSON was produced inside
+ * a VM running a customer's repository, so a hostile or merely broken program
+ * could return any shape at all. A result that does not parse, or that carries
+ * the wrong runtime version, is `null` — which the provider reports as a
+ * provider error rather than as a run that did nothing.
+ */
+export function parseAgentRuntimeResult(payload: string | null): AgentRuntimeResult | null {
+  if (payload === null) return null;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(payload);
+  } catch {
+    return null;
+  }
+
+  if (typeof parsed !== "object" || parsed === null) return null;
+  const raw = parsed as Record<string, unknown>;
+
+  if (raw.version !== AGENT_RUNTIME_VERSION) return null;
+
+  return {
+    version: AGENT_RUNTIME_VERSION,
+    subtype: typeof raw.subtype === "string" ? raw.subtype.slice(0, 64) : "unknown",
+    turns: nonNegativeInt(raw.turns),
+    // An identifier, never a credential — the transcript it would resume was
+    // never written, because `persistSession` is off.
+    sessionId: typeof raw.sessionId === "string" ? raw.sessionId.slice(0, 128) : null,
+    permissionDenials: nonNegativeInt(raw.permissionDenials),
+    modelUsage:
+      typeof raw.modelUsage === "object" && raw.modelUsage !== null
+        ? (raw.modelUsage as Record<string, unknown>)
+        : {},
+    error:
+      typeof raw.error === "string" && raw.error.trim().length > 0
+        ? raw.error.replace(/\s+/g, " ").trim().slice(0, MAX_ERROR_CHARS)
+        : null,
+  };
+}
+
+/**
+ * The per-model token counts, re-derived in Vibe's process.
+ *
+ * Shared with the in-process adapter's reading of the same SDK field, and
+ * deliberately not shared *code* with it — this one is parsing a value that
+ * crossed a trust boundary, so every number is coerced rather than cast.
+ */
+export function toAgentModelUsage(modelUsage: Record<string, unknown>): AgentModelUsage[] {
+  const usage: AgentModelUsage[] = [];
+
+  for (const [model, raw] of Object.entries(modelUsage)) {
+    if (typeof raw !== "object" || raw === null) continue;
+    const entry = raw as Record<string, unknown>;
+
+    usage.push({
+      model: model.slice(0, 128),
+      inputTokens: nonNegativeInt(entry.inputTokens),
+      outputTokens: nonNegativeInt(entry.outputTokens),
+      cacheReadInputTokens: nonNegativeInt(entry.cacheReadInputTokens),
+      cacheCreationInputTokens: nonNegativeInt(entry.cacheCreationInputTokens),
+      // Carried, never trusted as the billing figure — and here it arrived from
+      // inside the sandbox, which is one more reason it could not be.
+      reportedCostUsd:
+        typeof entry.costUSD === "number" && Number.isFinite(entry.costUSD) ? entry.costUSD : null,
+    });
+  }
+
+  return usage;
+}

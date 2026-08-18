@@ -210,6 +210,7 @@ class VercelSandboxHandle implements SandboxHandle {
     command: { command: string; args: string[] };
     cwd: string;
     timeoutMs: number;
+    env?: Record<string, string>;
   }) {
     // Per-command deadline. The sandbox's own timeout is a backstop for the
     // whole run; this stops one hanging command consuming the entire budget.
@@ -224,6 +225,9 @@ class VercelSandboxHandle implements SandboxHandle {
         // for injection even if a value were ever attacker-influenced (§13).
         args: input.command.args,
         cwd: input.cwd,
+        // Omitted rather than passed as `{}` when there is nothing to add, so
+        // the ordinary validation path is byte-for-byte the call it always was.
+        ...(input.env ? { env: input.env } : {}),
         signal: controller.signal,
       });
 
