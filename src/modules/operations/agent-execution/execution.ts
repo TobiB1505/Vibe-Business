@@ -2,7 +2,27 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { recordAuditEvent } from "@/modules/audit-log/events";
-import { deriveAgentLimits, checkBudgetMatchesScope } from "@/modules/coding-agent/budget";
+import {
+  deriveAgentLimits,
+  deriveGatewayCeilings,
+  checkBudgetMatchesScope,
+  type AgentRuntimeLimits,
+} from "@/modules/coding-agent/budget";
+import {
+  agentTokenExpiryFor,
+  mintRunGatewayToken,
+  readAgentGatewayConfig,
+} from "@/modules/coding-agent/gateway-config";
+import {
+  discoverWorkspaceChanges,
+  listWorkspaceFiles,
+  plantChangeMarker,
+  type WorkspaceListing,
+} from "@/modules/coding-agent/sandbox-runtime/changes";
+import {
+  AGENT_RUNTIME_DIRNAME,
+  installAgentRuntime,
+} from "@/modules/coding-agent/sandbox-runtime/provider";
 import {
   extractCandidateChange,
   verifyCandidateChange,
@@ -111,10 +131,53 @@ import {
  * have no verdict in it at all.
  */
 
+/**
+ * Where the agent's harness runs, and therefore where its writes are brokered.
+ *
+ * A tagged union rather than a flag, because the two differ in more than one
+ * place and each place must be forced to say which world it is in. The change
+ * set comes from the tool gateway in one and from the filesystem in the other;
+ * the sandbox ends with the network denied in one and narrowed to the gateway
+ * in the other. A boolean would let one of those be updated and the other
+ * forgotten, which is the failure mode this shape removes.
+ *
+ * `gateway_tools` is the Core-4 topology: the harness runs in Vibe's process
+ * with no built-in tools, and every effect goes through `ExecutionToolGateway`.
+ * It is not reachable in production — the SDK's native binary does not fit in a
+ * function — and it remains the shape the gateway's own tests exercise.
+ *
+ * `sandbox_workspace` is the runtime-placement correction: the harness runs in
+ * the execution's microVM with real file and shell tools, samples through the
+ * Agent Gateway, and never holds a Vibe credential.
+ */
+export type AgentExecutionRuntime =
+  | { kind: "gateway_tools"; provider: CodingAgentProvider }
+  | {
+      kind: "sandbox_workspace";
+      /**
+       * Builds the provider for one run.
+       *
+       * Injected for the same reason `sandboxProvider` is: the real one is
+       * constructed only at the composition root, and there is no local
+       * fallback for a test to reach for by accident (ADR 0015).
+       */
+      build: (context: SandboxAgentContext) => CodingAgentProvider;
+    };
+
+/** Everything the sandbox-hosted harness needs. None of it agent-chosen. */
+export type SandboxAgentContext = {
+  sandbox: SandboxHandle;
+  runtimeDir: string;
+  workspaceDir: string;
+  workspaceCwd: string;
+  gatewayBaseUrl: string;
+  gatewayToken: string;
+};
+
 export type AgentExecutionDeps = {
   /** Service-role client: workflow steps have no user session (ADR 0013). */
   supabase: SupabaseClient;
-  provider: CodingAgentProvider;
+  runtime: AgentExecutionRuntime;
   sandboxProvider: SandboxProvider;
   /** Built per step from the operation's own project — never from input. */
   resolveTarget: (
@@ -322,19 +385,62 @@ export async function provisionAgentWorkspaceStep(
   // would be pure additional reach.
   await sandbox.applyNetworkPolicy({ mode: "allow_domains", domains: DEPENDENCY_HOSTS });
 
+  // The gateway has to be reachable *after* the registry is closed, so its
+  // configuration is resolved before either install runs. A run that discovers
+  // at turn one that it has nowhere to sample has already bought a VM.
+  const gateway = deps.runtime.kind === "sandbox_workspace" ? readAgentGatewayConfig() : null;
+  if (deps.runtime.kind === "sandbox_workspace" && !gateway) {
+    return { ok: false, failureCode: "missing_required_context" };
+  }
+
   const installed = await sandbox.run({
     command: installCommand(packageManager),
     cwd: workdir.length > 0 ? workdir : ".",
     timeoutMs: SANDBOX_BUDGETS.installTimeoutMs,
   });
 
-  // Closed regardless of how the install ended. `deny-all` blocks DNS as well
-  // as traffic, closing the covert channel an allowlist leaves open. The agent
-  // never sees an open network — this happens before it is constructed (§12).
-  await sandbox.applyNetworkPolicy({ mode: "deny_all" });
+  /*
+   * The harness, installed inside the same registry window and nowhere else.
+   *
+   * This is the whole of "bootstrap egress and execution egress are separate":
+   * fetching a package needs npm, and running the agent needs the gateway.
+   * Leaving the registry reachable during the run would put a package publish
+   * between a customer's repository and an exfiltration channel.
+   */
+  let harness: { ok: true } | { ok: false; output: string } = { ok: true };
+  if (deps.runtime.kind === "sandbox_workspace" && installed.exitCode === 0) {
+    harness = await installAgentRuntime({
+      sandbox,
+      runtimeCwd: AGENT_RUNTIME_DIRNAME,
+      timeoutMs: SANDBOX_BUDGETS.installTimeoutMs,
+    });
+  }
+
+  /*
+   * Narrowed regardless of how either install ended, and to the least the run
+   * can work with.
+   *
+   * `deny_all` blocks DNS as well as traffic, closing the covert channel an
+   * allowlist leaves open, and it stays the answer whenever the harness is not
+   * in here. When it is, exactly one host survives — the Agent Gateway — and
+   * the token that reaches it authorizes one route on one execution. The agent
+   * never sees an open network either way: this happens before it exists (§12).
+   */
+  await sandbox.applyNetworkPolicy(
+    gateway ? { mode: "allow_domains", domains: [gateway.host] } : { mode: "deny_all" },
+  );
 
   if (installed.exitCode !== 0) {
     return { ok: false, failureCode: "validation_checks_failed" };
+  }
+
+  if (!harness.ok) {
+    console.error("[agent-execution] the agent harness could not be installed", {
+      operationId,
+      agentExecutionRunId: run.id,
+      detail: harness.output.slice(-2_000),
+    });
+    return { ok: false, failureCode: "sandbox_unavailable" };
   }
 
   const availableChecks = plan
@@ -349,10 +455,135 @@ export async function provisionAgentWorkspaceStep(
  * Step 2 — the paid agent loop (§16, §17, §19, §25, §37)
  * ------------------------------------------------------------------------ */
 
+/**
+ * The harness for one run, plus whatever the caller needs to read the change
+ * back afterwards.
+ *
+ * `baseline` and `markerPath` are null under `gateway_tools`, where the change
+ * set comes from the gateway's own record and no filesystem comparison is
+ * needed. Under `sandbox_workspace` they are the only source there is.
+ */
+type RunProviderOutcome =
+  | {
+      ok: true;
+      provider: CodingAgentProvider;
+      baseline: WorkspaceListing | null;
+      markerPath: string | null;
+      workspaceCwd: string;
+    }
+  | { ok: false; failureCode: OperationFailureCode };
+
+/** The workspace, relative to the sandbox home. `.` when the repo is the root. */
+function workspaceCwdFor(sourceRoot: string, workspaceRoot: string): string {
+  const joined = [sourceRoot, workspaceRoot]
+    .map((segment) => segment.replace(/^\/+|\/+$/g, ""))
+    .filter((segment) => segment.length > 0)
+    .join("/");
+
+  return joined.length > 0 ? joined : ".";
+}
+
+/**
+ * Constructs the harness the run will actually use.
+ *
+ * Under `sandbox_workspace` this is the moment the run's one credential is
+ * minted. It is minted here rather than at provisioning because its expiry is
+ * measured from the first turn: a token created while an install was still
+ * running would spend part of its life waiting.
+ */
+async function buildRunProvider(
+  deps: AgentExecutionDeps,
+  input: {
+    sandbox: SandboxHandle;
+    run: StoredAgentExecutionRun;
+    limits: AgentRuntimeLimits;
+    sourceRoot: string;
+    workspaceRoot: string;
+  },
+): Promise<RunProviderOutcome> {
+  const workspaceCwd = workspaceCwdFor(input.sourceRoot, input.workspaceRoot);
+
+  if (deps.runtime.kind === "gateway_tools") {
+    return {
+      ok: true,
+      provider: deps.runtime.provider,
+      baseline: null,
+      markerPath: null,
+      workspaceCwd,
+    };
+  }
+
+  const gateway = readAgentGatewayConfig();
+  if (!gateway) return { ok: false, failureCode: "missing_required_context" };
+
+  /*
+   * The sandbox's own idea of where it is.
+   *
+   * Asked rather than assumed: the harness needs absolute paths, and hardcoding
+   * the provider's layout would make a provider change look like a model that
+   * suddenly could not find any files.
+   */
+  const home = await input.sandbox.run({
+    command: { command: "pwd", args: [] },
+    cwd: ".",
+    timeoutMs: 30_000,
+  });
+  const sandboxHome = home.exitCode === 0 ? home.output.trim() : "";
+  if (sandboxHome.length === 0 || !sandboxHome.startsWith("/")) {
+    return { ok: false, failureCode: "sandbox_lost" };
+  }
+
+  const runtimeDir = `${sandboxHome}/${AGENT_RUNTIME_DIRNAME}`;
+  const markerPath = `${runtimeDir}/marker`;
+
+  // Taken before the marker is planted, so a file created between the two is
+  // visible as both new and touched rather than as neither.
+  const baseline = await listWorkspaceFiles({ sandbox: input.sandbox, cwd: workspaceCwd });
+  if (!(await plantChangeMarker({ sandbox: input.sandbox, markerPath }))) {
+    return { ok: false, failureCode: "sandbox_lost" };
+  }
+
+  const ceilings = deriveGatewayCeilings({ limits: input.limits, model: input.run.model });
+
+  const provider = deps.runtime.build({
+    sandbox: input.sandbox,
+    runtimeDir,
+    workspaceDir: workspaceCwd === "." ? sandboxHome : `${sandboxHome}/${workspaceCwd}`,
+    workspaceCwd,
+    gatewayBaseUrl: gateway.baseUrl,
+    gatewayToken: mintRunGatewayToken(
+      {
+        runId: input.run.id,
+        specId: input.run.executionSpecId,
+        projectId: input.run.projectId,
+        userId: input.run.userId,
+        model: input.run.model,
+        maxOutputTokens: ceilings.maxOutputTokens,
+        maxRequests: ceilings.maxRequests,
+        expiresAt: agentTokenExpiryFor(input.limits.maxWallClockMs, (deps.now ?? Date.now)()),
+      },
+      gateway.secret,
+    ),
+  });
+
+  return { ok: true, provider, baseline, markerPath, workspaceCwd };
+}
+
 export type RunAgentOutcome = StepOutcome<{
   /** True when the run stopped on a question and is holding (§25). */
   paused: boolean;
   changedFileCount: number;
+  /**
+   * The paths Vibe observed, when the harness ran in the sandbox.
+   *
+   * Carried to the extract step rather than re-derived there, because the
+   * comparison is only possible while the run's own baseline is in hand — and
+   * because the answer must be taken at the moment the agent stopped, not after
+   * whatever else touches the workspace next.
+   *
+   * Null under `gateway_tools`, where the extract step reads the tool trail.
+   */
+  changedPaths: readonly string[] | null;
 }>;
 
 export async function runAgentStep(
@@ -427,6 +658,23 @@ export async function runAgentStep(
     availableChecks,
   });
 
+  /*
+   * The harness, and — when it runs in the sandbox — the baseline every "did
+   * this change?" question is asked against.
+   *
+   * The marker is planted after both installs and immediately before the first
+   * turn, so an install artifact is never mistaken for the agent's work, and
+   * the listing is taken at the same moment for the same reason.
+   */
+  const runtime = await buildRunProvider(deps, {
+    sandbox,
+    run,
+    limits,
+    sourceRoot: target.sourceRoot,
+    workspaceRoot: target.workspaceRoot,
+  });
+  if (!runtime.ok) return { ok: false, failureCode: runtime.failureCode };
+
   // The wall-clock ceiling, enforced by Vibe rather than requested of the
   // provider. A provider that ignored `maxTurns` would still be stopped here.
   const controller = new AbortController();
@@ -437,7 +685,7 @@ export async function runAgentStep(
 
   let result;
   try {
-    result = await deps.provider.run({
+    result = await runtime.provider.run({
       runId: run.id,
       instruction,
       model: run.model,
@@ -457,6 +705,27 @@ export async function runAgentStep(
 
   const counters = gateway.counters;
 
+  /*
+   * What the run changed, read off the filesystem while the sandbox is still
+   * alive and before anything else touches it.
+   *
+   * Taken even when the run failed. A harness that died after writing four
+   * files still wrote four files, and a change set that quietly became empty
+   * because of how a run ended would be a false statement about the workspace.
+   */
+  const observed =
+    runtime.baseline && runtime.markerPath
+      ? await discoverWorkspaceChanges({
+          sandbox,
+          cwd: runtime.workspaceCwd,
+          before: runtime.baseline,
+          markerPath: runtime.markerPath,
+        })
+      : null;
+
+  const changedPaths = observed?.paths ?? null;
+  const changedFileCount = changedPaths ? changedPaths.length : counters.changedFiles;
+
   // Everything observed is recorded before anything is judged. A run that
   // failed still produced a tool trail, an activity trail and a provider bill,
   // and all three are facts about what happened (§35).
@@ -467,7 +736,7 @@ export async function runAgentStep(
     filesRead: counters.filesRead,
     checkRuns: counters.checkRuns,
     repairAttempts: gateway.repairAttempts,
-    changedFileCount: counters.changedFiles,
+    changedFileCount,
     changedBytes: counters.changedBytes,
     durationMs: result.durationMs,
     providerSessionId: result.sessionId,
@@ -488,7 +757,7 @@ export async function runAgentStep(
     userId: run.userId,
     projectId: run.projectId,
     agentExecutionRunId: run.id,
-    provider: deps.provider.id,
+    provider: runtime.provider.id,
     usage: result.usage,
     outcome: result.outcome,
     durationMs: result.durationMs,
@@ -521,7 +790,7 @@ export async function runAgentStep(
       },
     });
 
-    return { ok: true, paused: true, changedFileCount: counters.changedFiles };
+    return { ok: true, paused: true, changedFileCount, changedPaths };
   }
 
   if (result.outcome === "provider_error") {
@@ -543,7 +812,7 @@ export async function runAgentStep(
     console.error("[agent-execution] the coding-agent provider failed", {
       operationId,
       agentExecutionRunId: run.id,
-      provider: deps.provider.id,
+      provider: runtime.provider.id,
       durationMs: result.durationMs,
       turns: result.turns,
       detail: result.failureDetail,
@@ -552,7 +821,24 @@ export async function runAgentStep(
     return { ok: false, failureCode: "provider_unavailable" };
   }
 
-  return { ok: true, paused: false, changedFileCount: counters.changedFiles };
+  /*
+   * A change set Vibe is not sure is complete cannot become a diff.
+   *
+   * The listing degraded — a walk failed, or a pathological tree hit the cap —
+   * so "these are the files" is a claim this run cannot make. Refusing here is
+   * the honest outcome: preparing a partial change would hand a reviewer
+   * something to approve that is missing a file nobody knows about (Rule 27).
+   */
+  if (observed?.truncated) {
+    console.error("[agent-execution] the workspace observation was incomplete", {
+      operationId,
+      agentExecutionRunId: run.id,
+      observedPaths: observed.paths.length,
+    });
+    return { ok: false, failureCode: "change_preparation_failed" };
+  }
+
+  return { ok: true, paused: false, changedFileCount, changedPaths };
 }
 
 /* ---------------------------------------------------------------------------
@@ -564,9 +850,34 @@ export type ExtractOutcome = StepOutcome<{
   candidateDigest: string;
 }>;
 
+/** The writes the tool gateway brokered, under the `gateway_tools` topology. */
+async function readBrokeredWritePaths(
+  deps: AgentExecutionDeps,
+  runId: string,
+): Promise<string[]> {
+  const { data, error } = await deps.supabase
+    .from("agent_tool_events")
+    .select("path, decision, capability")
+    .eq("agent_execution_run_id", runId)
+    .eq("decision", "allowed")
+    .in("capability", ["workspace_write_file", "workspace_delete_file"]);
+
+  if (error) throw error;
+
+  return [
+    ...new Set(
+      ((data ?? []) as { path: string | null }[])
+        .map((event) => event.path)
+        .filter((path): path is string => path !== null),
+    ),
+  ];
+}
+
 export async function extractAndVerifyStep(
   deps: AgentExecutionDeps,
   operationId: string,
+  /** What the agent step observed, when the harness ran in the sandbox. */
+  observedPaths: readonly string[] | null = null,
 ): Promise<ExtractOutcome> {
   const loaded = await loadRun(deps, operationId);
   if (!loaded.ok) return loaded;
@@ -592,24 +903,18 @@ export async function extractAndVerifyStep(
     workspaceRoot: target.workspaceRoot,
   });
 
-  // The paths come from the tool trail Vibe wrote, not from anything the agent
-  // said. The bytes come from the filesystem. Neither is a claim (§27).
-  const { data: events, error } = await deps.supabase
-    .from("agent_tool_events")
-    .select("path, decision, capability")
-    .eq("agent_execution_run_id", run.id)
-    .eq("decision", "allowed")
-    .in("capability", ["workspace_write_file", "workspace_delete_file"]);
-
-  if (error) throw error;
-
-  const changedPaths = [
-    ...new Set(
-      ((events ?? []) as { path: string | null }[])
-        .map((event) => event.path)
-        .filter((path): path is string => path !== null),
-    ),
-  ];
+  /*
+   * The paths, from whichever source this topology makes authoritative — and in
+   * neither case from anything the agent said about its own work (Rule 77).
+   *
+   * Under `gateway_tools` it is the tool trail Vibe wrote as it brokered each
+   * write. Under `sandbox_workspace` there is no broker, so it is the
+   * filesystem comparison the agent step performed while the sandbox was still
+   * alive. The bytes come from the filesystem either way.
+   */
+  const changedPaths = observedPaths
+    ? [...new Set(observedPaths)]
+    : await readBrokeredWritePaths(deps, run.id);
 
   if (changedPaths.length === 0) {
     return { ok: false, failureCode: "agent_produced_no_change" };

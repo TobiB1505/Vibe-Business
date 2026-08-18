@@ -32,6 +32,20 @@ import { AGENT_TOOL_SHAPES } from "./tools";
  * time rather than recalled. Four of its defaults are load-bearing here and
  * three of them are actively wrong for this use case.
  *
+ * ## Why nothing in production constructs this any more
+ *
+ * The harness it describes cannot start here. `query()` spawns a native `claude`
+ * binary of 307–325 MB depending on platform, and a Vercel function's whole
+ * deployment budget is 250 MB — which the first real dogfood discovered by
+ * failing in 44 ms having taken zero turns. The runtime therefore moved into the
+ * execution's own microVM (`sandbox-runtime/`), and the SDK moved to a
+ * devDependency so that 325 MB never enters a deployed function again.
+ *
+ * This file is kept rather than deleted because the topology it documents is
+ * still the one the `gateway_tools` runtime describes, and because a build that
+ * re-wires it into production will now fail loudly on the missing dependency
+ * instead of deploying and dying at run time.
+ *
  * ## The topology, and why it is this one (§7)
  *
  * ```

@@ -1,9 +1,14 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fakeAgentSpec, fakeCodingAgentProvider } from "@/modules/coding-agent/test-support";
 import { creditsToUnits } from "@/modules/credits/units";
 import { agentSandboxNameFor } from "@/modules/coding-agent/identity";
 import type { BaseContentPort } from "@/modules/coding-agent/candidate";
+import type { CodingAgentProvider } from "@/modules/coding-agent/provider";
 import type { ExecutionProbePort, GitWritePort } from "@/modules/execution/git-port";
+import {
+  DEPENDENCY_HOSTS,
+  SOURCE_HOSTS,
+} from "@/modules/validation/sandbox-port";
 import { fakeSandboxProvider } from "@/modules/validation/test-support";
 import { FakeDatabase, fakeSupabase } from "../test-support";
 import {
@@ -219,13 +224,24 @@ function seed(overrides: { runStatus?: string; specMode?: string } = {}) {
   };
 }
 
-function deps(overrides: Partial<AgentExecutionDeps> = {}): AgentExecutionDeps {
+/**
+ * `provider` is still the override these tests write, because what they
+ * exercise is the step graph rather than where the harness happens to run.
+ * It is wrapped into the `gateway_tools` runtime here — the topology whose
+ * every effect goes through `ExecutionToolGateway`, which is what most of the
+ * assertions below are about.
+ */
+function deps(
+  overrides: Partial<AgentExecutionDeps> & { provider?: CodingAgentProvider } = {},
+): AgentExecutionDeps {
+  const { provider, ...rest } = overrides;
+
   return {
     supabase: fakeSupabase(db),
-    provider: fakeCodingAgentProvider(),
+    runtime: { kind: "gateway_tools", provider: provider ?? fakeCodingAgentProvider() },
     sandboxProvider: fakeSandboxProvider({ files: SANDBOX_FILES }),
     resolveTarget: async () => target(),
-    ...overrides,
+    ...rest,
   };
 }
 
@@ -411,7 +427,7 @@ describe("§25 — a question pauses the run", () => {
       "typecheck",
     ]);
 
-    expect(outcome).toEqual({ ok: true, paused: true, changedFileCount: 0 });
+    expect(outcome).toEqual({ ok: true, paused: true, changedPaths: null, changedFileCount: 0 });
 
     const interrupts = db.rows("execution_interrupts");
     expect(interrupts).toHaveLength(1);
@@ -676,5 +692,175 @@ describe("§20, §35 — cleanup and settlement", () => {
     // now would leave the resumed run with no authorized budget.
     expect(db.rows("billing_credit_reservations")[0].status).toBe("active");
     expect(db.rows("agent_execution_runs")[0].status).toBe("needs_user_input");
+  });
+});
+
+/* ---------------------------------------------------------------------------
+ * The runtime-placement correction: the harness inside the sandbox
+ * ------------------------------------------------------------------------ */
+
+/**
+ * The SDK spawns a native binary of 307–325 MB and a Vercel function's whole
+ * deployment budget is 250 MB, so the harness runs in the execution's own
+ * microVM. These assert the two things that changes: what the sandbox may
+ * reach, and where the change set comes from once no tool gateway brokers it.
+ */
+describe("the sandbox-hosted harness", () => {
+  const HOME = "/vercel/sandbox";
+  const LIST =
+    "find . ( -name node_modules -o -name .git -o -name .next -o -name dist -o -name build -o -name .turbo -o -name .vercel -o -name coverage ) -prune -o -type f -printf %P\n";
+  const TOUCHED = `find . ( -name node_modules -o -name .git -o -name .next -o -name dist -o -name build -o -name .turbo -o -name .vercel -o -name coverage ) -prune -o -type f -newer ${HOME}/.vibe-agent/marker -printf %P\n`;
+
+  /** The workspace as the fake sandbox reports it, before and after the run. */
+  function walk(options: { before: string[]; after: string[]; touched: string[] }) {
+    let listings = 0;
+    return {
+      [LIST]: {
+        exitCode: 0,
+        get output() {
+          listings += 1;
+          return `${(listings === 1 ? options.before : options.after).join("\n")}\n`;
+        },
+      },
+      [TOUCHED]: { exitCode: 0, output: `${options.touched.join("\n")}\n` },
+      "pwd": { exitCode: 0, output: `${HOME}\n` },
+    };
+  }
+
+  function sandboxRuntimeDeps(
+    provider: CodingAgentProvider,
+    sandboxProvider: ReturnType<typeof fakeSandboxProvider>,
+  ): AgentExecutionDeps {
+    return {
+      supabase: fakeSupabase(db),
+      runtime: { kind: "sandbox_workspace", build: () => provider },
+      sandboxProvider,
+      resolveTarget: async () => target(),
+    };
+  }
+
+  beforeEach(() => {
+    vi.stubEnv("VIBE_AGENT_GATEWAY_ORIGIN", "https://app.vibe.test");
+    vi.stubEnv("VIBE_AGENT_GATEWAY_SECRET", "test-gateway-secret-not-a-real-one");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("installs the harness while the registry is open, then narrows to the gateway alone", async () => {
+    const { operation } = seed();
+    const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES });
+
+    const outcome = await provisionAgentWorkspaceStep(
+      sandboxRuntimeDeps(fakeCodingAgentProvider(), sandbox),
+      operation.id,
+    );
+
+    expect(outcome.ok).toBe(true);
+
+    const commands = sandbox.commands();
+    const install = commands.findIndex((command) => command.startsWith("npm install"));
+    expect(install).toBeGreaterThan(-1);
+
+    // Bootstrap egress and execution egress, in that order and never overlapping.
+    expect(sandbox.policies()).toEqual([
+      { mode: "allow_domains", domains: SOURCE_HOSTS },
+      { mode: "allow_domains", domains: DEPENDENCY_HOSTS },
+      { mode: "allow_domains", domains: ["app.vibe.test"] },
+    ]);
+  });
+
+  /**
+   * The whole point of separating the two windows. A registry still reachable
+   * during the run is a package publish away from being an exfiltration
+   * channel, and the agent is the party that would use it.
+   */
+  it("leaves no registry host reachable once the agent can run", async () => {
+    const { operation } = seed();
+    const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES });
+
+    await provisionAgentWorkspaceStep(
+      sandboxRuntimeDeps(fakeCodingAgentProvider(), sandbox),
+      operation.id,
+    );
+
+    const final = sandbox.policies().at(-1);
+    expect(final).toEqual({ mode: "allow_domains", domains: ["app.vibe.test"] });
+  });
+
+  /**
+   * A run that cannot reach a gateway has nowhere to sample, and discovering
+   * that at turn one means a VM has already been bought.
+   */
+  it("refuses to provision when no gateway is configured", async () => {
+    vi.stubEnv("VIBE_AGENT_GATEWAY_ORIGIN", "");
+    const { operation } = seed();
+    const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES });
+
+    expect(
+      await provisionAgentWorkspaceStep(
+        sandboxRuntimeDeps(fakeCodingAgentProvider(), sandbox),
+        operation.id,
+      ),
+    ).toEqual({ ok: false, failureCode: "missing_required_context" });
+  });
+
+  it("takes the change set off the filesystem rather than from a tool trail", async () => {
+    const { operation } = seed();
+    const sandbox = fakeSandboxProvider({
+      files: SANDBOX_FILES,
+      results: walk({
+        before: ["package.json", "src/app/page.tsx"],
+        after: ["package.json", "src/app/page.tsx", "src/app/robots.ts"],
+        touched: ["src/app/robots.ts"],
+      }),
+    });
+    const deps = sandboxRuntimeDeps(fakeCodingAgentProvider(), sandbox);
+
+    await provisionAgentWorkspaceStep(deps, operation.id);
+    const outcome = await runAgentStep(deps, operation.id, ["typecheck"]);
+
+    expect(outcome).toMatchObject({
+      ok: true,
+      paused: false,
+      changedPaths: ["src/app/robots.ts"],
+      changedFileCount: 1,
+    });
+  });
+
+  /**
+   * "We found these files" and "these are the files" are different claims, and
+   * only the second may become a diff a person is asked to approve (Rule 27).
+   */
+  it("refuses when the workspace observation was incomplete", async () => {
+    const { operation } = seed();
+    const sandbox = fakeSandboxProvider({
+      files: SANDBOX_FILES,
+      results: { ...walk({ before: [], after: [], touched: [] }), [LIST]: { exitCode: 1, output: "" } },
+    });
+    const deps = sandboxRuntimeDeps(fakeCodingAgentProvider(), sandbox);
+
+    await provisionAgentWorkspaceStep(deps, operation.id);
+
+    expect(await runAgentStep(deps, operation.id, ["typecheck"])).toEqual({
+      ok: false,
+      failureCode: "change_preparation_failed",
+    });
+  });
+
+  /** The marker lives outside the repository, so it is never itself a change. */
+  it("plants its baseline marker outside the workspace", async () => {
+    const { operation } = seed();
+    const sandbox = fakeSandboxProvider({
+      files: SANDBOX_FILES,
+      results: walk({ before: [], after: [], touched: [] }),
+    });
+    const deps = sandboxRuntimeDeps(fakeCodingAgentProvider(), sandbox);
+
+    await provisionAgentWorkspaceStep(deps, operation.id);
+    await runAgentStep(deps, operation.id, ["typecheck"]);
+
+    expect(sandbox.commands()).toContain(`touch -- ${HOME}/.vibe-agent/marker`);
   });
 });

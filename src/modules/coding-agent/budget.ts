@@ -1,3 +1,4 @@
+import { resolvePricing } from "@/modules/ai/pricing";
 import type { ExecutionBudget } from "@/modules/execution-contract/budget";
 import type { ExecutionPolicy } from "@/modules/execution-contract/policy";
 import { AGENT_BUDGET_POLICY_VERSION } from "./schema";
@@ -88,6 +89,55 @@ export function deriveAgentLimits(input: {
 
     maxProviderSpendUsd: budget.maxProviderSpendUsd,
     maxNetworkRequests: budget.maxNetworkRequests,
+  };
+}
+
+/**
+ * The ceilings the Agent Gateway enforces for one run.
+ *
+ * ## Why these are not the budget
+ *
+ * The budget is the authority on what a customer authorized, and the harness's
+ * own `maxBudgetUsd` and `maxTurns` are what stop a run at it. These are a
+ * *containment* bound on a different question: what a token found inside a
+ * sandbox can do if the harness stops honouring anything.
+ *
+ * So they are deliberately loose. A containment bound that cut a legitimate run
+ * short would be a bug that looks exactly like a provider outage, and the
+ * budget already stopped the run long before these are reached.
+ *
+ * The token ceiling is derived from the authorized provider spend at the
+ * model's *output* rate — the most expensive per-token rate there is — so it
+ * cannot be tighter than the spend the budget already permits.
+ */
+export type AgentGatewayCeilings = {
+  maxOutputTokens: number;
+  maxRequests: number;
+};
+
+/**
+ * Requests each authorized turn may cost at the gateway.
+ *
+ * A turn is not one request: the harness re-sends a growing transcript, retries
+ * transport failures, and compacts context. Four is a ceiling on that ratio
+ * rather than a measurement of it, and the flat addition covers a short run
+ * whose per-turn overhead has nothing to amortise against.
+ */
+const GATEWAY_REQUESTS_PER_TURN = 4;
+const GATEWAY_REQUEST_FLOOR = 20;
+
+export function deriveGatewayCeilings(input: {
+  limits: AgentRuntimeLimits;
+  model: string;
+  at?: Date;
+}): AgentGatewayCeilings {
+  const pricing = resolvePricing(input.model, input.at ?? new Date());
+
+  return {
+    maxOutputTokens: Math.ceil(
+      (input.limits.maxProviderSpendUsd * 1e9) / pricing.outputNanoUsdPerToken,
+    ),
+    maxRequests: input.limits.maxTurns * GATEWAY_REQUESTS_PER_TURN + GATEWAY_REQUEST_FLOOR,
   };
 }
 

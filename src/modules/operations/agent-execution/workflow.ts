@@ -1,5 +1,5 @@
 import { createServiceClient } from "@/lib/supabase/service";
-import { createClaudeCodingAgentProvider } from "@/modules/coding-agent/claude/adapter";
+import { createSandboxCodingAgentProvider } from "@/modules/coding-agent/sandbox-runtime/provider";
 import { mintInstallationCloneCredential } from "@/modules/github/installation-token";
 import { createGithubRepositoryReader } from "@/modules/github/repository-reader";
 import {
@@ -114,9 +114,19 @@ async function resolveTarget(
 function deps(): AgentExecutionDeps {
   return {
     supabase: createServiceClient(),
-    // The real adapters, only ever constructed here. Tests inject fakes; there
-    // is no local-execution implementation to fall back to (ADR 0015).
-    provider: createClaudeCodingAgentProvider(),
+    /*
+     * The harness runs in the execution's own microVM, not in this function.
+     *
+     * Not a preference. `@anthropic-ai/claude-agent-sdk` spawns a native binary
+     * of 307–325 MB depending on platform and a Vercel function's whole
+     * deployment budget is 250 MB, so the in-process topology is not something
+     * this process can offer — the first real run proved it by failing in 44 ms
+     * with zero turns.
+     *
+     * The real adapters, only ever constructed here. Tests inject fakes; there
+     * is no local-execution implementation to fall back to (ADR 0015).
+     */
+    runtime: { kind: "sandbox_workspace", build: createSandboxCodingAgentProvider },
     sandboxProvider: createVercelSandboxProvider(),
     resolveTarget,
   };
@@ -139,9 +149,9 @@ async function runAgent(operationId: string, availableChecks: AgentCheckName[]) 
 // ambiguity must resolve to *not running it again* (§37).
 runAgent.maxRetries = 0;
 
-async function extractChange(operationId: string) {
+async function extractChange(operationId: string, observedPaths: string[] | null) {
   "use step";
-  return extractAndVerifyStep(deps(), operationId);
+  return extractAndVerifyStep(deps(), operationId, observedPaths);
 }
 extractChange.maxRetries = 0;
 
@@ -194,7 +204,10 @@ export async function agentExecutionWorkflow(operationId: string) {
         // and nothing further happens until an answer arrives (§25).
         paused = true;
       } else {
-        const extracted = await extractChange(operationId);
+        const extracted = await extractChange(
+          operationId,
+          agent.changedPaths ? [...agent.changedPaths] : null,
+        );
         if (!extracted.ok) {
           failureCode = extracted.failureCode;
         } else {
