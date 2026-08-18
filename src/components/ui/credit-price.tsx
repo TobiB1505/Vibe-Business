@@ -1,5 +1,5 @@
 import { resolveRetailPrice, type RetailOperationKind } from "@/modules/credits/retail";
-import { formatCreditUnits } from "@/modules/credits/units";
+import { formatCreditsForDisplay } from "@/modules/credits/units";
 
 /**
  * What an operation costs, shown before it starts (BILLING CORE-2 §55, §94).
@@ -36,7 +36,7 @@ export function CreditPrice({
 
   return (
     <span className={className ?? "text-fg-meta text-[0.8125rem] tabular-nums"}>
-      {formatCreditUnits(resolved.price.creditUnits)} Credits
+      {formatCreditsForDisplay(resolved.price.creditUnits)} Credits
     </span>
   );
 }
@@ -51,5 +51,5 @@ export function creditPriceLabel(operation: RetailOperationKind): string | null 
   const resolved = resolveRetailPrice(operation);
   if (!resolved || resolved.price.kind === "free") return null;
 
-  return `${formatCreditUnits(resolved.price.creditUnits)} Credits`;
+  return `${formatCreditsForDisplay(resolved.price.creditUnits)} Credits`;
 }

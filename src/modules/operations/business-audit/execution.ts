@@ -1,5 +1,5 @@
 import "server-only";
-import { releaseOperationBilling, settleOperationBilling } from "../billing";
+import { operationHasCreditHold, releaseOperationBilling, settleOperationBilling } from "../billing";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AIProvider } from "@/modules/ai/provider";
@@ -16,7 +16,10 @@ import { PROMPT_VERSION } from "@/modules/business-audit/prompt";
 import { RUBRIC_VERSION } from "@/modules/business-audit/rubric";
 import { buildAuditRequest, runBusinessReadinessAudit } from "@/modules/business-audit/runner";
 import { BUSINESS_AUDIT_SCHEMA_VERSION, BUSINESS_AUDIT_VERSION } from "@/modules/business-audit/schema";
-import { consumesIncludedEntitlement } from "@/modules/business-audit/entitlement";
+import {
+  consumesIncludedEntitlement,
+  type AuditAccessMode,
+} from "@/modules/business-audit/entitlement";
 import {
   completeAuditRun,
   computeAuditInputHash,
@@ -294,7 +297,29 @@ export async function prepareEvidenceStep(
     projectId: operation.projectId,
     userId: operation.userId,
   });
-  if (!authorization.allowed) {
+
+  /*
+   * `credits_required` is not a failure here — it is the mode (BILLING CORE-2
+   * §39).
+   *
+   * `authorizeProjectAudit` answers "is another audit *included*?", and for a
+   * paid re-run the honest answer is no. Treating that as a terminal failure
+   * meant a customer could reserve 35 Credits at the start path and then have
+   * the workflow refuse the work those Credits were held for, one step later.
+   *
+   * The hold itself is the authority, read live from the billing tables rather
+   * than carried across the step boundary — the same rule every other input in
+   * this step follows. No hold, and the refusal stands.
+   */
+  let accessMode: AuditAccessMode;
+  if (authorization.allowed) {
+    accessMode = authorization.accessMode;
+  } else if (
+    authorization.reason === "credits_required" &&
+    (await operationHasCreditHold(deps.supabase, operationId))
+  ) {
+    accessMode = "credits";
+  } else {
     return { ok: false, failureCode: authorization.reason };
   }
 
@@ -318,8 +343,8 @@ export async function prepareEvidenceStep(
     // Decided by the server-side gate, not assumed here. A refresh Vibe owes
     // the user because its own contract moved is funded differently from the
     // customer's included audit, and must not spend or restore it
-    // (CORE-2a.2 §19, §27).
-    accessMode: authorization.accessMode,
+    // (CORE-2a.2 §19, §27) — and a Credit-funded re-run from neither.
+    accessMode,
   });
 
   if (!run.ok) {
@@ -347,7 +372,7 @@ export async function prepareEvidenceStep(
       // A literal here would log every system contract refresh as if it were
       // the customer's included audit — false, and it would quietly corrupt
       // the one number that says how much Vibe spends on its own upgrades.
-      accessMode: authorization.accessMode,
+      accessMode,
       productProfileId: resolved.identity.productProfileId,
       productProfileSchemaVersion: PRODUCT_PROFILE_SCHEMA_VERSION,
     },

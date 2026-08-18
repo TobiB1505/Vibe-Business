@@ -5,7 +5,7 @@ import { findNextExpiry } from "@/modules/credits/grants";
 import { listActiveLots } from "@/modules/credits/lot-store";
 import { spendableCapacity } from "@/modules/credits/lots";
 import { findCreditAccountByUser, listLedgerEntries } from "@/modules/credits/store";
-import { formatCreditUnits, type CreditUnits, ZERO_CREDITS } from "@/modules/credits/units";
+import { formatCreditsForDisplay, type CreditUnits, ZERO_CREDITS } from "@/modules/credits/units";
 import { welcomeGrantIdempotencyKey, type PlanKey } from "./catalog";
 import { findActiveSubscription } from "./store";
 
@@ -114,13 +114,15 @@ export type BillingOverview = {
   welcomeGranted: boolean;
 };
 
-/** Thousands separators, so a four-digit balance is readable at a glance. */
-function formatCredits(units: CreditUnits): string {
-  const raw = formatCreditUnits(units);
-  const [whole, fraction] = raw.split(".");
-  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-  return fraction ? `${grouped}.${fraction}` : grouped;
-}
+/**
+ * Thousands separators, so a four-digit balance is readable at a glance.
+ *
+ * Moved to `credits/units.ts` so every customer-facing surface groups the same
+ * way — the audit's credit notice used the ungrouped formatter and printed
+ * "6080" beside this page's "6,080". Re-exported under the old local name so
+ * this file reads unchanged.
+ */
+const formatCredits = formatCreditsForDisplay;
 
 /**
  * Everything the billing page renders, in one pass.

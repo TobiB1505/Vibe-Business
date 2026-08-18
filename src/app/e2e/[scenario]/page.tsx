@@ -6,6 +6,9 @@ import {
 } from "@/app/app/projects/[projectId]/prepared-changes-section";
 import { IntelligenceSummary } from "@/app/app/projects/[projectId]/intelligence-summary";
 import { AuditOverview } from "@/app/app/projects/[projectId]/audit-overview";
+import { AuditCreditNotice } from "@/app/app/projects/[projectId]/audit-credit-notice";
+import { RunAuditButton } from "@/app/app/projects/[projectId]/run-audit-button";
+import { auditBlockedByCredits } from "@/modules/business-audit/entitlement";
 import { NeedsUserPanel } from "@/app/app/projects/[projectId]/needs-user-panel";
 import {
   AuditAnalyzing,
@@ -17,6 +20,10 @@ import {
   isE2eActionPlanScenario,
 } from "../action-plan-scenarios";
 import { E2E_AUDIT_SCENARIOS, isE2eAuditScenario } from "../audit-scenarios";
+import {
+  E2E_AUDIT_CREDIT_SCENARIOS,
+  isE2eAuditCreditScenario,
+} from "../audit-credit-scenarios";
 import { E2E_NEEDS_USER_SCENARIOS, isE2eNeedsUserScenario } from "../needs-user-scenarios";
 import { E2E_SCENARIOS, isE2eScenario } from "../scenarios";
 import { E2E_INTELLIGENCE_SCENARIOS, isE2eIntelligenceScenario } from "../intelligence-scenarios";
@@ -296,6 +303,36 @@ export default async function E2eScenarioPage({
 
   // The human-first Business Audit (CORE-2 §14): the same component the score
   // route renders, given an audit the real scoring produced.
+  /*
+   * The spent-entitlement gate (BILLING CORE-2 §39, §43).
+   *
+   * Deliberately renders the button *and* the notice together, in the order the
+   * score page puts them, because the defect was never in either one alone: a
+   * disabled control, a 35-Credit price and "credits … aren't available yet" all
+   * appeared on one screen and contradicted each other.
+   *
+   * `disabled` comes from the real `auditBlockedByCredits` rather than from the
+   * fixture, so the browser sees whatever the page would see.
+   */
+  if (isE2eAuditCreditScenario(scenario)) {
+    const { gate } = E2E_AUDIT_CREDIT_SCENARIOS[scenario];
+    return (
+      <main className="mx-auto max-w-3xl space-y-4 p-8">
+        {label}
+        <RunAuditButton
+          projectId="project_e2e"
+          hasAudit
+          disabled={auditBlockedByCredits(gate)}
+          // The included audit is spent in every scenario here, so the price is
+          // always shown — which is precisely what made the old copy a lie.
+          billable
+          activeOperation={null}
+        />
+        <AuditCreditNotice gate={gate} />
+      </main>
+    );
+  }
+
   if (isE2eAuditScenario(scenario)) {
     const auditResult = E2E_AUDIT_SCENARIOS[scenario]();
     const hasMoves = scenario !== "audit-synthesis-no-moves";

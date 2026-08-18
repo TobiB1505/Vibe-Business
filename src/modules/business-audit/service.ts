@@ -12,6 +12,7 @@ import {
   PROFILE_BUILDER_VERSION,
 } from "@/modules/product-understanding/schema";
 import { computeProfileInputHash, getLatestProfile } from "@/modules/product-understanding/store";
+import { resolveOperationCreditCost } from "@/modules/operations/billing";
 import { getFounderIntent } from "@/modules/projects/founder-intent-store";
 import { EVIDENCE_PACK_V3_VERSION } from "./evidence-v3";
 import { PROMPT_VERSION } from "./prompt";
@@ -200,11 +201,43 @@ export async function getConnectedRepositoryId(
   return (data as { github_repository_id: number } | null)?.github_repository_id ?? null;
 }
 
+/**
+ * The entitlement decision, plus the price when the customer is the one paying.
+ *
+ * `toAuditAccessStatus` is pure over entitlement facts and deliberately leaves
+ * `creditCost` null — a wallet is not an entitlement fact. This is where the
+ * two are joined, and the join is conditional on purpose: the balance is only
+ * read when the included audit is spent, so the free path costs no extra query.
+ *
+ * Without this, `credits_required` reached the UI as a bare refusal with no
+ * price and no balance, and the only sentence a screen could write from it was
+ * that Credits were unavailable — which stopped being true when Billing Core-2
+ * shipped (§39).
+ */
 export async function getAuditAccessStatus(
   supabase: SupabaseClient,
   params: { projectId: string; userId: string },
 ): Promise<AuditAccessStatus> {
-  return toAuditAccessStatus(await getAuditEntitlementFacts(supabase, params));
+  const status = toAuditAccessStatus(await getAuditEntitlementFacts(supabase, params));
+  if (status.blockedReason !== "credits_required") return status;
+
+  const cost = await resolveOperationCreditCost(supabase, {
+    projectId: params.projectId,
+    operation: "business_audit",
+  });
+  // Null means the audit carries no retail price under the policy in force.
+  // Then there is nothing to pay and nothing to say, so the status stays as the
+  // pure function left it rather than inventing a price of zero.
+  if (!cost) return status;
+
+  return {
+    ...status,
+    creditCost: {
+      requiredCredits: cost.requiredCredits,
+      availableCredits: cost.availableCredits,
+      affordable: cost.affordable,
+    },
+  };
 }
 
 /** The server-side gate. The UI renders its answer; it never decides. */
