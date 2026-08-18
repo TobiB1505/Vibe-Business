@@ -20,6 +20,7 @@ import {
   isE2eActionPlanScenario,
 } from "../action-plan-scenarios";
 import { E2E_AUDIT_SCENARIOS, isE2eAuditScenario } from "../audit-scenarios";
+import { AppErrorPreview } from "../app-error-preview";
 import {
   E2E_AUDIT_CREDIT_SCENARIOS,
   isE2eAuditCreditScenario,
@@ -332,6 +333,18 @@ export default async function E2eScenarioPage({
         <AuditCreditNotice gate={gate} />
       </main>
     );
+  }
+
+  /*
+   * The signed-in error boundary.
+   *
+   * Rendered whole rather than as a fragment, because what it has to get right
+   * is that a founder is not stranded: a header they recognise, a retry, and a
+   * way back — none of which needs a query to draw, since this screen exists
+   * for the case where querying is what broke.
+   */
+  if (scenario === "app-error" || scenario === "app-error-no-digest") {
+    return <AppErrorPreview digest={scenario === "app-error" ? "1813753987@E394" : undefined} />;
   }
 
   if (isE2eAuditScenario(scenario)) {
