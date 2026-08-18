@@ -115,22 +115,54 @@ describe("top-up purchases (§26, §72)", () => {
 
 describe("a payload cannot decide how many Credits are granted (§23, §102.4, §102.5)", () => {
   it("ignores a fabricated Credit amount carried in metadata", () => {
-    // The browser-changes-500-into-500000 attack. The amount is looked up from
-    // Vibe's catalog by SKU; there is no field here that could carry it.
+    /*
+     * The browser-changes-500-into-500000 attack. The amount is looked up from
+     * Vibe's catalog by SKU; there is no field here that could carry it.
+     *
+     * The forged values are deliberately chosen so none of them can collide
+     * with the correct answer in *either* unit. `creditsToUnits(500)` is
+     * 500,000 internal units — so a naive fixture using `credits: "500000"`
+     * asserts nothing, because a mutation that trusted the metadata would
+     * produce exactly the expected number. A mutation test found precisely
+     * that, which is why these values are all far outside the range.
+     */
     const intent = interpretStripeEvent(
       checkoutEvent({
         metadata: {
           [VIBE_SKU_METADATA_KEY]: "pack_500",
           [VIBE_USER_METADATA_KEY]: "user-1",
-          credits: "500000",
-          creditUnits: "500000000",
-          amount: "999999",
+          credits: "987654321",
+          creditUnits: "987654321",
+          credit_units: "987654321",
+          amount: "987654321",
+          quantity: "987654321",
         },
       }),
       PRICES,
     );
 
     expect(intent).toMatchObject({ kind: "grant_top_up", creditUnits: creditsToUnits(500) });
+  });
+
+  it("grants the catalog amount for every pack, whatever the metadata claims", () => {
+    // Proves the lookup is by SKU rather than incidentally correct for one
+    // pack: each SKU yields its own catalog figure while carrying the same
+    // fabricated metadata.
+    for (const [sku, credits] of [
+      ["pack_500", 500],
+      ["pack_1500", 1_500],
+      ["pack_5000", 5_000],
+    ] as const) {
+      const intent = interpretStripeEvent(
+        checkoutEvent({
+          metadata: { [VIBE_SKU_METADATA_KEY]: sku, credits: "987654321" },
+          priceIds: [PRICES[sku]!],
+        }),
+        PRICES,
+      );
+
+      expect(intent).toMatchObject({ kind: "grant_top_up", creditUnits: creditsToUnits(credits) });
+    }
   });
 
   it("refuses a forged Price id that does not match the SKU's configured Price", () => {

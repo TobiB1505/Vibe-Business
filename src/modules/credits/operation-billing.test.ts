@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { FakeDatabase, fakeSupabase } from "@/modules/operations/test-support";
 import { grantCreditLot } from "./grants";
-import { listActiveLots, listReservationAllocations } from "./lot-store";
+import { allocateReservation, listActiveLots, listReservationAllocations } from "./lot-store";
 import {
   authorizeOperationCredits,
   availableSpendableCredits,
@@ -223,6 +223,68 @@ describe("concurrency through the real service path (§44, §77)", () => {
 
     const balance = await getBillingBalance(supabase(), USER);
     expect(balance!.balance.available).toBeGreaterThanOrEqual(0);
+  });
+
+  it("never lets one lot fund more than it holds, under direct contention (§83)", async () => {
+    /*
+     * The per-lot guard, isolated from the account-level one.
+     *
+     * The account gate (`posted - reserved >= amount`) is usually the binding
+     * constraint, and it masks lot-level bugs: a mutation removing both the
+     * allocator's capacity check *and* the database's
+     * `billing_credit_grants_capacity_not_exceeded` still passed every other
+     * test in this file, because no scenario made a single lot the scarce
+     * resource. Found by mutation testing (§102.9).
+     *
+     * So this contends one 100-Credit lot with two 60-Credit allocations
+     * directly, where the lot — not the balance — is what has to say no.
+     */
+    await fund("purchase", 100, null, "p1");
+    const account = await accountId();
+
+    const [first, second] = await Promise.all([
+      allocateReservation(supabase(), {
+        creditAccountId: account,
+        reservationId: "res-a",
+        creditUnits: creditsToUnits(60),
+      }),
+      allocateReservation(supabase(), {
+        creditAccountId: account,
+        reservationId: "res-b",
+        creditUnits: creditsToUnits(60),
+      }),
+    ]);
+
+    expect([first, second].filter((result) => result.ok)).toHaveLength(1);
+
+    const lot = (await listActiveLots(supabase(), account))[0];
+    expect(lot.allocatedCreditUnits).toBe(creditsToUnits(60));
+    expect(lot.allocatedCreditUnits).toBeLessThanOrEqual(lot.initialCreditUnits);
+  });
+
+  it("refuses an allocation larger than any single lot can fund", async () => {
+    // Total balance is ample; no individual lot is. The allocator spreads
+    // across them, and the per-lot capacity is what bounds each take.
+    await fund("welcome", 30, "2026-11-01T00:00:00.000Z", "w1");
+    await fund("subscription", 30, "2026-12-01T00:00:00.000Z", "s1");
+    const account = await accountId();
+
+    const result = await allocateReservation(supabase(), {
+      creditAccountId: account,
+      reservationId: "res-a",
+      creditUnits: creditsToUnits(50),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.allocations).toEqual([
+      { lotId: expect.any(String), creditUnits: creditsToUnits(30) },
+      { lotId: expect.any(String), creditUnits: creditsToUnits(20) },
+    ]);
+
+    for (const lot of await listActiveLots(supabase(), account)) {
+      expect(lot.allocatedCreditUnits).toBeLessThanOrEqual(lot.initialCreditUnits);
+    }
   });
 
   it("protects purchased Credits while expiring capacity remains (§83)", async () => {
