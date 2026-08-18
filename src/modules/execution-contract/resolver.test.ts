@@ -79,6 +79,33 @@ describe("execution resolver — the Planner is not the authority (§6, §41)", 
     expect(resolution.mode).toBe("deterministic");
     expect(resolution.capability).toBe("nextjs_seo_foundations_v2");
   });
+
+  it("resolves a historically-unsupported step to agentic once the V1 boundary covers it", () => {
+    // The capability-evolution case: a step planned on Day 1, when Vibe had no
+    // safe route for it, resolved `not_yet_supported` and was stored that way —
+    // nothing here ever rewrites a stored plan. On Day 30, nothing about the
+    // plan changed and the Planner was never re-run, but Vibe's *execution*
+    // capability has: the repository is connected, a snapshot exists, a
+    // validation profile matches, and the step's own risk sits inside the V1
+    // ceiling. The resolver must reflect that, not the day-1 snapshot of what
+    // Vibe could do.
+    //
+    // `fakePlanStep()`'s own default already carries `executionSupport:
+    // "not_yet_supported"` — it is the plain historical claim, not a rigged
+    // one — and the default resolve context is deliberately agentic-eligible,
+    // so this is exactly the Day 1 → Day 30 lifecycle with nothing invented for
+    // the test.
+    const step = fakePlanStep();
+    expect(step.executionSupport).toBe("not_yet_supported");
+
+    const resolution = resolveStepExecution(
+      fakeResolveInput({ step, plan: fakePlanContext([step]) }),
+    );
+
+    expect(resolution.mode).toBe("agentic");
+    expect(resolution.reason).toBe("agentic_v1_eligible");
+    expect(isAgentReady(resolution)).toBe(true);
+  });
 });
 
 describe("execution resolver — deterministic is preferred (§7, §42)", () => {
