@@ -114,6 +114,7 @@ const INHERITED_ENV_KEYS: readonly string[] = [
 
 export function agentSubprocessEnv(
   source: Record<string, string | undefined> = process.env,
+  options: { configDir?: string } = {},
 ): Record<string, string | undefined> {
   const env: Record<string, string | undefined> = {};
   for (const key of INHERITED_ENV_KEYS) {
@@ -124,6 +125,30 @@ export function agentSubprocessEnv(
   // Belt and braces: the harness has no tools that could read a file anyway,
   // but an explicit non-interactive marker keeps a future default honest.
   env.CI = "1";
+
+  /*
+   * Auto memory loads *regardless* of `settingSources` (Anthropic, "Hosting
+   * the Agent SDK" → Multi-tenant isolation).
+   *
+   * That is the whole reason this line exists. `settingSources: []` is already
+   * passed, and reading it as "no filesystem input reaches the system prompt"
+   * is wrong: `~/.claude/projects/<project>/memory/` is loaded on top of it.
+   * For a harness that runs one customer's work after another's, that is a
+   * documented path for one tenant's context to become another tenant's
+   * instructions — and Rule 25 says repository-derived content is data, never
+   * instructions.
+   */
+  env.CLAUDE_CODE_DISABLE_AUTO_MEMORY = "1";
+
+  /*
+   * A per-run config directory, so runs never share `~/.claude.json`.
+   *
+   * The same source recommends it for multi-tenant isolation. Omitted rather
+   * than defaulted when the caller has no directory to give: pointing every run
+   * at one invented path would be the shared-state problem with extra steps.
+   */
+  if (options.configDir) env.CLAUDE_CONFIG_DIR = options.configDir;
+
   return env;
 }
 
@@ -280,7 +305,9 @@ export function createClaudeCodingAgentProvider(): CodingAgentProvider {
                 interrupt: false,
               },
         cwd: workdir,
-        env: agentSubprocessEnv(),
+        // The run's own scratch directory doubles as its config directory, so
+        // two runs never read each other's global config.
+        env: agentSubprocessEnv(process.env, { configDir: join(workdir, ".claude") }),
         // No transcript on disk: it would be a durable record of model
         // reasoning and customer source (Rule 43, §24).
         persistSession: false,

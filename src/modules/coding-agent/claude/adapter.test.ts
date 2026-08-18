@@ -82,3 +82,44 @@ describe("§13 — the subprocess receives no secret but its own", () => {
     expect(env.CLAUDE_AGENT_SDK_CLIENT_APP).toBe("vibe-business-execution/1");
   });
 });
+
+/**
+ * Isolation the SDK does *not* give you by passing `settingSources: []`
+ * (Anthropic, "Hosting the Agent SDK" → Multi-tenant isolation).
+ *
+ * Verified against the official hosting guidance rather than recalled: auto
+ * memory at `~/.claude/projects/<project>/memory/` loads into the system prompt
+ * regardless of `settingSources`. For a harness that runs one customer's work
+ * after another's, that is a documented path for one run's context to become
+ * another run's instructions — Rule 25's exact failure mode.
+ */
+describe("filesystem inputs that load regardless of settingSources", () => {
+  it("disables auto memory", () => {
+    expect(agentSubprocessEnv({ PATH: "/usr/bin" }).CLAUDE_CODE_DISABLE_AUTO_MEMORY).toBe("1");
+  });
+
+  it("gives a run its own config directory when one is supplied", () => {
+    const env = agentSubprocessEnv({ PATH: "/usr/bin" }, { configDir: "/tmp/run-a/.claude" });
+    expect(env.CLAUDE_CONFIG_DIR).toBe("/tmp/run-a/.claude");
+  });
+
+  /**
+   * Omitted rather than defaulted: pointing every run at one invented path
+   * would be the shared-state problem with extra steps.
+   */
+  it("sets no config directory when the caller has none to give", () => {
+    expect(agentSubprocessEnv({ PATH: "/usr/bin" })).not.toHaveProperty("CLAUDE_CONFIG_DIR");
+  });
+
+  /** The isolation additions are not a way in for anything else. */
+  it("still passes through no secret", () => {
+    const env = agentSubprocessEnv(
+      { PATH: "/usr/bin", ...REAL_SECRETS },
+      { configDir: "/tmp/run-a/.claude" },
+    );
+
+    for (const key of Object.keys(REAL_SECRETS)) {
+      expect(env, key).not.toHaveProperty(key);
+    }
+  });
+});
