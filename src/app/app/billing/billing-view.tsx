@@ -139,7 +139,7 @@ export function BillingView({
           ) : (
             <p className="text-fg-prose text-sm">
               {overview.plan.endingAtPeriodEnd
-                ? "Your plan ends at the end of this period. Credits you've already been given stay until they expire, and any Credits you bought stay."
+                ? `Your plan ends${overview.plan.renewsAt ? ` on ${formatDate(overview.plan.renewsAt)}` : ""}. Credits you've already been given stay until they expire, and any Credits you bought stay.`
                 : overview.plan.renewsAt
                   ? `Renews on ${formatDate(overview.plan.renewsAt)}.`
                   : "Active."}
