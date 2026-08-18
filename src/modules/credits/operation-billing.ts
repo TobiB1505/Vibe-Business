@@ -10,6 +10,11 @@ import {
   settleReservationAllocations,
 } from "./lot-store";
 import { spendableCapacity } from "./lots";
+import {
+  internalChargeFor,
+  isInternalOperationKind,
+  type InternalOperationKind,
+} from "./internal";
 import { retailChargeFor, type RetailOperationKind } from "./retail";
 import { releaseReservation, resolveBillingOwner, settleReservation } from "./service";
 import { claimReservation, ensureCreditAccount, getReservation } from "./store";
@@ -52,6 +57,36 @@ import type { ReleaseReason } from "./balance";
  * ------------------------------------------------------------------------ */
 
 export type OperationCreditRefusal = "insufficient_credits" | "account_suspended" | "account_not_found";
+
+/**
+ * Operations that can hold a Credit reservation.
+ *
+ * A union of two books rather than one list, and the union is the point: a
+ * reader at any call site can see which world an operation belongs to. The
+ * retail book is the customer rate card; the internal book is the CORE-4
+ * dogfood ceiling, reachable only through an operator-managed allowlist and
+ * carrying no production price (§18). Merging them into one enum would make an
+ * accidental customer-facing Agent price a one-line mistake.
+ */
+export type BillableOperationKind = RetailOperationKind | InternalOperationKind;
+
+/**
+ * What one operation costs, from whichever book governs it.
+ *
+ * Null means free *or* unpriced, and both are handled by the same caller
+ * branch: nothing is reserved and nothing will be charged. Agentic execution
+ * for an ordinary customer project resolves through neither book and lands
+ * here as null — which is correct, because such a project never gets past
+ * `resolveAgentEconomics` in the first place.
+ */
+function chargeFor(
+  operation: BillableOperationKind,
+  now: Date,
+): { creditUnits: CreditUnits; policyVersion: string } | null {
+  return isInternalOperationKind(operation)
+    ? internalChargeFor(operation, now)
+    : retailChargeFor(operation, now);
+}
 
 export type AuthorizeOperationCreditsResult =
   /** The operation is free. Nothing is reserved and nothing will be charged. */
@@ -96,7 +131,7 @@ export async function authorizeOperationCredits(
   supabase: SupabaseClient,
   params: {
     projectId: string;
-    operation: RetailOperationKind;
+    operation: BillableOperationKind;
     idempotencyKey: string;
     operationRunId?: string | null;
     now?: Date;
@@ -104,7 +139,7 @@ export async function authorizeOperationCredits(
 ): Promise<AuthorizeOperationCreditsResult> {
   const now = params.now ?? new Date();
 
-  const price = retailChargeFor(params.operation, now);
+  const price = chargeFor(params.operation, now);
   // Free operations never touch the billing machinery at all — no reservation,
   // no zero-Credit charge, no entry in the customer's history (§56).
   if (!price) return { ok: true, billable: false };

@@ -61,6 +61,22 @@ import type { ExecutionCapability } from "./schema";
 const CAPABILITY_OUTCOME_PROFILES: Record<ExecutionCapability, OutcomeProfile | null> = {
   nextjs_seo_foundations_v1: "nextjs_seo_foundations_outcome_v1",
   nextjs_seo_foundations_v2: "nextjs_seo_foundations_outcome_v1",
+  /**
+   * Agentic execution has no deterministic verifier, and cannot have a generic
+   * one.
+   *
+   * A verifier answers "is the thing this change was supposed to do actually
+   * true in production now?" — and it can only do that because it knows what
+   * the change was: the SEO profile checks that `/robots.txt` and
+   * `/sitemap.xml` are served, because that is what the generator emitted.
+   *
+   * An agent-produced change has no such fixed shape by design (§3), so any
+   * profile here would either be a lie about what was verified or a check so
+   * generic ("the site still responds") that reporting it as outcome
+   * verification would be worse than reporting nothing. Null is the honest
+   * answer, and it resolves to the existing `outcome_not_supported`.
+   */
+  agentic_execution_v1: null,
 };
 
 export function outcomeProfileForCapability(capability: string): OutcomeProfile | null {

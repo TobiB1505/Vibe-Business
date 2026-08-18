@@ -35,6 +35,17 @@ export type RecordUsageParams = {
    * (Sprint 4 §27).
    */
   usage?: AIUsage;
+  /**
+   * Cache tokens, when the operation used a cache breakpoint (CORE-4 §19).
+   *
+   * Not on `AIUsage` because that type is the `AIProvider` contract's shape and
+   * structured generation has no cache concept today. An agent loop does: it
+   * re-sends a growing transcript every turn, so cache reads and writes are the
+   * majority of its input bill. Recorded here so the first Agent cost baseline
+   * is a real number rather than a base-rate approximation of one.
+   */
+  cacheReadInputTokens?: number;
+  cacheCreationInputTokens?: number;
   /** Pre-call estimate from token counting, kept to measure estimate drift. */
   estimatedInputTokens: number | null;
   latencyMs: number;
@@ -60,6 +71,8 @@ export async function recordAIUsage(
         model: params.model,
         inputTokens: params.usage.inputTokens,
         outputTokens: params.usage.outputTokens,
+        cacheReadInputTokens: params.cacheReadInputTokens,
+        cacheCreationInputTokens: params.cacheCreationInputTokens,
       });
       pricingVersion = cost.pricingVersion;
       providerCostUsd = cost.totalUsd;
@@ -86,6 +99,8 @@ export async function recordAIUsage(
     input_tokens: params.usage?.inputTokens ?? null,
     output_tokens: params.usage?.outputTokens ?? null,
     thinking_tokens: params.usage?.thinkingTokens ?? null,
+    cache_read_input_tokens: params.cacheReadInputTokens ?? null,
+    cache_creation_input_tokens: params.cacheCreationInputTokens ?? null,
     estimated_input_tokens: params.estimatedInputTokens,
     provider_cost_usd: providerCostUsd,
     pricing_version: pricingVersion,

@@ -52,3 +52,19 @@ export function computeExecutionIdentity(params: {
 export function branchNameFor(identity: string): string {
   return `vibe/seo-foundations-${identity.slice(0, 12)}`;
 }
+
+/**
+ * The branch one agentic execution always maps to (CORE-4 §9, §30, Rule 57).
+ *
+ * Same discipline as `branchNameFor`, and the same reason it exists separately:
+ * the prefix says what produced the change, and a reader scanning a branch list
+ * should be able to tell an agent's work from a generator's without opening it.
+ *
+ * The agent contributes nothing to this name. It is a hash of an identity Vibe
+ * computed, truncated — no step title, no file path, no model text. §9 is
+ * explicit that the agent must not choose an external ref, and the way to
+ * guarantee that is for there to be no input it could influence.
+ */
+export function agentBranchNameFor(identity: string): string {
+  return `vibe/agent-${identity.slice(0, 12)}`;
+}

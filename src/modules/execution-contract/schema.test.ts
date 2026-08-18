@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { checkedValues } from "@/modules/operations/migration-test-support";
-import { EXECUTION_CAPABILITIES } from "@/modules/execution/schema";
+import { DETERMINISTIC_EXECUTION_CAPABILITIES } from "@/modules/execution/schema";
 import {
   EXECUTION_ACTIVITY_EVENTS,
   EXECUTION_ADMISSION_REFUSALS,
@@ -51,9 +51,19 @@ describe("SQL and TypeScript agree", () => {
     );
   });
 
-  it("permits exactly the capabilities the execution module declares", () => {
+  /**
+   * Deterministic capabilities only, and that is the whole point of the column.
+   *
+   * A spec's `capability` is non-null exactly when a registry-backed generator
+   * matched — the resolver leaves it null for every agentic resolution. The
+   * agentic capability (EXECUTION CORE-4) is recorded on the `PreparedChange`
+   * instead, where it says what produced the bytes. Permitting it here would
+   * let a spec claim a deterministic executor that does not exist, which is the
+   * distinction the six-value mode enum was built to protect.
+   */
+  it("permits exactly the deterministic capabilities the execution module declares", () => {
     expect(checkedValues("execution_specs", "capability").sort()).toEqual(
-      [...EXECUTION_CAPABILITIES].sort(),
+      [...DETERMINISTIC_EXECUTION_CAPABILITIES].sort(),
     );
   });
 });

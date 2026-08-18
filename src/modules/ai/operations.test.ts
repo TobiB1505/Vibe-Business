@@ -39,8 +39,23 @@ const OPERATIONS: AIOperation[] = [
  */
 const ADAPTIVE_CAPABLE_MODELS = ["claude-sonnet-5", "claude-opus-5"];
 
+/**
+ * The operations `getOperationConfig` answers for.
+ *
+ * `agentic_execution` is on the `AIOperation` union for *accounting* — one
+ * operation name in the usage ledger — but it does not flow through
+ * `AIProvider` and has no `OperationConfig`: an agent loop has no single
+ * request to count input tokens for and no output schema to size a ceiling
+ * against. Its model lives in `AGENTIC_EXECUTION_CONFIG` and is covered by its
+ * own case below, so nothing goes unchecked.
+ */
+const STRUCTURED_OPERATIONS = OPERATIONS.filter(
+  (operation): operation is Exclude<AIOperation, "agentic_execution"> =>
+    operation !== "agentic_execution",
+);
+
 describe("operation configs", () => {
-  it.each(OPERATIONS)("only asks %s for reasoning its model supports", (operation) => {
+  it.each(STRUCTURED_OPERATIONS)("only asks %s for reasoning its model supports", (operation) => {
     const config = getOperationConfig(operation);
     if (config.reasoning.mode !== "adaptive") return;
 
@@ -56,7 +71,7 @@ describe("operation configs", () => {
    * An unpriced model throws `UnpricedModelError` when the usage ledger tries
    * to record the call — after the money has been spent. Cheaper to find here.
    */
-  it.each(OPERATIONS)("has pricing configured for %s's model", (operation) => {
+  it.each(STRUCTURED_OPERATIONS)("has pricing configured for %s's model", (operation) => {
     const config = getOperationConfig(operation);
     expect(() => resolvePricing(config.model)).not.toThrow();
   });

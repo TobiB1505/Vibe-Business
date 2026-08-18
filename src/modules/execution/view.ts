@@ -161,4 +161,8 @@ export const BLOCKED_ACTION_LABELS: Record<Exclude<BlockedAction["kind"], "none"
 export const CAPABILITY_LABELS: Record<ExecutionCapability, string> = {
   nextjs_seo_foundations_v1: "SEO foundations",
   nextjs_seo_foundations_v2: "SEO foundations",
+  // Names what the change *is* from the customer's side, not the machinery that
+  // produced it. "Agentic execution v1" is our vocabulary; "a change to your
+  // app" is theirs, and the plan step beside it says which change.
+  agentic_execution_v1: "Change to your app",
 };

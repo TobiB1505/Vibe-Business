@@ -56,6 +56,7 @@ V0.1 foundational architecture decisions have been recorded:
 - [0024](0024-vibe-credits-economic-layer.md) — Vibe Credits as an Internal Economic Layer (Accepted)
 - [0025](0025-stripe-payment-rail-and-credit-grants.md) — Stripe as Payment Rail, and Credit Grants as Provenance (Accepted)
 - [0026](0026-agentic-execution-contract.md) — Agentic Execution Contract (Accepted)
+- [0027](0027-coding-agent-provider-and-tool-gateway.md) — Agentic Coding: Provider Abstraction, Tool Gateway, and Independent Validation (Accepted)
 
 Several architecture questions remain intentionally open — see [ARCHITECTURE.md §7](../../ARCHITECTURE.md#7-deferred--open-decisions).
 

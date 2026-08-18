@@ -185,6 +185,16 @@ export const OPERATION_FAILURE_MESSAGES: Record<OperationFailureCode, string> = 
   review_expired: "This comparison has expired and its images were removed.",
   review_failed: "The comparison could not be created.",
 
+  // Agentic execution (EXECUTION CORE-4 §34). Each says what happened and, where
+  // it is true, what the person can do — never an internal identifier and never
+  // a claim about the agent's intentions.
+  agent_change_rejected:
+    "Vibe checked the change and it fell outside what this step was allowed to touch, so nothing was written.",
+  agent_produced_no_change: "Nothing ended up changing, so there is nothing to review.",
+  agentic_pricing_not_configured: "Vibe can't make changes to your app for you yet.",
+  agent_reservation_invalid:
+    "The Credits held for this work no longer cover it, so nothing was started.",
+
   // Safe merge (Sprint 11C §28). Spread rather than restated: the merge module
   // owns the wording of its own refusals, and two copies of "the default branch
   // changed" is two chances for one of them to grow a sentence the other does

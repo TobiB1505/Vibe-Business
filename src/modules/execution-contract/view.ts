@@ -136,10 +136,16 @@ export const EXECUTION_INTERRUPT_QUESTIONS: Record<ExecutionInterruptType, strin
  */
 export const EXECUTION_ACTIVITY_LABELS: Record<ExecutionActivityEvent, string> = {
   inspecting_repository: "Reading your code",
+  searching_code: "Looking for the right place to change",
   found_existing_pattern: "Following your project's existing patterns",
   editing_files: "Making the change",
   running_typecheck: "Checking the types",
   running_tests: "Running your tests",
+  running_build: "Building the app",
+  // "Fixing" rather than "repairing": the customer-facing word for a check that
+  // came back red and is being answered. Emitted only when Vibe observed the
+  // previous check fail.
+  repairing: "Fixing what the checks found",
   validating: "Proving the change builds",
   needs_user_input: "Waiting on your answer",
   waiting_for_budget: "Waiting for you to approve more Credits",
