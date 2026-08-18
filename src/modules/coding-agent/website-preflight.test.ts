@@ -6,7 +6,8 @@ const getHead = vi.fn(async () => ({ defaultBranch: "main", commitSha: SNAPSHOT_
 const createGithubRepositoryReader = vi.fn(() => ({ getHead }));
 vi.mock("@/modules/github/repository-reader", () => ({ createGithubRepositoryReader }));
 
-const { previewDogfoodStep, isDogfoodEligibleProject } = await import("./website-preflight");
+const { previewDogfoodStep, isDogfoodEligibleProject, resolveDogfoodPlanRoutes } =
+  await import("./website-preflight");
 const { GithubDomainError } = await import("@/modules/github/errors");
 
 /**
@@ -337,6 +338,126 @@ describe("previewDogfoodStep — non-agentic routes never produce a spec (§6)",
  * dependency semantics reaches the page for free, and this is the test that
  * says it did.
  */
+/**
+ * The index page's routing (the "waiting on an earlier step" defect).
+ *
+ * The list resolved every step against a repository context of all nulls, so
+ * `classifyIntrinsic` could never reach `agentic` — every implementation step
+ * read "waiting on an earlier step", and the link to the step page was
+ * unreachable by construction. The surface was a list of refusals for a project
+ * whose repository was connected, snapshotted and supported.
+ *
+ * These assert the list routes against what the project actually has.
+ */
+describe("resolveDogfoodPlanRoutes — the list routes against real repository state", () => {
+  const PREPARATION = {
+    ...AGENTIC_STEP,
+    step_key: "1-work-out-the-approach",
+    step_order: 1,
+    actor: "vibe",
+    change_kind: "analysis",
+    depends_on: [],
+    evidence_ids: ["live.seo.canonical_missing"],
+    execution_support: "vibe_prepares",
+    requires_approval: false,
+  };
+  const IMPLEMENTATION = { ...AGENTIC_STEP, step_key: "2-build", step_order: 2, depends_on: [1] };
+
+  it("offers the implementation step, with the preparation named rather than blocking", async () => {
+    seedOwnedRepository();
+    seedSuccessfulSnapshot();
+    seedCompletedPlan([PREPARATION, IMPLEMENTATION]);
+
+    const routes = await resolveDogfoodPlanRoutes(fakeSupabase(db), {
+      projectId: PROJECT,
+      userId: USER,
+      env: ALLOWLIST,
+    });
+
+    expect(routes.available).toBe(true);
+    if (!routes.available) return;
+
+    const [preparation, implementation] = routes.resolutions;
+    // Vibe's own thinking work: real, and still not a button.
+    expect(preparation.mode).toBe("unsupported");
+    // The regression, stated directly.
+    expect(implementation.mode).toBe("agentic");
+    expect(implementation.absorbedPreparation).toEqual([1]);
+  });
+
+  /**
+   * The exact shape of the defect: with no repository loaded, an
+   * agentic-eligible step cannot classify as agentic and its preparation
+   * becomes a hard blocker again. Pinned so the page cannot quietly go back to
+   * resolving against nulls.
+   */
+  it("says the repository is missing rather than inventing a route for one", async () => {
+    seedCompletedPlan([PREPARATION, IMPLEMENTATION]);
+
+    const routes = await resolveDogfoodPlanRoutes(fakeSupabase(db), {
+      projectId: PROJECT,
+      userId: USER,
+      env: ALLOWLIST,
+    });
+
+    expect(routes.available).toBe(true);
+    if (!routes.available) return;
+
+    const implementation = routes.resolutions[1];
+    expect(implementation.mode).not.toBe("agentic");
+    expect(implementation.absorbedPreparation).toEqual([]);
+    // The real gap is still reported underneath the dependency block, so the
+    // page can say something a founder can act on.
+    expect(implementation.unmetRequirements).toContain("repository_not_connected");
+    expect(implementation.unmetRequirements).toContain("repository_snapshot_missing");
+  });
+
+  it("refuses a project that is not on the allowlist, before reading a plan", async () => {
+    seedOwnedRepository();
+    seedSuccessfulSnapshot();
+    seedCompletedPlan([PREPARATION, IMPLEMENTATION]);
+
+    const routes = await resolveDogfoodPlanRoutes(fakeSupabase(db), {
+      projectId: PROJECT,
+      userId: USER,
+      env: {},
+    });
+
+    expect(routes).toEqual({ available: false, reason: "not_dogfood_eligible" });
+  });
+
+  it("reports an absent plan as its own state rather than an empty list", async () => {
+    seedOwnedRepository();
+    seedSuccessfulSnapshot();
+
+    const routes = await resolveDogfoodPlanRoutes(fakeSupabase(db), {
+      projectId: PROJECT,
+      userId: USER,
+      env: ALLOWLIST,
+    });
+
+    expect(routes).toEqual({ available: false, reason: "no_action_plan" });
+  });
+
+  /**
+   * The list must not reach GitHub. It renders classification, and admission —
+   * the only thing a live HEAD answers — is the step page's job.
+   */
+  it("makes no live GitHub call", async () => {
+    seedOwnedRepository();
+    seedSuccessfulSnapshot();
+    seedCompletedPlan([PREPARATION, IMPLEMENTATION]);
+
+    await resolveDogfoodPlanRoutes(fakeSupabase(db), {
+      projectId: PROJECT,
+      userId: USER,
+      env: ALLOWLIST,
+    });
+
+    expect(getHead).not.toHaveBeenCalled();
+  });
+});
+
 describe("previewDogfoodStep — Vibe's own preparation does not gate the click", () => {
   const PREPARATION_STEP = {
     ...AGENTIC_STEP,

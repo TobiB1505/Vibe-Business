@@ -3,7 +3,11 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getLatestCompletedActionPlan } from "@/modules/action-plans/store";
 import { createExecutionSpec } from "@/modules/execution-contract/service";
-import { resolveStepExecution, type RepositoryContext } from "@/modules/execution-contract/resolver";
+import {
+  resolvePlanExecution,
+  resolveStepExecution,
+  type RepositoryContext,
+} from "@/modules/execution-contract/resolver";
 import type { ExecutionResolution } from "@/modules/execution-contract/schema";
 import { resolveExecutionValidation } from "@/modules/execution-contract/validation-requirements";
 import { createGithubRepositoryReader } from "@/modules/github/repository-reader";
@@ -133,6 +137,95 @@ async function loadOwnedRepositoryConnection(
     fullName: row.full_name,
     defaultBranch: row.default_branch,
     installationId: (installation as { installation_id: number }).installation_id,
+  };
+}
+
+/**
+ * Every step of the project's current plan, routed against **real** repository
+ * state.
+ *
+ * ## Why this exists rather than the index page resolving inline
+ *
+ * Because the index page did resolve inline, and it passed a repository
+ * context of all nulls — no connection, no snapshot — with a comment saying the
+ * list "only needs the route each step would take". A route is not independent
+ * of the repository. `classifyIntrinsic` needs a connection and a snapshot to
+ * reach `agentic` at all, so resolving against nulls does not show the route
+ * ignoring live state: it shows the route for a project that has no repository,
+ * which is `unsupported` for every product change, always.
+ *
+ * The visible consequence was that no step could *ever* be offered. Every
+ * implementation step read "waiting on an earlier step", the "Review this step"
+ * link was unreachable by construction, and the whole dogfood surface was a
+ * list of refusals for a project whose repository was connected, snapshotted
+ * and supported.
+ *
+ * ## What it deliberately does not read
+ *
+ * The live GitHub HEAD. That is one network call per page load to answer a
+ * question this page does not ask — admission, not classification — and
+ * `previewDogfoodStep` probes it for real on the step a founder actually
+ * opens. An unread HEAD is modelled honestly as `null`, which refuses
+ * admission; the index renders `mode` and `reason`, neither of which it
+ * touches.
+ */
+export type DogfoodPlanRoutes =
+  | { available: false; reason: Extract<DogfoodStepReason, "not_dogfood_eligible" | "no_action_plan"> }
+  | {
+      available: true;
+      plan: NonNullable<Awaited<ReturnType<typeof getLatestCompletedActionPlan>>>;
+      resolutions: readonly ExecutionResolution[];
+    };
+
+export async function resolveDogfoodPlanRoutes(
+  supabase: SupabaseClient,
+  params: { projectId: string; userId: string; env?: Record<string, string | undefined> },
+): Promise<DogfoodPlanRoutes> {
+  // The allowlist gate first, before anything is read (§26, §27).
+  if (!isDogfoodEligibleProject(params.projectId, params.env)) {
+    return { available: false, reason: "not_dogfood_eligible" };
+  }
+
+  const plan = await getLatestCompletedActionPlan(supabase, params.projectId);
+  if (!plan) return { available: false, reason: "no_action_plan" };
+
+  // Both may legitimately be absent, and the resolver says so per step with its
+  // own reasons — `repository_not_connected` and `repository_snapshot_missing`
+  // are real answers a founder can act on. What it must not do is invent them.
+  const [connection, snapshot] = await Promise.all([
+    loadOwnedRepositoryConnection(supabase, {
+      projectId: params.projectId,
+      userId: params.userId,
+    }),
+    getLatestSuccessfulSnapshot(supabase, params.projectId),
+  ]);
+
+  const repository: RepositoryContext = {
+    connection: connection
+      ? { id: connection.id, fullName: connection.fullName, defaultBranch: connection.defaultBranch }
+      : null,
+    snapshot: snapshot?.result ?? null,
+    snapshotId: snapshot?.id ?? null,
+    snapshotCommitSha: snapshot?.result?.source.commitSha ?? null,
+    // It is the newest successful one by construction — that is what the store
+    // function returns.
+    snapshotIsLatest: Boolean(snapshot?.result),
+    liveHead: null,
+  };
+
+  const economics = resolveAgentEconomics({ projectId: params.projectId, env: params.env });
+
+  return {
+    available: true,
+    plan,
+    resolutions: resolvePlanExecution({
+      // Nothing in the product completes a step yet (Core-3 `sequence.ts`), and
+      // since the semantics fix nothing needs to: Vibe's own preparation is
+      // absorbed into the run that follows it rather than waited on.
+      plan: { steps: plan.steps, completedSteps: new Set<number>(), isCurrent: true },
+      repository,
+      agenticBudgetAuthorized: economics !== null,
+    }),
   };
 }
 

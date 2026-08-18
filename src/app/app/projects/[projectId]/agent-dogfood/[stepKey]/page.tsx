@@ -7,7 +7,7 @@ import {
   EXECUTION_REASON_LABELS,
   EXECUTION_RISK_LABELS,
 } from "@/modules/execution-contract/view";
-import { PREFLIGHT_REFUSAL_LABELS } from "@/modules/coding-agent/view";
+import { preflightRefusalLabel } from "@/modules/coding-agent/view";
 import { isDogfoodEligibleProject, previewDogfoodStep } from "@/modules/coding-agent/website-preflight";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
 import { getDogfoodRunStatusAction } from "./actions";
@@ -62,7 +62,12 @@ export default async function AgentDogfoodStepPage({
               {preview.preflight && !preview.preflight.passed && (
                 <ul className="mt-2 list-inside list-disc">
                   {preview.preflight.refusals.map((refusal) => (
-                    <li key={refusal}>{PREFLIGHT_REFUSAL_LABELS[refusal]}</li>
+                    <li key={refusal}>
+                      {/* The specific admission answer where there is one —
+                          "your code changed" and "no Agent price exists" are
+                          not the same sentence. */}
+                      {preflightRefusalLabel(refusal, preview.resolution!.admission)}
+                    </li>
                   ))}
                 </ul>
               )}

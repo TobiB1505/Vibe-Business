@@ -5,10 +5,8 @@ import { EmptyState } from "@/components/ui/states";
 import { StatusPill } from "@/components/ui/status-pill";
 import { MonoLabel } from "@/components/ui/typography";
 import { buttonClasses } from "@/components/ui/button";
-import { getLatestCompletedActionPlan } from "@/modules/action-plans/store";
-import { resolvePlanExecution } from "@/modules/execution-contract/resolver";
 import { EXECUTION_MODE_LABELS, EXECUTION_REASON_LABELS } from "@/modules/execution-contract/view";
-import { isDogfoodEligibleProject } from "@/modules/coding-agent/website-preflight";
+import { resolveDogfoodPlanRoutes } from "@/modules/coding-agent/website-preflight";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
 
 /**
@@ -35,13 +33,23 @@ export default async function AgentDogfoodPage({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = await params;
-  const { supabase } = await requireProjectAccess(projectId);
+  const { supabase, userId } = await requireProjectAccess(projectId);
 
-  if (!isDogfoodEligibleProject(projectId)) notFound();
+  /*
+   * One call, resolved server-side against the project's real repository.
+   *
+   * The page used to gate, load the plan and resolve inline — and resolved
+   * against a repository context of all nulls, which made every implementation
+   * step permanently "waiting on an earlier step" and the whole surface
+   * unreachable. Routing is a server question about real state, so it lives in
+   * `website-preflight.ts` beside the per-step preflight that answers the same
+   * question one step deeper.
+   */
+  const routes = await resolveDogfoodPlanRoutes(supabase, { projectId, userId });
 
-  const plan = await getLatestCompletedActionPlan(supabase, projectId);
+  if (!routes.available && routes.reason === "not_dogfood_eligible") notFound();
 
-  if (!plan) {
+  if (!routes.available) {
     return (
       <div className="flex flex-col gap-6">
         <PageHeader />
@@ -58,22 +66,7 @@ export default async function AgentDogfoodPage({
     );
   }
 
-  const resolutions = resolvePlanExecution({
-    plan: { steps: plan.steps, completedSteps: new Set<number>(), isCurrent: true },
-    repository: {
-      connection: null,
-      snapshot: null,
-      snapshotId: null,
-      snapshotCommitSha: null,
-      snapshotIsLatest: false,
-      liveHead: null,
-    },
-    // Index view: whether *money* authorizes this project is already settled
-    // by the allowlist check above. What this list needs to show is only the
-    // *route* each step would take — the per-step page re-resolves against
-    // live repository state before anything can actually run.
-    agenticBudgetAuthorized: true,
-  });
+  const { plan, resolutions } = routes;
 
   return (
     <div className="flex flex-col gap-6">
@@ -99,6 +92,20 @@ export default async function AgentDogfoodPage({
                 </StatusPill>
               </div>
               <p className="text-fg-muted text-xs">{EXECUTION_REASON_LABELS[resolution.reason]}</p>
+              {/*
+                What this run would carry out before the change itself
+                (semantics fix §15). Named rather than silently folded in: a
+                founder looking at "#2 can run" while "#1" is still open is
+                owed the sentence that says why, and this is it.
+              */}
+              {resolution.absorbedPreparation.length > 0 && (
+                <p className="text-fg-meta text-xs">
+                  Vibe does this first, as part of the same run:{" "}
+                  {resolution.absorbedPreparation
+                    .map((order) => `#${order}`)
+                    .join(", ")}
+                </p>
+              )}
               {agentic && (
                 <div className="mt-1">
                   <Link
