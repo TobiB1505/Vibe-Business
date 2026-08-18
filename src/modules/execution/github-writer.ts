@@ -35,6 +35,15 @@ export type WriteTarget = {
   baseSha: string;
   branchName: string;
   capability: ExecutionCapability;
+  /**
+   * The plan step an agentic change implements (EXECUTION CORE-4 §30).
+   *
+   * An integer, deliberately. Rule 57 forbids model output controlling a commit
+   * message, and the step's *title* is Planner prose — so the message names the
+   * step by its ordinal, which Vibe assigned, rather than by what a model called
+   * it. Ignored for deterministic capabilities, which have a fixed message.
+   */
+  stepOrder?: number;
 };
 
 export type WriteResult =
@@ -43,6 +52,21 @@ export type WriteResult =
 
 /** Fixed, never model-generated, never impersonating the user (§19). */
 export const COMMIT_MESSAGE = "vibe: add SEO foundations";
+
+/**
+ * The commit message for one write, derived by Vibe (Rule 57, CORE-4 §30).
+ *
+ * Composed from a capability constant and an integer. Nothing a model produced
+ * — not the step title, not the agent's summary of its own work, not a file
+ * name it chose — reaches a commit message, because a commit message is
+ * repository content that outlives every explanation of where it came from.
+ */
+export function commitMessageFor(target: Pick<WriteTarget, "capability" | "stepOrder">): string {
+  if (target.capability !== "agentic_execution_v1") return COMMIT_MESSAGE;
+  return typeof target.stepOrder === "number"
+    ? `vibe: implement plan step ${target.stepOrder}`
+    : "vibe: implement plan step";
+}
 
 export type BranchInspection =
   | { state: "absent" }
@@ -122,7 +146,7 @@ export async function prepareChangeOnBranch(
 
     const treeSha = await port.createTree({ baseTreeSha, files: blobs });
     const commitSha = await port.createCommit({
-      message: COMMIT_MESSAGE,
+      message: commitMessageFor(target),
       treeSha,
       parentSha: target.baseSha,
     });

@@ -33,7 +33,17 @@ export type AIOperation =
   | "opportunity_generation"
   | "product_understanding"
   /** Turning one Move into an ordered, concrete plan (CORE-2b §45). */
-  | "action_planning";
+  | "action_planning"
+  /**
+   * One bounded coding-agent execution (EXECUTION CORE-4 §19).
+   *
+   * Present on this union so agent inference lands in the same usage ledger as
+   * every other paid call, keyed the same way. It does **not** flow through
+   * `AIProvider` — an agent loop is not a structured-generation request, and
+   * `getOperationConfig` deliberately has no entry for it. What it shares is
+   * accounting: one operation name, one model column, one cost book.
+   */
+  | "agentic_execution";
 
 /** Effort levels supported by the configured model family. */
 export type AIEffort = "low" | "medium" | "high";

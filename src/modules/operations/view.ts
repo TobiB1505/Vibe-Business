@@ -150,5 +150,14 @@ export const OPERATION_STAGE_LABELS: Record<OperationStage, string> = {
   collecting_baseline: "Collecting the baseline period",
   collecting_post: "Collecting the post-change period",
   comparing: "Comparing the two periods",
+  // Agentic execution (EXECUTION CORE-4 §21). Four durable steps, named for
+  // what a waiting user is told. The agent's own moment-to-moment activity is
+  // reported separately, from the tool calls Vibe brokered — these say where
+  // the *workflow* is, which is the only thing this stage list can honestly
+  // claim to know while a step is mid-flight.
+  preparing_workspace: "Setting up an isolated copy of your code",
+  running_agent: "Making the change",
+  extracting_change: "Working out exactly what changed",
+  verifying_change: "Checking the change is inside its limits",
   completed: "Completed",
 };

@@ -83,6 +83,22 @@ export type AuditEventType =
   | "change_validation.artifact_capture_failed"
   | "change_preparation.completed"
   | "change_preparation.failed"
+  // Agentic execution (EXECUTION CORE-4 §24). Domain lifecycle, distinct from
+  // the generic operation.* execution events.
+  //
+  // What these carry is deliberately narrow: identifiers, the model, the
+  // policy marker, and — on a rejection — the closed set of reasons the change
+  // was refused. What they must never carry is a prompt, model output, a
+  // reasoning trace, a file path's contents, a command's output, or the agent's
+  // own description of what it did (§24, Rule 43).
+  //
+  // `change_rejected` is the most important of the five, for the same reason
+  // `change_merge.blocked` is: it is the evidence that a safety check fired.
+  | "agent_execution.started"
+  | "agent_execution.needs_user_input"
+  | "agent_execution.change_rejected"
+  | "agent_execution.completed"
+  | "agent_execution.failed"
   // Temporary preview (Sprint 10B-2). None of these may carry the preview
   // origin: an unlisted public URL to a VM serving untrusted code is
   // capability-like, and an audit log is exactly the kind of durable, widely

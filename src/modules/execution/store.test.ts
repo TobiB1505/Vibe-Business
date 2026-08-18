@@ -26,6 +26,15 @@ function seedPreparing(id = "prepared_1") {
     branch_name: "vibe/seo-foundations-abc",
     execution_identity: "e".repeat(64),
     files: [],
+    // A generator-produced change names its capability and the opportunity it
+    // was prepared for. Both were always required by the schema; they became
+    // load-bearing in the fixture when EXECUTION CORE-4 made the opportunity
+    // columns nullable *only* for an agentic change, so a row omitting them
+    // now has to say which kind it is.
+    execution_capability: "nextjs_seo_foundations_v2",
+    execution_version: "nextjs-seo-foundations-v2",
+    opportunity_set_id: "set_1",
+    opportunity_id: "opportunity_1",
     created_at: "2026-08-04T00:00:00.000Z",
   });
 }

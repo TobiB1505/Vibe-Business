@@ -142,3 +142,22 @@ export function formatCreditUnits(units: CreditUnits): string {
 
   return negative ? `-${body}` : body;
 }
+
+/**
+ * The same number, grouped for a person to read: `6080000` → `"6,080"`.
+ *
+ * Lived privately in `billing/overview.ts` until a browser test found the
+ * consequence: the billing screen said "6,080" and the audit notice beside a
+ * price said "6080", for one balance on one account. A customer comparing two
+ * screens should not have to work out whether those are the same number.
+ *
+ * `formatCreditUnits` stays as it is and stays the default for anything
+ * machine-adjacent — a test assertion, a log line, an amount inside an
+ * identifier. This one is for prose a customer reads.
+ */
+export function formatCreditsForDisplay(units: CreditUnits): string {
+  const raw = formatCreditUnits(units);
+  const [whole, fraction] = raw.split(".");
+  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+  return fraction ? `${grouped}.${fraction}` : grouped;
+}

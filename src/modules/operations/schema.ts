@@ -83,6 +83,16 @@ export const OPERATION_TYPES = [
    * browser tab closing must not lose the answer.
    */
   "action_planning",
+  /**
+   * One bounded coding-agent execution (EXECUTION CORE-4 §21).
+   *
+   * Durable for the strongest reason of any operation here. It is slow — a
+   * sandbox, an agent loop and a repair cycle are minutes, not seconds — but
+   * the deciding reason is that it makes a *paid provider call and a repository
+   * write* on the customer's behalf. Neither may depend on a browser tab, and
+   * neither may be startable twice by a page reload.
+   */
+  "agent_execution",
 ] as const;
 export type OperationType = (typeof OPERATION_TYPES)[number];
 
@@ -207,6 +217,19 @@ export const OPERATION_STAGES = [
   "reading_code",
   "reading_public_product",
   "understanding_product",
+  /**
+   * Agentic execution (EXECUTION CORE-4 §21, §23).
+   *
+   * Four, not fourteen. The agent's own activity is reported through
+   * `agent_activity_events` — a richer, closed vocabulary derived from the tool
+   * calls Vibe brokered — and duplicating that here would give the same run two
+   * progress models that could disagree. These four are the *durable steps*:
+   * where the workflow is, not what the agent is doing.
+   */
+  "preparing_workspace",
+  "running_agent",
+  "extracting_change",
+  "verifying_change",
   "completed",
 ] as const;
 export type OperationStage = (typeof OPERATION_STAGES)[number];
@@ -261,6 +284,14 @@ export function hasEnteredPaidWork(stage: OperationStage): boolean {
     stage === "verifying_artifact" ||
     stage === "starting_server" ||
     stage === "checking_preview" ||
+    // Agentic execution (CORE-4 §37). `preparing_workspace` provisions a billed
+    // microVM and `running_agent` is the paid inference loop; both are past the
+    // point where money may already have been spent, so neither may be quietly
+    // restarted and cancellation cannot be promised to be free.
+    stage === "preparing_workspace" ||
+    stage === "running_agent" ||
+    stage === "extracting_change" ||
+    stage === "verifying_change" ||
     stage === "completed"
   );
 }

@@ -24,8 +24,8 @@ export type StoredPreparedChange = {
   projectId: string;
   userId: string;
   operationRunId: string;
-  opportunitySetId: string;
-  opportunityId: string;
+  opportunitySetId: string | null;
+  opportunityId: string | null;
   capability: ExecutionCapability;
   capabilityVersion: string;
   repositorySnapshotId: string;
@@ -46,8 +46,8 @@ type Row = {
   project_id: string;
   user_id: string;
   operation_run_id: string;
-  opportunity_set_id: string;
-  opportunity_id: string;
+  opportunity_set_id: string | null;
+  opportunity_id: string | null;
   execution_capability: ExecutionCapability;
   execution_version: string;
   repository_snapshot_id: string;
@@ -193,8 +193,18 @@ export async function claimPreparedChange(
     projectId: string;
     userId: string;
     operationRunId: string;
-    opportunitySetId: string;
-    opportunityId: string;
+    /**
+     * Null only for an agentic change (EXECUTION CORE-4 §29).
+     *
+     * A generator-produced change is prepared *for an opportunity*, and both
+     * columns are required. An agentic one traces to an Action Plan step
+     * instead — the Move is still known through the ExecutionSpec, but the
+     * opportunity *set* it belonged to may have been regenerated since, and a
+     * required reference to it would make an artifact that exists on GitHub
+     * unrepresentable. The database enforces the same split.
+     */
+    opportunitySetId: string | null;
+    opportunityId: string | null;
     capability: ExecutionCapability;
     capabilityVersion: string;
     repositorySnapshotId: string;

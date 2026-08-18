@@ -1,4 +1,4 @@
-import type { CreditUnits } from "@/modules/credits/units";
+import { creditsToUnits, type CreditUnits } from "@/modules/credits/units";
 
 /**
  * The execution budget contract (EXECUTION CORE-3 §24, §25, §26).
@@ -67,6 +67,21 @@ export type ExecutionBudget = {
   maxChangedBytes: number;
   /** Zero under a `none` network policy. Present so widening it is explicit. */
   maxNetworkRequests: number;
+  /**
+   * A hard USD ceiling handed to the agent provider itself (CORE-4 §17, §18).
+   *
+   * The second of two independent cost stops, and it exists because the first
+   * one is not enough. `maxCredits` is Vibe's authority over the *customer's*
+   * bill; this is Vibe's authority over its own provider invoice, enforced
+   * inside the provider's own loop so a runaway agent stops mid-run rather than
+   * at the next point Vibe happens to look.
+   *
+   * Deliberately not an accounting figure. The number a provider counts against
+   * this is its own client-side estimate, which §19 forbids treating as billing
+   * authority — so it is a guard rail, and the authoritative usage is metered
+   * separately from reported tokens.
+   */
+  maxProviderSpendUsd: number;
 };
 
 /**
@@ -93,6 +108,75 @@ export type ExecutionBudgetPolicy = {
  * Core-4 — not an implementation detail somebody fills in to make a test pass.
  */
 export const EXECUTION_BUDGET_POLICIES: readonly ExecutionBudgetPolicy[] = [];
+
+/**
+ * The CORE-4 internal dogfood budget (CORE-4 §17, §18).
+ *
+ * **Not a production policy, and structurally unable to become one by accident.**
+ * It lives in its own array, `resolveExecutionBudget` never sees it, and
+ * `coding-agent/authorization.ts` is the only thing that resolves it — for a
+ * project on an explicit internal allowlist. A customer path reaching this
+ * would have to add the project to that list first, which is a deployment
+ * action with a person attached.
+ *
+ * ## Where the numbers come from
+ *
+ * Nowhere, and that is stated rather than hidden. Vibe has never run an agent,
+ * so every value below is a *conservative ceiling chosen to bound the first
+ * experiment*, not a measurement and not a price. §17 asks for exactly this:
+ * deliberately small limits, versioned, labelled as dogfood.
+ *
+ * They are sized against what is already measured elsewhere in this codebase:
+ *
+ *  - `maxWallClockMs` 20 minutes — the sandbox's own lifetime bound is 15
+ *    minutes (`SANDBOX_BUDGETS.totalLifetimeMs`), so the agent cannot outlive
+ *    its workspace; the extra five minutes cover provisioning and teardown.
+ *  - `maxSandboxMs` matches that sandbox lifetime exactly, because the sandbox
+ *    is the thing being bounded and two different numbers would mean one of
+ *    them is decoration.
+ *  - `maxChangedFiles` 8 and `maxChangedBytes` 60 KB — a *bounded* change to
+ *    application source. The first real Vibe-prepared change was two files;
+ *    eight is generous for one Planner step and small enough that a runaway
+ *    rewrite stops rather than arriving at review.
+ *  - `maxAgentTurns` 40 and `maxRepairAttempts` 3 — enough for inspect → edit →
+ *    check → repair three times over, which is the loop §16 asks to be proven.
+ *  - `maxProviderSpendUsd` 3.00 — roughly two orders of magnitude above a
+ *    Business Audit's measured provider cost, and low enough that a stuck loop
+ *    costs less than a coffee before the provider stops it.
+ *  - `maxCredits` 0 in *effect*: see `credit.ts`. The dogfood account is
+ *    internal, and §18 forbids inventing a customer-facing Agent price, so the
+ *    ceiling exists to exercise reserve → settle → release rather than to
+ *    price anything.
+ */
+export const CORE4_DOGFOOD_BUDGET_POLICY: ExecutionBudgetPolicy = {
+  version: "core4-dogfood-budget-v1",
+  effectiveFrom: "2026-08-18T00:00:00.000Z",
+  effectiveTo: null,
+  budget: {
+    // An internal test ceiling, priced by `credits/dogfood.ts`. Never shown to
+    // a customer and never charged to one.
+    maxCredits: creditsToUnits(100),
+    maxAiCalls: 60,
+    maxAgentTurns: 40,
+    maxRepairAttempts: 3,
+    maxWallClockMs: 20 * 60 * 1000,
+    maxSandboxMs: 15 * 60 * 1000,
+    maxChangedFiles: 8,
+    maxChangedBytes: 60 * 1024,
+    maxNetworkRequests: 0,
+    maxProviderSpendUsd: 3,
+  },
+};
+
+/**
+ * The dogfood policy set, kept apart from production (§18).
+ *
+ * A separate array rather than a flag on the policy, because a flag is one
+ * `if` away from being ignored and a separate array has to be *reached for*.
+ */
+export const EXECUTION_DOGFOOD_BUDGET_POLICIES: readonly ExecutionBudgetPolicy[] = [
+  CORE4_DOGFOOD_BUDGET_POLICY,
+];
 
 /**
  * The budget in force at an instant, or null when none is.

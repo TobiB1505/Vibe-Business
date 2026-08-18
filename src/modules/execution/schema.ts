@@ -31,11 +31,59 @@ export const EXECUTION_CAPABILITIES = [
   "nextjs_seo_foundations_v1",
   /** Current. Sitemap derived from structured route intelligence. */
   "nextjs_seo_foundations_v2",
+  /**
+   * A change produced by the bounded coding agent (EXECUTION CORE-4 §3, §29).
+   *
+   * ## Why there is exactly one of these, and why there always will be
+   *
+   * §3 is emphatic: agentic execution exists **so that Vibe does not need a
+   * capability per customer task**. `build_login_v1`, `add_pricing_page_v1`,
+   * `fix_calendar_v1` — that taxonomy is the thing this value replaces. If a
+   * future sprint finds itself adding `agentic_pricing_page_v1`, the design has
+   * been misread.
+   *
+   * So this names the *producer*, not the task: "these bytes came from the
+   * bounded coding agent, under a recorded policy and prompt version", which is
+   * the only thing a stored `PreparedChange` row needs to know in order to stay
+   * interpretable forever.
+   *
+   * It is versioned for the same reason the SEO capability is: if what the
+   * agentic path *means* changes — a wider write scope, a different safety
+   * pipeline — that is a new value, because an old row must keep describing
+   * what was actually done. The model, the prompt and the budget are **not**
+   * part of that meaning; they are recorded per run, where they belong.
+   */
+  "agentic_execution_v1",
 ] as const;
 export type ExecutionCapability = (typeof EXECUTION_CAPABILITIES)[number];
 
 /** The capability new preparations resolve to. */
 export const CURRENT_SEO_FOUNDATIONS_CAPABILITY = "nextjs_seo_foundations_v2" as const;
+
+/** The capability every agent-produced change is recorded under (§29). */
+export const AGENTIC_EXECUTION_CAPABILITY = "agentic_execution_v1" as const;
+
+/**
+ * The capabilities a *plan step* or an *ExecutionSpec* may name.
+ *
+ * Deliberately excludes the agentic one, and the exclusion is a fact about the
+ * domain rather than a narrowing for convenience.
+ *
+ * A `capability` on a plan step or a spec means "a registry-backed generator
+ * matched this work" — `resolveStepExecution` sets it from `matchCapability`
+ * and leaves it **null** for every agentic resolution, because there is no
+ * generator. The agentic capability exists one layer later, on the
+ * `PreparedChange`, where it records what produced the bytes.
+ *
+ * Storing it upstream would mean a spec could claim a deterministic executor it
+ * does not have — which is precisely the confusion between "Vibe has an
+ * executor" and "an agent could do this" that Core-3's six-value mode enum was
+ * built to keep apart.
+ */
+export const DETERMINISTIC_EXECUTION_CAPABILITIES = EXECUTION_CAPABILITIES.filter(
+  (capability): capability is Exclude<ExecutionCapability, typeof AGENTIC_EXECUTION_CAPABILITY> =>
+    capability !== AGENTIC_EXECUTION_CAPABILITY,
+);
 
 /**
  * Generator output versions (§10).
@@ -45,6 +93,15 @@ export const CURRENT_SEO_FOUNDATIONS_CAPABILITY = "nextjs_seo_foundations_v2" as
  */
 export const NEXTJS_SEO_FOUNDATIONS_VERSION = "nextjs-seo-foundations-v1" as const;
 export const NEXTJS_SEO_FOUNDATIONS_V2_VERSION = "nextjs-seo-foundations-v2" as const;
+
+/**
+ * What "agentic execution v1" produced.
+ *
+ * There is no generator to version, so this names the *pipeline*: agent output
+ * verified against the compiled policy, written by trusted Vibe infrastructure,
+ * and validated independently. Bumping it means one of those changed meaning.
+ */
+export const AGENTIC_EXECUTION_VERSION = "agentic-execution-v1" as const;
 
 /**
  * The generator version a capability produces.
@@ -57,6 +114,7 @@ export const NEXTJS_SEO_FOUNDATIONS_V2_VERSION = "nextjs-seo-foundations-v2" as 
 export const CAPABILITY_VERSIONS: Record<ExecutionCapability, string> = {
   nextjs_seo_foundations_v1: NEXTJS_SEO_FOUNDATIONS_VERSION,
   nextjs_seo_foundations_v2: NEXTJS_SEO_FOUNDATIONS_V2_VERSION,
+  agentic_execution_v1: AGENTIC_EXECUTION_VERSION,
 };
 
 export function capabilityVersionFor(capability: ExecutionCapability): string {

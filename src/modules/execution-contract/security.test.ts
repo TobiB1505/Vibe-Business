@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -303,28 +304,57 @@ describe("§54 — a client cannot select another user's project", () => {
   });
 });
 
-describe("§3 — no coding agent is introduced", () => {
-  it("adds no agent SDK dependency", () => {
-    const manifest = JSON.parse(
-      readFileSync(join(process.cwd(), "package.json"), "utf8"),
-    ) as { dependencies: Record<string, string>; devDependencies: Record<string, string> };
-
-    const all = { ...manifest.dependencies, ...manifest.devDependencies };
-    for (const forbidden of [
-      "@anthropic-ai/claude-agent-sdk",
-      "@anthropic-ai/claude-code",
-      "@openai/codex",
-      "openai",
-      "langchain",
-    ]) {
-      expect(all).not.toHaveProperty(forbidden);
-    }
-  });
-
-  it("makes no AI call from this module", () => {
+/**
+ * The contract stays deterministic, even now that an agent exists.
+ *
+ * Core-3 asserted this as "no coding agent is introduced" and checked the
+ * *manifest*, which was the right test while there was no agent anywhere. Core-4
+ * built one, so that assertion is now false by design — and rewriting it as
+ * "the agent SDK is allowed" would delete the property rather than update it.
+ *
+ * The durable property is narrower and more valuable: **this module** — the
+ * resolver, the risk model, the policy compiler, the spec builder — must remain
+ * a pure function of structured facts. A classification a model could influence
+ * is a classification an injected README could influence (§37 of Core-3), and
+ * that is true whether or not an agent exists one directory over.
+ */
+describe("§3 — the execution contract stays deterministic", () => {
+  it("imports no agent or AI SDK anywhere in this module", () => {
     for (const source of moduleSources()) {
+      // The provider SDKs, by package name. Core-4's adapter is allowed to
+      // import the agent SDK; nothing in the contract is.
+      expect(source).not.toContain("@anthropic-ai/claude-agent-sdk");
+      expect(source).not.toContain("@anthropic-ai/sdk");
       expect(source).not.toContain("@/modules/ai/anthropic");
       expect(source).not.toContain("getAIProvider");
     }
+  });
+
+  /**
+   * The agent SDK is confined to one directory.
+   *
+   * Core-4's own rule, asserted here because this is the file a reviewer opens
+   * when asking "what is allowed to talk to a provider?". `coding-agent/claude/`
+   * is the only place, exactly as `ai/anthropic/` and `validation/vercel/` are
+   * the only places for their providers (CLAUDE.md rules 21 and 40).
+   */
+  it("confines the agent SDK to the Claude adapter", () => {
+    // Matches an actual import specifier, not a mention. A file that *names*
+    // the package in a comment — this one does, twice — is documenting the
+    // boundary rather than crossing it.
+    const offenders = execSync(
+      `grep -rlE 'from "@anthropic-ai/claude-agent-sdk"' src --include=*.ts --include=*.tsx || true`,
+      { encoding: "utf8" },
+    )
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+      .filter((path) => !path.startsWith("src/modules/coding-agent/claude/"))
+      // A test that asserts a boundary has to name it, and this file quotes the
+      // specifier verbatim in its own pattern. Excluding tests keeps the check
+      // about production code, which is what the boundary protects.
+      .filter((path) => !path.endsWith(".test.ts"));
+
+    expect(offenders).toEqual([]);
   });
 });

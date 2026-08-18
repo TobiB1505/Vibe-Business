@@ -6,6 +6,10 @@ import {
   getAuditReadiness,
   type AuditPrerequisite,
 } from "@/modules/business-audit/service";
+import {
+  auditBlockedByCredits,
+  resolveAuditCreditGate,
+} from "@/modules/business-audit/entitlement";
 import { getLatestSuccessfulAudit, getPausedAudit } from "@/modules/business-audit/store";
 import { buildAuditEvidenceNotice } from "@/modules/business-audit/evidence-notice";
 import { getDeepScanAccessStatus } from "@/modules/authenticated-product-intelligence/service";
@@ -23,6 +27,7 @@ import { getLatestOpportunities } from "@/modules/opportunities/service";
 
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
+import { AuditCreditNotice } from "../audit-credit-notice";
 import { AuditEvidenceNotice } from "../audit-evidence-notice";
 import { AuditOverview } from "../audit-overview";
 import {
@@ -171,8 +176,23 @@ export default async function ProjectScorePage({
   const missingPrerequisites = auditReadiness.missing.map(
     (prerequisite) => AUDIT_PREREQUISITE_LABELS[prerequisite],
   );
-  const blockedByCredits = auditAccess.blockedReason === "credits_required";
-  const auditReady = auditReadiness.ready && !blockedByCredits;
+
+  /*
+   * A spent entitlement is a price, not a wall (BILLING CORE-2 §39).
+   *
+   * This screen used to disable the button on `credits_required` and say the
+   * Credits "aren't available yet" — while rendering the 35-Credit price beside
+   * it, on an account holding thousands. Two sentences on one screen that could
+   * not both be true, and the one that mattered was wrong: Credits shipped, the
+   * audit has an approved price, and `startBusinessAudit` has been routing this
+   * exact refusal into a reservation ever since.
+   *
+   * So the refusal splits in two, on the *balance* rather than on the
+   * entitlement. Affordable is a purchase and stays enabled; unaffordable is
+   * the only remaining wall, and it can name both numbers.
+   */
+  const creditGate = resolveAuditCreditGate(auditAccess);
+  const auditReady = auditReadiness.ready && !auditBlockedByCredits(creditGate);
   /*
    * Vibe owes a replacement because Vibe changed (CORE-2a.2 §32).
    *
@@ -244,8 +264,9 @@ export default async function ProjectScorePage({
 
         {/*
           CORE-2 §16: the first qualified audit is free, and the entitlement is
-          decided server-side. This only reports the decision — no price, no
-          balance, no checkout that does not exist (§45, §46).
+          decided server-side. This one states the decision and nothing else —
+          the price and the balance belong to the state *after* it is spent, and
+          `AuditCreditNotice` below is where they are said.
         */}
         {auditReady && !latestAudit?.result && auditAccess.freeAuditAvailable && (
           <Notice tone="info" label="Included">
@@ -260,12 +281,7 @@ export default async function ProjectScorePage({
           </Notice>
         )}
 
-        {blockedByCredits && (
-          <Notice tone="waiting" label="Keep Vibe working">
-            You&rsquo;ve used the free audit for this project. Running another one will need
-            credits — they aren&rsquo;t available yet.
-          </Notice>
-        )}
+        <AuditCreditNotice gate={creditGate} />
 
         {/*
           The lifecycle drawn as its own states rather than one completed map

@@ -5,6 +5,7 @@ import { PROMPT_VERSION } from "@/modules/business-audit/prompt";
 import { RUBRIC_VERSION } from "@/modules/business-audit/rubric";
 import { BUSINESS_AUDIT_SCHEMA_VERSION, BUSINESS_AUDIT_VERSION } from "@/modules/business-audit/schema";
 import { computeAuditInputHash } from "@/modules/business-audit/store";
+import { creditsToUnits } from "@/modules/credits/units";
 import {
   FakeProvider,
   fakeLiveSnapshot,
@@ -327,6 +328,100 @@ describe("paid-call ambiguity (§11)", () => {
     expect(usage).toHaveLength(1);
     expect(usage[0].status).toBe("failed");
     expect(usage[0].input_tokens).toBe(100);
+  });
+});
+
+/**
+ * The paid re-run, one step in (BILLING CORE-2 §39).
+ *
+ * The start path has routed `credits_required` into a reservation since Core-2,
+ * and this step then re-asked the entitlement and refused — so a customer could
+ * have 35 Credits held for work the very next step declined to do. Nothing in
+ * the start path could see it, because the failure happened after the start
+ * path returned `started`.
+ *
+ * What decides here is the **hold**, read live from the billing tables rather
+ * than carried across the step boundary. So both directions matter: a held
+ * operation runs and is recorded as Credit-funded, and an unheld one is still
+ * refused.
+ */
+describe("a Credit-funded re-run", () => {
+  /** Spends the included audit, durably — the grant survives a reconnect. */
+  function consumeIncludedEntitlement() {
+    db.seed("repository_connections", {
+      id: "conn_1",
+      project_id: PROJECT,
+      github_repository_id: 12345,
+    });
+    db.seed("free_audit_grants", { id: "grant_1", user_id: USER, github_repository_id: 12345 });
+  }
+
+  /** Takes a real hold through the real billing path, not a hand-written row. */
+  async function holdCredits() {
+    const { grantCreditLot } = await import("@/modules/credits/grants");
+    const { holdOperationCredits } = await import("../billing");
+    await grantCreditLot(fakeSupabase(db), {
+      userId: USER,
+      sourceKind: "purchase",
+      credits: creditsToUnits(100),
+      reason: "test funding",
+      idempotencyKey: "test-fund:execution",
+    });
+    const held = await holdOperationCredits(fakeSupabase(db), {
+      projectId: PROJECT,
+      operationRunId: operationId,
+      operation: "business_audit",
+    });
+    expect(held.ok).toBe(true);
+  }
+
+  it("runs, and records the audit as Credit-funded rather than included", async () => {
+    consumeIncludedEntitlement();
+    await holdCredits();
+
+    const outcome = await prepareEvidenceStep(deps(), operationId);
+
+    expect(outcome.ok).toBe(true);
+    expect(auditRows()).toHaveLength(1);
+    expect(auditRows()[0].access_mode).toBe("credits");
+  });
+
+  it("writes no free-audit grant when it completes", async () => {
+    consumeIncludedEntitlement();
+    await holdCredits();
+
+    await runPipeline();
+
+    // One grant: the pre-existing one. A paid audit neither spends the included
+    // entitlement again nor restores it.
+    expect(db.rows("free_audit_grants")).toHaveLength(1);
+  });
+
+  it("still refuses when the entitlement is spent and nothing is held", async () => {
+    consumeIncludedEntitlement();
+
+    const outcome = await prepareEvidenceStep(deps(), operationId);
+
+    expect(outcome).toEqual({ ok: false, failureCode: "credits_required" });
+    expect(auditRows()).toHaveLength(0);
+    expect(provider.requests).toHaveLength(0);
+  });
+
+  /**
+   * A released hold funded nothing. Reading "a reservation exists" rather than
+   * "a reservation is active" would let a refunded operation run for free.
+   */
+  it("refuses when the hold has already been released", async () => {
+    consumeIncludedEntitlement();
+    await holdCredits();
+
+    const { releaseOperationBilling } = await import("../billing");
+    await releaseOperationBilling(fakeSupabase(db), { operationRunId: operationId });
+
+    const outcome = await prepareEvidenceStep(deps(), operationId);
+
+    expect(outcome).toEqual({ ok: false, failureCode: "credits_required" });
+    expect(provider.requests).toHaveLength(0);
   });
 });
 
