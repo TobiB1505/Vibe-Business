@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { BUSINESS_READINESS_AUDIT_CONFIG } from "@/modules/ai/operations";
+import { createServiceClient } from "@/lib/supabase/service";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import {
   checkOperationAffordability,
@@ -197,9 +198,12 @@ export async function resumeAnsweredAuditOperation(
  * same release every other failure uses, and it is idempotent, so calling it
  * for a free operation with no reservation does nothing.
  */
-async function releaseHoldForFailedStart(supabase: SupabaseClient, operationRunId: string): Promise<void> {
+async function releaseHoldForFailedStart(operationRunId: string): Promise<void> {
   const { releaseOperationBilling } = await import("./billing");
-  await releaseOperationBilling(supabase, { operationRunId, providerUsageOccurred: false });
+  // Service-role client (§53, §64): the hold this releases was taken with one,
+  // and every billing table's write policy is the same absence for every
+  // authenticated client regardless of which write is being undone.
+  await releaseOperationBilling(createServiceClient(), { operationRunId, providerUsageOccurred: false });
 }
 
 export async function startBusinessAuditOperation(
@@ -331,7 +335,13 @@ export async function startBusinessAuditOperation(
    * safe) and before anything can spend money.
    */
   if (payWithCredits) {
-    const held = await holdOperationCredits(supabase, {
+    // Service-role client (§53, §64): every billing table has a select policy
+    // and deliberately no write policy for any authenticated client, so a
+    // reservation held with the caller's cookie-scoped `supabase` would be
+    // silently refused by RLS. Ownership was already verified above, against
+    // `params.userId` from the caller's own session — never from a value this
+    // client could be tricked into writing on someone else's behalf.
+    const held = await holdOperationCredits(createServiceClient(), {
       projectId: params.projectId,
       operationRunId: operation.id,
       operation: "business_audit",
@@ -354,7 +364,7 @@ export async function startBusinessAuditOperation(
     // hold is returned by the same terminal-failure path every other failure
     // uses, so nothing stays reserved for work that never started.
     await failOperationRun(supabase, { operationId: operation.id, failureCode: "execution_start_failed" });
-    await releaseHoldForFailedStart(supabase, operation.id);
+    await releaseHoldForFailedStart(operation.id);
     return { kind: "failed", error: "execution_start_failed" };
   }
 
@@ -514,7 +524,9 @@ export async function startOpportunityOperation(
   const operation = created.operation;
 
   if (payWithCredits) {
-    const held = await holdOperationCredits(supabase, {
+    // Service-role client — see the same reservation in
+    // `startBusinessAuditOperation` for why.
+    const held = await holdOperationCredits(createServiceClient(), {
       projectId: params.projectId,
       operationRunId: operation.id,
       operation: "opportunity_generation",
@@ -536,7 +548,7 @@ export async function startOpportunityOperation(
 
   if (!started.ok) {
     await failOperationRun(supabase, { operationId: operation.id, failureCode: "execution_start_failed" });
-    await releaseHoldForFailedStart(supabase, operation.id);
+    await releaseHoldForFailedStart(operation.id);
     return { kind: "failed", error: "execution_start_failed" };
   }
 
@@ -793,7 +805,9 @@ export async function startActionPlanOperation(
 
   const operation = created.operation;
 
-  const held = await holdOperationCredits(supabase, {
+  // Service-role client — see the same reservation in
+  // `startBusinessAuditOperation` for why.
+  const held = await holdOperationCredits(createServiceClient(), {
     projectId: params.projectId,
     operationRunId: operation.id,
     operation: "action_plan",
@@ -817,7 +831,7 @@ export async function startActionPlanOperation(
       operationId: operation.id,
       failureCode: "execution_start_failed",
     });
-    await releaseHoldForFailedStart(supabase, operation.id);
+    await releaseHoldForFailedStart(operation.id);
     return { kind: "failed", error: "execution_start_failed" };
   }
 
