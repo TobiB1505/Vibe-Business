@@ -5,6 +5,7 @@ import { PROMPT_VERSION } from "@/modules/business-audit/prompt";
 import { RUBRIC_VERSION } from "@/modules/business-audit/rubric";
 import { BUSINESS_AUDIT_SCHEMA_VERSION, BUSINESS_AUDIT_VERSION } from "@/modules/business-audit/schema";
 import { computeAuditInputHash } from "@/modules/business-audit/store";
+import { creditsToUnits } from "@/modules/credits/units";
 import {
   getActiveBusinessAuditOperation,
   getOperationStatus,
@@ -156,12 +157,79 @@ describe("the free audit entitlement", () => {
     });
   }
 
-  it("refuses a paid run once the free audit is consumed", async () => {
+  /** Funds the owner's wallet so the entitlement can be paid past with Credits. */
+  async function fundWallet(credits: number, userId = USER): Promise<void> {
+    const { grantCreditLot } = await import("@/modules/credits/grants");
+    await grantCreditLot(fakeSupabase(db), {
+      userId,
+      sourceKind: "purchase",
+      credits: creditsToUnits(credits),
+      reason: "test funding",
+      idempotencyKey: `test-fund:${userId}:${credits}`,
+    });
+  }
+
+  it("runs a paid audit on Credits once the free one is spent (§39)", async () => {
+    seedConsumedEntitlement();
+    await fundWallet(100);
+
+    const outcome = await start({ force: true });
+
+    expect(outcome.kind).toBe("started");
+    expect(executor.starts).toHaveLength(1);
+
+    // 35 held, nothing charged yet — the charge follows a delivered result.
+    const reservation = db.rows("billing_credit_reservations")[0];
+    expect(reservation).toMatchObject({ status: "active", reserved_credits: creditsToUnits(35) });
+    expect(db.rows("billing_credit_ledger").filter((row) => row.kind === "charge")).toHaveLength(0);
+  });
+
+  it("starts no provider work when the hold is refused (§82, §102.10)", async () => {
+    /*
+     * The branch a pre-check cannot reach.
+     *
+     * `checkOperationAffordability` turns away most under-funded runs before an
+     * operation row exists, so "the *reservation* was refused" is a separate
+     * path — the one that runs when two projects race for the last Credits, or
+     * when the wallet is not in a state that may spend at all.
+     *
+     * Mutation testing found it uncovered: deleting the abort after a refused
+     * hold left every other test green while the executor started anyway.
+     *
+     * Driven here through a suspended wallet, which is a state the pre-check
+     * deliberately does not consider — it asks "are there enough Credits?",
+     * and there are. Only `claimReservation` asks whether this account may
+     * spend them.
+     */
+    seedConsumedEntitlement();
+    await fundWallet(100);
+
+    const wallet = db.rows("billing_credit_accounts")[0];
+    wallet.status = "suspended";
+
+    const outcome = await start({ force: true });
+
+    expect(outcome).toEqual({ kind: "failed", error: "insufficient_credits" });
+    // The property that matters: no provider work was enqueued.
+    expect(executor.starts).toHaveLength(0);
+    // And no hold was left behind.
+    expect(db.rows("billing_credit_reservations").filter((row) => row.status === "active")).toHaveLength(0);
+  });
+
+  it("refuses a paid run once the free audit is consumed and no Credits exist", async () => {
     seedConsumedEntitlement();
 
     const outcome = await start({ force: true });
 
-    expect(outcome).toEqual({ kind: "failed", error: "credits_required" });
+    /*
+     * `insufficient_credits`, not `credits_required` (BILLING CORE-2 §39, §43).
+     *
+     * Before Core-2 a spent entitlement was the end of the road, because
+     * Credits did not exist. Now it is a route into paying with them, and this
+     * account simply has none — which is a statement about balance, and the
+     * one the UI can act on by offering a way to get more.
+     */
+    expect(outcome).toEqual({ kind: "failed", error: "insufficient_credits" });
   });
 
   it("spends nothing: no operation row, and the executor is never started", async () => {

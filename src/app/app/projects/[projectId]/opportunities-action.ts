@@ -39,6 +39,9 @@ export async function startOpportunitiesAction(
     projectId,
     userId: session.userId,
     force,
+    // A deliberate regeneration from the workspace, so it costs Credits
+    // (BILLING CORE-2 §40). The bundled run inside onboarding does not.
+    requestedBy: "customer_requested",
   });
 
   if (outcome.kind === "failed") return { ok: false, error: outcome.error };

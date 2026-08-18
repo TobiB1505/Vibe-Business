@@ -42,11 +42,21 @@ export const CREDIT_LEDGER_KINDS = [
   "refund",
   /** A deliberate manual correction, always carrying a stated reason (§31). */
   "adjustment",
+  /**
+   * Credits that lapsed unspent (BILLING CORE-2 §10, §59, §60). Always negative.
+   *
+   * Expiration is a posted event rather than a read-time filter or a deletion.
+   * That keeps `posted_credits` — the figure Core-1's atomic reservation gate
+   * is evaluated against — honest without changing that primitive at all, and
+   * it keeps the grant that lapsed in history: "100 Welcome Credits, expired
+   * Aug 30" stays answerable forever.
+   */
+  "expiry",
 ] as const;
 export type CreditLedgerKind = (typeof CREDIT_LEDGER_KINDS)[number];
 
 /** Kinds whose delta must be negative. Enforced in the database as well as here. */
-export const DEBIT_KINDS: readonly CreditLedgerKind[] = ["charge"] as const;
+export const DEBIT_KINDS: readonly CreditLedgerKind[] = ["charge", "expiry"] as const;
 
 /** Kinds whose delta must be positive. `adjustment` is deliberately in neither. */
 export const CREDIT_KINDS: readonly CreditLedgerKind[] = ["grant", "purchase", "refund"] as const;

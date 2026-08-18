@@ -7,6 +7,7 @@ import { recordAuditEvent } from "@/modules/audit-log/events";
 import { listInstallationRepositories } from "@/modules/github/repositories";
 import { getVerifiedInstallation } from "@/modules/github/connections";
 import { createProjectWithRepository } from "@/modules/projects/connect";
+import { ensureWelcomeGrant } from "@/modules/credits/grants";
 import { createProjectOnboarding } from "@/modules/onboarding/store";
 
 export type SelectRepositoryResult = { ok: true } | { ok: false; error: string };
@@ -90,6 +91,32 @@ export async function selectRepository(
     eventType: "project.created",
     metadata: { projectId: result.projectId },
   });
+
+  /*
+   * Welcome Credits, at the one real provisioning moment (BILLING CORE-2 §5,
+   * §6, §57).
+   *
+   * Here rather than on the billing page because this is a POST that already
+   * creates account state — a page render must never move financial state
+   * (§99), and "grant on every page load" is exactly what §6 forbids.
+   *
+   * The grant is **account-scoped**, so connecting a second, third or tenth
+   * repository issues nothing further: every call computes the same identity,
+   * `welcome-credit-v1:<userId>`, and the ledger's unique index admits one.
+   * That is what makes creating projects useless as a way to farm Credits.
+   *
+   * Deliberately not allowed to fail the connect flow. A customer who
+   * connected their repository successfully has connected it; a billing hiccup
+   * must not undo that, and the billing page can reconcile the grant later.
+   */
+  try {
+    await ensureWelcomeGrant(supabase, { userId: session.userId });
+  } catch (error) {
+    console.error("[billing] welcome grant failed during project connect", {
+      userId: session.userId,
+      error: error instanceof Error ? error.name : "unknown",
+    });
+  }
 
   await createProjectOnboarding(supabase, {
     projectId: result.projectId,

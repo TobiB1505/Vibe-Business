@@ -463,6 +463,18 @@ export class FakeDatabase {
     // wrong. Without this the concurrency test would pass against a fake that
     // happily stores a negative available balance.
     if (table === "billing_credit_accounts") {
+      // billing_credit_accounts_user_idx. One wallet per owner — a second
+      // account would split a balance in two and make "available"
+      // unanswerable, so `ensureCreditAccount` relies on losing this index to
+      // re-read the winner's row. Modelled here because without it a
+      // concurrency test proves nothing: ten simultaneous first-time
+      // operations would each get their own wallet and every per-wallet
+      // assertion would still pass.
+      const duplicateOwner = others.some((row) => row.user_id === candidate.user_id);
+      if (duplicateOwner) {
+        return { code: POSTGRES_UNIQUE_VIOLATION, message: "billing_credit_accounts_user_idx" };
+      }
+
       const posted = Number(candidate.posted_credits ?? 0);
       const reserved = Number(candidate.reserved_credits ?? 0);
       if (reserved < 0) {
@@ -495,7 +507,7 @@ export class FakeDatabase {
       if (delta === 0) {
         return { code: POSTGRES_CHECK_VIOLATION, message: "credit_delta <> 0" };
       }
-      if (candidate.kind === "charge" && delta > 0) {
+      if (["charge", "expiry"].includes(String(candidate.kind)) && delta > 0) {
         return { code: POSTGRES_CHECK_VIOLATION, message: "billing_credit_ledger_sign_matches_kind" };
       }
       if (["grant", "purchase", "refund"].includes(String(candidate.kind)) && delta < 0) {
@@ -553,6 +565,119 @@ export class FakeDatabase {
       }
     }
 
+    // billing_credit_grants (BILLING CORE-2). The lot-level guarantees, modelled
+    // for the same reason the account-level ones are: a rule enforced only by an
+    // `if` is enforced right up until two requests arrive together.
+    if (table === "billing_credit_grants") {
+      // billing_credit_grants_ledger_entry_idx. One ledger entry owns at most
+      // one lot — this is what carries the ledger's exactly-once guarantee
+      // through to grant provenance, so a replayed webhook cannot mint a
+      // second lot even if it reached the insert.
+      const clash = others.some((row) => row.ledger_entry_id === candidate.ledger_entry_id);
+      if (clash) {
+        return { code: POSTGRES_UNIQUE_VIOLATION, message: "billing_credit_grants_ledger_entry_idx" };
+      }
+
+      // billing_credit_grants_capacity_not_exceeded. A lot can never give out
+      // more than it holds — the structural backstop that makes over-allocation
+      // impossible even if the application predicate were written wrong.
+      const initial = Number(candidate.initial_credit_units ?? 0);
+      const allocated = Number(candidate.allocated_credit_units ?? 0);
+      const expired = Number(candidate.expired_credit_units ?? 0);
+      if (allocated < 0 || expired < 0 || allocated + expired > initial) {
+        return {
+          code: POSTGRES_CHECK_VIOLATION,
+          message: "billing_credit_grants_capacity_not_exceeded",
+        };
+      }
+
+      // billing_credit_grants_expired_has_timestamp / _expired_had_a_date.
+      // Only an expiring lot may expire: a purchased lot has no expiry date and
+      // must never acquire one through an application bug.
+      if ((candidate.status === "expired") !== (candidate.expired_at != null)) {
+        return {
+          code: POSTGRES_CHECK_VIOLATION,
+          message: "billing_credit_grants_expired_has_timestamp",
+        };
+      }
+      if (candidate.status === "expired" && candidate.expires_at == null) {
+        return { code: POSTGRES_CHECK_VIOLATION, message: "billing_credit_grants_expired_had_a_date" };
+      }
+
+      // billing_credit_grants_period_matches_kind.
+      const hasPeriod = candidate.period_start != null && candidate.period_end != null;
+      if ((candidate.source_kind === "subscription") !== hasPeriod) {
+        return { code: POSTGRES_CHECK_VIOLATION, message: "billing_credit_grants_period_matches_kind" };
+      }
+    }
+
+    if (table === "billing_credit_allocations") {
+      // billing_credit_allocations_consumed_within_held. A lot may never fund
+      // more than it was asked to hold.
+      const held = Number(candidate.credit_units ?? 0);
+      if (candidate.consumed_units != null && Number(candidate.consumed_units) > held) {
+        return {
+          code: POSTGRES_CHECK_VIOLATION,
+          message: "billing_credit_allocations_consumed_within_held",
+        };
+      }
+
+      // billing_credit_allocations_consumed_has_amount / _has_timestamp.
+      if ((candidate.status === "consumed") !== (candidate.consumed_units != null)) {
+        return {
+          code: POSTGRES_CHECK_VIOLATION,
+          message: "billing_credit_allocations_consumed_has_amount",
+        };
+      }
+      if ((candidate.status === "consumed") !== (candidate.settled_at != null)) {
+        return {
+          code: POSTGRES_CHECK_VIOLATION,
+          message: "billing_credit_allocations_consumed_has_timestamp",
+        };
+      }
+      if ((candidate.status === "released") !== (candidate.released_at != null)) {
+        return {
+          code: POSTGRES_CHECK_VIOLATION,
+          message: "billing_credit_allocations_released_has_timestamp",
+        };
+      }
+    }
+
+    // billing_stripe_events_stripe_id_idx (§28). The claim that makes a replayed
+    // webhook a no-op: the second delivery loses this index and is answered from
+    // the existing row instead of re-running the handler.
+    if (table === "billing_stripe_events") {
+      const clash = others.some((row) => row.stripe_event_id === candidate.stripe_event_id);
+      if (clash) {
+        return { code: POSTGRES_UNIQUE_VIOLATION, message: "billing_stripe_events_stripe_id_idx" };
+      }
+    }
+
+    // billing_stripe_customers: one Stripe customer per owner per mode, and one
+    // owner per Stripe customer. Two simultaneous first purchases must not split
+    // one person's payment history across two customers.
+    if (table === "billing_stripe_customers") {
+      const perUser = others.some(
+        (row) => row.user_id === candidate.user_id && row.livemode === candidate.livemode,
+      );
+      if (perUser) {
+        return { code: POSTGRES_UNIQUE_VIOLATION, message: "billing_stripe_customers_user_mode_idx" };
+      }
+      const perCustomer = others.some((row) => row.stripe_customer_id === candidate.stripe_customer_id);
+      if (perCustomer) {
+        return { code: POSTGRES_UNIQUE_VIOLATION, message: "billing_stripe_customers_stripe_id_idx" };
+      }
+    }
+
+    if (table === "billing_subscriptions") {
+      const clash = others.some(
+        (row) => row.stripe_subscription_id === candidate.stripe_subscription_id,
+      );
+      if (clash) {
+        return { code: POSTGRES_UNIQUE_VIOLATION, message: "billing_subscriptions_stripe_id_idx" };
+      }
+    }
+
     // billing_usage_events_source_sku_idx (§43). One source row projects to at
     // most one event per SKU, which is what makes reconciliation safe to run
     // twice — and what a "no duplicates on a second pass" test must be proving
@@ -594,8 +719,9 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
   constructor(
     private readonly db: FakeDatabase,
     private readonly table: string,
-    private readonly mode: "select" | "insert" | "update",
+    private readonly mode: "select" | "insert" | "update" | "delete" | "upsert",
     private readonly payload?: Row | Row[],
+    private readonly onConflict?: string,
   ) {}
 
   eq(column: string, value: unknown): this {
@@ -720,6 +846,52 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
       return { data: targets, error: null };
     }
 
+    if (this.mode === "delete") {
+      const failure = this.failure();
+      if (failure) return { data: null, error: failure };
+
+      const rows = this.db.rows(this.table);
+      const removed = rows.filter((row) => matches(row, this.filters));
+      for (const row of removed) rows.splice(rows.indexOf(row), 1);
+      return { data: removed, error: null };
+    }
+
+    /*
+     * `upsert` with `onConflict`, modelled the way Postgres behaves rather than
+     * as "insert or replace": the conflict target decides whether an existing
+     * row is updated, and everything else inserts. Subscription snapshots
+     * depend on it — a renewal must update the row Stripe already told us
+     * about, not accumulate one row per webhook.
+     */
+    if (this.mode === "upsert") {
+      const failure = this.failure();
+      if (failure) return { data: null, error: failure };
+
+      const payload = this.payload as Row;
+      const conflictColumn = this.onConflict;
+      const existing = conflictColumn
+        ? this.db.rows(this.table).find((row) => row[conflictColumn] === payload[conflictColumn])
+        : undefined;
+
+      if (existing) {
+        const candidate = { ...existing, ...payload, updated_at: new Date().toISOString() };
+        const violation = this.db.checkConstraints(this.table, candidate, existing.id);
+        if (violation) return { data: null, error: violation };
+        Object.assign(existing, candidate);
+        return { data: [existing], error: null };
+      }
+
+      const row: Row = {
+        id: `${this.table}_${this.db.rows(this.table).length + 1}`,
+        created_at: new Date().toISOString(),
+        ...payload,
+      };
+      const violation = this.db.checkConstraints(this.table, row);
+      if (violation) return { data: null, error: violation };
+      this.db.rows(this.table).push(row);
+      return { data: [row], error: null };
+    }
+
     const rows = this.resolveRows();
     // A `head: true` count query returns no rows and a `count`, which is what
     // the entitlement's abuse window reads.
@@ -763,6 +935,9 @@ export function fakeSupabase(db: FakeDatabase): SupabaseClient {
         select: () => new FakeQuery(db, table, "select"),
         insert: (payload: Row | Row[]) => new FakeQuery(db, table, "insert", payload),
         update: (payload: Row) => new FakeQuery(db, table, "update", payload),
+        delete: () => new FakeQuery(db, table, "delete"),
+        upsert: (payload: Row, options?: { onConflict?: string }) =>
+          new FakeQuery(db, table, "upsert", payload, options?.onConflict),
       };
     },
   } as unknown as SupabaseClient;

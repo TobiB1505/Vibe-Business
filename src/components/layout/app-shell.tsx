@@ -11,24 +11,40 @@ import { signOut } from "@/modules/auth/actions";
  * the chrome for account-level screens — the project list, the connect flow —
  * as opposed to `ProjectShell`, which adds a project's own sidebar.
  *
- * ## What is deliberately not here
+ * ## The Credit balance
  *
- * The mockups put a credits balance in this bar. There is no Vibe Credit
- * ledger in the system yet (ARCHITECTURE.md §3.11 — the internal provider-cost
- * half exists, the customer-facing balance does not), so there is nothing to
- * read and a number here would be invented. The slot is not stubbed, not
- * greyed out, and not filled with a zero; it simply does not exist until the
- * ledger does.
+ * The slot the mockups reserved, filled now that there is something real to
+ * read (BILLING CORE-2 §54). It stayed empty through Core-1 on purpose — the
+ * ledger existed but no customer balance did, and a number here would have
+ * been invented.
+ *
+ * Restrained by design: a plain number and a word, linking to billing. Credits
+ * are how the product is paid for, not what the product is about, so this does
+ * not get a pill, a colour, an icon or a progress bar (§54).
+ *
+ * Rendered only when the caller passes a balance. The shell does not fetch it
+ * — a component that queried on every signed-in page render would put a
+ * database round trip behind every navigation (§100), so the pages that want
+ * it read it and pass it down.
  */
 export function AppShell({
   children,
   /** The signed-in address, shown so it is obvious which account is acting. */
   email,
+  /**
+   * Available Credits, already formatted for display (e.g. `"2,480"`).
+   *
+   * Omitted rather than zeroed when unknown: "we did not look" and "you have
+   * none" are different facts, and only one of them should be shown as a
+   * balance.
+   */
+  credits,
   /** Full-bleed content, e.g. a shell that supplies its own inner layout. */
   bleed = false,
 }: {
   children: ReactNode;
   email?: string | null;
+  credits?: string | null;
   bleed?: boolean;
 }) {
   return (
@@ -44,6 +60,15 @@ export function AppShell({
           </Link>
 
           <div className="ml-auto flex items-center gap-4">
+            {credits != null && (
+              <Link
+                href="/app/billing"
+                className="text-fg-body hover:text-fg rounded-nav text-[0.8125rem] tabular-nums transition-colors duration-150"
+              >
+                <span className="font-semibold">{credits}</span>{" "}
+                <span className="text-fg-meta">Credits</span>
+              </Link>
+            )}
             {email && (
               <span className="text-fg-meta hidden text-[0.8125rem] sm:inline" title={email}>
                 {email}

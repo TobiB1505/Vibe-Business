@@ -177,6 +177,15 @@ const LABELS: Record<AuditEventType, string> = {
   "credit_reservation.released": "Reserved Credits released",
   "credit_charge.settled": "Credits charged",
   "credit_refund.posted": "Credits refunded",
+
+  // Billing Core-2 (§53, §94). Human labels, never raw enums: a customer reads
+  // "Credits added", not "grant lot posted, source_kind=subscription".
+  "billing.credit_lot_granted": "Credits added",
+  "billing.credits_expired": "Credits expired",
+  "billing.operation_reserved": "Credits reserved for an operation",
+  "billing.checkout_started": "Checkout started",
+  "billing.subscription_updated": "Subscription updated",
+  "billing.stripe_event_ignored": "Payment event received",
 };
 
 /**

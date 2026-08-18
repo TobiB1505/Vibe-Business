@@ -8,9 +8,17 @@ import { getSupabaseServiceEnv } from "@/lib/env/supabase-service";
 /**
  * The service-role Supabase client. **RLS does not apply to this client.**
  *
- * It exists for exactly one caller: durable operation execution (ADR 0013). A
- * workflow step runs outside any HTTP request, so there is no cookie, no
- * session, and no `auth.uid()` for a policy to check against.
+ * It exists for callers that genuinely have no session to act under:
+ *
+ *  1. **Durable operation execution** (ADR 0013). A workflow step runs outside
+ *     any HTTP request, so there is no cookie and no `auth.uid()`.
+ *  2. **The Stripe webhook** (ADR 0025). Stripe authenticates by signing the
+ *     request body, not by presenting a Vibe session — there is no user agent
+ *     and no cookie, by design. The endpoint is nonetheless the only funding
+ *     path into the Credit ledger, so it needs to write.
+ *
+ * Both are the same situation and carry the same obligation: RLS cannot apply,
+ * so ownership has to be re-established in code.
  *
  * ## The rules that replace RLS
  *
@@ -25,9 +33,16 @@ import { getSupabaseServiceEnv } from "@/lib/env/supabase-service";
  *     handed an operation id and nothing else; it re-reads the row and uses
  *     that row's ids. A step must never accept a `projectId` or `userId`
  *     parameter, because then a caller could name someone else's.
- *  3. **Stay inside `src/modules/operations/`.** Nothing else may import this
- *     module. The read path the browser uses stays on the cookie-scoped
- *     client in `server.ts`, where RLS still enforces everything.
+ *  3. **Stay inside `src/modules/operations/` or `src/modules/billing/`.**
+ *     Nothing else may import this module. The read path the browser uses
+ *     stays on the cookie-scoped client in `server.ts`, where RLS still
+ *     enforces everything — including every read on the billing page.
+ *
+ * The billing webhook satisfies (1) and (2) the same way a workflow step does:
+ * it never accepts a `userId` from its caller. The owner is resolved from
+ * `billing_stripe_customers`, a mapping Vibe wrote itself when it created the
+ * Stripe customer — so a payload claiming to belong to somebody else resolves
+ * to nothing, not to that somebody else.
  *
  * Sessions are disabled: this client must never pick up, persist or refresh a
  * user session, and it has no storage to put one in.

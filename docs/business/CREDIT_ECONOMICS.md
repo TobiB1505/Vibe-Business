@@ -1,6 +1,6 @@
 # Vibe Credit Economics
 
-Status: recommendation, not implemented. No production rate card exists after this document; none is added by it.
+Status: recommendation. **Partly implemented by Billing Core-2** — see the implementation note at the end of this document for exactly which recommendations shipped, which were superseded by a founder decision, and which remain open. The body below is the original recommendation and is left unedited, so what was recommended stays distinguishable from what was built.
 
 Every number below is labeled:
 
@@ -420,3 +420,50 @@ Pending — opened immediately after commit/push, titled "Billing Product 1 — 
 ## Merge recommendation
 
 Ready to merge as documentation once reviewed by the founder — it changes no code, activates no rate card, and adds no infrastructure. The open items (Sandbox/browser cost, real Agent dogfood) are correctly *left* open rather than resolved with invented numbers; merging this document does not block on resolving them; it exists specifically to make them visible. **Not merged automatically**, per instruction.
+
+---
+
+## Implementation note — Billing Core-2 (2026-08-18)
+
+Added after the fact. The document above is unchanged; this records what became real, so a reader can tell a recommendation from a shipped decision. Full detail in [docs/sprints/0038-billing-core2-stripe-entitlements.md](../sprints/0038-billing-core2-stripe-entitlements.md) and [ADR 0025](../decisions/0025-stripe-payment-rail-and-credit-grants.md).
+
+### Implemented as recommended
+
+- Credits stay closed-loop, non-transferable and non-cash-redeemable.
+- Class A operations carry **fixed** Credit prices, decoupled from any individual run's token usage.
+- **Failure policy**, exactly as the table above specifies: a Vibe failure, a provider failure and a run producing nothing usable are all 0 charged. Provider spend that really happened stays attributable via `abandoned_with_usage`.
+- **Product Understanding always free**, and free as a distinct case rather than a price of zero — no 0-Credit charge is ever posted.
+- **First Business Audit free per project**, unchanged. §Free usage preserves the existing `included_first_audit` entitlement explicitly, which is what settled the legacy-entitlement question: it was kept, not removed.
+- **First Deep Scan free per project**, unchanged, and **no price invented** for additional scans. The refusal behaviour is exactly as recommended: no price shown, no balance invented.
+- **Purchased top-up Credits do not expire** on any normal schedule, and are stored with a null expiry rather than a far-future date.
+- **Purchased Credits are spent last**, preserving the customer's already-paid balance longest.
+- No Agentic Execution price, and no Pro-tier finalization beyond the founder's own number — both still gated on data that does not exist.
+
+### Refined by founder decision
+
+- **Prices rounded.** Recommended ~33 / ~16 / ~11; shipped **35 / 20 / 15**. Within the spirit of a document that wrote them with a tilde and called Action Planning provisional at n=1.
+- **Currency.** This document models in USD; the shipped catalog prices in **EUR** (€19 Builder, €49 Pro, €12 / €33 / €99 packs).
+- **Subscription tiers.** §Subscription hypotheses offered Starter $29–39 and Pro $79–99 as explicitly non-committal hypotheses. Shipped as **Builder €19 / 1,000 Credits** and **Pro €49 / 3,000 Credits**. The document's caution that Pro's numbers should not be finalized before real Agent dogfood stands, and is accepted as a knowingly-taken risk.
+- **Welcome Credits.** Not in this document at all. **100 Credits, valid 30 days, once per account** is an additive founder decision.
+
+### Superseded by founder decision — stated plainly
+
+**§Expiration recommends that subscription Credits roll over with a cap of 2× the monthly grant. Billing Core-2 implements expiry at the end of the paid period instead.**
+
+These are different economics, not a detail: a quiet Builder month keeps 1,000 Credits under this document's policy and none under the shipped one. The override was explicit and is recorded in ADR 0025 rather than left to be inferred from the code. **Capped rollover is deferred, not abandoned.**
+
+### Superseded in detail, not in outcome
+
+**§Credit spending priority** orders by source category (promotional → subscription → purchased). Billing Core-2 orders by **expiry deadline**, soonest first, non-expiring last.
+
+For every combination of lots that exists today the two produce the same answer, including the document's own priority of spending purchased Credits last. They diverge only where a promotional grant outlives a subscription period — which is exactly the case a category list gets wrong, and the reason the shipped rule is stated over the thing that actually matters.
+
+### Reconciled, and worth naming
+
+**§Free usage** recommends Opportunity Generation stay bundled with the free audit rather than separately priced. Billing Core-2 keeps the **onboarding-bundled** generation free and prices a **deliberately customer-requested regeneration from the workspace** at 20 Credits. Both readings are honoured: a new user's guided first run costs nothing, and a re-run somebody asked for is paid work.
+
+### Still open, unchanged
+
+Every item under §Decisions requiring Sandbox/browser cost and §Decisions requiring real Coding Agent dogfood remains open, for the same reason it was open: nobody has measured the cost. Additionally, **Credit reversal for a Stripe refund or chargeback has no policy** — Billing Core-2 records such events and deliberately implements no clawback, because the Credits may already have been spent and a negative balance would be a surprise debt.
+
+The §Legal/accounting review flags are unchanged and none of them is solved in code. They form the first section of the production activation checklist.

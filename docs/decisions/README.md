@@ -54,6 +54,7 @@ V0.1 foundational architecture decisions have been recorded:
 - [0022](0022-sentry-observability.md) — Sentry for Error Monitoring and Baseline Tracing (Accepted)
 - [0023](0023-project-scoped-onboarding-orchestration.md) — Project-scoped Onboarding Orchestration (Accepted)
 - [0024](0024-vibe-credits-economic-layer.md) — Vibe Credits as an Internal Economic Layer (Accepted)
+- [0025](0025-stripe-payment-rail-and-credit-grants.md) — Stripe as Payment Rail, and Credit Grants as Provenance (Accepted)
 
 Several architecture questions remain intentionally open — see [ARCHITECTURE.md §7](../../ARCHITECTURE.md#7-deferred--open-decisions).
 
