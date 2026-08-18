@@ -244,7 +244,25 @@ export type AuditEventType =
   | "billing.operation_reserved"
   | "billing.checkout_started"
   | "billing.subscription_updated"
-  | "billing.stripe_event_ignored";
+  | "billing.stripe_event_ignored"
+
+  /*
+   * Agentic execution contract (EXECUTION CORE-3 §35).
+   *
+   * One event, because one thing durably happens in this sprint: an immutable
+   * ExecutionSpec is recorded. §35 lists several others it *could* log —
+   * `execution.resolved`, `execution.blocked`, `execution.needs_input`,
+   * `execution.budget_bound` — and none is added, because resolution is a pure
+   * function recomputed on every read and logging it would record page views
+   * rather than events. `change_merge.not_eligible` already carries that
+   * lesson, and it had to be deduplicated to survive it.
+   *
+   * The metadata carries identifiers, a mode, a risk class, a Credit ceiling
+   * and policy versions. It must never carry the objective's text, the
+   * compiled policy, a repository path, generated code, a prompt, a model
+   * response or a reasoning trace.
+   */
+  | "execution.spec_created";
 
 /*
  * There is deliberately no `credit_usage.reconciled`. Shadow reconciliation
