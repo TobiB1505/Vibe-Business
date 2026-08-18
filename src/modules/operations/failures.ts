@@ -47,6 +47,8 @@ export type OperationExecutionFailure =
   | "move_missing"
   /** The Moves were prioritized from an older audit than the current one. */
   | "move_stale"
+  /** An explicitly chosen Move no longer names anything in the current set (§83). */
+  | "move_not_found"
   /**
    * The business problem behind the Move could not be established (CORE-2b FIX §8).
    *
@@ -114,6 +116,8 @@ const RETRYABLE: readonly OperationFailureCode[] = [
   // Same shape: the user can generate Moves, or refresh them, and then plan.
   "move_missing",
   "move_stale",
+  // The founder can pick a different Move, or plan the current top one.
+  "move_not_found",
 ];
 
 export function isRetryable(code: OperationFailureCode): boolean {

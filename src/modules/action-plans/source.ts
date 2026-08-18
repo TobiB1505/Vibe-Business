@@ -212,3 +212,52 @@ export function defaultPlannedOpportunity(
 ): BusinessOpportunity | null {
   return [...opportunities].sort((a, b) => a.rank - b.rank)[0] ?? null;
 }
+
+/**
+ * The Move a plan is built for, honoring an explicit founder choice (§6, §83; PRODUCT.md
+ * §6 step 7 — "User selects an opportunity").
+ *
+ * §83 forbids exactly one thing: *Vibe* substituting an easier Move for the important one,
+ * silently, while telling the founder it planned the important one. It does not forbid a
+ * founder consciously choosing to plan a different Move than rank 1 — the Core Loop has
+ * always given them that agency for the single-opportunity "prepare a change" flow
+ * (`execution/service.ts::StartPreparationParams`); Action Plans withheld it only because
+ * no caller had ever asked for it.
+ *
+ * So the choice stays honest by construction rather than by convention:
+ *
+ *  - No selection (`requestedOpportunityId: null`) is indistinguishable from before this
+ *    existed — it is still exactly `defaultPlannedOpportunity`, rank 1, unconditionally.
+ *  - An explicit selection must name a Move in the *current* set. A stale or foreign id
+ *    resolves to `null` — never a silent fallback to rank 1, which would substitute a
+ *    different Move than the one actually requested without saying so.
+ *  - The caller is responsible for disclosing the deviation on screen when the resolved
+ *    Move is not rank 1 (`ActionPlanReadiness.isDefaultMove`) — the one part of §83's
+ *    honesty requirement this function cannot enforce by itself.
+ */
+export function resolveRequestedOpportunity(
+  opportunities: readonly BusinessOpportunity[],
+  requestedOpportunityId: string | null,
+): BusinessOpportunity | null {
+  if (requestedOpportunityId === null) return defaultPlannedOpportunity(opportunities);
+  return opportunities.find((entry) => entry.id === requestedOpportunityId) ?? null;
+}
+
+/** The query parameter a "Plan this Move" link carries. Internal, stable. */
+export const PLAN_OPPORTUNITY_PARAM = "plan";
+
+export function planMoveHref(movesHref: string, opportunityId: string): string {
+  return `${movesHref}?${PLAN_OPPORTUNITY_PARAM}=${encodeURIComponent(opportunityId)}#plan-this-move`;
+}
+
+/**
+ * `requested` from a URL is untrusted text (mirrors `resolveMovesContext`).
+ *
+ * Bounded before it ever reaches a comparison — an opportunity id is
+ * `3-external_setup-…`-shaped, and an oversized value is not a typo a founder
+ * made.
+ */
+export function sanitizeRequestedOpportunityId(requested: string | null | undefined): string | null {
+  if (typeof requested !== "string" || requested.length === 0 || requested.length > 128) return null;
+  return requested;
+}

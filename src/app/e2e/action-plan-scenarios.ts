@@ -24,6 +24,7 @@ function readiness(overrides: Partial<ActionPlanReadiness> = {}): ActionPlanRead
     blockedReason: null,
     auditId: "audit_e2e",
     opportunityId: "move_e2e",
+    isDefaultMove: true,
     conclusionKey: "blocker-1",
     conclusionLineage: "direct",
     unresolvedSourceReason: null,
@@ -218,7 +219,11 @@ function operation(overrides: Partial<OperationView> = {}): OperationView {
 }
 
 export type ActionPlanFixture = {
+  /** Which Move the panel is rendered for — mirrors `readiness.opportunityId` (§83). */
+  opportunityId: string | null;
   moveTitle: string | null;
+  /** The engine's own rank-1 title, for the priority-deviation disclosure. */
+  defaultMoveTitle: string | null;
   readiness: ActionPlanReadiness;
   planView: ActionPlanView | null;
   activeOperation: OperationView | null;
@@ -227,7 +232,9 @@ export type ActionPlanFixture = {
 export const E2E_ACTION_PLAN_SCENARIOS = {
   /** No plan exists yet, and nothing blocks starting one. */
   action_plan_ready_to_start: (): ActionPlanFixture => ({
+    opportunityId: "move_e2e",
     moveTitle: MOVE_TITLE,
+    defaultMoveTitle: MOVE_TITLE,
     readiness: readiness(),
     planView: null,
     activeOperation: null,
@@ -235,7 +242,9 @@ export const E2E_ACTION_PLAN_SCENARIOS = {
 
   /** No Move exists yet — the block a founder sees before ever reaching this move. */
   action_plan_blocked_move_missing: (): ActionPlanFixture => ({
+    opportunityId: null,
     moveTitle: null,
+    defaultMoveTitle: null,
     readiness: readiness({ ready: false, blockedReason: "move_missing", opportunityId: null }),
     planView: null,
     activeOperation: null,
@@ -243,7 +252,9 @@ export const E2E_ACTION_PLAN_SCENARIOS = {
 
   /** The audit itself is missing — routes at the business audit, not next moves. */
   action_plan_blocked_audit_missing: (): ActionPlanFixture => ({
+    opportunityId: null,
     moveTitle: null,
+    defaultMoveTitle: null,
     readiness: readiness({
       ready: false,
       blockedReason: "audit_missing",
@@ -254,9 +265,34 @@ export const E2E_ACTION_PLAN_SCENARIOS = {
     activeOperation: null,
   }),
 
+  /** An explicitly requested Move no longer names anything current (§83). */
+  action_plan_blocked_move_not_found: (): ActionPlanFixture => ({
+    opportunityId: null,
+    moveTitle: null,
+    defaultMoveTitle: MOVE_TITLE,
+    readiness: readiness({ ready: false, blockedReason: "move_not_found", opportunityId: null }),
+    planView: null,
+    activeOperation: null,
+  }),
+
+  /**
+   * A founder chose a Move other than the engine's own rank 1 (§83). The
+   * disclosure must say so — never render identically to `action_plan_ready`.
+   */
+  action_plan_priority_deviation: (): ActionPlanFixture => ({
+    opportunityId: "move_e2e_seo",
+    moveTitle: "Add discoverability foundations",
+    defaultMoveTitle: MOVE_TITLE,
+    readiness: readiness({ opportunityId: "move_e2e_seo", isDefaultMove: false }),
+    planView: null,
+    activeOperation: null,
+  }),
+
   /** A plan is being generated. Ambient copy only — no fake percentage. */
   action_plan_planning: (): ActionPlanFixture => ({
+    opportunityId: "move_e2e",
     moveTitle: MOVE_TITLE,
+    defaultMoveTitle: MOVE_TITLE,
     readiness: readiness(),
     planView: null,
     activeOperation: operation(),
@@ -264,7 +300,9 @@ export const E2E_ACTION_PLAN_SCENARIOS = {
 
   /** A completed plan, covering every actor and every execution-support value. */
   action_plan_ready: (): ActionPlanFixture => ({
+    opportunityId: "move_e2e",
     moveTitle: MOVE_TITLE,
+    defaultMoveTitle: MOVE_TITLE,
     readiness: readiness(),
     planView: planView(),
     activeOperation: null,
@@ -272,7 +310,9 @@ export const E2E_ACTION_PLAN_SCENARIOS = {
 
   /** The same plan, but the audit has since moved. */
   action_plan_stale: (): ActionPlanFixture => ({
+    opportunityId: "move_e2e",
     moveTitle: MOVE_TITLE,
+    defaultMoveTitle: MOVE_TITLE,
     readiness: readiness(),
     planView: planView({ staleness: ["audit_superseded", "move_superseded"] }),
     activeOperation: null,
@@ -280,7 +320,9 @@ export const E2E_ACTION_PLAN_SCENARIOS = {
 
   /** Planning failed. No provider internals reach the screen. */
   action_plan_failed: (): ActionPlanFixture => ({
+    opportunityId: "move_e2e",
     moveTitle: MOVE_TITLE,
+    defaultMoveTitle: MOVE_TITLE,
     readiness: readiness(),
     planView: null,
     activeOperation: operation({

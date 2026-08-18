@@ -12,6 +12,7 @@ import { describeEvidenceId } from "@/modules/business-audit/evidence-labels";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { OPERATION_STAGE_LABELS, type OperationView } from "@/modules/operations/view";
 import { buildOpportunityBlockNotice } from "@/modules/opportunities/view";
+import { planMoveHref } from "@/modules/action-plans/source";
 import {
   partitionByContext,
   type MoveLineageMap,
@@ -85,6 +86,8 @@ function OpportunityCard({
   lineageHeadline,
   preparedHref,
   emphasis,
+  movesHref,
+  isPlannedMove,
 }: {
   projectId: string;
   opportunity: BusinessOpportunity;
@@ -97,6 +100,9 @@ function OpportunityCard({
   preparedHref: string;
   /** The engine's rank 1, or the top of a contextual group. */
   emphasis: boolean;
+  movesHref: string;
+  /** Whether the Action Plan section below is already about this exact card (§83). */
+  isPlannedMove: boolean;
 }) {
   return (
     <Surface
@@ -200,6 +206,21 @@ function OpportunityCard({
           preparedHref={preparedHref}
         />
       )}
+
+      {/* A step-by-step Action Plan is a separate, always-available affordance
+          from the single-shot "prepare a change" flow above — offered for
+          every card, not gated on `execution`, since a plan can genuinely
+          begin with a founder decision Vibe cannot yet execute at all (§83).
+          Omitted for whichever card the section below is already planning,
+          so a card never links to itself. */}
+      {!isPlannedMove && (
+        <Link
+          href={planMoveHref(movesHref, opportunity.id)}
+          className="text-fg-secondary hover:text-fg-body self-start text-xs underline underline-offset-4 transition-colors"
+        >
+          Plan this Move
+        </Link>
+      )}
     </Surface>
   );
 }
@@ -220,6 +241,7 @@ export function OpportunitiesPanel({
   movesContext,
   movesHref,
   preparedHref,
+  plannedOpportunityId,
 }: {
   projectId: string;
   opportunities: BusinessOpportunity[];
@@ -239,6 +261,8 @@ export function OpportunitiesPanel({
   movesContext: MovesContext | null;
   movesHref: string;
   preparedHref: string;
+  /** Which Move the Action Plan section below is currently about (§83). */
+  plannedOpportunityId: string | null;
 }) {
   const action = startOpportunitiesAction.bind(null, projectId);
   const [state, formAction, pending] = useActionState(action, initialState);
@@ -298,6 +322,8 @@ export function OpportunitiesPanel({
       lineageHeadline={inContext ? null : (lineage[opportunity.id]?.headline ?? null)}
       preparedHref={preparedHref}
       emphasis={emphasis}
+      movesHref={movesHref}
+      isPlannedMove={opportunity.id === plannedOpportunityId}
     />
   );
 

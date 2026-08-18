@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { defaultPlannedOpportunity, resolvePlannerSource } from "./source";
+import { defaultPlannedOpportunity, resolvePlannerSource, resolveRequestedOpportunity } from "./source";
 import { firstActionableStep, planProgress } from "./sequence";
 import {
   FAKE_PLAN_EVIDENCE_IDS,
@@ -345,6 +345,33 @@ describe("priority is not execution suitability", () => {
     expect(chosen?.rank).toBe(1);
     expect(chosen?.id).toBe("1-positioning-narrow-your-first-customer");
     expect(chosen?.executionReadiness).toBe("needs_user_input");
+  });
+});
+
+/**
+ * §83's extension — a founder's own explicit choice is not the substitution
+ * §83 forbids. Vibe still never makes the choice; it only stops being the
+ * only one who can (PRODUCT.md §6 step 7).
+ */
+describe("resolveRequestedOpportunity — the founder's own explicit choice", () => {
+  const opportunities = [
+    fakeOpportunity({ id: "1-positioning-narrow-your-first-customer", rank: 1 }),
+    fakeOpportunity({ id: "2-seo-add-discoverability-foundations", rank: 2 }),
+  ];
+
+  it("is identical to defaultPlannedOpportunity when nothing was requested", () => {
+    expect(resolveRequestedOpportunity(opportunities, null)).toEqual(
+      defaultPlannedOpportunity(opportunities),
+    );
+  });
+
+  it("honors an explicit choice of a lower-ranked Move", () => {
+    const chosen = resolveRequestedOpportunity(opportunities, "2-seo-add-discoverability-foundations");
+    expect(chosen?.id).toBe("2-seo-add-discoverability-foundations");
+  });
+
+  it("never falls back to rank 1 for a stale or foreign id", () => {
+    expect(resolveRequestedOpportunity(opportunities, "some-other-projects-move")).toBeNull();
   });
 });
 

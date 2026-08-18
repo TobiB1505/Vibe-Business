@@ -729,7 +729,13 @@ export async function getLastFailedOperation(
 export async function startActionPlanOperation(
   supabase: SupabaseClient,
   executor: OperationExecutor,
-  params: { projectId: string; userId: string; force?: boolean },
+  params: {
+    projectId: string;
+    userId: string;
+    force?: boolean;
+    /** An explicit founder choice of Move (§83). Absent, and unconditionally rank 1, for every existing caller. */
+    requestedOpportunityId?: string | null;
+  },
 ): Promise<StartOperationOutcome> {
   const { data: project } = await supabase
     .from("projects")
@@ -743,7 +749,11 @@ export async function startActionPlanOperation(
   // Refuses outright when the audit or the Moves are missing or stale: planning
   // from a judgment we already know is out of date produces a confident plan
   // for a business that has since changed, and nothing on screen would say so.
-  const identity = await resolveActionPlanIdentity(supabase, params.projectId);
+  const identity = await resolveActionPlanIdentity(
+    supabase,
+    params.projectId,
+    params.requestedOpportunityId ?? null,
+  );
   if (!identity.ok) return { kind: "failed", error: identity.error };
 
   if (!params.force) {
@@ -787,6 +797,11 @@ export async function startActionPlanOperation(
     userId: params.userId,
     operationType: "action_planning",
     inputIdentity: identity.inputHash,
+    // The Move this run is for, whether that is rank 1 by default or a
+    // founder's explicit choice — so the durable step below resolves against
+    // the exact Move the operation was created for, not "whatever rank 1 is
+    // by the time the step runs" (§83, mirrors `change_preparation`).
+    subjectId: identity.opportunityId,
   });
 
   if (!created.ok) {

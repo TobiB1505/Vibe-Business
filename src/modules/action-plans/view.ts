@@ -43,6 +43,7 @@ const BLOCK_NOTICE_COPY: Record<
   },
   move_missing: { actionLabel: "Find your next moves", target: "next_moves" },
   move_stale: { actionLabel: "Refresh your next moves", target: "next_moves" },
+  move_not_found: { actionLabel: "Choose a move", target: "next_moves" },
   // The Move itself may be current; what failed is linking it back to a
   // business conclusion. The remedy is the same one that regenerates it.
   planner_source_unresolved: { actionLabel: "Refresh your next moves", target: "next_moves" },

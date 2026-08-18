@@ -17,11 +17,7 @@ import {
   buildPlannerPack,
   runActionPlanning,
 } from "@/modules/action-plans/runner";
-import {
-  defaultPlannedOpportunity,
-  resolvePlannerSource,
-  type PlannerSource,
-} from "@/modules/action-plans/source";
+import { resolvePlannerSource, type PlannerSource } from "@/modules/action-plans/source";
 import { trimPlannerEvidence } from "@/modules/action-plans/evidence";
 import {
   completeActionPlanRun,
@@ -140,8 +136,14 @@ async function loadSources(
   // saw. Without the profile it would be a different pack.
   if (!profile) return { ok: false, failureCode: "product_profile_missing" };
 
-  const move = defaultPlannedOpportunity(opportunitySet.opportunities);
-  if (!move) return { ok: false, failureCode: "move_missing" };
+  // The operation carries the Move it was created for (§83, mirrors
+  // `change-preparation/execution.ts`) — re-resolved from the *current* set
+  // rather than trusted from creation time, so a Move that has since
+  // disappeared blocks instead of silently resolving to whatever is rank 1
+  // now.
+  if (!operation.subjectId) return { ok: false, failureCode: "move_missing" };
+  const move = opportunitySet.opportunities.find((entry) => entry.id === operation.subjectId);
+  if (!move) return { ok: false, failureCode: "move_not_found" };
 
   /*
    * The source gate, re-checked inside the durable step (FIX §7, §9).

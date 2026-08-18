@@ -22,7 +22,12 @@ import {
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
 import { getActionPlanReadiness, getLatestActionPlan } from "@/modules/action-plans/service";
-import { defaultPlannedOpportunity } from "@/modules/action-plans/source";
+import {
+  defaultPlannedOpportunity,
+  PLAN_OPPORTUNITY_PARAM,
+  resolveRequestedOpportunity,
+  sanitizeRequestedOpportunityId,
+} from "@/modules/action-plans/source";
 import { SANDBOX_POLICY_VERSION } from "@/modules/validation/schema";
 import { getLatestValidation } from "@/modules/validation/service";
 import { buildValidationSummary } from "@/modules/validation/view";
@@ -51,10 +56,18 @@ export default async function ProjectMovesPage({
   searchParams,
 }: {
   params: Promise<{ projectId: string }>;
-  searchParams: Promise<{ [MOVES_CONTEXT_PARAM]?: string }>;
+  searchParams: Promise<{ [MOVES_CONTEXT_PARAM]?: string; [PLAN_OPPORTUNITY_PARAM]?: string }>;
 }) {
   const { projectId } = await params;
   const { supabase, project } = await requireProjectAccess(projectId);
+  const resolvedSearchParams = await searchParams;
+
+  // A founder's explicit choice of which Move to plan (§83). Absent, this is
+  // still unconditionally rank 1 — nothing here changes for the vast majority
+  // of visits, which never carry this parameter.
+  const requestedOpportunityId = sanitizeRequestedOpportunityId(
+    resolvedSearchParams[PLAN_OPPORTUNITY_PARAM],
+  );
 
   const [
     opportunities,
@@ -69,18 +82,37 @@ export default async function ProjectMovesPage({
     getOpportunityReadiness(supabase, projectId),
     getActiveOpportunityOperation(supabase, projectId),
     getOpportunityExecutionSummaries(supabase, projectId),
-    getActionPlanReadiness(supabase, projectId),
+    getActionPlanReadiness(supabase, projectId, requestedOpportunityId),
     getLatestActionPlan(supabase, projectId),
     getActiveActionPlanOperation(supabase, projectId),
   ]);
 
-  // The Action Plan can only ever be for the current #1 Move — the planner
-  // has no concept of planning any other one (§83). This is why plan detail
-  // lives on this same page rather than at a `/moves/[opportunityId]` route:
-  // that route would imply a selection the backend cannot actually serve.
+  /*
+   * Which Move the Action Plan section is about (§6, §83).
+   *
+   * Rank 1 by default; a founder's explicit "Plan this Move" link can name a
+   * different one, re-resolved against the current set exactly as readiness
+   * does — a stale or foreign id degrades to null rather than silently
+   * substituting rank 1, so the CTA copy below can never claim to be about a
+   * Move it is not.
+   */
   const plannedMove = opportunities
+    ? resolveRequestedOpportunity(opportunities.set.opportunities, requestedOpportunityId)
+    : null;
+  const defaultMove = opportunities
     ? defaultPlannedOpportunity(opportunities.set.opportunities)
     : null;
+
+  // The single latest completed plan is project-wide, not per-Move
+  // (`supersedeOtherPlans` marks every other one superseded regardless of
+  // which Move it was for). If it is for a different Move than the one
+  // currently selected, showing it here would read as "here is your plan for
+  // X" while displaying Y's — so it renders only when it actually answers the
+  // current selection; otherwise the CTA below offers to plan this one.
+  const resolvedActionPlanView =
+    actionPlanView && plannedMove && actionPlanView.plan.opportunityId === plannedMove.id
+      ? actionPlanView
+      : null;
 
   /*
    * Which audit finding each Move answers, and which one the founder arrived
@@ -99,7 +131,7 @@ export default async function ProjectMovesPage({
     ? await getMoveLineage(supabase, { projectId, set: opportunities.set })
     : {};
   const movesContext = resolveMovesContext({
-    requested: (await searchParams)[MOVES_CONTEXT_PARAM],
+    requested: resolvedSearchParams[MOVES_CONTEXT_PARAM],
     lineage,
     opportunities: opportunities?.set.opportunities ?? [],
   });
@@ -191,21 +223,44 @@ export default async function ProjectMovesPage({
         // (`BUSINESS_AUDIT_ANCHOR`); the route it now lives on is a UI fact, so
         // it is supplied here rather than hard-coded in the domain.
         auditHref={projectSectionHref(project.id, "business-audit")}
+        // Which Move the section below is currently about, so every other
+        // card can offer "Plan this Move" and the selected one does not
+        // redundantly link to itself (§83).
+        plannedOpportunityId={plannedMove?.id ?? null}
       />
 
       {/*
-       * The Action Plan for the current #1 Move, on the same section rather
-       * than a section of its own — there is only ever one Move being
-       * planned, and it is this list's own rank-1 entry, so a separate nav
-       * item would name a place with nothing else to distinguish it.
+       * The Action Plan section, on the same page rather than a section of
+       * its own — there is only ever one *current* plan for the project
+       * (`supersedeOtherPlans` retires any other completed one regardless of
+       * which Move it was for), so a separate nav item would name a place
+       * with nothing else to distinguish it.
+       *
+       * Which Move this is *for* defaults to rank 1 and stays that way for
+       * every visit that never carries `?plan=` — a founder's explicit
+       * "Plan this Move" link on a card above can point it at a different one
+       * instead (§83; PRODUCT.md §6 step 7). Vibe itself never makes that
+       * substitution — `readiness.isDefaultMove` tells the panel to disclose
+       * it whenever a human did.
        */}
-      <div className="border-line-2 flex flex-col gap-5 border-t pt-8">
+      <div className="border-line-2 flex flex-col gap-5 border-t pt-8" id="plan-this-move">
         <h3 className="text-fg text-title font-bold">Plan this move</h3>
         <ActionPlanPanel
           projectId={project.id}
+          opportunityId={plannedMove?.id ?? null}
           moveTitle={plannedMove?.title ?? null}
+          defaultMoveTitle={defaultMove?.title ?? null}
           readiness={actionPlanReadiness}
-          planView={actionPlanView}
+          planView={resolvedActionPlanView}
+          // Project-wide, not scoped to `plannedMove` — `action_planning`
+          // operations are keyed by input identity (which does include the
+          // Move), so two concurrent runs for two different Moves are
+          // possible in principle. This read model predates per-Move
+          // selection and does not yet disambiguate that case; it would show
+          // whichever run it finds even if it is for a different Move than
+          // currently selected. Rare enough (two plan clicks on different
+          // Moves within the same run) that it is called out here rather than
+          // fixed now.
           activeOperation={activeActionPlanOperation}
           auditHref={projectSectionHref(project.id, "business-audit")}
           understandingHref={projectSectionHref(project.id, "understanding")}

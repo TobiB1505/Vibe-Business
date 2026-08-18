@@ -47,6 +47,11 @@ import { startPlanAction, type StartPlanActionState } from "./plan-action";
  *    planner version, provider or model ever reaches JSX.
  *  - **Assume the first step is first.** "Start Here" renders whatever
  *    `firstActionableStep` computed server-side — never `steps[0]`.
+ *  - **Substitute silently.** `opportunityId` may name a Move other than rank
+ *    1 (§83's extension: a founder's own explicit choice, never Vibe's). This
+ *    file's one job in that case is to say so — `showsPriorityDeviation`
+ *    below — never to render it identically to the default and let the
+ *    deviation go unstated.
  *
  * UI-1.1 changes presentation only: scan first, expand second. The plan's own
  * content — descriptions, purpose, completion criteria, dependencies,
@@ -338,7 +343,9 @@ const initialState: StartPlanActionState = null;
 
 export function ActionPlanPanel({
   projectId,
+  opportunityId,
   moveTitle,
+  defaultMoveTitle,
   readiness,
   planView,
   activeOperation,
@@ -346,15 +353,19 @@ export function ActionPlanPanel({
   understandingHref,
 }: {
   projectId: string;
-  /** The current rank-1 Move's title, when there is one — for the CTA's copy only. */
+  /** The Move this panel is currently about — rank 1 by default, or a founder's explicit choice (§83). */
+  opportunityId: string | null;
+  /** That Move's title, when there is one — for the CTA's copy only. */
   moveTitle: string | null;
+  /** The engine's own rank-1 title, for the disclosure when `opportunityId` is not it. */
+  defaultMoveTitle: string | null;
   readiness: ActionPlanReadiness;
   planView: ActionPlanView | null;
   activeOperation: OperationView | null;
   auditHref: string;
   understandingHref: string;
 }) {
-  const action = startPlanAction.bind(null, projectId);
+  const action = startPlanAction.bind(null, projectId, opportunityId);
   const [state, formAction, pending] = useActionState(action, initialState);
   const [polled, setPolled] = useState<OperationView | null>(activeOperation);
 
@@ -393,8 +404,22 @@ export function ActionPlanPanel({
         ? understandingHref
         : null; // "next_moves" lives on this same page — no navigation needed.
 
+  // §83's honesty requirement, made visible: Vibe never makes this
+  // substitution on its own, so whenever the resolved Move is not rank 1, it
+  // is because a founder explicitly chose it — and that choice is disclosed
+  // here, not left implicit in a title alone.
+  const showsPriorityDeviation = readiness.opportunityId !== null && !readiness.isDefaultMove;
+
   return (
     <div className="flex flex-col gap-4">
+      {showsPriorityDeviation && (
+        <Notice tone="waiting" label="Planned out of priority order">
+          {defaultMoveTitle
+            ? `You chose this Move yourself — Vibe's own top priority is currently "${defaultMoveTitle}".`
+            : "You chose this Move yourself, out of the engine's own priority order."}
+        </Notice>
+      )}
+
       {/* Kept visible during a replan rather than hidden behind the loading
           notice below it — the same choice `OpportunitiesPanel` makes, so a
           founder never sees a blank panel while Vibe re-plans. */}

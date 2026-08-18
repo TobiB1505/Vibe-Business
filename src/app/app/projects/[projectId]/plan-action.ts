@@ -9,14 +9,18 @@ import type { OperationView } from "@/modules/operations/view";
 import { VercelWorkflowExecutor } from "@/modules/operations/vercel/executor";
 
 /**
- * Starting a durable Action Plan run (ACTION PLANNER UI-1).
+ * Starting a durable Action Plan run (ACTION PLANNER UI-1; §83 extension).
  *
  * Mirrors `opportunities-action.ts` exactly: validate and enqueue, never wait
- * for the provider inline. The only input is a project id the caller must
- * already own — the Move, the audit, the conclusion, the model and the
+ * for the provider inline. The input is a project id the caller must already
+ * own, plus which Move to plan — the audit, the conclusion, the model and the
  * prompt are all resolved server-side (`resolveActionPlanIdentity`), so this
- * cannot be used to plan an arbitrary Move or to spend on someone else's
- * project.
+ * cannot be used to spend on someone else's project, and `opportunityId` is
+ * only ever whatever `ActionPlanPanel` was itself rendered with (bound here,
+ * not read from form data) — the same trust boundary `projectId` already has,
+ * not a new one. A Move the caller names that no longer exists in the current
+ * set refuses (`move_not_found`) rather than silently planning rank 1
+ * instead.
  */
 
 export type StartPlanActionState =
@@ -28,6 +32,7 @@ export type StartPlanActionState =
 
 export async function startPlanAction(
   projectId: string,
+  opportunityId: string | null,
   _prevState: StartPlanActionState,
   formData: FormData,
 ): Promise<StartPlanActionState> {
@@ -42,6 +47,7 @@ export async function startPlanAction(
     projectId,
     userId: session.userId,
     force,
+    requestedOpportunityId: opportunityId,
   });
 
   if (outcome.kind === "failed") return { ok: false, error: outcome.error };
