@@ -148,6 +148,26 @@ test.describe("the default moves list", () => {
     // rather than being given a plausible-looking one.
     await expect(lineage).toHaveCount(3);
   });
+
+  /**
+   * §83 extension: every card, not only rank 1, can be the one a founder
+   * plans — proven by a real, clickable link rather than by the domain
+   * function it is built from.
+   */
+  test("every card offers to plan that specific Move", async ({ page }) => {
+    await page.goto(RANKED);
+
+    const cards = page.getByTestId("move-card");
+    const count = await cards.count();
+    expect(count).toBeGreaterThan(1);
+
+    for (let index = 0; index < count; index++) {
+      const link = cards.nth(index).getByRole("link", { name: "Plan this Move" });
+      await expect(link).toBeVisible();
+      const href = await link.getAttribute("href");
+      expect(href).toMatch(/\/app\/projects\/project_e2e\/moves\?plan=.+#plan-this-move$/);
+    }
+  });
 });
 
 test.describe("a move card says one thing at a time", () => {

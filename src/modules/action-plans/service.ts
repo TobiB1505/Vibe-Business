@@ -21,6 +21,7 @@ import { firstActionableStep, planProgress } from "./sequence";
 import {
   defaultPlannedOpportunity,
   resolvePlannerSource,
+  resolveRequestedOpportunity,
   type ConclusionLineage,
   type SourceUnresolvedReason,
 } from "./source";
@@ -54,6 +55,14 @@ export type ActionPlanBlockReason =
   | "move_missing"
   /** The Moves were prioritized from an older audit than the current one. */
   | "move_stale"
+  /**
+   * An explicitly requested Move does not name anything in the current set (§83).
+   *
+   * Distinct from `move_missing`: the project has Moves, the founder chose one of
+   * them, and that one is no longer there — a stale link, not an empty list. Never
+   * silently substitutes rank 1 for the one actually requested.
+   */
+  | "move_not_found"
   /** Vibe has no understanding of the product to plan against. */
   | "product_profile_missing"
   /**
@@ -71,6 +80,13 @@ export type ActionPlanReadiness = {
   auditId: string | null;
   /** The Move a plan would be built for, when there is one (§6, §83). */
   opportunityId: string | null;
+  /**
+   * Whether `opportunityId` is the engine's own rank 1, or a founder's explicit
+   * deviation from it (§83). The caller renders this — never infers it from
+   * rank on its own copy of the set — so the disclosure and the resolution can
+   * never drift apart.
+   */
+  isDefaultMove: boolean;
   /** The conclusion that Move addresses, once it has been established (FIX §7). */
   conclusionKey: string | null;
   /** How it was established — stated, or recovered for a legacy Move (FIX §4). */
@@ -89,15 +105,28 @@ function blocked(
     blockedReason: reason,
     auditId,
     opportunityId: null,
+    isDefaultMove: true,
     conclusionKey: null,
     conclusionLineage: null,
     unresolvedSourceReason,
   };
 }
 
+/**
+ * Action Plan readiness for the engine's own rank-1 Move, or for a Move the
+ * founder explicitly chose instead (§6, §83; PRODUCT.md §6 step 7).
+ *
+ * `requestedOpportunityId` is `null` by every existing caller today and stays
+ * that way unless a founder clicked "Plan this Move" on a specific card — so
+ * omitting it is not a degraded call, it is the whole product's behavior
+ * before this parameter existed. See `resolveRequestedOpportunity` for why an
+ * explicit selection can never silently fall back to rank 1 the way an absent
+ * one intentionally does.
+ */
 export async function getActionPlanReadiness(
   supabase: SupabaseClient,
   projectId: string,
+  requestedOpportunityId: string | null = null,
 ): Promise<ActionPlanReadiness> {
   const [audit, currency, opportunities, profile] = await Promise.all([
     getLatestSuccessfulAudit(supabase, projectId),
@@ -116,10 +145,13 @@ export async function getActionPlanReadiness(
   if (!opportunities) return blocked("move_missing", audit.id);
   if (opportunities.stale) return blocked("move_stale", audit.id);
 
-  // Rank 1. Never "whichever Move Vibe could most easily execute" — that trade
-  // is exactly what §83 forbids.
-  const move = defaultPlannedOpportunity(opportunities.set.opportunities);
-  if (!move) return blocked("move_missing", audit.id);
+  // Rank 1 by default. A founder's explicit choice can name a different Move
+  // (§83) — Vibe itself never substitutes one on its own.
+  const move = resolveRequestedOpportunity(opportunities.set.opportunities, requestedOpportunityId);
+  if (!move) {
+    return blocked(requestedOpportunityId === null ? "move_missing" : "move_not_found", audit.id);
+  }
+  const isDefaultMove = move.id === defaultPlannedOpportunity(opportunities.set.opportunities)?.id;
 
   /*
    * The source gate (FIX §7, §9).
@@ -140,6 +172,7 @@ export async function getActionPlanReadiness(
     blockedReason: null,
     auditId: audit.id,
     opportunityId: move.id,
+    isDefaultMove,
     conclusionKey: source.source.conclusionKey,
     conclusionLineage: source.source.lineage,
     unresolvedSourceReason: null,
@@ -150,6 +183,7 @@ export async function getActionPlanReadiness(
 export async function resolveActionPlanIdentity(
   supabase: SupabaseClient,
   projectId: string,
+  requestedOpportunityId: string | null = null,
 ): Promise<
   | {
       ok: true;
@@ -162,7 +196,7 @@ export async function resolveActionPlanIdentity(
     }
   | { ok: false; error: ActionPlanBlockReason }
 > {
-  const readiness = await getActionPlanReadiness(supabase, projectId);
+  const readiness = await getActionPlanReadiness(supabase, projectId, requestedOpportunityId);
   if (!readiness.ready) return { ok: false, error: readiness.blockedReason ?? "audit_missing" };
 
   const [audit, opportunities, profile, founderIntent] = await Promise.all([
@@ -176,8 +210,12 @@ export async function resolveActionPlanIdentity(
   if (!opportunities) return { ok: false, error: "move_missing" };
   if (!profile) return { ok: false, error: "product_profile_missing" };
 
-  const move = defaultPlannedOpportunity(opportunities.set.opportunities);
-  if (!move) return { ok: false, error: "move_missing" };
+  // Re-derived rather than trusting `readiness.opportunityId`: the audit or the
+  // Moves can be superseded between the two calls, and re-resolving is what
+  // makes that show up as `move_not_found`/`move_stale` instead of an identity
+  // built from a Move that already isn't current (§55 in spirit).
+  const move = resolveRequestedOpportunity(opportunities.set.opportunities, requestedOpportunityId);
+  if (!move) return { ok: false, error: requestedOpportunityId === null ? "move_missing" : "move_not_found" };
 
   // Already checked by readiness above; re-derived here because the identity needs the
   // key, and re-deriving is free while passing it through two layers is a chance to drift.

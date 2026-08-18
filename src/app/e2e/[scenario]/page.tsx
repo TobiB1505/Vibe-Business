@@ -168,6 +168,7 @@ export default async function E2eScenarioPage({
           movesContext={fixture.movesContext}
           movesHref="/app/projects/project_e2e/moves"
           preparedHref="/app/projects/project_e2e/prepared"
+          plannedOpportunityId={null}
         />
       </main>
     );
@@ -368,7 +369,9 @@ export default async function E2eScenarioPage({
         {label}
         <ActionPlanPanel
           projectId="project_e2e"
+          opportunityId={fixture.opportunityId}
           moveTitle={fixture.moveTitle}
+          defaultMoveTitle={fixture.defaultMoveTitle}
           readiness={fixture.readiness}
           planView={fixture.planView}
           activeOperation={fixture.activeOperation}

@@ -99,6 +99,30 @@ test.describe("no plan yet", () => {
   });
 });
 
+test.describe("priority deviation (§83 extension)", () => {
+  /**
+   * A founder can now name a Move other than the engine's own rank 1. Vibe
+   * still never makes that substitution itself — this is the one place it is
+   * required to say so, or the deviation is invisible.
+   */
+  test("discloses when the selected Move is not the engine's own top priority", async ({ page }) => {
+    await page.goto("/e2e/action_plan_priority_deviation");
+
+    await expect(page.getByText("Planned out of priority order")).toBeVisible();
+    await expect(
+      page.getByText('Vibe\'s own top priority is currently "Make your product findable in search"', {
+        exact: false,
+      }),
+    ).toBeVisible();
+    await expect(page.getByText("Add discoverability foundations", { exact: false })).toBeVisible();
+  });
+
+  test("shows no such notice for the engine's own default Move", async ({ page }) => {
+    await page.goto("/e2e/action_plan_ready_to_start");
+    await expect(page.getByText("Planned out of priority order")).not.toBeVisible();
+  });
+});
+
 test.describe("blocked", () => {
   test("a missing Move points back at next moves, not a dead end", async ({ page }) => {
     await page.goto("/e2e/action_plan_blocked_move_missing");
