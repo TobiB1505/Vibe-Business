@@ -1,4 +1,4 @@
-# 0027 - Founder-Selectable Action Plan Move
+# 0028 - Founder-Selectable Action Plan Move
 
 Status: Accepted
 Date: 2026-08-18
