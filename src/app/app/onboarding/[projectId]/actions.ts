@@ -352,6 +352,11 @@ export async function revealAuditAndFindFirstMoveAction(projectId: string): Prom
   const outcome = await startOpportunityOperation(supabase, new VercelWorkflowExecutor(), {
     projectId,
     userId: session.userId,
+    // Part of the flow that delivers the free first audit, so it is free
+    // (BILLING CORE-2 §40, CREDIT_ECONOMICS.md §Free usage). Charging a
+    // brand-new user here would spend Credits they have not met yet, inside a
+    // flow they did not choose to pay for.
+    requestedBy: "bundled_with_free_audit",
   });
   // Opportunity generation is deliberately not a completion blocker. A real
   // result will be shown if it exists; otherwise the honest fallback remains.

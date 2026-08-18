@@ -1,4 +1,5 @@
 import "server-only";
+import { releaseOperationBilling, settleOperationBilling } from "../billing";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ACTION_PLANNING_CONFIG } from "@/modules/ai/operations";
@@ -402,6 +403,16 @@ export async function completeActionPlanOperationStep(
   const transitioned = await completeOperationRun(deps.supabase, { operationId, resultId: planId });
   if (!transitioned) return;
 
+  /*
+   * The customer is charged here, and only here (BILLING CORE-2 §39, §79).
+   *
+   * After the terminal transition, which is guarded so it happens at most once
+   * — so the charge inherits exactly-once from the state machine rather than
+   * needing its own guard, and is idempotent underneath it regardless. A free
+   * or entitlement-funded run has no reservation and this does nothing.
+   */
+  await settleOperationBilling(deps.supabase, { operationRunId: operationId });
+
   const operation = await getOperationRunById(deps.supabase, operationId);
   if (!operation) return;
 
@@ -423,6 +434,21 @@ export async function failActionPlanOperationStep(
 ): Promise<void> {
   const transitioned = await failOperationRun(deps.supabase, { operationId, failureCode });
   if (!transitioned) return;
+
+  /*
+   * The hold goes back (BILLING CORE-2 §45, §80).
+   *
+   * The approved V1 failure policy: a Vibe failure, a provider failure and a
+   * run that produced nothing usable are all 0 charged. Vibe absorbs whatever
+   * it already paid the provider, and `abandoned_with_usage` records that this
+   * is what happened rather than pretending the run was free to Vibe too.
+   *
+   * No reservation is ever left stranded: this runs on every terminal failure.
+   */
+  await releaseOperationBilling(deps.supabase, {
+    operationRunId: operationId,
+    providerUsageOccurred: true,
+  });
 
   const operation = await getOperationRunById(deps.supabase, operationId);
   if (!operation) return;

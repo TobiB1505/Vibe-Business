@@ -22,10 +22,17 @@ export const OPERATION_FAILURE_MESSAGES: Record<OperationFailureCode, string> = 
   // needs a first analysis; a stale one needs a refresh. Collapsing them into
   // one message would leave the user guessing which.
   product_profile_missing: "Vibe needs to understand your product first.",
-  // CORE-2 §45/§46: the honest terminal answer. No price, no balance, and no
-  // route into a checkout that does not exist.
+  // BILLING CORE-2 §39: no longer terminal. The included audit is spent, and
+  // paying with Credits is now a real route rather than a dead end — so this
+  // message is only ever reached when something else stopped the Credit path,
+  // and it says what is true without promising a checkout.
   credits_required:
-    "You've used the free audit for this project. Running another one will need credits — they aren't available yet.",
+    "You've used the free audit for this project. Running another one costs Credits.",
+  // BILLING CORE-2 §43, §95. Says what is true and what to do about it, and
+  // never how it failed internally. The exact numbers — "you need 35, you have
+  // 20" — come from the balance the billing surface already shows, not from a
+  // failure string that would go stale the moment Credits are added.
+  insufficient_credits: "You don't have enough Credits for this yet. Vibe didn't charge you.",
   audit_already_running: "An audit is already running for this project. Give it a moment.",
   start_attempts_exhausted:
     "That's been started several times in the last hour. Give it a little while before trying again.",

@@ -156,12 +156,20 @@ describe("the free audit entitlement", () => {
     });
   }
 
-  it("refuses a paid run once the free audit is consumed", async () => {
+  it("refuses a paid run once the free audit is consumed and no Credits exist", async () => {
     seedConsumedEntitlement();
 
     const outcome = await start({ force: true });
 
-    expect(outcome).toEqual({ kind: "failed", error: "credits_required" });
+    /*
+     * `insufficient_credits`, not `credits_required` (BILLING CORE-2 §39, §43).
+     *
+     * Before Core-2 a spent entitlement was the end of the road, because
+     * Credits did not exist. Now it is a route into paying with them, and this
+     * account simply has none — which is a statement about balance, and the
+     * one the UI can act on by offering a way to get more.
+     */
+    expect(outcome).toEqual({ kind: "failed", error: "insufficient_credits" });
   });
 
   it("spends nothing: no operation row, and the executor is never started", async () => {

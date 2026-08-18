@@ -3,6 +3,10 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { BUSINESS_READINESS_AUDIT_CONFIG } from "@/modules/ai/operations";
 import { recordAuditEvent } from "@/modules/audit-log/events";
+import {
+  checkOperationAffordability,
+  holdOperationCredits,
+} from "./billing";
 import { EVIDENCE_PACK_V3_VERSION } from "@/modules/business-audit/evidence-v3";
 import { PROMPT_VERSION } from "@/modules/business-audit/prompt";
 import { RUBRIC_VERSION } from "@/modules/business-audit/rubric";
@@ -186,6 +190,18 @@ export async function resumeAnsweredAuditOperation(
   return { ok: true };
 }
 
+/**
+ * Returns a hold when an operation never got off the ground.
+ *
+ * A separate helper only so the start paths read as one sequence; it is the
+ * same release every other failure uses, and it is idempotent, so calling it
+ * for a free operation with no reservation does nothing.
+ */
+async function releaseHoldForFailedStart(supabase: SupabaseClient, operationRunId: string): Promise<void> {
+  const { releaseOperationBilling } = await import("./billing");
+  await releaseOperationBilling(supabase, { operationRunId, providerUsageOccurred: false });
+}
+
 export async function startBusinessAuditOperation(
   supabase: SupabaseClient,
   executor: OperationExecutor,
@@ -255,11 +271,31 @@ export async function startBusinessAuditOperation(
   });
   if (alreadyActive) return { kind: "active", operation: view(alreadyActive) };
 
-  // Everything above this line is free: reusing a stored audit costs nothing
-  // and must keep working after the entitlement is spent. Everything below it
-  // spends money, so the refusal goes exactly here.
+  /*
+   * Everything above this line is free: reusing a stored audit costs nothing
+   * and must keep working after the entitlement is spent. Everything below it
+   * spends money, so the refusal goes exactly here.
+   *
+   * `credits_required` is no longer terminal (BILLING CORE-2 §39). It means the
+   * included audit is spent, which since Core-2 is a route into paying with
+   * Credits rather than the end of the road — every other denial still is.
+   */
+  let payWithCredits = false;
+
   if (!authorization.allowed) {
-    return { kind: "failed", error: authorization.reason };
+    if (authorization.reason !== "credits_required") {
+      return { kind: "failed", error: authorization.reason };
+    }
+
+    // A cheap read before anything is created, so the common refusal leaves no
+    // failed operation row behind. The reservation below is the real gate.
+    const affordable = await checkOperationAffordability(supabase, {
+      projectId: params.projectId,
+      operation: "business_audit",
+    });
+    if ("refusal" in affordable) return { kind: "failed", error: "insufficient_credits" };
+
+    payWithCredits = true;
   }
 
   const created = await createOperationRun(supabase, {
@@ -286,12 +322,39 @@ export async function startBusinessAuditOperation(
 
   const operation = created.operation;
 
+  /*
+   * The price is held before any provider work is enqueued (§39, §43).
+   *
+   * Discovering an empty wallet after paying Anthropic is both a cost leak and
+   * an insult, so the hold goes here — after the operation row exists (its id
+   * is the reservation's idempotency key, which is what makes a double-click
+   * safe) and before anything can spend money.
+   */
+  if (payWithCredits) {
+    const held = await holdOperationCredits(supabase, {
+      projectId: params.projectId,
+      operationRunId: operation.id,
+      operation: "business_audit",
+    });
+
+    if (!held.ok) {
+      await failOperationRun(supabase, {
+        operationId: operation.id,
+        failureCode: "insufficient_credits",
+      });
+      return { kind: "failed", error: "insufficient_credits" };
+    }
+  }
+
   const started = await executor.start({ operationId: operation.id, operationType: "business_audit" });
 
   if (!started.ok) {
     // The row exists but nothing is carrying it. Failing it immediately keeps
-    // the identity's unique index free, so the user can simply try again.
+    // the identity's unique index free, so the user can simply try again. The
+    // hold is returned by the same terminal-failure path every other failure
+    // uses, so nothing stays reserved for work that never started.
     await failOperationRun(supabase, { operationId: operation.id, failureCode: "execution_start_failed" });
+    await releaseHoldForFailedStart(supabase, operation.id);
     return { kind: "failed", error: "execution_start_failed" };
   }
 
@@ -353,7 +416,28 @@ export async function getActiveBusinessAuditOperation(
 export async function startOpportunityOperation(
   supabase: SupabaseClient,
   executor: OperationExecutor,
-  params: { projectId: string; userId: string; force?: boolean },
+  params: {
+    projectId: string;
+    userId: string;
+    force?: boolean;
+    /**
+     * Who asked for this run, and therefore whether it is billable
+     * (BILLING CORE-2 §40).
+     *
+     * `bundled_with_free_audit` is the generation that runs inside onboarding,
+     * as part of the flow that delivers the free first audit. CREDIT_ECONOMICS.md
+     * §Free usage keeps that one bundled and unpriced — decoupling it would
+     * make a brand-new user's first guided run cost Credits they have not been
+     * introduced to yet.
+     *
+     * `customer_requested` is the deliberate regeneration from the project
+     * workspace, which costs 20 Credits.
+     *
+     * Required rather than defaulted: whether a customer is charged is not a
+     * thing to get by omission.
+     */
+    requestedBy: "bundled_with_free_audit" | "customer_requested";
+  },
 ): Promise<StartOperationOutcome> {
   const { data: project } = await supabase
     .from("projects")
@@ -396,6 +480,18 @@ export async function startOpportunityOperation(
   });
   if (alreadyActive) return { kind: "active", operation: view(alreadyActive) };
 
+  // Everything above is free — reusing a stored set and returning a live run
+  // both cost nothing and must keep working with an empty balance (§42, §81).
+  const payWithCredits = params.requestedBy === "customer_requested";
+
+  if (payWithCredits) {
+    const affordable = await checkOperationAffordability(supabase, {
+      projectId: params.projectId,
+      operation: "opportunity_generation",
+    });
+    if ("refusal" in affordable) return { kind: "failed", error: "insufficient_credits" };
+  }
+
   const created = await createOperationRun(supabase, {
     projectId: params.projectId,
     userId: params.userId,
@@ -416,6 +512,23 @@ export async function startOpportunityOperation(
   }
 
   const operation = created.operation;
+
+  if (payWithCredits) {
+    const held = await holdOperationCredits(supabase, {
+      projectId: params.projectId,
+      operationRunId: operation.id,
+      operation: "opportunity_generation",
+    });
+
+    if (!held.ok) {
+      await failOperationRun(supabase, {
+        operationId: operation.id,
+        failureCode: "insufficient_credits",
+      });
+      return { kind: "failed", error: "insufficient_credits" };
+    }
+  }
+
   const started = await executor.start({
     operationId: operation.id,
     operationType: "opportunity_generation",
@@ -423,6 +536,7 @@ export async function startOpportunityOperation(
 
   if (!started.ok) {
     await failOperationRun(supabase, { operationId: operation.id, failureCode: "execution_start_failed" });
+    await releaseHoldForFailedStart(supabase, operation.id);
     return { kind: "failed", error: "execution_start_failed" };
   }
 
@@ -647,6 +761,15 @@ export async function startActionPlanOperation(
   });
   if (alreadyActive) return { kind: "active", operation: view(alreadyActive) };
 
+  // Everything above is free (§41, §81): opening a persisted plan, its Timeline
+  // and Start Here, and every bit of Planner navigation reuse this path and
+  // return before reaching a reservation.
+  const affordable = await checkOperationAffordability(supabase, {
+    projectId: params.projectId,
+    operation: "action_plan",
+  });
+  if ("refusal" in affordable) return { kind: "failed", error: "insufficient_credits" };
+
   const created = await createOperationRun(supabase, {
     projectId: params.projectId,
     userId: params.userId,
@@ -669,6 +792,21 @@ export async function startActionPlanOperation(
   }
 
   const operation = created.operation;
+
+  const held = await holdOperationCredits(supabase, {
+    projectId: params.projectId,
+    operationRunId: operation.id,
+    operation: "action_plan",
+  });
+
+  if (!held.ok) {
+    await failOperationRun(supabase, {
+      operationId: operation.id,
+      failureCode: "insufficient_credits",
+    });
+    return { kind: "failed", error: "insufficient_credits" };
+  }
+
   const started = await executor.start({
     operationId: operation.id,
     operationType: "action_planning",
@@ -679,6 +817,7 @@ export async function startActionPlanOperation(
       operationId: operation.id,
       failureCode: "execution_start_failed",
     });
+    await releaseHoldForFailedStart(supabase, operation.id);
     return { kind: "failed", error: "execution_start_failed" };
   }
 

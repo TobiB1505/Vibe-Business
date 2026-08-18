@@ -58,7 +58,11 @@ export type GrantLotParams = {
 export type GrantLotResult = {
   creditAccountId: string;
   lotId: string;
-  /** True when this grant was already durable — a retry, not a second issue. */
+  /**
+   * True when the Credits were already durable before this call — a retry, a
+   * webhook replay, or a losing caller in a race. Exactly one caller across any
+   * number of concurrent attempts sees `false`.
+   */
   alreadyGranted: boolean;
 };
 
@@ -94,7 +98,7 @@ export async function grantCreditLot(
   // Runs even on a retry: a crash between the ledger insert and the lot insert
   // would otherwise leave posted Credits with no provenance, and this is what
   // repairs that on the next attempt.
-  const { lot, alreadyExisted } = await insertGrantLot(supabase, {
+  const { lot } = await insertGrantLot(supabase, {
     creditAccountId: account.id,
     ledgerEntryId: entry.id,
     sourceKind: params.sourceKind,
@@ -126,7 +130,12 @@ export async function grantCreditLot(
   return {
     creditAccountId: account.id,
     lotId: lot.id,
-    alreadyGranted: alreadyPosted && alreadyExisted,
+    // The **ledger entry** is what decides whether Credits came into existence,
+    // so it alone decides this flag. The lot is provenance: a caller that lost
+    // the ledger's unique index but happened to win the lot insert (a real
+    // interleaving, and the shape a crash-recovery repair also takes) granted
+    // nothing, and must not report that it did.
+    alreadyGranted: alreadyPosted,
   };
 }
 

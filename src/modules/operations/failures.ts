@@ -55,7 +55,21 @@ export type OperationExecutionFailure =
    * without that produces a generic task list, so it is refused **before** anything is
    * spent (§9).
    */
-  | "planner_source_unresolved";
+  | "planner_source_unresolved"
+  /**
+   * The customer does not have enough Credits for this operation
+   * (BILLING CORE-2 §43).
+   *
+   * Distinct from `credits_required`, and the distinction is the whole point.
+   * `credits_required` means "your included audit is spent, this one costs
+   * Credits" — a statement about entitlement. This means "it costs 35 and you
+   * have 20" — a statement about balance, which the UI answers with a way to
+   * get more rather than an explanation of entitlement.
+   *
+   * Reached before any provider call. Nothing is spent, nothing is reserved,
+   * and no AI runs.
+   */
+  | "insufficient_credits";
 
 export type OperationFailureCode =
   | AuditRunFailure
