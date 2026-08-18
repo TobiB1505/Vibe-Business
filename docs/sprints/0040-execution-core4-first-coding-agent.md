@@ -504,13 +504,64 @@ recorded as unknown.
 
 ## Migration status
 
-`20260818210000_agent_execution.sql` is written and pinned by tests
-(`coding-agent/schema.test.ts` asserts every CHECK constraint and partial index
-against the TypeScript unions) but **has not been deployed**. Per rule 29 and
-rule 30 it must go out through the linked Supabase CLI workflow, and
-`pnpm db:status` must be inspected before `pnpm db:push` — a migration applied
-by hand, or pushed without reading the remote history, is the failure those
-rules exist to prevent.
+`20260818210000_agent_execution.sql` is **deployed and verified against real
+Postgres**, and pinned by tests (`coding-agent/schema.test.ts` asserts every
+CHECK constraint and partial index against the TypeScript unions).
+
+The Supabase CLI workflow was unavailable — no `SUPABASE_ACCESS_TOKEN` and no
+linked project ref — so it went out through the Supabase MCP's
+`apply_migration`, which records it in `supabase_migrations.schema_migrations`
+rather than being a SQL Editor paste. Rule 29's condition ("when the linked
+Supabase CLI workflow is available") was not met; rule 30 was followed by
+inspecting the remote history and the live rows first.
+
+**Rule 30, before applying.** The remote history showed 39 migrations and no
+`agent_execution`. The live state was checked rather than assumed: none of the
+four tables existed, neither `ai_usage_events` column existed, and all 92
+`operation_runs` rows plus the single `prepared_changes` row already satisfied
+the new CHECK constraints — so no ALTER could fail on existing data.
+
+**Rule 34, after applying.** The management API stamped a wall-clock version
+(`20260818151425`) rather than the filename's, the same drift Billing Core-2
+recorded. The ledger was reconciled to the filename, because the migration file
+is the source of truth and the remote converges to it — not the reverse.
+Left alone: `billing_credits_stripe_entitlements` is still recorded remotely as
+`20260818090300` against a local filename of `20260818120000`. That drift is
+pre-existing and unrelated to this sprint, and silently rewriting another
+sprint's ledger row is a deliberate decision somebody should make on purpose.
+
+**Verified by read-back, not by the call returning success.** 4 tables, RLS
+enabled on all 4, 5 policies, 8 indexes, 2 triggers, 3 agent-run CHECKs, the
+`prepared_changes` generator guard, both cache columns, both opportunity columns
+nullable, and **zero** narration columns on `agent_activity_events`.
+
+**Every guarantee was then exercised in a transaction that was rolled back**,
+leaving zero rows — 15 of 15 behaved correctly:
+
+| Attempt | Postgres |
+| --- | --- |
+| `operation_type = agent_execution`, `stage = running_agent` | accepted |
+| agentic prepared change with a null opportunity | accepted |
+| generator prepared change with a null opportunity | **REFUSED** |
+| a second agent run for the same identity (§56) | **REFUSED** |
+| `succeeded` with no prepared change (§33) | **REFUSED** |
+| `failed` with no reason (§34) | **REFUSED** |
+| `succeeded` *with* a prepared change | accepted |
+| a second open interrupt on one run (§25) | **REFUSED** |
+| an `open` interrupt carrying an answer | **REFUSED** |
+| a tool denial with no reason (§24) | **REFUSED** |
+| a tool denial with a reason | accepted |
+| an invented activity event (§23) | **REFUSED** |
+| a real activity event (`repairing`) | accepted |
+
+**Security advisor after the DDL: no new findings.** Five pre-existing ones
+remain and none touches this sprint's tables — `billing_stripe_events` has RLS
+with no policy (Billing Core-2), `set_updated_at` has a mutable search_path,
+`rls_auto_enable()` is an `anon`- and `authenticated`-callable SECURITY DEFINER
+function, and leaked-password protection is off in Auth. Recorded here rather
+than fixed silently, because each is another sprint's decision. Notably the four
+new tables do **not** appear in `rls_enabled_no_policy`, which is the check
+Core-3's own security-definer finding taught this project to run.
 
 ## Deferred to EXECUTION UI-1
 
