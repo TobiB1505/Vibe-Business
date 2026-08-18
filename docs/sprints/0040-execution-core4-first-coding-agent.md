@@ -616,31 +616,54 @@ narration field, nothing fabricated. An open interrupt renders Core-3's own
 `answerExecutionInterrupt`, which is already scoped to project and user and
 already validates the answer against the stored schema.
 
-### What this addendum does not do
+### What this addendum does not do — corrected after the founder planned a real Move
 
-It does not select a step. **No project in the database currently has a
-completed Action Plan whose repository also has a supported validation
-profile** — Jandia-Arena's one completed plan is FastAPI + React with no
-detected package manager (Core-3's own finding, unchanged); Vibe Business's
-own project gained a real Next.js snapshot since the base sprint was written,
-but has zero Action Plans, in any status. Planning a Move is a founder product
-action needing `ANTHROPIC_API_KEY`, which is absent from every environment
-this work has been done in — so the index page's honest empty state, not a
-selected step, is what a founder reaches first. See *Runway* below.
+It does not select a step, and this needed re-checking against live state
+rather than left as first written. The founder planned a real Move for Vibe
+Business itself (Action Plan `12762f86…`, completed 2026-08-18 17:06 UTC,
+repository connection `TobiB1505/Vibe-Business`, resolved against the current
+`main` HEAD `61618ac8…`, which also happens to be the exact commit the newest
+repository snapshot analyzed — so the snapshot is not stale). Re-running the
+real resolver against this real plan shows **zero of its six steps currently
+resolve `agentic`**, for two independent, verified reasons — neither is a gap
+in this sprint's code:
+
+| step | actor / kind | resolved mode | why |
+| --- | --- | --- | --- |
+| 1 lay out pricing structures | vibe / analysis | `unsupported` | `no_executor_for_vibe_work` — this is Vibe's own reasoning output, not a repo change, exactly as designed |
+| 2 confirm price and plan | founder_decision | `needs_user_input` | a decision only the founder can make |
+| 3 activate Stripe | founder_action | `manual` | outside Vibe entirely |
+| 4 publish pricing page | vibe / product_change | `blocked` | depends on step 2, and nothing in the product marks a step "completed" yet (`action-plans/sequence.ts`) — this is the one step that would be worth forecasting once that exists |
+| 5 build checkout path | vibe / product_change | `blocked`, and its *intrinsic* forecast is `unsupported` / `risk_class_prohibited` | cites `live.surface.checkout_billing`, a `FINANCIAL_SURFACES` id (`execution-contract/risk.ts`) — this step will never become agentic no matter what completes, by the same default-deny rule that governs all payment architecture |
+| 6 verify payment path works | vibe / measurement | `blocked` | depends on step 5 |
+
+So the founder's real plan is itself a clean confirmation of the risk
+boundary working as intended on a real, current, non-synthetic case: the one
+step that touches checkout/billing is correctly refused outright, and the
+other candidate step is blocked by a real, known product gap (step
+completion tracking does not exist yet) rather than by anything this
+addendum should have built. The index page's honest per-step "why not" is
+still what a founder reaches first — there is no agentic step to press
+"Run with Vibe" on today, on this plan.
 
 ### Runway for the founder
 
 ```
-1. Open /app/projects/<vibe-business-project-id>/moves and plan a Move.
-   (Repository analysis is already done — 8 successful snapshots exist.)
-2. Open /app/projects/<vibe-business-project-id>/agent-dogfood.
-   Only reachable because this project is on VIBE_INTERNAL_AGENT_DOGFOOD_PROJECT_IDS.
-3. Pick the step that resolved "Vibe could build this" and open it.
+1. Open /app/projects/<vibe-business-project-id>/agent-dogfood.
+   Only reachable because this project is on VIBE_INTERNAL_AGENT_DOGFOOD_PROJECT_IDS
+   (a Vercel environment variable — set it in the dashboard, Preview at minimum).
+2. The existing plan's steps will all show a non-agentic route (see table
+   above) — that is correct, not a bug, until step completion tracking exists
+   and a *different* Move is planned whose product_change step doesn't touch
+   payments.
+3. To reach a real "Run with Vibe" click, plan a Move whose product_change
+   step (a) has no unmet dependency and (b) doesn't cite a payments/checkout
+   surface — then open that step here.
 4. Read the preflight — route, risk, validation profile, ceilings, done-when.
 5. Press "Run with Vibe".
 ```
 
-Nothing in steps 2–5 spends a Credit or contacts a provider until step 5's
+Nothing in steps 1–4 spends a Credit or contacts a provider until step 5's
 click clears server-side admission a second time.
 
 **REAL CLAUDE AGENT RUN: NOT STARTED BY THIS CONTINUATION.**
