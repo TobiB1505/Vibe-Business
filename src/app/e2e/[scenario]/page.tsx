@@ -35,6 +35,8 @@ import { RetryProductScan } from "@/app/app/onboarding/[projectId]/phase-actions
 import { UnderstandingStatus } from "@/app/app/onboarding/[projectId]/understanding-status";
 import { OpportunitiesPanel } from "@/app/app/projects/[projectId]/opportunities-panel";
 import { ProductLogo } from "@/components/brand/product-logo";
+import { BillingView } from "@/app/app/billing/billing-view";
+import { E2E_BILLING_SCENARIOS, isE2eBillingScenario } from "../billing-scenarios";
 import { E2E_MOVES_SCENARIOS, isE2eMovesScenario } from "../moves-scenarios";
 import {
   E2E_ONBOARDING_SCENARIOS,
@@ -114,6 +116,25 @@ export default async function E2eScenarioPage({
           analyzedAt={fixture.analyzedAt}
           projectId="project_e2e"
           liveSnapshot={fixture.live}
+        />
+      </main>
+    );
+  }
+
+  /*
+   * The billing screen (BILLING CORE-2 §93). The same `BillingView` the real
+   * route renders, given a complete `BillingOverview` written by hand from the
+   * read model's own types — no database, no Stripe request, no AI call.
+   */
+  if (isE2eBillingScenario(scenario)) {
+    const fixture = E2E_BILLING_SCENARIOS[scenario];
+    return (
+      <main className="mx-auto max-w-5xl p-8">
+        {label}
+        <BillingView
+          overview={fixture.overview}
+          stripeReady={fixture.stripeReady}
+          checkoutState={"checkoutState" in fixture ? fixture.checkoutState : undefined}
         />
       </main>
     );
