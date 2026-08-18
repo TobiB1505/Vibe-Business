@@ -7,6 +7,7 @@ import { CategoryChip, StatusPill, type StatusTone } from "@/components/ui/statu
 import { Surface } from "@/components/ui/surface";
 import { MonoLabel } from "@/components/ui/typography";
 import { Notice } from "@/components/ui/states";
+import { CreditPrice } from "@/components/ui/credit-price";
 import { describeEvidenceId } from "@/modules/business-audit/evidence-labels";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { OPERATION_STAGE_LABELS, type OperationView } from "@/modules/operations/view";
@@ -421,6 +422,10 @@ export function OpportunitiesPanel({
                 ? "Refresh my next moves"
                 : "Find my next moves"}
           </Button>
+          {/* The cost, before the click (BILLING CORE-2 §55). Reads the same
+              policy the reservation will, so there is no second copy of the
+              price to drift out of step with what is charged. */}
+          <CreditPrice operation="opportunity_generation" />
         </form>
       )}
 

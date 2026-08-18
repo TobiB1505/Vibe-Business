@@ -27,6 +27,7 @@ import {
   type StepDisplayState,
 } from "@/modules/action-plans/view";
 import { getOperationStatusAction } from "./run-audit-action";
+import { CreditPrice } from "@/components/ui/credit-price";
 import { startPlanAction, type StartPlanActionState } from "./plan-action";
 
 /**
@@ -464,6 +465,9 @@ export function ActionPlanPanel({
                 <Button type="submit" disabled={pending}>
                   {pending ? "Starting…" : "Plan this move"}
                 </Button>
+                {/* The cost, before the click (BILLING CORE-2 §55). Reading the
+                    finished plan, its Timeline and Start Here stay free. */}
+                <CreditPrice operation="action_plan" />
               </form>
             </Surface>
           )}

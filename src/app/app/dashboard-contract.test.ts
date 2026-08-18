@@ -75,6 +75,39 @@ describe("the dashboard is summary-only", () => {
     }
   });
 
+  it("reads the Credit balance per account, never per project", () => {
+    /*
+     * BILLING CORE-2 §54, §100. The header balance renders on every signed-in
+     * navigation, so its cost is the dashboard's cost.
+     *
+     * `getHeaderCreditBalance` is account-scoped: one wallet row plus that
+     * wallet's active lots, whether the user has one project or sixty. The
+     * per-project billing reads are the ones that would turn it into an N+1,
+     * and none of them belongs on this page.
+     */
+    expect(page).toContain("getHeaderCreditBalance");
+
+    for (const forbidden of [
+      "getBillingOverview",
+      "authorizeOperationCredits",
+      "checkOperationAffordability",
+      "listLedgerEntries",
+      "sweepExpiredCredits",
+    ]) {
+      expect(page, `page.tsx calls ${forbidden}`).not.toContain(`${forbidden}(`);
+    }
+  });
+
+  it("moves no financial state on a page render", () => {
+    // §99: a GET must never grant, expire, reserve or charge. The dashboard is
+    // a Server Component, so this is that rule stated where it can fail.
+    for (const src of [page, readModel]) {
+      expect(src).not.toContain("ensureWelcomeGrant");
+      expect(src).not.toContain("grantCreditLot");
+      expect(src).not.toContain("settleOperationCredits");
+    }
+  });
+
   it("keeps the service-role client out", () => {
     // It bypasses RLS. A dashboard reading across every project is the last
     // place that should hold a key which ignores ownership.

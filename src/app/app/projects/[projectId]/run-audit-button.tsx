@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { CreditPrice } from "@/components/ui/credit-price";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { OPERATION_STAGE_LABELS, type OperationView } from "@/modules/operations/view";
 import {
@@ -20,11 +21,23 @@ export function RunAuditButton({
   projectId,
   hasAudit,
   disabled,
+  billable = false,
   activeOperation,
 }: {
   projectId: string;
   hasAudit: boolean;
   disabled: boolean;
+  /**
+   * Whether starting this run would actually spend Credits
+   * (BILLING CORE-2 §55).
+   *
+   * Decided on the server from the entitlement, not inferred from `hasAudit`.
+   * The two come apart in a case that matters: when Vibe owes a replacement
+   * because its own audit contract moved, an audit exists *and* the re-run is
+   * free — and showing "35 Credits" beside a free run would be a lie in the
+   * direction that costs trust.
+   */
+  billable?: boolean;
   /**
    * Discovered on the server at page load. This is what makes a reload or a
    * return to the tab show "Analyzing…" instead of an inviting button, without
@@ -129,6 +142,8 @@ export function RunAuditButton({
         <Button type="submit" disabled={pending || disabled}>
           {pending ? "Starting…" : hasAudit ? "Re-run business audit" : "Run business audit"}
         </Button>
+        {/* The cost, before the click (§55) — and only when there is one. */}
+        {billable && <CreditPrice operation="business_audit" />}
       </form>
 
       {failed && operation?.failureCode && (

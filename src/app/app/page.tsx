@@ -9,6 +9,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireSession } from "@/modules/auth/session";
 import { buildActivityEntry } from "@/modules/audit-log/view";
 import { buildAttentionItems } from "@/modules/projects/attention";
+import { getHeaderCreditBalance } from "@/modules/billing/overview";
 import { getDashboardOverview } from "@/modules/projects/dashboard";
 import { getOnboardingRouting } from "@/modules/onboarding/store";
 import { AttentionList } from "./attention-list";
@@ -81,7 +82,15 @@ export default async function AppHomePage({
   const { connect_error: connectError } = await searchParams;
 
   const supabase = await createClient();
-  const { projects, recentActivity } = await getDashboardOverview(supabase, session.userId);
+  /*
+   * Two independent reads, in parallel (§100). The Credit balance is one
+   * account row plus its active lots — never a lifetime ledger scan — because
+   * this renders on every signed-in navigation.
+   */
+  const [{ projects, recentActivity }, creditBalance] = await Promise.all([
+    getDashboardOverview(supabase, session.userId),
+    getHeaderCreditBalance(supabase, { userId: session.userId }),
+  ]);
 
   /*
    * First login and interrupted activation resolve on the server. Connection
@@ -131,7 +140,7 @@ export default async function AppHomePage({
         : `${attention.length} ${attention.length === 1 ? "thing needs" : "things need"} your attention.`;
 
   return (
-    <AppShell email={session.email}>
+    <AppShell email={session.email} credits={creditBalance?.display ?? null}>
       <div className="flex flex-col gap-10">
         {connectError && (
           <Notice tone="problem" label="Connection failed">

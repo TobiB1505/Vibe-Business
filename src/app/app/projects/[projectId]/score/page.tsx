@@ -213,6 +213,9 @@ export default async function ProjectScorePage({
           projectId={project.id}
           hasAudit={Boolean(latestAudit?.result)}
           disabled={!auditReady}
+          // Billable only once the included audit is spent and Vibe does not
+          // owe a contract refresh — both server-side facts (§55).
+          billable={!auditAccess.freeAuditAvailable && !auditAccess.systemRefreshAvailable}
           activeOperation={activeAuditOperation}
         />
       }
