@@ -299,6 +299,19 @@ describe("subscription lifecycle (§29, §33)", () => {
     expect(await listAllLots(supabase(), await accountId())).toHaveLength(1);
   });
 
+  it("records which Stripe world the event came from, rather than assuming test", async () => {
+    /*
+     * Test-mode and live-mode objects share an id namespace but are entirely
+     * separate. A hardcoded `false` here would let a live customer be recorded
+     * as a test one — which is precisely the mixing the `livemode` column
+     * exists to prevent, and it would not bite until the day live mode is
+     * switched on.
+     */
+    await process({ ...subscriptionEvent("active"), livemode: true });
+
+    expect(db.current.rows("billing_subscriptions")[0]).toMatchObject({ livemode: true });
+  });
+
   it("records a scheduled cancellation while the plan is still live", async () => {
     await process(subscriptionEvent("active", { cancelAtPeriodEnd: true }));
 

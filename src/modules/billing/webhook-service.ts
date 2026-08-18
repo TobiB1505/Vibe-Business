@@ -71,7 +71,7 @@ export async function processStripeEvent(
 
   try {
     const intent = interpretStripeEvent(event, params.catalogPriceIds);
-    const outcome = await applyBillingIntent(supabase, intent);
+    const outcome = await applyBillingIntent(supabase, intent, event.livemode);
 
     await completeStripeEvent(supabase, {
       stripeEventId: event.id,
@@ -92,6 +92,16 @@ export async function processStripeEvent(
 async function applyBillingIntent(
   supabase: SupabaseClient,
   intent: BillingIntent,
+  /**
+   * Which Stripe world this event came from.
+   *
+   * Threaded from the event rather than assumed. Test-mode and live-mode
+   * objects share an id namespace but are entirely separate, and a row that
+   * recorded the wrong one would let a test-mode customer be treated as a live
+   * one — the exact mixing `billing_stripe_customers.livemode` exists to
+   * prevent.
+   */
+  livemode: boolean,
 ): Promise<ProcessStripeEventResult> {
   switch (intent.kind) {
     case "ignored":
@@ -104,7 +114,7 @@ async function applyBillingIntent(
       return grantSubscriptionPeriod(supabase, intent);
 
     case "sync_subscription":
-      return syncSubscription(supabase, intent);
+      return syncSubscription(supabase, intent, livemode);
   }
 }
 
@@ -196,6 +206,7 @@ async function grantSubscriptionPeriod(
 async function syncSubscription(
   supabase: SupabaseClient,
   intent: Extract<BillingIntent, { kind: "sync_subscription" }>,
+  livemode: boolean,
 ): Promise<ProcessStripeEventResult> {
   // An unrecognized plan is recorded as nothing rather than guessed. A snapshot
   // is not a grant, so being unable to name the plan costs nothing.
@@ -211,7 +222,7 @@ async function syncSubscription(
     await linkStripeCustomer(supabase, {
       userId: owner.userId,
       stripeCustomerId: intent.stripeCustomerId,
-      livemode: false,
+      livemode,
     }).catch(() => {
       // A mapping that already exists for this user is the normal case and not
       // an error worth failing a webhook over.
@@ -230,7 +241,7 @@ async function syncSubscription(
       intent.currentPeriodEnd === null ? null : new Date(intent.currentPeriodEnd * 1000).toISOString(),
     cancelAtPeriodEnd: intent.cancelAtPeriodEnd,
     canceledAt: intent.canceledAt === null ? null : new Date(intent.canceledAt * 1000).toISOString(),
-    livemode: false,
+    livemode,
   });
 
   await recordAuditEvent(supabase, {
