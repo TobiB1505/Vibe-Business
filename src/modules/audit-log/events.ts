@@ -224,7 +224,27 @@ export type AuditEventType =
   | "credit_reservation.created"
   | "credit_reservation.released"
   | "credit_charge.settled"
-  | "credit_refund.posted";
+  | "credit_refund.posted"
+
+  /*
+   * Billing Core-2 (§68). Money, entitlements and real Credit consumption.
+   *
+   * Deliberately absent from every one of these: card data, Stripe secrets,
+   * webhook signatures, payment amounts in currency, and any provider payload.
+   * The metadata carries identifiers, Credit amounts and policy versions —
+   * enough to answer "why does this account have these Credits?" and nothing
+   * that would duplicate Stripe's own record of a payment.
+   *
+   * There is no `billing.checkout_completed`. A returning browser is not proof
+   * of payment (§25), so the event that matters is the grant a verified Stripe
+   * event produced, which `billing.credit_lot_granted` already records.
+   */
+  | "billing.credit_lot_granted"
+  | "billing.credits_expired"
+  | "billing.operation_reserved"
+  | "billing.checkout_started"
+  | "billing.subscription_updated"
+  | "billing.stripe_event_ignored";
 
 /*
  * There is deliberately no `credit_usage.reconciled`. Shadow reconciliation
