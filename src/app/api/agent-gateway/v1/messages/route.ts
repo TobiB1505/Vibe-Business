@@ -55,6 +55,23 @@ import {
 /** Node, not edge: the service-role client and `node:crypto` both need it. */
 export const runtime = "nodejs";
 
+/**
+ * Long enough for a real turn.
+ *
+ * This route is not answering a question of its own — it is holding a
+ * connection open while Anthropic composes a coding agent's next turn, which
+ * routinely takes 30–90 seconds and can take longer on a large transcript. The
+ * platform default is shorter than that on some plans, and a ceiling reached
+ * mid-turn returns a 504 the SDK reads as a provider fault: the run dies
+ * looking exactly like an outage, which is the failure mode this whole runtime
+ * placement exists to stop mistaking for something else.
+ *
+ * 300s is a deadline, not a budget. What actually bounds a run is the token
+ * ceiling and request count on its gateway token, and the sandbox's own
+ * 15-minute lifetime.
+ */
+export const maxDuration = 300;
+
 /** The single upstream this gateway will ever speak to. */
 const ANTHROPIC_ORIGIN = "https://api.anthropic.com";
 const ROUTE = "/v1/messages";
