@@ -52,13 +52,46 @@ export async function createExecutionSpec(
     creditQuoteId?: string | null;
   },
 ): Promise<CreateExecutionSpecResult> {
-  const spec = buildExecutionSpec(params);
+  return recordExecutionSpec(supabase, { ...params, spec: buildExecutionSpec(params) });
+}
+
+/**
+ * Records a spec that has already been built (§10, §35).
+ *
+ * Split out from {@link createExecutionSpec} because building and persisting
+ * are different acts with different costs. Building is pure — it runs the mode
+ * check, the secret guard and the policy compiler, and produces the document a
+ * screen can render in full. Persisting writes an immutable, permanently
+ * auditable row.
+ *
+ * The internal dogfood surface conflated them: it persisted a spec on every
+ * page *render*, which is both a write on a read path and a write the caller's
+ * cookie-scoped client can never perform — `execution_specs` has a select
+ * policy and deliberately no insert policy, so a browser cannot forge a mode, a
+ * base SHA, a policy or a Credit ceiling. Rendering a preview now builds; only
+ * a start persists, through the service-role writer in
+ * `operations/agent-execution/spec.ts`.
+ */
+export async function recordExecutionSpec(
+  supabase: SupabaseClient,
+  params: {
+    spec: ExecutionSpec;
+    userId: string;
+    repositoryConnectionId: string;
+    creditQuoteId?: string | null;
+    budget?: BuildExecutionSpecInput["budget"];
+  },
+): Promise<CreateExecutionSpecResult> {
+  const { spec } = params;
 
   const result = await insertExecutionSpec(supabase, {
     spec,
     repositoryConnectionId: params.repositoryConnectionId,
     creditQuoteId: params.creditQuoteId ?? null,
-    maxAuthorizedCredits: params.budget?.maxCredits ?? null,
+    // Read off the spec rather than off a second argument: the document is the
+    // authority, and a column that could disagree with it is a column that
+    // eventually will.
+    maxAuthorizedCredits: spec.budget?.maxCredits ?? null,
   });
 
   if (!result.ok) return result;

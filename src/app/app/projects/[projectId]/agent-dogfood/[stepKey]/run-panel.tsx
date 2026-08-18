@@ -3,7 +3,11 @@
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/states";
-import { AGENT_START_REFUSAL_LABELS } from "@/modules/coding-agent/view";
+import {
+  AGENT_START_REFUSAL_LABELS,
+  DOGFOOD_START_REFUSAL_LABELS,
+} from "@/modules/coding-agent/view";
+import type { AgentStartRefusal } from "@/modules/coding-agent/service";
 import { startDogfoodRunAction, type StartDogfoodRunState } from "./actions";
 
 const initialState: StartDogfoodRunState = null;
@@ -26,9 +30,12 @@ export function RunPanel({ projectId, stepKey }: { projectId: string; stepKey: s
     <form action={formAction} className="flex flex-col gap-3">
       {state && !state.ok && (
         <Notice tone="problem" label="couldn't start">
-          {state.error === "not_eligible"
-            ? "This step is no longer eligible — the page will show why above."
-            : AGENT_START_REFUSAL_LABELS[state.error]}
+          {/* Two vocabularies, because the two failures happen at different
+              points: one before the run could be recorded, one after. Neither
+              is rendered as the other. */}
+          {state.error in DOGFOOD_START_REFUSAL_LABELS
+            ? DOGFOOD_START_REFUSAL_LABELS[state.error as keyof typeof DOGFOOD_START_REFUSAL_LABELS]
+            : AGENT_START_REFUSAL_LABELS[state.error as AgentStartRefusal]}
         </Notice>
       )}
       <div>

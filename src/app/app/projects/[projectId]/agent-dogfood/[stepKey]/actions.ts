@@ -13,6 +13,7 @@ import {
 import { getAgentExecutionStatus, startAgentExecution } from "@/modules/coding-agent/service";
 import type { AgentStartRefusal } from "@/modules/coding-agent/service";
 import { previewDogfoodStep } from "@/modules/coding-agent/website-preflight";
+import { persistAgentExecutionSpec } from "@/modules/operations/agent-execution/spec";
 import { VercelWorkflowExecutor } from "@/modules/operations/vercel/executor";
 import type { OperationView } from "@/modules/operations/view";
 import type { ExecutionInterruptAnswer } from "@/modules/execution-contract/schema";
@@ -28,7 +29,7 @@ import type { ExecutionInterruptAnswer } from "@/modules/execution-contract/sche
  */
 
 export type StartDogfoodRunState =
-  | { ok: false; error: AgentStartRefusal | "not_eligible" }
+  | { ok: false; error: AgentStartRefusal | "not_eligible" | "spec_not_persisted" }
   | null;
 
 /**
@@ -60,10 +61,33 @@ export async function startDogfoodRunAction(
 
   if (!preview.eligible) return { ok: false, error: "not_eligible" };
 
+  /*
+   * The write happens here, on the click, and nowhere else.
+   *
+   * The preview builds the spec; this persists it. Separated because an
+   * immutable audit row is not something a page render should mint, and
+   * because `execution_specs` accepts no insert from the caller's own client
+   * by design — the service-role writer lives in `operations/`, which is the
+   * only place Rule 53 permits it.
+   *
+   * Idempotent by the spec's identity: a double submission, a retry or two
+   * tabs on the same step all resolve to the same row, and then to the same
+   * run.
+   */
+  const persisted = await persistAgentExecutionSpec({
+    spec: preview.spec,
+    userId: session.userId,
+    repositoryConnectionId: preview.repositoryConnectionId,
+  });
+
+  if (!persisted.ok) {
+    return { ok: false, error: persisted.error === "project_not_found" ? "project_not_found" : "spec_not_persisted" };
+  }
+
   const outcome = await startAgentExecution(supabase, new VercelWorkflowExecutor(), {
     projectId,
     userId: session.userId,
-    executionSpecId: preview.executionSpecId,
+    executionSpecId: persisted.executionSpecId,
   });
 
   if (outcome.kind === "failed") return { ok: false, error: outcome.error };

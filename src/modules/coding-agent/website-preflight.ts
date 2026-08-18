@@ -2,7 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getLatestCompletedActionPlan } from "@/modules/action-plans/store";
-import { createExecutionSpec } from "@/modules/execution-contract/service";
+import { buildExecutionSpec, type ExecutionSpec } from "@/modules/execution-contract/spec";
 import {
   resolvePlanExecution,
   resolveStepExecution,
@@ -72,7 +72,16 @@ export type DogfoodStepPreview =
   | {
       eligible: true;
       stepTitle: string;
-      executionSpecId: string;
+      /**
+       * The instruction package, **built and not yet persisted**.
+       *
+       * A preview renders it; only a start writes it. Handing back a row id
+       * from a read path was what hid the fact that the row was never being
+       * created — see `operations/agent-execution/spec.ts`.
+       */
+      spec: ExecutionSpec;
+      /** Needed by the writer, and not derivable from the spec document. */
+      repositoryConnectionId: string;
       resolution: ExecutionResolution;
       preflight: AgentPreflight;
       economics: AgentEconomicPolicy;
@@ -319,7 +328,19 @@ export async function previewDogfoodStep(
     },
   };
 
-  const created = await createExecutionSpec(supabase, {
+  /*
+   * Built, not persisted.
+   *
+   * A preview is a read. Persisting on render would write an immutable,
+   * permanently auditable row every time somebody opened this page — and, more
+   * bluntly, it never worked: `execution_specs` has no insert policy, so the
+   * caller's cookie-scoped client was silently refused and this function
+   * reported `not_agentic` for a step it had just resolved as agentic.
+   *
+   * `startDogfoodRunAction` persists it, once, through
+   * `operations/agent-execution/spec.ts`, which holds the only client that may.
+   */
+  const spec = buildExecutionSpec({
     resolution,
     step,
     plan: {
@@ -364,17 +385,9 @@ export async function previewDogfoodStep(
       (order) => plan.steps.find((candidate) => candidate.order === order)!,
     ),
     createdAt: new Date().toISOString(),
-    userId: params.userId,
-    repositoryConnectionId: connection.id,
   });
 
-  if (!created.ok) return { eligible: false, reason: "not_agentic", resolution };
-
-  const preflight = runAgentPreflight({
-    resolution,
-    spec: created.stored.spec,
-    economics,
-  });
+  const preflight = runAgentPreflight({ resolution, spec, economics });
 
   if (!preflight.passed || !economics) {
     return { eligible: false, reason: "preflight_refused", resolution, preflight };
@@ -383,7 +396,8 @@ export async function previewDogfoodStep(
   return {
     eligible: true,
     stepTitle: step.title,
-    executionSpecId: created.stored.id,
+    spec,
+    repositoryConnectionId: connection.id,
     resolution,
     preflight,
     economics,

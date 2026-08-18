@@ -42,6 +42,21 @@ export const AGENT_START_REFUSAL_LABELS: Record<AgentStartRefusal, string> = {
 };
 
 /**
+ * Why a start attempt stopped before `startAgentExecution` was even reached.
+ *
+ * Separate from {@link AGENT_START_REFUSAL_LABELS} because these happen one
+ * step earlier — while recording the instruction package the run would execute.
+ * They were previously invisible: a refused insert was reported as "this isn't
+ * the kind of change Vibe can attempt", on a screen that had just said the
+ * opposite in the sentence above it.
+ */
+export const DOGFOOD_START_REFUSAL_LABELS = {
+  not_eligible: "This step is no longer eligible — the page will show why above.",
+  spec_not_persisted: "Vibe couldn't record what this run would do, so it didn't start one.",
+  project_not_found: "That project couldn't be found.",
+} as const;
+
+/**
  * The refusal, said accurately.
  *
  * `not_admissible` is one preflight refusal standing in for nine different

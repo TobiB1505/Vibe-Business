@@ -119,8 +119,23 @@ describe("previewDogfoodStep — the gate runs before anything else is read (§2
   });
 });
 
-describe("previewDogfoodStep — the real chain (§7, §9)", () => {
-  it("resolves a real agentic step and persists a spec", async () => {
+/**
+ * The preview is a read (§7, §9).
+ *
+ * These two tests used to assert the opposite — that a preview persisted a spec
+ * row and returned its id — and they passed while the behaviour they described
+ * had **never once worked in production**. `execution_specs` has a select policy
+ * and deliberately no insert policy, so the caller's cookie-scoped client was
+ * refused every time; `FakeDatabase` models no RLS, so the write "succeeded"
+ * here and nowhere else.
+ *
+ * That is the lesson worth keeping: a fake that is more permissive than the
+ * real database can only prove that code runs, never that it is allowed to.
+ * The behaviour is now what it should always have been — building is a read,
+ * and only a click writes.
+ */
+describe("previewDogfoodStep — the real chain", () => {
+  it("resolves a real agentic step and builds its instruction package", async () => {
     seedOwnedRepository();
     seedSuccessfulSnapshot();
     seedCompletedPlan([AGENTIC_STEP]);
@@ -136,39 +151,53 @@ describe("previewDogfoodStep — the real chain (§7, §9)", () => {
     if (!preview.eligible) return;
     expect(preview.resolution.mode).toBe("agentic");
     expect(preview.preflight.passed).toBe(true);
-    expect(preview.executionSpecId).toBeTruthy();
+    expect(preview.spec.identity).toBeTruthy();
+    expect(preview.spec.projectId).toBe(PROJECT);
+    expect(preview.repositoryConnectionId).toBeTruthy();
+    // Live HEAD is read for real: this is the one thing the dev probe cannot do.
     expect(getHead).toHaveBeenCalledWith();
-
-    // The persisted spec is a real row, findable by identity — not a value
-    // invented in memory and handed to the caller.
-    const rows = db.rows("execution_specs");
-    expect(rows).toHaveLength(1);
-    expect(rows[0].id).toBe(preview.executionSpecId);
-    expect(rows[0].project_id).toBe(PROJECT);
   });
 
-  it("returns the same spec id on a second call against unchanged state (idempotent)", async () => {
+  it("writes nothing — rendering a page mints no immutable row", async () => {
     seedOwnedRepository();
     seedSuccessfulSnapshot();
     seedCompletedPlan([AGENTIC_STEP]);
 
-    const first = await previewDogfoodStep(fakeSupabase(db), {
-      projectId: PROJECT,
-      userId: USER,
-      stepKey: "1-ship-it",
-      env: ALLOWLIST,
-    });
-    const second = await previewDogfoodStep(fakeSupabase(db), {
+    await previewDogfoodStep(fakeSupabase(db), {
       projectId: PROJECT,
       userId: USER,
       stepKey: "1-ship-it",
       env: ALLOWLIST,
     });
 
+    expect(db.rows("execution_specs")).toHaveLength(0);
+    expect(db.rows("audit_events")).toHaveLength(0);
+  });
+
+  /**
+   * Identity, not a row id, is what makes a second look at the same step the
+   * same job — which is exactly why the start path can persist late and still
+   * be idempotent.
+   */
+  it("builds a byte-identical spec identity on a second call against unchanged state", async () => {
+    seedOwnedRepository();
+    seedSuccessfulSnapshot();
+    seedCompletedPlan([AGENTIC_STEP]);
+
+    const call = () =>
+      previewDogfoodStep(fakeSupabase(db), {
+        projectId: PROJECT,
+        userId: USER,
+        stepKey: "1-ship-it",
+        env: ALLOWLIST,
+      });
+
+    const first = await call();
+    const second = await call();
+
     expect(first.eligible && second.eligible).toBe(true);
     if (!first.eligible || !second.eligible) return;
-    expect(second.executionSpecId).toBe(first.executionSpecId);
-    expect(db.rows("execution_specs")).toHaveLength(1);
+    expect(second.spec.identity).toBe(first.spec.identity);
   });
 });
 
@@ -472,7 +501,7 @@ describe("previewDogfoodStep — Vibe's own preparation does not gate the click"
     requires_approval: false,
   };
 
-  it("resolves the implementation step and persists a spec carrying the preparation", async () => {
+  it("resolves the implementation step and builds a spec carrying the preparation", async () => {
     seedOwnedRepository();
     seedSuccessfulSnapshot();
     seedCompletedPlan([
@@ -492,11 +521,9 @@ describe("previewDogfoodStep — Vibe's own preparation does not gate the click"
     expect(preview.resolution.mode).toBe("agentic");
     expect(preview.resolution.absorbedPreparation).toEqual([1]);
 
-    // The persisted spec records the boundary that was compiled, so the run is
-    // explainable later without re-resolving anything.
-    const [spec] = db.rows("execution_specs");
-    expect(spec).toBeDefined();
-    expect((spec.spec as { objective: { preparation: unknown[] } }).objective.preparation).toEqual([
+    // The spec records the boundary that was compiled, so a run started from it
+    // is explainable later without re-resolving anything.
+    expect(preview.spec.objective.preparation).toEqual([
       {
         stepOrder: 1,
         stepKey: "1-work-out-the-approach",
