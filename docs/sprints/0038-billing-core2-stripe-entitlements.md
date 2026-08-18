@@ -1,6 +1,6 @@
 # Billing Core-2 — Stripe, Credit Grants, Entitlements & Real Credit Consumption
 
-Status: implemented, not merged. Test mode only. No live payments.
+Status: merged (PR #48, hotfix PR #49). Deployed and dogfooded against real Stripe test mode. Test mode only — no live payments.
 
 Billing Core-1 made Credits financially correct. Billing Product-1 decided what they mean commercially. Core-2 makes them real: money enters through Stripe, becomes an immutable grant, expires on a schedule, is spent in a deterministic order, and pays for actual operations.
 
@@ -250,27 +250,33 @@ Two mutations remain uncaught **individually**, and should be: removing only the
 
 ## Real Stripe test-mode dogfood
 
-**NOT RUN — external credential block.**
+**PARTIALLY RUN — REAL, against the founder's own test-mode account**, after merge. The credential block described below applied only to this session's build environment, which never held Stripe secrets; once the operator configured them on the deployment and requested a merge, the founder ran real test-mode traffic through it directly.
 
-No `STRIPE_SECRET_KEY`, no `STRIPE_WEBHOOK_SECRET` and no Stripe account are available in this environment, and none were invented. Every Stripe test here is a fixture or a signed payload constructed with Stripe's own `generateTestHeaderString` — real cryptography against the real verification path, but **not** an end-to-end payment.
+Verified against the ledger (`billing_credit_grants`, `billing_credit_ledger`, `billing_stripe_events`), not just observed in the UI:
 
-Status: **TEST-MODE DOGFOOD PENDING.** Mocked Stripe tests are not E2E, and this sprint does not claim otherwise.
+1. **Welcome grant** — 100 Credits, `welcome-credit-v1:<userId>`, one ledger entry.
+2. **Top-up purchase (Pack 5000)** — real Checkout Session `cs_test_a1ZUd0…`, event `checkout.session.completed` processed, exactly 5,000 Credits granted (the catalog amount for that SKU, not a client-supplied number), no expiry.
+3. **Builder subscription** — real invoice `in_1U5kZU…`, event `invoice.paid` processed, exactly 1,000 Credits granted, `expires_at` set to the period end (18 Sep), matching the shipped period-end-expiry policy.
+4. **The §31 defence, live**: the subscription's own `checkout.session.completed` event arrived and was correctly **ignored** with reason `checkout_subscription_handled_by_invoice` — the grant came from `invoice.paid`, not the Checkout return, exactly as designed. This is the one case that is genuinely hard to fake with a fixture and the most important one to see for real.
+5. **`customer.subscription.created`** processed, subscription snapshot synced (`plan_key: builder`, `status: active`, `livemode: false`).
+6. **Ledger reconciles exactly**: 100,000 + 1,000,000 + 5,000,000 = 6,100,000 units posted, 0 reserved, matching the account row and the balance shown on `/app/billing`.
 
-What remains to be proven against a real test-mode account:
+**Not yet exercised**: a genuine Stripe webhook retry/replay (nothing failed, so Stripe had no reason to redeliver — idempotency under replay is proven at the unit level in `webhook-service.test.ts` §71/§72 but not yet observed live), cancellation, and spending Credits on a real priced operation (Business Audit / Opportunity / Action Plan) against this balance.
 
-1. Account receives 100 Welcome Credits
-2. Buy a 500-Credit pack → exactly 500 granted
-3. Replay the webhook → no duplicate
-4. Subscribe to Builder → exactly 1,000 on the first paid period
-5. Replay → no duplicate
-6. Cancel → future grants stop, purchased Credits remain
-7. Run a real paid operation → balance and ledger reconcile
+## Production bugs found and fixed post-merge
+
+Two real defects surfaced within minutes of the founder's first live click, both traced to the same root cause and both fixed and merged (PR #49) before further testing:
+
+- **Root cause**: `src/app/app/billing/actions.ts` and the welcome-grant call in `src/app/app/connect/github/repositories/actions.ts` wrote through the ordinary cookie-scoped Supabase client. Every billing table deliberately has a select policy and no write policy for any authenticated client (§64) — that absence is what makes "no client-writable financial surface" true — so **every write these actions attempted was refused by RLS** before reaching application logic. Both "Add my 100 Welcome Credits" and "Choose Builder" failed on first click with a generic message.
+- **Compounding defect**: the failure was invisible. Both actions caught their own exceptions without logging them, so Vercel showed HTTP 200 on every request and zero errors anywhere — a genuine gap in this sprint's own observability that the DoD's "quality gate" did not catch, because no test exercised these Server Actions at the argument-passing layer; only the domain functions one level down were unit tested, always with a trusted client supplied directly.
+- **Fix**: both call sites now use `createServiceClient()` — the same client the Stripe webhook already uses, for the same reason (ADR 0025 §9): ownership comes from `requireSession()`'s verified JWT claim, never from a client-supplied parameter, so bypassing RLS here does not reopen the hole RLS closes. Every catch block now logs the error by name.
+- **Residual gap, stated plainly**: no test exists at the Server-Action layer that would have caught the original wrong-client bug, or would catch a regression of it. The domain-level tests (4,154 of them) were and remain correct; they simply cannot see which Supabase client a route handler chose to pass them.
 
 ## Migration status
 
 `supabase/migrations/20260818120000_billing_credits_stripe_entitlements.sql`, forward-only. No deployed migration edited; the only drops are two CHECK constraints replaced in the same file to admit the `expiry` ledger kind, and a test asserts both are re-added.
 
-**NOT DEPLOYED.** No Supabase project is linked in this environment and no credentials are present, so `db push` and `db lint` could not run. The migration must be applied via the linked CLI workflow before this branch is exercised against a real database.
+**DEPLOYED** to the linked project (`dcbwlctscooefwnivxzv`, eu-north-1) via the Supabase MCP `apply_migration`, after confirming migration history was aligned through `billing_credits_core` (Core-1) with no drift. `list_migrations` afterward shows `20260818090300_billing_credits_stripe_entitlements` as the current head. `get_advisors` (security) reports one expected INFO — `billing_stripe_events` has RLS enabled with no policy at all, which is the deliberate design (§67), not a gap — plus three pre-existing WARNs on functions unrelated to this migration (`set_updated_at` search_path, `rls_auto_enable` SECURITY DEFINER exposure, leaked-password protection), none introduced by this sprint.
 
 ## Live-mode status
 
@@ -328,6 +334,10 @@ No Agent price exists and none was invented. No Agent button, no Agent execution
 
 ## Merge recommendation
 
-Ready for review, **not** ready to merge unattended. Two things must happen first: the migration deployed through the linked Supabase CLI workflow, and the real Stripe test-mode dogfood run. Neither is blocked by the code — both are blocked by credentials that do not exist in the build environment.
+**Merged** (PR #48, explicit founder approval; hotfix PR #49 same day). Migration deployed via the linked Supabase MCP; real Stripe test-mode dogfood run directly against the deployed app and verified against the ledger, both described above.
 
-Not merged automatically, per instruction.
+Outstanding before this is genuinely done, not before it was safe to merge:
+
+- Webhook replay/retry, cancellation, and spending Credits on a real operation are still unexercised against a live account (see the dogfood section).
+- No test exists at the Server-Action layer, so the class of bug PR #49 fixed has no regression guard yet — the domain functions are fully tested, the thin routing layer that chooses which Supabase client to hand them is not.
+- The production activation checklist (legal, VAT, live Products/Prices, live webhook secret, `STRIPE_ALLOW_LIVE_MODE`) is entirely unstarted, by design — live mode remains **NOT ACTIVATED**.
