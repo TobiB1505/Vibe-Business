@@ -668,3 +668,84 @@ click clears server-side admission a second time.
 
 **REAL CLAUDE AGENT RUN: NOT STARTED BY THIS CONTINUATION.**
 **PRODUCTION AGENT CREDIT PRICE: NOT ACTIVATED.**
+
+---
+
+## Addendum — execution semantics fix: agent-preparable dependencies
+
+**Continuation, 2026-08-18. Merged Core-4 is unchanged; this corrects one rule inside it.**
+
+### The finding
+
+The addendum above closed with *"there is no agentic step to press Run with Vibe on today"*, and named step completion tracking as the missing piece. That diagnosis was half right. On the plan that exists now — `9110ab8b`, the technical-SEO Move — the resolver said:
+
+```
+1  Define the metadata plan …            unsupported   no_executor_for_vibe_work
+2  Add canonical URLs …                  blocked       dependency_unsatisfied
+3  Add Open Graph tags and structured …  blocked       dependency_unsatisfied
+4  Add robots meta directives …          blocked       dependency_unsatisfied
+```
+
+Steps 2–4 are moderate-risk changes to a Next.js/pnpm repository with a real validation profile, no capability match, no founder decision outstanding, no auth or payment evidence. All three were refused because step 1 — *Vibe's own analysis* — was unfinished.
+
+Completion tracking would have "fixed" it by asking the founder to tick off Vibe's own preparatory work before Vibe would do the work that follows it. That is the wrong product, and the fix specification rules it out explicitly (§4). The real defect was upstream of completion: the resolver treated every Planner prerequisite as a hard runtime blocker.
+
+### What changed
+
+One new module, one changed rule, one new field.
+
+| | |
+| --- | --- |
+| `execution-contract/dependencies.ts` | classifies each prerequisite `satisfied` / `agent_preparable` / `hard`, walks preparation chains, refuses cycles |
+| `execution-contract/resolver.ts` | `blockedBy` is now the **hard** subset; preparation is absorbed instead |
+| `ExecutionResolution.absorbedPreparation` | which prerequisite steps this execution carries |
+| `ExecutionSpec.objective.preparation` | those steps' title, purpose and done-when, as bounded context |
+| `coding-agent/prompt.ts` | a fenced *"Work out first"* block in the user turn |
+| `EXECUTION_RESOLVER_VERSION` | `v1` → `v2`; absorbed step keys join the spec identity |
+
+Absorption is off unless the route is `agentic`, so every other mode behaves exactly as before. Classification reads `actor`, `changeKind`, risk and the capability registry — never a step's wording. `analysis` is the only preparatory change kind: `measurement` is excluded because a run must not become its own judge (rule 78), and `research` because no repository answers it.
+
+See [ADR 0026's amendment](../decisions/0026-agentic-execution-contract.md#amendment-2026-08-18--a-planner-dependency-is-not-automatically-a-runtime-hard-blocker) for the full reasoning.
+
+### The real plan, re-resolved
+
+`pnpm execution:dogfood` against the live database, plan `9110ab8b`, snapshot `c40986d0` (Next.js + React, pnpm, `61618ac8`):
+
+```
+#   planner says        depends  resolved      risk      absorbs  why
+1   vibe_prepares       —        unsupported   low       —        no_executor_for_vibe_work
+2   not_yet_supported   1        agentic       moderate  1        agentic_v1_eligible
+3   not_yet_supported   1        agentic       moderate  1        agentic_v1_eligible
+4   not_yet_supported   1        agentic       moderate  1        agentic_v1_eligible
+5   vibe_prepares       2,3,4    blocked       low       —        dependency_unsatisfied
+6   founder_acts        5        blocked       high      —        dependency_unsatisfied
+```
+
+Step 1 stays `unsupported` — being absorbable into a downstream run is not the same as being independently runnable. Steps 5 and 6 stay blocked on prerequisites that must genuinely exist: three product changes, then a person submitting the re-crawl.
+
+`pnpm agent:preflight` selects step 2, compiles the instruction with step 1 in the *"Work out first"* block, and reports the whole §43 picture — `nextjs_node_v1` validation (install → typecheck → test → build), six granted capabilities, eight never granted, no network, no secrets, 8 files / 60 KB / 40 turns / $3.00.
+
+### What still blocks the click
+
+**The repository has moved.** The analyzed snapshot is `61618ac8`; `main` is now `68b60577` (PRs #55 and #56 merged). The website preflight reads the live HEAD through the caller's own installation, so it refuses with `repository_head_moved` — correctly, and by the same rule the merge path uses: a moved default branch blocks, it does not trigger reasoning.
+
+The remedy is a fresh repository scan, which the founder starts. Vibe does not trigger a refresh on anybody's behalf (rule 60).
+
+### Runbook
+
+```
+1. Re-scan the repository for the Vibe Business project, so the snapshot
+   matches current main.
+2. Open /app/projects/b95779dc-73ca-40d8-bc60-40878d079ca7/agent-dogfood.
+   Requires VIBE_INTERNAL_AGENT_DOGFOOD_PROJECT_IDS to contain that project id.
+3. Open step 3 — "Add Open Graph tags and structured data to public pages".
+   Expect: route agentic, risk moderate, validation nextjs_node_v1, and step 1
+   listed as absorbed preparation.
+4. Read the preflight.
+5. Press "Run with Vibe".
+```
+
+Steps 1–4 spend no Credit and contact no provider.
+
+**REAL CLAUDE AGENT RUN: NOT STARTED BY THIS CONTINUATION.**
+**PRODUCTION AGENT CREDIT PRICE: NOT ACTIVATED.**

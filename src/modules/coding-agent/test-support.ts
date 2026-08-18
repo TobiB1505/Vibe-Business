@@ -12,7 +12,11 @@ import {
   fakeWriteScope,
 } from "@/modules/execution-contract/test-support";
 import { creditsToUnits } from "@/modules/credits/units";
-import type { ExecutionResolution } from "@/modules/execution-contract/schema";
+import {
+  EXECUTION_RESOLVER_VERSION,
+  EXECUTION_RISK_POLICY_VERSION,
+  type ExecutionResolution,
+} from "@/modules/execution-contract/schema";
 import { deriveAgentLimits, type AgentRuntimeLimits } from "./budget";
 import type {
   AgentModelUsage,
@@ -57,8 +61,8 @@ export function fakeAgenticResolution(
   overrides: Partial<ExecutionResolution> = {},
 ): ExecutionResolution {
   return {
-    resolverVersion: "execution-resolver-v1",
-    riskPolicyVersion: "execution-risk-policy-v1",
+    resolverVersion: EXECUTION_RESOLVER_VERSION,
+    riskPolicyVersion: EXECUTION_RISK_POLICY_VERSION,
     stepOrder: 1,
     stepKey: "1-ship-the-thing",
     mode: "agentic",
@@ -69,6 +73,7 @@ export function fakeAgenticResolution(
     capability: null,
     capabilityVersion: null,
     blockedBy: [],
+    absorbedPreparation: [],
     unmetRequirements: [],
     requiresUserInput: false,
     admission: { admissible: true },

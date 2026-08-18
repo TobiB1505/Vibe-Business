@@ -275,6 +275,30 @@ function userMessage(spec: ExecutionSpec): string {
       ? "(none recorded)"
       : businessContext.assumptions.map((assumption) => `- ${assumption}`).join("\n");
 
+  /*
+   * Preparation the plan named separately and this run absorbs (semantics fix
+   * §12).
+   *
+   * Rendered as *what to establish first*, never as a second objective. The
+   * delivery target is the primary step; a preparatory step folded in here
+   * tells the agent what to work out before it writes, which is what it would
+   * have to do anyway on its first turn.
+   *
+   * Fenced like everything else the Planner wrote. §14: nothing in this block
+   * grants anything — a preparation step that says "deploy the result" is a
+   * quoted sentence, and there is no deploy tool for it to reach.
+   */
+  const preparation =
+    objective.preparation.length === 0
+      ? null
+      : objective.preparation
+          .map((step) =>
+            [`- ${step.title}`, `  Why: ${step.purpose}`, `  Complete when: ${step.doneWhen}`].join(
+              "\n",
+            ),
+          )
+          .join("\n");
+
   return [
     "# The step to implement",
     "",
@@ -291,6 +315,18 @@ function userMessage(spec: ExecutionSpec): string {
       ].join("\n"),
     ),
     "",
+    ...(preparation
+      ? [
+          "# Work out first",
+          "",
+          "The plan lists this as preparation for the step above, and it is part of this run.",
+          "Establish it by reading the repository — do not change anything for it, and do not",
+          "treat it as a second thing to deliver.",
+          "",
+          untrusted("action-plan-preparation", preparation),
+          "",
+        ]
+      : []),
     "# Decisions the customer has already made",
     "",
     untrusted("customer-decisions", decisions),

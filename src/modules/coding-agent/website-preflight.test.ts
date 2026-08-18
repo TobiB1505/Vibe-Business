@@ -328,3 +328,87 @@ describe("previewDogfoodStep — non-agentic routes never produce a spec (§6)",
     expect(db.rows("execution_specs")).toHaveLength(0);
   });
 });
+
+/**
+ * The website reads the real resolver (semantics fix §37).
+ *
+ * No step id is named anywhere in this surface: eligibility is whatever
+ * `resolveStepExecution` says about the step the URL points at. So the fix to
+ * dependency semantics reaches the page for free, and this is the test that
+ * says it did.
+ */
+describe("previewDogfoodStep — Vibe's own preparation does not gate the click", () => {
+  const PREPARATION_STEP = {
+    ...AGENTIC_STEP,
+    step_key: "1-work-out-the-approach",
+    step_order: 1,
+    title: "Work out the repository-consistent approach",
+    actor: "vibe",
+    change_kind: "analysis",
+    depends_on: [],
+    evidence_ids: ["live.seo.canonical_missing"],
+    execution_support: "vibe_prepares",
+    requires_approval: false,
+  };
+
+  it("resolves the implementation step and persists a spec carrying the preparation", async () => {
+    seedOwnedRepository();
+    seedSuccessfulSnapshot();
+    seedCompletedPlan([
+      PREPARATION_STEP,
+      { ...AGENTIC_STEP, step_key: "2-build", step_order: 2, depends_on: [1] },
+    ]);
+
+    const preview = await previewDogfoodStep(fakeSupabase(db), {
+      projectId: PROJECT,
+      userId: USER,
+      stepKey: "2-build",
+      env: ALLOWLIST,
+    });
+
+    expect(preview.eligible).toBe(true);
+    if (!preview.eligible) return;
+    expect(preview.resolution.mode).toBe("agentic");
+    expect(preview.resolution.absorbedPreparation).toEqual([1]);
+
+    // The persisted spec records the boundary that was compiled, so the run is
+    // explainable later without re-resolving anything.
+    const [spec] = db.rows("execution_specs");
+    expect(spec).toBeDefined();
+    expect((spec.spec as { objective: { preparation: unknown[] } }).objective.preparation).toEqual([
+      {
+        stepOrder: 1,
+        stepKey: "1-work-out-the-approach",
+        title: "Work out the repository-consistent approach",
+        purpose: "So a visitor can complete the flow.",
+        doneWhen: "A visitor can complete the flow end to end.",
+      },
+    ]);
+  });
+
+  /**
+   * The preparation step itself is still not independently runnable. Being
+   * absorbable is a statement about a *downstream* execution, never a claim
+   * that a click exists for the preparation.
+   */
+  it("still refuses the preparation step on its own", async () => {
+    seedOwnedRepository();
+    seedSuccessfulSnapshot();
+    seedCompletedPlan([
+      PREPARATION_STEP,
+      { ...AGENTIC_STEP, step_key: "2-build", step_order: 2, depends_on: [1] },
+    ]);
+
+    const preview = await previewDogfoodStep(fakeSupabase(db), {
+      projectId: PROJECT,
+      userId: USER,
+      stepKey: "1-work-out-the-approach",
+      env: ALLOWLIST,
+    });
+
+    expect(preview.eligible).toBe(false);
+    if (preview.eligible) return;
+    expect(preview.resolution?.mode).toBe("unsupported");
+    expect(preview.resolution?.reason).toBe("no_executor_for_vibe_work");
+  });
+});

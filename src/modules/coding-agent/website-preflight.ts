@@ -252,6 +252,24 @@ export async function previewDogfoodStep(
     budget,
     credit: { quoteId: null, maxAuthorizedCredits: budget?.maxCredits ?? null },
     writeScope,
+    /*
+     * Preparation the resolver folded into this execution boundary
+     * (semantics fix §12, §13).
+     *
+     * Taken from `resolution.absorbedPreparation` rather than chosen here: the
+     * resolver decides which prerequisites are Vibe's own preparation, and a
+     * surface that picked its own set would be compiling a different execution
+     * than the one it classified. `buildExecutionSpec` refuses if the two
+     * disagree, so this cannot drift silently.
+     *
+     * The non-null assertion is safe by construction — every absorbed order
+     * came from a step in `plan.steps` a moment ago — and if that ever stopped
+     * being true the spec builder would throw rather than build something
+     * partial.
+     */
+    preparationSteps: resolution.absorbedPreparation.map(
+      (order) => plan.steps.find((candidate) => candidate.order === order)!,
+    ),
     createdAt: new Date().toISOString(),
     userId: params.userId,
     repositoryConnectionId: connection.id,
