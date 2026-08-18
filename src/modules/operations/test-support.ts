@@ -326,6 +326,38 @@ export class FakeDatabase {
       if (clash) return { code: POSTGRES_UNIQUE_VIOLATION, message: "duplicate order in plan" };
     }
 
+    // execution_specs (EXECUTION CORE-3 §10). Two rules, both stated twice on
+    // purpose.
+    //
+    // The unique identity is what makes re-resolving an unchanged world
+    // idempotent, so without it the store test would prove the application's
+    // lookup rather than the guarantee the database provides.
+    //
+    // `execution_specs_mode_matches_authority` is the constraint that stops a
+    // spec claiming an agentic grant *and* a deterministic capability at once —
+    // a row nothing downstream could route — and the in-memory database would
+    // otherwise never notice a bug in the builder that produced one.
+    if (table === "execution_specs") {
+      const agentic = candidate.mode === "agentic";
+      const wellFormed = agentic
+        ? candidate.execution_class != null && candidate.capability == null
+        : candidate.execution_class == null && candidate.capability != null;
+
+      if (!wellFormed) {
+        return {
+          code: POSTGRES_CHECK_VIOLATION,
+          message: "execution_specs_mode_matches_authority",
+        };
+      }
+
+      const clash = others.some(
+        (row) =>
+          row.project_id === candidate.project_id &&
+          row.spec_identity === candidate.spec_identity,
+      );
+      if (clash) return { code: POSTGRES_UNIQUE_VIOLATION, message: "one spec per identity" };
+    }
+
     // At most one live-or-successful preparation per execution identity.
     if (table === "prepared_changes" && ["preparing", "prepared"].includes(String(candidate.status))) {
       const clash = others.some(

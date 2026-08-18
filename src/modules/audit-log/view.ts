@@ -186,6 +186,12 @@ const LABELS: Record<AuditEventType, string> = {
   "billing.checkout_started": "Checkout started",
   "billing.subscription_updated": "Subscription updated",
   "billing.stripe_event_ignored": "Payment event received",
+
+  // EXECUTION CORE-3. "Prepared" rather than "spec created": the customer-facing
+  // sentence is that Vibe worked out what it would be allowed to do for a step,
+  // not that a versioned document exists. Nothing about this event means work
+  // started — no agent exists to start it.
+  "execution.spec_created": "Execution prepared for a plan step",
 };
 
 /**
