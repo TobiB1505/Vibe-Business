@@ -24,6 +24,8 @@ export const APPROVED_BASE = "528d372b81cf28786edcba7d6384f9f74e55ba33";
 export const DRIFTED_HEAD = "b8638ae4a0c4a1e31288da4d6ef3300f04d1746a";
 
 const APPROVAL_ID = "approval_e2e";
+/** Where a person looks when the base moved under a prepared change. */
+const COMPARE_URL = "https://github.com/vibe-e2e/example/compare/main...vibe/seo-foundations";
 const APPROVED_AT = "2026-08-14T08:22:59.917Z";
 
 /**
@@ -51,6 +53,7 @@ function baseChange(): Omit<
     filePaths: ["src/app/robots.ts", "src/app/sitemap.ts"],
     createdAt: "2026-08-13T18:00:00.000Z",
     branchUrl: null,
+    compareUrl: null,
     // The real SEO capability's rationale, not invented copy: the browser
     // suite asserts against what the product would actually render.
     rationale: businessRationaleFor("nextjs_seo_foundations_v2"),
@@ -317,6 +320,7 @@ export const E2E_SCENARIOS = {
       ...baseChange(),
       outcome: outcomeCard(),
       businessImpact: businessImpactCard(),
+      compareUrl: COMPARE_URL,
       merge: mergeCard({
         state: "not_eligible",
         failureCode: "merge_repository_changed",
@@ -339,6 +343,7 @@ export const E2E_SCENARIOS = {
       ...baseChange(),
       outcome: outcomeCard(),
       businessImpact: businessImpactCard(),
+      compareUrl: COMPARE_URL,
       merge: mergeCard({
         state: "blocked",
         changeMergeId: "merge_blocked_e2e",

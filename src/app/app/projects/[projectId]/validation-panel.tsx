@@ -62,7 +62,7 @@ const PHASE_TONES: Record<ValidationPhaseView["state"], string> = {
   failed: "text-coral",
   timed_out: "text-coral",
   skipped: "text-fg-muted",
-  active: "text-sky-400",
+  active: "text-mint-dim",
   pending: "text-fg-meta",
   not_run: "text-fg-meta",
 };
@@ -269,7 +269,7 @@ export function ValidationPanel({
             disabled={pending}
             className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2 disabled:opacity-60"
           >
-            {shown.underCurrentPolicy ? "Validate again" : "Validate under current policy"}
+            {shown.underCurrentPolicy ? "Validate again" : "Check under the current rules"}
           </button>
         </div>
       ) : shown?.status === "failed" ? (
@@ -323,7 +323,7 @@ export function ValidationPanel({
 
       {state?.ok && state.kind === "reused" && (
         <p className="text-xs text-fg-muted">
-          This commit already passed validation under the current policy — nothing was re-run.
+          This commit already passed under the current rules — nothing was re-run.
         </p>
       )}
     </section>

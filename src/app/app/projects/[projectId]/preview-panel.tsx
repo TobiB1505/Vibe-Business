@@ -390,7 +390,7 @@ export function PreviewPanel({
               here. Saying "stopped" before it confirms would be the one claim
               this panel is in no position to make (§12). */}
           <p className="text-xs text-fg-muted">
-            Vibe is stopping the environment and releasing the validated artifact.
+            Vibe is stopping the environment and releasing the saved build.
           </p>
         </div>
       ) : previewState === "running" ? (
@@ -457,15 +457,15 @@ export function PreviewPanel({
         <div className="space-y-2">
           <p className="text-sm text-fg-secondary">
             {previewState === "artifact_expired"
-              ? "Preview artifact expired"
-              : "Preview artifact unavailable"}
+              ? "Saved build expired"
+              : "Saved build unavailable"}
           </p>
           {/* Deliberately not phrased as a free refresh. A new validation
               provisions a paid sandbox, and the user starts it or nobody
               does (§15, CLAUDE.md rule 60). */}
           <p className="text-xs text-fg-muted">
-            The previous validated artifact is no longer retained. Validate the change again to
-            create a new preview artifact.
+            The build Vibe saved from the last safety check is no longer kept. Run the checks
+            again to make a new one.
           </p>
           <button
             type="button"
@@ -484,8 +484,8 @@ export function PreviewPanel({
           {card.revalidationRequired && (
             <>
               <p className="text-xs text-fg-muted">
-                The validated artifact was released when the preview ended. Validate the change
-                again to create a new preview artifact.
+                The saved build was released when the preview ended. Run the checks again to
+                make a new one.
               </p>
               <button
                 type="button"
@@ -510,8 +510,8 @@ export function PreviewPanel({
           {card.revalidationRequired && (
             <>
               <p className="text-xs text-fg-muted">
-                The validated artifact was released when the preview ended. Validate the change
-                again to create a new preview artifact.
+                The saved build was released when the preview ended. Run the checks again to
+                make a new one.
               </p>
               <button
                 type="button"
@@ -554,7 +554,7 @@ export function PreviewPanel({
 
       {state?.ok && state.kind === "reused" && (
         <p className="text-xs text-fg-muted">
-          A preview of this exact artifact is already running — nothing new was started.
+          A preview of this exact build is already running — nothing new was started.
         </p>
       )}
     </section>

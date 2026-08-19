@@ -53,6 +53,8 @@ export type PreparedChangeCard = {
   filePaths: string[];
   createdAt: string;
   branchUrl: string | null;
+  /** The base-to-branch difference on GitHub, for a change that stalled. */
+  compareUrl: string | null;
   validation: ValidationSummary | null;
   /** Preview state, decided on the server. Never inferred from the fields above. */
   preview: PreviewCard;
@@ -196,6 +198,41 @@ export function PreparedChangesSection({
                 >
                   Open branch on GitHub
                 </a>
+              )}
+
+              {/*
+                * A way forward for a change that cannot go in as it is
+                * (UI-5 §7).
+                *
+                * A branch moving under a prepared change is the normal life of
+                * a repository, not the user's mistake — but until now the card
+                * said so and stopped, leaving the most common non-happy path
+                * as a sentence with no door.
+                *
+                * What is offered is a look, not a fix. Re-preparing,
+                * re-checking and re-reviewing all cost provider time, and
+                * starting any of them on someone's behalf is exactly what the
+                * product refuses to do. So the link goes where the difference
+                * actually is, and the sentence says what survives: the work is
+                * still on its branch and the approval is still on record for
+                * the commit it named.
+                */}
+              {change.progress.stage === "stalled" && change.compareUrl && (
+                <div className="space-y-1 pt-1">
+                  <a
+                    href={change.compareUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-block text-xs text-fg-prose underline underline-offset-2 hover:text-fg"
+                  >
+                    Compare this branch on GitHub
+                  </a>
+                  <p className="text-xs text-fg-meta max-w-[70ch]">
+                    Nothing was written to your repository, and nothing was lost: this work is still
+                    on its branch, and your approval still records the commit you approved. Starting
+                    a fresh attempt is your call, from Next moves.
+                  </p>
+                </div>
               )}
             </div>
 

@@ -73,7 +73,7 @@ function MergeDialog({
       role="dialog"
       aria-modal="true"
       aria-labelledby="merge-confirm-title"
-      className="space-y-3 rounded-md border border-sky-800/60 bg-sky-950/20 p-4"
+      className="space-y-3 rounded-md border border-mint-line/60 bg-mint-tint-soft p-4"
     >
       <h5 id="merge-confirm-title" className="text-sm font-medium text-fg">
         Merge approved change?
@@ -117,7 +117,7 @@ function MergeDialog({
           type="button"
           onClick={onConfirm}
           disabled={pending}
-          className="rounded-md border border-sky-800 bg-sky-950/40 px-3 py-1.5 text-sm text-sky-200 hover:bg-sky-900/40 disabled:opacity-60"
+          className="rounded-md border border-mint-line bg-mint-tint px-3 py-1.5 text-sm text-mint hover:bg-mint-tint/70 disabled:opacity-60"
         >
           {pending ? "Merging…" : "Merge approved change"}
         </button>

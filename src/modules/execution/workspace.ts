@@ -8,7 +8,7 @@ import { NoConnectedMetricSources } from "@/modules/business-measurement/source"
 import { getPreviewCard, getPreviewStatus } from "@/modules/change-preview/service";
 import { businessRationaleFor } from "@/modules/execution/business-rationale";
 import { deriveChangeProgress } from "@/modules/execution/change-progress";
-import { buildBranchUrl } from "@/modules/execution/diff";
+import { buildBranchUrl, buildCompareUrl } from "@/modules/execution/diff";
 import { listPreparedChangesForProject } from "@/modules/execution/store";
 import { createGithubMergePort } from "@/modules/merge/github/adapter";
 import { mergeFailureMessage } from "@/modules/merge/messages";
@@ -267,6 +267,13 @@ async function buildPreparedChangeCard(
     createdAt: prepared.createdAt,
     branchUrl: params.repositoryFullName
       ? buildBranchUrl(params.repositoryFullName, prepared.branchName)
+      : null,
+    /*
+     * Only ever read: what moved under this change, when it can no longer go
+     * in as it is (UI-5 §7).
+     */
+    compareUrl: params.repositoryFullName
+      ? buildCompareUrl(params.repositoryFullName, prepared.baseBranch, prepared.branchName)
       : null,
     validation: validationSummary,
     preview,
