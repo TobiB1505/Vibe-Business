@@ -1,11 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useState } from "react";
 import { Button, buttonClasses } from "@/components/ui/button";
 import { preparedChangeHref } from "@/components/layout/project-shell";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
-import { OPERATION_STAGE_LABELS, type OperationView } from "@/modules/operations/view";
+import { useOperationPoll } from "@/lib/client/use-operation-poll";
+import {
+  freshestOperation,
+  OPERATION_STAGE_LABELS,
+  operationPollPhase,
+  type OperationView,
+} from "@/modules/operations/view";
 import {
   BLOCKED_ACTION_LABELS,
   BLOCKED_MESSAGES,
@@ -145,34 +151,34 @@ export function PrepareChangePanel({
   const action = prepareChangeAction.bind(null, projectId, opportunityId);
   const [state, formAction, pending] = useActionState(action, initialState);
   const [confirming, setConfirming] = useState(false);
-  const [polled, setPolled] = useState<OperationView | null>(
-    actionState.kind === "preparing" ? actionState.operation : null,
-  );
   const [diff, setDiff] = useState<PreparedDiff | null>(null);
   const [diffError, setDiffError] = useState<string | null>(null);
 
+  const serverOperation = actionState.kind === "preparing" ? actionState.operation : null;
   const startedOperation = state?.ok && state.kind === "running" ? state.operation : null;
-  const operation =
-    startedOperation && polled?.operationId !== startedOperation.operationId ? startedOperation : polled;
 
-  const operationId = operation?.operationId ?? null;
-  const shouldPoll = operation?.shouldPoll ?? false;
+  /*
+   * What to watch, before the first reading lands: whichever of the server
+   * render and the start action's answer is newer.
+   */
+  const watching = freshestOperation(serverOperation, startedOperation);
 
-  useEffect(() => {
-    if (!operationId || !shouldPoll) return;
+  const { latest: polled } = useOperationPoll<OperationView>({
+    key: watching?.operationId ?? null,
+    enabled: operationPollPhase(watching) === "working",
+    intervalMs: POLL_INTERVAL_MS,
+    poll: async () => {
+      const operationId = watching?.operationId;
+      if (!operationId) return { kind: "unavailable" };
 
-    let cancelled = false;
-    const timer = setInterval(async () => {
       const result = await getOperationStatusAction(projectId, operationId);
-      if (cancelled) return;
-      if (result.ok) setPolled(result.operation);
-    }, POLL_INTERVAL_MS);
+      return result.ok ? { kind: "value", value: result.operation } : { kind: "unavailable" };
+    },
+    // Stops on its own answer: the server render cannot know the run ended.
+    continueAfter: (next) => operationPollPhase(next) === "working",
+  });
 
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [projectId, operationId, shouldPoll]);
+  const operation = freshestOperation(polled ?? serverOperation, startedOperation);
 
   const running = operation !== null && (operation.status === "queued" || operation.status === "running");
 
@@ -190,6 +196,31 @@ export function PrepareChangePanel({
     const result = await getPreparedDiffAction(projectId, id);
     if (result.ok) setDiff(result.diff);
     else setDiffError("The prepared change could not be loaded for review.");
+  }
+
+  /*
+   * A run nobody is coming back to (UI-4 §5).
+   *
+   * The panel used to render "…preparing the change" for as long as the row
+   * said `running`, which for a lost durable run is forever: the promise that
+   * Vibe will continue is exactly the thing that has stopped being true. It
+   * says so instead, and offers the same start control as before — the
+   * operation is not resumable, so starting again is the honest option.
+   */
+  if (operationPollPhase(operation) === "stalled") {
+    return (
+      <div className="space-y-3 border-t border-line-2 pt-3">
+        <p className="text-sm text-fg-prose">This is taking much longer than expected.</p>
+        <p className="text-sm text-fg-muted">
+          Vibe has not written anything to your repository. You can start again.
+        </p>
+        <form action={formAction}>
+          <Button type="submit" variant="secondary" size="sm" disabled={pending}>
+            {pending ? "Starting…" : "Try again"}
+          </Button>
+        </form>
+      </div>
+    );
   }
 
   if (running && operation) {

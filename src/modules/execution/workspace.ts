@@ -86,28 +86,32 @@ export async function listPreparedChangeSummaries(
 ): Promise<PreparedChangeSummary[]> {
   const prepared = await listPreparedChangesForProject(supabase, params.projectId);
 
-  const summaries: PreparedChangeSummary[] = [];
-  for (const change of prepared) {
-    const validation = await getLatestValidation(supabase, {
-      projectId: params.projectId,
-      preparedChangeId: change.id,
-    });
+  /*
+   * One read per change, and no change's read depends on another's, so they
+   * go together rather than in a queue (UI-4 §4). `map` preserves order, so
+   * the list is the same list it was.
+   */
+  return await Promise.all(
+    prepared.map(async (change) => {
+      const validation = await getLatestValidation(supabase, {
+        projectId: params.projectId,
+        preparedChangeId: change.id,
+      });
 
-    summaries.push({
-      id: change.id,
-      branchName: change.branchName,
-      commitSha: change.commitSha,
-      baseBranch: change.baseBranch,
-      filePaths: change.files.map((file) => file.path),
-      createdAt: change.createdAt,
-      branchUrl: params.repositoryFullName
-        ? buildBranchUrl(params.repositoryFullName, change.branchName)
-        : null,
-      validationStatus: validation?.status ?? null,
-    });
-  }
-
-  return summaries;
+      return {
+        id: change.id,
+        branchName: change.branchName,
+        commitSha: change.commitSha,
+        baseBranch: change.baseBranch,
+        filePaths: change.files.map((file) => file.path),
+        createdAt: change.createdAt,
+        branchUrl: params.repositoryFullName
+          ? buildBranchUrl(params.repositoryFullName, change.branchName)
+          : null,
+        validationStatus: validation?.status ?? null,
+      };
+    }),
+  );
 }
 
 /**
@@ -127,14 +131,81 @@ async function buildPreparedChangeCard(
 ) {
   const { projectId, userId, prepared, mergeTarget } = params;
 
-  const validation = await getLatestValidation(supabase, {
-    projectId,
-    preparedChangeId: prepared.id,
-  });
+  /*
+   * Three waves, not nine queued reads (UI-4 §4).
+   *
+   * Every comment below is the original one and still says why each read is
+   * safe to make on a page load. What changed is only the order: reads that
+   * never depended on each other no longer wait for each other, and the two
+   * that genuinely do — a preview needs its validation, an origin needs its
+   * preview — still do.
+   */
+
+  const [validation, review, approval, merge, outcome, businessImpact] = await Promise.all([
+    getLatestValidation(supabase, { projectId, preparedChangeId: prepared.id }),
+
+    // Review state, read from persisted rows. Like the preview card, this costs
+    // no provider call: opening the page must never spend anything (§40).
+    getReviewCard(supabase, {
+      projectId,
+      preparedChangeId: prepared.id,
+      resolveFailureMessage: (code) =>
+        OPERATION_FAILURE_MESSAGES[code as keyof typeof OPERATION_FAILURE_MESSAGES] ?? null,
+    }),
+
+    // Approval state. Read-only, like every other card on this page: opening a
+    // project must never approve, revoke, validate, preview or capture anything.
+    getApprovalCard(supabase, {
+      projectId,
+      userId,
+      preparedChangeId: prepared.id,
+      resolveBlockMessage: approvalBlockMessage,
+    }),
+
+    // Merge state (Sprint 11C §17). Unlike every other card on this page this
+    // one may spend four read-only GitHub calls — but only for a change a human
+    // has already approved, because for anything else a live read could not
+    // tell the user something they can act on. Nothing billed, nothing written,
+    // and the answer authorizes nothing: the durable workflow re-runs every
+    // critical check immediately before it writes.
+    mergeTarget
+      ? getMergeCard(supabase, createGithubMergePort(mergeTarget), {
+          projectId,
+          // Only so an "approved but unmergeable" observation can be attributed
+          // when one is recorded. Never used to decide anything.
+          userId,
+          preparedChangeId: prepared.id,
+        })
+      : buildMergeCard({
+          latestMerge: null,
+          eligibility: { outcome: "blocked", reason: "merge_repository_unavailable" },
+          changeApprovalId: null,
+          resolveFailureMessage: mergeFailureMessage,
+        }),
+
+    // Production outcome state (Sprint 12A §29, §43). Two database reads and
+    // **no outbound HTTP at all**: opening a project page must never contact a
+    // customer's production website, and must never start an observation. The
+    // card is `unavailable` for everything that was not merged, which is most
+    // prepared changes.
+    getOutcomeCard(supabase, { projectId, preparedChangeId: prepared.id }),
+
+    // Business impact state (Sprint 12B §36, §45). Up to four database reads
+    // and **zero provider calls**: rendering a project page must never contact
+    // an analytics vendor, must never create a measurement plan, and must never
+    // start a measurement. The registry is asked whether anything is
+    // *connected*, which today is a synchronous "no" for every project.
+    getBusinessImpactCard(supabase, new NoConnectedMetricSources(), {
+      projectId,
+      preparedChangeId: prepared.id,
+    }),
+  ]);
 
   // Preview state is the server's answer, not something the panel derives
   // from validation plus a guess. This read costs three rows and no provider
   // call: opening the page must never spend anything (Sprint 10B-3 §2, §22).
+  //
+  // Genuinely second: it is told which validation it is previewing.
   const preview = await getPreviewCard(supabase, {
     projectId,
     preparedChangeId: prepared.id,
@@ -142,66 +213,6 @@ async function buildPreparedChangeCard(
     resolveFailureMessage: (code) =>
       OPERATION_FAILURE_MESSAGES[code as keyof typeof OPERATION_FAILURE_MESSAGES] ?? null,
   });
-
-  // Review state, read from persisted rows. Like the preview card, this costs
-  // no provider call: opening the page must never spend anything (§40).
-  const review = await getReviewCard(supabase, {
-    projectId,
-    preparedChangeId: prepared.id,
-    resolveFailureMessage: (code) =>
-      OPERATION_FAILURE_MESSAGES[code as keyof typeof OPERATION_FAILURE_MESSAGES] ?? null,
-  });
-
-  // Approval state. Read-only, like every other card on this page: opening a
-  // project must never approve, revoke, validate, preview or capture anything.
-  const approval = await getApprovalCard(supabase, {
-    projectId,
-    userId,
-    preparedChangeId: prepared.id,
-    resolveBlockMessage: approvalBlockMessage,
-  });
-
-  // Merge state (Sprint 11C §17). Unlike every other card on this page this
-  // one may spend four read-only GitHub calls — but only for a change a human
-  // has already approved, because for anything else a live read could not
-  // tell the user something they can act on. Nothing billed, nothing written,
-  // and the answer authorizes nothing: the durable workflow re-runs every
-  // critical check immediately before it writes.
-  const merge = mergeTarget
-    ? await getMergeCard(supabase, createGithubMergePort(mergeTarget), {
-        projectId,
-        // Only so an "approved but unmergeable" observation can be attributed
-        // when one is recorded. Never used to decide anything.
-        userId,
-        preparedChangeId: prepared.id,
-      })
-    : buildMergeCard({
-        latestMerge: null,
-        eligibility: { outcome: "blocked", reason: "merge_repository_unavailable" },
-        changeApprovalId: null,
-        resolveFailureMessage: mergeFailureMessage,
-      });
-
-  // Production outcome state (Sprint 12A §29, §43). Two database reads and
-  // **no outbound HTTP at all**: opening a project page must never contact a
-  // customer's production website, and must never start an observation. The
-  // card is `unavailable` for everything that was not merged, which is most
-  // prepared changes.
-  const outcome = await getOutcomeCard(supabase, {
-    projectId,
-    preparedChangeId: prepared.id,
-  });
-
-  // Business impact state (Sprint 12B §36, §45). Up to four database reads
-  // and **zero provider calls**: rendering a project page must never contact
-  // an analytics vendor, must never create a measurement plan, and must never
-  // start a measurement. The registry is asked whether anything is
-  // *connected*, which today is a synchronous "no" for every project.
-  const businessImpact = await getBusinessImpactCard(
-    supabase,
-    new NoConnectedMetricSources(),
-    { projectId, preparedChangeId: prepared.id },
-  );
 
   // The preview's public origin, only while it is genuinely running. Fetched
   // from the provider rather than stored, because it is capability-like
@@ -282,27 +293,35 @@ export async function getPreparedChangeWorkspace(
   supabase: SupabaseClient,
   params: { projectId: string; userId: string; repositoryFullName: string | null },
 ): Promise<PreparedChangeWorkspaceItem[]> {
-  // The repository a merge would write to, resolved once for the whole set.
-  // Null when no repository is connected, which is also the answer that keeps
-  // the merge card from making any GitHub call at all.
-  const mergeTarget = params.repositoryFullName
-    ? await resolveMergeTarget(supabase, params.projectId)
-    : null;
+  /*
+   * The merge target and the change list answer independent questions, so
+   * they are asked together (UI-4 §4).
+   *
+   * The repository a merge would write to is resolved once for the whole set.
+   * Null when no repository is connected, which is also the answer that keeps
+   * the merge card from making any GitHub call at all.
+   */
+  const [mergeTarget, prepared] = await Promise.all([
+    params.repositoryFullName ? resolveMergeTarget(supabase, params.projectId) : null,
+    listPreparedChangesForProject(supabase, params.projectId),
+  ]);
 
-  const prepared = await listPreparedChangesForProject(supabase, params.projectId);
-
-  const cards: PreparedChangeWorkspaceItem[] = [];
-  for (const change of prepared) {
-    cards.push(
-      await buildPreparedChangeCard(supabase, {
+  /*
+   * Cards are built together rather than in a queue. Two of the reads inside
+   * a card can write — `getMergeCard` may record a not-eligible observation,
+   * and `getPreviewStatus` may request teardown of a session that has expired
+   * — but both are scoped to their own prepared change and both are "at most
+   * once per reason", so cards cannot race each other into either of them.
+   */
+  return await Promise.all(
+    prepared.map((change) =>
+      buildPreparedChangeCard(supabase, {
         projectId: params.projectId,
         userId: params.userId,
         repositoryFullName: params.repositoryFullName,
         mergeTarget,
         prepared: change,
       }),
-    );
-  }
-
-  return cards;
+    ),
+  );
 }

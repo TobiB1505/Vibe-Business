@@ -1,14 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, useTransition } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/states";
 import { StatusPill } from "@/components/ui/status-pill";
 import { MonoLabel } from "@/components/ui/typography";
 import { Surface } from "@/components/ui/surface";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
-import { OPERATION_STAGE_LABELS } from "@/modules/operations/view";
+import { useOperationPoll } from "@/lib/client/use-operation-poll";
+import { OPERATION_STAGE_LABELS, operationPollPhase } from "@/modules/operations/view";
 import { EXECUTION_ACTIVITY_LABELS, EXECUTION_INTERRUPT_QUESTIONS } from "@/modules/execution-contract/view";
 import type { ExecutionInterruptAnswer } from "@/modules/execution-contract/schema";
 import { answerDogfoodInterruptAction, getDogfoodRunStatusAction, type DogfoodRunStatus } from "./actions";
@@ -36,21 +37,19 @@ export function StatusView({
   projectId: string;
   status: DogfoodRunStatus;
 }) {
-  const [status, setStatus] = useState(initial);
-  const [, startTransition] = useTransition();
+  const { latest: polled } = useOperationPoll<DogfoodRunStatus>({
+    key: initial.operation.operationId,
+    enabled: operationPollPhase(initial.operation) === "working",
+    intervalMs: POLL_INTERVAL_MS,
+    poll: async () => {
+      const next = await getDogfoodRunStatusAction(projectId, initial.operation.operationId);
+      return next ? { kind: "value", value: next } : { kind: "unavailable" };
+    },
+    // Stops on its own answer: the server render cannot know the run ended.
+    continueAfter: (next) => operationPollPhase(next.operation) === "working",
+  });
 
-  useEffect(() => {
-    if (!status.operation.shouldPoll) return;
-
-    const interval = setInterval(() => {
-      startTransition(async () => {
-        const next = await getDogfoodRunStatusAction(projectId, status.operation.operationId);
-        if (next) setStatus(next);
-      });
-    }, POLL_INTERVAL_MS);
-
-    return () => clearInterval(interval);
-  }, [projectId, status.operation.operationId, status.operation.shouldPoll]);
+  const status = polled ?? initial;
 
   const { operation, activity, openInterrupt } = status;
 

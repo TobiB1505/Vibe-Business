@@ -1,13 +1,18 @@
 "use client";
 
-import { useActionState, useEffect, useState } from "react";
+import { useActionState } from "react";
 import { VibeMark } from "@/components/brand/vibe-mark";
 import { Button } from "@/components/ui/button";
 import { Surface } from "@/components/ui/surface";
 import { MonoLabel } from "@/components/ui/typography";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import type { OperationStage } from "@/modules/operations/schema";
-import type { OperationView } from "@/modules/operations/view";
+import { useOperationPoll } from "@/lib/client/use-operation-poll";
+import {
+  freshestOperation,
+  operationPollPhase,
+  type OperationView,
+} from "@/modules/operations/view";
 import {
   getUnderstandingStatusAction,
   startUnderstandingAction,
@@ -126,30 +131,31 @@ export function UnderstandingProgress({
     action,
     null,
   );
-  const [polled, setPolled] = useState<OperationView | null>(activeOperation);
 
-  const started = state?.ok && state.kind === "running" ? state.operation : null;
-  const operation =
-    started && polled?.operationId !== started.operationId ? started : polled;
+  const startedOperation = state?.ok && state.kind === "running" ? state.operation : null;
 
-  const operationId = operation?.operationId ?? null;
-  const shouldPoll = operation?.shouldPoll ?? false;
+  /*
+   * What to watch, before the first reading lands: whichever of the server
+   * render and the start action's answer is newer.
+   */
+  const watching = freshestOperation(activeOperation, startedOperation);
 
-  useEffect(() => {
-    if (!operationId || !shouldPoll) return;
+  const { latest: polled } = useOperationPoll<OperationView>({
+    key: watching?.operationId ?? null,
+    enabled: operationPollPhase(watching) === "working",
+    intervalMs: POLL_INTERVAL_MS,
+    poll: async () => {
+      const operationId = watching?.operationId;
+      if (!operationId) return { kind: "unavailable" };
 
-    let cancelled = false;
-    const timer = setInterval(async () => {
       const result = await getUnderstandingStatusAction(projectId, operationId);
-      if (cancelled) return;
-      if (result.ok) setPolled(result.operation);
-    }, POLL_INTERVAL_MS);
+      return result.ok ? { kind: "value", value: result.operation } : { kind: "unavailable" };
+    },
+    // Stops on its own answer: the server render cannot know the run ended.
+    continueAfter: (next) => operationPollPhase(next) === "working",
+  });
 
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [projectId, operationId, shouldPoll]);
+  const operation = freshestOperation(polled ?? activeOperation, startedOperation);
 
   const running =
     operation !== null && (operation.status === "queued" || operation.status === "running");

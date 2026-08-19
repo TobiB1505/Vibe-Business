@@ -114,6 +114,8 @@ function LiveViewDialog({
   onCancel: () => void;
   onAnalyze: () => void;
 }) {
+  const elapsedSeconds = useElapsedSeconds(busy);
+
   const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -179,9 +181,31 @@ function LiveViewDialog({
 
         <p className="text-xs text-fg-muted">Deep Scan works best on a desktop browser.</p>
 
+        {busy && (
+          /*
+           * What a founder is owed while this runs (UI-4 §6): what is
+           * happening, roughly how long it takes, and that leaving would lose
+           * it. No stage list and no percentage — the analysis reports nothing
+           * until it is done, and inventing steps to fill the silence would be
+           * the same lie as a progress bar that sits at 60%.
+           */
+          <div role="status" className="space-y-1 rounded-md border border-line-2 bg-surface-2 p-3">
+            <p className="text-sm text-fg-prose">
+              Vibe is looking around your signed-in product.
+            </p>
+            <p className="text-xs text-fg-muted">
+              This usually takes up to about 90 seconds. Keep this window open — the scan runs
+              while it is here, and closing it stops the browser Vibe is signed in to.
+            </p>
+            <p className="font-mono text-[0.6875rem] text-fg-meta">
+              {elapsedSeconds}s elapsed
+            </p>
+          </div>
+        )}
+
         <div className="flex flex-wrap items-center gap-3">
           <Button type="button" onClick={onAnalyze} disabled={busy || !liveViewUrl}>
-            {busy ? "Working…" : "I'm logged in — Analyze"}
+            {busy ? "Looking around…" : "I'm logged in — Analyze"}
           </Button>
           <button
             type="button"
@@ -195,6 +219,39 @@ function LiveViewDialog({
       </div>
     </div>
   );
+}
+
+/**
+ * Seconds since the analysis started (UI-4 §6).
+ *
+ * The only honest progress signal available here. Deep Scan runs inside the
+ * request that starts it, and the analyzer reports nothing until it has
+ * finished — so there is no stage to name and no fraction to fill. What can be
+ * said truthfully is how long the founder has been waiting and how long that
+ * is expected to take.
+ */
+function useElapsedSeconds(running: boolean): number {
+  /*
+   * Both ends of the measurement live in state and are written together, once
+   * per second, from inside the interval. Keeping them as a pair is what makes
+   * the elapsed figure a derivation rather than a counter to be reset — and
+   * refs are not an option here, because reading one during render is exactly
+   * the bug that would make this stop updating.
+   */
+  const [span, setSpan] = useState<{ startedAt: number; now: number } | null>(null);
+
+  useEffect(() => {
+    if (!running) return;
+
+    const startedAt = Date.now();
+    const timer = setInterval(() => setSpan({ startedAt, now: Date.now() }), 1_000);
+
+    return () => clearInterval(timer);
+  }, [running]);
+
+  if (!running || !span) return 0;
+
+  return Math.max(0, Math.floor((span.now - span.startedAt) / 1000));
 }
 
 function ResultSummary({ result }: { result: NonNullable<DeepScanViewModel["lastResult"]> }) {

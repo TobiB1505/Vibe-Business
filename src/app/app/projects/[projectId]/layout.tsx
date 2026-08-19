@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import {
   PROJECT_SECTIONS,
   ProjectHeader,
@@ -9,6 +9,10 @@ import {
   type ProjectNavItem,
 } from "@/components/layout/project-shell";
 import { StatusPill } from "@/components/ui/status-pill";
+import {
+  RepositoryAccessPill,
+  RepositoryAccessPillFallback,
+} from "./repository-access-pill";
 import { createClient } from "@/lib/supabase/server";
 import { requireSession } from "@/modules/auth/session";
 import { getProjectWorkspaceContext } from "@/modules/projects/workspace-context";
@@ -98,7 +102,13 @@ export default async function ProjectLayout({
         <ProjectSidebar
           projectName={project.name}
           repositoryFullName={project.repository?.fullName ?? null}
-          tone={project.repository ? (project.accessible ? "active" : "waiting") : "neutral"}
+          /*
+           * Whether a repository is connected — not whether GitHub is
+           * reachable this second. Live reachability is stated in words in
+           * the header, and saying it twice, once as colour alone, is what
+           * the status system is being pulled away from.
+           */
+          tone={project.repository ? "active" : "neutral"}
           items={navItems}
         />
       }
@@ -120,12 +130,10 @@ export default async function ProjectLayout({
               <span className="text-fg-muted font-mono text-xs">
                 {project.repository.defaultBranch}
               </span>
-              {/* The word carries the state, so colour is never the only signal
-                  — and "GitHub access unavailable" stays the product's existing
-                  wording rather than a friendlier, vaguer one. */}
-              <StatusPill tone={project.accessible ? "success" : "waiting"} dot>
-                {project.accessible ? "Connected" : "GitHub access unavailable"}
-              </StatusPill>
+              {/* Streamed, so asking GitHub never delays the workspace. */}
+              <Suspense fallback={<RepositoryAccessPillFallback />}>
+                <RepositoryAccessPill installationId={project.repository.installationId} />
+              </Suspense>
             </>
           ) : (
             <StatusPill tone="neutral">No repository connected</StatusPill>

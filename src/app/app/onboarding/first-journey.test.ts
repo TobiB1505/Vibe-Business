@@ -111,8 +111,18 @@ describe("a founder can see what is happening", () => {
   it("refreshes when the stage moves, not only when the run ends", () => {
     expect(WATCHER).toContain("next.stage !== stage");
     expect(WATCHER).toContain("next.stalled !== stalled");
-    // Re-armed against freshly rendered values rather than a stale closure.
-    expect(WATCHER).toMatch(/\[[^\]]*\bstage\b[^\]]*\]/);
+
+    /*
+     * Compared against freshly rendered values rather than a stale closure.
+     *
+     * This used to be asserted as `stage` appearing in an effect's dependency
+     * list, which was how the watcher re-armed itself when it owned its own
+     * timer. It no longer owns one: the shared poll hook keeps the callback in
+     * a ref it refreshes every render, so the comparison above reads this
+     * render's props by construction. The assertion follows the mechanism —
+     * the behaviour it protects is the two lines above.
+     */
+    expect(WATCHER).toContain("useOperationPoll");
   });
 
   /** Regression: "taking longer than expected" beside "Vibe will keep going". */

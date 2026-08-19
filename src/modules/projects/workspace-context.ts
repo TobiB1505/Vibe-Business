@@ -4,7 +4,6 @@ import { notFound } from "next/navigation";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { requireSession } from "@/modules/auth/session";
-import { checkInstallationStillAccessible } from "@/modules/github/repositories";
 import { getProjectWithRepository } from "@/modules/projects/queries";
 
 /**
@@ -29,6 +28,19 @@ import { getProjectWithRepository } from "@/modules/projects/queries";
  * project ids exist. The layout resolves this once and each route re-resolves
  * it for itself, because a layout in the App Router does not gate the routes
  * beneath it: they render independently and must not assume a parent ran.
+ *
+ * ## Why there is no GitHub probe here (UI-4 §3)
+ *
+ * There used to be one: every context read also asked GitHub whether the
+ * installation was still usable, which mints an installation token and lists
+ * the repositories it can reach. Two round trips — and because layout and
+ * route each resolve the context independently, four per navigation, before
+ * anything could paint.
+ *
+ * Exactly one place ever used the answer: the "Connected" pill in the project
+ * header. Eight route files paid for it and threw it away. So the probe now
+ * belongs to the thing that displays it, which streams it in after the page
+ * has rendered, and this stays a database read.
  */
 
 export type ProjectWorkspaceContext = {
@@ -42,8 +54,6 @@ export type ProjectWorkspaceContext = {
     htmlUrl: string;
     installationId: number;
   } | null;
-  /** Live GitHub probe. False when no repository is connected. */
-  accessible: boolean;
 };
 
 /**
@@ -64,12 +74,6 @@ export async function getProjectWorkspaceContext(
 
   const repository = project.repository;
 
-  // Live probe (Sprint 1 §11): degrade gracefully — never crash — if the
-  // installation was revoked or suspended on GitHub's side since connection.
-  const accessible = repository
-    ? await checkInstallationStillAccessible(repository.installationId)
-    : false;
-
   return {
     id: project.id,
     name: project.name,
@@ -83,7 +87,6 @@ export async function getProjectWorkspaceContext(
           installationId: repository.installationId,
         }
       : null,
-    accessible,
   };
 }
 
@@ -97,8 +100,8 @@ export async function getProjectWorkspaceContext(
  * its layout would have refused. A route that assumed "the layout already
  * checked" would be an authorization hole that looks correct in the file tree.
  *
- * So this runs per route. It costs one project read (RLS-scoped) plus the
- * GitHub reachability probe the frame needs anyway.
+ * So this runs per route, and it costs one RLS-scoped project read. It no
+ * longer carries a GitHub probe: see the note above.
  *
  * Returns the context or renders 404 — the same answer for "no such project"
  * and "not yours", so a URL cannot enumerate project ids.

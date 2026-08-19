@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireSession } from "@/modules/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import type { OperationFailureCode } from "@/modules/operations/failures";
+import { isTerminal } from "@/modules/operations/schema";
 import {
   getOperationStatus,
   startBusinessAuditOperation,
@@ -92,8 +93,15 @@ export async function getOperationStatusAction(
   const operation = await getOperationStatus(supabase, { projectId, operationId });
   if (!operation) return { ok: false, error: "not_found" };
 
-  // A finished operation means the page's server-rendered audit is stale.
-  if (operation.status === "completed") revalidatePath(`/app/projects/${projectId}`);
+  /*
+   * A run that has stopped means the page's server render is stale — whatever
+   * it stopped for.
+   *
+   * This used to fire only on `completed`, so a failed or cancelled run left
+   * the screen showing a live operation that had already ended, and the panel
+   * had to discover it for itself.
+   */
+  if (isTerminal(operation.status)) revalidatePath(`/app/projects/${projectId}`);
 
   return { ok: true, operation };
 }

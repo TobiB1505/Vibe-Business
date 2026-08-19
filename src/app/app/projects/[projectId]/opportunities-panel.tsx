@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useEffect, useState } from "react";
+import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
 import { CategoryChip, StatusPill, type StatusTone } from "@/components/ui/status-pill";
 import { Surface } from "@/components/ui/surface";
@@ -10,7 +10,12 @@ import { Notice } from "@/components/ui/states";
 import { CreditPrice } from "@/components/ui/credit-price";
 import { describeEvidenceId } from "@/modules/business-audit/evidence-labels";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
-import { OPERATION_STAGE_LABELS, type OperationView } from "@/modules/operations/view";
+import { useOperationPoll } from "@/lib/client/use-operation-poll";
+import {
+  freshestOperation,
+  operationPollPhase,
+  OPERATION_STAGE_LABELS, type OperationView,
+} from "@/modules/operations/view";
 import { buildOpportunityBlockNotice } from "@/modules/opportunities/view";
 import { planMoveHref } from "@/modules/action-plans/source";
 import {
@@ -266,30 +271,31 @@ export function OpportunitiesPanel({
 }) {
   const action = startOpportunitiesAction.bind(null, projectId);
   const [state, formAction, pending] = useActionState(action, initialState);
-  const [polled, setPolled] = useState<OperationView | null>(activeOperation);
 
   const startedOperation = state?.ok && state.kind === "running" ? state.operation : null;
-  const operation =
-    startedOperation && polled?.operationId !== startedOperation.operationId ? startedOperation : polled;
 
-  const operationId = operation?.operationId ?? null;
-  const shouldPoll = operation?.shouldPoll ?? false;
+  /*
+   * What to watch, before the first reading lands: whichever of the server
+   * render and the start action's answer is newer.
+   */
+  const watching = freshestOperation(activeOperation, startedOperation);
 
-  useEffect(() => {
-    if (!operationId || !shouldPoll) return;
+  const { latest: polled } = useOperationPoll<OperationView>({
+    key: watching?.operationId ?? null,
+    enabled: operationPollPhase(watching) === "working",
+    intervalMs: POLL_INTERVAL_MS,
+    poll: async () => {
+      const operationId = watching?.operationId;
+      if (!operationId) return { kind: "unavailable" };
 
-    let cancelled = false;
-    const timer = setInterval(async () => {
       const result = await getOperationStatusAction(projectId, operationId);
-      if (cancelled) return;
-      if (result.ok) setPolled(result.operation);
-    }, POLL_INTERVAL_MS);
+      return result.ok ? { kind: "value", value: result.operation } : { kind: "unavailable" };
+    },
+    // Stops on its own answer: the server render cannot know the run ended.
+    continueAfter: (next) => operationPollPhase(next) === "working",
+  });
 
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [projectId, operationId, shouldPoll]);
+  const operation = freshestOperation(polled ?? activeOperation, startedOperation);
 
   const running = operation !== null && (operation.status === "queued" || operation.status === "running");
   const hasOpportunities = opportunities.length > 0;

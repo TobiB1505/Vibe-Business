@@ -1,8 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import type { OutcomeCheckStatus } from "@/modules/outcome-verification/schema";
+import { useOperationPoll } from "@/lib/client/use-operation-poll";
+import { shouldRefreshForState } from "@/modules/operations/view";
 import type { OutcomeCard, OutcomeCheckLine } from "@/modules/outcome-verification/view";
 import {
   checkProductionOutcomeAction,
@@ -10,6 +12,16 @@ import {
   type OutcomeActionState,
 } from "./outcome-actions";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
+
+/**
+ * Fifteen seconds, and it stops.
+ *
+ * Slower than every other poller here on purpose: production is being asked
+ * whether it has caught up, and it is allowed to take minutes. There is no
+ * leading read — the server render is the first answer, and firing one on
+ * mount would ask again for what the page has just been given.
+ */
+const POLL_INTERVAL_MS = 15_000;
 
 /**
  * The Outcome section (Sprint 12A §29–§34).
@@ -171,26 +183,23 @@ export function OutcomePanel({
 
   const observing = current.state === "observing";
 
-  const poll = useCallback(async () => {
-    const next = await readProductionOutcomeAction(projectId, preparedChangeId);
-    setLive(next);
-    // Only when the answer actually changed. A refresh every fifteen seconds
-    // for fifteen minutes would re-render the whole project page ~60 times to
-    // learn nothing.
-    if (next.state !== current.state) router.refresh();
-  }, [projectId, preparedChangeId, current.state, router]);
-
-  useEffect(() => {
-    if (!observing) return;
-    let cancelled = false;
-    const timer = setInterval(() => {
-      if (!cancelled) void poll();
-    }, 15_000);
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [observing, poll]);
+  useOperationPoll<OutcomeCard>({
+    key: preparedChangeId,
+    enabled: observing,
+    intervalMs: POLL_INTERVAL_MS,
+    poll: async () => ({
+      kind: "value",
+      value: await readProductionOutcomeAction(projectId, preparedChangeId),
+    }),
+    continueAfter: (next) => next.state === "observing",
+    onReading: (next) => {
+      setLive(next);
+      // Only when the answer actually changed. A refresh every fifteen seconds
+      // for fifteen minutes would re-render the whole project page ~60 times to
+      // learn nothing.
+      if (shouldRefreshForState(next.state, current.state)) router.refresh();
+    },
+  });
 
   function check() {
     setPending(true);
