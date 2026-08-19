@@ -50,6 +50,8 @@ const SLOTS: Record<ExecutionEventType, number> = {
   execution_completed: 14,
   execution_failed: 15,
   usage_updated: 16,
+  context_compiled: 17,
+  context_used: 18,
 
   // Feed-produced types never take a milestone slot. Present so the map is
   // total and a new event type cannot be forgotten here.

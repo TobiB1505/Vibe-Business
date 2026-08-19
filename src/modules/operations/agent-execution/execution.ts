@@ -39,14 +39,18 @@ import {
 import { ExecutionToolGateway } from "@/modules/coding-agent/gateway";
 import { createBaseIgnorePort } from "@/modules/coding-agent/ignored-paths";
 import { createLifecycleRecorder } from "@/modules/coding-agent/observability/lifecycle";
+import { MAX_EVENTS_PER_RUN } from "@/modules/coding-agent/observability/events";
 import { eventsFromRuntimeFeed } from "@/modules/coding-agent/observability/runtime-feed";
-import { recordExecutionEvents } from "@/modules/coding-agent/observability/store";
+import { listExecutionEvents, recordExecutionEvents } from "@/modules/coding-agent/observability/store";
 import {
   agentSandboxNameFor,
   computeAgentChangeIdentity,
   computeCandidateDigest,
 } from "@/modules/coding-agent/identity";
 import { agentToolDescriptors, compileAgentInstruction } from "@/modules/coding-agent/prompt";
+import type { ExecutionBrief } from "@/modules/execution-context/brief";
+import { loadExecutionBrief } from "@/modules/execution-context/service";
+import { summarizeContextUsage } from "@/modules/execution-context/usage";
 import type { DetachedCodingAgentProvider } from "@/modules/coding-agent/provider";
 import { createSandboxWorkspace } from "@/modules/coding-agent/sandbox-workspace";
 import type { AgentCheckName, AgentFailureCode } from "@/modules/coding-agent/schema";
@@ -796,11 +800,76 @@ export async function startAgentStep(
   }
 
   const gateway = buildToolGateway(deps, context, availableChecks);
+
+  /*
+   * What Vibe already knows that bears on this step (EXECUTION CONTEXT
+   * INTELLIGENCE, PART D).
+   *
+   * Wrapped, and null on any failure. A brief is an optimisation over an
+   * execution that already worked without one: an unreadable snapshot must cost
+   * this run its briefing, never its run. `loadExecutionBrief` is scoped by the
+   * project id on the persisted run row, because this is the service-role
+   * client and RLS is not doing the scoping (Rule 53).
+   */
+  let brief: ExecutionBrief | null = null;
+  try {
+    brief = await loadExecutionBrief({
+      supabase: deps.supabase,
+      projectId: context.run.projectId,
+      spec: context.spec.spec,
+    });
+  } catch (error) {
+    console.error("[execution-context] the brief could not be compiled", {
+      operationId,
+      agentExecutionRunId: context.run.id,
+      detail: error instanceof Error ? `${error.name}: ${error.message.slice(0, 200)}` : "unknown",
+    });
+  }
+
   const instruction = compileAgentInstruction({
     spec: context.spec.spec,
     limits: context.limits,
     availableChecks,
+    brief,
   });
+
+  /*
+   * Recorded before the harness starts, from what was actually compiled.
+   *
+   * `instruction.context` describes the bytes that went into the prompt rather
+   * than what a brief would render to if asked again later — observability that
+   * re-derives what a run was given eventually disagrees with what the run was
+   * given. A run that was briefed but read none of it is a finding; a run that
+   * lost the record of being briefed is a hole.
+   */
+  if (brief && instruction.context) {
+    await recordAgentRunObservations(deps.supabase, context.run.id, {
+      contextBriefVersion: brief.briefVersion,
+      contextFreshness: brief.freshness.state,
+      contextBytes: instruction.briefed ? instruction.context.bytes : 0,
+      contextFactsSent: instruction.briefed ? instruction.context.factsRendered : 0,
+      contextCandidatesSent: instruction.briefed ? instruction.context.candidatesRendered : 0,
+    });
+
+    await recordLifecycle(
+      deps,
+      context.run,
+      "context_compiled",
+      instruction.briefed
+        ? "Started from what Vibe already knows about this project"
+        : "Nothing Vibe knows applied to this commit",
+      {
+        briefVersion: brief.briefVersion,
+        freshness: brief.freshness.state,
+        briefed: instruction.briefed,
+        bytes: instruction.context.bytes,
+        facts: instruction.context.factsRendered,
+        candidates: instruction.context.candidatesRendered,
+        factsOmitted: instruction.context.factsOmitted,
+        candidatesOmitted: instruction.context.candidatesOmitted,
+      },
+    );
+  }
 
   const started = await context.provider.start({
     runId: context.run.id,
@@ -1149,7 +1218,105 @@ export async function collectAgentStep(
     { observedPaths: observedPathCount },
   );
 
+  await recordContextUsage(deps, context);
+
   return { ok: true, paused: false, observedPathCount, changedPaths };
+}
+
+
+/* ---------------------------------------------------------------------------
+ * What the briefing was worth (EXECUTION CONTEXT INTELLIGENCE, PART L, PART M)
+ * ------------------------------------------------------------------------ */
+
+/**
+ * Counts what the run read against what it was briefed with.
+ *
+ * ## Where each half comes from
+ *
+ * The reading comes from the durable `file_read` events, which were built from
+ * the harness's own tool stream — what the agent *executed*, never its account
+ * of what it looked at (Rule 77). The briefing is recompiled: it is a pure
+ * function of the immutable spec and the snapshot that spec names, so the same
+ * inputs give the same candidates, and storing a second copy of a list already
+ * derivable from stored state would be the duplicate source of truth this
+ * sprint exists to avoid.
+ *
+ * "Recompiled" is checked rather than assumed. If the recompiled brief does not
+ * match the version and freshness the run recorded at start, nothing is written
+ * — an unmeasurable run is recorded as unmeasured, which is a fact, rather than
+ * as a comparison against a briefing it was never given.
+ *
+ * ## Why a failure here changes nothing
+ *
+ * Because this is telemetry hanging off a paid execution, computed after the
+ * change has already been observed. A run whose context metrics could not be
+ * written is still a run, and its change is still exactly as good.
+ */
+async function recordContextUsage(
+  deps: AgentExecutionDeps,
+  context: AgentRunContext,
+): Promise<void> {
+  const { run } = context;
+  if (!run.contextBriefVersion) return;
+
+  try {
+    const brief = await loadExecutionBrief({
+      supabase: deps.supabase,
+      projectId: run.projectId,
+      spec: context.spec.spec,
+    });
+
+    if (
+      !brief ||
+      brief.briefVersion !== run.contextBriefVersion ||
+      brief.freshness.state !== run.contextFreshness
+    ) {
+      return;
+    }
+
+    const events = await listExecutionEvents(deps.supabase, {
+      runId: run.id,
+      projectId: run.projectId,
+      limit: MAX_EVENTS_PER_RUN,
+    });
+
+    const readPaths = events
+      .filter((event) => event.type === "file_read")
+      .map((event) => event.metadata.path)
+      .filter((path): path is string => typeof path === "string");
+
+    const usage = summarizeContextUsage({
+      candidates: brief.fileCandidates.map((candidate) => candidate.path),
+      readPaths,
+    });
+
+    await recordAgentRunObservations(deps.supabase, run.id, {
+      contextCandidatesRead: usage.candidatesRead,
+      uniqueFilesRead: usage.uniqueFilesRead,
+      repeatedFileReads: usage.repeatedFileReads,
+      filesReadOutsideContext: usage.filesReadOutsideContext,
+    });
+
+    await recordLifecycle(
+      deps,
+      run,
+      "context_used",
+      `Read ${usage.candidatesRead} of ${usage.candidatesOffered} briefed file(s) and ` +
+        `${usage.filesReadOutsideContext} beyond the briefing`,
+      {
+        candidatesOffered: usage.candidatesOffered,
+        candidatesRead: usage.candidatesRead,
+        uniqueFilesRead: usage.uniqueFilesRead,
+        repeatedFileReads: usage.repeatedFileReads,
+        filesReadOutsideContext: usage.filesReadOutsideContext,
+      },
+    );
+  } catch (error) {
+    console.error("[execution-context] context usage could not be recorded", {
+      agentExecutionRunId: run.id,
+      detail: error instanceof Error ? `${error.name}: ${error.message.slice(0, 200)}` : "unknown",
+    });
+  }
 }
 
 /* ---------------------------------------------------------------------------

@@ -7,6 +7,7 @@ import type { OperationView } from "@/modules/operations/view";
 import { buildExecutionTimeline, currentAction, type TimelineStep } from "./timeline";
 import { listExecutionEvents } from "./store";
 import type { StoredExecutionEvent } from "./events";
+import type { FreshnessState } from "@/modules/execution-context/brief";
 
 /**
  * Everything one agent execution's live view needs, in one read.
@@ -74,6 +75,16 @@ export type AgentRunMetrics = {
   commands: number;
   elapsedMs: number | null;
   wallClockBudgetMs: number | null;
+
+  /**
+   * What Vibe told the run before it started, and what the run then read.
+   *
+   * Passed through from the run row rather than recomputed here: the counts
+   * describe the bytes that were actually sent, and a live view that re-derived
+   * them from a brief compiled now would eventually disagree with the prompt
+   * the run received. Null means this run had no Execution Brief.
+   */
+  context: LiveRunRow["context"];
 };
 
 export type ValidationState = "not_started" | "queued" | "running" | "passed" | "failed";
@@ -106,6 +117,27 @@ export type LiveRunRow = {
   observedPathCount: number;
   /** Files in the verified candidate. Never what the runtime touched. */
   changedFileCount: number;
+
+  /**
+   * What the run was told before it started, and what it read after
+   * (EXECUTION CONTEXT INTELLIGENCE, PART L).
+   *
+   * Null throughout means this run had no Execution Brief — either it predates
+   * the compiler, or nothing Vibe had described the commit it worked against.
+   * Rendered as raw counts and never as a ratio: reading a briefed file proves
+   * the agent opened it, never that opening it was what made the change right.
+   */
+  context: {
+    briefVersion: string;
+    freshness: FreshnessState;
+    bytes: number;
+    factsSent: number;
+    candidatesSent: number;
+    candidatesRead: number | null;
+    uniqueFilesRead: number | null;
+    repeatedFileReads: number | null;
+    filesReadOutsideContext: number | null;
+  } | null;
 };
 
 /**
@@ -276,6 +308,7 @@ function deriveMetrics(input: {
     ...counts,
     elapsedMs,
     wallClockBudgetMs: input.limits?.maxWallClockMs ?? null,
+    context: input.run?.context ?? null,
   };
 }
 

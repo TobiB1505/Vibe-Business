@@ -60,6 +60,7 @@ V0.1 foundational architecture decisions have been recorded:
 - [0028](0028-founder-selectable-action-plan-move.md) — Founder-Selectable Action Plan Move (Accepted)
 - [0029](0029-agent-runtime-placement-and-credential-broker.md) — Agent Runtime Placement: the Harness in the Sandbox, the Key Behind a Gateway (Accepted, amends 0027)
 - [0030](0030-agent-execution-observability.md) — Agent Execution Observability: one ordered event log, a reusable live view, derived economics (Accepted, extends 0027 and 0029)
+- [0031](0031-execution-context-intelligence.md) — Execution Context Intelligence: verify relevant facts, do not broadly rediscover (Accepted, extends 0027, 0029 and 0030)
 
 Several architecture questions remain intentionally open — see [ARCHITECTURE.md §7](../../ARCHITECTURE.md#7-deferred--open-decisions).
 

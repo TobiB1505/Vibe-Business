@@ -319,6 +319,47 @@ export function DeveloperInspector({ model }: { model: AgentExecutionLiveModel }
             <Metric label="Files edited" value={metrics.filesEdited || null} mono />
           </InspectorGroup>
 
+          {/*
+            What the run started from, and where its reading went.
+
+            Raw counts, never a ratio (PART M). "Read 3 of 6 briefed files" is
+            checkable; a "context hit rate" is a number whose denominator is
+            arguable and whose movement nobody can act on. Files read beyond the
+            briefing is deliberately not framed as a miss — the instruction tells
+            the agent to look wider when the briefing does not cover what it
+            needs, so a high number here can mean the brief was thin or that the
+            step was simply larger than the analysis.
+          */}
+          {metrics.context ? (
+            <InspectorGroup label="Context">
+              <Metric label="Brief" value={metrics.context.briefVersion} mono />
+              <Metric label="Freshness" value={metrics.context.freshness} mono />
+              <Metric label="Prompt bytes" value={formatBytes(metrics.context.bytes)} mono />
+              <Metric label="Facts sent" value={metrics.context.factsSent || null} mono />
+              <Metric label="Files offered" value={metrics.context.candidatesSent || null} mono />
+              <Metric
+                label="Offered files read"
+                value={metrics.context.candidatesRead ?? UNKNOWN}
+                mono
+              />
+              <Metric
+                label="Unique files read"
+                value={metrics.context.uniqueFilesRead ?? UNKNOWN}
+                mono
+              />
+              <Metric
+                label="Re-reads"
+                value={metrics.context.repeatedFileReads ?? UNKNOWN}
+                mono
+              />
+              <Metric
+                label="Read beyond brief"
+                value={metrics.context.filesReadOutsideContext ?? UNKNOWN}
+                mono
+              />
+            </InspectorGroup>
+          ) : null}
+
           <InspectorGroup label="Provider">
             <Metric label="Gateway requests" value={provider.calls || null} mono />
             <Metric label="Request ceiling" value={model.gatewayRequestCeiling} mono />

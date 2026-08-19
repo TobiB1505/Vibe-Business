@@ -1,0 +1,119 @@
+import { describe, expect, it } from "vitest";
+import { renderExecutionBrief } from "./render";
+import { BRIEF_BUDGET, type ContextFact, type ExecutionBrief, type FileCandidate } from "./brief";
+
+function fact(overrides: Partial<ContextFact> = {}): ContextFact {
+  return {
+    subject: "framework",
+    value: "Next.js",
+    source: "repository_scan",
+    confidence: "high",
+    evidence: [{ path: "package.json", revision: "abc123" }],
+    ...overrides,
+  };
+}
+
+function candidate(overrides: Partial<FileCandidate> = {}): FileCandidate {
+  return {
+    path: "src/app/layout.tsx",
+    reason: "layout",
+    confidence: "medium",
+    note: "layout for /",
+    ...overrides,
+  };
+}
+
+function brief(overrides: Partial<ExecutionBrief> = {}): ExecutionBrief {
+  return {
+    briefVersion: "execution-brief.v1",
+    task: "Stop crawlers indexing the dashboard",
+    businessIntent: "Signed-in pages are being indexed.",
+    doneWhen: "The dashboard is marked noindex.",
+    facts: [fact()],
+    fileCandidates: [candidate()],
+    likelyIrrelevantAreas: ["supabase", "docs"],
+    live: { origin: null, relationToRepository: "unknown" },
+    freshness: {
+      state: "fresh",
+      snapshotSha: "abc123",
+      executionSha: "abc123",
+      snapshotId: "snap-1",
+    },
+    truncated: { factsOmitted: 0, candidatesOmitted: 0 },
+    ...overrides,
+  };
+}
+
+describe("rendering", () => {
+  it("states the commit the facts were established at", () => {
+    const rendered = renderExecutionBrief(brief());
+
+    expect(rendered.text).toContain("abc123");
+    expect(rendered.factsRendered).toBe(1);
+    expect(rendered.candidatesRendered).toBe(1);
+  });
+
+  it("carries provenance on every fact, so nothing reads as an assertion by Vibe", () => {
+    const rendered = renderExecutionBrief(brief());
+
+    expect(rendered.text).toContain("[repo scan, high]");
+    expect(rendered.text).toContain("seen in package.json");
+  });
+
+  it("keeps the stale warning even though nothing else survives it", () => {
+    const rendered = renderExecutionBrief(
+      brief({
+        facts: [],
+        fileCandidates: [],
+        likelyIrrelevantAreas: [],
+        freshness: {
+          state: "stale",
+          snapshotSha: "old",
+          executionSha: "new",
+          snapshotId: "snap-1",
+        },
+      }),
+    );
+
+    expect(rendered.text).toContain("different commit");
+    expect(rendered.factsRendered).toBe(0);
+  });
+
+  it("never exceeds the byte ceiling, whatever it is handed", () => {
+    const rendered = renderExecutionBrief(
+      brief({
+        facts: Array.from({ length: 20 }, (_, index) =>
+          fact({ value: `${"framework-".repeat(18)}${index}` }),
+        ),
+        fileCandidates: Array.from({ length: 12 }, (_, index) =>
+          candidate({ path: `src/app/${"deeply-nested/".repeat(10)}page-${index}.tsx` }),
+        ),
+      }),
+    );
+
+    expect(rendered.bytes).toBeLessThanOrEqual(BRIEF_BUDGET.maxRenderedBytes);
+  });
+
+  it("says what it left out rather than presenting a squeezed brief as the whole", () => {
+    const rendered = renderExecutionBrief(
+      brief({
+        facts: Array.from({ length: 60 }, (_, index) =>
+          fact({ value: `${"a-very-long-fact-value ".repeat(8)}${index}` }),
+        ),
+        truncated: { factsOmitted: 4, candidatesOmitted: 0 },
+      }),
+    );
+
+    expect(rendered.text).toContain("Vibe knows more than this");
+    // Selection dropped four; the byte budget dropped the rest.
+    expect(rendered.factsOmitted).toBeGreaterThan(4);
+  });
+
+  it("does not imply a deployed origin is the code being edited", () => {
+    const rendered = renderExecutionBrief(
+      brief({ live: { origin: "https://acme.example", relationToRepository: "unknown" } }),
+    );
+
+    expect(rendered.text).toContain("is not known");
+  });
+});

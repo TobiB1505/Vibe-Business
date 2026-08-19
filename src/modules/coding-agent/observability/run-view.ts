@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { deriveAgentLimits, deriveGatewayCeilings } from "../budget";
 import type { LiveRunRow, ValidationState } from "./live-view";
+import type { FreshnessState } from "@/modules/execution-context/brief";
 
 /**
  * The run's own row, plus the two things derived from its spec.
@@ -45,6 +46,15 @@ type RawRun = {
   duration_ms: number | null;
   observed_path_count: number;
   changed_file_count: number;
+  context_brief_version: string | null;
+  context_freshness: FreshnessState | null;
+  context_bytes: number | null;
+  context_facts_sent: number | null;
+  context_candidates_sent: number | null;
+  context_candidates_read: number | null;
+  unique_files_read: number | null;
+  repeated_file_reads: number | null;
+  files_read_outside_context: number | null;
 };
 
 export async function readAgentRunForLiveView(
@@ -54,7 +64,7 @@ export async function readAgentRunForLiveView(
   const { data, error } = await supabase
     .from("agent_execution_runs")
     .select(
-      "id, operation_run_id, execution_spec_id, status, assistant_messages, sdk_loop_iterations, model, started_at, completed_at, duration_ms, observed_path_count, changed_file_count",
+      "id, operation_run_id, execution_spec_id, status, assistant_messages, sdk_loop_iterations, model, started_at, completed_at, duration_ms, observed_path_count, changed_file_count, context_brief_version, context_freshness, context_bytes, context_facts_sent, context_candidates_sent, context_candidates_read, unique_files_read, repeated_file_reads, files_read_outside_context",
     )
     .eq("id", params.runId)
     .eq("project_id", params.projectId)
@@ -75,6 +85,28 @@ export async function readAgentRunForLiveView(
     durationMs: row.duration_ms,
     observedPathCount: row.observed_path_count,
     changedFileCount: row.changed_file_count,
+
+    /*
+     * Present only when the run actually recorded a brief version.
+     *
+     * The read counts stay nullable inside it, because they are written one
+     * step later than the compile counts: a run being watched live has been
+     * briefed but has not finished reading, and zero would claim it read
+     * nothing rather than that nobody has counted yet.
+     */
+    context: row.context_brief_version
+      ? {
+          briefVersion: row.context_brief_version,
+          freshness: row.context_freshness ?? "unknown",
+          bytes: row.context_bytes ?? 0,
+          factsSent: row.context_facts_sent ?? 0,
+          candidatesSent: row.context_candidates_sent ?? 0,
+          candidatesRead: row.context_candidates_read,
+          uniqueFilesRead: row.unique_files_read,
+          repeatedFileReads: row.repeated_file_reads,
+          filesReadOutsideContext: row.files_read_outside_context,
+        }
+      : null,
   };
 
   const [limits, validation] = await Promise.all([

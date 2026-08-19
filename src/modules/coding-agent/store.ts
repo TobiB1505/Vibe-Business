@@ -12,6 +12,7 @@ import type {
 import { isValidInterruptAnswer } from "@/modules/execution-contract/interrupts";
 import type { AgentToolEvent, RaisedInterrupt } from "./gateway";
 import type { AgentFailureCode, AgentRunStatus } from "./schema";
+import type { FreshnessState } from "@/modules/execution-context/brief";
 
 /**
  * Persistence for agentic execution (EXECUTION CORE-4 §22, §23, §24, §25).
@@ -71,6 +72,25 @@ export type StoredAgentExecutionRun = {
   changedBytes: number;
   durationMs: number | null;
   providerSessionId: string | null;
+
+  /*
+   * The Execution Brief this run was given, and what it read (PART L).
+   *
+   * Null throughout means the run had no brief — no snapshot to compile from,
+   * or one taken at a different commit. `contextFreshness` distinguishes the
+   * two cases that matter: `stale`/`unknown` say Vibe *had* intelligence and
+   * withheld it, which is a reason to re-analyse; null says there was none.
+   */
+  contextBriefVersion: string | null;
+  contextFreshness: FreshnessState | null;
+  contextBytes: number | null;
+  contextFactsSent: number | null;
+  contextCandidatesSent: number | null;
+  contextCandidatesRead: number | null;
+  uniqueFilesRead: number | null;
+  repeatedFileReads: number | null;
+  filesReadOutsideContext: number | null;
+
   preparedChangeId: string | null;
   createdAt: string;
   startedAt: string | null;
@@ -108,6 +128,15 @@ type RunRow = {
   changed_bytes: number;
   duration_ms: number | null;
   provider_session_id: string | null;
+  context_brief_version: string | null;
+  context_freshness: FreshnessState | null;
+  context_bytes: number | null;
+  context_facts_sent: number | null;
+  context_candidates_sent: number | null;
+  context_candidates_read: number | null;
+  unique_files_read: number | null;
+  repeated_file_reads: number | null;
+  files_read_outside_context: number | null;
   prepared_change_id: string | null;
   created_at: string;
   started_at: string | null;
@@ -120,6 +149,8 @@ const RUN_COLUMNS =
   "execution_policy_version, non_production_economics, base_sha, credit_reservation_id, status, " +
   "failure_code, assistant_messages, sdk_loop_iterations, tool_calls_allowed, tool_calls_denied, files_read, check_runs, " +
   "repair_attempts, observed_path_count, changed_file_count, changed_bytes, duration_ms, provider_session_id, " +
+  "context_brief_version, context_freshness, context_bytes, context_facts_sent, context_candidates_sent, " +
+  "context_candidates_read, unique_files_read, repeated_file_reads, files_read_outside_context, " +
   "prepared_change_id, created_at, started_at, completed_at";
 
 function mapRun(row: RunRow): StoredAgentExecutionRun {
@@ -154,6 +185,15 @@ function mapRun(row: RunRow): StoredAgentExecutionRun {
     changedBytes: row.changed_bytes,
     durationMs: row.duration_ms,
     providerSessionId: row.provider_session_id,
+    contextBriefVersion: row.context_brief_version,
+    contextFreshness: row.context_freshness,
+    contextBytes: row.context_bytes,
+    contextFactsSent: row.context_facts_sent,
+    contextCandidatesSent: row.context_candidates_sent,
+    contextCandidatesRead: row.context_candidates_read,
+    uniqueFilesRead: row.unique_files_read,
+    repeatedFileReads: row.repeated_file_reads,
+    filesReadOutsideContext: row.files_read_outside_context,
     preparedChangeId: row.prepared_change_id,
     createdAt: row.created_at,
     startedAt: row.started_at,
@@ -347,6 +387,24 @@ export type AgentRunObservations = {
   changedBytes?: number;
   durationMs?: number;
   providerSessionId?: string | null;
+
+  /*
+   * What the run was told before it started, and what it read afterwards
+   * (EXECUTION CONTEXT INTELLIGENCE, PART L).
+   *
+   * All optional and all nullable, because a brief is an optimisation that may
+   * legitimately be absent. Null means "this run had no brief"; zero would
+   * claim it had one that offered nothing.
+   */
+  contextBriefVersion?: string | null;
+  contextFreshness?: FreshnessState | null;
+  contextBytes?: number;
+  contextFactsSent?: number;
+  contextCandidatesSent?: number;
+  contextCandidatesRead?: number;
+  uniqueFilesRead?: number;
+  repeatedFileReads?: number;
+  filesReadOutsideContext?: number;
 };
 
 /** Records what Vibe observed, without deciding the run's fate. */
@@ -372,6 +430,15 @@ export async function recordAgentRunObservations(
   set("changed_bytes", observations.changedBytes);
   set("duration_ms", observations.durationMs);
   set("provider_session_id", observations.providerSessionId);
+  set("context_brief_version", observations.contextBriefVersion);
+  set("context_freshness", observations.contextFreshness);
+  set("context_bytes", observations.contextBytes);
+  set("context_facts_sent", observations.contextFactsSent);
+  set("context_candidates_sent", observations.contextCandidatesSent);
+  set("context_candidates_read", observations.contextCandidatesRead);
+  set("unique_files_read", observations.uniqueFilesRead);
+  set("repeated_file_reads", observations.repeatedFileReads);
+  set("files_read_outside_context", observations.filesReadOutsideContext);
 
   if (Object.keys(patch).length === 0) return;
 

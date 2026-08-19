@@ -79,6 +79,10 @@ export const EXECUTION_EVENT_TYPES = [
   "workspace_ready",
   "workspace_failed",
 
+  // What Vibe already knew and chose to send, and what the run did with it.
+  "context_compiled",
+  "context_used",
+
   // The harness
   "agent_started",
   "turn_completed",
@@ -339,6 +343,7 @@ const PHASE_OF: Record<ExecutionEventType, ExecutionPhase> = {
   workspace_preparing: "preparing",
   workspace_ready: "preparing",
   workspace_failed: "preparing",
+  context_compiled: "preparing",
 
   agent_started: "working",
   turn_completed: "working",
@@ -351,6 +356,7 @@ const PHASE_OF: Record<ExecutionEventType, ExecutionPhase> = {
   command_completed: "working",
   command_failed: "working",
   usage_updated: "working",
+  context_used: "reviewing_change",
 
   change_discovered: "reviewing_change",
   change_verified: "reviewing_change",
