@@ -8,6 +8,7 @@ import { isAgenticWritablePath } from "@/modules/execution/paths";
 import type { ExecutionSpec } from "@/modules/execution-contract/spec";
 import type { AgentRuntimeLimits } from "./budget";
 import type { GatewayChange } from "./gateway";
+import type { CandidateIgnorePort } from "./ignored-paths";
 import type { AgentWorkspace } from "./workspace";
 
 /**
@@ -51,6 +52,27 @@ export type BaseContentPort = {
   getTextFile(path: string, commitSha: string, maxBytes: number): Promise<string | null>;
 };
 
+/**
+ * Which paths the repository actually contained at the pinned base commit.
+ *
+ * A separate question from "can this file be read", and the reason it needs its
+ * own port: `getTextFile` returns `null` for a file that is absent, one that is
+ * binary, one that exceeds the read bound and a directory alike. Deriving
+ * "tracked" from it would let a large or binary file that the repository really
+ * does contain be treated as untracked — and an untracked path is the only kind
+ * a `.gitignore` is allowed to withhold.
+ *
+ * `truncated` is load-bearing. A tree Vibe could not enumerate completely does
+ * not support the claim "this path is untracked", so a truncated tree suppresses
+ * nothing at all.
+ */
+export type BaseTreePort = {
+  getTree(commitSha: string): Promise<{
+    entries: readonly { path: string; type: "blob" | "tree" }[];
+    truncated: boolean;
+  }>;
+};
+
 export type CandidateFile = {
   path: string;
   /** `null` when the agent deleted a file that existed at the base commit. */
@@ -63,11 +85,38 @@ export type CandidateFile = {
   contentHash: string | null;
 };
 
+/** An observed path withheld from the change because it was never source. */
+export type IgnoredCandidatePath = {
+  path: string;
+  reason: "base_gitignore" | "known_build_artifact";
+  /** The rule that withheld it, so the decision can be explained. */
+  rule: string;
+};
+
 export type CandidateChange = {
   files: readonly CandidateFile[];
   totalBytes: number;
   /** Paths the agent wrote that turned out to be identical to the base. */
   unchangedPaths: readonly string[];
+  /**
+   * Observed, present, and withheld — never silently dropped.
+   *
+   * These do not enter the PreparedChange and they do not count against any
+   * budget, but they remain in the record. A mutation Vibe saw and chose not to
+   * write is a thing a reader must be able to find; "we excluded it" and "we
+   * never noticed it" are different statements about the same directory.
+   */
+  ignoredPaths: readonly IgnoredCandidatePath[];
+  /**
+   * Observed paths that exist but are larger than the read bound.
+   *
+   * Kept apart from absence deliberately. Collapsing the two made a file that is
+   * merely too big to diff look like a *deletion*, because "nothing on disk plus
+   * something at the base" is exactly how a deletion is recognised — so an
+   * oversized build artifact could have been reported as the agent removing a
+   * repository file.
+   */
+  unreadablePaths: readonly string[];
 };
 
 export function sha256(content: string): string {
@@ -89,19 +138,69 @@ export async function extractCandidateChange(input: {
   workspace: AgentWorkspace;
   base: BaseContentPort;
   limits: AgentRuntimeLimits;
+  /**
+   * Which paths the repository contained at the base commit.
+   *
+   * Optional so the gateway-brokered topology, whose paths are Vibe's own
+   * record of writes it authorized, needs no tree read. Absent means nothing is
+   * withheld: without a tracked-path answer there is no safe way to tell a
+   * generated artifact from a source file, and the safe default is to keep it.
+   */
+  tree?: BaseTreePort | null;
+  /**
+   * Consulted only for paths the base commit did not contain.
+   *
+   * That precondition is enforced below rather than assumed, because it is the
+   * property that stops a `.gitignore` from ever hiding a real repository file.
+   */
+  ignore?: CandidateIgnorePort | null;
 }): Promise<CandidateChange> {
   const files: CandidateFile[] = [];
   const unchangedPaths: string[] = [];
+  const ignoredPaths: IgnoredCandidatePath[] = [];
+  const unreadablePaths: string[] = [];
 
   // Sorted, so two runs that produced the same set produce byte-identical
   // records — the property `execution/identity.ts` relies on downstream.
   const paths = [...new Set(input.changes.map((change) => change.path))].sort();
 
+  const tracked = await readTrackedPaths(input.tree ?? null, input.spec.repository.baseSha);
+
   for (const path of paths) {
+    /*
+     * Suppression, and the two conditions that gate it.
+     *
+     * `tracked === null` is a tree Vibe could not enumerate, which is not
+     * evidence that anything is untracked — so nothing is withheld. And a path
+     * the tree does contain is compared no matter what any ignore rule says: a
+     * repository that both tracks and ignores a file has tracked it, and the
+     * tracking is the fact about whether it is source.
+     */
+    if (input.ignore && tracked !== null && !tracked.has(path)) {
+      const decision = await input.ignore.classify(path);
+      if (decision.ignored) {
+        ignoredPaths.push({ path, reason: decision.reason, rule: decision.rule });
+        continue;
+      }
+    }
+
     const [onDisk, atBase] = await Promise.all([
       input.workspace.read({ path, maxBytes: input.limits.maxBytesPerFile }),
       input.base.getTextFile(path, input.spec.repository.baseSha, input.limits.maxBytesPerFile),
     ]);
+
+    /*
+     * Present but unreadable is its own answer.
+     *
+     * It cannot become a deletion — the file is right there — and it cannot
+     * become a write, because there are no bytes to write. Recorded, and left
+     * for `verifyCandidateChange` to refuse: a change Vibe cannot represent
+     * exactly is one it must not represent approximately (§59).
+     */
+    if (onDisk.kind === "too_large") {
+      unreadablePaths.push(path);
+      continue;
+    }
 
     const content = onDisk.kind === "content" ? onDisk.content : null;
 
@@ -141,7 +240,35 @@ export async function extractCandidateChange(input: {
     files,
     totalBytes: files.reduce((total, file) => total + file.bytes, 0),
     unchangedPaths,
+    ignoredPaths,
+    unreadablePaths,
   };
+}
+
+/**
+ * The base commit's blob paths, or `null` when they cannot be established.
+ *
+ * `null` rather than an empty set, and the difference decides whether anything
+ * is suppressed at all: an empty set would say "the repository contains no
+ * files", which would make every path untracked and every ignore rule apply.
+ */
+async function readTrackedPaths(
+  tree: BaseTreePort | null,
+  baseSha: string,
+): Promise<Set<string> | null> {
+  if (!tree) return null;
+
+  try {
+    const result = await tree.getTree(baseSha);
+    if (result.truncated) return null;
+
+    return new Set(
+      result.entries.filter((entry) => entry.type === "blob").map((entry) => entry.path),
+    );
+  } catch {
+    // A tree read that failed is not a tree that is empty.
+    return null;
+  }
 }
 
 /* ---------------------------------------------------------------------------
@@ -167,6 +294,17 @@ export const CANDIDATE_REJECTIONS = [
   "source_revision_unverified",
   /** A deletion outside what the policy permits. */
   "deletion_not_permitted",
+  /**
+   * A file that exists but is too large to read back, so the change cannot be
+   * stated exactly (§59).
+   *
+   * Refusing is the only honest option: writing the rest would present a
+   * partial change as a complete one, and dropping it silently would hide a
+   * mutation Vibe watched happen. Note that this is reached only for a path the
+   * repository tracks or does not ignore — an oversized build artifact is
+   * withheld earlier, with a rule recorded.
+   */
+  "change_not_representable",
 ] as const;
 export type CandidateRejection = (typeof CANDIDATE_REJECTIONS)[number];
 
@@ -218,6 +356,8 @@ export function verifyCandidateChange(input: {
 
   const deletions = input.candidate.files.filter((file) => file.status === "deleted");
   if (deletions.length > 0) rejections.push("deletion_not_permitted");
+
+  if (input.candidate.unreadablePaths.length > 0) rejections.push("change_not_representable");
 
   const writes = input.candidate.files.filter(
     (file): file is CandidateFile & { content: string; contentHash: string } =>

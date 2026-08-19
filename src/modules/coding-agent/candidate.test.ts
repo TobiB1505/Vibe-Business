@@ -132,6 +132,8 @@ describe("§28 — post-agent verification", () => {
       })),
       totalBytes: files.reduce((total, file) => total + Buffer.byteLength(file.content, "utf8"), 0),
       unchangedPaths: [],
+      ignoredPaths: [],
+      unreadablePaths: [],
     };
   }
 
@@ -195,7 +197,7 @@ describe("§28 — post-agent verification", () => {
   it("refuses a change with no files", () => {
     const verification = verifyCandidateChange({
       spec,
-      candidate: { files: [], totalBytes: 0, unchangedPaths: [] },
+      candidate: { files: [], totalBytes: 0, unchangedPaths: [], ignoredPaths: [], unreadablePaths: [] },
       sourceRevisionVerified: true,
     });
 
@@ -247,6 +249,8 @@ describe("§28 — post-agent verification", () => {
         ],
         totalBytes: 0,
         unchangedPaths: [],
+        ignoredPaths: [],
+        unreadablePaths: [],
       },
       sourceRevisionVerified: true,
     });

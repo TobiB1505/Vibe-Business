@@ -124,6 +124,11 @@ async function resolveTarget(
     // The same bounded reader the analyzer uses. Reading a file at the pinned
     // base commit to compute a diff is an ordinary read, not a new capability.
     base: createGithubRepositoryReader(installationId, owner, repo),
+    // The same reader again, for the question `getTextFile` cannot answer:
+    // it returns null for a file that is absent, binary, oversized or a
+    // directory alike, and only a path the base tree really does contain may be
+    // protected from the repository's own ignore rules.
+    baseTree: createGithubRepositoryReader(installationId, owner, repo),
   };
 }
 

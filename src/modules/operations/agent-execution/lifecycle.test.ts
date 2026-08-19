@@ -98,6 +98,9 @@ function target(): AgentRepositoryTarget {
     git: noopGit,
     probe,
     base,
+    // No tracked-path answer, so nothing is ever withheld. These tests are
+    // about lifecycle, and the safe default is the one they should exercise.
+    baseTree: null,
   };
 }
 

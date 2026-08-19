@@ -29,12 +29,14 @@ import {
   extractCandidateChange,
   verifyCandidateChange,
   type BaseContentPort,
+  type BaseTreePort,
 } from "@/modules/coding-agent/candidate";
 import {
   changeRejectionMetadata,
   summarizeChangeEvidence,
 } from "@/modules/coding-agent/change-evidence";
 import { ExecutionToolGateway } from "@/modules/coding-agent/gateway";
+import { createBaseIgnorePort } from "@/modules/coding-agent/ignored-paths";
 import {
   agentSandboxNameFor,
   computeAgentChangeIdentity,
@@ -191,6 +193,16 @@ export type AgentRepositoryTarget = {
   probe: ExecutionProbePort;
   /** Reads a file at an exact commit. The bounded reader the analyzer uses. */
   base: BaseContentPort;
+  /**
+   * Which paths the repository contained at the base commit.
+   *
+   * Separate from `base` rather than folded into it, so that "we could not
+   * establish what is tracked" is a value a caller can express. Null disables
+   * every ignore rule: without a tracked-path answer there is no way to tell a
+   * generated artifact from a source file, and keeping the path is the safe
+   * direction.
+   */
+  baseTree: BaseTreePort | null;
 };
 
 export type StepOutcome<T> = ({ ok: true } & T) | { ok: false; failureCode: OperationFailureCode };
@@ -1094,13 +1106,45 @@ export async function extractAndVerifyStep(
     return { ok: false, failureCode: "agent_produced_no_change" };
   }
 
+  /*
+   * Suppression, at the candidate boundary and nowhere earlier.
+   *
+   * The workspace scan above still reported every path the agent touched, and
+   * the evidence below still names all of them. What is decided here is only
+   * which of those paths become a *change* — because a file the repository
+   * itself ignores was never its source, and writing it onto a branch would be
+   * wrong at any budget.
+   *
+   * Both authorities are read at the pinned base commit: the tree, so a tracked
+   * file can never be withheld, and `.gitignore`, so the twenty minutes the
+   * agent spent with write access to the workspace cannot influence the rules
+   * applied to its own output.
+   */
+  const skippedIgnoreFiles: { path: string; reason: string }[] = [];
   const candidate = await extractCandidateChange({
     spec: spec.spec,
     changes: changedPaths.map((path) => ({ path, content: null })),
     workspace,
     base: target.base,
     limits,
+    tree: target.baseTree,
+    ignore: createBaseIgnorePort({
+      base: target.base,
+      baseSha: spec.spec.repository.baseSha,
+      onSkipped: (detail) => skippedIgnoreFiles.push(detail),
+    }),
   });
+
+  if (skippedIgnoreFiles.length > 0) {
+    // A bound that was reached is reported, never silently absorbed: an ignore
+    // file that went unread means some path may be in the change that the
+    // repository would have withheld.
+    console.warn("[agent-change] some ignore rules could not be read", {
+      operationId,
+      agentExecutionRunId: run.id,
+      skipped: skippedIgnoreFiles,
+    });
+  }
 
   /*
    * What the observation actually contained, written down before anything

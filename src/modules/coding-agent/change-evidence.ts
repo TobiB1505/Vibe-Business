@@ -88,11 +88,27 @@ export type ChangedPathEvidence = {
    * observation is mostly `unchanged` has a detection problem, not a budget
    * problem.
    */
-  status: "added" | "modified" | "deleted" | "unchanged" | "absent";
+  status:
+    | "added"
+    | "modified"
+    | "deleted"
+    | "unchanged"
+    | "absent"
+    /** Present, and withheld from the change because it was never source. */
+    | "ignored"
+    /** Present, and larger than the read bound — so not representable. */
+    | "unreadable";
   /** Bytes of the produced file. Zero for anything that is not a write. */
   bytes: number;
   artifactClass: ChangeArtifactClass;
   detectedBy: ChangeDetectionSource;
+  /**
+   * Why an `ignored` path was withheld, and by which rule.
+   *
+   * The whole reason suppression is safe to have at all: a filter whose
+   * decisions cannot be read back is indistinguishable from a blind spot.
+   */
+  ignoredBy?: { reason: "base_gitignore" | "known_build_artifact"; rule: string };
 };
 
 export type ChangeEvidence = {
@@ -104,6 +120,10 @@ export type ChangeEvidence = {
   unchangedPathCount: number;
   /** Observed paths that are neither on disk nor at the base. */
   absentPathCount: number;
+  /** Observed paths withheld from the change. Observed, never invisible. */
+  ignoredPathCount: number;
+  /** Observed paths that exist and exceed the read bound. */
+  unreadablePathCount: number;
   /** Bytes the candidate would write. The number `diff_too_large` is measured against. */
   totalDiffBytes: number;
   /** Counts by class, over every observed path — computed before truncation. */
@@ -227,6 +247,8 @@ export function summarizeChangeEvidence(input: {
 }): ChangeEvidence {
   const byPath = new Map(input.candidate.files.map((file) => [file.path, file]));
   const unchanged = new Set(input.candidate.unchangedPaths);
+  const ignored = new Map(input.candidate.ignoredPaths.map((entry) => [entry.path, entry]));
+  const unreadable = new Set(input.candidate.unreadablePaths);
 
   // Sorted before capping, so the same run always records the same subset.
   const observed = [...new Set(input.observedPaths)].sort();
@@ -241,20 +263,29 @@ export function summarizeChangeEvidence(input: {
   const entries: ChangedPathEvidence[] = [];
   let unchangedCount = 0;
   let absentCount = 0;
+  let ignoredCount = 0;
+  let unreadableCount = 0;
 
   for (const path of observed) {
     const artifactClass = classifyChangedPath(path);
     classCounts[artifactClass] += 1;
 
     const file = byPath.get(path);
+    const withheld = ignored.get(path);
     const status: ChangedPathEvidence["status"] = file
       ? file.status
-      : unchanged.has(path)
-        ? "unchanged"
-        : "absent";
+      : withheld
+        ? "ignored"
+        : unreadable.has(path)
+          ? "unreadable"
+          : unchanged.has(path)
+            ? "unchanged"
+            : "absent";
 
     if (status === "unchanged") unchangedCount += 1;
     if (status === "absent") absentCount += 1;
+    if (status === "ignored") ignoredCount += 1;
+    if (status === "unreadable") unreadableCount += 1;
 
     // Counted for every path, recorded for the first `MAX_EVIDENCE_PATHS` — so
     // the totals stay true even when the list does not.
@@ -265,6 +296,9 @@ export function summarizeChangeEvidence(input: {
         bytes: file?.bytes ?? 0,
         artifactClass,
         detectedBy: input.detectedBy,
+        ...(withheld
+          ? { ignoredBy: { reason: withheld.reason, rule: boundPath(withheld.rule) } }
+          : {}),
       });
     }
   }
@@ -280,6 +314,8 @@ export function summarizeChangeEvidence(input: {
     candidateFileCount: input.candidate.files.length,
     unchangedPathCount: unchangedCount,
     absentPathCount: absentCount,
+    ignoredPathCount: ignoredCount,
+    unreadablePathCount: unreadableCount,
     totalDiffBytes: input.candidate.totalBytes,
     classCounts,
     paths: entries,
@@ -309,6 +345,8 @@ export function changeRejectionMetadata(input: {
     changedFileCount: input.evidence.candidateFileCount,
     unchangedPathCount: input.evidence.unchangedPathCount,
     absentPathCount: input.evidence.absentPathCount,
+    ignoredPathCount: input.evidence.ignoredPathCount,
+    unreadablePathCount: input.evidence.unreadablePathCount,
     totalDiffBytes: input.evidence.totalDiffBytes,
     classCounts: { ...input.evidence.classCounts },
     changedPaths: input.evidence.paths.map((entry) => ({ ...entry })),

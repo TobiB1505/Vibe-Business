@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fakeAgentSpec, fakeDetachedAgentProvider } from "@/modules/coding-agent/test-support";
 import { creditsToUnits } from "@/modules/credits/units";
 import { agentSandboxNameFor } from "@/modules/coding-agent/identity";
-import type { BaseContentPort } from "@/modules/coding-agent/candidate";
+import type { BaseContentPort, BaseTreePort } from "@/modules/coding-agent/candidate";
 import type { DetachedCodingAgentProvider } from "@/modules/coding-agent/provider";
 import type { ExecutionProbePort, GitWritePort } from "@/modules/execution/git-port";
 import {
@@ -121,10 +121,49 @@ const probe: ExecutionProbePort = {
   },
 };
 
+/**
+ * The repository as it stood at the pinned base commit.
+ *
+ * A real tree and a real `.gitignore`, not a stub: the suppression rule that
+ * matters — "a tracked file is never withheld" — is only testable if there is
+ * something tracked to withhold.
+ */
+const BASE_FILES: Record<string, string> = {
+  "src/app/page.tsx": "export default function Page() { return null; }\n",
+  "src/app/layout.tsx": "export default function Layout() { return null; }\n",
+  "src/app/app/layout.tsx": "export default function AppLayout() { return null; }\n",
+  "src/app/login/page.tsx": "export default function Login() { return null; }\n",
+  "src/app/signup/page.tsx": "export default function Signup() { return null; }\n",
+  "src/app/forgot-password/page.tsx": "export default function Forgot() { return null; }\n",
+  "src/app/reset-password/page.tsx": "export default function Reset() { return null; }\n",
+  // Verbatim from this repository's own `.gitignore` at the commit run
+  // `b33635a1` was pinned to.
+  ".gitignore": [
+    "/node_modules",
+    "/coverage",
+    "/.next/",
+    "/out/",
+    "/build",
+    ".DS_Store",
+    "*.tsbuildinfo",
+    "next-env.d.ts",
+    "/.swc",
+    "src/app/.well-known/workflow/",
+  ].join("\n"),
+};
+
 const base: BaseContentPort = {
   async getTextFile(path: string) {
-    // The base commit's bytes. `src/app/page.tsx` exists; anything else is new.
-    return path === "src/app/page.tsx" ? "export default function Page() { return null; }\n" : null;
+    return BASE_FILES[path] ?? null;
+  },
+};
+
+const baseTree: BaseTreePort = {
+  async getTree() {
+    return {
+      entries: Object.keys(BASE_FILES).map((path) => ({ path, type: "blob" as const })),
+      truncated: false,
+    };
   },
 };
 
@@ -139,6 +178,7 @@ function target(): AgentRepositoryTarget {
     git: git.port,
     probe,
     base,
+    baseTree,
   };
 }
 
@@ -614,7 +654,11 @@ describe("§27, §28 — Vibe computes and checks the change", () => {
     const metadata = rejected!.metadata as Record<string, unknown>;
     expect(metadata.rejections).toEqual(["too_many_files"]);
     expect(metadata.changedPathCount).toBe(18);
-    expect(metadata.changedFileCount).toBe(18);
+    // `tsconfig.tsbuildinfo` is withheld by the base `.gitignore`; `debug.log`
+    // is not ignored by this repository and stays a change. Seventeen files
+    // still overruns the fifteen the fixture scope allows.
+    expect(metadata.changedFileCount).toBe(17);
+    expect(metadata.ignoredPathCount).toBe(1);
     expect(metadata.changedPathsTruncated).toBe(false);
     expect(metadata.classCounts).toEqual({ source: 16, generated: 1, runtime: 1, unknown: 0 });
 
@@ -625,7 +669,7 @@ describe("§27, §28 — Vibe computes and checks the change", () => {
     // The limit the change was measured against, which the previous row dropped.
     expect(metadata.violations).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ kind: "too_many_files", changed: 18, limit: 15 }),
+        expect.objectContaining({ kind: "too_many_files", changed: 17, limit: 15 }),
       ]),
     );
 
