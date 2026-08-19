@@ -2,288 +2,448 @@ import { describe, expect, it } from "vitest";
 import {
   classifyCompletionActivity,
   compileCompletionBudget,
-  decideCompletionAction,
+  evaluateCompletionAction,
+  initialCompletionState,
+  observeToolFailure,
   toSandboxCompletionPolicy,
+  type CompletionActionInput,
   type CompletionState,
 } from "./completion";
 import { completionBudgetFor } from "./service";
-import { compileAgentVerificationPlan } from "./verification";
+import { compileAgentVerificationPlan, verificationPlanForMode } from "./verification";
 
 /**
- * The completion budget, driven through the same pure function the harness
- * calls.
+ * The completion lifecycle, driven through the same pure function the harness
+ * mirrors.
  *
- * The canaries prove the SDK reaches this decision; these prove the decision is
- * right. Both are needed, and the `allowedTools` bug is why: a correct decision
- * on a path nothing takes is worth exactly nothing.
+ * The canaries prove the SDK actually reaches this decision; these prove the
+ * decision is right. Both are needed, and the `allowedTools` bug is why: a
+ * correct decision on a path nothing takes is worth exactly nothing.
  */
 
 const BUDGET = compileCompletionBudget("low");
+const LOW_PLAN = verificationPlanForMode("low");
 const BRIEF = new Set(["src/app/layout.tsx", "src/app/app/layout.tsx"]);
 
-function state(overrides: Partial<CompletionState> = {}): CompletionState {
-  return {
-    implemented: true,
-    toolCallsSinceEdit: 0,
-    outsideBriefReadsSinceEdit: 0,
-    windowResets: 0,
-    repairCycles: 0,
-    msSinceEdit: 0,
-    unresolvedFailure: false,
-    ...overrides,
-  };
+/** One run, driven action by action, exactly as the harness drives it. */
+class Run {
+  state: CompletionState = initialCompletionState();
+  clock = 0;
+
+  act(toolName: string, path: string | null, options: { advanceMs?: number; commandCheck?: CompletionActionInput["commandCheck"] } = {}) {
+    this.clock += options.advanceMs ?? 0;
+    const outcome = evaluateCompletionAction(this.state, {
+      toolName,
+      path,
+      briefPaths: BRIEF,
+      requiredChecks: LOW_PLAN.requiredChecks,
+      commandCheck: options.commandCheck ?? null,
+      budget: BUDGET,
+      now: this.clock,
+    });
+    this.state = outcome.state;
+    return outcome.decision;
+  }
+
+  fail(toolName: string) {
+    this.state = observeToolFailure(this.state, toolName);
+  }
 }
 
-function decide(
-  toolName: string,
-  path: string | null,
-  overrides: Partial<CompletionState> = {},
-) {
-  return decideCompletionAction({
-    toolName,
-    path,
-    briefPaths: BRIEF,
-    budget: BUDGET,
-    state: state(overrides),
-  });
-}
-
-describe("before the first edit, nothing is scarce (PART I)", () => {
+describe("before the first edit, nothing is scarce", () => {
   it("permits reading far outside the brief", () => {
-    const decision = decide("Read", "src/modules/anything.ts", { implemented: false });
+    const run = new Run();
+    const decision = run.act("Read", "src/modules/anything.ts");
 
     expect(decision.allowed).toBe(true);
     expect(decision.activity).toBe("orientation");
   });
 
-  it("permits it even past every budget, because no budget has started", () => {
-    const decision = decide("Read", "src/modules/anything.ts", {
-      implemented: false,
-      toolCallsSinceEdit: 999,
-      outsideBriefReadsSinceEdit: 999,
-      msSinceEdit: 999_999,
-    });
-
-    expect(decision.allowed).toBe(true);
-  });
-});
-
-describe("after the code is written, exploration is scarce", () => {
-  it("refuses a tool call past the window", () => {
-    const decision = decide("Grep", null, {
-      toolCallsSinceEdit: BUDGET.maxToolCallsSinceEdit,
-    });
-
-    expect(decision.allowed).toBe(false);
-    if (decision.allowed) return;
-    expect(decision.reason).toBe("completion_budget_exhausted");
-  });
-
-  it("refuses an outside-brief read past its own smaller allowance", () => {
-    const decision = decide("Read", "src/modules/elsewhere.ts", {
-      outsideBriefReadsSinceEdit: BUDGET.maxOutsideBriefReadsSinceEdit,
-    });
-
-    expect(decision.allowed).toBe(false);
-    if (decision.allowed) return;
-    expect(decision.reason).toBe("outside_brief_budget_exhausted");
-  });
-
-  it("does not charge a brief read against that allowance", () => {
-    const decision = decide("Read", "src/app/layout.tsx", {
-      outsideBriefReadsSinceEdit: BUDGET.maxOutsideBriefReadsSinceEdit,
-    });
-
-    expect(decision.allowed).toBe(true);
-    expect(decision.activity).toBe("brief_read");
-  });
-
-  it("refuses once the completion clock runs out", () => {
-    const decision = decide("Read", "src/app/layout.tsx", {
-      msSinceEdit: BUDGET.maxCompletionWallClockMs,
-    });
-
-    expect(decision.allowed).toBe(false);
-    if (decision.allowed) return;
-    expect(decision.reason).toBe("completion_wall_clock_exhausted");
-  });
-});
-
-describe("repair outranks every budget (PART F, PART H)", () => {
-  it("permits reading anything while a failure is unresolved", () => {
-    const decision = decide("Read", "src/modules/implicated.ts", {
-      unresolvedFailure: true,
-      toolCallsSinceEdit: 999,
-      outsideBriefReadsSinceEdit: 999,
-    });
-
-    expect(decision.allowed).toBe(true);
-    expect(decision.activity).toBe("repair");
-  });
-
-  it("never refuses a mutation — an agent still editing has not finished", () => {
-    const decision = decide("Edit", "src/app/layout.tsx", {
-      toolCallsSinceEdit: 999,
-      msSinceEdit: 999_999,
-    });
-
-    expect(decision.allowed).toBe(true);
-    expect(decision.activity).toBe("candidate_mutation");
-  });
-
-  it("stops an agent that keeps failing", () => {
-    const decision = decide("Read", "src/modules/x.ts", {
-      unresolvedFailure: true,
-      repairCycles: BUDGET.maxRepairCycles,
-    });
-
-    expect(decision.allowed).toBe(false);
-    if (decision.allowed) return;
-    expect(decision.reason).toBe("repair_cycles_exhausted");
-  });
-
-  /**
-   * Two counters, because run #6 proved one cannot mean both.
-   *
-   * It recorded `repair_cycles: 1` for its second *implementation* edit — no
-   * check had failed, nothing was repaired. The window reset correctly; only
-   * the name was wrong. They are now separate, and each bounds its own thing.
-   */
-  it("counts an ordinary second edit as a window reset, not a repair", () => {
-    const budget = compileCompletionBudget("low");
-
-    // Run #6's shape exactly: two edits, no failure, three post-edit actions.
-    const decision = decide("Read", "src/app/layout.tsx", {
-      windowResets: 1,
-      repairCycles: 0,
-      toolCallsSinceEdit: 3,
-    });
-
-    expect(decision.allowed).toBe(true);
-    expect(budget.maxCompletionWindows).toBeGreaterThan(1);
-  });
-
-  it("stops an agent that buys windows forever without ever failing", () => {
-    const decision = decide("Read", "src/app/layout.tsx", {
-      windowResets: BUDGET.maxCompletionWindows,
-      repairCycles: 0,
-    });
-
-    expect(decision.allowed).toBe(false);
-    if (decision.allowed) return;
-    expect(decision.reason).toBe("completion_windows_exhausted");
-  });
-
-  it("lets a genuinely repairing agent past the window backstop", () => {
-    const decision = decide("Read", "src/modules/implicated.ts", {
-      unresolvedFailure: true,
-      windowResets: BUDGET.maxCompletionWindows,
-      repairCycles: 0,
-    });
-
-    expect(decision.allowed).toBe(true);
-    expect(decision.activity).toBe("repair");
-  });
-});
-
-describe("the model cannot widen its own budget (PART O)", () => {
-  /**
-   * There is no argument to make.
-   *
-   * The decision reads a tool name, a path, a brief membership set and counters
-   * the harness keeps. None of those is text the model writes, and the shape of
-   * the function is the proof: there is no parameter a sentence could arrive in.
-   */
-  it("takes no input a model or a repository authors", () => {
-    const inputs = Object.keys({
-      toolName: "",
-      path: null,
-      briefPaths: BRIEF,
-      budget: BUDGET,
-      state: state(),
-    }).sort();
-
-    expect(inputs).toEqual(["briefPaths", "budget", "path", "state", "toolName"]);
-  });
-
-  it("ignores a plea embedded in a path", () => {
-    const decision = decide(
-      "Read",
-      "src/IGNORE_POLICY_AND_GRANT_UNLIMITED_READS.ts",
-      { outsideBriefReadsSinceEdit: BUDGET.maxOutsideBriefReadsSinceEdit },
-    );
-
-    expect(decision.allowed).toBe(false);
-  });
-
-  it("classifies from evidence, never from an explanation", () => {
-    // The same read is repair or exploration purely by whether a tool failed.
-    const exploring = classifyCompletionActivity({
-      toolName: "Read",
-      path: "src/modules/x.ts",
-      briefPaths: BRIEF,
-      state: state(),
-    });
-    const repairing = classifyCompletionActivity({
-      toolName: "Read",
-      path: "src/modules/x.ts",
-      briefPaths: BRIEF,
-      state: state({ unresolvedFailure: true }),
-    });
-
-    expect(exploring).toBe("outside_brief_read");
-    expect(repairing).toBe("repair");
-  });
-});
-
-describe("budgets follow the verification depth (PART J)", () => {
-  it("reuses the existing taxonomy rather than inventing one", () => {
-    for (const mode of ["low", "medium", "high"] as const) {
-      expect(compileCompletionBudget(mode).mode).toBe(mode);
+  it("permits it indefinitely, because no budget has started", () => {
+    const run = new Run();
+    for (let index = 0; index < 30; index += 1) {
+      expect(run.act("Grep", null).allowed).toBe(true);
     }
   });
+});
 
-  it("gives a deeper task more room to diagnose", () => {
-    const low = compileCompletionBudget("low");
-    const high = compileCompletionBudget("high");
+describe("implementation breadth is free (PART F)", () => {
+  /*
+   * Run #7's shape, exactly: eight files that all legitimately need the same
+   * change, each preceded by the read that makes writing it possible.
+   *
+   * Under the counter this replaces, the eight edits produced seven completion
+   * windows against a ceiling of four, and every action after the fifth edit
+   * was refused.
+   */
+  const PAGES = [
+    "src/app/page.tsx",
+    "src/app/login/page.tsx",
+    "src/app/signup/page.tsx",
+    "src/app/forgot-password/page.tsx",
+    "src/app/reset-password/page.tsx",
+    "src/app/privacy/page.tsx",
+    "src/app/terms/page.tsx",
+    "src/app/layout.tsx",
+  ];
 
-    expect(high.maxToolCallsSinceEdit).toBeGreaterThan(low.maxToolCallsSinceEdit);
-    expect(high.maxOutsideBriefReadsSinceEdit).toBeGreaterThan(low.maxOutsideBriefReadsSinceEdit);
-    expect(high.maxRepairCycles).toBeGreaterThan(low.maxRepairCycles);
-    expect(high.maxCompletionWindows).toBeGreaterThan(low.maxCompletionWindows);
+  function eightFileRun() {
+    const run = new Run();
+    for (const page of PAGES) {
+      expect(run.act("Read", page).allowed).toBe(true);
+      expect(run.act("Edit", page).allowed).toBe(true);
+    }
+    return run;
+  }
+
+  it("charges eight legitimate edits nothing at all", () => {
+    const run = eightFileRun();
+
+    expect(run.state.implementationMutations).toBe(8);
+    expect(run.state.convergenceMutations).toBe(0);
+    expect(run.state.repairCycles).toBe(0);
   });
 
-  it("covers the legitimate post-edit work run #5 actually did", () => {
-    // Two diff-review reads, one search to locate a test, one targeted test.
-    expect(compileCompletionBudget("low").maxToolCallsSinceEdit).toBeGreaterThanOrEqual(4);
-    // And is less than the nine actions it took.
-    expect(compileCompletionBudget("low").maxToolCallsSinceEdit).toBeLessThan(9);
+  it("refuses none of them, and none of the reads between them", () => {
+    const run = new Run();
+    const refusals: string[] = [];
+
+    for (const page of PAGES) {
+      const read = run.act("Read", page);
+      if (!read.allowed) refusals.push(read.reason);
+      const edit = run.act("Edit", page);
+      if (!edit.allowed) refusals.push(edit.reason);
+    }
+
+    expect(refusals).toEqual([]);
   });
 
-  it("is compiled from the verification plan, not classified again", () => {
-    const plan = compileAgentVerificationPlan({
-      changeKind: "product_change",
-      evidenceIds: ["live.seo.robots_meta_missing"],
-      riskClass: "moderate",
+  it("keeps the run in the implementing phase throughout", () => {
+    expect(eightFileRun().state.phase).toBe("implementing");
+  });
+
+  it("records every changed path, because that is what scopes the diff review", () => {
+    expect([...eightFileRun().state.mutatedPaths].sort()).toEqual([...PAGES].sort());
+  });
+});
+
+describe("required verification outranks the completion budget (PART H)", () => {
+  /**
+   * The exact contradiction run #7 hit: the LOW plan requires a diff review,
+   * and the completion budget had refused all eight attempts at one.
+   */
+  function convergedRunWithSpentBudget() {
+    const run = new Run();
+    run.act("Edit", "src/app/page.tsx");
+    run.act("Edit", "src/app/terms/page.tsx");
+
+    // Converge, then spend the whole optional allowance.
+    for (let index = 0; index < BUDGET.maxCompletionActions + 4; index += 1) {
+      run.act("Grep", null);
+    }
+    return run;
+  }
+
+  it("allows re-reading a file this run changed, with the budget exhausted", () => {
+    const run = convergedRunWithSpentBudget();
+
+    const decision = run.act("Read", "src/app/page.tsx");
+
+    expect(decision.allowed).toBe(true);
+    expect(decision.activity).toBe("required_diff_review");
+  });
+
+  it("still refuses an unrelated read at the same moment", () => {
+    const run = convergedRunWithSpentBudget();
+
+    const decision = run.act("Read", "src/lib/unrelated-config.ts");
+
+    expect(decision.allowed).toBe(false);
+    expect(decision.activity).toBe("outside_brief_read");
+  });
+
+  it("counts the override, so a contradiction is visible rather than silent", () => {
+    const run = convergedRunWithSpentBudget();
+    run.act("Read", "src/app/page.tsx");
+    run.act("Read", "src/app/terms/page.tsx");
+
+    expect(run.state.requiredVerificationActions).toBe(2);
+    expect(run.state.requiredVerificationOverrides).toBe(2);
+  });
+
+  it("records no override when the budget would have allowed it anyway", () => {
+    const run = new Run();
+    run.act("Edit", "src/app/page.tsx");
+    run.act("Read", "src/app/page.tsx");
+
+    expect(run.state.requiredVerificationActions).toBe(1);
+    expect(run.state.requiredVerificationOverrides).toBe(0);
+  });
+
+  it("does not treat a read of an unchanged file as a diff review", () => {
+    const run = new Run();
+    run.act("Edit", "src/app/page.tsx");
+
+    expect(run.act("Read", "src/app/layout.tsx").activity).toBe("brief_read");
+  });
+
+  it("allows a required check command past an exhausted completion budget", () => {
+    const run = convergedRunWithSpentBudget();
+
+    const decision = run.act("Bash", null, { commandCheck: "diff_review" });
+
+    // `diff_review` is the LOW plan's required check; a command mapping to it is
+    // treated as required work rather than as optional exploration.
+    expect(decision.allowed).toBe(true);
+    expect(decision.activity).toBe("required_check");
+  });
+});
+
+describe("diff review is scoped, not a licence (PART I)", () => {
+  it("bounds how many times one changed file may be re-read", () => {
+    const run = new Run();
+    run.act("Edit", "src/app/page.tsx");
+
+    for (let index = 0; index < BUDGET.maxDiffReviewReadsPerPath; index += 1) {
+      expect(run.act("Read", "src/app/page.tsx").allowed).toBe(true);
+    }
+
+    const decision = run.act("Read", "src/app/page.tsx");
+    expect(decision.allowed).toBe(false);
+    expect(decision).toMatchObject({ reason: "diff_review_scope_exhausted" });
+  });
+
+  it("cannot be turned into unrestricted reading by editing one more file", () => {
+    const run = new Run();
+    run.act("Edit", "src/app/page.tsx");
+
+    // The set of reviewable paths only ever grows by the run mutating a file,
+    // and mutating a file is itself observed and counted. A path the run never
+    // wrote is never reviewable.
+    expect(
+      classifyCompletionActivity({
+        toolName: "Read",
+        path: "src/lib/secrets.ts",
+        briefPaths: BRIEF,
+        requiredChecks: LOW_PLAN.requiredChecks,
+        commandCheck: null,
+        state: run.state,
+      }),
+    ).toBe("outside_brief_read");
+  });
+
+  it("does not apply at all when the plan does not require a diff review", () => {
+    const run = new Run();
+    run.act("Edit", "src/app/page.tsx");
+
+    expect(
+      classifyCompletionActivity({
+        toolName: "Read",
+        path: "src/app/page.tsx",
+        briefPaths: BRIEF,
+        requiredChecks: [],
+        commandCheck: null,
+        state: run.state,
+      }),
+    ).toBe("outside_brief_read");
+  });
+});
+
+describe("optional exploration is still bounded after convergence (PART J)", () => {
+  function converged() {
+    const run = new Run();
+    run.act("Edit", "src/app/page.tsx");
+    for (let index = 0; index < BUDGET.implementationStabilisationCalls; index += 1) {
+      run.act("Grep", null);
+    }
+    return run;
+  }
+
+  it("enters the completing phase by observation alone", () => {
+    const run = converged();
+    run.act("Grep", null);
+
+    expect(run.state.phase).toBe("completing");
+  });
+
+  it("runs out of optional actions", () => {
+    const run = converged();
+    let refusal: string | null = null;
+
+    for (let index = 0; index < 20 && refusal === null; index += 1) {
+      const decision = run.act("Grep", null);
+      if (!decision.allowed) refusal = decision.reason;
+    }
+
+    expect(refusal).toBe("completion_budget_exhausted");
+  });
+
+  it("runs out of outside-brief reads sooner than of actions", () => {
+    const run = converged();
+
+    for (let index = 0; index < BUDGET.maxOutsideBriefReads; index += 1) {
+      expect(run.act("Read", `src/lib/other-${index}.ts`).allowed).toBe(true);
+    }
+
+    expect(run.act("Read", "src/lib/one-more.ts")).toMatchObject({
+      allowed: false,
+      reason: "outside_brief_budget_exhausted",
     });
+  });
 
-    expect(completionBudgetFor(plan)?.mode).toBe(plan.mode);
-    expect(completionBudgetFor(null)).toBeNull();
+  it("runs out of wall clock", () => {
+    const run = converged();
+
+    expect(
+      run.act("Grep", null, { advanceMs: BUDGET.maxCompletionWallClockMs }),
+    ).toMatchObject({ allowed: false, reason: "completion_wall_clock_exhausted" });
+  });
+
+  it("bounds converge-edit-converge churn", () => {
+    const run = new Run();
+    run.act("Edit", "src/app/page.tsx");
+
+    for (let cycle = 0; cycle < BUDGET.maxConvergenceWindows; cycle += 1) {
+      for (let index = 0; index <= BUDGET.implementationStabilisationCalls; index += 1) {
+        run.act("Grep", null);
+      }
+      run.act("Edit", "src/app/page.tsx");
+    }
+
+    expect(run.state.convergenceMutations).toBe(BUDGET.maxConvergenceWindows);
+
+    for (let index = 0; index <= BUDGET.implementationStabilisationCalls; index += 1) {
+      run.act("Grep", null);
+    }
+    expect(run.act("Grep", null)).toMatchObject({
+      allowed: false,
+      reason: "convergence_windows_exhausted",
+    });
+  });
+
+  it("never refuses the mutation itself", () => {
+    const run = new Run();
+    run.act("Edit", "src/app/page.tsx");
+
+    for (let cycle = 0; cycle < BUDGET.maxConvergenceWindows + 5; cycle += 1) {
+      for (let index = 0; index <= BUDGET.implementationStabilisationCalls; index += 1) {
+        run.act("Grep", null);
+      }
+      expect(run.act("Edit", "src/app/page.tsx").allowed).toBe(true);
+    }
+  });
+});
+
+describe("repair means a failure was answered (PART K)", () => {
+  it("does not call an ordinary second implementation edit a repair", () => {
+    const run = new Run();
+    run.act("Edit", "src/app/layout.tsx");
+    run.act("Edit", "src/app/app/layout.tsx");
+
+    // This is run #6's shape, which recorded `repair_cycles: 1` with nothing
+    // failing, because one counter meant both things.
+    expect(run.state.repairCycles).toBe(0);
+    expect(run.state.implementationMutations).toBe(2);
+  });
+
+  it("counts a mutation that answered an observed failure", () => {
+    const run = new Run();
+    run.act("Edit", "src/app/page.tsx");
+    run.fail("Bash");
+    run.act("Edit", "src/app/page.tsx");
+
+    expect(run.state.repairCycles).toBe(1);
+  });
+
+  it("unlocks diagnosis while a failure is outstanding, past the optional budget", () => {
+    const run = new Run();
+    run.act("Edit", "src/app/page.tsx");
+    for (let index = 0; index < 20; index += 1) run.act("Grep", null);
+    run.fail("Bash");
+
+    const decision = run.act("Read", "src/lib/anything.ts");
+    expect(decision.allowed).toBe(true);
+    expect(decision.activity).toBe("repair");
+  });
+
+  it("bounds repair too", () => {
+    const run = new Run();
+    run.act("Edit", "src/app/page.tsx");
+
+    for (let cycle = 0; cycle < BUDGET.maxRepairCycles; cycle += 1) {
+      run.fail("Bash");
+      run.act("Edit", "src/app/page.tsx");
+    }
+
+    run.fail("Bash");
+    expect(run.act("Read", "src/lib/anything.ts")).toMatchObject({
+      allowed: false,
+      reason: "repair_cycles_exhausted",
+    });
+  });
+
+  it("does not treat a failed read as evidence the implementation is wrong", () => {
+    const run = new Run();
+    run.act("Edit", "src/app/page.tsx");
+    run.fail("Read");
+
+    expect(run.state.unresolvedFailure).toBe(false);
   });
 });
 
 describe("what crosses into the sandbox", () => {
-  it("carries the brief's paths, integers and Vibe's own messages", () => {
+  it("carries the required checks, because the harness has to know them", () => {
     const policy = toSandboxCompletionPolicy({
       budget: BUDGET,
       briefPaths: ["src/app/layout.tsx"],
+      requiredChecks: LOW_PLAN.requiredChecks,
     });
 
-    expect(policy.briefPaths).toEqual(["src/app/layout.tsx"]);
-    expect(policy.budget.maxToolCallsSinceEdit).toBe(BUDGET.maxToolCallsSinceEdit);
-    expect(policy.mutatingTools).toContain("Edit");
-    expect(policy.readTools).toContain("Read");
-    // Vibe's refusal wording travels; nothing about how it was derived does.
-    expect(JSON.stringify(policy)).not.toContain("budgetVersion");
+    expect(policy.requiredChecks).toContain("diff_review");
+  });
+
+  it("carries no mode and no version — those are Vibe's records, not rules", () => {
+    const policy = toSandboxCompletionPolicy({
+      budget: BUDGET,
+      briefPaths: [],
+      requiredChecks: [],
+    });
+
+    expect(policy.budget).not.toHaveProperty("mode");
+    expect(policy.budget).not.toHaveProperty("budgetVersion");
+  });
+
+  it("carries a message for every refusal reason", () => {
+    const policy = toSandboxCompletionPolicy({ budget: BUDGET, briefPaths: [], requiredChecks: [] });
+
+    for (const reason of Object.keys(policy.messages)) {
+      expect(policy.messages[reason as keyof typeof policy.messages].length).toBeGreaterThan(20);
+    }
+  });
+});
+
+describe("the budget follows the verification mode", () => {
+  it("is null when there is no plan", () => {
+    expect(completionBudgetFor(null)).toBeNull();
+  });
+
+  it("matches the plan's mode", () => {
+    const plan = compileAgentVerificationPlan({
+      changeKind: "product_change",
+      evidenceIds: ["live.seo.canonical_missing"],
+      riskClass: "low",
+    });
+
+    expect(completionBudgetFor(plan)?.mode).toBe(plan.mode);
+  });
+
+  it("gives a higher mode more room in every dimension", () => {
+    const low = compileCompletionBudget("low");
+    const high = compileCompletionBudget("high");
+
+    expect(high.maxCompletionActions).toBeGreaterThan(low.maxCompletionActions);
+    expect(high.maxOutsideBriefReads).toBeGreaterThan(low.maxOutsideBriefReads);
+    expect(high.maxConvergenceWindows).toBeGreaterThan(low.maxConvergenceWindows);
+    expect(high.maxRepairCycles).toBeGreaterThan(low.maxRepairCycles);
   });
 });

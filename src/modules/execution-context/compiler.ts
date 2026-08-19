@@ -7,6 +7,8 @@ import type {
   RouteSummary,
 } from "@/modules/repository-intelligence/schema";
 import type { ExecutionSpec } from "@/modules/execution-contract/spec";
+import type { StepChangeKind } from "@/modules/action-plans/schema";
+import type { LiveProductIntelligenceSnapshot } from "@/modules/live-product-intelligence/schema";
 import type { ProductProfile } from "@/modules/product-understanding/schema";
 import {
   BRIEF_BUDGET,
@@ -22,6 +24,14 @@ import {
   type FileCandidate,
   type LiveProductContext,
 } from "./brief";
+import {
+  EMPTY_SURFACE_REQUIREMENT,
+  deriveExecutionSurfaceRequirement,
+  resolveExecutionSurface,
+  type ExecutionSurfaceRequirement,
+  type ResolvedExecutionSurface,
+  type ResolvedRoute,
+} from "./surface";
 
 /**
  * The Execution Context Compiler: stored intelligence → one task-specific brief.
@@ -64,7 +74,11 @@ import {
  *    directive survives intact in, and the renderer fences the lot.
  */
 
-export const EXECUTION_BRIEF_VERSION = "execution-brief.v1" as const;
+/**
+ * v2 (Sprint 0044) adds the resolved execution surface: the `execution_surface`
+ * facts and the page candidates a step's cited evidence resolves to.
+ */
+export const EXECUTION_BRIEF_VERSION = "execution-brief.v2" as const;
 
 /* ---------------------------------------------------------------------------
  * Freshness (PART C)
@@ -245,7 +259,7 @@ export function selectSurfaces(terms: ReadonlySet<string>): BusinessSurfaceId[] 
  * should first become visible. Over-long paths are dropped rather than
  * truncated, because a truncated path is a wrong path stated confidently.
  */
-function usablePath(path: string): boolean {
+export function usablePath(path: string): boolean {
   if (path.length === 0 || path.length > MAX_BRIEF_PATH) return false;
   if (path.startsWith("/") || path.includes("..") || path.includes("\\")) return false;
   return !/\s/.test(path);
@@ -566,6 +580,52 @@ function routeMatchesTask(route: RouteSummary, terms: ReadonlySet<string>): bool
  * start, and being wrong costs one tool call — the same call the agent makes
  * today, except today it makes fourteen of them.
  */
+export function selectSurfaceEvidenceCandidates(
+  snapshot: RepositoryIntelligenceSnapshot,
+  surfaces: readonly BusinessSurfaceId[],
+): FileCandidate[] {
+  const candidates: FileCandidate[] = [];
+  const byId = new Map(snapshot.businessSurfaces.map((surface) => [surface.id, surface]));
+
+  for (const id of surfaces) {
+    const surface = byId.get(id);
+    if (!surface?.detected) continue;
+    for (const item of surface.evidence.slice(0, BRIEF_BUDGET.maxEvidencePerFact)) {
+      if (!usablePath(item.path)) continue;
+      candidates.push({
+        path: item.path,
+        reason: "business_surface_evidence",
+        confidence: surface.confidence,
+        note: boundText(surface.name),
+      });
+    }
+  }
+
+  return candidates;
+}
+
+/**
+ * Merges candidate lists, keeping the first mention of each path.
+ *
+ * Order is meaningful: `rankCandidates` breaks confidence ties by position, so
+ * the caller's argument order decides what survives the cap. Surface evidence
+ * first, then the pages the requirement resolved to, then the weaker hints.
+ */
+export function mergeCandidates(...lists: readonly FileCandidate[][]): FileCandidate[] {
+  const seen = new Set<string>();
+  const merged: FileCandidate[] = [];
+
+  for (const list of lists) {
+    for (const candidate of list) {
+      if (!usablePath(candidate.path) || seen.has(candidate.path)) continue;
+      seen.add(candidate.path);
+      merged.push(candidate);
+    }
+  }
+
+  return merged;
+}
+
 export function selectFileCandidates(
   snapshot: RepositoryIntelligenceSnapshot,
   surfaces: readonly BusinessSurfaceId[],
@@ -580,19 +640,7 @@ export function selectFileCandidates(
     candidates.push({ ...candidate, note: candidate.note ? boundText(candidate.note) : null });
   };
 
-  const byId = new Map(snapshot.businessSurfaces.map((surface) => [surface.id, surface]));
-  for (const id of surfaces) {
-    const surface = byId.get(id);
-    if (!surface?.detected) continue;
-    for (const item of surface.evidence.slice(0, BRIEF_BUDGET.maxEvidencePerFact)) {
-      add({
-        path: item.path,
-        reason: "business_surface_evidence",
-        confidence: surface.confidence,
-        note: surface.name,
-      });
-    }
-  }
+  for (const candidate of selectSurfaceEvidenceCandidates(snapshot, surfaces)) add(candidate);
 
   const routes = snapshot.routes.routes.filter((route) => usablePath(route.sourcePath));
 
@@ -630,6 +678,121 @@ export function selectFileCandidates(
 }
 
 /**
+ * How many pages of a resolved surface may be named.
+ *
+ * A ceiling on this list specifically, below `BRIEF_BUDGET.maxCandidates`, so
+ * that resolving a wide surface can never crowd out the surface evidence and
+ * layouts that come with it. A site with forty public pages produces eight
+ * candidates and an honest omission count, not a forty-line brief.
+ */
+const MAX_SURFACE_PAGE_CANDIDATES = 8;
+
+/**
+ * The pages a resolved requirement puts in front of the agent.
+ *
+ * Only for scopes the step's own evidence named. A repository with a signed-in
+ * area does not get its app routes listed because they exist — it gets them only
+ * if the cited evidence said the work is about the authenticated surface, which
+ * is what stops a public-page task from pulling in private routes (PART O).
+ */
+function executionSurfaceCandidates(
+  requirement: ExecutionSurfaceRequirement,
+  resolved: ResolvedExecutionSurface,
+): FileCandidate[] {
+  const candidates: FileCandidate[] = [];
+
+  const take = (
+    routes: readonly ResolvedRoute[],
+    reason: "public_page_surface" | "authenticated_page_surface",
+  ) => {
+    for (const route of routes.slice(0, MAX_SURFACE_PAGE_CANDIDATES)) {
+      candidates.push({
+        path: route.sourcePath,
+        reason,
+        confidence: route.confidence,
+        note: boundText(route.path),
+      });
+    }
+  };
+
+  if (requirement.scopes.includes("public_pages")) take(resolved.publicPages, "public_page_surface");
+  if (requirement.scopes.includes("authenticated_pages")) {
+    take(resolved.authenticatedPages, "authenticated_page_surface");
+  }
+
+  return candidates;
+}
+
+/**
+ * The requirement, stated as a fact rather than left implicit in a file list.
+ *
+ * Worth a fact of its own because "this step applies to every public page" is
+ * the sentence run #7 never received — it was given six paths with no statement
+ * of what set they were a sample of, read one of them, and went looking.
+ */
+function executionSurfaceFacts(
+  requirement: ExecutionSurfaceRequirement,
+  resolved: ResolvedExecutionSurface,
+  revision: string,
+): ContextFact[] {
+  const facts: ContextFact[] = [];
+
+  const state = (
+    scope: "public_pages" | "authenticated_pages",
+    routes: readonly ResolvedRoute[],
+    label: string,
+  ) => {
+    if (!requirement.scopes.includes(scope) || routes.length === 0) return;
+    facts.push(
+      fact({
+        subject: "execution_surface",
+        value: `${label} (${routes.length}): ${routes.map((route) => route.path).join(", ")}`,
+        source: "repository_scan",
+        confidence: resolved.corroboratedByLiveScan ? "high" : "medium",
+        evidence: routes.slice(0, BRIEF_BUDGET.maxEvidencePerFact).map((route) => ({
+          path: route.sourcePath,
+          revision,
+        })),
+      }),
+    );
+  };
+
+  state("public_pages", resolved.publicPages, "This step applies to the public pages");
+  state(
+    "authenticated_pages",
+    resolved.authenticatedPages,
+    "This step applies to the signed-in application pages",
+  );
+
+  /*
+   * The exclusion, stated once and only when it is a real one.
+   *
+   * A public-page step in a product that has a signed-in area is exactly where
+   * an agent would otherwise wonder, and "Vibe left these out deliberately" is
+   * cheaper than it deciding for itself.
+   */
+  if (
+    requirement.scopes.includes("public_pages") &&
+    !requirement.scopes.includes("authenticated_pages") &&
+    resolved.authenticatedPages.length > 0
+  ) {
+    facts.push(
+      fact({
+        subject: "execution_surface",
+        value:
+          `The signed-in application pages are outside this step (${resolved.authenticatedPages.length} ` +
+          `under ${resolved.authenticatedRoots.join(", ") || "the app area"})`,
+        source: "repository_scan",
+        confidence: "medium",
+        evidence: [],
+      }),
+    );
+  }
+
+  return facts;
+}
+
+/**
  * Directories the step is believed not to touch.
  *
  * Only ever stated when there is something to contrast it with: with no
@@ -657,6 +820,20 @@ function irrelevantAreas(
  * The compiler
  * ------------------------------------------------------------------------ */
 
+/**
+ * The trusted half of the step.
+ *
+ * Two fields, both closed vocabularies the server owns: the change kind and the
+ * Vibe-minted evidence ids the plan cites. Nothing free-text is accepted here —
+ * the step's prose reaches the compiler through `spec.objective`, where it is a
+ * relevance *hint*, and it can never produce an execution-surface requirement
+ * (PART Q).
+ */
+export type TrustedStepFacts = {
+  changeKind: StepChangeKind;
+  evidenceIds: readonly string[];
+};
+
 export type CompileExecutionBriefInput = {
   spec: ExecutionSpec;
   /** The snapshot the spec names. Null when it could not be loaded. */
@@ -665,6 +842,17 @@ export type CompileExecutionBriefInput = {
   productProfile: ProductProfile | null;
   /** The origin the live scan looked at, when there is one. */
   liveOrigin: string | null;
+  /**
+   * The plan step's trusted structured fields. Null when the plan is unreadable,
+   * which degrades surface selection to the pre-0044 prose hints rather than
+   * failing the run.
+   */
+  step?: TrustedStepFacts | null;
+  /**
+   * The live scan itself, used only to corroborate the public/authenticated
+   * split. It is not pinned to this commit and never invents a path.
+   */
+  liveSnapshot?: LiveProductIntelligenceSnapshot | null;
 };
 
 /**
@@ -680,17 +868,59 @@ export function compileExecutionBrief(input: CompileExecutionBriefInput): Execut
   const freshness = assessFreshness(spec, snapshot);
   const usable = freshness.state === "fresh" && snapshot !== null;
 
+  /*
+   * The requirement comes first, and it comes from trusted structured data only.
+   *
+   * It is derived whether or not the snapshot is fresh, because it is a fact
+   * about the *step*, not about the tree — a stale run still records what
+   * surface the work was for. Resolving it into paths is what requires freshness.
+   */
+  const requirement = input.step
+    ? deriveExecutionSurfaceRequirement(input.step)
+    : EMPTY_SURFACE_REQUIREMENT;
+
   const terms = taskTerms(spec);
-  const surfaces = usable ? selectSurfaces(terms) : [];
+
+  /*
+   * Trusted evidence outranks the step's words, and having *any* recognised
+   * evidence is what settles it.
+   *
+   * A requirement that resolved from `live.conversion.primary_cta` names no
+   * business surface at all, and that is a real answer — "this is about the
+   * public pages, not about a surface" — not a reason to fall back on prose.
+   * The prose path survives only for steps that cite nothing this compiler
+   * recognises, which is where run #7's `pricing_page` false positive came from.
+   */
+  const surfaces = !usable
+    ? []
+    : requirement.derivedFrom.length > 0
+      ? requirement.surfaces
+      : selectSurfaces(terms);
+
+  const resolved: ResolvedExecutionSurface | null =
+    usable && snapshot
+      ? resolveExecutionSurface({ snapshot, live: input.liveSnapshot ?? null, usablePath })
+      : null;
+
+  const surfaceCandidates = resolved
+    ? executionSurfaceCandidates(requirement, resolved)
+    : [];
 
   const allFacts = [
     ...(usable && snapshot ? repositoryFacts(snapshot, surfaces) : []),
+    ...(resolved ? executionSurfaceFacts(requirement, resolved, snapshot!.source.commitSha) : []),
     ...specFacts(spec, !usable),
     ...profileFacts(input.productProfile),
   ];
 
   const allCandidates =
-    usable && snapshot ? selectFileCandidates(snapshot, surfaces, terms) : [];
+    usable && snapshot
+      ? mergeCandidates(
+          selectSurfaceEvidenceCandidates(snapshot, surfaces),
+          surfaceCandidates,
+          selectFileCandidates(snapshot, surfaces, terms),
+        )
+      : [];
 
   const facts = rankFacts(allFacts).slice(0, BRIEF_BUDGET.maxFacts);
   const fileCandidates = rankCandidates(allCandidates).slice(0, BRIEF_BUDGET.maxCandidates);
@@ -720,5 +950,20 @@ export function compileExecutionBrief(input: CompileExecutionBriefInput): Execut
       factsOmitted: allFacts.length - facts.length,
       candidatesOmitted: allCandidates.length - fileCandidates.length,
     },
+    surface: {
+      requirement,
+      publicPagesResolved: resolved?.publicPages.length ?? 0,
+      publicPagesIncluded: countIncluded(fileCandidates, "public_page_surface"),
+      authenticatedPagesResolved: resolved?.authenticatedPages.length ?? 0,
+      authenticatedPagesIncluded: countIncluded(fileCandidates, "authenticated_page_surface"),
+    },
   };
+}
+
+/** How many of a reason's candidates survived ranking and the cap. */
+function countIncluded(
+  candidates: readonly FileCandidate[],
+  reason: FileCandidate["reason"],
+): number {
+  return candidates.filter((candidate) => candidate.reason === reason).length;
 }

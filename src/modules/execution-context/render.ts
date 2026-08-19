@@ -55,12 +55,15 @@ const SUBJECT_LABELS: Record<string, string> = {
   api_location: "api",
   business_surface: "surface",
   product_capability: "product does",
+  execution_surface: "this step's surface",
 };
 
 const REASON_LABELS: Record<FileCandidate["reason"], string> = {
   business_surface_evidence: "Vibe's analysis cites this for this surface",
   route_source: "route file matching this step",
   layout: "layout, where site-wide concerns live here",
+  public_page_surface: "a public page this step applies to",
+  authenticated_page_surface: "a signed-in page this step applies to",
 };
 
 function renderFact(fact: ContextFact): string {

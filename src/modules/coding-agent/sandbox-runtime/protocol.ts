@@ -147,8 +147,20 @@ export type AgentRuntimeResult = {
   policyDecisions: number;
   /** Mutations that answered an observed failure. A real repair. */
   repairCycles: number;
-  /** Mutations after the first — how many times the window was bought back. */
-  completionWindows: number;
+  /**
+   * Files written while the change was still being implemented.
+   *
+   * Breadth, and never charged against anything. Run #7 legitimately needed
+   * eight, and the counter this replaces reported that as seven convergence
+   * windows against a ceiling of four.
+   */
+  implementationMutations: number;
+  /** Files written after the run had already converged. Each cost a window. */
+  convergenceMutations: number;
+  /** Required verification operations the runtime allowed. */
+  requiredVerificationActions: number;
+  /** Of those, the ones a completion budget alone would have refused. */
+  requiredVerificationOverrides: number;
   sessionId: string | null;
   permissionDenials: number;
   /** Per-model token counts, keyed by model id. Never a cost claim. */
@@ -212,7 +224,10 @@ export function parseAgentRuntimeResult(payload: string | null): AgentRuntimeRes
     verificationRefusals: nonNegativeInt(raw.verificationRefusals),
     policyDecisions: nonNegativeInt(raw.policyDecisions),
     repairCycles: nonNegativeInt(raw.repairCycles),
-    completionWindows: nonNegativeInt(raw.completionWindows),
+    implementationMutations: nonNegativeInt(raw.implementationMutations),
+    convergenceMutations: nonNegativeInt(raw.convergenceMutations),
+    requiredVerificationActions: nonNegativeInt(raw.requiredVerificationActions),
+    requiredVerificationOverrides: nonNegativeInt(raw.requiredVerificationOverrides),
     modelUsage:
       typeof raw.modelUsage === "object" && raw.modelUsage !== null
         ? (raw.modelUsage as Record<string, unknown>)

@@ -120,8 +120,14 @@ export type StoredAgentExecutionRun = {
   completionRefusals: number | null;
   /** Mutations that answered an observed failure. A real repair. */
   repairCycles: number | null;
-  /** Mutations after the first. Each bought back the completion window. */
-  completionWindows: number | null;
+  /** Files written while implementing. Breadth, never charged (Sprint 0044). */
+  implementationMutations: number | null;
+  /** Files written after the run converged. Each one cost a window. */
+  convergenceMutations: number | null;
+  /** Required verification operations the runtime allowed. */
+  requiredVerificationActions: number | null;
+  /** Of those, the ones a completion budget alone would have refused. */
+  requiredVerificationOverrides: number | null;
   /** Tool calls the policy hook saw. Zero beside tool calls means it never ran. */
   policyDecisions: number | null;
 
@@ -187,7 +193,10 @@ type RunRow = {
   post_edit_provider_cost_usd: string | number | null;
   completion_refusals: number | null;
   repair_cycles: number | null;
-  completion_windows: number | null;
+  implementation_mutations: number | null;
+  convergence_mutations: number | null;
+  required_verification_actions: number | null;
+  required_verification_overrides: number | null;
   policy_decisions: number | null;
   prepared_change_id: string | null;
   created_at: string;
@@ -207,7 +216,8 @@ const RUN_COLUMNS =
   "verification_ms, time_to_first_edit_ms, time_to_last_edit_ms, " +
   "completion_budget_version, post_edit_tool_calls, post_edit_reads, post_edit_reads_beyond_brief, " +
   "post_edit_commands, post_edit_provider_calls, post_edit_provider_cost_usd, completion_refusals, " +
-  "repair_cycles, completion_windows, policy_decisions, " +
+  "repair_cycles, implementation_mutations, convergence_mutations, " +
+  "required_verification_actions, required_verification_overrides, policy_decisions, " +
   "prepared_change_id, created_at, started_at, completed_at";
 
 function mapRun(row: RunRow): StoredAgentExecutionRun {
@@ -268,7 +278,10 @@ function mapRun(row: RunRow): StoredAgentExecutionRun {
       row.post_edit_provider_cost_usd === null ? null : Number(row.post_edit_provider_cost_usd),
     completionRefusals: row.completion_refusals,
     repairCycles: row.repair_cycles,
-    completionWindows: row.completion_windows,
+    implementationMutations: row.implementation_mutations,
+    convergenceMutations: row.convergence_mutations,
+    requiredVerificationActions: row.required_verification_actions,
+    requiredVerificationOverrides: row.required_verification_overrides,
     policyDecisions: row.policy_decisions,
     preparedChangeId: row.prepared_change_id,
     createdAt: row.created_at,
@@ -513,8 +526,13 @@ export type AgentRunObservations = {
   postEditProviderCostUsd?: number | null;
   completionRefusals?: number;
   repairCycles?: number;
-  completionWindows?: number;
+  implementationMutations?: number;
+  convergenceMutations?: number;
+  requiredVerificationActions?: number;
+  requiredVerificationOverrides?: number;
   policyDecisions?: number | null;
+  contextSurfaceScopes?: string[] | null;
+  contextSurfacePages?: number | null;
 };
 
 /** Records what Vibe observed, without deciding the run's fate. */
@@ -565,8 +583,13 @@ export async function recordAgentRunObservations(
   set("post_edit_provider_cost_usd", observations.postEditProviderCostUsd);
   set("completion_refusals", observations.completionRefusals);
   set("repair_cycles", observations.repairCycles);
-  set("completion_windows", observations.completionWindows);
+  set("implementation_mutations", observations.implementationMutations);
+  set("convergence_mutations", observations.convergenceMutations);
+  set("required_verification_actions", observations.requiredVerificationActions);
+  set("required_verification_overrides", observations.requiredVerificationOverrides);
   set("policy_decisions", observations.policyDecisions);
+  set("context_surface_scopes", observations.contextSurfaceScopes);
+  set("context_surface_pages", observations.contextSurfacePages);
 
   if (Object.keys(patch).length === 0) return;
 

@@ -193,8 +193,14 @@ export type CodingAgentResult = {
   policyDecisions: number | null;
   /** Mutations that answered an observed failure. A real repair. */
   repairCycles: number | null;
-  /** Mutations after the first. Each one bought a fresh completion window. */
-  completionWindows: number | null;
+  /** Files written while implementing. Breadth, never charged (Sprint 0044). */
+  implementationMutations: number | null;
+  /** Files written after the run converged. Each one cost a window. */
+  convergenceMutations: number | null;
+  /** Required verification operations the runtime allowed. */
+  requiredVerificationActions: number | null;
+  /** Of those, the ones a completion budget alone would have refused. */
+  requiredVerificationOverrides: number | null;
   durationMs: number;
   /**
    * A sanitized description of a provider failure. Never surfaced to a user,

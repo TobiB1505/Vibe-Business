@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { EMPTY_SURFACE_REQUIREMENT } from "./surface";
 import { renderExecutionBrief } from "./render";
 import { BRIEF_BUDGET, type ContextFact, type ExecutionBrief, type FileCandidate } from "./brief";
 
@@ -40,6 +41,13 @@ function brief(overrides: Partial<ExecutionBrief> = {}): ExecutionBrief {
       snapshotId: "snap-1",
     },
     truncated: { factsOmitted: 0, candidatesOmitted: 0 },
+    surface: {
+      requirement: EMPTY_SURFACE_REQUIREMENT,
+      publicPagesResolved: 0,
+      publicPagesIncluded: 0,
+      authenticatedPagesResolved: 0,
+      authenticatedPagesIncluded: 0,
+    },
     ...overrides,
   };
 }

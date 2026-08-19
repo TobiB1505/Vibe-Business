@@ -163,7 +163,12 @@ export type LiveRunRow = {
     providerCostUsd: number | null;
     refusals: number | null;
     repairCycles: number | null;
-    completionWindows: number | null;
+    implementationMutations: number | null;
+    convergenceMutations: number | null;
+    requiredVerificationActions: number | null;
+    requiredVerificationOverrides: number | null;
+    contextSurfaceScopes: string[] | null;
+    contextSurfacePages: number | null;
     policyDecisions: number | null;
   } | null;
 

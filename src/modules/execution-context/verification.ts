@@ -297,6 +297,24 @@ export function classifyAgentVerification(
       };
 }
 
+/**
+ * The plan for a mode, without going through the classifier.
+ *
+ * Exported so the policy-consistency matrix can check every profile this
+ * product can compile, rather than only the ones a particular classification
+ * happens to reach. Nothing in a request path should use it: which mode a step
+ * gets is `classifyAgentVerification`'s decision, and a caller able to name a
+ * mode directly would be a caller able to choose one.
+ */
+export function verificationPlanForMode(mode: VerificationMode): AgentVerificationPlan {
+  return {
+    planVersion: AGENT_VERIFICATION_PLAN_VERSION,
+    mode,
+    rationale: `Profile ${mode}.`,
+    ...PROFILES[mode],
+  };
+}
+
 /** Builds the plan for one classified step. */
 export function compileAgentVerificationPlan(
   input: VerificationClassificationInput,

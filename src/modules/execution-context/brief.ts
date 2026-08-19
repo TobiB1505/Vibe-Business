@@ -36,6 +36,8 @@
  * field a directive could arrive in intact.
  */
 
+import type { ExecutionSurfaceRequirement } from "./surface";
+
 /**
  * How strongly a fact is grounded.
  *
@@ -84,6 +86,14 @@ export const FACT_SUBJECTS = [
   "api_location",
   "business_surface",
   "product_capability",
+  /**
+   * The surface the step's own cited evidence says the work lands on.
+   *
+   * Distinct from `public_surface`, which lists what the repository has.
+   * This one says which of it *this step applies to*, and it exists only when
+   * a trusted `ExecutionSurfaceRequirement` resolved to something.
+   */
+  "execution_surface",
 ] as const;
 export type FactSubject = (typeof FACT_SUBJECTS)[number];
 
@@ -124,6 +134,16 @@ export const CANDIDATE_REASONS = [
   "business_surface_evidence",
   "route_source",
   "layout",
+  /**
+   * A page in the surface the step's cited evidence resolved to.
+   *
+   * The reason run #7 had to find seven files itself. It is derived from
+   * `evidenceIds` through route intelligence (`surface.ts`), never from the
+   * step's words — which is what makes it work identically for canonical URLs,
+   * CTA copy and analytics attribution.
+   */
+  "public_page_surface",
+  "authenticated_page_surface",
 ] as const;
 export type CandidateReason = (typeof CANDIDATE_REASONS)[number];
 
@@ -184,6 +204,22 @@ export type BriefTruncation = {
   candidatesOmitted: number;
 };
 
+/**
+ * What the step's cited evidence said its surface is, and what resolving it
+ * against the pinned snapshot produced.
+ *
+ * Carried on the brief rather than recomputed, so a stored run answers "how many
+ * public pages did Vibe actually know about, and how many fitted?" without
+ * re-deriving anything.
+ */
+export type BriefSurface = {
+  requirement: ExecutionSurfaceRequirement;
+  publicPagesResolved: number;
+  publicPagesIncluded: number;
+  authenticatedPagesResolved: number;
+  authenticatedPagesIncluded: number;
+};
+
 export type ExecutionBrief = {
   briefVersion: string;
 
@@ -207,6 +243,7 @@ export type ExecutionBrief = {
   live: LiveProductContext;
   freshness: BriefFreshness;
   truncated: BriefTruncation;
+  surface: BriefSurface;
 };
 
 /* ---------------------------------------------------------------------------

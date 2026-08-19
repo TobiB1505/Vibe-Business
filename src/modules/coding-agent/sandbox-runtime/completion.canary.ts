@@ -3,6 +3,7 @@ import {
   compileCompletionBudget,
   toSandboxCompletionPolicy,
 } from "@/modules/execution-context/completion";
+import { verificationPlanForMode } from "@/modules/execution-context/verification";
 import { markerPath, runCanary, sdkBinaryAvailable } from "./canary/harness";
 
 /**
@@ -20,7 +21,18 @@ import { markerPath, runCanary, sdkBinaryAvailable } from "./canary/harness";
 const BUDGET = compileCompletionBudget("low");
 const BRIEF = ["src/app/layout.tsx", "src/app/app/layout.tsx"];
 
-const policy = toSandboxCompletionPolicy({ budget: BUDGET, briefPaths: BRIEF });
+/*
+ * The LOW plan's required checks travel with the budget (Sprint 0044).
+ *
+ * Without them the harness cannot tell "reading a file I changed because Vibe
+ * required a diff review" from "reading a file because I am curious", which is
+ * exactly the distinction run #7 needed and did not have.
+ */
+const policy = toSandboxCompletionPolicy({
+  budget: BUDGET,
+  briefPaths: BRIEF,
+  requiredChecks: verificationPlanForMode("low").requiredChecks,
+});
 
 const write = (path: string) => ({ name: "Write", input: { file_path: path, content: "x\n" } });
 const read = (path: string) => ({ name: "Read", input: { file_path: path } });
@@ -59,19 +71,19 @@ canary("completion control", () => {
     const outcome = await runCanary({
       completion: policy,
       script: [
-        write("src/app/layout.tsx"),
-        // Six permitted actions, then the seventh is past the LOW window.
-        read("src/app/layout.tsx"),
-        read("src/app/app/layout.tsx"),
-        bash("echo one"),
-        bash("echo two"),
-        bash("echo three"),
-        bash("echo four"),
+        write("src/modules/somewhere-else.ts"),
+        /*
+         * Enough calls to cross the stabilisation threshold, spend the whole
+         * optional allowance, and then keep going. Convergence is observed from
+         * the absence of mutations, not announced — so the first few of these
+         * are what move the run into `completing` in the first place.
+         */
+        ...Array.from({ length: 12 }, (_, index) => bash(`echo ${index}`)),
         bash(`touch ${marker}`),
       ],
       markerPaths: { late: marker },
       scriptedPaths: SCRIPTED_PATHS,
-      maxTurns: 14,
+      maxTurns: 30,
     });
 
     expect(outcome.result?.verificationRefusals ?? 0).toBeGreaterThan(0);
@@ -86,6 +98,11 @@ canary("completion control", () => {
       completion: policy,
       script: [
         write("src/app/layout.tsx"),
+        // Three non-mutating calls first: that is what convergence looks like
+        // from outside, and the outside-brief allowance only starts there.
+        bash("echo one"),
+        bash("echo two"),
+        bash("echo three"),
         // One is allowed — the brief can be wrong, and a single look is cheap.
         read("src/modules/execution/generators/nextjs-seo-foundations.ts"),
         // The second is the tail behaviour run #5 actually produced.
@@ -104,9 +121,9 @@ canary("completion control", () => {
     const outcome = await runCanary({
       completion: policy,
       script: [
-        write("src/app/layout.tsx"),
+        write("src/app/app/layout.tsx"),
         read("src/app/layout.tsx"),
-        read("src/app/app/layout.tsx"),
+        read("src/app/layout.tsx"),
         read("src/app/layout.tsx"),
       ],
       scriptedPaths: SCRIPTED_PATHS,
@@ -117,63 +134,126 @@ canary("completion control", () => {
   });
 
   /**
-   * The loop that must never break.
+   * Run #7's shape, against the real SDK.
    *
-   * A new edit buys back the window, because an agent that is still changing
-   * files has not finished. That is what makes repair possible without an
-   * exemption the model has to ask for — and asking is exactly what a model
-   * would learn to do if an exemption existed.
+   * Eight files that all legitimately need the same change, each preceded by
+   * the read that makes writing it possible — then a review of every one of
+   * them. Under the counter this replaces, the fifth edit exhausted the window
+   * and all eight reviews were refused.
    */
-  it("gives a repairing agent a fresh window on every edit", async () => {
-    const marker = markerPath("repair-final");
+  it("charges an eight-file change nothing, and allows reviewing all of it", async () => {
+    const marker = markerPath("wide-change-final");
+    const pages = [
+      "src/app/layout.tsx",
+      "src/app/page.tsx",
+      "src/app/login/page.tsx",
+      "src/app/signup/page.tsx",
+      "src/app/forgot-password/page.tsx",
+      "src/app/reset-password/page.tsx",
+      "src/app/privacy/page.tsx",
+      "src/app/terms/page.tsx",
+    ];
+
+    const outcome = await runCanary({
+      completion: policy,
+      script: [
+        ...pages.flatMap((path) => [read(path), write(path)]),
+        ...pages.map((path) => read(path)),
+        bash(`touch ${marker}`),
+      ],
+      markerPaths: { final: marker },
+      scriptedPaths: [...SCRIPTED_PATHS, ...pages],
+      maxTurns: 40,
+    });
+
+    expect(outcome.result?.verificationRefusals).toBe(0);
+    expect(outcome.result?.implementationMutations).toBe(8);
+    expect(outcome.result?.convergenceMutations).toBe(0);
+    expect(outcome.result?.repairCycles).toBe(0);
+    // Every one of the eight reviews was recognised as required work.
+    expect(outcome.result?.requiredVerificationActions).toBe(8);
+    expect(outcome.markers.final).toBe(true);
+  });
+
+  /**
+   * The priority that run #7 did not have.
+   *
+   * The optional budget is spent to exhaustion, and then the agent reads a file
+   * it changed. That read is the LOW plan's own required diff review, so no
+   * Vibe resource budget may refuse it — while an unrelated read at the same
+   * moment still is.
+   */
+  it("allows a required diff review past an exhausted budget, and refuses an unrelated read", async () => {
+    const allowed = markerPath("diff-review-allowed");
+    const refusedMarker = markerPath("unrelated-refused");
 
     const outcome = await runCanary({
       completion: policy,
       script: [
         write("src/app/layout.tsx"),
+        ...Array.from({ length: 12 }, (_, index) => bash(`echo spend-${index}`)),
         read("src/app/layout.tsx"),
-        bash("echo check-one"),
-        bash("echo check-two"),
-        bash("echo check-three"),
-        bash("echo check-four"),
-        bash("echo check-five"),
-        // Sixth action would exhaust the window — but this is an edit, so the
-        // window resets instead.
-        write("src/app/layout.tsx"),
-        read("src/app/layout.tsx"),
-        bash(`touch ${marker}`),
+        bash(`touch ${allowed}`),
+        read("src/modules/somewhere-else.ts"),
+        bash(`touch ${refusedMarker}`),
       ],
-      markerPaths: { final: marker },
+      markerPaths: { allowed, refused: refusedMarker },
       scriptedPaths: SCRIPTED_PATHS,
-      maxTurns: 16,
+      maxTurns: 40,
     });
 
-    expect(outcome.result?.verificationRefusals).toBe(0);
-    expect(outcome.markers.final).toBe(true);
-    // A window reset, not a repair: nothing had failed.
-    expect(outcome.result?.completionWindows).toBe(1);
-    expect(outcome.result?.repairCycles).toBe(0);
+    const reasons = outcome.progress.entries
+      .filter((entry) => entry.kind === "verification_refused")
+      .map((entry) => entry.refusalReason);
+
+    // The diff review ran; the optional reads around it did not.
+    expect(outcome.result?.requiredVerificationActions ?? 0).toBeGreaterThanOrEqual(1);
+    expect(outcome.result?.requiredVerificationOverrides ?? 0).toBeGreaterThanOrEqual(1);
+    expect(reasons).toContain("completion_budget_exhausted");
   });
 
-  it("stops an agent that keeps buying windows forever", async () => {
+  it("bounds how many times one changed file may be re-read", async () => {
+    const outcome = await runCanary({
+      completion: policy,
+      script: [
+        write("src/app/layout.tsx"),
+        ...Array.from({ length: BUDGET.maxDiffReviewReadsPerPath + 2 }, () =>
+          read("src/app/layout.tsx"),
+        ),
+      ],
+      scriptedPaths: SCRIPTED_PATHS,
+      maxTurns: 20,
+    });
+
+    const reasons = outcome.progress.entries
+      .filter((entry) => entry.kind === "verification_refused")
+      .map((entry) => entry.refusalReason);
+
+    expect(reasons).toContain("diff_review_scope_exhausted");
+  });
+
+  it("stops an agent that converges and reopens forever", async () => {
     const script = [];
-    for (let cycle = 0; cycle <= BUDGET.maxCompletionWindows + 1; cycle += 1) {
-      script.push(write("src/app/layout.tsx"));
-      script.push(read("src/modules/somewhere-else.ts"));
-      script.push(read("src/modules/somewhere-else-again.ts"));
+    for (let cycle = 0; cycle <= BUDGET.maxConvergenceWindows + 1; cycle += 1) {
+      script.push(write("src/modules/somewhere-else.ts"));
+      for (let call = 0; call <= BUDGET.implementationStabilisationCalls; call += 1) {
+        script.push(bash(`echo cycle-${cycle}-${call}`));
+      }
     }
 
     const outcome = await runCanary({
       completion: policy,
       script,
       scriptedPaths: SCRIPTED_PATHS,
-      maxTurns: 24,
+      maxTurns: 60,
     });
 
-    expect(outcome.result?.verificationRefusals ?? 0).toBeGreaterThan(0);
-    expect(outcome.result?.completionWindows ?? 0).toBeGreaterThanOrEqual(
-      BUDGET.maxCompletionWindows,
-    );
+    const reasons = outcome.progress.entries
+      .filter((entry) => entry.kind === "verification_refused")
+      .map((entry) => entry.refusalReason);
+
+    expect(reasons.length).toBeGreaterThan(0);
+    expect(outcome.result?.convergenceMutations ?? 0).toBeGreaterThanOrEqual(1);
     // It never failed at anything, so it never repaired anything either.
     expect(outcome.result?.repairCycles).toBe(0);
   });
@@ -185,7 +265,7 @@ canary("completion control", () => {
    * The old build recorded a repair cycle for the second edit and a targeted
    * test for the grep; neither happened. Both are now counted for what they are.
    */
-  it("reproduces run #6 without inventing a repair or a test", async () => {
+  it("reproduces run #6 without inventing a repair, a window or a test", async () => {
     const outcome = await runCanary({
       completion: policy,
       script: [
@@ -201,8 +281,9 @@ canary("completion control", () => {
     });
 
     expect(outcome.result?.verificationRefusals).toBe(0);
-    // The second edit reset the window. Nothing had failed, so nothing was repaired.
-    expect(outcome.result?.completionWindows).toBe(1);
+    // Two implementation edits. Nothing converged, nothing was repaired.
+    expect(outcome.result?.implementationMutations).toBe(2);
+    expect(outcome.result?.convergenceMutations).toBe(0);
     expect(outcome.result?.repairCycles).toBe(0);
     // And a grep that merely names test files is not a test run.
     expect(outcome.result?.verificationCommands).toBe(0);
@@ -221,8 +302,8 @@ canary("completion control", () => {
       maxTurns: 10,
     });
 
-    expect(outcome.result?.completionWindows).toBe(1);
     expect(outcome.result?.repairCycles).toBe(1);
+    expect(outcome.result?.convergenceMutations).toBe(0);
   });
 
   it("permits everything when no completion policy was supplied", async () => {

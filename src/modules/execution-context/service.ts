@@ -4,7 +4,8 @@ import { getSnapshotById } from "@/modules/repository-intelligence/store";
 import { getLatestProfile } from "@/modules/product-understanding/store";
 import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intelligence/store";
 import { getActionPlanById } from "@/modules/action-plans/store";
-import { compileExecutionBrief } from "./compiler";
+import type { ActionPlanStep } from "@/modules/action-plans/schema";
+import { compileExecutionBrief, type TrustedStepFacts } from "./compiler";
 import type { ExecutionBrief } from "./brief";
 import { compileAgentVerificationPlan, type AgentVerificationPlan } from "./verification";
 import { compileCompletionBudget, type CompletionBudget } from "./completion";
@@ -59,10 +60,11 @@ export async function loadExecutionBrief(
   const snapshotId = spec.repository.repositorySnapshotId;
   if (!snapshotId) return null;
 
-  const [snapshot, profile, live] = await Promise.all([
+  const [snapshot, profile, live, step] = await Promise.all([
     getSnapshotById(supabase, { snapshotId, projectId }).catch(() => null),
     getLatestProfile(supabase, projectId).catch(() => null),
     getLatestSuccessfulLiveSnapshot(supabase, projectId).catch(() => null),
+    loadPlanStep(input),
   ]);
 
   if (!snapshot?.result) return null;
@@ -78,7 +80,49 @@ export async function loadExecutionBrief(
      * says so rather than implying the deployed site is this code.
      */
     liveOrigin: live?.result?.source.effectiveOrigin ?? null,
+    /*
+     * The scan itself, so the compiler can tell a page an anonymous visitor
+     * actually reached from one that redirected to a login. It corroborates the
+     * public/authenticated split and never contributes a path (Sprint 0044).
+     */
+    liveSnapshot: live?.result ?? null,
+    step: step ? trustedFactsOf(step) : null,
   });
+}
+
+/**
+ * The plan step this spec was built from.
+ *
+ * Found by `stepKey` on the plan the spec names, never "the newest plan for this
+ * project" — a spec is a value with an identity, and a run that re-read the
+ * current plan could be compiled against a step that has since been reworded.
+ *
+ * Unreadable means null, and null means the compiler falls back to the prose
+ * hints it used before Sprint 0044. A missing plan degrades context; it never
+ * fails a run.
+ */
+async function loadPlanStep(input: LoadExecutionBriefInput): Promise<ActionPlanStep | null> {
+  try {
+    const plan = await getActionPlanById(input.supabase, input.spec.actionPlanId);
+    return (
+      plan?.steps.find(
+        (entry) => entry.id === input.spec.stepKey || entry.order === input.spec.stepOrder,
+      ) ?? null
+    );
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The two fields of a step the compiler is allowed to route on.
+ *
+ * Narrowed deliberately at the boundary rather than passing the whole step: a
+ * step also carries `title`, `description` and `purpose`, and handing those to
+ * a surface resolver is how prose gets back in (PART Q).
+ */
+function trustedFactsOf(step: ActionPlanStep): TrustedStepFacts {
+  return { changeKind: step.changeKind, evidenceIds: step.evidenceIds ?? [] };
 }
 
 
@@ -108,21 +152,15 @@ export async function loadExecutionBrief(
 export async function loadAgentVerificationPlan(
   input: LoadExecutionBriefInput,
 ): Promise<AgentVerificationPlan | null> {
-  const { supabase, spec } = input;
+  const { spec } = input;
 
-  try {
-    const plan = await getActionPlanById(supabase, spec.actionPlanId);
-    const step = plan?.steps.find((entry) => entry.id === spec.stepKey || entry.order === spec.stepOrder);
-    if (!step) return null;
+  const step = await loadPlanStep(input);
+  if (!step) return null;
 
-    return compileAgentVerificationPlan({
-      changeKind: step.changeKind,
-      evidenceIds: step.evidenceIds ?? [],
-      riskClass: spec.riskClass,
-    });
-  } catch {
-    return null;
-  }
+  return compileAgentVerificationPlan({
+    ...trustedFactsOf(step),
+    riskClass: spec.riskClass,
+  });
 }
 
 

@@ -47,8 +47,15 @@ export const CODING_AGENT_POLICY_VERSION = "coding-agent-policy-v1" as const;
  * Recorded on every run. If the compiler changes what an agent is told, two
  * runs of the same spec are no longer the same experiment, and the dogfood
  * economics recorded under v1 must not be read as though they described v2.
+ *
+ * v5 (Sprint 0044) is the Execution Surface change: the briefing now names the
+ * pages a step's own cited evidence resolves to, and the completion section
+ * tells the agent that implementation breadth is free while reviewing its own
+ * diff is always available. It also participates in `computeAgentRunIdentity`,
+ * so bumping it is what stops a click after this sprint from being served run
+ * #7's stored result instead of executing.
  */
-export const AGENT_PROMPT_COMPILER_VERSION = "agent-prompt-v4" as const;
+export const AGENT_PROMPT_COMPILER_VERSION = "agent-prompt-v5" as const;
 
 /** The CORE-4 dogfood limit set. Explicitly not final customer pricing (§17). */
 export const AGENT_BUDGET_POLICY_VERSION = "core4-dogfood-budget-v1" as const;

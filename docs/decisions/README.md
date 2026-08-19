@@ -63,6 +63,7 @@ V0.1 foundational architecture decisions have been recorded:
 - [0031](0031-execution-context-intelligence.md) — Execution Context Intelligence: verify relevant facts, do not broadly rediscover (Accepted, extends 0027, 0029 and 0030)
 - [0032](0032-agent-verification-and-completion.md) — Agent Verification and Completion: the agent checks enough to converge, the validator checks enough to authorize (Accepted, extends 0027, 0029 and 0031)
 - [0033](0033-post-implementation-completion-control.md) — Post-Implementation Completion Control: stop paying for exploration after the job has converged (Accepted, extends 0027, 0029, 0031 and 0032)
+- [0034](0034-execution-surface-and-lifecycle.md) — Execution surfaces, and separating implementation breadth from convergence (Accepted, supersedes parts of 0031 and 0033)
 
 Several architecture questions remain intentionally open — see [ARCHITECTURE.md §7](../../ARCHITECTURE.md#7-deferred--open-decisions).
 

@@ -549,7 +549,10 @@ export function createSandboxCodingAgentProvider(
           verificationRefusals: null,
           policyDecisions: null,
           repairCycles: null,
-          completionWindows: null,
+          implementationMutations: null,
+          convergenceMutations: null,
+          requiredVerificationActions: null,
+          requiredVerificationOverrides: null,
           durationMs,
           failureDetail: progress.started
             ? "the agent runtime produced no result"
@@ -575,7 +578,10 @@ export function createSandboxCodingAgentProvider(
         verificationRefusals: result.verificationRefusals,
         policyDecisions: result.policyDecisions,
         repairCycles: result.repairCycles,
-        completionWindows: result.completionWindows,
+        implementationMutations: result.implementationMutations,
+        convergenceMutations: result.convergenceMutations,
+        requiredVerificationActions: result.requiredVerificationActions,
+        requiredVerificationOverrides: result.requiredVerificationOverrides,
         usage: toAgentModelUsage(result.modelUsage),
         sessionId: result.sessionId,
         providerDeniedToolCalls: result.permissionDenials,

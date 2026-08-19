@@ -57,6 +57,7 @@ import {
 } from "@/modules/execution-context/service";
 import { toSandboxPolicy, type AgentVerificationPlan } from "@/modules/execution-context/verification";
 import { toSandboxCompletionPolicy } from "@/modules/execution-context/completion";
+import { assertPolicyConsistency } from "@/modules/execution-context/policy";
 import { summarizeContextUsage } from "@/modules/execution-context/usage";
 import type { DetachedCodingAgentProvider } from "@/modules/coding-agent/provider";
 import { createSandboxWorkspace } from "@/modules/coding-agent/sandbox-workspace";
@@ -841,6 +842,29 @@ export async function startAgentStep(
 
   const completionBudget = completionBudgetFor(verification);
 
+  /*
+   * Do Vibe's two policies contradict each other? (PART M)
+   *
+   * Run #7's LOW plan required a diff review and its completion budget refused
+   * every attempt at one. Both were internally consistent; nothing compared
+   * them, so whichever check ran first won. This compares them before the
+   * harness starts, and a contradiction is a bug in Vibe's own configuration
+   * rather than a customer's situation — so it is logged loudly and the run
+   * continues under the safer of the two, exactly as it would have without a
+   * plan at all.
+   */
+  if (verification && completionBudget) {
+    try {
+      assertPolicyConsistency(verification, completionBudget);
+    } catch (error) {
+      console.error("[execution-context] trusted policies contradict each other", {
+        operationId,
+        agentExecutionRunId: context.run.id,
+        detail: error instanceof Error ? error.message.slice(0, 300) : "unknown",
+      });
+    }
+  }
+
   const instruction = compileAgentInstruction({
     spec: context.spec.spec,
     limits: context.limits,
@@ -877,8 +901,10 @@ export async function startAgentStep(
         {
           budgetVersion: completionBudget.budgetVersion,
           mode: completionBudget.mode,
-          maxToolCallsSinceEdit: completionBudget.maxToolCallsSinceEdit,
-          maxOutsideBriefReadsSinceEdit: completionBudget.maxOutsideBriefReadsSinceEdit,
+          implementationStabilisationCalls: completionBudget.implementationStabilisationCalls,
+          maxCompletionActions: completionBudget.maxCompletionActions,
+          maxOutsideBriefReads: completionBudget.maxOutsideBriefReads,
+          maxConvergenceWindows: completionBudget.maxConvergenceWindows,
           maxRepairCycles: completionBudget.maxRepairCycles,
           maxCompletionWallClockMs: completionBudget.maxCompletionWallClockMs,
         },
@@ -918,6 +944,17 @@ export async function startAgentStep(
       contextBytes: instruction.briefed ? instruction.context.bytes : 0,
       contextFactsSent: instruction.briefed ? instruction.context.factsRendered : 0,
       contextCandidatesSent: instruction.briefed ? instruction.context.candidatesRendered : 0,
+      /*
+       * What the step's own cited evidence said its surface was (Sprint 0044).
+       *
+       * Recorded even when nothing resolved, because an empty scope list is the
+       * finding: it means the planner cited nothing this compiler recognises,
+       * and the run fell back to the prose hints that made run #6 and run #7
+       * compile to byte-identical briefs.
+       */
+      contextSurfaceScopes: [...brief.surface.requirement.scopes],
+      contextSurfacePages:
+        brief.surface.publicPagesResolved + brief.surface.authenticatedPagesResolved,
     });
 
     await recordLifecycle(
@@ -936,6 +973,34 @@ export async function startAgentStep(
         candidates: instruction.context.candidatesRendered,
         factsOmitted: instruction.context.factsOmitted,
         candidatesOmitted: instruction.context.candidatesOmitted,
+      },
+    );
+
+    /*
+     * The surface, separately from the size of the brief.
+     *
+     * Run #6 and run #7 produced identical `context_compiled` payloads — same
+     * bytes, same facts, same candidates — for two tasks whose execution
+     * surfaces have nothing in common. This is the line that would have shown
+     * the difference before a paid run had to.
+     */
+    await recordLifecycle(
+      deps,
+      context.run,
+      "execution_surface_resolved",
+      brief.surface.requirement.scopes.length > 0
+        ? `This step's surface: ${brief.surface.requirement.scopes.join(", ")}`
+        : "The step cites no evidence this compiler recognises",
+      {
+        requirementVersion: brief.surface.requirement.requirementVersion,
+        scopes: brief.surface.requirement.scopes.join(", ") || "none",
+        surfaces: brief.surface.requirement.surfaces.join(", ") || "none",
+        derivedFrom: brief.surface.requirement.derivedFrom.join(", ") || "none",
+        unrecognised: brief.surface.requirement.unrecognised.join(", ") || "none",
+        publicPagesResolved: brief.surface.publicPagesResolved,
+        publicPagesIncluded: brief.surface.publicPagesIncluded,
+        authenticatedPagesResolved: brief.surface.authenticatedPagesResolved,
+        authenticatedPagesIncluded: brief.surface.authenticatedPagesIncluded,
       },
     );
   }
@@ -968,6 +1033,12 @@ export async function startAgentStep(
           completion: toSandboxCompletionPolicy({
             budget: completionBudget,
             briefPaths: (brief?.fileCandidates ?? []).map((candidate) => candidate.path),
+            /*
+             * The required checks travel with the budget, because the harness
+             * has to know which operations a Vibe policy already marked
+             * required before it may refuse one on resource grounds (PART H).
+             */
+            requiredChecks: verification?.requiredChecks ?? [],
           }),
         }
       : {}),
@@ -1535,7 +1606,10 @@ async function recordVerificationOutcome(
     verificationRefusals: number | null;
     policyDecisions: number | null;
     repairCycles: number | null;
-    completionWindows: number | null;
+    implementationMutations: number | null;
+    convergenceMutations: number | null;
+    requiredVerificationActions: number | null;
+    requiredVerificationOverrides: number | null;
   },
 ): Promise<void> {
   const { run } = context;
@@ -1628,7 +1702,10 @@ async function recordVerificationOutcome(
       postEditCommands: postEdit.filter((event) => event.type === "command_started").length,
       completionRefusals: completionRefusals.length,
       repairCycles: result.repairCycles ?? undefined,
-      completionWindows: result.completionWindows ?? undefined,
+      implementationMutations: result.implementationMutations ?? undefined,
+      convergenceMutations: result.convergenceMutations ?? undefined,
+      requiredVerificationActions: result.requiredVerificationActions ?? undefined,
+      requiredVerificationOverrides: result.requiredVerificationOverrides ?? undefined,
       policyDecisions: result.policyDecisions,
       ...(await postEditSpend(deps, run, lastEditMs)),
       ...(await postEditBriefReads(deps, run, context.spec.spec, postEdit)),

@@ -166,17 +166,39 @@ const mutatingTools = new Set(completion ? completion.mutatingTools : []);
 const readTools = new Set(completion ? completion.readTools : []);
 const searchTools = new Set(completion ? completion.searchTools : []);
 
+/*
+ * The lifecycle state (Sprint 0044).
+ *
+ * callsSinceEdit is the whole convergence signal: while the agent keeps coming
+ * back to write files it keeps resetting, and no completion budget applies. Run
+ * #7 wrote eight files and was charged seven "completion windows" for it,
+ * because the old counter incremented on every mutation after the first.
+ */
 const progressState = {
   implemented: false,
-  toolCallsSinceEdit: 0,
-  outsideBriefReadsSinceEdit: 0,
-  /* Mutations after the first. Each bought back a window. */
-  windowResets: 0,
-  /* Of those, the ones that answered an observed failure. A real repair. */
+  converged: false,
+  callsSinceEdit: 0,
+  completionActions: 0,
+  outsideBriefReads: 0,
+  /* Files written while still implementing. Breadth, never charged. */
+  implementationMutations: 0,
+  /* Files written after the run had already converged. Each cost a window. */
+  convergenceMutations: 0,
+  /* Of all mutations, the ones that answered an observed failure. */
   repairCycles: 0,
+  /* Required verification operations the runtime allowed. */
+  requiredVerificationActions: 0,
+  /* Of those, the ones a completion budget alone would have refused. */
+  requiredVerificationOverrides: 0,
   lastEditAt: null,
   unresolvedFailure: false,
+  /* Paths this run mutated, observed here rather than reported by the model. */
+  mutatedPaths: new Set(),
+  /* Diff-review reads spent per mutated path. */
+  diffReviewReads: new Map(),
 };
+
+const requiredChecks = new Set(completion ? completion.requiredChecks || [] : []);
 
 const messageFor = (reason) =>
   (policy && policy.messages && policy.messages[reason]) ||
@@ -196,16 +218,42 @@ const relativePath = (path) => {
   return path.startsWith(root) ? path.slice(root.length) : path;
 };
 
-const classify = (toolName, path) => {
+const classify = (toolName, path, commandCheck) => {
   if (mutatingTools.has(toolName)) return "candidate_mutation";
   if (!progressState.implemented) return "orientation";
+
+  /*
+   * Required verification is recognised before repair, because the label has to
+   * say what the action IS. Reading a file this run changed, while the plan
+   * requires a diff review, is the diff review whatever else is going on.
+   */
+  if (readTools.has(toolName) && path !== null &&
+      progressState.mutatedPaths.has(path) && requiredChecks.has("diff_review")) {
+    return "required_diff_review";
+  }
+  if (commandCheck !== null && requiredChecks.has(commandCheck)) return "required_check";
+
   if (progressState.unresolvedFailure) return "repair";
-  if (toolName === "Bash") return "required_verification";
+  if (toolName === "Bash") return "verification_command";
   if (searchTools.has(toolName)) return "search";
   if (readTools.has(toolName)) {
     return path !== null && briefPaths.has(path) ? "brief_read" : "outside_brief_read";
   }
   return "orientation";
+};
+
+/* Has the implementation stopped moving? Counted, never claimed. */
+const converged = () =>
+  progressState.converged ||
+  progressState.callsSinceEdit >= completion.budget.implementationStabilisationCalls;
+
+const budgetWouldRefuse = () => {
+  const budget = completion.budget;
+  if (!converged()) return false;
+  if (progressState.convergenceMutations >= budget.maxConvergenceWindows) return true;
+  if (progressState.completionActions >= budget.maxCompletionActions) return true;
+  return progressState.lastEditAt !== null &&
+    Date.now() - progressState.lastEditAt >= budget.maxCompletionWallClockMs;
 };
 
 /*
@@ -216,36 +264,32 @@ const classify = (toolName, path) => {
  * canary runs this one for real — so a divergence shows up as a failing canary
  * rather than as a paid run behaving differently from every test.
  */
-const decideCompletion = (toolName, args) => {
+const decideCompletion = (toolName, args, commandCheck) => {
   if (!completion) return null;
 
   const path = relativePath(pathOf(args));
-  const activity = classify(toolName, path);
+  const activity = classify(toolName, path, commandCheck || null);
   const budget = completion.budget;
 
+  /* A mutation is never refused. It is the work. */
   if (activity === "candidate_mutation") {
-    /*
-     * A repair only if something had actually failed.
-     *
-     * Run #6 wrote two files in a row and recorded a repair cycle for the
-     * second, because one counter was asked to mean both "the window reset"
-     * and "the agent fixed something". They are separate now: every mutation
-     * after the first resets the window, and only a mutation that answers an
-     * observed failure is a repair.
-     */
-    if (progressState.implemented) {
-      progressState.windowResets += 1;
-      if (progressState.unresolvedFailure) progressState.repairCycles += 1;
-    }
+    if (progressState.implemented && converged()) progressState.convergenceMutations += 1;
+    else progressState.implementationMutations += 1;
+    if (progressState.unresolvedFailure) progressState.repairCycles += 1;
+
     progressState.implemented = true;
-    progressState.toolCallsSinceEdit = 0;
-    progressState.outsideBriefReadsSinceEdit = 0;
+    progressState.converged = false;
+    progressState.callsSinceEdit = 0;
+    progressState.completionActions = 0;
+    progressState.outsideBriefReads = 0;
     progressState.unresolvedFailure = false;
     progressState.lastEditAt = Date.now();
+    if (path !== null) progressState.mutatedPaths.add(path);
     emit({
       t: "phase",
       phase: "implementing",
-      windows: progressState.windowResets,
+      implementation: progressState.implementationMutations,
+      convergence: progressState.convergenceMutations,
       repairs: progressState.repairCycles,
     });
     return null;
@@ -253,16 +297,58 @@ const decideCompletion = (toolName, args) => {
 
   if (!progressState.implemented) return null;
 
+  /* 3 — concrete evidence of a problem outranks every budget below. */
   if (activity === "repair") {
     if (progressState.repairCycles >= budget.maxRepairCycles) {
       return { reason: "repair_cycles_exhausted", activity: activity };
     }
-    progressState.toolCallsSinceEdit += 1;
+    progressState.callsSinceEdit += 1;
     return null;
   }
 
-  if (progressState.windowResets >= budget.maxCompletionWindows) {
-    return { reason: "completion_windows_exhausted", activity: activity };
+  /*
+   * 4 — required verification, bounded by scope rather than by budget.
+   *
+   * Run #7's LOW plan required a diff review and the completion budget refused
+   * it eight times. A Vibe policy may not block another Vibe policy's required
+   * work; what bounds this one is the set of paths Vibe observed the run mutate,
+   * and a per-path re-read ceiling. An unrelated file is not a changed path, so
+   * it stays governed by the ordinary budgets below.
+   */
+  if (activity === "required_diff_review" || activity === "required_check") {
+    if (activity === "required_diff_review") {
+      const key = path || "";
+      const spent = progressState.diffReviewReads.get(key) || 0;
+      if (spent >= budget.maxDiffReviewReadsPerPath) {
+        return { reason: "diff_review_scope_exhausted", activity: activity };
+      }
+      progressState.diffReviewReads.set(key, spent + 1);
+    }
+    if (budgetWouldRefuse()) progressState.requiredVerificationOverrides += 1;
+    progressState.requiredVerificationActions += 1;
+    progressState.callsSinceEdit += 1;
+    return null;
+  }
+
+  /*
+   * 5 — the completion budgets, and only once the run has actually converged.
+   *
+   * While the implementation is still moving, the reads that make the next edit
+   * possible are free. Charging for them is what turned run #7's eight-file
+   * change into eight refusals.
+   */
+  if (!converged()) {
+    progressState.callsSinceEdit += 1;
+    return null;
+  }
+
+  if (!progressState.converged) {
+    progressState.converged = true;
+    emit({ t: "phase", phase: "completing", calls: progressState.callsSinceEdit });
+  }
+
+  if (progressState.convergenceMutations >= budget.maxConvergenceWindows) {
+    return { reason: "convergence_windows_exhausted", activity: activity };
   }
 
   if (progressState.lastEditAt !== null &&
@@ -271,17 +357,32 @@ const decideCompletion = (toolName, args) => {
   }
 
   if (activity === "outside_brief_read" &&
-      progressState.outsideBriefReadsSinceEdit >= budget.maxOutsideBriefReadsSinceEdit) {
+      progressState.outsideBriefReads >= budget.maxOutsideBriefReads) {
     return { reason: "outside_brief_budget_exhausted", activity: activity };
   }
 
-  if (progressState.toolCallsSinceEdit >= budget.maxToolCallsSinceEdit) {
+  if (progressState.completionActions >= budget.maxCompletionActions) {
     return { reason: "completion_budget_exhausted", activity: activity };
   }
 
-  progressState.toolCallsSinceEdit += 1;
-  if (activity === "outside_brief_read") progressState.outsideBriefReadsSinceEdit += 1;
+  progressState.callsSinceEdit += 1;
+  progressState.completionActions += 1;
+  if (activity === "outside_brief_read") progressState.outsideBriefReads += 1;
   return null;
+};
+
+/*
+ * Which verification check a tool call represents, if any.
+ *
+ * Computed once and handed to both decision layers, because the completion
+ * layer needs to know whether a command is one the plan REQUIRED — and a check
+ * the verification layer allowed returns null from decide(), so the answer
+ * cannot be recovered from its return value.
+ */
+const checkForCall = (toolName, args) => {
+  if (toolName !== "Bash") return null;
+  const command = typeof args.command === "string" ? args.command : "";
+  return checkOf(command, categoryOf(command));
 };
 
 const decide = (toolName, input) => {
@@ -352,8 +453,20 @@ const result = {
    */
   policyDecisions: 0,
   completionRefusals: 0,
+  /*
+   * Three counters where run #6 and run #7 had one (Sprint 0044).
+   *
+   * implementationMutations is breadth — files the task legitimately needed.
+   * convergenceMutations is churn — files written after the run had already
+   * settled. repairCycles is neither: a mutation that answered a failure the
+   * harness observed. Run #7's eight-file change reads as 8 / 0 / 0 here, and
+   * as "7 completion windows against a max of 4" under the old single counter.
+   */
+  implementationMutations: 0,
+  convergenceMutations: 0,
+  requiredVerificationActions: 0,
+  requiredVerificationOverrides: 0,
   repairCycles: 0,
-  completionWindows: 0,
   error: null,
 };
 
@@ -437,8 +550,9 @@ try {
                  * whatever the budget says, and reporting it as "out of budget"
                  * would send the agent looking for a cheaper way to run it.
                  */
+                const commandCheck = checkForCall(event.tool_name, args);
                 const refusal = decide(event.tool_name, event.tool_input)
-                  || decideCompletion(event.tool_name, args);
+                  || decideCompletion(event.tool_name, args, commandCheck);
                 if (!refusal) return { continue: true };
 
                 verification.refusals += 1;
@@ -583,7 +697,10 @@ result.verificationCommands = verification.commands;
 result.verificationRefusals = verification.refusals;
 result.policyDecisions = verification.decisions;
 result.repairCycles = progressState.repairCycles;
-result.completionWindows = progressState.windowResets;
+result.implementationMutations = progressState.implementationMutations;
+result.convergenceMutations = progressState.convergenceMutations;
+result.requiredVerificationActions = progressState.requiredVerificationActions;
+result.requiredVerificationOverrides = progressState.requiredVerificationOverrides;
 result.verificationMs = verification.firstAt === null ? null : Date.now() - verification.firstAt;
 
 emit({ t: "finished", subtype: result.subtype, n: result.assistantMessages });

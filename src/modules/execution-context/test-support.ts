@@ -83,3 +83,66 @@ export function fakeRoute(overrides: Partial<RouteSummary> & { path: string }): 
     ...overrides,
   };
 }
+
+/**
+ * A repository shaped like Vibe Business itself at the run #7 commit.
+ *
+ * Seven public pages, a signed-in application area behind `/app`, a root layout
+ * and an app layout, plus the two SEO surfaces the analyzer detected. This is
+ * the fixture PART N, PART O and PART P are all measured against — one
+ * repository, three different task shapes, and no task-specific code anywhere
+ * between them.
+ */
+export function fakePublicSiteSnapshot(
+  overrides: Parameters<typeof fakeBriefSnapshot>[0] = {},
+): RepositoryIntelligenceSnapshot {
+  return fakeBriefSnapshot({
+    frameworkEvidence: ["package.json"],
+    routes: [
+      fakeRoute({ path: "/", kind: "layout", sourcePath: "src/app/layout.tsx" }),
+      fakeRoute({ path: "/app", kind: "layout", sourcePath: "src/app/app/layout.tsx" }),
+      fakeRoute({ path: "/", sourcePath: "src/app/page.tsx" }),
+      fakeRoute({ path: "/login" }),
+      fakeRoute({ path: "/signup" }),
+      fakeRoute({ path: "/forgot-password" }),
+      fakeRoute({ path: "/reset-password" }),
+      fakeRoute({ path: "/privacy" }),
+      fakeRoute({ path: "/terms" }),
+      fakeRoute({ path: "/app", sourcePath: "src/app/app/page.tsx" }),
+      fakeRoute({ path: "/app/billing", sourcePath: "src/app/app/billing/page.tsx" }),
+      fakeRoute({
+        path: "/app/projects/[projectId]",
+        dynamic: true,
+        sourcePath: "src/app/app/projects/[projectId]/page.tsx",
+      }),
+      fakeRoute({
+        path: "/api/github/webhook",
+        kind: "api",
+        sourcePath: "src/app/api/github/webhook/route.ts",
+      }),
+    ],
+    surfaces: [
+      { id: "robots", name: "robots.txt", detected: true, evidencePaths: ["src/app/robots.ts"] },
+      {
+        id: "seo_metadata",
+        name: "SEO metadata",
+        detected: true,
+        evidencePaths: ["src/app/layout.tsx"],
+      },
+      {
+        id: "legal",
+        name: "Legal pages",
+        detected: true,
+        evidencePaths: ["src/app/privacy/page.tsx", "src/app/terms/page.tsx"],
+      },
+      {
+        id: "dashboard_app",
+        name: "Dashboard / app area",
+        detected: true,
+        evidencePaths: ["src/app/app/layout.tsx", "src/app/app/page.tsx"],
+      },
+    ],
+    topLevelDirectories: ["src", "public", "supabase", "docs", "scripts"],
+    ...overrides,
+  });
+}

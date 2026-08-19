@@ -359,13 +359,44 @@ export function DeveloperInspector({ model }: { model: AgentExecutionLiveModel }
               />
               <Metric label="Refused" value={metrics.completion.refusals ?? UNKNOWN} mono />
               {/*
-                Two counters, because run #6 proved one cannot mean both. It
-                edited two files with nothing failing and recorded a "repair
-                cycle" for the second. Windows reset on any edit; a repair is
-                one that answered an observed failure.
+                Three counters, because run #7 proved one cannot mean three. It
+                changed eight files that all legitimately needed the same edit
+                and was charged seven "completion windows" for it.
+
+                  Implementation  files the task needed. Breadth. Free.
+                  Convergence     files written after the run had settled.
+                  Repairs         mutations that answered an observed failure.
+
+                A contradiction is meant to be obvious here: high implementation
+                with zero convergence and zero repairs is a clean wide change;
+                convergence climbing while implementation stays flat is churn.
               */}
-              <Metric label="Windows" value={metrics.completion.completionWindows ?? UNKNOWN} mono />
+              <Metric
+                label="Implementation"
+                value={metrics.completion.implementationMutations ?? UNKNOWN}
+                mono
+              />
+              <Metric
+                label="Convergence"
+                value={metrics.completion.convergenceMutations ?? UNKNOWN}
+                mono
+              />
               <Metric label="Repairs" value={metrics.completion.repairCycles ?? UNKNOWN} mono />
+              {/*
+                What the decision hierarchy actually did. `Required` is diff
+                reviews and required checks the runtime allowed; `overridden` is
+                how many of those a completion budget alone would have refused.
+                Run #7's shape is 8 and 8; a healthy run is n and 0.
+              */}
+              <Metric
+                label="Required verification"
+                value={
+                  metrics.completion.requiredVerificationActions === null
+                    ? UNKNOWN
+                    : `${metrics.completion.requiredVerificationActions} (${metrics.completion.requiredVerificationOverrides ?? 0} overridden)`
+                }
+                mono
+              />
               {/*
                 Zero decisions beside a run full of tool calls means the policy
                 never ran — the exact failure that made run #5 execute a

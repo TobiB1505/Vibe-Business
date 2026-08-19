@@ -82,6 +82,15 @@ export const EXECUTION_EVENT_TYPES = [
   // What Vibe already knew and chose to send, and what the run did with it.
   "context_compiled",
   "context_used",
+  /**
+   * Which pages the step's own cited evidence resolved to (Sprint 0044).
+   *
+   * Separate from `context_compiled` because it answers a different question:
+   * not "how big was the brief" but "did Vibe understand what the task touches".
+   * Run #6 and run #7 had identical `context_compiled` payloads and completely
+   * different execution surfaces.
+   */
+  "execution_surface_resolved",
 
   // How much the run was allowed to check its own work, and what it did with
   // that (Sprint 0042). A refusal is recorded because a bounded agent that is
@@ -91,10 +100,19 @@ export const EXECUTION_EVENT_TYPES = [
   "verification_command_refused",
   "verification_escalated",
   "verification_completed",
+  /**
+   * A required operation a completion budget alone would have refused.
+   *
+   * The event that would have made run #7's contradiction visible in one line
+   * instead of as eight refusals nobody could attribute.
+   */
+  "required_verification_allowed",
 
   // Where the requested job ended, and what was refused after it (Sprint 0043).
   "completion_budget_compiled",
   "completion_window_started",
+  /** The run stopped changing files. Observed, never claimed (Sprint 0044). */
+  "convergence_started",
   "completion_action_refused",
   "completion_repair_started",
 
@@ -433,6 +451,9 @@ const PHASE_OF: Record<ExecutionEventType, ExecutionPhase> = {
   verification_escalated: "working",
   verification_completed: "working",
   completion_window_started: "working",
+  convergence_started: "working",
+  required_verification_allowed: "working",
+  execution_surface_resolved: "reviewing_change",
   completion_action_refused: "working",
   completion_repair_started: "working",
   context_used: "reviewing_change",
