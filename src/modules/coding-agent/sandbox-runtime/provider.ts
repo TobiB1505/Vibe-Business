@@ -211,7 +211,14 @@ export type RuntimeProgressEntry = {
   sequence: number;
   /** Milliseconds since the harness started. Absent from an older feed. */
   offsetMs?: number;
-  kind: "started" | "turn" | "tool" | "finished" | "verification" | "verification_refused";
+  kind:
+    | "started"
+    | "turn"
+    | "tool"
+    | "finished"
+    | "verification"
+    | "verification_refused"
+    | "phase";
   /** Model responses so far, on a `turn` line. */
   assistantMessages?: number;
   tool?: string;
@@ -222,6 +229,8 @@ export type RuntimeProgressEntry = {
   check?: string;
   /** Why a check command was refused. Closed vocabulary. */
   refusalReason?: string;
+  /** Which observed phase the run moved into. Closed vocabulary. */
+  phase?: string;
 };
 
 export type RuntimeProgress = {
@@ -329,6 +338,22 @@ export function parseRuntimeProgress(output: string): RuntimeProgress {
       continue;
     }
 
+    /*
+     * A phase change the harness observed — an edit, or a tool that failed.
+     *
+     * Carried so Vibe can reconstruct where implementation ended and repair
+     * began without inferring it from timestamps alone.
+     */
+    if (event.t === "phase") {
+      entries.push({
+        sequence,
+        offsetMs,
+        kind: "phase",
+        phase: readString(event.phase, 24),
+      });
+      continue;
+    }
+
     if (event.t === "finished") {
       finished = true;
       entries.push({ sequence, offsetMs, kind: "finished", subtype: readString(event.subtype, 40) });
@@ -398,6 +423,7 @@ export function createSandboxCodingAgentProvider(
         // command can be seen before it runs, so it is the only place this can
         // be applied (Sprint 0042).
         ...(request.verification ? { verification: request.verification } : {}),
+        ...(request.completion ? { completion: request.completion } : {}),
       };
 
       /*
@@ -521,6 +547,8 @@ export function createSandboxCodingAgentProvider(
           providerDeniedToolCalls: 0,
           verificationCommands: null,
           verificationRefusals: null,
+          policyDecisions: null,
+          repairCycles: null,
           durationMs,
           failureDetail: progress.started
             ? "the agent runtime produced no result"
@@ -544,6 +572,8 @@ export function createSandboxCodingAgentProvider(
         sdkLoopIterations: result.sdkLoopIterations,
         verificationCommands: result.verificationCommands,
         verificationRefusals: result.verificationRefusals,
+        policyDecisions: result.policyDecisions,
+        repairCycles: result.repairCycles,
         usage: toAgentModelUsage(result.modelUsage),
         sessionId: result.sessionId,
         providerDeniedToolCalls: result.permissionDenials,

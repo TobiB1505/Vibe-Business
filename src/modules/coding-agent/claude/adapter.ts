@@ -408,6 +408,8 @@ export function createClaudeCodingAgentProvider(): CodingAgentProvider {
          */
         verificationCommands: null,
         verificationRefusals: null,
+        policyDecisions: null,
+        repairCycles: null,
         usage,
         // An opaque identifier, not a reconnect credential: the SDK's resume
         // path needs the on-disk transcript, which `persistSession: false`

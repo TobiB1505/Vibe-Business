@@ -78,7 +78,7 @@ describe("the verification plan is enforced, not described", () => {
   /** PART G: never a silent block. The agent is told, and so is the timeline. */
   it("reports a refusal to the agent and to the feed", () => {
     expect(AGENT_RUNTIME_PROGRAM).toContain("messageFor(refusal.reason)");
-    expect(AGENT_RUNTIME_PROGRAM).toContain('emit({ t: "refused"');
+    expect(AGENT_RUNTIME_PROGRAM).toContain('t: "refused"');
   });
 
   /**

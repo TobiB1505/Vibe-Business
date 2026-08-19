@@ -1,5 +1,6 @@
 import type { AgentModelUsage } from "../provider";
 import type { SandboxVerificationPolicy } from "@/modules/execution-context/verification";
+import type { SandboxCompletionPolicy } from "@/modules/execution-context/completion";
 
 /**
  * The contract between Vibe and the program that runs inside the agent sandbox
@@ -96,6 +97,14 @@ export type AgentRuntimeRequest = {
    * cannot check anything at all.
    */
   verification?: SandboxVerificationPolicy;
+  /**
+   * How much work is allowed after the code is written (Sprint 0043).
+   *
+   * Optional and permissive-when-absent, exactly like `verification`. A run
+   * without one behaves as run #5 did: unbounded post-implementation
+   * exploration.
+   */
+  completion?: SandboxCompletionPolicy;
 };
 
 /**
@@ -136,6 +145,8 @@ export type AgentRuntimeResult = {
    * otherwise indistinguishable from a policy that had nothing to refuse.
    */
   policyDecisions: number;
+  /** Mutations after the first — how many times the window was bought back. */
+  repairCycles: number;
   sessionId: string | null;
   permissionDenials: number;
   /** Per-model token counts, keyed by model id. Never a cost claim. */
@@ -198,6 +209,7 @@ export function parseAgentRuntimeResult(payload: string | null): AgentRuntimeRes
     verificationCommands: nonNegativeInt(raw.verificationCommands),
     verificationRefusals: nonNegativeInt(raw.verificationRefusals),
     policyDecisions: nonNegativeInt(raw.policyDecisions),
+    repairCycles: nonNegativeInt(raw.repairCycles),
     modelUsage:
       typeof raw.modelUsage === "object" && raw.modelUsage !== null
         ? (raw.modelUsage as Record<string, unknown>)

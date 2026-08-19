@@ -109,6 +109,19 @@ export type StoredAgentExecutionRun = {
   /** Offset of the last observed write. The closest observable thing to "done". */
   timeToLastEditMs: number | null;
 
+  /** Where time and money went after the code was written. Null without a budget. */
+  completionBudgetVersion: string | null;
+  postEditToolCalls: number | null;
+  postEditReads: number | null;
+  postEditReadsBeyondBrief: number | null;
+  postEditCommands: number | null;
+  postEditProviderCalls: number | null;
+  postEditProviderCostUsd: number | null;
+  completionRefusals: number | null;
+  repairCycles: number | null;
+  /** Tool calls the policy hook saw. Zero beside tool calls means it never ran. */
+  policyDecisions: number | null;
+
   preparedChangeId: string | null;
   createdAt: string;
   startedAt: string | null;
@@ -162,6 +175,16 @@ type RunRow = {
   verification_ms: number | null;
   time_to_first_edit_ms: number | null;
   time_to_last_edit_ms: number | null;
+  completion_budget_version: string | null;
+  post_edit_tool_calls: number | null;
+  post_edit_reads: number | null;
+  post_edit_reads_beyond_brief: number | null;
+  post_edit_commands: number | null;
+  post_edit_provider_calls: number | null;
+  post_edit_provider_cost_usd: string | number | null;
+  completion_refusals: number | null;
+  repair_cycles: number | null;
+  policy_decisions: number | null;
   prepared_change_id: string | null;
   created_at: string;
   started_at: string | null;
@@ -178,6 +201,9 @@ const RUN_COLUMNS =
   "context_candidates_read, unique_files_read, repeated_file_reads, files_read_outside_context, " +
   "verification_mode, verification_plan_version, verification_commands, verification_refusals, " +
   "verification_ms, time_to_first_edit_ms, time_to_last_edit_ms, " +
+  "completion_budget_version, post_edit_tool_calls, post_edit_reads, post_edit_reads_beyond_brief, " +
+  "post_edit_commands, post_edit_provider_calls, post_edit_provider_cost_usd, completion_refusals, " +
+  "repair_cycles, policy_decisions, " +
   "prepared_change_id, created_at, started_at, completed_at";
 
 function mapRun(row: RunRow): StoredAgentExecutionRun {
@@ -228,6 +254,17 @@ function mapRun(row: RunRow): StoredAgentExecutionRun {
     verificationMs: row.verification_ms,
     timeToFirstEditMs: row.time_to_first_edit_ms,
     timeToLastEditMs: row.time_to_last_edit_ms,
+    completionBudgetVersion: row.completion_budget_version,
+    postEditToolCalls: row.post_edit_tool_calls,
+    postEditReads: row.post_edit_reads,
+    postEditReadsBeyondBrief: row.post_edit_reads_beyond_brief,
+    postEditCommands: row.post_edit_commands,
+    postEditProviderCalls: row.post_edit_provider_calls,
+    postEditProviderCostUsd:
+      row.post_edit_provider_cost_usd === null ? null : Number(row.post_edit_provider_cost_usd),
+    completionRefusals: row.completion_refusals,
+    repairCycles: row.repair_cycles,
+    policyDecisions: row.policy_decisions,
     preparedChangeId: row.prepared_change_id,
     createdAt: row.created_at,
     startedAt: row.started_at,
@@ -455,6 +492,23 @@ export type AgentRunObservations = {
   verificationMs?: number | null;
   timeToFirstEditMs?: number | null;
   timeToLastEditMs?: number | null;
+
+  /*
+   * Where the run's time and money went after the code was written
+   * (Sprint 0043). All nullable: a run with no completion budget, or one whose
+   * boundary could not be established, records null rather than a zero that
+   * would read as "nothing happened after the edit".
+   */
+  completionBudgetVersion?: string | null;
+  postEditToolCalls?: number;
+  postEditReads?: number;
+  postEditReadsBeyondBrief?: number;
+  postEditCommands?: number;
+  postEditProviderCalls?: number;
+  postEditProviderCostUsd?: number | null;
+  completionRefusals?: number;
+  repairCycles?: number;
+  policyDecisions?: number | null;
 };
 
 /** Records what Vibe observed, without deciding the run's fate. */
@@ -496,6 +550,16 @@ export async function recordAgentRunObservations(
   set("verification_ms", observations.verificationMs);
   set("time_to_first_edit_ms", observations.timeToFirstEditMs);
   set("time_to_last_edit_ms", observations.timeToLastEditMs);
+  set("completion_budget_version", observations.completionBudgetVersion);
+  set("post_edit_tool_calls", observations.postEditToolCalls);
+  set("post_edit_reads", observations.postEditReads);
+  set("post_edit_reads_beyond_brief", observations.postEditReadsBeyondBrief);
+  set("post_edit_commands", observations.postEditCommands);
+  set("post_edit_provider_calls", observations.postEditProviderCalls);
+  set("post_edit_provider_cost_usd", observations.postEditProviderCostUsd);
+  set("completion_refusals", observations.completionRefusals);
+  set("repair_cycles", observations.repairCycles);
+  set("policy_decisions", observations.policyDecisions);
 
   if (Object.keys(patch).length === 0) return;
 

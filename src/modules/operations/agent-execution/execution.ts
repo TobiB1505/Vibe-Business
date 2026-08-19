@@ -48,9 +48,15 @@ import {
   computeCandidateDigest,
 } from "@/modules/coding-agent/identity";
 import { agentToolDescriptors, compileAgentInstruction } from "@/modules/coding-agent/prompt";
+import type { ExecutionSpec } from "@/modules/execution-contract/spec";
 import type { ExecutionBrief } from "@/modules/execution-context/brief";
-import { loadAgentVerificationPlan, loadExecutionBrief } from "@/modules/execution-context/service";
+import {
+  completionBudgetFor,
+  loadAgentVerificationPlan,
+  loadExecutionBrief,
+} from "@/modules/execution-context/service";
 import { toSandboxPolicy, type AgentVerificationPlan } from "@/modules/execution-context/verification";
+import { toSandboxCompletionPolicy } from "@/modules/execution-context/completion";
 import { summarizeContextUsage } from "@/modules/execution-context/usage";
 import type { DetachedCodingAgentProvider } from "@/modules/coding-agent/provider";
 import { createSandboxWorkspace } from "@/modules/coding-agent/sandbox-workspace";
@@ -833,12 +839,15 @@ export async function startAgentStep(
     });
   }
 
+  const completionBudget = completionBudgetFor(verification);
+
   const instruction = compileAgentInstruction({
     spec: context.spec.spec,
     limits: context.limits,
     availableChecks,
     brief,
     verification,
+    completion: completionBudget,
   });
 
   /*
@@ -854,6 +863,27 @@ export async function startAgentStep(
       verificationMode: verification.mode,
       verificationPlanVersion: verification.planVersion,
     });
+
+    if (completionBudget) {
+      await recordAgentRunObservations(deps.supabase, context.run.id, {
+        completionBudgetVersion: completionBudget.budgetVersion,
+      });
+
+      await recordLifecycle(
+        deps,
+        context.run,
+        "completion_budget_compiled",
+        `Completion budget: ${completionBudget.mode}`,
+        {
+          budgetVersion: completionBudget.budgetVersion,
+          mode: completionBudget.mode,
+          maxToolCallsSinceEdit: completionBudget.maxToolCallsSinceEdit,
+          maxOutsideBriefReadsSinceEdit: completionBudget.maxOutsideBriefReadsSinceEdit,
+          maxRepairCycles: completionBudget.maxRepairCycles,
+          maxCompletionWallClockMs: completionBudget.maxCompletionWallClockMs,
+        },
+      );
+    }
 
     await recordLifecycle(
       deps,
@@ -925,6 +955,22 @@ export async function startAgentStep(
     // Carried into the sandbox as data. The harness is the only place a shell
     // command exists before it runs, so it is the only place this can apply.
     ...(verification ? { verification: toSandboxPolicy(verification) } : {}),
+    /*
+     * The completion budget, with the brief's own paths.
+     *
+     * The paths are what let the harness tell a read of a file Vibe pointed at
+     * from a read of one it did not — the distinction the outside-brief
+     * allowance rests on, and the reason the brief and the budget are compiled
+     * together rather than in two places.
+     */
+    ...(completionBudget
+      ? {
+          completion: toSandboxCompletionPolicy({
+            budget: completionBudget,
+            briefPaths: (brief?.fileCandidates ?? []).map((candidate) => candidate.path),
+          }),
+        }
+      : {}),
     // Nothing to cancel through: the harness outlives this call. Cancellation
     // is the poll loop's job, and the sandbox's own lifetime is the backstop.
     signal: new AbortController().signal,
@@ -1364,6 +1410,91 @@ async function recordContextUsage(
 
 
 /**
+ * Provider calls and cost after the last observed write (PART L).
+ *
+ * A timestamp comparison against one boundary, and nothing cleverer. Returns
+ * nothing at all when the boundary is unknown — PART L is explicit that an
+ * unreliable split should not exist rather than exist approximately, and a run
+ * that wrote no file has no far side to be on.
+ *
+ * `provider_cost_usd` is untouched. This is an additional column beside it,
+ * never a re-derivation of it.
+ */
+async function postEditSpend(
+  deps: AgentExecutionDeps,
+  run: StoredAgentExecutionRun,
+  lastEditMs: number | null,
+): Promise<{ postEditProviderCalls?: number; postEditProviderCostUsd?: number }> {
+  if (lastEditMs === null || !run.startedAt) return {};
+
+  const boundary = new Date(Date.parse(run.startedAt) + lastEditMs).toISOString();
+
+  const { data, error } = await deps.supabase
+    .from("ai_usage_events")
+    .select("provider_cost_usd")
+    .eq("job_id", run.id)
+    .eq("project_id", run.projectId)
+    .gt("created_at", boundary);
+
+  if (error) return {};
+
+  const rows = (data ?? []) as { provider_cost_usd: string | number | null }[];
+  return {
+    postEditProviderCalls: rows.length,
+    postEditProviderCostUsd: rows.reduce<number>(
+      (total, row) => total + Number(row.provider_cost_usd ?? 0),
+      0,
+    ),
+  };
+}
+
+/**
+ * How many post-edit reads landed outside what the brief named.
+ *
+ * The number the outside-brief allowance exists to move. Compared against the
+ * recompiled brief's own candidate paths, and skipped entirely when the brief
+ * cannot be reproduced — an unmeasurable run is recorded as unmeasured.
+ */
+async function postEditBriefReads(
+  deps: AgentExecutionDeps,
+  run: StoredAgentExecutionRun,
+  spec: ExecutionSpec,
+  postEdit: readonly { type: string; metadata: Record<string, unknown> }[],
+): Promise<{ postEditReadsBeyondBrief?: number }> {
+  if (!run.contextBriefVersion) return {};
+
+  try {
+    const brief = await loadExecutionBrief({
+      supabase: deps.supabase,
+      projectId: run.projectId,
+      spec,
+    });
+    if (!brief || brief.briefVersion !== run.contextBriefVersion) return {};
+
+    const named = new Set(brief.fileCandidates.map((candidate) => candidate.path));
+    const reads = postEdit.filter((event) => event.type === "file_read");
+
+    return {
+      postEditReadsBeyondBrief: reads.filter((event) => {
+        const path = event.metadata.path;
+        return typeof path === "string" && !named.has(path);
+      }).length,
+    };
+  } catch {
+    return {};
+  }
+}
+
+/** Tool events that count as "the agent did something" for the tail counters. */
+const TOOL_EVENT_TYPES: ReadonlySet<string> = new Set([
+  "file_read",
+  "file_written",
+  "file_edited",
+  "file_searched",
+  "command_started",
+]);
+
+/**
  * What the verification plan cost, and where the implementation ended
  * (Sprint 0042, PART K, PART L).
  *
@@ -1402,6 +1533,8 @@ async function recordVerificationOutcome(
     durationMs: number;
     verificationCommands: number | null;
     verificationRefusals: number | null;
+    policyDecisions: number | null;
+    repairCycles: number | null;
   },
 ): Promise<void> {
   const { run } = context;
@@ -1463,12 +1596,40 @@ async function recordVerificationOutcome(
       });
     }
 
+    /*
+     * The tail, counted against the one boundary Vibe can actually observe.
+     *
+     * Everything after the last write was either checking or exploring, and
+     * splitting those two apart afterwards would need to know what the agent
+     * intended. The useful question — how much did this run spend once the code
+     * was already written — does not need that, so it is not claimed.
+     */
+    const lastEditMs = editOffsets.length > 0 ? Math.max(...editOffsets) : null;
+    const after = (event: { occurredAt: string }): boolean => {
+      const offset = offsetOf(event);
+      return lastEditMs !== null && offset !== null && offset > lastEditMs;
+    };
+
+    const postEdit = events.filter(after);
+    const completionRefusals = events.filter(
+      (event) => event.type === "completion_action_refused",
+    );
+
     await recordAgentRunObservations(deps.supabase, run.id, {
       verificationCommands: harnessChecks ?? checks.length,
       verificationRefusals: result.verificationRefusals ?? refusals.length,
       verificationMs,
       timeToFirstEditMs: editOffsets.length > 0 ? Math.min(...editOffsets) : null,
-      timeToLastEditMs: editOffsets.length > 0 ? Math.max(...editOffsets) : null,
+      timeToLastEditMs: lastEditMs,
+
+      postEditToolCalls: postEdit.filter((event) => TOOL_EVENT_TYPES.has(event.type)).length,
+      postEditReads: postEdit.filter((event) => event.type === "file_read").length,
+      postEditCommands: postEdit.filter((event) => event.type === "command_started").length,
+      completionRefusals: completionRefusals.length,
+      repairCycles: result.repairCycles ?? undefined,
+      policyDecisions: result.policyDecisions,
+      ...(await postEditSpend(deps, run, lastEditMs)),
+      ...(await postEditBriefReads(deps, run, context.spec.spec, postEdit)),
     });
 
     if (run.verificationMode) {

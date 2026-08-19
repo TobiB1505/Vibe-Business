@@ -62,6 +62,16 @@ type RawRun = {
   verification_ms: number | null;
   time_to_first_edit_ms: number | null;
   time_to_last_edit_ms: number | null;
+  completion_budget_version: string | null;
+  post_edit_tool_calls: number | null;
+  post_edit_reads: number | null;
+  post_edit_reads_beyond_brief: number | null;
+  post_edit_commands: number | null;
+  post_edit_provider_calls: number | null;
+  post_edit_provider_cost_usd: string | number | null;
+  completion_refusals: number | null;
+  repair_cycles: number | null;
+  policy_decisions: number | null;
 };
 
 export async function readAgentRunForLiveView(
@@ -71,7 +81,7 @@ export async function readAgentRunForLiveView(
   const { data, error } = await supabase
     .from("agent_execution_runs")
     .select(
-      "id, operation_run_id, execution_spec_id, status, assistant_messages, sdk_loop_iterations, model, started_at, completed_at, duration_ms, observed_path_count, changed_file_count, context_brief_version, context_freshness, context_bytes, context_facts_sent, context_candidates_sent, context_candidates_read, unique_files_read, repeated_file_reads, files_read_outside_context, verification_mode, verification_plan_version, verification_commands, verification_refusals, verification_ms, time_to_first_edit_ms, time_to_last_edit_ms",
+      "id, operation_run_id, execution_spec_id, status, assistant_messages, sdk_loop_iterations, model, started_at, completed_at, duration_ms, observed_path_count, changed_file_count, context_brief_version, context_freshness, context_bytes, context_facts_sent, context_candidates_sent, context_candidates_read, unique_files_read, repeated_file_reads, files_read_outside_context, verification_mode, verification_plan_version, verification_commands, verification_refusals, verification_ms, time_to_first_edit_ms, time_to_last_edit_ms, completion_budget_version, post_edit_tool_calls, post_edit_reads, post_edit_reads_beyond_brief, post_edit_commands, post_edit_provider_calls, post_edit_provider_cost_usd, completion_refusals, repair_cycles, policy_decisions",
     )
     .eq("id", params.runId)
     .eq("project_id", params.projectId)
@@ -110,6 +120,24 @@ export async function readAgentRunForLiveView(
           verificationMs: row.verification_ms,
           timeToFirstEditMs: row.time_to_first_edit_ms,
           timeToLastEditMs: row.time_to_last_edit_ms,
+        }
+      : null,
+
+    completion: row.completion_budget_version
+      ? {
+          budgetVersion: row.completion_budget_version,
+          toolCalls: row.post_edit_tool_calls,
+          reads: row.post_edit_reads,
+          readsBeyondBrief: row.post_edit_reads_beyond_brief,
+          commands: row.post_edit_commands,
+          providerCalls: row.post_edit_provider_calls,
+          providerCostUsd:
+            row.post_edit_provider_cost_usd === null
+              ? null
+              : Number(row.post_edit_provider_cost_usd),
+          refusals: row.completion_refusals,
+          repairCycles: row.repair_cycles,
+          policyDecisions: row.policy_decisions,
         }
       : null,
 

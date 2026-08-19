@@ -86,6 +86,7 @@ export type AgentRunMetrics = {
    */
   context: LiveRunRow["context"];
   verification: LiveRunRow["verification"];
+  completion: LiveRunRow["completion"];
 };
 
 export type ValidationState = "not_started" | "queued" | "running" | "passed" | "failed";
@@ -143,6 +144,26 @@ export type LiveRunRow = {
     verificationMs: number | null;
     timeToFirstEditMs: number | null;
     timeToLastEditMs: number | null;
+  } | null;
+
+  /**
+   * Where the run's work went after the code was written (Sprint 0043).
+   *
+   * Null means no completion budget was compiled and the run explored freely —
+   * which is what every run before #6 did. Resource control over model
+   * behaviour, never a statement about whether the change is safe.
+   */
+  completion: {
+    budgetVersion: string;
+    toolCalls: number | null;
+    reads: number | null;
+    readsBeyondBrief: number | null;
+    commands: number | null;
+    providerCalls: number | null;
+    providerCostUsd: number | null;
+    refusals: number | null;
+    repairCycles: number | null;
+    policyDecisions: number | null;
   } | null;
 
   context: {
@@ -334,6 +355,7 @@ function deriveMetrics(input: {
     wallClockBudgetMs: input.limits?.maxWallClockMs ?? null,
     context: input.run?.context ?? null,
     verification: input.run?.verification ?? null,
+    completion: input.run?.completion ?? null,
   };
 }
 

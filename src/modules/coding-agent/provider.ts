@@ -1,4 +1,5 @@
 import type { SandboxVerificationPolicy } from "@/modules/execution-context/verification";
+import type { SandboxCompletionPolicy } from "@/modules/execution-context/completion";
 import type { AgentProviderOutcome, AgentToolRequestName } from "./schema";
 
 /**
@@ -121,6 +122,8 @@ export type CodingAgentRequest = {
    * without one behaves exactly as it did before the plan existed.
    */
   verification?: SandboxVerificationPolicy;
+  /** How much work is allowed after the code is written. Carried, never read. */
+  completion?: SandboxCompletionPolicy;
   /** Cancellation and wall-clock enforcement (§36). */
   signal: AbortSignal;
 };
@@ -186,6 +189,10 @@ export type CodingAgentResult = {
    */
   verificationCommands: number | null;
   verificationRefusals: number | null;
+  /** Every tool call the policy hook saw. Zero beside many tool calls is a bug. */
+  policyDecisions: number | null;
+  /** Mutations after the first. Each one bought a fresh completion window. */
+  repairCycles: number | null;
   durationMs: number;
   /**
    * A sanitized description of a provider failure. Never surfaced to a user,
@@ -266,7 +273,14 @@ export type ObservedRuntimeEntry = {
    * with real per-step durations rather than one timestamp per poll batch.
    */
   offsetMs?: number;
-  kind: "started" | "turn" | "tool" | "finished" | "verification" | "verification_refused";
+  kind:
+    | "started"
+    | "turn"
+    | "tool"
+    | "finished"
+    | "verification"
+    | "verification_refused"
+    | "phase";
   /** Model responses so far, on a `turn` line. */
   assistantMessages?: number;
   tool?: string;
@@ -277,6 +291,8 @@ export type ObservedRuntimeEntry = {
   check?: string;
   /** Why a check command was refused. Closed vocabulary. */
   refusalReason?: string;
+  /** Which observed phase the run moved into. Closed vocabulary. */
+  phase?: string;
 };
 
 export type DetachedObservation = {

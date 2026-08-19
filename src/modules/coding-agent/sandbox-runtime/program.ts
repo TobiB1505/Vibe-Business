@@ -152,9 +152,113 @@ const checkOf = (command, category) => {
  * It is a convergence control, not a security boundary. What makes a change
  * safe is decided afterwards by Vibe, outside this VM.
  */
+/*
+ * The completion policy, alongside the verification one (Sprint 0043).
+ *
+ * Same shape and same rule: data in request.json, no interpolation, and an
+ * absent policy permits everything. The brief's paths travel with it so the
+ * harness can tell a read of a file Vibe pointed at from a read of one it did
+ * not, which is the whole distinction the outside-brief allowance rests on.
+ */
+const completion = request.completion || null;
+const briefPaths = new Set(completion ? completion.briefPaths : []);
+const mutatingTools = new Set(completion ? completion.mutatingTools : []);
+const readTools = new Set(completion ? completion.readTools : []);
+const searchTools = new Set(completion ? completion.searchTools : []);
+
+const progressState = {
+  implemented: false,
+  toolCallsSinceEdit: 0,
+  outsideBriefReadsSinceEdit: 0,
+  repairCycles: 0,
+  lastEditAt: null,
+  unresolvedFailure: false,
+};
+
 const messageFor = (reason) =>
   (policy && policy.messages && policy.messages[reason]) ||
+  (completion && completion.messages && completion.messages[reason]) ||
   "That action is outside this task's execution policy.";
+
+const pathOf = (args) => {
+  if (typeof args.file_path === "string") return args.file_path;
+  if (typeof args.path === "string") return args.path;
+  return null;
+};
+
+/* The workspace root prefix, so a path matches the brief's relative form. */
+const relativePath = (path) => {
+  if (typeof path !== "string" || path.length === 0) return null;
+  const root = request.cwd.endsWith("/") ? request.cwd : request.cwd + "/";
+  return path.startsWith(root) ? path.slice(root.length) : path;
+};
+
+const classify = (toolName, path) => {
+  if (mutatingTools.has(toolName)) return "candidate_mutation";
+  if (!progressState.implemented) return "orientation";
+  if (progressState.unresolvedFailure) return "repair";
+  if (toolName === "Bash") return "required_verification";
+  if (searchTools.has(toolName)) return "search";
+  if (readTools.has(toolName)) {
+    return path !== null && briefPaths.has(path) ? "brief_read" : "outside_brief_read";
+  }
+  return "orientation";
+};
+
+/*
+ * The completion decision.
+ *
+ * Mirrors decideCompletionAction in execution-context/completion.ts, which is
+ * the version Vibe's tests drive. Both are fed the same policy object, and the
+ * canary runs this one for real — so a divergence shows up as a failing canary
+ * rather than as a paid run behaving differently from every test.
+ */
+const decideCompletion = (toolName, args) => {
+  if (!completion) return null;
+
+  const path = relativePath(pathOf(args));
+  const activity = classify(toolName, path);
+  const budget = completion.budget;
+
+  if (activity === "candidate_mutation") {
+    if (progressState.implemented) progressState.repairCycles += 1;
+    progressState.implemented = true;
+    progressState.toolCallsSinceEdit = 0;
+    progressState.outsideBriefReadsSinceEdit = 0;
+    progressState.unresolvedFailure = false;
+    progressState.lastEditAt = Date.now();
+    emit({ t: "phase", phase: "implementing", cycles: progressState.repairCycles });
+    return null;
+  }
+
+  if (!progressState.implemented) return null;
+
+  if (activity === "repair") {
+    if (progressState.repairCycles >= budget.maxRepairCycles) {
+      return { reason: "repair_cycles_exhausted", activity: activity };
+    }
+    progressState.toolCallsSinceEdit += 1;
+    return null;
+  }
+
+  if (progressState.lastEditAt !== null &&
+      Date.now() - progressState.lastEditAt >= budget.maxCompletionWallClockMs) {
+    return { reason: "completion_wall_clock_exhausted", activity: activity };
+  }
+
+  if (activity === "outside_brief_read" &&
+      progressState.outsideBriefReadsSinceEdit >= budget.maxOutsideBriefReadsSinceEdit) {
+    return { reason: "outside_brief_budget_exhausted", activity: activity };
+  }
+
+  if (progressState.toolCallsSinceEdit >= budget.maxToolCallsSinceEdit) {
+    return { reason: "completion_budget_exhausted", activity: activity };
+  }
+
+  progressState.toolCallsSinceEdit += 1;
+  if (activity === "outside_brief_read") progressState.outsideBriefReadsSinceEdit += 1;
+  return null;
+};
 
 const decide = (toolName, input) => {
   if (!policy) return null;
@@ -223,6 +327,8 @@ const result = {
    * which reads identically to a policy that had nothing to refuse.
    */
   policyDecisions: 0,
+  completionRefusals: 0,
+  repairCycles: 0,
   error: null,
 };
 
@@ -295,11 +401,27 @@ try {
               async (event) => {
                 verification.decisions += 1;
 
-                const refusal = decide(event.tool_name, event.tool_input);
+                const args = event.tool_input && typeof event.tool_input === "object"
+                  ? event.tool_input
+                  : {};
+
+                /*
+                 * Verification first, completion second.
+                 *
+                 * A forbidden check is refused for being the wrong check
+                 * whatever the budget says, and reporting it as "out of budget"
+                 * would send the agent looking for a cheaper way to run it.
+                 */
+                const refusal = decide(event.tool_name, event.tool_input)
+                  || decideCompletion(event.tool_name, args);
                 if (!refusal) return { continue: true };
 
                 verification.refusals += 1;
-                emit({ t: "refused", check: refusal.check, reason: refusal.reason });
+                emit({
+                  t: "refused",
+                  check: refusal.check || refusal.activity,
+                  reason: refusal.reason,
+                });
 
                 return {
                   continue: true,
@@ -309,6 +431,41 @@ try {
                     permissionDecisionReason: messageFor(refusal.reason),
                   },
                 };
+              },
+            ],
+          },
+        ],
+        /*
+         * The only trusted signal that something is actually wrong.
+         *
+         * A tool's own failure, seen by the harness — not the model saying it
+         * is stuck. It is what unlocks repair, so it has to come from
+         * somewhere the model cannot write to.
+         */
+        PostToolUseFailure: [
+          {
+            hooks: [
+              async (event) => {
+                /*
+                 * Only a command or a write counts.
+                 *
+                 * A failed Read means the agent guessed a path that is not
+                 * there — which says nothing about whether the implementation
+                 * is wrong, and everything about whether the guess was. The
+                 * canary caught this: reading two non-existent files marked the
+                 * run as repairing and unlocked unlimited exploration, which is
+                 * a bypass any model could have found by accident.
+                 *
+                 * A failing check, or a write that would not apply, is
+                 * different: both are evidence about the change itself.
+                 */
+                const tool = String(event.tool_name || "");
+                const counts = tool === "Bash" || mutatingTools.has(tool);
+                if (progressState.implemented && counts) {
+                  progressState.unresolvedFailure = true;
+                  emit({ t: "phase", phase: "repairing", tool: tool });
+                }
+                return { continue: true };
               },
             ],
           },
@@ -400,6 +557,7 @@ try {
 result.verificationCommands = verification.commands;
 result.verificationRefusals = verification.refusals;
 result.policyDecisions = verification.decisions;
+result.repairCycles = progressState.repairCycles;
 result.verificationMs = verification.firstAt === null ? null : Date.now() - verification.firstAt;
 
 emit({ t: "finished", subtype: result.subtype, n: result.assistantMessages });

@@ -320,6 +320,60 @@ export function DeveloperInspector({ model }: { model: AgentExecutionLiveModel }
           </InspectorGroup>
 
           {/*
+            Where the run's work went once the code was written.
+
+            The panel run #5 needed and nobody had: it spent 69% of its wall
+            clock and eight of fifteen provider calls after its last edit, and
+            the only way to see that was to reconstruct it from raw events
+            afterwards.
+
+            "Refused" is shown, never hidden. A bounded agent that is silently
+            bounded cannot be told apart from one that chose to stop, and a
+            budget that turns out to be too tight should look like evidence.
+          */}
+          {metrics.completion ? (
+            <InspectorGroup label="After the change">
+              <Metric label="Budget" value={metrics.completion.budgetVersion} mono />
+              <Metric
+                label="Implementation"
+                value={formatDuration(metrics.verification?.timeToLastEditMs ?? null) ?? UNKNOWN}
+                mono
+              />
+              <Metric label="Tool calls" value={metrics.completion.toolCalls ?? UNKNOWN} mono />
+              <Metric label="Reads" value={metrics.completion.reads ?? UNKNOWN} mono />
+              <Metric
+                label="Reads beyond brief"
+                value={metrics.completion.readsBeyondBrief ?? UNKNOWN}
+                mono
+              />
+              <Metric label="Commands" value={metrics.completion.commands ?? UNKNOWN} mono />
+              <Metric
+                label="Provider calls"
+                value={metrics.completion.providerCalls ?? UNKNOWN}
+                mono
+              />
+              <Metric
+                label="Provider cost"
+                value={formatUsd(metrics.completion.providerCostUsd) ?? UNKNOWN}
+                mono
+              />
+              <Metric label="Refused" value={metrics.completion.refusals ?? UNKNOWN} mono />
+              <Metric label="Repair cycles" value={metrics.completion.repairCycles ?? UNKNOWN} mono />
+              {/*
+                Zero decisions beside a run full of tool calls means the policy
+                never ran — the exact failure that made run #5 execute a
+                governed command while recording nothing. It is shown so that
+                state is visible rather than inferred.
+              */}
+              <Metric
+                label="Policy decisions"
+                value={metrics.completion.policyDecisions ?? UNKNOWN}
+                mono
+              />
+            </InspectorGroup>
+          ) : null}
+
+          {/*
             How much this run was allowed to check its own work.
 
             Developer detail only, and deliberately not a customer surface: a
@@ -509,6 +563,9 @@ const FEED_VERBS: Record<string, string> = {
   verification_check_started: "CHECK",
   verification_command_refused: "SKIP",
   verification_escalated: "ESCALATE",
+  completion_action_refused: "STOP",
+  completion_window_started: "WROTE",
+  completion_repair_started: "REPAIR",
 };
 
 export function ActivityFeed({ events }: { events: readonly StoredExecutionEvent[] }) {

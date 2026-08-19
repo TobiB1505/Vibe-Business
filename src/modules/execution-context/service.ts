@@ -7,6 +7,7 @@ import { getActionPlanById } from "@/modules/action-plans/store";
 import { compileExecutionBrief } from "./compiler";
 import type { ExecutionBrief } from "./brief";
 import { compileAgentVerificationPlan, type AgentVerificationPlan } from "./verification";
+import { compileCompletionBudget, type CompletionBudget } from "./completion";
 
 /**
  * Loading what the compiler compiles from.
@@ -122,4 +123,18 @@ export async function loadAgentVerificationPlan(
   } catch {
     return null;
   }
+}
+
+
+/**
+ * How much work is allowed after the code is written.
+ *
+ * Keyed on the verification mode rather than classified again, because the two
+ * questions have the same answer: a task shallow enough to need only a diff
+ * review is a task that should not need ten files read afterwards, and one deep
+ * enough to warrant the full suite is one whose failures take room to diagnose.
+ * A second taxonomy would be a second thing to keep in agreement.
+ */
+export function completionBudgetFor(plan: AgentVerificationPlan | null): CompletionBudget | null {
+  return plan ? compileCompletionBudget(plan.mode) : null;
 }

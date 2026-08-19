@@ -9,6 +9,7 @@ import { AGENT_RUNTIME_TOOLS, AGENT_RUNTIME_VERSION, parseAgentRuntimeResult } f
 import type { AgentRuntimeResult } from "../protocol";
 import { parseRuntimeProgress, type RuntimeProgress } from "../provider";
 import type { SandboxVerificationPolicy } from "@/modules/execution-context/verification";
+import type { SandboxCompletionPolicy } from "@/modules/execution-context/completion";
 import { startStubAnthropic, type ScriptedToolCall } from "./stub-anthropic";
 
 /**
@@ -46,6 +47,7 @@ export type CanaryOutcome = {
 export type CanaryInput = {
   script: readonly ScriptedToolCall[];
   policy?: SandboxVerificationPolicy;
+  completion?: SandboxCompletionPolicy;
   /**
    * Paths whose existence afterwards proves a command really executed.
    *
@@ -54,6 +56,8 @@ export type CanaryInput = {
    * could hide that.
    */
   markerPaths?: Record<string, string>;
+  /** Repository-relative paths the script writes to, so their parents exist. */
+  scriptedPaths?: readonly string[];
   maxTurns?: number;
   timeoutMs?: number;
 };
@@ -68,6 +72,19 @@ export async function runCanary(input: CanaryInput): Promise<CanaryOutcome> {
     join(workspace, "package.json"),
     JSON.stringify({ name: "canary-workspace", private: true, scripts: { build: "echo built" } }),
   );
+
+  /*
+   * Directories for every path the scripted calls touch.
+   *
+   * Without them a Write fails, `PostToolUseFailure` fires, and the run
+   * legitimately enters repair — which is correct behaviour and a useless test.
+   * The workspace has to be real enough that a failure means what it says.
+   */
+  for (const path of input.scriptedPaths ?? []) {
+    const parent = path.split("/").slice(0, -1).join("/");
+    if (parent) await mkdir(join(workspace, parent), { recursive: true });
+    await writeFile(join(workspace, path), "// canary\n", "utf8");
+  }
 
   /*
    * `node_modules` beside the program, which is the production shape.
@@ -93,6 +110,7 @@ export async function runCanary(input: CanaryInput): Promise<CanaryOutcome> {
       tools: AGENT_RUNTIME_TOOLS,
       cwd: workspace,
       ...(input.policy ? { verification: input.policy } : {}),
+      ...(input.completion ? { completion: input.completion } : {}),
     }),
     "utf8",
   );

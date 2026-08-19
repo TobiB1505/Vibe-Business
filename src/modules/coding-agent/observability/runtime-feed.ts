@@ -120,15 +120,45 @@ function toEvent(
    * instead of as an agent that mysteriously did less.
    */
   if (entry.kind === "verification_refused") {
+    /*
+     * Two refusal families, one feed line, told apart by reason.
+     *
+     * A verification refusal says "wrong check for this task"; a completion
+     * refusal says "the job is done and this costs money". They read very
+     * differently to a person and they belong to different budgets, so they
+     * become different event types here rather than one type with a field
+     * somebody has to remember to look at.
+     */
+    const reason = entry.refusalReason ?? "check_not_permitted";
+    const isCompletion = reason.startsWith("completion_") || reason.startsWith("outside_brief_") ||
+      reason.startsWith("repair_cycles");
+
     return executionEvent({
       sequence: entry.sequence,
-      type: "verification_command_refused",
+      type: isCompletion ? "completion_action_refused" : "verification_command_refused",
       occurredAt,
-      summary: `Skipped by policy: ${entry.check ?? "a check"}`,
-      metadata: {
-        check: entry.check ?? "unknown",
-        reason: entry.refusalReason ?? "check_not_permitted",
-      },
+      summary: isCompletion
+        ? `Stopped after completion: ${entry.check ?? "further work"}`
+        : `Skipped by policy: ${entry.check ?? "a check"}`,
+      metadata: { check: entry.check ?? "unknown", reason },
+    });
+  }
+
+  /*
+   * A phase the harness observed: the code changed, or a command failed.
+   *
+   * Vibe's own record of where implementation ended, taken from tool events
+   * rather than inferred from timestamps — and never from the agent saying it
+   * is finished, which is not a thing it is asked.
+   */
+  if (entry.kind === "phase") {
+    const repairing = entry.phase === "repairing";
+    return executionEvent({
+      sequence: entry.sequence,
+      type: repairing ? "completion_repair_started" : "completion_window_started",
+      occurredAt,
+      summary: repairing ? "A check failed; repairing" : "Change written",
+      metadata: { phase: entry.phase ?? "unknown" },
     });
   }
 

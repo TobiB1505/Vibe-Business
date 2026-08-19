@@ -5,6 +5,7 @@ import {
   renderVerificationPlan,
   type AgentVerificationPlan,
 } from "@/modules/execution-context/verification";
+import type { CompletionBudget } from "@/modules/execution-context/completion";
 import type { AgentInstruction, AgentToolDescriptor } from "./provider";
 import type { AgentRuntimeLimits } from "./budget";
 import {
@@ -357,6 +358,7 @@ function userMessage(
   spec: ExecutionSpec,
   brief: RenderedBrief | null,
   plan: AgentVerificationPlan | null,
+  completion: CompletionBudget | null,
 ): string {
   const { objective, businessContext, repository } = spec;
 
@@ -471,6 +473,29 @@ function userMessage(
      * material it may weigh against something else.
      */
     ...(plan ? ["# Checking your own work", "", renderVerificationPlan(plan), ""] : []),
+    /*
+     * The budget, stated rather than sprung (PART H).
+     *
+     * Telling the agent the shape of the limit is not what enforces it — the
+     * harness refuses regardless — but an agent that knows exploration is
+     * scarce after it writes can spend its reading *before* it writes, which is
+     * the cheaper order anyway. A limit discovered by hitting it costs a turn.
+     */
+    ...(completion
+      ? [
+          "# After the change is written",
+          "",
+          `Once you have edited a file, you have about ${completion.maxToolCallsSinceEdit} more tool`,
+          "actions before Vibe stops accepting exploratory work for this step, and at most",
+          `${completion.maxOutsideBriefReadsSinceEdit} read(s) of files outside the ones named above. Editing again resets that,`,
+          "because an agent still changing files has not finished — so a genuine repair is never",
+          "the thing that runs out.",
+          "",
+          "Do the looking you need before you write, not after. Nothing after the change is",
+          "written re-earns its cost by confirming something you already know.",
+          "",
+        ]
+      : []),
     "# Start",
     "",
     ...(brief
@@ -523,6 +548,8 @@ export function compileAgentInstruction(input: {
   brief?: ExecutionBrief | null;
   /** How much the run may check its own work. Null leaves v2 behaviour. */
   verification?: AgentVerificationPlan | null;
+  /** How much work is allowed after the code is written. Null leaves it open. */
+  completion?: CompletionBudget | null;
 }): CompiledAgentInstruction {
   const checks = input.availableChecks.length > 0 ? input.availableChecks : AGENT_CHECK_NAMES;
 
@@ -544,10 +571,11 @@ export function compileAgentInstruction(input: {
     rendered.repositoryFactsRendered + rendered.candidatesRendered > 0;
 
   const plan = input.verification ?? null;
+  const completion = input.completion ?? null;
 
   return {
     system: systemPrompt(input.limits, checks, briefed, plan),
-    userMessage: userMessage(input.spec, briefed ? rendered : null, plan),
+    userMessage: userMessage(input.spec, briefed ? rendered : null, plan, completion),
     compilerVersion: AGENT_PROMPT_COMPILER_VERSION,
     context: rendered,
     briefed,

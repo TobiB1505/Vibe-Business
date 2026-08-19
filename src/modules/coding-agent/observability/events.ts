@@ -92,6 +92,12 @@ export const EXECUTION_EVENT_TYPES = [
   "verification_escalated",
   "verification_completed",
 
+  // Where the requested job ended, and what was refused after it (Sprint 0043).
+  "completion_budget_compiled",
+  "completion_window_started",
+  "completion_action_refused",
+  "completion_repair_started",
+
   // The harness
   "agent_started",
   "turn_completed",
@@ -385,6 +391,7 @@ const PHASE_OF: Record<ExecutionEventType, ExecutionPhase> = {
   workspace_failed: "preparing",
   context_compiled: "preparing",
   verification_plan_compiled: "preparing",
+  completion_budget_compiled: "preparing",
 
   agent_started: "working",
   turn_completed: "working",
@@ -401,6 +408,9 @@ const PHASE_OF: Record<ExecutionEventType, ExecutionPhase> = {
   verification_command_refused: "working",
   verification_escalated: "working",
   verification_completed: "working",
+  completion_window_started: "working",
+  completion_action_refused: "working",
+  completion_repair_started: "working",
   context_used: "reviewing_change",
 
   change_discovered: "reviewing_change",

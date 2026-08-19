@@ -256,6 +256,8 @@ export type FakeProviderOptions = {
    */
   verificationCommands?: number | null;
   verificationRefusals?: number | null;
+  policyDecisions?: number | null;
+  repairCycles?: number | null;
 };
 
 export type FakeCodingAgentProvider = CodingAgentProvider & {
@@ -308,6 +310,8 @@ export function fakeCodingAgentProvider(
         // Null rather than zero: nothing counted is not the same as none.
         verificationCommands: null,
         verificationRefusals: null,
+        policyDecisions: null,
+        repairCycles: null,
         usage: options.usage ?? [
           {
             model: "claude-sonnet-5",
@@ -420,6 +424,8 @@ export function fakeDetachedAgentProvider(
         sdkLoopIterations: threw ? null : turns,
         verificationCommands: options.verificationCommands ?? null,
         verificationRefusals: options.verificationRefusals ?? null,
+        policyDecisions: options.policyDecisions ?? null,
+        repairCycles: options.repairCycles ?? null,
         usage: options.usage ?? [
           {
             model: "claude-sonnet-5",

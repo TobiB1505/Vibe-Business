@@ -41,6 +41,7 @@ describe("a well-formed result", () => {
       verificationCommands: 0,
       verificationRefusals: 0,
       policyDecisions: 0,
+      repairCycles: 0,
       permissionDenials: 1,
       modelUsage: {},
       error: null,
