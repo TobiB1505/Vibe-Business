@@ -16,6 +16,9 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Vibe Business",
   description: "The business layer for AI-built products.",
+  // Public by default. `/app` overrides this with `noindex, nofollow` in its
+  // own layout, since everything under it requires a signed-in session.
+  robots: { index: true, follow: true },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
