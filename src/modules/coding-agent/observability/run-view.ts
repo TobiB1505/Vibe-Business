@@ -42,6 +42,7 @@ type RawRun = {
   started_at: string | null;
   completed_at: string | null;
   duration_ms: number | null;
+  observed_path_count: number;
   changed_file_count: number;
 };
 
@@ -52,7 +53,7 @@ export async function readAgentRunForLiveView(
   const { data, error } = await supabase
     .from("agent_execution_runs")
     .select(
-      "id, operation_run_id, execution_spec_id, status, turns, model, started_at, completed_at, duration_ms, changed_file_count",
+      "id, operation_run_id, execution_spec_id, status, turns, model, started_at, completed_at, duration_ms, observed_path_count, changed_file_count",
     )
     .eq("id", params.runId)
     .eq("project_id", params.projectId)
@@ -70,6 +71,7 @@ export async function readAgentRunForLiveView(
     startedAt: row.started_at,
     completedAt: row.completed_at,
     durationMs: row.duration_ms,
+    observedPathCount: row.observed_path_count,
     changedFileCount: row.changed_file_count,
   };
 

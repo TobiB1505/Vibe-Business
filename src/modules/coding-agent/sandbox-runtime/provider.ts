@@ -209,6 +209,8 @@ function outcomeFor(subtype: string): AgentProviderOutcome {
  */
 export type RuntimeProgressEntry = {
   sequence: number;
+  /** Milliseconds since the harness started. Absent from an older feed. */
+  offsetMs?: number;
   kind: "started" | "turn" | "tool" | "finished";
   turns?: number;
   tool?: string;
@@ -259,22 +261,31 @@ export function parseRuntimeProgress(output: string): RuntimeProgress {
      */
     const sequence = typeof event.s === "number" && event.s > 0 ? event.s : index + 1;
 
+    // Milliseconds since the harness started, when it reported one. Undefined
+    // rather than zero for a feed written before this was emitted: zero would
+    // claim every line happened at the instant the run began.
+    const offsetMs =
+      typeof event.ms === "number" && Number.isFinite(event.ms) && event.ms >= 0
+        ? event.ms
+        : undefined;
+
     if (event.t === "started") {
       started = true;
-      entries.push({ sequence, kind: "started" });
+      entries.push({ sequence, offsetMs, kind: "started" });
       continue;
     }
 
     if (event.t === "turn") {
       const n = typeof event.n === "number" ? event.n : 0;
       if (n > turns) turns = n;
-      entries.push({ sequence, kind: "turn", turns: n });
+      entries.push({ sequence, offsetMs, kind: "turn", turns: n });
       continue;
     }
 
     if (event.t === "tool") {
       entries.push({
         sequence,
+        offsetMs,
         kind: "tool",
         tool: readString(event.name, 40),
         path: readString(event.path, 400),
@@ -285,7 +296,7 @@ export function parseRuntimeProgress(output: string): RuntimeProgress {
 
     if (event.t === "finished") {
       finished = true;
-      entries.push({ sequence, kind: "finished", subtype: readString(event.subtype, 40) });
+      entries.push({ sequence, offsetMs, kind: "finished", subtype: readString(event.subtype, 40) });
     }
   }
 

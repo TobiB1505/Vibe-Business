@@ -341,16 +341,37 @@ export function changeRejectionMetadata(input: {
   return {
     rejections: [...input.rejections],
     violations: input.violations.map((violation) => ({ ...violation })),
-    changedPathCount: input.evidence.observedPathCount,
-    changedFileCount: input.evidence.candidateFileCount,
-    unchangedPathCount: input.evidence.unchangedPathCount,
-    absentPathCount: input.evidence.absentPathCount,
-    ignoredPathCount: input.evidence.ignoredPathCount,
-    unreadablePathCount: input.evidence.unreadablePathCount,
-    totalDiffBytes: input.evidence.totalDiffBytes,
-    classCounts: { ...input.evidence.classCounts },
-    changedPaths: input.evidence.paths.map((entry) => ({ ...entry })),
-    changedPathsTruncated: input.evidence.truncated,
-    largestChanges: input.evidence.largestChanges.map((entry) => ({ ...entry })),
+    ...changeEvidenceMetadata(input.evidence),
+  };
+}
+
+/**
+ * The same evidence, for a change that was **accepted**.
+ *
+ * Run #3 is why this exists. It observed fourteen paths, withheld twelve and
+ * prepared two — and because the audit event only fired on rejection, the record
+ * of which twelve and by which rule lived nowhere but a platform log with a
+ * retention nobody controls. That is the wrong way round: an accepted change is
+ * the one that goes to a human for approval and possibly to a branch, so it is
+ * the one whose evidence somebody will need months later.
+ *
+ * Shares its shape with the rejection payload deliberately. Two payloads that
+ * describe the same thing differently are two things to keep in sync, and a
+ * reader querying "what did this run withhold" should not need to know how the
+ * run ended to write the query.
+ */
+export function changeEvidenceMetadata(evidence: ChangeEvidence): Record<string, unknown> {
+  return {
+    changedPathCount: evidence.observedPathCount,
+    changedFileCount: evidence.candidateFileCount,
+    unchangedPathCount: evidence.unchangedPathCount,
+    absentPathCount: evidence.absentPathCount,
+    ignoredPathCount: evidence.ignoredPathCount,
+    unreadablePathCount: evidence.unreadablePathCount,
+    totalDiffBytes: evidence.totalDiffBytes,
+    classCounts: { ...evidence.classCounts },
+    changedPaths: evidence.paths.map((entry) => ({ ...entry })),
+    changedPathsTruncated: evidence.truncated,
+    largestChanges: evidence.largestChanges.map((entry) => ({ ...entry })),
   };
 }

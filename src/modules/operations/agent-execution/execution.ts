@@ -32,6 +32,7 @@ import {
   type BaseTreePort,
 } from "@/modules/coding-agent/candidate";
 import {
+  changeEvidenceMetadata,
   changeRejectionMetadata,
   summarizeChangeEvidence,
 } from "@/modules/coding-agent/change-evidence";
@@ -950,6 +951,12 @@ export async function pollAgentStep(
         events: eventsFromRuntimeFeed({
           entries: observation.entries,
           observedAt: new Date((deps.now ?? Date.now)()).toISOString(),
+          // The two halves of a real timestamp: Vibe's own start time, and the
+          // harness's offset from it. Neither alone is enough — the sandbox's
+          // clock is not this system's, and a poll's read time stamps a whole
+          // batch with one moment.
+          startedAt: context.run.startedAt,
+          workspaceDir: context.paths.workspaceDir,
         }),
       });
     } catch (error) {
@@ -986,7 +993,15 @@ export async function pollAgentStep(
 export type RunAgentOutcome = StepOutcome<{
   /** True when the run stopped on a question and is holding (§25). */
   paused: boolean;
-  changedFileCount: number;
+  /**
+   * Paths Vibe observed, *before* any of them is known to be a change.
+   *
+   * Named for what it is. The candidate count comes one step later, from the
+   * comparison against the pinned base, and is usually smaller — 14 against 2
+   * in run #3, because the agent's own build wrote twelve artifacts the
+   * repository ignores.
+   */
+  observedPathCount: number;
   /**
    * The paths Vibe observed.
    *
@@ -1034,7 +1049,7 @@ export async function collectAgentStep(
     : null;
 
   const changedPaths = observed?.paths ?? null;
-  const changedFileCount = changedPaths?.length ?? 0;
+  const observedPathCount = changedPaths?.length ?? 0;
 
   /*
    * Only the columns this step is the one to know.
@@ -1042,10 +1057,17 @@ export async function collectAgentStep(
    * The tool counters were written when the harness was started, by the gateway
    * instance that saw the calls. Writing them again from a gateway rebuilt here
    * would overwrite a real trail with the zeros of an object nothing ever used.
+   *
+   * `observed_path_count`, not `changed_file_count`. This step has looked at the
+   * filesystem and nothing else: it does not yet know which of these paths are
+   * a change, because that is decided by comparing them against the pinned base
+   * one step later. Run #3 stored 14 in a column named for the other number and
+   * the change was two files — the same confusion that made run #2's eighteen
+   * touched paths read as eighteen changes.
    */
   await recordAgentRunObservations(deps.supabase, run.id, {
     turns: result.turns,
-    changedFileCount,
+    observedPathCount,
     durationMs: result.durationMs,
     providerSessionId: result.sessionId,
   });
@@ -1106,11 +1128,11 @@ export async function collectAgentStep(
     deps,
     run,
     "change_discovered",
-    `Observed ${changedFileCount} ${changedFileCount === 1 ? "path" : "paths"} in the workspace`,
-    { observedPaths: changedFileCount },
+    `Observed ${observedPathCount} ${observedPathCount === 1 ? "path" : "paths"} in the workspace`,
+    { observedPaths: observedPathCount },
   );
 
-  return { ok: true, paused: false, changedFileCount, changedPaths };
+  return { ok: true, paused: false, observedPathCount, changedPaths };
 }
 
 /* ---------------------------------------------------------------------------
@@ -1319,6 +1341,19 @@ export async function extractAndVerifyStep(
     return { ok: false, failureCode: "agent_produced_no_change" };
   }
 
+  /*
+   * The candidate count, written by the step that actually knows it.
+   *
+   * `observed_path_count` was written by collect, from the filesystem. This is
+   * the other number: what survived comparison with the pinned base and would
+   * be written. Run #3 was 14 and 2, and before this the row carried only the
+   * first under a name that promised the second.
+   */
+  await recordAgentRunObservations(deps.supabase, run.id, {
+    changedFileCount: verification.files.length,
+    changedBytes: candidate.totalBytes,
+  });
+
   await recordLifecycle(
     deps,
     run,
@@ -1331,6 +1366,27 @@ export async function extractAndVerifyStep(
       totalDiffBytes: evidence.totalDiffBytes,
     },
   );
+
+  /*
+   * The evidence for an *accepted* change, made durable.
+   *
+   * Previously only a refusal wrote one, which had it backwards: an accepted
+   * change is the one a human is asked to approve and the one that may reach a
+   * branch, so it is the one whose "which paths were withheld, and by which
+   * rule" somebody will want months later. Run #3 withheld twelve paths and the
+   * only record of which twelve was a platform log.
+   */
+  await recordAuditEvent(deps.supabase, {
+    userId: run.userId,
+    projectId: run.projectId,
+    eventType: "agent_execution.change_verified",
+    metadata: {
+      projectId: run.projectId,
+      operationId,
+      agentExecutionRunId: run.id,
+      ...changeEvidenceMetadata(evidence),
+    },
+  });
 
   return {
     ok: true,

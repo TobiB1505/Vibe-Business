@@ -220,6 +220,14 @@ export type DetachedStartOutcome =
  */
 export type ObservedRuntimeEntry = {
   sequence: number;
+  /**
+   * Milliseconds since the harness started.
+   *
+   * Relative, because the sandbox's clock is not this system's. Vibe adds it to
+   * the start time it recorded itself, which survives skew and gives a feed
+   * with real per-step durations rather than one timestamp per poll batch.
+   */
+  offsetMs?: number;
   kind: "started" | "turn" | "tool" | "finished";
   turns?: number;
   tool?: string;

@@ -47,6 +47,17 @@ is good for: noticing a run that is looping.
    the same defect and should be resolved by the split above, not by dropping one
    of the two.
 
+## The same defect, in another column — now fixed
+
+Run #3 stored `changed_file_count: 14` for a change of two files, for exactly
+this reason: the collect step wrote the number it had (the observation) into a
+column named for the number it did not (the candidate). That one is repaired —
+`observed_path_count` now holds the observation and `changed_file_count` holds
+the verified candidate, written by the step that knows it. See migration
+`20260819140000`.
+
+The turns pair below is the remaining instance.
+
 ## What must not change as part of this
 
 The turn budget itself. `maxAgentTurns = 40` was not reached under either

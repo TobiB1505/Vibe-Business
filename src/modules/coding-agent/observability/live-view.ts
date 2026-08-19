@@ -99,6 +99,9 @@ export type LiveRunRow = {
   startedAt: string | null;
   completedAt: string | null;
   durationMs: number | null;
+  /** Paths the runtime touched. Always >= `changedFileCount`. */
+  observedPathCount: number;
+  /** Files in the verified candidate. Never what the runtime touched. */
   changedFileCount: number;
 };
 
@@ -266,6 +269,15 @@ function deriveMetrics(input: {
   };
 }
 
+/**
+ * The verified candidate count, or null while none exists.
+ *
+ * From the event rather than from the run row, because the event exists the
+ * moment verification finishes and the row is written in the same step — either
+ * is correct, and the event is the one a live view already has in memory. Null
+ * rather than the observed count standing in: run #3 observed fourteen paths
+ * and changed two, and the two numbers are never interchangeable.
+ */
 function candidateCount(events: readonly StoredExecutionEvent[]): number | null {
   const verified = events.find((event) => event.type === "change_verified");
   return verified ? numberFrom(verified.metadata.candidateFiles) : null;

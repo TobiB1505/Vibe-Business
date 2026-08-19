@@ -64,10 +64,23 @@ const allowed = new Set(request.tools);
  * sees whole lines behind it, and never a torn one.
  */
 let sequence = 0;
+const startedAt = Date.now();
 
+/*
+ * Milliseconds since this harness started, on every line.
+ *
+ * Relative rather than absolute, and that is the point: the sandbox's clock is
+ * not Vibe's, so an absolute timestamp from inside the VM would be a number
+ * nobody could safely compare to anything. An offset from a start Vibe recorded
+ * on its own clock survives any skew and gives real per-step durations.
+ *
+ * Without it every line of a poll's batch was stamped with the moment Vibe read
+ * the file, so run #3's sixty-eight events all carried 11:10:38 and the feed
+ * could not show that a typecheck took ninety seconds.
+ */
 const emit = (event) => {
   sequence += 1;
-  const line = JSON.stringify(Object.assign({ s: sequence }, event)) + "\\n";
+  const line = JSON.stringify(Object.assign({ s: sequence, ms: Date.now() - startedAt }, event)) + "\\n";
   try {
     process.stdout.write(line);
   } catch {

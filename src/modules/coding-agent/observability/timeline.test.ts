@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { executionEvent, type ExecutionEventType, type StoredExecutionEvent } from "./events";
-import { eventsFromRuntimeFeed, summarizeRuntimeFeed, LIFECYCLE_SEQUENCE_BASE } from "./runtime-feed";
+import {
+  eventsFromRuntimeFeed,
+  summarizeRuntimeFeed,
+  toRepositoryPath,
+  LIFECYCLE_SEQUENCE_BASE,
+} from "./runtime-feed";
 import { buildExecutionTimeline, currentAction } from "./timeline";
 import type { ObservedRuntimeEntry } from "../provider";
 
@@ -158,6 +163,81 @@ describe("the runtime feed, made durable", () => {
     });
 
     expect(events).toEqual([]);
+  });
+
+  /**
+   * Run #3 stamped all sixty-eight of its events with 11:10:38, because one
+   * poll wrote the whole batch and the batch carried Vibe's read time. The feed
+   * now carries the harness's own offset from its start, so a typecheck that
+   * took ninety seconds looks like one.
+   */
+  it("places each line at the harness's own offset from the run's start", () => {
+    const events = eventsFromRuntimeFeed({
+      entries: [
+        { sequence: 2, offsetMs: 0, kind: "turn", turns: 1 },
+        { sequence: 3, offsetMs: 12_000, kind: "tool", tool: "Read", path: "a.ts" },
+        { sequence: 4, offsetMs: 95_000, kind: "tool", tool: "Bash", command: "pnpm run typecheck" },
+      ],
+      observedAt: "2026-08-19T11:10:38.000Z",
+      startedAt: "2026-08-19T11:09:00.000Z",
+    });
+
+    expect(events.map((e) => e.occurredAt)).toEqual([
+      "2026-08-19T11:09:00.000Z",
+      "2026-08-19T11:09:12.000Z",
+      "2026-08-19T11:10:35.000Z",
+    ]);
+  });
+
+  /** A feed written before offsets existed gets the honest "when we saw it". */
+  it("falls back to the read time rather than inventing a moment", () => {
+    const events = eventsFromRuntimeFeed({
+      entries: [{ sequence: 2, kind: "tool", tool: "Read", path: "a.ts" }],
+      observedAt: "2026-08-19T11:10:38.000Z",
+      startedAt: "2026-08-19T11:09:00.000Z",
+    });
+
+    expect(events[0].occurredAt).toBe("2026-08-19T11:10:38.000Z");
+  });
+
+  it("falls back the same way when the run has no recorded start", () => {
+    const events = eventsFromRuntimeFeed({
+      entries: [{ sequence: 2, offsetMs: 12_000, kind: "tool", tool: "Read", path: "a.ts" }],
+      observedAt: "2026-08-19T11:10:38.000Z",
+      startedAt: null,
+    });
+
+    expect(events[0].occurredAt).toBe("2026-08-19T11:10:38.000Z");
+  });
+
+  /**
+   * The harness reports absolute paths inside its VM; the candidate, the policy
+   * check and the prepared change all speak repository-relative. Run #3's feed
+   * was full of `/vercel/Vibe-Business/src/app/layout.tsx`, which no candidate
+   * list could be lined up against.
+   */
+  it("reports paths as the repository knows them", () => {
+    const events = eventsFromRuntimeFeed({
+      entries: [
+        { sequence: 2, kind: "tool", tool: "Edit", path: "/vercel/Vibe-Business/src/app/layout.tsx" },
+      ],
+      observedAt: "2026-08-19T11:10:38.000Z",
+      workspaceDir: "/vercel/Vibe-Business",
+    });
+
+    expect(events[0].metadata.path).toBe("src/app/layout.tsx");
+    expect(events[0].summary).toBe("Updated layout.tsx");
+  });
+
+  it("keeps a path it cannot place rather than dropping it", () => {
+    expect(toRepositoryPath("/somewhere/else/x.ts", "/vercel/Vibe-Business")).toBe(
+      "/somewhere/else/x.ts",
+    );
+    expect(toRepositoryPath("src/app/x.ts", null)).toBe("src/app/x.ts");
+    // A directory that merely shares a prefix is not the workspace.
+    expect(toRepositoryPath("/vercel/Vibe-Business-old/x.ts", "/vercel/Vibe-Business")).toBe(
+      "/vercel/Vibe-Business-old/x.ts",
+    );
   });
 
   it("counts what the harness did", () => {

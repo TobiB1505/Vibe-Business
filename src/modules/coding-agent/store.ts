@@ -61,6 +61,9 @@ export type StoredAgentExecutionRun = {
   filesRead: number;
   checkRuns: number;
   repairAttempts: number;
+  /** Paths Vibe observed as touched, before comparison against the base. */
+  observedPathCount: number;
+  /** Files in the verified candidate. Never what the runtime touched. */
   changedFileCount: number;
   changedBytes: number;
   durationMs: number | null;
@@ -96,6 +99,7 @@ type RunRow = {
   files_read: number;
   check_runs: number;
   repair_attempts: number;
+  observed_path_count: number;
   changed_file_count: number;
   changed_bytes: number;
   duration_ms: number | null;
@@ -111,7 +115,7 @@ const RUN_COLUMNS =
   "model, coding_agent_policy_version, prompt_compiler_version, budget_policy_version, " +
   "execution_policy_version, non_production_economics, base_sha, credit_reservation_id, status, " +
   "failure_code, turns, tool_calls_allowed, tool_calls_denied, files_read, check_runs, " +
-  "repair_attempts, changed_file_count, changed_bytes, duration_ms, provider_session_id, " +
+  "repair_attempts, observed_path_count, changed_file_count, changed_bytes, duration_ms, provider_session_id, " +
   "prepared_change_id, created_at, started_at, completed_at";
 
 function mapRun(row: RunRow): StoredAgentExecutionRun {
@@ -140,6 +144,7 @@ function mapRun(row: RunRow): StoredAgentExecutionRun {
     filesRead: row.files_read,
     checkRuns: row.check_runs,
     repairAttempts: row.repair_attempts,
+    observedPathCount: row.observed_path_count,
     changedFileCount: row.changed_file_count,
     changedBytes: row.changed_bytes,
     durationMs: row.duration_ms,
@@ -326,6 +331,7 @@ export type AgentRunObservations = {
   filesRead?: number;
   checkRuns?: number;
   repairAttempts?: number;
+  observedPathCount?: number;
   changedFileCount?: number;
   changedBytes?: number;
   durationMs?: number;
@@ -349,6 +355,7 @@ export async function recordAgentRunObservations(
   set("files_read", observations.filesRead);
   set("check_runs", observations.checkRuns);
   set("repair_attempts", observations.repairAttempts);
+  set("observed_path_count", observations.observedPathCount);
   set("changed_file_count", observations.changedFileCount);
   set("changed_bytes", observations.changedBytes);
   set("duration_ms", observations.durationMs);

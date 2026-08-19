@@ -42,6 +42,26 @@ const TOOL_EVENTS: Record<string, { type: ExecutionEventType; verb: string }> = 
   Grep: { type: "file_searched", verb: "Searched the code" },
 };
 
+/**
+ * A path as the repository knows it.
+ *
+ * The harness reports absolute paths inside its VM — run #3's feed is full of
+ * `/vercel/Vibe-Business/src/app/layout.tsx` — while the candidate change,
+ * the policy check and the prepared change all speak in repository-relative
+ * paths. Two vocabularies for the same file meant the observed list and the
+ * candidate list could not be put side by side.
+ *
+ * Falls back to the original string when the prefix does not match, because a
+ * path this cannot place is still worth showing. It is never used to *decide*
+ * anything: the candidate comes from Vibe's own workspace comparison.
+ */
+export function toRepositoryPath(path: string, workspaceDir: string | null): string {
+  if (!workspaceDir) return path;
+
+  const root = workspaceDir.endsWith("/") ? workspaceDir : `${workspaceDir}/`;
+  return path.startsWith(root) ? path.slice(root.length) : path;
+}
+
 /** The last path segment, which is what a person recognises in a timeline. */
 function basename(path: string): string {
   const segments = path.split("/").filter((segment) => segment.length > 0);
@@ -56,7 +76,11 @@ function basename(path: string): string {
  * them, with the timestamps of its own clock. Two records of the same fact,
  * one of them from inside an untrusted VM, is one too many.
  */
-function toEvent(entry: ObservedRuntimeEntry, occurredAt: string): StoredExecutionEvent | null {
+function toEvent(
+  entry: ObservedRuntimeEntry,
+  occurredAt: string,
+  workspaceDir: string | null,
+): StoredExecutionEvent | null {
   if (entry.kind === "turn") {
     return executionEvent({
       sequence: entry.sequence,
@@ -88,12 +112,14 @@ function toEvent(entry: ObservedRuntimeEntry, occurredAt: string): StoredExecuti
   const mapped = TOOL_EVENTS[tool];
   if (!mapped) return null;
 
+  const path = entry.path ? toRepositoryPath(entry.path, workspaceDir) : null;
+
   return executionEvent({
     sequence: entry.sequence,
     type: mapped.type,
     occurredAt,
-    summary: entry.path ? `${mapped.verb} ${basename(entry.path)}` : mapped.verb,
-    metadata: entry.path ? { path: entry.path, tool } : { tool },
+    summary: path ? `${mapped.verb} ${basename(path)}` : mapped.verb,
+    metadata: path ? { path, tool } : { tool },
   });
 }
 
@@ -107,13 +133,37 @@ function toEvent(entry: ObservedRuntimeEntry, occurredAt: string): StoredExecuti
  */
 export function eventsFromRuntimeFeed(input: {
   entries: readonly ObservedRuntimeEntry[];
+  /** When Vibe read the feed. The fallback for a line with no offset. */
   observedAt: string;
+  /**
+   * When the harness started, on Vibe's clock.
+   *
+   * Each line's offset is added to this. The harness reports milliseconds since
+   * its own start rather than a wall-clock time, because the sandbox's clock is
+   * not this system's — so the two halves come from the two places that can
+   * each answer honestly.
+   */
+  startedAt?: string | null;
+  /** The repository root inside the sandbox, so paths can be made relative. */
+  workspaceDir?: string | null;
 }): StoredExecutionEvent[] {
+  const base = input.startedAt ? Date.parse(input.startedAt) : Number.NaN;
+  const anchored = Number.isFinite(base);
+
   const events: StoredExecutionEvent[] = [];
 
   for (const entry of input.entries) {
     if (entry.sequence >= LIFECYCLE_SEQUENCE_BASE) continue;
-    const event = toEvent(entry, input.observedAt);
+
+    // The harness's own offset when both halves are available, and the read
+    // time otherwise. Never a guess in between: a feed with no offset gets the
+    // honest "this is when we saw it" rather than an invented moment.
+    const occurredAt =
+      anchored && entry.offsetMs !== undefined
+        ? new Date(base + entry.offsetMs).toISOString()
+        : input.observedAt;
+
+    const event = toEvent(entry, occurredAt, input.workspaceDir ?? null);
     if (event) events.push(event);
   }
 

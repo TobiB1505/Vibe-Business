@@ -326,7 +326,7 @@ async function runAgent(
   if (!started.ok) return started;
   // A question raised before the first turn holds the run where it is; there is
   // nothing to watch and nothing to collect.
-  if (started.paused) return { ok: true as const, paused: true, changedFileCount: 0, changedPaths: null };
+  if (started.paused) return { ok: true as const, paused: true, observedPathCount: 0, changedPaths: null };
 
   for (let poll = 0; poll < 5; poll += 1) {
     const observed = await pollAgentStep(agentDeps, operationId);
@@ -540,7 +540,7 @@ describe("§25 — a question pauses the run", () => {
     ]);
 
     // The pause happens at start, before there is anything to watch or collect.
-    expect(outcome).toEqual({ ok: true, paused: true, changedPaths: null, changedFileCount: 0 });
+    expect(outcome).toEqual({ ok: true, paused: true, changedPaths: null, observedPathCount: 0 });
 
     const interrupts = db.rows("execution_interrupts");
     expect(interrupts).toHaveLength(1);
@@ -995,7 +995,7 @@ describe("the sandbox-hosted harness", () => {
       ok: true,
       paused: false,
       changedPaths: ["src/app/robots.ts"],
-      changedFileCount: 1,
+      observedPathCount: 1,
     });
   });
 
@@ -1013,7 +1013,7 @@ describe("the sandbox-hosted harness", () => {
     await provisionAgentWorkspaceStep(shared, operation.id);
     const outcome = await runAgent(shared, operation.id, ["typecheck"]);
 
-    expect(outcome).toMatchObject({ ok: true, changedPaths: [], changedFileCount: 0 });
+    expect(outcome).toMatchObject({ ok: true, changedPaths: [], observedPathCount: 0 });
   });
 
   /**

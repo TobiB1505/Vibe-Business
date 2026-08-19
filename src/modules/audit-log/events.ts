@@ -92,10 +92,17 @@ export type AuditEventType =
   // reasoning trace, a file path's contents, a command's output, or the agent's
   // own description of what it did (§24, Rule 43).
   //
-  // `change_rejected` is the most important of the five, for the same reason
+  // `change_rejected` is the most important of the six, for the same reason
   // `change_merge.blocked` is: it is the evidence that a safety check fired.
+  //
+  // `change_verified` carries the same payload for the other outcome, and it is
+  // not a formality: an accepted change is the one a human is asked to approve
+  // and the one that may reach a branch, so "which observed paths were withheld
+  // and by which rule" matters more there, not less. Run #3 withheld twelve of
+  // fourteen and the only record of which twelve was a platform log.
   | "agent_execution.started"
   | "agent_execution.needs_user_input"
+  | "agent_execution.change_verified"
   | "agent_execution.change_rejected"
   | "agent_execution.completed"
   | "agent_execution.failed"

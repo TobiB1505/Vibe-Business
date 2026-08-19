@@ -413,6 +413,7 @@ describe("the live view model", () => {
         startedAt: "2026-08-19T09:50:00.000Z",
         completedAt: null,
         durationMs: null,
+        observedPathCount: 0,
         changedFileCount: 0,
       },
       limits: { maxWallClockMs: 1_200_000, maxTurns: 40, maxProviderSpendUsd: 3 },
@@ -462,6 +463,94 @@ describe("the live view model", () => {
 
     const times = live.events.map((event) => Date.parse(event.occurredAt));
     expect([...times].sort((a, b) => a - b)).toEqual(times);
+  });
+});
+
+describe("observed and changed are two columns, not one", () => {
+  /**
+   * Run #3 stored `changed_file_count: 14` for a change of two files. Both
+   * numbers were real; the column held the wrong one, under a name that
+   * promised the other. This is that split, end to end.
+   */
+  it("records the observation on collect and the candidate on extract", async () => {
+    const { operation } = seed();
+    const shared = deps();
+
+    await toRunningAgent(shared, operation.id);
+    await pollAgentStep(shared, operation.id);
+    await collectAgentStep(shared, operation.id);
+
+    // Collect has looked at the filesystem and nothing else, so it writes the
+    // observation and leaves the candidate count alone.
+    const afterCollect = db.rows("agent_execution_runs")[0] as Record<string, unknown>;
+    const observed = afterCollect.observed_path_count as number;
+    expect(afterCollect.changed_file_count).toBe(0);
+
+    await extractAndVerifyStep(shared, operation.id, [
+      "src/app/page.tsx",
+      "tsconfig.tsbuildinfo",
+    ]);
+
+    // Extract knows which of them survived comparison with the pinned base —
+    // and does not touch the observation collect recorded.
+    const afterExtract = db.rows("agent_execution_runs")[0] as Record<string, unknown>;
+    expect(afterExtract.observed_path_count).toBe(observed);
+    expect(afterExtract.changed_file_count).toBe(1);
+    expect(afterExtract.changed_bytes).toBeGreaterThan(0);
+  });
+
+  /** A run that never verified anything keeps 0, not the observation. */
+  it("leaves the candidate count at zero for a run that never got that far", async () => {
+    const { operation } = seed();
+    const shared = deps();
+
+    await toRunningAgent(shared, operation.id);
+    await pollAgentStep(shared, operation.id);
+    await collectAgentStep(shared, operation.id);
+
+    expect((db.rows("agent_execution_runs")[0] as Record<string, unknown>).changed_file_count).toBe(0);
+  });
+});
+
+describe("the evidence for an accepted change", () => {
+  /**
+   * Previously only a refusal wrote an audit event, which had it backwards: an
+   * accepted change is the one a human approves and the one that may reach a
+   * branch. Run #3 withheld twelve of fourteen paths and the only record of
+   * which twelve was a platform log.
+   */
+  it("is durable, and names every path it withheld", async () => {
+    const { operation, run } = seed();
+    const shared = deps();
+
+    await toRunningAgent(shared, operation.id);
+    await pollAgentStep(shared, operation.id);
+    await collectAgentStep(shared, operation.id);
+
+    const outcome = await extractAndVerifyStep(shared, operation.id, [
+      "src/app/page.tsx",
+      "tsconfig.tsbuildinfo",
+    ]);
+    expect(outcome.ok).toBe(true);
+
+    const verified = db
+      .rows("audit_events")
+      .find((row) => row.event_type === "agent_execution.change_verified");
+    expect(verified).toBeDefined();
+
+    const metadata = verified!.metadata as Record<string, unknown>;
+    expect(metadata.agentExecutionRunId).toBe(run.id);
+    expect(metadata.changedPathCount).toBe(2);
+    expect(metadata.changedFileCount).toBe(1);
+    expect(metadata.ignoredPathCount).toBe(1);
+
+    const withheld = (metadata.changedPaths as { path: string; status: string; ignoredBy?: unknown }[])
+      .filter((entry) => entry.status === "observed_ignored");
+    expect(withheld.map((entry) => entry.path)).toEqual(["tsconfig.tsbuildinfo"]);
+    expect(withheld[0].ignoredBy).toMatchObject({ reason: "base_gitignore" });
+
+    // Rule 26: measurements about files, never any of their bytes.
+    expect(JSON.stringify(metadata)).not.toContain("export default");
   });
 });
 
