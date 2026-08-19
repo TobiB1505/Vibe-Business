@@ -482,9 +482,25 @@ export class FakeDatabase {
       }
     }
 
-    // The ledger's idempotency guarantee: one usage event per job.
-    if (table === "ai_usage_events" && candidate.job_id != null) {
-      const clash = others.some((row) => row.job_id === candidate.job_id);
+    /*
+     * The ledger's idempotency guarantee: one usage event per job — for every
+     * operation that makes one call per job.
+     *
+     * `agentic_execution` is excluded, exactly as the partial unique index in
+     * `20260819010000_agent_usage_cardinality.sql` excludes it. An agent run is
+     * a loop: forty turns is forty billed requests and forty rows, and the
+     * Agent Gateway reads them back to decide whether the run has spent its
+     * authorization. Modelling the exclusion here is what lets a test prove the
+     * gateway's ceilings actually accumulate.
+     */
+    if (
+      table === "ai_usage_events" &&
+      candidate.job_id != null &&
+      candidate.operation !== "agentic_execution"
+    ) {
+      const clash = others.some(
+        (row) => row.job_id === candidate.job_id && row.operation !== "agentic_execution",
+      );
       if (clash) return { code: POSTGRES_UNIQUE_VIOLATION, message: "usage already recorded for job" };
     }
 
