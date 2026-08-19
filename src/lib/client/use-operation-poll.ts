@@ -69,6 +69,17 @@ export type UseOperationPollOptions<T> = {
   /** One read. Must not write, and must be safe to call repeatedly. */
   poll: () => Promise<PollReading<T>>;
   /**
+   * Whether the answer just received is worth asking after again.
+   *
+   * `enabled` can only speak for what the server rendered, which goes stale
+   * the moment the first reading lands — so this is how a poller stops on its
+   * own answer. Supplied by the caller and kept pure (`operationPollPhase`,
+   * a state comparison) so the decision stays testable and out of here.
+   *
+   * Omitted, the timer runs until `enabled` or `key` says otherwise.
+   */
+  continueAfter?: (next: T) => boolean;
+  /**
    * Called once per successful reading, with the one before it. This is where
    * a caller decides whether the server render is now stale.
    */
@@ -88,6 +99,7 @@ export function useOperationPoll<T>({
   enabled,
   intervalMs,
   poll,
+  continueAfter,
   onReading,
 }: UseOperationPollOptions<T>): OperationPoll<T> {
   /*
@@ -97,25 +109,32 @@ export function useOperationPoll<T>({
    * stale answer can never be read as the new subject's first one, not even
    * for the one render before an effect would have run.
    */
-  const [reading, setReading] = useState<{ key: string | null; value: T | null }>({
-    key,
-    value: null,
-  });
-  const latest = reading.key === key ? reading.value : null;
+  const [reading, setReading] = useState<{
+    key: string | null;
+    value: T | null;
+    /** Set once an answer says there is nothing left to wait for. Stored with
+     *  the subject, so a new one is never born already stopped. */
+    stopped: boolean;
+  }>({ key, value: null, stopped: false });
+
+  const current = reading.key === key ? reading : { key, value: null, stopped: false };
+  const latest = current.value;
 
   // Held rather than depended on: both are re-created by the caller on every
   // render, and depending on them would re-arm the interval each time.
   const pollRef = useRef(poll);
   const onReadingRef = useRef(onReading);
+  const continueAfterRef = useRef(continueAfter);
   const previousRef = useRef<T | null>(null);
 
   useEffect(() => {
     pollRef.current = poll;
     onReadingRef.current = onReading;
+    continueAfterRef.current = continueAfter;
   });
 
   useEffect(() => {
-    if (!key || !enabled) return;
+    if (!key || !enabled || current.stopped) return;
 
     // A new subject starts with no history to compare against.
     previousRef.current = null;
@@ -136,7 +155,9 @@ export function useOperationPoll<T>({
 
       const previous = previousRef.current;
       previousRef.current = next.value;
-      setReading({ key, value: next.value });
+
+      const keepGoing = continueAfterRef.current?.(next.value) ?? true;
+      setReading({ key, value: next.value, stopped: !keepGoing });
       onReadingRef.current?.(next.value, previous);
     };
 
@@ -146,7 +167,7 @@ export function useOperationPoll<T>({
       cancelled = true;
       clearInterval(timer);
     };
-  }, [key, enabled, intervalMs]);
+  }, [key, enabled, intervalMs, current.stopped]);
 
-  return { latest, polling: Boolean(key) && enabled };
+  return { latest, polling: Boolean(key) && enabled && !current.stopped };
 }
