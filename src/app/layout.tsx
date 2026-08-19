@@ -16,6 +16,10 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Vibe Business",
   description: "The business layer for AI-built products.",
+  robots: {
+    index: true,
+    follow: true,
+  },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
