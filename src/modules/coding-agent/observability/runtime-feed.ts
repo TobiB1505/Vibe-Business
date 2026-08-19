@@ -91,6 +91,47 @@ function toEvent(
     });
   }
 
+  /*
+   * The verification plan, as it was actually applied inside the VM.
+   *
+   * `verification_check_started` is the counterpart to `command_started`: the
+   * same command, seen one moment earlier, at the point the harness decided it
+   * was allowed. Both are kept because they answer different questions — one
+   * says what ran, the other says what the plan permitted — and a run where
+   * those two disagree is exactly the run worth looking at.
+   */
+  if (entry.kind === "verification") {
+    return executionEvent({
+      sequence: entry.sequence,
+      type: "verification_check_started",
+      occurredAt,
+      summary: `Checking: ${entry.check ?? "unknown"}`,
+      metadata: { check: entry.check ?? "unknown" },
+    });
+  }
+
+  /*
+   * A refusal, recorded rather than swallowed.
+   *
+   * PART G is explicit that commands are never silently blocked. The agent is
+   * told in its tool result, and this is the other half of that promise: a
+   * person reading the timeline can see that Vibe stopped a full build, which
+   * check it was, and why — so a plan that is too tight shows up as evidence
+   * instead of as an agent that mysteriously did less.
+   */
+  if (entry.kind === "verification_refused") {
+    return executionEvent({
+      sequence: entry.sequence,
+      type: "verification_command_refused",
+      occurredAt,
+      summary: `Skipped by policy: ${entry.check ?? "a check"}`,
+      metadata: {
+        check: entry.check ?? "unknown",
+        reason: entry.refusalReason ?? "check_not_permitted",
+      },
+    });
+  }
+
   if (entry.kind !== "tool") return null;
 
   const tool = entry.tool ?? "";

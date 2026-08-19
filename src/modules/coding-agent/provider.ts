@@ -1,3 +1,4 @@
+import type { SandboxVerificationPolicy } from "@/modules/execution-context/verification";
 import type { AgentProviderOutcome, AgentToolRequestName } from "./schema";
 
 /**
@@ -111,6 +112,15 @@ export type CodingAgentRequest = {
    * bypasses it.
    */
   invokeTool(name: string, input: unknown): Promise<AgentToolOutcome>;
+  /**
+   * How much self-checking this task is allowed (Sprint 0042).
+   *
+   * A provider carries it to wherever the harness runs and never interprets it.
+   * Optional because a provider that has no place to enforce it — anything not
+   * hosting the agent's own shell — correctly ignores it, and because a run
+   * without one behaves exactly as it did before the plan existed.
+   */
+  verification?: SandboxVerificationPolicy;
   /** Cancellation and wall-clock enforcement (§36). */
   signal: AbortSignal;
 };
@@ -243,13 +253,17 @@ export type ObservedRuntimeEntry = {
    * with real per-step durations rather than one timestamp per poll batch.
    */
   offsetMs?: number;
-  kind: "started" | "turn" | "tool" | "finished";
+  kind: "started" | "turn" | "tool" | "finished" | "verification" | "verification_refused";
   /** Model responses so far, on a `turn` line. */
   assistantMessages?: number;
   tool?: string;
   path?: string;
   command?: string;
   subtype?: string;
+  /** Which check a verification line was about. Closed vocabulary (Sprint 0042). */
+  check?: string;
+  /** Why a check command was refused. Closed vocabulary. */
+  refusalReason?: string;
 };
 
 export type DetachedObservation = {

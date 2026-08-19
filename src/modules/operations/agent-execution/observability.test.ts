@@ -418,6 +418,7 @@ describe("the live view model", () => {
         observedPathCount: 0,
         changedFileCount: 0,
         context: null,
+        verification: null,
       },
       limits: { maxWallClockMs: 1_200_000, maxTurns: 40, maxProviderSpendUsd: 3 },
       now: () => Date.parse("2026-08-19T10:00:00.000Z"),

@@ -320,6 +320,67 @@ export function DeveloperInspector({ model }: { model: AgentExecutionLiveModel }
           </InspectorGroup>
 
           {/*
+            How much this run was allowed to check its own work.
+
+            Developer detail only, and deliberately not a customer surface: a
+            founder wants to know their change is being checked, not to tune a
+            verification mode. "Skipped by policy" is shown rather than hidden,
+            because a bounded agent that is silently bounded is one nobody can
+            tell apart from an agent that chose to stop.
+
+            Nothing here is a verdict. A run whose every permitted check passed
+            has proved that the agent found no mistake it could see — the
+            independent validation row below is the one that decides anything.
+          */}
+          {metrics.verification ? (
+            <InspectorGroup label="Agent verification">
+              <Metric label="Mode" value={metrics.verification.mode} mono />
+              <Metric label="Checks run" value={metrics.verification.commands ?? UNKNOWN} mono />
+              <Metric
+                label="Refused by policy"
+                value={metrics.verification.refusals ?? UNKNOWN}
+                mono
+              />
+              <Metric
+                label="First edit at"
+                value={formatDuration(metrics.verification.timeToFirstEditMs) ?? UNKNOWN}
+                mono
+              />
+              {/*
+                Named for what it measures. Vibe cannot observe the moment an
+                agent believes it is finished; it can observe the last time the
+                agent wrote a file, and everything after that was checking or
+                exploring.
+              */}
+              <Metric
+                label="Last edit at"
+                value={formatDuration(metrics.verification.timeToLastEditMs) ?? UNKNOWN}
+                mono
+              />
+              <Metric
+                label="Checking time"
+                value={formatDuration(metrics.verification.verificationMs) ?? UNKNOWN}
+                mono
+              />
+              {economics.afterLastEdit ? (
+                <>
+                  <Metric label="Calls after last edit" value={economics.afterLastEdit.calls} mono />
+                  <Metric
+                    label="Cost after last edit"
+                    value={formatUsd(economics.afterLastEdit.costUsd)}
+                    mono
+                  />
+                  <Metric
+                    label="Share of run cost"
+                    value={formatPercent(economics.afterLastEdit.shareOfCost)}
+                    mono
+                  />
+                </>
+              ) : null}
+            </InspectorGroup>
+          ) : null}
+
+          {/*
             What the run started from, and where its reading went.
 
             Raw counts, never a ratio (PART M). "Read 3 of 6 briefed files" is
@@ -445,6 +506,9 @@ const FEED_VERBS: Record<string, string> = {
   command_failed: "FAIL",
   turn_completed: "TURN",
   usage_updated: "USAGE",
+  verification_check_started: "CHECK",
+  verification_command_refused: "SKIP",
+  verification_escalated: "ESCALATE",
 };
 
 export function ActivityFeed({ events }: { events: readonly StoredExecutionEvent[] }) {

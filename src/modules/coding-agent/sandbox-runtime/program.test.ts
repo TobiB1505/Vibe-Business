@@ -25,6 +25,72 @@ describe("the program contains no interpolation point", () => {
   it("reads everything it needs from request.json", () => {
     expect(AGENT_RUNTIME_PROGRAM).toContain('readFile(dir + "/request.json", "utf8")');
   });
+
+  /**
+   * The other half of "it is a template literal": escapes.
+   *
+   * A backslash sequence written once instead of twice does not fail to
+   * compile — it *succeeds*, and the template literal quietly turns it into the
+   * character it names. `\b` inside a regex became a literal backspace and
+   * shipped a program whose regular expression no longer parsed, which nothing
+   * in this suite noticed because every assertion was about substrings.
+   *
+   * A control character is the fingerprint of that mistake, whatever escape
+   * produced it, so this covers the whole class rather than the one instance.
+   */
+  it("carries no control character an eaten escape would have left behind", () => {
+    const control = AGENT_RUNTIME_PROGRAM.match(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/);
+    expect(control).toBeNull();
+  });
+});
+
+describe("the verification plan is enforced, not described", () => {
+  /**
+   * The only place a shell command can be refused.
+   *
+   * The harness runs the agent's own tools inside the VM and never calls back
+   * to Vibe's gateway, so a server-side check-run ceiling has nothing to
+   * intercept — run #4 recorded `check_runs: 0` while running three of them.
+   * `canUseTool` receives the tool's arguments, which makes `input.command` the
+   * one thing in the system that exists before the command does.
+   */
+  it("inspects the command, not only the tool name", () => {
+    expect(AGENT_RUNTIME_PROGRAM).toContain("canUseTool: async (name, input)");
+    expect(AGENT_RUNTIME_PROGRAM).toContain('name === "Bash"');
+    expect(AGENT_RUNTIME_PROGRAM).toContain("decide(input.command)");
+  });
+
+  /** PART G: never a silent block. The agent is told, and so is the timeline. */
+  it("reports a refusal to the agent and to the feed", () => {
+    expect(AGENT_RUNTIME_PROGRAM).toContain("policy.messages[refusal.reason]");
+    expect(AGENT_RUNTIME_PROGRAM).toContain('emit({ t: "refused"');
+  });
+
+  /**
+   * One source of truth for what a command *is*.
+   *
+   * Both the category table and the targeted-test pattern arrive with the
+   * policy. A copy of either written into this program would be a second answer
+   * to the same question, and the two would drift the first time one was
+   * edited.
+   */
+  it("classifies commands from the shipped rules rather than its own", () => {
+    expect(AGENT_RUNTIME_PROGRAM).toContain("new RegExp(rule.pattern)");
+    expect(AGENT_RUNTIME_PROGRAM).toContain("new RegExp(policy.targetedTestPattern)");
+    expect(AGENT_RUNTIME_PROGRAM).not.toContain("vitest|jest");
+  });
+
+  /**
+   * A missing policy permits everything.
+   *
+   * The direction of failure matters more than the failure. A version skew that
+   * left an old request without a policy must produce the behaviour Vibe had
+   * before plans existed — not an agent that cannot check its own work at all.
+   */
+  it("permits every command when no policy was supplied", () => {
+    expect(AGENT_RUNTIME_PROGRAM).toContain("const policy = request.verification || null");
+    expect(AGENT_RUNTIME_PROGRAM).toContain("if (!policy) return null");
+  });
 });
 
 describe("the options that are not the SDK's defaults", () => {

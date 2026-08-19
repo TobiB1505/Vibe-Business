@@ -3,8 +3,10 @@ import type { ExecutionSpec } from "@/modules/execution-contract/spec";
 import { getSnapshotById } from "@/modules/repository-intelligence/store";
 import { getLatestProfile } from "@/modules/product-understanding/store";
 import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intelligence/store";
+import { getActionPlanById } from "@/modules/action-plans/store";
 import { compileExecutionBrief } from "./compiler";
 import type { ExecutionBrief } from "./brief";
+import { compileAgentVerificationPlan, type AgentVerificationPlan } from "./verification";
 
 /**
  * Loading what the compiler compiles from.
@@ -76,4 +78,48 @@ export async function loadExecutionBrief(
      */
     liveOrigin: live?.result?.source.effectiveOrigin ?? null,
   });
+}
+
+
+/**
+ * How much this run may check its own work (Sprint 0042).
+ *
+ * ## Why it is loaded here and not read off the spec
+ *
+ * The two fields that decide it — `changeKind` and the Vibe-minted
+ * `evidenceIds` the step cites — live on `action_plan_steps` and are not copied
+ * into `ExecutionSpec`. Re-reading them is a deliberate choice over widening the
+ * spec: the spec's identity is a hash over what it already carries, and adding
+ * fields to it would make every stored spec's identity unrecomputable.
+ *
+ * The step is found by `stepKey` on the plan the spec names, not by "the newest
+ * plan for this project". A spec is a value with an identity, and a run that
+ * re-read the current plan could be verified against a step that has since been
+ * reworded.
+ *
+ * ## Why a failure here is not a failure of the run
+ *
+ * Null means "no plan", and a run with no plan behaves exactly as run #4 did:
+ * unbounded self-checking, the v2 instruction, nothing refused. That is the
+ * correct direction to fail. A missing plan that meant "forbid every check"
+ * would turn an unreadable row into an agent that cannot see its own mistakes.
+ */
+export async function loadAgentVerificationPlan(
+  input: LoadExecutionBriefInput,
+): Promise<AgentVerificationPlan | null> {
+  const { supabase, spec } = input;
+
+  try {
+    const plan = await getActionPlanById(supabase, spec.actionPlanId);
+    const step = plan?.steps.find((entry) => entry.id === spec.stepKey || entry.order === spec.stepOrder);
+    if (!step) return null;
+
+    return compileAgentVerificationPlan({
+      changeKind: step.changeKind,
+      evidenceIds: step.evidenceIds ?? [],
+      riskClass: spec.riskClass,
+    });
+  } catch {
+    return null;
+  }
 }

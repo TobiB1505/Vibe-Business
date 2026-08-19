@@ -37,6 +37,8 @@
 
 export type ProviderUsageRow = {
   status: string;
+  /** When the call was recorded. Used only to place it either side of the last edit. */
+  createdAt?: string | null;
   inputTokens: number | null;
   outputTokens: number | null;
   cacheReadInputTokens: number | null;
@@ -101,6 +103,26 @@ export type ExecutionEconomics = {
   providerBudgetUsd: number | null;
   /** Authorized minus spent, floored at zero. Null without a budget. */
   providerBudgetRemainingUsd: number | null;
+  /**
+   * What happened after the agent stopped writing (Sprint 0042, PART L).
+   *
+   * Null when the boundary is unknown — no observed write, or a run with no
+   * recorded start — and null is the whole point: PART L says not to invent a
+   * precise split that cannot be trusted. When it *is* known, the boundary is a
+   * timestamp comparison and nothing more, so the number is checkable.
+   *
+   * "After the last edit" is deliberately not called "verification cost". Some
+   * of it is checking; some of it is an agent re-reading files for reassurance.
+   * Distinguishing those would require knowing what the agent intended, and the
+   * useful question — how much did this run spend once the code was already
+   * written — does not need that.
+   */
+  afterLastEdit: {
+    calls: number;
+    costUsd: number;
+    /** Share of the run's provider cost, 0–1. Null when the run cost nothing. */
+    shareOfCost: number | null;
+  } | null;
 };
 
 function sum(values: readonly (number | null)[]): number {
@@ -152,10 +174,52 @@ export function summarizeSandboxEconomics(row: SandboxMeteringRow | null): Sandb
   };
 }
 
+/**
+ * The calls that happened after the agent last wrote a file.
+ *
+ * A timestamp comparison, and deliberately nothing cleverer. The boundary comes
+ * from Vibe's own observation of the run — the offset of the last `file_written`
+ * or `file_edited` event — and every usage row carries the moment it was
+ * recorded, so placing a call either side of it needs no inference at all.
+ *
+ * Returns null the moment any input is missing. PART L is explicit that an
+ * unreliable split should not exist rather than exist approximately, and a run
+ * that wrote nothing has no boundary to be on the far side of.
+ */
+function splitAfterLastEdit(input: {
+  usage: readonly ProviderUsageRow[];
+  startedAt?: string | null;
+  lastEditMs?: number | null;
+  totalCostUsd: number;
+}): ExecutionEconomics["afterLastEdit"] {
+  const startedAtMs = input.startedAt ? Date.parse(input.startedAt) : Number.NaN;
+  if (!Number.isFinite(startedAtMs)) return null;
+  if (input.lastEditMs === null || input.lastEditMs === undefined) return null;
+
+  const boundary = startedAtMs + input.lastEditMs;
+
+  const after = input.usage.filter((row) => {
+    const at = row.createdAt ? Date.parse(row.createdAt) : Number.NaN;
+    return Number.isFinite(at) && at > boundary;
+  });
+
+  const costUsd = sum(after.map((row) => row.providerCostUsd));
+
+  return {
+    calls: after.length,
+    costUsd,
+    shareOfCost: input.totalCostUsd > 0 ? costUsd / input.totalCostUsd : null,
+  };
+}
+
 export function summarizeExecutionEconomics(input: {
   usage: readonly ProviderUsageRow[];
   sandbox: SandboxMeteringRow | null;
   providerBudgetUsd?: number | null;
+  /** When the harness started, on Vibe's clock. Needed for the edit boundary. */
+  startedAt?: string | null;
+  /** Offset of the last observed write. The boundary itself. */
+  lastEditMs?: number | null;
 }): ExecutionEconomics {
   const provider = summarizeProviderEconomics(input.usage);
   const sandbox = summarizeSandboxEconomics(input.sandbox);
@@ -168,6 +232,12 @@ export function summarizeExecutionEconomics(input: {
     totalCostUsd: sandbox.costUsd === null ? null : provider.costUsd + sandbox.costUsd,
     providerBudgetUsd: budget,
     providerBudgetRemainingUsd: budget === null ? null : Math.max(0, budget - provider.costUsd),
+    afterLastEdit: splitAfterLastEdit({
+      usage: input.usage,
+      startedAt: input.startedAt,
+      lastEditMs: input.lastEditMs,
+      totalCostUsd: provider.costUsd,
+    }),
   };
 }
 

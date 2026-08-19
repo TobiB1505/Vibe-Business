@@ -93,6 +93,89 @@ const emit = (event) => {
   }
 };
 
+/*
+ * The verification policy, rebuilt from data (Sprint 0042).
+ *
+ * Rules and integers arrive in request.json; nothing here is program text
+ * assembled from a string. A request with no policy leaves every command
+ * permitted, which is what v2 did — a missing field must never mean "refuse
+ * everything", because that turns a version skew into a run that cannot check
+ * its own work at all.
+ */
+const policy = request.verification || null;
+const categoryRules = policy && Array.isArray(policy.categoryRules)
+  ? policy.categoryRules.map((rule) => ({ category: rule.category, re: new RegExp(rule.pattern) }))
+  : [];
+const permitted = new Set(policy ? policy.permittedChecks : []);
+
+const verification = { commands: 0, firstAt: null, refusals: 0 };
+
+const categoryOf = (command) => {
+  const text = String(command || "").toLowerCase();
+  for (const rule of categoryRules) {
+    if (rule.re.test(text)) return rule.category;
+  }
+  return "other";
+};
+
+/*
+ * Targeted or whole-suite, decided by argument shape.
+ *
+ * A shell cannot tell them apart any other way: "vitest run src/x.test.ts" and
+ * "vitest run" are the same category. The pattern arrives with the policy
+ * rather than being written here, so Vibe and this harness answer the question
+ * with one string instead of two that drift.
+ *
+ * Anything that does not look clearly targeted counts as the full suite, so the
+ * error lands on refusing a narrow test rather than admitting a long one.
+ */
+const targetedTest = policy && policy.targetedTestPattern
+  ? new RegExp(policy.targetedTestPattern)
+  : /$^/;
+
+const checkOf = (command, category) => {
+  if (category === "test") return targetedTest.test(String(command || "")) ? "targeted_test" : "full_test";
+  if (category === "typecheck") return "typecheck";
+  if (category === "build") return "build";
+  if (category === "lint") return "lint";
+  return null;
+};
+
+/**
+ * Whether one Bash command may run.
+ *
+ * Only check commands are ever refused. Reading, searching, editing and
+ * anything that classifies as something other than a check pass through
+ * untouched — this bounds how much the agent spends proving its work, not what
+ * it is able to do.
+ *
+ * It is a convergence control, not a security boundary. What makes a change
+ * safe is decided afterwards by Vibe, outside this VM.
+ */
+const decide = (command) => {
+  if (!policy) return null;
+
+  const category = categoryOf(command);
+  const check = checkOf(command, category);
+  if (!check) return null;
+
+  if (!permitted.has(check)) {
+    return { reason: "check_not_permitted", check: check, category: category };
+  }
+  if (verification.commands >= policy.maxVerificationCommands) {
+    return { reason: "command_budget_exhausted", check: check, category: category };
+  }
+  if (verification.firstAt !== null &&
+      Date.now() - verification.firstAt >= policy.maxVerificationWallClockMs) {
+    return { reason: "wall_clock_exhausted", check: check, category: category };
+  }
+
+  verification.commands += 1;
+  if (verification.firstAt === null) verification.firstAt = Date.now();
+  emit({ t: "verify", check: check, category: category, n: verification.commands });
+  return null;
+};
+
 const result = {
   version: request.version,
   subtype: "no_result",
@@ -113,6 +196,17 @@ const result = {
   sessionId: null,
   permissionDenials: 0,
   modelUsage: {},
+  /*
+   * What the verification plan actually cost, counted here rather than inferred.
+   *
+   * Vibe re-derives the same numbers from the event feed, and the two are kept
+   * separate on purpose: the feed can lose a poll, and this cannot. Neither is
+   * authority over what the run *changed* — that is still established by
+   * comparing the workspace against the pinned commit (Rule 77).
+   */
+  verificationCommands: 0,
+  verificationRefusals: 0,
+  verificationMs: null,
   error: null,
 };
 
@@ -134,14 +228,46 @@ try {
       settingSources: [],
       permissionMode: "default",
       allowDangerouslySkipPermissions: false,
-      canUseTool: async (name) =>
-        allowed.has(name)
-          ? { behavior: "allow" }
-          : {
+      /*
+       * Two questions, in order: is the tool available at all, and — for Bash —
+       * is this command inside the verification plan?
+       *
+       * The second is why the signature takes a second parameter. The SDK hands
+       * the tool's arguments to the permission callback, so input.command is the
+       * exact string the shell would receive, before it runs. That is the only
+       * point in the whole system where a full build can be stopped: the harness
+       * runs the agent's tools inside this VM and never calls back to Vibe's
+       * gateway, so a server-side ceiling has nothing to intercept.
+       *
+       * A refusal is never silent. The agent is told, in Vibe's words, that the
+       * check is outside this task's plan and that Vibe validates the prepared
+       * change independently afterwards — so the useful next move is to finish,
+       * not to find another way to run it.
+       */
+      canUseTool: async (name, input) => {
+        if (!allowed.has(name)) {
+          return {
+            behavior: "deny",
+            message: "That tool is not available to this execution.",
+            interrupt: false,
+          };
+        }
+
+        if (name === "Bash" && input && typeof input.command === "string") {
+          const refusal = decide(input.command);
+          if (refusal) {
+            verification.refusals += 1;
+            emit({ t: "refused", check: refusal.check, reason: refusal.reason });
+            return {
               behavior: "deny",
-              message: "That tool is not available to this execution.",
+              message: policy.messages[refusal.reason] || "That check is not part of this task's verification plan.",
               interrupt: false,
-            },
+            };
+          }
+        }
+
+        return { behavior: "allow" };
+      },
       cwd: request.cwd,
       persistSession: false,
       includePartialMessages: false,
@@ -209,6 +335,10 @@ try {
   const message = error && error.message ? String(error.message) : "";
   result.error = (name + ": " + message).replace(/\\s+/g, " ").trim().slice(0, 400);
 }
+
+result.verificationCommands = verification.commands;
+result.verificationRefusals = verification.refusals;
+result.verificationMs = verification.firstAt === null ? null : Date.now() - verification.firstAt;
 
 emit({ t: "finished", subtype: result.subtype, n: result.assistantMessages });
 

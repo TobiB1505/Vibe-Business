@@ -211,13 +211,17 @@ export type RuntimeProgressEntry = {
   sequence: number;
   /** Milliseconds since the harness started. Absent from an older feed. */
   offsetMs?: number;
-  kind: "started" | "turn" | "tool" | "finished";
+  kind: "started" | "turn" | "tool" | "finished" | "verification" | "verification_refused";
   /** Model responses so far, on a `turn` line. */
   assistantMessages?: number;
   tool?: string;
   path?: string;
   command?: string;
   subtype?: string;
+  /** Which check a verification line was about. Closed vocabulary. */
+  check?: string;
+  /** Why a check command was refused. Closed vocabulary. */
+  refusalReason?: string;
 };
 
 export type RuntimeProgress = {
@@ -296,6 +300,35 @@ export function parseRuntimeProgress(output: string): RuntimeProgress {
       continue;
     }
 
+    /*
+     * The verification plan, as the harness applied it.
+     *
+     * Two lines and no more: a check it let through, and a check it refused.
+     * Both carry a closed-vocabulary name and nothing else — there is no field
+     * here a sentence could arrive in, which is the same property every other
+     * line of this feed has.
+     */
+    if (event.t === "verify") {
+      entries.push({
+        sequence,
+        offsetMs,
+        kind: "verification",
+        check: readString(event.check, 40),
+      });
+      continue;
+    }
+
+    if (event.t === "refused") {
+      entries.push({
+        sequence,
+        offsetMs,
+        kind: "verification_refused",
+        check: readString(event.check, 40),
+        refusalReason: readString(event.reason, 40),
+      });
+      continue;
+    }
+
     if (event.t === "finished") {
       finished = true;
       entries.push({ sequence, offsetMs, kind: "finished", subtype: readString(event.subtype, 40) });
@@ -361,6 +394,10 @@ export function createSandboxCodingAgentProvider(
         maxBudgetUsd: request.limits.maxProviderSpendUsd,
         tools: AGENT_RUNTIME_TOOLS,
         cwd: deps.workspaceDir,
+        // Carried, never interpreted. The harness is the only place a shell
+        // command can be seen before it runs, so it is the only place this can
+        // be applied (Sprint 0042).
+        ...(request.verification ? { verification: request.verification } : {}),
       };
 
       /*

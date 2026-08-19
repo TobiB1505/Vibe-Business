@@ -83,6 +83,15 @@ export const EXECUTION_EVENT_TYPES = [
   "context_compiled",
   "context_used",
 
+  // How much the run was allowed to check its own work, and what it did with
+  // that (Sprint 0042). A refusal is recorded because a bounded agent that is
+  // silently bounded is one nobody can tell from an agent that chose to stop.
+  "verification_plan_compiled",
+  "verification_check_started",
+  "verification_command_refused",
+  "verification_escalated",
+  "verification_completed",
+
   // The harness
   "agent_started",
   "turn_completed",
@@ -308,6 +317,37 @@ export const COMMAND_CATEGORIES = [
 export type CommandCategory = (typeof COMMAND_CATEGORIES)[number];
 
 /**
+ * The rules, as data, in priority order.
+ *
+ * ## Why data rather than a chain of `if`s
+ *
+ * Because two places have to agree on the answer and only one of them can
+ * import this file. The timeline classifies a command *after* it ran, here, in
+ * Vibe's process; the agent harness has to classify it *before* it runs, inside
+ * the sandbox, where nothing of Vibe's is importable — the runtime program is a
+ * string constant with no interpolation (ADR 0029).
+ *
+ * So the rules travel into the VM as JSON, in the run request, and are rebuilt
+ * there with `new RegExp`. That keeps one source of truth and keeps the program
+ * free of interpolation. The patterns are Vibe's own constants — nothing from a
+ * repository, a model or a customer ever reaches this array.
+ *
+ * Order is significant and is part of the contract: `pnpm build` must classify
+ * as `build` rather than as whatever a later rule would also match.
+ */
+export const COMMAND_CATEGORY_RULES: readonly { category: CommandCategory; pattern: string }[] = [
+  { category: "install", pattern: String.raw`\b(npm|pnpm|yarn|bun)\s+(install|ci|add)\b` },
+  { category: "typecheck", pattern: String.raw`\b(tsc|typecheck|type-check)\b` },
+  { category: "test", pattern: String.raw`\b(vitest|jest|playwright|test)\b` },
+  { category: "build", pattern: String.raw`\bbuild\b` },
+  { category: "lint", pattern: String.raw`\b(eslint|lint)\b` },
+  { category: "format", pattern: String.raw`\b(prettier|format)\b` },
+  { category: "read", pattern: String.raw`^\s*(cat|head|tail|less|wc)\b` },
+  { category: "search", pattern: String.raw`^\s*(grep|rg|find|ls|fd)\b` },
+  { category: "git", pattern: String.raw`^\s*git\b` },
+];
+
+/**
  * What a shell command was for, in one word.
  *
  * A category is what a timeline should lead with — "production build started"
@@ -317,19 +357,19 @@ export type CommandCategory = (typeof COMMAND_CATEGORIES)[number];
  *
  * Matched on the whole line rather than the first token, because the
  * interesting word is usually the script name: `pnpm run typecheck`.
+ *
+ * Since Sprint 0042 the same answer also *gates* a command inside the sandbox,
+ * which raises the cost of a wrong category from a mislabelled row to a refused
+ * command. It stays deliberately generous rather than clever: a command that
+ * matches nothing is `other`, and `other` is never a check, so an unrecognised
+ * command is never refused for being an unrecognised check.
  */
 export function classifyCommand(command: string): CommandCategory {
   const text = command.toLowerCase();
 
-  if (/\b(npm|pnpm|yarn|bun)\s+(install|ci|add)\b/.test(text)) return "install";
-  if (/\b(tsc|typecheck|type-check)\b/.test(text)) return "typecheck";
-  if (/\b(vitest|jest|playwright|test)\b/.test(text)) return "test";
-  if (/\bbuild\b/.test(text)) return "build";
-  if (/\b(eslint|lint)\b/.test(text)) return "lint";
-  if (/\b(prettier|format)\b/.test(text)) return "format";
-  if (/^\s*(cat|head|tail|less|wc)\b/.test(text)) return "read";
-  if (/^\s*(grep|rg|find|ls|fd)\b/.test(text)) return "search";
-  if (/^\s*git\b/.test(text)) return "git";
+  for (const rule of COMMAND_CATEGORY_RULES) {
+    if (new RegExp(rule.pattern).test(text)) return rule.category;
+  }
 
   return "other";
 }
@@ -344,6 +384,7 @@ const PHASE_OF: Record<ExecutionEventType, ExecutionPhase> = {
   workspace_ready: "preparing",
   workspace_failed: "preparing",
   context_compiled: "preparing",
+  verification_plan_compiled: "preparing",
 
   agent_started: "working",
   turn_completed: "working",
@@ -356,6 +397,10 @@ const PHASE_OF: Record<ExecutionEventType, ExecutionPhase> = {
   command_completed: "working",
   command_failed: "working",
   usage_updated: "working",
+  verification_check_started: "working",
+  verification_command_refused: "working",
+  verification_escalated: "working",
+  verification_completed: "working",
   context_used: "reviewing_change",
 
   change_discovered: "reviewing_change",

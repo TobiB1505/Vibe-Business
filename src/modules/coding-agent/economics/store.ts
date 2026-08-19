@@ -26,13 +26,20 @@ import {
 
 export async function readExecutionEconomics(
   supabase: SupabaseClient,
-  params: { runId: string; projectId: string; providerBudgetUsd?: number | null },
+  params: {
+    runId: string;
+    projectId: string;
+    providerBudgetUsd?: number | null;
+    /** The run's own start, on Vibe's clock, and where its last write landed. */
+    startedAt?: string | null;
+    lastEditMs?: number | null;
+  },
 ): Promise<ExecutionEconomics> {
   const [usage, sandbox] = await Promise.all([
     supabase
       .from("ai_usage_events")
       .select(
-        "status, input_tokens, output_tokens, cache_read_input_tokens, cache_creation_input_tokens, thinking_tokens, provider_cost_usd, latency_ms",
+        "status, input_tokens, output_tokens, cache_read_input_tokens, cache_creation_input_tokens, thinking_tokens, provider_cost_usd, latency_ms, created_at",
       )
       .eq("job_id", params.runId)
       .eq("project_id", params.projectId),
@@ -53,6 +60,8 @@ export async function readExecutionEconomics(
     usage: (usage.data ?? []).map(toProviderRow),
     sandbox: sandbox.data ? toSandboxRow(sandbox.data as RawSandboxRow) : null,
     providerBudgetUsd: params.providerBudgetUsd ?? null,
+    startedAt: params.startedAt ?? null,
+    lastEditMs: params.lastEditMs ?? null,
   });
 }
 
@@ -156,6 +165,7 @@ type RawUsageRow = {
   thinking_tokens: number | null;
   provider_cost_usd: string | number | null;
   latency_ms: number | null;
+  created_at?: string | null;
 };
 
 type RawSandboxRow = {
@@ -170,6 +180,7 @@ function toProviderRow(raw: unknown): ProviderUsageRow {
   const row = raw as RawUsageRow;
   return {
     status: row.status,
+    createdAt: row.created_at ?? null,
     inputTokens: row.input_tokens,
     outputTokens: row.output_tokens,
     cacheReadInputTokens: row.cache_read_input_tokens,

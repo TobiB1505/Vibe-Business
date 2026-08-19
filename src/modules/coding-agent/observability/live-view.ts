@@ -85,6 +85,7 @@ export type AgentRunMetrics = {
    * the run received. Null means this run had no Execution Brief.
    */
   context: LiveRunRow["context"];
+  verification: LiveRunRow["verification"];
 };
 
 export type ValidationState = "not_started" | "queued" | "running" | "passed" | "failed";
@@ -127,6 +128,23 @@ export type LiveRunRow = {
    * Rendered as raw counts and never as a ratio: reading a briefed file proves
    * the agent opened it, never that opening it was what made the change right.
    */
+  /**
+   * How much this run was allowed to check its own work (Sprint 0042).
+   *
+   * Null means no plan was compiled and the run checked whatever it liked —
+   * which is what every run before #5 did. Advisory throughout: a mode never
+   * authorized anything, and independent validation is unaffected by it.
+   */
+  verification: {
+    mode: string;
+    planVersion: string | null;
+    commands: number | null;
+    refusals: number | null;
+    verificationMs: number | null;
+    timeToFirstEditMs: number | null;
+    timeToLastEditMs: number | null;
+  } | null;
+
   context: {
     briefVersion: string;
     freshness: FreshnessState;
@@ -169,6 +187,11 @@ export async function buildAgentExecutionLiveModel(
           runId,
           projectId: params.projectId,
           providerBudgetUsd: params.limits?.maxProviderSpendUsd ?? null,
+          // The boundary between building and checking, so the calls that
+          // happened after the code was already written can be counted. Both
+          // halves come from the run row; without either, the split is null.
+          startedAt: params.run?.startedAt ?? null,
+          lastEditMs: params.run?.verification?.timeToLastEditMs ?? null,
         })
       : Promise.resolve(emptyEconomics()),
   ]);
@@ -242,6 +265,7 @@ function emptyEconomics(): ExecutionEconomics {
     totalCostUsd: null,
     providerBudgetUsd: null,
     providerBudgetRemainingUsd: null,
+    afterLastEdit: null,
   };
 }
 
@@ -309,6 +333,7 @@ function deriveMetrics(input: {
     elapsedMs,
     wallClockBudgetMs: input.limits?.maxWallClockMs ?? null,
     context: input.run?.context ?? null,
+    verification: input.run?.verification ?? null,
   };
 }
 

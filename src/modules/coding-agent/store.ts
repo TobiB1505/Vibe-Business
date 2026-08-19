@@ -13,6 +13,7 @@ import { isValidInterruptAnswer } from "@/modules/execution-contract/interrupts"
 import type { AgentToolEvent, RaisedInterrupt } from "./gateway";
 import type { AgentFailureCode, AgentRunStatus } from "./schema";
 import type { FreshnessState } from "@/modules/execution-context/brief";
+import type { VerificationMode } from "@/modules/execution-context/verification";
 
 /**
  * Persistence for agentic execution (EXECUTION CORE-4 §22, §23, §24, §25).
@@ -91,6 +92,23 @@ export type StoredAgentExecutionRun = {
   repeatedFileReads: number | null;
   filesReadOutsideContext: number | null;
 
+  /**
+   * How much self-checking this run was allowed, and what it spent.
+   *
+   * Advisory throughout. `verificationMode` never authorized anything: a run
+   * whose every permitted check passed has proved only that the agent found no
+   * mistake it could see, and independent validation decides the rest.
+   */
+  verificationMode: VerificationMode | null;
+  verificationPlanVersion: string | null;
+  verificationCommands: number | null;
+  verificationRefusals: number | null;
+  verificationMs: number | null;
+  /** Offset of the first observed write. Where implementation actually began. */
+  timeToFirstEditMs: number | null;
+  /** Offset of the last observed write. The closest observable thing to "done". */
+  timeToLastEditMs: number | null;
+
   preparedChangeId: string | null;
   createdAt: string;
   startedAt: string | null;
@@ -137,6 +155,13 @@ type RunRow = {
   unique_files_read: number | null;
   repeated_file_reads: number | null;
   files_read_outside_context: number | null;
+  verification_mode: VerificationMode | null;
+  verification_plan_version: string | null;
+  verification_commands: number | null;
+  verification_refusals: number | null;
+  verification_ms: number | null;
+  time_to_first_edit_ms: number | null;
+  time_to_last_edit_ms: number | null;
   prepared_change_id: string | null;
   created_at: string;
   started_at: string | null;
@@ -151,6 +176,8 @@ const RUN_COLUMNS =
   "repair_attempts, observed_path_count, changed_file_count, changed_bytes, duration_ms, provider_session_id, " +
   "context_brief_version, context_freshness, context_bytes, context_facts_sent, context_candidates_sent, " +
   "context_candidates_read, unique_files_read, repeated_file_reads, files_read_outside_context, " +
+  "verification_mode, verification_plan_version, verification_commands, verification_refusals, " +
+  "verification_ms, time_to_first_edit_ms, time_to_last_edit_ms, " +
   "prepared_change_id, created_at, started_at, completed_at";
 
 function mapRun(row: RunRow): StoredAgentExecutionRun {
@@ -194,6 +221,13 @@ function mapRun(row: RunRow): StoredAgentExecutionRun {
     uniqueFilesRead: row.unique_files_read,
     repeatedFileReads: row.repeated_file_reads,
     filesReadOutsideContext: row.files_read_outside_context,
+    verificationMode: row.verification_mode,
+    verificationPlanVersion: row.verification_plan_version,
+    verificationCommands: row.verification_commands,
+    verificationRefusals: row.verification_refusals,
+    verificationMs: row.verification_ms,
+    timeToFirstEditMs: row.time_to_first_edit_ms,
+    timeToLastEditMs: row.time_to_last_edit_ms,
     preparedChangeId: row.prepared_change_id,
     createdAt: row.created_at,
     startedAt: row.started_at,
@@ -405,6 +439,22 @@ export type AgentRunObservations = {
   uniqueFilesRead?: number;
   repeatedFileReads?: number;
   filesReadOutsideContext?: number;
+
+  /*
+   * How much the run was allowed to check its own work, and what that cost
+   * (Sprint 0042).
+   *
+   * Nullable throughout for the same reason the context columns are: a run may
+   * legitimately have no plan, and null says so where zero would claim it had
+   * one that permitted nothing.
+   */
+  verificationMode?: VerificationMode | null;
+  verificationPlanVersion?: string | null;
+  verificationCommands?: number;
+  verificationRefusals?: number;
+  verificationMs?: number | null;
+  timeToFirstEditMs?: number | null;
+  timeToLastEditMs?: number | null;
 };
 
 /** Records what Vibe observed, without deciding the run's fate. */
@@ -439,6 +489,13 @@ export async function recordAgentRunObservations(
   set("unique_files_read", observations.uniqueFilesRead);
   set("repeated_file_reads", observations.repeatedFileReads);
   set("files_read_outside_context", observations.filesReadOutsideContext);
+  set("verification_mode", observations.verificationMode);
+  set("verification_plan_version", observations.verificationPlanVersion);
+  set("verification_commands", observations.verificationCommands);
+  set("verification_refusals", observations.verificationRefusals);
+  set("verification_ms", observations.verificationMs);
+  set("time_to_first_edit_ms", observations.timeToFirstEditMs);
+  set("time_to_last_edit_ms", observations.timeToLastEditMs);
 
   if (Object.keys(patch).length === 0) return;
 

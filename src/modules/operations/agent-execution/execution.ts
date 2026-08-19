@@ -49,7 +49,8 @@ import {
 } from "@/modules/coding-agent/identity";
 import { agentToolDescriptors, compileAgentInstruction } from "@/modules/coding-agent/prompt";
 import type { ExecutionBrief } from "@/modules/execution-context/brief";
-import { loadExecutionBrief } from "@/modules/execution-context/service";
+import { loadAgentVerificationPlan, loadExecutionBrief } from "@/modules/execution-context/service";
+import { toSandboxPolicy, type AgentVerificationPlan } from "@/modules/execution-context/verification";
 import { summarizeContextUsage } from "@/modules/execution-context/usage";
 import type { DetachedCodingAgentProvider } from "@/modules/coding-agent/provider";
 import { createSandboxWorkspace } from "@/modules/coding-agent/sandbox-workspace";
@@ -811,13 +812,19 @@ export async function startAgentStep(
    * project id on the persisted run row, because this is the service-role
    * client and RLS is not doing the scoping (Rule 53).
    */
+  const contextInput = {
+    supabase: deps.supabase,
+    projectId: context.run.projectId,
+    spec: context.spec.spec,
+  };
+
   let brief: ExecutionBrief | null = null;
+  let verification: AgentVerificationPlan | null = null;
   try {
-    brief = await loadExecutionBrief({
-      supabase: deps.supabase,
-      projectId: context.run.projectId,
-      spec: context.spec.spec,
-    });
+    [brief, verification] = await Promise.all([
+      loadExecutionBrief(contextInput),
+      loadAgentVerificationPlan(contextInput),
+    ]);
   } catch (error) {
     console.error("[execution-context] the brief could not be compiled", {
       operationId,
@@ -831,7 +838,39 @@ export async function startAgentStep(
     limits: context.limits,
     availableChecks,
     brief,
+    verification,
   });
+
+  /*
+   * The plan, recorded before the harness can act on it (Sprint 0042).
+   *
+   * Written from the compiled plan rather than re-derived later, for the same
+   * reason the context counts are: a stored run has to say what it was actually
+   * told, and observability that recomputes its own inputs eventually disagrees
+   * with the run it is describing.
+   */
+  if (verification) {
+    await recordAgentRunObservations(deps.supabase, context.run.id, {
+      verificationMode: verification.mode,
+      verificationPlanVersion: verification.planVersion,
+    });
+
+    await recordLifecycle(
+      deps,
+      context.run,
+      "verification_plan_compiled",
+      `Checking plan: ${verification.mode}`,
+      {
+        mode: verification.mode,
+        planVersion: verification.planVersion,
+        required: verification.requiredChecks.join(", "),
+        allowed: verification.allowedChecks.join(", ") || "none",
+        forbidden: verification.forbiddenChecks.join(", ") || "none",
+        maxCommands: verification.maxVerificationCommands,
+        maxWallClockMs: verification.maxVerificationWallClockMs,
+      },
+    );
+  }
 
   /*
    * Recorded before the harness starts, from what was actually compiled.
@@ -883,6 +922,9 @@ export async function startAgentStep(
       maxProviderSpendUsd: context.limits.maxProviderSpendUsd,
     },
     invokeTool: (name: string, input: unknown) => gateway.invoke(name, input),
+    // Carried into the sandbox as data. The harness is the only place a shell
+    // command exists before it runs, so it is the only place this can apply.
+    ...(verification ? { verification: toSandboxPolicy(verification) } : {}),
     // Nothing to cancel through: the harness outlives this call. Cancellation
     // is the poll loop's job, and the sandbox's own lifetime is the backstop.
     signal: new AbortController().signal,
@@ -1219,6 +1261,7 @@ export async function collectAgentStep(
   );
 
   await recordContextUsage(deps, context);
+  await recordVerificationOutcome(deps, context, result.durationMs);
 
   return { ok: true, paused: false, observedPathCount, changedPaths };
 }
@@ -1313,6 +1356,113 @@ async function recordContextUsage(
     );
   } catch (error) {
     console.error("[execution-context] context usage could not be recorded", {
+      agentExecutionRunId: run.id,
+      detail: error instanceof Error ? `${error.name}: ${error.message.slice(0, 200)}` : "unknown",
+    });
+  }
+}
+
+
+/**
+ * What the verification plan cost, and where the implementation ended
+ * (Sprint 0042, PART K, PART L).
+ *
+ * ## The boundary, and why it is named for what it measures
+ *
+ * Vibe cannot observe the moment an agent believes it is finished — there is no
+ * signal for it, and asking the agent would be reading its account of its own
+ * work, which Rule 77 forbids for exactly this kind of question. What Vibe can
+ * observe is the last time it wrote a file. Everything after that instant was
+ * checking or exploring, so `time_to_last_edit_ms` is the honest approximation
+ * and the column is named for the observation rather than for the inference.
+ *
+ * That one number is what makes PART L answerable without inventing a split:
+ * with it, "how many provider calls happened after the implementation was
+ * already complete" is a timestamp comparison against the usage ledger, done at
+ * read time, rather than a figure stored here that could drift from it.
+ *
+ * ## Failure changes nothing
+ *
+ * Telemetry hanging off a paid execution, computed after the change has already
+ * been observed. A run whose verification metrics could not be written is still
+ * a run, and its change is exactly as good.
+ */
+async function recordVerificationOutcome(
+  deps: AgentExecutionDeps,
+  context: AgentRunContext,
+  /*
+   * Passed in rather than read off the run row.
+   *
+   * The row was loaded at the top of this step, before this invocation wrote
+   * `duration_ms` to it — so `run.durationMs` here is whatever it was *before*
+   * the run finished, which for every real run is null. The collected result is
+   * the only value that describes the run that just ended.
+   */
+  durationMs: number,
+): Promise<void> {
+  const { run } = context;
+
+  try {
+    const events = await listExecutionEvents(deps.supabase, {
+      runId: run.id,
+      projectId: run.projectId,
+      limit: MAX_EVENTS_PER_RUN,
+    });
+
+    const startedAt = run.startedAt ? Date.parse(run.startedAt) : Number.NaN;
+    if (!Number.isFinite(startedAt)) return;
+
+    const offsetOf = (event: { occurredAt: string }): number | null => {
+      const at = Date.parse(event.occurredAt);
+      return Number.isFinite(at) ? Math.max(0, at - startedAt) : null;
+    };
+
+    const writes = events.filter(
+      (event) => event.type === "file_written" || event.type === "file_edited",
+    );
+    const checks = events.filter((event) => event.type === "verification_check_started");
+    const refusals = events.filter((event) => event.type === "verification_command_refused");
+
+    const editOffsets = writes.map(offsetOf).filter((value): value is number => value !== null);
+    const checkOffsets = checks.map(offsetOf).filter((value): value is number => value !== null);
+
+    /*
+     * From the first permitted check to the end of the run.
+     *
+     * Not "the sum of the check durations": the gaps between checks are the
+     * model deciding what to do next, and that time is bought by the plan just
+     * as surely as the commands are. Run #4's 4m58s was mostly the commands,
+     * but a run that spends two minutes thinking between two ten-second tests
+     * has still spent two minutes on verification.
+     */
+    const verificationMs =
+      checkOffsets.length > 0 ? Math.max(0, durationMs - Math.min(...checkOffsets)) : null;
+
+    await recordAgentRunObservations(deps.supabase, run.id, {
+      verificationCommands: checks.length,
+      verificationRefusals: refusals.length,
+      verificationMs,
+      timeToFirstEditMs: editOffsets.length > 0 ? Math.min(...editOffsets) : null,
+      timeToLastEditMs: editOffsets.length > 0 ? Math.max(...editOffsets) : null,
+    });
+
+    if (run.verificationMode) {
+      await recordLifecycle(
+        deps,
+        run,
+        "verification_completed",
+        `Ran ${checks.length} check(s); ${refusals.length} refused by policy`,
+        {
+          mode: run.verificationMode,
+          commands: checks.length,
+          refusals: refusals.length,
+          verificationMs: verificationMs ?? 0,
+          lastEditMs: editOffsets.length > 0 ? Math.max(...editOffsets) : 0,
+        },
+      );
+    }
+  } catch (error) {
+    console.error("[agent-verification] the verification outcome could not be recorded", {
       agentExecutionRunId: run.id,
       detail: error instanceof Error ? `${error.name}: ${error.message.slice(0, 200)}` : "unknown",
     });

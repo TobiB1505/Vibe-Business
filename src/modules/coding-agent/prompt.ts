@@ -1,6 +1,10 @@
 import type { ExecutionSpec } from "@/modules/execution-contract/spec";
 import type { ExecutionBrief } from "@/modules/execution-context/brief";
 import { renderExecutionBrief, type RenderedBrief } from "@/modules/execution-context/render";
+import {
+  renderVerificationPlan,
+  type AgentVerificationPlan,
+} from "@/modules/execution-context/verification";
 import type { AgentInstruction, AgentToolDescriptor } from "./provider";
 import type { AgentRuntimeLimits } from "./budget";
 import {
@@ -209,7 +213,39 @@ function systemPrompt(
   limits: AgentRuntimeLimits,
   checks: readonly AgentCheckName[],
   briefed: boolean,
+  plan: AgentVerificationPlan | null,
 ): string {
+  /*
+   * When the run is finished (PART F).
+   *
+   * v2 said "run the checks and fix what they find. Repeat until they pass or
+   * until you are out of budget" — an instruction with no completion condition
+   * in it at all. Run #4 read it the only way it could: implement, then check
+   * everything available, twice over, for four minutes fifty-eight seconds,
+   * while the independent validator waited to run the same commands again.
+   *
+   * v3 gives the agent a finish line. Done When comes from the plan; what
+   * counts as enough checking comes from the compiled verification plan; and
+   * the two together are the whole stopping condition. Without a plan the old
+   * sentence stands, because an agent told to stop early with nothing telling
+   * it what "enough" means would just stop early.
+   */
+  const whenToStop = plan
+    ? [
+        "You are finished when two things are true: the step's Done When is satisfied, and the",
+        "checks your verification plan requires have passed. At that point, stop — do not keep",
+        "reading files for reassurance, do not run broader checks than the plan lists, and do not",
+        "look for more work adjacent to what you were asked for.",
+        "",
+        "If a required check fails, that is your job: read the error, fix the cause, run the same",
+        "check again. Do not respond to a failure by widening the search or reaching for a bigger",
+        "check — a failing targeted test is information about the lines you just wrote.",
+      ]
+    : [
+        "When you have made the change, run the checks and fix what they find. Repeat until they",
+        "pass or until you are out of budget.",
+      ];
+
   /*
    * The one paragraph that changes with the brief (PART G).
    *
@@ -256,8 +292,7 @@ function systemPrompt(
     "were not asked to change, do not add dependencies, do not reformat files you are not",
     "otherwise touching, and do not leave commented-out code or TODOs behind.",
     "",
-    "When you have made the change, run the checks and fix what they find. Repeat until they",
-    "pass or until you are out of budget.",
+    ...whenToStop,
     "",
     "# What decides things",
     "",
@@ -284,7 +319,7 @@ function systemPrompt(
     "",
     `- At most ${limits.maxChangedFiles} files changed, and ${limits.maxChangedBytes} bytes in total.`,
     `- At most ${limits.maxFilesRead} files read, up to ${limits.maxBytesPerFile} bytes each.`,
-    `- At most ${limits.maxCheckRuns} check runs (${checks.join(", ")}).`,
+    ...(plan ? [] : [`- At most ${limits.maxCheckRuns} check runs (${checks.join(", ")}).`]),
     `- At most ${limits.maxTurns} turns.`,
     "- No network. No shell. No git. No secrets. No deployment. No database.",
     "- You cannot create a branch, commit, push, merge or deploy, and you must not try.",
@@ -318,7 +353,11 @@ function untrusted(label: string, body: string): string {
   return [`<untrusted source="${label}">`, body.trim(), "</untrusted>"].join("\n");
 }
 
-function userMessage(spec: ExecutionSpec, brief: RenderedBrief | null): string {
+function userMessage(
+  spec: ExecutionSpec,
+  brief: RenderedBrief | null,
+  plan: AgentVerificationPlan | null,
+): string {
   const { objective, businessContext, repository } = spec;
 
   const decisions =
@@ -421,6 +460,17 @@ function userMessage(spec: ExecutionSpec, brief: RenderedBrief | null): string {
           ].join("\n"),
     ),
     "",
+    /*
+     * Vibe's own policy, unfenced (PART J).
+     *
+     * Every string in it is a constant from `execution-context/verification.ts`
+     * and the only interpolated values are a mode name from a three-value union
+     * and two integers. Nothing a customer wrote can reach it, so Rule 42 puts
+     * it here with Vibe's instructions rather than inside an untrusted fence —
+     * fencing it would tell the model to read Vibe's own rules as quoted
+     * material it may weigh against something else.
+     */
+    ...(plan ? ["# Checking your own work", "", renderVerificationPlan(plan), ""] : []),
     "# Start",
     "",
     ...(brief
@@ -452,6 +502,8 @@ export type CompiledAgentInstruction = AgentInstruction & {
   context: RenderedBrief | null;
   /** Whether the instruction told the agent to start from a briefing. */
   briefed: boolean;
+  /** The verification mode the instruction described. Null when none was given. */
+  verificationMode: AgentVerificationPlan["mode"] | null;
 };
 
 /**
@@ -469,6 +521,8 @@ export function compileAgentInstruction(input: {
   availableChecks: readonly AgentCheckName[];
   /** What Vibe already knows that bears on this step. Null when nothing does. */
   brief?: ExecutionBrief | null;
+  /** How much the run may check its own work. Null leaves v2 behaviour. */
+  verification?: AgentVerificationPlan | null;
 }): CompiledAgentInstruction {
   const checks = input.availableChecks.length > 0 ? input.availableChecks : AGENT_CHECK_NAMES;
 
@@ -489,11 +543,14 @@ export function compileAgentInstruction(input: {
     input.brief?.freshness.state === "fresh" &&
     rendered.repositoryFactsRendered + rendered.candidatesRendered > 0;
 
+  const plan = input.verification ?? null;
+
   return {
-    system: systemPrompt(input.limits, checks, briefed),
-    userMessage: userMessage(input.spec, briefed ? rendered : null),
+    system: systemPrompt(input.limits, checks, briefed, plan),
+    userMessage: userMessage(input.spec, briefed ? rendered : null, plan),
     compilerVersion: AGENT_PROMPT_COMPILER_VERSION,
     context: rendered,
     briefed,
+    verificationMode: plan?.mode ?? null,
   };
 }

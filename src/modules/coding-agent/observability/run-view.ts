@@ -55,6 +55,13 @@ type RawRun = {
   unique_files_read: number | null;
   repeated_file_reads: number | null;
   files_read_outside_context: number | null;
+  verification_mode: string | null;
+  verification_plan_version: string | null;
+  verification_commands: number | null;
+  verification_refusals: number | null;
+  verification_ms: number | null;
+  time_to_first_edit_ms: number | null;
+  time_to_last_edit_ms: number | null;
 };
 
 export async function readAgentRunForLiveView(
@@ -64,7 +71,7 @@ export async function readAgentRunForLiveView(
   const { data, error } = await supabase
     .from("agent_execution_runs")
     .select(
-      "id, operation_run_id, execution_spec_id, status, assistant_messages, sdk_loop_iterations, model, started_at, completed_at, duration_ms, observed_path_count, changed_file_count, context_brief_version, context_freshness, context_bytes, context_facts_sent, context_candidates_sent, context_candidates_read, unique_files_read, repeated_file_reads, files_read_outside_context",
+      "id, operation_run_id, execution_spec_id, status, assistant_messages, sdk_loop_iterations, model, started_at, completed_at, duration_ms, observed_path_count, changed_file_count, context_brief_version, context_freshness, context_bytes, context_facts_sent, context_candidates_sent, context_candidates_read, unique_files_read, repeated_file_reads, files_read_outside_context, verification_mode, verification_plan_version, verification_commands, verification_refusals, verification_ms, time_to_first_edit_ms, time_to_last_edit_ms",
     )
     .eq("id", params.runId)
     .eq("project_id", params.projectId)
@@ -94,6 +101,18 @@ export async function readAgentRunForLiveView(
      * briefed but has not finished reading, and zero would claim it read
      * nothing rather than that nobody has counted yet.
      */
+    verification: row.verification_mode
+      ? {
+          mode: row.verification_mode,
+          planVersion: row.verification_plan_version,
+          commands: row.verification_commands,
+          refusals: row.verification_refusals,
+          verificationMs: row.verification_ms,
+          timeToFirstEditMs: row.time_to_first_edit_ms,
+          timeToLastEditMs: row.time_to_last_edit_ms,
+        }
+      : null,
+
     context: row.context_brief_version
       ? {
           briefVersion: row.context_brief_version,

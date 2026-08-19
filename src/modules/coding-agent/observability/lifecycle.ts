@@ -52,6 +52,8 @@ const SLOTS: Record<ExecutionEventType, number> = {
   usage_updated: 16,
   context_compiled: 17,
   context_used: 18,
+  verification_plan_compiled: 19,
+  verification_completed: 20,
 
   // Feed-produced types never take a milestone slot. Present so the map is
   // total and a new event type cannot be forgotten here.
@@ -63,6 +65,9 @@ const SLOTS: Record<ExecutionEventType, number> = {
   command_started: 0,
   command_completed: 0,
   command_failed: 0,
+  verification_check_started: 0,
+  verification_command_refused: 0,
+  verification_escalated: 0,
 };
 
 export type LifecycleRecorder = (

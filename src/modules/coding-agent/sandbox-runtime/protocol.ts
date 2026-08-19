@@ -1,4 +1,5 @@
 import type { AgentModelUsage } from "../provider";
+import type { SandboxVerificationPolicy } from "@/modules/execution-context/verification";
 
 /**
  * The contract between Vibe and the program that runs inside the agent sandbox
@@ -32,7 +33,7 @@ import type { AgentModelUsage } from "../provider";
  * program left in a reused sandbox would otherwise answer a request it never
  * understood — and the reply would look perfectly well-formed.
  */
-export const AGENT_RUNTIME_VERSION = "vibe-agent-runtime-v2" as const;
+export const AGENT_RUNTIME_VERSION = "vibe-agent-runtime-v3" as const;
 
 /**
  * The SDK version installed in the sandbox, pinned rather than floating.
@@ -80,6 +81,21 @@ export type AgentRuntimeRequest = {
   tools: readonly string[];
   /** Absolute path of the repository workspace inside the sandbox. */
   cwd: string;
+  /**
+   * How much self-checking this task is allowed (Sprint 0042).
+   *
+   * Rules and integers, carried as data in `request.json` and never
+   * interpolated into program text — the property ADR 0029 gives the runtime
+   * program, preserved. The harness rebuilds the category matchers from
+   * `categoryRules`, which are Vibe's own constants, so the sandbox classifies
+   * a command by exactly the table Vibe's timeline classifies it by.
+   *
+   * Optional so that a request without one behaves as v2 did: unbounded
+   * self-checking. Absence must never mean "forbid everything" — a policy that
+   * fails closed on a missing field would turn a deploy skew into a run that
+   * cannot check anything at all.
+   */
+  verification?: SandboxVerificationPolicy;
 };
 
 /**
