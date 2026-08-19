@@ -199,25 +199,97 @@ function outcomeFor(subtype: string): AgentProviderOutcome {
  * never started, and the acceptance criterion for this runtime is precisely
  * "did a real turn happen".
  */
-function turnsFromProgress(output: string): { turns: number; started: boolean } {
+/**
+ * One line of the harness's progress feed.
+ *
+ * Deliberately three shapes and no more. `t` is a closed tag, `s` is the
+ * monotonic sequence the harness assigned, and everything else is a bounded
+ * identifier — a tool name, a repository path, a command Vibe's own harness
+ * ran. There is no field a sentence could arrive in.
+ */
+export type RuntimeProgressEntry = {
+  sequence: number;
+  kind: "started" | "turn" | "tool" | "finished";
+  turns?: number;
+  tool?: string;
+  path?: string;
+  command?: string;
+  subtype?: string;
+};
+
+export type RuntimeProgress = {
+  turns: number;
+  started: boolean;
+  finished: boolean;
+  entries: readonly RuntimeProgressEntry[];
+};
+
+function readString(value: unknown, max: number): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value.slice(0, max) : undefined;
+}
+
+export function parseRuntimeProgress(output: string): RuntimeProgress {
   let turns = 0;
   let started = false;
+  let finished = false;
+  const entries: RuntimeProgressEntry[] = [];
 
-  for (const line of output.split("\n")) {
-    const trimmed = line.trim();
+  const lines = output.split("\n");
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const trimmed = lines[index].trim();
     if (!trimmed.startsWith("{")) continue;
 
+    let event: Record<string, unknown>;
     try {
-      const event = JSON.parse(trimmed) as { t?: unknown; n?: unknown };
-      if (event.t === "started") started = true;
-      if (event.t === "turn" && typeof event.n === "number" && event.n > turns) turns = event.n;
+      event = JSON.parse(trimmed) as Record<string, unknown>;
     } catch {
       // The repository's own build output shares this stream. A line that is
       // not our JSON is not an error; it is somebody else's stdout.
+      continue;
+    }
+
+    /*
+     * The harness's own counter, or the line's position when it has none.
+     *
+     * Both are monotonic and unique within the file, which is all the durable
+     * upsert needs. The fallback matters because a feed written by an older
+     * runtime has no `s` — and a parser that dropped those lines would silently
+     * lose the progress of a run that was already in flight when this shipped.
+     */
+    const sequence = typeof event.s === "number" && event.s > 0 ? event.s : index + 1;
+
+    if (event.t === "started") {
+      started = true;
+      entries.push({ sequence, kind: "started" });
+      continue;
+    }
+
+    if (event.t === "turn") {
+      const n = typeof event.n === "number" ? event.n : 0;
+      if (n > turns) turns = n;
+      entries.push({ sequence, kind: "turn", turns: n });
+      continue;
+    }
+
+    if (event.t === "tool") {
+      entries.push({
+        sequence,
+        kind: "tool",
+        tool: readString(event.name, 40),
+        path: readString(event.path, 400),
+        command: readString(event.command, 400),
+      });
+      continue;
+    }
+
+    if (event.t === "finished") {
+      finished = true;
+      entries.push({ sequence, kind: "finished", subtype: readString(event.subtype, 40) });
     }
   }
 
-  return { turns, started };
+  return { turns, started, finished, entries };
 }
 
 /** Bytes of the progress file kept. It is one short JSON object per turn. */
@@ -250,13 +322,15 @@ export function createSandboxCodingAgentProvider(
   const progressPath = `${deps.runtimeDir}/progress.ndjson`;
   const resultPath = `${deps.runtimeDir}/result.json`;
 
-  const readProgress = async (): Promise<{ turns: number; started: boolean }> => {
+  const readProgress = async (): Promise<RuntimeProgress> => {
     const progress = await deps.sandbox.readFile({
       path: progressPath,
       maxBytes: MAX_PROGRESS_BYTES,
     });
 
-    return progress === null ? { turns: 0, started: false } : turnsFromProgress(progress);
+    return progress === null
+      ? { turns: 0, started: false, finished: false, entries: [] }
+      : parseRuntimeProgress(progress);
   };
 
   return {
@@ -356,6 +430,15 @@ export function createSandboxCodingAgentProvider(
         started: progress.started,
         finished: result !== null,
         turns: progress.turns,
+        /*
+         * The whole feed, every time.
+         *
+         * Not a delta: the reader is a different function invocation with no
+         * memory of the last one, and the durable write is an upsert keyed on
+         * the harness's own sequence. Re-offering what has already been stored
+         * is therefore free and makes a lost poll cost nothing.
+         */
+        entries: progress.entries,
       };
     },
 

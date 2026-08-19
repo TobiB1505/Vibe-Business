@@ -95,7 +95,7 @@ export type ChangedPathEvidence = {
     | "unchanged"
     | "absent"
     /** Present, and withheld from the change because it was never source. */
-    | "ignored"
+    | "observed_ignored"
     /** Present, and larger than the read bound — so not representable. */
     | "unreadable";
   /** Bytes of the produced file. Zero for anything that is not a write. */
@@ -103,7 +103,7 @@ export type ChangedPathEvidence = {
   artifactClass: ChangeArtifactClass;
   detectedBy: ChangeDetectionSource;
   /**
-   * Why an `ignored` path was withheld, and by which rule.
+   * Why an `observed_ignored` path was withheld, and by which rule.
    *
    * The whole reason suppression is safe to have at all: a filter whose
    * decisions cannot be read back is indistinguishable from a blind spot.
@@ -275,7 +275,7 @@ export function summarizeChangeEvidence(input: {
     const status: ChangedPathEvidence["status"] = file
       ? file.status
       : withheld
-        ? "ignored"
+        ? "observed_ignored"
         : unreadable.has(path)
           ? "unreadable"
           : unchanged.has(path)
@@ -284,7 +284,7 @@ export function summarizeChangeEvidence(input: {
 
     if (status === "unchanged") unchangedCount += 1;
     if (status === "absent") absentCount += 1;
-    if (status === "ignored") ignoredCount += 1;
+    if (status === "observed_ignored") ignoredCount += 1;
     if (status === "unreadable") unreadableCount += 1;
 
     // Counted for every path, recorded for the first `MAX_EVIDENCE_PATHS` — so

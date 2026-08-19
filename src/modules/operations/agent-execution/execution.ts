@@ -37,6 +37,9 @@ import {
 } from "@/modules/coding-agent/change-evidence";
 import { ExecutionToolGateway } from "@/modules/coding-agent/gateway";
 import { createBaseIgnorePort } from "@/modules/coding-agent/ignored-paths";
+import { createLifecycleRecorder } from "@/modules/coding-agent/observability/lifecycle";
+import { eventsFromRuntimeFeed } from "@/modules/coding-agent/observability/runtime-feed";
+import { recordExecutionEvents } from "@/modules/coding-agent/observability/store";
 import {
   agentSandboxNameFor,
   computeAgentChangeIdentity,
@@ -206,6 +209,32 @@ export type AgentRepositoryTarget = {
 };
 
 export type StepOutcome<T> = ({ ok: true } & T) | { ok: false; failureCode: OperationFailureCode };
+
+/**
+ * One milestone, recorded against the run that produced it.
+ *
+ * A thin wrapper so a step needs three arguments rather than five, and so the
+ * ownership fields come from the persisted run row rather than from anything a
+ * caller assembles (Rule 53). Never throws: telemetry attached to a paid
+ * execution must not be able to fail it.
+ */
+async function recordLifecycle(
+  deps: AgentExecutionDeps,
+  run: StoredAgentExecutionRun,
+  type: Parameters<ReturnType<typeof createLifecycleRecorder>>[0],
+  summary: string,
+  metadata?: Parameters<ReturnType<typeof createLifecycleRecorder>>[2],
+): Promise<void> {
+  const record = createLifecycleRecorder({
+    supabase: deps.supabase,
+    runId: run.id,
+    projectId: run.projectId,
+    userId: run.userId,
+    now: deps.now,
+  });
+
+  await record(type, summary, metadata);
+}
 
 async function loadRun(
   deps: AgentExecutionDeps,
@@ -439,6 +468,11 @@ export async function provisionAgentWorkspaceStep(
     agentExecutionRunId: run.id,
     sandboxId: sandbox.id,
     egress: gateway.host,
+  });
+
+  await recordLifecycle(deps, run, "workspace_ready", "Project prepared", {
+    sandboxId: sandbox.id,
+    egressHost: gateway.host,
   });
 
   if (installed.exitCode !== 0) {
@@ -739,6 +773,12 @@ export async function startAgentStep(
 
   await setOperationStage(deps.supabase, { operationId, stage: "running_agent" });
 
+  await recordLifecycle(deps, context.run, "agent_started", "Started working on the change", {
+    model: context.run.model,
+    maxWallClockMs: context.limits.maxWallClockMs,
+    maxSdkIterations: context.limits.maxTurns,
+  });
+
   if (!(await captureWorkspaceBaseline({
     sandbox: context.sandbox,
     cwd: context.paths.workspaceCwd,
@@ -890,6 +930,38 @@ export async function pollAgentStep(
   await recordAgentTurnProgress(deps.supabase, context.run.id, observation.turns);
 
   /*
+   * The harness's feed, made durable.
+   *
+   * The whole file is re-offered on every poll and the write is an upsert on
+   * the sequence the harness itself assigned, so a lost poll costs nothing and
+   * a workflow retry rewrites identical rows. That is the same property the
+   * turn counter has, for the same reason: nothing in this process survives to
+   * the next invocation, so a cursor would be a fourth thing to lose.
+   *
+   * Wrapped, because this is telemetry hanging off a paid run. A run whose
+   * event log could not be written is still a run.
+   */
+  if (observation.entries && observation.entries.length > 0) {
+    try {
+      await recordExecutionEvents(deps.supabase, {
+        runId: context.run.id,
+        projectId: context.run.projectId,
+        userId: context.run.userId,
+        events: eventsFromRuntimeFeed({
+          entries: observation.entries,
+          observedAt: new Date((deps.now ?? Date.now)()).toISOString(),
+        }),
+      });
+    } catch (error) {
+      console.error("[agent-observability] the runtime feed could not be recorded", {
+        operationId,
+        agentExecutionRunId: context.run.id,
+        detail: error instanceof Error ? `${error.name}: ${error.message.slice(0, 200)}` : "unknown",
+      });
+    }
+  }
+
+  /*
    * The wall clock, enforced by Vibe against durable state.
    *
    * Measured from the run row's own `started_at` rather than from anything this
@@ -1023,6 +1095,20 @@ export async function collectAgentStep(
     });
     return { ok: false, failureCode: "change_preparation_failed" };
   }
+
+  await recordLifecycle(deps, run, "agent_finished", "Finished working on the change", {
+    outcome: result.outcome,
+    assistantMessages: result.turns,
+    durationMs: result.durationMs,
+  });
+
+  await recordLifecycle(
+    deps,
+    run,
+    "change_discovered",
+    `Observed ${changedFileCount} ${changedFileCount === 1 ? "path" : "paths"} in the workspace`,
+    { observedPaths: changedFileCount },
+  );
 
   return { ok: true, paused: false, changedFileCount, changedPaths };
 }
@@ -1218,12 +1304,33 @@ export async function extractAndVerifyStep(
         ...metadata,
       },
     });
+    await recordLifecycle(deps, run, "change_rejected", "The change was refused", {
+      rejections: verification.rejections.join(", "),
+      observedPaths: evidence.observedPathCount,
+      candidateFiles: evidence.candidateFileCount,
+      observedIgnored: evidence.ignoredPathCount,
+      totalDiffBytes: evidence.totalDiffBytes,
+    });
+
     return { ok: false, failureCode: "agent_change_rejected" };
   }
 
   if (verification.files.length === 0) {
     return { ok: false, failureCode: "agent_produced_no_change" };
   }
+
+  await recordLifecycle(
+    deps,
+    run,
+    "change_verified",
+    `${verification.files.length} ${verification.files.length === 1 ? "file" : "files"} changed`,
+    {
+      candidateFiles: verification.files.length,
+      observedPaths: evidence.observedPathCount,
+      observedIgnored: evidence.ignoredPathCount,
+      totalDiffBytes: evidence.totalDiffBytes,
+    },
+  );
 
   return {
     ok: true,
@@ -1342,6 +1449,12 @@ export async function writeAgentBranchStep(
     })),
   });
 
+  await recordLifecycle(deps, run, "branch_prepared", "Your change is ready to review", {
+    branch: prepared.branchName,
+    commitSha: write.commitSha,
+    files: files.length,
+  });
+
   return {
     ok: true,
     preparedChangeId: prepared.id,
@@ -1360,6 +1473,8 @@ export async function cleanupAgentWorkspaceStep(
 ): Promise<{ cleanup: string }> {
   const run = await findAgentRunByOperation(deps.supabase, operationId);
   if (!run) return { cleanup: "not_provisioned" };
+
+  await recordLifecycle(deps, run, "sandbox_stopping", "Shutting down the workspace");
 
   let sandbox: SandboxHandle | null = null;
   try {
@@ -1398,6 +1513,12 @@ export async function cleanupAgentWorkspaceStep(
       succeeded: run.status !== "failed",
       failureCode: run.failureCode,
     });
+
+    await recordLifecycle(deps, run, "sandbox_stopped", "Workspace shut down", {
+      activeCpuMs: usage?.activeCpuDurationMs ?? null,
+      networkEgressBytes: usage?.networkEgressBytes ?? null,
+    });
+
     return { cleanup: "stopped" };
   } catch {
     await recordAgentSandboxUsage(deps.supabase, {
@@ -1485,6 +1606,10 @@ export async function finishAgentExecutionStep(
         },
       });
     }
+
+    await recordLifecycle(deps, run, "execution_completed", "Ready for review", {
+      preparedChangeId: outcome.preparedChangeId,
+    });
     return;
   }
 
@@ -1515,6 +1640,10 @@ export async function finishAgentExecutionStep(
       agentExecutionRunId: run.id,
       reason: outcome.failureCode,
     },
+  });
+
+  await recordLifecycle(deps, run, "execution_failed", "The run stopped without a change", {
+    failureCode: outcome.failureCode,
   });
 }
 

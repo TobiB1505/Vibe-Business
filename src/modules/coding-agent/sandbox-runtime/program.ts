@@ -63,8 +63,11 @@ const allowed = new Set(request.tools);
  * Appended synchronously and line-at-a-time so a reader that arrives mid-write
  * sees whole lines behind it, and never a torn one.
  */
+let sequence = 0;
+
 const emit = (event) => {
-  const line = JSON.stringify(event) + "\\n";
+  sequence += 1;
+  const line = JSON.stringify(Object.assign({ s: sequence }, event)) + "\\n";
   try {
     process.stdout.write(line);
   } catch {
@@ -123,6 +126,35 @@ try {
     if (message.type === "assistant") {
       result.turns += 1;
       emit({ t: "turn", n: result.turns });
+
+      /*
+       * What the harness executed, taken from its own tool stream.
+       *
+       * A tool_use block is an instruction the harness carried out — a file it
+       * read, an edit it applied, a command it ran. It is not the model talking
+       * about itself, and nothing here reads the text blocks alongside it: the
+       * loop looks only at type "tool_use" and copies three fields out of its
+       * input. There is no path by which a sentence reaches Vibe.
+       *
+       * This is telemetry, never authority. What the run actually changed is
+       * still established afterwards by comparing the workspace against the
+       * pinned commit (Rule 77); these events say what to show a person while
+       * they wait.
+       */
+      const blocks = message.message && Array.isArray(message.message.content)
+        ? message.message.content
+        : [];
+
+      for (const block of blocks) {
+        if (!block || block.type !== "tool_use") continue;
+        const input = block.input && typeof block.input === "object" ? block.input : {};
+        const detail = { t: "tool", name: String(block.name || "") };
+        if (typeof input.file_path === "string") detail.path = input.file_path.slice(0, 400);
+        if (typeof input.path === "string" && !detail.path) detail.path = input.path.slice(0, 400);
+        if (typeof input.pattern === "string") detail.pattern = "1";
+        if (typeof input.command === "string") detail.command = input.command.slice(0, 400);
+        emit(detail);
+      }
     }
 
     if (message.type === "result") {

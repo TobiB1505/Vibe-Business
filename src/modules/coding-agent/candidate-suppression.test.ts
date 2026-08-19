@@ -233,7 +233,7 @@ describe("run b33635a1, with the repository's own rules applied", () => {
 
     const withheld = new Map(
       evidence.paths
-        .filter((entry) => entry.status === "ignored")
+        .filter((entry) => entry.status === "observed_ignored")
         .map((entry) => [entry.path, entry.ignoredBy]),
     );
 

@@ -15,8 +15,12 @@ import type { AgentStartRefusal } from "@/modules/coding-agent/service";
 import { previewDogfoodStep } from "@/modules/coding-agent/website-preflight";
 import { persistAgentExecutionSpec } from "@/modules/operations/agent-execution/server-writes";
 import { VercelWorkflowExecutor } from "@/modules/operations/vercel/executor";
-import type { OperationView } from "@/modules/operations/view";
 import type { ExecutionInterruptAnswer } from "@/modules/execution-contract/schema";
+import {
+  buildAgentExecutionLiveModel,
+  type AgentExecutionLiveModel,
+} from "@/modules/coding-agent/observability/live-view";
+import { readAgentRunForLiveView } from "@/modules/coding-agent/observability/run-view";
 
 /**
  * The internal dogfood website actions (EXECUTION CORE-4 website gate, §7,
@@ -102,7 +106,14 @@ export async function startDogfoodRunAction(
 }
 
 export type DogfoodRunStatus = {
-  operation: OperationView;
+  /**
+   * Everything the reusable live view renders.
+   *
+   * Assembled by a module rather than by this page, so the same model can be
+   * mounted in the production dashboard later without any of this logic moving
+   * with it (EXECUTION CORE-4 observability).
+   */
+  live: AgentExecutionLiveModel;
   activity: StoredAgentActivity[];
   openInterrupt: StoredExecutionInterrupt | null;
 };
@@ -123,18 +134,35 @@ export async function getDogfoodRunStatusAction(
   if (!operation) return null;
 
   if (!operation.agentExecutionRunId) {
-    return { operation, activity: [], openInterrupt: null };
+    return {
+      live: await buildAgentExecutionLiveModel(supabase, { operation, projectId, run: null }),
+      activity: [],
+      openInterrupt: null,
+    };
   }
 
-  const [activity, openInterrupt] = await Promise.all([
+  const [activity, openInterrupt, runView] = await Promise.all([
     listAgentActivity(supabase, { runId: operation.agentExecutionRunId, projectId }),
     findOpenInterruptForRun(supabase, {
       projectId,
       agentExecutionRunId: operation.agentExecutionRunId,
     }),
+    readAgentRunForLiveView(supabase, {
+      runId: operation.agentExecutionRunId,
+      projectId,
+    }),
   ]);
 
-  return { operation, activity, openInterrupt };
+  const live = await buildAgentExecutionLiveModel(supabase, {
+    operation,
+    projectId,
+    run: runView?.run ?? null,
+    limits: runView?.limits ?? null,
+    gatewayRequestCeiling: runView?.gatewayRequestCeiling ?? null,
+    validation: runView?.validation ?? "not_started",
+  });
+
+  return { live, activity, openInterrupt };
 }
 
 export type AnswerInterruptState =

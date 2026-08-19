@@ -24,6 +24,7 @@ import type {
   CodingAgentRequest,
   CodingAgentResult,
   DetachedCodingAgentProvider,
+  ObservedRuntimeEntry,
 } from "./provider";
 import type {
   AgentWorkspace,
@@ -244,6 +245,8 @@ export type FakeProviderOptions = {
   usage?: readonly AgentModelUsage[];
   /** Throw instead of returning, to exercise the caller's error path. */
   throws?: Error;
+  /** The harness's progress feed, as `observe` would read it back. */
+  entries?: readonly ObservedRuntimeEntry[];
 };
 
 export type FakeCodingAgentProvider = CodingAgentProvider & {
@@ -385,6 +388,14 @@ export function fakeDetachedAgentProvider(
         started: started > 0,
         finished: started > 0 && polls > pollsBeforeFinished,
         turns,
+        /*
+         * The whole feed, every time — as the real provider returns it.
+         *
+         * Re-offered rather than deltaed, because the durable write is an
+         * upsert keyed on the harness's own sequence. A fake that returned
+         * each line once would let a duplicate-write bug pass every test.
+         */
+        entries: options.entries ?? [],
       };
     },
 

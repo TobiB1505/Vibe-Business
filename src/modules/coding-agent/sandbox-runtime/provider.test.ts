@@ -263,19 +263,19 @@ describe("watching a run that has not finished", () => {
       },
     });
 
-    expect(observation).toEqual({ started: true, finished: false, turns: 4 });
+    expect(observation).toMatchObject({ started: true, finished: false, turns: 4 });
   });
 
   it("reports a finished run once the result file exists", async () => {
     const { observation } = await run(OK);
 
-    expect(observation).toEqual({ started: true, finished: true, turns: 3 });
+    expect(observation).toMatchObject({ started: true, finished: true, turns: 3 });
   });
 
   it("reports a harness that has not written anything yet", async () => {
     const { observation } = await run();
 
-    expect(observation).toEqual({ started: false, finished: false, turns: 0 });
+    expect(observation).toEqual({ started: false, finished: false, turns: 0, entries: [] });
   });
 });
 

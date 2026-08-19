@@ -211,6 +211,23 @@ export type DetachedStartOutcome =
   /** Sanitized. Never a raw provider object and never model text. */
   | { ok: false; failureDetail: string };
 
+/**
+ * One line of the harness's progress feed, as Vibe read it back.
+ *
+ * Structurally incapable of carrying narration: a closed tag, a sequence, and
+ * bounded identifiers. Telemetry only — what the run actually changed is still
+ * established by comparing the workspace to the pinned commit (Rule 77).
+ */
+export type ObservedRuntimeEntry = {
+  sequence: number;
+  kind: "started" | "turn" | "tool" | "finished";
+  turns?: number;
+  tool?: string;
+  path?: string;
+  command?: string;
+  subtype?: string;
+};
+
 export type DetachedObservation = {
   /** True once the harness has written anything at all. */
   started: boolean;
@@ -224,6 +241,15 @@ export type DetachedObservation = {
    * description of what it did (Rule 77).
    */
   turns: number;
+  /**
+   * The whole feed, every time — never a delta.
+   *
+   * The reader is a different function invocation with no memory of the last
+   * one, and the durable write is an upsert keyed on the harness's own
+   * sequence. Re-offering what is already stored is therefore free, and makes a
+   * lost poll cost nothing.
+   */
+  entries?: readonly ObservedRuntimeEntry[];
 };
 
 export interface CodingAgentProvider {
