@@ -145,8 +145,10 @@ export type AgentRuntimeResult = {
    * otherwise indistinguishable from a policy that had nothing to refuse.
    */
   policyDecisions: number;
-  /** Mutations after the first — how many times the window was bought back. */
+  /** Mutations that answered an observed failure. A real repair. */
   repairCycles: number;
+  /** Mutations after the first — how many times the window was bought back. */
+  completionWindows: number;
   sessionId: string | null;
   permissionDenials: number;
   /** Per-model token counts, keyed by model id. Never a cost claim. */
@@ -210,6 +212,7 @@ export function parseAgentRuntimeResult(payload: string | null): AgentRuntimeRes
     verificationRefusals: nonNegativeInt(raw.verificationRefusals),
     policyDecisions: nonNegativeInt(raw.policyDecisions),
     repairCycles: nonNegativeInt(raw.repairCycles),
+    completionWindows: nonNegativeInt(raw.completionWindows),
     modelUsage:
       typeof raw.modelUsage === "object" && raw.modelUsage !== null
         ? (raw.modelUsage as Record<string, unknown>)

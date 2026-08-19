@@ -163,6 +163,7 @@ export type LiveRunRow = {
     providerCostUsd: number | null;
     refusals: number | null;
     repairCycles: number | null;
+    completionWindows: number | null;
     policyDecisions: number | null;
   } | null;
 

@@ -191,8 +191,10 @@ export type CodingAgentResult = {
   verificationRefusals: number | null;
   /** Every tool call the policy hook saw. Zero beside many tool calls is a bug. */
   policyDecisions: number | null;
-  /** Mutations after the first. Each one bought a fresh completion window. */
+  /** Mutations that answered an observed failure. A real repair. */
   repairCycles: number | null;
+  /** Mutations after the first. Each one bought a fresh completion window. */
+  completionWindows: number | null;
   durationMs: number;
   /**
    * A sanitized description of a provider failure. Never surfaced to a user,

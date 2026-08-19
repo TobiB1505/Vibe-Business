@@ -118,7 +118,10 @@ export type StoredAgentExecutionRun = {
   postEditProviderCalls: number | null;
   postEditProviderCostUsd: number | null;
   completionRefusals: number | null;
+  /** Mutations that answered an observed failure. A real repair. */
   repairCycles: number | null;
+  /** Mutations after the first. Each bought back the completion window. */
+  completionWindows: number | null;
   /** Tool calls the policy hook saw. Zero beside tool calls means it never ran. */
   policyDecisions: number | null;
 
@@ -184,6 +187,7 @@ type RunRow = {
   post_edit_provider_cost_usd: string | number | null;
   completion_refusals: number | null;
   repair_cycles: number | null;
+  completion_windows: number | null;
   policy_decisions: number | null;
   prepared_change_id: string | null;
   created_at: string;
@@ -203,7 +207,7 @@ const RUN_COLUMNS =
   "verification_ms, time_to_first_edit_ms, time_to_last_edit_ms, " +
   "completion_budget_version, post_edit_tool_calls, post_edit_reads, post_edit_reads_beyond_brief, " +
   "post_edit_commands, post_edit_provider_calls, post_edit_provider_cost_usd, completion_refusals, " +
-  "repair_cycles, policy_decisions, " +
+  "repair_cycles, completion_windows, policy_decisions, " +
   "prepared_change_id, created_at, started_at, completed_at";
 
 function mapRun(row: RunRow): StoredAgentExecutionRun {
@@ -264,6 +268,7 @@ function mapRun(row: RunRow): StoredAgentExecutionRun {
       row.post_edit_provider_cost_usd === null ? null : Number(row.post_edit_provider_cost_usd),
     completionRefusals: row.completion_refusals,
     repairCycles: row.repair_cycles,
+    completionWindows: row.completion_windows,
     policyDecisions: row.policy_decisions,
     preparedChangeId: row.prepared_change_id,
     createdAt: row.created_at,
@@ -508,6 +513,7 @@ export type AgentRunObservations = {
   postEditProviderCostUsd?: number | null;
   completionRefusals?: number;
   repairCycles?: number;
+  completionWindows?: number;
   policyDecisions?: number | null;
 };
 
@@ -559,6 +565,7 @@ export async function recordAgentRunObservations(
   set("post_edit_provider_cost_usd", observations.postEditProviderCostUsd);
   set("completion_refusals", observations.completionRefusals);
   set("repair_cycles", observations.repairCycles);
+  set("completion_windows", observations.completionWindows);
   set("policy_decisions", observations.policyDecisions);
 
   if (Object.keys(patch).length === 0) return;

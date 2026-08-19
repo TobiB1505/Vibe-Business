@@ -150,12 +150,14 @@ canary("completion control", () => {
 
     expect(outcome.result?.verificationRefusals).toBe(0);
     expect(outcome.markers.final).toBe(true);
-    expect(outcome.result?.repairCycles).toBe(1);
+    // A window reset, not a repair: nothing had failed.
+    expect(outcome.result?.completionWindows).toBe(1);
+    expect(outcome.result?.repairCycles).toBe(0);
   });
 
   it("stops an agent that keeps buying windows forever", async () => {
     const script = [];
-    for (let cycle = 0; cycle <= BUDGET.maxRepairCycles + 1; cycle += 1) {
+    for (let cycle = 0; cycle <= BUDGET.maxCompletionWindows + 1; cycle += 1) {
       script.push(write("src/app/layout.tsx"));
       script.push(read("src/modules/somewhere-else.ts"));
       script.push(read("src/modules/somewhere-else-again.ts"));
@@ -169,7 +171,58 @@ canary("completion control", () => {
     });
 
     expect(outcome.result?.verificationRefusals ?? 0).toBeGreaterThan(0);
-    expect(outcome.result?.repairCycles ?? 0).toBeGreaterThanOrEqual(BUDGET.maxRepairCycles);
+    expect(outcome.result?.completionWindows ?? 0).toBeGreaterThanOrEqual(
+      BUDGET.maxCompletionWindows,
+    );
+    // It never failed at anything, so it never repaired anything either.
+    expect(outcome.result?.repairCycles).toBe(0);
+  });
+
+  /**
+   * Run #6's exact shape, replayed.
+   *
+   * Two ordinary implementation edits and a grep that mentions test filenames.
+   * The old build recorded a repair cycle for the second edit and a targeted
+   * test for the grep; neither happened. Both are now counted for what they are.
+   */
+  it("reproduces run #6 without inventing a repair or a test", async () => {
+    const outcome = await runCanary({
+      completion: policy,
+      script: [
+        write("src/app/layout.tsx"),
+        write("src/app/app/layout.tsx"),
+        read("src/app/layout.tsx"),
+        bash(
+          'grep -rn "robots" src/app/landing-contract.test.ts 2>/dev/null; find . -iname "*metadata*.test.*"',
+        ),
+      ],
+      scriptedPaths: SCRIPTED_PATHS,
+      maxTurns: 12,
+    });
+
+    expect(outcome.result?.verificationRefusals).toBe(0);
+    // The second edit reset the window. Nothing had failed, so nothing was repaired.
+    expect(outcome.result?.completionWindows).toBe(1);
+    expect(outcome.result?.repairCycles).toBe(0);
+    // And a grep that merely names test files is not a test run.
+    expect(outcome.result?.verificationCommands).toBe(0);
+  });
+
+  it("counts a mutation after a real failure as a repair", async () => {
+    const outcome = await runCanary({
+      completion: policy,
+      script: [
+        write("src/app/layout.tsx"),
+        // A command that exits non-zero: the harness observes the failure.
+        bash("exit 3"),
+        write("src/app/layout.tsx"),
+      ],
+      scriptedPaths: SCRIPTED_PATHS,
+      maxTurns: 10,
+    });
+
+    expect(outcome.result?.completionWindows).toBe(1);
+    expect(outcome.result?.repairCycles).toBe(1);
   });
 
   it("permits everything when no completion policy was supplied", async () => {

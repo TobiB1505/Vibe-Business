@@ -170,6 +170,9 @@ const progressState = {
   implemented: false,
   toolCallsSinceEdit: 0,
   outsideBriefReadsSinceEdit: 0,
+  /* Mutations after the first. Each bought back a window. */
+  windowResets: 0,
+  /* Of those, the ones that answered an observed failure. A real repair. */
   repairCycles: 0,
   lastEditAt: null,
   unresolvedFailure: false,
@@ -221,13 +224,30 @@ const decideCompletion = (toolName, args) => {
   const budget = completion.budget;
 
   if (activity === "candidate_mutation") {
-    if (progressState.implemented) progressState.repairCycles += 1;
+    /*
+     * A repair only if something had actually failed.
+     *
+     * Run #6 wrote two files in a row and recorded a repair cycle for the
+     * second, because one counter was asked to mean both "the window reset"
+     * and "the agent fixed something". They are separate now: every mutation
+     * after the first resets the window, and only a mutation that answers an
+     * observed failure is a repair.
+     */
+    if (progressState.implemented) {
+      progressState.windowResets += 1;
+      if (progressState.unresolvedFailure) progressState.repairCycles += 1;
+    }
     progressState.implemented = true;
     progressState.toolCallsSinceEdit = 0;
     progressState.outsideBriefReadsSinceEdit = 0;
     progressState.unresolvedFailure = false;
     progressState.lastEditAt = Date.now();
-    emit({ t: "phase", phase: "implementing", cycles: progressState.repairCycles });
+    emit({
+      t: "phase",
+      phase: "implementing",
+      windows: progressState.windowResets,
+      repairs: progressState.repairCycles,
+    });
     return null;
   }
 
@@ -239,6 +259,10 @@ const decideCompletion = (toolName, args) => {
     }
     progressState.toolCallsSinceEdit += 1;
     return null;
+  }
+
+  if (progressState.windowResets >= budget.maxCompletionWindows) {
+    return { reason: "completion_windows_exhausted", activity: activity };
   }
 
   if (progressState.lastEditAt !== null &&
@@ -329,6 +353,7 @@ const result = {
   policyDecisions: 0,
   completionRefusals: 0,
   repairCycles: 0,
+  completionWindows: 0,
   error: null,
 };
 
@@ -558,6 +583,7 @@ result.verificationCommands = verification.commands;
 result.verificationRefusals = verification.refusals;
 result.policyDecisions = verification.decisions;
 result.repairCycles = progressState.repairCycles;
+result.completionWindows = progressState.windowResets;
 result.verificationMs = verification.firstAt === null ? null : Date.now() - verification.firstAt;
 
 emit({ t: "finished", subtype: result.subtype, n: result.assistantMessages });

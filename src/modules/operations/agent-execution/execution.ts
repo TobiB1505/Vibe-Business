@@ -1535,6 +1535,7 @@ async function recordVerificationOutcome(
     verificationRefusals: number | null;
     policyDecisions: number | null;
     repairCycles: number | null;
+    completionWindows: number | null;
   },
 ): Promise<void> {
   const { run } = context;
@@ -1627,6 +1628,7 @@ async function recordVerificationOutcome(
       postEditCommands: postEdit.filter((event) => event.type === "command_started").length,
       completionRefusals: completionRefusals.length,
       repairCycles: result.repairCycles ?? undefined,
+      completionWindows: result.completionWindows ?? undefined,
       policyDecisions: result.policyDecisions,
       ...(await postEditSpend(deps, run, lastEditMs)),
       ...(await postEditBriefReads(deps, run, context.spec.spec, postEdit)),

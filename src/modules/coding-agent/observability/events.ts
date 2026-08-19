@@ -341,15 +341,18 @@ export type CommandCategory = (typeof COMMAND_CATEGORIES)[number];
  * Order is significant and is part of the contract: `pnpm build` must classify
  * as `build` rather than as whatever a later rule would also match.
  */
+/** `pnpm test`, `npm run build`, `npx vitest` — a script actually being invoked. */
+const RUNNER = String.raw`(?:npm|pnpm|yarn|bun|npx)\s+(?:run\s+)?`;
+
 export const COMMAND_CATEGORY_RULES: readonly { category: CommandCategory; pattern: string }[] = [
-  { category: "install", pattern: String.raw`\b(npm|pnpm|yarn|bun)\s+(install|ci|add)\b` },
-  { category: "typecheck", pattern: String.raw`\b(tsc|typecheck|type-check)\b` },
-  { category: "test", pattern: String.raw`\b(vitest|jest|playwright|test)\b` },
-  { category: "build", pattern: String.raw`\bbuild\b` },
-  { category: "lint", pattern: String.raw`\b(eslint|lint)\b` },
-  { category: "format", pattern: String.raw`\b(prettier|format)\b` },
-  { category: "read", pattern: String.raw`^\s*(cat|head|tail|less|wc)\b` },
-  { category: "search", pattern: String.raw`^\s*(grep|rg|find|ls|fd)\b` },
+  { category: "install", pattern: String.raw`\b(?:npm|pnpm|yarn|bun)\s+(?:install|ci|add)\b` },
+  { category: "typecheck", pattern: String.raw`\b(?:tsc)\b|\b${RUNNER}type-?check\b` },
+  { category: "test", pattern: String.raw`\b(?:vitest|jest|playwright)\b|\b${RUNNER}test\b` },
+  { category: "build", pattern: String.raw`\b(?:next|vite|tsup|rollup|webpack)\s+build\b|\b${RUNNER}build\b` },
+  { category: "lint", pattern: String.raw`\beslint\b|\b${RUNNER}lint\b` },
+  { category: "format", pattern: String.raw`\bprettier\b|\b${RUNNER}format\b` },
+  { category: "read", pattern: String.raw`^\s*(?:cat|head|tail|less|wc)\b` },
+  { category: "search", pattern: String.raw`^\s*(?:grep|rg|find|ls|fd)\b` },
   { category: "git", pattern: String.raw`^\s*git\b` },
 ];
 
@@ -366,9 +369,30 @@ export const COMMAND_CATEGORY_RULES: readonly { category: CommandCategory; patte
  *
  * Since Sprint 0042 the same answer also *gates* a command inside the sandbox,
  * which raises the cost of a wrong category from a mislabelled row to a refused
- * command. It stays deliberately generous rather than clever: a command that
- * matches nothing is `other`, and `other` is never a check, so an unrecognised
- * command is never refused for being an unrecognised check.
+ * command. A command that matches nothing is `other`, and `other` is never a
+ * check, so an unrecognised command is never refused for being one.
+ *
+ * ## Why a check must look like an invocation, not like a word
+ *
+ * Run #6 ran this and Vibe recorded it as a targeted test:
+ *
+ * ```
+ * grep -rn "robots" src/app/landing-contract.test.ts ; find . -iname "*metadata*.test.*"
+ * ```
+ *
+ * The old rule was `\b(vitest|jest|playwright|test)\b`, and `test` appears in
+ * both *filenames*. `\bbuild\b` and `\btypecheck\b` had the same flaw: any
+ * command that so much as mentioned one would have been classified as running
+ * it — and under Sprint 0042 that means refused.
+ *
+ * So a check now has to look like something being *run*: a known runner binary
+ * (`vitest`, `tsc`, `eslint`, `next build`) or a package-manager script
+ * invocation (`pnpm test`, `npm run build`). Mentioning a word is not running it.
+ *
+ * This is a convergence control, not a security boundary (ADR 0033), so the
+ * question it answers is "what did this command do", not "what could a hostile
+ * caller disguise". A determined evader has simpler options; an ordinary agent
+ * grepping for the word `build` should not be told it may not build.
  */
 export function classifyCommand(command: string): CommandCategory {
   const text = command.toLowerCase();

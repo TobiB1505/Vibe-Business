@@ -71,6 +71,7 @@ type RawRun = {
   post_edit_provider_cost_usd: string | number | null;
   completion_refusals: number | null;
   repair_cycles: number | null;
+  completion_windows: number | null;
   policy_decisions: number | null;
 };
 
@@ -81,7 +82,7 @@ export async function readAgentRunForLiveView(
   const { data, error } = await supabase
     .from("agent_execution_runs")
     .select(
-      "id, operation_run_id, execution_spec_id, status, assistant_messages, sdk_loop_iterations, model, started_at, completed_at, duration_ms, observed_path_count, changed_file_count, context_brief_version, context_freshness, context_bytes, context_facts_sent, context_candidates_sent, context_candidates_read, unique_files_read, repeated_file_reads, files_read_outside_context, verification_mode, verification_plan_version, verification_commands, verification_refusals, verification_ms, time_to_first_edit_ms, time_to_last_edit_ms, completion_budget_version, post_edit_tool_calls, post_edit_reads, post_edit_reads_beyond_brief, post_edit_commands, post_edit_provider_calls, post_edit_provider_cost_usd, completion_refusals, repair_cycles, policy_decisions",
+      "id, operation_run_id, execution_spec_id, status, assistant_messages, sdk_loop_iterations, model, started_at, completed_at, duration_ms, observed_path_count, changed_file_count, context_brief_version, context_freshness, context_bytes, context_facts_sent, context_candidates_sent, context_candidates_read, unique_files_read, repeated_file_reads, files_read_outside_context, verification_mode, verification_plan_version, verification_commands, verification_refusals, verification_ms, time_to_first_edit_ms, time_to_last_edit_ms, completion_budget_version, post_edit_tool_calls, post_edit_reads, post_edit_reads_beyond_brief, post_edit_commands, post_edit_provider_calls, post_edit_provider_cost_usd, completion_refusals, repair_cycles, completion_windows, policy_decisions",
     )
     .eq("id", params.runId)
     .eq("project_id", params.projectId)
@@ -137,6 +138,7 @@ export async function readAgentRunForLiveView(
               : Number(row.post_edit_provider_cost_usd),
           refusals: row.completion_refusals,
           repairCycles: row.repair_cycles,
+          completionWindows: row.completion_windows,
           policyDecisions: row.policy_decisions,
         }
       : null,

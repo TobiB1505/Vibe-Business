@@ -26,6 +26,7 @@ function state(overrides: Partial<CompletionState> = {}): CompletionState {
     implemented: true,
     toolCallsSinceEdit: 0,
     outsideBriefReadsSinceEdit: 0,
+    windowResets: 0,
     repairCycles: 0,
     msSinceEdit: 0,
     unresolvedFailure: false,
@@ -130,7 +131,7 @@ describe("repair outranks every budget (PART F, PART H)", () => {
     expect(decision.activity).toBe("candidate_mutation");
   });
 
-  it("still stops an agent that buys windows forever", () => {
+  it("stops an agent that keeps failing", () => {
     const decision = decide("Read", "src/modules/x.ts", {
       unresolvedFailure: true,
       repairCycles: BUDGET.maxRepairCycles,
@@ -139,6 +140,49 @@ describe("repair outranks every budget (PART F, PART H)", () => {
     expect(decision.allowed).toBe(false);
     if (decision.allowed) return;
     expect(decision.reason).toBe("repair_cycles_exhausted");
+  });
+
+  /**
+   * Two counters, because run #6 proved one cannot mean both.
+   *
+   * It recorded `repair_cycles: 1` for its second *implementation* edit — no
+   * check had failed, nothing was repaired. The window reset correctly; only
+   * the name was wrong. They are now separate, and each bounds its own thing.
+   */
+  it("counts an ordinary second edit as a window reset, not a repair", () => {
+    const budget = compileCompletionBudget("low");
+
+    // Run #6's shape exactly: two edits, no failure, three post-edit actions.
+    const decision = decide("Read", "src/app/layout.tsx", {
+      windowResets: 1,
+      repairCycles: 0,
+      toolCallsSinceEdit: 3,
+    });
+
+    expect(decision.allowed).toBe(true);
+    expect(budget.maxCompletionWindows).toBeGreaterThan(1);
+  });
+
+  it("stops an agent that buys windows forever without ever failing", () => {
+    const decision = decide("Read", "src/app/layout.tsx", {
+      windowResets: BUDGET.maxCompletionWindows,
+      repairCycles: 0,
+    });
+
+    expect(decision.allowed).toBe(false);
+    if (decision.allowed) return;
+    expect(decision.reason).toBe("completion_windows_exhausted");
+  });
+
+  it("lets a genuinely repairing agent past the window backstop", () => {
+    const decision = decide("Read", "src/modules/implicated.ts", {
+      unresolvedFailure: true,
+      windowResets: BUDGET.maxCompletionWindows,
+      repairCycles: 0,
+    });
+
+    expect(decision.allowed).toBe(true);
+    expect(decision.activity).toBe("repair");
   });
 });
 
@@ -206,6 +250,7 @@ describe("budgets follow the verification depth (PART J)", () => {
     expect(high.maxToolCallsSinceEdit).toBeGreaterThan(low.maxToolCallsSinceEdit);
     expect(high.maxOutsideBriefReadsSinceEdit).toBeGreaterThan(low.maxOutsideBriefReadsSinceEdit);
     expect(high.maxRepairCycles).toBeGreaterThan(low.maxRepairCycles);
+    expect(high.maxCompletionWindows).toBeGreaterThan(low.maxCompletionWindows);
   });
 
   it("covers the legitimate post-edit work run #5 actually did", () => {

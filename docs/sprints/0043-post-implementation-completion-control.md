@@ -128,3 +128,68 @@ policy and independent validation profile. Only completion control changes.
 
 Targets, not thresholds. A correct two-file candidate that costs $0.20 beats a
 cheap one that fails validation.
+
+
+---
+
+# Run #6 and the two findings it produced
+
+Run #6 (`0c481729`) succeeded: 79.9s, 10 provider calls, $0.1444, the same
+two-file candidate, prepared SHA `c9d1b8d2`, independent validation passed
+(install 15.0s / typecheck 93.6s / test 91.1s / build 120.8s, revision integrity
+verified, sandbox stopped). `policy_decisions: 14` — the enforcement path was
+live for the first time in a paid run.
+
+It also produced two measurement defects, both fixed here.
+
+## 1. A grep was recorded as a targeted test
+
+The command was:
+
+```
+grep -rn "robots" src/app/landing-contract.test.ts ; find . -iname "*metadata*.test.*"
+```
+
+The old rule was `\b(vitest|jest|playwright|test)\b`, and `test` appears in both
+*filenames*. `\bbuild\b`, `\btypecheck\b` and `\blint\b` had the same flaw: any
+command that so much as mentioned one would have been classified as running it
+— and since sprint 0042 that means **refused**. An agent grepping for the word
+`build` would have been told it may not build.
+
+A check now has to look like something being *run*: a known runner binary
+(`vitest`, `tsc`, `eslint`, `next build`) or a package-manager script
+invocation (`pnpm test`, `npm run build`). Mentioning a word is not running it.
+
+Fifteen real commands are asserted, including run #6's exact one. This is a
+convergence control rather than a security boundary (ADR 0033), so the question
+it answers is "what did this command do", not "what could a hostile caller
+disguise".
+
+## 2. An ordinary second edit was recorded as a repair
+
+Run #6 wrote `src/app/layout.tsx`, then `src/app/app/layout.tsx`, and recorded
+`repair_cycles: 1`. Nothing had failed. One counter was being asked to mean both
+"the completion window reset" and "the agent fixed something it got wrong".
+
+The budget semantics were right — any mutation resets the window, because an
+agent still changing files has not finished — but a number that overstates
+convergence trouble is one a reader acts on.
+
+```
+completion_windows   mutations after the first. Each bought back a window.
+repair_cycles        of those, the ones that answered an observed failure.
+```
+
+Each now bounds its own thing: `maxCompletionWindows` stops
+edit → explore → edit → explore, and `maxRepairCycles` stops an agent that keeps
+failing. The repair branch is checked first, so an agent genuinely answering
+failures is bounded by its repair allowance rather than by the window backstop.
+
+LOW: 4 windows, 2 repairs. Run #6 used one window and no repairs.
+
+## Both proved against the real SDK
+
+Two new canaries: run #6's exact shape replayed (expects `completion_windows: 1`,
+`repair_cycles: 0`, `verification_commands: 0`), and a command exiting non-zero
+followed by an edit (expects `repair_cycles: 1`). Sixteen canary tests total,
+zero provider cost.

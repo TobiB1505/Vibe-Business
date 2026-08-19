@@ -549,6 +549,7 @@ export function createSandboxCodingAgentProvider(
           verificationRefusals: null,
           policyDecisions: null,
           repairCycles: null,
+          completionWindows: null,
           durationMs,
           failureDetail: progress.started
             ? "the agent runtime produced no result"
@@ -574,6 +575,7 @@ export function createSandboxCodingAgentProvider(
         verificationRefusals: result.verificationRefusals,
         policyDecisions: result.policyDecisions,
         repairCycles: result.repairCycles,
+        completionWindows: result.completionWindows,
         usage: toAgentModelUsage(result.modelUsage),
         sessionId: result.sessionId,
         providerDeniedToolCalls: result.permissionDenials,

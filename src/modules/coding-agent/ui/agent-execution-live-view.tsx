@@ -358,7 +358,14 @@ export function DeveloperInspector({ model }: { model: AgentExecutionLiveModel }
                 mono
               />
               <Metric label="Refused" value={metrics.completion.refusals ?? UNKNOWN} mono />
-              <Metric label="Repair cycles" value={metrics.completion.repairCycles ?? UNKNOWN} mono />
+              {/*
+                Two counters, because run #6 proved one cannot mean both. It
+                edited two files with nothing failing and recorded a "repair
+                cycle" for the second. Windows reset on any edit; a repair is
+                one that answered an observed failure.
+              */}
+              <Metric label="Windows" value={metrics.completion.completionWindows ?? UNKNOWN} mono />
+              <Metric label="Repairs" value={metrics.completion.repairCycles ?? UNKNOWN} mono />
               {/*
                 Zero decisions beside a run full of tool calls means the policy
                 never ran — the exact failure that made run #5 execute a

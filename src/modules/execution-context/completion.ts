@@ -99,10 +99,21 @@ export type CompletionBudget = {
   maxOutsideBriefReadsSinceEdit: number;
 
   /**
-   * How many times the window may be bought back by a new edit.
+   * How many times a new edit may buy back the window.
    *
-   * The backstop on the reset rule. Without it, edit → explore → edit → explore
-   * is unbounded, and each cycle costs a full window.
+   * The backstop on the reset rule: without it, edit → explore → edit → explore
+   * is unbounded and each cycle costs a full window. Counts **every** mutation
+   * after the first, whether it repaired something or not.
+   */
+  maxCompletionWindows: number;
+
+  /**
+   * How many mutations may follow an observed failure.
+   *
+   * A strict subset of the windows above, and the one that answers "is this run
+   * converging?". Run #6 recorded `repair_cycles: 1` for what was simply its
+   * second implementation edit — no check had failed — because one counter was
+   * being asked to mean both things. It now means only this.
    */
   maxRepairCycles: number;
 
@@ -130,18 +141,23 @@ const PROFILES: Record<VerificationMode, Omit<CompletionBudget, "budgetVersion" 
   low: {
     maxToolCallsSinceEdit: 6,
     maxOutsideBriefReadsSinceEdit: 1,
+    // Run #6 used two: one per file it had to touch. Four leaves room for a
+    // repair on each without letting a run reset itself indefinitely.
+    maxCompletionWindows: 4,
     maxRepairCycles: 2,
     maxCompletionWallClockMs: 120_000,
   },
   medium: {
     maxToolCallsSinceEdit: 10,
     maxOutsideBriefReadsSinceEdit: 3,
+    maxCompletionWindows: 6,
     maxRepairCycles: 3,
     maxCompletionWallClockMs: 240_000,
   },
   high: {
     maxToolCallsSinceEdit: 16,
     maxOutsideBriefReadsSinceEdit: 6,
+    maxCompletionWindows: 10,
     maxRepairCycles: 4,
     maxCompletionWallClockMs: 480_000,
   },
@@ -182,6 +198,7 @@ export const COMPLETION_REFUSAL_REASONS = [
   "completion_budget_exhausted",
   "outside_brief_budget_exhausted",
   "completion_wall_clock_exhausted",
+  "completion_windows_exhausted",
   "repair_cycles_exhausted",
 ] as const;
 export type CompletionRefusalReason = (typeof COMPLETION_REFUSAL_REASONS)[number];
@@ -198,7 +215,9 @@ export type CompletionState = {
   toolCallsSinceEdit: number;
   /** Outside-brief reads since the last mutation. */
   outsideBriefReadsSinceEdit: number;
-  /** Mutations after the first. Each one is a repair cycle. */
+  /** Mutations after the first. Each one bought back the window. */
+  windowResets: number;
+  /** Of those, the ones that followed an observed failure. A real repair. */
   repairCycles: number;
   /** Milliseconds since the last mutation. Null before the first. */
   msSinceEdit: number | null;
@@ -272,6 +291,18 @@ export function decideCompletionAction(input: {
       : { allowed: true, activity };
   }
 
+  /*
+   * The reset rule's own backstop.
+   *
+   * Checked after repair, so an agent genuinely answering failures is bounded
+   * by its repair allowance rather than by this — and before the per-window
+   * budgets, because once a run has bought back its window too many times the
+   * remaining question is not how much of this window is left.
+   */
+  if (state.windowResets >= budget.maxCompletionWindows) {
+    return { allowed: false, reason: "completion_windows_exhausted", activity };
+  }
+
   if (
     state.msSinceEdit !== null &&
     state.msSinceEdit >= budget.maxCompletionWallClockMs
@@ -310,11 +341,14 @@ export const COMPLETION_MESSAGES: Record<CompletionRefusalReason, string> = {
     "This step has been through its allowed repair attempts. Stop and describe honestly what " +
     "is still wrong — a partial change that is accurately reported is far more useful than " +
     "another attempt Vibe cannot pay for.",
+  completion_windows_exhausted:
+    "This step has been edited and revisited as many times as its budget allows. Stop and " +
+    "describe what you changed and anything you left undone.",
 };
 
 /** The completion half of what crosses into the sandbox. */
 export type SandboxCompletionPolicy = {
-  budget: Omit<CompletionBudget, "budgetVersion">;
+  budget: Omit<CompletionBudget, "budgetVersion" | "mode">;
   /** Repository-relative paths the Execution Brief named. */
   briefPaths: readonly string[];
   mutatingTools: readonly string[];
@@ -327,7 +361,7 @@ export function toSandboxCompletionPolicy(input: {
   budget: CompletionBudget;
   briefPaths: readonly string[];
 }): SandboxCompletionPolicy {
-  const { budgetVersion: _ignored, ...budget } = input.budget;
+  const { budgetVersion: _version, mode: _mode, ...budget } = input.budget;
   return {
     budget,
     briefPaths: input.briefPaths,
