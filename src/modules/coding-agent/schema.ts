@@ -48,7 +48,7 @@ export const CODING_AGENT_POLICY_VERSION = "coding-agent-policy-v1" as const;
  * runs of the same spec are no longer the same experiment, and the dogfood
  * economics recorded under v1 must not be read as though they described v2.
  */
-export const AGENT_PROMPT_COMPILER_VERSION = "agent-prompt-v3" as const;
+export const AGENT_PROMPT_COMPILER_VERSION = "agent-prompt-v4" as const;
 
 /** The CORE-4 dogfood limit set. Explicitly not final customer pricing (§17). */
 export const AGENT_BUDGET_POLICY_VERSION = "core4-dogfood-budget-v1" as const;
