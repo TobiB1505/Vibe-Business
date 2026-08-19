@@ -46,38 +46,51 @@ describe("the program contains no interpolation point", () => {
 
 describe("the verification plan is enforced, not described", () => {
   /**
-   * The only place a shell command can be refused.
+   * Where the decision is made, and why it moved.
    *
-   * The harness runs the agent's own tools inside the VM and never calls back
-   * to Vibe's gateway, so a server-side check-run ceiling has nothing to
-   * intercept — run #4 recorded `check_runs: 0` while running three of them.
-   * `canUseTool` receives the tool's arguments, which makes `input.command` the
-   * one thing in the system that exists before the command does.
+   * `canUseTool` is not enough on its own. `permissionMode: "default"` prompts
+   * only "for dangerous operations" by its own documentation, so a read or a
+   * search can be approved without the callback ever running — and
+   * `allowedTools` skipped it for *everything*, which is how run #5 executed a
+   * command its plan governed while recording zero decisions.
+   *
+   * `PreToolUse` has no such carve-out: it fires for every tool call, and the
+   * SDK's own notes confirm it resolves before `canUseTool`. So the policy
+   * lives in the hook, and `canUseTool` stays as the tool-name backstop.
+   *
+   * These assertions are about wiring. The *behaviour* — that a forbidden
+   * command is refused and does not execute — is proved by
+   * `enforcement.canary.ts`, which runs the real SDK. Substring tests like the
+   * ones below are exactly what let the `allowedTools` bug through, so they are
+   * kept only for the things a running canary cannot show.
    */
-  it("inspects the command, not only the tool name", () => {
-    expect(AGENT_RUNTIME_PROGRAM).toContain("canUseTool: async (name, input)");
-    expect(AGENT_RUNTIME_PROGRAM).toContain('name === "Bash"');
-    expect(AGENT_RUNTIME_PROGRAM).toContain("decide(input.command)");
+  it("puts the policy decision in the hook that always fires", () => {
+    expect(AGENT_RUNTIME_PROGRAM).toContain("PreToolUse:");
+    expect(AGENT_RUNTIME_PROGRAM).toContain('permissionDecision: "deny"');
+    expect(AGENT_RUNTIME_PROGRAM).toContain("decide(event.tool_name, event.tool_input)");
+  });
+
+  it("keeps the tool-name backstop beside it", () => {
+    expect(AGENT_RUNTIME_PROGRAM).toContain("canUseTool");
+    expect(AGENT_RUNTIME_PROGRAM).toContain("allowed.has(name)");
   });
 
   /** PART G: never a silent block. The agent is told, and so is the timeline. */
   it("reports a refusal to the agent and to the feed", () => {
-    expect(AGENT_RUNTIME_PROGRAM).toContain("policy.messages[refusal.reason]");
+    expect(AGENT_RUNTIME_PROGRAM).toContain("messageFor(refusal.reason)");
     expect(AGENT_RUNTIME_PROGRAM).toContain('emit({ t: "refused"');
   });
 
   /**
-   * One source of truth for what a command *is*.
+   * The counter that makes silence visible.
    *
-   * Both the category table and the targeted-test pattern arrive with the
-   * policy. A copy of either written into this program would be a second answer
-   * to the same question, and the two would drift the first time one was
-   * edited.
+   * A policy that is never reached and a policy with nothing to refuse both
+   * record zero refusals. Only a count of decisions *taken* distinguishes them,
+   * which is the single number that would have caught run #5 at a glance.
    */
-  it("classifies commands from the shipped rules rather than its own", () => {
-    expect(AGENT_RUNTIME_PROGRAM).toContain("new RegExp(rule.pattern)");
-    expect(AGENT_RUNTIME_PROGRAM).toContain("new RegExp(policy.targetedTestPattern)");
-    expect(AGENT_RUNTIME_PROGRAM).not.toContain("vitest|jest");
+  it("counts every decision it was asked to make", () => {
+    expect(AGENT_RUNTIME_PROGRAM).toContain("verification.decisions += 1");
+    expect(AGENT_RUNTIME_PROGRAM).toContain("result.policyDecisions = verification.decisions");
   });
 
   /**

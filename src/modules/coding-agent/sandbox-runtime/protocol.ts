@@ -128,6 +128,14 @@ export type AgentRuntimeResult = {
   verificationCommands: number;
   /** Check commands it refused. Zero is only meaningful beside the first. */
   verificationRefusals: number;
+  /**
+   * Every tool call the policy hook saw.
+   *
+   * The number that would have caught run #5 immediately: a run with thirty
+   * tool calls and zero decisions has a policy that is not running, which is
+   * otherwise indistinguishable from a policy that had nothing to refuse.
+   */
+  policyDecisions: number;
   sessionId: string | null;
   permissionDenials: number;
   /** Per-model token counts, keyed by model id. Never a cost claim. */
@@ -189,6 +197,7 @@ export function parseAgentRuntimeResult(payload: string | null): AgentRuntimeRes
      */
     verificationCommands: nonNegativeInt(raw.verificationCommands),
     verificationRefusals: nonNegativeInt(raw.verificationRefusals),
+    policyDecisions: nonNegativeInt(raw.policyDecisions),
     modelUsage:
       typeof raw.modelUsage === "object" && raw.modelUsage !== null
         ? (raw.modelUsage as Record<string, unknown>)

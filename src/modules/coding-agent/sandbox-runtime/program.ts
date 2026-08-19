@@ -108,7 +108,7 @@ const categoryRules = policy && Array.isArray(policy.categoryRules)
   : [];
 const permitted = new Set(policy ? policy.permittedChecks : []);
 
-const verification = { commands: 0, firstAt: null, refusals: 0 };
+const verification = { commands: 0, firstAt: null, refusals: 0, decisions: 0 };
 
 const categoryOf = (command) => {
   const text = String(command || "").toLowerCase();
@@ -152,8 +152,16 @@ const checkOf = (command, category) => {
  * It is a convergence control, not a security boundary. What makes a change
  * safe is decided afterwards by Vibe, outside this VM.
  */
-const decide = (command) => {
+const messageFor = (reason) =>
+  (policy && policy.messages && policy.messages[reason]) ||
+  "That action is outside this task's execution policy.";
+
+const decide = (toolName, input) => {
   if (!policy) return null;
+  const args = input && typeof input === "object" ? input : {};
+
+  if (toolName !== "Bash") return null;
+  const command = typeof args.command === "string" ? args.command : "";
 
   const category = categoryOf(command);
   const check = checkOf(command, category);
@@ -207,6 +215,14 @@ const result = {
   verificationCommands: 0,
   verificationRefusals: 0,
   verificationMs: null,
+  /*
+   * Every tool call the policy hook saw.
+   *
+   * The counter that would have caught run #5 in one glance: a run with
+   * thirty tool calls and zero decisions has a policy that is not running,
+   * which reads identically to a policy that had nothing to refuse.
+   */
+  policyDecisions: 0,
   error: null,
 };
 
@@ -259,30 +275,60 @@ try {
        * change independently afterwards — so the useful next move is to finish,
        * not to find another way to run it.
        */
-      canUseTool: async (name, input) => {
-        if (!allowed.has(name)) {
-          return {
-            behavior: "deny",
-            message: "That tool is not available to this execution.",
-            interrupt: false,
-          };
-        }
+      /*
+       * The policy decision point, and the reason it is a hook.
+       *
+       * PreToolUse fires for every tool call, whatever the permission mode.
+       * canUseTool does not: permissionMode "default" is documented as
+       * "prompts for dangerous operations", so a read or a search can be
+       * auto-approved without the callback ever running — and allowedTools
+       * skipped it for everything, which is how run #5 executed a command the
+       * plan governed while recording zero decisions.
+       *
+       * Two lessons, both encoded here: put the decision where it is always
+       * reached, and count it where it is made.
+       */
+      hooks: {
+        PreToolUse: [
+          {
+            hooks: [
+              async (event) => {
+                verification.decisions += 1;
 
-        if (name === "Bash" && input && typeof input.command === "string") {
-          const refusal = decide(input.command);
-          if (refusal) {
-            verification.refusals += 1;
-            emit({ t: "refused", check: refusal.check, reason: refusal.reason });
-            return {
-              behavior: "deny",
-              message: policy.messages[refusal.reason] || "That check is not part of this task's verification plan.",
-              interrupt: false,
-            };
-          }
-        }
+                const refusal = decide(event.tool_name, event.tool_input);
+                if (!refusal) return { continue: true };
 
-        return { behavior: "allow" };
+                verification.refusals += 1;
+                emit({ t: "refused", check: refusal.check, reason: refusal.reason });
+
+                return {
+                  continue: true,
+                  hookSpecificOutput: {
+                    hookEventName: "PreToolUse",
+                    permissionDecision: "deny",
+                    permissionDecisionReason: messageFor(refusal.reason),
+                  },
+                };
+              },
+            ],
+          },
+        ],
       },
+      /*
+       * The tool-name backstop, kept.
+       *
+       * The hook governs *what a permitted tool may do*; this governs *which
+       * tools exist at all*. Two questions, two answers, and the second one
+       * must not depend on a hook being registered.
+       */
+      canUseTool: async (name) =>
+        allowed.has(name)
+          ? { behavior: "allow" }
+          : {
+              behavior: "deny",
+              message: "That tool is not available to this execution.",
+              interrupt: false,
+            },
       cwd: request.cwd,
       persistSession: false,
       includePartialMessages: false,
@@ -353,6 +399,7 @@ try {
 
 result.verificationCommands = verification.commands;
 result.verificationRefusals = verification.refusals;
+result.policyDecisions = verification.decisions;
 result.verificationMs = verification.firstAt === null ? null : Date.now() - verification.firstAt;
 
 emit({ t: "finished", subtype: result.subtype, n: result.assistantMessages });

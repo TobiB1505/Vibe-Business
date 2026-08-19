@@ -40,6 +40,7 @@ describe("a well-formed result", () => {
       sessionId: "session-1",
       verificationCommands: 0,
       verificationRefusals: 0,
+      policyDecisions: 0,
       permissionDenials: 1,
       modelUsage: {},
       error: null,
