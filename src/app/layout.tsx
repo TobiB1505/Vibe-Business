@@ -16,6 +16,11 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Vibe Business",
   description: "The business layer for AI-built products.",
+  // The site-wide default: public marketing, legal and auth pages should be
+  // indexed and their links followed. `src/app/app/layout.tsx` overrides this
+  // for every signed-in page, since Next.js metadata is merged per top-level
+  // field from root to leaf and a page never sets its own `robots` value.
+  robots: { index: true, follow: true },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
