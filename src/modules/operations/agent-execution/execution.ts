@@ -54,6 +54,7 @@ import {
   completionBudgetFor,
   loadAgentVerificationPlan,
   loadExecutionBrief,
+  loadPlanStep,
 } from "@/modules/execution-context/service";
 import { toSandboxPolicy, type AgentVerificationPlan } from "@/modules/execution-context/verification";
 import { toSandboxCompletionPolicy } from "@/modules/execution-context/completion";
@@ -81,6 +82,7 @@ import { releaseOperationCredits, settleOperationCredits } from "@/modules/credi
 import { findExecutionSpecByIdentity } from "@/modules/execution-contract/store";
 import { agentBranchNameFor } from "@/modules/execution/identity";
 import { prepareChangeOnBranch } from "@/modules/execution/github-writer";
+import { compileCommitMessage, renderCommitMessage } from "@/modules/execution/commit-message";
 import type { ExecutionProbePort, GitWritePort } from "@/modules/execution/git-port";
 import {
   AGENTIC_EXECUTION_CAPABILITY,
@@ -2071,6 +2073,62 @@ export async function writeAgentBranchStep(
 
   if (!prepared) return { ok: false, failureCode: "change_preparation_failed" };
 
+  /*
+   * The commit message, compiled before the write (Sprint 0046, PART H).
+   *
+   * `loadPlanStep` is the same trusted lookup `execution-context/service.ts`
+   * already uses — fixture registry first, then the project's real plan — so
+   * this opens no second source of truth. A step it cannot find (an unusual,
+   * legitimate case: a plan reworded or removed since the run started)
+   * compiles to `null`, and the compiler's own fallback produces a generic but
+   * still-real Conventional Commit rather than failing the write.
+   *
+   * Title, purpose and doneWhen come from this same step, not from
+   * `spec.spec.objective` — the two describe the same field in production
+   * (the objective was copied from this exact step when the spec was built),
+   * but reading one source rather than two avoids a second place either could
+   * ever drift from the other.
+   */
+  const trustedStep = await loadPlanStep({
+    supabase: deps.supabase,
+    projectId: run.projectId,
+    spec: spec.spec,
+  });
+
+  const compiledMessage = compileCommitMessage(
+    trustedStep
+      ? {
+          title: trustedStep.title,
+          purpose: trustedStep.purpose,
+          doneWhen: trustedStep.completionCriteria,
+          changeKind: trustedStep.changeKind,
+          evidenceIds: trustedStep.evidenceIds,
+        }
+      : null,
+    {
+      executionId: run.id,
+      stepKey: spec.spec.stepKey,
+      preparedChangeId: prepared.id,
+    },
+  );
+
+  await recordLifecycle(
+    deps,
+    run,
+    "commit_message_compiled",
+    compiledMessage.fallback
+      ? "Could not classify this change; using the generic commit message"
+      : `Commit message: ${compiledMessage.type}${compiledMessage.scope ? `(${compiledMessage.scope})` : ""}`,
+    {
+      compilerVersion: compiledMessage.compilerVersion,
+      type: compiledMessage.type,
+      scope: compiledMessage.scope,
+      subject: compiledMessage.subject,
+      fallback: compiledMessage.fallback,
+      fallbackReason: compiledMessage.fallbackReason,
+    },
+  );
+
   const write = await prepareChangeOnBranch(
     target.git,
     {
@@ -2080,8 +2138,7 @@ export async function writeAgentBranchStep(
       baseSha: prepared.baseSha,
       branchName: prepared.branchName,
       capability: AGENTIC_EXECUTION_CAPABILITY,
-      // An integer Vibe assigned, never the Planner's prose (Rule 57).
-      stepOrder: spec.spec.stepOrder,
+      commitMessage: renderCommitMessage(compiledMessage),
     },
     files.map((file) => ({ path: file.path, content: file.content, contentHash: file.contentHash, bytes: file.bytes })),
   );

@@ -138,6 +138,12 @@ export const EXECUTION_EVENT_TYPES = [
   "change_discovered",
   "change_verified",
   "change_rejected",
+  /**
+   * The Conventional-Commits message compiled for this change, before the
+   * write (Sprint 0046, PART K). `fallback: true` in its metadata is the rare,
+   * observable case PART J asks for — no trusted step existed to classify.
+   */
+  "commit_message_compiled",
   "branch_prepared",
 
   // Teardown and the independent validation that follows.
@@ -461,6 +467,7 @@ const PHASE_OF: Record<ExecutionEventType, ExecutionPhase> = {
   change_discovered: "reviewing_change",
   change_verified: "reviewing_change",
   change_rejected: "reviewing_change",
+  commit_message_compiled: "preparing_branch",
   branch_prepared: "preparing_branch",
 
   sandbox_stopping: "finished",

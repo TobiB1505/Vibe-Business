@@ -43,6 +43,7 @@ const SLOTS: Record<ExecutionEventType, number> = {
   change_verified: 7,
   change_rejected: 8,
   branch_prepared: 9,
+  commit_message_compiled: 23,
   sandbox_stopping: 10,
   sandbox_stopped: 11,
   validation_started: 12,

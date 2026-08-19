@@ -3,6 +3,7 @@ import { generateSeoFoundations, sha256 } from "./generators/nextjs-seo-foundati
 import type { GitWritePort } from "./git-port";
 import {
   COMMIT_MESSAGE,
+  commitMessageFor,
   inspectExistingBranch,
   prepareChangeOnBranch,
   type WriteTarget,
@@ -289,5 +290,76 @@ describe("prepareChangeOnBranch — path enforcement (§13)", () => {
 
     expect(result).toEqual({ ok: false, reason: "change_preparation_failed" });
     expect(git.calls).toHaveLength(0);
+  });
+});
+
+describe("commitMessageFor (Sprint 0046)", () => {
+  it("keeps the deterministic capability's fixed message untouched", () => {
+    expect(
+      commitMessageFor({ capability: "nextjs_seo_foundations_v2", commitMessage: "feat(seo): should be ignored" }),
+    ).toBe(COMMIT_MESSAGE);
+  });
+
+  it("uses the compiled agentic message verbatim", () => {
+    const compiled = "feat(seo): add canonical URLs to public pages\n\nVibe-Execution: e1";
+    expect(commitMessageFor({ capability: "agentic_execution_v1", commitMessage: compiled })).toBe(compiled);
+  });
+
+  it("falls back to a generic Conventional Commit, never the old step-number string", () => {
+    const message = commitMessageFor({ capability: "agentic_execution_v1", commitMessage: null });
+    expect(message).toBe("chore: apply prepared product change");
+    expect(message).not.toContain("implement plan step");
+  });
+
+  it("falls back the same way for an empty string, not just null", () => {
+    expect(commitMessageFor({ capability: "agentic_execution_v1", commitMessage: "" })).toBe(
+      "chore: apply prepared product change",
+    );
+  });
+});
+
+/**
+ * PART H — the Prepared SHA / validated SHA invariant.
+ *
+ * Commit-message generation changes the resulting SHA, which is expected. What
+ * must never happen is a *second* write changing the message of a commit that
+ * already exists — that would move the SHA a prior validation was run against
+ * without anyone re-validating it. `GitWritePort` has no operation that could
+ * amend a commit or force-update a ref (see the module's own header comment),
+ * so this is provable by showing the recovery path, not the mutation path,
+ * is what a second call with a *different* compiled message actually takes.
+ */
+describe("PART H — no amendment after a commit exists", () => {
+  const AGENTIC_TARGET: WriteTarget = { ...TARGET, capability: "agentic_execution_v1" };
+
+  it("a second write with a different commit message does not change the existing commit", async () => {
+    const first = { ...AGENTIC_TARGET, commitMessage: "feat(seo): add canonical URLs to public pages" };
+    const git = fakeGit();
+
+    const firstResult = await prepareChangeOnBranch(git.port, first, FILES);
+    expect(firstResult.ok).toBe(true);
+    if (!firstResult.ok) return;
+
+    const second = { ...AGENTIC_TARGET, commitMessage: "fix(seo): a completely different message" };
+    const secondResult = await prepareChangeOnBranch(git.port, second, FILES);
+
+    expect(secondResult).toEqual({ ok: true, commitSha: firstResult.commitSha, recovered: true });
+    // Exactly one createCommit call happened, ever — the second call took the
+    // recovery path and never called the Git API that could have amended
+    // anything, because there is no such call to take.
+    expect(git.calls.filter((call) => call.op === "createCommit")).toHaveLength(1);
+    expect(git.calls.filter((call) => call.op === "createCommit")[0]?.detail).toContain(
+      "feat(seo): add canonical URLs to public pages",
+    );
+  });
+
+  it("the port itself offers no operation that could amend a commit or force a ref", async () => {
+    // Structural, not behavioural: this is what makes the property above true
+    // for every possible caller, not just this test's specific sequence.
+    const git = fakeGit();
+    const methodNames = Object.keys(git.port);
+    for (const forbidden of ["updateRef", "amendCommit", "forceRef", "deleteRef", "forcePush"]) {
+      expect(methodNames).not.toContain(forbidden);
+    }
   });
 });

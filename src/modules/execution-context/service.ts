@@ -101,8 +101,13 @@ export async function loadExecutionBrief(
  * Unreadable means null, and null means the compiler falls back to the prose
  * hints it used before Sprint 0044. A missing plan degrades context; it never
  * fails a run.
+ *
+ * Exported so every reader of "the trusted step behind this spec" — the
+ * verification classifier below, and `writeAgentBranchStep`'s commit-message
+ * compiler (Sprint 0046) — goes through the same lookup rather than each
+ * re-implementing the fixture-then-database check.
  */
-async function loadPlanStep(input: LoadExecutionBriefInput): Promise<ActionPlanStep | null> {
+export async function loadPlanStep(input: LoadExecutionBriefInput): Promise<ActionPlanStep | null> {
   /*
    * An internal benchmark step comes from Vibe's own fixture registry.
    *

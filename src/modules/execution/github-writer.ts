@@ -36,14 +36,17 @@ export type WriteTarget = {
   branchName: string;
   capability: ExecutionCapability;
   /**
-   * The plan step an agentic change implements (EXECUTION CORE-4 §30).
+   * The fully rendered agentic commit message (Sprint 0046).
    *
-   * An integer, deliberately. Rule 57 forbids model output controlling a commit
-   * message, and the step's *title* is Planner prose — so the message names the
-   * step by its ordinal, which Vibe assigned, rather than by what a model called
-   * it. Ignored for deterministic capabilities, which have a fixed message.
+   * Rendered elsewhere, by `execution/commit-message.ts`'s
+   * `compileCommitMessage`/`renderCommitMessage`, from the trusted Action
+   * Step and Vibe-computed identifiers — never by this module, and never from
+   * anything the coding agent itself said. `github-writer.ts` stays
+   * deliberately ignorant of Conventional-Commits semantics; its job is
+   * writing whatever string it is given, not deciding what the string says.
+   * Ignored for deterministic capabilities, which keep their fixed message.
    */
-  stepOrder?: number;
+  commitMessage?: string | null;
 };
 
 export type WriteResult =
@@ -54,18 +57,26 @@ export type WriteResult =
 export const COMMIT_MESSAGE = "vibe: add SEO foundations";
 
 /**
- * The commit message for one write, derived by Vibe (Rule 57, CORE-4 §30).
- *
- * Composed from a capability constant and an integer. Nothing a model produced
- * — not the step title, not the agent's summary of its own work, not a file
- * name it chose — reaches a commit message, because a commit message is
- * repository content that outlives every explanation of where it came from.
+ * The last-resort agentic message, used only if a caller somehow reaches this
+ * function without having compiled one — every real caller does. Not the old
+ * `vibe: implement plan step N` string: PART J's own fallback shape, so even
+ * the safety net reads as a real, if generic, Conventional Commit.
  */
-export function commitMessageFor(target: Pick<WriteTarget, "capability" | "stepOrder">): string {
+const AGENTIC_MESSAGE_FALLBACK = "chore: apply prepared product change";
+
+/**
+ * The commit message for one write (Rule 57, CORE-4 §30, Sprint 0046).
+ *
+ * The deterministic capability keeps its fixed message. The agentic
+ * capability uses whatever `commitMessage` the caller compiled — see
+ * `commit-message.ts` for how that string is built from trusted Planner text
+ * and Vibe-minted identifiers, never from the coding agent's own output.
+ */
+export function commitMessageFor(target: Pick<WriteTarget, "capability" | "commitMessage">): string {
   if (target.capability !== "agentic_execution_v1") return COMMIT_MESSAGE;
-  return typeof target.stepOrder === "number"
-    ? `vibe: implement plan step ${target.stepOrder}`
-    : "vibe: implement plan step";
+  return target.commitMessage && target.commitMessage.trim().length > 0
+    ? target.commitMessage
+    : AGENTIC_MESSAGE_FALLBACK;
 }
 
 export type BranchInspection =

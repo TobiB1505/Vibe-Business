@@ -681,7 +681,7 @@ describe("§27, §28 — Vibe computes and checks the change", () => {
 
 describe("§30 — trusted Vibe infrastructure writes the branch", () => {
   async function prepared() {
-    const { operation } = seed();
+    const { operation, run } = seed();
     const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES, results: SANDBOX_RESULTS });
     const shared = deps({
       sandboxProvider: sandbox,
@@ -700,11 +700,11 @@ describe("§30 — trusted Vibe infrastructure writes the branch", () => {
     const extracted = await extractAndVerifyStep(shared, operation.id);
     if (!extracted.ok) throw new Error("fixture did not produce a change");
 
-    return { operation, shared, extracted };
+    return { operation, run, shared, extracted };
   }
 
-  it("derives the branch and commit message itself", async () => {
-    const { operation, shared, extracted } = await prepared();
+  it("derives the branch itself, and falls back safely when no plan step exists", async () => {
+    const { operation, run, shared, extracted } = await prepared();
 
     const outcome = await writeAgentBranchStep(
       shared,
@@ -719,9 +719,56 @@ describe("§30 — trusted Vibe infrastructure writes the branch", () => {
       expect(outcome.branchName).toMatch(/^vibe\/agent-[0-9a-f]{12}$/);
     }
 
-    // An integer Vibe assigned, never the Planner's prose (Rule 57).
-    expect(git.commits).toEqual(["vibe: implement plan step 1"]);
+    // `seed()` seeds no `action_plans` row, so `loadPlanStep` finds nothing —
+    // the exact "no trusted step" case Sprint 0046's compiler falls back on.
+    // This is a real, useful regression case in its own right: it proves the
+    // write never fails or blocks just because a plan step could not be found.
+    expect(git.commits).toHaveLength(1);
+    expect(git.commits[0]).toContain("chore: apply prepared product change");
+    expect(git.commits[0]).toContain(`Vibe-Execution: ${run.id}`);
     expect(git.refs).toHaveLength(1);
+  });
+
+  it("compiles a real Conventional-Commits message from the trusted plan step", async () => {
+    const { operation, run, shared, extracted } = await prepared();
+
+    // The exact step `fakeAgentSpec()`'s defaults produce (`fakePlanStep()`),
+    // seeded now as the project's real plan so `loadPlanStep` finds it.
+    db.seed("action_plans", { id: "plan-1", project_id: PROJECT });
+    db.seed("action_plan_steps", {
+      action_plan_id: "plan-1",
+      step_key: "1-ship-the-thing",
+      step_order: 1,
+      title: "Add canonical URLs to public pages",
+      description: "x",
+      purpose: "Closes the gap where duplicate URLs could be misread by search engines.",
+      actor: "vibe",
+      change_kind: "product_change",
+      completion_criteria: "Every public page returns a canonical URL tag.",
+      depends_on: [],
+      evidence_ids: ["live.seo.canonical_missing"],
+      execution_support: "vibe_prepares",
+      capability: null,
+      requires_approval: true,
+    });
+
+    const outcome = await writeAgentBranchStep(
+      shared,
+      operation.id,
+      extracted.files,
+      extracted.candidateDigest,
+    );
+
+    expect(outcome.ok).toBe(true);
+    expect(git.commits).toHaveLength(1);
+    const [message] = git.commits;
+
+    // A real, human-readable Conventional Commit — not a step number.
+    expect(message).toContain("feat(seo): add canonical URLs to public pages");
+    expect(message).not.toMatch(/implement plan step/i);
+    // Traceability moved to the body, not deleted (PART G).
+    expect(message).toContain(`Vibe-Execution: ${run.id}`);
+    expect(message).toContain("Vibe-Step: 1-ship-the-thing");
   });
 
   /**
