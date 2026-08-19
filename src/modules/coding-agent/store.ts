@@ -131,6 +131,10 @@ export type StoredAgentExecutionRun = {
   /** Tool calls the policy hook saw. Zero beside tool calls means it never ran. */
   policyDecisions: number | null;
 
+  /** `planner` for a customer execution, `dogfood_fixture` for an internal benchmark. */
+  executionOrigin: string;
+  dogfoodFixtureId: string | null;
+
   preparedChangeId: string | null;
   createdAt: string;
   startedAt: string | null;
@@ -198,6 +202,8 @@ type RunRow = {
   required_verification_actions: number | null;
   required_verification_overrides: number | null;
   policy_decisions: number | null;
+  execution_origin: string;
+  dogfood_fixture_id: string | null;
   prepared_change_id: string | null;
   created_at: string;
   started_at: string | null;
@@ -218,6 +224,7 @@ const RUN_COLUMNS =
   "post_edit_commands, post_edit_provider_calls, post_edit_provider_cost_usd, completion_refusals, " +
   "repair_cycles, implementation_mutations, convergence_mutations, " +
   "required_verification_actions, required_verification_overrides, policy_decisions, " +
+  "execution_origin, dogfood_fixture_id, " +
   "prepared_change_id, created_at, started_at, completed_at";
 
 function mapRun(row: RunRow): StoredAgentExecutionRun {
@@ -283,6 +290,8 @@ function mapRun(row: RunRow): StoredAgentExecutionRun {
     requiredVerificationActions: row.required_verification_actions,
     requiredVerificationOverrides: row.required_verification_overrides,
     policyDecisions: row.policy_decisions,
+    executionOrigin: row.execution_origin,
+    dogfoodFixtureId: row.dogfood_fixture_id,
     preparedChangeId: row.prepared_change_id,
     createdAt: row.created_at,
     startedAt: row.started_at,
@@ -323,6 +332,16 @@ export async function claimAgentExecutionRun(
     nonProductionEconomics: boolean;
     baseSha: string;
     creditReservationId: string | null;
+    /**
+     * Where this execution's step came from.
+     *
+     * Derived from the persisted spec by the caller, never supplied by a
+     * browser or a fixture — a benchmark must be *visible* as one, so it cannot
+     * be the thing that decides whether it is labelled as one.
+     */
+    executionOrigin: "planner" | "dogfood_fixture";
+    /** The fixture id, when the origin is a benchmark. Null otherwise. */
+    dogfoodFixtureId: string | null;
   },
 ): Promise<ClaimAgentRunResult> {
   const { data, error } = await supabase
@@ -343,6 +362,8 @@ export async function claimAgentExecutionRun(
       non_production_economics: params.nonProductionEconomics,
       base_sha: params.baseSha,
       credit_reservation_id: params.creditReservationId,
+      execution_origin: params.executionOrigin,
+      dogfood_fixture_id: params.dogfoodFixtureId,
       status: "queued",
     })
     .select(RUN_COLUMNS)

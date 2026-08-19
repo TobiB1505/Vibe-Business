@@ -20,6 +20,7 @@
     "execution:dogfood": "vitest run --config vitest.probe.config.mts src/modules/execution-contract",
     "agent:preflight": "vitest run --config vitest.probe.config.mts src/modules/coding-agent",
     "agent:canary": "vitest run --config vitest.canary.config.mts",
+    "agent:dogfood": "vitest run --config vitest.probe.config.mts src/modules/coding-agent/dogfood/",
     "db:status": "supabase migration list",
     "db:push": "supabase db push",
     "db:lint": "supabase db lint --linked",

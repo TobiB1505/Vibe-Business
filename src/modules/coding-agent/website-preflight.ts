@@ -2,6 +2,8 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getLatestCompletedActionPlan } from "@/modules/action-plans/store";
+import type { ActionPlanStep } from "@/modules/action-plans/schema";
+import { benchmarkStep, fixtureForStepKey } from "./dogfood/fixtures";
 import { buildExecutionSpec, type ExecutionSpec } from "@/modules/execution-contract/spec";
 import {
   resolvePlanExecution,
@@ -85,6 +87,14 @@ export type DogfoodStepPreview =
       resolution: ExecutionResolution;
       preflight: AgentPreflight;
       economics: AgentEconomicPolicy;
+      /**
+       * Whether the repository's live HEAD was read and matched.
+       *
+       * False only for a compilation preflight that deliberately resolved
+       * against the analysed commit. A run must never be started from one: it
+       * says nothing about whether the default branch has moved.
+       */
+      revisionVerified: boolean;
     }
   | {
       eligible: false;
@@ -255,8 +265,131 @@ export async function previewDogfoodStep(
   const plan = await getLatestCompletedActionPlan(supabase, params.projectId);
   if (!plan) return { eligible: false, reason: "no_action_plan" };
 
+  /*
+   * An internal benchmark step is resolved from Vibe's own fixture registry
+   * (Sprint 0045).
+   *
+   * Recognised by its namespaced key, which a Planner step id can never carry.
+   * This is what lets a controlled benchmark be started through the *existing*
+   * Run button — the same allowlist gate, the same ownership re-resolution, the
+   * same idempotent `startAgentExecution` — instead of through a second start
+   * path that would have to be audited again.
+   */
+  const fixture = fixtureForStepKey(params.stepKey);
+  if (fixture) {
+    const snapshot = await getLatestSuccessfulSnapshot(supabase, params.projectId);
+    if (!snapshot?.result) return { eligible: false, reason: "repository_snapshot_missing" };
+
+    const step = benchmarkStep(fixture, snapshot.result);
+    return resolveExecutableStep(supabase, {
+      projectId: params.projectId,
+      userId: params.userId,
+      env: params.env,
+      step,
+      planSteps: [step],
+      lineage: {
+        id: plan.id,
+        goal: fixture.goal,
+        expectedOutcome: fixture.expectedChangedState,
+        assumptions: [],
+        opportunityId: plan.opportunityId,
+        businessAuditId: plan.businessAuditId,
+      },
+    });
+  }
+
   const step = plan.steps.find((candidate) => candidate.id === params.stepKey);
   if (!step) return { eligible: false, reason: "step_not_found" };
+
+  return resolveExecutableStep(supabase, {
+    projectId: params.projectId,
+    userId: params.userId,
+    env: params.env,
+    step,
+    /*
+     * Every step of the plan, because the resolver decides what to absorb.
+     *
+     * A caller that handed it only the step being run would be answering the
+     * resolver's question for it — which preparation steps this execution
+     * boundary carries — and `buildExecutionSpec` refuses when the two disagree.
+     */
+    planSteps: plan.steps,
+    lineage: {
+      id: plan.id,
+      goal: plan.goal,
+      expectedOutcome: plan.expectedOutcome,
+      assumptions: plan.assumptions,
+      opportunityId: plan.opportunityId,
+      businessAuditId: plan.businessAuditId,
+    },
+  });
+}
+
+/**
+ * Everything between a resolved `(step, lineage)` pair and an admissible spec.
+ *
+ * ## Why this is a seam
+ *
+ * Because it is the exact span the internal benchmark harness replaces, and
+ * nothing else. `previewDogfoodStep` reaches it by reading the project's real
+ * Action Plan; `coding-agent/dogfood/benchmark.ts` reaches it with a
+ * Vibe-authored fixture step. From here down the two are the same code —
+ * the same live HEAD read, the same resolver, the same risk classification, the
+ * same validation profile, the same write scope, the same preflight — which is
+ * what makes a benchmark representative of a real execution rather than a
+ * parallel implementation that resembles one.
+ *
+ * The lineage fields are supplied rather than looked up because a benchmark's
+ * business lineage is the project's own: it runs against the same audit and the
+ * same opportunity set a customer execution would, and only the *step* is
+ * authored by Vibe.
+ */
+export type ExecutableStepLineage = {
+  id: string;
+  goal: string | null;
+  expectedOutcome: string | null;
+  assumptions: readonly string[];
+  opportunityId: string | null;
+  businessAuditId: string | null;
+};
+
+export async function resolveExecutableStep(
+  supabase: SupabaseClient,
+  params: {
+    projectId: string;
+    userId: string;
+    env?: Record<string, string | undefined>;
+    step: ActionPlanStep;
+    planSteps: readonly ActionPlanStep[];
+    lineage: ExecutableStepLineage;
+    /**
+     * Resolve against the **analysed** commit instead of the live one.
+     *
+     * A compilation preflight only, and never a route to a run. Admission
+     * requires the default branch to be read *now* and to still point at the
+     * commit the snapshot describes (Rule 55, ADR 0014) — an unread HEAD is
+     * `source_revision_unverified`, and that is correct and stays correct.
+     *
+     * But "what would the Context Compiler, the surface resolver and the
+     * verification classifier produce for this step?" is a different question,
+     * and it is answerable without a network at all. The internal benchmark
+     * harness asks that one, in environments that hold no GitHub App
+     * credentials, and every preview produced this way is stamped
+     * `revisionVerified: false` so it cannot be mistaken for admission.
+     *
+     * Nothing in the product sets this. The website's Run button reaches this
+     * function without it and reads the live HEAD for real.
+     */
+    resolveAgainstAnalysedCommit?: boolean;
+  },
+): Promise<DogfoodStepPreview> {
+  // §26, §27: the gate, again, because this is now an entry point of its own.
+  if (!isDogfoodEligibleProject(params.projectId, params.env)) {
+    return { eligible: false, reason: "not_dogfood_eligible" };
+  }
+
+  const { step, planSteps, lineage } = params;
+  const plan = lineage;
 
   const connection = await loadOwnedRepositoryConnection(supabase, {
     projectId: params.projectId,
@@ -270,12 +403,18 @@ export async function previewDogfoodStep(
   // Live state, read now, for this session's own installation (§7, §16 of Core-3).
   // A failed read is not a crash — it is an unread HEAD, which the resolver
   // already treats as unknown rather than unchanged.
-  let liveHead: RepositoryContext["liveHead"] = null;
-  try {
-    const reader = createGithubRepositoryReader(connection.installationId, connection.owner, connection.name);
-    liveHead = await reader.getHead();
-  } catch (error) {
-    if (!(error instanceof GithubDomainError)) throw error;
+  const revisionVerified = params.resolveAgainstAnalysedCommit !== true;
+  let liveHead: RepositoryContext["liveHead"] = revisionVerified
+    ? null
+    : { commitSha: snapshot.result.source.commitSha, defaultBranch: connection.defaultBranch };
+
+  if (revisionVerified) {
+    try {
+      const reader = createGithubRepositoryReader(connection.installationId, connection.owner, connection.name);
+      liveHead = await reader.getHead();
+    } catch (error) {
+      if (!(error instanceof GithubDomainError)) throw error;
+    }
   }
 
   const repository: RepositoryContext = {
@@ -296,7 +435,7 @@ export async function previewDogfoodStep(
   const resolution = resolveStepExecution({
     step,
     plan: {
-      steps: plan.steps,
+      steps: planSteps,
       // Nothing in the product completes a step yet (Core-3 §sequence.ts).
       completedSteps: new Set<number>(),
       isCurrent: true,
@@ -382,7 +521,7 @@ export async function previewDogfoodStep(
      * partial.
      */
     preparationSteps: resolution.absorbedPreparation.map(
-      (order) => plan.steps.find((candidate) => candidate.order === order)!,
+      (order) => planSteps.find((candidate) => candidate.order === order)!,
     ),
     createdAt: new Date().toISOString(),
   });
@@ -401,5 +540,6 @@ export async function previewDogfoodStep(
     resolution,
     preflight,
     economics,
+    revisionVerified,
   };
 }

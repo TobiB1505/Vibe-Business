@@ -5,6 +5,7 @@ import { getLatestProfile } from "@/modules/product-understanding/store";
 import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intelligence/store";
 import { getActionPlanById } from "@/modules/action-plans/store";
 import type { ActionPlanStep } from "@/modules/action-plans/schema";
+import { benchmarkStep, fixtureForStepKey } from "@/modules/coding-agent/dogfood/fixtures";
 import { compileExecutionBrief, type TrustedStepFacts } from "./compiler";
 import type { ExecutionBrief } from "./brief";
 import { compileAgentVerificationPlan, type AgentVerificationPlan } from "./verification";
@@ -102,6 +103,29 @@ export async function loadExecutionBrief(
  * fails a run.
  */
 async function loadPlanStep(input: LoadExecutionBriefInput): Promise<ActionPlanStep | null> {
+  /*
+   * An internal benchmark step comes from Vibe's own fixture registry.
+   *
+   * Recognised by its key alone, which cannot collide: a Planner step id is
+   * `${order}-${changeKind}-${slug(title)}`, so none of them begins with the
+   * benchmark namespace. That is what lets a controlled benchmark reach the
+   * real Context Compiler and the real verification classifier without a
+   * fabricated Action Plan row existing anywhere — the fixture is Vibe-authored
+   * code, present in this process, and it goes through the same `classifyStep`
+   * a customer's plan does (`coding-agent/dogfood/fixtures.ts`).
+   *
+   * Checked before the database, deliberately: a benchmark must never be able
+   * to pick up a customer's step, and a customer's step can never be named this.
+   */
+  const fixture = fixtureForStepKey(input.spec.stepKey);
+  if (fixture) {
+    const snapshot = await getSnapshotById(input.supabase, {
+      snapshotId: input.spec.repository.repositorySnapshotId,
+      projectId: input.projectId,
+    }).catch(() => null);
+    return benchmarkStep(fixture, snapshot?.result ?? null);
+  }
+
   try {
     const plan = await getActionPlanById(input.supabase, input.spec.actionPlanId);
     return (

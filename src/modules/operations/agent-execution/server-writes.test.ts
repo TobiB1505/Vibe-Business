@@ -221,6 +221,8 @@ describe("claimAgentExecutionRunRow", () => {
       nonProductionEconomics: true,
       baseSha: "c".repeat(40),
       creditReservationId: null,
+      executionOrigin: "planner" as const,
+      dogfoodFixtureId: null,
     });
 
   it("writes the one run row for this identity", async () => {

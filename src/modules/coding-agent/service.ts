@@ -24,6 +24,7 @@ import { buildOperationView, type OperationView } from "@/modules/operations/vie
 import { AGENTIC_EXECUTION_CONFIG } from "@/modules/ai/operations";
 import { resolveAgentEconomics } from "./authorization";
 import { computeAgentRunIdentity } from "./identity";
+import { executionOriginForStepKey } from "./dogfood/fixtures";
 import {
   findActiveAgentRunByIdentity,
   type StoredAgentExecutionRun,
@@ -279,6 +280,15 @@ export async function startAgentExecution(
     nonProductionEconomics: economics.nonProduction,
     baseSha: stored.baseSha,
     creditReservationId: reservationId,
+    /*
+     * Provenance, derived from the immutable spec rather than passed in.
+     *
+     * The step key is what the spec was built with and what durable execution
+     * resolves the step from, so reading the origin off it is reading the same
+     * fact the pipeline itself acts on. A caller cannot mislabel a run, and a
+     * fixture cannot hide that it is one.
+     */
+    ...executionOriginForStepKey(stored.stepKey),
   });
 
   if (!claim.ok) {
