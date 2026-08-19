@@ -124,6 +124,10 @@ export type AgentRuntimeResult = {
    * message has no honest value here, and the message count is not a substitute.
    */
   sdkLoopIterations: number | null;
+  /** Check commands the harness let through, counted at the decision point. */
+  verificationCommands: number;
+  /** Check commands it refused. Zero is only meaningful beside the first. */
+  verificationRefusals: number;
   sessionId: string | null;
   permissionDenials: number;
   /** Per-model token counts, keyed by model id. Never a cost claim. */
@@ -174,6 +178,17 @@ export function parseAgentRuntimeResult(payload: string | null): AgentRuntimeRes
     // never written, because `persistSession` is off.
     sessionId: typeof raw.sessionId === "string" ? raw.sessionId.slice(0, 128) : null,
     permissionDenials: nonNegativeInt(raw.permissionDenials),
+    /*
+     * Counted where the decision was made, not where it was inferred.
+     *
+     * Vibe also derives these from the progress feed, and keeping both is the
+     * point: the feed can lose a poll, and — as run #5 proved — a decision path
+     * that is never reached emits nothing at all while looking perfectly
+     * healthy. Two counters that disagree are a bug report; one counter is a
+     * belief.
+     */
+    verificationCommands: nonNegativeInt(raw.verificationCommands),
+    verificationRefusals: nonNegativeInt(raw.verificationRefusals),
     modelUsage:
       typeof raw.modelUsage === "object" && raw.modelUsage !== null
         ? (raw.modelUsage as Record<string, unknown>)

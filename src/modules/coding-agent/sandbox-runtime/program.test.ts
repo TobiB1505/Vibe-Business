@@ -87,6 +87,20 @@ describe("the verification plan is enforced, not described", () => {
    * left an old request without a policy must produce the behaviour Vibe had
    * before plans existed — not an agent that cannot check its own work at all.
    */
+  /**
+   * The bug this test exists for, found by run #5.
+   *
+   * `allowedTools` means "auto-allowed **without** prompting for permission" —
+   * the SDK's own words. Naming Bash in it made every command auto-allowed and
+   * `canUseTool` was never consulted, so the whole verification plan was inert:
+   * the run executed a targeted test the plan permitted and the harness never
+   * saw the decision. Availability is `tools`; permission is `canUseTool`.
+   */
+  it("does not auto-allow tools past the permission handler", () => {
+    expect(AGENT_RUNTIME_PROGRAM).toContain("tools: request.tools");
+    expect(AGENT_RUNTIME_PROGRAM).not.toContain("allowedTools:");
+  });
+
   it("permits every command when no policy was supplied", () => {
     expect(AGENT_RUNTIME_PROGRAM).toContain("const policy = request.verification || null");
     expect(AGENT_RUNTIME_PROGRAM).toContain("if (!policy) return null");

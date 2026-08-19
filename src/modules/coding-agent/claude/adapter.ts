@@ -401,6 +401,13 @@ export function createClaudeCodingAgentProvider(): CodingAgentProvider {
         outcome,
         assistantMessages,
         sdkLoopIterations,
+        /*
+         * The in-process adapter brokers every tool through the gateway and
+         * hosts no shell of its own, so it makes no verification decisions.
+         * Null, never zero — zero would claim it decided nothing was needed.
+         */
+        verificationCommands: null,
+        verificationRefusals: null,
         usage,
         // An opaque identifier, not a reconnect credential: the SDK's resume
         // path needs the on-disk transcript, which `persistSession: false`

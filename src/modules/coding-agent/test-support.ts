@@ -247,6 +247,15 @@ export type FakeProviderOptions = {
   throws?: Error;
   /** The harness's progress feed, as `observe` would read it back. */
   entries?: readonly ObservedRuntimeEntry[];
+  /**
+   * What the harness counted at its own decision point (Sprint 0042).
+   *
+   * Null by default, which is what a provider that hosts no shell reports. A
+   * test that wants to prove Vibe notices a disagreement between this and the
+   * feed sets them explicitly.
+   */
+  verificationCommands?: number | null;
+  verificationRefusals?: number | null;
 };
 
 export type FakeCodingAgentProvider = CodingAgentProvider & {
@@ -295,6 +304,10 @@ export function fakeCodingAgentProvider(
         outcome: options.outcome ?? "completed",
         assistantMessages: turns,
         sdkLoopIterations: turns,
+        // This fake hosts no shell, so it makes no verification decisions.
+        // Null rather than zero: nothing counted is not the same as none.
+        verificationCommands: null,
+        verificationRefusals: null,
         usage: options.usage ?? [
           {
             model: "claude-sonnet-5",
@@ -405,6 +418,8 @@ export function fakeDetachedAgentProvider(
         outcome: threw ? ("provider_error" as const) : (options.outcome ?? "completed"),
         assistantMessages: turns,
         sdkLoopIterations: threw ? null : turns,
+        verificationCommands: options.verificationCommands ?? null,
+        verificationRefusals: options.verificationRefusals ?? null,
         usage: options.usage ?? [
           {
             model: "claude-sonnet-5",

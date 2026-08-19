@@ -222,7 +222,22 @@ try {
       maxTurns: request.maxTurns,
       maxBudgetUsd: request.maxBudgetUsd,
       tools: request.tools,
-      allowedTools: request.tools,
+      /*
+       * allowedTools is deliberately NOT set.
+       *
+       * Its own type documentation says these tools are "auto-allowed without
+       * prompting for permission" and "will execute automatically without
+       * asking the user for approval" — which means canUseTool is never
+       * consulted for anything named in it. Passing the whole tool list made
+       * every Bash command auto-allowed, so the verification plan was inert:
+       * run #5 ran a targeted test that the plan permitted and the harness
+       * never saw the decision, recording zero verification commands.
+       *
+       * That is the same defect shape as the gateway check-run ceiling this
+       * sprint was written to replace — a limit enforced on a path nothing
+       * calls. Availability is bounded by tools; permission is answered by
+       * canUseTool, in one place, for every call.
+       */
       mcpServers: {},
       strictMcpConfig: true,
       settingSources: [],

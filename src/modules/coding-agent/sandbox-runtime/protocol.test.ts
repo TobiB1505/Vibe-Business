@@ -38,6 +38,8 @@ describe("a well-formed result", () => {
       assistantMessages: 4,
       sdkLoopIterations: 9,
       sessionId: "session-1",
+      verificationCommands: 0,
+      verificationRefusals: 0,
       permissionDenials: 1,
       modelUsage: {},
       error: null,

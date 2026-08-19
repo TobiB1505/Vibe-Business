@@ -1261,7 +1261,7 @@ export async function collectAgentStep(
   );
 
   await recordContextUsage(deps, context);
-  await recordVerificationOutcome(deps, context, result.durationMs);
+  await recordVerificationOutcome(deps, context, result);
 
   return { ok: true, paused: false, observedPathCount, changedPaths };
 }
@@ -1398,9 +1398,14 @@ async function recordVerificationOutcome(
    * the run finished, which for every real run is null. The collected result is
    * the only value that describes the run that just ended.
    */
-  durationMs: number,
+  result: {
+    durationMs: number;
+    verificationCommands: number | null;
+    verificationRefusals: number | null;
+  },
 ): Promise<void> {
   const { run } = context;
+  const durationMs = result.durationMs;
 
   try {
     const events = await listExecutionEvents(deps.supabase, {
@@ -1438,9 +1443,29 @@ async function recordVerificationOutcome(
     const verificationMs =
       checkOffsets.length > 0 ? Math.max(0, durationMs - Math.min(...checkOffsets)) : null;
 
+    /*
+     * The harness's own count wins, and a disagreement is logged.
+     *
+     * Two counters exist because one of them cannot detect its own silence.
+     * Run #5 derived zero verification commands from the feed while the run
+     * had executed a permitted targeted test — correct arithmetic over an
+     * empty set, because `allowedTools` had auto-allowed Bash past the
+     * permission handler and the decision point was never reached. A counter
+     * written where the decision happens is the only thing that could have
+     * disagreed, and the disagreement is the bug report.
+     */
+    const harnessChecks = result.verificationCommands;
+    if (harnessChecks !== null && harnessChecks !== checks.length) {
+      console.error("[agent-verification] the harness and the feed disagree on check count", {
+        agentExecutionRunId: run.id,
+        harness: harnessChecks,
+        feed: checks.length,
+      });
+    }
+
     await recordAgentRunObservations(deps.supabase, run.id, {
-      verificationCommands: checks.length,
-      verificationRefusals: refusals.length,
+      verificationCommands: harnessChecks ?? checks.length,
+      verificationRefusals: result.verificationRefusals ?? refusals.length,
       verificationMs,
       timeToFirstEditMs: editOffsets.length > 0 ? Math.min(...editOffsets) : null,
       timeToLastEditMs: editOffsets.length > 0 ? Math.max(...editOffsets) : null,

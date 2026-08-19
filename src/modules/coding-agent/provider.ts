@@ -173,6 +173,19 @@ export type CodingAgentResult = {
   sessionId: string | null;
   /** How many tool calls the provider's own permission layer refused. */
   providerDeniedToolCalls: number;
+  /**
+   * Check commands the harness let through and refused, counted at the point
+   * the decision was made (Sprint 0042).
+   *
+   * Null for a provider that hosts no shell, and — importantly — null is not
+   * zero. Run #5 recorded zero verification commands while running a permitted
+   * targeted test, because `allowedTools` had auto-allowed Bash past the
+   * permission handler entirely. A counter written where the decision happens
+   * is the only thing that can disagree with one derived from the feed, and a
+   * disagreement is the bug report.
+   */
+  verificationCommands: number | null;
+  verificationRefusals: number | null;
   durationMs: number;
   /**
    * A sanitized description of a provider failure. Never surfaced to a user,
