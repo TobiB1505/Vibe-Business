@@ -79,7 +79,7 @@ describe("provenance is derived from the spec, not supplied", () => {
   it("never labels an unknown namespaced key as a benchmark", () => {
     // The pair must not be able to disagree — the database check constraint
     // enforces the same thing from the other side.
-    expect(executionOriginForStepKey("dogfood-fixture:removed-long-ago")).toEqual({
+    expect(executionOriginForStepKey("dogfood-fixture--removed-long-ago")).toEqual({
       executionOrigin: "planner",
       dogfoodFixtureId: null,
     });

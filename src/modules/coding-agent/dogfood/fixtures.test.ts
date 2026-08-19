@@ -33,7 +33,7 @@ describe("a fixture is the Planner's half of a step, and no more", () => {
   it("produces a canonical Action Step", () => {
     const step = benchmarkStep(LOW_UI_PRIMARY_CTA, SNAPSHOT);
 
-    expect(step.id).toBe("dogfood-fixture:low-ui-primary-cta");
+    expect(step.id).toBe("dogfood-fixture--low-ui-primary-cta");
     expect(step.order).toBe(1);
     expect(step.dependsOn).toEqual([]);
     expect(step.changeKind).toBe("product_change");
@@ -110,6 +110,23 @@ describe("the benchmark namespace cannot collide with a customer's plan", () => 
     ]) {
       expect(isBenchmarkStepKey(key)).toBe(false);
       expect(fixtureForStepKey(key)).toBeNull();
+    }
+  });
+
+  /*
+   * The defect this asserts, in full.
+   *
+   * The first version separated the namespace with a colon. A colon in a URL
+   * path segment is sent as `%3A`, the internal dogfood page received that
+   * string, and the prefix check failed — so a fixture that resolved in every
+   * test answered "that step could not be found" in the browser. A key that
+   * needs no escaping is the fix; this is what keeps it that way.
+   */
+  it("survives a URL round trip untouched, because it is a path segment", () => {
+    for (const fixture of listBenchmarkFixtures()) {
+      const key = benchmarkStepKey(fixture);
+      expect(encodeURIComponent(key)).toBe(key);
+      expect(fixtureForStepKey(decodeURIComponent(encodeURIComponent(key)))?.id).toBe(fixture.id);
     }
   });
 

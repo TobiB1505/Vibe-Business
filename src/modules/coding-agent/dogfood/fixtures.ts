@@ -61,12 +61,41 @@ export const BENCHMARK_FIXTURE_VERSION = "dogfood-fixture.v1" as const;
  * The namespace that separates a fixture step from a planner step.
  *
  * A real step id is `${order}-${changeKind}-${slug(title)}`, produced
- * deterministically by the Planner's own key builder, so it can never begin
- * with this prefix. That is what lets the durable execution path recognise a
- * fixture-backed step by its key alone, without a lookup that could be confused
- * by a customer's data.
+ * deterministically by the Planner's own key builder, so it always begins with
+ * a digit and can never begin with this prefix. That is what lets the durable
+ * execution path recognise a fixture-backed step by its key alone, without a
+ * lookup that could be confused by a customer's data.
+ *
+ * ## Why the separator is `--` and not `:`
+ *
+ * Because a step key is a **URL path segment**. The first version of this used
+ * a colon, and the internal dogfood page answered "that step could not be
+ * found" for a fixture that resolved perfectly in every test: the browser sends
+ * `dogfood-fixture%3Alow-ui-primary-cta`, the page received that string, and the
+ * prefix check failed against the escape sequence.
+ *
+ * The fix is a key that never needs escaping rather than a `decodeURIComponent`
+ * somewhere on the read path — one that would have to be repeated at every
+ * boundary the key crosses, and forgotten at one of them. `assertUrlSafe` below
+ * keeps it true.
  */
-export const BENCHMARK_STEP_PREFIX = "dogfood-fixture:" as const;
+export const BENCHMARK_STEP_PREFIX = "dogfood-fixture--" as const;
+
+/**
+ * A step key must survive a URL round trip untouched.
+ *
+ * Asserted at module load, so a fixture id that would need escaping fails the
+ * suite rather than one page render. This is the whole defect above, made
+ * unrepresentable.
+ */
+function assertUrlSafe(key: string): string {
+  if (encodeURIComponent(key) !== key) {
+    throw new Error(
+      `A benchmark step key travels as a URL path segment and must need no escaping: ${key}`,
+    );
+  }
+  return key;
+}
 
 export type BenchmarkFixture = {
   /** Stable, human-typed on the command line. */
@@ -93,7 +122,7 @@ export type BenchmarkFixture = {
 
 /** The step key this fixture executes under. */
 export function benchmarkStepKey(fixture: BenchmarkFixture): string {
-  return `${BENCHMARK_STEP_PREFIX}${fixture.id}`;
+  return assertUrlSafe(`${BENCHMARK_STEP_PREFIX}${fixture.id}`);
 }
 
 export function isBenchmarkStepKey(stepKey: string): boolean {

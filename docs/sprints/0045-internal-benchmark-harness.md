@@ -83,10 +83,24 @@ newest completed plan for lineage, and supplies the work itself from the
 fixture.
 
 Durable execution then re-resolves the step from the fixture registry by its
-namespaced key (`dogfood-fixture:<id>`), which a Planner step id can never
+namespaced key (`dogfood-fixture--<id>`), which a Planner step id can never
 carry: real ids are `${order}-${changeKind}-${slug(title)}`. So no step row is
 needed either, and `loadPlanStep` checks the registry *before* the database so a
 benchmark can never pick up a customer's step.
+
+## The step key is a URL path segment
+
+The namespace separator is `--`, not `:`. The first version used a colon and the
+internal dogfood page answered *"that step could not be found"* for a fixture
+that resolved in every unit test: a browser sends `%3A` for a colon in a path
+segment, the page received that string, and the prefix check failed against the
+escape sequence.
+
+The fix is a key that never needs escaping, rather than a `decodeURIComponent`
+on the read path — one that would have to be repeated at every boundary the key
+crosses and forgotten at one of them. `benchmarkStepKey` asserts
+`encodeURIComponent(key) === key`, so a fixture id that would need escaping
+fails the suite instead of one page render.
 
 ## Dry run
 
