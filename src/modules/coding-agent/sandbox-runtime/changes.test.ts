@@ -1,10 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { fakeSandboxProvider, type FakeSandboxOptions } from "@/modules/validation/test-support";
 import {
+  captureWorkspaceBaseline,
   discoverWorkspaceChanges,
   listWorkspaceFiles,
   MAX_WORKSPACE_PATHS,
   plantChangeMarker,
+  readWorkspaceBaseline,
 } from "./changes";
 
 /**
@@ -137,6 +139,80 @@ describe("an observation that might be incomplete", () => {
     });
 
     expect(result.truncated).toBe(true);
+  });
+});
+
+/**
+ * The baseline, and the bug it shipped with.
+ *
+ * The first real agent run failed six seconds in with
+ * `agent_workspace_unavailable`. The cause was not the sandbox: the baseline
+ * was captured by joining `pruneExpression()` into a `sh -c` line, and those
+ * tokens are written for an argument array — so `(` and `)` arrived at the
+ * shell unquoted and `find` never ran. The tests passed because the fake parsed
+ * the redirect and never looked at the command in front of it.
+ *
+ * Both halves are covered here: the baseline round-trips through the sandbox,
+ * and no shell is asked to parse a command Vibe assembled.
+ */
+describe("the baseline listing", () => {
+  it("round-trips through the sandbox", async () => {
+    const { sandbox } = await handle({
+      files: { "repo/app/page.tsx": "x", "repo/app/robots.ts": "y", "repo/node_modules/dep/i.js": "z" },
+    });
+
+    const captured = await captureWorkspaceBaseline({
+      sandbox,
+      cwd: "repo",
+      baselinePath: "/vercel/sandbox/.vibe-agent/baseline",
+    });
+    expect(captured).toBe(true);
+
+    const read = await readWorkspaceBaseline({
+      sandbox,
+      baselinePath: "/vercel/sandbox/.vibe-agent/baseline",
+    });
+
+    // Pruned directories are absent, so a later listing does not report an
+    // install tree as newly added.
+    expect(read?.paths).toEqual(new Set(["app/page.tsx", "app/robots.ts"]));
+    expect(read?.truncated).toBe(false);
+  });
+
+  it("never hands an assembled command line to a shell", async () => {
+    const { provider, sandbox } = await handle({ files: { "repo/a.ts": "x" } });
+
+    await captureWorkspaceBaseline({
+      sandbox,
+      cwd: "repo",
+      baselinePath: "/vercel/sandbox/.vibe-agent/baseline",
+    });
+
+    // The one legitimate `sh -c` is the here-document that writes bytes over
+    // stdin. A `find` on a shell line is the defect this test exists for: its
+    // prune tokens are argv-safe and shell-hostile at the same time.
+    for (const command of provider.commands()) {
+      if (!command.startsWith("sh -c ")) continue;
+      expect(command).toContain("base64 -d");
+      expect(command).not.toContain("find ");
+    }
+  });
+
+  /**
+   * A baseline that is missing files makes every one of them look newly added.
+   * No baseline at all is the safer of the two failures, and the caller already
+   * treats it as the workspace being unavailable.
+   */
+  it("refuses to write a truncated listing", async () => {
+    const { sandbox } = await handle({ defaultExitCode: 1 });
+
+    const captured = await captureWorkspaceBaseline({
+      sandbox,
+      cwd: "repo",
+      baselinePath: "/vercel/sandbox/.vibe-agent/baseline",
+    });
+
+    expect(captured).toBe(false);
   });
 });
 

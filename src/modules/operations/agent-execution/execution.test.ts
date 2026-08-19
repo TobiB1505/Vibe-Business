@@ -294,7 +294,7 @@ async function runAgent(
     if (observed.finished || observed.expired) break;
   }
 
-  return collectAgentStep(agentDeps, operationId, availableChecks);
+  return collectAgentStep(agentDeps, operationId);
 }
 
 beforeEach(() => {
@@ -918,9 +918,22 @@ describe("the sandbox-hosted harness", () => {
    */
   it("refuses when the workspace observation was incomplete", async () => {
     const { operation } = seed();
+    // The *post-run* listing fails. The baseline is taken first and must
+    // succeed, or the run stops before the agent — a different failure, covered
+    // by the test below.
+    let listings = 0;
     const sandbox = fakeSandboxProvider({
       files: SANDBOX_FILES,
-      results: { ...walk({ before: [], after: [], touched: [] }), [LIST]: { exitCode: 1, output: "" } },
+      results: {
+        ...walk({ before: [], after: [], touched: [] }),
+        [LIST]: {
+          get exitCode() {
+            listings += 1;
+            return listings === 1 ? 0 : 1;
+          },
+          output: "",
+        },
+      },
     });
     const deps = sandboxRuntimeDeps(fakeDetachedAgentProvider(), sandbox);
 
@@ -930,6 +943,34 @@ describe("the sandbox-hosted harness", () => {
       ok: false,
       failureCode: "change_preparation_failed",
     });
+  });
+
+  /**
+   * The defect that killed the first real run, at the level it mattered.
+   *
+   * The baseline listing was built by joining `find`'s prune tokens — written
+   * for an argument array — into a `sh -c` line, so the shell choked on `(` and
+   * the run reported `agent_workspace_unavailable` six seconds in. What the
+   * step must do when it genuinely cannot list the workspace is stop *before*
+   * the harness starts: an agent launched against a workspace Vibe never
+   * observed produces a diff with no baseline to compare it to.
+   */
+  it("stops before the agent when the baseline could not be taken", async () => {
+    const { operation } = seed();
+    const sandbox = fakeSandboxProvider({
+      files: SANDBOX_FILES,
+      results: { ...walk({ before: [], after: [], touched: [] }), [LIST]: { exitCode: 1, output: "" } },
+    });
+    const provider = fakeDetachedAgentProvider();
+    const deps = sandboxRuntimeDeps(provider, sandbox);
+
+    await provisionAgentWorkspaceStep(deps, operation.id);
+
+    expect(await runAgent(deps, operation.id, ["typecheck"])).toEqual({
+      ok: false,
+      failureCode: "sandbox_lost",
+    });
+    expect(provider.starts()).toBe(0);
   });
 
   /** The marker lives outside the repository, so it is never itself a change. */

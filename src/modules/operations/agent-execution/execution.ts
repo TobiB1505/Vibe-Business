@@ -54,7 +54,7 @@ import {
   markAgentRunStarted,
   type StoredAgentExecutionRun,
 } from "@/modules/coding-agent/store";
-import { recordAgentAiUsage, recordAgentSandboxUsage } from "@/modules/coding-agent/usage";
+import { recordAgentSandboxUsage } from "@/modules/coding-agent/usage";
 import { releaseOperationCredits, settleOperationCredits } from "@/modules/credits/operation-billing";
 import { findExecutionSpecByIdentity } from "@/modules/execution-contract/store";
 import { agentBranchNameFor } from "@/modules/execution/identity";
@@ -912,7 +912,6 @@ export type RunAgentOutcome = StepOutcome<{
 export async function collectAgentStep(
   deps: AgentExecutionDeps,
   operationId: string,
-  availableChecks: readonly AgentCheckName[],
 ): Promise<RunAgentOutcome> {
   const loaded = await loadAgentRunContext(deps, operationId);
   if (!loaded.ok) return loaded;

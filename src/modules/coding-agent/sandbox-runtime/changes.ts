@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SandboxHandle } from "@/modules/validation/sandbox-port";
+import { writeSandboxTextFile } from "./files";
 
 /**
  * What the run changed, established by Vibe looking (Rule 77).
@@ -151,12 +152,24 @@ export async function listWorkspaceFiles(input: {
  * through a durable workflow's arguments either.
  *
  * The sandbox is the right home for it: it describes that filesystem, it dies
- * with it, and it is one `find` with a redirect rather than a megabyte crossing
- * the boundary twice.
+ * with it, and it is a listing this module already knows how to take.
  *
- * Every argument below is a constant from this file. Nothing repository-derived
- * or model-derived reaches the command line, which is why a shell is acceptable
- * here at all — it is needed only for the redirect.
+ * ## Why it does not build a shell line
+ *
+ * It used to, and that is what broke the first real run. `find … > path` was
+ * assembled by joining `pruneExpression()`, whose tokens are written for an
+ * *argument array* — so the bare `(` and `)` reached `sh -c` as unquoted shell
+ * metacharacters, `find` never ran, and the workspace was reported unavailable
+ * six seconds in.
+ *
+ * The repair is to remove the shell from the listing entirely rather than to
+ * quote it correctly: the same `listWorkspaceFiles` the rest of this module
+ * uses takes the listing over argv, and `writeSandboxTextFile` puts the bytes
+ * down over stdin. Neither has a command line for a metacharacter to appear on.
+ *
+ * A truncated listing is refused rather than written. A baseline that is missing
+ * files makes every one of them look newly added later, which is a worse outcome
+ * than having no baseline at all.
  */
 export async function captureWorkspaceBaseline(input: {
   sandbox: SandboxHandle;
@@ -164,15 +177,13 @@ export async function captureWorkspaceBaseline(input: {
   /** Absolute, outside the repository, so the baseline is never itself a change. */
   baselinePath: string;
 }): Promise<boolean> {
-  const find = ["find", ".", ...pruneExpression(), "-type", "f", "-printf", "'%P\\n'"].join(" ");
+  const listing = await listWorkspaceFiles({ sandbox: input.sandbox, cwd: input.cwd });
+  if (listing.truncated) return false;
 
-  const result = await input.sandbox.run({
-    command: { command: "sh", args: ["-c", `${find} > '${input.baselinePath}'`] },
-    cwd: input.cwd,
-    timeoutMs: LISTING_TIMEOUT_MS,
+  return writeSandboxTextFile(input.sandbox, {
+    path: input.baselinePath,
+    content: [...listing.paths].sort().join("\n"),
   });
-
-  return result.exitCode === 0;
 }
 
 /**

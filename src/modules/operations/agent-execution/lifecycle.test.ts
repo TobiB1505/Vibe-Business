@@ -7,7 +7,6 @@ import type { ExecutionProbePort, GitWritePort } from "@/modules/execution/git-p
 import { fakeSandboxProvider } from "@/modules/validation/test-support";
 import { FakeDatabase, fakeSupabase } from "../test-support";
 import {
-  collectAgentStep,
   pollAgentStep,
   provisionAgentWorkspaceStep,
   startAgentStep,

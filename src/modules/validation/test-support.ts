@@ -305,28 +305,29 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
         }
 
         /*
-         * A shell redirect, modelled rather than stubbed.
+         * Every other script is refused, the way a real `sh` refuses one.
          *
-         * The agent runtime captures its baseline listing with
-         * `find … > '<path>'` so twenty thousand paths never cross the sandbox
-         * boundary twice. A fake that acknowledged that command without
-         * creating the file would let every test pass while the step that reads
-         * the baseline back found nothing — which is precisely the failure the
-         * baseline exists to prevent.
+         * This fake used to model a redirect (`find … > '<path>'`) with a regex
+         * that never looked at the command in front of it. That is how the
+         * first real agent run died: the baseline listing was built by joining
+         * tokens written for an *argument array*, so `(` and `)` reached `sh -c`
+         * unquoted, `find` never ran — and the fake, which parsed the redirect
+         * and ignored the rest, reported success.
          *
-         * The redirected path is absolute here, so it is stored as given.
+         * A fake that accepts shell it cannot parse is not modelling a shell.
+         * Vibe has exactly one legitimate `sh -c` shape, the here-document
+         * above; anything else is either a quoting bug or a new construct that
+         * must be modelled here before it can be relied on in a sandbox.
          */
-        const redirect = /^(.+) > '(.+)'$/.exec(script);
-        if (redirect) {
-          const inner = redirect[1];
-          const configured = options.results?.[inner];
-          if (configured?.exitCode !== undefined && configured.exitCode !== 0) {
-            return { exitCode: configured.exitCode, durationMs: 5, output: "", timedOut: false };
-          }
-          files[redirect[2]] = configured?.output ?? runFind(inner, input.cwd);
-          touch(redirect[2]);
-          return { exitCode: 0, durationMs: 5, output: "", timedOut: false };
-        }
+        const stray = /[()<>|&;$`*?]/.exec(script);
+        return stray
+          ? {
+              exitCode: 2,
+              durationMs: 5,
+              output: `sh: 1: Syntax error: "${stray[0]}" unexpected`,
+              timedOut: false,
+            }
+          : { exitCode: 127, durationMs: 5, output: "sh: 1: not found", timedOut: false };
       }
 
       if (

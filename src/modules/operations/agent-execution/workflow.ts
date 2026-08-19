@@ -178,9 +178,9 @@ async function pollAgent(operationId: string) {
  */
 pollAgent.maxRetries = 2;
 
-async function collectAgent(operationId: string, availableChecks: AgentCheckName[]) {
+async function collectAgent(operationId: string) {
   "use step";
-  return collectAgentStep(deps(), operationId, availableChecks);
+  return collectAgentStep(deps(), operationId);
 }
 collectAgent.maxRetries = 0;
 
@@ -300,7 +300,7 @@ export async function agentExecutionWorkflow(operationId: string) {
 
       const agent =
         failureCode === null && !paused
-          ? await collectAgent(operationId, provisioned.availableChecks)
+          ? await collectAgent(operationId)
           : null;
 
       if (agent === null) {

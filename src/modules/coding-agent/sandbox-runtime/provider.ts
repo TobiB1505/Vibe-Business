@@ -9,6 +9,7 @@ import type {
   DetachedStartOutcome,
 } from "../provider";
 import type { AgentProviderOutcome } from "../schema";
+import { writeSandboxTextFile } from "./files";
 import { AGENT_RUNTIME_PROGRAM } from "./program";
 import {
   AGENT_RUNTIME_TOOLS,
@@ -143,34 +144,6 @@ export async function installAgentRuntime(input: {
   });
 
   return installed.exitCode === 0 ? { ok: true } : { ok: false, output: installed.output };
-}
-
-/**
- * Writes a Vibe-authored file into the sandbox without a command line.
- *
- * The content is piped through `base64 -d` on stdin, so it never appears as an
- * argument and there is nothing to quote — the same technique `sandbox-workspace.ts`
- * uses, and for the same reason. The only interpolated value is a path this
- * module constructs.
- */
-async function writeSandboxFile(
-  sandbox: SandboxHandle,
-  input: { path: string; content: string },
-): Promise<boolean> {
-  const encoded = Buffer.from(input.content, "utf8").toString("base64");
-  const script = [
-    `base64 -d > '${input.path.replace(/'/g, "'\\''")}' <<'VIBE_EOF'`,
-    encoded,
-    "VIBE_EOF",
-  ].join("\n");
-
-  const written = await sandbox.run({
-    command: { command: "sh", args: ["-c", script] },
-    cwd: ".",
-    timeoutMs: 30_000,
-  });
-
-  return written.exitCode === 0;
 }
 
 /**
@@ -317,13 +290,13 @@ export function createSandboxCodingAgentProvider(
         return { ok: false, failureDetail: "the agent runtime was already started for this run" };
       }
 
-      const wrote = await writeSandboxFile(deps.sandbox, {
+      const wrote = await writeSandboxTextFile(deps.sandbox, {
         path: `${deps.runtimeDir}/run.mjs`,
         content: AGENT_RUNTIME_PROGRAM,
       });
       if (!wrote) return { ok: false, failureDetail: "the agent runtime program could not be written" };
 
-      const configured = await writeSandboxFile(deps.sandbox, {
+      const configured = await writeSandboxTextFile(deps.sandbox, {
         path: `${deps.runtimeDir}/request.json`,
         content: JSON.stringify(payload),
       });
