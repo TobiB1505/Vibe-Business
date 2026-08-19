@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fakeAgentSpec, fakeCodingAgentProvider } from "@/modules/coding-agent/test-support";
+import { fakeAgentSpec, fakeDetachedAgentProvider } from "@/modules/coding-agent/test-support";
 import { creditsToUnits } from "@/modules/credits/units";
 import { agentSandboxNameFor } from "@/modules/coding-agent/identity";
 import type { BaseContentPort } from "@/modules/coding-agent/candidate";
-import type { CodingAgentProvider } from "@/modules/coding-agent/provider";
+import type { DetachedCodingAgentProvider } from "@/modules/coding-agent/provider";
 import type { ExecutionProbePort, GitWritePort } from "@/modules/execution/git-port";
 import {
   DEPENDENCY_HOSTS,
@@ -16,7 +16,9 @@ import {
   extractAndVerifyStep,
   finishAgentExecutionStep,
   provisionAgentWorkspaceStep,
-  runAgentStep,
+  collectAgentStep,
+  pollAgentStep,
+  startAgentStep,
   writeAgentBranchStep,
   type AgentExecutionDeps,
   type AgentRepositoryTarget,
@@ -140,6 +142,19 @@ function target(): AgentRepositoryTarget {
   };
 }
 
+const SANDBOX_HOME = "/vercel/sandbox";
+
+/**
+ * Commands every agent step depends on the sandbox answering.
+ *
+ * `pwd` is how the runtime learns where it is — asked rather than assumed, so
+ * a provider that moved its workspace would surface as a failure to start
+ * rather than as a model that could not find any files.
+ */
+const SANDBOX_RESULTS = {
+  pwd: { exitCode: 0, output: `${SANDBOX_HOME}\n` },
+};
+
 const SANDBOX_FILES = {
   "product/package.json": JSON.stringify({
     scripts: { typecheck: "tsc", test: "vitest", build: "next build" },
@@ -231,30 +246,82 @@ function seed(overrides: { runStatus?: string; specMode?: string } = {}) {
  * every effect goes through `ExecutionToolGateway`, which is what most of the
  * assertions below are about.
  */
+/**
+ * `provider` is still the override these tests write, wrapped into the one
+ * runtime shape production uses.
+ *
+ * There is no second shape any more. The harness runs detached in the
+ * execution's own sandbox, and a fake offering one awaited `run()` would let
+ * this whole file test a step graph no deployment executes — the failure rule
+ * 69 keeps warning about, and the one that let a 300-second ceiling reach a
+ * customer.
+ */
 function deps(
-  overrides: Partial<AgentExecutionDeps> & { provider?: CodingAgentProvider } = {},
+  overrides: Partial<AgentExecutionDeps> & { provider?: DetachedCodingAgentProvider } = {},
 ): AgentExecutionDeps {
   const { provider, ...rest } = overrides;
+  const harness = provider ?? fakeDetachedAgentProvider();
 
   return {
     supabase: fakeSupabase(db),
-    runtime: { kind: "gateway_tools", provider: provider ?? fakeCodingAgentProvider() },
-    sandboxProvider: fakeSandboxProvider({ files: SANDBOX_FILES }),
+    runtime: { build: () => harness },
+    sandboxProvider: fakeSandboxProvider({ files: SANDBOX_FILES, results: SANDBOX_RESULTS }),
     resolveTarget: async () => target(),
     ...rest,
   };
+}
+
+/**
+ * Start, watch and collect — the three steps that replaced one `runAgentStep`.
+ *
+ * Kept as one helper so the tests below still read as "run the agent", while
+ * actually exercising the boundaries a real deployment crosses between them.
+ */
+async function runAgent(
+  agentDeps: AgentExecutionDeps,
+  operationId: string,
+  availableChecks: Parameters<typeof startAgentStep>[2],
+) {
+  const started = await startAgentStep(agentDeps, operationId, availableChecks);
+  if (!started.ok) return started;
+  // A question raised before the first turn holds the run where it is; there is
+  // nothing to watch and nothing to collect.
+  if (started.paused) return { ok: true as const, paused: true, changedFileCount: 0, changedPaths: null };
+
+  for (let poll = 0; poll < 5; poll += 1) {
+    const observed = await pollAgentStep(agentDeps, operationId);
+    if (!observed.ok) return observed;
+    if (observed.finished || observed.expired) break;
+  }
+
+  return collectAgentStep(agentDeps, operationId, availableChecks);
 }
 
 beforeEach(() => {
   db = new FakeDatabase();
   git = fakeGit();
   probeState = { head: { defaultBranch: "main", commitSha: BASE_SHA }, writePermission: true };
+
+  /*
+   * The gateway is not optional any more.
+   *
+   * Provisioning resolves it before it installs anything, because a run that
+   * discovers at turn one that it has nowhere to sample has already bought a
+   * VM. Stubbed for every test here rather than a few, so the suite runs the
+   * configuration a deployment actually has.
+   */
+  vi.stubEnv("VIBE_AGENT_GATEWAY_ORIGIN", "https://app.vibe.test");
+  vi.stubEnv("VIBE_AGENT_GATEWAY_SECRET", "test-gateway-secret-not-a-real-one");
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
 });
 
 describe("§8, §12 — the workspace is pinned, scrubbed and closed before the agent exists", () => {
   it("creates one sandbox at the exact base SHA and shuts the network before install ends", async () => {
     const { operation } = seed();
-    const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES });
+    const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES, results: SANDBOX_RESULTS });
 
     const outcome = await provisionAgentWorkspaceStep(deps({ sandboxProvider: sandbox }), operation.id);
 
@@ -273,13 +340,20 @@ describe("§8, §12 — the workspace is pinned, scrubbed and closed before the 
     // The environment carries nothing of value.
     expect(created?.env).toEqual({ CI: "1", NODE_ENV: "production", NEXT_TELEMETRY_DISABLED: "1" });
 
-    // The policy sequence: github → registry → nothing. The agent has not been
+    // The policy sequence: github → registry → the gateway alone. The agent has not been
     // constructed yet when the last one is applied (§12).
     expect(sandbox.policies().map((policy) => policy.mode)).toEqual([
       "allow_domains",
       "allow_domains",
-      "deny_all",
+      "allow_domains",
     ]);
+    // …and the last one is exactly one host: the Agent Gateway. Egress is not
+    // "closed" any more, it is narrowed to the single destination the harness
+    // needs, because the harness now lives inside this VM (ADR 0029 §3).
+    expect(sandbox.policies().at(-1)).toEqual({
+      mode: "allow_domains",
+      domains: ["app.vibe.test"],
+    });
 
     // The credential stops existing before anything repository-controlled runs.
     expect(sandbox.commands()).toContain("rm -rf .git");
@@ -323,7 +397,7 @@ describe("§8, §12 — the workspace is pinned, scrubbed and closed before the 
 
   it("adopts a sandbox a previous attempt left behind rather than buying a second", async () => {
     const { operation } = seed();
-    const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES });
+    const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES, results: SANDBOX_RESULTS });
 
     await provisionAgentWorkspaceStep(deps({ sandboxProvider: sandbox }), operation.id);
     await provisionAgentWorkspaceStep(deps({ sandboxProvider: sandbox }), operation.id);
@@ -335,11 +409,11 @@ describe("§8, §12 — the workspace is pinned, scrubbed and closed before the 
 describe("§37 — the paid loop runs at most once", () => {
   it("refuses to run a second agent after an ambiguous outcome", async () => {
     const { operation } = seed();
-    const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES });
+    const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES, results: SANDBOX_RESULTS });
     await provisionAgentWorkspaceStep(deps({ sandboxProvider: sandbox }), operation.id);
 
-    const provider = fakeCodingAgentProvider({ calls: [] });
-    const first = await runAgentStep(deps({ provider, sandboxProvider: sandbox }), operation.id, [
+    const provider = fakeDetachedAgentProvider({ calls: [] });
+    const first = await runAgent(deps({ provider, sandboxProvider: sandbox }), operation.id, [
       "typecheck",
     ]);
     expect(first.ok).toBe(true);
@@ -348,7 +422,7 @@ describe("§37 — the paid loop runs at most once", () => {
     // A re-entry after the outcome was lost. The claim is scoped to `queued`,
     // so this reports false and the step refuses rather than buying a second
     // coding agent.
-    const second = await runAgentStep(deps({ provider, sandboxProvider: sandbox }), operation.id, [
+    const second = await runAgent(deps({ provider, sandboxProvider: sandbox }), operation.id, [
       "typecheck",
     ]);
     expect(second).toEqual({ ok: false, failureCode: "inference_interrupted" });
@@ -360,40 +434,38 @@ describe("§37 — the paid loop runs at most once", () => {
    * still recorded — Vibe paid for those tokens whether or not the run
    * delivered anything.
    */
-  it("records observed usage when the provider fails", async () => {
-    const { operation, run } = seed();
-    const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES });
-    await provisionAgentWorkspaceStep(deps({ sandboxProvider: sandbox }), operation.id);
-
-    const provider = fakeCodingAgentProvider({
-      calls: [{ tool: "read_file", input: { path: "src/app/page.tsx" } }],
-      outcome: "provider_error",
+  /**
+   * Provider usage is no longer written here, and that is the fix rather than a
+   * regression.
+   *
+   * Every sampling call writes its own row from the Agent Gateway as it
+   * happens — the only place that sees what a streamed response actually cost.
+   * A summary row written at the end would double-count a run whose per-call
+   * rows are the ones the ceilings are measured against.
+   */
+  it("leaves provider usage to the gateway that observed each call", async () => {
+    const { operation } = seed();
+    const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES, results: SANDBOX_RESULTS });
+    const shared = deps({
+      sandboxProvider: sandbox,
+      provider: fakeDetachedAgentProvider({ outcome: "provider_error" }),
     });
 
-    const outcome = await runAgentStep(deps({ provider, sandboxProvider: sandbox }), operation.id, [
-      "typecheck",
-    ]);
+    await provisionAgentWorkspaceStep(shared, operation.id);
+    await runAgent(shared, operation.id, ["typecheck"]);
 
-    expect(outcome).toEqual({ ok: false, failureCode: "provider_unavailable" });
+    expect(db.rows("ai_usage_events")).toHaveLength(0);
 
-    const usage = db.rows("ai_usage_events");
-    expect(usage).toHaveLength(1);
-    expect(usage[0]).toMatchObject({
-      operation: "agentic_execution",
-      status: "failed",
-      job_id: run.id,
-      // Cache accounting, which is most of an agent loop's input bill.
-      cache_read_input_tokens: 4_000,
-      cache_creation_input_tokens: 2_000,
-    });
+    // What this step does still record is what only it can observe.
+    expect(db.rows("agent_execution_runs")[0]).toMatchObject({ duration_ms: 1_234 });
   });
 
   it("records the tool trail and the activity trail even on failure", async () => {
     const { operation } = seed();
-    const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES });
+    const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES, results: SANDBOX_RESULTS });
     await provisionAgentWorkspaceStep(deps({ sandboxProvider: sandbox }), operation.id);
 
-    const provider = fakeCodingAgentProvider({
+    const provider = fakeDetachedAgentProvider({
       calls: [
         { tool: "read_file", input: { path: "src/app/page.tsx" } },
         { tool: "read_file", input: { path: ".env" } },
@@ -401,7 +473,7 @@ describe("§37 — the paid loop runs at most once", () => {
       outcome: "provider_error",
     });
 
-    await runAgentStep(deps({ provider, sandboxProvider: sandbox }), operation.id, ["typecheck"]);
+    await runAgent(deps({ provider, sandboxProvider: sandbox }), operation.id, ["typecheck"]);
 
     const events = db.rows("agent_tool_events");
     expect(events).toHaveLength(2);
@@ -413,20 +485,21 @@ describe("§37 — the paid loop runs at most once", () => {
 describe("§25 — a question pauses the run", () => {
   it("persists the interrupt, pauses both records, and does not proceed", async () => {
     const { operation, run } = seed();
-    const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES });
+    const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES, results: SANDBOX_RESULTS });
     await provisionAgentWorkspaceStep(deps({ sandboxProvider: sandbox }), operation.id);
 
-    const provider = fakeCodingAgentProvider({
+    const provider = fakeDetachedAgentProvider({
       calls: [
         { tool: "request_decision", input: { situation: "business_decision_required" } },
         { tool: "write_file", input: { path: "src/app/page.tsx", content: "changed" } },
       ],
     });
 
-    const outcome = await runAgentStep(deps({ provider, sandboxProvider: sandbox }), operation.id, [
+    const outcome = await runAgent(deps({ provider, sandboxProvider: sandbox }), operation.id, [
       "typecheck",
     ]);
 
+    // The pause happens at start, before there is anything to watch or collect.
     expect(outcome).toEqual({ ok: true, paused: true, changedPaths: null, changedFileCount: 0 });
 
     const interrupts = db.rows("execution_interrupts");
@@ -448,11 +521,11 @@ describe("§25 — a question pauses the run", () => {
 describe("§27, §28 — Vibe computes and checks the change", () => {
   async function runToChange(calls: { tool: string; input: unknown }[]) {
     const { operation } = seed();
-    const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES });
-    const shared = deps({ sandboxProvider: sandbox, provider: fakeCodingAgentProvider({ calls }) });
+    const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES, results: SANDBOX_RESULTS });
+    const shared = deps({ sandboxProvider: sandbox, provider: fakeDetachedAgentProvider({ calls }) });
 
     await provisionAgentWorkspaceStep(shared, operation.id);
-    await runAgentStep(shared, operation.id, ["typecheck", "test", "build"]);
+    await runAgent(shared, operation.id, ["typecheck", "test", "build"]);
     return { operation, shared, sandbox };
   }
 
@@ -504,10 +577,10 @@ describe("§27, §28 — Vibe computes and checks the change", () => {
 describe("§30 — trusted Vibe infrastructure writes the branch", () => {
   async function prepared() {
     const { operation } = seed();
-    const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES });
+    const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES, results: SANDBOX_RESULTS });
     const shared = deps({
       sandboxProvider: sandbox,
-      provider: fakeCodingAgentProvider({
+      provider: fakeDetachedAgentProvider({
         calls: [
           {
             tool: "write_file",
@@ -518,7 +591,7 @@ describe("§30 — trusted Vibe infrastructure writes the branch", () => {
     });
 
     await provisionAgentWorkspaceStep(shared, operation.id);
-    await runAgentStep(shared, operation.id, ["typecheck"]);
+    await runAgent(shared, operation.id, ["typecheck"]);
     const extracted = await extractAndVerifyStep(shared, operation.id);
     if (!extracted.ok) throw new Error("fixture did not produce a change");
 
@@ -728,32 +801,23 @@ describe("the sandbox-hosted harness", () => {
   }
 
   function sandboxRuntimeDeps(
-    provider: CodingAgentProvider,
+    provider: DetachedCodingAgentProvider,
     sandboxProvider: ReturnType<typeof fakeSandboxProvider>,
   ): AgentExecutionDeps {
     return {
       supabase: fakeSupabase(db),
-      runtime: { kind: "sandbox_workspace", build: () => provider },
+      runtime: { build: () => provider },
       sandboxProvider,
       resolveTarget: async () => target(),
     };
   }
 
-  beforeEach(() => {
-    vi.stubEnv("VIBE_AGENT_GATEWAY_ORIGIN", "https://app.vibe.test");
-    vi.stubEnv("VIBE_AGENT_GATEWAY_SECRET", "test-gateway-secret-not-a-real-one");
-  });
-
-  afterEach(() => {
-    vi.unstubAllEnvs();
-  });
-
   it("installs the harness while the registry is open, then narrows to the gateway alone", async () => {
     const { operation } = seed();
-    const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES });
+    const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES, results: SANDBOX_RESULTS });
 
     const outcome = await provisionAgentWorkspaceStep(
-      sandboxRuntimeDeps(fakeCodingAgentProvider(), sandbox),
+      sandboxRuntimeDeps(fakeDetachedAgentProvider(), sandbox),
       operation.id,
     );
 
@@ -778,10 +842,10 @@ describe("the sandbox-hosted harness", () => {
    */
   it("leaves no registry host reachable once the agent can run", async () => {
     const { operation } = seed();
-    const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES });
+    const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES, results: SANDBOX_RESULTS });
 
     await provisionAgentWorkspaceStep(
-      sandboxRuntimeDeps(fakeCodingAgentProvider(), sandbox),
+      sandboxRuntimeDeps(fakeDetachedAgentProvider(), sandbox),
       operation.id,
     );
 
@@ -796,11 +860,11 @@ describe("the sandbox-hosted harness", () => {
   it("refuses to provision when no gateway is configured", async () => {
     vi.stubEnv("VIBE_AGENT_GATEWAY_ORIGIN", "");
     const { operation } = seed();
-    const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES });
+    const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES, results: SANDBOX_RESULTS });
 
     expect(
       await provisionAgentWorkspaceStep(
-        sandboxRuntimeDeps(fakeCodingAgentProvider(), sandbox),
+        sandboxRuntimeDeps(fakeDetachedAgentProvider(), sandbox),
         operation.id,
       ),
     ).toEqual({ ok: false, failureCode: "missing_required_context" });
@@ -808,18 +872,20 @@ describe("the sandbox-hosted harness", () => {
 
   it("takes the change set off the filesystem rather than from a tool trail", async () => {
     const { operation } = seed();
-    const sandbox = fakeSandboxProvider({
-      files: SANDBOX_FILES,
-      results: walk({
-        before: ["package.json", "src/app/page.tsx"],
-        after: ["package.json", "src/app/page.tsx", "src/app/robots.ts"],
-        touched: ["src/app/robots.ts"],
+    const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES, results: SANDBOX_RESULTS });
+    const shared = deps({
+      sandboxProvider: sandbox,
+      // The write lands in the fake's own filesystem, and the marker plus
+      // `find -newer` is what finds it again. Nothing consults the tool trail.
+      provider: fakeDetachedAgentProvider({
+        calls: [
+          { tool: "write_file", input: { path: "src/app/robots.ts", content: "export const x = 1;\n" } },
+        ],
       }),
     });
-    const deps = sandboxRuntimeDeps(fakeCodingAgentProvider(), sandbox);
 
-    await provisionAgentWorkspaceStep(deps, operation.id);
-    const outcome = await runAgentStep(deps, operation.id, ["typecheck"]);
+    await provisionAgentWorkspaceStep(shared, operation.id);
+    const outcome = await runAgent(shared, operation.id, ["typecheck"]);
 
     expect(outcome).toMatchObject({
       ok: true,
@@ -827,6 +893,23 @@ describe("the sandbox-hosted harness", () => {
       changedPaths: ["src/app/robots.ts"],
       changedFileCount: 1,
     });
+  });
+
+  /** A file the agent only read is not a change, whatever it says it did. */
+  it("reports nothing for a run that only read", async () => {
+    const { operation } = seed();
+    const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES, results: SANDBOX_RESULTS });
+    const shared = deps({
+      sandboxProvider: sandbox,
+      provider: fakeDetachedAgentProvider({
+        calls: [{ tool: "read_file", input: { path: "src/app/page.tsx" } }],
+      }),
+    });
+
+    await provisionAgentWorkspaceStep(shared, operation.id);
+    const outcome = await runAgent(shared, operation.id, ["typecheck"]);
+
+    expect(outcome).toMatchObject({ ok: true, changedPaths: [], changedFileCount: 0 });
   });
 
   /**
@@ -839,11 +922,11 @@ describe("the sandbox-hosted harness", () => {
       files: SANDBOX_FILES,
       results: { ...walk({ before: [], after: [], touched: [] }), [LIST]: { exitCode: 1, output: "" } },
     });
-    const deps = sandboxRuntimeDeps(fakeCodingAgentProvider(), sandbox);
+    const deps = sandboxRuntimeDeps(fakeDetachedAgentProvider(), sandbox);
 
     await provisionAgentWorkspaceStep(deps, operation.id);
 
-    expect(await runAgentStep(deps, operation.id, ["typecheck"])).toEqual({
+    expect(await runAgent(deps, operation.id, ["typecheck"])).toEqual({
       ok: false,
       failureCode: "change_preparation_failed",
     });
@@ -856,10 +939,10 @@ describe("the sandbox-hosted harness", () => {
       files: SANDBOX_FILES,
       results: walk({ before: [], after: [], touched: [] }),
     });
-    const deps = sandboxRuntimeDeps(fakeCodingAgentProvider(), sandbox);
+    const deps = sandboxRuntimeDeps(fakeDetachedAgentProvider(), sandbox);
 
     await provisionAgentWorkspaceStep(deps, operation.id);
-    await runAgentStep(deps, operation.id, ["typecheck"]);
+    await runAgent(deps, operation.id, ["typecheck"]);
 
     expect(sandbox.commands()).toContain(`touch -- ${HOME}/.vibe-agent/marker`);
   });

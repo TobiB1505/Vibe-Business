@@ -250,6 +250,17 @@ export const AGENT_OPERATION_FAILURES = [
   "agentic_pricing_not_configured",
   /** The bound Credit reservation no longer authorizes this work (§55). */
   "agent_reservation_invalid",
+  /**
+   * The run outlived the wall clock its budget authorized (ADR 0029, A1).
+   *
+   * Its own code rather than a generic provider failure, because the two lead
+   * somewhere different: a provider failure is Vibe's or Anthropic's problem,
+   * and this is the run doing more work than was paid for. It is also the
+   * outcome that must exist for a detached harness — nothing else stops an
+   * agent that ignores its own ceiling, and a run with no terminal state is the
+   * defect the first real run left behind.
+   */
+  "agent_wall_clock_exceeded",
 ] as const;
 export type AgentOperationFailure = (typeof AGENT_OPERATION_FAILURES)[number];
 

@@ -2,8 +2,18 @@ import "server-only";
 
 import { createServiceClient } from "@/lib/supabase/service";
 import { ZERO_CREDITS } from "@/modules/credits/units";
-import { claimAgentExecutionRun, type ClaimAgentRunResult } from "@/modules/coding-agent/store";
-import { authorizeOperationCredits, type AuthorizeOperationCreditsResult } from "@/modules/credits/operation-billing";
+import { AGENT_SANDBOX_LIFETIME_MS } from "@/modules/coding-agent/budget";
+import {
+  claimAgentExecutionRun,
+  failAgentRun,
+  type ClaimAgentRunResult,
+} from "@/modules/coding-agent/store";
+import {
+  authorizeOperationCredits,
+  releaseOperationCredits,
+  type AuthorizeOperationCreditsResult,
+} from "@/modules/credits/operation-billing";
+import { failOperationRun } from "../store";
 import { recordExecutionSpec } from "@/modules/execution-contract/service";
 import type { ExecutionSpec } from "@/modules/execution-contract/spec";
 
@@ -225,4 +235,109 @@ async function ownsProject(
     .maybeSingle();
 
   return Boolean(data);
+}
+
+/* ---------------------------------------------------------------------------
+ * The backstop: a run that nothing is carrying any more (ADR 0029, A1)
+ * ------------------------------------------------------------------------ */
+
+/**
+ * How long past its own wall clock a run may sit before it is presumed dead.
+ *
+ * Generous, because being wrong in one direction is much worse than the other:
+ * failing a run that was merely slow throws away work a customer paid for,
+ * while leaving a genuinely dead one a few minutes longer costs nothing. The
+ * sandbox is bounded independently and expires on its own.
+ */
+const STALE_RUN_GRACE_MS = 10 * 60 * 1000;
+
+/**
+ * Fails a run whose workflow stopped carrying it, and releases its Credits.
+ *
+ * ## Why this exists at all
+ *
+ * The polling loop terminates every run it is watching. What it cannot do is
+ * survive the *workflow itself* dying — and that is exactly what happened to
+ * the first real run: the step was killed at 300 seconds, nothing reached
+ * cleanup, and hours later the run still read `running` with 100 Credits held.
+ *
+ * A durable execution that can leave a customer's Credits reserved forever is
+ * not one, so there has to be an answer that does not depend on the workflow
+ * being alive to give it. This is that answer: a read path notices, and repairs.
+ *
+ * ## Why on a read rather than a schedule
+ *
+ * Because the read is the moment it matters. Somebody is looking at this run's
+ * status; the alternative is a cron this product does not have and would need a
+ * decision to introduce (rule 24). It is bounded, idempotent and scoped to one
+ * operation — `failAgentRun` and `releaseOperationCredits` are both no-ops on a
+ * run that is already terminal, so a hundred page loads repair it once.
+ *
+ * Service-role, because `agent_execution_runs` and the billing tables accept no
+ * write from a browser's client and must not (Rule 53).
+ */
+export async function expireStaleAgentExecution(params: {
+  operationRunId: string;
+  /** Injected so a test can be explicit about time rather than sleeping. */
+  now?: () => number;
+}): Promise<{ expired: boolean }> {
+  const supabase = createServiceClient();
+
+  const { data } = await supabase
+    .from("agent_execution_runs")
+    .select("id, project_id, status, started_at, credit_reservation_id")
+    .eq("operation_run_id", params.operationRunId)
+    .maybeSingle();
+
+  const run = data as
+    | {
+        id: string;
+        project_id: string;
+        status: string;
+        started_at: string | null;
+        credit_reservation_id: string | null;
+      }
+    | null;
+
+  // Only a run that is genuinely mid-flight can be stale. `queued` is not: it
+  // has taken no provider call yet and its workflow may simply not have picked
+  // it up, and failing that would race a run that is about to start.
+  if (!run || run.status !== "running" || !run.started_at) return { expired: false };
+
+  const startedAt = Date.parse(run.started_at);
+  if (!Number.isFinite(startedAt)) return { expired: false };
+
+  /*
+   * The bound is the sandbox's lifetime, not the agent's wall clock.
+   *
+   * Reading the run's own budget here would mean loading its spec on every
+   * status render. The sandbox is the outer bound on any run — the harness
+   * cannot outlive the VM it is in — so a run past that plus grace is dead
+   * whatever its budget said.
+   */
+  const deadline = startedAt + AGENT_SANDBOX_LIFETIME_MS + STALE_RUN_GRACE_MS;
+  if ((params.now ?? Date.now)() < deadline) return { expired: false };
+
+  console.error("[agent-execution] expiring a run nothing is carrying", {
+    operationRunId: params.operationRunId,
+    agentExecutionRunId: run.id,
+    startedAt: run.started_at,
+  });
+
+  await failAgentRun(supabase, { runId: run.id, failureCode: "agent_provider_failed" });
+  await failOperationRun(supabase, {
+    operationId: params.operationRunId,
+    failureCode: "agent_wall_clock_exceeded",
+  });
+
+  // Nothing was delivered, so nothing is charged. Release is idempotent: a
+  // reservation already settled or released stays as it is.
+  if (run.credit_reservation_id) {
+    await releaseOperationCredits(supabase, {
+      reservationId: run.credit_reservation_id,
+      reason: "abandoned_with_usage",
+    });
+  }
+
+  return { expired: true };
 }

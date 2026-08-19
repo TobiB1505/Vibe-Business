@@ -40,6 +40,7 @@
  */
 
 export const AGENT_RUNTIME_PROGRAM = `
+import { appendFileSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { query } from "@anthropic-ai/claude-agent-sdk";
 
@@ -50,16 +51,29 @@ const allowed = new Set(request.tools);
 /**
  * Progress, as it happens.
  *
- * Written to stdout as one JSON object per line so Vibe can see how far a run
- * got even when it never reaches a result — a crash after four turns and a
- * crash before the first one are different failures, and the final file is
- * written by neither.
+ * Written to a **file** as well as stdout, and the file is the one that
+ * matters. This process is detached: it outlives the Vibe step that started it,
+ * so nothing is holding its stdout by the time anyone wants to read it. A later
+ * step reads this file to learn how far the run has got.
+ *
+ * That is what stops a turn from being lost. The first real run reached
+ * Anthropic 27 times and still recorded turns: 0, because the only record of
+ * its progress died with the step that was watching.
+ *
+ * Appended synchronously and line-at-a-time so a reader that arrives mid-write
+ * sees whole lines behind it, and never a torn one.
  */
 const emit = (event) => {
+  const line = JSON.stringify(event) + "\\n";
   try {
-    process.stdout.write(JSON.stringify(event) + "\\n");
+    process.stdout.write(line);
   } catch {
     // Telemetry must never be the thing that ends a paid run.
+  }
+  try {
+    appendFileSync(dir + "/progress.ndjson", line);
+  } catch {
+    // Same rule. A run that cannot report is still a run.
   }
 };
 

@@ -140,6 +140,66 @@ export async function listWorkspaceFiles(input: {
 }
 
 /**
+ * Takes the baseline listing and leaves it **in the sandbox**.
+ *
+ * ## Why it is written there rather than returned
+ *
+ * Because the step that takes it and the step that uses it are different
+ * function invocations, minutes apart. The agent now runs detached, so nothing
+ * in Vibe's memory survives from "before the first turn" to "after the last
+ * one" — and a listing of twenty thousand paths is not something to carry
+ * through a durable workflow's arguments either.
+ *
+ * The sandbox is the right home for it: it describes that filesystem, it dies
+ * with it, and it is one `find` with a redirect rather than a megabyte crossing
+ * the boundary twice.
+ *
+ * Every argument below is a constant from this file. Nothing repository-derived
+ * or model-derived reaches the command line, which is why a shell is acceptable
+ * here at all — it is needed only for the redirect.
+ */
+export async function captureWorkspaceBaseline(input: {
+  sandbox: SandboxHandle;
+  cwd: string;
+  /** Absolute, outside the repository, so the baseline is never itself a change. */
+  baselinePath: string;
+}): Promise<boolean> {
+  const find = ["find", ".", ...pruneExpression(), "-type", "f", "-printf", "'%P\\n'"].join(" ");
+
+  const result = await input.sandbox.run({
+    command: { command: "sh", args: ["-c", `${find} > '${input.baselinePath}'`] },
+    cwd: input.cwd,
+    timeoutMs: LISTING_TIMEOUT_MS,
+  });
+
+  return result.exitCode === 0;
+}
+
+/**
+ * Reads the baseline back.
+ *
+ * A missing or unreadable baseline is `null`, never an empty listing. The two
+ * lead to opposite conclusions — "the workspace started empty" would make every
+ * file in the repository look newly added — and only one of them is safe.
+ */
+export async function readWorkspaceBaseline(input: {
+  sandbox: SandboxHandle;
+  baselinePath: string;
+}): Promise<WorkspaceListing | null> {
+  const content = await input.sandbox.readFile({
+    path: input.baselinePath,
+    // Generous: this is one short path per line, and truncating it would
+    // silently turn existing files into additions.
+    maxBytes: 8 * 1024 * 1024,
+  });
+
+  if (content === null) return null;
+
+  const parsed = parsePaths(content);
+  return { paths: parsed.paths, truncated: parsed.truncated };
+}
+
+/**
  * Plants the marker every "has this changed" question is asked against.
  *
  * A file rather than a timestamp captured in this process, because the

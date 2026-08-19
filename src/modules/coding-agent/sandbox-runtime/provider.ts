@@ -2,9 +2,11 @@ import "server-only";
 
 import type { SandboxHandle } from "@/modules/validation/sandbox-port";
 import type {
-  CodingAgentProvider,
   CodingAgentRequest,
   CodingAgentResult,
+  DetachedCodingAgentProvider,
+  DetachedObservation,
+  DetachedStartOutcome,
 } from "../provider";
 import type { AgentProviderOutcome } from "../schema";
 import { AGENT_RUNTIME_PROGRAM } from "./program";
@@ -245,26 +247,50 @@ function turnsFromProgress(output: string): { turns: number; started: boolean } 
   return { turns, started };
 }
 
+/** Bytes of the progress file kept. It is one short JSON object per turn. */
+const MAX_PROGRESS_BYTES = 256 * 1024;
+
+/**
+ * The harness, running detached in the execution's own microVM.
+ *
+ * ## Why nothing is remembered between calls
+ *
+ * Because the three calls happen in three different Vercel function
+ * invocations, minutes apart. `start` launches the process and returns; `observe`
+ * runs on a timer from a step that has never seen it; `collect` reads what it
+ * left behind. So the run's state lives in two places that survive a function
+ * dying — the sandbox's filesystem, and the database — and never in this object.
+ *
+ * ```
+ * progress.ndjson   one line per turn, appended by the harness as it works
+ * result.json       written once, at the end. Its existence IS "finished".
+ * ```
+ *
+ * The first real run is why. It reached Anthropic 27 times over five minutes
+ * and was then killed by the platform's 300-second step ceiling, leaving a run
+ * row that said `turns: 0` — every turn had really happened, and the only
+ * record of them died with the step that was watching.
+ */
 export function createSandboxCodingAgentProvider(
   deps: SandboxAgentRuntimeDeps,
-): CodingAgentProvider {
+): DetachedCodingAgentProvider {
+  const progressPath = `${deps.runtimeDir}/progress.ndjson`;
+  const resultPath = `${deps.runtimeDir}/result.json`;
+
+  const readProgress = async (): Promise<{ turns: number; started: boolean }> => {
+    const progress = await deps.sandbox.readFile({
+      path: progressPath,
+      maxBytes: MAX_PROGRESS_BYTES,
+    });
+
+    return progress === null ? { turns: 0, started: false } : turnsFromProgress(progress);
+  };
+
   return {
     id: "anthropic",
     harness: "claude_agent_sdk_sandbox",
 
-    async run(request: CodingAgentRequest): Promise<CodingAgentResult> {
-      const startedAt = Date.now();
-
-      const failure = (detail: string, outcome: AgentProviderOutcome = "provider_error") => ({
-        outcome,
-        turns: 0,
-        usage: [],
-        sessionId: null,
-        providerDeniedToolCalls: 0,
-        durationMs: Date.now() - startedAt,
-        failureDetail: detail,
-      });
-
+    async start(request: CodingAgentRequest): Promise<DetachedStartOutcome> {
       const payload: AgentRuntimeRequest = {
         version: AGENT_RUNTIME_VERSION,
         systemPrompt: request.instruction.system,
@@ -277,68 +303,117 @@ export function createSandboxCodingAgentProvider(
         cwd: deps.workspaceDir,
       };
 
+      /*
+       * The second, independent guard against a second Claude process.
+       *
+       * The caller's database claim is the primary one and is scoped to a
+       * `queued` run, so a retry cannot get past it. This checks the workspace
+       * itself, because the failure being prevented — two paid harnesses on one
+       * execution — is expensive enough to deserve an answer that does not
+       * depend on the database being reachable.
+       */
+      const existing = await readProgress();
+      if (existing.started) {
+        return { ok: false, failureDetail: "the agent runtime was already started for this run" };
+      }
+
       const wrote = await writeSandboxFile(deps.sandbox, {
         path: `${deps.runtimeDir}/run.mjs`,
         content: AGENT_RUNTIME_PROGRAM,
       });
-      if (!wrote) return failure("the agent runtime program could not be written");
+      if (!wrote) return { ok: false, failureDetail: "the agent runtime program could not be written" };
 
       const configured = await writeSandboxFile(deps.sandbox, {
         path: `${deps.runtimeDir}/request.json`,
         content: JSON.stringify(payload),
       });
-      if (!configured) return failure("the agent runtime request could not be written");
+      if (!configured) {
+        return { ok: false, failureDetail: "the agent runtime request could not be written" };
+      }
 
       // Cancelled before it began. Checked here rather than trusted to the
       // command's own signal handling: a paid loop that starts after a
       // cancellation is the expensive mistake, not a slow one.
-      if (request.signal.aborted) return failure("the run was cancelled", "aborted");
+      if (request.signal.aborted) return { ok: false, failureDetail: "the run was cancelled" };
 
       deps.onEvent?.({ kind: "cli_started" });
 
-      const executed = await deps.sandbox.run({
-        command: { command: "node", args: [`${deps.runtimeDir}/run.mjs`, deps.runtimeDir] },
-        cwd: deps.workspaceCwd,
-        // The provider's own wall clock. Vibe's `AbortController` cannot reach
-        // into the VM, so the ceiling has to be the command's.
-        timeoutMs: request.limits.maxWallClockMs,
-        env: runtimeEnv(deps),
-      });
-
-      deps.onEvent?.({
-        kind: "cli_exited",
-        exitCode: executed.exitCode,
-        timedOut: executed.timedOut,
-      });
-
-      const progress = turnsFromProgress(executed.output);
-      if (progress.turns > 0) {
-        deps.onEvent?.({ kind: "turn_observed", turns: progress.turns });
+      try {
+        /*
+         * Detached, and this is the whole point of the refactor.
+         *
+         * `runBackground` returns as soon as the process exists, so the step
+         * that starts a twenty-minute agent finishes in seconds. The handle it
+         * returns is deliberately dropped: it cannot cross a step boundary, and
+         * building on it would put the run's liveness in a Vercel function's
+         * memory — exactly where the last one died.
+         */
+        await deps.sandbox.runBackground({
+          command: { command: "node", args: [`${deps.runtimeDir}/run.mjs`, deps.runtimeDir] },
+          cwd: deps.workspaceCwd,
+          env: runtimeEnv(deps),
+        });
+      } catch (error) {
+        return {
+          ok: false,
+          failureDetail:
+            error instanceof Error
+              ? `${error.name}: ${error.message.slice(0, 200)}`
+              : "the agent runtime could not be started",
+        };
       }
 
+      return { ok: true };
+    },
+
+    async observe(): Promise<DetachedObservation> {
+      /*
+       * `result.json` is the completion signal, and it is a *file* rather than
+       * a process status deliberately: a process handle does not survive a step
+       * boundary, and asking the provider whether a detached command is alive
+       * would answer a different question anyway — "still running" is not the
+       * same as "did the work".
+       */
+      const result = await deps.sandbox.readFile({ path: resultPath, maxBytes: 1024 });
+      const progress = await readProgress();
+
+      if (progress.turns > 0) deps.onEvent?.({ kind: "turn_observed", turns: progress.turns });
+
+      return {
+        started: progress.started,
+        finished: result !== null,
+        turns: progress.turns,
+      };
+    },
+
+    async collect(input: { startedAtMs: number }): Promise<CodingAgentResult> {
+      const durationMs = Math.max(0, Date.now() - input.startedAtMs);
+      const progress = await readProgress();
+
       const result = parseAgentRuntimeResult(
-        await deps.sandbox.readFile({ path: `${deps.runtimeDir}/result.json`, maxBytes: 256 * 1024 }),
+        await deps.sandbox.readFile({ path: resultPath, maxBytes: 256 * 1024 }),
       );
 
       if (!result) {
         /*
          * No result file, or one this runtime does not recognise.
          *
-         * Whatever the progress stream showed is still reported. §37 forbids
+         * Whatever the progress file showed is still reported. §37 forbids
          * resolving a paid ambiguity optimistically, and it forbids the reverse
-         * too: a run that took three turns and lost its result file did take
-         * three turns, and pretending otherwise would understate what a customer
-         * was charged for.
+         * too: a run that took three turns and lost its result did take three
+         * turns, and reporting zero would understate what a customer was
+         * charged for.
          */
         return {
-          ...failure(
-            executed.timedOut
-              ? "the agent runtime exceeded its wall clock"
-              : progress.started
-                ? "the agent runtime produced no result"
-                : "the agent runtime did not start",
-          ),
+          outcome: "provider_error",
           turns: progress.turns,
+          usage: [],
+          sessionId: null,
+          providerDeniedToolCalls: 0,
+          durationMs,
+          failureDetail: progress.started
+            ? "the agent runtime produced no result"
+            : "the agent runtime did not start",
         };
       }
 
@@ -350,7 +425,7 @@ export function createSandboxCodingAgentProvider(
         usage: toAgentModelUsage(result.modelUsage),
         sessionId: result.sessionId,
         providerDeniedToolCalls: result.permissionDenials,
-        durationMs: Date.now() - startedAt,
+        durationMs,
         failureDetail:
           result.subtype === "success" ? null : (result.error ?? `agent run ended: ${result.subtype}`),
       };

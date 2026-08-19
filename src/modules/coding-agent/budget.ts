@@ -93,6 +93,39 @@ export function deriveAgentLimits(input: {
 }
 
 /**
+ * How long an agent's sandbox may live (ADR 0029, A1).
+ *
+ * ## Why this is not `SANDBOX_BUDGETS.totalLifetimeMs`
+ *
+ * Because validation's fifteen minutes were sized for validation: a pipeline of
+ * installs and checks whose whole job finishes well inside it. An agent run is
+ * authorized for twenty minutes of wall clock, so reusing that constant put the
+ * VM's death *before* the budget's — the sandbox would have been reclaimed with
+ * the harness still working and the run still paid for.
+ *
+ * It is also the leak bound. That was the argument for keeping it tight, and it
+ * is weaker now than it was: with the harness detached, no step holds a
+ * connection for more than a few seconds, so the workflow reaches its cleanup
+ * step instead of being killed before it. The looser bound buys back a run that
+ * uses the budget it was sold.
+ *
+ * Deliberately far below the provider's 45-minute maximum. A run that needs
+ * longer than this is telling us something about the repository, and the honest
+ * answer in V0.1 is still to stop and say so.
+ */
+export const AGENT_SANDBOX_LIFETIME_MS = 30 * 60 * 1000;
+
+/**
+ * Room for everything that happens before the first turn.
+ *
+ * Cloning a repository, installing its dependencies and installing the harness
+ * all happen inside the sandbox's lifetime and before the agent's own clock
+ * starts. Ten minutes is generous for that on purpose: the failure it prevents
+ * is a slow install stealing time a customer paid for as agent work.
+ */
+export const AGENT_PROVISION_HEADROOM_MS = 10 * 60 * 1000;
+
+/**
  * The ceilings the Agent Gateway enforces for one run.
  *
  * ## Why these are not the budget

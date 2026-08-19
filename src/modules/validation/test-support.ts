@@ -56,7 +56,13 @@ export type FakeEvent =
   | { kind: "snapshot"; expirationMs: number }
   | { kind: "origin"; port: number }
   | { kind: "delete_artifact"; snapshotId: string }
-  | { kind: "background"; command: string; cwd: string }
+  /**
+   * `env` is recorded for the same reason it is on `command`: its contents are
+   * the assertion. The agent harness is started detached and is handed exactly
+   * one thing — a scoped gateway token — and a fake that could not show that
+   * would not notice the day a provider key travelled with it.
+   */
+  | { kind: "background"; command: string; cwd: string; env?: Record<string, string> }
   | { kind: "inspect"; name: string }
   | { kind: "stop" };
 
@@ -168,6 +174,24 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
   const files = { ...(options.files ?? {}) };
   let stopCount = 0;
 
+  /*
+   * Modification order, so `find -newer` means something.
+   *
+   * The agent runtime establishes what a run changed by planting a marker and
+   * asking the filesystem what is newer than it. A fake with no notion of
+   * "when" could only stub that answer — and the property under test is exactly
+   * that Vibe reads the change back off the filesystem rather than believing
+   * what the agent said it wrote. A monotonic counter is enough: nothing here
+   * needs real clocks, only ordering.
+   */
+  let clock = 0;
+  const writtenAt = new Map<string, number>();
+  const touch = (path: string) => {
+    clock += 1;
+    writtenAt.set(path, clock);
+  };
+  for (const path of Object.keys(files)) touch(path);
+
   let createCount = 0;
   let reconnectCount = 0;
   let snapshotCount = 0;
@@ -175,6 +199,32 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
   let backgroundCount = 0;
   let terminated = false;
   const deletedArtifacts: string[] = [];
+
+  /**
+   * `find`, over the fake's own filesystem.
+   *
+   * Only the shape the agent runtime builds is understood: prune a few
+   * directories, take regular files, print paths relative to the walk root, and
+   * optionally restrict to what is newer than a marker. Enough to make the
+   * change-discovery path real rather than stubbed, and narrow enough that a
+   * command this does not recognise falls through to the configured results.
+   */
+  function runFind(command: string, cwd: string): string {
+    const prefix = cwd === "." || cwd === "" ? "" : `${cwd}/`;
+    const pruned = [...command.matchAll(/-name (\S+)/g)].map((match) => match[1]);
+    const newer = /-newer (\S+)/.exec(command);
+    const since = newer ? (writtenAt.get(newer[1]) ?? 0) : 0;
+
+    const matched = Object.keys(files)
+      .filter((path) => path.startsWith(prefix))
+      .map((path) => path.slice(prefix.length))
+      .filter((path) => path.length > 0 && !path.startsWith("/"))
+      .filter((path) => !pruned.some((name) => path.split("/").includes(name)))
+      .filter((path) => (writtenAt.get(`${prefix}${path}`) ?? 0) > since)
+      .sort();
+
+    return matched.length === 0 ? "" : `${matched.join("\n")}\n`;
+  }
 
   const handle: SandboxHandle = {
     id: "sandbox_1",
@@ -248,7 +298,33 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
         const script = input.command.args[1] ?? "";
         const write = /^base64 -d > '(.+)' <<'VIBE_EOF'\n([\s\S]*)\nVIBE_EOF$/.exec(script);
         if (write) {
-          files[resolve(write[1])] = Buffer.from(write[2], "base64").toString("utf8");
+          const written = resolve(write[1]);
+          files[written] = Buffer.from(write[2], "base64").toString("utf8");
+          touch(written);
+          return { exitCode: 0, durationMs: 5, output: "", timedOut: false };
+        }
+
+        /*
+         * A shell redirect, modelled rather than stubbed.
+         *
+         * The agent runtime captures its baseline listing with
+         * `find … > '<path>'` so twenty thousand paths never cross the sandbox
+         * boundary twice. A fake that acknowledged that command without
+         * creating the file would let every test pass while the step that reads
+         * the baseline back found nothing — which is precisely the failure the
+         * baseline exists to prevent.
+         *
+         * The redirected path is absolute here, so it is stored as given.
+         */
+        const redirect = /^(.+) > '(.+)'$/.exec(script);
+        if (redirect) {
+          const inner = redirect[1];
+          const configured = options.results?.[inner];
+          if (configured?.exitCode !== undefined && configured.exitCode !== 0) {
+            return { exitCode: configured.exitCode, durationMs: 5, output: "", timedOut: false };
+          }
+          files[redirect[2]] = configured?.output ?? runFind(inner, input.cwd);
+          touch(redirect[2]);
           return { exitCode: 0, durationMs: 5, output: "", timedOut: false };
         }
       }
@@ -264,6 +340,30 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
 
       if (input.command.command === "mkdir") {
         return { exitCode: 0, durationMs: 5, output: "", timedOut: false };
+      }
+
+      // `touch -- <path>`: the change marker. Creates the file and stamps it.
+      if (input.command.command === "touch") {
+        const path = input.command.args.at(-1) ?? "";
+        files[path] = "";
+        touch(path);
+        return { exitCode: 0, durationMs: 5, output: "", timedOut: false };
+      }
+
+      if (
+        input.command.command === "find" &&
+        options.results?.[rendered] === undefined &&
+        // A configured default still wins: a test that says "every command
+        // fails" is testing the walk-failed path, and a `find` that quietly
+        // succeeded would take that path away from it.
+        (options.defaultExitCode ?? 0) === 0
+      ) {
+        return {
+          exitCode: 0,
+          durationMs: 5,
+          output: runFind(rendered, input.cwd),
+          timedOut: false,
+        };
       }
 
       const argument = input.command.args.at(-1) ?? "";
@@ -319,7 +419,12 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
 
     async runBackground(input) {
       const rendered = [input.command.command, ...input.command.args].join(" ");
-      events.push({ kind: "background", command: rendered, cwd: input.cwd });
+      events.push({
+        kind: "background",
+        command: rendered,
+        cwd: input.cwd,
+        ...(input.env ? { env: input.env } : {}),
+      });
 
       if (options.failBackground) throw new Error("could not start process");
       backgroundCount += 1;

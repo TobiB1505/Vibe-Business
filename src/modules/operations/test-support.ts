@@ -59,7 +59,8 @@ type Filter =
   | { kind: "not_is"; column: string; value: null }
   | { kind: "gt"; column: string; value: unknown }
   | { kind: "gte"; column: string; value: unknown }
-  | { kind: "lte"; column: string; value: unknown };
+  | { kind: "lte"; column: string; value: unknown }
+  | { kind: "lt"; column: string; value: unknown };
 
 /**
  * Reads a column, following PostgREST's `column->>key` JSON accessor.
@@ -104,6 +105,19 @@ function matches(row: Row, filters: Filter[]): boolean {
       return typeof value === "number" && typeof filter.value === "number"
         ? value <= filter.value
         : String(value ?? "") <= String(filter.value);
+    }
+    /*
+     * Numeric, like `lte` and for the same reason.
+     *
+     * Its one caller is the monotonic turn counter — `update({turns}).lt("turns", turns)`
+     * — which is what stops a poll that raced a stale read from walking a run's
+     * observed turns backwards. Compared as strings, `"9" < "10"` is false and
+     * the guard would silently stop working somewhere after turn nine.
+     */
+    if (filter.kind === "lt") {
+      return typeof value === "number" && typeof filter.value === "number"
+        ? value < filter.value
+        : String(value ?? "") < String(filter.value);
     }
     return String(value ?? "") > String(filter.value);
   });
@@ -913,6 +927,10 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
   }
   lte(column: string, value: unknown): this {
     this.filters.push({ kind: "lte", column, value });
+    return this;
+  }
+  lt(column: string, value: unknown): this {
+    this.filters.push({ kind: "lt", column, value });
     return this;
   }
   order(column: string, options?: { ascending?: boolean }): this {

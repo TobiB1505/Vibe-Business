@@ -156,6 +156,76 @@ export type CodingAgentResult = {
   failureDetail: string | null;
 };
 
+/**
+ * A harness that outlives the step which started it
+ * (EXECUTION CORE-4 runtime placement, ADR 0029).
+ *
+ * ## Why this is a different interface rather than a longer `run()`
+ *
+ * Because the shape of the work changed, not just its duration.
+ * `CodingAgentProvider.run()` is one awaited call: whoever starts the agent
+ * stays alive until it finishes. That is exactly what a Vercel step cannot do —
+ * the first real run proved it by being killed at 300 seconds with the harness
+ * still working and the run row still reading `turns: 0`.
+ *
+ * Under this interface the three moments are three separate calls, each short
+ * enough to be its own durable step, and **none of them holds state between
+ * calls**. Every implementation must be reconstructible from scratch: the step
+ * that observes a run is a different function invocation from the one that
+ * started it, on a different machine, minutes later. What persists lives in the
+ * sandbox and in the database, never in this object.
+ *
+ * ## What each call may and may not do
+ *
+ * `start` may launch exactly one process, and must be safe to call after a
+ * retry — the caller's claim is the primary guard, and an implementation is
+ * expected to check the workspace as an independent second one.
+ *
+ * `observe` must be cheap and read-only. It is called on a timer for the whole
+ * length of a run, so anything expensive here is paid for tens of times.
+ *
+ * `collect` reads the finished result. It never waits for one.
+ */
+export interface DetachedCodingAgentProvider {
+  readonly id: string;
+  readonly harness: string;
+
+  /** Launches the harness and returns as soon as it is running. */
+  start(request: CodingAgentRequest): Promise<DetachedStartOutcome>;
+
+  /** What Vibe can see of the run right now. Never the agent's own account. */
+  observe(): Promise<DetachedObservation>;
+
+  /**
+   * The finished result.
+   *
+   * `startedAtMs` is passed in rather than remembered, because the object that
+   * started the run no longer exists — the duration belongs to the run, not to
+   * any one invocation of this provider.
+   */
+  collect(input: { startedAtMs: number }): Promise<CodingAgentResult>;
+}
+
+export type DetachedStartOutcome =
+  | { ok: true }
+  /** Sanitized. Never a raw provider object and never model text. */
+  | { ok: false; failureDetail: string };
+
+export type DetachedObservation = {
+  /** True once the harness has written anything at all. */
+  started: boolean;
+  /** True once it has written its result. The loop is over. */
+  finished: boolean;
+  /**
+   * Turns Vibe has observed, from the harness's own progress file.
+   *
+   * An observation, not a claim: the file records that a turn *happened*, which
+   * is a fact about what was billed. It is deliberately not the model's
+   * description of what it did (Rule 77).
+   */
+  turns: number;
+};
+
 export interface CodingAgentProvider {
   /** Stable identifier persisted with every usage event, e.g. "anthropic". */
   readonly id: string;

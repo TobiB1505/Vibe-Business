@@ -275,17 +275,61 @@ export async function markAgentRunStarted(
   return (data ?? []).length > 0;
 }
 
+/**
+ * Records the turns observed so far, mid-run.
+ *
+ * Separate from `recordAgentRunObservations` because the two answer different
+ * questions. That one writes the whole picture once the harness has stopped;
+ * this one writes the single number that must survive the harness *not*
+ * stopping.
+ *
+ * The first real run made that concrete: it reached Anthropic 27 times over
+ * five minutes and the run row still read `turns: 0`, because the step was
+ * killed before the final write. A turn that happened is a fact about what a
+ * customer was charged for, and it must not depend on a later step succeeding.
+ *
+ * Monotonic by construction — `turns` only ever climbs, so a poll that races a
+ * stale read cannot walk the count backwards.
+ */
+export async function recordAgentTurnProgress(
+  supabase: SupabaseClient,
+  runId: string,
+  turns: number,
+): Promise<void> {
+  if (turns <= 0) return;
+
+  const { error } = await supabase
+    .from("agent_execution_runs")
+    .update({ turns })
+    .eq("id", runId)
+    .lt("turns", turns);
+
+  if (error) throw error;
+}
+
+/**
+ * What was observed about a run, in parts.
+ *
+ * Every field optional, because the observations are produced at different
+ * moments by different durable steps and neither may clobber the other. The
+ * tool trail exists when the harness is started; the turns, the change set and
+ * the duration only exist when it has stopped — minutes and several function
+ * invocations later (ADR 0029, A1).
+ *
+ * A writer that took the whole record would force each step to invent values
+ * for the half it cannot know, and "zero" is not the same as "not yet".
+ */
 export type AgentRunObservations = {
-  turns: number;
-  toolCallsAllowed: number;
-  toolCallsDenied: number;
-  filesRead: number;
-  checkRuns: number;
-  repairAttempts: number;
-  changedFileCount: number;
-  changedBytes: number;
-  durationMs: number;
-  providerSessionId: string | null;
+  turns?: number;
+  toolCallsAllowed?: number;
+  toolCallsDenied?: number;
+  filesRead?: number;
+  checkRuns?: number;
+  repairAttempts?: number;
+  changedFileCount?: number;
+  changedBytes?: number;
+  durationMs?: number;
+  providerSessionId?: string | null;
 };
 
 /** Records what Vibe observed, without deciding the run's fate. */
@@ -294,21 +338,25 @@ export async function recordAgentRunObservations(
   runId: string,
   observations: AgentRunObservations,
 ): Promise<void> {
-  const { error } = await supabase
-    .from("agent_execution_runs")
-    .update({
-      turns: observations.turns,
-      tool_calls_allowed: observations.toolCallsAllowed,
-      tool_calls_denied: observations.toolCallsDenied,
-      files_read: observations.filesRead,
-      check_runs: observations.checkRuns,
-      repair_attempts: observations.repairAttempts,
-      changed_file_count: observations.changedFileCount,
-      changed_bytes: observations.changedBytes,
-      duration_ms: observations.durationMs,
-      provider_session_id: observations.providerSessionId,
-    })
-    .eq("id", runId);
+  const patch: Record<string, unknown> = {};
+  const set = (column: string, value: unknown) => {
+    if (value !== undefined) patch[column] = value;
+  };
+
+  set("turns", observations.turns);
+  set("tool_calls_allowed", observations.toolCallsAllowed);
+  set("tool_calls_denied", observations.toolCallsDenied);
+  set("files_read", observations.filesRead);
+  set("check_runs", observations.checkRuns);
+  set("repair_attempts", observations.repairAttempts);
+  set("changed_file_count", observations.changedFileCount);
+  set("changed_bytes", observations.changedBytes);
+  set("duration_ms", observations.durationMs);
+  set("provider_session_id", observations.providerSessionId);
+
+  if (Object.keys(patch).length === 0) return;
+
+  const { error } = await supabase.from("agent_execution_runs").update(patch).eq("id", runId);
 
   if (error) throw error;
 }

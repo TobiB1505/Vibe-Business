@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import {
+  AGENT_SANDBOX_LIFETIME_MS,
   deriveAgentLimits,
   deriveGatewayCeilings,
   checkBudgetMatchesScope,
@@ -14,10 +15,10 @@ import {
   readAgentGatewayConfig,
 } from "@/modules/coding-agent/gateway-config";
 import {
+  captureWorkspaceBaseline,
   discoverWorkspaceChanges,
-  listWorkspaceFiles,
   plantChangeMarker,
-  type WorkspaceListing,
+  readWorkspaceBaseline,
 } from "@/modules/coding-agent/sandbox-runtime/changes";
 import {
   AGENT_RUNTIME_DIRNAME,
@@ -36,7 +37,7 @@ import {
   computeCandidateDigest,
 } from "@/modules/coding-agent/identity";
 import { agentToolDescriptors, compileAgentInstruction } from "@/modules/coding-agent/prompt";
-import type { CodingAgentProvider } from "@/modules/coding-agent/provider";
+import type { DetachedCodingAgentProvider } from "@/modules/coding-agent/provider";
 import { createSandboxWorkspace } from "@/modules/coding-agent/sandbox-workspace";
 import type { AgentCheckName, AgentFailureCode } from "@/modules/coding-agent/schema";
 import {
@@ -49,6 +50,7 @@ import {
   recordAgentActivity,
   recordAgentRunObservations,
   recordAgentToolEvents,
+  recordAgentTurnProgress,
   markAgentRunStarted,
   type StoredAgentExecutionRun,
 } from "@/modules/coding-agent/store";
@@ -133,37 +135,29 @@ import {
  */
 
 /**
- * Where the agent's harness runs, and therefore where its writes are brokered.
+ * How the agent harness is built for one run (ADR 0029, A1).
  *
- * A tagged union rather than a flag, because the two differ in more than one
- * place and each place must be forced to say which world it is in. The change
- * set comes from the tool gateway in one and from the filesystem in the other;
- * the sandbox ends with the network denied in one and narrowed to the gateway
- * in the other. A boolean would let one of those be updated and the other
- * forgotten, which is the failure mode this shape removes.
- *
- * `gateway_tools` is the Core-4 topology: the harness runs in Vibe's process
- * with no built-in tools, and every effect goes through `ExecutionToolGateway`.
- * It is not reachable in production — the SDK's native binary does not fit in a
- * function — and it remains the shape the gateway's own tests exercise.
- *
- * `sandbox_workspace` is the runtime-placement correction: the harness runs in
- * the execution's microVM with real file and shell tools, samples through the
- * Agent Gateway, and never holds a Vibe credential.
+ * A builder rather than a provider instance, because the harness outlives the
+ * step that starts it. Three different function invocations — start, observe,
+ * collect — each construct their own, from a sandbox handle they reconnected
+ * to and paths they re-derived. Nothing is carried between them in memory,
+ * because the first real run proved memory does not survive: the platform
+ * killed the step at 300 seconds with the agent still working.
  */
-export type AgentExecutionRuntime =
-  | { kind: "gateway_tools"; provider: CodingAgentProvider }
-  | {
-      kind: "sandbox_workspace";
-      /**
-       * Builds the provider for one run.
-       *
-       * Injected for the same reason `sandboxProvider` is: the real one is
-       * constructed only at the composition root, and there is no local
-       * fallback for a test to reach for by accident (ADR 0015).
-       */
-      build: (context: SandboxAgentContext) => CodingAgentProvider;
-    };
+export type AgentExecutionRuntime = {
+  /**
+   * Builds the harness for one run.
+   *
+   * Injected for the same reason `sandboxProvider` is: the real one is
+   * constructed only at the composition root, and there is no local-execution
+   * implementation for a test to reach for by accident (ADR 0015).
+   *
+   * Called fresh in every step that needs it. The object it returns holds no
+   * state between calls — it cannot, because each call happens in a different
+   * function invocation (ADR 0029, A1).
+   */
+  build: (context: SandboxAgentContext) => DetachedCodingAgentProvider;
+};
 
 /** Everything the sandbox-hosted harness needs. None of it agent-chosen. */
 export type SandboxAgentContext = SandboxAgentRuntimeDeps;
@@ -311,7 +305,7 @@ export async function provisionAgentWorkspaceStep(
           credential: target.cloneCredential,
         },
         networkPolicy: { mode: "allow_domains", domains: SOURCE_HOSTS },
-        timeoutMs: SANDBOX_BUDGETS.totalLifetimeMs,
+        timeoutMs: AGENT_SANDBOX_LIFETIME_MS,
         env: { ...SANDBOX_ENVIRONMENT },
       });
     } catch {
@@ -382,10 +376,8 @@ export async function provisionAgentWorkspaceStep(
   // The gateway has to be reachable *after* the registry is closed, so its
   // configuration is resolved before either install runs. A run that discovers
   // at turn one that it has nowhere to sample has already bought a VM.
-  const gateway = deps.runtime.kind === "sandbox_workspace" ? readAgentGatewayConfig() : null;
-  if (deps.runtime.kind === "sandbox_workspace" && !gateway) {
-    return { ok: false, failureCode: "missing_required_context" };
-  }
+  const gateway = readAgentGatewayConfig();
+  if (!gateway) return { ok: false, failureCode: "missing_required_context" };
 
   const installed = await sandbox.run({
     command: installCommand(packageManager),
@@ -402,7 +394,7 @@ export async function provisionAgentWorkspaceStep(
    * between a customer's repository and an exfiltration channel.
    */
   let harness: { ok: true } | { ok: false; output: string } = { ok: true };
-  if (deps.runtime.kind === "sandbox_workspace" && installed.exitCode === 0) {
+  if (installed.exitCode === 0) {
     harness = await installAgentRuntime({
       sandbox,
       runtimeCwd: AGENT_RUNTIME_DIRNAME,
@@ -420,9 +412,7 @@ export async function provisionAgentWorkspaceStep(
    * the token that reaches it authorizes one route on one execution. The agent
    * never sees an open network either way: this happens before it exists (§12).
    */
-  await sandbox.applyNetworkPolicy(
-    gateway ? { mode: "allow_domains", domains: [gateway.host] } : { mode: "deny_all" },
-  );
+  await sandbox.applyNetworkPolicy({ mode: "allow_domains", domains: [gateway.host] });
 
   // The other half of the runtime trail. Which sandbox, and what it may reach
   // from here — the two facts a person needs before asking why a run behaved
@@ -432,7 +422,7 @@ export async function provisionAgentWorkspaceStep(
     operationId,
     agentExecutionRunId: run.id,
     sandboxId: sandbox.id,
-    egress: gateway ? gateway.host : "deny_all",
+    egress: gateway.host,
   });
 
   if (installed.exitCode !== 0) {
@@ -460,23 +450,14 @@ export async function provisionAgentWorkspaceStep(
  * Step 2 — the paid agent loop (§16, §17, §19, §25, §37)
  * ------------------------------------------------------------------------ */
 
-/**
- * The harness for one run, plus whatever the caller needs to read the change
- * back afterwards.
- *
- * `baseline` and `markerPath` are null under `gateway_tools`, where the change
- * set comes from the gateway's own record and no filesystem comparison is
- * needed. Under `sandbox_workspace` they are the only source there is.
- */
-type RunProviderOutcome =
-  | {
-      ok: true;
-      provider: CodingAgentProvider;
-      baseline: WorkspaceListing | null;
-      markerPath: string | null;
-      workspaceCwd: string;
-    }
-  | { ok: false; failureCode: OperationFailureCode };
+/** Where the run's own files live inside the sandbox. Derived, never stored. */
+type SandboxPaths = {
+  runtimeDir: string;
+  markerPath: string;
+  baselinePath: string;
+  workspaceDir: string;
+  workspaceCwd: string;
+};
 
 /** The workspace, relative to the sandbox home. `.` when the repo is the root. */
 function workspaceCwdFor(sourceRoot: string, workspaceRoot: string): string {
@@ -489,68 +470,63 @@ function workspaceCwdFor(sourceRoot: string, workspaceRoot: string): string {
 }
 
 /**
- * Constructs the harness the run will actually use.
+ * Asks the sandbox where it is, and derives every path from that.
  *
- * Under `sandbox_workspace` this is the moment the run's one credential is
- * minted. It is minted here rather than at provisioning because its expiry is
- * measured from the first turn: a token created while an install was still
- * running would spend part of its life waiting.
+ * Asked rather than assumed: the harness needs absolute paths, and hardcoding
+ * the provider's layout would make a provider change look like a model that
+ * suddenly could not find any files.
+ *
+ * Re-derived in every step rather than persisted, because it is a pure function
+ * of the sandbox and the repository target — both of which each step already
+ * has to re-establish anyway.
  */
-async function buildRunProvider(
+async function resolveSandboxPaths(
+  sandbox: SandboxHandle,
+  target: { sourceRoot: string; workspaceRoot: string },
+): Promise<SandboxPaths | null> {
+  const home = await sandbox.run({
+    command: { command: "pwd", args: [] },
+    cwd: ".",
+    timeoutMs: 30_000,
+  });
+
+  const sandboxHome = home.exitCode === 0 ? home.output.trim() : "";
+  if (sandboxHome.length === 0 || !sandboxHome.startsWith("/")) return null;
+
+  const runtimeDir = `${sandboxHome}/${AGENT_RUNTIME_DIRNAME}`;
+  const workspaceCwd = workspaceCwdFor(target.sourceRoot, target.workspaceRoot);
+
+  return {
+    runtimeDir,
+    markerPath: `${runtimeDir}/marker`,
+    baselinePath: `${runtimeDir}/baseline.txt`,
+    workspaceDir: workspaceCwd === "." ? sandboxHome : `${sandboxHome}/${workspaceCwd}`,
+    workspaceCwd,
+  };
+}
+
+/**
+ * Builds the harness for one run.
+ *
+ * The gateway token is minted here, in whichever step needs a provider. It is
+ * short-lived and execution-scoped, so re-minting one is not a second grant —
+ * every claim in it is re-checked against durable state at the gateway on every
+ * request (ADR 0029 §2). Storing one instead would mean keeping a bearer
+ * credential in a database row for the length of a run.
+ */
+function buildRunProvider(
   deps: AgentExecutionDeps,
   input: {
     sandbox: SandboxHandle;
     run: StoredAgentExecutionRun;
     limits: AgentRuntimeLimits;
-    sourceRoot: string;
-    workspaceRoot: string;
+    paths: SandboxPaths;
+    gateway: { baseUrl: string; secret: string };
   },
-): Promise<RunProviderOutcome> {
-  const workspaceCwd = workspaceCwdFor(input.sourceRoot, input.workspaceRoot);
-
-  if (deps.runtime.kind === "gateway_tools") {
-    return {
-      ok: true,
-      provider: deps.runtime.provider,
-      baseline: null,
-      markerPath: null,
-      workspaceCwd,
-    };
-  }
-
-  const gateway = readAgentGatewayConfig();
-  if (!gateway) return { ok: false, failureCode: "missing_required_context" };
-
-  /*
-   * The sandbox's own idea of where it is.
-   *
-   * Asked rather than assumed: the harness needs absolute paths, and hardcoding
-   * the provider's layout would make a provider change look like a model that
-   * suddenly could not find any files.
-   */
-  const home = await input.sandbox.run({
-    command: { command: "pwd", args: [] },
-    cwd: ".",
-    timeoutMs: 30_000,
-  });
-  const sandboxHome = home.exitCode === 0 ? home.output.trim() : "";
-  if (sandboxHome.length === 0 || !sandboxHome.startsWith("/")) {
-    return { ok: false, failureCode: "sandbox_lost" };
-  }
-
-  const runtimeDir = `${sandboxHome}/${AGENT_RUNTIME_DIRNAME}`;
-  const markerPath = `${runtimeDir}/marker`;
-
-  // Taken before the marker is planted, so a file created between the two is
-  // visible as both new and touched rather than as neither.
-  const baseline = await listWorkspaceFiles({ sandbox: input.sandbox, cwd: workspaceCwd });
-  if (!(await plantChangeMarker({ sandbox: input.sandbox, markerPath }))) {
-    return { ok: false, failureCode: "sandbox_lost" };
-  }
-
+): DetachedCodingAgentProvider {
   const ceilings = deriveGatewayCeilings({ limits: input.limits, model: input.run.model });
 
-  const provider = deps.runtime.build({
+  return deps.runtime.build({
     sandbox: input.sandbox,
     /*
      * Runtime lifecycle, to the operator's log rather than to the audit trail.
@@ -560,10 +536,6 @@ async function buildRunProvider(
      * it. What the customer's records already carry is the outcome: turns on the
      * run row, tokens and latency per sampling call in `ai_usage_events`, CPU
      * and egress in `sandbox_usage_events`, and the reservation's own status.
-     *
-     * These three lines close the one gap those leave: a run that produced zero
-     * turns says nothing about *how far* it got, which is exactly the question
-     * the 44 ms failure could not answer.
      */
     onEvent: (event) => {
       console.info("[agent-runtime]", {
@@ -572,10 +544,10 @@ async function buildRunProvider(
         ...event,
       });
     },
-    runtimeDir,
-    workspaceDir: workspaceCwd === "." ? sandboxHome : `${sandboxHome}/${workspaceCwd}`,
-    workspaceCwd,
-    gatewayBaseUrl: gateway.baseUrl,
+    runtimeDir: input.paths.runtimeDir,
+    workspaceDir: input.paths.workspaceDir,
+    workspaceCwd: input.paths.workspaceCwd,
+    gatewayBaseUrl: input.gateway.baseUrl,
     gatewayToken: mintRunGatewayToken(
       {
         runId: input.run.id,
@@ -587,58 +559,42 @@ async function buildRunProvider(
         maxRequests: ceilings.maxRequests,
         expiresAt: agentTokenExpiryFor(input.limits.maxWallClockMs, (deps.now ?? Date.now)()),
       },
-      gateway.secret,
+      input.gateway.secret,
     ),
   });
-
-  return { ok: true, provider, baseline, markerPath, workspaceCwd };
 }
 
-export type RunAgentOutcome = StepOutcome<{
-  /** True when the run stopped on a question and is holding (§25). */
-  paused: boolean;
-  changedFileCount: number;
-  /**
-   * The paths Vibe observed, when the harness ran in the sandbox.
-   *
-   * Carried to the extract step rather than re-derived there, because the
-   * comparison is only possible while the run's own baseline is in hand — and
-   * because the answer must be taken at the moment the agent stopped, not after
-   * whatever else touches the workspace next.
-   *
-   * Null under `gateway_tools`, where the extract step reads the tool trail.
-   */
-  changedPaths: readonly string[] | null;
-}>;
+/**
+ * Everything the agent steps re-establish from scratch, every time.
+ *
+ * Three steps now touch one run — start, observe, collect — and each is a
+ * separate function invocation that has never seen the others. So none of them
+ * inherits anything: the spec is loaded by id, the repository target is rebuilt
+ * from the project row, the sandbox is reconnected by its deterministic name,
+ * and the paths are re-derived. That is what makes any of them safe to retry.
+ */
+type AgentRunContext = {
+  operation: StoredOperationRun;
+  run: StoredAgentExecutionRun;
+  spec: NonNullable<Awaited<ReturnType<typeof loadSpec>>>;
+  limits: AgentRuntimeLimits;
+  target: AgentRepositoryTarget;
+  sandbox: SandboxHandle;
+  paths: SandboxPaths;
+  provider: DetachedCodingAgentProvider;
+};
 
-export async function runAgentStep(
+async function loadAgentRunContext(
   deps: AgentExecutionDeps,
   operationId: string,
-  availableChecks: readonly AgentCheckName[],
-): Promise<RunAgentOutcome> {
+): Promise<StepOutcome<{ context: AgentRunContext }>> {
   const loaded = await loadRun(deps, operationId);
   if (!loaded.ok) return loaded;
   const { operation, run } = loaded;
 
-  // The paid-call guard. Scoped to `queued`, so a re-entry after a lost outcome
-  // reports false and this step refuses rather than buying a second agent (§37).
-  const claimed = await markAgentRunStarted(deps.supabase, run.id);
-  if (!claimed) {
-    return { ok: false, failureCode: "inference_interrupted" };
-  }
-
   const spec = await loadSpec(deps, run);
   if (!spec) return { ok: false, failureCode: "missing_required_context" };
   if (!spec.spec.budget) return { ok: false, failureCode: "agentic_pricing_not_configured" };
-
-  const mismatches = checkBudgetMatchesScope({
-    budget: spec.spec.budget,
-    policy: spec.spec.policy,
-  });
-  if (mismatches.length > 0) {
-    console.error("[agent-execution] budget and write scope disagree", { mismatches });
-    return { ok: false, failureCode: "change_preparation_failed" };
-  }
 
   const target = await deps.resolveTarget(operation, { withCloneCredential: false });
   if (!target) return { ok: false, failureCode: "missing_required_context" };
@@ -648,87 +604,325 @@ export async function runAgentStep(
     return { ok: false, failureCode: "sandbox_lost" };
   }
 
-  await setOperationStage(deps.supabase, { operationId, stage: "running_agent" });
+  const paths = await resolveSandboxPaths(sandbox, target);
+  if (!paths) return { ok: false, failureCode: "sandbox_lost" };
+
+  const gateway = readAgentGatewayConfig();
+  if (!gateway) return { ok: false, failureCode: "missing_required_context" };
 
   const limits = deriveAgentLimits({ budget: spec.spec.budget, policy: spec.spec.policy });
+
+  return {
+    ok: true,
+    context: {
+      operation,
+      run,
+      spec,
+      limits,
+      target,
+      sandbox,
+      paths,
+      provider: buildRunProvider(deps, { sandbox, run, limits, paths, gateway }),
+    },
+  };
+}
+
+/**
+ * The tool gateway for one run.
+ *
+ * Constructed even though the sandbox-hosted harness never calls it: it is what
+ * `compileAgentInstruction` describes to the model, it carries the counters the
+ * observation record is written from, and it is still the only door in the
+ * `AgentWorkspace` sense. What changed with ADR 0029 is which side of the VM
+ * boundary the writes happen on, not whether the policy exists.
+ */
+function buildToolGateway(
+  deps: AgentExecutionDeps,
+  context: AgentRunContext,
+  availableChecks: readonly AgentCheckName[],
+): ExecutionToolGateway {
   const workspace = createSandboxWorkspace({
-    sandbox,
-    sourceRoot: target.sourceRoot,
-    workspaceRoot: target.workspaceRoot,
+    sandbox: context.sandbox,
+    sourceRoot: context.target.sourceRoot,
+    workspaceRoot: context.target.workspaceRoot,
   });
 
-  // The commands the gateway will run, constructed by `validation/commands.ts`
-  // — the one place in this codebase allowed to build a command, already tested
-  // and already the rule (Sprint 10A §12). The agent names a check; this map
-  // decides what that means.
-  const packageManager = spec.spec.repository.packageManager === "npm" ? "npm" : "pnpm";
+  // The commands the gateway would run, constructed by `validation/commands.ts`
+  // — the one place in this codebase allowed to build a command (Sprint 10A §12).
+  const packageManager = context.spec.spec.repository.packageManager === "npm" ? "npm" : "pnpm";
   const checkCommands: Partial<Record<AgentCheckName, SandboxCommand>> = {};
   for (const entry of planValidationSteps({ packageManager, scripts: [...availableChecks] })) {
     if (!entry.run || entry.step === "install") continue;
     checkCommands[entry.step as AgentCheckName] = entry.command;
   }
 
-  const gateway = new ExecutionToolGateway({
-    spec: spec.spec,
+  return new ExecutionToolGateway({
+    spec: context.spec.spec,
     workspace,
-    limits,
+    limits: context.limits,
     checkCommands,
     commandTimeoutMs: SANDBOX_BUDGETS.commandTimeoutMs,
     now: deps.now,
   });
+}
 
+/* ---------------------------------------------------------------------------
+ * Step 2a — start the harness, and return (§37, ADR 0029 A1)
+ * ------------------------------------------------------------------------ */
+
+/**
+ * Launches the agent and finishes in seconds.
+ *
+ * ## Why this is not "run the agent"
+ *
+ * Because the first real run was killed doing exactly that. It reached
+ * Anthropic 27 times over five minutes and the platform ended the step at 300
+ * seconds — with the harness still working, the run row still reading
+ * `turns: 0`, the reservation still held and the sandbox still alive.
+ *
+ * The budget promises twenty minutes of agent work. No Vercel step can hold a
+ * connection open that long, and lowering the budget to fit would be answering
+ * a platform constraint by giving the customer less. So the harness is
+ * detached: this step starts it and returns, and short polling steps watch it.
+ *
+ * ## The marker, and why it is planted here
+ *
+ * Immediately before the first turn, after both installs, so an install
+ * artifact is never mistaken for the agent's work. The baseline listing is
+ * taken at the same instant and left *in the sandbox*, because the step that
+ * will compare against it does not exist yet.
+ */
+export async function startAgentStep(
+  deps: AgentExecutionDeps,
+  operationId: string,
+  availableChecks: readonly AgentCheckName[],
+): Promise<StepOutcome<{ paused?: boolean }>> {
+  const loaded = await loadAgentRunContext(deps, operationId);
+  if (!loaded.ok) return loaded;
+  const { context } = loaded;
+
+  const mismatches = checkBudgetMatchesScope({
+    budget: context.spec.spec.budget!,
+    policy: context.spec.spec.policy,
+  });
+  if (mismatches.length > 0) {
+    console.error("[agent-execution] budget and write scope disagree", { mismatches });
+    return { ok: false, failureCode: "change_preparation_failed" };
+  }
+
+  /*
+   * The paid-call guard, and the reason a retry cannot buy a second agent.
+   *
+   * Scoped to `queued`, so the second entrant reports false. Taken *before* the
+   * harness is launched rather than after, because the ambiguity §37 forbids
+   * resolving optimistically is "did a provider call already happen", and the
+   * only safe order is to claim first.
+   */
+  const claimed = await markAgentRunStarted(deps.supabase, context.run.id);
+  if (!claimed) return { ok: false, failureCode: "inference_interrupted" };
+
+  await setOperationStage(deps.supabase, { operationId, stage: "running_agent" });
+
+  if (!(await captureWorkspaceBaseline({
+    sandbox: context.sandbox,
+    cwd: context.paths.workspaceCwd,
+    baselinePath: context.paths.baselinePath,
+  }))) {
+    return { ok: false, failureCode: "sandbox_lost" };
+  }
+
+  if (!(await plantChangeMarker({
+    sandbox: context.sandbox,
+    markerPath: context.paths.markerPath,
+  }))) {
+    return { ok: false, failureCode: "sandbox_lost" };
+  }
+
+  const gateway = buildToolGateway(deps, context, availableChecks);
   const instruction = compileAgentInstruction({
-    spec: spec.spec,
-    limits,
+    spec: context.spec.spec,
+    limits: context.limits,
     availableChecks,
   });
 
-  /*
-   * The harness, and — when it runs in the sandbox — the baseline every "did
-   * this change?" question is asked against.
-   *
-   * The marker is planted after both installs and immediately before the first
-   * turn, so an install artifact is never mistaken for the agent's work, and
-   * the listing is taken at the same moment for the same reason.
-   */
-  const runtime = await buildRunProvider(deps, {
-    sandbox,
-    run,
-    limits,
-    sourceRoot: target.sourceRoot,
-    workspaceRoot: target.workspaceRoot,
+  const started = await context.provider.start({
+    runId: context.run.id,
+    instruction,
+    model: context.run.model,
+    effort: "high",
+    tools: agentToolDescriptors(availableChecks),
+    limits: {
+      maxTurns: context.limits.maxTurns,
+      maxWallClockMs: context.limits.maxWallClockMs,
+      maxProviderSpendUsd: context.limits.maxProviderSpendUsd,
+    },
+    invokeTool: (name: string, input: unknown) => gateway.invoke(name, input),
+    // Nothing to cancel through: the harness outlives this call. Cancellation
+    // is the poll loop's job, and the sandbox's own lifetime is the backstop.
+    signal: new AbortController().signal,
   });
-  if (!runtime.ok) return { ok: false, failureCode: runtime.failureCode };
 
-  // The wall-clock ceiling, enforced by Vibe rather than requested of the
-  // provider. A provider that ignored `maxTurns` would still be stopped here.
-  const controller = new AbortController();
-  const deadline = setTimeout(() => {
-    gateway.cancel();
-    controller.abort();
-  }, limits.maxWallClockMs);
+  /*
+   * The tool trail is written here, not at collect.
+   *
+   * It belongs to the gateway instance the harness was handed, and that
+   * instance dies with this invocation — the collecting step is a different
+   * function on a different machine and builds a fresh, empty one. Recording it
+   * anywhere else would silently persist zeros.
+   *
+   * Under the sandbox topology the trail is empty by construction: the harness
+   * edits files with its own tools inside the VM and never calls back. It is
+   * still written, because "the gateway brokered nothing" is a fact worth
+   * having recorded rather than an absence to infer.
+   */
+  const counters = gateway.counters;
+  await recordAgentRunObservations(deps.supabase, context.run.id, {
+    toolCallsAllowed: counters.allowedCalls,
+    toolCallsDenied: counters.deniedCalls,
+    filesRead: counters.filesRead,
+    checkRuns: counters.checkRuns,
+    repairAttempts: gateway.repairAttempts,
+    changedBytes: counters.changedBytes,
+  });
 
-  let result;
-  try {
-    result = await runtime.provider.run({
-      runId: run.id,
-      instruction,
-      model: run.model,
-      effort: "high",
-      tools: agentToolDescriptors(availableChecks),
-      limits: {
-        maxTurns: limits.maxTurns,
-        maxWallClockMs: limits.maxWallClockMs,
-        maxProviderSpendUsd: limits.maxProviderSpendUsd,
-      },
-      invokeTool: (name, input) => gateway.invoke(name, input),
-      signal: controller.signal,
+  await recordAgentToolEvents(deps.supabase, {
+    runId: context.run.id,
+    projectId: context.run.projectId,
+    events: gateway.toolEvents,
+  });
+  await recordAgentActivity(deps.supabase, {
+    runId: context.run.id,
+    projectId: context.run.projectId,
+    records: gateway.activityRecords,
+  });
+
+  const interrupt = gateway.interrupt;
+  if (interrupt) {
+    await raiseExecutionInterrupt(deps.supabase, {
+      projectId: context.run.projectId,
+      userId: context.run.userId,
+      executionSpecId: context.run.executionSpecId,
+      agentExecutionRunId: context.run.id,
+      interrupt,
     });
-  } finally {
-    clearTimeout(deadline);
+    await pauseAgentRunForUser(deps.supabase, context.run.id);
+    await pauseOperationForUser(deps.supabase, operationId);
+
+    await recordAuditEvent(deps.supabase, {
+      userId: context.run.userId,
+      projectId: context.run.projectId,
+      eventType: "agent_execution.needs_user_input",
+      metadata: {
+        projectId: context.run.projectId,
+        operationId,
+        agentExecutionRunId: context.run.id,
+        interruptType: interrupt.type,
+      },
+    });
+
+    return { ok: true, paused: true };
   }
 
-  const counters = gateway.counters;
+  if (!started.ok) {
+    console.error("[agent-execution] the agent harness could not be started", {
+      operationId,
+      agentExecutionRunId: context.run.id,
+      detail: started.failureDetail,
+    });
+    return { ok: false, failureCode: "provider_unavailable" };
+  }
+
+  return { ok: true };
+}
+
+/* ---------------------------------------------------------------------------
+ * Step 2b — watch it, briefly and repeatedly
+ * ------------------------------------------------------------------------ */
+
+export type PollAgentOutcome = StepOutcome<{
+  /** The harness wrote its result. Nothing further will change. */
+  finished: boolean;
+  /** The run outlived its authorized wall clock and must be stopped. */
+  expired: boolean;
+  /** Turns observed so far — already persisted before this returns. */
+  turns: number;
+}>;
+
+/**
+ * One short look at a running agent.
+ *
+ * Cheap by construction: it reconnects, reads two small files and writes at
+ * most one column. It is called on a timer for the whole length of a run, so
+ * anything expensive here is paid for dozens of times.
+ *
+ * The turn count is persisted *here*, not at the end. That is the whole point —
+ * the first real run's turns were lost because the only record of them lived in
+ * a function the platform killed.
+ */
+export async function pollAgentStep(
+  deps: AgentExecutionDeps,
+  operationId: string,
+): Promise<PollAgentOutcome> {
+  const loaded = await loadAgentRunContext(deps, operationId);
+  if (!loaded.ok) return loaded;
+  const { context } = loaded;
+
+  const observation = await context.provider.observe();
+
+  // Written before anything else can fail. A turn that happened is a fact about
+  // what a customer was charged for (Rule 47).
+  await recordAgentTurnProgress(deps.supabase, context.run.id, observation.turns);
+
+  /*
+   * The wall clock, enforced by Vibe against durable state.
+   *
+   * Measured from the run row's own `started_at` rather than from anything this
+   * invocation remembers, because no invocation has been here before. A harness
+   * that ignored its own ceiling is stopped by this and by the sandbox's
+   * independent lifetime — two bounds, neither of which is the agent's to hold.
+   */
+  const startedAt = context.run.startedAt ? Date.parse(context.run.startedAt) : null;
+  const now = (deps.now ?? Date.now)();
+  const expired =
+    startedAt !== null && Number.isFinite(startedAt)
+      ? now - startedAt > context.limits.maxWallClockMs
+      : false;
+
+  return { ok: true, finished: observation.finished, expired, turns: observation.turns };
+}
+
+/* ---------------------------------------------------------------------------
+ * Step 2c — collect what it left behind (§16, §17, §19, §25, §35)
+ * ------------------------------------------------------------------------ */
+
+export type RunAgentOutcome = StepOutcome<{
+  /** True when the run stopped on a question and is holding (§25). */
+  paused: boolean;
+  changedFileCount: number;
+  /**
+   * The paths Vibe observed.
+   *
+   * Carried to the extract step rather than re-derived there, because the
+   * answer must be taken at the moment the agent stopped and while its baseline
+   * is still in the sandbox — not after whatever else touches the workspace next.
+   */
+  changedPaths: readonly string[] | null;
+}>;
+
+export async function collectAgentStep(
+  deps: AgentExecutionDeps,
+  operationId: string,
+  availableChecks: readonly AgentCheckName[],
+): Promise<RunAgentOutcome> {
+  const loaded = await loadAgentRunContext(deps, operationId);
+  if (!loaded.ok) return loaded;
+  const { context } = loaded;
+  const { run } = context;
+
+  const startedAtMs = run.startedAt ? Date.parse(run.startedAt) : (deps.now ?? Date.now)();
+  const result = await context.provider.collect({
+    startedAtMs: Number.isFinite(startedAtMs) ? startedAtMs : (deps.now ?? Date.now)(),
+  });
 
   /*
    * What the run changed, read off the filesystem while the sandbox is still
@@ -738,106 +932,57 @@ export async function runAgentStep(
    * files still wrote four files, and a change set that quietly became empty
    * because of how a run ended would be a false statement about the workspace.
    */
-  const observed =
-    runtime.baseline && runtime.markerPath
-      ? await discoverWorkspaceChanges({
-          sandbox,
-          cwd: runtime.workspaceCwd,
-          before: runtime.baseline,
-          markerPath: runtime.markerPath,
-        })
-      : null;
+  const baseline = await readWorkspaceBaseline({
+    sandbox: context.sandbox,
+    baselinePath: context.paths.baselinePath,
+  });
+
+  const observed = baseline
+    ? await discoverWorkspaceChanges({
+        sandbox: context.sandbox,
+        cwd: context.paths.workspaceCwd,
+        before: baseline,
+        markerPath: context.paths.markerPath,
+      })
+    : null;
 
   const changedPaths = observed?.paths ?? null;
-  const changedFileCount = changedPaths ? changedPaths.length : counters.changedFiles;
+  const changedFileCount = changedPaths?.length ?? 0;
 
-  // Everything observed is recorded before anything is judged. A run that
-  // failed still produced a tool trail, an activity trail and a provider bill,
-  // and all three are facts about what happened (§35).
+  /*
+   * Only the columns this step is the one to know.
+   *
+   * The tool counters were written when the harness was started, by the gateway
+   * instance that saw the calls. Writing them again from a gateway rebuilt here
+   * would overwrite a real trail with the zeros of an object nothing ever used.
+   */
   await recordAgentRunObservations(deps.supabase, run.id, {
     turns: result.turns,
-    toolCallsAllowed: counters.allowedCalls,
-    toolCallsDenied: counters.deniedCalls + result.providerDeniedToolCalls,
-    filesRead: counters.filesRead,
-    checkRuns: counters.checkRuns,
-    repairAttempts: gateway.repairAttempts,
     changedFileCount,
-    changedBytes: counters.changedBytes,
     durationMs: result.durationMs,
     providerSessionId: result.sessionId,
   });
 
-  await recordAgentToolEvents(deps.supabase, {
-    runId: run.id,
-    projectId: run.projectId,
-    events: gateway.toolEvents,
-  });
-  await recordAgentActivity(deps.supabase, {
-    runId: run.id,
-    projectId: run.projectId,
-    records: gateway.activityRecords,
-  });
-
-  await recordAgentAiUsage(deps.supabase, {
-    userId: run.userId,
-    projectId: run.projectId,
-    agentExecutionRunId: run.id,
-    provider: runtime.provider.id,
-    usage: result.usage,
-    outcome: result.outcome,
-    durationMs: result.durationMs,
-    failureCode: result.failureDetail,
-  });
-
-  // A question was raised: persist it, pause, and stop. No further tool call is
-  // possible — the gateway refuses every one from here (§25, §49).
-  const interrupt = gateway.interrupt;
-  if (interrupt) {
-    await raiseExecutionInterrupt(deps.supabase, {
-      projectId: run.projectId,
-      userId: run.userId,
-      executionSpecId: run.executionSpecId,
-      agentExecutionRunId: run.id,
-      interrupt,
-    });
-    await pauseAgentRunForUser(deps.supabase, run.id);
-    await pauseOperationForUser(deps.supabase, operationId);
-
-    await recordAuditEvent(deps.supabase, {
-      userId: run.userId,
-      projectId: run.projectId,
-      eventType: "agent_execution.needs_user_input",
-      metadata: {
-        projectId: run.projectId,
-        operationId,
-        agentExecutionRunId: run.id,
-        interruptType: interrupt.type,
-      },
-    });
-
-    return { ok: true, paused: true, changedFileCount, changedPaths };
-  }
+  /*
+   * Provider usage is NOT recorded here.
+   *
+   * Every sampling call already wrote its own row as it happened, from the
+   * Agent Gateway — which is the only place that sees what a streamed response
+   * actually cost. Recording a summary here as well would double-count a run
+   * whose per-call rows are the ones the ceilings are measured against.
+   */
 
   if (result.outcome === "provider_error") {
     /*
      * The one string that says *why*, written where a person can read it.
      *
-     * `failureDetail` was computed by the adapter and then dropped: the run row
-     * has no column for it, the customer-facing copy is deliberately vague
-     * ("the AI provider could not be reached"), and nothing logged it. The
-     * first real dogfood therefore failed in 44ms with zero turns and left no
-     * evidence of what had happened — the cause had to be reconstructed from
-     * the SDK's package manifest.
-     *
      * This is an infrastructure error string, not model output: no prompt, no
      * response, no reasoning, so Rules 43 and 47 have nothing to say about it.
-     * `change-validation/execution.ts` already records the same class of detail
-     * for the same reason.
      */
     console.error("[agent-execution] the coding-agent provider failed", {
       operationId,
       agentExecutionRunId: run.id,
-      provider: runtime.provider.id,
+      provider: context.provider.id,
       durationMs: result.durationMs,
       turns: result.turns,
       detail: result.failureDetail,
@@ -849,16 +994,17 @@ export async function runAgentStep(
   /*
    * A change set Vibe is not sure is complete cannot become a diff.
    *
-   * The listing degraded — a walk failed, or a pathological tree hit the cap —
-   * so "these are the files" is a claim this run cannot make. Refusing here is
-   * the honest outcome: preparing a partial change would hand a reviewer
-   * something to approve that is missing a file nobody knows about (Rule 27).
+   * The baseline was lost, or a listing degraded, so "these are the files" is a
+   * claim this run cannot make. Refusing here is the honest outcome: preparing a
+   * partial change would hand a reviewer something to approve that is missing a
+   * file nobody knows about (Rule 27).
    */
-  if (observed?.truncated) {
+  if (!baseline || observed?.truncated) {
     console.error("[agent-execution] the workspace observation was incomplete", {
       operationId,
       agentExecutionRunId: run.id,
-      observedPaths: observed.paths.length,
+      baselineFound: baseline !== null,
+      observedPaths: observed?.paths.length ?? 0,
     });
     return { ok: false, failureCode: "change_preparation_failed" };
   }

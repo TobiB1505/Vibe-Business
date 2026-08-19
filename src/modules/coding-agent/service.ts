@@ -8,6 +8,7 @@ import { findExecutionSpecByIdentity } from "@/modules/execution-contract/store"
 import { getReservation } from "@/modules/credits/store";
 import {
   claimAgentExecutionRunRow,
+  expireStaleAgentExecution,
   holdAgentExecutionCredits,
 } from "@/modules/operations/agent-execution/server-writes";
 import type { OperationExecutor } from "@/modules/operations/executor";
@@ -345,6 +346,21 @@ export async function getAgentExecutionStatus(
     .maybeSingle();
 
   if (!project) return null;
+
+  /*
+   * The backstop for a workflow that stopped carrying its run (ADR 0029, A1).
+   *
+   * The polling loop terminates every run it is watching, but it cannot survive
+   * the workflow itself dying — which is what happened to the first real run:
+   * the step was killed at 300 seconds, nothing reached cleanup, and hours
+   * later the run still read `running` with 100 Credits held.
+   *
+   * A read is the right moment for the repair because it is the moment somebody
+   * cares, and it needs no scheduler this product has not decided to introduce
+   * (rule 24). Idempotent and bounded to one operation, so a hundred page loads
+   * repair it once.
+   */
+  await expireStaleAgentExecution({ operationRunId: params.operationId });
 
   const operation = await getOperationRunById(supabase, params.operationId);
   if (!operation || operation.projectId !== params.projectId) return null;

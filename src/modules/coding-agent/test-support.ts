@@ -23,6 +23,7 @@ import type {
   CodingAgentProvider,
   CodingAgentRequest,
   CodingAgentResult,
+  DetachedCodingAgentProvider,
 } from "./provider";
 import type {
   AgentWorkspace,
@@ -304,6 +305,107 @@ export function fakeCodingAgentProvider(
         providerDeniedToolCalls: 0,
         durationMs: 1_234,
         failureDetail: null,
+      };
+    },
+  };
+}
+
+export type FakeDetachedAgentProvider = DetachedCodingAgentProvider & {
+  /** Every tool call the fake actually attempted, with what came back. */
+  readonly attempted: { tool: string; outcomeKind: string }[];
+  readonly requests: CodingAgentRequest[];
+  /** How many times a harness was launched. Must never exceed one per run. */
+  starts(): number;
+  /** Make `observe()` report "still working" for the first N polls. */
+  finishAfterPolls(polls: number): void;
+};
+
+/**
+ * The same scripted agent, in the shape production actually runs
+ * (ADR 0029, A1).
+ *
+ * The harness now outlives the step that starts it, so the durable layer calls
+ * `start`, then `observe` on a timer, then `collect`. A fake that still offered
+ * one awaited `run()` would let the step graph be tested against a shape no
+ * deployment uses — the failure rule 69 keeps warning about.
+ *
+ * The scripted tool calls run inside `start`, not because a real harness works
+ * that way, but because it is the only moment this fake is handed the gateway.
+ * What the tests using it care about is what the gateway did with each call,
+ * and that is unchanged.
+ */
+export function fakeDetachedAgentProvider(
+  options: FakeProviderOptions = {},
+): FakeDetachedAgentProvider {
+  const attempted: { tool: string; outcomeKind: string }[] = [];
+  const requests: CodingAgentRequest[] = [];
+  let started = 0;
+  let polls = 0;
+  let pollsBeforeFinished = 0;
+  let turns = 0;
+  let threw: unknown = null;
+
+  return {
+    id: "fake_provider",
+    harness: "fake_harness",
+    attempted,
+    requests,
+
+    starts: () => started,
+    finishAfterPolls: (count: number) => {
+      pollsBeforeFinished = count;
+    },
+
+    async start(request: CodingAgentRequest) {
+      requests.push(request);
+      started += 1;
+
+      if (options.throws) {
+        // Carried rather than raised: a provider fault must reach the caller as
+        // a typed outcome, never as an exception the durable layer cannot
+        // classify (§37).
+        threw = options.throws;
+        return { ok: false as const, failureDetail: "fake provider refused to start" };
+      }
+
+      for (const call of options.calls ?? []) {
+        if (request.signal.aborted) break;
+        turns += 1;
+        const outcome = await request.invokeTool(call.tool, call.input);
+        attempted.push({ tool: call.tool, outcomeKind: outcome.kind });
+        if (outcome.kind === "halt") break;
+      }
+
+      return { ok: true as const };
+    },
+
+    async observe() {
+      polls += 1;
+      return {
+        started: started > 0,
+        finished: started > 0 && polls > pollsBeforeFinished,
+        turns,
+      };
+    },
+
+    async collect() {
+      return {
+        outcome: threw ? ("provider_error" as const) : (options.outcome ?? "completed"),
+        turns,
+        usage: options.usage ?? [
+          {
+            model: "claude-sonnet-5",
+            inputTokens: 1_000,
+            outputTokens: 500,
+            cacheReadInputTokens: 4_000,
+            cacheCreationInputTokens: 2_000,
+            reportedCostUsd: 0.02,
+          },
+        ],
+        sessionId: "session-1",
+        providerDeniedToolCalls: 0,
+        durationMs: 1_234,
+        failureDetail: threw ? "fake provider failed" : null,
       };
     },
   };

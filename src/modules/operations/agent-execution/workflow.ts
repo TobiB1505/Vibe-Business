@@ -1,3 +1,4 @@
+import { sleep } from "workflow";
 import { createServiceClient } from "@/lib/supabase/service";
 import { createSandboxCodingAgentProvider } from "@/modules/coding-agent/sandbox-runtime/provider";
 import { mintInstallationCloneCredential } from "@/modules/github/installation-token";
@@ -15,8 +16,10 @@ import {
   cleanupAgentWorkspaceStep,
   extractAndVerifyStep,
   finishAgentExecutionStep,
+  collectAgentStep,
+  pollAgentStep,
   provisionAgentWorkspaceStep,
-  runAgentStep,
+  startAgentStep,
   writeAgentBranchStep,
   type AgentExecutionDeps,
   type AgentRepositoryTarget,
@@ -28,12 +31,25 @@ import {
  * ## The step graph
  *
  * ```
- * provision ─▶ run agent ─▶ extract ─▶ write branch
- *      │           │           │            │
- *      └───────────┴───────────┴────────────┘
- *                        ▼
- *                    cleanup ─▶ finish
+ * provision ─▶ start agent ─▶ (sleep ─▶ poll)* ─▶ collect ─▶ extract ─▶ write branch
+ *      │            │              │                 │           │           │
+ *      └────────────┴──────────────┴─────────────────┴───────────┴───────────┘
+ *                                      ▼
+ *                                  cleanup ─▶ finish
  * ```
+ *
+ * ## Why the agent is watched rather than awaited
+ *
+ * Because a Vercel step is killed at 300 seconds and the budget authorizes
+ * twenty minutes. The first real run hit exactly that: 27 Anthropic calls over
+ * five minutes, then `Task timed out after 300 seconds`, leaving a run row
+ * reading `turns: 0`, a reservation still held and a sandbox still alive.
+ *
+ * Lowering the budget to fit the platform would have answered a hosting
+ * constraint by giving the customer less. So the harness is detached and the
+ * workflow watches it: `sleep()` suspends without holding a function open, and
+ * each poll is a step measured in milliseconds. No step in this graph now needs
+ * to stay alive for more than a few seconds (ADR 0029, A1).
  *
  * ## Why cleanup is carried in a local rather than by returning early
  *
@@ -126,7 +142,7 @@ function deps(): AgentExecutionDeps {
      * The real adapters, only ever constructed here. Tests inject fakes; there
      * is no local-execution implementation to fall back to (ADR 0015).
      */
-    runtime: { kind: "sandbox_workspace", build: createSandboxCodingAgentProvider },
+    runtime: { build: createSandboxCodingAgentProvider },
     sandboxProvider: createVercelSandboxProvider(),
     resolveTarget,
   };
@@ -140,14 +156,87 @@ async function provisionWorkspace(operationId: string) {
 // outside. A platform retry could buy a second one for the same question.
 provisionWorkspace.maxRetries = 0;
 
-async function runAgent(operationId: string, availableChecks: AgentCheckName[]) {
+async function startAgent(operationId: string, availableChecks: AgentCheckName[]) {
   "use step";
-  return runAgentStep(deps(), operationId, availableChecks);
+  return startAgentStep(deps(), operationId, availableChecks);
 }
-// The paid loop. A retry cannot distinguish "the agent never ran" from "the
-// agent ran and its result was lost", and for a paid provider call that
-// ambiguity must resolve to *not running it again* (§37).
-runAgent.maxRetries = 0;
+// The paid loop's ignition. A retry cannot distinguish "the agent never
+// started" from "it started and the outcome was lost", and for a paid provider
+// call that ambiguity must resolve to *not starting it again* (§37).
+startAgent.maxRetries = 0;
+
+async function pollAgent(operationId: string) {
+  "use step";
+  return pollAgentStep(deps(), operationId);
+}
+/*
+ * The one step in this workflow that may retry.
+ *
+ * It is read-only against the sandbox and writes at most a monotonic turn
+ * count, so "already done" and "done twice" are the same state. Retrying it is
+ * how a transient provider blip stops being a lost twenty-minute run.
+ */
+pollAgent.maxRetries = 2;
+
+async function collectAgent(operationId: string, availableChecks: AgentCheckName[]) {
+  "use step";
+  return collectAgentStep(deps(), operationId, availableChecks);
+}
+collectAgent.maxRetries = 0;
+
+/**
+ * How often the workflow looks at a running agent.
+ *
+ * Twenty seconds is a compromise between two costs that pull opposite ways: a
+ * shorter interval means a finished run is noticed sooner and its sandbox is
+ * released sooner, and a longer one means fewer function invocations across a
+ * twenty-minute run. It is not a timeout — nothing fails because a poll was
+ * late.
+ */
+const AGENT_POLL_INTERVAL_MS = 20_000;
+
+/**
+ * The hard bound on the loop.
+ *
+ * Derived from the longest wall clock any budget authorizes plus provisioning
+ * slack, divided by the interval. It exists so the loop is finite *in the code*
+ * rather than finite because a condition is expected to become true — an
+ * unbounded workflow loop is the failure mode that turns one stuck run into a
+ * permanent one.
+ *
+ * Reaching it is itself a failure: the run outlived every bound and is stopped.
+ */
+const AGENT_MAX_POLLS = Math.ceil((25 * 60_000) / AGENT_POLL_INTERVAL_MS);
+
+type WatchOutcome =
+  | { ok: true; expired: boolean }
+  | { ok: false; failureCode: OperationFailureCode };
+
+/**
+ * Watches a detached agent to completion, in short steps.
+ *
+ * `sleep()` suspends the workflow without holding a function open, so a
+ * twenty-minute run costs sixty brief invocations rather than one that the
+ * platform kills at three hundred seconds. That kill is exactly what happened
+ * to the first real run: 27 Anthropic calls, five minutes of work, and a run
+ * row that still said `turns: 0`.
+ *
+ * Not a step itself — `sleep` must be called from workflow context.
+ */
+async function watchAgent(operationId: string): Promise<WatchOutcome> {
+  for (let poll = 0; poll < AGENT_MAX_POLLS; poll += 1) {
+    await sleep(AGENT_POLL_INTERVAL_MS);
+
+    const observed = await pollAgent(operationId);
+    if (!observed.ok) return { ok: false, failureCode: observed.failureCode };
+    if (observed.finished) return { ok: true, expired: false };
+    if (observed.expired) return { ok: true, expired: true };
+  }
+
+  // The loop's own bound, reached. The run has outlived even the slack, so it
+  // is treated exactly as an expiry rather than watched forever.
+  return { ok: true, expired: true };
+}
 
 async function extractChange(operationId: string, observedPaths: string[] | null) {
   "use step";
@@ -196,8 +285,27 @@ export async function agentExecutionWorkflow(operationId: string) {
     if (!provisioned.ok) {
       failureCode = provisioned.failureCode;
     } else {
-      const agent = await runAgent(operationId, provisioned.availableChecks);
-      if (!agent.ok) {
+      const started = await startAgent(operationId, provisioned.availableChecks);
+      if (!started.ok) {
+        failureCode = started.failureCode;
+      } else if (started.paused) {
+        // The harness raised a question before it ever got going. The run holds
+        // its claims and its reservation until a customer answers (§25).
+        paused = true;
+      } else {
+        const watched = await watchAgent(operationId);
+        if (!watched.ok) failureCode = watched.failureCode;
+        else if (watched.expired) failureCode = "agent_wall_clock_exceeded";
+      }
+
+      const agent =
+        failureCode === null && !paused
+          ? await collectAgent(operationId, provisioned.availableChecks)
+          : null;
+
+      if (agent === null) {
+        // Already failed above; fall through to cleanup.
+      } else if (!agent.ok) {
         failureCode = agent.failureCode;
       } else if (agent.paused) {
         // A question was raised. The run holds its claims and its reservation,

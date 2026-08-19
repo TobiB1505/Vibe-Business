@@ -61,30 +61,57 @@ function request(overrides: Partial<CodingAgentRequest> = {}): CodingAgentReques
   };
 }
 
-async function run(options: FakeSandboxOptions = {}, overrides: Partial<CodingAgentRequest> = {}) {
-  const { provider, sandbox } = await handle(options);
-
-  const result = await createSandboxCodingAgentProvider({
+/**
+ * Start, observe, collect — the three calls a durable workflow makes, driven
+ * here in one helper so a test still reads as "run the agent".
+ *
+ * They are genuinely separate: each constructs its own provider from a
+ * reconnected sandbox, exactly as three different function invocations would.
+ */
+function providerFor(sandbox: Awaited<ReturnType<typeof handle>>["sandbox"]) {
+  return createSandboxCodingAgentProvider({
     sandbox,
     runtimeDir: RUNTIME_DIR,
     workspaceDir: "/vercel/sandbox/repo",
     workspaceCwd: "repo",
     gatewayBaseUrl: GATEWAY,
     gatewayToken: TOKEN,
-  }).run(request(overrides));
+  });
+}
 
-  return { provider, result };
+async function run(options: FakeSandboxOptions = {}, overrides: Partial<CodingAgentRequest> = {}) {
+  /*
+   * Two sandboxes, because the timeline is real.
+   *
+   * `start` sees a workspace the harness has not written to yet — that is the
+   * whole basis of its "already started?" guard. `observe` and `collect` run
+   * minutes later, against a workspace the harness has since filled in. A single
+   * pre-seeded fake would let `start` see its own future.
+   */
+  const before = await handle();
+  const started = await providerFor(before.sandbox).start(request(overrides));
+
+  const after = await handle(options);
+  const observation = await providerFor(after.sandbox).observe();
+  const result = await providerFor(after.sandbox).collect({ startedAtMs: Date.now() - 1_234 });
+
+  return { provider: before.provider, after: after.provider, started, observation, result };
 }
 
 /** The `node run.mjs` invocation, with the environment it was given. */
 function cliCommand(provider: ReturnType<typeof fakeSandboxProvider>) {
+  // `background`, not `command`: the harness outlives the step that starts it.
   return provider.events.find(
-    (event) => event.kind === "command" && event.command.startsWith("node "),
+    (event) => event.kind === "background" && event.command.startsWith("node "),
   );
 }
 
+/** A finished run: the harness wrote both its progress and its result. */
 const OK: FakeSandboxOptions = {
-  files: { [`${RUNTIME_DIR}/result.json`]: runtimeResult() },
+  files: {
+    [`${RUNTIME_DIR}/result.json`]: runtimeResult(),
+    [`${RUNTIME_DIR}/progress.ndjson`]: '{"t":"started"}\n{"t":"turn","n":1}\n{"t":"turn","n":2}\n{"t":"turn","n":3}\n',
+  },
 };
 
 describe("what the sandbox is given", () => {
@@ -92,7 +119,7 @@ describe("what the sandbox is given", () => {
     const { provider } = await run(OK);
     const command = cliCommand(provider);
 
-    expect(command?.kind === "command" && command.env?.ANTHROPIC_BASE_URL).toBe(GATEWAY);
+    expect(command?.kind === "background" && command.env?.ANTHROPIC_BASE_URL).toBe(GATEWAY);
     expect(JSON.stringify(command)).not.toContain("api.anthropic.com");
   });
 
@@ -103,7 +130,7 @@ describe("what the sandbox is given", () => {
   it("carries a scoped token and no provider key", async () => {
     const { provider } = await run(OK);
     const command = cliCommand(provider);
-    const env = command?.kind === "command" ? (command.env ?? {}) : {};
+    const env = command?.kind === "background" ? (command.env ?? {}) : {};
 
     expect(env.ANTHROPIC_AUTH_TOKEN).toBe(TOKEN);
     expect(env).not.toHaveProperty("ANTHROPIC_API_KEY");
@@ -113,7 +140,7 @@ describe("what the sandbox is given", () => {
   it("gives the run its own config directory, outside the repository", async () => {
     const { provider } = await run(OK);
     const command = cliCommand(provider);
-    const env = command?.kind === "command" ? (command.env ?? {}) : {};
+    const env = command?.kind === "background" ? (command.env ?? {}) : {};
 
     expect(env.CLAUDE_CONFIG_DIR).toBe(`${RUNTIME_DIR}/claude`);
     expect(env.CLAUDE_CONFIG_DIR?.startsWith("/vercel/sandbox/repo")).toBe(false);
@@ -128,14 +155,14 @@ describe("what the sandbox is given", () => {
     const { provider } = await run(OK);
     const command = cliCommand(provider);
 
-    expect(command?.kind === "command" && command.env?.CLAUDE_CODE_DISABLE_AUTO_MEMORY).toBe("1");
+    expect(command?.kind === "background" && command.env?.CLAUDE_CODE_DISABLE_AUTO_MEMORY).toBe("1");
   });
 
   it("runs the agent in the repository workspace", async () => {
     const { provider } = await run(OK);
     const command = cliCommand(provider);
 
-    expect(command?.kind === "command" && command.cwd).toBe("repo");
+    expect(command?.kind === "background" && command.cwd).toBe("repo");
   });
 
   it("writes the task as data rather than as program text", async () => {
@@ -184,19 +211,22 @@ describe("what comes back", () => {
 });
 
 describe("a run that produced no result file", () => {
+  /** Progress the harness appended before it died, read back off the workspace. */
+  function progress(...lines: string[]) {
+    return { [`${RUNTIME_DIR}/progress.ndjson`]: `${lines.join("\n")}\n` };
+  }
+
   /**
    * §37 forbids resolving a paid ambiguity optimistically — and it forbids the
-   * reverse too. A run that took three turns and then lost its result file did
-   * take three turns, and reporting zero would understate what was billed.
+   * reverse too. A run that took two turns and then lost its result did take
+   * two turns, and reporting zero would understate what was billed.
+   *
+   * This is the exact shape of the first real failure: the harness worked, the
+   * step that was watching it was killed, and the run row said `turns: 0`.
    */
-  it("still reports the turns the progress stream showed", async () => {
+  it("still reports the turns the progress file recorded", async () => {
     const { result } = await run({
-      results: {
-        [`node ${RUNTIME_DIR}/run.mjs ${RUNTIME_DIR}`]: {
-          exitCode: 1,
-          output: '{"t":"started"}\n{"t":"turn","n":1}\n{"t":"turn","n":2}\n',
-        },
-      },
+      files: progress('{"t":"started"}', '{"t":"turn","n":1}', '{"t":"turn","n":2}'),
     });
 
     expect(result.outcome).toBe("provider_error");
@@ -205,54 +235,87 @@ describe("a run that produced no result file", () => {
   });
 
   it("distinguishes a harness that never started from one that died", async () => {
-    const { result } = await run({
-      results: {
-        [`node ${RUNTIME_DIR}/run.mjs ${RUNTIME_DIR}`]: { exitCode: 127, output: "node: not found" },
-      },
-    });
+    const { result } = await run();
 
     expect(result.turns).toBe(0);
     expect(result.failureDetail).toBe("the agent runtime did not start");
   });
 
-  it("names a wall-clock death as one", async () => {
+  /** The repository's own build output shares this file's directory, not its lines. */
+  it("ignores progress lines that are not the runtime's own", async () => {
     const { result } = await run({
-      results: {
-        [`node ${RUNTIME_DIR}/run.mjs ${RUNTIME_DIR}`]: {
-          exitCode: -1,
-          output: '{"t":"started"}',
-          timedOut: true,
-        },
-      },
-    });
-
-    expect(result.failureDetail).toBe("the agent runtime exceeded its wall clock");
-  });
-
-  /** Repository build output shares stdout. A line that is not ours is not an error. */
-  it("ignores output that is not the runtime's own", async () => {
-    const { result } = await run({
-      results: {
-        [`node ${RUNTIME_DIR}/run.mjs ${RUNTIME_DIR}`]: {
-          exitCode: 1,
-          output: 'building...\n{"t":"turn","n":1}\n{ not json\nDone in 4s\n',
-        },
-      },
+      files: progress('building...', '{"t":"turn","n":1}', '{ not json', 'Done in 4s'),
     });
 
     expect(result.turns).toBe(1);
   });
 });
 
-describe("a cancelled run", () => {
-  it("never starts the harness", async () => {
+describe("watching a run that has not finished", () => {
+  /**
+   * The signal a polling step reads. `result.json` is the completion marker
+   * because a file survives a step boundary and a process handle does not.
+   */
+  it("reports it as started but unfinished, with the turns so far", async () => {
+    const { observation } = await run({
+      files: {
+        [`${RUNTIME_DIR}/progress.ndjson`]: '{"t":"started"}\n{"t":"turn","n":4}\n',
+      },
+    });
+
+    expect(observation).toEqual({ started: true, finished: false, turns: 4 });
+  });
+
+  it("reports a finished run once the result file exists", async () => {
+    const { observation } = await run(OK);
+
+    expect(observation).toEqual({ started: true, finished: true, turns: 3 });
+  });
+
+  it("reports a harness that has not written anything yet", async () => {
+    const { observation } = await run();
+
+    expect(observation).toEqual({ started: false, finished: false, turns: 0 });
+  });
+});
+
+describe("a run that must not start twice", () => {
+  /**
+   * The second, independent guard. The caller's database claim is the primary
+   * one, but two paid harnesses on one execution is expensive enough to deserve
+   * an answer that does not depend on the database being reachable.
+   */
+  it("refuses to start when the workspace shows a harness already ran", async () => {
+    const { sandbox, provider } = await handle({
+      files: { [`${RUNTIME_DIR}/progress.ndjson`]: '{"t":"started"}\n' },
+    });
+
+    const started = await providerFor(sandbox).start(request());
+
+    expect(started).toEqual({
+      ok: false,
+      failureDetail: "the agent runtime was already started for this run",
+    });
+    expect(cliCommand(provider)).toBeUndefined();
+  });
+
+  it("never launches a cancelled run", async () => {
     const controller = new AbortController();
     controller.abort();
+    const { sandbox, provider } = await handle();
 
-    const { provider, result } = await run(OK, { signal: controller.signal });
+    const started = await providerFor(sandbox).start(request({ signal: controller.signal }));
 
-    expect(result.outcome).toBe("aborted");
+    expect(started).toEqual({ ok: false, failureDetail: "the run was cancelled" });
     expect(cliCommand(provider)).toBeUndefined();
+  });
+
+  it("reports a harness the provider refused to launch", async () => {
+    const { sandbox } = await handle({ failBackground: true });
+
+    const started = await providerFor(sandbox).start(request());
+
+    expect(started.ok).toBe(false);
   });
 });
 
