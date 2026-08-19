@@ -31,6 +31,26 @@ vi.mock("@/modules/operations/agent-execution/gateway-state", () => ({
   recordGatewayUsage: (params: unknown) => recordGatewayUsage(params),
 }));
 
+/**
+ * `after()` runs work that must outlive the response — which is exactly what a
+ * test cannot observe by awaiting the handler. Captured here and drained
+ * explicitly, so an assertion about usage is an assertion about what the
+ * platform would really have run.
+ */
+const afterTasks: (() => Promise<unknown> | unknown)[] = [];
+
+vi.mock("next/server", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("next/server")>()),
+  after: (task: () => Promise<unknown> | unknown) => {
+    afterTasks.push(task);
+  },
+}));
+
+async function drainAfter() {
+  const tasks = afterTasks.splice(0, afterTasks.length);
+  for (const task of tasks) await task();
+}
+
 const { POST } = await import("./route");
 
 function claims(overrides: Partial<AgentGatewayClaims> = {}): AgentGatewayClaims {
@@ -107,6 +127,10 @@ beforeEach(() => {
   vi.stubEnv("ANTHROPIC_API_KEY", REAL_KEY);
   readAgentRunGatewayState.mockResolvedValue(liveRun());
   recordGatewayUsage.mockClear();
+  // An undrained task from a previous test would otherwise write its usage row
+  // into this one's assertions — the same bleed a real deployment cannot have,
+  // because each request's `after` belongs to that request.
+  afterTasks.length = 0;
   fetchMock = vi.fn(async () => anthropicOk());
   vi.stubGlobal("fetch", fetchMock);
   vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -331,5 +355,183 @@ describe("an unreachable provider", () => {
     expect(recordGatewayUsage).toHaveBeenCalledWith(
       expect.objectContaining({ status: "failed", failureCode: "provider_unreachable" }),
     );
+  });
+});
+
+/* ---------------------------------------------------------------------------
+ * Streaming — the shape the Claude CLI actually asks for
+ * ------------------------------------------------------------------------ */
+
+/**
+ * The defect the first real run exposed: the gateway buffered the body and ran
+ * `JSON.parse` over Server-Sent Events, so every billed call recorded null
+ * tokens — and the ceilings measured against those tokens could never bind.
+ */
+describe("a streamed response", () => {
+  function sseBody(options: { outputTokens?: number; stop?: boolean } = {}) {
+    const start = {
+      type: "message_start",
+      message: {
+        id: "msg_01",
+        model: "claude-sonnet-5",
+        usage: { input_tokens: 1_200, output_tokens: 1, cache_read_input_tokens: 90 },
+      },
+    };
+    const delta = {
+      type: "message_delta",
+      delta: { stop_reason: "end_turn" },
+      usage: { input_tokens: null, output_tokens: options.outputTokens ?? 340 },
+    };
+
+    const parts = [
+      `event: message_start\ndata: ${JSON.stringify(start)}\n\n`,
+      `event: message_delta\ndata: ${JSON.stringify(delta)}\n\n`,
+    ];
+    if (options.stop !== false) parts.push(`event: message_stop\ndata: {"type":"message_stop"}\n\n`);
+    return parts.join("");
+  }
+
+  /** A real SSE response: a body that arrives in pieces, not a string. */
+  function anthropicStream(body: string, options: { status?: number; chunk?: number } = {}) {
+    const encoder = new TextEncoder();
+    const size = options.chunk ?? 16;
+
+    return new Response(
+      new ReadableStream<Uint8Array>({
+        start(controller) {
+          for (let at = 0; at < body.length; at += size) {
+            controller.enqueue(encoder.encode(body.slice(at, at + size)));
+          }
+          controller.close();
+        },
+      }),
+      { status: options.status ?? 200, headers: { "content-type": "text/event-stream" } },
+    );
+  }
+
+  it("forwards the stream to the caller rather than buffering it", async () => {
+    const body = sseBody();
+    fetchMock.mockResolvedValue(anthropicStream(body));
+
+    const response = await POST(samplingRequest());
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("text/event-stream");
+    // Byte-identical: the gateway is a credential boundary, not a translator.
+    expect(await response.text()).toBe(body);
+  });
+
+  /**
+   * The response must be answerable without waiting for the accounting. If the
+   * usage write had to finish first, every turn would pay for it.
+   */
+  it("answers before the usage is written", async () => {
+    fetchMock.mockResolvedValue(anthropicStream(sseBody()));
+
+    await POST(samplingRequest());
+
+    expect(recordGatewayUsage).not.toHaveBeenCalled();
+    await drainAfter();
+    expect(recordGatewayUsage).toHaveBeenCalledOnce();
+  });
+
+  it("records the tokens the stream reported", async () => {
+    fetchMock.mockResolvedValue(anthropicStream(sseBody({ outputTokens: 340 })));
+
+    const response = await POST(samplingRequest());
+    await response.text();
+    await drainAfter();
+
+    expect(recordGatewayUsage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "succeeded",
+        model: "claude-sonnet-5",
+        failureCode: null,
+        usage: expect.objectContaining({
+          inputTokens: 1_200,
+          outputTokens: 340,
+          cacheReadInputTokens: 90,
+        }),
+      }),
+    );
+  });
+
+  /** A stream that stopped early still produced what it produced (Rule 47). */
+  it("records a partial stream as failed while keeping its tokens", async () => {
+    fetchMock.mockResolvedValue(anthropicStream(sseBody({ stop: false })));
+
+    const response = await POST(samplingRequest());
+    await response.text();
+    await drainAfter();
+
+    expect(recordGatewayUsage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "failed",
+        failureCode: "stream_incomplete",
+        usage: expect.objectContaining({ outputTokens: 340 }),
+      }),
+    );
+  });
+
+  it("survives a malformed stream without failing the turn", async () => {
+    fetchMock.mockResolvedValue(anthropicStream('data: {"type":"message_del\n\nnot sse at all\n'));
+
+    const response = await POST(samplingRequest());
+
+    expect(response.status).toBe(200);
+    await response.text();
+    await expect(drainAfter()).resolves.not.toThrow();
+  });
+
+  /**
+   * Many calls, one run — the cardinality the migration exists for. Each
+   * forwarded request writes its own row, and the ceiling reads their sum.
+   */
+  it("writes one usage row per forwarded request", async () => {
+    fetchMock.mockImplementation(async () => anthropicStream(sseBody({ outputTokens: 100 })));
+
+    for (let call = 0; call < 3; call += 1) {
+      const response = await POST(samplingRequest());
+      await response.text();
+    }
+    await drainAfter();
+
+    expect(recordGatewayUsage).toHaveBeenCalledTimes(3);
+    for (const [params] of recordGatewayUsage.mock.calls) {
+      expect(params).toMatchObject({ runId: "run-1", usage: { outputTokens: 100 } });
+    }
+  });
+
+  /**
+   * The point of recording cumulative usage: the next request reads it back.
+   * A run cannot outspend its authorization by looping faster than the ledger.
+   */
+  it("is refused once the accumulated spend reaches the ceiling", async () => {
+    fetchMock.mockImplementation(async () => anthropicStream(sseBody()));
+
+    // Under the ceiling: forwarded.
+    readAgentRunGatewayState.mockResolvedValue(
+      liveRun({ spentOutputTokens: 59_900, forwardedRequests: 12 }),
+    );
+    expect((await POST(samplingRequest())).status).toBe(200);
+
+    // The ledger now says the ceiling is reached; the next call never leaves.
+    readAgentRunGatewayState.mockResolvedValue(
+      liveRun({ spentOutputTokens: 60_000, forwardedRequests: 13 }),
+    );
+    fetchMock.mockClear();
+
+    expect((await POST(samplingRequest())).status).toBe(429);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  /** A refused request was never forwarded, so it must never be counted. */
+  it("records nothing for a request it refused", async () => {
+    readAgentRunGatewayState.mockResolvedValue(liveRun({ status: "cancelled" }));
+
+    await POST(samplingRequest());
+    await drainAfter();
+
+    expect(recordGatewayUsage).not.toHaveBeenCalled();
   });
 });

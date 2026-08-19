@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { after, NextResponse, type NextRequest } from "next/server";
 
 import {
   authorizeGatewayRequest,
@@ -6,6 +6,12 @@ import {
   type AgentGatewayRefusal,
 } from "@/modules/coding-agent/gateway-policy";
 import { verifyAgentGatewayToken } from "@/modules/coding-agent/gateway-token";
+import {
+  createUsageAccumulator,
+  hasBilledTokens,
+  usageFromJsonBody,
+  type GatewayStreamUsage,
+} from "@/modules/coding-agent/gateway-usage";
 import {
   readAgentRunGatewayState,
   recordGatewayUsage,
@@ -185,82 +191,114 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(gatewayRefusalBody(), { status: 502 });
   }
 
-  const payload = await upstream.text();
+  /*
+   * A streamed response is forwarded as a stream, and counted beside it.
+   *
+   * The obvious shape — buffer the body, parse it, then answer — is what the
+   * first version did, and it was wrong twice over. It turned a streaming proxy
+   * into a blocking one, adding the whole generation time to the SDK's
+   * time-to-first-byte; and it then called `JSON.parse` on Server-Sent Events,
+   * which threw, which is why that run recorded null tokens for calls that were
+   * really billed.
+   *
+   * `tee()` splits the body into two independent readers. One becomes the
+   * response the moment upstream sends its first byte. The other is consumed
+   * here, after the answer is already on its way to the sandbox, so accounting
+   * cannot delay or fail a turn.
+   */
+  const contentType = upstream.headers.get("content-type") ?? "application/json";
+  const forwardedHeaders = new Headers({ "content-type": contentType });
+  const cacheHeader = upstream.headers.get("cache-control");
+  if (cacheHeader) forwardedHeaders.set("cache-control", cacheHeader);
+
+  const streamed = contentType.includes("text/event-stream") && upstream.body !== null;
+
+  if (!streamed) {
+    // Not a stream: an error body, or a caller that asked for a whole message.
+    // Still a billed call, so it is still counted.
+    const payload = await upstream.text();
+
+    await recordGatewayUsage({
+      runId: claims.runId,
+      projectId: claims.projectId,
+      userId: claims.userId,
+      model: claims.model,
+      status: upstream.ok ? "succeeded" : "failed",
+      latencyMs: Date.now() - startedAt,
+      failureCode: upstream.ok ? null : `upstream_${upstream.status}`,
+      usage: upstream.ok ? toRecordedUsage(usageFromJsonBody(payload)) : undefined,
+    });
+
+    return new NextResponse(payload, { status: upstream.status, headers: forwardedHeaders });
+  }
+
+  const [toCaller, toLedger] = upstream.body!.tee();
 
   /*
-   * Usage is recorded from the provider's own response, for successes and
-   * failures alike (Rule 47) — and only when tokens were genuinely billed.
+   * `after()` rather than a floating promise.
    *
-   * This is also what makes the budget ceiling real: the next request reads
-   * this row back, so a run cannot outspend its authorization by looping faster
-   * than the ledger is written.
+   * The platform may freeze a function the moment its response is done, and a
+   * detached promise would be cut off mid-stream — the exact failure that would
+   * make usage look complete and be short. `after` is Next's contract for work
+   * that must outlive the response.
    */
-  await recordGatewayUsage({
-    runId: claims.runId,
-    projectId: claims.projectId,
-    userId: claims.userId,
-    model: claims.model,
-    status: upstream.ok ? "succeeded" : "failed",
-    latencyMs: Date.now() - startedAt,
-    failureCode: upstream.ok ? null : `upstream_${upstream.status}`,
-    usage: upstream.ok ? usageFrom(payload) : undefined,
+  after(async () => {
+    const accumulator = createUsageAccumulator();
+    const decoder = new TextDecoder();
+    const reader = toLedger.getReader();
+    let interrupted: string | null = null;
+
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        accumulator.push(decoder.decode(value, { stream: true }));
+      }
+      accumulator.push(decoder.decode());
+    } catch (error) {
+      // The connection died part-way. What was counted so far is still true.
+      interrupted = error instanceof Error ? error.name : "stream_read_failed";
+    } finally {
+      reader.releaseLock();
+    }
+
+    const usage = accumulator.result();
+    const failure = interrupted ?? usage.streamError ?? (usage.complete ? null : "stream_incomplete");
+
+    await recordGatewayUsage({
+      runId: claims.runId,
+      projectId: claims.projectId,
+      userId: claims.userId,
+      // What the provider says it served, never what the caller asked for —
+      // the token already bound the model, and this is the billing record.
+      model: usage.model ?? claims.model,
+      // A stream that broke still produced the tokens it produced. Recording it
+      // as `failed` while keeping the counts is the honest pair (Rule 47).
+      status: failure === null ? "succeeded" : "failed",
+      latencyMs: Date.now() - startedAt,
+      failureCode: failure,
+      usage: toRecordedUsage(usage),
+    });
   });
 
-  // The provider's own answer, verbatim. The gateway is a credential boundary,
-  // not a translation layer — rewriting a response would make the SDK's error
-  // handling depend on our parsing of it.
-  return new NextResponse(payload, {
-    status: upstream.status,
-    headers: { "content-type": upstream.headers.get("content-type") ?? "application/json" },
-  });
+  return new NextResponse(toCaller, { status: upstream.status, headers: forwardedHeaders });
 }
 
 /**
- * The token counts the provider reported, or nothing.
+ * The ledger's shape, or nothing when the provider reported no tokens.
  *
- * Returns `undefined` rather than zeros when the shape is unfamiliar: a zero
- * recorded as if it were measured would understate a bill that really happened,
- * and `recordAIUsage` already treats an absent `usage` as "no tokens known".
+ * `undefined` rather than zeros when nothing was billed: `recordAIUsage` treats
+ * an absent `usage` as "no tokens known", and a zero recorded as if it were
+ * measured would understate a bill that really happened.
  */
-function usageFrom(payload: string):
-  | {
-      inputTokens: number;
-      outputTokens: number;
-      thinkingTokens: number;
-      cacheReadInputTokens?: number;
-      cacheCreationInputTokens?: number;
-    }
-  | undefined {
-  try {
-    const usage = (
-      JSON.parse(payload) as {
-        usage?: Record<string, unknown> & {
-          output_tokens_details?: { thinking_tokens?: unknown } | null;
-        };
-      }
-    ).usage;
-    if (!usage) return undefined;
+function toRecordedUsage(usage: GatewayStreamUsage | null) {
+  if (!usage || !hasBilledTokens(usage)) return undefined;
 
-    const input = usage.input_tokens;
-    const output = usage.output_tokens;
-    if (typeof input !== "number" || typeof output !== "number") return undefined;
-
-    // The same field the Anthropic adapter reads. A count, never the text —
-    // reasoning is billed and therefore recorded, and nothing more (Rule 43).
-    const thinking = usage.output_tokens_details?.thinking_tokens;
-
-    return {
-      inputTokens: input,
-      outputTokens: output,
-      thinkingTokens: typeof thinking === "number" ? thinking : 0,
-      cacheReadInputTokens:
-        typeof usage.cache_read_input_tokens === "number" ? usage.cache_read_input_tokens : undefined,
-      cacheCreationInputTokens:
-        typeof usage.cache_creation_input_tokens === "number"
-          ? usage.cache_creation_input_tokens
-          : undefined,
-    };
-  } catch {
-    return undefined;
-  }
+  return {
+    inputTokens: usage.inputTokens,
+    outputTokens: usage.outputTokens,
+    thinkingTokens: usage.thinkingTokens,
+    cacheReadInputTokens: usage.cacheReadInputTokens || undefined,
+    cacheCreationInputTokens: usage.cacheCreationInputTokens || undefined,
+  };
 }
