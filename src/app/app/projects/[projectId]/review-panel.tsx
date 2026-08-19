@@ -1,10 +1,16 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
+import { useOperationPoll } from "@/lib/client/use-operation-poll";
+import { shouldRefreshForState } from "@/modules/operations/view";
 import type { ReviewCard } from "@/modules/review/view";
 import type { ReviewImages } from "@/modules/review/service";
-import { startReviewAction, type StartReviewActionState } from "./review-actions";
+import {
+  getReviewStatusAction,
+  startReviewAction,
+  type StartReviewActionState,
+} from "./review-actions";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
 
 /**
@@ -138,21 +144,33 @@ export function ReviewPanel({
   const router = useRouter();
   const [state, setState] = useState<StartReviewActionState>(null);
   const [pending, startTransition] = useTransition();
-  const shouldPoll = card.state === "capturing" || pending;
-
-  useEffect(() => {
-    if (!shouldPoll) return;
-
-    let cancelled = false;
-    const timer = setInterval(() => {
-      if (!cancelled) router.refresh();
-    }, POLL_INTERVAL_MS);
-
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [shouldPoll, router]);
+  /*
+   * Watch the comparison, rather than re-rendering the page to find out
+   * (UI-4 §5).
+   *
+   * This used to poll by calling `router.refresh()` on every tick, which
+   * re-rendered the entire prepared-change route — every card, its merge
+   * preflight, its signed image URLs — two and a half seconds apart. A render
+   * can outlast that gap, so each refresh superseded the one still in flight,
+   * and a capture of a minute cost roughly two dozen full re-renders to learn
+   * one thing. It is the same mistake the preview panel had already made and
+   * documented one file over.
+   *
+   * Now it asks the cheap question and refreshes once, on the transition.
+   */
+  useOperationPoll<ReviewCard>({
+    key: `${preparedChangeId}:review`,
+    enabled: card.state === "capturing" || pending,
+    intervalMs: POLL_INTERVAL_MS,
+    poll: async () => ({
+      kind: "value",
+      value: await getReviewStatusAction(projectId, preparedChangeId),
+    }),
+    continueAfter: (next) => next.state === "capturing",
+    onReading: (next) => {
+      if (shouldRefreshForState(next.state, card.state)) router.refresh();
+    },
+  });
 
   function generate() {
     if (!previewSessionId) return;

@@ -1,9 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
-import type { OperationView } from "@/modules/operations/view";
+import { useOperationPoll } from "@/lib/client/use-operation-poll";
+import {
+  freshestOperation,
+  operationPollPhase,
+  type OperationView,
+} from "@/modules/operations/view";
 import { failedPhase, type ValidationPhaseView, type ValidationSummary } from "@/modules/validation/view";
 import { getValidationProgressAction, validateChangeAction, type ValidateChangeActionState } from "./validate-change-action";
 
@@ -122,61 +127,65 @@ export function ValidationPanel({
   const router = useRouter();
   const [state, setState] = useState<ValidateChangeActionState>(null);
   const [pending, startTransition] = useTransition();
-  const [polled, setPolled] = useState<OperationView | null>(runningOperation);
   /**
-   * Live phase state, replacing the server-rendered summary while a run is in
-   * flight.
-   *
-   * The whole point of the durable-phase refactor from the user's side: without
-   * this the panel could only say "validating…" for five minutes, because the
+   * Cleared when a new run starts, so the previous run's phases cannot be read
+   * as this one's. Live phases otherwise come from the poll below: without
+   * them the panel could only say "validating…" for five minutes, because the
    * server render happened before any phase had finished.
    */
-  const [liveSummary, setLiveSummary] = useState<ValidationSummary | null>(null);
+  const [clearedFor, setClearedFor] = useState(0);
 
   function validate() {
     startTransition(async () => {
-      setLiveSummary(null);
+      setClearedFor((runs) => runs + 1);
       setState(await validateChangeAction(projectId, preparedChangeId));
     });
   }
 
   const started = state?.ok && state.kind === "running" ? state.operation : null;
-  const operation = started && polled?.operationId !== started.operationId ? started : polled;
 
-  const operationId = operation?.operationId ?? null;
-  const shouldPoll = operation?.shouldPoll ?? false;
-
-  useEffect(() => {
-    if (!operationId || !shouldPoll) return;
-
-    let cancelled = false;
-    const timer = setInterval(async () => {
-      const result = await getValidationProgressAction(projectId, preparedChangeId, operationId);
-      if (cancelled || !result.ok) return;
-      setPolled(result.operation);
-      // May legitimately be null before the first phase is recorded.
-      setLiveSummary(result.summary);
-    }, POLL_INTERVAL_MS);
-
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [projectId, preparedChangeId, operationId, shouldPoll]);
-
-  /**
-   * Pull the result in once the operation stops.
-   *
-   * `summary` is rendered on the server, so without this the panel fell back to
-   * "Not validated" the moment polling ended — which is exactly what the first
-   * real run looked like from the outside: the button flickered and the failure
-   * was invisible. The verdict lives in the database; this is what fetches it.
+  /*
+   * What to watch, before the first reading lands: whichever of the server
+   * render and the start action's answer is newer.
    */
-  useEffect(() => {
-    if (!operation) return;
-    if (operation.status === "queued" || operation.status === "running") return;
-    router.refresh();
-  }, [operation, router]);
+  const watching = freshestOperation(runningOperation, started);
+
+  const { latest: reading } = useOperationPoll<{
+    operation: OperationView;
+    summary: ValidationSummary | null;
+  }>({
+    // Includes the run counter so starting again drops the previous run's
+    // phases even before its replacement has an id.
+    key: watching ? `${watching.operationId}:${clearedFor}` : null,
+    enabled: operationPollPhase(watching) === "working",
+    intervalMs: POLL_INTERVAL_MS,
+    poll: async () => {
+      const operationId = watching?.operationId;
+      if (!operationId) return { kind: "unavailable" };
+
+      const result = await getValidationProgressAction(projectId, preparedChangeId, operationId);
+      // The summary may legitimately be null before the first phase is recorded.
+      return result.ok
+        ? { kind: "value", value: { operation: result.operation, summary: result.summary } }
+        : { kind: "unavailable" };
+    },
+    continueAfter: (next) => operationPollPhase(next.operation) === "working",
+    /**
+     * Pull the result in once the run stops.
+     *
+     * `summary` is rendered on the server, so without this the panel fell back
+     * to "Not validated" the moment polling ended — which is exactly what the
+     * first real run looked like from the outside: the button flickered and
+     * the failure was invisible. The verdict lives in the database; this is
+     * what fetches it.
+     */
+    onReading: (next) => {
+      if (operationPollPhase(next.operation) !== "working") router.refresh();
+    },
+  });
+
+  const operation = freshestOperation(reading?.operation ?? runningOperation, started);
+  const liveSummary = reading?.summary ?? null;
 
   const running =
     pending || (operation !== null && (operation.status === "queued" || operation.status === "running"));
