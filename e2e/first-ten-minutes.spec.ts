@@ -58,7 +58,7 @@ test.describe("the landing page", () => {
     await page.goto("/");
 
     const hero = page.getByRole("main").locator("section").first();
-    const primary = hero.getByRole("link", { name: "Get started" });
+    const primary = hero.getByRole("link", { name: "Get your business audit" });
     await expect(primary).toBeVisible();
     await expect(primary).toHaveAttribute("href", "/signup");
 

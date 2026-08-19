@@ -299,7 +299,7 @@ test.describe("public pages stay public", () => {
     // well. What is being asserted is that an unauthenticated visitor reaches
     // the page at all — not how many ways in it offers.
     await expect(
-      page.getByRole("main").getByRole("link", { name: "Get started" }).first(),
+      page.getByRole("main").getByRole("link", { name: "Get your business audit" }).first(),
     ).toBeVisible();
   });
 

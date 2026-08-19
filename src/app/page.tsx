@@ -83,7 +83,7 @@ export default function HomePage() {
 
         <div className="flex flex-wrap items-center gap-4">
           <Link href="/signup" className={buttonClasses()}>
-            Get started
+            Get your business audit
           </Link>
           <Link href="/login" className={buttonClasses({ variant: "secondary" })}>
             Sign in
@@ -176,7 +176,7 @@ export default function HomePage() {
           Start with the product you already have.
         </h2>
         <Link href="/signup" className={buttonClasses()}>
-          Get started
+          Get your business audit
         </Link>
       </section>
     </MarketingShell>
