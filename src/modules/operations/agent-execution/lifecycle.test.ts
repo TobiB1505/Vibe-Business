@@ -337,7 +337,7 @@ describe("a run nothing is carrying any more", () => {
       id: "account-1",
       user_id: USER,
       status: "active",
-      balance_credits: creditsToUnits(1_000),
+      posted_credits: creditsToUnits(1_000),
       reserved_credits: creditsToUnits(100),
     });
 
