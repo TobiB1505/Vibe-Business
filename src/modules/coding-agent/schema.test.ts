@@ -40,6 +40,27 @@ describe("agent_execution_runs constraints", () => {
     );
   });
 
+  /**
+   * Two counters, two columns, and no column named for both.
+   *
+   * `turns` counted model responses during a run and the harness's loop count
+   * after it, under one name, against a ceiling in the second unit. Run
+   * b33635a1 read 66 against a limit of 40 and overran nothing. The rename is
+   * asserted here because an alias or a re-added `turns` would quietly restore
+   * exactly the ambiguity that caused it.
+   */
+  it("names the two turn counters separately and keeps the ambiguous one gone", () => {
+    const sql = migrationSql().join("\n");
+
+    expect(sql).toContain("rename column turns to assistant_messages");
+    expect(sql).toContain("add column sdk_loop_iterations integer");
+
+    // Nullable on purpose: the harness reports it once, in its terminal
+    // message, so a run that died before one has no honest value. A NOT NULL
+    // default would mean writing the message count there.
+    expect(sql).toContain("sdk_loop_iterations is null or sdk_loop_iterations >= 0");
+  });
+
   /** A "succeeded" run with no artifact behind it would let a report claim work that never landed. */
   it("refuses a successful run with no prepared change", () => {
     expect(migrationSql().join("\n")).toContain("agent_execution_runs_succeeded_has_change");

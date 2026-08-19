@@ -183,7 +183,7 @@ describe("what comes back", () => {
     const { result } = await run(OK);
 
     expect(result.outcome).toBe("completed");
-    expect(result.turns).toBe(3);
+    expect(result.assistantMessages).toBe(3);
     expect(result.sessionId).toBe("session-1");
     expect(result.usage).toEqual([
       {
@@ -230,14 +230,14 @@ describe("a run that produced no result file", () => {
     });
 
     expect(result.outcome).toBe("provider_error");
-    expect(result.turns).toBe(2);
+    expect(result.assistantMessages).toBe(2);
     expect(result.failureDetail).toBe("the agent runtime produced no result");
   });
 
   it("distinguishes a harness that never started from one that died", async () => {
     const { result } = await run();
 
-    expect(result.turns).toBe(0);
+    expect(result.assistantMessages).toBe(0);
     expect(result.failureDetail).toBe("the agent runtime did not start");
   });
 
@@ -247,7 +247,7 @@ describe("a run that produced no result file", () => {
       files: progress('building...', '{"t":"turn","n":1}', '{ not json', 'Done in 4s'),
     });
 
-    expect(result.turns).toBe(1);
+    expect(result.assistantMessages).toBe(1);
   });
 });
 
@@ -263,19 +263,19 @@ describe("watching a run that has not finished", () => {
       },
     });
 
-    expect(observation).toMatchObject({ started: true, finished: false, turns: 4 });
+    expect(observation).toMatchObject({ started: true, finished: false, assistantMessages: 4 });
   });
 
   it("reports a finished run once the result file exists", async () => {
     const { observation } = await run(OK);
 
-    expect(observation).toMatchObject({ started: true, finished: true, turns: 3 });
+    expect(observation).toMatchObject({ started: true, finished: true, assistantMessages: 3 });
   });
 
   it("reports a harness that has not written anything yet", async () => {
     const { observation } = await run();
 
-    expect(observation).toEqual({ started: false, finished: false, turns: 0, entries: [] });
+    expect(observation).toEqual({ started: false, finished: false, assistantMessages: 0, entries: [] });
   });
 });
 

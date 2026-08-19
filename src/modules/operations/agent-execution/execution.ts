@@ -60,7 +60,7 @@ import {
   recordAgentActivity,
   recordAgentRunObservations,
   recordAgentToolEvents,
-  recordAgentTurnProgress,
+  recordAgentMessageProgress,
   markAgentRunStarted,
   type StoredAgentExecutionRun,
 } from "@/modules/coding-agent/store";
@@ -901,8 +901,8 @@ export type PollAgentOutcome = StepOutcome<{
   finished: boolean;
   /** The run outlived its authorized wall clock and must be stopped. */
   expired: boolean;
-  /** Turns observed so far — already persisted before this returns. */
-  turns: number;
+  /** Model responses observed so far — already persisted before this returns. */
+  assistantMessages: number;
 }>;
 
 /**
@@ -926,9 +926,9 @@ export async function pollAgentStep(
 
   const observation = await context.provider.observe();
 
-  // Written before anything else can fail. A turn that happened is a fact about
-  // what a customer was charged for (Rule 47).
-  await recordAgentTurnProgress(deps.supabase, context.run.id, observation.turns);
+  // Written before anything else can fail. A model response that happened is a
+  // fact about what a customer was charged for (Rule 47).
+  await recordAgentMessageProgress(deps.supabase, context.run.id, observation.assistantMessages);
 
   /*
    * The harness's feed, made durable.
@@ -983,7 +983,12 @@ export async function pollAgentStep(
       ? now - startedAt > context.limits.maxWallClockMs
       : false;
 
-  return { ok: true, finished: observation.finished, expired, turns: observation.turns };
+  return {
+    ok: true,
+    finished: observation.finished,
+    expired,
+    assistantMessages: observation.assistantMessages,
+  };
 }
 
 /* ---------------------------------------------------------------------------
@@ -1066,7 +1071,16 @@ export async function collectAgentStep(
    * touched paths read as eighteen changes.
    */
   await recordAgentRunObservations(deps.supabase, run.id, {
-    turns: result.turns,
+    /*
+     * Both counts, each written under its own name.
+     *
+     * `sdkLoopIterations` is the unit the budget's ceiling is in and is null
+     * when the harness never reported one — which is the honest value for a run
+     * that died before its terminal message. Filling it with the message count
+     * is the substitution that made run b33635a1 read "66 / 40".
+     */
+    assistantMessages: result.assistantMessages,
+    sdkLoopIterations: result.sdkLoopIterations,
     observedPathCount,
     durationMs: result.durationMs,
     providerSessionId: result.sessionId,
@@ -1093,7 +1107,7 @@ export async function collectAgentStep(
       agentExecutionRunId: run.id,
       provider: context.provider.id,
       durationMs: result.durationMs,
-      turns: result.turns,
+      assistantMessages: result.assistantMessages,
       detail: result.failureDetail,
     });
 
@@ -1120,7 +1134,10 @@ export async function collectAgentStep(
 
   await recordLifecycle(deps, run, "agent_finished", "Finished working on the change", {
     outcome: result.outcome,
-    assistantMessages: result.turns,
+    assistantMessages: result.assistantMessages,
+    // Null when the harness never reported one, and recorded as null rather
+    // than as the message count — the inspector reads this field directly.
+    sdkLoopIterations: result.sdkLoopIterations,
     durationMs: result.durationMs,
   });
 

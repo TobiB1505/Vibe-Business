@@ -1,7 +1,10 @@
-# Known defect — `turns` and `maxAgentTurns` do not count the same thing
+# Fixed — `turns` and `maxAgentTurns` did not count the same thing
 
-**Status:** recorded, not fixed. Deliberately out of scope for the change-evidence patch.
+**Status:** fixed, 2026-08-19. Migration `20260819160000`.
 **Found:** 2026-08-19, during the first complete agent execution (run `42b4cc54`).
+
+The record below is kept because the reasoning is the useful part: the defect
+was never a wrong number, it was two right numbers sharing one name.
 
 ## What was observed
 
@@ -31,21 +34,29 @@ worse than showing nothing, because it teaches a reader that Vibe's stated
 ceilings are decorative. It also makes the number useless for the one thing it
 is good for: noticing a run that is looping.
 
-## Proposed correction (a later patch)
+## The correction, as applied
 
-1. **Name the metric for what it measures.** Rename the persisted column and the
-   protocol field from `turns` to `assistantMessages` / `assistant_messages`, or
-   record the harness's own `num_turns` as a second, separately named field.
-   Persisting both is cheap and answers different questions: assistant messages
-   track model responses, harness turns track the budget.
-2. **Compare like with like in the UI.** Whatever is displayed beside
-   `maxAgentTurns` must be the harness's turn count, not the message count.
-3. **Keep the terminal value authoritative.** `program.ts` already overwrites its
-   running tally with the harness's `num_turns` from the `result` message, so the
-   final stored value is *already* in harness units while every intermediate
-   progress write is in message units. That silent unit switch mid-run is part of
-   the same defect and should be resolved by the split above, not by dropping one
-   of the two.
+1. **Both metrics named for what they measure.** `turns` renamed to
+   `assistant_messages`; `sdk_loop_iterations` added beside it, nullable. The
+   old name is gone rather than aliased — the whole defect is that somebody read
+   an ambiguous name and believed it, and a rename fails loudly at every call
+   site instead.
+2. **The UI compares like with like.** The inspector shows *Assistant messages*,
+   *SDK loop iterations* and *Max SDK iterations* as three separately named
+   values and forms no ratio between them. It also stopped reading the loop
+   count out of the `agent_finished` event's message-count field, which is how
+   it had been labelling one number as the other.
+3. **The silent unit switch is gone.** Both `program.ts` (sandbox harness) and
+   `claude/adapter.ts` (in-process) had one variable that counted messages and
+   was then overwritten by the SDK's `num_turns`. They now keep two, and the
+   loop count is `null` until the harness reports one — a run that died before
+   its terminal message has no honest value there, and the message count is not
+   a substitute.
+
+Historical rows keep their message counts, which is what they mostly held.
+`sdk_loop_iterations` is null for all of them rather than back-filled from a
+column whose unit is not knowable per row: an unknown recorded as unknown beats
+a plausible number nobody can check.
 
 ## The same defect, in another column — now fixed
 
@@ -58,7 +69,13 @@ the verified candidate, written by the step that knows it. See migration
 
 The turns pair below is the remaining instance.
 
-## What must not change as part of this
+## What deliberately did not change
 
-The turn budget itself. `maxAgentTurns = 40` was not reached under either
-reading, so there is no evidence yet about whether it is the right number.
+**The turn budget.** `maxAgentTurns = 40` was not reached under either reading,
+so there is still no evidence about whether it is the right number.
+
+**The `ExecutionSpec` field name.** `budget.maxAgentTurns` is badly named — it
+is in SDK-loop units, not turns — but a spec is an immutable stored artifact
+whose identity is hashed, and renaming a field in it would invalidate every spec
+already written. The runtime limit derived from it is documented as being in the
+harness's unit instead.

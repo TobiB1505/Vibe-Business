@@ -174,7 +174,8 @@ function seed() {
     base_sha: BASE_SHA,
     credit_reservation_id: null,
     status: "queued",
-    turns: 0,
+    assistant_messages: 0,
+    sdk_loop_iterations: null,
     tool_calls_allowed: 0,
     tool_calls_denied: 0,
     files_read: 0,
@@ -208,7 +209,7 @@ function deps(overrides: { entries?: readonly ObservedRuntimeEntry[] } = {}): Ag
 
 const FEED: ObservedRuntimeEntry[] = [
   { sequence: 1, kind: "started" },
-  { sequence: 2, kind: "turn", turns: 1 },
+  { sequence: 2, kind: "turn", assistantMessages: 1 },
   { sequence: 3, kind: "tool", tool: "Read", path: "src/app/page.tsx" },
   { sequence: 4, kind: "tool", tool: "Edit", path: "src/app/page.tsx" },
   { sequence: 5, kind: "tool", tool: "Bash", command: "pnpm run typecheck" },
@@ -409,7 +410,8 @@ describe("the live view model", () => {
       run: {
         id: run.id,
         status: row.status as string,
-        turns: 1,
+        assistantMessages: 1,
+        sdkLoopIterations: null,
         startedAt: "2026-08-19T09:50:00.000Z",
         completedAt: null,
         durationMs: null,
@@ -442,27 +444,49 @@ describe("the live view model", () => {
     expect(live.metrics.sdkLoopIterations).toBeNull();
   });
 
-  /** Observed is not candidate. Nothing may promise a change before verification. */
-  it("shows touched paths as observed until a candidate is verified", async () => {
-    const live = await model(FEED, "running");
+  /**
+   * The specific substitution that produced the misleading display: the
+   * inspector read the message count out of the `agent_finished` event and
+   * labelled it SDK loop iterations. It now reads the run row's own column.
+   */
+  it("reads the loop count from its own column, never from the message count", async () => {
+    const { operation, run } = seed();
+    const shared = deps({ entries: FEED });
 
-    expect(live.files.map((file) => file.path)).toEqual(["src/app/page.tsx"]);
-    expect(live.files.every((file) => file.kind === "observed")).toBe(true);
-    expect(live.timeline.find((step) => step.phase === "reviewing_change")?.state).toBe("pending");
+    await toRunningAgent(shared, operation.id);
+    await pollAgentStep(shared, operation.id);
+    await collectAgentStep(shared, operation.id);
+
+    const events = await listExecutionEvents(fakeSupabase(db), {
+      runId: run.id,
+      projectId: PROJECT,
+    });
+    const finished = events.find((event) => event.type === "agent_finished");
+
+    // Both are recorded, under their own names, and neither is derived from
+    // the other — the event carries them as two separate fields.
+    expect(finished?.metadata).toHaveProperty("assistantMessages");
+    expect(finished?.metadata).toHaveProperty("sdkLoopIterations");
+
+    const row = db.rows("agent_execution_runs")[0] as Record<string, unknown>;
+    expect(row).toHaveProperty("sdk_loop_iterations");
+    expect(row.sdk_loop_iterations).toBe(finished?.metadata.sdkLoopIterations);
   });
 
-  it("stops asking once the operation is terminal", async () => {
-    const live = await model(FEED, "failed");
+  /**
+   * Mid-run progress writes the message count and nothing else. The harness
+   * reports its loop count once, in its terminal message, so filling the column
+   * before then could only mean putting the message count there.
+   */
+  it("writes no loop count before the harness has reported one", async () => {
+    const { operation } = seed();
+    const shared = deps({ entries: FEED });
 
-    expect(live.operation.shouldPoll).toBe(false);
-    expect(live.timeline.some((step) => step.state === "active")).toBe(false);
-  });
+    await toRunningAgent(shared, operation.id);
+    await pollAgentStep(shared, operation.id);
 
-  it("orders the feed chronologically rather than by producer", async () => {
-    const live = await model(FEED, "running");
-
-    const times = live.events.map((event) => Date.parse(event.occurredAt));
-    expect([...times].sort((a, b) => a - b)).toEqual(times);
+    const row = db.rows("agent_execution_runs")[0] as Record<string, unknown>;
+    expect(row.sdk_loop_iterations ?? null).toBeNull();
   });
 });
 

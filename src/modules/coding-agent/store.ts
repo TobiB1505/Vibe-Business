@@ -55,7 +55,10 @@ export type StoredAgentExecutionRun = {
   creditReservationId: string | null;
   status: AgentRunStatus;
   failureCode: AgentFailureCode | null;
-  turns: number;
+  /** Model responses. Never comparable to the budget's turn ceiling. */
+  assistantMessages: number;
+  /** The harness's own loop count, in the ceiling's unit. Null if unreported. */
+  sdkLoopIterations: number | null;
   toolCallsAllowed: number;
   toolCallsDenied: number;
   filesRead: number;
@@ -93,7 +96,8 @@ type RunRow = {
   credit_reservation_id: string | null;
   status: AgentRunStatus;
   failure_code: AgentFailureCode | null;
-  turns: number;
+  assistant_messages: number;
+  sdk_loop_iterations: number | null;
   tool_calls_allowed: number;
   tool_calls_denied: number;
   files_read: number;
@@ -114,7 +118,7 @@ const RUN_COLUMNS =
   "id, project_id, user_id, operation_run_id, execution_spec_id, run_identity, provider, harness, " +
   "model, coding_agent_policy_version, prompt_compiler_version, budget_policy_version, " +
   "execution_policy_version, non_production_economics, base_sha, credit_reservation_id, status, " +
-  "failure_code, turns, tool_calls_allowed, tool_calls_denied, files_read, check_runs, " +
+  "failure_code, assistant_messages, sdk_loop_iterations, tool_calls_allowed, tool_calls_denied, files_read, check_runs, " +
   "repair_attempts, observed_path_count, changed_file_count, changed_bytes, duration_ms, provider_session_id, " +
   "prepared_change_id, created_at, started_at, completed_at";
 
@@ -138,7 +142,8 @@ function mapRun(row: RunRow): StoredAgentExecutionRun {
     creditReservationId: row.credit_reservation_id,
     status: row.status,
     failureCode: row.failure_code,
-    turns: row.turns,
+    assistantMessages: row.assistant_messages,
+    sdkLoopIterations: row.sdk_loop_iterations,
     toolCallsAllowed: row.tool_calls_allowed,
     toolCallsDenied: row.tool_calls_denied,
     filesRead: row.files_read,
@@ -281,7 +286,7 @@ export async function markAgentRunStarted(
 }
 
 /**
- * Records the turns observed so far, mid-run.
+ * Records the model responses observed so far, mid-run.
  *
  * Separate from `recordAgentRunObservations` because the two answer different
  * questions. That one writes the whole picture once the harness has stopped;
@@ -289,25 +294,30 @@ export async function markAgentRunStarted(
  * stopping.
  *
  * The first real run made that concrete: it reached Anthropic 27 times over
- * five minutes and the run row still read `turns: 0`, because the step was
+ * five minutes and the run row still read zero, because the step was
  * killed before the final write. A turn that happened is a fact about what a
  * customer was charged for, and it must not depend on a later step succeeding.
  *
- * Monotonic by construction — `turns` only ever climbs, so a poll that races a
- * stale read cannot walk the count backwards.
+ * Monotonic by construction — the count only ever climbs, so a poll that races
+ * a stale read cannot walk it backwards.
+ *
+ * Writes `assistant_messages` and nothing else. `sdk_loop_iterations` has no
+ * mid-run value: the harness reports it once, in its terminal message, and
+ * filling the column with the message count in the meantime is precisely the
+ * unit switch this rename exists to end.
  */
-export async function recordAgentTurnProgress(
+export async function recordAgentMessageProgress(
   supabase: SupabaseClient,
   runId: string,
-  turns: number,
+  assistantMessages: number,
 ): Promise<void> {
-  if (turns <= 0) return;
+  if (assistantMessages <= 0) return;
 
   const { error } = await supabase
     .from("agent_execution_runs")
-    .update({ turns })
+    .update({ assistant_messages: assistantMessages })
     .eq("id", runId)
-    .lt("turns", turns);
+    .lt("assistant_messages", assistantMessages);
 
   if (error) throw error;
 }
@@ -317,7 +327,7 @@ export async function recordAgentTurnProgress(
  *
  * Every field optional, because the observations are produced at different
  * moments by different durable steps and neither may clobber the other. The
- * tool trail exists when the harness is started; the turns, the change set and
+ * tool trail exists when the harness is started; the message count, the change set and
  * the duration only exist when it has stopped — minutes and several function
  * invocations later (ADR 0029, A1).
  *
@@ -325,7 +335,8 @@ export async function recordAgentTurnProgress(
  * for the half it cannot know, and "zero" is not the same as "not yet".
  */
 export type AgentRunObservations = {
-  turns?: number;
+  assistantMessages?: number;
+  sdkLoopIterations?: number | null;
   toolCallsAllowed?: number;
   toolCallsDenied?: number;
   filesRead?: number;
@@ -349,7 +360,8 @@ export async function recordAgentRunObservations(
     if (value !== undefined) patch[column] = value;
   };
 
-  set("turns", observations.turns);
+  set("assistant_messages", observations.assistantMessages);
+  set("sdk_loop_iterations", observations.sdkLoopIterations);
   set("tool_calls_allowed", observations.toolCallsAllowed);
   set("tool_calls_denied", observations.toolCallsDenied);
   set("files_read", observations.filesRead);

@@ -96,7 +96,20 @@ const emit = (event) => {
 const result = {
   version: request.version,
   subtype: "no_result",
-  turns: 0,
+  /*
+   * Two counters, because they count two different things.
+   *
+   * assistantMessages is one per model response. sdkLoopIterations is the
+   * harness's own loop count, which advances on tool results as well — so it is
+   * the unit maxTurns bounds, and the two are not a ratio.
+   *
+   * They used to be one field that switched units at the end: the running tally
+   * counted messages and the terminal write replaced it with num_turns. Run
+   * b33635a1 recorded 66 against a ceiling of 40 and overran nothing, because
+   * the number shown and the number bounded were never the same quantity.
+   */
+  assistantMessages: 0,
+  sdkLoopIterations: null,
   sessionId: null,
   permissionDenials: 0,
   modelUsage: {},
@@ -137,8 +150,8 @@ try {
 
   for await (const message of stream) {
     if (message.type === "assistant") {
-      result.turns += 1;
-      emit({ t: "turn", n: result.turns });
+      result.assistantMessages += 1;
+      emit({ t: "turn", n: result.assistantMessages });
 
       /*
        * What the harness executed, taken from its own tool stream.
@@ -172,7 +185,9 @@ try {
 
     if (message.type === "result") {
       result.subtype = message.subtype;
-      result.turns = typeof message.num_turns === "number" ? message.num_turns : result.turns;
+      // The harness's own count, kept beside the message count rather than
+      // written over it. Null when the SDK did not report one.
+      result.sdkLoopIterations = typeof message.num_turns === "number" ? message.num_turns : null;
       result.sessionId = message.session_id ?? null;
       result.permissionDenials = Array.isArray(message.permission_denials)
         ? message.permission_denials.length
@@ -195,7 +210,7 @@ try {
   result.error = (name + ": " + message).replace(/\\s+/g, " ").trim().slice(0, 400);
 }
 
-emit({ t: "finished", subtype: result.subtype, turns: result.turns });
+emit({ t: "finished", subtype: result.subtype, n: result.assistantMessages });
 
 await writeFile(dir + "/result.json", JSON.stringify(result), "utf8");
 `;

@@ -293,7 +293,8 @@ export function fakeCodingAgentProvider(
 
       return {
         outcome: options.outcome ?? "completed",
-        turns,
+        assistantMessages: turns,
+        sdkLoopIterations: turns,
         usage: options.usage ?? [
           {
             model: "claude-sonnet-5",
@@ -387,7 +388,7 @@ export function fakeDetachedAgentProvider(
       return {
         started: started > 0,
         finished: started > 0 && polls > pollsBeforeFinished,
-        turns,
+        assistantMessages: turns,
         /*
          * The whole feed, every time — as the real provider returns it.
          *
@@ -402,7 +403,8 @@ export function fakeDetachedAgentProvider(
     async collect() {
       return {
         outcome: threw ? ("provider_error" as const) : (options.outcome ?? "completed"),
-        turns,
+        assistantMessages: turns,
+        sdkLoopIterations: threw ? null : turns,
         usage: options.usage ?? [
           {
             model: "claude-sonnet-5",

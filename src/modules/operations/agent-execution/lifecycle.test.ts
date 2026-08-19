@@ -140,7 +140,8 @@ function seed() {
     base_sha: BASE_SHA,
     credit_reservation_id: null,
     status: "queued",
-    turns: 0,
+    assistant_messages: 0,
+    sdk_loop_iterations: null,
     tool_calls_allowed: 0,
     tool_calls_denied: 0,
     files_read: 0,
@@ -237,7 +238,7 @@ describe("an agent that runs longer than a Vercel step may live", () => {
     // No collect step has run, and none ever will in this test. The turns are
     // already durable.
     const stored = db.rows("agent_execution_runs").find((row) => row.id === run.id);
-    expect(stored?.turns).toBe(2);
+    expect(stored?.assistant_messages).toBe(2);
   });
 
   /** Monotonic: a poll racing a stale read must not walk the count backwards. */

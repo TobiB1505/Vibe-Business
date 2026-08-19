@@ -119,7 +119,7 @@ describe("the current action", () => {
 describe("the runtime feed, made durable", () => {
   const entries: ObservedRuntimeEntry[] = [
     { sequence: 1, kind: "started" },
-    { sequence: 2, kind: "turn", turns: 1 },
+    { sequence: 2, kind: "turn", assistantMessages: 1 },
     { sequence: 3, kind: "tool", tool: "Read", path: "src/app/login/page.tsx" },
     { sequence: 4, kind: "tool", tool: "Edit", path: "src/app/login/page.tsx" },
     { sequence: 5, kind: "tool", tool: "Bash", command: "pnpm run typecheck" },
@@ -174,7 +174,7 @@ describe("the runtime feed, made durable", () => {
   it("places each line at the harness's own offset from the run's start", () => {
     const events = eventsFromRuntimeFeed({
       entries: [
-        { sequence: 2, offsetMs: 0, kind: "turn", turns: 1 },
+        { sequence: 2, offsetMs: 0, kind: "turn", assistantMessages: 1 },
         { sequence: 3, offsetMs: 12_000, kind: "tool", tool: "Read", path: "a.ts" },
         { sequence: 4, offsetMs: 95_000, kind: "tool", tool: "Bash", command: "pnpm run typecheck" },
       ],

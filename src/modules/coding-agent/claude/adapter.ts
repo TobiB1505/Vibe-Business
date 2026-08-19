@@ -329,7 +329,18 @@ export function createClaudeCodingAgentProvider(): CodingAgentProvider {
         abortController: controller,
       };
 
-      let turns = 0;
+      /*
+       * Two counters, in two units, never one that switches.
+       *
+       * `assistantMessages` is one per model response. `sdkLoopIterations` is
+       * the harness's own `num_turns`, which advances on tool results as well —
+       * so it is the unit `maxTurns` bounds. This used to be a single variable
+       * that counted messages and was then overwritten by `num_turns`, which is
+       * how run b33635a1 came to report 66 against a ceiling of 40 while
+       * overrunning nothing.
+       */
+      let assistantMessages = 0;
+      let sdkLoopIterations: number | null = null;
       let usage: readonly AgentModelUsage[] = [];
       let sessionId: string | null = null;
       let providerDeniedToolCalls = 0;
@@ -341,7 +352,7 @@ export function createClaudeCodingAgentProvider(): CodingAgentProvider {
           prompt: request.instruction.userMessage,
           options,
         }) as AsyncIterable<SDKMessage>) {
-          if (message.type === "assistant") turns += 1;
+          if (message.type === "assistant") assistantMessages += 1;
 
           if (message.type === "system" && message.subtype === "permission_denied") {
             providerDeniedToolCalls += 1;
@@ -352,7 +363,7 @@ export function createClaudeCodingAgentProvider(): CodingAgentProvider {
             // than summing across them.
             usage = toModelUsage(message.modelUsage as Record<string, unknown>);
             sessionId = message.session_id;
-            turns = message.num_turns;
+            sdkLoopIterations = message.num_turns;
             providerDeniedToolCalls = message.permission_denials.length;
             outcome = outcomeFor(message.subtype);
             if (message.subtype !== "success") {
@@ -388,7 +399,8 @@ export function createClaudeCodingAgentProvider(): CodingAgentProvider {
 
       return {
         outcome,
-        turns,
+        assistantMessages,
+        sdkLoopIterations,
         usage,
         // An opaque identifier, not a reconnect credential: the SDK's resume
         // path needs the on-disk transcript, which `persistSession: false`

@@ -32,7 +32,7 @@ import type { AgentModelUsage } from "../provider";
  * program left in a reused sandbox would otherwise answer a request it never
  * understood — and the reply would look perfectly well-formed.
  */
-export const AGENT_RUNTIME_VERSION = "vibe-agent-runtime-v1" as const;
+export const AGENT_RUNTIME_VERSION = "vibe-agent-runtime-v2" as const;
 
 /**
  * The SDK version installed in the sandbox, pinned rather than floating.
@@ -92,7 +92,22 @@ export type AgentRuntimeRequest = {
 export type AgentRuntimeResult = {
   version: string;
   subtype: string;
-  turns: number;
+  /**
+   * Model responses. One per `assistant` message in the SDK's stream.
+   *
+   * **Not** comparable to the budget's turn ceiling, which bounds the harness's
+   * own loop — see `sdkLoopIterations`. The two used to be one field that
+   * switched units at the end of a run, which is how run `b33635a1` came to
+   * record 66 against a limit of 40 while overrunning nothing.
+   */
+  assistantMessages: number;
+  /**
+   * The harness's own loop count, in the unit `maxSdkIterations` bounds.
+   *
+   * Null when the SDK did not report one — a run that died before its terminal
+   * message has no honest value here, and the message count is not a substitute.
+   */
+  sdkLoopIterations: number | null;
   sessionId: string | null;
   permissionDenials: number;
   /** Per-model token counts, keyed by model id. Never a cost claim. */
@@ -134,7 +149,11 @@ export function parseAgentRuntimeResult(payload: string | null): AgentRuntimeRes
   return {
     version: AGENT_RUNTIME_VERSION,
     subtype: typeof raw.subtype === "string" ? raw.subtype.slice(0, 64) : "unknown",
-    turns: nonNegativeInt(raw.turns),
+    assistantMessages: nonNegativeInt(raw.assistantMessages),
+    sdkLoopIterations:
+      typeof raw.sdkLoopIterations === "number" && Number.isFinite(raw.sdkLoopIterations)
+        ? Math.max(0, Math.trunc(raw.sdkLoopIterations))
+        : null,
     // An identifier, never a credential — the transcript it would resume was
     // never written, because `persistSession` is off.
     sessionId: typeof raw.sessionId === "string" ? raw.sessionId.slice(0, 128) : null,

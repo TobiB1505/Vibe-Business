@@ -212,7 +212,8 @@ export type RuntimeProgressEntry = {
   /** Milliseconds since the harness started. Absent from an older feed. */
   offsetMs?: number;
   kind: "started" | "turn" | "tool" | "finished";
-  turns?: number;
+  /** Model responses so far, on a `turn` line. */
+  assistantMessages?: number;
   tool?: string;
   path?: string;
   command?: string;
@@ -220,7 +221,8 @@ export type RuntimeProgressEntry = {
 };
 
 export type RuntimeProgress = {
-  turns: number;
+  /** Model responses seen so far. Never the harness's own loop count. */
+  assistantMessages: number;
   started: boolean;
   finished: boolean;
   entries: readonly RuntimeProgressEntry[];
@@ -231,7 +233,7 @@ function readString(value: unknown, max: number): string | undefined {
 }
 
 export function parseRuntimeProgress(output: string): RuntimeProgress {
-  let turns = 0;
+  let assistantMessages = 0;
   let started = false;
   let finished = false;
   const entries: RuntimeProgressEntry[] = [];
@@ -277,8 +279,8 @@ export function parseRuntimeProgress(output: string): RuntimeProgress {
 
     if (event.t === "turn") {
       const n = typeof event.n === "number" ? event.n : 0;
-      if (n > turns) turns = n;
-      entries.push({ sequence, offsetMs, kind: "turn", turns: n });
+      if (n > assistantMessages) assistantMessages = n;
+      entries.push({ sequence, offsetMs, kind: "turn", assistantMessages: n });
       continue;
     }
 
@@ -300,7 +302,7 @@ export function parseRuntimeProgress(output: string): RuntimeProgress {
     }
   }
 
-  return { turns, started, finished, entries };
+  return { assistantMessages, started, finished, entries };
 }
 
 /** Bytes of the progress file kept. It is one short JSON object per turn. */
@@ -340,7 +342,7 @@ export function createSandboxCodingAgentProvider(
     });
 
     return progress === null
-      ? { turns: 0, started: false, finished: false, entries: [] }
+      ? { assistantMessages: 0, started: false, finished: false, entries: [] }
       : parseRuntimeProgress(progress);
   };
 
@@ -435,12 +437,14 @@ export function createSandboxCodingAgentProvider(
       const result = await deps.sandbox.readFile({ path: resultPath, maxBytes: 1024 });
       const progress = await readProgress();
 
-      if (progress.turns > 0) deps.onEvent?.({ kind: "turn_observed", turns: progress.turns });
+      if (progress.assistantMessages > 0) {
+        deps.onEvent?.({ kind: "turn_observed", turns: progress.assistantMessages });
+      }
 
       return {
         started: progress.started,
         finished: result !== null,
-        turns: progress.turns,
+        assistantMessages: progress.assistantMessages,
         /*
          * The whole feed, every time.
          *
@@ -473,7 +477,8 @@ export function createSandboxCodingAgentProvider(
          */
         return {
           outcome: "provider_error",
-          turns: progress.turns,
+          assistantMessages: progress.assistantMessages,
+          sdkLoopIterations: null,
           usage: [],
           sessionId: null,
           providerDeniedToolCalls: 0,
@@ -486,9 +491,18 @@ export function createSandboxCodingAgentProvider(
 
       return {
         outcome: outcomeFor(result.subtype),
-        // The harness's own count when it finished, the observed count when it
-        // did not. Never a number the model reported about itself.
-        turns: Math.max(result.turns, progress.turns),
+        /*
+         * Both counts, each in its own unit.
+         *
+         * The message count takes the larger of the harness's terminal figure
+         * and what the progress file showed — a run whose result was lost still
+         * produced the responses the file recorded. The loop count is whatever
+         * the harness reported, or null: it has no observable proxy, and the
+         * message count standing in for it is exactly the substitution that
+         * made "66 / 40" look like a breach.
+         */
+        assistantMessages: Math.max(result.assistantMessages, progress.assistantMessages),
+        sdkLoopIterations: result.sdkLoopIterations,
         usage: toAgentModelUsage(result.modelUsage),
         sessionId: result.sessionId,
         providerDeniedToolCalls: result.permissionDenials,

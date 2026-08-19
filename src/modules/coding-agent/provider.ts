@@ -136,8 +136,23 @@ export type AgentModelUsage = {
 
 export type CodingAgentResult = {
   outcome: AgentProviderOutcome;
-  /** Turns the provider actually took. Observed, never self-reported by the model. */
-  turns: number;
+  /**
+   * Model responses the run produced. Observed, never self-reported.
+   *
+   * **Not** the unit the budget's turn ceiling is in. That bounds the harness's
+   * own loop, which advances on tool results too — see `sdkLoopIterations`.
+   * Run `b33635a1` recorded 66 of these against a ceiling of 40 and overran
+   * nothing, because the number shown and the number bounded were different
+   * quantities sharing one name.
+   */
+  assistantMessages: number;
+  /**
+   * The harness's own loop count, in the unit the ceiling is in.
+   *
+   * Null when the harness never reported one. Null is the honest answer there;
+   * the message count is not a stand-in for it.
+   */
+  sdkLoopIterations: number | null;
   usage: readonly AgentModelUsage[];
   /**
    * The provider's session identity, when it exposes one (§38).
@@ -229,7 +244,8 @@ export type ObservedRuntimeEntry = {
    */
   offsetMs?: number;
   kind: "started" | "turn" | "tool" | "finished";
-  turns?: number;
+  /** Model responses so far, on a `turn` line. */
+  assistantMessages?: number;
   tool?: string;
   path?: string;
   command?: string;
@@ -242,13 +258,14 @@ export type DetachedObservation = {
   /** True once it has written its result. The loop is over. */
   finished: boolean;
   /**
-   * Turns Vibe has observed, from the harness's own progress file.
+   * Model responses Vibe has observed, from the harness's own progress file.
    *
-   * An observation, not a claim: the file records that a turn *happened*, which
-   * is a fact about what was billed. It is deliberately not the model's
-   * description of what it did (Rule 77).
+   * An observation, not a claim: the file records that a response *happened*,
+   * which is a fact about what was billed. It is deliberately not the model's
+   * description of what it did (Rule 77) — and deliberately not comparable to
+   * the budget's turn ceiling, which counts the harness's loop instead.
    */
-  turns: number;
+  assistantMessages: number;
   /**
    * The whole feed, every time — never a delta.
    *

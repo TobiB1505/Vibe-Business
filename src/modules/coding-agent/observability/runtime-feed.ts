@@ -87,7 +87,7 @@ function toEvent(
       type: "turn_completed",
       occurredAt,
       summary: "Model response",
-      metadata: { assistantMessages: entry.turns ?? 0 },
+      metadata: { assistantMessages: entry.assistantMessages ?? 0 },
     });
   }
 

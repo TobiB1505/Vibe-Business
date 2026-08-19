@@ -95,7 +95,10 @@ export type AgentExecutionLiveModel = {
 export type LiveRunRow = {
   id: string;
   status: string;
-  turns: number;
+  /** Model responses. Never comparable to the budget's turn ceiling. */
+  assistantMessages: number;
+  /** The harness's own loop count, in the ceiling's unit. Null if unreported. */
+  sdkLoopIterations: number | null;
   startedAt: string | null;
   completedAt: string | null;
   durationMs: number | null;
@@ -248,7 +251,6 @@ function deriveMetrics(input: {
     }
   }
 
-  const finished = input.events.find((event) => event.type === "agent_finished");
 
   const startedAt = input.run?.startedAt ? Date.parse(input.run.startedAt) : null;
   const endedAt = input.run?.completedAt ? Date.parse(input.run.completedAt) : null;
@@ -260,9 +262,17 @@ function deriveMetrics(input: {
   return {
     // The event log's count while running; the run row's own number once the
     // harness has reported. Never one standing in for the other.
-    assistantMessages: Math.max(assistantMessages, input.run?.turns ?? 0),
+    assistantMessages: Math.max(assistantMessages, input.run?.assistantMessages ?? 0),
     maxSdkIterations: input.limits?.maxTurns ?? null,
-    sdkLoopIterations: finished ? numberFrom(finished.metadata.assistantMessages) : null,
+    /*
+     * The run row's own column, and nothing else.
+     *
+     * This used to read `agent_finished`'s `assistantMessages` metadata — so the
+     * inspector labelled the message count as SDK loop iterations, which is the
+     * exact confusion the two names exist to prevent. Null while the harness has
+     * not reported one, because there is no observable proxy for it.
+     */
+    sdkLoopIterations: input.run?.sdkLoopIterations ?? null,
     ...counts,
     elapsedMs,
     wallClockBudgetMs: input.limits?.maxWallClockMs ?? null,

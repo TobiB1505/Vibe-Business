@@ -20,7 +20,8 @@ function result(overrides: Record<string, unknown> = {}) {
   return JSON.stringify({
     version: AGENT_RUNTIME_VERSION,
     subtype: "success",
-    turns: 4,
+    assistantMessages: 4,
+    sdkLoopIterations: 9,
     sessionId: "session-1",
     permissionDenials: 1,
     modelUsage: {},
@@ -34,7 +35,8 @@ describe("a well-formed result", () => {
     expect(parseAgentRuntimeResult(result())).toEqual({
       version: AGENT_RUNTIME_VERSION,
       subtype: "success",
-      turns: 4,
+      assistantMessages: 4,
+      sdkLoopIterations: 9,
       sessionId: "session-1",
       permissionDenials: 1,
       modelUsage: {},
@@ -64,11 +66,25 @@ describe("a result this runtime cannot vouch for", () => {
 
 describe("fields are coerced, never trusted", () => {
   it.each([
-    ["a negative turn count", { turns: -5 }, 0],
-    ["a fractional turn count", { turns: 3.7 }, 3],
-    ["a turn count that is a string", { turns: "many" }, 0],
+    ["a negative turn count", { assistantMessages: -5 }, 0],
+    ["a fractional turn count", { assistantMessages: 3.7 }, 3],
+    ["a turn count that is a string", { assistantMessages: "many" }, 0],
   ])("%s becomes a non-negative integer", (_why, overrides, expected) => {
-    expect(parseAgentRuntimeResult(result(overrides))?.turns).toBe(expected);
+    expect(parseAgentRuntimeResult(result(overrides))?.assistantMessages).toBe(expected);
+  });
+
+  /**
+   * The two counters are separate on purpose, so the parser must not let one
+   * fill in for the other. Null is the honest value for a run whose harness
+   * never reported a loop count — the message count is not a substitute, and
+   * treating it as one is what produced run b33635a1's "66 / 40".
+   */
+  it("reports an absent loop count as null, never as the message count", () => {
+    expect(parseAgentRuntimeResult(result({ sdkLoopIterations: undefined }))?.sdkLoopIterations)
+      .toBeNull();
+    expect(parseAgentRuntimeResult(result({ sdkLoopIterations: "nine" }))?.sdkLoopIterations)
+      .toBeNull();
+    expect(parseAgentRuntimeResult(result({ sdkLoopIterations: 12 }))?.sdkLoopIterations).toBe(12);
   });
 
   it("drops a session id that is not a string", () => {
