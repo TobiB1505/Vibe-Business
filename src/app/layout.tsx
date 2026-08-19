@@ -16,6 +16,9 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Vibe Business",
   description: "The business layer for AI-built products.",
+  // Public pages are indexable by default. `src/app/app/layout.tsx`
+  // overrides this to noindex for every signed-in route beneath /app.
+  robots: { index: true, follow: true },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
