@@ -1,5 +1,5 @@
 import { isRetryable, type OperationFailureCode } from "./failures";
-import type { OperationStage, OperationStatus } from "./schema";
+import { isTerminal, isWorking, type OperationStage, type OperationStatus } from "./schema";
 
 /**
  * The safe operation DTO (Sprint 7 §16, §17).
@@ -80,6 +80,82 @@ export function buildOperationView(
     retryAllowed: failureCode !== null && isRetryable(failureCode),
     stalled,
   };
+}
+
+/**
+ * What a poller should do about an operation, as one word (UI-4 §5).
+ *
+ * ## The ambiguity this removes
+ *
+ * `shouldPoll` answers one question — "ask again?" — and three different
+ * situations answer it "no": the operation finished, the operation is waiting
+ * on a person, and the operation has been running so long it is presumed
+ * lost. Every panel that treated "stopped polling" as "finished" was therefore
+ * wrong in two of the three cases, and several did.
+ *
+ * So the phase is named rather than inferred. `settled` is the only one that
+ * means the work is over.
+ */
+export type OperationPollPhase =
+  /** Nothing to watch. */
+  | "idle"
+  /** Doing work. Keep asking. */
+  | "working"
+  /** Paused on a question only the founder can answer. Stop asking — the
+   *  answer arrives through the form, not through the poll. */
+  | "waiting_user"
+  /** Running far past what the work could take. Stop asking, and say so. */
+  | "stalled"
+  /** Completed, failed or cancelled. */
+  | "settled";
+
+export function operationPollPhase(operation: OperationView | null): OperationPollPhase {
+  if (!operation) return "idle";
+  if (isTerminal(operation.status)) return "settled";
+  if (operation.status === "needs_user") return "waiting_user";
+  if (operation.stalled) return "stalled";
+  if (isWorking(operation.status)) return "working";
+
+  return "idle";
+}
+
+/**
+ * Which of two answers about an operation is the newer one (UI-4 §5).
+ *
+ * A panel holds two: what the start action just returned, and what the poller
+ * last saw. Rather than syncing them, derive which is newer — a poll result
+ * for the started operation supersedes it; anything else means the poller has
+ * not caught up yet.
+ *
+ * Written out here because five panels had each derived it for themselves,
+ * and the one that got it wrong showed a just-started audit flickering back
+ * to its start button.
+ */
+export function freshestOperation(
+  polled: OperationView | null,
+  started: OperationView | null,
+): OperationView | null {
+  if (started && polled?.operationId !== started.operationId) return started;
+  return polled ?? started;
+}
+
+/**
+ * Whether a polled answer is worth re-rendering the server component for
+ * (UI-4 §5).
+ *
+ * The rule the preview panel paid for: refresh on the *transition*, never on
+ * the tick. A page render can cost provider calls and several reads, so at a
+ * two-second interval a refresh can outlast the gap until the next one, and
+ * each supersedes the one still in flight — hundreds of re-renders for one
+ * state change, of which one may never land.
+ *
+ * Compared as strings because the shapes differ per surface: an operation
+ * status, a preview state, an outcome state. What matters is only whether the
+ * poll is naming something other than what is on screen.
+ */
+export function shouldRefreshForState(polled: string | null | undefined, rendered: string): boolean {
+  if (polled === null || polled === undefined) return false;
+  return polled !== rendered;
 }
 
 /**

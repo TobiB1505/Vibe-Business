@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   buildOperationView,
+  freshestOperation,
   OPERATION_STAGE_LABELS,
   OPERATION_STALL_THRESHOLD_MS,
+  operationPollPhase,
+  shouldRefreshForState,
   type BuildOperationViewInput,
 } from "./view";
 
@@ -123,5 +126,94 @@ describe("stage copy", () => {
   it("has copy for every stage", () => {
     expect(OPERATION_STAGE_LABELS.running_ai).toBe("Analyzing business");
     expect(OPERATION_STAGE_LABELS.preparing).toBe("Preparing evidence");
+  });
+});
+
+describe("poll phase", () => {
+  /**
+   * The distinction the panels kept getting wrong: `shouldPoll` goes false
+   * for three different reasons and only one of them means the work is over.
+   */
+
+  it("says there is nothing to watch without an operation", () => {
+    expect(operationPollPhase(null)).toBe("idle");
+  });
+
+  it("works while queued or running", () => {
+    expect(operationPollPhase(view({ status: "queued" }))).toBe("working");
+    expect(operationPollPhase(view({ status: "running" }))).toBe("working");
+  });
+
+  it("settles on every terminal status", () => {
+    for (const status of ["completed", "failed", "cancelled"] as const) {
+      expect(operationPollPhase(view({ status }))).toBe("settled");
+    }
+  });
+
+  it("separates a paused question from a finished run", () => {
+    const paused = operationPollPhase(view({ status: "needs_user" }));
+
+    expect(paused).toBe("waiting_user");
+    expect(paused).not.toBe("settled");
+  });
+
+  it("separates a lost run from a finished one", () => {
+    const lost = view(
+      { status: "running" },
+      new Date(NOW.getTime() + OPERATION_STALL_THRESHOLD_MS + 1_000),
+    );
+
+    expect(lost.shouldPoll).toBe(false);
+    expect(operationPollPhase(lost)).toBe("stalled");
+    expect(operationPollPhase(lost)).not.toBe("settled");
+  });
+
+  it("stops polling for everything except work in progress", () => {
+    // The property the hook depends on: one phase means "keep asking".
+    for (const status of ["needs_user", "completed", "failed", "cancelled"] as const) {
+      expect(view({ status }).shouldPoll).toBe(false);
+    }
+  });
+});
+
+describe("freshest answer", () => {
+  it("prefers a just-started operation the poller has not seen", () => {
+    const started = view({ operationId: "operation_2" });
+
+    expect(freshestOperation(view({ operationId: "operation_1" }), started)).toBe(started);
+  });
+
+  it("prefers the poll once it has caught up", () => {
+    const polled = view({ operationId: "operation_2", status: "completed" });
+
+    expect(freshestOperation(polled, view({ operationId: "operation_2" }))).toBe(polled);
+  });
+
+  it("falls back to whichever one exists", () => {
+    const only = view();
+
+    expect(freshestOperation(null, only)).toBe(only);
+    expect(freshestOperation(only, null)).toBe(only);
+    expect(freshestOperation(null, null)).toBeNull();
+  });
+});
+
+describe("refresh on transition", () => {
+  /**
+   * The rule the preview panel paid for: refreshing every tick can cost a
+   * page render per two seconds, each superseding the last.
+   */
+
+  it("does not refresh while the poll agrees with the screen", () => {
+    expect(shouldRefreshForState("running", "running")).toBe(false);
+  });
+
+  it("refreshes when the poll names something else", () => {
+    expect(shouldRefreshForState("ready", "starting")).toBe(true);
+  });
+
+  it("does not refresh on an answer it did not get", () => {
+    expect(shouldRefreshForState(null, "starting")).toBe(false);
+    expect(shouldRefreshForState(undefined, "starting")).toBe(false);
   });
 });
