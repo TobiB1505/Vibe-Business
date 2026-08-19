@@ -1,7 +1,12 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { AuthShell } from "@/components/layout/auth-shell";
 import { sanitizeNextPath } from "@/modules/auth/redirects";
 import { SignupForm } from "./signup-form";
+
+export const metadata: Metadata = {
+  alternates: { canonical: "/signup" },
+};
 
 /**
  * `next` is sanitized here, once, so the value that reaches the form — and

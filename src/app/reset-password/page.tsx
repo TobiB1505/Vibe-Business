@@ -1,8 +1,13 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AuthShell } from "@/components/layout/auth-shell";
 import { getSession } from "@/modules/auth/session";
 import { ResetPasswordForm } from "./reset-password-form";
+
+export const metadata: Metadata = {
+  alternates: { canonical: "/reset-password" },
+};
 
 /**
  * The final step of password recovery.

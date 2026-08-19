@@ -13,7 +13,17 @@ import "./globals.css";
  * Components must reach them through `font-sans` / `font-mono`; a
  * `font-family` declaration anywhere else in the codebase is a bug.
  */
+
+/**
+ * The canonical origin every page's `alternates.canonical` resolves against.
+ *
+ * Kept identical to the origin hardcoded in `robots.ts` and `sitemap.ts` —
+ * all three describe the same deployed site and must not drift apart.
+ */
+const ORIGIN = "https://vibe-business-fawn.vercel.app";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(ORIGIN),
   title: "Vibe Business",
   description: "The business layer for AI-built products.",
 };

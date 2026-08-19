@@ -1,8 +1,13 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { MarketingShell } from "@/components/layout/marketing-shell";
 import { BusinessMapPreview } from "@/components/marketing/business-map-preview";
 import { buttonClasses } from "@/components/ui/button";
 import { MonoLabel } from "@/components/ui/typography";
+
+export const metadata: Metadata = {
+  alternates: { canonical: "/" },
+};
 
 /**
  * The landing page (UI-S1 §3–§6).

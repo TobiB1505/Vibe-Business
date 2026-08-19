@@ -1,7 +1,12 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { AuthShell } from "@/components/layout/auth-shell";
 import { authFailureMessage, parseFailureParam } from "@/modules/auth/errors";
 import { ForgotPasswordForm } from "./forgot-password-form";
+
+export const metadata: Metadata = {
+  alternates: { canonical: "/forgot-password" },
+};
 
 /**
  * Where a dead reset link sends people, as well as where a forgotten password

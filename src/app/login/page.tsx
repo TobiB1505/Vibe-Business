@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AuthShell } from "@/components/layout/auth-shell";
@@ -5,6 +6,10 @@ import { authFailureMessage, parseFailureParam } from "@/modules/auth/errors";
 import { sanitizeNextPath } from "@/modules/auth/redirects";
 import { getSession } from "@/modules/auth/session";
 import { LoginForm } from "./login-form";
+
+export const metadata: Metadata = {
+  alternates: { canonical: "/login" },
+};
 
 /**
  * The sign-in screen.

@@ -5,6 +5,7 @@ import { LegalPage, LegalSection } from "@/components/marketing/legal-page";
 export const metadata: Metadata = {
   title: "Terms — Vibe Business",
   description: "The terms you agree to when you use Vibe Business.",
+  alternates: { canonical: "/terms" },
 };
 
 /**
