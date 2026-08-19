@@ -572,6 +572,66 @@ describe("§27, §28 — Vibe computes and checks the change", () => {
       expect(outcome.candidateDigest).toHaveLength(64);
     }
   });
+
+  /**
+   * Why a refusal happened, and not only that it did.
+   *
+   * The first complete agent run was refused for `too_many_files` and
+   * `diff_too_large`, and the audit row said exactly that and nothing else — so
+   * "the budget is too small for this step" and "the observation swept up build
+   * output" were indistinguishable weeks later. The paths are what tells them
+   * apart, and they belong in the record the refusal writes.
+   */
+  it("records the paths and the measured limits behind a refusal", async () => {
+    const { operation } = seed();
+
+    // Sixteen source files plus build output the walk's prune list does not
+    // cover, which is the shape the real run is suspected of having had.
+    const source = Array.from({ length: 16 }, (_, index) => `src/app/p${index}/page.tsx`);
+    const generated = ["tsconfig.tsbuildinfo", "debug.log"];
+    const observed = [...source, ...generated];
+
+    const sandbox = fakeSandboxProvider({
+      files: {
+        ...SANDBOX_FILES,
+        ...Object.fromEntries(observed.map((path) => [`product/${path}`, `content of ${path}\n`])),
+      },
+      results: SANDBOX_RESULTS,
+    });
+    const shared = deps({ sandboxProvider: sandbox, provider: fakeDetachedAgentProvider() });
+
+    await provisionAgentWorkspaceStep(shared, operation.id);
+    await runAgent(shared, operation.id, ["typecheck"]);
+
+    const outcome = await extractAndVerifyStep(shared, operation.id, observed);
+    expect(outcome).toEqual({ ok: false, failureCode: "agent_change_rejected" });
+
+    const rejected = db
+      .rows("audit_events")
+      .find((row) => row.event_type === "agent_execution.change_rejected");
+    expect(rejected).toBeDefined();
+
+    const metadata = rejected!.metadata as Record<string, unknown>;
+    expect(metadata.rejections).toEqual(["too_many_files"]);
+    expect(metadata.changedPathCount).toBe(18);
+    expect(metadata.changedFileCount).toBe(18);
+    expect(metadata.changedPathsTruncated).toBe(false);
+    expect(metadata.classCounts).toEqual({ source: 16, generated: 1, runtime: 1, unknown: 0 });
+
+    // The actual list, so the next question can be answered by reading.
+    const paths = (metadata.changedPaths as { path: string }[]).map((entry) => entry.path);
+    expect(paths.sort()).toEqual([...observed].sort());
+
+    // The limit the change was measured against, which the previous row dropped.
+    expect(metadata.violations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: "too_many_files", changed: 18, limit: 15 }),
+      ]),
+    );
+
+    // Rule 26: measurements about files, never any of their bytes.
+    expect(JSON.stringify(metadata)).not.toContain("content of");
+  });
 });
 
 describe("§30 — trusted Vibe infrastructure writes the branch", () => {

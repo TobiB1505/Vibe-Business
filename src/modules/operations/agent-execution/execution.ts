@@ -30,6 +30,10 @@ import {
   verifyCandidateChange,
   type BaseContentPort,
 } from "@/modules/coding-agent/candidate";
+import {
+  changeRejectionMetadata,
+  summarizeChangeEvidence,
+} from "@/modules/coding-agent/change-evidence";
 import { ExecutionToolGateway } from "@/modules/coding-agent/gateway";
 import {
   agentSandboxNameFor,
@@ -1098,6 +1102,27 @@ export async function extractAndVerifyStep(
     limits,
   });
 
+  /*
+   * What the observation actually contained, written down before anything
+   * decides on it.
+   *
+   * Computed for every candidate rather than only for a refused one, because
+   * "the change was accepted and here is why it was that size" is the baseline
+   * a later rejection is read against. Paths, bytes and counts only — never a
+   * byte of the files themselves (Rule 26).
+   */
+  const evidence = summarizeChangeEvidence({
+    observedPaths: changedPaths,
+    candidate,
+    detectedBy: observedPaths ? "workspace_scan" : "gateway_tool_trail",
+  });
+
+  console.info("[agent-change]", {
+    operationId,
+    agentExecutionRunId: run.id,
+    ...evidence,
+  });
+
   // Checked before verification, because "the agent changed nothing" and "the
   // agent's change was refused" are different findings and only one of them is
   // a safety event. Collapsing them would report a no-op run as a policy
@@ -1119,6 +1144,25 @@ export async function extractAndVerifyStep(
   });
 
   if (!verification.accepted) {
+    const metadata = changeRejectionMetadata({
+      evidence,
+      rejections: verification.rejections,
+      violations: verification.violations,
+    });
+
+    /*
+     * The same evidence in the log as in the audit row.
+     *
+     * Not redundancy: the audit row is what a reader queries weeks later, and
+     * the log line is what is available during a dogfood run while the sandbox
+     * is still warm and the next decision is being made.
+     */
+    console.error("[agent-execution] the produced change was refused", {
+      operationId,
+      agentExecutionRunId: run.id,
+      ...metadata,
+    });
+
     await recordAuditEvent(deps.supabase, {
       userId: run.userId,
       projectId: run.projectId,
@@ -1127,7 +1171,7 @@ export async function extractAndVerifyStep(
         projectId: run.projectId,
         operationId,
         agentExecutionRunId: run.id,
-        rejections: [...verification.rejections],
+        ...metadata,
       },
     });
     return { ok: false, failureCode: "agent_change_rejected" };
