@@ -17,20 +17,30 @@ export async function getProjectWithRepository(
   supabase: SupabaseClient,
   projectId: string,
 ): Promise<ProjectDetail | null> {
-  const { data: project, error: projectError } = await supabase
-    .from("projects")
-    .select("id, name, user_id, production_url")
-    .eq("id", projectId)
-    .maybeSingle();
+  /*
+   * The project and its repository connection are both keyed on the project
+   * id, so neither read waits on the other (UI-4 §3). Only the installation
+   * lookup below genuinely depends on a previous answer. This read sits in
+   * every workspace render, which is why one round trip is worth removing.
+   *
+   * A connection is read for a project that turns out not to exist or not to
+   * belong to the caller — RLS scopes it either way, and the row is dropped
+   * unread a line later.
+   */
+  const [
+    { data: project, error: projectError },
+    { data: repoConnection, error: repoError },
+  ] = await Promise.all([
+    supabase.from("projects").select("id, name, user_id, production_url").eq("id", projectId).maybeSingle(),
+    supabase
+      .from("repository_connections")
+      .select("github_repository_id, owner, name, full_name, default_branch, private, html_url, github_installation_id")
+      .eq("project_id", projectId)
+      .maybeSingle(),
+  ]);
 
   if (projectError) throw projectError;
   if (!project) return null;
-
-  const { data: repoConnection, error: repoError } = await supabase
-    .from("repository_connections")
-    .select("github_repository_id, owner, name, full_name, default_branch, private, html_url, github_installation_id")
-    .eq("project_id", projectId)
-    .maybeSingle();
 
   if (repoError) throw repoError;
 
