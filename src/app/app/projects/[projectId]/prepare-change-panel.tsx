@@ -198,6 +198,31 @@ export function PrepareChangePanel({
     else setDiffError("The prepared change could not be loaded for review.");
   }
 
+  /*
+   * A run nobody is coming back to (UI-4 §5).
+   *
+   * The panel used to render "…preparing the change" for as long as the row
+   * said `running`, which for a lost durable run is forever: the promise that
+   * Vibe will continue is exactly the thing that has stopped being true. It
+   * says so instead, and offers the same start control as before — the
+   * operation is not resumable, so starting again is the honest option.
+   */
+  if (operationPollPhase(operation) === "stalled") {
+    return (
+      <div className="space-y-3 border-t border-line-2 pt-3">
+        <p className="text-sm text-fg-prose">This is taking much longer than expected.</p>
+        <p className="text-sm text-fg-muted">
+          Vibe has not written anything to your repository. You can start again.
+        </p>
+        <form action={formAction}>
+          <Button type="submit" variant="secondary" size="sm" disabled={pending}>
+            {pending ? "Starting…" : "Try again"}
+          </Button>
+        </form>
+      </div>
+    );
+  }
+
   if (running && operation) {
     return (
       <div className="space-y-1 border-t border-line-2 pt-3">
