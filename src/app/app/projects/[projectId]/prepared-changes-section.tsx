@@ -156,80 +156,121 @@ export function PreparedChangesSection({
             data-testid="prepared-change"
             data-prepared-change-id={change.id}
           >
-            <div className="space-y-1">
-              <p className="font-mono text-sm text-fg-body">{change.branchName}</p>
-              <p className="text-xs text-fg-muted">
+            {/* Where this change stands, before anything about how it was
+                built. The card used to open with a branch name, which answers
+                a question almost nobody arrives with (UI-5 §2). */}
+            <p className="text-fg text-sm font-medium">{change.progress.headline}</p>
+
+            {/* What it is and why, immediately under that. This block used to
+                sit ninth of eleven — below the Approve and Merge controls — so
+                a person was asked to authorize a change before the screen had
+                told them what it was for. */}
+            <ChangeRationale rationale={change.rationale} />
+
+            {/* How it was built, demoted to where it belongs: true, checkable,
+                and not the first thing anyone needs. */}
+            <div className="space-y-1 border-t border-line-2 pt-3">
+              <p className="font-mono text-xs text-fg-muted">
+                {change.branchName}
+                {" · "}
                 {change.commitSha ? `${change.commitSha.slice(0, 7)} on ${change.baseBranch}` : change.baseBranch}
                 {" · "}
                 {change.filePaths.length} file{change.filePaths.length === 1 ? "" : "s"}
               </p>
+
+              {/* Paths only. File contents live on the branch, never in our rows. */}
+              <ul className="space-y-0.5">
+                {change.filePaths.map((path) => (
+                  <li key={path} className="font-mono text-xs text-fg-meta">
+                    {path}
+                  </li>
+                ))}
+              </ul>
+
+              {change.branchUrl && (
+                <a
+                  href={change.branchUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-block text-xs text-fg-prose underline underline-offset-2 hover:text-fg"
+                >
+                  Open branch on GitHub
+                </a>
+              )}
             </div>
 
-            {/* Paths only. File contents live on the branch, never in our rows. */}
-            <ul className="space-y-0.5">
-              {change.filePaths.map((path) => (
-                <li key={path} className="font-mono text-xs text-fg-muted">
-                  {path}
-                </li>
-              ))}
-            </ul>
+            {/*
+              * The four gates a person has already been through (UI-5 §3).
+              *
+              * Open while they are the work, folded to a summary once an
+              * approval stands — and an approval cannot exist without a
+              * validation that passed and a review that is ready, so one
+              * answer settles all four. Nothing is removed: `details` keeps
+              * every panel one click away, which is what settled evidence
+              * should be. It is checkable, not unavoidable.
+              *
+              * Merge, Outcome and Business impact never fold. Those are the
+              * answers a person came for.
+              */}
+            <details open={!change.progress.earlySettled} className="group space-y-3">
+              <summary className="cursor-pointer list-none text-xs text-fg-muted hover:text-fg-prose">
+                <span className="group-open:hidden">Checked, previewed, reviewed and approved</span>
+                <span className="hidden group-open:inline">How this change got here</span>
+              </summary>
 
-            {change.branchUrl && (
-              <a
-                href={change.branchUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-block text-sm text-fg-prose underline underline-offset-2 hover:text-fg"
-              >
-                Open branch on GitHub
-              </a>
-            )}
+              <ValidationPanel
+                projectId={projectId}
+                preparedChangeId={change.id}
+                summary={change.validation}
+                runningOperation={null}
+                approved={change.progress.approved}
+                merged={change.progress.merged}
+              />
 
-            <ValidationPanel
-              projectId={projectId}
-              preparedChangeId={change.id}
-              summary={change.validation}
-              runningOperation={null}
-            />
+              {/* Below validation, deliberately: a preview restores what a
+                  validation produced, so the order on screen is the order of the
+                  gates. There is no Merge, Deploy or Approve button here or
+                  anywhere — none of those exist. */}
+              <PreviewPanel
+                projectId={projectId}
+                preparedChangeId={change.id}
+                card={change.preview}
+                validatedArtifactId={change.validatedArtifactId}
+                // Already resolved for this render. Without it the panel renders
+                // "Resolving preview address…" until its first poll, for an
+                // origin the server handed the page milliseconds earlier.
+                serverOrigin={change.previewOrigin}
+                approved={change.progress.approved}
+                merged={change.progress.merged}
+              />
 
-            {/* Below validation, deliberately: a preview restores what a
-                validation produced, so the order on screen is the order of the
-                gates. There is no Merge, Deploy or Approve button here or
-                anywhere — none of those exist. */}
-            <PreviewPanel
-              projectId={projectId}
-              preparedChangeId={change.id}
-              card={change.preview}
-              validatedArtifactId={change.validatedArtifactId}
-              // Already resolved for this render. Without it the panel renders
-              // "Resolving preview address…" until its first poll, for an
-              // origin the server handed the page milliseconds earlier.
-              serverOrigin={change.previewOrigin}
-            />
+              {/* Below Preview, because a comparison photographs a running
+                  preview. The order on screen is the order of the gates — and
+                  there is no Approve, Merge or Deploy control after it. */}
+              <ReviewPanel
+                projectId={projectId}
+                preparedChangeId={change.id}
+                card={change.review}
+                images={change.reviewImages}
+                previewSessionId={change.previewSessionId}
+                previewOrigin={change.previewOrigin}
+                branchUrl={change.branchUrl}
+                commitSha={change.commitSha}
+                filesChanged={change.filePaths.length}
+                approved={change.progress.approved}
+                merged={change.progress.merged}
+              />
 
-            {/* Below Preview, because a comparison photographs a running
-                preview. The order on screen is the order of the gates — and
-                there is no Approve, Merge or Deploy control after it. */}
-            <ReviewPanel
-              projectId={projectId}
-              preparedChangeId={change.id}
-              card={change.review}
-              images={change.reviewImages}
-              previewSessionId={change.previewSessionId}
-              previewOrigin={change.previewOrigin}
-              branchUrl={change.branchUrl}
-              commitSha={change.commitSha}
-              filesChanged={change.filePaths.length}
-            />
-
-            {/* Below the evidence, because approval is a human decision about
-                it rather than another measurement of it. */}
-            <ApprovalPanel
-              projectId={projectId}
-              preparedChangeId={change.id}
-              card={change.approval}
-              reviewArtifactId={change.review.reviewArtifactId}
-            />
+              {/* Below the evidence, because approval is a human decision about
+                  it rather than another measurement of it. */}
+              <ApprovalPanel
+                projectId={projectId}
+                preparedChangeId={change.id}
+                card={change.approval}
+                reviewArtifactId={change.review.reviewArtifactId}
+                merged={change.progress.merged}
+              />
+            </details>
 
             {/* Last, and only reachable through everything above it: a merge
                 needs an approval, an approval needs a review, a review needs a
@@ -245,10 +286,6 @@ export function PreparedChangesSection({
                 panel here that asks about the customer's product rather than
                 about Vibe's own work — and the only one whose success state
                 has to explicitly say what it does *not* mean. */}
-            {/* Before the verified checks, because the order a user needs is
-                what changed → why it matters → what was confirmed (§11). */}
-            <ChangeRationale rationale={change.rationale} />
-
             <OutcomePanel
               projectId={projectId}
               preparedChangeId={change.id}

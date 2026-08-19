@@ -58,11 +58,17 @@ function localTime(iso: string | null): string | null {
   return formatTimestamp(iso);
 }
 
-/** Repeated wherever a comparison looks conclusive. That is when it is needed. */
-function NotApproved() {
+/**
+ * Repeated wherever a comparison looks conclusive. That is when it is needed —
+ * and only for the clauses still true (UI-5 §4). A comparison never stops
+ * being evidence rather than a verdict, so that half never drops.
+ */
+function NotApproved({ approved, merged }: { approved: boolean; merged: boolean }) {
   return (
     <p className="text-xs text-fg-muted">
-      A comparison is evidence, not a verdict · Not approved · Not merged · Not deployed
+      A comparison is evidence, not a verdict
+      {approved ? "" : " · Not approved"}
+      {merged ? " · Merged · Deployment not verified by Vibe" : " · Not merged · Not deployed"}
     </p>
   );
 }
@@ -130,6 +136,8 @@ export function ReviewPanel({
   branchUrl,
   commitSha,
   filesChanged,
+  approved,
+  merged,
 }: {
   projectId: string;
   preparedChangeId: string;
@@ -140,6 +148,10 @@ export function ReviewPanel({
   branchUrl: string | null;
   commitSha: string | null;
   filesChanged: number;
+  /** A human approved this exact commit, and that still stands (UI-5 §4). */
+  approved: boolean;
+  /** The default branch carries this change, verified by reading it back. */
+  merged: boolean;
 }) {
   const router = useRouter();
   const [state, setState] = useState<StartReviewActionState>(null);
@@ -262,7 +274,7 @@ export function ReviewPanel({
             )}
           </div>
 
-          <NotApproved />
+          <NotApproved approved={approved} merged={merged} />
         </div>
       ) : card.state === "failed" ? (
         <div className="space-y-2">

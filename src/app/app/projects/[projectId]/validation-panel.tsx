@@ -116,6 +116,8 @@ export function ValidationPanel({
   preparedChangeId,
   summary,
   runningOperation,
+  approved,
+  merged,
 }: {
   projectId: string;
   preparedChangeId: string;
@@ -123,6 +125,10 @@ export function ValidationPanel({
   summary: ValidationSummary | null;
   /** A validation already in flight when the page rendered. */
   runningOperation: OperationView | null;
+  /** A human approved this exact commit, and that still stands (UI-5 §4). */
+  approved: boolean;
+  /** The default branch carries this change, verified by reading it back. */
+  merged: boolean;
 }) {
   const router = useRouter();
   const [state, setState] = useState<ValidateChangeActionState>(null);
@@ -234,8 +240,18 @@ export function ValidationPanel({
               about what passing does *not* establish. A green tick is exactly
               when someone is most likely to assume more happened than did. */}
           <div className="flex flex-col gap-1">
+            {/*
+              * Only while each clause is true (UI-5 §4). The sentence is
+              * unchanged and still deliberately repeated after a pass. What
+              * changed is that it stops once more genuinely has happened: it
+              * used to greet a merged, production-verified change by denying
+              * all three at once.
+              *
+              * The deployment clause never drops, because Vibe never deploys.
+              */}
             <p className="text-xs text-fg-muted">
-              Not merged · Not deployed · Not reviewed by a human
+              {merged ? "Merged · Deployment not verified by Vibe" : "Not merged · Not deployed"}
+              {approved ? "" : " · Not reviewed by a human"}
             </p>
             <p className="text-fg-meta max-w-[70ch] text-xs">
               Passing these checks means the change is technically sound. It is not a judgement

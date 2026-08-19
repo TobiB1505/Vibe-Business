@@ -49,10 +49,18 @@ function shortSha(sha: string | null): string | null {
  * user is most likely to assume more happened than did: they just pressed a
  * button called Approve.
  */
-function NotMerged() {
-  return (
-    <p className="text-xs text-fg-muted">Nothing has been merged or deployed.</p>
-  );
+function NotMerged({ merged }: { merged: boolean }) {
+  /*
+   * Only while it is true (UI-5 §4). It used to sit under "Change approved"
+   * forever, so a change already in the default branch was still being told
+   * nothing had been merged — on the one panel whose whole job is recording
+   * what a person authorized.
+   */
+  if (merged) {
+    return <p className="text-xs text-fg-muted">Merged. Vibe has not verified a deployment.</p>;
+  }
+
+  return <p className="text-xs text-fg-muted">Nothing has been merged or deployed.</p>;
 }
 
 function ApproveDialog({
@@ -173,11 +181,14 @@ export function ApprovalPanel({
   card,
   /** The comparison the user is looking at. Sent so a stale tab is refused. */
   reviewArtifactId,
+  merged,
 }: {
   projectId: string;
   preparedChangeId: string;
   card: ApprovalCard;
   reviewArtifactId: string | null;
+  /** The default branch carries this change, verified by reading it back. */
+  merged: boolean;
 }) {
   const router = useRouter();
   const [state, setState] = useState<ApproveActionState | RevokeActionState>(null);
@@ -252,15 +263,26 @@ export function ApprovalPanel({
               <code className="text-fg-prose">{shortSha(card.approvedCommitSha)}</code>.
             </p>
           )}
-          <NotMerged />
-          <button
-            type="button"
-            onClick={() => setConfirming("revoke")}
-            disabled={busy}
-            className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2 disabled:opacity-60"
-          >
-            Revoke approval
-          </button>
+          <NotMerged merged={merged} />
+          {/*
+            * Withdrawable only while there is something to withdraw (UI-5 §6).
+            *
+            * After the merge this panel is a record, not a decision still in
+            * play: the write it authorized has happened and been read back,
+            * and no button here can unmake it. Offering one implied otherwise.
+            * The record itself is permanent either way — that was always true
+            * and is now the only thing this state says.
+            */}
+          {!merged && (
+            <button
+              type="button"
+              onClick={() => setConfirming("revoke")}
+              disabled={busy}
+              className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2 disabled:opacity-60"
+            >
+              Revoke approval
+            </button>
+          )}
         </div>
       ) : card.state === "invalidated" ? (
         <div className="space-y-2">

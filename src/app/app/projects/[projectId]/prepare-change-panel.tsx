@@ -288,6 +288,12 @@ export function PrepareChangePanel({
           preparedChangeId={preparedChangeId}
           summary={validationSummary}
           runningOperation={null}
+          /*
+           * A change that was prepared moments ago. Neither is possible yet,
+           * and stating them is the honest reading rather than a default.
+           */
+          approved={false}
+          merged={false}
         />
       </div>
     );

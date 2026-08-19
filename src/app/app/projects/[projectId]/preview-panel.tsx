@@ -148,9 +148,17 @@ function ConfirmDialog({
   );
 }
 
-/** Repeated wherever a preview looks like success. That is exactly when it is needed. */
-function NotApproved() {
-  return <p className="text-xs text-fg-muted">Not merged · Not deployed · Not reviewed by a human</p>;
+/**
+ * Repeated wherever a preview looks like success. That is exactly when it is
+ * needed — and only while it is true (UI-5 §4).
+ */
+function NotApproved({ approved, merged }: { approved: boolean; merged: boolean }) {
+  return (
+    <p className="text-xs text-fg-muted">
+      {merged ? "Merged · Deployment not verified by Vibe" : "Not merged · Not deployed"}
+      {approved ? "" : " · Not reviewed by a human"}
+    </p>
+  );
 }
 
 export function PreviewPanel({
@@ -161,12 +169,18 @@ export function PreviewPanel({
   validatedArtifactId,
   /** The origin this render already resolved, before the first poll returns. */
   serverOrigin,
+  approved,
+  merged,
 }: {
   projectId: string;
   preparedChangeId: string;
   card: PreviewCard;
   validatedArtifactId: string | null;
   serverOrigin: string | null;
+  /** A human approved this exact commit, and that still stands (UI-5 §4). */
+  approved: boolean;
+  /** The default branch carries this change, verified by reading it back. */
+  merged: boolean;
 }) {
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
@@ -430,7 +444,7 @@ export function PreviewPanel({
           <p className="text-xs text-amber/80">
             Anyone with the preview URL may be able to access it until it expires.
           </p>
-          <NotApproved />
+          <NotApproved approved={approved} merged={merged} />
         </div>
       ) : previewState === "needs_validation" || previewState === "not_available" ? (
         <div className="space-y-2">
