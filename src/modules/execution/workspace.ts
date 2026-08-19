@@ -7,6 +7,7 @@ import { getBusinessImpactCard } from "@/modules/business-measurement/service";
 import { NoConnectedMetricSources } from "@/modules/business-measurement/source";
 import { getPreviewCard, getPreviewStatus } from "@/modules/change-preview/service";
 import { businessRationaleFor } from "@/modules/execution/business-rationale";
+import { deriveChangeProgress } from "@/modules/execution/change-progress";
 import { buildBranchUrl } from "@/modules/execution/diff";
 import { listPreparedChangesForProject } from "@/modules/execution/store";
 import { createGithubMergePort } from "@/modules/merge/github/adapter";
@@ -230,7 +231,34 @@ async function buildPreparedChangeCard(
         )?.origin ?? null)
       : null;
 
+  /*
+   * Hoisted so the card's own progress can read it. The construction is
+   * unchanged — only its position moved.
+   */
+  const validationSummary = validation
+    ? buildValidationSummary(validation, {
+        currentPolicyVersion: SANDBOX_POLICY_VERSION,
+        failureMessage: validation.failureCode
+          ? (OPERATION_FAILURE_MESSAGES[validation.failureCode] ?? null)
+          : null,
+      })
+    : null;
+
   return {
+    /*
+     * Where this change stands, decided once here rather than re-inferred by
+     * each panel (UI-5 §1). Synchronous and free: it reads the answers the
+     * gates above already gave and re-decides none of them.
+     */
+    progress: deriveChangeProgress({
+      validation: validationSummary,
+      preview,
+      review,
+      approval,
+      merge,
+      outcome,
+      businessImpact,
+    }),
     id: prepared.id,
     branchName: prepared.branchName,
     commitSha: prepared.commitSha,
@@ -240,14 +268,7 @@ async function buildPreparedChangeCard(
     branchUrl: params.repositoryFullName
       ? buildBranchUrl(params.repositoryFullName, prepared.branchName)
       : null,
-    validation: validation
-      ? buildValidationSummary(validation, {
-          currentPolicyVersion: SANDBOX_POLICY_VERSION,
-          failureMessage: validation.failureCode
-            ? (OPERATION_FAILURE_MESSAGES[validation.failureCode] ?? null)
-            : null,
-        })
-      : null,
+    validation: validationSummary,
     preview,
     // The artifact's id is its validation run's, and only a passing run can
     // have one. A failed run offers nothing for the client to name.

@@ -1,6 +1,7 @@
 import { preparedChangeAnchorId } from "@/components/layout/project-shell";
 import type { ApprovalCard } from "@/modules/approvals/view";
 import type { BusinessRationale } from "@/modules/execution/business-rationale";
+import type { ChangeProgress } from "@/modules/execution/change-progress";
 import type { MergeCard } from "@/modules/merge/view";
 import type { OutcomeCard } from "@/modules/outcome-verification/view";
 import type { BusinessImpactCard } from "@/modules/business-measurement/view";
@@ -36,6 +37,15 @@ import { ValidationPanel, type ValidationSummary } from "./validation-panel";
  */
 
 export type PreparedChangeCard = {
+  /**
+   * Where this change stands, decided once on the server (UI-5 §1).
+   *
+   * Every panel below speaks only for its own gate, which is why the card
+   * needs someone to speak for the whole chain: what to lead with, which
+   * settled gates can fold away, and which "this has not happened yet" lines
+   * are still true.
+   */
+  progress: ChangeProgress;
   id: string;
   branchName: string;
   commitSha: string | null;

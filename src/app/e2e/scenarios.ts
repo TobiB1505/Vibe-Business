@@ -2,6 +2,7 @@ import type { PreparedChangeCard } from "@/app/app/projects/[projectId]/prepared
 import type { OutcomeCard, OutcomeCheckLine } from "@/modules/outcome-verification/view";
 import type { BusinessImpactCard } from "@/modules/business-measurement/view";
 import { businessRationaleFor } from "@/modules/execution/business-rationale";
+import { deriveChangeProgress } from "@/modules/execution/change-progress";
 import { OBSERVED_CHANGE_DISCLAIMER } from "@/modules/business-measurement/causality";
 
 /**
@@ -25,8 +26,23 @@ export const DRIFTED_HEAD = "b8638ae4a0c4a1e31288da4d6ef3300f04d1746a";
 const APPROVAL_ID = "approval_e2e";
 const APPROVED_AT = "2026-08-14T08:22:59.917Z";
 
+/**
+ * Completes a card by deriving its progress exactly as the server does.
+ *
+ * Deliberately the real function rather than a hand-written state per
+ * scenario: a fixture that decided for itself where a change stood could
+ * disagree with production and the browser suite would keep passing while the
+ * product said something else.
+ */
+function withProgress(card: Omit<PreparedChangeCard, "progress">): PreparedChangeCard {
+  return { ...card, progress: deriveChangeProgress(card) };
+}
+
 /** Everything except the merge card, which is what each scenario varies. */
-function baseChange(): Omit<PreparedChangeCard, "merge" | "outcome" | "businessImpact"> {
+function baseChange(): Omit<
+  PreparedChangeCard,
+  "progress" | "merge" | "outcome" | "businessImpact"
+> {
   return {
     id: "prepared_e2e",
     branchName: "vibe/seo-foundations-cc32273131c5",
@@ -184,7 +200,12 @@ function outcomeCard(overrides: Partial<OutcomeCard> = {}): OutcomeCard {
 
 /** A merged change with an outcome card in whatever state the scenario needs. */
 function outcomeChange(outcome: OutcomeCard): PreparedChangeCard {
-  return { ...baseChange(), merge: mergedCard(), outcome, businessImpact: businessImpactCard() };
+  return withProgress({
+    ...baseChange(),
+    merge: mergedCard(),
+    outcome,
+    businessImpact: businessImpactCard(),
+  });
 }
 
 
@@ -253,7 +274,7 @@ function plannedImpact(overrides: Partial<BusinessImpactCard> = {}): BusinessImp
 
 /** A merged change with an outcome verified and a business impact card. */
 function impactChange(businessImpact: BusinessImpactCard): PreparedChangeCard {
-  return {
+  return withProgress({
     ...baseChange(),
     merge: mergedCard(),
     outcome: outcomeCard({
@@ -266,21 +287,22 @@ function impactChange(businessImpact: BusinessImpactCard): PreparedChangeCard {
       attemptCount: 1,
     }),
     businessImpact,
-  };
+  });
 }
 
 export const E2E_SCENARIOS = {
   /** A fresh preflight says this could merge now. The confirmation path. */
-  merge_ready: (): PreparedChangeCard => ({
-    ...baseChange(),
-    outcome: outcomeCard(),
-    businessImpact: businessImpactCard(),
-    merge: mergeCard({
-      state: "ready",
-      currentDefaultHeadSha: APPROVED_BASE,
-      canMerge: true,
+  merge_ready: (): PreparedChangeCard =>
+    withProgress({
+      ...baseChange(),
+      outcome: outcomeCard(),
+      businessImpact: businessImpactCard(),
+      merge: mergeCard({
+        state: "ready",
+        currentDefaultHeadSha: APPROVED_BASE,
+        canMerge: true,
+      }),
     }),
-  }),
 
   /**
    * **What the real dogfood produced**, and the distinction worth keeping.
@@ -290,18 +312,19 @@ export const E2E_SCENARIOS = {
    * ChangeMerge row and no merge id — the panel is saying "this cannot be
    * merged", not "a merge was tried and stopped".
    */
-  merge_not_eligible_repository_changed: (): PreparedChangeCard => ({
-    ...baseChange(),
-    outcome: outcomeCard(),
-    businessImpact: businessImpactCard(),
-    merge: mergeCard({
-      state: "not_eligible",
-      failureCode: "merge_repository_changed",
-      failureMessage:
-        "The default branch changed after this change was prepared. Vibe did not modify the repository. Review the updated repository state before merging.",
-      canMerge: false,
+  merge_not_eligible_repository_changed: (): PreparedChangeCard =>
+    withProgress({
+      ...baseChange(),
+      outcome: outcomeCard(),
+      businessImpact: businessImpactCard(),
+      merge: mergeCard({
+        state: "not_eligible",
+        failureCode: "merge_repository_changed",
+        failureMessage:
+          "The default branch changed after this change was prepared. Vibe did not modify the repository. Review the updated repository state before merging.",
+        canMerge: false,
+      }),
     }),
-  }),
 
   /**
    * The other refusal: an attempt existed and was stopped before any write.
@@ -311,35 +334,37 @@ export const E2E_SCENARIOS = {
    * because a row exists; there is no resulting SHA because nothing was
    * written, which the `change_merges_blocked_wrote_nothing` CHECK guarantees.
    */
-  merge_blocked_repository_changed: (): PreparedChangeCard => ({
-    ...baseChange(),
-    outcome: outcomeCard(),
-    businessImpact: businessImpactCard(),
-    merge: mergeCard({
-      state: "blocked",
-      changeMergeId: "merge_blocked_e2e",
-      failureCode: "merge_repository_changed",
-      failureMessage:
-        "The default branch changed after this change was prepared. Vibe did not modify the repository. Review the updated repository state before merging.",
-      currentDefaultHeadSha: DRIFTED_HEAD,
-      canMerge: false,
+  merge_blocked_repository_changed: (): PreparedChangeCard =>
+    withProgress({
+      ...baseChange(),
+      outcome: outcomeCard(),
+      businessImpact: businessImpactCard(),
+      merge: mergeCard({
+        state: "blocked",
+        changeMergeId: "merge_blocked_e2e",
+        failureCode: "merge_repository_changed",
+        failureMessage:
+          "The default branch changed after this change was prepared. Vibe did not modify the repository. Review the updated repository state before merging.",
+        currentDefaultHeadSha: DRIFTED_HEAD,
+        canMerge: false,
+      }),
     }),
-  }),
 
   /** The default branch was moved and the result independently read back. */
-  merge_merged: (): PreparedChangeCard => ({
-    ...baseChange(),
-    outcome: outcomeCard(),
-    businessImpact: businessImpactCard(),
-    merge: mergeCard({
-      state: "merged",
-      changeMergeId: "merge_e2e",
-      currentDefaultHeadSha: APPROVED_BASE,
-      resultingDefaultHeadSha: APPROVED_COMMIT,
-      mergedAt: "2026-08-14T12:30:00.000Z",
-      canMerge: false,
+  merge_merged: (): PreparedChangeCard =>
+    withProgress({
+      ...baseChange(),
+      outcome: outcomeCard(),
+      businessImpact: businessImpactCard(),
+      merge: mergeCard({
+        state: "merged",
+        changeMergeId: "merge_e2e",
+        currentDefaultHeadSha: APPROVED_BASE,
+        resultingDefaultHeadSha: APPROVED_COMMIT,
+        mergedAt: "2026-08-14T12:30:00.000Z",
+        canMerge: false,
+      }),
     }),
-  }),
 
   /**
    * Merged, and nobody has asked yet (§29, §43).
