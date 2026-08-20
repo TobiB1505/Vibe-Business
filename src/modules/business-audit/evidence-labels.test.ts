@@ -3,6 +3,13 @@ import { describeEvidenceId } from "./evidence-labels";
 import { AUTHENTICATED_SURFACE_LABELS } from "@/modules/authenticated-product-intelligence/schema";
 import { PRODUCT_SURFACE_LABELS } from "@/modules/live-product-intelligence/human-view";
 import { BUSINESS_SURFACE_LABELS } from "@/modules/repository-intelligence/schema";
+import {
+  BUSINESS_SIGNAL_IDS,
+  CAPABILITY_LABELS,
+  JOURNEY_STAGE_LABELS,
+} from "@/modules/product-understanding/schema";
+import { evidenceSource } from "./map-view";
+import { EVIDENCE_SOURCE_LABELS } from "./evidence-labels";
 
 /**
  * "Why?" resolution (Sprint 6 §12, UI-7 §2).
@@ -61,7 +68,7 @@ describe("polarity survives", () => {
 describe("the source is named from where the founder thinks it came from", () => {
   it.each([
     ["repo.integration.github", "Your code"],
-    ["live.surface.pricing", "Your public site"],
+    ["live.surface.pricing", "Your live site"],
     ["business.primary_goal", "What you told Vibe"],
     ["auth.surface.dashboard", "Your signed-in product"],
   ])("%s → %s", (id, source) => {
@@ -103,6 +110,22 @@ const LITERAL_IDS = [
   "business.target_customer",
   "business.monetization_model",
   "business.product_summary",
+  "profile.completeness",
+  "profile.identity.name",
+  "profile.identity.category",
+  "profile.identity.description",
+  "profile.identity.promise",
+  "profile.identity.purpose",
+  "profile.identity.understanding",
+  "profile.identity.audience",
+  "profile.audience.primary",
+  "profile.audience.user_type",
+  "profile.audience.problem",
+  "profile.audience.use_case",
+  "intent.primary_goal",
+  "intent.stage",
+  "intent.how_it_earns",
+  "intent.monetization_model",
 ] as const;
 
 const FAMILY_IDS = [
@@ -112,10 +135,17 @@ const FAMILY_IDS = [
     `auth.surface.${id}`,
     `auth.surface.${id}_not_observed`,
   ]),
+  ...Object.keys(JOURNEY_STAGE_LABELS).flatMap((id) => [
+    `profile.journey.${id}`,
+    `profile.journey.${id}_not_found`,
+  ]),
+  ...Object.keys(CAPABILITY_LABELS).map((id) => `profile.capability.${id}`),
   "repo.framework.nextjs",
   "repo.language.typescript",
   "repo.integration.supabase",
   "auth.action.open_settings",
+  ...BUSINESS_SIGNAL_IDS.map((id) => `profile.signal.${id}`),
+  "profile.technical.payment_provider",
 ];
 
 describe("nothing the product still emits falls through to the fallback", () => {
@@ -138,6 +168,24 @@ describe("nothing the product still emits falls through to the fallback", () => 
       expect(prose, id).not.toMatch(/[a-z]\.[a-z]/);
       expect(detail.split(" ").length, id).toBeGreaterThan(1);
     }
+  });
+});
+
+describe("both prefix tables know the same sources", () => {
+  /**
+   * There are two, and they disagreed (UI-7 §2).
+   *
+   * `map-view.ts` renders the caption under a citation ("from what Vibe
+   * understood"); this module renders the citation itself. The caption table
+   * knew all six prefixes and the label table knew four — which is exactly how
+   * a row could read "from what Vibe understood · Signal pricing surface",
+   * with the caption right and the line above it a raw id.
+   *
+   * They stay two tables because they are two sentences in two positions. What
+   * they may not do again is cover different sets of prefixes.
+   */
+  it.each(Object.keys(EVIDENCE_SOURCE_LABELS))("%s is known to the caption too", (prefix) => {
+    expect(evidenceSource(`${prefix}.anything`)).not.toBeNull();
   });
 });
 

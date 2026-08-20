@@ -125,6 +125,12 @@ export function evidenceSource(evidenceId: string): string | null {
     case "auth":
       return "from your signed-in product";
     case "intent":
+    // The same thing under an older name: `evidence.ts` emits `business.*`
+    // where `evidence-v3.ts` emits `intent.*`, and a stored audit can carry
+    // either. This table knew only the newer one, so every citation of a
+    // founder's own answers on an older audit rendered with no source line at
+    // all (UI-7 §2).
+    case "business":
       return "from your answers";
     case "profile":
       return "from what Vibe understood";
