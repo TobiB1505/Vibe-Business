@@ -92,6 +92,7 @@ export function ConfirmPanel({
   title,
   tone = "action",
   confirmLabel,
+  confirmType = "button",
   cancelLabel = "Cancel",
   pending = false,
   onConfirm,
@@ -102,9 +103,16 @@ export function ConfirmPanel({
   tone?: ConfirmTone;
   /** The full label, including any in-flight wording the caller decides. */
   confirmLabel: ReactNode;
+  /**
+   * `submit` when the confirmation sits inside a `<form>` whose action is the
+   * thing being confirmed — so the server action stays the mechanism rather
+   * than a click handler imitating one.
+   */
+  confirmType?: "button" | "submit";
   cancelLabel?: string;
   pending?: boolean;
-  onConfirm: () => void;
+  /** Optional for a `submit` confirm, whose form action is what runs. */
+  onConfirm?: () => void;
   onCancel: () => void;
   /** What the person is being asked to agree to. Never summarised here. */
   children: ReactNode;
@@ -145,7 +153,7 @@ export function ConfirmPanel({
         <Button type="button" variant="secondary" size="sm" onClick={onCancel} disabled={pending}>
           {cancelLabel}
         </Button>
-        <Button type="button" variant="primary" size="sm" onClick={onConfirm} disabled={pending}>
+        <Button type={confirmType} variant="primary" size="sm" onClick={onConfirm} disabled={pending}>
           {confirmLabel}
         </Button>
       </div>
