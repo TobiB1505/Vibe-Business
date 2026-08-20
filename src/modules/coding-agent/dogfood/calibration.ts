@@ -1,7 +1,8 @@
 import { classifyExecutionPricingClass, type ExecutionPricingClass } from "@/modules/economy/execution-class";
 import { deriveExecutionSurfaceRequirement } from "@/modules/execution-context/surface";
 import type { ExecutionRiskClass } from "@/modules/execution-contract/schema";
-import { BENCHMARK_FIXTURE_VERSION, type BenchmarkFixture } from "./fixtures";
+import type { BenchmarkFixture } from "./fixtures";
+import { BENCHMARK_FIXTURE_VERSION } from "./fixture-version";
 
 /**
  * The five calibration moves (Sprint 0055).

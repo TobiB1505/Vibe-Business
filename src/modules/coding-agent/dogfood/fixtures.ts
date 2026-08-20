@@ -1,7 +1,10 @@
 import type { ActionPlanStep, StepActor, StepChangeKind } from "@/modules/action-plans/schema";
 import { classifyStep } from "@/modules/action-plans/classify";
 import { CALIBRATION_FIXTURES } from "./calibration";
+import { BENCHMARK_FIXTURE_VERSION, BENCHMARK_STEP_PREFIX } from "./fixture-version";
 import type { RepositoryIntelligenceSnapshot } from "@/modules/repository-intelligence/schema";
+
+export { BENCHMARK_FIXTURE_VERSION, BENCHMARK_STEP_PREFIX } from "./fixture-version";
 
 /**
  * Internal benchmark fixtures — the only thing this harness replaces.
@@ -56,7 +59,6 @@ import type { RepositoryIntelligenceSnapshot } from "@/modules/repository-intell
  * generalization claim run #8 exists to test against a real repository.
  */
 
-export const BENCHMARK_FIXTURE_VERSION = "dogfood-fixture.v1" as const;
 
 /**
  * The namespace that separates a fixture step from a planner step.
@@ -80,7 +82,6 @@ export const BENCHMARK_FIXTURE_VERSION = "dogfood-fixture.v1" as const;
  * boundary the key crosses, and forgotten at one of them. `assertUrlSafe` below
  * keeps it true.
  */
-export const BENCHMARK_STEP_PREFIX = "dogfood-fixture--" as const;
 
 /**
  * A step key must survive a URL round trip untouched.
@@ -177,20 +178,19 @@ export const LOW_UI_PRIMARY_CTA: BenchmarkFixture = {
  * expectations are calibration's concern, not the harness's — but they are
  * listed here, because a fixture the surface cannot reach cannot be run.
  *
- * Assembled inside the function rather than in a module-level constant. The two
- * modules genuinely reference each other — calibration fixtures *are*
- * `BenchmarkFixture`s, and the harness has to be able to list them — so a
- * constant evaluated at import time reads `CALIBRATION_FIXTURES` before that
- * module has finished initialising, and gets `undefined`. Deferring the read to
- * call time is the whole fix: by the time anything asks for the list, both
- * modules exist.
+ * This is a plain constant again, and safely so: `calibration.ts` imports only
+ * the *type* from this module — erased at build — and takes the one value it
+ * needs from `fixture-version.ts`. The dependency runs one way, so there is
+ * nothing left to evaluate out of order.
  */
+const FIXTURES: readonly BenchmarkFixture[] = [LOW_UI_PRIMARY_CTA, ...CALIBRATION_FIXTURES];
+
 export function listBenchmarkFixtures(): readonly BenchmarkFixture[] {
-  return [LOW_UI_PRIMARY_CTA, ...CALIBRATION_FIXTURES];
+  return FIXTURES;
 }
 
 export function findBenchmarkFixture(id: string): BenchmarkFixture | null {
-  return listBenchmarkFixtures().find((fixture) => fixture.id === id) ?? null;
+  return FIXTURES.find((fixture) => fixture.id === id) ?? null;
 }
 
 /** The fixture a benchmark step key names, or null. */

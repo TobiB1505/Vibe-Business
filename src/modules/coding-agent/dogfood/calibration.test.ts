@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { EXECUTION_PRICING_CLASSES } from "@/modules/economy/execution-class";
 import { MAX_AGENTIC_V1_RISK, riskExceeds } from "@/modules/execution-contract/schema";
@@ -172,6 +174,52 @@ describe("every calibration run is recorded as dogfood, without a migration", ()
     for (const fixture of CALIBRATION_FIXTURES) {
       expect(benchmarkStepKey(fixture)).toMatch(/^dogfood-fixture--[a-z0-9-]+$/);
     }
+  });
+});
+
+/**
+ * The defect this prevents, in full.
+ *
+ * `fixtures.ts` lists the calibration fixtures and `calibration.ts` builds them,
+ * so the two modules reference each other. A *value* import in both directions
+ * means whichever module the bundler enters first evaluates while the other is
+ * still initialising, and reads `undefined`.
+ *
+ * The failure is direction-dependent, which is what made it dangerous: the unit
+ * suite entered through `calibration.ts` and passed all 51 assertions, and only
+ * `next build` — entering through a page that imports `fixtures.ts` — threw
+ * `Cannot access 'j' before initialization`. A deferred read papered over it;
+ * moving the one shared value into `fixture-version.ts` removed it.
+ */
+describe("the fixture modules do not import each other's values", () => {
+  it("keeps calibration's import of the harness type-only", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/modules/coding-agent/dogfood/calibration.ts"),
+      "utf8",
+    );
+
+    const harnessImports = source
+      .split("\n")
+      .filter((line) => line.includes('from "./fixtures"'));
+
+    expect(harnessImports.length).toBeGreaterThan(0);
+    for (const line of harnessImports) {
+      expect(line, "a value import here reintroduces the build-time cycle").toMatch(/^import type /);
+    }
+  });
+
+  it("takes the shared constant from the module that depends on nothing", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/modules/coding-agent/dogfood/calibration.ts"),
+      "utf8",
+    );
+    const shared = readFileSync(
+      join(process.cwd(), "src/modules/coding-agent/dogfood/fixture-version.ts"),
+      "utf8",
+    );
+
+    expect(source).toContain('from "./fixture-version"');
+    expect(shared, "fixture-version.ts must import nothing").not.toMatch(/^import /m);
   });
 });
 
