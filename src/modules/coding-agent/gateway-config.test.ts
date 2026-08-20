@@ -96,6 +96,46 @@ describe("the token a run is given", () => {
   });
 });
 
+/**
+ * Production Domain & Environment Migration v1, PART F — the gateway origin
+ * must stay independent of `lib/env/app-url.ts`'s general deployment-URL
+ * resolution, on purpose. `getAppUrl()` would happily resolve `VERCEL_URL`
+ * or `NEXT_PUBLIC_APP_URL` into an origin, but this file already documents
+ * why doing that here would be wrong: the value becomes the sandbox's whole
+ * egress allowlist, so an automatic guess is both a wrong destination and a
+ * hole in the network policy. These pin that the two never merge.
+ */
+describe("independence from the general app-URL resolution (PART F)", () => {
+  it("ignores NEXT_PUBLIC_APP_URL entirely — still refuses without its own origin", () => {
+    expect(
+      readAgentGatewayConfig({
+        VIBE_AGENT_GATEWAY_SECRET: SECRET,
+        NEXT_PUBLIC_APP_URL: "https://vibe.business",
+      }),
+    ).toBeNull();
+  });
+
+  it("ignores VERCEL_URL entirely — still refuses without its own origin", () => {
+    expect(
+      readAgentGatewayConfig({
+        VIBE_AGENT_GATEWAY_SECRET: SECRET,
+        VERCEL_URL: "some-deploy.vercel.app",
+      }),
+    ).toBeNull();
+  });
+
+  it("VIBE_AGENT_GATEWAY_ORIGIN may legitimately differ from NEXT_PUBLIC_APP_URL — both are read independently", () => {
+    // A real, deliberate operational shape: production traffic serves from
+    // the custom domain while agent dogfooding still points at a pinned
+    // preview deployment. Neither variable talks the other one down.
+    expect(
+      readAgentGatewayConfig(
+        env({ VIBE_AGENT_GATEWAY_ORIGIN: "https://dogfood-preview.vercel.app" }),
+      )?.origin,
+    ).toBe("https://dogfood-preview.vercel.app");
+  });
+});
+
 describe("expiry", () => {
   /**
    * Sized to the run's own wall clock rather than a round number, so a token

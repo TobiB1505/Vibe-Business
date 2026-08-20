@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { getAppUrl } from "@/lib/env/app-url";
 import { fontVariables } from "./fonts";
 import "./globals.css";
 
@@ -14,6 +15,12 @@ import "./globals.css";
  * `font-family` declaration anywhere else in the codebase is a bug.
  */
 export const metadata: Metadata = {
+  // Resolves any relative URL a page's own metadata provides (Open Graph
+  // images, alternates, ...) against this deployment's own origin, so a
+  // Preview build never resolves one against Production's domain. No page
+  // currently sets a relative metadata URL — this establishes the base
+  // before one needs it, rather than after a wrong resolution ships.
+  metadataBase: new URL(getAppUrl()),
   title: "Vibe Business",
   description: "The business layer for AI-built products.",
 };

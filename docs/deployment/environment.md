@@ -1,0 +1,132 @@
+# Environment & Domain Architecture
+
+How Vibe Business tells development, preview, and production apart, and
+where each URL a deployment needs comes from. Written for the Production
+Domain & Environment Migration sprint, which removed the last hardcoded
+`*.vercel.app` values from the codebase.
+
+## The principle
+
+```
+Code -> Environment Configuration -> Development / Preview / Production URL
+```
+
+The environment decides which URL is "this deployment's own"; the code never
+guesses a domain and never bakes one in. This document is about **Vibe's own
+URL** — the domain a visitor, a search engine, or Stripe reaches Vibe at.
+It has nothing to do with a *connected project's* production URL (the
+customer's own website, configured per-project in `/app/projects/[id]` and
+used by Live Product Intelligence) — that is unrelated, per-customer data,
+not deployment configuration.
+
+## The three tiers
+
+| Tier | How the origin is resolved | Configuration needed |
+|---|---|---|
+| **Development** | `http://localhost:3000`, the fallback when nothing else resolves | None |
+| **Preview** | Vercel's own `VERCEL_URL` — a fresh, unique host per deployment | None — this is automatic |
+| **Production** | `NEXT_PUBLIC_APP_URL`, set explicitly | Set once, in Vercel's Production environment variables |
+
+Resolved by `src/lib/env/app-url.ts`'s `getAppUrl()`, in that priority order
+(`NEXT_PUBLIC_APP_URL` first, then `VERCEL_URL`, then localhost) — see that
+file's own doc comment for the full reasoning. `getAppEnvironment()` answers
+the companion question, "which tier is this", primarily from Vercel's
+`VERCEL_ENV`.
+
+**Do not set a fixed "preview domain" variable.** A Preview deployment gets a
+new, branch-specific URL from Vercel on every deployment; a variable copied
+from one preview would be wrong for the next one. Reading `VERCEL_URL` is the
+only version of "Preview" that stays correct without being reconfigured on
+every branch — which is why Preview needs zero manual configuration at all.
+
+## What actually reads `NEXT_PUBLIC_APP_URL` / `getAppUrl()`
+
+| Consumer | File | What it builds |
+|---|---|---|
+| Sitemap | `src/app/sitemap.ts` | Every listed page's absolute URL |
+| Robots | `src/app/robots.ts` | The `sitemap:` directive's URL |
+| Root metadata | `src/app/layout.tsx` | `metadataBase`, for resolving any future relative Open Graph/alternate URL |
+| Stripe Checkout / Customer Portal | `src/modules/billing/checkout.ts` | The return-URL fallback, only when `STRIPE_BILLING_RETURN_URL` is not explicitly set |
+
+## What deliberately does NOT read it
+
+Two different reasons, worth telling apart:
+
+**Already environment-agnostic by design, unrelated to this migration.**
+Nothing here needed to change:
+
+- **Auth redirects** (`src/modules/auth/actions.ts`'s `requestOrigin()`) — build
+  the origin from the incoming request's `Host`/`X-Forwarded-Host` header, not
+  from configuration. This is intentional: it is what lets localhost, every
+  Preview deployment, and Production all work without a URL variable to keep
+  in sync. Safety does not depend on trusting that header — Supabase rejects
+  any `redirectTo` that is not on its own configured Redirect URLs allow list
+  (see `docs/setup/supabase-auth.md`), so a spoofed host produces a rejected
+  sign-in, not a redirect to an attacker.
+- **Login/session redirects** (`src/modules/auth/redirects.ts`,
+  `src/lib/supabase/proxy.ts`) — build relative paths or Next's own resolved
+  `request.nextUrl`, never an absolute URL from configuration. A redirect that
+  is only ever a path is structurally incapable of pointing at another origin.
+- **GitHub App OAuth callback** — configured entirely in the GitHub App's own
+  settings page (see `docs/setup/github-app.md`), not in code at all.
+
+**A deliberately separate security boundary**, not merely unrelated:
+
+- **`VIBE_AGENT_GATEWAY_ORIGIN`** (`src/modules/coding-agent/gateway-config.ts`)
+  — the origin a Coding Agent's isolated Vercel Sandbox is told to send its
+  Claude API traffic to, and — critically — the **entire egress allowlist**
+  for that sandbox's network policy. `gateway-config.ts` documents in detail
+  why this must stay explicit and independently configured: deriving it from
+  `VERCEL_URL` would point a production execution at whatever deployment
+  happened to be running the workflow (a preview, a branch, a rollback), which
+  is simultaneously a wrong destination and a hole in the sandbox's network
+  policy. It is **not** read from `NEXT_PUBLIC_APP_URL`, and a
+  `gateway-config.test.ts` regression suite pins that the two never merge —
+  setting `NEXT_PUBLIC_APP_URL` or `VERCEL_URL` has zero effect on what
+  `readAgentGatewayConfig()` resolves.
+
+  Set it to whichever deployment origin should actually receive gateway
+  traffic — normally the Production domain, but it may legitimately differ
+  (e.g. staying pinned to a specific Preview deployment while dogfooding the
+  Coding Agent before rolling it out to Production). That is an operational
+  decision made when setting the variable, not something this file or any
+  code infers.
+
+## Vercel environment variables
+
+| Variable | Development | Preview | Production |
+|---|---|---|---|
+| `NEXT_PUBLIC_APP_URL` | unset | unset (auto via `VERCEL_URL`) | **your production custom domain**, e.g. `https://your-production-domain.com` |
+| `VIBE_AGENT_GATEWAY_ORIGIN` | unset (agent execution unavailable locally) | set only if deliberately dogfooding the Coding Agent on that Preview | your production custom domain, or a pinned dogfood Preview — see above |
+| `VIBE_AGENT_GATEWAY_SECRET` | as needed for local dogfooding | as needed | required alongside the origin above |
+| `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` | required | required | required |
+| `STRIPE_BILLING_RETURN_URL` | unset (falls back to `getAppUrl()` + `/app/billing`) | unset | set explicitly, or leave unset to fall back to `NEXT_PUBLIC_APP_URL` + `/app/billing` |
+
+`VERCEL_URL` and `VERCEL_ENV` are injected automatically by Vercel on every
+build — never set them yourself.
+
+## Migrating from a `*.vercel.app` domain to a custom one
+
+1. Add the custom domain in Vercel (Project Settings → Domains).
+2. Set `NEXT_PUBLIC_APP_URL` to the new domain in Vercel's **Production**
+   environment variables only. Preview and Development need no change.
+3. Update Supabase's Site URL and add the new domain's `/auth/callback` and
+   `/auth/confirm` Redirect URLs — see `docs/setup/supabase-auth.md`. Keep the
+   old `*.vercel.app` entries until you have confirmed nothing still depends
+   on them (an in-flight email link, a bookmarked preview).
+4. If a production GitHub App exists, update its Homepage URL and Callback
+   URL — see `docs/setup/github-app.md`.
+5. Decide `VIBE_AGENT_GATEWAY_ORIGIN` deliberately (see above) — it does not
+   move automatically just because `NEXT_PUBLIC_APP_URL` did.
+6. Redeploy Production. Verify: the deployed site's `/robots.txt` and
+   `/sitemap.xml` name the new domain, sign-in and Google OAuth complete
+   successfully, and (if Stripe is configured) a Checkout session returns to
+   the new domain.
+
+## Local development
+
+No `NEXT_PUBLIC_APP_URL` needed — everything falls back to
+`http://localhost:3000` automatically. Auth already works against any host
+because it is header-derived (see above); the only thing to configure locally
+is `http://localhost:3000/auth/callback` and `/auth/confirm` on Supabase's
+Redirect URLs list, per `docs/setup/supabase-auth.md`.
