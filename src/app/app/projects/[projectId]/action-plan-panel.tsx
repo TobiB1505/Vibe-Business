@@ -462,14 +462,14 @@ export function ActionPlanPanel({
                 blockHref ? (
                   <a
                     href={blockHref}
-                    className="text-fg-prose hover:text-fg rounded-sm text-sm underline underline-offset-4 transition-colors"
+                    className="text-fg-prose hover:text-fg rounded-sm text-sm underline underline-offset-4 transition-interactive"
                   >
                     {blockNotice.actionLabel}
                   </a>
                 ) : (
                   <a
                     href="#next-moves"
-                    className="text-fg-prose hover:text-fg rounded-sm text-sm underline underline-offset-4 transition-colors"
+                    className="text-fg-prose hover:text-fg rounded-sm text-sm underline underline-offset-4 transition-interactive"
                   >
                     {blockNotice.actionLabel}
                   </a>

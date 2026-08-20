@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils/cn";
 
 export const inputClassName =
   "rounded-field bg-field border-line-strong text-fg-body placeholder:text-fg-meta w-full border px-4 py-3 text-sm " +
-  "transition-colors duration-150 ease-vibe " +
+  "transition-interactive " +
   "focus:border-mint/60 focus:ring-mint/10 focus:ring-4 focus:outline-none " +
   "disabled:text-fg-disabled disabled:cursor-not-allowed";
 

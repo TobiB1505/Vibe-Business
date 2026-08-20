@@ -160,6 +160,47 @@ describe("every colour a class name asks for exists", () => {
   });
 });
 
+describe("the focus ring is never animated", () => {
+  /**
+   * `transition-colors` includes `outline-color` (UI-6 §9).
+   *
+   * A control using it fades its focus ring in over 150ms, so a keyboard user
+   * pressing Tab sees the indicator arrive after they have already started
+   * deciding where they are. `button.tsx` worked this out and wrote the
+   * property list by hand — which fixed one control, because a comment in one
+   * file is not a mechanism. Twenty others kept the shorthand.
+   *
+   * `transition-interactive` in `globals.css` is the mechanism. This is what
+   * stops the shorthand coming back.
+   */
+  const ALLOWED = new Set([
+    // A progress bar, not a control: it cannot take focus, and it runs at
+    // 300ms deliberately because it is reporting movement rather than
+    // responding to a pointer.
+    "src/app/app/projects/[projectId]/understanding-progress.tsx",
+  ]);
+
+  it("is defined once, as a utility", () => {
+    expect(CSS).toContain("@utility transition-interactive");
+    expect(CSS).not.toMatch(/@utility transition-interactive[\s\S]*?outline-color/);
+  });
+
+  it("is what interactive elements use", () => {
+    const offenders: string[] = [];
+
+    for (const file of walk(join(process.cwd(), "src"))) {
+      if (!file.endsWith(".tsx")) continue;
+      const relative = file.slice(process.cwd().length + 1);
+      if (ALLOWED.has(relative)) continue;
+      if (withoutComments(readFileSync(file, "utf8")).includes("transition-colors")) {
+        offenders.push(relative);
+      }
+    }
+
+    expect(offenders, `use transition-interactive instead: ${offenders.join(", ")}`).toEqual([]);
+  });
+});
+
 function withoutComments(src: string): string {
   return src
     .replace(/\{\/\*[\s\S]*?\*\/\}/g, " ")

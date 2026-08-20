@@ -195,7 +195,7 @@ export default async function ProjectOverviewPage({
               <MonoLabel>Recent activity</MonoLabel>
               <Link
                 href={projectSectionHref(project.id, "activity")}
-                className="text-fg-muted hover:text-fg-body rounded-sm text-xs underline underline-offset-4 transition-colors"
+                className="text-fg-muted hover:text-fg-body rounded-sm text-xs underline underline-offset-4 transition-interactive"
               >
                 See all
               </Link>

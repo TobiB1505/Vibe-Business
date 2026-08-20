@@ -31,11 +31,14 @@ const SIZE_CLASSES: Record<ButtonSize, string> = {
 };
 
 const BASE_CLASSES =
-  "inline-flex items-center justify-center gap-2 rounded-full duration-150 ease-vibe " +
+  "inline-flex items-center justify-center gap-2 rounded-full " +
   // Not `transition-colors`: that list includes `outline-color`, which would
-  // fade the focus ring in over 150ms. A focus indicator has to appear at
-  // once, so the transition names the properties hover actually changes.
-  "transition-[color,background-color,border-color] " +
+  // fade the focus ring in over 150ms, so the indicator arrives after the
+  // keyboard user has already started deciding where they are. This file
+  // worked that out first and wrote the property list by hand — which fixed
+  // one control and nothing else, because a comment is not a mechanism.
+  // `transition-interactive` in `globals.css` is the mechanism.
+  "transition-interactive " +
   // A disabled control drops to the bottom of the ramp and keeps a border, so
   // it still reads as a control that exists but is not available — never as an
   // invisible gap. Per the writing rules it should also be accompanied by a
@@ -92,11 +95,9 @@ const TEXT_ACTION_TONES: Record<TextActionTone, string> = {
 };
 
 const TEXT_ACTION_BASE =
-  "rounded-sm underline underline-offset-4 duration-150 ease-vibe " +
-  // Named properties rather than `transition-colors`, for the reason the pill
-  // gives above: a focus indicator that fades in is a focus indicator that is
-  // not there when the key is pressed.
-  "transition-[color] " +
+  "rounded-sm underline underline-offset-4 " +
+  // The same shared utility as the pill, for the reason given there.
+  "transition-interactive " +
   "disabled:pointer-events-none disabled:text-fg-disabled disabled:no-underline";
 
 export function textActionClasses(tone: TextActionTone = "muted"): string {

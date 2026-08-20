@@ -48,7 +48,7 @@ export function DashboardActivity({ entries }: { entries: DashboardActivityEntry
             <span className="text-fg-body text-sm">{entry.title}</span>
             <Link
               href={`/app/projects/${entry.projectId}/activity`}
-              className="text-fg-muted hover:text-fg-body rounded-sm font-mono text-[0.6875rem] transition-colors"
+              className="text-fg-muted hover:text-fg-body rounded-sm font-mono text-[0.6875rem] transition-interactive"
             >
               {entry.projectName}
             </Link>

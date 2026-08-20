@@ -65,7 +65,7 @@ function NextStepLink({ step, projectId }: { step: CapabilityNextStep; projectId
   return (
     <Link
       href={nextStepHref(step, projectId)}
-      className="text-fg-prose hover:text-fg w-fit rounded-sm text-sm underline underline-offset-4 transition-colors"
+      className="text-fg-prose hover:text-fg w-fit rounded-sm text-sm underline underline-offset-4 transition-interactive"
     >
       {step.label}
     </Link>

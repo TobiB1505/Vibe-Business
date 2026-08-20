@@ -123,7 +123,7 @@ export default async function ProjectLayout({
                 href={project.repository.htmlUrl}
                 target="_blank"
                 rel="noreferrer"
-                className="text-fg-body hover:text-fg rounded-sm font-mono text-xs underline underline-offset-4 transition-colors"
+                className="text-fg-body hover:text-fg rounded-sm font-mono text-xs underline underline-offset-4 transition-interactive"
               >
                 {project.repository.fullName}
               </a>

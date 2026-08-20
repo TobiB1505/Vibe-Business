@@ -265,7 +265,7 @@ export function UnderstandingPanel({
             </ul>
             <Link
               href={projectSectionHref(projectId, "overview")}
-              className="text-fg-muted hover:text-fg-body w-fit rounded-sm text-xs underline underline-offset-4 transition-colors"
+              className="text-fg-muted hover:text-fg-body w-fit rounded-sm text-xs underline underline-offset-4 transition-interactive"
             >
               Code and public product findings
             </Link>

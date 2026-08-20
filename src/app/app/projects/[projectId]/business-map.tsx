@@ -172,7 +172,7 @@ function MobileLensButton({
       type="button"
       onClick={() => onSelect(node.lens)}
       aria-pressed={selected}
-      className={`rounded-panel flex w-full items-center gap-3 border px-4 py-3.5 text-left transition-colors ${
+      className={`rounded-panel flex w-full items-center gap-3 border px-4 py-3.5 text-left transition-interactive ${
         selected
           ? "border-mint/60 bg-mint/[0.06]"
           : isNow

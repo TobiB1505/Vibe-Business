@@ -184,7 +184,7 @@ export function ProjectHeader({
       <div className="flex flex-wrap items-end justify-between gap-4 px-5 py-5 sm:px-8">
         <div className="flex min-w-0 flex-col gap-2">
           <p className="text-fg-meta flex items-center gap-2 font-mono text-[0.6875rem]">
-            <Link href="/app" className="hover:text-fg-muted rounded-sm transition-colors">
+            <Link href="/app" className="hover:text-fg-muted rounded-sm transition-interactive">
               Projects
             </Link>
             <span aria-hidden className="text-fg-faint">

@@ -264,6 +264,29 @@
   animation: audit-radial-sweep 5.5s linear infinite;
 }
 
+/*
+ * The focus-safe transition (UI-6 §9).
+ *
+ * `transition-colors` is Tailwind's shorthand, and its property list includes
+ * `outline-color`. Every control that used it therefore faded its focus ring
+ * in over 150ms — so a keyboard user pressing Tab saw the indicator arrive
+ * *after* they had already started deciding where they were.
+ *
+ * `button.tsx` worked this out and wrote the property list by hand, with a
+ * comment explaining why. Twenty controls elsewhere kept `transition-colors`,
+ * because a comment in one file is not a mechanism. This is the mechanism:
+ * the same list, named once, for anything that can take focus.
+ *
+ * `box-shadow` and `transform` are included because several controls animate
+ * a glow or a lift on hover, and splitting those into a second transition
+ * would put two durations on one gesture.
+ */
+@utility transition-interactive {
+  transition-property: color, background-color, border-color, box-shadow, transform;
+  transition-timing-function: var(--ease-vibe);
+  transition-duration: 150ms;
+}
+
 @keyframes audit-node-breathe {
   0%,
   100% {

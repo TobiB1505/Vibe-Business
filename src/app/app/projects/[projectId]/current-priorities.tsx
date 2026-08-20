@@ -121,7 +121,7 @@ export function CurrentPriorities({
                 onClick={() => lens && onSelect(lens)}
                 aria-pressed={isSelected}
                 data-primary={isPrimary ? "true" : undefined}
-                className={`rounded-panel flex w-full flex-col items-start gap-2 border p-4 text-left transition-colors ${
+                className={`rounded-panel flex w-full flex-col items-start gap-2 border p-4 text-left transition-interactive ${
                   isPrimary
                     ? "border-mint/45 bg-mint/[0.05] hover:border-mint/70"
                     : "border-line-2 bg-surface-1 hover:border-line-4"

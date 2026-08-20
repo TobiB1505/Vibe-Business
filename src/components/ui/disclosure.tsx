@@ -38,7 +38,7 @@ export function Disclosure({
       <summary
         className={cn(
           "text-fg-muted hover:text-fg-body flex cursor-pointer list-none items-center gap-2",
-          "rounded-sm text-xs transition-colors duration-150",
+          "rounded-sm text-xs transition-interactive",
           // Safari and Chrome each add their own marker; both are removed so
           // the caret below is the only one.
           "[&::-webkit-details-marker]:hidden",
