@@ -55,7 +55,13 @@ export function ResetPasswordForm() {
           />
         </Field>
 
-        <Button type="submit" disabled={pending} className="mt-1" data-testid="set-password">
+        <Button
+          type="submit"
+          disabled={pending}
+          className="mt-1"
+          data-testid="set-password"
+          busy={pending}
+        >
           {pending ? "Saving…" : "Set new password"}
         </Button>
       </form>

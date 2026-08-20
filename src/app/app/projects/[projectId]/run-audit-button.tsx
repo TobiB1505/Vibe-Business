@@ -142,7 +142,7 @@ export function RunAuditButton({
     <div className="space-y-3">
       <form action={formAction} className="flex items-center gap-3">
         <input type="hidden" name="force" value={hasAudit ? "true" : "false"} />
-        <Button type="submit" disabled={pending || disabled}>
+        <Button type="submit" disabled={pending || disabled} busy={pending}>
           {pending ? "Starting…" : hasAudit ? "Re-run business audit" : "Run business audit"}
         </Button>
         {/* The cost, before the click (§55) — and only when there is one. */}

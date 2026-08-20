@@ -118,13 +118,33 @@ export const TextAction = forwardRef<HTMLButtonElement, TextActionProps>(functio
 export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: ButtonVariant;
   size?: ButtonSize;
+  /**
+   * The action this button started is still running (UI-6 §3).
+   *
+   * Twenty-one controls in this product swap their label for "Merging…",
+   * "Approving…", "Saving…" while a transition is in flight. A sighted user
+   * sees that immediately. A screen-reader user was told nothing at all: the
+   * label of a button that already has focus is not re-read, and the app has
+   * three live regions in total, none of them near these.
+   *
+   * `aria-busy` is the right answer rather than a live region per button. It
+   * says "this control is working" on the element the user is already on, it
+   * needs no region to exist beforehand, and it cannot double-announce the way
+   * a polite region next to changing text does.
+   */
+  busy?: boolean;
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { className, variant = "primary", size = "md", ...props },
+  { className, variant = "primary", size = "md", busy, ...props },
   ref,
 ) {
   return (
-    <button ref={ref} className={cn(buttonClasses({ variant, size }), className)} {...props} />
+    <button
+      ref={ref}
+      aria-busy={busy || undefined}
+      className={cn(buttonClasses({ variant, size }), className)}
+      {...props}
+    />
   );
 });

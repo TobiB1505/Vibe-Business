@@ -73,7 +73,7 @@ function ConfirmDialog({
       <div className="flex items-center gap-3">
         <form action={formAction}>
           <input type="hidden" name="confirmed" value="true" />
-          <Button type="submit" disabled={pending}>
+          <Button type="submit" disabled={pending} busy={pending}>
             {pending ? "Starting…" : "Prepare change"}
           </Button>
         </form>
@@ -211,7 +211,7 @@ export function PrepareChangePanel({
           Vibe has not written anything to your repository. You can start again.
         </p>
         <form action={formAction}>
-          <Button type="submit" variant="secondary" size="sm" disabled={pending}>
+          <Button type="submit" variant="secondary" size="sm" disabled={pending} busy={pending}>
             {pending ? "Starting…" : "Try again"}
           </Button>
         </form>

@@ -201,6 +201,36 @@ describe("the focus ring is never animated", () => {
   });
 });
 
+describe("a button that is working says so", () => {
+  /**
+   * Twenty-seven controls swap their label for "Merging…", "Saving…",
+   * "Starting…" while a transition runs (UI-6 §3). A sighted user sees that at
+   * once. A screen-reader user was told nothing: the label of a button that
+   * already has focus is not re-read, and the app has three live regions in
+   * total, none of them near these.
+   *
+   * `aria-busy` is the fix — on the element the user is already standing on,
+   * needing no region to have existed beforehand. This is what keeps the two
+   * in step, because the label and the attribute are easy to change apart.
+   */
+  it("pairs every in-flight label with aria-busy", () => {
+    const offenders: string[] = [];
+
+    for (const file of walk(join(process.cwd(), "src"))) {
+      if (!file.endsWith(".tsx")) continue;
+      const src = withoutComments(readFileSync(file, "utf8"));
+
+      for (const match of src.matchAll(/<Button\b((?:[^<>]|\{[^{}]*\})*?)>\s*\{(\w+) \? "[^"]*…"/g)) {
+        if (!/\bbusy=\{/.test(match[1])) {
+          offenders.push(`${file.slice(process.cwd().length + 1)} (${match[2]})`);
+        }
+      }
+    }
+
+    expect(offenders, `add busy={…}: ${offenders.join(", ")}`).toEqual([]);
+  });
+});
+
 function withoutComments(src: string): string {
   return src
     .replace(/\{\/\*[\s\S]*?\*\/\}/g, " ")

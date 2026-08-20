@@ -79,7 +79,11 @@ export function RepositoryPicker({
       {state && !state.ok && <p className="text-coral text-sm">{state.error}</p>}
 
       <div>
-        <Button type="submit" disabled={pending || selectedId === null || !canSelect}>
+        <Button
+          type="submit"
+          disabled={pending || selectedId === null || !canSelect}
+          busy={pending}
+        >
           {pending ? "Connecting…" : "Connect repository"}
         </Button>
       </div>

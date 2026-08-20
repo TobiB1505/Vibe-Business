@@ -172,7 +172,13 @@ export function PreparedChangesSection({
             {/* Where this change stands, before anything about how it was
                 built. The card used to open with a branch name, which answers
                 a question almost nobody arrives with (UI-5 §2). */}
-            <p className="text-fg text-sm font-medium">{change.progress.headline}</p>
+            {/* A live region, because this sentence is the one thing on the
+                card that changes as the change advances — and a screen reader
+                announces nothing when visible text is simply replaced. Polite:
+                it is a status, not an interruption. */}
+            <p role="status" className="text-fg text-sm font-medium">
+              {change.progress.headline}
+            </p>
 
             {/* What it is and why, immediately under that. This block used to
                 sit ninth of eleven — below the Approve and Merge controls — so

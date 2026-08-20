@@ -257,7 +257,7 @@ function LiveViewDialog({
         )}
 
         <div className="flex flex-wrap items-center gap-3">
-          <Button type="button" onClick={onAnalyze} disabled={busy || !liveViewUrl}>
+          <Button type="button" onClick={onAnalyze} disabled={busy || !liveViewUrl} busy={busy}>
             {busy ? "Looking around…" : "I'm logged in — Analyze"}
           </Button>
           <TextAction type="button" onClick={onCancel} disabled={busy} className="text-sm">
@@ -537,7 +537,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
               </p>
             )}
             {model.canStart ? (
-              <Button type="button" onClick={handleStart} disabled={disabled}>
+              <Button type="button" onClick={handleStart} disabled={disabled} busy={disabled}>
                 {disabled ? "Starting…" : "Try Deep Scan again"}
               </Button>
             ) : (
@@ -568,7 +568,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
               <p className="text-fg-prose">Your first Deep Scan for this project is included.</p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
-              <Button type="button" onClick={handleStart} disabled={disabled}>
+              <Button type="button" onClick={handleStart} disabled={disabled} busy={disabled}>
                 {disabled ? "Starting…" : "Run free Deep Scan"}
               </Button>
               <span className="text-sm text-fg-muted">Not now</span>
@@ -581,7 +581,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
               Optional deeper analysis of what users experience after signing in.
             </p>
             {model.canStart ? (
-              <Button type="button" onClick={handleStart} disabled={disabled}>
+              <Button type="button" onClick={handleStart} disabled={disabled} busy={disabled}>
                 {disabled ? "Starting…" : "Run Deep Scan"}
               </Button>
             ) : (

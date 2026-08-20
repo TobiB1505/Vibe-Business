@@ -67,7 +67,7 @@ export function ProductionUrlForm({
           required
           className="min-w-64 flex-1 rounded-md border border-line-strong bg-field px-3 py-1.5 text-sm text-fg-body placeholder:text-fg-meta focus:border-mint/60 focus:ring-mint/10 focus:ring-4 focus:outline-none"
         />
-        <Button type="submit" disabled={pending}>
+        <Button type="submit" disabled={pending} busy={pending}>
           {pending ? "Saving…" : currentUrl ? "Save" : "Add production URL"}
         </Button>
         {currentUrl !== null && (

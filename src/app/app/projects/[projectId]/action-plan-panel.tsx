@@ -432,7 +432,13 @@ export function ActionPlanPanel({
           <ReadyPlan planView={planView} />
           <form action={formAction} className="flex items-center gap-3">
             <input type="hidden" name="force" value="true" />
-            <Button type="submit" variant="secondary" size="sm" disabled={pending || running}>
+            <Button
+              type="submit"
+              variant="secondary"
+              size="sm"
+              disabled={pending || running}
+              busy={pending}
+            >
               {pending ? "Starting…" : "Replan this move"}
             </Button>
           </form>
@@ -491,7 +497,7 @@ export function ActionPlanPanel({
               />
               <form action={formAction} className="flex items-center gap-3">
                 <input type="hidden" name="force" value="false" />
-                <Button type="submit" disabled={pending}>
+                <Button type="submit" disabled={pending} busy={pending}>
                   {pending ? "Starting…" : "Plan this move"}
                 </Button>
                 {/* The cost, before the click (BILLING CORE-2 §55). Reading the

@@ -161,7 +161,7 @@ export function UnderstandingConfirm({
         ))}
 
         <div className="flex flex-wrap items-center gap-3">
-          <Button type="submit" disabled={saving}>
+          <Button type="submit" disabled={saving} busy={saving}>
             {saving ? "Saving…" : "Save what I changed"}
           </Button>
           <Button type="button" variant="secondary" onClick={() => setEditing(false)}>

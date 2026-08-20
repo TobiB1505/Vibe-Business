@@ -151,7 +151,7 @@ export function NeedsUserPanel({
         )}
 
         <div className="flex flex-wrap items-center gap-3">
-          <Button type="submit" disabled={pending || value.trim() === ""}>
+          <Button type="submit" disabled={pending || value.trim() === ""} busy={pending}>
             {pending ? "Continuing…" : "Continue audit"}
           </Button>
 

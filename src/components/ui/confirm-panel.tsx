@@ -153,7 +153,14 @@ export function ConfirmPanel({
         <Button type="button" variant="secondary" size="sm" onClick={onCancel} disabled={pending}>
           {cancelLabel}
         </Button>
-        <Button type={confirmType} variant="primary" size="sm" onClick={onConfirm} disabled={pending}>
+        <Button
+          type={confirmType}
+          variant="primary"
+          size="sm"
+          onClick={onConfirm}
+          disabled={pending}
+          busy={pending}
+        >
           {confirmLabel}
         </Button>
       </div>

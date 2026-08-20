@@ -67,6 +67,7 @@ export function LoginForm({
             disabled={busy}
             className="w-full"
             data-testid="google-signin"
+            busy={googlePending}
           >
             {googlePending ? "Opening Google…" : "Continue with Google"}
           </Button>
@@ -108,7 +109,13 @@ export function LoginForm({
             />
           </Field>
 
-          <Button type="submit" disabled={busy} className="mt-1" data-testid="email-signin">
+          <Button
+            type="submit"
+            disabled={busy}
+            className="mt-1"
+            data-testid="email-signin"
+            busy={passwordPending}
+          >
             {passwordPending ? "Signing in…" : "Sign in"}
           </Button>
         </form>
