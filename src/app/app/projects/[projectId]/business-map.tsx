@@ -246,7 +246,9 @@ function MapNode({
         type="button"
         onClick={() => onSelect(node.lens)}
         aria-pressed={selected}
-        aria-label={`${node.label}. Health ${HEALTH_LABELS[node.health]}. Priority ${MATERIALITY_LABELS[node.materiality]}.`}
+        aria-label={`${node.label}. Health ${HEALTH_LABELS[node.health]}. Priority ${MATERIALITY_LABELS[node.materiality]}.${
+          node.blockerRank !== null ? ` Part of priority ${node.blockerRank}.` : ""
+        }`}
         className={`relative flex flex-col text-left transition-[color,background-color,border-color,box-shadow,transform] duration-200 ease-vibe ${
           isNow
             ? "w-[5.75rem] gap-2 rounded-[0.8rem] border border-mint/45 bg-app/95 px-2 py-2.5 shadow-[0_0_34px_-14px_rgb(0_229_160/0.65)] hover:-translate-y-0.5 hover:border-mint/70"
@@ -468,11 +470,25 @@ export function BusinessMap({
         <div className="pointer-events-none absolute top-1/2 left-1/2 z-10 flex size-24 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-full text-center">
           {score !== null ? (
             <>
-              <span className="text-fg text-[1.75rem] leading-none font-semibold tracking-[-0.03em]">
+              {/*
+                Out of what, and which way up (UI-7 §3). "43 READINESS" gave a
+                reader a number with no scale and no direction — the "/100"
+                existed only on the legacy meta line, which most audits no
+                longer render. The visual pair is hidden from assistive tech in
+                favour of the sentence below it, because "43 readiness slash
+                100" is not a thing anyone wants read aloud.
+              */}
+              <span aria-hidden="true" className="text-fg text-[1.75rem] leading-none font-semibold tracking-[-0.03em]">
                 {score}
               </span>
-              <span className="text-fg-meta mt-1 font-mono text-[0.5625rem] tracking-[0.14em] uppercase">
-                readiness
+              <span
+                aria-hidden="true"
+                className="text-fg-meta mt-1 font-mono text-[0.5625rem] tracking-[0.14em] uppercase"
+              >
+                readiness /100
+              </span>
+              <span className="sr-only">
+                Business readiness score: {score} out of 100. Higher is more ready.
               </span>
             </>
           ) : (
@@ -541,6 +557,18 @@ export function BusinessMap({
         <li className="flex items-center gap-1.5">
           <span className="border-line-strong w-4 border-t border-dashed" />
           judged together
+        </li>
+        {/*
+          The numbered badge, which had no key at all (UI-7 §3). Three nodes can
+          carry a "1" at once — it says which of the audit's priorities an area
+          belongs to, not that three areas are somehow all first — and without
+          this line a reader had to infer that from the nodes themselves.
+        */}
+        <li className="flex items-center gap-1.5">
+          <span className="bg-surface-4 text-fg-secondary flex size-4 items-center justify-center rounded-sm font-mono text-[0.5rem] font-bold">
+            1
+          </span>
+          part of priority 1
         </li>
       </ul>
 

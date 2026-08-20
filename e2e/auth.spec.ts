@@ -95,13 +95,21 @@ test.describe("starting Google sign-in", () => {
   test("disables both routes in while handing off", async ({ page }) => {
     await page.goto("/login");
 
-    // Hold the hand-off at the network boundary. Without this the browser
-    // leaves for Supabase immediately and there is no page left to assert on
-    // — which is the correct product behaviour, but makes the pending state
-    // unobservable.
-    await page.route("**e2e-placeholder.supabase.co/**", async (route) => {
-      await new Promise((resolve) => setTimeout(resolve, 3_000));
-      await route.abort();
+    /*
+     * Hold the hand-off at the network boundary. Without this the browser
+     * leaves for Supabase immediately and there is no page left to assert on
+     * — which is the correct product behaviour, but makes the pending state
+     * unobservable.
+     *
+     * Held open rather than released after three seconds. The two assertions
+     * below are only true *while* the request is in flight, so a three-second
+     * hold gave them a three-second window — and under two parallel workers
+     * that window occasionally closed first, which is exactly the shape of
+     * flake this suite exists to not have. Playwright discards the route when
+     * the context closes, so nothing is left hanging.
+     */
+    await page.route("**e2e-placeholder.supabase.co/**", () => {
+      // Deliberately never settled.
     });
 
     await page.getByTestId("google-signin").click();

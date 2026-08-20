@@ -133,7 +133,11 @@ const VIBE_SYNTHESIS: AuditSynthesis = {
     lensAssessment("revenue_economics", "weak", "soon", [
       "intent.how_it_earns",
       "live.surface.pricing_not_observed",
-      "repo.payments.none",
+      // Was `repo.payments.none`, which no evidence builder emits — so the
+      // fixture was the only place that string could come from, and it rendered
+      // as "Payments none" in a screenshot the audit then quoted as a product
+      // defect (UI-7 §2). The real id for the same fact.
+      "repo.surface.payments_not_observed",
     ]),
     lensAssessment("acquisition", "weak", "soon", ["live.seo.canonical_not_observed"]),
     lensAssessment("business_readiness", "weak", "later", ["live.surface.terms_not_observed"]),

@@ -10,7 +10,7 @@ import { isActionable } from "./lens-priority";
 import type { BusinessLens, BusinessLensAssessment, LensMateriality } from "./schema";
 
 /**
- * The "Vibe needs u" gate (CORE-2a.4).
+ * The "Vibe needs you" gate (CORE-2a.4).
  *
  * ## What this layer is for
  *

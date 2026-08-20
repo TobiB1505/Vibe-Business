@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 /**
- * "Vibe needs u", in a real browser (CORE-2a.4 §30, §31, §47, §48).
+ * "Vibe needs you", in a real browser (CORE-2a.4 §30, §31, §47, §48).
  *
  * ## What only a browser can prove here
  *
@@ -36,7 +36,7 @@ async function topOf(page: Page, locator: ReturnType<Page["getByText"]>): Promis
 test.describe("it reads as a collaborator, not an error (§29)", () => {
   test("names itself as Vibe needing the founder", async ({ page }) => {
     await page.goto(FIRST_CUSTOMER);
-    await expect(page.getByText("Vibe needs u")).toBeVisible();
+    await expect(page.getByText("Vibe needs you")).toBeVisible();
   });
 
   /**

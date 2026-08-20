@@ -15,7 +15,7 @@ import { submitFounderAnswerAction, type AnswerActionState } from "./needs-user-
 import type { AnswerFailure } from "@/modules/business-audit/answer-service";
 
 /**
- * "Vibe needs u" (CORE-2a.4 §29–§31).
+ * "Vibe needs you" (CORE-2a.4 §29–§31).
  *
  * ## What this is not
  *
@@ -86,7 +86,7 @@ export function NeedsUserPanel({
     >
       <span aria-hidden="true" className="audit-intelligence-glow pointer-events-none absolute inset-0" />
       <div className="relative flex flex-col gap-3">
-        <MonoLabel className="text-mint">Vibe needs u</MonoLabel>
+        <MonoLabel className="text-mint">Vibe needs you</MonoLabel>
 
         {/*
           What Vibe worked out on its own. Absent rather than invented when the

@@ -302,6 +302,12 @@ export default async function ProjectScorePage({
             movesHref={`/app/projects/${project.id}/moves`}
             hasMoves={hasMoves}
             movesByConclusion={contextualMoves}
+            // Provenance rather than a notice: a current Deep Scan is a fact
+            // about what this audit was made from, not something to interrupt
+            // the verdict with (UI-7 §4).
+            usedSignedInEvidence={
+              Boolean(latestDeepScanSnapshot?.result) && !auditCurrency.newDeepScanEvidence
+            }
           />
         ) : auditStage !== null ? null : (
           // Not scored is not a score of zero. No meter, no number.
