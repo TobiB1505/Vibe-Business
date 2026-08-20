@@ -77,8 +77,10 @@ export default function HomePage() {
         </h1>
 
         <p className="text-fg-prose text-lead max-w-[62ch]">
-          You built the thing. Vibe works out the business around it — what your product actually
-          is, what is holding it back, and what to do about it next. Then it helps you do it.
+          This is for founders who vibe-coded a product — with Lovable, Claude Code, or something
+          like it. You built the thing. Vibe works out the business around it — what your product
+          actually is, what is holding it back, and what to do about it next. Then it helps you do
+          it.
         </p>
 
         <div className="flex flex-wrap items-center gap-4">
