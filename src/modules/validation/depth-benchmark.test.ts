@@ -104,12 +104,13 @@ function depthOf(run: HistoricalRun) {
 
 describe("PART I — historical runs against the depth policy", () => {
   it("run #6 (robots meta) is FAST: cosmetic intent, and two layout files to match", () => {
+    // FAST is install + typecheck + build. It skips the unit suite only.
     const result = depthOf(RUN_6);
 
     expect(result.depth).toBe("fast");
     expect(result.reason).toBe("presentational_low_risk");
     expect(result.escalatedBy).toEqual([]);
-    expect(result.steps).toEqual(["install", "typecheck"]);
+    expect(result.steps).toEqual(["install", "typecheck", "build"]);
   });
 
   it("run #7 (canonical URLs) is DEEP: it edits the login and signup pages", () => {
@@ -158,7 +159,7 @@ describe("PART K — the saving, measured rather than claimed", () => {
    * The arithmetic below is therefore a projection built on measured numbers,
    * not a benchmark of the new policy — no depth-selected run has executed yet.
    * The distinction is the point: what is measured is how long each step took,
-   * and what is projected is the consequence of not running two of them.
+   * and what is projected is the consequence of not running one of them.
    */
   const fullPhaseMs =
     MEASURED_MS.install + MEASURED_MS.typecheck + MEASURED_MS.test + MEASURED_MS.build;
@@ -173,15 +174,21 @@ describe("PART K — the saving, measured rather than claimed", () => {
     expect(projected[2]).toBe(fullPhaseMs);
   });
 
-  it("run #6's projected phase time is install + typecheck and nothing else", () => {
+  /**
+   * Revised downward after the first dogfood. The original assertion here read
+   * 66%, on a `fast` that skipped the build — which turned out to be a step the
+   * pass verdict and the preview artifact both depend on. The available saving
+   * is the unit suite, and only the unit suite.
+   */
+  it("run #6's projected saving is exactly the unit suite", () => {
     const projected = stepsForDepth(depthOf(RUN_6).depth).reduce(
       (total, step) => total + MEASURED_MS[step],
       0,
     );
 
-    expect(projected).toBe(MEASURED_MS.install + MEASURED_MS.typecheck);
-    // 100.1s against 298.6s of measured phase time — a 66% reduction on one run
+    expect(projected).toBe(fullPhaseMs - MEASURED_MS.test);
+    // 211.7s against 298.6s of measured phase time — a 29% reduction on one run
     // of three, which is the whole of the honest claim.
-    expect(Math.round((1 - projected / fullPhaseMs) * 100)).toBe(66);
+    expect(Math.round((1 - projected / fullPhaseMs) * 100)).toBe(29);
   });
 });

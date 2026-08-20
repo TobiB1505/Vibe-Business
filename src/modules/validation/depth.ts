@@ -64,16 +64,35 @@ export const VALIDATION_DEPTH_POLICY_VERSION = "validation-depth-v1" as const;
  * dependency audit. When one exists, `deep` grows and `standard` does not, and
  * every historical run already says which question it answered.
  *
- * ## Why `fast` keeps `typecheck`
+ * ## Why `fast` still runs the build
  *
- * PART C asks for "a lightweight validation command if available" and forbids
- * the full test suite and the production build. Typecheck is the cheapest step
- * that can still catch a change which does not compile — for a copy or metadata
- * edit it is the *only* step likely to catch anything at all. Dropping it would
- * make `fast` mean "we installed the dependencies", which is not a verdict.
+ * This is the one thing the first dogfood of this policy got wrong, and it is
+ * worth stating plainly. `fast` originally ran `install` + `typecheck` only,
+ * and the run failed with `validation_not_supported` — because the build is not
+ * merely the fourth check.
+ *
+ * Two things depend on it, both structural rather than stylistic:
+ *
+ * - `buildSatisfiesProfile` requires a passing build for a run to be recorded
+ *   as passed at all. That invariant predates this file and is deliberate: a
+ *   pipeline that reached the end without building has not established the
+ *   claim a pass makes.
+ * - A passing run's filesystem is captured as the artifact a **preview** boots
+ *   from — "the exact validated build". Skip the build and the artifact holds
+ *   unbuilt bytes, so the next stage of the pipeline starts from something that
+ *   was never compiled.
+ *
+ * There is also a plain engineering reason, independent of both. For a
+ * presentational change the unit suite is the *least* likely of the four steps
+ * to catch a regression — vitest never renders `src/app/layout.tsx` — while the
+ * build prerenders every route and is the *most* likely. Dropping the build to
+ * keep the tests would have skipped the step that actually checks the work.
+ *
+ * So `fast` skips exactly one step: `test`. The saving is smaller than the
+ * first draft claimed, and it is the saving that is actually available.
  */
 const DEPTH_STEPS: Record<ValidationDepth, readonly ValidationStepName[]> = {
-  fast: ["install", "typecheck"],
+  fast: ["install", "typecheck", "build"],
   standard: ["install", "typecheck", "test", "build"],
   deep: ["install", "typecheck", "test", "build"],
 };

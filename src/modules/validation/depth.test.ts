@@ -272,10 +272,23 @@ describe("FAST requires a positive trusted signal — silence never buys speed",
 });
 
 describe("what each depth actually runs", () => {
-  it("FAST installs and typechecks, and does not run the suite or the build", () => {
-    expect(stepsForDepth("fast")).toEqual(["install", "typecheck"]);
+  it("FAST skips the unit suite and nothing else", () => {
+    expect(stepsForDepth("fast")).toEqual(["install", "typecheck", "build"]);
     expect(depthRunsStep("fast", "test")).toBe(false);
-    expect(depthRunsStep("fast", "build")).toBe(false);
+  });
+
+  /**
+   * The build is not depth-adjustable, and this is the regression test for the
+   * first dogfood: `fast` skipped it, `buildSatisfiesProfile` requires a passing
+   * build for any run to be recorded as passed, and the preview artifact is the
+   * validated filesystem the build produces. The run failed with
+   * `validation_not_supported`.
+   */
+  it("every depth runs the build, because a pass and a preview both depend on it", () => {
+    for (const depth of VALIDATION_DEPTHS) {
+      expect(depthRunsStep(depth, "build")).toBe(true);
+      expect(depthRunsStep(depth, "install")).toBe(true);
+    }
   });
 
   it("STANDARD runs the profile's full step set", () => {

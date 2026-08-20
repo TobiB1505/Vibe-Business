@@ -33,8 +33,27 @@ Introduce `ValidationDepth` (`fast` | `standard` | `deep`) as a second,
 orthogonal axis, resolved per prepared change and recorded on the run.
 
 **A depth only ever selects a subset of the profile's own steps.** It cannot
-introduce a command the profile does not define. `fast` runs `install` +
-`typecheck`; `standard` and `deep` run all four.
+introduce a command the profile does not define. `fast` skips exactly one step,
+the unit suite; `standard` and `deep` run all four.
+
+### Why the build is not depth-adjustable
+
+The first draft had `fast` run `install` + `typecheck` only. The first dogfood
+of it failed with `validation_not_supported`, and the reason is structural
+rather than a matter of caution:
+
+- `buildSatisfiesProfile` requires a passing build before a run may be recorded
+  as passed at all. That invariant predates this ADR and is deliberate.
+- A passing run's filesystem is captured as the artifact a **preview** boots
+  from — "the exact validated build". Without a build, the artifact holds
+  unbuilt bytes and the next pipeline stage starts from something never
+  compiled.
+
+There is also a plain engineering reason. For a presentational change the unit
+suite is the *least* likely of the four steps to catch a regression — vitest
+never renders `src/app/layout.tsx` — while the build prerenders every route and
+is the *most* likely. Dropping the build to keep the tests would have skipped
+the step that actually checks the work.
 
 `standard` and `deep` are deliberately identical today. That is stated rather
 than disguised: `deep` is not currently more work, and claiming otherwise would
@@ -99,9 +118,9 @@ run and shown in the panel. Human approval requirements are unchanged.
 
 ## Consequences
 
-**Easier.** A cosmetic change no longer pays for a full test suite and a
-production build. The axis exists, is versioned, and is recorded, so the first
-genuinely deeper check has somewhere to attach.
+**Easier.** A cosmetic change no longer pays for the full unit suite. The axis
+exists, is versioned, and is recorded, so the first genuinely deeper check has
+somewhere to attach.
 
 **Harder.** There are now two versioned policies to reason about instead of one,
 and a `fast` pass is a weaker statement than a `standard` one. The UI must say
@@ -114,14 +133,22 @@ repository whose profile omits a step still omits it at every depth.
 
 Simulated against the three historical agentic runs (see
 `validation/depth-benchmark.test.ts`), the policy assigns one of each depth.
-Only run #6 gets shorter — a projected 100.1s against 298.6s of measured phase
-time. Runs #7 and #8 are unchanged. **No depth-selected validation has executed
-yet**, so the step durations are measured and the saving is a projection built
-on them.
+Only run #6 gets shorter — a projected 211.7s against 298.6s of measured phase
+time, a 29% reduction on one run of three. Runs #7 and #8 are unchanged. The
+step durations are measured; the saving is arithmetic on top of them.
 
-That benchmark also caught two defects in the first draft of the policy, which
-is the reason it is checked in rather than run once: `presentational_low_risk`
-was unreachable (it required `riskClass !== "moderate"`, but `classifyExecutionRisk`
-only returns `low` for non-mutating change kinds, already handled a branch
-earlier), and `e2e/auth.spec.ts` escalated a CTA copy change to `deep` because
-the auth path rule matched a test filename.
+An earlier revision of this ADR claimed 66%, on the `fast` that skipped the
+build. That number was wrong and is retained here only so the correction is
+legible.
+
+Three defects in the first draft were found by running it rather than reading
+it, which is why the benchmark is checked in and why the depth was dogfooded
+before being believed:
+
+1. `presentational_low_risk` was unreachable — it required
+   `riskClass !== "moderate"`, but `classifyExecutionRisk` only returns `low`
+   for non-mutating change kinds, already handled a branch earlier.
+2. `e2e/auth.spec.ts` escalated a CTA copy change to `deep` because the auth
+   path rule matched a test filename.
+3. `fast` skipped the build, which the pass verdict and the preview artifact
+   both depend on. Found only by running a real validation.

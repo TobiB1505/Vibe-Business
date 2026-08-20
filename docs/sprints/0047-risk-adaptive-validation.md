@@ -151,3 +151,45 @@ are unchanged.
 **No depth-selected validation has executed yet.** The step durations are
 measured; the saving is arithmetic on top of them. Validation is not yet
 "faster" and this sprint does not claim it is.
+
+## The first dogfood, and what it changed
+
+Run #6's prepared change (`95b7c258`) was re-validated on the branch deployment.
+Three things worked on the first attempt:
+
+- the depth resolved to `fast` / `presentational_low_risk` / `validation-depth-v1`
+  and was persisted on the run;
+- the identity guard held — the existing passed run was **not** reused, and a
+  fresh sandbox run was provisioned, which is exactly what a changed
+  `validation_identity` must cause;
+- `install` and `typecheck` ran and passed.
+
+And the run **failed**, with `validation_not_supported`. Two defects, one
+serious:
+
+**1. `fast` skipped the build, which is load-bearing.** `buildSatisfiesProfile`
+requires a passing build before any run may be recorded as passed, and a passing
+run's filesystem is captured as the artifact a preview boots from. The build is
+not the fourth check; it is the step whose *output* two later stages consume.
+`fast` now runs `install` + `typecheck` + `build` and skips the unit suite only.
+
+**2. A skipped step claimed the customer's repository was missing a script.**
+The depth skip reused `skipReason: "not_in_profile"`, and the panel renders any
+skip as "no script for this in the project". For a step skipped because the
+*change* did not need it, that is a false statement about someone else's
+repository. `outside_depth` was added to `STEP_SKIP_REASONS`, the reason now
+reaches the phase view, and the three reasons render as three sentences.
+
+### The revised measurement
+
+| Step | Duration | In `fast`? |
+|---|---|---|
+| `install` | 13.0s | yes |
+| `typecheck` | 87.1s | yes |
+| `test` | 87.0s | **no** |
+| `build` | 111.6s | yes |
+| **full** | **298.6s** | |
+| **fast** | **211.7s** | |
+
+29% on one run of three, not the 66% the first draft projected. The earlier
+number assumed a saving that was never available.

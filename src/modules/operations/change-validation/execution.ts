@@ -521,8 +521,13 @@ export async function runPhaseStep(
    * Recorded as an explicit skip with a reason, never silently omitted: a phase
    * with no row at all is indistinguishable from a phase whose result was lost,
    * and the whole point of a depth is that a reader can see which questions were
-   * asked. `not_in_profile` already existed in `STEP_SKIP_REASONS` for exactly
-   * this shape and had no producer until now.
+   * asked.
+   *
+   * `outside_depth`, not `not_in_profile`. The first dogfood reused the latter
+   * and the panel rendered the skipped step as "no script for this in the
+   * project" — a statement about the customer's repository that was simply
+   * untrue. "The profile has no such step" and "this change did not need it"
+   * are different sentences and now have different reasons.
    *
    * A run claimed before depth existed has `validationDepth: null` and runs
    * everything, which is precisely what those runs did.
@@ -539,7 +544,7 @@ export async function runPhaseStep(
         durationMs: 0,
         outputTail: "",
         outputTruncated: false,
-        skipReason: "not_in_profile",
+        skipReason: "outside_depth",
       },
       stage: PHASE_STAGES[phase],
     });

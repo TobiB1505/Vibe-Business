@@ -7,6 +7,7 @@ import {
 import {
   VALIDATION_STEPS,
   type SourceIntegrity,
+  type StepSkipReason,
   type ValidationFailureCode,
   type ValidationStage,
   type ValidationStatus,
@@ -79,6 +80,11 @@ export type ValidationPhaseView = {
   /** Bounded, already-sanitized failure output. Never present for a pass. */
   outputTail: string | null;
   outputTruncated: boolean;
+  /**
+   * Why a skipped phase was skipped, so the panel can say which of the three
+   * it was. Null unless `state` is `skipped`.
+   */
+  skipReason: StepSkipReason | null;
 };
 
 const PHASE_ORDER: readonly ValidationPhaseName[] = [
@@ -153,12 +159,14 @@ export function buildValidationProgress(run: ValidationProgressInput): Validatio
     let durationMs: number | null = null;
     let outputTail: string | null = null;
     let outputTruncated = false;
+    let skipReason: StepSkipReason | null = null;
 
     if (recorded) {
       // A recorded phase outranks everything else: it is the only evidence that
       // the work actually happened.
       state = recorded.status;
       durationMs = recorded.durationMs > 0 ? recorded.durationMs : null;
+      skipReason = recorded.status === "skipped" ? (recorded.skipReason ?? null) : null;
       if (recorded.status !== "passed" && recorded.status !== "skipped" && recorded.outputTail) {
         outputTail = recorded.outputTail;
         outputTruncated = recorded.outputTruncated;
@@ -194,6 +202,7 @@ export function buildValidationProgress(run: ValidationProgressInput): Validatio
       durationMs,
       outputTail,
       outputTruncated,
+      skipReason,
     };
   });
 }
@@ -264,7 +273,7 @@ function buildDepthView(run: {
         ? VALIDATION_DEPTH_REASON_LABELS[reason]
         : "Validation depth chosen by policy",
     notRun: VALIDATION_STEPS.filter(
-      (step) => run.steps[step]?.skipReason === "not_in_profile",
+      (step) => run.steps[step]?.skipReason === "outside_depth",
     ),
   };
 }

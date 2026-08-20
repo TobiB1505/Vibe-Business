@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import type { OperationView } from "@/modules/operations/view";
+import type { StepSkipReason } from "@/modules/validation/schema";
 import { failedPhase, type ValidationPhaseView, type ValidationSummary } from "@/modules/validation/view";
 import { getValidationProgressAction, validateChangeAction, type ValidateChangeActionState } from "./validate-change-action";
 
@@ -64,6 +65,20 @@ const PHASE_TONES: Record<ValidationPhaseView["state"], string> = {
 
 export type { ValidationSummary };
 
+/**
+ * Three different reasons a step did not run, and three different sentences.
+ *
+ * This row used to render one sentence for every skip. The first depth dogfood
+ * showed why that was wrong: a step skipped because the *change* did not need
+ * it was reported as "no script for this in the project", which told the reader
+ * something untrue about their own repository.
+ */
+const SKIP_NOTES: Record<StepSkipReason, string> = {
+  script_not_present: "no script for this in the project",
+  not_in_profile: "not part of this project's validation profile",
+  outside_depth: "not needed for this change",
+};
+
 function PhaseRow({ phase }: { phase: ValidationPhaseView }) {
   const active = phase.state === "active";
   const muted = phase.state === "pending" || phase.state === "not_run";
@@ -76,7 +91,7 @@ function PhaseRow({ phase }: { phase: ValidationPhaseView }) {
           {active ? `${phase.activeLabel}…` : phase.label}
         </span>
         {phase.state === "skipped" && (
-          <span className="text-xs text-fg-muted">no script for this in the project</span>
+          <span className="text-xs text-fg-muted">{SKIP_NOTES[phase.skipReason ?? "script_not_present"]}</span>
         )}
         {phase.durationMs !== null && (
           <span className="text-xs text-fg-meta">{(phase.durationMs / 1000).toFixed(1)}s</span>
