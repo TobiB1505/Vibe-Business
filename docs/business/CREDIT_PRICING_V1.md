@@ -56,6 +56,57 @@ exactly as written.
 
 ---
 
+## Addendum — Sprint 0054, 2026-08-20
+
+**Credits remain deactivated. Economy Intelligence is prepared.**
+
+`CREDIT_RATE_CARDS` in `credits/rating.ts` is still `[]`, `resolveRateCard`
+returns null at every instant, and no Stripe, wallet, balance, top-up,
+reservation or settlement logic changed. `src/modules/economy/sprint-0054-safety.test.ts`
+is the executable form of that sentence.
+
+What changed is that the numbers in this document are now answerable to
+something. Sprint 0054 built a predictive layer — see
+[ECONOMY_MODEL.md](ECONOMY_MODEL.md#economy-intelligence-sprint-0054) and
+[ADR 0038](../decisions/0038-economy-intelligence-layer.md) — and three of its
+findings bear directly on the recommendation below.
+
+**1. The estimator is off by about a quarter, and the reason is the dataset.**
+A leave-one-out backtest over runs #3–#9 gives 24.3% mean absolute error and
++51.3% at worst, with no systematic bias. Runs #3 and #6 are the *same step*
+2.5× apart. This does not weaken the execution-class model — §12's price
+stability argument is unaffected, because a class quote is deliberately *not* a
+cost estimate — but it does say how far a per-run cost prediction currently is
+from being usable for a maximum-authorization ceiling.
+
+**2. Repository growth is now a stress axis, and it is the one that bites.**
+§9's stress tests could not vary it. With it included, Model C holds above 75%
+on every single axis — provider +100% at 80.3%, failure rate 40% at 84.4%,
+repository 5× at 81.4% — and lands at **59.0%** with all four compounded. The
+"combined stress" figure in §9 (76.7%) was computed without a growth term and
+should be read as the three-axis number it is.
+
+**3. Credits still price a class, and the engine reinforces why.** A
+cost-derived Credit figure would have moved 2.16× between run #6 and run #9 for
+a byte-identical step. `simulatePreRunQuote` therefore reads the class, never the
+estimated cost, and returns `null` Credits unless a caller names one of the
+hypothetical A/B/C scenarios from `credit-rate-card.ts`. Its `activated` field is
+the literal `false`.
+
+**What the predictive layer adds for a later settlement sprint.** A
+`PredictionSnapshot` type that replays to its own estimate exactly, so a quote
+can be explained six months later; a protected cost that buffers by confidence
+for Vibe's internal planning and is never customer-facing; and a clamped
+adjustment proposal that no code applies.
+
+**The verdict below is unchanged.** Confidence is still LOW, n is still 7, the
+`complex` class still has zero observations, every run is still
+`non_production_economics`, and no rate card is activated. Sprint 0054 did not
+make the recommendation stronger — it made the evidence behind it measurable,
+and measuring it lowered rather than raised the case for acting now.
+
+---
+
 ## 1. The Product Unit
 
 Vibe does not sell tokens, model time, provider calls, tool calls, sandbox

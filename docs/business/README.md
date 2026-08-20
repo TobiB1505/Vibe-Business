@@ -20,7 +20,11 @@ would be a list of intentions pretending to be documentation.
 - [CREDIT_ECONOMICS.md](CREDIT_ECONOMICS.md) — Credit scale, margin analysis and
   pricing policy for Vibe's *predictable* operations, from real cost data.
 - [ECONOMY_MODEL.md](ECONOMY_MODEL.md) — measured unit economics of **agentic
-  execution**, from the six runs that exist. Replaces the modelled Agent figures
-  in CREDIT_ECONOMICS.md and corrects two of its claims. Analysis only; nothing
-  in it is implemented as pricing.
+  execution**, from the runs that exist, plus the **Economy Intelligence** layer
+  that predicts what the next one will cost and measures how wrong it was.
+  Replaces the modelled Agent figures in CREDIT_ECONOMICS.md and corrects two of
+  its claims. Analysis only; nothing in it is implemented as pricing.
+- [CREDIT_PRICING_V1.md](CREDIT_PRICING_V1.md) — the sellable Product Unit, the
+  execution-class model, and rate-card simulations. Design and simulation only;
+  no rate card is activated by it.
 

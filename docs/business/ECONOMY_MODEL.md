@@ -459,6 +459,216 @@ not control.
 
 ---
 
+# Economy Intelligence (Sprint 0054)
+
+Everything above measures runs that already happened. This chapter is about the
+two questions a Credit system actually rests on:
+
+- Before an agent starts: *what will this improvement probably cost?*
+- After it finishes: *how wrong was that guess, and why?*
+
+The engine lives in `src/modules/economy/intelligence/`. It is analysis only:
+no migration, no persistence, no UI, no wiring into the execution flow, and
+`CREDIT_RATE_CARDS` is still `[]`. See
+[ADR 0038](../decisions/0038-economy-intelligence-layer.md).
+
+## What already existed, and what was missing (PART A)
+
+**Sufficient already.** Model spend to the nanodollar (`ai_usage_events`, priced
+by `ai/pricing.ts`). Sandbox time (`sandbox_usage_events`, priced by
+`sandbox-cost.ts`). The pre-execution classification inputs — `risk_class` from
+`execution_specs`, `change_kind` and `evidence_ids` from `action_plan_steps`,
+surfaces from `deriveExecutionSurfaceRequirement`. Validation shape from
+`stepsForDepth`.
+
+**Only needed connecting.** The pricing classifier existed and had exactly one
+caller in the entire repository: `historical-runs.ts`, replaying the past. It
+had never been asked about a run that had not happened yet.
+
+**Genuinely missing.** Repository size on any delivered run — see *The gap that
+decides everything* below.
+
+## Predictive economics
+
+`estimateExecutionEconomics` scales a historical baseline drawn from comparable
+runs by three bounded terms:
+
+| Term | Source | Bound |
+|---|---|---|
+| Repository complexity | tree entries, routes, candidate supply against a reference scale | 0.75×–1.75× |
+| Repository drift | movement since the last execution | 1.0×–1.15× |
+| Validation depth | assumed wall time, applied to the validation share only | ±15% of the estimate |
+| Cohort correction | systematic bias for this class of work | 0.8×–1.25× |
+
+Two properties are enforced by tests rather than by care.
+
+**It cannot see what a run produced.** No tokens, no runtime, no sandbox
+milliseconds, no usage row — a source scan checks for the identifiers. An
+estimator that can reach actuals eventually becomes a bill, and then
+prediction-versus-reality compares a number against itself and reports perfect
+accuracy forever.
+
+**Without a baseline it produces nothing.** A five-million-entry repository with
+no comparable run estimates `unknown`, not a large number. That is what makes
+"repository size alone produces no price" structural rather than aspirational.
+
+The validation share is 0.15, derived rather than picked: the floor-to-upper band
+on a delivered run *is* the validation active-CPU component, and it averages
+$0.0484 across the six validated runs against a mean floor of $0.3041 — 15.9%.
+Scaling the whole estimate by a depth ratio instead would have repriced model
+spend because the test suite got shorter, by about 20% at `fast`.
+
+## Repository context and drift signals
+
+Two signals, deliberately not one.
+
+**Complexity** — *how big is this at one commit?* A 100,000-file repository where
+the step edits a README is large and cheap.
+
+**Volatility** — *how much did it move since the last run?* This is what run
+#6 → #9 actually was: same step, same class, 2.16× the model spend, against a
+repository that had grown three files the step needed.
+
+Neither contains a nanodollar amount, and a test asserts it. Repository size is
+not billed by anyone; its entire cost effect is already inside the model spend,
+so giving it a slice of the same total counts the money twice.
+
+**Context pressure** is the third, and the one size cannot see:
+
+```
+candidatePressure = candidatesAvailable / candidatesSent
+```
+
+Because `candidatesSent` saturates at the brief cap of 12, a repository offering
+200 relevant candidates and one offering exactly 12 are identical on that column
+alone. When `candidatesAvailable` is unrecorded the ratio is `null` — never 1,
+which would read as "nothing was discarded", the one conclusion the data cannot
+support.
+
+## Prediction vs reality
+
+`deriveActualExecutionEconomics` splits a completed run into model, agent
+sandbox, validation and infrastructure. Exactly one component may be `measured`:
+the provider figure. Everything rate-derived is `estimated` however precisely
+computed, and a test enforces it — a rate-derived number stamped measured is
+indistinguishable from an invoice in every downstream reader.
+
+Measurement confidence tops out at **medium** today, and that is the honest
+answer: `sandbox_usage_events.provider_cost_usd` is null in every row Vibe has
+ever written.
+
+`compareEstimateToActual` answers comparability explicitly. An unpredicted run is
+incomparable rather than infinitely wrong; a cost that is only a floor teaches
+nothing; and an estimate made under one economy model version is never compared
+against costs incurred under another, which would measure the version change
+instead of the prediction.
+
+**Variance explanation.** A variance is attributed only to signals that moved in
+the same direction as it, from a closed vocabulary, citing measured quantities —
+no generated prose, nothing interpolated from repository or website content.
+`unexplainedShare` reports what the named reasons do not account for. A run 40%
+over against a repository that did not move gets *no* reasons and an unexplained
+share of 1, because a layer that always produces an explanation is a layer whose
+explanations mean nothing.
+
+Run #6 → #9, as the engine explains it:
+
+> 42% more than expected, because the repository moved by 35 files and 6 relevant
+> candidates since the last execution, and context pressure became severe — the
+> brief could not carry every relevant candidate.
+
+## Historical learning and cohort bias
+
+Every delivered run is estimated against the dataset **without itself**. A
+backtest that lets a run predict itself is a memory test.
+
+| Run | Predicted | Actual | Error |
+|---|---|---|---|
+| #3 | $0.2863 | $0.4331 | **+51.3%** |
+| #4 | $0.3151 | $0.2845 | −9.7% |
+| #5 | $0.3016 | $0.3542 | +17.4% |
+| #6 | $0.3366 | $0.1739 | **−48.3%** |
+| #7 | $0.3134 | $0.2821 | −10.0% |
+| #8 | $0.3125 | $0.2541 | −18.7% |
+| #9 | $0.3030 | $0.3470 | +14.5% |
+
+**Mean absolute error 24.3%. Worst case +51.3%. No systematic bias** — three
+under, four over, median −9.7%.
+
+That is not good, and the reason is visible rather than mysterious. With no
+repository context the estimator is predicting little more than a class mean, and
+runs #3 and #6 are the *same step* 2.5× apart. The fix is evidence, not a
+cleverer formula.
+
+`detectCohortBias` is what makes this a loop rather than a report: it groups
+observations by pre-execution fields and detects a class of work being
+mispredicted the same way every time. Below 20 comparable observations the answer
+is exactly 1 — not a hedged 1.08 fitted to seven points. **Every cohort in
+today's dataset is below the floor**, so the machinery is the deliverable and the
+numbers are not yet.
+
+## Safety margin
+
+Expected cost is what Vibe predicts; **protected cost** is what Vibe plans
+against because the prediction might be low.
+
+| Confidence | Buffer |
+|---|---|
+| none | 50% |
+| low | 30% |
+| medium | 15% |
+| high | 5% |
+
+It is called protected rather than safe because it claims nothing about the run:
+a $0.30 estimate at LOW confidence with a 30% buffer says Vibe plans against
+$0.39 of risk, not that the run costs $0.39. It is internal, and
+`quote-simulation.ts` does not read it — charging a customer for Vibe's
+uncertainty is a decision nobody has made.
+
+## Simulation, with the fourth axis
+
+`stress-test.ts` varied provider inflation, infrastructure inflation and failure
+rate. It could not vary repository growth, because that axis did not exist when
+it was written — which meant it could not express the one cost movement Vibe has
+actually observed in production.
+
+Model C, simulated prices, gross margin per delivered run:
+
+| Scenario | Margin | |
+|---|---|---|
+| current | 89.4% | acceptable |
+| AI provider +100% | 80.3% | acceptable |
+| infrastructure +100% | 87.8% | acceptable |
+| failure rate 40% | 84.4% | acceptable |
+| repository 2× | 84.0% | acceptable |
+| repository 5× | 81.4% | acceptable |
+| **everything at once** | **59.0%** | **watch** |
+
+Every axis alone is survivable. All four together land 16 points below the 75%
+target, and that number exists only because growth is now one of the axes.
+
+One limitation stated rather than hidden: past roughly 5× growth the repository
+policy's ceiling is doing the work instead of the evidence, so the simulation
+cannot distinguish a 5× product from a 10× one.
+
+## The gap that decides everything
+
+**No delivered run carries repository size.** The `repo_*` and
+`context_candidates_available` columns were added by
+`20260820200000_repository_context_size.sql` — 2026-08-20T20:00Z. Run #9, the
+newest, was created at 15:07Z the same day.
+
+So the backtest above exercises the historical term and **cannot exercise the
+repository or drift terms at all**. No Supabase read can recover the data; it was
+never written. `metric-availability.ts` now records this, so a later analysis
+reads `unavailable` rather than averaging seven nulls into a repository of size
+zero.
+
+`context_candidates_sent` is the one exception, landing a day earlier, so runs
+#6–#9 carry it — which is what makes the 6 → 12 candidate movement a measurement.
+
+---
+
 ## Missing metrics
 
 | Gap | Consequence | Fixable by |
@@ -469,7 +679,7 @@ not control.
 | Historical runs #3–#8 have no validation point estimate | The six existing runs keep floor + upper bound forever | Not fixable — no second copy of the number exists to recover |
 | Vercel Functions / Workflow invocation cost not instrumented | Immaterial under real prices too — 0.19–0.94% of a delivered run, event rate now attested, per-step duration still an explicit assumption | Not pursued — see PART H, Sprint 0051 and its addendum; revisit only if invocation count grows materially |
 | n = 7 | Correlations are thin; the PART D table above is still the n=6 computation | More runs |
-| Repository size unmeasured for every run in the dataset | The one cost driver run #9 identified cannot yet be quantified | The columns exist as of Sprint 0053; the next run is the first observation |
+| Repository size unmeasured for every run in the dataset | The one cost driver run #9 identified cannot yet be quantified — **and now measurably so**: Sprint 0054's backtest exercises the historical term and cannot exercise the repository or drift terms at all, which is most of why mean absolute error sits at 24.3% | The columns exist as of Sprint 0053; the next run is the first observation. `metric-availability.ts` now records the dates, so this reads as `unavailable` rather than as seven zeroes |
 | All 12 runs `non_production_economics` | No production-rate data at all. Note `execution_origin = 'planner'` does **not** make a run production-rate — the flag is set by the internal dogfood allowlist path (`coding-agent/authorization.ts`), so run #9 looks like production traffic and is not | A production run |
 
 ---
