@@ -1,6 +1,8 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import type { ReviewClassificationResult } from "@/modules/review/classification";
+import { classifyReviewForPreparedChange } from "@/modules/review/classification-inputs";
 import { requireSession } from "@/modules/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -116,6 +118,15 @@ export type DogfoodRunStatus = {
   live: AgentExecutionLiveModel;
   activity: StoredAgentActivity[];
   openInterrupt: StoredExecutionInterrupt | null;
+  /**
+   * Which review this change deserves (Sprint 0048).
+   *
+   * Present only once a change has been prepared, and null whenever it cannot
+   * be answered — a recommendation nobody can justify is worse than none.
+   * Recomputed on read rather than stored: every input is already persisted,
+   * and this gates nothing, so there is no second copy to keep in step.
+   */
+  recommendedReview: ReviewClassificationResult | null;
 };
 
 /** Durable status, re-read from the database on every call (§16, §18, §20). */
@@ -138,6 +149,8 @@ export async function getDogfoodRunStatusAction(
       live: await buildAgentExecutionLiveModel(supabase, { operation, projectId, run: null }),
       activity: [],
       openInterrupt: null,
+      // No agent run yet, so no prepared change and nothing to recommend.
+      recommendedReview: null,
     };
   }
 
@@ -162,7 +175,17 @@ export async function getDogfoodRunStatusAction(
     validation: runView?.validation ?? "not_started",
   });
 
-  return { live, activity, openInterrupt };
+  // `resultId` is the prepared change id a completed run wrote. Classification
+  // is only meaningful once one exists, so it is not attempted before then.
+  const recommendedReview = operation.resultId
+    ? await classifyReviewForPreparedChange({
+        supabase,
+        projectId,
+        preparedChangeId: operation.resultId,
+      })
+    : null;
+
+  return { live, activity, openInterrupt, recommendedReview };
 }
 
 export type AnswerInterruptState =

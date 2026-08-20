@@ -12,8 +12,10 @@ import { createVercelSandboxProvider } from "@/modules/validation/vercel/provide
 import type { AgentCheckName } from "@/modules/coding-agent/schema";
 import type { OperationFailureCode } from "../failures";
 import type { StoredOperationRun } from "../store";
+import { VercelWorkflowExecutor } from "../vercel/executor";
 import {
   cleanupAgentWorkspaceStep,
+  enqueueValidationStep,
   extractAndVerifyStep,
   finishAgentExecutionStep,
   collectAgentStep,
@@ -35,8 +37,12 @@ import {
  *      │            │              │                 │           │           │
  *      └────────────┴──────────────┴─────────────────┴───────────┴───────────┘
  *                                      ▼
- *                                  cleanup ─▶ finish
+ *                                  cleanup ─▶ finish ─▶ enqueue validation
  * ```
+ *
+ * The last step is the only one outside the failure-carrying discipline below:
+ * it runs after the run is already recorded as succeeded, and its own outcome
+ * cannot change this workflow's (Sprint 0048).
  *
  * ## Why the agent is watched rather than awaited
  *
@@ -267,6 +273,28 @@ async function cleanupWorkspace(operationId: string) {
 }
 cleanupWorkspace.maxRetries = 0;
 
+/**
+ * Hands the finished change to Independent Validation (Sprint 0048).
+ *
+ * The last step in the graph, and the only one whose failure is not a failure:
+ * by the time it runs the branch is written, the prepared change exists and the
+ * credits are settled, so validation not starting leaves exactly the state this
+ * workflow produced before this sprint — a change waiting for a click.
+ *
+ * It calls `startChangeValidation`, the same function the button calls, rather
+ * than reproducing any part of it. Every guard, the reuse check and the
+ * in-flight check come along, which is also why a second call cannot provision
+ * a second sandbox.
+ */
+async function enqueueValidation(operationId: string) {
+  "use step";
+  await enqueueValidationStep(deps(), new VercelWorkflowExecutor(), operationId);
+}
+// Starting a durable run is an external side effect. Recovery is the identity
+// guard inside `startChangeValidation`, not a retry — and a missed enqueue
+// costs a click rather than a run.
+enqueueValidation.maxRetries = 0;
+
 async function finish(
   operationId: string,
   outcome:
@@ -363,4 +391,9 @@ export async function agentExecutionWorkflow(operationId: string) {
   }
 
   await finish(operationId, { kind: "succeeded", preparedChangeId });
+
+  // After `finish`, deliberately. The run is recorded as succeeded before
+  // anything downstream is attempted, so the outcome of this workflow never
+  // depends on what the next stage does with its result.
+  await enqueueValidation(operationId);
 }

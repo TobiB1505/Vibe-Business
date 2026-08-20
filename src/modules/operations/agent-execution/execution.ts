@@ -2,6 +2,8 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { recordAuditEvent } from "@/modules/audit-log/events";
+import { startChangeValidation } from "@/modules/validation/service";
+import type { OperationExecutor } from "../executor";
 import {
   AGENT_SANDBOX_LIFETIME_MS,
   deriveAgentLimits,
@@ -2390,4 +2392,87 @@ function toAgentFailureCode(code: OperationFailureCode): AgentFailureCode {
     default:
       return "agent_provider_failed";
   }
+}
+
+/* ---------------------------------------------------------------------------
+ * Handing a finished change to Independent Validation (Sprint 0048)
+ * ------------------------------------------------------------------------ */
+
+/**
+ * Enqueues validation for the change this run just prepared.
+ *
+ * ## Why this calls the same function the button does
+ *
+ * `startChangeValidation` is the only entry point to validation, and it carries
+ * every guard: project ownership, prepared-change readiness, snapshot presence,
+ * profile support, depth resolution, identity reuse, in-flight detection and
+ * the unique index that settles a double submit. Reproducing any part of that
+ * here would create a second validation path — one that could drift from the
+ * one a user's click takes, and would be exactly the wrong thing to have two of.
+ *
+ * So this step resolves three identifiers and calls it. Nothing else.
+ *
+ * ## Why it is safe against a retry it does not have
+ *
+ * Not by new code. A second call for the same artifact finds either a reusable
+ * passed run or an active operation with the same input identity, and returns
+ * `reused` or `running` without provisioning anything. The idempotency is the
+ * existing guards', which is the only kind worth relying on.
+ *
+ * ## Why a failure here cannot fail the run
+ *
+ * The agent execution is already complete: the branch is written, the prepared
+ * change exists, the credits are settled and the run row says `succeeded`.
+ * Validation not starting is a missing convenience, not a broken execution —
+ * the user can still click "Validate change" and get exactly what they would
+ * have got before this sprint. So every outcome is recorded and none is
+ * propagated.
+ *
+ * ## Ownership
+ *
+ * `projectId` and `userId` come from the persisted run row, never from an
+ * argument. This runs under the service-role client, which bypasses RLS, so the
+ * ownership it filters on must be the ownership the database already recorded
+ * (Rule 53).
+ */
+export async function enqueueValidationStep(
+  deps: AgentExecutionDeps,
+  executor: OperationExecutor,
+  operationId: string,
+): Promise<void> {
+  const run = await findAgentRunByOperation(deps.supabase, operationId);
+  if (!run?.preparedChangeId) return;
+
+  let outcome: string;
+  let detail: string | null = null;
+
+  try {
+    const started = await startChangeValidation(deps.supabase, executor, {
+      projectId: run.projectId,
+      userId: run.userId,
+      preparedChangeId: run.preparedChangeId,
+    });
+
+    outcome = started.kind;
+    if (started.kind === "failed") detail = started.error;
+  } catch {
+    // A provider or database fault. Not inspected — the value is untyped and
+    // may carry third-party prose — and deliberately not rethrown.
+    outcome = "failed";
+    detail = "execution_start_failed";
+  }
+
+  await recordAuditEvent(deps.supabase, {
+    userId: run.userId,
+    projectId: run.projectId,
+    eventType: "agent_execution.validation_enqueued",
+    metadata: {
+      projectId: run.projectId,
+      operationId,
+      agentExecutionRunId: run.id,
+      preparedChangeId: run.preparedChangeId,
+      outcome,
+      ...(detail ? { detail } : {}),
+    },
+  });
 }

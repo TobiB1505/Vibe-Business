@@ -105,6 +105,15 @@ export type AuditEventType =
   | "agent_execution.change_verified"
   | "agent_execution.change_rejected"
   | "agent_execution.completed"
+  /**
+   * Validation was handed the change a finished run prepared (Sprint 0048).
+   *
+   * Recorded for every outcome, including `failed`, because "the automatic
+   * trigger did not fire" is the one thing about it that is invisible from the
+   * outside — the manual button still works, so a silent miss looks exactly
+   * like a user who has not clicked yet.
+   */
+  | "agent_execution.validation_enqueued"
   | "agent_execution.failed"
   // Temporary preview (Sprint 10B-2). None of these may carry the preview
   // origin: an unlisted public URL to a VM serving untrusted code is

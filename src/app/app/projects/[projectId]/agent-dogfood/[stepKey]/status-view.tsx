@@ -6,6 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/states";
 import { Surface } from "@/components/ui/surface";
 import { MonoLabel } from "@/components/ui/typography";
+import {
+  REVIEW_CLASSIFICATION_LABELS,
+  REVIEW_CLASSIFICATION_NOTES,
+} from "@/modules/review/classification";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { EXECUTION_INTERRUPT_QUESTIONS } from "@/modules/execution-contract/view";
 import { AgentExecutionLiveView } from "@/modules/coding-agent/ui/agent-execution-live-view";
@@ -79,14 +83,56 @@ export function StatusView({
             </Link>
           }
         >
-          Vibe finished. A candidate change exists and is waiting on your own validation and review —
-          nothing has been merged or deployed.
+          Vibe sent the change for validation. Nothing has been merged or deployed.
         </Notice>
+      )}
+
+      {operation.status === "completed" && status.recommendedReview && (
+        <RecommendedReview classification={status.recommendedReview} />
       )}
 
       {openInterrupt && <InterruptPanel projectId={projectId} interrupt={openInterrupt} />}
     </div>
   );
+}
+
+/**
+ * Which review this change deserves (Sprint 0048).
+ *
+ * A line in the existing panel, not a new surface. It recommends and nothing
+ * else: no review is started here, and the visual-review domain's rule that
+ * nothing is automatic is untouched — a browser session still costs money by
+ * the second and still waits for a click.
+ */
+function RecommendedReview({
+  classification,
+}: {
+  classification: NonNullable<DogfoodRunStatus["recommendedReview"]>;
+}) {
+  return (
+    <div className="flex flex-col gap-1 rounded-md border border-line-2 p-4">
+      <p className="text-xs uppercase tracking-wide text-fg-muted">Recommended review</p>
+      <p className="text-sm font-semibold text-fg-prose">
+        {REVIEW_CLASSIFICATION_LABELS[classification.classification]}
+      </p>
+      <p className="text-xs text-fg-secondary">
+        {REVIEW_CLASSIFICATION_NOTES[classification.classification]}
+      </p>
+      {classification.routes.length > 0 && (
+        <p className="text-xs text-fg-muted">
+          Pages affected: {classification.routes.join(", ")}
+        </p>
+      )}
+      <p className="text-xs text-fg-muted">
+        {classification.visualPaths.length} rendered {fileWord(classification.visualPaths.length)},{" "}
+        {classification.codePaths.length} other {fileWord(classification.codePaths.length)}.
+      </p>
+    </div>
+  );
+}
+
+function fileWord(count: number): string {
+  return count === 1 ? "file" : "files";
 }
 
 function InterruptPanel({
