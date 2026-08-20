@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { actionLabels } from "./test-support";
 import { findCausalClaims } from "@/modules/business-measurement/causality";
 
 /**
@@ -34,15 +35,6 @@ function renderedCopy(file: string): string {
     .replace(/\/\*[\s\S]*?\*\//g, " ")
     .replace(/^\s*\/\/.*$/gm, " ")
     .replace(/\s+/g, " ");
-}
-
-function actionLabels(src: string): string[] {
-  const inner = (tag: string) =>
-    [...src.matchAll(new RegExp(`<${tag}\\b(?:=>|[^>])*?>([\\s\\S]*?)</${tag}>`, "g"))].map(
-      (match) => match[1],
-    );
-
-  return [...inner("button"), ...inner("a")];
 }
 
 describe("the panel offers only what this sprint implements (§28, §34)", () => {

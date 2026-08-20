@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { actionLabels } from "./test-support";
 
 /**
  * The merge trust boundary, asserted against the UI source (Sprint 11C §15, §25, §26, §29, §30).
@@ -33,15 +34,6 @@ const DIR = join(process.cwd(), "src/app/app/projects/[projectId]");
 
 function source(file: string): string {
   return readFileSync(join(DIR, file), "utf8");
-}
-
-function actionLabels(src: string): string[] {
-  const inner = (tag: string) =>
-    [...src.matchAll(new RegExp(`<${tag}\\b(?:=>|[^>])*?>([\\s\\S]*?)</${tag}>`, "g"))].map(
-      (match) => match[1],
-    );
-
-  return [...inner("button"), ...inner("a")];
 }
 
 describe("the merge panel offers merging and nothing more (§15, §25)", () => {

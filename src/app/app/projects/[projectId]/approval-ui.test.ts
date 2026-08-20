@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { actionLabels } from "./test-support";
 
 /**
  * The trust boundary, asserted against the UI source (Sprint 11B §7, §11, §22, §23).
@@ -37,15 +38,6 @@ function source(file: string): string {
  * `onClick={() => setConfirming("revoke")}` — contains a `>`, and a naive tag
  * scan ends the opening tag there and reads half the attributes as the label.
  */
-function actionLabels(src: string): string[] {
-  const inner = (tag: string) =>
-    [...src.matchAll(new RegExp(`<${tag}\\b(?:=>|[^>])*?>([\\s\\S]*?)</${tag}>`, "g"))].map(
-      (match) => match[1],
-    );
-
-  return [...inner("button"), ...inner("a")];
-}
-
 /**
  * Words that would each claim an authority this product does not have.
  *
