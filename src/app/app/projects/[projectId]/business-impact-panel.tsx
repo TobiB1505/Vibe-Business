@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { Button } from "@/components/ui/button";
 import type { BusinessImpactCard } from "@/modules/business-measurement/view";
 import {
   planMeasurementAction,
@@ -189,14 +190,15 @@ export function BusinessImpactPanel({
             connection, no provider call, no model — and it records the intent
             rather than a result. It is an option, never a prerequisite. */}
         {card.state === "not_planned" && (
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
             onClick={() => run(planMeasurementAction)}
             disabled={pending}
-            className="text-xs text-fg-muted underline underline-offset-2 hover:text-fg-prose disabled:opacity-60"
           >
             Plan how this would be measured
-          </button>
+          </Button>
         )}
 
         {state?.ok === false && <p className="text-sm text-coral">{state.message}</p>}
@@ -216,14 +218,15 @@ export function BusinessImpactPanel({
           {/* No interim conclusion. The result does not exist yet, and saying
               anything about its direction would be a guess (§22). */}
           {card.canStartMeasuring && (
-            <button
+            <Button
               type="button"
+              variant="primary"
+              size="sm"
               onClick={() => run(startMeasurementAction)}
               disabled={pending}
-              className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2 disabled:opacity-60"
             >
               Start measuring
-            </button>
+            </Button>
           )}
         </div>
       ) : card.state === "measuring" ? (

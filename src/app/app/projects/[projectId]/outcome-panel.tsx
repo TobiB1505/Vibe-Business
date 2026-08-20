@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { Button } from "@/components/ui/button";
 import type { OutcomeCheckStatus } from "@/modules/outcome-verification/schema";
 import { useOperationPoll } from "@/lib/client/use-operation-poll";
 import { shouldRefreshForState } from "@/modules/operations/view";
@@ -253,14 +254,15 @@ export function OutcomePanel({
             ) : null}
             . This reads public pages only, and changes nothing.
           </p>
-          <button
+          <Button
             type="button"
+            variant="primary"
+            size="sm"
             onClick={check}
             disabled={pending || !current.canVerify}
-            className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2 disabled:opacity-60"
           >
             Check production outcome
-          </button>
+          </Button>
         </div>
       ) : current.state === "observing" ? (
         <div className="space-y-2">

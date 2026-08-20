@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { Button } from "@/components/ui/button";
 import type { ApprovalCard } from "@/modules/approvals/view";
 import {
   approveChangeAction,
@@ -98,22 +99,12 @@ function ApproveDialog({
       </div>
 
       <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={pending}
-          className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-prose hover:bg-surface-2 disabled:opacity-60"
-        >
+        <Button type="button" variant="secondary" size="sm" onClick={onCancel} disabled={pending}>
           Cancel
-        </button>
-        <button
-          type="button"
-          onClick={onConfirm}
-          disabled={pending}
-          className="rounded-md border border-mint-line bg-mint-tint-soft px-3 py-1.5 text-sm text-mint hover:bg-mint-tint disabled:opacity-60"
-        >
+        </Button>
+        <Button type="button" variant="primary" size="sm" onClick={onConfirm} disabled={pending}>
           {pending ? "Approving…" : "Approve change"}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -147,22 +138,15 @@ function RevokeDialog({
       </div>
 
       <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={pending}
-          className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-prose hover:bg-surface-2 disabled:opacity-60"
-        >
+        <Button type="button" variant="secondary" size="sm" onClick={onCancel} disabled={pending}>
           Cancel
-        </button>
-        <button
-          type="button"
-          onClick={onConfirm}
-          disabled={pending}
-          className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2 disabled:opacity-60"
-        >
+        </Button>
+        {/* Not `danger`. Withdrawing an approval destroys nothing — the record
+            is kept, as the sentence above says — and coral would claim a
+            consequence this action does not have. */}
+        <Button type="button" variant="secondary" size="sm" onClick={onConfirm} disabled={pending}>
           {pending ? "Revoking…" : "Revoke approval"}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -274,14 +258,15 @@ export function ApprovalPanel({
             * and is now the only thing this state says.
             */}
           {!merged && (
-            <button
+            <Button
               type="button"
+              variant="secondary"
+              size="sm"
               onClick={() => setConfirming("revoke")}
               disabled={busy}
-              className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2 disabled:opacity-60"
             >
               Revoke approval
-            </button>
+            </Button>
           )}
         </div>
       ) : card.state === "invalidated" ? (
@@ -304,14 +289,15 @@ export function ApprovalPanel({
             </p>
           )}
           {card.canApprove ? (
-            <button
+            <Button
               type="button"
+              variant="primary"
+              size="sm"
               onClick={() => setConfirming("approve")}
               disabled={busy || !reviewArtifactId}
-              className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2 disabled:opacity-60"
             >
               Approve change
-            </button>
+            </Button>
           ) : (
             card.blockMessage && <p className="text-xs text-fg-muted">{card.blockMessage}</p>
           )}
@@ -323,14 +309,15 @@ export function ApprovalPanel({
             You withdrew your approval{card.revokedAt ? ` on ${localTime(card.revokedAt)}` : ""}.
           </p>
           {card.canApprove && (
-            <button
+            <Button
               type="button"
+              variant="primary"
+              size="sm"
               onClick={() => setConfirming("approve")}
               disabled={busy || !reviewArtifactId}
-              className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2 disabled:opacity-60"
             >
               Approve change
-            </button>
+            </Button>
           )}
         </div>
       ) : card.state === "not_approved" ? (
@@ -339,14 +326,15 @@ export function ApprovalPanel({
           <p className="text-xs text-fg-muted">
             Approving records that you reviewed this exact change. Nothing is merged or deployed.
           </p>
-          <button
+          <Button
             type="button"
+            variant="primary"
+            size="sm"
             onClick={() => setConfirming("approve")}
             disabled={busy || !reviewArtifactId}
-            className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2 disabled:opacity-60"
           >
             Approve change
-          </button>
+          </Button>
         </div>
       ) : (
         <div className="space-y-2">

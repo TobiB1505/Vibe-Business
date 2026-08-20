@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { Button } from "@/components/ui/button";
 import type { MergeCard } from "@/modules/merge/view";
 import { mergeApprovedChangeAction, type MergeActionState } from "./merge-actions";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
@@ -105,22 +106,15 @@ function MergeDialog({
       </div>
 
       <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={pending}
-          className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-prose hover:bg-surface-2 disabled:opacity-60"
-        >
+        <Button type="button" variant="secondary" size="sm" onClick={onCancel} disabled={pending}>
           Cancel
-        </button>
-        <button
-          type="button"
-          onClick={onConfirm}
-          disabled={pending}
-          className="rounded-md border border-mint-line bg-mint-tint px-3 py-1.5 text-sm text-mint hover:bg-mint-tint/70 disabled:opacity-60"
-        >
+        </Button>
+        {/* The one mint control in this flow, on the click that writes to the
+            default branch. Mint is the accent that means Vibe is about to do
+            something, and there is no moment it means more than this one. */}
+        <Button type="button" variant="primary" size="sm" onClick={onConfirm} disabled={pending}>
           {pending ? "Merging…" : "Merge approved change"}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -222,14 +216,18 @@ export function MergePanel({
             )}
           </p>
           <NotDeployed />
-          <button
+          {/* Primary because it is the section's one action, and the dialog it
+              opens replaces it — so the screen never carries two mint
+              controls at once. */}
+          <Button
             type="button"
+            variant="primary"
+            size="sm"
             onClick={() => setConfirming(true)}
             disabled={pending || !card.canMerge}
-            className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2 disabled:opacity-60"
           >
             Merge approved change
-          </button>
+          </Button>
         </div>
       ) : card.state === "blocked" || card.state === "failed" ? (
         <div className="space-y-2">

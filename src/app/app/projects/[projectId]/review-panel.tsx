@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { Button, buttonClasses } from "@/components/ui/button";
 import { useOperationPoll } from "@/lib/client/use-operation-poll";
 import { shouldRefreshForState } from "@/modules/operations/view";
 import type { ReviewCard } from "@/modules/review/view";
@@ -267,7 +268,7 @@ export function ReviewPanel({
                 href={branchUrl}
                 target="_blank"
                 rel="noreferrer noopener"
-                className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2"
+                className={buttonClasses({ variant: "secondary", size: "sm" })}
               >
                 View code diff
               </a>
@@ -282,14 +283,9 @@ export function ReviewPanel({
           {/* Safe copy from a stable code. Never a provider message (§31). */}
           {card.failureMessage && <p className="text-sm text-fg-secondary">{card.failureMessage}</p>}
           {previewSessionId && (
-            <button
-              type="button"
-              onClick={generate}
-              disabled={pending}
-              className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2 disabled:opacity-60"
-            >
+            <Button type="button" variant="primary" size="sm" onClick={generate} disabled={pending}>
               Try again
-            </button>
+            </Button>
           )}
         </div>
       ) : card.state === "expired" ? (
@@ -306,14 +302,9 @@ export function ReviewPanel({
             Generate a visual before/after comparison of your current live page and the temporary
             preview. Vibe opens both in an isolated browser and stores two screenshots.
           </p>
-          <button
-            type="button"
-            onClick={generate}
-            disabled={pending}
-            className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2 disabled:opacity-60"
-          >
+          <Button type="button" variant="primary" size="sm" onClick={generate} disabled={pending}>
             Generate comparison
-          </button>
+          </Button>
         </div>
       ) : (
         <div className="space-y-2">

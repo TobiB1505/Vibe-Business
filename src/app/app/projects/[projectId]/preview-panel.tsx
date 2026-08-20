@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
+import { Button } from "@/components/ui/button";
 import { useOperationPoll } from "@/lib/client/use-operation-poll";
 import { shouldRefreshForState } from "@/modules/operations/view";
 import { PREVIEW_STAGE_LABELS, type PreviewCard } from "@/modules/change-preview/view";
@@ -127,22 +128,15 @@ function ConfirmDialog({
       </div>
 
       <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={pending}
-          className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-prose hover:bg-surface-2 disabled:opacity-60"
-        >
+        <Button type="button" variant="secondary" size="sm" onClick={onCancel} disabled={pending}>
           Cancel
-        </button>
-        <button
-          type="button"
-          onClick={onConfirm}
-          disabled={pending}
-          className="rounded-md border border-amber-line bg-amber-tint px-3 py-1.5 text-sm text-amber hover:bg-amber-tint/70 disabled:opacity-60"
-        >
+        </Button>
+        {/* The amber stays where it carries meaning — the panel's tint and the
+            sentence about the unlisted URL — rather than on the button. Amber
+            reports a state; a button reports what happens when you press it. */}
+        <Button type="button" variant="primary" size="sm" onClick={onConfirm} disabled={pending}>
           Start temporary preview
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -421,17 +415,18 @@ export function PreviewPanel({
               </span>
             )}
 
-            <button
+            <Button
               type="button"
+              variant="secondary"
+              size="sm"
               onClick={stop}
               disabled={intent !== null}
-              className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2 disabled:opacity-60"
             >
               {/* No "Stopping…" label here any more: a stop in flight renders
                   the stopping section instead of this block, so this branch is
                   only ever reached while the preview is genuinely running. */}
               Stop preview
-            </button>
+            </Button>
           </div>
 
           {expiresAt && (
@@ -467,13 +462,9 @@ export function PreviewPanel({
             The build Vibe saved from the last safety check is no longer kept. Run the checks
             again to make a new one.
           </p>
-          <button
-            type="button"
-            onClick={validateAgain}
-            className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2"
-          >
+          <Button type="button" variant="secondary" size="sm" onClick={validateAgain}>
             Validate again
-          </button>
+          </Button>
         </div>
       ) : previewState === "failed" ? (
         <div className="space-y-2">
@@ -487,13 +478,9 @@ export function PreviewPanel({
                 The saved build was released when the preview ended. Run the checks again to
                 make a new one.
               </p>
-              <button
-                type="button"
-                onClick={validateAgain}
-                className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2"
-              >
+              <Button type="button" variant="secondary" size="sm" onClick={validateAgain}>
                 Validate again
-              </button>
+              </Button>
             </>
           )}
         </div>
@@ -513,13 +500,9 @@ export function PreviewPanel({
                 The saved build was released when the preview ended. Run the checks again to
                 make a new one.
               </p>
-              <button
-                type="button"
-                onClick={validateAgain}
-                className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2"
-              >
+              <Button type="button" variant="secondary" size="sm" onClick={validateAgain}>
                 Validate again
-              </button>
+              </Button>
             </>
           )}
         </div>
@@ -539,14 +522,15 @@ export function PreviewPanel({
             Vibe will run the exact validated build in an isolated environment for 15 minutes, on a
             public, unlisted URL. Your repository and production site are not changed.
           </p>
-          <button
+          <Button
             type="button"
+            variant="primary"
+            size="sm"
             onClick={() => setConfirming(true)}
             disabled={intent !== null || !validatedArtifactId}
-            className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2 disabled:opacity-60"
           >
             Start temporary preview
-          </button>
+          </Button>
         </div>
       )}
 
