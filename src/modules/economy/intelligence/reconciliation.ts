@@ -59,7 +59,12 @@ export function compareEstimateToActual(
   options: { actualEconomyModelVersion?: string } = {},
 ): EconomicsComparison {
   const predictedNanoUsd = estimate.estimatedCost.known ? estimate.estimatedCost.nanoUsd : null;
-  const actualFloorNanoUsd = actual.actualCost.knownFloorNanoUsd;
+
+  // A floor of zero from a run where *nothing* resolved is not a cheap run, it
+  // is an unmeasured one, and reporting 0 would make it the best-performing run
+  // in any comparison it entered.
+  const anythingKnown = Object.values(actual.components).some((component) => component.known);
+  const actualFloorNanoUsd = anythingKnown ? actual.actualCost.knownFloorNanoUsd : null;
 
   const versionMismatch =
     options.actualEconomyModelVersion !== undefined &&
@@ -69,7 +74,7 @@ export function compareEstimateToActual(
     ? "model_version_mismatch"
     : predictedNanoUsd === null || predictedNanoUsd === 0
       ? "prediction_unknown"
-      : !actual.actualCost.complete
+      : !actual.actualCost.complete || actualFloorNanoUsd === null
         ? "actual_incomplete"
         : null;
 
@@ -78,7 +83,8 @@ export function compareEstimateToActual(
   // The difference is reported whenever both numbers exist, even when the pair
   // is not comparable — a reader investigating one run still wants to see it.
   // Only `comparable` decides whether it may move future predictions.
-  const differenceNanoUsd = predictedNanoUsd === null ? null : actualFloorNanoUsd - predictedNanoUsd;
+  const differenceNanoUsd =
+    predictedNanoUsd === null || actualFloorNanoUsd === null ? null : actualFloorNanoUsd - predictedNanoUsd;
 
   return {
     predictedNanoUsd,

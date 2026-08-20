@@ -90,7 +90,7 @@ describe("prediction is compared against reality", () => {
     expect(result.predictedNanoUsd).toBe(estimate.estimatedCost.known ? estimate.estimatedCost.nanoUsd : null);
     expect(result.actualFloorNanoUsd).toBe(actual.actualCost.knownFloorNanoUsd);
     expect(result.differenceNanoUsd).toBe(
-      result.actualFloorNanoUsd - (result.predictedNanoUsd ?? 0),
+      (result.actualFloorNanoUsd ?? 0) - (result.predictedNanoUsd ?? 0),
     );
     expect(result.relativeError).toBeCloseTo(
       (result.differenceNanoUsd ?? 0) / (result.predictedNanoUsd ?? 1),
@@ -130,6 +130,25 @@ describe("prediction is compared against reality", () => {
 
     expect(result.comparable).toBe(false);
     expect(result.incomparableReason).toBe("model_version_mismatch");
+  });
+
+  it("reports no floor at all when nothing about the run resolved", () => {
+    // A floor of zero from an entirely unmeasured run would make it the
+    // cheapest run in any comparison it entered.
+    const nothing = deriveActualExecutionEconomics({
+      providerCostNanoUsd: null,
+      agentSandbox: null,
+      validationSandbox: null,
+      validationAttempted: false,
+      workflowSteps: null,
+      rates: VERCEL_SANDBOX_RATES,
+      functionsRates: VERCEL_FUNCTIONS_RATES,
+    });
+    const result = compareEstimateToActual(estimateExecutionEconomics(estimateInput()), nothing);
+
+    expect(result.actualFloorNanoUsd).toBeNull();
+    expect(result.comparable).toBe(false);
+    expect(result.incomparableReason).toBe("actual_incomplete");
   });
 
   it("still shows the difference on an incomparable pair, for a human reading one run", () => {
