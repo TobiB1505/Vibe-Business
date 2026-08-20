@@ -3,6 +3,8 @@ import type { OutcomeCard, OutcomeCheckLine } from "@/modules/outcome-verificati
 import type { BusinessImpactCard } from "@/modules/business-measurement/view";
 import { businessRationaleFor } from "@/modules/execution/business-rationale";
 import { deriveChangeProgress } from "@/modules/execution/change-progress";
+import { MERGE_FAILURE_MESSAGES } from "@/modules/merge/messages";
+import { APPROVAL_BLOCK_MESSAGES } from "@/modules/approvals/messages";
 import { OBSERVED_CHANGE_DISCLAIMER } from "@/modules/business-measurement/causality";
 
 /**
@@ -294,6 +296,94 @@ function impactChange(businessImpact: BusinessImpactCard): PreparedChangeCard {
 }
 
 export const E2E_SCENARIOS = {
+  /**
+   * **The moment the product asks for something** (UI-5 §3).
+   *
+   * Everything a person needs in order to decide exists — validation passed, a
+   * comparison is ready — and nobody has decided. It is the one state where
+   * the four early gates are the work rather than the history, so it is the
+   * one that renders them expanded.
+   *
+   * Every other scenario here is approved, which is why this fixture had to be
+   * written: without it the open form of the card would ship untested in a
+   * browser, proven only by unit tests over the derivation.
+   */
+  change_awaiting_approval: (): PreparedChangeCard =>
+    withProgress({
+      ...baseChange(),
+      outcome: outcomeCard(),
+      businessImpact: businessImpactCard(),
+      approval: {
+        state: "not_approved",
+        approvalId: null,
+        approvedAt: null,
+        revokedAt: null,
+        approvedCommitSha: null,
+        invalidationReason: null,
+        blockReason: null,
+        blockMessage: null,
+        canApprove: true,
+        currentCommitSha: APPROVED_COMMIT,
+      },
+      merge: mergeCard({
+        state: "not_eligible",
+        failureCode: "merge_approval_required",
+        failureMessage: MERGE_FAILURE_MESSAGES.merge_approval_required,
+        canMerge: false,
+      }),
+    }),
+
+  /**
+   * The earliest gate, still open — a change nobody has checked yet.
+   *
+   * Deliberately `null` rather than a run in flight. The section hands the
+   * validation panel `runningOperation={null}`, so a stored `running` summary
+   * renders as "Not validated" while the card's headline says a check is
+   * happening — a contradiction a fixture would then assert as correct. The
+   * gap is real and recorded in the sprint doc; what this scenario proves is
+   * the state the section can actually produce coherently.
+   */
+  change_not_validated: (): PreparedChangeCard =>
+    withProgress({
+      ...baseChange(),
+      outcome: outcomeCard(),
+      businessImpact: businessImpactCard(),
+      validation: null,
+      review: {
+        state: "not_generated",
+        reviewArtifactId: null,
+        operationRunId: null,
+        failureCode: null,
+        failureMessage: null,
+        route: null,
+        beforeOrigin: null,
+        beforeCapturedAt: null,
+        afterCapturedAt: null,
+        width: null,
+        height: null,
+        expiresAt: null,
+      },
+      reviewImages: null,
+      approval: {
+        state: "not_eligible",
+        approvalId: null,
+        approvedAt: null,
+        revokedAt: null,
+        approvedCommitSha: null,
+        invalidationReason: null,
+        blockReason: "approval_validation_required",
+        blockMessage: APPROVAL_BLOCK_MESSAGES.approval_validation_required,
+        canApprove: false,
+        currentCommitSha: APPROVED_COMMIT,
+      },
+      merge: mergeCard({
+        state: "not_eligible",
+        failureCode: "merge_approval_required",
+        failureMessage: MERGE_FAILURE_MESSAGES.merge_approval_required,
+        canMerge: false,
+      }),
+    }),
+
   /** A fresh preflight says this could merge now. The confirmation path. */
   merge_ready: (): PreparedChangeCard =>
     withProgress({
