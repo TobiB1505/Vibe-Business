@@ -111,8 +111,8 @@ On **Vercel** (Project Settings → Environment Variables): paste the `.pem` fil
 
 GitHub Apps are configured with a fixed Homepage URL and Callback URL. The cleanest way to support both local development and a deployed Vercel URL is to **create a second GitHub App** for production (e.g. `Vibe Business`, without the `(dev)` suffix), identical in every setting above except:
 
-- **Homepage URL**: your production URL (e.g. `https://<your-app>.vercel.app`)
-- **Callback URL**: `https://<your-app>.vercel.app/app/connect/github/callback`
+- **Homepage URL**: your production custom domain (e.g. `https://vibebusiness.de`) — the same value `NEXT_PUBLIC_APP_URL` is set to in Vercel's Production environment, see [environment.md](../deployment/environment.md)
+- **Callback URL**: `https://vibebusiness.de/app/connect/github/callback`
 
 Then set the production App's credentials as environment variables on the Vercel project (Production environment), keeping the dev App's credentials only in `.env.local`. Do not reuse one App's client secret/private key across environments.
 

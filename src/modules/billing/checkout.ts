@@ -1,5 +1,6 @@
 import "server-only";
 
+import { getAppUrl } from "@/lib/env/app-url";
 import { getStripeEnv } from "@/lib/env/stripe";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -96,9 +97,23 @@ async function resolveStripeCustomerId(
   return link.stripeCustomerId;
 }
 
-function returnUrls(): { success: string; cancel: string } {
+/**
+ * Where Stripe returns the customer, in priority order.
+ *
+ * `STRIPE_BILLING_RETURN_URL` stays the explicit override it always was —
+ * Stripe's own dashboard documentation shows it as a full URL an operator
+ * configures once — but its fallback is now this deployment's own resolved
+ * origin rather than a hardcoded `localhost`, so a Preview or Production
+ * deployment with no `STRIPE_BILLING_RETURN_URL` set returns the customer
+ * to itself instead of to a value that only ever worked locally.
+ */
+export function billingReturnBase(): string {
   const env = getStripeEnv();
-  const base = env.STRIPE_BILLING_RETURN_URL ?? "http://localhost:3000/app/billing";
+  return env.STRIPE_BILLING_RETURN_URL ?? `${getAppUrl()}/app/billing`;
+}
+
+function returnUrls(): { success: string; cancel: string } {
+  const base = billingReturnBase();
 
   return {
     // `checkout=complete` tells the page to say "your payment is being
@@ -240,7 +255,7 @@ export async function startCustomerPortal(
 
   const session = await getStripeClient().billingPortal.sessions.create({
     customer: link.stripeCustomerId,
-    return_url: env.STRIPE_BILLING_RETURN_URL ?? "http://localhost:3000/app/billing",
+    return_url: billingReturnBase(),
   });
 
   return session.url ? { ok: true, url: session.url } : { ok: false, refusal: "stripe_not_configured" };

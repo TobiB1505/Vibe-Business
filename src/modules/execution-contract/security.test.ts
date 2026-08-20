@@ -8,6 +8,9 @@ import { resolveStepExecution } from "./resolver";
 import { admitExecutionSpec } from "./service";
 import { buildExecutionSpec } from "./spec";
 import { resolveExecutionValidation } from "./validation-requirements";
+
+/** The sandbox program's source. Named once, and exempted once, below. */
+const RUNTIME_PROGRAM = "src/modules/coding-agent/sandbox-runtime/program.ts";
 import {
   FIXTURE_OTHER_SHA,
   FIXTURE_PLAN,
@@ -353,8 +356,36 @@ describe("§3 — the execution contract stays deterministic", () => {
       // A test that asserts a boundary has to name it, and this file quotes the
       // specifier verbatim in its own pattern. Excluding tests keeps the check
       // about production code, which is what the boundary protects.
-      .filter((path) => !path.endsWith(".test.ts"));
+      .filter((path) => !path.endsWith(".test.ts"))
+      /*
+       * The one file that contains the specifier without importing it.
+       *
+       * `program.ts` is the source of the program that runs *inside the agent
+       * sandbox* — a different machine, with its own `node_modules`. The text
+       * is a string constant in this repository, so Vibe's own process never
+       * loads the SDK from it. The assertion below proves that rather than
+       * asserting it in a comment.
+       */
+      .filter((path) => path !== RUNTIME_PROGRAM);
 
     expect(offenders).toEqual([]);
+  });
+
+  /**
+   * And the exemption above is real: the specifier appears only inside the
+   * program constant, never in the module's own import block.
+   *
+   * Without this, the allowlist entry would be a hole — a future edit could add
+   * a genuine top-level import to that file and the boundary check would step
+   * politely around it.
+   */
+  it("keeps the sandbox program's SDK import inside the program text", () => {
+    const source = readFileSync(RUNTIME_PROGRAM, "utf8");
+    const declaration = source.indexOf("export const AGENT_RUNTIME_PROGRAM");
+    const specifier = source.indexOf('from "@anthropic-ai/claude-agent-sdk"');
+
+    expect(declaration).toBeGreaterThan(-1);
+    expect(specifier).toBeGreaterThan(declaration);
+    expect(source.indexOf('from "@anthropic-ai/claude-agent-sdk"', specifier + 1)).toBe(-1);
   });
 });

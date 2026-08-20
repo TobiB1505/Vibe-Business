@@ -11,6 +11,7 @@ import {
 } from "@/modules/operations/store";
 import { buildOperationView, type OperationView } from "@/modules/operations/view";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
+import { resolveDepthForPreparedChange } from "./depth-inputs";
 import { computeValidationIdentity } from "./identity";
 import { resolveValidationProfile } from "./profile";
 import {
@@ -110,6 +111,20 @@ async function resolveContext(
   const profile = resolveValidationProfile(snapshot.result);
   if (!profile.supported) return { ok: false, error: profile.reason };
 
+  /*
+   * The depth is an identity input, so the reuse check has to know it.
+   *
+   * Resolved through the same shared function the claim uses — if these two
+   * disagreed even once, this lookup would search for a hash the claim never
+   * wrote and every validation would provision a fresh sandbox for a question
+   * already answered (Sprint 0047).
+   */
+  const depth = await resolveDepthForPreparedChange({
+    supabase,
+    projectId: params.projectId,
+    prepared,
+  });
+
   return {
     ok: true,
     preparedCommitSha: prepared.commitSha,
@@ -119,6 +134,8 @@ async function resolveContext(
       validationProfile: profile.profile,
       validationProfileVersion: validationProfileVersionFor(profile.profile),
       sandboxPolicyVersion: SANDBOX_POLICY_VERSION,
+      validationDepth: depth.depth,
+      validationDepthPolicyVersion: depth.policyVersion,
     }),
   };
 }

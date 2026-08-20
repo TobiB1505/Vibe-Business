@@ -1,11 +1,26 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { creditsToUnits } from "@/modules/credits/units";
 import { FakeDatabase, FakeExecutor, fakeSupabase } from "@/modules/operations/test-support";
 import { AGENTIC_EXECUTION_CONFIG } from "@/modules/ai/operations";
 import { computeAgentRunIdentity } from "./identity";
-import { startAgentExecution } from "./service";
 import { CODING_AGENT_POLICY_VERSION, AGENT_PROMPT_COMPILER_VERSION } from "./schema";
 import { fakeAgentSpec } from "./test-support";
+
+/*
+ * The Credit hold and the run row are server-owned: both tables carry a select
+ * policy and no write policy, so `startAgentExecution` takes them with the
+ * service-role client (Rule 53). The double shares this test's in-memory
+ * database, which is what production does too — one Postgres, two clients with
+ * different write access to it.
+ *
+ * `operations/service.test.ts` sets the same double up for the same reason.
+ */
+const serviceDb = { current: new FakeDatabase() };
+vi.mock("@/lib/supabase/service", () => ({
+  createServiceClient: () => fakeSupabase(serviceDb.current),
+}));
+
+const { startAgentExecution } = await import("./service");
 
 /**
  * Starting an agent execution
@@ -109,6 +124,7 @@ async function withEnv<T>(env: Record<string, string>, body: () => Promise<T>): 
 
 beforeEach(async () => {
   db = new FakeDatabase();
+  serviceDb.current = db;
   executor = new FakeExecutor();
   seedProject(PROJECT, USER);
   seedProject(OTHER_PROJECT, OTHER_USER);

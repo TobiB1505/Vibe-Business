@@ -12,13 +12,19 @@ import {
   fakeWriteScope,
 } from "@/modules/execution-contract/test-support";
 import { creditsToUnits } from "@/modules/credits/units";
-import type { ExecutionResolution } from "@/modules/execution-contract/schema";
+import {
+  EXECUTION_RESOLVER_VERSION,
+  EXECUTION_RISK_POLICY_VERSION,
+  type ExecutionResolution,
+} from "@/modules/execution-contract/schema";
 import { deriveAgentLimits, type AgentRuntimeLimits } from "./budget";
 import type {
   AgentModelUsage,
   CodingAgentProvider,
   CodingAgentRequest,
   CodingAgentResult,
+  DetachedCodingAgentProvider,
+  ObservedRuntimeEntry,
 } from "./provider";
 import type {
   AgentWorkspace,
@@ -57,8 +63,8 @@ export function fakeAgenticResolution(
   overrides: Partial<ExecutionResolution> = {},
 ): ExecutionResolution {
   return {
-    resolverVersion: "execution-resolver-v1",
-    riskPolicyVersion: "execution-risk-policy-v1",
+    resolverVersion: EXECUTION_RESOLVER_VERSION,
+    riskPolicyVersion: EXECUTION_RISK_POLICY_VERSION,
     stepOrder: 1,
     stepKey: "1-ship-the-thing",
     mode: "agentic",
@@ -69,6 +75,7 @@ export function fakeAgenticResolution(
     capability: null,
     capabilityVersion: null,
     blockedBy: [],
+    absorbedPreparation: [],
     unmetRequirements: [],
     requiresUserInput: false,
     admission: { admissible: true },
@@ -238,6 +245,23 @@ export type FakeProviderOptions = {
   usage?: readonly AgentModelUsage[];
   /** Throw instead of returning, to exercise the caller's error path. */
   throws?: Error;
+  /** The harness's progress feed, as `observe` would read it back. */
+  entries?: readonly ObservedRuntimeEntry[];
+  /**
+   * What the harness counted at its own decision point (Sprint 0042).
+   *
+   * Null by default, which is what a provider that hosts no shell reports. A
+   * test that wants to prove Vibe notices a disagreement between this and the
+   * feed sets them explicitly.
+   */
+  verificationCommands?: number | null;
+  verificationRefusals?: number | null;
+  policyDecisions?: number | null;
+  repairCycles?: number | null;
+  implementationMutations?: number | null;
+  convergenceMutations?: number | null;
+  requiredVerificationActions?: number | null;
+  requiredVerificationOverrides?: number | null;
 };
 
 export type FakeCodingAgentProvider = CodingAgentProvider & {
@@ -284,7 +308,18 @@ export function fakeCodingAgentProvider(
 
       return {
         outcome: options.outcome ?? "completed",
-        turns,
+        assistantMessages: turns,
+        sdkLoopIterations: turns,
+        // This fake hosts no shell, so it makes no verification decisions.
+        // Null rather than zero: nothing counted is not the same as none.
+        verificationCommands: null,
+        verificationRefusals: null,
+        policyDecisions: null,
+        repairCycles: null,
+        implementationMutations: null,
+        convergenceMutations: null,
+        requiredVerificationActions: null,
+        requiredVerificationOverrides: null,
         usage: options.usage ?? [
           {
             model: "claude-sonnet-5",
@@ -299,6 +334,124 @@ export function fakeCodingAgentProvider(
         providerDeniedToolCalls: 0,
         durationMs: 1_234,
         failureDetail: null,
+      };
+    },
+  };
+}
+
+export type FakeDetachedAgentProvider = DetachedCodingAgentProvider & {
+  /** Every tool call the fake actually attempted, with what came back. */
+  readonly attempted: { tool: string; outcomeKind: string }[];
+  readonly requests: CodingAgentRequest[];
+  /** How many times a harness was launched. Must never exceed one per run. */
+  starts(): number;
+  /** Make `observe()` report "still working" for the first N polls. */
+  finishAfterPolls(polls: number): void;
+};
+
+/**
+ * The same scripted agent, in the shape production actually runs
+ * (ADR 0029, A1).
+ *
+ * The harness now outlives the step that starts it, so the durable layer calls
+ * `start`, then `observe` on a timer, then `collect`. A fake that still offered
+ * one awaited `run()` would let the step graph be tested against a shape no
+ * deployment uses — the failure rule 69 keeps warning about.
+ *
+ * The scripted tool calls run inside `start`, not because a real harness works
+ * that way, but because it is the only moment this fake is handed the gateway.
+ * What the tests using it care about is what the gateway did with each call,
+ * and that is unchanged.
+ */
+export function fakeDetachedAgentProvider(
+  options: FakeProviderOptions = {},
+): FakeDetachedAgentProvider {
+  const attempted: { tool: string; outcomeKind: string }[] = [];
+  const requests: CodingAgentRequest[] = [];
+  let started = 0;
+  let polls = 0;
+  let pollsBeforeFinished = 0;
+  let turns = 0;
+  let threw: unknown = null;
+
+  return {
+    id: "fake_provider",
+    harness: "fake_harness",
+    attempted,
+    requests,
+
+    starts: () => started,
+    finishAfterPolls: (count: number) => {
+      pollsBeforeFinished = count;
+    },
+
+    async start(request: CodingAgentRequest) {
+      requests.push(request);
+      started += 1;
+
+      if (options.throws) {
+        // Carried rather than raised: a provider fault must reach the caller as
+        // a typed outcome, never as an exception the durable layer cannot
+        // classify (§37).
+        threw = options.throws;
+        return { ok: false as const, failureDetail: "fake provider refused to start" };
+      }
+
+      for (const call of options.calls ?? []) {
+        if (request.signal.aborted) break;
+        turns += 1;
+        const outcome = await request.invokeTool(call.tool, call.input);
+        attempted.push({ tool: call.tool, outcomeKind: outcome.kind });
+        if (outcome.kind === "halt") break;
+      }
+
+      return { ok: true as const };
+    },
+
+    async observe() {
+      polls += 1;
+      return {
+        started: started > 0,
+        finished: started > 0 && polls > pollsBeforeFinished,
+        assistantMessages: turns,
+        /*
+         * The whole feed, every time — as the real provider returns it.
+         *
+         * Re-offered rather than deltaed, because the durable write is an
+         * upsert keyed on the harness's own sequence. A fake that returned
+         * each line once would let a duplicate-write bug pass every test.
+         */
+        entries: options.entries ?? [],
+      };
+    },
+
+    async collect() {
+      return {
+        outcome: threw ? ("provider_error" as const) : (options.outcome ?? "completed"),
+        assistantMessages: turns,
+        sdkLoopIterations: threw ? null : turns,
+        verificationCommands: options.verificationCommands ?? null,
+        verificationRefusals: options.verificationRefusals ?? null,
+        policyDecisions: options.policyDecisions ?? null,
+        repairCycles: options.repairCycles ?? null,
+        implementationMutations: options.implementationMutations ?? null,
+        convergenceMutations: options.convergenceMutations ?? null,
+        requiredVerificationActions: options.requiredVerificationActions ?? null,
+        requiredVerificationOverrides: options.requiredVerificationOverrides ?? null,
+        usage: options.usage ?? [
+          {
+            model: "claude-sonnet-5",
+            inputTokens: 1_000,
+            outputTokens: 500,
+            cacheReadInputTokens: 4_000,
+            cacheCreationInputTokens: 2_000,
+            reportedCostUsd: 0.02,
+          },
+        ],
+        sessionId: "session-1",
+        providerDeniedToolCalls: 0,
+        durationMs: 1_234,
+        failureDetail: threw ? "fake provider failed" : null,
       };
     },
   };

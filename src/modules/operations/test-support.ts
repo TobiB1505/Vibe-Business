@@ -59,7 +59,8 @@ type Filter =
   | { kind: "not_is"; column: string; value: null }
   | { kind: "gt"; column: string; value: unknown }
   | { kind: "gte"; column: string; value: unknown }
-  | { kind: "lte"; column: string; value: unknown };
+  | { kind: "lte"; column: string; value: unknown }
+  | { kind: "lt"; column: string; value: unknown };
 
 /**
  * Reads a column, following PostgREST's `column->>key` JSON accessor.
@@ -104,6 +105,19 @@ function matches(row: Row, filters: Filter[]): boolean {
       return typeof value === "number" && typeof filter.value === "number"
         ? value <= filter.value
         : String(value ?? "") <= String(filter.value);
+    }
+    /*
+     * Numeric, like `lte` and for the same reason.
+     *
+     * Its one caller is the monotonic turn counter — `update({turns}).lt("turns", turns)`
+     * — which is what stops a poll that raced a stale read from walking a run's
+     * observed turns backwards. Compared as strings, `"9" < "10"` is false and
+     * the guard would silently stop working somewhere after turn nine.
+     */
+    if (filter.kind === "lt") {
+      return typeof value === "number" && typeof filter.value === "number"
+        ? value < filter.value
+        : String(value ?? "") < String(filter.value);
     }
     return String(value ?? "") > String(filter.value);
   });
@@ -482,9 +496,25 @@ export class FakeDatabase {
       }
     }
 
-    // The ledger's idempotency guarantee: one usage event per job.
-    if (table === "ai_usage_events" && candidate.job_id != null) {
-      const clash = others.some((row) => row.job_id === candidate.job_id);
+    /*
+     * The ledger's idempotency guarantee: one usage event per job — for every
+     * operation that makes one call per job.
+     *
+     * `agentic_execution` is excluded, exactly as the partial unique index in
+     * `20260819010000_agent_usage_cardinality.sql` excludes it. An agent run is
+     * a loop: forty turns is forty billed requests and forty rows, and the
+     * Agent Gateway reads them back to decide whether the run has spent its
+     * authorization. Modelling the exclusion here is what lets a test prove the
+     * gateway's ceilings actually accumulate.
+     */
+    if (
+      table === "ai_usage_events" &&
+      candidate.job_id != null &&
+      candidate.operation !== "agentic_execution"
+    ) {
+      const clash = others.some(
+        (row) => row.job_id === candidate.job_id && row.operation !== "agentic_execution",
+      );
       if (clash) return { code: POSTGRES_UNIQUE_VIOLATION, message: "usage already recorded for job" };
     }
 
@@ -897,6 +927,10 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
   }
   lte(column: string, value: unknown): this {
     this.filters.push({ kind: "lte", column, value });
+    return this;
+  }
+  lt(column: string, value: unknown): this {
+    this.filters.push({ kind: "lt", column, value });
     return this;
   }
   order(column: string, options?: { ascending?: boolean }): this {

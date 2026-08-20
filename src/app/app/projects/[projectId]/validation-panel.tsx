@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
+import type { StepSkipReason } from "@/modules/validation/schema";
 import { useOperationPoll } from "@/lib/client/use-operation-poll";
 import {
   freshestOperation,
@@ -69,6 +70,20 @@ const PHASE_TONES: Record<ValidationPhaseView["state"], string> = {
 
 export type { ValidationSummary };
 
+/**
+ * Three different reasons a step did not run, and three different sentences.
+ *
+ * This row used to render one sentence for every skip. The first depth dogfood
+ * showed why that was wrong: a step skipped because the *change* did not need
+ * it was reported as "no script for this in the project", which told the reader
+ * something untrue about their own repository.
+ */
+const SKIP_NOTES: Record<StepSkipReason, string> = {
+  script_not_present: "no script for this in the project",
+  not_in_profile: "not part of this project's validation profile",
+  outside_depth: "not needed for this change",
+};
+
 function PhaseRow({ phase }: { phase: ValidationPhaseView }) {
   const active = phase.state === "active";
   const muted = phase.state === "pending" || phase.state === "not_run";
@@ -81,7 +96,7 @@ function PhaseRow({ phase }: { phase: ValidationPhaseView }) {
           {active ? `${phase.activeLabel}…` : phase.label}
         </span>
         {phase.state === "skipped" && (
-          <span className="text-xs text-fg-muted">no script for this in the project</span>
+          <span className="text-xs text-fg-muted">{SKIP_NOTES[phase.skipReason ?? "script_not_present"]}</span>
         )}
         {phase.durationMs !== null && (
           <span className="text-xs text-fg-meta">{(phase.durationMs / 1000).toFixed(1)}s</span>
@@ -108,6 +123,35 @@ function PhaseList({ phases }: { phases: ValidationPhaseView[] }) {
         <PhaseRow key={phase.phase} phase={phase} />
       ))}
     </ul>
+  );
+}
+
+/**
+ * How much of the profile ran, and why (Sprint 0047).
+ *
+ * Shown for the same reason the "checked under earlier rules" line is: a
+ * validation that took ninety seconds and one that took five minutes are
+ * different claims, and the difference should be readable rather than inferred
+ * from a stopwatch. When a depth deliberately skipped steps, they are named —
+ * "we did not run this" is the honest half of "this was fast".
+ *
+ * Absent for runs validated before depth existed, which ran everything.
+ */
+function DepthNote({ depth }: { depth: ValidationSummary["depth"] }) {
+  if (!depth) return null;
+
+  return (
+    <div className="flex flex-col gap-1">
+      <p className="text-xs text-fg-secondary">
+        <span className="text-fg-muted">Depth:</span> {depth.label} — {depth.reason}
+      </p>
+      {depth.notRun.length > 0 && (
+        <p className="text-xs text-fg-muted">
+          Not run at this depth: {depth.notRun.join(", ")}. The exact commit, the changed files and
+          the build identity were verified regardless.
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -207,7 +251,10 @@ export function ValidationPanel({
               Before the first phase records itself there is nothing truthful to
               show, so the panel says only that it has started. */}
           {liveSummary ? (
-            <PhaseList phases={liveSummary.phases} />
+            <>
+              <DepthNote depth={liveSummary.depth} />
+              <PhaseList phases={liveSummary.phases} />
+            </>
           ) : (
             <p className="text-sm text-fg-secondary">Starting an isolated environment</p>
           )}
@@ -227,6 +274,7 @@ export function ValidationPanel({
               ? "Your project still builds, and the change matches the exact commit Vibe prepared."
               : "This result was produced before Vibe's validation rules changed. It still describes what was checked at the time, but not what would be checked now."}
           </p>
+          <DepthNote depth={shown.depth} />
           <PhaseList phases={shown.phases} />
           {/* Deliberately repeated after a pass. A green tick is exactly when
               someone is most likely to assume more happened than did. */}

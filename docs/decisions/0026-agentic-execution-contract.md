@@ -103,3 +103,60 @@ The architecture generalizes. The permission does not, and widening it is an ADR
 **Persist interrupts and activity events now.** Rejected: nothing writes them, and a table with no writer is the speculative infrastructure rule 15 and ADR 0007 both refuse. Both are code-level contracts until Core-4 supplies the writer.
 
 **Choose provisional budget numbers.** Rejected: a guess that looks like a decision would be baked into every spec produced before the first real dogfood corrected it.
+
+---
+
+## Amendment, 2026-08-18 — a Planner dependency is not automatically a runtime hard blocker
+
+**The original decision is preserved above. This amends §2 and the resolver's dependency rule, which the first real SEO plan showed to be wrong in one specific way.**
+
+### What the dogfood found
+
+Action Plan `9110ab8b` for Vibe Business's own repository:
+
+```
+1  Define the metadata plan …            vibe · analysis        depends on —
+2  Add canonical URLs …                  vibe · product_change  depends on 1
+3  Add Open Graph tags and structured …  vibe · product_change  depends on 1
+4  Add robots meta directives …          vibe · product_change  depends on 1
+```
+
+Step 1 resolved `unsupported` — correctly, because no executor produces a written metadata plan on a click. Steps 2–4 then resolved `blocked`.
+
+Every individual answer was right and the outcome was wrong. Those three steps are moderate-risk changes to a Next.js/pnpm repository with a real validation profile, no capability match, no founder decision outstanding and no auth or payment evidence. They were refused because Vibe had not first performed a piece of **its own thinking** — which is the first thing a coding agent does anyway, before it writes a line.
+
+### The distinction
+
+> The Planner describes *what work is needed*. It does not define one runtime execution boundary per step.
+
+Three classes, decided in the **Execution** layer:
+
+| | | |
+| --- | --- | --- |
+| **hard** | must already exist | founder decision · real-world work · external party · a product change |
+| **agent-preparable** | Vibe's own technical preparation | inspect the implementation · determine the repository-consistent pattern |
+| **satisfied** | finished | nothing to wait for and nothing to absorb |
+
+A hard dependency still blocks, and one is enough (§30 of the fix). An agent-preparable one is **absorbed** into the downstream execution: the run performs it as preparation, the ExecutionSpec records which steps it carried, and the Planner's own state is untouched.
+
+### Why this is not a relaxation
+
+Four things keep it narrow, and all four are structural rather than advisory:
+
+1. **Only an agentic route absorbs anything.** A `needs_user_input`, `manual` or `unsupported` step is not something Vibe runs, so there is no boundary to absorb into. A `deterministic` step runs a generator that reads structured repository facts and would not read a metadata plan — claiming it absorbed one would be a false statement about the run. So every non-agentic route keeps the pre-amendment behaviour exactly.
+
+2. **Classification reads structured fields only.** `actor`, `changeKind`, the derived risk class, and the current capability registry — the same closed vocabulary risk classification and capability matching are already restricted to. There is no `title.includes("analyze")`, because a rule keyed on prose lets a reworded step reclassify itself, and that is the most valuable thing a prompt injection in a customer's repository could achieve.
+
+3. **`analysis` and nothing else.** `measurement` is excluded even though the Planner also maps it to `vibe_prepares`: a measurement step observes a finished result, and folding *"verify the new signals render correctly"* into the run that produced them would make the run its own judge, which rule 78 forbids. `research` is excluded because it gathers information from people and the market, which no repository answers.
+
+4. **Absorption grants nothing.** The compiled policy is a function of mode, execution class, risk class and write scope. No preparation text is an input to any of them. A preparatory step saying *"deploy the result"* arrives as a quoted sentence inside a fenced untrusted block, and there is no deploy tool for it to reach.
+
+Cycles fail safely: the resolver settles them against the plan layer's own `findDependencyCycles` before walking anything, and a step that reaches a loop is blocked rather than absorbed.
+
+### What the amendment costs
+
+`EXECUTION_RESOLVER_VERSION` moves to `execution-resolver-v2`, and the absorbed step keys join the ExecutionSpec identity. Both are required rather than incidental: a step that resolved `blocked` under v1 resolves `agentic` under v2 with nothing about the plan or the repository having changed, and two runs delivering the same step while carrying different preparation are genuinely different instructions. A stored v1 resolution is never re-read as though it were a v2 answer.
+
+### What did not change
+
+Risk policy, the validation requirement, the capability registry, the globally forbidden capability set, the two-authority admission rule, and the absence of an approved Agent Credit price. A repository with no validation profile is still unsupported; a moved HEAD still refuses; deterministic execution is still preferred over agentic.

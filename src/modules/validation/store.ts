@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { ValidationDepth } from "./depth";
 import type { CleanupStatus } from "./orchestrator";
 import type { SandboxUsage } from "./sandbox-port";
 import type {
@@ -36,6 +37,15 @@ export type StoredValidationRun = {
   operationRunId: string;
   validationProfile: ValidationProfile;
   validationProfileVersion: string;
+  /**
+   * How much of the profile ran (Sprint 0047).
+   *
+   * Null for runs validated before depth existed — those always ran the full
+   * step set, and the UI says so rather than relabelling them retroactively.
+   */
+  validationDepth: ValidationDepth | null;
+  validationDepthPolicyVersion: string | null;
+  validationDepthReason: string | null;
   sandboxPolicyVersion: string;
   sandboxProvider: SandboxProviderId;
   sandboxRuntime: string | null;
@@ -61,6 +71,7 @@ export type StoredValidationRun = {
 
 const COLUMNS =
   "id, project_id, prepared_change_id, operation_run_id, validation_profile, validation_profile_version, " +
+  "validation_depth, validation_depth_policy_version, validation_depth_reason, " +
   "sandbox_policy_version, sandbox_provider, sandbox_runtime, package_manager, prepared_commit_sha, " +
   "status, stage, steps, failure_code, failure_detail, source_integrity, artifact_snapshot_id, artifact_expires_at, artifact_deleted_at, sandbox_duration_ms, cleanup_status, validation_identity, " +
   "created_at, started_at, completed_at";
@@ -75,6 +86,9 @@ function mapRow(row: Row): StoredValidationRun {
     operationRunId: String(row.operation_run_id),
     validationProfile: row.validation_profile as ValidationProfile,
     validationProfileVersion: String(row.validation_profile_version),
+    validationDepth: (row.validation_depth as ValidationDepth | null) ?? null,
+    validationDepthPolicyVersion: (row.validation_depth_policy_version as string | null) ?? null,
+    validationDepthReason: (row.validation_depth_reason as string | null) ?? null,
     sandboxPolicyVersion: String(row.sandbox_policy_version),
     sandboxProvider: row.sandbox_provider as SandboxProviderId,
     sandboxRuntime: (row.sandbox_runtime as string | null) ?? null,
@@ -183,6 +197,9 @@ export async function claimValidationRun(
     operationRunId: string;
     validationProfile: ValidationProfile;
     validationProfileVersion: string;
+    validationDepth: ValidationDepth;
+    validationDepthPolicyVersion: string;
+    validationDepthReason: string;
     sandboxPolicyVersion: string;
     sandboxProvider: SandboxProviderId;
     packageManager: SupportedPackageManager;
@@ -199,6 +216,9 @@ export async function claimValidationRun(
       operation_run_id: params.operationRunId,
       validation_profile: params.validationProfile,
       validation_profile_version: params.validationProfileVersion,
+      validation_depth: params.validationDepth,
+      validation_depth_policy_version: params.validationDepthPolicyVersion,
+      validation_depth_reason: params.validationDepthReason,
       sandbox_policy_version: params.sandboxPolicyVersion,
       sandbox_provider: params.sandboxProvider,
       package_manager: params.packageManager,

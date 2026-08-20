@@ -10,11 +10,9 @@ Prompt Compiler          §14      deterministic, versioned
       ↓
 CodingAgentProvider      §5       provider-neutral; Claude is the one adapter
       ↓
-ExecutionToolGateway     §10 §11  default deny, outside any prompt
-      ↓
-AgentWorkspace           §8       the complete set of effects an agent can have
-      ↓
-isolated sandbox                  pinned commit · no credential · no network
+agent sandbox            0029     the harness runs HERE, holding no Vibe secret
+      ↓                           pinned commit · file/shell tools · one egress host
+Agent Gateway            0029     ANTHROPIC_BASE_URL → Vibe injects the real key
       ↓
 candidate change         §27      computed by Vibe, never claimed by the agent
       ↓
@@ -22,6 +20,17 @@ post-agent verification  §28      paths · counts · bytes · secrets · base i
       ↓
 PreparedChange → ValidationRun → Review → Approval → Safe Merge     unchanged
 ```
+
+> **Runtime placement was corrected after the first real run.** The Core-4
+> topology ran the harness in Vibe's process and brokered every effect through
+> `ExecutionToolGateway`. It could not start: `query()` spawns a native binary of
+> 307–325 MB and a Vercel function's budget is 250 MB, so the first dogfood died
+> in 44 ms with zero turns. The harness now runs in the execution's own sandbox
+> and samples through the Agent Gateway — see
+> [ADR 0029](../../../docs/decisions/0029-agent-runtime-placement-and-credential-broker.md).
+> `ExecutionToolGateway` and `AgentWorkspace` are unchanged and still describe
+> the `gateway_tools` topology; the change set now comes from a filesystem
+> comparison Vibe performs rather than from the gateway's write record.
 
 ## The principle, one layer on
 

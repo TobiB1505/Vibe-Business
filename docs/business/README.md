@@ -14,3 +14,13 @@ later do this for a customer. See
 Documents are added when there is something real to record. This directory is
 deliberately empty until then — a placeholder file for every planned topic
 would be a list of intentions pretending to be documentation.
+
+## Documents
+
+- [CREDIT_ECONOMICS.md](CREDIT_ECONOMICS.md) — Credit scale, margin analysis and
+  pricing policy for Vibe's *predictable* operations, from real cost data.
+- [ECONOMY_MODEL.md](ECONOMY_MODEL.md) — measured unit economics of **agentic
+  execution**, from the six runs that exist. Replaces the modelled Agent figures
+  in CREDIT_ECONOMICS.md and corrects two of its claims. Analysis only; nothing
+  in it is implemented as pricing.
+

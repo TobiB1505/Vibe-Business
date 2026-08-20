@@ -1,5 +1,10 @@
 import type { ActionPlanStep } from "@/modules/action-plans/schema";
-import { isAgentReady, isDeterministicReady, type ExecutionResolution } from "./schema";
+import {
+  firstExecutableStep,
+  isAgentReady,
+  isDeterministicReady,
+  type ExecutionResolution,
+} from "./schema";
 
 /**
  * The §38 dogfood report.
@@ -68,6 +73,7 @@ export function renderExecutionResolutionReport(input: ExecutionReportInput): st
     pad("resolved", 17),
     pad("if unblocked", 17),
     pad("risk", 11),
+    pad("absorbs", 8),
     pad("agent-ready?", 34),
     "why",
   ].join(" ");
@@ -84,6 +90,9 @@ export function renderExecutionResolutionReport(input: ExecutionReportInput): st
         pad(resolution.mode, 17),
         pad(resolution.mode === "blocked" ? resolution.intrinsicMode : "—", 17),
         pad(resolution.riskClass, 11),
+        // Preparation this execution would carry out itself rather than wait
+        // for (semantics fix §15). Blank is the common case.
+        pad(resolution.absorbedPreparation.join(",") || "—", 8),
         pad(readiness(resolution), 34),
         resolution.reason,
       ].join(" "),
@@ -115,6 +124,21 @@ export function renderExecutionResolutionReport(input: ExecutionReportInput): st
       ? "No step on this plan can be executed by Vibe right now."
       : `${executable.length} step(s) could be executed by Vibe right now.`,
   );
+
+  // The execution layer's own "what could start now", read from the resolver
+  // rather than from plan position (§17). Not the same question as the
+  // Planner's first actionable step, and after the dependency fix not
+  // necessarily the same answer either.
+  const next = firstExecutableStep(input.resolutions);
+  if (next) {
+    const step = byOrder.get(next.stepOrder);
+    lines.push(
+      `First executable: #${next.stepOrder} — ${truncate(step?.title ?? "", 80)}` +
+        (next.absorbedPreparation.length > 0
+          ? ` (absorbing preparation ${next.absorbedPreparation.join(", ")})`
+          : ""),
+    );
+  }
 
   return lines.join("\n");
 }

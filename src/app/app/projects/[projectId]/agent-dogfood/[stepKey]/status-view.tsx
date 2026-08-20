@@ -4,13 +4,17 @@ import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/states";
-import { StatusPill } from "@/components/ui/status-pill";
-import { MonoLabel } from "@/components/ui/typography";
 import { Surface } from "@/components/ui/surface";
+import { MonoLabel } from "@/components/ui/typography";
+import {
+  REVIEW_CLASSIFICATION_LABELS,
+  REVIEW_CLASSIFICATION_NOTES,
+} from "@/modules/review/classification";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { useOperationPoll } from "@/lib/client/use-operation-poll";
-import { OPERATION_STAGE_LABELS, operationPollPhase } from "@/modules/operations/view";
-import { EXECUTION_ACTIVITY_LABELS, EXECUTION_INTERRUPT_QUESTIONS } from "@/modules/execution-contract/view";
+import { operationPollPhase } from "@/modules/operations/view";
+import { EXECUTION_INTERRUPT_QUESTIONS } from "@/modules/execution-contract/view";
+import { AgentExecutionLiveView } from "@/modules/coding-agent/ui/agent-execution-live-view";
 import type { ExecutionInterruptAnswer } from "@/modules/execution-contract/schema";
 import { answerDogfoodInterruptAction, getDogfoodRunStatusAction, type DogfoodRunStatus } from "./actions";
 
@@ -18,17 +22,18 @@ import { answerDogfoodInterruptAction, getDogfoodRunStatusAction, type DogfoodRu
 const POLL_INTERVAL_MS = 3_000;
 
 /**
- * Durable execution status (EXECUTION CORE-4 website gate, §16, §17, §18, §22, §24).
+ * The dogfood surface's host for the reusable live execution view.
  *
- * Everything rendered here is real: `operation.stage` and `operation.status`
- * are the durable workflow's own state, and every activity line is a tool
- * call Vibe actually brokered — there is no fabricated progress, and no field
- * exists that could carry a model's own narration (§17).
+ * Everything visual lives in `@/modules/coding-agent/ui` — this file owns the
+ * route, the poll and the one thing that genuinely is dogfood-specific, which
+ * is the interrupt form. That split is the point: moving this into the real
+ * dashboard later is a new host and a data call, not a second implementation.
  *
- * Polling is the refresh mechanism, never the source of truth: the initial
- * render comes from the server component that mounted this, a reload
- * re-fetches through the same server action, and losing the poll (a closed
- * tab, a dead connection) loses nothing — the next load reads the same rows.
+ * Polling is the refresh mechanism, never the source of truth: the first render
+ * comes from the server component that mounted this, a reload re-fetches
+ * through the same server action, and losing the poll loses nothing. It stops
+ * the moment the operation is terminal — `shouldPoll` is false for every
+ * terminal status, so a finished run costs no further requests.
  */
 export function StatusView({
   projectId,
@@ -38,89 +43,94 @@ export function StatusView({
   status: DogfoodRunStatus;
 }) {
   const { latest: polled } = useOperationPoll<DogfoodRunStatus>({
-    key: initial.operation.operationId,
-    enabled: operationPollPhase(initial.operation) === "working",
+    key: initial.live.operation.operationId,
+    enabled: operationPollPhase(initial.live.operation) === "working",
     intervalMs: POLL_INTERVAL_MS,
     poll: async () => {
-      const next = await getDogfoodRunStatusAction(projectId, initial.operation.operationId);
+      const next = await getDogfoodRunStatusAction(projectId, initial.live.operation.operationId);
       return next ? { kind: "value", value: next } : { kind: "unavailable" };
     },
     // Stops on its own answer: the server render cannot know the run ended.
-    continueAfter: (next) => operationPollPhase(next.operation) === "working",
+    continueAfter: (next) => operationPollPhase(next.live.operation) === "working",
   });
 
   const status = polled ?? initial;
-
-  const { operation, activity, openInterrupt } = status;
+  const { live, openInterrupt } = status;
+  const operation = live.operation;
 
   return (
     <div className="flex flex-col gap-6">
-      <Surface level="section" padding="md" className="flex flex-col gap-2">
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-fg text-sm font-semibold">{OPERATION_STAGE_LABELS[operation.stage]}</p>
-          <StatusPill tone={statusTone(operation.status)} dot={operation.shouldPoll}>
-            {operation.status}
-          </StatusPill>
-        </div>
+      <AgentExecutionLiveView model={live} />
 
-        {operation.status === "failed" && operation.failureCode && (
-          <Notice tone="problem" label="stopped">
-            {OPERATION_FAILURE_MESSAGES[operation.failureCode]}
-          </Notice>
-        )}
+      {operation.status === "failed" && operation.failureCode && (
+        <Notice tone="problem" label="stopped">
+          {OPERATION_FAILURE_MESSAGES[operation.failureCode]}
+        </Notice>
+      )}
 
-        {operation.status === "completed" && operation.resultId && (
-          <Notice
-            tone="info"
-            label="ready for review"
-            action={
-              <Link
-                href={`/app/projects/${projectId}/prepared`}
-                className="text-mint text-sm font-semibold underline underline-offset-2"
-              >
-                Review change
-              </Link>
-            }
-          >
-            Vibe finished. A candidate change exists and is waiting on your own validation and review — nothing
-            has been merged or deployed.
-          </Notice>
-        )}
+      {operation.status === "completed" && operation.resultId && (
+        <Notice
+          tone="info"
+          label="ready for review"
+          action={
+            <Link
+              href={`/app/projects/${projectId}/prepared`}
+              className="text-mint text-sm font-semibold underline underline-offset-2"
+            >
+              Review change
+            </Link>
+          }
+        >
+          Vibe sent the change for validation. Nothing has been merged or deployed.
+        </Notice>
+      )}
 
-        {operation.status === "needs_user" && (
-          <Notice tone="waiting" label="waiting on you">
-            Vibe stopped to ask a question before continuing.
-          </Notice>
-        )}
-      </Surface>
+      {operation.status === "completed" && status.recommendedReview && (
+        <RecommendedReview classification={status.recommendedReview} />
+      )}
 
       {openInterrupt && <InterruptPanel projectId={projectId} interrupt={openInterrupt} />}
-
-      {activity.length > 0 && (
-        <Surface level="section" padding="md" className="flex flex-col gap-2">
-          <MonoLabel>activity</MonoLabel>
-          <ol className="flex flex-col gap-1.5">
-            {activity.map((entry, index) => (
-              <li key={index} className="text-fg-prose flex items-center gap-2 text-sm">
-                <span className="bg-mint size-1.5 shrink-0 rounded-full" aria-hidden />
-                {EXECUTION_ACTIVITY_LABELS[entry.event]}
-                {entry.filesRead !== null && (
-                  <span className="text-fg-muted text-xs">({entry.filesRead} files)</span>
-                )}
-              </li>
-            ))}
-          </ol>
-        </Surface>
-      )}
     </div>
   );
 }
 
-function statusTone(status: string): "active" | "success" | "waiting" | "problem" | "neutral" {
-  if (status === "completed") return "success";
-  if (status === "failed" || status === "cancelled") return "problem";
-  if (status === "needs_user") return "waiting";
-  return "active";
+/**
+ * Which review this change deserves (Sprint 0048).
+ *
+ * A line in the existing panel, not a new surface. It recommends and nothing
+ * else: no review is started here, and the visual-review domain's rule that
+ * nothing is automatic is untouched — a browser session still costs money by
+ * the second and still waits for a click.
+ */
+function RecommendedReview({
+  classification,
+}: {
+  classification: NonNullable<DogfoodRunStatus["recommendedReview"]>;
+}) {
+  return (
+    <div className="flex flex-col gap-1 rounded-md border border-line-2 p-4">
+      <p className="text-xs uppercase tracking-wide text-fg-muted">Recommended review</p>
+      <p className="text-sm font-semibold text-fg-prose">
+        {REVIEW_CLASSIFICATION_LABELS[classification.classification]}
+      </p>
+      <p className="text-xs text-fg-secondary">
+        {REVIEW_CLASSIFICATION_NOTES[classification.classification]}
+      </p>
+      {classification.routes.length > 0 && (
+        <p className="text-xs text-fg-muted">
+          Pages affected: {classification.routes.join(", ")}
+        </p>
+      )}
+      <p className="text-xs text-fg-muted">
+        {classification.visualPaths.length} rendered {fileWord(classification.visualPaths.length)},{" "}
+        {classification.codePaths.length} other {fileWord(classification.codePaths.length)}.
+      </p>
+    </div>
+  );
+}
+
+function fileWord(count: number): string {
+  return count === 1 ? "file" : "files";
 }
 
 function InterruptPanel({

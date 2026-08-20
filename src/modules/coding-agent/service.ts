@@ -2,11 +2,15 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { recordAuditEvent } from "@/modules/audit-log/events";
-import { authorizeOperationCredits } from "@/modules/credits/operation-billing";
 import { checkBudgetBinding } from "@/modules/execution-contract/budget";
 import type { StoredExecutionSpec } from "@/modules/execution-contract/store";
 import { findExecutionSpecByIdentity } from "@/modules/execution-contract/store";
 import { getReservation } from "@/modules/credits/store";
+import {
+  claimAgentExecutionRunRow,
+  expireStaleAgentExecution,
+  holdAgentExecutionCredits,
+} from "@/modules/operations/agent-execution/server-writes";
 import type { OperationExecutor } from "@/modules/operations/executor";
 import {
   attachExecutionRun,
@@ -20,8 +24,8 @@ import { buildOperationView, type OperationView } from "@/modules/operations/vie
 import { AGENTIC_EXECUTION_CONFIG } from "@/modules/ai/operations";
 import { resolveAgentEconomics } from "./authorization";
 import { computeAgentRunIdentity } from "./identity";
+import { executionOriginForStepKey } from "./dogfood/fixtures";
 import {
-  claimAgentExecutionRun,
   findActiveAgentRunByIdentity,
   type StoredAgentExecutionRun,
 } from "./store";
@@ -205,10 +209,20 @@ export async function startAgentExecution(
 
   // Money before work (§18, §55). Keyed on the operation run id, so a retried
   // request finds the same hold rather than taking a second one.
-  const authorized = await authorizeOperationCredits(supabase, {
+  /*
+   * Service-role, like every other hold in the product (Rule 53, §64).
+   *
+   * `billing_credit_reservations`, `billing_credit_ledger` and
+   * `billing_credit_allocations` each carry a select policy and deliberately no
+   * write policy for any authenticated client, so a hold taken with the
+   * caller's `supabase` is refused with `42501` — which is exactly what Run
+   * with Vibe did. Ownership was established against the persisted project row
+   * above, and `holdAgentExecutionCredits` re-establishes it rather than
+   * trusting that.
+   */
+  const authorized = await holdAgentExecutionCredits({
     projectId: params.projectId,
-    operation: "agent_execution_dogfood",
-    idempotencyKey: operation.id,
+    userId: params.userId,
     operationRunId: operation.id,
   });
 
@@ -247,7 +261,10 @@ export async function startAgentExecution(
     }
   }
 
-  const claim = await claimAgentExecutionRun(supabase, {
+  // Server-owned for the same reason: `agent_execution_runs` accepts no insert
+  // from a client, because the unique index on the run identity is what makes a
+  // double-click one run rather than two.
+  const claim = await claimAgentExecutionRunRow({
     projectId: params.projectId,
     userId: params.userId,
     operationRunId: operation.id,
@@ -263,6 +280,15 @@ export async function startAgentExecution(
     nonProductionEconomics: economics.nonProduction,
     baseSha: stored.baseSha,
     creditReservationId: reservationId,
+    /*
+     * Provenance, derived from the immutable spec rather than passed in.
+     *
+     * The step key is what the spec was built with and what durable execution
+     * resolves the step from, so reading the origin off it is reading the same
+     * fact the pipeline itself acts on. A caller cannot mislabel a run, and a
+     * fixture cannot hide that it is one.
+     */
+    ...executionOriginForStepKey(stored.stepKey),
   });
 
   if (!claim.ok) {
@@ -330,6 +356,21 @@ export async function getAgentExecutionStatus(
     .maybeSingle();
 
   if (!project) return null;
+
+  /*
+   * The backstop for a workflow that stopped carrying its run (ADR 0029, A1).
+   *
+   * The polling loop terminates every run it is watching, but it cannot survive
+   * the workflow itself dying — which is what happened to the first real run:
+   * the step was killed at 300 seconds, nothing reached cleanup, and hours
+   * later the run still read `running` with 100 Credits held.
+   *
+   * A read is the right moment for the repair because it is the moment somebody
+   * cares, and it needs no scheduler this product has not decided to introduce
+   * (rule 24). Idempotent and bounded to one operation, so a hundred page loads
+   * repair it once.
+   */
+  await expireStaleAgentExecution({ operationRunId: params.operationId });
 
   const operation = await getOperationRunById(supabase, params.operationId);
   if (!operation || operation.projectId !== params.projectId) return null;

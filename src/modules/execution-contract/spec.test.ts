@@ -147,6 +147,7 @@ describe("ExecutionSpec — immutability by identity (§10, §47)", () => {
       capability: null,
       capabilityVersion: null,
       businessContextHash: "hash",
+      absorbedPreparationKeys: [],
       specSchemaVersion: "execution-spec.v1",
       resolverVersion: "execution-resolver-v1",
       policyVersion: "execution-policy-v1",

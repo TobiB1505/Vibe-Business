@@ -1,4 +1,5 @@
 import type { MetadataRoute } from "next";
+import { getAppUrl } from "@/lib/env/app-url";
 
 /**
  * Sitemap for search engine crawlers.
@@ -11,8 +12,12 @@ import type { MetadataRoute } from "next";
  * intended default, not an assertion that no other page should be indexed.
  *
  * Prepared by Vibe Business. Review before merging.
+ *
+ * The origin is this deployment's own resolved URL (Production Domain &
+ * Environment Migration v1), not a fixed value — a Preview build's sitemap
+ * must describe that Preview's own URLs, not Production's.
  */
-const ORIGIN = "https://vibe-business-fawn.vercel.app";
+const ORIGIN = getAppUrl();
 
 export default function sitemap(): MetadataRoute.Sitemap {
   const lastModified = new Date();

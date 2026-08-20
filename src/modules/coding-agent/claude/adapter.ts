@@ -32,6 +32,20 @@ import { AGENT_TOOL_SHAPES } from "./tools";
  * time rather than recalled. Four of its defaults are load-bearing here and
  * three of them are actively wrong for this use case.
  *
+ * ## Why nothing in production constructs this any more
+ *
+ * The harness it describes cannot start here. `query()` spawns a native `claude`
+ * binary of 307–325 MB depending on platform, and a Vercel function's whole
+ * deployment budget is 250 MB — which the first real dogfood discovered by
+ * failing in 44 ms having taken zero turns. The runtime therefore moved into the
+ * execution's own microVM (`sandbox-runtime/`), and the SDK moved to a
+ * devDependency so that 325 MB never enters a deployed function again.
+ *
+ * This file is kept rather than deleted because the topology it documents is
+ * still the one the `gateway_tools` runtime describes, and because a build that
+ * re-wires it into production will now fail loudly on the missing dependency
+ * instead of deploying and dying at run time.
+ *
  * ## The topology, and why it is this one (§7)
  *
  * ```
@@ -114,6 +128,7 @@ const INHERITED_ENV_KEYS: readonly string[] = [
 
 export function agentSubprocessEnv(
   source: Record<string, string | undefined> = process.env,
+  options: { configDir?: string } = {},
 ): Record<string, string | undefined> {
   const env: Record<string, string | undefined> = {};
   for (const key of INHERITED_ENV_KEYS) {
@@ -124,6 +139,30 @@ export function agentSubprocessEnv(
   // Belt and braces: the harness has no tools that could read a file anyway,
   // but an explicit non-interactive marker keeps a future default honest.
   env.CI = "1";
+
+  /*
+   * Auto memory loads *regardless* of `settingSources` (Anthropic, "Hosting
+   * the Agent SDK" → Multi-tenant isolation).
+   *
+   * That is the whole reason this line exists. `settingSources: []` is already
+   * passed, and reading it as "no filesystem input reaches the system prompt"
+   * is wrong: `~/.claude/projects/<project>/memory/` is loaded on top of it.
+   * For a harness that runs one customer's work after another's, that is a
+   * documented path for one tenant's context to become another tenant's
+   * instructions — and Rule 25 says repository-derived content is data, never
+   * instructions.
+   */
+  env.CLAUDE_CODE_DISABLE_AUTO_MEMORY = "1";
+
+  /*
+   * A per-run config directory, so runs never share `~/.claude.json`.
+   *
+   * The same source recommends it for multi-tenant isolation. Omitted rather
+   * than defaulted when the caller has no directory to give: pointing every run
+   * at one invented path would be the shared-state problem with extra steps.
+   */
+  if (options.configDir) env.CLAUDE_CONFIG_DIR = options.configDir;
+
   return env;
 }
 
@@ -280,7 +319,9 @@ export function createClaudeCodingAgentProvider(): CodingAgentProvider {
                 interrupt: false,
               },
         cwd: workdir,
-        env: agentSubprocessEnv(),
+        // The run's own scratch directory doubles as its config directory, so
+        // two runs never read each other's global config.
+        env: agentSubprocessEnv(process.env, { configDir: join(workdir, ".claude") }),
         // No transcript on disk: it would be a durable record of model
         // reasoning and customer source (Rule 43, §24).
         persistSession: false,
@@ -288,7 +329,18 @@ export function createClaudeCodingAgentProvider(): CodingAgentProvider {
         abortController: controller,
       };
 
-      let turns = 0;
+      /*
+       * Two counters, in two units, never one that switches.
+       *
+       * `assistantMessages` is one per model response. `sdkLoopIterations` is
+       * the harness's own `num_turns`, which advances on tool results as well —
+       * so it is the unit `maxTurns` bounds. This used to be a single variable
+       * that counted messages and was then overwritten by `num_turns`, which is
+       * how run b33635a1 came to report 66 against a ceiling of 40 while
+       * overrunning nothing.
+       */
+      let assistantMessages = 0;
+      let sdkLoopIterations: number | null = null;
       let usage: readonly AgentModelUsage[] = [];
       let sessionId: string | null = null;
       let providerDeniedToolCalls = 0;
@@ -300,7 +352,7 @@ export function createClaudeCodingAgentProvider(): CodingAgentProvider {
           prompt: request.instruction.userMessage,
           options,
         }) as AsyncIterable<SDKMessage>) {
-          if (message.type === "assistant") turns += 1;
+          if (message.type === "assistant") assistantMessages += 1;
 
           if (message.type === "system" && message.subtype === "permission_denied") {
             providerDeniedToolCalls += 1;
@@ -311,7 +363,7 @@ export function createClaudeCodingAgentProvider(): CodingAgentProvider {
             // than summing across them.
             usage = toModelUsage(message.modelUsage as Record<string, unknown>);
             sessionId = message.session_id;
-            turns = message.num_turns;
+            sdkLoopIterations = message.num_turns;
             providerDeniedToolCalls = message.permission_denials.length;
             outcome = outcomeFor(message.subtype);
             if (message.subtype !== "success") {
@@ -347,7 +399,21 @@ export function createClaudeCodingAgentProvider(): CodingAgentProvider {
 
       return {
         outcome,
-        turns,
+        assistantMessages,
+        sdkLoopIterations,
+        /*
+         * The in-process adapter brokers every tool through the gateway and
+         * hosts no shell of its own, so it makes no verification decisions.
+         * Null, never zero — zero would claim it decided nothing was needed.
+         */
+        verificationCommands: null,
+        verificationRefusals: null,
+        policyDecisions: null,
+        repairCycles: null,
+        implementationMutations: null,
+        convergenceMutations: null,
+        requiredVerificationActions: null,
+        requiredVerificationOverrides: null,
         usage,
         // An opaque identifier, not a reconnect credential: the SDK's resume
         // path needs the on-disk transcript, which `persistSession: false`

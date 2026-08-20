@@ -27,6 +27,7 @@ import { createHash } from "node:crypto";
  * | mode / execution class / risk | what kind of work was authorized |
  * | capability + version | which executor, and which generated output |
  * | business context hash | the founder decisions the work rests on (§28) |
+ * | absorbed preparation | which preparatory steps this boundary carries (§13) |
  * | resolver / policy / risk-policy / spec-schema versions | the rules it was decided under (§36) |
  *
  * ## What is deliberately absent
@@ -56,6 +57,17 @@ export function computeExecutionSpecIdentity(params: {
   capability: string | null;
   capabilityVersion: string | null;
   businessContextHash: string;
+  /**
+   * Step keys of the preparation folded into this execution, in plan order.
+   *
+   * Keys rather than orders: a replanned step at position 1 is a different
+   * instruction, and the key is what says so. Included because two runs
+   * delivering the same primary step while carrying different preparation are
+   * genuinely different boundaries — the agent is asked to establish different
+   * things before it writes — and a shared identity would let one be reused for
+   * the other.
+   */
+  absorbedPreparationKeys: readonly string[];
   specSchemaVersion: string;
   resolverVersion: string;
   policyVersion: string;
@@ -75,6 +87,7 @@ export function computeExecutionSpecIdentity(params: {
     params.capability,
     params.capabilityVersion,
     params.businessContextHash,
+    params.absorbedPreparationKeys,
     params.specSchemaVersion,
     params.resolverVersion,
     params.policyVersion,

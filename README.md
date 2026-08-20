@@ -37,6 +37,7 @@ pnpm build                  # production build
 - [CLAUDE.md](CLAUDE.md) — working agreement for AI-assisted implementation sessions
 - [docs/decisions/](docs/decisions/README.md) — architecture decision records
 - [docs/sprints/](docs/sprints/README.md) — sprint planning
+- [docs/deployment/environment.md](docs/deployment/environment.md) — how development/preview/production URLs are resolved, and how to migrate to a custom production domain
 - [docs/PROJECT_HISTORY_AND_LEARNINGS.md](docs/PROJECT_HISTORY_AND_LEARNINGS.md) — how the product got here: history, evolution, measured results, and durable principles
 
 ## Current phase

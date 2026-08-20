@@ -195,6 +195,19 @@ export interface SandboxHandle {
     command: SandboxCommand;
     cwd: string;
     timeoutMs: number;
+    /**
+     * Merged over the sandbox environment, for this command only.
+     *
+     * Validation passes nothing and must keep passing nothing: §8 is that the
+     * environment untrusted code runs in holds no privilege, and a per-command
+     * override is exactly how that erodes.
+     *
+     * The agent runtime is the one caller, and what it passes is the one thing
+     * that qualifies — a short-lived, execution-scoped gateway token whose whole
+     * design is that it is worthless outside the run it names. Never a provider
+     * key, never a GitHub credential, never a service role.
+     */
+    env?: Record<string, string>;
   }): Promise<SandboxCommandResult>;
 
   /**

@@ -5,6 +5,8 @@ import { recordAuditEvent } from "@/modules/audit-log/events";
 import { SANDBOX_BUDGETS } from "@/modules/validation/budgets";
 import { getPreparedChange } from "@/modules/execution/store";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
+import { depthRunsStep } from "@/modules/validation/depth";
+import { resolveDepthForPreparedChange } from "@/modules/validation/depth-inputs";
 import { computeValidationIdentity } from "@/modules/validation/identity";
 import {
   buildSatisfiesProfile,
@@ -305,12 +307,29 @@ export async function prepareValidationStep(
   const profile = resolveValidationProfile(snapshot.result);
   if (!profile.supported) return { ok: false, failureCode: profile.reason };
 
+  /*
+   * How much of the profile this change deserves (Sprint 0047).
+   *
+   * Server-derived from the spec's risk class, the trusted Action Step's
+   * change kind and evidence ids, and the paths Vibe itself verified as
+   * changed — never from a commit message, and never from anything the agent
+   * said about its own work. The same shared resolver `startChangeValidation`
+   * uses for its reuse check, so both compute the same identity.
+   */
+  const depth = await resolveDepthForPreparedChange({
+    supabase: deps.supabase,
+    projectId: operation.projectId,
+    prepared,
+  });
+
   const identity = computeValidationIdentity({
     preparedChangeId: prepared.id,
     preparedCommitSha: prepared.commitSha,
     validationProfile: profile.profile,
     validationProfileVersion: validationProfileVersionFor(profile.profile),
     sandboxPolicyVersion: SANDBOX_POLICY_VERSION,
+    validationDepth: depth.depth,
+    validationDepthPolicyVersion: depth.policyVersion,
   });
 
   const claim = await claimValidationRun(deps.supabase, {
@@ -320,6 +339,9 @@ export async function prepareValidationStep(
     operationRunId: operationId,
     validationProfile: profile.profile,
     validationProfileVersion: validationProfileVersionFor(profile.profile),
+    validationDepth: depth.depth,
+    validationDepthPolicyVersion: depth.policyVersion,
+    validationDepthReason: depth.reason,
     sandboxPolicyVersion: SANDBOX_POLICY_VERSION,
     sandboxProvider: deps.provider.id,
     packageManager: profile.packageManager,
@@ -345,6 +367,9 @@ export async function prepareValidationStep(
       validationRunId: claim.validationRun.id,
       preparedChangeId: prepared.id,
       profile: profile.profile,
+      validationDepth: depth.depth,
+      validationDepthReason: depth.reason,
+      validationDepthEscalatedBy: depth.escalatedBy.join(", ") || null,
       sandboxPolicyVersion: SANDBOX_POLICY_VERSION,
     },
   });
@@ -488,6 +513,42 @@ export async function runPhaseStep(
       ok: false,
       failureCode: recorded.status === "timed_out" ? "sandbox_timeout" : "validation_checks_failed",
     };
+  }
+
+  /*
+   * Outside this run's depth (Sprint 0047).
+   *
+   * Recorded as an explicit skip with a reason, never silently omitted: a phase
+   * with no row at all is indistinguishable from a phase whose result was lost,
+   * and the whole point of a depth is that a reader can see which questions were
+   * asked.
+   *
+   * `outside_depth`, not `not_in_profile`. The first dogfood reused the latter
+   * and the panel rendered the skipped step as "no script for this in the
+   * project" — a statement about the customer's repository that was simply
+   * untrue. "The profile has no such step" and "this change did not need it"
+   * are different sentences and now have different reasons.
+   *
+   * A run claimed before depth existed has `validationDepth: null` and runs
+   * everything, which is precisely what those runs did.
+   */
+  if (run.validationDepth !== null && !depthRunsStep(run.validationDepth, phase)) {
+    await recordValidationPhase(deps.supabase, {
+      validationRunId: run.id,
+      projectId: operation.projectId,
+      step: phase,
+      result: {
+        command: "",
+        status: "skipped",
+        exitCode: null,
+        durationMs: 0,
+        outputTail: "",
+        outputTruncated: false,
+        skipReason: "outside_depth",
+      },
+      stage: PHASE_STAGES[phase],
+    });
+    return { ok: true };
   }
 
   await announceStage(deps, {
