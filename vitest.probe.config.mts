@@ -1,52 +1,28 @@
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
+import { applyEnv, parseEnvFile } from "./src/lib/env/load-local-env";
 
 /**
- * Loads `.env.local` the way a developer expects it to be loaded.
+ * Loads `.env.local` the way `pnpm dev` already does, for the probe scripts.
  *
- * Next.js reads `.env.local` automatically; vitest does not, and nothing here
- * did either — so every probe invocation meant pasting five or six secrets onto
- * the command line, where they land in shell history. For the calibration
- * workflow that is ten invocations, which is ten chances to leak a key or fat-
- * finger one and read the resulting failure as a fact about the run.
+ * Next.js reads it automatically via its own bundled `dotenv`; Vitest does
+ * not, and nothing in this repo's probe tooling did either — every
+ * `pnpm agent:calibrate` invocation meant pasting five or six secrets onto the
+ * command line, where they land in shell history. Ten invocations for one
+ * calibration sprint is ten chances to leak a key.
  *
- * Three deliberate properties:
- *
- * - **An explicit, non-empty variable always wins.** Anything already in
- *   `process.env` with a real value is left alone, so `FOO=bar pnpm
- *   agent:calibrate` still overrides the file. An empty string is treated the
- *   same as unset — a required credential is never meant to be `""`, and a
- *   shell or profile script that pre-declares the name empty (common for
- *   `NEXT_PUBLIC_*` names, which some tooling exports as placeholders) must
- *   not silently defeat the file. The first version of this got that wrong:
- *   it checked `!== undefined` only, so a pre-declared empty variable made the
- *   probe fail with "required" even though `.env.local` had the real value.
- * - **Escapes are not interpreted.** `GITHUB_APP_PRIVATE_KEY` is stored as one
- *   line with literal `\n` sequences, and `src/lib/env/github.ts` converts them
- *   back itself. Unescaping here would hand it a key it then mangles again.
- * - **Absence is fine.** CI has no `.env.local`, and CI never runs probes.
+ * The parsing itself lives in `src/lib/env/load-local-env.ts`, with its own
+ * tests. It went through two real bugs in production use before landing here
+ * — an empty pre-set variable defeating the file, and a multiline quoted PEM
+ * truncated to its first line — which is exactly why it is no longer inline
+ * config-file logic that nothing exercised.
  */
 function loadLocalEnv(): void {
   const path = fileURLToPath(new URL("./.env.local", import.meta.url));
   if (!existsSync(path)) return;
 
-  for (const line of readFileSync(path, "utf8").split("\n")) {
-    const trimmed = line.trim();
-    if (trimmed === "" || trimmed.startsWith("#")) continue;
-
-    const separator = trimmed.indexOf("=");
-    if (separator <= 0) continue;
-
-    const key = trimmed.slice(0, separator).trim();
-    if (process.env[key]) continue;
-
-    const raw = trimmed.slice(separator + 1).trim();
-    const quoted =
-      (raw.startsWith('"') && raw.endsWith('"')) || (raw.startsWith("'") && raw.endsWith("'"));
-
-    process.env[key] = quoted ? raw.slice(1, -1) : raw;
-  }
+  applyEnv(parseEnvFile(readFileSync(path, "utf8")), process.env);
 }
 
 loadLocalEnv();
