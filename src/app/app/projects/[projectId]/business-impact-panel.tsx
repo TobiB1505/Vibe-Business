@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { statusToneText } from "@/components/ui/status-pill";
+import { Button } from "@/components/ui/button";
 import type { BusinessImpactCard } from "@/modules/business-measurement/view";
 import {
   planMeasurementAction,
@@ -69,12 +71,18 @@ function formatRelative(relative: number): string {
   return `${sign}${Math.abs(percent).toFixed(1)}%`;
 }
 
+/*
+ * `degraded` is `waiting`, not `problem`: an observed decline between two
+ * windows is a thing to look at, and the panel's own copy says it does not
+ * prove this change caused it. And `failed` here is Vibe's measurement
+ * failing, never the customer's business — which is why neither is coral.
+ */
 const RESULT_TONE: Record<string, string> = {
-  improved: "text-mint",
-  degraded: "text-amber",
-  neutral: "text-fg-prose",
-  insufficient_data: "text-fg-prose",
-  failed: "text-amber",
+  improved: statusToneText("success"),
+  degraded: statusToneText("waiting"),
+  neutral: statusToneText("neutral"),
+  insufficient_data: statusToneText("neutral"),
+  failed: statusToneText("waiting"),
 };
 
 function BeforeAfter({ card }: { card: BusinessImpactCard }) {
@@ -125,7 +133,7 @@ function Windows({ card }: { card: BusinessImpactCard }) {
   );
 }
 
-function Metric({ card }: { card: BusinessImpactCard }) {
+function MeasuredMetric({ card }: { card: BusinessImpactCard }) {
   if (!card.metricLabel) return null;
 
   return (
@@ -189,14 +197,15 @@ export function BusinessImpactPanel({
             connection, no provider call, no model — and it records the intent
             rather than a result. It is an option, never a prerequisite. */}
         {card.state === "not_planned" && (
-          <button
+          <Button
             type="button"
+            variant="secondary"
+            size="sm"
             onClick={() => run(planMeasurementAction)}
             disabled={pending}
-            className="text-xs text-fg-muted underline underline-offset-2 hover:text-fg-prose disabled:opacity-60"
           >
             Plan how this would be measured
-          </button>
+          </Button>
         )}
 
         {state?.ok === false && <p className="text-sm text-coral">{state.message}</p>}
@@ -211,25 +220,26 @@ export function BusinessImpactPanel({
       {card.state === "scheduled" ? (
         <div className="space-y-2">
           <p className="text-sm text-fg-prose">{card.headline}</p>
-          <Metric card={card} />
+          <MeasuredMetric card={card} />
           <Windows card={card} />
           {/* No interim conclusion. The result does not exist yet, and saying
               anything about its direction would be a guess (§22). */}
           {card.canStartMeasuring && (
-            <button
+            <Button
               type="button"
+              variant="primary"
+              size="sm"
               onClick={() => run(startMeasurementAction)}
               disabled={pending}
-              className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2 disabled:opacity-60"
             >
               Start measuring
-            </button>
+            </Button>
           )}
         </div>
       ) : card.state === "measuring" ? (
         <div className="space-y-2">
           <p className="text-sm text-fg-prose">{card.headline}</p>
-          <Metric card={card} />
+          <MeasuredMetric card={card} />
           {/* Factual progress only — days, never a percentage, and never
               "looking good" before the window closes (§23). */}
           <p className="text-sm text-fg-secondary">
@@ -240,7 +250,7 @@ export function BusinessImpactPanel({
       ) : card.state === "insufficient_data" ? (
         <div className="space-y-2">
           <p className="text-sm text-fg-prose">{card.headline}</p>
-          <Metric card={card} />
+          <MeasuredMetric card={card} />
           <p className="text-sm text-fg-secondary">
             Not enough traffic was observed to make a meaningful comparison.
           </p>
@@ -276,7 +286,7 @@ export function BusinessImpactPanel({
           {/* improved / degraded / neutral. A negative result is shown exactly
               as prominently as a positive one (§25). */}
           <p className={`text-sm ${RESULT_TONE[card.state] ?? "text-fg-prose"}`}>{card.headline}</p>
-          <Metric card={card} />
+          <MeasuredMetric card={card} />
           <BeforeAfter card={card} />
           <Windows card={card} />
           {card.dataQuality && card.dataQuality !== "complete" && (

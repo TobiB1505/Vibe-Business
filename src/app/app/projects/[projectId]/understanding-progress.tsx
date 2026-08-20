@@ -96,10 +96,10 @@ function StepRow({ label, state }: { label: string; state: StepState }) {
       <span
         className={
           state === "done"
-            ? "text-mint font-mono text-[0.6875rem]"
+            ? "text-mint font-mono text-meta"
             : state === "active"
-              ? "text-fg-secondary font-mono text-[0.6875rem]"
-              : "text-fg-meta font-mono text-[0.6875rem]"
+              ? "text-fg-secondary font-mono text-meta"
+              : "text-fg-meta font-mono text-meta"
         }
       >
         {state === "done" ? "done" : state === "active" ? "looking…" : "waiting"}

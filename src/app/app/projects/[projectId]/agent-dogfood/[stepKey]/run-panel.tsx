@@ -39,7 +39,7 @@ export function RunPanel({ projectId, stepKey }: { projectId: string; stepKey: s
         </Notice>
       )}
       <div>
-        <Button type="submit" variant="primary" disabled={pending}>
+        <Button type="submit" variant="primary" disabled={pending} busy={pending}>
           {pending ? "Starting…" : "Run with Vibe"}
         </Button>
       </div>

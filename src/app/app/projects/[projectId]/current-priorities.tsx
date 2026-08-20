@@ -121,7 +121,7 @@ export function CurrentPriorities({
                 onClick={() => lens && onSelect(lens)}
                 aria-pressed={isSelected}
                 data-primary={isPrimary ? "true" : undefined}
-                className={`rounded-panel flex w-full flex-col items-start gap-2 border p-4 text-left transition-colors ${
+                className={`rounded-panel flex w-full flex-col items-start gap-2 border p-4 text-left transition-interactive ${
                   isPrimary
                     ? "border-mint/45 bg-mint/[0.05] hover:border-mint/70"
                     : "border-line-2 bg-surface-1 hover:border-line-4"
@@ -161,7 +161,7 @@ export function CurrentPriorities({
                   A taste, not the explanation. Two lines here and the whole
                   text below the map, which is the width it was written for.
                 */}
-                <span className="text-fg-muted line-clamp-2 text-[0.8125rem] leading-relaxed">
+                <span className="text-fg-muted line-clamp-2 text-ui leading-relaxed">
                   {blocker.explanation}
                 </span>
 
@@ -220,7 +220,7 @@ export function CurrentPriorities({
                   <div className="mt-2 pl-2">
                     <Link
                       href={movesContextHref(movesHref, key)}
-                      className="text-fg-muted hover:text-fg-body rounded-sm text-[0.8125rem] underline underline-offset-4"
+                      className="text-fg-muted hover:text-fg-body rounded-sm text-ui underline underline-offset-4"
                     >
                       {addressing === 1 ? "See the move for this" : `See the ${addressing} moves for this`}
                     </Link>

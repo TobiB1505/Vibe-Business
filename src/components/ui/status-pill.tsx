@@ -39,6 +39,83 @@ const DOT_CLASSES: Record<StatusTone, string> = {
   neutral: "bg-fg-meta",
 };
 
+/**
+ * A tone as plain foreground colour, for a status word set in prose (UI-6 §2).
+ *
+ * ## Why this is separate from `TONE_CLASSES`
+ *
+ * A pill is a filled chip and its text sits on a tint, so `neutral` there can
+ * be `fg-prose` and still read. The same word inline on a panel has no fill
+ * behind it and belongs one step further down the ramp. Same vocabulary,
+ * different job.
+ *
+ * ## What it replaces
+ *
+ * Seven local `Record<SomeState, string>` tables that each mapped a domain
+ * state straight to `text-mint` / `text-amber` / `text-coral`. Written that
+ * way, a panel choosing amber for `failed` and another choosing coral looks
+ * like drift — and the only way to find out whether it was drift or a decision
+ * was to read both files and guess.
+ *
+ * Naming the tone makes the choice legible at the call site: a check that did
+ * not appear in production is `waiting`, because the product may simply not
+ * have deployed yet, while a build that failed in the sandbox is `problem`,
+ * because something really is wrong. Those are different states that share an
+ * English word, and the tables now say so.
+ */
+const TONE_TEXT: Record<StatusTone, string> = {
+  active: "text-mint-dim",
+  success: "text-mint",
+  waiting: "text-amber",
+  problem: "text-coral",
+  neutral: "text-fg-muted",
+};
+
+export function statusToneText(tone: StatusTone): string {
+  return TONE_TEXT[tone];
+}
+
+/**
+ * The glyph vocabulary (UI-6 §2).
+ *
+ * Three of these existed — `✓ ✕ ⏱ –`, `✓ ✕ – !` and `✓ ~ —` — so the same
+ * character meant different things on adjacent panels and different characters
+ * meant the same thing. They are one table now, keyed by what the mark *says*
+ * rather than by any one panel's state names.
+ *
+ * Every glyph is decorative: each is rendered beside a label that carries the
+ * same information as text, because a state must never depend on a symbol any
+ * more than it may depend on a colour.
+ */
+export type StatusGlyphName =
+  /** Confirmed, and Vibe checked it. */
+  | "confirmed"
+  /** Ran, and did not hold. */
+  | "refused"
+  /** Ran out of time rather than producing an answer. */
+  | "expired"
+  /** Deliberately not applicable — never a failure. */
+  | "skipped"
+  /** Looked for and not seen. Neither a tick nor a cross. */
+  | "unseen"
+  /** Happening now. */
+  | "running"
+  /** Not started. */
+  | "pending"
+  /** Vibe could not tell — a statement about Vibe, not about the product. */
+  | "unknown";
+
+export const STATUS_GLYPHS: Record<StatusGlyphName, string> = {
+  confirmed: "✓",
+  refused: "✕",
+  expired: "⏱",
+  skipped: "–",
+  unseen: "–",
+  running: "●",
+  pending: "○",
+  unknown: "!",
+};
+
 export function StatusPill({
   tone = "neutral",
   dot = false,

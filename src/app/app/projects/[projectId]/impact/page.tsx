@@ -81,7 +81,7 @@ export default async function ProjectImpactPage({
                   />
                   <Link
                     href={preparedHref}
-                    className="text-fg-prose hover:text-fg ml-auto rounded-sm text-sm underline underline-offset-4 transition-colors"
+                    className="text-fg-prose hover:text-fg ml-auto rounded-sm text-sm underline underline-offset-4 transition-interactive"
                   >
                     See its outcome
                   </Link>

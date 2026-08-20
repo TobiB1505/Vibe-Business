@@ -162,7 +162,7 @@ function OpportunityCard({
       )}
 
       <details className="group">
-        <summary className="text-fg-muted hover:text-fg-body cursor-pointer rounded-sm text-xs transition-colors">
+        <summary className="text-fg-muted hover:text-fg-body cursor-pointer rounded-sm text-xs transition-interactive">
           Why now?
         </summary>
         <div className="mt-3 flex flex-col gap-4">
@@ -221,7 +221,7 @@ function OpportunityCard({
       {!isPlannedMove && (
         <Link
           href={planMoveHref(movesHref, opportunity.id)}
-          className="text-fg-secondary hover:text-fg-body self-start text-xs underline underline-offset-4 transition-colors"
+          className="text-fg-secondary hover:text-fg-body self-start text-xs underline underline-offset-4 transition-interactive"
         >
           Plan this Move
         </Link>
@@ -421,7 +421,7 @@ export function OpportunitiesPanel({
           action={
             <a
               href={`${auditHref}${blockNotice.anchor}`}
-              className="text-fg-prose hover:text-fg rounded-sm text-sm underline underline-offset-4 transition-colors"
+              className="text-fg-prose hover:text-fg rounded-sm text-sm underline underline-offset-4 transition-interactive"
             >
               {blockNotice.actionLabel}
             </a>

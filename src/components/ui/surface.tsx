@@ -85,10 +85,6 @@ export function Surface({
   );
 }
 
-/** Level 2 — the default block. Named for the vocabulary the mockups use. */
-export function VibePanel(props: Omit<SurfaceProps, "level">) {
-  return <Surface {...props} level="panel" />;
-}
 
 /** Level 3 — the primary object on a view, or a modal. */
 export function VibeCard(props: Omit<SurfaceProps, "level">) {

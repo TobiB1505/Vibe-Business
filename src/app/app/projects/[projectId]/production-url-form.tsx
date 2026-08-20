@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Button, TextAction } from "@/components/ui/button";
 import type { SetProductionUrlFailure } from "@/modules/projects/production-url";
 import { setProductionUrlAction, type ProductionUrlActionState } from "./production-url-action";
 
@@ -49,13 +49,9 @@ export function ProductionUrlForm({
         >
           {currentUrl}
         </a>
-        <button
-          type="button"
-          onClick={() => setEditing(true)}
-          className="text-xs text-fg-muted underline underline-offset-2 hover:text-fg-prose"
-        >
+        <TextAction type="button" onClick={() => setEditing(true)} className="text-xs">
           Change
-        </button>
+        </TextAction>
       </div>
     );
   }
@@ -71,17 +67,13 @@ export function ProductionUrlForm({
           required
           className="min-w-64 flex-1 rounded-md border border-line-strong bg-field px-3 py-1.5 text-sm text-fg-body placeholder:text-fg-meta focus:border-mint/60 focus:ring-mint/10 focus:ring-4 focus:outline-none"
         />
-        <Button type="submit" disabled={pending}>
+        <Button type="submit" disabled={pending} busy={pending}>
           {pending ? "Saving…" : currentUrl ? "Save" : "Add production URL"}
         </Button>
         {currentUrl !== null && (
-          <button
-            type="button"
-            onClick={() => setEditing(false)}
-            className="text-xs text-fg-muted underline underline-offset-2 hover:text-fg-prose"
-          >
+          <TextAction type="button" onClick={() => setEditing(false)} className="text-xs">
             Cancel
-          </button>
+          </TextAction>
         )}
       </form>
 

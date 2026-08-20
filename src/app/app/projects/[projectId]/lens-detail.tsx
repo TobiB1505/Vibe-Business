@@ -37,7 +37,7 @@ function Meta({ label, children }: { label: string; children: React.ReactNode })
   return (
     <div className="flex min-w-[7rem] flex-col gap-1.5">
       <MonoLabel>{label}</MonoLabel>
-      <div className="text-fg-body flex items-center gap-2 text-[0.8125rem]">{children}</div>
+      <div className="text-fg-body flex items-center gap-2 text-ui">{children}</div>
     </div>
   );
 }
@@ -127,7 +127,7 @@ export function LensDetail({ node, map }: { node: LensNode; map: BusinessMap }) 
           <summary className="text-fg-muted hover:text-fg-body marker:content-none flex cursor-pointer items-center gap-2 text-sm">
             <span className="text-fg-meta transition-transform group-open:rotate-90">›</span>
             Why Vibe thinks this
-            <span className="text-fg-meta font-mono text-[0.6875rem]">
+            <span className="text-fg-meta font-mono text-meta">
               {node.evidenceIds.length} signals · {sources.length}{" "}
               {sources.length === 1 ? "source" : "sources"}
             </span>
@@ -138,7 +138,7 @@ export function LensDetail({ node, map }: { node: LensNode; map: BusinessMap }) 
               <li key={id} className="flex flex-col gap-0.5">
                 <span className="text-fg-secondary text-sm">{describeEvidenceId(id).detail}</span>
                 {evidenceSource(id) && (
-                  <span className="text-fg-meta font-mono text-[0.6875rem]">
+                  <span className="text-fg-meta font-mono text-meta">
                     {evidenceSource(id)}
                   </span>
                 )}

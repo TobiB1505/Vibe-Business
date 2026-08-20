@@ -78,7 +78,7 @@ function Strengths({ audit }: { audit: BusinessReadinessAudit }) {
               <span className="text-fg-body text-sm leading-snug font-medium">
                 {strength.headline}
               </span>
-              <span className="text-fg-muted line-clamp-2 text-[0.8125rem] leading-relaxed">
+              <span className="text-fg-muted line-clamp-2 text-ui leading-relaxed">
                 {strength.explanation}
               </span>
             </span>
@@ -117,7 +117,7 @@ export function AuditOverview({
           knowing what matters next, not receiving a number, and a large number
           at the top would answer a question nobody asked.
         */}
-        <div className="text-fg-meta flex flex-wrap items-center gap-x-2.5 gap-y-1 font-mono text-[0.6875rem] tracking-[0.04em]">
+        <div className="text-fg-meta flex flex-wrap items-center gap-x-2.5 gap-y-1 font-mono text-meta tracking-[0.04em]">
           {/*
             The score moved into the map's centre, so repeating it here would
             be the same number twice. It stays in this line only when there is

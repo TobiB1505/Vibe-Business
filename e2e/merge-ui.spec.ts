@@ -212,6 +212,68 @@ test.describe("reload recovery", () => {
   });
 });
 
+/**
+ * The confirmation's keyboard behaviour (UI-6 §3).
+ *
+ * These four blocks claimed `aria-modal="true"` and none of them were modal:
+ * the page behind stayed scrollable and fully focusable. A screen-reader user
+ * was told the rest of the page had gone away while a keyboard user could Tab
+ * straight past the confirmation and press something else — the two
+ * experiences disagreeing about what was on screen, on the screen where being
+ * wrong costs the most.
+ *
+ * The fix was to drop the claim and add the behaviour a dialog actually owes:
+ * focus in, focus back, Escape cancels. Asserted in a browser because none of
+ * it is visible in the source.
+ */
+test.describe("the merge confirmation is operable by keyboard", () => {
+  test("does not claim to be modal, because it is not", async ({ page }) => {
+    await page.goto("/e2e/merge_ready");
+    await page.getByRole("button", { name: "Merge approved change" }).click();
+
+    const dialog = page.getByRole("dialog", { name: "Merge approved change?" });
+    await expect(dialog).toBeVisible();
+    await expect(dialog).not.toHaveAttribute("aria-modal", "true");
+  });
+
+  test("moves focus into the confirmation when it opens", async ({ page }) => {
+    await page.goto("/e2e/merge_ready");
+    await page.getByRole("button", { name: "Merge approved change" }).click();
+
+    // The heading, so a screen reader reads what is being confirmed before it
+    // reaches the button that does it.
+    await expect(page.locator(":focus")).toHaveText("Merge approved change?");
+  });
+
+  test("cancels on Escape and gives focus back to what opened it", async ({ page }) => {
+    await page.goto("/e2e/merge_ready");
+    const opener = page.getByRole("button", { name: "Merge approved change" });
+    await opener.click();
+    await expect(page.getByRole("dialog", { name: "Merge approved change?" })).toBeVisible();
+
+    await page.keyboard.press("Escape");
+
+    await expect(page.getByRole("dialog", { name: "Merge approved change?" })).toHaveCount(0);
+    // Without this a keyboard user lands back at the top of the document and
+    // has to Tab through the whole page to reach where they were standing.
+    await expect(opener).toBeFocused();
+  });
+
+  test("still merges nothing until the confirm is pressed", async ({ page }) => {
+    await page.goto("/e2e/merge_ready");
+    await page.getByRole("button", { name: "Merge approved change" }).click();
+    await page.keyboard.press("Escape");
+
+    await expect(mergeSection(page).getByText("Ready to merge")).toBeVisible();
+    // Scoped to the merge section: "merged" appears in the disclaimers on
+    // three other panels, and an unscoped match would pass or fail on copy
+    // that has nothing to do with whether a merge happened.
+    await expect(
+      mergeSection(page).getByText("Repository default branch updated successfully"),
+    ).toHaveCount(0);
+  });
+});
+
 test.describe("approval is shown beside the merge it authorizes", () => {
   /**
    * The approval is one of the four gates a person has already been through,

@@ -44,7 +44,7 @@ export function MarketingShell({ children }: { children: ReactNode }) {
           <div className="ml-auto flex items-center gap-2 sm:gap-4">
             <Link
               href="/login"
-              className="text-fg-secondary hover:text-fg-body rounded-sm px-2 text-sm transition-colors duration-150"
+              className="text-fg-secondary hover:text-fg-body rounded-sm px-2 text-sm transition-interactive"
             >
               Sign in
             </Link>
@@ -75,7 +75,7 @@ export function MarketingShell({ children }: { children: ReactNode }) {
               <Link
                 key={href}
                 href={href}
-                className="text-fg-muted hover:text-fg-body rounded-sm transition-colors duration-150"
+                className="text-fg-muted hover:text-fg-body rounded-sm transition-interactive"
               >
                 {label}
               </Link>

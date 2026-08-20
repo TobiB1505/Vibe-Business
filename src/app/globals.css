@@ -43,13 +43,30 @@
   /* ── Foreground ramp (on --color-app) ────────────────────────────────
      Eight steps, each with a job. `fg` is headlines, `fg-body` values and
      UI text, `fg-prose` long explanation, then down to `fg-disabled`
-     which is the only legitimate use of the bottom of the ramp. */
+     which is the only legitimate use of the bottom of the ramp.
+
+     Six of the eight carry text and are held to 4.5:1 — measured against
+     `--color-surface-4`, not against `--color-app`. The surfaces are white
+     over the frame, so text on a panel has *less* contrast than the same
+     text on the page, and a ramp checked against the page alone passes
+     while the product fails. `design-tokens.test.ts` does the measuring.
+
+     `fg-disabled` and `fg-faint` are deliberately below the floor: one is
+     unavailable-control text, which WCAG exempts, and the other is never
+     text at all. */
   --color-fg: #f7f5f1;
   --color-fg-body: #edebe7;
   --color-fg-prose: #c9c5bd;
   --color-fg-secondary: #a5a19a;
-  --color-fg-muted: #8c8880;
-  --color-fg-meta: #6e6a63;
+  /* Raised with `fg-meta` below it: the two were 1.12x apart once the floor
+     rose, which is not a step anyone can see. The bottom of the ramp
+     compresses as a result, and that is the cost of having had a step below
+     the legibility floor at all. */
+  --color-fg-muted: #95928a;
+  /* Was #6e6a63 — 3.38:1 on a panel, and the default for the brand's
+     signature eyebrow (90 `MonoLabel` uses plus raw ones). The single token
+     that failed AA on every screen in the product. */
+  --color-fg-meta: #847f77;
   --color-fg-disabled: #57534c;
   --color-fg-faint: #3b3833;
 
@@ -130,6 +147,24 @@
   --text-label: 0.65625rem;
   --text-label--line-height: 1.4;
   --text-label--letter-spacing: 0.16em;
+
+  /*
+   * Two sizes the product actually uses (UI-6 §6).
+   *
+   * The audit counted ~90 arbitrary `text-[…rem]` values against a six-step
+   * scale and read it as call sites ignoring the system. Measured, most of it
+   * is two numbers: `0.6875rem` thirty-four times and `0.8125rem` thirteen —
+   * neither of which the scale has ever had. That is not call sites drifting.
+   * It is a scale missing two steps that the product needs forty-seven times,
+   * and the fix belongs here rather than in forty-seven files.
+   *
+   * Font size only, no line-height or letter-spacing. Both are used on mono
+   * runs, in pills and beside numbers, where the surrounding rule is already
+   * set deliberately — a token that also imposed leading would change every
+   * one of those as a side effect of naming a size.
+   */
+  --text-meta: 0.6875rem;
+  --text-ui: 0.8125rem;
 
   /* ── Shape ───────────────────────────────────────────────────────────
      Radii scale with the element. Every interactive control is a full
@@ -245,6 +280,29 @@
   -webkit-mask: radial-gradient(circle, transparent 58%, black 59%, black 61%, transparent 62%);
   mask: radial-gradient(circle, transparent 58%, black 59%, black 61%, transparent 62%);
   animation: audit-radial-sweep 5.5s linear infinite;
+}
+
+/*
+ * The focus-safe transition (UI-6 §9).
+ *
+ * `transition-colors` is Tailwind's shorthand, and its property list includes
+ * `outline-color`. Every control that used it therefore faded its focus ring
+ * in over 150ms — so a keyboard user pressing Tab saw the indicator arrive
+ * *after* they had already started deciding where they were.
+ *
+ * `button.tsx` worked this out and wrote the property list by hand, with a
+ * comment explaining why. Twenty controls elsewhere kept `transition-colors`,
+ * because a comment in one file is not a mechanism. This is the mechanism:
+ * the same list, named once, for anything that can take focus.
+ *
+ * `box-shadow` and `transform` are included because several controls animate
+ * a glow or a lift on hover, and splitting those into a second transition
+ * would put two durations on one gesture.
+ */
+@utility transition-interactive {
+  transition-property: color, background-color, border-color, box-shadow, transform;
+  transition-timing-function: var(--ease-vibe);
+  transition-duration: 150ms;
 }
 
 @keyframes audit-node-breathe {

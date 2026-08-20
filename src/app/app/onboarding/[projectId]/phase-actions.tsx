@@ -24,7 +24,7 @@ export function RetryProductScan({ projectId }: { projectId: string }) {
   return (
     <div className="flex flex-col gap-3">
       <form action={action}>
-        <Button type="submit" disabled={pending}>
+        <Button type="submit" disabled={pending} busy={pending}>
           {pending ? "Vibe is reading your product…" : "Try again"}
         </Button>
       </form>

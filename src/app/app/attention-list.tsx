@@ -53,7 +53,7 @@ function AttentionRow({ item, index, primary }: { item: AttentionItem; index: nu
           <MonoLabel className="tracking-[0.14em]">{TIER_LABEL[item.tier]}</MonoLabel>
         </div>
         <p className="text-fg-muted text-sm">{item.detail}</p>
-        <p className="text-fg-meta font-mono text-[0.6875rem]">{item.projectName}</p>
+        <p className="text-fg-meta font-mono text-meta">{item.projectName}</p>
       </div>
 
       <div className="shrink-0">

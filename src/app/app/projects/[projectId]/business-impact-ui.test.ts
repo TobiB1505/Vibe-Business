@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { actionLabels } from "./test-support";
 import { findCausalClaims } from "@/modules/business-measurement/causality";
 
 /**
@@ -34,15 +35,6 @@ function renderedCopy(file: string): string {
     .replace(/\/\*[\s\S]*?\*\//g, " ")
     .replace(/^\s*\/\/.*$/gm, " ")
     .replace(/\s+/g, " ");
-}
-
-function actionLabels(src: string): string[] {
-  const inner = (tag: string) =>
-    [...src.matchAll(new RegExp(`<${tag}\\b(?:=>|[^>])*?>([\\s\\S]*?)</${tag}>`, "g"))].map(
-      (match) => match[1],
-    );
-
-  return [...inner("button"), ...inner("a")];
 }
 
 describe("the panel offers only what this sprint implements (§28, §34)", () => {
@@ -164,9 +156,13 @@ describe("negative results are never hidden (§25)", () => {
     // a §25 guarantee to one palette and broke the moment the design system
     // renamed its colours (UI-1) — while the guarantee itself was intact. What
     // must never change is that a fall does not wear the colour of a rise.
+    //
+    // The table now names a tone rather than a class (UI-6 §2), so this reads
+    // whichever it finds. Comparing tone names is comparing meanings, which is
+    // what the rule was always about.
     const tones = src.slice(src.indexOf("const RESULT_TONE"), src.indexOf("function BeforeAfter"));
     const toneFor = (state: string): string | null =>
-      tones.match(new RegExp(`${state}:\\s*"([^"]+)"`))?.[1] ?? null;
+      tones.match(new RegExp(`${state}:\\s*(?:statusToneText\\()?"([^"]+)"`))?.[1] ?? null;
 
     const improved = toneFor("improved");
     const degraded = toneFor("degraded");

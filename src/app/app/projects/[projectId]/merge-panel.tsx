@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { ConfirmPanel, useReturnFocus } from "@/components/ui/confirm-panel";
+import { Button } from "@/components/ui/button";
 import type { MergeCard } from "@/modules/merge/view";
 import { mergeApprovedChangeAction, type MergeActionState } from "./merge-actions";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
@@ -69,17 +71,14 @@ function MergeDialog({
   pending: boolean;
 }) {
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="merge-confirm-title"
-      className="space-y-3 rounded-md border border-mint-line/60 bg-mint-tint-soft p-4"
+    <ConfirmPanel
+      title="Merge approved change?"
+      pending={pending}
+      onCancel={onCancel}
+      onConfirm={onConfirm}
+      confirmLabel={pending ? "Merging…" : "Merge approved change"}
     >
-      <h5 id="merge-confirm-title" className="text-sm font-medium text-fg">
-        Merge approved change?
-      </h5>
-
-      <div className="space-y-2 text-sm text-fg-prose">
+      <>
         <p>You approved this exact change earlier.</p>
         <p>
           Vibe will now update the repository&apos;s default branch
@@ -102,27 +101,8 @@ function MergeDialog({
           Updating the default branch may trigger your repository&apos;s existing CI/CD or hosting
           automation.
         </p>
-      </div>
-
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={pending}
-          className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-prose hover:bg-surface-2 disabled:opacity-60"
-        >
-          Cancel
-        </button>
-        <button
-          type="button"
-          onClick={onConfirm}
-          disabled={pending}
-          className="rounded-md border border-mint-line bg-mint-tint px-3 py-1.5 text-sm text-mint hover:bg-mint-tint/70 disabled:opacity-60"
-        >
-          {pending ? "Merging…" : "Merge approved change"}
-        </button>
-      </div>
-    </div>
+      </>
+    </ConfirmPanel>
   );
 }
 
@@ -147,6 +127,9 @@ export function MergePanel({
   const [, startTransition] = useTransition();
   const [pending, setPending] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  // Focus goes back to this button when the confirmation closes — it is
+  // unmounted while the confirmation is open, so the panel cannot do it.
+  const openerRef = useReturnFocus<HTMLButtonElement>(confirming);
 
   function merge() {
     if (!card.changeApprovalId) return;
@@ -222,14 +205,19 @@ export function MergePanel({
             )}
           </p>
           <NotDeployed />
-          <button
+          {/* Primary because it is the section's one action, and the dialog it
+              opens replaces it — so the screen never carries two mint
+              controls at once. */}
+          <Button
+            ref={openerRef}
             type="button"
+            variant="primary"
+            size="sm"
             onClick={() => setConfirming(true)}
             disabled={pending || !card.canMerge}
-            className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2 disabled:opacity-60"
           >
             Merge approved change
-          </button>
+          </Button>
         </div>
       ) : card.state === "blocked" || card.state === "failed" ? (
         <div className="space-y-2">

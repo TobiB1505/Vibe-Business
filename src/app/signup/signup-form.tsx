@@ -68,6 +68,7 @@ export function SignupForm({ next }: { next: string }) {
             disabled={busy}
             className="w-full"
             data-testid="google-signup"
+            busy={googlePending}
           >
             {googlePending ? "Opening Google…" : "Continue with Google"}
           </Button>
@@ -110,7 +111,13 @@ export function SignupForm({ next }: { next: string }) {
             />
           </Field>
 
-          <Button type="submit" disabled={busy} className="mt-1" data-testid="email-signup">
+          <Button
+            type="submit"
+            disabled={busy}
+            className="mt-1"
+            data-testid="email-signup"
+            busy={pending}
+          >
             {pending ? "Creating account…" : "Create account"}
           </Button>
         </form>

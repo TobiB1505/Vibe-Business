@@ -99,7 +99,7 @@ export function UnderstandingPanel({
             {actions}
           </div>
         ) : (
-          <p className="text-mint font-mono text-[0.6875rem] tracking-[0.1em] uppercase">
+          <p className="text-mint font-mono text-meta tracking-[0.1em] uppercase">
             You confirmed this
           </p>
         )}
@@ -114,7 +114,7 @@ export function UnderstandingPanel({
               <div key={fact.label} className="flex flex-col gap-1">
                 <dt className="text-fg-muted text-xs">{fact.label}</dt>
                 <dd className={`${TONE_TEXT[fact.tone]} text-sm`}>{fact.value}</dd>
-                <p className="text-fg-meta font-mono text-[0.6875rem]">{fact.note}</p>
+                <p className="text-fg-meta font-mono text-meta">{fact.note}</p>
               </div>
             ))}
           </dl>
@@ -143,7 +143,7 @@ export function UnderstandingPanel({
                   </span>
                   {capability.label}
                 </span>
-                <span className="text-fg-meta pl-6 font-mono text-[0.6875rem] sm:shrink-0 sm:pl-0">
+                <span className="text-fg-meta pl-6 font-mono text-meta sm:shrink-0 sm:pl-0">
                   {capability.note}
                 </span>
               </li>
@@ -181,7 +181,7 @@ export function UnderstandingPanel({
                   />
                   <span className="flex flex-col">
                     <span className="text-fg-body font-mono text-[0.75rem]">{color.value}</span>
-                    <span className="text-fg-meta text-[0.6875rem]">{color.role}</span>
+                    <span className="text-fg-meta text-meta">{color.role}</span>
                   </span>
                 </li>
               ))}
@@ -193,7 +193,7 @@ export function UnderstandingPanel({
               {brand.typefaces.map((typeface) => (
                 <li key={`${typeface.role}-${typeface.family}`} className="flex flex-col">
                   <span className="text-fg-body text-sm">{typeface.family}</span>
-                  <span className="text-fg-meta text-[0.6875rem]">{typeface.role}</span>
+                  <span className="text-fg-meta text-meta">{typeface.role}</span>
                 </li>
               ))}
             </ul>
@@ -265,7 +265,7 @@ export function UnderstandingPanel({
             </ul>
             <Link
               href={projectSectionHref(projectId, "overview")}
-              className="text-fg-muted hover:text-fg-body w-fit rounded-sm text-xs underline underline-offset-4 transition-colors"
+              className="text-fg-muted hover:text-fg-body w-fit rounded-sm text-xs underline underline-offset-4 transition-interactive"
             >
               Code and public product findings
             </Link>

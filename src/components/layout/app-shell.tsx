@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { TextAction } from "@/components/ui/button";
 import { VibeLockup } from "@/components/brand/vibe-mark";
 import { cn } from "@/lib/utils/cn";
 import { signOut } from "@/modules/auth/actions";
@@ -51,9 +52,13 @@ export function AppShell({
     <div className="bg-app text-fg-body flex min-h-dvh flex-col">
       <header className="border-line-1 bg-app/70 sticky top-0 z-30 border-b backdrop-blur-xl">
         <div className="flex items-center gap-4 px-5 py-4 sm:px-8">
+          {/* The ring used to be switched off here with nothing put in its
+              place, so the first Tab stop on every signed-in page was
+              invisible. The global `:focus-visible` rule is the right one; it
+              only needed the rounding to follow. */}
           <Link
             href="/app"
-            className="rounded-nav focus-visible:outline-none"
+            className="rounded-nav"
             aria-label="Vibe Business — your projects"
           >
             <VibeLockup />
@@ -63,24 +68,21 @@ export function AppShell({
             {credits != null && (
               <Link
                 href="/app/billing"
-                className="text-fg-body hover:text-fg rounded-nav text-[0.8125rem] tabular-nums transition-colors duration-150"
+                className="text-fg-body hover:text-fg rounded-nav text-ui tabular-nums transition-interactive"
               >
                 <span className="font-semibold">{credits}</span>{" "}
                 <span className="text-fg-meta">Credits</span>
               </Link>
             )}
             {email && (
-              <span className="text-fg-meta hidden text-[0.8125rem] sm:inline" title={email}>
+              <span className="text-fg-meta hidden text-ui sm:inline" title={email}>
                 {email}
               </span>
             )}
             <form action={signOut}>
-              <button
-                type="submit"
-                className="text-fg-muted hover:text-fg-body rounded-sm text-[0.8125rem] underline underline-offset-4 transition-colors duration-150"
-              >
+              <TextAction type="submit" className="text-ui">
                 Sign out
-              </button>
+              </TextAction>
             </form>
           </div>
         </div>

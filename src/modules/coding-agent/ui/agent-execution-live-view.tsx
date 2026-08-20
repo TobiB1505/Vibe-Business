@@ -621,7 +621,7 @@ export function ActivityFeed({ events }: { events: readonly StoredExecutionEvent
           {events.map((event) => (
             <li
               key={event.sequence}
-              className="flex items-baseline gap-3 px-3 py-1.5 font-mono text-[0.6875rem]"
+              className="flex items-baseline gap-3 px-3 py-1.5 font-mono text-meta"
             >
               <span className="text-fg-faint shrink-0">{formatClock(event.occurredAt)}</span>
               <span className="text-fg-muted w-16 shrink-0">

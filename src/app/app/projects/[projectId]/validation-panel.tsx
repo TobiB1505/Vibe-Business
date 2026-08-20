@@ -2,6 +2,8 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { STATUS_GLYPHS, statusToneText } from "@/components/ui/status-pill";
+import { Button } from "@/components/ui/button";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import type { StepSkipReason } from "@/modules/validation/schema";
 import { useOperationPoll } from "@/lib/client/use-operation-poll";
@@ -49,21 +51,26 @@ import { getValidationProgressAction, validateChangeAction, type ValidateChangeA
 const POLL_INTERVAL_MS = 2500;
 
 const PHASE_SYMBOLS: Record<ValidationPhaseView["state"], string> = {
-  passed: "✓",
-  failed: "✕",
-  timed_out: "⏱",
-  skipped: "–",
-  active: "●",
-  pending: "○",
-  not_run: "○",
+  passed: STATUS_GLYPHS.confirmed,
+  failed: STATUS_GLYPHS.refused,
+  timed_out: STATUS_GLYPHS.expired,
+  skipped: STATUS_GLYPHS.skipped,
+  active: STATUS_GLYPHS.running,
+  pending: STATUS_GLYPHS.pending,
+  not_run: STATUS_GLYPHS.pending,
 };
 
+/*
+ * `problem`, unlike the outcome panel's `failed`. A command Vibe constructed
+ * exited non-zero inside an isolated VM: something really is wrong, it is
+ * attributable, and the user can act on it.
+ */
 const PHASE_TONES: Record<ValidationPhaseView["state"], string> = {
-  passed: "text-mint",
-  failed: "text-coral",
-  timed_out: "text-coral",
-  skipped: "text-fg-muted",
-  active: "text-mint-dim",
+  passed: statusToneText("success"),
+  failed: statusToneText("problem"),
+  timed_out: statusToneText("problem"),
+  skipped: statusToneText("neutral"),
+  active: statusToneText("active"),
   pending: "text-fg-meta",
   not_run: "text-fg-meta",
 };
@@ -311,14 +318,9 @@ export function ValidationPanel({
               artifact availability decide what happens. A current pass with a
               live artifact is reused; a missing/expired artifact or a policy
               change starts the explicit new validation the user requested. */}
-          <button
-            type="button"
-            onClick={validate}
-            disabled={pending}
-            className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2 disabled:opacity-60"
-          >
+          <Button type="button" variant="secondary" size="sm" onClick={validate} disabled={pending}>
             {shown.underCurrentPolicy ? "Validate again" : "Check under the current rules"}
-          </button>
+          </Button>
         </div>
       ) : shown?.status === "failed" ? (
         <div className="space-y-3">
@@ -335,14 +337,9 @@ export function ValidationPanel({
               sandbox time on a change that already needs work.
             </p>
           )}
-          <button
-            type="button"
-            onClick={validate}
-            disabled={pending}
-            className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2 disabled:opacity-60"
-          >
+          <Button type="button" variant="primary" size="sm" onClick={validate} disabled={pending}>
             Validate again
-          </button>
+          </Button>
         </div>
       ) : (
         <div className="space-y-3">
@@ -351,14 +348,9 @@ export function ValidationPanel({
             Vibe will check out this exact commit in an isolated environment, install dependencies,
             and build it. Your repository is not modified.
           </p>
-          <button
-            type="button"
-            onClick={validate}
-            disabled={pending}
-            className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2 disabled:opacity-60"
-          >
+          <Button type="button" variant="primary" size="sm" onClick={validate} disabled={pending}>
             Validate change
-          </button>
+          </Button>
         </div>
       )}
 

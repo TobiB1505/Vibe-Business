@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Button, TextAction } from "@/components/ui/button";
 import { StatusPill, type StatusTone } from "@/components/ui/status-pill";
 import { Surface } from "@/components/ui/surface";
 import { Disclosure } from "@/components/ui/disclosure";
@@ -95,14 +95,14 @@ function ExpandableText({ text }: { text: string }) {
       <p className={cn("text-fg-prose text-sm leading-relaxed", !expanded && "line-clamp-2")}>
         {text}
       </p>
-      <button
+      <TextAction
         type="button"
         onClick={() => setExpanded((value) => !value)}
         aria-expanded={expanded}
-        className="text-fg-muted hover:text-fg-body self-start text-xs underline underline-offset-4 transition-colors"
+        className="self-start text-xs"
       >
         {expanded ? "Show less" : "More context"}
-      </button>
+      </TextAction>
     </div>
   );
 }
@@ -185,7 +185,7 @@ function TimelineStep({
       <span
         aria-hidden
         className={cn(
-          "relative z-10 mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full border font-mono text-[0.6875rem]",
+          "relative z-10 mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full border font-mono text-meta",
           isCurrent
             ? "bg-mint-tint border-mint-line text-mint"
             : "bg-surface-3 border-line-3 text-fg-meta",
@@ -432,7 +432,13 @@ export function ActionPlanPanel({
           <ReadyPlan planView={planView} />
           <form action={formAction} className="flex items-center gap-3">
             <input type="hidden" name="force" value="true" />
-            <Button type="submit" variant="secondary" size="sm" disabled={pending || running}>
+            <Button
+              type="submit"
+              variant="secondary"
+              size="sm"
+              disabled={pending || running}
+              busy={pending}
+            >
               {pending ? "Starting…" : "Replan this move"}
             </Button>
           </form>
@@ -462,14 +468,14 @@ export function ActionPlanPanel({
                 blockHref ? (
                   <a
                     href={blockHref}
-                    className="text-fg-prose hover:text-fg rounded-sm text-sm underline underline-offset-4 transition-colors"
+                    className="text-fg-prose hover:text-fg rounded-sm text-sm underline underline-offset-4 transition-interactive"
                   >
                     {blockNotice.actionLabel}
                   </a>
                 ) : (
                   <a
                     href="#next-moves"
-                    className="text-fg-prose hover:text-fg rounded-sm text-sm underline underline-offset-4 transition-colors"
+                    className="text-fg-prose hover:text-fg rounded-sm text-sm underline underline-offset-4 transition-interactive"
                   >
                     {blockNotice.actionLabel}
                   </a>
@@ -491,7 +497,7 @@ export function ActionPlanPanel({
               />
               <form action={formAction} className="flex items-center gap-3">
                 <input type="hidden" name="force" value="false" />
-                <Button type="submit" disabled={pending}>
+                <Button type="submit" disabled={pending} busy={pending}>
                   {pending ? "Starting…" : "Plan this move"}
                 </Button>
                 {/* The cost, before the click (BILLING CORE-2 §55). Reading the

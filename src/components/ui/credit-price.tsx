@@ -35,7 +35,7 @@ export function CreditPrice({
   if (!resolved || resolved.price.kind === "free") return null;
 
   return (
-    <span className={className ?? "text-fg-meta text-[0.8125rem] tabular-nums"}>
+    <span className={className ?? "text-fg-meta text-ui tabular-nums"}>
       {formatCreditsForDisplay(resolved.price.creditUnits)} Credits
     </span>
   );

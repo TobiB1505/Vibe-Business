@@ -94,7 +94,7 @@ export function AuditIntelligence({
             <MonoLabel as="h2" className="text-fg-secondary">
               Business intelligence
             </MonoLabel>
-            <span className="text-fg-meta font-mono text-[0.6875rem]">
+            <span className="text-fg-meta font-mono text-meta">
               closer to centre = sooner
             </span>
           </div>
@@ -150,7 +150,7 @@ export function AuditIntelligence({
           <button
             type="button"
             onClick={() => setSelected(null)}
-            className="text-fg-meta hover:text-fg-body hover:border-line-2 absolute top-4 right-4 rounded-full border border-transparent px-3 py-1.5 font-mono text-[0.6875rem] transition-colors"
+            className="text-fg-meta hover:text-fg-body hover:border-line-2 absolute top-4 right-4 rounded-full border border-transparent px-3 py-1.5 font-mono text-meta transition-interactive"
           >
             Close
           </button>

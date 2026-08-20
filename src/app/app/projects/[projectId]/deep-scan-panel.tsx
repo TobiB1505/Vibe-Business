@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { Button, TextAction } from "@/components/ui/button";
 import type { DeepScanViewModel } from "@/modules/authenticated-product-intelligence/view";
 import {
   analyzeDeepScanAction,
@@ -99,6 +99,10 @@ function Heading({ title, status }: { title: string; status?: string }) {
  * the service, because hiding the modal while leaving a remote browser running
  * would keep billing and keep an authenticated session alive (§10, §16).
  */
+/** What the browser will stop on, for the modal's Tab wrap. */
+const FOCUSABLE =
+  'a[href], button, input, select, textarea, iframe, [tabindex]:not([tabindex="-1"])';
+
 function LiveViewDialog({
   liveViewUrl,
   loading,
@@ -119,13 +123,62 @@ function LiveViewDialog({
   const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    /*
+     * A real modal, unlike the four inline confirmations (UI-6 §3). This one
+     * covers the page with an overlay and holds a live browser the user signs
+     * into, so `aria-modal` is honest here — and the behaviour that goes with
+     * it has to be too.
+     *
+     * Two halves were missing. Focus never came back: dismissing this dropped
+     * a keyboard user at the top of the document, several sections above the
+     * control they pressed. And focus was never held: Tab walked out of the
+     * overlay into the page underneath, which is still visually covered, so
+     * the ring vanished and the next Enter pressed something invisible.
+     */
+    const opener = document.activeElement as HTMLElement | null;
     dialogRef.current?.focus();
+
+    return () => {
+      // Still connected, because the overlay is what unmounts, not the page.
+      if (opener?.isConnected) opener.focus();
+    };
   }, []);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       // ESC cancels for real rather than merely closing the overlay.
-      if (event.key === "Escape" && !busy) onCancel();
+      if (event.key === "Escape" && !busy) {
+        onCancel();
+        return;
+      }
+
+      if (event.key !== "Tab") return;
+
+      const dialog = dialogRef.current;
+      if (!dialog) return;
+
+      const focusable = [...dialog.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(
+        (element) => !element.hasAttribute("disabled") && element.tabIndex !== -1,
+      );
+      if (focusable.length === 0) return;
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+
+      // Wrap at both ends, and pull focus back in if it has already escaped —
+      // which it can, because the iframe inside this dialog is its own focus
+      // context and the browser does not always return through our elements.
+      if (!dialog.contains(active)) {
+        event.preventDefault();
+        first.focus();
+      } else if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
@@ -197,24 +250,19 @@ function LiveViewDialog({
               This usually takes up to about 90 seconds. Keep this window open — the scan runs
               while it is here, and closing it stops the browser Vibe is signed in to.
             </p>
-            <p className="font-mono text-[0.6875rem] text-fg-meta">
+            <p className="font-mono text-meta text-fg-meta">
               {elapsedSeconds}s elapsed
             </p>
           </div>
         )}
 
         <div className="flex flex-wrap items-center gap-3">
-          <Button type="button" onClick={onAnalyze} disabled={busy || !liveViewUrl}>
+          <Button type="button" onClick={onAnalyze} disabled={busy || !liveViewUrl} busy={busy}>
             {busy ? "Looking around…" : "I'm logged in — Analyze"}
           </Button>
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={busy}
-            className="text-sm text-fg-secondary underline underline-offset-2 hover:text-fg-body disabled:opacity-50"
-          >
+          <TextAction type="button" onClick={onCancel} disabled={busy} className="text-sm">
             Cancel
-          </button>
+          </TextAction>
         </div>
       </div>
     </div>
@@ -489,7 +537,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
               </p>
             )}
             {model.canStart ? (
-              <Button type="button" onClick={handleStart} disabled={disabled}>
+              <Button type="button" onClick={handleStart} disabled={disabled} busy={disabled}>
                 {disabled ? "Starting…" : "Try Deep Scan again"}
               </Button>
             ) : (
@@ -520,7 +568,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
               <p className="text-fg-prose">Your first Deep Scan for this project is included.</p>
             </div>
             <div className="flex flex-wrap items-center gap-3">
-              <Button type="button" onClick={handleStart} disabled={disabled}>
+              <Button type="button" onClick={handleStart} disabled={disabled} busy={disabled}>
                 {disabled ? "Starting…" : "Run free Deep Scan"}
               </Button>
               <span className="text-sm text-fg-muted">Not now</span>
@@ -533,7 +581,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
               Optional deeper analysis of what users experience after signing in.
             </p>
             {model.canStart ? (
-              <Button type="button" onClick={handleStart} disabled={disabled}>
+              <Button type="button" onClick={handleStart} disabled={disabled} busy={disabled}>
                 {disabled ? "Starting…" : "Run Deep Scan"}
               </Button>
             ) : (

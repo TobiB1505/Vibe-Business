@@ -51,7 +51,13 @@ export function ForgotPasswordForm({ initialError }: { initialError?: string | n
           />
         </Field>
 
-        <Button type="submit" disabled={pending} className="mt-1" data-testid="send-reset-link">
+        <Button
+          type="submit"
+          disabled={pending}
+          className="mt-1"
+          data-testid="send-reset-link"
+          busy={pending}
+        >
           {pending ? "Sending…" : "Send reset link"}
         </Button>
       </form>

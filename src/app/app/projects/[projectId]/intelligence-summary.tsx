@@ -65,7 +65,7 @@ function NextStepLink({ step, projectId }: { step: CapabilityNextStep; projectId
   return (
     <Link
       href={nextStepHref(step, projectId)}
-      className="text-fg-prose hover:text-fg w-fit rounded-sm text-sm underline underline-offset-4 transition-colors"
+      className="text-fg-prose hover:text-fg w-fit rounded-sm text-sm underline underline-offset-4 transition-interactive"
     >
       {step.label}
     </Link>
@@ -111,7 +111,7 @@ function Capability({
                   {capability.evidence.map((item) => (
                     <li
                       key={`${item.path}-${item.detail ?? ""}`}
-                      className="text-fg-secondary [overflow-wrap:anywhere] font-mono text-[0.6875rem]"
+                      className="text-fg-secondary [overflow-wrap:anywhere] font-mono text-meta"
                     >
                       {item.path}
                       {item.detail && <span className="text-fg-meta"> · {item.detail}</span>}
@@ -208,7 +208,7 @@ export function IntelligenceSummary({
 
       <div className="flex flex-col gap-3">
         <p className="text-fg-prose text-sm">{view.stackSummary}</p>
-        <p className="text-fg-meta font-mono text-[0.6875rem]">
+        <p className="text-fg-meta font-mono text-meta">
           Code last read {formatTimestamp(analyzedAt) ?? analyzedAt}
         </p>
 
@@ -239,7 +239,7 @@ export function IntelligenceSummary({
         {/* Every detection, metric and identifier the analyzer produced. */}
         <TechnicalDetails entries={view.technical}>
           {view.stackNames.length > 0 && (
-            <p className="text-fg-secondary [overflow-wrap:anywhere] font-mono text-[0.6875rem]">
+            <p className="text-fg-secondary [overflow-wrap:anywhere] font-mono text-meta">
               {view.stackNames.join(" · ")}
             </p>
           )}

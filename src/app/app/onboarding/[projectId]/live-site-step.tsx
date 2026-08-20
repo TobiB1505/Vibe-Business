@@ -121,11 +121,16 @@ export function LiveSiteStep({
         )}
 
         <div className="flex flex-wrap gap-3">
-          <Button type="submit" disabled={pending || continuing}>
+          <Button type="submit" disabled={pending || continuing} busy={pending}>
             {pending ? "Vibe is reading your product…" : "Let Vibe get to know it"}
           </Button>
           {(liveScanFailed || error?.step === "live") && (
-            <Button formAction={withoutLiveAction} variant="secondary" disabled={pending || continuing}>
+            <Button
+              formAction={withoutLiveAction}
+              variant="secondary"
+              disabled={pending || continuing}
+              busy={continuing}
+            >
               {continuing ? "Continuing…" : "Continue without live product"}
             </Button>
           )}

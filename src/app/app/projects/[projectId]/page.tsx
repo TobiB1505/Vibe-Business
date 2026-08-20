@@ -195,7 +195,7 @@ export default async function ProjectOverviewPage({
               <MonoLabel>Recent activity</MonoLabel>
               <Link
                 href={projectSectionHref(project.id, "activity")}
-                className="text-fg-muted hover:text-fg-body rounded-sm text-xs underline underline-offset-4 transition-colors"
+                className="text-fg-muted hover:text-fg-body rounded-sm text-xs underline underline-offset-4 transition-interactive"
               >
                 See all
               </Link>
@@ -206,7 +206,7 @@ export default async function ProjectOverviewPage({
                   <span className="text-fg-secondary truncate text-sm">{entry.title}</span>
                   <time
                     dateTime={entry.at}
-                    className="text-fg-meta shrink-0 font-mono text-[0.6875rem]"
+                    className="text-fg-meta shrink-0 font-mono text-meta"
                   >
                     {formatTimestamp(entry.at) ?? entry.at}
                   </time>

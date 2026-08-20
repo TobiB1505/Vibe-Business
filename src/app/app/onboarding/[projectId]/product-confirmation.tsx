@@ -129,7 +129,7 @@ export function ProductConfirmation({
           </Field>
         ))}
         <div className="flex flex-wrap gap-3">
-          <Button type="submit" disabled={saving}>
+          <Button type="submit" disabled={saving} busy={saving}>
             {saving ? "Saving and starting Audit…" : "Save and continue"}
           </Button>
           <Button type="button" variant="secondary" onClick={() => setEditing(false)}>

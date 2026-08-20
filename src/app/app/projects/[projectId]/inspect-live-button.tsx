@@ -48,7 +48,7 @@ export function InspectLiveButton({
         {/* Without this a refresh inside the freshness window would reuse
             the stored snapshot and appear to do nothing. */}
         <input type="hidden" name="force" value={hasSnapshot ? "true" : "false"} />
-        <Button type="submit" disabled={pending}>
+        <Button type="submit" disabled={pending} busy={pending}>
           {pending ? "Inspecting…" : hasSnapshot ? "Refresh live product intelligence" : "Inspect live product"}
         </Button>
       </form>

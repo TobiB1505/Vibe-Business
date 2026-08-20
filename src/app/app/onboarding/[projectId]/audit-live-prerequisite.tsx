@@ -113,6 +113,7 @@ export function AuditLivePrerequisite({
           type="submit"
           variant={mode === "parked" ? "secondary" : "primary"}
           disabled={pending}
+          busy={pending}
         >
           {pending ? "Checking your live product…" : "Check my live product"}
         </Button>

@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { statusToneText, type StatusTone } from "@/components/ui/status-pill";
+import { scoreDisplay, type ScoreTone } from "@/components/ui/score-display";
 import { buttonClasses } from "@/components/ui/button";
 import { StatusDot } from "@/components/ui/status-pill";
 import { Surface } from "@/components/ui/surface";
@@ -27,18 +29,27 @@ import type { DashboardProject } from "@/modules/projects/dashboard";
  *   "Open". This is presentation choosing a destination, not a decision engine.
  */
 
-function scoreDisplay(project: DashboardProject): { value: string; mono: boolean; tone: string } {
+/** Which status tone a score band reads as. */
+const SCORE_TONE: Record<ScoreTone, StatusTone> = {
+  strong: "success",
+  partial: "waiting",
+  weak: "problem",
+  unscored: "neutral",
+};
+
+function projectScore(project: DashboardProject): { value: string; mono: boolean; tone: string } {
   if (project.scoreState === "scored" && project.score !== null) {
-    const tone =
-      project.score >= 60 ? "text-mint" : project.score >= 35 ? "text-amber" : "text-coral";
-    return { value: `${project.score}`, mono: true, tone };
+    // The bands live in `score-display.ts` and were re-derived here as two
+    // magic numbers. One of the two would eventually have moved (UI-6 §8).
+    const { tone } = scoreDisplay(project.score);
+    return { value: `${project.score}`, mono: true, tone: statusToneText(SCORE_TONE[tone]) };
   }
   if (project.scoreState === "insufficient_coverage") {
     // Vibe looked and could not say. A different sentence from "never looked",
     // and neither of them is a number.
-    return { value: "Not enough evidence", mono: false, tone: "text-fg-muted" };
+    return { value: "Not enough evidence", mono: false, tone: statusToneText("neutral") };
   }
-  return { value: "Not analysed", mono: false, tone: "text-fg-muted" };
+  return { value: "Not analysed", mono: false, tone: statusToneText("neutral") };
 }
 
 /** The most useful destination given what is actually pending. */
@@ -61,7 +72,7 @@ function primaryAction(project: DashboardProject): { label: string; href: string
 }
 
 export function ProjectRow({ project }: { project: DashboardProject }) {
-  const score = scoreDisplay(project);
+  const score = projectScore(project);
   const action = primaryAction(project);
   const connected = project.repositoryFullName !== null;
 

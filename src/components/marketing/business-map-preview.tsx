@@ -63,12 +63,12 @@ export function BusinessMapPreview() {
               key={lens}
               className="border-line-2 bg-app/70 flex min-w-0 flex-col gap-2 rounded-xl border px-3 py-3"
             >
-              <span className="text-fg-secondary text-[0.8125rem] leading-tight font-medium">
+              <span className="text-fg-secondary text-ui leading-tight font-medium">
                 {LENS_LABELS[lens]}
               </span>
               <span className="flex items-center gap-2">
                 <span className="bg-line-track h-1 flex-1 rounded-full" aria-hidden />
-                <span className="text-fg-faint font-mono text-[0.6875rem]" aria-hidden>
+                <span className="text-fg-faint font-mono text-meta" aria-hidden>
                   —
                 </span>
               </span>
