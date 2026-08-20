@@ -43,13 +43,30 @@
   /* ── Foreground ramp (on --color-app) ────────────────────────────────
      Eight steps, each with a job. `fg` is headlines, `fg-body` values and
      UI text, `fg-prose` long explanation, then down to `fg-disabled`
-     which is the only legitimate use of the bottom of the ramp. */
+     which is the only legitimate use of the bottom of the ramp.
+
+     Six of the eight carry text and are held to 4.5:1 — measured against
+     `--color-surface-4`, not against `--color-app`. The surfaces are white
+     over the frame, so text on a panel has *less* contrast than the same
+     text on the page, and a ramp checked against the page alone passes
+     while the product fails. `design-tokens.test.ts` does the measuring.
+
+     `fg-disabled` and `fg-faint` are deliberately below the floor: one is
+     unavailable-control text, which WCAG exempts, and the other is never
+     text at all. */
   --color-fg: #f7f5f1;
   --color-fg-body: #edebe7;
   --color-fg-prose: #c9c5bd;
   --color-fg-secondary: #a5a19a;
-  --color-fg-muted: #8c8880;
-  --color-fg-meta: #6e6a63;
+  /* Raised with `fg-meta` below it: the two were 1.12x apart once the floor
+     rose, which is not a step anyone can see. The bottom of the ramp
+     compresses as a result, and that is the cost of having had a step below
+     the legibility floor at all. */
+  --color-fg-muted: #95928a;
+  /* Was #6e6a63 — 3.38:1 on a panel, and the default for the brand's
+     signature eyebrow (90 `MonoLabel` uses plus raw ones). The single token
+     that failed AA on every screen in the product. */
+  --color-fg-meta: #847f77;
   --color-fg-disabled: #57534c;
   --color-fg-faint: #3b3833;
 

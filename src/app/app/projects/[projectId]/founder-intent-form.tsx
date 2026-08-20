@@ -156,8 +156,11 @@ export function FounderIntentForm({
         )}
       </div>
 
+      {/* `text-danger` named no token and never has, so this alert rendered in
+          whatever colour it inherited — invisible as an error, on the one
+          message telling a founder their answer did not save. */}
       {state?.ok === false && (
-        <p role="alert" className="text-sm text-danger">
+        <p role="alert" className="text-sm text-coral">
           {ERROR_MESSAGES[state.error]}
         </p>
       )}
