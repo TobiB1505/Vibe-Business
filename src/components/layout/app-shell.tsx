@@ -68,19 +68,19 @@ export function AppShell({
             {credits != null && (
               <Link
                 href="/app/billing"
-                className="text-fg-body hover:text-fg rounded-nav text-[0.8125rem] tabular-nums transition-interactive"
+                className="text-fg-body hover:text-fg rounded-nav text-ui tabular-nums transition-interactive"
               >
                 <span className="font-semibold">{credits}</span>{" "}
                 <span className="text-fg-meta">Credits</span>
               </Link>
             )}
             {email && (
-              <span className="text-fg-meta hidden text-[0.8125rem] sm:inline" title={email}>
+              <span className="text-fg-meta hidden text-ui sm:inline" title={email}>
                 {email}
               </span>
             )}
             <form action={signOut}>
-              <TextAction type="submit" className="text-[0.8125rem]">
+              <TextAction type="submit" className="text-ui">
                 Sign out
               </TextAction>
             </form>

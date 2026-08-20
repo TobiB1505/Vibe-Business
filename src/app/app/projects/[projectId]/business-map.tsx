@@ -270,7 +270,7 @@ function MapNode({
               isNow
                 ? "text-fg text-[0.875rem]"
                 : isSoon
-                  ? "text-fg-body text-[0.8125rem]"
+                  ? "text-fg-body text-ui"
                   : "text-fg-secondary text-[0.75rem]"
             }`}
           >
@@ -554,7 +554,7 @@ export function BusinessMap({
           <section key={group.ring} className="flex flex-col gap-2">
             <h3
               id={`business-map-${glowId}-${group.ring}`}
-              className={`font-mono text-[0.6875rem] tracking-[0.14em] uppercase ${
+              className={`font-mono text-meta tracking-[0.14em] uppercase ${
                 group.ring === "now" ? "text-mint" : "text-fg-meta"
               }`}
             >

@@ -38,7 +38,7 @@ function ActivityRow({ entry }: { entry: ActivityEntry }) {
           <span className="text-fg-body text-sm">{entry.title}</span>
           <time
             dateTime={entry.at}
-            className="text-fg-meta shrink-0 font-mono text-[0.6875rem]"
+            className="text-fg-meta shrink-0 font-mono text-meta"
           >
             {formatTimestamp(entry.at) ?? entry.at}
           </time>
@@ -47,7 +47,7 @@ function ActivityRow({ entry }: { entry: ActivityEntry }) {
         {entry.facts.length > 0 && (
           <div className="flex flex-wrap gap-x-4 gap-y-1">
             {entry.facts.map((fact) => (
-              <span key={fact.label} className="text-fg-muted font-mono text-[0.6875rem]">
+              <span key={fact.label} className="text-fg-muted font-mono text-meta">
                 <span className="text-fg-meta">{fact.label} </span>
                 {fact.value}
               </span>

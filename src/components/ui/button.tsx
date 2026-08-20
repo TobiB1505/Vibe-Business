@@ -27,7 +27,7 @@ const VARIANT_CLASSES: Record<ButtonVariant, string> = {
 
 const SIZE_CLASSES: Record<ButtonSize, string> = {
   md: "px-5 py-3 text-sm",
-  sm: "px-4 py-2.5 text-[0.8125rem]",
+  sm: "px-4 py-2.5 text-ui",
 };
 
 const BASE_CLASSES =

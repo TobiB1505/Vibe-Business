@@ -185,7 +185,7 @@ function TimelineStep({
       <span
         aria-hidden
         className={cn(
-          "relative z-10 mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full border font-mono text-[0.6875rem]",
+          "relative z-10 mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full border font-mono text-meta",
           isCurrent
             ? "bg-mint-tint border-mint-line text-mint"
             : "bg-surface-3 border-line-3 text-fg-meta",

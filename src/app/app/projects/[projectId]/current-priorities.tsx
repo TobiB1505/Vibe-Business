@@ -161,7 +161,7 @@ export function CurrentPriorities({
                   A taste, not the explanation. Two lines here and the whole
                   text below the map, which is the width it was written for.
                 */}
-                <span className="text-fg-muted line-clamp-2 text-[0.8125rem] leading-relaxed">
+                <span className="text-fg-muted line-clamp-2 text-ui leading-relaxed">
                   {blocker.explanation}
                 </span>
 
@@ -220,7 +220,7 @@ export function CurrentPriorities({
                   <div className="mt-2 pl-2">
                     <Link
                       href={movesContextHref(movesHref, key)}
-                      className="text-fg-muted hover:text-fg-body rounded-sm text-[0.8125rem] underline underline-offset-4"
+                      className="text-fg-muted hover:text-fg-body rounded-sm text-ui underline underline-offset-4"
                     >
                       {addressing === 1 ? "See the move for this" : `See the ${addressing} moves for this`}
                     </Link>

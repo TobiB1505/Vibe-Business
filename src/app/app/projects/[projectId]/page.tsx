@@ -206,7 +206,7 @@ export default async function ProjectOverviewPage({
                   <span className="text-fg-secondary truncate text-sm">{entry.title}</span>
                   <time
                     dateTime={entry.at}
-                    className="text-fg-meta shrink-0 font-mono text-[0.6875rem]"
+                    className="text-fg-meta shrink-0 font-mono text-meta"
                   >
                     {formatTimestamp(entry.at) ?? entry.at}
                   </time>

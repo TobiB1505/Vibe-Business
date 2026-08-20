@@ -33,7 +33,7 @@ export function Metric({
       <span
         className={cn(
           "truncate text-sm",
-          mono && "font-mono text-[0.8125rem]",
+          mono && "font-mono text-ui",
           missing ? "text-fg-muted" : "text-fg-body",
         )}
       >

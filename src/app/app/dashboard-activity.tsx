@@ -48,13 +48,13 @@ export function DashboardActivity({ entries }: { entries: DashboardActivityEntry
             <span className="text-fg-body text-sm">{entry.title}</span>
             <Link
               href={`/app/projects/${entry.projectId}/activity`}
-              className="text-fg-muted hover:text-fg-body rounded-sm font-mono text-[0.6875rem] transition-interactive"
+              className="text-fg-muted hover:text-fg-body rounded-sm font-mono text-meta transition-interactive"
             >
               {entry.projectName}
             </Link>
             <time
               dateTime={entry.at}
-              className="text-fg-meta ml-auto shrink-0 font-mono text-[0.6875rem]"
+              className="text-fg-meta ml-auto shrink-0 font-mono text-meta"
             >
               {formatTimestamp(entry.at) ?? entry.at}
             </time>

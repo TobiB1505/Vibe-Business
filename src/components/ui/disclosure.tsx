@@ -85,8 +85,8 @@ export function TechnicalDetails({
           <dl className="flex flex-col gap-1.5">
             {entries.map((entry) => (
               <div key={entry.key} className="flex flex-wrap gap-x-3 gap-y-0.5">
-                <dt className="text-fg-meta font-mono text-[0.6875rem]">{entry.key}</dt>
-                <dd className="text-fg-secondary [overflow-wrap:anywhere] font-mono text-[0.6875rem]">
+                <dt className="text-fg-meta font-mono text-meta">{entry.key}</dt>
+                <dd className="text-fg-secondary [overflow-wrap:anywhere] font-mono text-meta">
                   {entry.value === null ? "null" : String(entry.value)}
                 </dd>
               </div>

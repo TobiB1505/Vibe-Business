@@ -84,7 +84,7 @@ export function OnboardingShell({
                     {complete ? "✓" : index + 1}
                   </span>
                   <span
-                    className={`truncate text-[0.6875rem] font-medium tracking-[0.08em] uppercase ${
+                    className={`truncate text-meta font-medium tracking-[0.08em] uppercase ${
                       current ? "text-fg-body" : complete ? "text-fg-secondary" : "text-fg-meta"
                     }`}
                   >

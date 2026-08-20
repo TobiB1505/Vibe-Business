@@ -148,6 +148,24 @@
   --text-label--line-height: 1.4;
   --text-label--letter-spacing: 0.16em;
 
+  /*
+   * Two sizes the product actually uses (UI-6 §6).
+   *
+   * The audit counted ~90 arbitrary `text-[…rem]` values against a six-step
+   * scale and read it as call sites ignoring the system. Measured, most of it
+   * is two numbers: `0.6875rem` thirty-four times and `0.8125rem` thirteen —
+   * neither of which the scale has ever had. That is not call sites drifting.
+   * It is a scale missing two steps that the product needs forty-seven times,
+   * and the fix belongs here rather than in forty-seven files.
+   *
+   * Font size only, no line-height or letter-spacing. Both are used on mono
+   * runs, in pills and beside numbers, where the surrounding rule is already
+   * set deliberately — a token that also imposed leading would change every
+   * one of those as a side effect of naming a size.
+   */
+  --text-meta: 0.6875rem;
+  --text-ui: 0.8125rem;
+
   /* ── Shape ───────────────────────────────────────────────────────────
      Radii scale with the element. Every interactive control is a full
      pill — that is a rule, not a preference, so `rounded-full` on buttons

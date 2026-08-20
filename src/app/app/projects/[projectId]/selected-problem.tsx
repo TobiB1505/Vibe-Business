@@ -72,7 +72,7 @@ export function SelectedProblem({
           <summary className="text-fg-muted hover:text-fg-body marker:content-none flex cursor-pointer items-center gap-2 text-sm">
             <span className="text-fg-meta transition-transform group-open:rotate-90">›</span>
             How Vibe reached this
-            <span className="text-fg-meta font-mono text-[0.6875rem]">
+            <span className="text-fg-meta font-mono text-meta">
               {blocker.evidenceIds.length}{" "}
               {blocker.evidenceIds.length === 1 ? "signal" : "signals"}
             </span>

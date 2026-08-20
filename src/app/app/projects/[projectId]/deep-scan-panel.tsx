@@ -250,7 +250,7 @@ function LiveViewDialog({
               This usually takes up to about 90 seconds. Keep this window open — the scan runs
               while it is here, and closing it stops the browser Vibe is signed in to.
             </p>
-            <p className="font-mono text-[0.6875rem] text-fg-meta">
+            <p className="font-mono text-meta text-fg-meta">
               {elapsedSeconds}s elapsed
             </p>
           </div>

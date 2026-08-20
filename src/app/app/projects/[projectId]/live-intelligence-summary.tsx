@@ -95,7 +95,7 @@ export function LiveIntelligenceSummary({
       </Surface>
 
       <div className="flex flex-col gap-3">
-        <p className="text-fg-meta font-mono text-[0.6875rem]">
+        <p className="text-fg-meta font-mono text-meta">
           Last checked {formatTimestamp(analyzedAt) ?? analyzedAt}
         </p>
 

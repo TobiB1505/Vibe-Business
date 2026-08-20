@@ -232,7 +232,7 @@ export function BillingView({
                 <li key={entry.id} className="flex items-center justify-between gap-4 px-5 py-4">
                   <div className="flex min-w-0 flex-col gap-1">
                     <span className="text-fg-body truncate text-sm">{entry.label}</span>
-                    <span className="text-fg-meta text-[0.8125rem]">{formatDate(entry.at)}</span>
+                    <span className="text-fg-meta text-ui">{formatDate(entry.at)}</span>
                   </div>
                   <span
                     className={
