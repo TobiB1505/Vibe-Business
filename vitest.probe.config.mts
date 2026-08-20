@@ -13,8 +13,15 @@ import { defineConfig } from "vitest/config";
  *
  * Three deliberate properties:
  *
- * - **An explicit variable always wins.** Anything already in `process.env` is
- *   left alone, so `FOO=bar pnpm agent:calibrate` still overrides the file.
+ * - **An explicit, non-empty variable always wins.** Anything already in
+ *   `process.env` with a real value is left alone, so `FOO=bar pnpm
+ *   agent:calibrate` still overrides the file. An empty string is treated the
+ *   same as unset — a required credential is never meant to be `""`, and a
+ *   shell or profile script that pre-declares the name empty (common for
+ *   `NEXT_PUBLIC_*` names, which some tooling exports as placeholders) must
+ *   not silently defeat the file. The first version of this got that wrong:
+ *   it checked `!== undefined` only, so a pre-declared empty variable made the
+ *   probe fail with "required" even though `.env.local` had the real value.
  * - **Escapes are not interpreted.** `GITHUB_APP_PRIVATE_KEY` is stored as one
  *   line with literal `\n` sequences, and `src/lib/env/github.ts` converts them
  *   back itself. Unescaping here would hand it a key it then mangles again.
@@ -32,7 +39,7 @@ function loadLocalEnv(): void {
     if (separator <= 0) continue;
 
     const key = trimmed.slice(0, separator).trim();
-    if (process.env[key] !== undefined) continue;
+    if (process.env[key]) continue;
 
     const raw = trimmed.slice(separator + 1).trim();
     const quoted =
