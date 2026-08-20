@@ -2,7 +2,7 @@
   "name": "vibe-business",
   "version": "0.1.0",
   "private": true,
-  "description": "Vibe Business \u2014 the business layer for AI-built products.",
+  "description": "Vibe Business — the business layer for AI-built products.",
   "engines": {
     "node": ">=20.9.0"
   },
@@ -36,6 +36,7 @@
     "@supabase/ssr": "0.12.4",
     "@supabase/supabase-js": "2.112.2",
     "@vercel/sandbox": "^3.0.0",
+    "@vercel/speed-insights": "^2.0.0",
     "next": "16.3.0",
     "octokit": "5.0.5",
     "playwright-core": "1.62.1",
