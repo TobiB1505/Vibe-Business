@@ -42,25 +42,6 @@ export function MonoLabel({
   );
 }
 
-/**
- * Anything the system produced rather than a person: identifiers, SHAs,
- * branches, timestamps, counts, credits.
- */
-export function MonoValue({
-  children,
-  className,
-  title,
-}: {
-  children: ReactNode;
-  className?: string;
-  title?: string;
-}) {
-  return (
-    <span title={title} className={cn("text-fg-body font-mono text-[0.8125rem]", className)}>
-      {children}
-    </span>
-  );
-}
 
 /**
  * A section heading with its optional supporting line and trailing controls.

@@ -133,7 +133,7 @@ function Windows({ card }: { card: BusinessImpactCard }) {
   );
 }
 
-function Metric({ card }: { card: BusinessImpactCard }) {
+function MeasuredMetric({ card }: { card: BusinessImpactCard }) {
   if (!card.metricLabel) return null;
 
   return (
@@ -220,7 +220,7 @@ export function BusinessImpactPanel({
       {card.state === "scheduled" ? (
         <div className="space-y-2">
           <p className="text-sm text-fg-prose">{card.headline}</p>
-          <Metric card={card} />
+          <MeasuredMetric card={card} />
           <Windows card={card} />
           {/* No interim conclusion. The result does not exist yet, and saying
               anything about its direction would be a guess (§22). */}
@@ -239,7 +239,7 @@ export function BusinessImpactPanel({
       ) : card.state === "measuring" ? (
         <div className="space-y-2">
           <p className="text-sm text-fg-prose">{card.headline}</p>
-          <Metric card={card} />
+          <MeasuredMetric card={card} />
           {/* Factual progress only — days, never a percentage, and never
               "looking good" before the window closes (§23). */}
           <p className="text-sm text-fg-secondary">
@@ -250,7 +250,7 @@ export function BusinessImpactPanel({
       ) : card.state === "insufficient_data" ? (
         <div className="space-y-2">
           <p className="text-sm text-fg-prose">{card.headline}</p>
-          <Metric card={card} />
+          <MeasuredMetric card={card} />
           <p className="text-sm text-fg-secondary">
             Not enough traffic was observed to make a meaningful comparison.
           </p>
@@ -286,7 +286,7 @@ export function BusinessImpactPanel({
           {/* improved / degraded / neutral. A negative result is shown exactly
               as prominently as a positive one (§25). */}
           <p className={`text-sm ${RESULT_TONE[card.state] ?? "text-fg-prose"}`}>{card.headline}</p>
-          <Metric card={card} />
+          <MeasuredMetric card={card} />
           <BeforeAfter card={card} />
           <Windows card={card} />
           {card.dataQuality && card.dataQuality !== "complete" && (
