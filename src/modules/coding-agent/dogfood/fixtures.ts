@@ -1,5 +1,6 @@
 import type { ActionPlanStep, StepActor, StepChangeKind } from "@/modules/action-plans/schema";
 import { classifyStep } from "@/modules/action-plans/classify";
+import { CALIBRATION_FIXTURES } from "./calibration";
 import type { RepositoryIntelligenceSnapshot } from "@/modules/repository-intelligence/schema";
 
 /**
@@ -167,14 +168,29 @@ export const LOW_UI_PRIMARY_CTA: BenchmarkFixture = {
   evidenceIds: ["live.conversion.primary_cta"],
 };
 
-const FIXTURES: readonly BenchmarkFixture[] = [LOW_UI_PRIMARY_CTA];
-
+/**
+ * Every fixture the internal dogfood surface can execute.
+ *
+ * `CALIBRATION_FIXTURES` (Sprint 0055) are ordinary benchmark fixtures with
+ * their expected pricing class written down and asserted, so a calibration run
+ * measures the class it intended to. They live in their own module because the
+ * expectations are calibration's concern, not the harness's — but they are
+ * listed here, because a fixture the surface cannot reach cannot be run.
+ *
+ * Assembled inside the function rather than in a module-level constant. The two
+ * modules genuinely reference each other — calibration fixtures *are*
+ * `BenchmarkFixture`s, and the harness has to be able to list them — so a
+ * constant evaluated at import time reads `CALIBRATION_FIXTURES` before that
+ * module has finished initialising, and gets `undefined`. Deferring the read to
+ * call time is the whole fix: by the time anything asks for the list, both
+ * modules exist.
+ */
 export function listBenchmarkFixtures(): readonly BenchmarkFixture[] {
-  return FIXTURES;
+  return [LOW_UI_PRIMARY_CTA, ...CALIBRATION_FIXTURES];
 }
 
 export function findBenchmarkFixture(id: string): BenchmarkFixture | null {
-  return FIXTURES.find((fixture) => fixture.id === id) ?? null;
+  return listBenchmarkFixtures().find((fixture) => fixture.id === id) ?? null;
 }
 
 /** The fixture a benchmark step key names, or null. */

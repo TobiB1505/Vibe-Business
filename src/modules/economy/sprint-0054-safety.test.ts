@@ -91,15 +91,55 @@ describe("the Economy Intelligence layer bills nobody", () => {
     }
   });
 
-  it("stays unwired: nothing outside the economy module imports it", () => {
-    // The layer is deliberately an island this sprint. Wiring it into
-    // coding-agent/service.ts needs persistence, and that is the Credit
-    // Settlement sprint's decision to make, not this one's.
+  /**
+   * Who outside the economy module may read it at all.
+   *
+   * Sprint 0054 asserted "nobody", because the layer was deliberately an island
+   * until persistence existed. Sprint 0055 changed that on purpose and narrowly:
+   * the internal calibration harness has to know a fixture's pricing class
+   * *before* the run, and the only honest way to know it is to ask the same
+   * classifier the run itself will use. A second copy of the policy would make
+   * the recorded prediction and the executed run answer different questions —
+   * exactly the drift this suite exists to prevent.
+   *
+   * So this is an allowlist naming its one reader, not a deleted guard. What it
+   * still forbids is the thing that matters: the estimator being wired into the
+   * production execution path, which needs persistence and is the Credit
+   * Settlement sprint's decision to make.
+   */
+  const PERMITTED_ECONOMY_READERS = [join("modules", "coding-agent", "dogfood")];
+
+  it("is read only by the economy module and the internal calibration harness", () => {
     const offenders = walk(join(process.cwd(), "src")).filter(
       (file) =>
-        !file.includes(`${join("modules", "economy")}`) &&
+        !file.includes(join("modules", "economy")) &&
+        !PERMITTED_ECONOMY_READERS.some((permitted) => file.includes(permitted)) &&
         readFileSync(file, "utf8").includes('from "@/modules/economy/'),
     );
+
+    expect(offenders).toEqual([]);
+  });
+
+  /**
+   * The narrower rule the allowlist above must not be allowed to erode: the
+   * calibration harness may ask what class a change is, and may not ask what it
+   * will cost. A quote reaching the execution path is a quote that will
+   * eventually authorize something.
+   */
+  it("never lets the predictive estimator reach the execution path", () => {
+    const forbidden = [
+      "economy/intelligence/pre-execution-estimate",
+      "economy/intelligence/quote-simulation",
+      "economy/intelligence/safety-margin",
+    ];
+
+    const offenders = walk(join(process.cwd(), "src"))
+      .filter((file) => !file.includes(join("modules", "economy")))
+      .filter((file) => !file.endsWith(".test.ts"))
+      .filter((file) => {
+        const code = readFileSync(file, "utf8");
+        return forbidden.some((module) => code.includes(module));
+      });
 
     expect(offenders).toEqual([]);
   });
