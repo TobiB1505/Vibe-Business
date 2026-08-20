@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Button, TextAction } from "@/components/ui/button";
 import type { SetProductionUrlFailure } from "@/modules/projects/production-url";
 import { setProductionUrlAction, type ProductionUrlActionState } from "./production-url-action";
 
@@ -49,13 +49,9 @@ export function ProductionUrlForm({
         >
           {currentUrl}
         </a>
-        <button
-          type="button"
-          onClick={() => setEditing(true)}
-          className="text-xs text-fg-muted underline underline-offset-2 hover:text-fg-prose"
-        >
+        <TextAction type="button" onClick={() => setEditing(true)} className="text-xs">
           Change
-        </button>
+        </TextAction>
       </div>
     );
   }
@@ -75,13 +71,9 @@ export function ProductionUrlForm({
           {pending ? "Saving…" : currentUrl ? "Save" : "Add production URL"}
         </Button>
         {currentUrl !== null && (
-          <button
-            type="button"
-            onClick={() => setEditing(false)}
-            className="text-xs text-fg-muted underline underline-offset-2 hover:text-fg-prose"
-          >
+          <TextAction type="button" onClick={() => setEditing(false)} className="text-xs">
             Cancel
-          </button>
+          </TextAction>
         )}
       </form>
 

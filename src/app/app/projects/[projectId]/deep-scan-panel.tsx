@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Button } from "@/components/ui/button";
+import { Button, TextAction } from "@/components/ui/button";
 import type { DeepScanViewModel } from "@/modules/authenticated-product-intelligence/view";
 import {
   analyzeDeepScanAction,
@@ -207,14 +207,9 @@ function LiveViewDialog({
           <Button type="button" onClick={onAnalyze} disabled={busy || !liveViewUrl}>
             {busy ? "Looking around…" : "I'm logged in — Analyze"}
           </Button>
-          <button
-            type="button"
-            onClick={onCancel}
-            disabled={busy}
-            className="text-sm text-fg-secondary underline underline-offset-2 hover:text-fg-body disabled:opacity-50"
-          >
+          <TextAction type="button" onClick={onCancel} disabled={busy} className="text-sm">
             Cancel
-          </button>
+          </TextAction>
         </div>
       </div>
     </div>

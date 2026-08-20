@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { TextAction } from "@/components/ui/button";
 import { VibeLockup } from "@/components/brand/vibe-mark";
 import { cn } from "@/lib/utils/cn";
 import { signOut } from "@/modules/auth/actions";
@@ -75,12 +76,9 @@ export function AppShell({
               </span>
             )}
             <form action={signOut}>
-              <button
-                type="submit"
-                className="text-fg-muted hover:text-fg-body rounded-sm text-[0.8125rem] underline underline-offset-4 transition-colors duration-150"
-              >
+              <TextAction type="submit" className="text-[0.8125rem]">
                 Sign out
-              </button>
+              </TextAction>
             </form>
           </div>
         </div>

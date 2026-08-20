@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useActionState, useState } from "react";
-import { Button, buttonClasses } from "@/components/ui/button";
+import { Button, TextAction, buttonClasses} from "@/components/ui/button";
 import { preparedChangeHref } from "@/components/layout/project-shell";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { useOperationPoll } from "@/lib/client/use-operation-poll";
@@ -77,13 +77,9 @@ function ConfirmDialog({
             {pending ? "Starting…" : "Prepare change"}
           </Button>
         </form>
-        <button
-          type="button"
-          onClick={onCancel}
-          className="text-sm text-fg-secondary underline underline-offset-2 hover:text-fg-body"
-        >
+        <TextAction type="button" onClick={onCancel} className="text-sm">
           Cancel
-        </button>
+        </TextAction>
       </div>
     </div>
   );
@@ -259,13 +255,9 @@ export function PrepareChangePanel({
           >
             Review prepared change
           </Link>
-          <button
-            type="button"
-            onClick={() => loadDiff(preparedChangeId)}
-            className="text-sm text-fg-prose underline underline-offset-2 hover:text-fg"
-          >
+          <TextAction type="button" onClick={() => loadDiff(preparedChangeId)} className="text-sm">
             Preview the diff here
-          </button>
+          </TextAction>
           {branchUrl && (
             <a
               href={branchUrl}

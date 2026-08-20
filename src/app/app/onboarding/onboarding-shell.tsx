@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
+import { TextAction } from "@/components/ui/button";
 import { VibeLockup } from "@/components/brand/vibe-mark";
 import { signOut } from "@/modules/auth/actions";
 import {
@@ -56,9 +57,7 @@ export function OnboardingShell({
             )}
             {email && <span className="text-fg-meta hidden text-xs sm:inline">{email}</span>}
             <form action={signOut}>
-              <button className="text-fg-muted hover:text-fg-body text-xs underline underline-offset-4">
-                Sign out
-              </button>
+              <TextAction className="text-xs">Sign out</TextAction>
             </form>
           </div>
         </div>

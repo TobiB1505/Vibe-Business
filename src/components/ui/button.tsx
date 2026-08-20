@@ -57,6 +57,63 @@ export function buttonClasses({
  */
 export const buttonClassName = buttonClasses();
 
+/**
+ * The one control that is not a pill (UI-6 §1).
+ *
+ * ## Why this exists rather than a fifth `Button` variant
+ *
+ * Because the pill rule above is real and worth keeping: a `Button` is always
+ * a pill, and a variant that was not one would make that sentence false.
+ *
+ * But nine controls in this product are genuinely not buttons in the visual
+ * sense — "Sign out" in the header, "Change" beside a value, "More context"
+ * under a paragraph, "Cancel" beside a form's real action. Rendering those as
+ * pills would give a header two competing controls and turn every inline
+ * affordance into furniture. They were written nine separate times instead,
+ * each with its own size, colour and hover, which is how a third button system
+ * appears without anyone deciding to build one.
+ *
+ * So the category is named once, here, next to the one it is not.
+ *
+ * ## What it fixes for free
+ *
+ * All nine used `transition-colors`, which includes `outline-color` — so the
+ * focus ring faded in over 150ms on every one of them. Same bug the pill
+ * documents avoiding two comments above, in the controls that never inherited
+ * the knowledge.
+ */
+export type TextActionTone = "muted" | "danger";
+
+const TEXT_ACTION_TONES: Record<TextActionTone, string> = {
+  muted: "text-fg-muted hover:text-fg-body",
+  // Coral, and it darkens rather than lightens on hover, so a destructive
+  // control never reads as the most inviting thing on the screen.
+  danger: "text-coral hover:text-coral/80",
+};
+
+const TEXT_ACTION_BASE =
+  "rounded-sm underline underline-offset-4 duration-150 ease-vibe " +
+  // Named properties rather than `transition-colors`, for the reason the pill
+  // gives above: a focus indicator that fades in is a focus indicator that is
+  // not there when the key is pressed.
+  "transition-[color] " +
+  "disabled:pointer-events-none disabled:text-fg-disabled disabled:no-underline";
+
+export function textActionClasses(tone: TextActionTone = "muted"): string {
+  return cn(TEXT_ACTION_BASE, TEXT_ACTION_TONES[tone]);
+}
+
+export type TextActionProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+  tone?: TextActionTone;
+};
+
+export const TextAction = forwardRef<HTMLButtonElement, TextActionProps>(function TextAction(
+  { className, tone = "muted", ...props },
+  ref,
+) {
+  return <button ref={ref} className={cn(textActionClasses(tone), className)} {...props} />;
+});
+
 export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: ButtonVariant;
   size?: ButtonSize;

@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Button, TextAction } from "@/components/ui/button";
 import {
   GOAL_LABELS,
   MONETIZATION_LABELS,
@@ -84,13 +84,9 @@ export function FounderIntentForm({
             </div>
           )}
         </dl>
-        <button
-          type="button"
-          onClick={() => setEditing(true)}
-          className="text-xs text-fg-muted underline underline-offset-2 hover:text-fg-prose"
-        >
+        <TextAction type="button" onClick={() => setEditing(true)} className="text-xs">
           Edit what you&rsquo;re working toward
-        </button>
+        </TextAction>
       </div>
     );
   }
@@ -146,13 +142,9 @@ export function FounderIntentForm({
           {pending ? "Saving…" : "Save"}
         </Button>
         {!empty && (
-          <button
-            type="button"
-            onClick={() => setEditing(false)}
-            className="text-xs text-fg-muted underline underline-offset-2 hover:text-fg-prose"
-          >
+          <TextAction type="button" onClick={() => setEditing(false)} className="text-xs">
             Cancel
-          </button>
+          </TextAction>
         )}
       </div>
 

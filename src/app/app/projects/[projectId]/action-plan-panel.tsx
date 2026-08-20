@@ -1,7 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Button, TextAction } from "@/components/ui/button";
 import { StatusPill, type StatusTone } from "@/components/ui/status-pill";
 import { Surface } from "@/components/ui/surface";
 import { Disclosure } from "@/components/ui/disclosure";
@@ -95,14 +95,14 @@ function ExpandableText({ text }: { text: string }) {
       <p className={cn("text-fg-prose text-sm leading-relaxed", !expanded && "line-clamp-2")}>
         {text}
       </p>
-      <button
+      <TextAction
         type="button"
         onClick={() => setExpanded((value) => !value)}
         aria-expanded={expanded}
-        className="text-fg-muted hover:text-fg-body self-start text-xs underline underline-offset-4 transition-colors"
+        className="self-start text-xs"
       >
         {expanded ? "Show less" : "More context"}
-      </button>
+      </TextAction>
     </div>
   );
 }

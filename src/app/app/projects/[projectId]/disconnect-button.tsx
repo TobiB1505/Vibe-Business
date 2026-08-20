@@ -1,6 +1,7 @@
 "use client";
 
 import { disconnectProjectAction } from "./actions";
+import { TextAction } from "@/components/ui/button";
 
 /** Native `confirm()` — explicit confirmation (Sprint 1 §11) without a new dependency. */
 export function DisconnectButton({ projectId }: { projectId: string }) {
@@ -18,9 +19,9 @@ export function DisconnectButton({ projectId }: { projectId: string }) {
         }
       }}
     >
-      <button type="submit" className="text-sm text-coral underline underline-offset-2 hover:text-coral">
+      <TextAction type="submit" tone="danger" className="text-sm">
         Disconnect project
-      </button>
+      </TextAction>
     </form>
   );
 }
