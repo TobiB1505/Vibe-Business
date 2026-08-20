@@ -1,7 +1,8 @@
 # UI-5 — The Prepared Change Card
 
-**Status:** implemented. Lint / typecheck / 4542 unit tests / build / 297 browser E2E green. One
-thing is deliberately **not** claimed — see *What has not been proved* below.
+**Status:** implemented, then corrected by its own first dogfood. Lint / typecheck / 4562 unit
+tests / build / 298 browser E2E green. Two things are deliberately **not** claimed — see *What has
+not been proved* below.
 
 Derived from the product UI/UX audit of 17.08.2026 (`docs/audits/2026-08-17-product-ux-audit/`,
 findings **F-2**, **F-3**, **F-11**, **F-12**, **F-24** and the execution-surface findings), which
@@ -113,12 +114,43 @@ folded one.
 - Every stage label, failure message and status vocabulary in the domain modules is untouched. This
   sprint changed the order and the conditions, never the words the domain owns.
 
+## The first dogfood, and what it cost to look
+
+This sprint shipped saying the card had never carried a real change. It has now — a deployed
+preview of this branch, opened on a project with seven prepared changes — and the first screen
+found **two** defects that nineteen fixtures and 4,542 unit tests did not.
+
+**The headline narrated work nobody was doing.** "Vibe is preparing what you need to review", above
+a preview that was never started and a review waiting for one. The `reviewing` stage stood for a
+comparison being built *and* for a comparison nobody had started — the identical conflation this
+sprint had already found and fixed one gate earlier, in `validating`, and then reintroduced by not
+looking one step further. It is now three stages: Vibe preparing something, the founder's turn, and
+a comparison that failed or expired.
+
+**An agent-written change had nothing to lead with.** `businessRationaleFor` is a per-capability
+lookup, and every change an agent will ever write carries `agentic_execution_v1` — so it returns
+null, the rationale section returns null with it, and the card opened with a status line and then a
+branch name. Exactly the screen this sprint set out to replace, reappearing for the change type the
+product is moving toward, and not fixable by adding a table entry: one sentence per capability
+cannot describe changes that differ per change.
+
+Such a change now leads with the Move it was asked to address, under **"What this change was
+for"** — never the rationale's heading — and closes with an unconditional line saying it is the
+request, written before the change existed, and not a description of what the change did. The text
+is the same text the Moves panel already shows: a second view, not a new class of claim, and it is
+rendered and nothing else.
+
+**What is worth writing down is why the fixtures missed both.** Neither defect needs an unusual
+state. Both need a *combination* — validated but unpreviewed, agentic but unapproved — and every
+scenario written before this sprint was approved, deterministic, or both. `change_agentic_review_required`
+is now that combination, rebuilt from the screen itself rather than invented.
+
 ## What has not been proved
 
-**The card has never been driven by a real change through all seven gates.** Everything above is
-proven against fixtures in a real browser and against the derivation in unit tests. The fixture
-harness renders the real panels with the real server-decided cards, but the wiring in the workspace
-read model that produces those cards is not exercised by it. That belongs to the first dogfood.
+**The seven gates end to end.** A real change reached the card and produced two fixes; it has not
+been driven through validation, preview, review, approval, merge and outcome in one run. The
+fixture harness renders the real panels with the real server-decided cards, but the wiring in the
+workspace read model that produces those cards is still only exercised by hand.
 
 **A running validation still renders as "Not validated" after a reload.** Found while building the
 fixtures, and left alone: `prepared-changes-section.tsx` hands the validation panel
