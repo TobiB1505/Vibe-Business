@@ -9,17 +9,39 @@ import { MonoLabel } from "@/components/ui/typography";
 import {
   REVIEW_CLASSIFICATION_LABELS,
   REVIEW_CLASSIFICATION_NOTES,
+  REVIEW_DOWNGRADE_NOTE,
 } from "@/modules/review/classification";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { useOperationPoll } from "@/lib/client/use-operation-poll";
 import { operationPollPhase } from "@/modules/operations/view";
 import { EXECUTION_INTERRUPT_QUESTIONS } from "@/modules/execution-contract/view";
 import { AgentExecutionLiveView } from "@/modules/coding-agent/ui/agent-execution-live-view";
+// From `./poll`, not `./live-view`: this is a client component, and
+// `live-view.ts` is server-only (Sprint 0053).
+import { validationStillSettling } from "@/modules/coding-agent/observability/poll";
 import type { ExecutionInterruptAnswer } from "@/modules/execution-contract/schema";
 import { answerDogfoodInterruptAction, getDogfoodRunStatusAction, type DogfoodRunStatus } from "./actions";
 
 /** Matches the existing Action Plan panel's own cadence (§16, §20). */
 const POLL_INTERVAL_MS = 3_000;
+
+/**
+ * Whether this screen still has anything to wait for.
+ *
+ * Two things happen on this page in sequence, not one: the agent run, and then
+ * the validation its success automatically enqueues a few seconds later. Asking
+ * only about the agent stopped the poll in the gap between them, which is why a
+ * six-minute validation used to render forever as "not started" (Sprint 0053).
+ *
+ * Both halves are pure functions kept out of this component, so the decision is
+ * unit-tested rather than asserted by a screenshot.
+ */
+function stillWatching(status: DogfoodRunStatus): boolean {
+  return (
+    operationPollPhase(status.live.operation) === "working" ||
+    validationStillSettling(status.live)
+  );
+}
 
 /**
  * The dogfood surface's host for the reusable live execution view.
@@ -44,14 +66,14 @@ export function StatusView({
 }) {
   const { latest: polled } = useOperationPoll<DogfoodRunStatus>({
     key: initial.live.operation.operationId,
-    enabled: operationPollPhase(initial.live.operation) === "working",
+    enabled: stillWatching(initial),
     intervalMs: POLL_INTERVAL_MS,
     poll: async () => {
       const next = await getDogfoodRunStatusAction(projectId, initial.live.operation.operationId);
       return next ? { kind: "value", value: next } : { kind: "unavailable" };
     },
     // Stops on its own answer: the server render cannot know the run ended.
-    continueAfter: (next) => operationPollPhase(next.live.operation) === "working",
+    continueAfter: stillWatching,
   });
 
   const status = polled ?? initial;
@@ -120,6 +142,11 @@ function RecommendedReview({
         <p className="text-xs text-fg-muted">
           Pages affected: {classification.routes.join(", ")}
         </p>
+      )}
+      {/* Why a page file did not earn a screenshot. Without this the reader
+          has to guess whether the classifier missed it. */}
+      {classification.downgradedPaths.length > 0 && (
+        <p className="text-xs text-fg-muted">{REVIEW_DOWNGRADE_NOTE}</p>
       )}
       <p className="text-xs text-fg-muted">
         {classification.visualPaths.length} rendered {fileWord(classification.visualPaths.length)},{" "}
