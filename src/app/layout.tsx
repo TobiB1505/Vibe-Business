@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { getAppUrl } from "@/lib/env/app-url";
 import { fontVariables } from "./fonts";
@@ -31,6 +32,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="en" className={`h-full antialiased ${fontVariables}`}>
       <body className="bg-app text-fg-body h-full font-sans">
         {children}
+        <Analytics />
         <SpeedInsights />
       </body>
     </html>
