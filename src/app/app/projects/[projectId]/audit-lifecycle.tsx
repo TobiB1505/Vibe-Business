@@ -205,7 +205,7 @@ export function AuditWaitingHeader() {
   return (
     <div className="flex flex-col gap-3 pt-2">
       <MonoLabel as="h2" className="text-mint">
-        Vibe needs u · Business audit waiting for you
+        Vibe needs you · Business audit waiting for you
       </MonoLabel>
       <p className="text-fg max-w-[46ch] text-xl leading-snug font-semibold tracking-[-0.025em]">
         Vibe found the one part of the business only you can clarify.

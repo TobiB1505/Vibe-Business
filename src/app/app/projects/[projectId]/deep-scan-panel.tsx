@@ -476,8 +476,8 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
             <Heading title="Deep Scan" status="Unavailable" />
             {model.unavailableReason === "provider_not_configured" ? (
               <p className="text-sm text-fg-muted">
-                Deep Scan isn&apos;t available on this deployment yet. It needs a browser provider
-                to be configured on the server.
+                Deep Scan is not switched on here yet. That is a gap on Vibe&apos;s side — it says
+                nothing about your product, and nothing else about your project is affected.
               </p>
             ) : (
               <p className="text-sm text-fg-muted">

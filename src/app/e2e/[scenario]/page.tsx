@@ -291,7 +291,7 @@ export default async function E2eScenarioPage({
     );
   }
 
-  // "Vibe needs u" (CORE-2a.4 §30): the same panel the score route renders,
+  // "Vibe needs you" (CORE-2a.4 §30): the same panel the score route renders,
   // given a question the real gate produced.
   if (isE2eNeedsUserScenario(scenario)) {
     const question = E2E_NEEDS_USER_SCENARIOS[scenario]();
