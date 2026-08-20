@@ -27,14 +27,20 @@ These five runs are designed to close the countable part of that gap.
 | Run | Fixture | Class | How it gets there | What it teaches |
 |---|---|---|---|---|
 | 1 | `calibration-1-small-copy` | `small` | public pages, no named surface | A second `small` observation, and a repeat of run #8's evidence against a repository that has grown |
-| 2 | `calibration-2-complex-multi-surface` | `complex` | `seo_metadata` + `pricing_page` | The **first `complex` observation in Vibe's history** |
+| 2 | `calibration-2-complex-multi-surface` | `complex` | `seo_metadata` + `legal` | The **first `complex` observation in Vibe's history** |
 | 3 | `calibration-3-standard-logic` | `standard` | `sitemap` alone | The first non-presentational change — is `standard` internally consistent? |
 | 4 | `calibration-4-standard-validation-heavy` | `standard` | `seo_metadata` alone | Class held fixed, validation effort varied, so validation cost separates from class |
-| 5 | `calibration-5-complex-structural` | `complex` | `legal` + `docs_help` | A second `complex` on a *different* surface pair |
+| 5 | `calibration-5-complex-structural` | `complex` | `sitemap` + `robots` | A second `complex` on a *different* surface pair |
 
 Every one of those classes is asserted in `calibration.test.ts` against the
 production classifier. A calibration set whose classes turn out wrong after the
 money is spent has measured nothing.
+
+The same test also checks each surface against a file that exists. The first
+draft of runs 2 and 5 cited a pricing page and a docs page — this repository has
+neither. Classification reads evidence ids and never touches the filesystem, so
+both classified correctly and the suite went green while the work was
+impossible. A fixture has to be *possible*, not just well-classified.
 
 ### Why `complex` is never reached by risk
 

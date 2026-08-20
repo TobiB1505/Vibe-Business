@@ -121,11 +121,19 @@ export const CALIBRATION_1_SMALL_COPY: CalibrationFixture = {
  * RUN 2 — the first `complex`, by surface count.
  *
  * `live.seo.meta_description_missing` implies the `seo_metadata` surface;
- * `live.surface.pricing` implies `pricing_page`. Two named surfaces, so rule 4
- * fires: `multi_surface` → `complex`.
+ * `repo.surface.legal` implies `legal`. Two named surfaces, so rule 4 fires:
+ * `multi_surface` → `complex`. Neither id is in `SENSITIVE_EVIDENCE_PREFIXES`.
  *
- * Neither id is in `SENSITIVE_EVIDENCE_PREFIXES`, so this reaches `complex`
- * without touching payments, checkout or authentication.
+ * ## Why not the pricing page, which the first draft cited
+ *
+ * Because this repository has no pricing page. The classifier would still have
+ * answered `complex` — it reads evidence ids, not the filesystem — so the class
+ * assertions passed while the *work* was impossible. The agent would have found
+ * nothing to edit, or invented a pricing page, and either way the run would
+ * have cost real money and measured nothing.
+ *
+ * `calibration.test.ts` now checks every fixture's surfaces against paths that
+ * exist on disk, which is the guard that was missing.
  */
 export const CALIBRATION_2_COMPLEX_MULTI_SURFACE: CalibrationFixture = {
   id: "calibration-2-complex-multi-surface",
@@ -136,30 +144,31 @@ export const CALIBRATION_2_COMPLEX_MULTI_SURFACE: CalibrationFixture = {
     "by risk, because a high-risk agentic run is refused and would produce no cost data.",
   expectedRiskClass: "moderate",
   expectedPricingClass: "complex",
-  expectedSurfaces: ["pricing_page", "seo_metadata"],
+  expectedSurfaces: ["seo_metadata", "legal"],
 
   benchmarkIntent:
-    "Two named business surfaces in one step, which is what the `complex` class is meant to price.",
+    "Two named business surfaces in one step, on two pages that genuinely exist and genuinely " +
+    "share the defect.",
 
-  goal: "Give the pricing page a meta description that matches what the page actually offers.",
+  goal: "Give the legal pages meta descriptions that say what each one covers.",
   expectedChangedState:
-    "The pricing page carries a meta description written for it specifically, rather than " +
-    "inheriting a generic site-wide one or having none.",
+    "The privacy and terms pages each carry their own meta description, written for that page, " +
+    "rather than inheriting the site-wide default.",
 
-  title: "Give the pricing page its own meta description",
+  title: "Give the privacy and terms pages their own meta descriptions",
   description:
-    "Add a page-specific meta description to the public pricing page, describing what the page " +
-    "shows rather than repeating the site-wide description.",
+    "Add a page-specific meta description to the public privacy page and to the public terms " +
+    "page, each describing what that document covers.",
   purpose:
-    "The pricing page is the page a visitor reaches when they are deciding whether to pay, and " +
-    "it is described to search engines in words written for the site as a whole.",
+    "Both legal pages are described to search engines in words written for the site as a whole, " +
+    "so a visitor searching for Vibe's terms sees a summary of the product instead.",
   doneWhen:
-    "The pricing page exports its own metadata description; the site-wide default is left in " +
-    "place for pages that have no override; no pricing figure, plan or entitlement is changed; " +
-    "and no checkout or billing code is touched.",
+    "The privacy page and the terms page each export their own metadata description; the " +
+    "site-wide default is left in place for pages with no override; no legal wording is altered; " +
+    "and no other page is changed.",
   actor: "vibe",
   changeKind: "product_change",
-  evidenceIds: ["live.seo.meta_description_missing", "live.surface.pricing"],
+  evidenceIds: ["live.seo.meta_description_missing", "repo.surface.legal"],
 };
 
 /**
@@ -254,10 +263,14 @@ export const CALIBRATION_4_STANDARD_VALIDATION_HEAVY: CalibrationFixture = {
 /**
  * RUN 5 — the second `complex`, on a different pair of surfaces.
  *
- * `repo.surface.legal` and `repo.surface.docs_help` are two named surfaces, so
- * `multi_surface` → `complex` again. A second observation on a *different* pair
- * is what separates "complex costs more" from "that one pair costs more" —
- * with n=1 the two are indistinguishable.
+ * `live.seo.sitemap_missing` implies `sitemap`; `live.seo.robots_txt_missing`
+ * implies `robots`. Two named surfaces again, and a *different* pair from run
+ * 2 — which is what separates "complex costs more" from "that one pair costs
+ * more". With n=1 the two are indistinguishable.
+ *
+ * Both `src/app/sitemap.ts` and `src/app/robots.ts` exist, and the change
+ * between them is the standard one: a robots file should point crawlers at the
+ * sitemap it belongs with.
  */
 export const CALIBRATION_5_COMPLEX_STRUCTURAL: CalibrationFixture = {
   id: "calibration-5-complex-structural",
@@ -268,32 +281,31 @@ export const CALIBRATION_5_COMPLEX_STRUCTURAL: CalibrationFixture = {
     "from the particular surfaces run 2 happened to touch.",
   expectedRiskClass: "moderate",
   expectedPricingClass: "complex",
-  expectedSurfaces: ["docs_help", "legal"],
+  expectedSurfaces: ["sitemap", "robots"],
 
   benchmarkIntent:
-    "Two named surfaces that share a structural problem, so the change is genuinely broader " +
-    "rather than one edit cited twice.",
+    "Two named surfaces that share one structural relationship, so the change is genuinely " +
+    "broader rather than one edit cited twice.",
 
-  goal: "Give the legal and help pages a consistent way of stating when they were last updated.",
+  goal: "Make the robots file point crawlers at the sitemap it belongs with.",
   expectedChangedState:
-    "The legal and help pages state when they were last updated, from one shared source rather " +
-    "than from a date written separately into each page.",
+    "The generated robots output references the site's sitemap URL, derived from the same base " +
+    "URL the sitemap itself is built from rather than from a second hard-coded literal.",
 
-  title: "State when the legal and help pages were last updated",
+  title: "Point the robots file at the sitemap",
   description:
-    "Give the legal and help pages a shared way of showing a last-updated date, so the value is " +
-    "defined once rather than written into each page by hand.",
+    "Reference the sitemap URL from the generated robots output, taking the base URL from the " +
+    "same source the sitemap route already uses.",
   purpose:
-    "A legal page with no last-updated date leaves a reader unable to tell whether the terms " +
-    "they are agreeing to are current, and a date copied into each page drifts the moment one " +
-    "page is edited and the other is not.",
+    "A crawler that reads robots.txt is told nothing about where the sitemap is, so the sitemap " +
+    "is only found by guessing the conventional path.",
   doneWhen:
-    "The legal and help pages show a last-updated date drawn from a single shared definition; no " +
-    "legal wording is altered; the existing page structure and design system are preserved; and " +
-    "no authenticated screen is changed.",
+    "The robots output names the sitemap URL; the URL comes from the application's existing base " +
+    "URL rather than a duplicated literal; the existing robots rules are unchanged; and both " +
+    "routes keep their current tests passing.",
   actor: "vibe",
   changeKind: "product_change",
-  evidenceIds: ["repo.surface.legal", "repo.surface.docs_help"],
+  evidenceIds: ["live.seo.sitemap_missing", "live.seo.robots_txt_missing"],
 };
 
 export const CALIBRATION_FIXTURES: readonly CalibrationFixture[] = [

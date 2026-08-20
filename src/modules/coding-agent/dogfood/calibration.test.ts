@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { EXECUTION_PRICING_CLASSES } from "@/modules/economy/execution-class";
@@ -174,6 +174,73 @@ describe("every calibration run is recorded as dogfood, without a migration", ()
     for (const fixture of CALIBRATION_FIXTURES) {
       expect(benchmarkStepKey(fixture)).toMatch(/^dogfood-fixture--[a-z0-9-]+$/);
     }
+  });
+});
+
+/**
+ * The check that was missing, and what it cost to notice.
+ *
+ * Every assertion above verifies the *classification* — which is derived from
+ * evidence ids alone, and never touches the filesystem. So a fixture citing
+ * `live.surface.pricing` classified as `complex` exactly as designed, and the
+ * suite went green, in a repository that has no pricing page. Two of the five
+ * fixtures named surfaces that do not exist here; run 2 would have found
+ * nothing to edit or invented a page, and either way it would have spent real
+ * money measuring nothing.
+ *
+ * A calibration fixture has to be *possible*, not just well-classified. This
+ * maps each named surface to the paths that implement it and requires at least
+ * one to exist.
+ */
+describe("every fixture names a surface this repository actually has", () => {
+  const SURFACE_PATHS: Record<string, readonly string[]> = {
+    seo_metadata: ["src/app/layout.tsx", "src/app/page.tsx"],
+    sitemap: ["src/app/sitemap.ts"],
+    robots: ["src/app/robots.ts"],
+    legal: ["src/app/privacy/page.tsx", "src/app/terms/page.tsx"],
+    pricing_page: ["src/app/pricing/page.tsx"],
+    docs_help: ["src/app/docs/page.tsx", "src/app/help/page.tsx"],
+    contact: ["src/app/contact/page.tsx"],
+    blog_content: ["src/app/blog/page.tsx"],
+    onboarding: ["src/app/app/onboarding/page.tsx"],
+    dashboard_app: ["src/app/app/page.tsx"],
+  };
+
+  it("knows where every surface the fixtures name would live", () => {
+    for (const fixture of CALIBRATION_FIXTURES) {
+      for (const surface of fixture.expectedSurfaces) {
+        expect(SURFACE_PATHS[surface], `no path mapping for surface ${surface}`).toBeDefined();
+      }
+    }
+  });
+
+  it("only names surfaces backed by a file that exists", () => {
+    for (const fixture of CALIBRATION_FIXTURES) {
+      for (const surface of fixture.expectedSurfaces) {
+        const paths = SURFACE_PATHS[surface] ?? [];
+        const present = paths.filter((path) => existsSync(join(process.cwd(), path)));
+
+        expect(
+          present.length,
+          `${fixture.id} targets the ${surface} surface, and none of ${paths.join(", ")} exists — ` +
+            "the class would be right and the work impossible",
+        ).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  /**
+   * The two complex runs exist to tell the class apart from the surfaces that
+   * happened to produce it. Two observations of the same pair would not.
+   */
+  it("gives the two complex runs different surface pairs", () => {
+    const complex = CALIBRATION_FIXTURES.filter((f) => f.expectedPricingClass === "complex");
+
+    expect(complex).toHaveLength(2);
+    const [first, second] = complex;
+    expect([...(first?.expectedSurfaces ?? [])].sort()).not.toEqual(
+      [...(second?.expectedSurfaces ?? [])].sort(),
+    );
   });
 });
 
