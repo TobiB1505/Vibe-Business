@@ -213,11 +213,96 @@ test.describe("reload recovery", () => {
 });
 
 test.describe("approval is shown beside the merge it authorizes", () => {
+  /**
+   * The approval is one of the four gates a person has already been through,
+   * so on a change that is ready to merge it is folded away (UI-5 §3). Folded
+   * is not gone: the assertion opens the summary and checks the same three
+   * sentences it always did.
+   *
+   * What this test protects is the copy, not the fold. If the approval ever
+   * stops saying which commit it applies to, or starts claiming a merge that
+   * has not happened, this fails — which is the point.
+   */
   test("renders the approved commit and the boundary copy", async ({ page }) => {
     await page.goto("/e2e/merge_ready");
+
+    await page.getByText("Checked, previewed, reviewed and approved").click();
 
     await expect(page.getByText("Change approved")).toBeVisible();
     await expect(page.getByText("This approval applies only to commit")).toBeVisible();
     await expect(page.getByText("Nothing has been merged or deployed.")).toBeVisible();
+  });
+
+  /**
+   * The fold itself, asserted once so it is a decision rather than an
+   * accident: the gates behind a person are reachable, and the answers they
+   * came for — merge, outcome, business impact — never fold at all.
+   */
+  test("folds the settled gates without hiding them", async ({ page }) => {
+    await page.goto("/e2e/merge_ready");
+
+    await expect(page.getByText("Change approved")).not.toBeVisible();
+    await expect(mergeSection(page).getByText("Ready to merge")).toBeVisible();
+
+    await page.getByText("Checked, previewed, reviewed and approved").click();
+    await expect(page.getByText("Change approved")).toBeVisible();
+  });
+});
+
+/**
+ * The other half of the fold (UI-5 §3, §10).
+ *
+ * A card whose early gates are still the work renders them open, and the
+ * suite would not have known: every scenario written before this sprint is
+ * approved, so the folded form was the only form a browser ever saw. These
+ * two states are the ones a person is actually asked to do something in.
+ */
+test.describe("a change still moving shows its gates", () => {
+  test("awaiting approval opens the gates and leads with whose turn it is", async ({ page }) => {
+    await page.goto("/e2e/change_awaiting_approval");
+
+    await expect(page.getByText("Ready for you to review and approve.")).toBeVisible();
+
+    // Open, not folded away — these gates are the work, not the history.
+    await expect(page.getByText("How this change got here")).toBeVisible();
+    await expect(page.getByText("Checked, previewed, reviewed and approved")).not.toBeVisible();
+    await expect(page.getByRole("button", { name: "Approve change" })).toBeVisible();
+
+    // And the disclaimers are true here, which is the case they were written
+    // for: nothing has been approved, merged or deployed yet.
+    await expect(page.getByText("Nothing is merged or deployed")).toBeVisible();
+    await expect(mergeSection(page).getByText("Ready to merge")).toHaveCount(0);
+  });
+
+  /**
+   * The screen that found both of this sprint's dogfood defects, rebuilt.
+   *
+   * It asserts the two sentences that were wrong on it: a headline narrating
+   * work nobody was doing, and no statement of meaning at all above a branch
+   * name.
+   */
+  test("an agent-written change names whose turn it is, and what it was for", async ({ page }) => {
+    await page.goto("/e2e/change_agentic_review_required");
+
+    // Nothing is running: the preview has not been started and the comparison
+    // is waiting for one. The card used to claim Vibe was preparing something.
+    await expect(page.getByText("Ready for you to preview and compare.")).toBeVisible();
+    await expect(page.getByText("Vibe is preparing what you need to review.")).toHaveCount(0);
+
+    // And it leads with meaning rather than with a branch name.
+    await expect(page.getByText("What this change was for")).toBeVisible();
+    await expect(page.getByText("It does not describe what the change did")).toBeVisible();
+
+    // The rationale heading belongs to a written, capability-owned sentence.
+    // An agentic change has none, and must not borrow the stronger claim.
+    await expect(page.getByText("What Vibe changed")).toHaveCount(0);
+  });
+
+  test("an unchecked change says so and offers nothing downstream", async ({ page }) => {
+    await page.goto("/e2e/change_not_validated");
+
+    await expect(page.getByText("This change has not been checked yet.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Approve change" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Merge approved change" })).toHaveCount(0);
   });
 });

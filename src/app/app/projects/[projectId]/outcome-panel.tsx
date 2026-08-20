@@ -156,6 +156,29 @@ function NotDeployed() {
   );
 }
 
+/**
+ * What a dead end leaves standing (UI-5 §8).
+ *
+ * `not_observed` and `failed` are the two terminal answers with nothing to
+ * click: once a verification row exists, `canVerify` is false for every state,
+ * and the observation window has closed behind it. A screen that stops at the
+ * bad news leaves two questions open — whether the merge came undone, and
+ * whether something is still running — and the answers are "no" and "no".
+ *
+ * Deliberately without an affordance. Looking again costs provider time, and
+ * starting that on the user's behalf is what CLAUDE.md rule 60 forbids; the
+ * panel's action allowlist is one label long so that stays true.
+ */
+function WindowClosed({ endsAt }: { endsAt: string | null }) {
+  return (
+    <p className="text-xs text-fg-muted">
+      Your change is still in your repository — this says only what Vibe could see on your public
+      product. The checking window {endsAt ? `closed at ${localTime(endsAt)}` : "is closed"}, and
+      Vibe is no longer looking.
+    </p>
+  );
+}
+
 export function OutcomePanel({
   projectId,
   preparedChangeId,
@@ -291,6 +314,7 @@ export function OutcomePanel({
             This does not mean a deployment failed. Vibe does not read your hosting provider, so it
             cannot say why the behavior was not visible.
           </p>
+          <WindowClosed endsAt={current.windowEndsAt} />
           <OutcomeLadder productOutcome="Not observed" businessImpact={businessImpactLabel} />
         </div>
       ) : current.state === "failed" ? (
@@ -303,6 +327,11 @@ export function OutcomePanel({
             This says nothing about whether your product behaves as intended — only that Vibe could
             not observe it.
           </p>
+          <WindowClosed endsAt={current.windowEndsAt} />
+          {/* The one terminal state that used to end without the ladder — so the
+              row saying nobody has measured the business went missing on
+              exactly the answer that leaves a user most unsure (§33). */}
+          <OutcomeLadder productOutcome="Not checked" businessImpact={businessImpactLabel} />
         </div>
       ) : (
         <div className="space-y-2">

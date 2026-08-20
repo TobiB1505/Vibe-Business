@@ -189,6 +189,54 @@ describe("the four outcome states read differently (§30, §31, §32, §23)", ()
   });
 });
 
+describe("a dead end says what still holds (UI-5 §8)", () => {
+  const src = source("outcome-panel.tsx");
+  const copy = renderedCopy("outcome-panel.tsx");
+
+  /** The two terminal answers with nothing to click, sliced from the JSX. */
+  const notObserved = src.slice(
+    src.indexOf('current.state === "not_observed"'),
+    src.indexOf('current.state === "failed"'),
+  );
+  const failed = src.slice(src.indexOf('current.state === "failed"'));
+
+  it("tells the user the merge is untouched and the window has closed", () => {
+    // Both states are read as "something came undone" unless the screen says
+    // otherwise, and neither offers a control that could settle it: once a
+    // verification row exists, `canVerify` is false for every state.
+    expect(copy).toContain("Your change is still in your repository");
+    expect(copy).toContain("Vibe is no longer looking");
+  });
+
+  it("says it on both dead ends, not only the one about the product", () => {
+    expect(notObserved).toContain("<WindowClosed");
+    expect(failed).toContain("<WindowClosed");
+  });
+
+  it("keeps the four state headlines exactly as they were", () => {
+    // Package 8 adds sentences; it does not reword the four lines the outcome
+    // states are recognised by, here or in the browser suite.
+    expect(src).toContain("Production outcome verified");
+    expect(src).toContain("Partially observed");
+    expect(src).toContain("Not observed within verification window");
+    expect(src).toContain("Vibe could not check the production outcome");
+  });
+
+  it("gives a could-not-check the same ladder as every other terminal state", () => {
+    // It was the one terminal answer that ended without it — so "Business
+    // impact: Not measured" went missing on exactly the state that leaves a
+    // user least certain what is true.
+    expect(failed).toContain("<OutcomeLadder");
+  });
+
+  it("adds no control to either dead end (§32, rule 60)", () => {
+    // Looking again costs provider time. Explaining a dead end must never
+    // become a button that starts paid work on the user's behalf.
+    expect(notObserved).not.toContain("<button");
+    expect(failed).not.toContain("<button");
+  });
+});
+
 describe("the panel decides nothing (§11, §29)", () => {
   const src = source("outcome-panel.tsx");
 

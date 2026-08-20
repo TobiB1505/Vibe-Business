@@ -146,5 +146,34 @@ export async function getPreparedDiff(
  */
 export function buildBranchUrl(repositoryFullName: string, branchName: string): string {
   const [owner, repo] = repositoryFullName.split("/");
-  return `https://github.com/${owner}/${repo}/tree/${branchName.split("/").map(encodeURIComponent).join("/")}`;
+  return `https://github.com/${owner}/${repo}/tree/${encodeRef(branchName)}`;
+}
+
+/**
+ * The difference between the default branch and this one, on GitHub.
+ *
+ * Offered when a prepared change can no longer go in as it is (UI-5 §7): the
+ * base moved, so what a person needs is to see what moved. It is a link to a
+ * read, not a remedy — re-preparing costs provider time and stays the user's
+ * own decision.
+ *
+ * Built from stored project linkage like the branch URL above, never from
+ * anything a client supplied.
+ */
+export function buildCompareUrl(
+  repositoryFullName: string,
+  baseBranch: string,
+  branchName: string,
+): string {
+  const [owner, repo] = repositoryFullName.split("/");
+  return `https://github.com/${owner}/${repo}/compare/${encodeRef(baseBranch)}...${encodeRef(branchName)}`;
+}
+
+/**
+ * `encodeURIComponent` per segment, because a ref can legitimately contain
+ * slashes — `vibe/seo-foundations-…` always does — and encoding the whole
+ * thing would turn the separator into `%2F`.
+ */
+function encodeRef(ref: string): string {
+  return ref.split("/").map(encodeURIComponent).join("/");
 }

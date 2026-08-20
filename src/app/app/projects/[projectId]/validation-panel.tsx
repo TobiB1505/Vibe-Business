@@ -63,7 +63,7 @@ const PHASE_TONES: Record<ValidationPhaseView["state"], string> = {
   failed: "text-coral",
   timed_out: "text-coral",
   skipped: "text-fg-muted",
-  active: "text-sky-400",
+  active: "text-mint-dim",
   pending: "text-fg-meta",
   not_run: "text-fg-meta",
 };
@@ -160,6 +160,8 @@ export function ValidationPanel({
   preparedChangeId,
   summary,
   runningOperation,
+  approved,
+  merged,
 }: {
   projectId: string;
   preparedChangeId: string;
@@ -167,6 +169,10 @@ export function ValidationPanel({
   summary: ValidationSummary | null;
   /** A validation already in flight when the page rendered. */
   runningOperation: OperationView | null;
+  /** A human approved this exact commit, and that still stands (UI-5 §4). */
+  approved: boolean;
+  /** The default branch carries this change, verified by reading it back. */
+  merged: boolean;
 }) {
   const router = useRouter();
   const [state, setState] = useState<ValidateChangeActionState>(null);
@@ -282,8 +288,18 @@ export function ValidationPanel({
               about what passing does *not* establish. A green tick is exactly
               when someone is most likely to assume more happened than did. */}
           <div className="flex flex-col gap-1">
+            {/*
+              * Only while each clause is true (UI-5 §4). The sentence is
+              * unchanged and still deliberately repeated after a pass. What
+              * changed is that it stops once more genuinely has happened: it
+              * used to greet a merged, production-verified change by denying
+              * all three at once.
+              *
+              * The deployment clause never drops, because Vibe never deploys.
+              */}
             <p className="text-xs text-fg-muted">
-              Not merged · Not deployed · Not reviewed by a human
+              {merged ? "Merged · Deployment not verified by Vibe" : "Not merged · Not deployed"}
+              {approved ? "" : " · Not reviewed by a human"}
             </p>
             <p className="text-fg-meta max-w-[70ch] text-xs">
               Passing these checks means the change is technically sound. It is not a judgement
@@ -301,7 +317,7 @@ export function ValidationPanel({
             disabled={pending}
             className="rounded-md border border-line-4 px-3 py-1.5 text-sm text-fg-body hover:bg-surface-2 disabled:opacity-60"
           >
-            {shown.underCurrentPolicy ? "Validate again" : "Validate under current policy"}
+            {shown.underCurrentPolicy ? "Validate again" : "Check under the current rules"}
           </button>
         </div>
       ) : shown?.status === "failed" ? (
@@ -355,7 +371,7 @@ export function ValidationPanel({
 
       {state?.ok && state.kind === "reused" && (
         <p className="text-xs text-fg-muted">
-          This commit already passed validation under the current policy — nothing was re-run.
+          This commit already passed under the current rules — nothing was re-run.
         </p>
       )}
     </section>

@@ -1,6 +1,8 @@
 import { preparedChangeAnchorId } from "@/components/layout/project-shell";
 import type { ApprovalCard } from "@/modules/approvals/view";
 import type { BusinessRationale } from "@/modules/execution/business-rationale";
+import type { ChangeOrigin as ChangeOriginData } from "@/modules/execution/change-origin";
+import type { ChangeProgress } from "@/modules/execution/change-progress";
 import type { MergeCard } from "@/modules/merge/view";
 import type { OutcomeCard } from "@/modules/outcome-verification/view";
 import type { BusinessImpactCard } from "@/modules/business-measurement/view";
@@ -8,6 +10,7 @@ import type { PreviewCard } from "@/modules/change-preview/view";
 import type { ReviewCard } from "@/modules/review/view";
 import type { ReviewImages } from "@/modules/review/service";
 import { ApprovalPanel } from "./approval-panel";
+import { ChangeOrigin } from "./change-origin";
 import { ChangeRationale } from "./change-rationale";
 import { MergePanel } from "./merge-panel";
 import { OutcomePanel } from "./outcome-panel";
@@ -36,6 +39,15 @@ import { ValidationPanel, type ValidationSummary } from "./validation-panel";
  */
 
 export type PreparedChangeCard = {
+  /**
+   * Where this change stands, decided once on the server (UI-5 §1).
+   *
+   * Every panel below speaks only for its own gate, which is why the card
+   * needs someone to speak for the whole chain: what to lead with, which
+   * settled gates can fold away, and which "this has not happened yet" lines
+   * are still true.
+   */
+  progress: ChangeProgress;
   id: string;
   branchName: string;
   commitSha: string | null;
@@ -43,6 +55,8 @@ export type PreparedChangeCard = {
   filePaths: string[];
   createdAt: string;
   branchUrl: string | null;
+  /** The base-to-branch difference on GitHub, for a change that stalled. */
+  compareUrl: string | null;
   validation: ValidationSummary | null;
   /** Preview state, decided on the server. Never inferred from the fields above. */
   preview: PreviewCard;
@@ -106,6 +120,15 @@ export type PreparedChangeCard = {
    * after the change itself. Null for a capability with no written rationale.
    */
   rationale: BusinessRationale | null;
+  /**
+   * The Move this change was prepared to address (UI-5 dogfood).
+   *
+   * A weaker claim than a rationale and rendered only in its absence: the
+   * request, written by a model before the change existed. It exists because an
+   * agent-produced change has no capability rationale and cannot have one, so
+   * without it the card opens with a status line and then a branch name.
+   */
+  origin: ChangeOriginData | null;
 };
 
 export function PreparedChangesSection({
@@ -146,80 +169,161 @@ export function PreparedChangesSection({
             data-testid="prepared-change"
             data-prepared-change-id={change.id}
           >
-            <div className="space-y-1">
-              <p className="font-mono text-sm text-fg-body">{change.branchName}</p>
-              <p className="text-xs text-fg-muted">
+            {/* Where this change stands, before anything about how it was
+                built. The card used to open with a branch name, which answers
+                a question almost nobody arrives with (UI-5 §2). */}
+            <p className="text-fg text-sm font-medium">{change.progress.headline}</p>
+
+            {/* What it is and why, immediately under that. This block used to
+                sit ninth of eleven — below the Approve and Merge controls — so
+                a person was asked to authorize a change before the screen had
+                told them what it was for. */}
+            <ChangeRationale rationale={change.rationale} />
+
+            {/* Only when there is no written rationale — otherwise two answers
+                to the same question would stack, and the written one is
+                stronger. In practice: every agent-produced change. */}
+            {!change.rationale && <ChangeOrigin origin={change.origin} />}
+
+            {/* How it was built, demoted to where it belongs: true, checkable,
+                and not the first thing anyone needs. */}
+            <div className="space-y-1 border-t border-line-2 pt-3">
+              <p className="font-mono text-xs text-fg-muted">
+                {change.branchName}
+                {" · "}
                 {change.commitSha ? `${change.commitSha.slice(0, 7)} on ${change.baseBranch}` : change.baseBranch}
                 {" · "}
                 {change.filePaths.length} file{change.filePaths.length === 1 ? "" : "s"}
               </p>
+
+              {/* Paths only. File contents live on the branch, never in our rows. */}
+              <ul className="space-y-0.5">
+                {change.filePaths.map((path) => (
+                  <li key={path} className="font-mono text-xs text-fg-meta">
+                    {path}
+                  </li>
+                ))}
+              </ul>
+
+              {change.branchUrl && (
+                <a
+                  href={change.branchUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-block text-xs text-fg-prose underline underline-offset-2 hover:text-fg"
+                >
+                  Open branch on GitHub
+                </a>
+              )}
+
+              {/*
+                * A way forward for a change that cannot go in as it is
+                * (UI-5 §7).
+                *
+                * A branch moving under a prepared change is the normal life of
+                * a repository, not the user's mistake — but until now the card
+                * said so and stopped, leaving the most common non-happy path
+                * as a sentence with no door.
+                *
+                * What is offered is a look, not a fix. Re-preparing,
+                * re-checking and re-reviewing all cost provider time, and
+                * starting any of them on someone's behalf is exactly what the
+                * product refuses to do. So the link goes where the difference
+                * actually is, and the sentence says what survives: the work is
+                * still on its branch and the approval is still on record for
+                * the commit it named.
+                */}
+              {change.progress.stage === "stalled" && change.compareUrl && (
+                <div className="space-y-1 pt-1">
+                  <a
+                    href={change.compareUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-block text-xs text-fg-prose underline underline-offset-2 hover:text-fg"
+                  >
+                    Compare this branch on GitHub
+                  </a>
+                  <p className="text-xs text-fg-meta max-w-[70ch]">
+                    Nothing was written to your repository, and nothing was lost: this work is still
+                    on its branch, and your approval still records the commit you approved. Starting
+                    a fresh attempt is your call, from Next moves.
+                  </p>
+                </div>
+              )}
             </div>
 
-            {/* Paths only. File contents live on the branch, never in our rows. */}
-            <ul className="space-y-0.5">
-              {change.filePaths.map((path) => (
-                <li key={path} className="font-mono text-xs text-fg-muted">
-                  {path}
-                </li>
-              ))}
-            </ul>
+            {/*
+              * The four gates a person has already been through (UI-5 §3).
+              *
+              * Open while they are the work, folded to a summary once an
+              * approval stands — and an approval cannot exist without a
+              * validation that passed and a review that is ready, so one
+              * answer settles all four. Nothing is removed: `details` keeps
+              * every panel one click away, which is what settled evidence
+              * should be. It is checkable, not unavoidable.
+              *
+              * Merge, Outcome and Business impact never fold. Those are the
+              * answers a person came for.
+              */}
+            <details open={!change.progress.earlySettled} className="group space-y-3">
+              <summary className="cursor-pointer list-none text-xs text-fg-muted hover:text-fg-prose">
+                <span className="group-open:hidden">Checked, previewed, reviewed and approved</span>
+                <span className="hidden group-open:inline">How this change got here</span>
+              </summary>
 
-            {change.branchUrl && (
-              <a
-                href={change.branchUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-block text-sm text-fg-prose underline underline-offset-2 hover:text-fg"
-              >
-                Open branch on GitHub
-              </a>
-            )}
+              <ValidationPanel
+                projectId={projectId}
+                preparedChangeId={change.id}
+                summary={change.validation}
+                runningOperation={null}
+                approved={change.progress.approved}
+                merged={change.progress.merged}
+              />
 
-            <ValidationPanel
-              projectId={projectId}
-              preparedChangeId={change.id}
-              summary={change.validation}
-              runningOperation={null}
-            />
+              {/* Below validation, deliberately: a preview restores what a
+                  validation produced, so the order on screen is the order of the
+                  gates. There is no Merge, Deploy or Approve button here or
+                  anywhere — none of those exist. */}
+              <PreviewPanel
+                projectId={projectId}
+                preparedChangeId={change.id}
+                card={change.preview}
+                validatedArtifactId={change.validatedArtifactId}
+                // Already resolved for this render. Without it the panel renders
+                // "Resolving preview address…" until its first poll, for an
+                // origin the server handed the page milliseconds earlier.
+                serverOrigin={change.previewOrigin}
+                approved={change.progress.approved}
+                merged={change.progress.merged}
+              />
 
-            {/* Below validation, deliberately: a preview restores what a
-                validation produced, so the order on screen is the order of the
-                gates. There is no Merge, Deploy or Approve button here or
-                anywhere — none of those exist. */}
-            <PreviewPanel
-              projectId={projectId}
-              preparedChangeId={change.id}
-              card={change.preview}
-              validatedArtifactId={change.validatedArtifactId}
-              // Already resolved for this render. Without it the panel renders
-              // "Resolving preview address…" until its first poll, for an
-              // origin the server handed the page milliseconds earlier.
-              serverOrigin={change.previewOrigin}
-            />
+              {/* Below Preview, because a comparison photographs a running
+                  preview. The order on screen is the order of the gates — and
+                  there is no Approve, Merge or Deploy control after it. */}
+              <ReviewPanel
+                projectId={projectId}
+                preparedChangeId={change.id}
+                card={change.review}
+                images={change.reviewImages}
+                previewSessionId={change.previewSessionId}
+                previewOrigin={change.previewOrigin}
+                branchUrl={change.branchUrl}
+                commitSha={change.commitSha}
+                filesChanged={change.filePaths.length}
+                approved={change.progress.approved}
+                merged={change.progress.merged}
+              />
 
-            {/* Below Preview, because a comparison photographs a running
-                preview. The order on screen is the order of the gates — and
-                there is no Approve, Merge or Deploy control after it. */}
-            <ReviewPanel
-              projectId={projectId}
-              preparedChangeId={change.id}
-              card={change.review}
-              images={change.reviewImages}
-              previewSessionId={change.previewSessionId}
-              previewOrigin={change.previewOrigin}
-              branchUrl={change.branchUrl}
-              commitSha={change.commitSha}
-              filesChanged={change.filePaths.length}
-            />
-
-            {/* Below the evidence, because approval is a human decision about
-                it rather than another measurement of it. */}
-            <ApprovalPanel
-              projectId={projectId}
-              preparedChangeId={change.id}
-              card={change.approval}
-              reviewArtifactId={change.review.reviewArtifactId}
-            />
+              {/* Below the evidence, because approval is a human decision about
+                  it rather than another measurement of it. */}
+              <ApprovalPanel
+                projectId={projectId}
+                preparedChangeId={change.id}
+                card={change.approval}
+                reviewArtifactId={change.review.reviewArtifactId}
+                merged={change.progress.merged}
+              />
+            </details>
 
             {/* Last, and only reachable through everything above it: a merge
                 needs an approval, an approval needs a review, a review needs a
@@ -235,10 +339,6 @@ export function PreparedChangesSection({
                 panel here that asks about the customer's product rather than
                 about Vibe's own work — and the only one whose success state
                 has to explicitly say what it does *not* mean. */}
-            {/* Before the verified checks, because the order a user needs is
-                what changed → why it matters → what was confirmed (§11). */}
-            <ChangeRationale rationale={change.rationale} />
-
             <OutcomePanel
               projectId={projectId}
               preparedChangeId={change.id}

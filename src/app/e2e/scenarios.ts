@@ -2,6 +2,9 @@ import type { PreparedChangeCard } from "@/app/app/projects/[projectId]/prepared
 import type { OutcomeCard, OutcomeCheckLine } from "@/modules/outcome-verification/view";
 import type { BusinessImpactCard } from "@/modules/business-measurement/view";
 import { businessRationaleFor } from "@/modules/execution/business-rationale";
+import { deriveChangeProgress } from "@/modules/execution/change-progress";
+import { MERGE_FAILURE_MESSAGES } from "@/modules/merge/messages";
+import { APPROVAL_BLOCK_MESSAGES } from "@/modules/approvals/messages";
 import { OBSERVED_CHANGE_DISCLAIMER } from "@/modules/business-measurement/causality";
 
 /**
@@ -23,10 +26,27 @@ export const APPROVED_BASE = "528d372b81cf28786edcba7d6384f9f74e55ba33";
 export const DRIFTED_HEAD = "b8638ae4a0c4a1e31288da4d6ef3300f04d1746a";
 
 const APPROVAL_ID = "approval_e2e";
+/** Where a person looks when the base moved under a prepared change. */
+const COMPARE_URL = "https://github.com/vibe-e2e/example/compare/main...vibe/seo-foundations";
 const APPROVED_AT = "2026-08-14T08:22:59.917Z";
 
+/**
+ * Completes a card by deriving its progress exactly as the server does.
+ *
+ * Deliberately the real function rather than a hand-written state per
+ * scenario: a fixture that decided for itself where a change stood could
+ * disagree with production and the browser suite would keep passing while the
+ * product said something else.
+ */
+function withProgress(card: Omit<PreparedChangeCard, "progress">): PreparedChangeCard {
+  return { ...card, progress: deriveChangeProgress(card) };
+}
+
 /** Everything except the merge card, which is what each scenario varies. */
-function baseChange(): Omit<PreparedChangeCard, "merge" | "outcome" | "businessImpact"> {
+function baseChange(): Omit<
+  PreparedChangeCard,
+  "progress" | "merge" | "outcome" | "businessImpact"
+> {
   return {
     id: "prepared_e2e",
     branchName: "vibe/seo-foundations-cc32273131c5",
@@ -35,9 +55,13 @@ function baseChange(): Omit<PreparedChangeCard, "merge" | "outcome" | "businessI
     filePaths: ["src/app/robots.ts", "src/app/sitemap.ts"],
     createdAt: "2026-08-13T18:00:00.000Z",
     branchUrl: null,
+    compareUrl: null,
     // The real SEO capability's rationale, not invented copy: the browser
     // suite asserts against what the product would actually render.
     rationale: businessRationaleFor("nextjs_seo_foundations_v2"),
+    // Null wherever a rationale exists: the card renders one or the other, and
+    // `change_agentic_review_required` is the scenario that carries an origin.
+    origin: null,
     validation: {
       status: "passed",
       phases: [],
@@ -192,7 +216,12 @@ function outcomeCard(overrides: Partial<OutcomeCard> = {}): OutcomeCard {
 
 /** A merged change with an outcome card in whatever state the scenario needs. */
 function outcomeChange(outcome: OutcomeCard): PreparedChangeCard {
-  return { ...baseChange(), merge: mergedCard(), outcome, businessImpact: businessImpactCard() };
+  return withProgress({
+    ...baseChange(),
+    merge: mergedCard(),
+    outcome,
+    businessImpact: businessImpactCard(),
+  });
 }
 
 
@@ -261,7 +290,7 @@ function plannedImpact(overrides: Partial<BusinessImpactCard> = {}): BusinessImp
 
 /** A merged change with an outcome verified and a business impact card. */
 function impactChange(businessImpact: BusinessImpactCard): PreparedChangeCard {
-  return {
+  return withProgress({
     ...baseChange(),
     merge: mergedCard(),
     outcome: outcomeCard({
@@ -274,21 +303,193 @@ function impactChange(businessImpact: BusinessImpactCard): PreparedChangeCard {
       attemptCount: 1,
     }),
     businessImpact,
-  };
+  });
 }
 
 export const E2E_SCENARIOS = {
-  /** A fresh preflight says this could merge now. The confirmation path. */
-  merge_ready: (): PreparedChangeCard => ({
-    ...baseChange(),
-    outcome: outcomeCard(),
-    businessImpact: businessImpactCard(),
-    merge: mergeCard({
-      state: "ready",
-      currentDefaultHeadSha: APPROVED_BASE,
-      canMerge: true,
+  /**
+   * **The moment the product asks for something** (UI-5 §3).
+   *
+   * Everything a person needs in order to decide exists — validation passed, a
+   * comparison is ready — and nobody has decided. It is the one state where
+   * the four early gates are the work rather than the history, so it is the
+   * one that renders them expanded.
+   *
+   * Every other scenario here is approved, which is why this fixture had to be
+   * written: without it the open form of the card would ship untested in a
+   * browser, proven only by unit tests over the derivation.
+   */
+  change_awaiting_approval: (): PreparedChangeCard =>
+    withProgress({
+      ...baseChange(),
+      outcome: outcomeCard(),
+      businessImpact: businessImpactCard(),
+      approval: {
+        state: "not_approved",
+        approvalId: null,
+        approvedAt: null,
+        revokedAt: null,
+        approvedCommitSha: null,
+        invalidationReason: null,
+        blockReason: null,
+        blockMessage: null,
+        canApprove: true,
+        currentCommitSha: APPROVED_COMMIT,
+      },
+      merge: mergeCard({
+        state: "not_eligible",
+        failureCode: "merge_approval_required",
+        failureMessage: MERGE_FAILURE_MESSAGES.merge_approval_required,
+        canMerge: false,
+      }),
     }),
-  }),
+
+  /**
+   * **The first real change this card ever carried** (UI-5 dogfood).
+   *
+   * A rebuild of the screen that found two defects at once, so the browser
+   * suite holds the combination that produced them rather than an invented
+   * one. Everything here is what the deployed card actually showed: an
+   * agent-written change, validation passed, preview never started, review
+   * waiting for one, nobody approving.
+   *
+   * The two things it proves. **The headline names whose turn it is** — that
+   * screen said "Vibe is preparing what you need to review" while nothing was
+   * running anywhere. And **an agent-written change has something to lead
+   * with** — `agentic_execution_v1` has no capability rationale and cannot
+   * have one, so the card opened with a status line and then a branch name.
+   *
+   * The branch and the short commit are the real ones off that card; a full
+   * SHA is not, because the card only ever displayed seven characters of it.
+   */
+  change_agentic_review_required: (): PreparedChangeCard =>
+    withProgress({
+      ...baseChange(),
+      outcome: outcomeCard(),
+      businessImpact: businessImpactCard(),
+      branchName: "vibe/agent-07d2308c197d",
+      commitSha: "94c3165",
+      filePaths: ["e2e/auth.spec.ts", "e2e/first-ten-minutes.spec.ts", "src/app/page.tsx"],
+      // No written rationale, which is true of every agentic change there will
+      // ever be — and the reason the origin below has to exist.
+      rationale: null,
+      origin: {
+        title: "Give the landing page a proper social preview",
+        problem:
+          "The landing page has no canonical Open Graph metadata, so a link to it shared anywhere renders without a title, description or image.",
+        whyNow:
+          "Every link shared before this is fixed is a first impression the product does not get to make again.",
+      },
+      preview: {
+        state: "ready_to_start",
+        previewSessionId: null,
+        operationRunId: null,
+        stage: null,
+        failureCode: null,
+        failureMessage: null,
+        expiresAt: null,
+        readyAt: null,
+        revalidationRequired: false,
+      },
+      validatedArtifactId: "validation_e2e",
+      review: {
+        state: "not_generated",
+        reviewArtifactId: null,
+        operationRunId: null,
+        failureCode: null,
+        failureMessage: null,
+        route: null,
+        beforeOrigin: null,
+        beforeCapturedAt: null,
+        afterCapturedAt: null,
+        width: null,
+        height: null,
+        expiresAt: null,
+      },
+      reviewImages: null,
+      approval: {
+        state: "not_eligible",
+        approvalId: null,
+        approvedAt: null,
+        revokedAt: null,
+        approvedCommitSha: null,
+        invalidationReason: null,
+        blockReason: "approval_review_required",
+        blockMessage: APPROVAL_BLOCK_MESSAGES.approval_review_required,
+        canApprove: false,
+        currentCommitSha: "94c3165",
+      },
+      merge: mergeCard({
+        state: "not_eligible",
+        failureCode: "merge_approval_required",
+        failureMessage: MERGE_FAILURE_MESSAGES.merge_approval_required,
+        canMerge: false,
+      }),
+    }),
+
+  /**
+   * The earliest gate, still open — a change nobody has checked yet.
+   *
+   * Deliberately `null` rather than a run in flight. The section hands the
+   * validation panel `runningOperation={null}`, so a stored `running` summary
+   * renders as "Not validated" while the card's headline says a check is
+   * happening — a contradiction a fixture would then assert as correct. The
+   * gap is real and recorded in the sprint doc; what this scenario proves is
+   * the state the section can actually produce coherently.
+   */
+  change_not_validated: (): PreparedChangeCard =>
+    withProgress({
+      ...baseChange(),
+      outcome: outcomeCard(),
+      businessImpact: businessImpactCard(),
+      validation: null,
+      review: {
+        state: "not_generated",
+        reviewArtifactId: null,
+        operationRunId: null,
+        failureCode: null,
+        failureMessage: null,
+        route: null,
+        beforeOrigin: null,
+        beforeCapturedAt: null,
+        afterCapturedAt: null,
+        width: null,
+        height: null,
+        expiresAt: null,
+      },
+      reviewImages: null,
+      approval: {
+        state: "not_eligible",
+        approvalId: null,
+        approvedAt: null,
+        revokedAt: null,
+        approvedCommitSha: null,
+        invalidationReason: null,
+        blockReason: "approval_validation_required",
+        blockMessage: APPROVAL_BLOCK_MESSAGES.approval_validation_required,
+        canApprove: false,
+        currentCommitSha: APPROVED_COMMIT,
+      },
+      merge: mergeCard({
+        state: "not_eligible",
+        failureCode: "merge_approval_required",
+        failureMessage: MERGE_FAILURE_MESSAGES.merge_approval_required,
+        canMerge: false,
+      }),
+    }),
+
+  /** A fresh preflight says this could merge now. The confirmation path. */
+  merge_ready: (): PreparedChangeCard =>
+    withProgress({
+      ...baseChange(),
+      outcome: outcomeCard(),
+      businessImpact: businessImpactCard(),
+      merge: mergeCard({
+        state: "ready",
+        currentDefaultHeadSha: APPROVED_BASE,
+        canMerge: true,
+      }),
+    }),
 
   /**
    * **What the real dogfood produced**, and the distinction worth keeping.
@@ -298,18 +499,20 @@ export const E2E_SCENARIOS = {
    * ChangeMerge row and no merge id — the panel is saying "this cannot be
    * merged", not "a merge was tried and stopped".
    */
-  merge_not_eligible_repository_changed: (): PreparedChangeCard => ({
-    ...baseChange(),
-    outcome: outcomeCard(),
-    businessImpact: businessImpactCard(),
-    merge: mergeCard({
-      state: "not_eligible",
-      failureCode: "merge_repository_changed",
-      failureMessage:
-        "The default branch changed after this change was prepared. Vibe did not modify the repository. Review the updated repository state before merging.",
-      canMerge: false,
+  merge_not_eligible_repository_changed: (): PreparedChangeCard =>
+    withProgress({
+      ...baseChange(),
+      outcome: outcomeCard(),
+      businessImpact: businessImpactCard(),
+      compareUrl: COMPARE_URL,
+      merge: mergeCard({
+        state: "not_eligible",
+        failureCode: "merge_repository_changed",
+        failureMessage:
+          "The default branch changed after this change was prepared. Vibe did not modify the repository. Review the updated repository state before merging.",
+        canMerge: false,
+      }),
     }),
-  }),
 
   /**
    * The other refusal: an attempt existed and was stopped before any write.
@@ -319,35 +522,38 @@ export const E2E_SCENARIOS = {
    * because a row exists; there is no resulting SHA because nothing was
    * written, which the `change_merges_blocked_wrote_nothing` CHECK guarantees.
    */
-  merge_blocked_repository_changed: (): PreparedChangeCard => ({
-    ...baseChange(),
-    outcome: outcomeCard(),
-    businessImpact: businessImpactCard(),
-    merge: mergeCard({
-      state: "blocked",
-      changeMergeId: "merge_blocked_e2e",
-      failureCode: "merge_repository_changed",
-      failureMessage:
-        "The default branch changed after this change was prepared. Vibe did not modify the repository. Review the updated repository state before merging.",
-      currentDefaultHeadSha: DRIFTED_HEAD,
-      canMerge: false,
+  merge_blocked_repository_changed: (): PreparedChangeCard =>
+    withProgress({
+      ...baseChange(),
+      outcome: outcomeCard(),
+      businessImpact: businessImpactCard(),
+      compareUrl: COMPARE_URL,
+      merge: mergeCard({
+        state: "blocked",
+        changeMergeId: "merge_blocked_e2e",
+        failureCode: "merge_repository_changed",
+        failureMessage:
+          "The default branch changed after this change was prepared. Vibe did not modify the repository. Review the updated repository state before merging.",
+        currentDefaultHeadSha: DRIFTED_HEAD,
+        canMerge: false,
+      }),
     }),
-  }),
 
   /** The default branch was moved and the result independently read back. */
-  merge_merged: (): PreparedChangeCard => ({
-    ...baseChange(),
-    outcome: outcomeCard(),
-    businessImpact: businessImpactCard(),
-    merge: mergeCard({
-      state: "merged",
-      changeMergeId: "merge_e2e",
-      currentDefaultHeadSha: APPROVED_BASE,
-      resultingDefaultHeadSha: APPROVED_COMMIT,
-      mergedAt: "2026-08-14T12:30:00.000Z",
-      canMerge: false,
+  merge_merged: (): PreparedChangeCard =>
+    withProgress({
+      ...baseChange(),
+      outcome: outcomeCard(),
+      businessImpact: businessImpactCard(),
+      merge: mergeCard({
+        state: "merged",
+        changeMergeId: "merge_e2e",
+        currentDefaultHeadSha: APPROVED_BASE,
+        resultingDefaultHeadSha: APPROVED_COMMIT,
+        mergedAt: "2026-08-14T12:30:00.000Z",
+        canMerge: false,
+      }),
     }),
-  }),
 
   /**
    * Merged, and nobody has asked yet (§29, §43).
@@ -441,6 +647,11 @@ export const E2E_SCENARIOS = {
           "sitemap_excludes_private_prefix:/signup": "not_observed",
         }),
         observedAt: "2026-08-14T15:00:03.000Z",
+        // The window a `not_observed` row always carries — the database
+        // requires it to be bounded — so the dead-end copy renders the closing
+        // time rather than its fallback. `outcome_failed` deliberately leaves
+        // it null, which covers the other branch.
+        windowEndsAt: "2026-08-14T15:00:00.000Z",
         attemptCount: 7,
       }),
     ),
