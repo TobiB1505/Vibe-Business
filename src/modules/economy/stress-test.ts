@@ -1,5 +1,6 @@
 import {
   CREDIT_RATE_CARD_SCENARIOS,
+  RETAIL_NANO_USD_PER_CREDIT,
   historicalRunCostInput,
   simulateCreditRateCard,
   type CreditRateCardModel,
@@ -95,7 +96,7 @@ function averageRevenuePerDeliveredRunNanoUsd(rateCard: CreditRateCardScenario):
     if (c.pricingClass === null) {
       throw new Error(`Run #${c.run} has no pricing class; cannot compute stress-test revenue.`);
     }
-    return sum + rateCard.creditsByClass[c.pricingClass] * 10_000_000; // RETAIL_NANO_USD_PER_CREDIT
+    return sum + rateCard.creditsByClass[c.pricingClass] * RETAIL_NANO_USD_PER_CREDIT;
   }, 0);
   return total / HISTORICAL_CLASSIFICATIONS.length;
 }
