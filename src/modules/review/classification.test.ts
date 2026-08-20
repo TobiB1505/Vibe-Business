@@ -177,6 +177,77 @@ describe("the result describes itself", () => {
 
     expect([...result.visualPaths, ...result.codePaths].sort()).toEqual([...changedPaths].sort());
   });
+
+  it("still partitions exactly once when a path was downgraded", () => {
+    const changedPaths = ["src/app/layout.tsx", "src/modules/billing/ledger.ts"];
+
+    const result = classifyReview(
+      input({ changedPaths, provenNonRendering: ["src/app/layout.tsx"] }),
+    );
+
+    expect([...result.visualPaths, ...result.codePaths].sort()).toEqual([...changedPaths].sort());
+    // Downgraded paths are a *label* on paths already counted in `codePaths`,
+    // never a third bucket that would make the partition add up to more than
+    // the change.
+    expect(result.downgradedPaths).toEqual(["src/app/layout.tsx"]);
+    expect(result.codePaths).toContain("src/app/layout.tsx");
+    expect(result.visualPaths).not.toContain("src/app/layout.tsx");
+  });
+});
+
+/**
+ * A structural proof may only ever subtract (Sprint 0053).
+ *
+ * `provenNonRendering` is consulted after `isVisual` has already said yes, so
+ * these are properties of *where* the check sits rather than rules the loop has
+ * to remember. Both directions are asserted, because a test that only showed
+ * the downgrade working would also pass on a classifier that returned `code`
+ * for anything named in the list.
+ */
+describe("a proof can only downgrade, never upgrade", () => {
+  it("cannot make a code path visual, however loudly it is proven", () => {
+    const result = classifyReview(
+      input({
+        changedPaths: ["src/modules/billing/ledger.ts"],
+        provenNonRendering: ["src/modules/billing/ledger.ts"],
+      }),
+    );
+
+    expect(result.classification).toBe("code");
+    expect(result.visualPaths).toEqual([]);
+    // It was never visual, so there was nothing to downgrade.
+    expect(result.downgradedPaths).toEqual([]);
+  });
+
+  it("leaves visualPaths a subset of what it would be without any proof", () => {
+    const changedPaths = ["src/app/layout.tsx", "src/app/page.tsx", "src/components/ui/button.tsx"];
+
+    const without = classifyReview(input({ changedPaths }));
+    const with_ = classifyReview(
+      input({ changedPaths, provenNonRendering: ["src/app/layout.tsx"] }),
+    );
+
+    for (const path of with_.visualPaths) expect(without.visualPaths).toContain(path);
+    expect(with_.visualPaths.length).toBeLessThan(without.visualPaths.length);
+  });
+
+  it("stops naming a route once the only file serving it is downgraded", () => {
+    const changedPaths = ["src/app/page.tsx"];
+
+    expect(classifyReview(input({ changedPaths })).routes).toEqual(["/"]);
+    expect(
+      classifyReview(input({ changedPaths, provenNonRendering: ["src/app/page.tsx"] })).routes,
+    ).toEqual([]);
+  });
+
+  it("ignores a proof for a path that did not change", () => {
+    const result = classifyReview(
+      input({ changedPaths: ["src/app/page.tsx"], provenNonRendering: ["src/app/other.tsx"] }),
+    );
+
+    expect(result.classification).toBe("visual");
+    expect(result.downgradedPaths).toEqual([]);
+  });
 });
 
 /**
@@ -185,11 +256,52 @@ describe("the result describes itself", () => {
  * `prepared_changes.files`.
  */
 describe("the historical runs", () => {
-  it("run #6 (two layouts) is VISUAL", () => {
+  /**
+   * Unchanged, and worth being precise about *why* it is still `visual`.
+   *
+   * The path rule alone cannot tell a layout that moved its JSX from one that
+   * only edited `metadata` — that is the whole defect run #9 exposed below. So
+   * with no proof supplied, two changed layouts remain visual, and that is the
+   * correct conservative answer rather than a stale one.
+   */
+  it("run #6 (two layouts, nothing proven) is VISUAL", () => {
     expect(
       classifyReview(input({ changedPaths: ["src/app/app/layout.tsx", "src/app/layout.tsx"] }))
         .classification,
     ).toBe("visual");
+  });
+
+  /**
+   * The regression, at the pure layer (Sprint 0053).
+   *
+   * Production run `5ea8a9a0` (2026-08-20) changed only the `metadata` export
+   * in two layouts and added one test file, and was recommended a *visual*
+   * review — a before/after screenshot of a page that could not have moved.
+   * With `render-impact.ts`'s proof supplied, the recommendation becomes what
+   * it always should have been.
+   */
+  it("run #9 (two metadata-only layouts plus a test) is CODE once proven", () => {
+    const changedPaths = [
+      "src/app/app/layout.tsx",
+      "src/app/layout.tsx",
+      "src/app/robots-meta.test.ts",
+    ];
+
+    const before = classifyReview(input({ changedPaths }));
+    expect(before.classification).toBe("visual_and_code");
+
+    const after = classifyReview(
+      input({
+        changedPaths,
+        provenNonRendering: ["src/app/app/layout.tsx", "src/app/layout.tsx"],
+      }),
+    );
+
+    expect(after.classification).toBe("code");
+    expect(after.visualPaths).toEqual([]);
+    expect(after.downgradedPaths).toEqual(["src/app/app/layout.tsx", "src/app/layout.tsx"]);
+    // Nothing is photographed, so nothing names a route.
+    expect(after.routes).toEqual([]);
   });
 
   it("run #8 (CTA copy plus two e2e specs) is VISUAL_AND_CODE", () => {

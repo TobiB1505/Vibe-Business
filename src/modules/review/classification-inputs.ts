@@ -12,6 +12,7 @@ import { findExecutionSpecByIdentity } from "@/modules/execution-contract/store"
 import { getPreparedChange } from "@/modules/execution/store";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import { classifyReview, type ReviewClassificationResult } from "./classification";
+import { isRenderImpactCandidate } from "./route-segment";
 
 /**
  * Gathering what the review classifier needs (Sprint 0048).
@@ -34,12 +35,51 @@ import { classifyReview, type ReviewClassificationResult } from "./classificatio
  * The one input that never degrades is the changed-path list, which comes off
  * the prepared change Vibe itself verified — and that is the input the decision
  * actually rests on.
+ *
+ * ## The render-impact probe, and why it may read file content at all
+ *
+ * A fourth lookup was added for the defect production run `5ea8a9a0` exposed: a
+ * metadata-only edit to two layouts was recommended for a *visual* review,
+ * which would have photographed the same page twice. Deciding that from paths
+ * alone is impossible, so this reads the two versions of a small number of
+ * candidate files and hands `classifyReview` a list of paths a structural proof
+ * cleared.
+ *
+ * Three properties make that permissible:
+ *
+ * - **Rule 26.** Nothing is persisted. The text arrives in a local variable, is
+ *   reduced to a boolean by a pure function, and goes out of scope. It must
+ *   never reach a log line, an error message or a breadcrumb either — only
+ *   paths and verdict reasons may be recorded.
+ * - **Rule 57.** `analyzeRenderImpact` reads syntax, never meaning. An agent
+ *   cannot write a comment, a string or a commit message that buys its own
+ *   change a cheaper review.
+ * - **Read-only by type.** The port below has one method and no way to write,
+ *   so "a classification can never modify a repository" is a property of the
+ *   signature rather than a claim about the code.
  */
+
+/**
+ * The one method the probe needs.
+ *
+ * Declared narrowly rather than importing `RepositoryReader` so the real reader
+ * satisfies it structurally with no adapter, and a test double is three lines.
+ */
+export type FileTextReader = {
+  getTextFile(path: string, commitSha: string, maxBytes: number): Promise<string | null>;
+};
 
 export type ReviewClassificationInput = {
   supabase: SupabaseClient;
   projectId: string;
   preparedChangeId: string;
+  /**
+   * Read-only repository access, when the project has a connected repository.
+   *
+   * Absent or null degrades to the path-based answer — which is the safe one,
+   * and the one this function returned before the probe existed.
+   */
+  reader?: FileTextReader | null;
 };
 
 export async function classifyReviewForPreparedChange(
@@ -56,11 +96,75 @@ export async function classifyReviewForPreparedChange(
     loadRequirement(input, prepared.operationRunId),
   ]);
 
-  return classifyReview({
-    changedPaths: prepared.files.map((file) => file.path),
-    surface,
-    requirement,
-  });
+  const changedPaths = prepared.files.map((file) => file.path);
+  const first = classifyReview({ changedPaths, surface, requirement });
+
+  /*
+   * Two passes over a pure function, rather than threading the proof into the
+   * first one. It costs nothing over at most ten paths, and it makes the
+   * invariant visible right here: the probe is only ever asked about paths the
+   * path rule *already* called visual, so the second answer can only be a
+   * subset of the first.
+   */
+  const provenNonRendering = await loadProvenNonRendering(input, prepared, first.visualPaths);
+  if (provenNonRendering.length === 0) return first;
+
+  return classifyReview({ changedPaths, surface, requirement, provenNonRendering });
+}
+
+/**
+ * Paths whose change provably cannot alter rendered output.
+ *
+ * Empty whenever anything is missing or goes wrong — no repository, no commit
+ * to compare against, a failed read, a file that will not parse. Every one of
+ * those leaves the path-based answer standing, which is the more thorough
+ * review.
+ */
+async function loadProvenNonRendering(
+  input: ReviewClassificationInput,
+  prepared: { baseSha: string; commitSha: string | null },
+  visualPaths: readonly string[],
+): Promise<readonly string[]> {
+  if (!input.reader || prepared.commitSha === null) return [];
+
+  /*
+   * The path guard runs before any network call, so an ordinary change — a
+   * component, a stylesheet, a route handler — costs nothing at all. `typescript`
+   * is ~9 MB, so the module that imports it is reached by dynamic import and
+   * only once there is something for it to do. `next.config.ts` records what
+   * eagerly loading a large package on a rendered page cost this product once
+   * already.
+   */
+  const candidates = visualPaths.filter(isRenderImpactCandidate);
+  if (candidates.length === 0) return [];
+
+  try {
+    const { analyzeRenderImpact, RENDER_IMPACT_LIMITS } = await import("./render-impact");
+    const reader = input.reader;
+    const commitSha = prepared.commitSha;
+
+    // `visualPaths` is already sorted, so the cap keeps a deterministic subset.
+    const inspected = candidates.slice(0, RENDER_IMPACT_LIMITS.maxFilesInspected);
+
+    const verdicts = await Promise.all(
+      inspected.map(async (path) => {
+        const [baseText, headText] = await Promise.all([
+          reader.getTextFile(path, prepared.baseSha, RENDER_IMPACT_LIMITS.maxBytesPerFile),
+          reader.getTextFile(path, commitSha, RENDER_IMPACT_LIMITS.maxBytesPerFile),
+        ]);
+
+        return { path, verdict: analyzeRenderImpact({ path, baseText, headText }) };
+      }),
+    );
+
+    return verdicts
+      .filter(({ verdict }) => verdict.kind === "no_render_impact")
+      .map(({ path }) => path);
+  } catch {
+    // A probe that cannot run proves nothing, and proving nothing is the
+    // pre-existing behaviour rather than a failure worth surfacing.
+    return [];
+  }
 }
 
 /**
