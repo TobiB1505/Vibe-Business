@@ -59,8 +59,16 @@ export const RATE_SOURCE_KINDS = [
 ] as const;
 export type RateSourceKind = (typeof RATE_SOURCE_KINDS)[number];
 
-export type InfrastructureRateCard = {
-  provider: "vercel_sandbox";
+/**
+ * The provenance fields every rate card carries, regardless of which Vercel
+ * product it prices.
+ *
+ * Factored out once a second card (`VercelFunctionsRateCard`, added
+ * alongside the founder's second attestation) needed the identical seven
+ * fields. Two rate cards that can each say *how* they came to be trusted is
+ * the point; two copies of the same seven-field shape saying it would not be.
+ */
+export type RateProvenance = {
   pricingVersion: string;
   /** When the figures were stated. Not when they became effective. */
   observedAt: string;
@@ -79,6 +87,10 @@ export type InfrastructureRateCard = {
   attestedAt: string | null;
   /** Why verification did not happen, or what it consisted of. */
   verificationNote: string | null;
+};
+
+export type InfrastructureRateCard = RateProvenance & {
+  provider: "vercel_sandbox";
 
   activeCpuNanoUsdPerCpuHour: number;
   memoryNanoUsdPerGbHour: number;
@@ -142,6 +154,72 @@ export const INFRASTRUCTURE_RATE_CARDS: readonly InfrastructureRateCard[] = [
  */
 export function rateCardByVersion(version: string): InfrastructureRateCard | null {
   return INFRASTRUCTURE_RATE_CARDS.find((card) => card.pricingVersion === version) ?? null;
+}
+
+/* ---------------------------------------------------------------------------
+ * Vercel Functions / Workflows — a different product, a different shape
+ * ------------------------------------------------------------------------ */
+
+/**
+ * What Vercel Functions and Workflows bill, distinct from the sandbox.
+ *
+ * Not folded into `InfrastructureRateCard`: a sandbox has creations, egress
+ * and snapshot storage; a Function invocation and a Workflow event are a
+ * different pair of line items with no snapshot or egress line at all. Forcing
+ * one shape onto both would mean nullable fields standing in for "does not
+ * apply", which is a worse honesty story than two small, exact types.
+ *
+ * `invocationNanoUsd` prices a plain Function call. `workflowEventNanoUsd`
+ * prices a step inside a **Workflow** — Vibe's `agentExecutionWorkflow` and
+ * `changeValidationWorkflow` are built on `"use step"` / `"use workflow"`,
+ * i.e. the Workflows product, not bare Functions, so this second, much higher
+ * rate ($20 vs $0.60 per million) is the one that actually applies to every
+ * step in Vibe's own two workflows. That mapping — "a `\"use step\"` call is
+ * one Workflow event" — is this file's own reading of Vibe's architecture
+ * against the product boundary the founder's attestation describes; the
+ * founder confirmed the *prices*, not that specific claim, so it is stated
+ * here rather than folded silently into a number.
+ */
+export type VercelFunctionsRateCard = RateProvenance & {
+  provider: "vercel_functions";
+  activeCpuNanoUsdPerCpuHour: number;
+  memoryNanoUsdPerGbHour: number;
+  invocationNanoUsd: number;
+  workflowEventNanoUsd: number;
+};
+
+/**
+ * `$0.128` per CPU-hour (identical to the sandbox rate), `$0.0106` per
+ * GB-hour (half the sandbox's `$0.0212` — Fluid Compute shares memory more
+ * efficiently than a dedicated microVM), `$0.60` per million invocations,
+ * `$20` per million Workflow events.
+ */
+export const VERCEL_FUNCTIONS_RATES: VercelFunctionsRateCard = {
+  provider: "vercel_functions",
+  pricingVersion: "vercel-functions-2026-08-20",
+  observedAt: "2026-08-20",
+  currency: "USD",
+  source: "https://vercel.com/pricing",
+  sourceKind: "founder_attested",
+  verified: true,
+  attestedBy: "founder",
+  attestedAt: "2026-08-20",
+  verificationNote:
+    "Confirmed directly by Vibe's founder on 2026-08-20, the same session as the sandbox rate card and for the same reason: this environment cannot reach vercel.com to check a price table itself.",
+
+  activeCpuNanoUsdPerCpuHour: 128_000_000, // $0.128
+  memoryNanoUsdPerGbHour: 10_600_000, // $0.0106
+  invocationNanoUsd: 600, // $0.60 per 1,000,000
+  workflowEventNanoUsd: 20_000, // $20 per 1,000,000
+};
+
+export const FUNCTIONS_RATE_CARDS: readonly VercelFunctionsRateCard[] = [
+  VERCEL_FUNCTIONS_RATES,
+];
+
+/** The Functions/Workflows equivalent of `rateCardByVersion`. */
+export function functionsRateCardByVersion(version: string): VercelFunctionsRateCard | null {
+  return FUNCTIONS_RATE_CARDS.find((card) => card.pricingVersion === version) ?? null;
 }
 
 /* ---------------------------------------------------------------------------

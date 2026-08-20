@@ -205,6 +205,34 @@ things were tried, in order, and only the second was accepted:
 decisions" for the live status — items 2 and 3 above are unaffected and still
 stand as labelled limitations, not blockers.
 
+### Second addendum, same day — PART H re-opened with a real price
+
+The founder then attested to a second set of figures: Vercel Functions Active
+CPU (`$0.128`/CPU-hour), Function Memory (`$0.0106`/GB-hour), Function
+Invocations (`$0.60`/million) and **Vercel Workflows Events (`$20`/million)**.
+
+This directly answers PART H above, which reasoned about workflow-invocation
+cost with no real price at all. `economy/workflow-invocation-cost.ts` now
+computes it for real: the step count was already solid (read from the code —
+8 fixed agent steps, one poll per 20s of agent wall clock, 11 validation
+steps; 23–46 events across runs #3–#8), and the founder's attestation replaced
+the unquoted per-event guess with the real Workflow-events rate — the one
+that applies, since Vibe's two workflows are built on `"use step"` /
+`"use workflow"`, i.e. the Workflows product, not bare Functions.
+
+**What the attestation could not supply, because no price list can: how long
+each step actually runs.** That stays an explicit, named assumption —
+`realistic` (500ms, a DB read/write) or `generous` (2s, a deliberately
+pessimistic bound) — never `measured`. Under real prices: 0.19–0.37% of the
+$0.4752 delivered-run floor realistically, **0.94% on the dearest run (#3)
+under the generous bound** — closer to the 1% line than the earlier unquoted
+guess suggested, but still under it.
+
+**PART H's verdict is unchanged: not instrumented.** It now rests on a real
+price for three of its four inputs instead of zero, and the fourth — per-step
+duration — is stated as what it is: unmeasured, and nothing short of actual
+telemetry closes that one.
+
 ## Gate
 
 lint 0 errors / typecheck / full unit suite / build / E2E green, no migration

@@ -274,6 +274,34 @@ Across all attempts **$2.8515**, delivering six runs:
 **$0.4752 per delivered run** — a 60% uplift on the successful-run mean of
 $0.2970, and up from the model-spend-only figure of $0.4047.
 
+### Vercel Functions / Workflows: real prices, materiality unchanged
+
+Sprint 0051's PART H reasoned about workflow-invocation cost with no real
+price at all — every dollar figure in it was a labelled, deliberately-bounded
+guess. The founder's second attestation (2026-08-20) replaced the price with
+a real one: `$0.128`/CPU-hour, `$0.0106`/GB-hour, `$0.60`/million invocations,
+**`$20`/million Workflow events** — 33⅓× a plain invocation, and the rate that
+actually applies, since Vibe's two workflows are built on `"use step"` /
+`"use workflow"` (Vercel Workflows), not bare Functions.
+
+The step count was never a guess — `economy/workflow-invocation-cost.ts`
+computes it from the real step graph (8 fixed agent steps + one poll per 20s
+of agent wall clock + 11 validation steps) and each run's own measured
+duration: **23–46 events per run**. What the founder's attestation could not
+supply, because no price list can, is how long each step actually runs — that
+stays an explicitly labelled assumption, `realistic` (500ms, a DB read/write)
+or `generous` (2s, a deliberately pessimistic upper bound), never `measured`.
+
+| | Realistic | Generous (dearest run, #3) |
+|---|---|---|
+| Share of the $0.4752 delivered-run floor | 0.19–0.37% | **0.94%** |
+
+**Materiality conclusion unchanged: still not instrumented.** The event
+charge alone — the one component now fully priced with no assumption at all —
+is under 0.2% by itself even on the busiest run. The generous bound sits close
+to the 1% line without crossing it, which is the honest way to say this
+survived contact with a real price rather than that it was comfortably clear.
+
 ## Cost drivers (PART D)
 
 Pearson correlation against provider cost, computed in Postgres over the six
@@ -357,7 +385,7 @@ not control.
 | ~~Validation `active_cpu_ms` not recorded~~ | ~~Validation cost has a floor and a bound~~ — **resolved (Sprint 0051)**: the bug is fixed at the source; every validation from now on gets a point estimate | done |
 | ~~`tool_calls_allowed` / `files_read` always 0~~ | ~~Tool use untestable~~ — **resolved**: correct as gateway counters; harness activity derived from `agent_execution_events` | done |
 | Historical runs #3–#8 have no validation point estimate | The six existing runs keep floor + upper bound forever | Not fixable — no second copy of the number exists to recover |
-| Vercel Functions / Workflow invocation cost not instrumented | Believed immaterial (0.07–1.07% of a delivered run, reasoned not measured) | Not pursued — see PART H, Sprint 0051; revisit only if invocation count grows materially |
+| Vercel Functions / Workflow invocation cost not instrumented | Immaterial under real prices too — 0.19–0.94% of a delivered run, event rate now attested, per-step duration still an explicit assumption | Not pursued — see PART H, Sprint 0051 and its addendum; revisit only if invocation count grows materially |
 | n = 6 | Correlations are thin | More runs |
 | All runs `non_production_economics` | No production-rate data at all | A production run |
 
