@@ -17,6 +17,7 @@ import {
   rankCandidates,
   rankFacts,
   type BriefFreshness,
+  type BriefRepositoryScale,
   type ContextFact,
   type ExecutionBrief,
   type FactConfidence,
@@ -957,6 +958,45 @@ export function compileExecutionBrief(input: CompileExecutionBriefInput): Execut
       authenticatedPagesResolved: resolved?.authenticatedPages.length ?? 0,
       authenticatedPagesIncluded: countIncluded(fileCandidates, "authenticated_page_surface"),
     },
+    repositoryScale: repositoryScale(usable ? snapshot : null, allCandidates.length),
+  };
+}
+
+/**
+ * The pinned snapshot's own size, carried onto the brief (Sprint 0053).
+ *
+ * Gated on freshness by the caller, not here: a stale snapshot describes a
+ * different tree, and its size is not this run's size. Everything but
+ * `candidatesAvailable` therefore goes null in that case — which is the honest
+ * answer, and the same discipline the freshness gate applies to every
+ * repository-derived fact.
+ *
+ * `candidatesAvailable` survives regardless because it is a fact about *this*
+ * compilation rather than about the tree: a stale run genuinely had zero
+ * candidates to offer, and zero is the true count, not a missing measurement.
+ */
+function repositoryScale(
+  snapshot: RepositoryIntelligenceSnapshot | null,
+  candidatesAvailable: number,
+): BriefRepositoryScale {
+  if (!snapshot) {
+    return {
+      treeEntries: null,
+      filesAnalyzed: null,
+      bytesAnalyzed: null,
+      routesDetected: null,
+      surfacesDetected: null,
+      candidatesAvailable,
+    };
+  }
+
+  return {
+    treeEntries: snapshot.metrics.treeEntriesConsidered,
+    filesAnalyzed: snapshot.metrics.filesFetched,
+    bytesAnalyzed: snapshot.metrics.bytesFetched,
+    routesDetected: snapshot.routes.routes.length,
+    surfacesDetected: snapshot.businessSurfaces.length,
+    candidatesAvailable,
   };
 }
 

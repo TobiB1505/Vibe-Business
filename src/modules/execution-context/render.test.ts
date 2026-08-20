@@ -41,6 +41,16 @@ function brief(overrides: Partial<ExecutionBrief> = {}): ExecutionBrief {
       snapshotId: "snap-1",
     },
     truncated: { factsOmitted: 0, candidatesOmitted: 0 },
+    // Observability only — the renderer must never put any of this in the
+    // prompt, which is asserted below rather than assumed.
+    repositoryScale: {
+      treeEntries: 1420,
+      filesAnalyzed: 37,
+      bytesAnalyzed: 412_000,
+      routesDetected: 26,
+      surfacesDetected: 4,
+      candidatesAvailable: 19,
+    },
     surface: {
       requirement: EMPTY_SURFACE_REQUIREMENT,
       publicPagesResolved: 0,
@@ -59,6 +69,20 @@ describe("rendering", () => {
     expect(rendered.text).toContain("abc123");
     expect(rendered.factsRendered).toBe(1);
     expect(rendered.candidatesRendered).toBe(1);
+  });
+
+  /**
+   * `repositoryScale` is observability, and observability that leaks into the
+   * prompt is paid for by the token (Sprint 0053). The brief has a hard byte
+   * budget precisely because every field on it costs money if rendered, so the
+   * separation is asserted rather than trusted to a reviewer noticing.
+   */
+  it("never renders the repository-scale counters into the prompt", () => {
+    const rendered = renderExecutionBrief(brief());
+
+    for (const value of ["1420", "412000", "412,000", "candidatesAvailable"]) {
+      expect(rendered.text).not.toContain(value);
+    }
   });
 
   it("carries provenance on every fact, so nothing reads as an assertion by Vibe", () => {
