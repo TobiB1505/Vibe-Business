@@ -36,8 +36,12 @@ import type { ValidationSummary } from "@/modules/validation/view";
  */
 
 export type ChangeStage =
-  /** Safety checks have not passed. Nothing downstream can start. */
+  /** No safety check has been run, and none is running. */
+  | "not_validated"
+  /** A safety check is in flight. */
   | "validating"
+  /** A safety check ran and did not pass. Nothing downstream can start. */
+  | "validation_failed"
   /** Checked, but the comparison a human reviews does not exist yet. */
   | "reviewing"
   /** Everything a person needs in order to decide is on screen. */
@@ -77,7 +81,16 @@ export type ChangeProgress = {
  * differently is how a product starts disagreeing with itself.
  */
 const STAGE_HEADLINES: Record<ChangeStage, string> = {
+  /*
+   * Three sentences where there was one. "Vibe is checking this change is
+   * safe" was being said for a change nobody had checked and for a change that
+   * had already failed its checks — two false statements in the same place
+   * this sprint exists to remove them from. Whether a check is happening is a
+   * different fact from whether one has happened.
+   */
+  not_validated: "This change has not been checked yet.",
   validating: "Vibe is checking this change is safe.",
+  validation_failed: "This change did not pass its safety checks.",
   reviewing: "Vibe is preparing what you need to review.",
   awaiting_approval: "Ready for you to review and approve.",
   ready_to_merge: "Approved by you, ready to go into your repository.",
@@ -99,8 +112,22 @@ function reviewSettled(review: ReviewCard): boolean {
   return review.state === "ready";
 }
 
-function validationPassed(validation: ValidationSummary | null): boolean {
-  return validation?.status === "passed";
+/**
+ * Which of the three validation stages a change is on, or null once it is past
+ * the gate.
+ *
+ * `cancelled` reads as "not checked" rather than as a failure, matching the
+ * validation panel: a run somebody stopped says nothing about the change.
+ */
+function validationGate(
+  validation: ValidationSummary | null,
+): "not_validated" | "validating" | "validation_failed" | null {
+  if (validation === null) return "not_validated";
+  if (validation.status === "passed") return null;
+  if (validation.status === "queued" || validation.status === "running") return "validating";
+  if (validation.status === "failed") return "validation_failed";
+
+  return "not_validated";
 }
 
 /** A preview is optional evidence: it never blocks, so it never holds a stage. */
@@ -172,11 +199,10 @@ export function deriveChangeProgress(input: ChangeProgressInput): ChangeProgress
         ? "stalled"
         : approved
           ? "ready_to_merge"
-          : !validationPassed(validation)
-            ? "validating"
-            : reviewSettled(review) && !previewInFlight(preview)
+          : (validationGate(validation) ??
+            (reviewSettled(review) && !previewInFlight(preview)
               ? "awaiting_approval"
-              : "reviewing";
+              : "reviewing"));
 
   return {
     stage,

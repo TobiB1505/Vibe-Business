@@ -35,32 +35,80 @@ function input(overrides: Record<string, unknown> = {}): ChangeProgressInput {
 }
 
 describe("stage", () => {
+  /** A change that has got no further than its first gate. */
+  function beforeValidation(validation: unknown) {
+    return input({
+      validation,
+      review: { state: "not_generated" },
+      approval: { state: "not_eligible" },
+      merge: { state: "not_eligible", failureCode: "merge_approval_required" },
+    });
+  }
+
   it("waits on safety checks before anything else", () => {
     for (const status of ["queued", "running", "failed", "cancelled"] as const) {
       const progress = deriveChangeProgress(
-        input({
-          validation: { status, phases: [], failureMessage: null, sandboxDurationMs: null, underCurrentPolicy: true },
-          review: { state: "not_generated" },
-          approval: { state: "not_eligible" },
-          merge: { state: "not_eligible", failureCode: "merge_approval_required" },
+        beforeValidation({
+          status,
+          phases: [],
+          failureMessage: null,
+          sandboxDurationMs: null,
+          underCurrentPolicy: true,
         }),
       );
 
-      expect(progress.stage).toBe("validating");
+      expect(["not_validated", "validating", "validation_failed"]).toContain(progress.stage);
     }
   });
 
-  it("treats a change with no validation at all as unvalidated, never as ready", () => {
+  /**
+   * The three are not interchangeable, and saying so is the point.
+   *
+   * One sentence used to cover all of them — "Vibe is checking this change is
+   * safe" — which was true only while something was actually running. On a
+   * change nobody had checked, and on a change whose checks had failed, the
+   * card was stating something that was not happening.
+   */
+  it.each([
+    ["queued", "validating"],
+    ["running", "validating"],
+    ["failed", "validation_failed"],
+    // A run somebody stopped says nothing about the change, so it reads as
+    // unchecked rather than as a failure — the same call the panel makes.
+    ["cancelled", "not_validated"],
+  ] as const)("reads %s as %s", (status, stage) => {
     const progress = deriveChangeProgress(
-      input({
-        validation: null,
-        review: { state: "not_generated" },
-        approval: { state: "not_eligible" },
-        merge: { state: "not_eligible", failureCode: "merge_approval_required" },
+      beforeValidation({
+        status,
+        phases: [],
+        failureMessage: null,
+        sandboxDurationMs: null,
+        underCurrentPolicy: true,
       }),
     );
 
-    expect(progress.stage).toBe("validating");
+    expect(progress.stage).toBe(stage);
+  });
+
+  it("treats a change with no validation at all as unvalidated, never as ready", () => {
+    const progress = deriveChangeProgress(beforeValidation(null));
+
+    expect(progress.stage).toBe("not_validated");
+    expect(progress.headline).toBe("This change has not been checked yet.");
+  });
+
+  it("never claims a check is happening when none is", () => {
+    // The defect this split exists to prevent, asserted as the sentence rather
+    // than as the stage name.
+    for (const validation of [
+      null,
+      { status: "cancelled", phases: [], failureMessage: null, sandboxDurationMs: null, underCurrentPolicy: true },
+      { status: "failed", phases: [], failureMessage: null, sandboxDurationMs: null, underCurrentPolicy: true },
+    ]) {
+      expect(deriveChangeProgress(beforeValidation(validation)).headline).not.toContain(
+        "is checking",
+      );
+    }
   });
 
   it("waits for the comparison a person reviews", () => {
