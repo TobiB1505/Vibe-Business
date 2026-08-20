@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import type { ValidationDepth } from "./depth";
 import type { ValidationProfile } from "./schema";
 
 /**
@@ -35,6 +36,18 @@ export function computeValidationIdentity(params: {
   validationProfile: ValidationProfile;
   validationProfileVersion: string;
   sandboxPolicyVersion: string;
+  /**
+   * How much of the profile ran, and the rules that chose it (Sprint 0047).
+   *
+   * Identity inputs for exactly the reason the policy version is: a `fast` run
+   * and a `deep` run answer different questions about the same commit, so a
+   * stored `fast` pass must never satisfy a later request for a `deep` one.
+   * Including both here makes that true by construction rather than by anyone
+   * remembering to check — and re-deciding the depth downward on a re-run
+   * cannot reach back and reuse a deeper result either, because the hash moved.
+   */
+  validationDepth: ValidationDepth;
+  validationDepthPolicyVersion: string;
 }): string {
   // Fixed order rather than object key order, so a refactor cannot silently
   // rehash every stored identity.
@@ -44,6 +57,8 @@ export function computeValidationIdentity(params: {
     params.validationProfile,
     params.validationProfileVersion,
     params.sandboxPolicyVersion,
+    params.validationDepth,
+    params.validationDepthPolicyVersion,
   ]);
 
   return createHash("sha256").update(canonical).digest("hex");

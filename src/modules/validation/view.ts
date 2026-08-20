@@ -1,10 +1,17 @@
-import type {
-  SourceIntegrity,
-  ValidationFailureCode,
-  ValidationStage,
-  ValidationStatus,
-  ValidationStepName,
-  ValidationStepResult,
+import {
+  VALIDATION_DEPTH_LABELS,
+  VALIDATION_DEPTH_REASON_LABELS,
+  type ValidationDepth,
+  type ValidationDepthReason,
+} from "./depth";
+import {
+  VALIDATION_STEPS,
+  type SourceIntegrity,
+  type ValidationFailureCode,
+  type ValidationStage,
+  type ValidationStatus,
+  type ValidationStepName,
+  type ValidationStepResult,
 } from "./schema";
 
 /**
@@ -203,6 +210,14 @@ export type ValidationSummary = {
   failureMessage: string | null;
   sandboxDurationMs: number | null;
   /**
+   * How much of the profile ran, and why (Sprint 0047).
+   *
+   * Null for runs validated before depth existed — those ran the full set, and
+   * saying "Standard" about them would be relabelling history. The panel shows
+   * nothing rather than a depth nobody chose.
+   */
+  depth: ValidationDepthView | null;
+  /**
    * Whether this result was produced under the integrity policy in force now.
    *
    * A stored pass describes the rules it was checked against. When those rules
@@ -213,10 +228,53 @@ export type ValidationSummary = {
   underCurrentPolicy: boolean;
 };
 
+/**
+ * The depth, as the panel renders it.
+ *
+ * Carries the label and the reason together because they only mean anything
+ * together: "Fast" alone invites "why did you skip things?", and the answer —
+ * "low-risk presentational change" — is the whole point of showing it.
+ */
+export type ValidationDepthView = {
+  depth: ValidationDepth;
+  label: string;
+  reason: string;
+  /** The steps this depth deliberately did not run. Empty at full depth. */
+  notRun: ValidationStepName[];
+};
+
+function buildDepthView(run: {
+  validationDepth: ValidationDepth | null;
+  validationDepthReason: string | null;
+  steps: Partial<Record<ValidationStepName, ValidationStepResult>>;
+}): ValidationDepthView | null {
+  if (!run.validationDepth) return null;
+
+  const reason = run.validationDepthReason as ValidationDepthReason | null;
+
+  return {
+    depth: run.validationDepth,
+    label: VALIDATION_DEPTH_LABELS[run.validationDepth],
+    // An unrecognised stored reason is shown as the generic sentence rather
+    // than as a raw enum: a future policy version may record a reason this
+    // build has no copy for, and leaking `sensitive_domain_changed` into the
+    // UI would be worse than saying less.
+    reason:
+      reason && reason in VALIDATION_DEPTH_REASON_LABELS
+        ? VALIDATION_DEPTH_REASON_LABELS[reason]
+        : "Validation depth chosen by policy",
+    notRun: VALIDATION_STEPS.filter(
+      (step) => run.steps[step]?.skipReason === "not_in_profile",
+    ),
+  };
+}
+
 export function buildValidationSummary(
   run: ValidationProgressInput & {
     sandboxDurationMs: number | null;
     sandboxPolicyVersion: string;
+    validationDepth?: ValidationDepth | null;
+    validationDepthReason?: string | null;
   },
   options: { currentPolicyVersion: string; failureMessage: string | null },
 ): ValidationSummary {
@@ -225,6 +283,11 @@ export function buildValidationSummary(
     phases: buildValidationProgress(run),
     failureMessage: options.failureMessage,
     sandboxDurationMs: run.sandboxDurationMs,
+    depth: buildDepthView({
+      validationDepth: run.validationDepth ?? null,
+      validationDepthReason: run.validationDepthReason ?? null,
+      steps: run.steps,
+    }),
     underCurrentPolicy: run.sandboxPolicyVersion === options.currentPolicyVersion,
   };
 }

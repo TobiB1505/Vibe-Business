@@ -65,6 +65,7 @@ V0.1 foundational architecture decisions have been recorded:
 - [0033](0033-post-implementation-completion-control.md) — Post-Implementation Completion Control: stop paying for exploration after the job has converged (Accepted, extends 0027, 0029, 0031 and 0032)
 - [0034](0034-execution-surface-and-lifecycle.md) — Execution surfaces, and separating implementation breadth from convergence (Accepted, supersedes parts of 0031 and 0033)
 - [0035](0035-commit-message-compiler.md) — Commit Message Compiler: Conventional Commits from the trusted Action Step (Accepted, narrows Rule 57's application to the Planner's own already-trusted text)
+- [0036](0036-risk-adaptive-validation-depth.md) — Risk-Adaptive Independent Validation Depth: profile answers *which commands*, depth answers *how many this change deserves* (Accepted, extends Rule 65 with a second versioned axis; leaves Rule 66 untouched)
 
 Several architecture questions remain intentionally open — see [ARCHITECTURE.md §7](../../ARCHITECTURE.md#7-deferred--open-decisions).
 

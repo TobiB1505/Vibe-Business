@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { FakeDatabase, FakeExecutor, fakeSupabase } from "@/modules/operations/test-support";
+import { VALIDATION_DEPTH_POLICY_VERSION, type ValidationDepth } from "./depth";
 import { computeValidationIdentity } from "./identity";
 import { SANDBOX_POLICY_VERSION, validationProfileVersionFor } from "./schema";
 import { startChangeValidation } from "./service";
@@ -22,13 +23,24 @@ const PREPARED = "prepared_1";
 let db: FakeDatabase;
 let executor: FakeExecutor;
 
-function identityFor(overrides: { commitSha?: string; policyVersion?: string; profileVersion?: string } = {}) {
+function identityFor(
+  overrides: {
+    commitSha?: string;
+    policyVersion?: string;
+    profileVersion?: string;
+    depth?: ValidationDepth;
+  } = {},
+) {
   return computeValidationIdentity({
     preparedChangeId: PREPARED,
     preparedCommitSha: overrides.commitSha ?? FIXTURE_COMMIT_SHA,
     validationProfile: "nextjs_node_v1",
     validationProfileVersion: overrides.profileVersion ?? validationProfileVersionFor("nextjs_node_v1"),
     sandboxPolicyVersion: overrides.policyVersion ?? SANDBOX_POLICY_VERSION,
+    // The fixture prepared change has no agent run behind it, so every trusted
+    // lookup returns nothing and the resolver lands on its safe default.
+    validationDepth: overrides.depth ?? "standard",
+    validationDepthPolicyVersion: VALIDATION_DEPTH_POLICY_VERSION,
   });
 }
 
@@ -404,6 +416,8 @@ describe("integrity policy versioning (post-dogfood v1 → v2)", () => {
       validationProfile: "nextjs_node_v1",
       validationProfileVersion: validationProfileVersionFor("nextjs_node_v1"),
       sandboxPolicyVersion: "sandbox-policy-v1",
+      validationDepth: "standard",
+      validationDepthPolicyVersion: VALIDATION_DEPTH_POLICY_VERSION,
     });
 
     expect(identityFor()).not.toBe(underV1);
@@ -426,6 +440,8 @@ describe("integrity policy versioning (post-dogfood v1 → v2)", () => {
         validationProfile: "nextjs_node_v1",
         validationProfileVersion: validationProfileVersionFor("nextjs_node_v1"),
         sandboxPolicyVersion: "sandbox-policy-v1",
+        validationDepth: "standard",
+        validationDepthPolicyVersion: VALIDATION_DEPTH_POLICY_VERSION,
       }),
       status: "passed",
       stage: "completed",

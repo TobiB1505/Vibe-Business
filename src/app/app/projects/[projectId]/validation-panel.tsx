@@ -106,6 +106,35 @@ function PhaseList({ phases }: { phases: ValidationPhaseView[] }) {
   );
 }
 
+/**
+ * How much of the profile ran, and why (Sprint 0047).
+ *
+ * Shown for the same reason the "checked under earlier rules" line is: a
+ * validation that took ninety seconds and one that took five minutes are
+ * different claims, and the difference should be readable rather than inferred
+ * from a stopwatch. When a depth deliberately skipped steps, they are named —
+ * "we did not run this" is the honest half of "this was fast".
+ *
+ * Absent for runs validated before depth existed, which ran everything.
+ */
+function DepthNote({ depth }: { depth: ValidationSummary["depth"] }) {
+  if (!depth) return null;
+
+  return (
+    <div className="flex flex-col gap-1">
+      <p className="text-xs text-fg-secondary">
+        <span className="text-fg-muted">Depth:</span> {depth.label} — {depth.reason}
+      </p>
+      {depth.notRun.length > 0 && (
+        <p className="text-xs text-fg-muted">
+          Not run at this depth: {depth.notRun.join(", ")}. The exact commit, the changed files and
+          the build identity were verified regardless.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function ValidationPanel({
   projectId,
   preparedChangeId,
@@ -198,7 +227,10 @@ export function ValidationPanel({
               Before the first phase records itself there is nothing truthful to
               show, so the panel says only that it has started. */}
           {liveSummary ? (
-            <PhaseList phases={liveSummary.phases} />
+            <>
+              <DepthNote depth={liveSummary.depth} />
+              <PhaseList phases={liveSummary.phases} />
+            </>
           ) : (
             <p className="text-sm text-fg-secondary">Starting an isolated environment</p>
           )}
@@ -218,6 +250,7 @@ export function ValidationPanel({
               ? "Your project still builds, and the change matches the exact commit Vibe prepared."
               : "This result was produced before Vibe's validation rules changed. It still describes what was checked at the time, but not what would be checked now."}
           </p>
+          <DepthNote depth={shown.depth} />
           <PhaseList phases={shown.phases} />
           {/* Deliberately repeated after a pass. A green tick is exactly when
               someone is most likely to assume more happened than did. */}
