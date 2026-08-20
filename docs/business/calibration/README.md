@@ -85,6 +85,27 @@ overwrite either**. **Commit them before starting the run**: there is no
 predictions table, so git's timestamp is what proves the estimate preceded the
 run. Drop `VIBE_CALIBRATION_OUT` to print to stdout instead.
 
+### 1a. If the prediction is refused
+
+A refusal now prints the reason the resolver actually gave, not just the
+`not_executable` wrapper around it. The two worth recognising:
+
+**`admission refused: repository_head_moved`** — the default branch has moved
+since Vibe last analysed the repository, so the commit the prediction would be
+pinned to is no longer `main`'s head. This is ADR 0014 working: a moved default
+branch blocks execution rather than triggering merge reasoning. Fix it by
+**re-analysing the project** from the app, which re-pins the snapshot to the
+current head. Nothing here starts that for you — it is the user's action, not
+the harness's.
+
+Merging *anything* to `main` between two calibration runs triggers this. The
+practical rule for a calibration session: land no PRs while runs are in flight,
+or re-analyse after each one.
+
+**`resolved mode: deterministic`** — the fixture matched a registry capability
+and would never reach the agent. That is a fixture defect, not a state problem;
+`calibration.test.ts` now blocks the one pair that can cause it.
+
 ### 2. Start the run
 
 In the deployed app, as the project's owner:
