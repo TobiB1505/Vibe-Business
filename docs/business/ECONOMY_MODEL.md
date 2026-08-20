@@ -173,12 +173,22 @@ versioned Vercel Sandbox rate card (`vercel-sandbox-2026-08-20`):
 | Snapshot storage | $0.08 / GB-month |
 | RAM per vCPU | 2 GB (verified from Vercel docs) |
 
-**The prices are `operator_supplied` and `verified: false`.** They could not be
-checked from the build environment: `vercel.com` is blocked by the egress proxy,
-and the Vercel documentation-search tool returns the pricing page's worked
-examples but not its price table. The rate card says so in a field, and every
-cost derived from it is labelled `estimated`. Re-verifying against the live page
-is an open task.
+**The prices are `founder_attested` and `verified: true`.** Three attempts
+across two sprints to check them from the build environment all failed —
+`vercel.com` is blocked by the egress proxy, and the Vercel
+documentation-search tool returns the pricing page's worked examples but
+never its price table. A fourth attempt — a screenshot of a different AI
+assistant claiming to have browsed the page — was rejected as evidence: no
+way to tell a real fetch from a recollection that happens to match, and not a
+primary source regardless. What closed it was Vibe's own founder confirming
+the five figures directly, on 2026-08-20 — a commercial sign-off, the same
+kind of authority `credits/rating.ts` already requires before any Credit rate
+can exist, applied one layer down to infrastructure cost. The rate card's
+`sourceKind` says exactly this — `founder_attested`, not
+`official_public_pricing` — so nothing here claims a technical verification
+that did not happen. Cost derived from it is still labelled `estimated` rather
+than `measured`, because it is a price applied to a measured quantity, not a
+provider-reported cost.
 
 They do reproduce Vercel's own worked example — 2 vCPU / 4 GB / 5 min fully
 active = **$0.0284**, against Vercel's documented "about $0.03" — which is
@@ -343,7 +353,7 @@ not control.
 
 | Gap | Consequence | Fixable by |
 |---|---|---|
-| **Rate card unverified** | Sandbox cost is estimated, not confirmed | Reading vercel.com/docs/sandbox/pricing from an unblocked network — attempted three times across two sprints, blocked every time |
+| ~~Rate card unverified~~ | ~~Sandbox cost is estimated, not confirmed~~ — **resolved**: `founder_attested` by Vibe's own founder on 2026-08-20, after three failed environment-side attempts and one rejected AI-relayed claim | done |
 | ~~Validation `active_cpu_ms` not recorded~~ | ~~Validation cost has a floor and a bound~~ — **resolved (Sprint 0051)**: the bug is fixed at the source; every validation from now on gets a point estimate | done |
 | ~~`tool_calls_allowed` / `files_read` always 0~~ | ~~Tool use untestable~~ — **resolved**: correct as gateway counters; harness activity derived from `agent_execution_events` | done |
 | Historical runs #3–#8 have no validation point estimate | The six existing runs keep floor + upper bound forever | Not fixable — no second copy of the number exists to recover |
@@ -355,13 +365,18 @@ not control.
 
 ## Open decisions
 
-1. **Verify the Vercel rate card. This is the one remaining blocker on Credit
-   pricing** (Sprint 0051's verdict: NOT READY, for this reason alone). The
-   figures are the operator's and the code says so
-   (`sourceKind: "operator_supplied"`, `verified: false`) after three
-   independent attempts across two sprints to reach the price table from this
-   environment. They reproduce Vercel's own worked example, which is
-   corroboration, not confirmation.
+1. ~~**Verify the Vercel rate card.**~~ **Resolved.** Sprint 0051 named this
+   the one remaining blocker on Credit pricing after three independent
+   attempts across two sprints failed to reach the price table from this
+   environment, and after a screenshot claiming a different AI assistant had
+   browsed the page was rejected — no way to tell a real fetch from a
+   recollection that happens to match, and not a primary source either way.
+   Vibe's founder then confirmed the five figures directly, by name, on
+   2026-08-20. `sourceKind` now reads `founder_attested` — a commercial
+   sign-off, not a claim that this environment performed a technical
+   verification it did not. The **NOT READY** verdict from Sprint 0051 is
+   superseded on this specific point; see that sprint's own record for what
+   was tried and rejected before this closed it.
 2. **Price per run, not per token.** The data supports it: cost correlates with
    context volume, which the customer neither sees nor controls, and not with
    delivered work, which is what they think they are buying.

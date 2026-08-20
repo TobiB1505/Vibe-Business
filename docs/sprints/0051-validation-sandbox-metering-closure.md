@@ -184,6 +184,27 @@ model can be built around; item 1 is the one number the whole rate card
 depends on, and it has not been confirmed from a primary source in three
 sprints of trying.
 
+### Addendum, same day — item 1 resolved by founder attestation
+
+After this sprint's own attempts closed with the verdict above, two more
+things were tried, in order, and only the second was accepted:
+
+- A screenshot claiming a different AI assistant had browsed the pricing page
+  and confirmed the same figures — **rejected.** No way to tell a real fetch
+  from a recollection that happens to match, and the numbers being identical
+  to what was already `operator_supplied` is not independent evidence of
+  anything.
+- Vibe's own founder confirming the five figures directly, by name, on
+  2026-08-20 — **accepted.** `infrastructure-rates.ts` gained a new
+  `sourceKind`, `founder_attested`, distinct from `official_public_pricing`
+  precisely so this sign-off is never confused with a technical verification
+  this environment did not perform. `VERCEL_SANDBOX_RATES.verified` is now
+  `true`; the five numeric rates are unchanged.
+
+**Item 1 is resolved.** See `docs/business/ECONOMY_MODEL.md`'s "Open
+decisions" for the live status — items 2 and 3 above are unaffected and still
+stand as labelled limitations, not blockers.
+
 ## Gate
 
 lint 0 errors / typecheck / full unit suite / build / E2E green, no migration

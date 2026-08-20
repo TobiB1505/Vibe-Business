@@ -33,14 +33,23 @@ describe("the rate card is versioned and honest about itself", () => {
     expect(rateCardByVersion("some-future-card")).toBeNull();
   });
 
-  it("declares itself operator-supplied and unverified", () => {
-    // The figures could not be checked from this environment: vercel.com is
-    // egress-blocked and the docs-search tool returns the pricing page's worked
-    // examples but not its price table. Labelling them `official_public_pricing`
-    // would assert a verification that did not happen.
-    expect(VERCEL_SANDBOX_RATES.sourceKind).toBe("operator_supplied");
-    expect(VERCEL_SANDBOX_RATES.verified).toBe(false);
-    expect(VERCEL_SANDBOX_RATES.verificationNote).toContain("egress");
+  it("declares itself founder-attested, not a technical fetch this session performed", () => {
+    // Three attempts across two sprints could not reach vercel.com from this
+    // environment (egress-blocked; the docs-search tool returns worked
+    // examples but never the price table), and a screenshot of a different AI
+    // assistant claiming to have browsed the page was rejected as
+    // unfalsifiable. What closed it was the founder confirming the five
+    // figures by name — a commercial sign-off, which `sourceKind` says plainly
+    // rather than mislabelling as `official_public_pricing`.
+    expect(VERCEL_SANDBOX_RATES.sourceKind).toBe("founder_attested");
+    expect(VERCEL_SANDBOX_RATES.verified).toBe(true);
+    expect(VERCEL_SANDBOX_RATES.attestedBy).toBe("founder");
+    expect(VERCEL_SANDBOX_RATES.attestedAt).toBe("2026-08-20");
+    expect(VERCEL_SANDBOX_RATES.verificationNote).toContain("founder");
+  });
+
+  it("never labels an attestation as an independent technical fetch", () => {
+    expect(VERCEL_SANDBOX_RATES.sourceKind).not.toBe("official_public_pricing");
   });
 
   it("holds every rate as an integer number of nanodollars", () => {
@@ -145,10 +154,14 @@ describe("provenance travels with every derivation", () => {
 
     expect(provenance.pricingVersion).toBe("vercel-sandbox-2026-08-20");
     expect(provenance.pricingObservedAt).toBe("2026-08-20");
-    expect(provenance.pricingVerified).toBe(false);
+    // The rate card is founder-attested, not this session's own technical
+    // fetch — but attestation is still a real confirmation, so `verified` is
+    // true and no "unverified rate card" assumption is added.
+    expect(provenance.pricingVerified).toBe(true);
     expect(provenance.vcpusBasis).toBe("derived_from_configuration");
     expect(provenance.assumptions.join(" ")).toContain("not recorded");
     expect(provenance.assumptions.join(" ")).toContain("2 GB per vCPU");
+    expect(provenance.assumptions.join(" ")).not.toContain("unverified");
   });
 
   it("stops claiming a reconstruction when the provider reported the shape", () => {
