@@ -337,6 +337,89 @@ export const E2E_SCENARIOS = {
     }),
 
   /**
+   * **The first real change this card ever carried** (UI-5 dogfood).
+   *
+   * A rebuild of the screen that found two defects at once, so the browser
+   * suite holds the combination that produced them rather than an invented
+   * one. Everything here is what the deployed card actually showed: an
+   * agent-written change, validation passed, preview never started, review
+   * waiting for one, nobody approving.
+   *
+   * The two things it proves. **The headline names whose turn it is** — that
+   * screen said "Vibe is preparing what you need to review" while nothing was
+   * running anywhere. And **an agent-written change has something to lead
+   * with** — `agentic_execution_v1` has no capability rationale and cannot
+   * have one, so the card opened with a status line and then a branch name.
+   *
+   * The branch and the short commit are the real ones off that card; a full
+   * SHA is not, because the card only ever displayed seven characters of it.
+   */
+  change_agentic_review_required: (): PreparedChangeCard =>
+    withProgress({
+      ...baseChange(),
+      outcome: outcomeCard(),
+      businessImpact: businessImpactCard(),
+      branchName: "vibe/agent-07d2308c197d",
+      commitSha: "94c3165",
+      filePaths: ["e2e/auth.spec.ts", "e2e/first-ten-minutes.spec.ts", "src/app/page.tsx"],
+      // No written rationale, which is true of every agentic change there will
+      // ever be — and the reason the origin below has to exist.
+      rationale: null,
+      origin: {
+        title: "Give the landing page a proper social preview",
+        problem:
+          "The landing page has no canonical Open Graph metadata, so a link to it shared anywhere renders without a title, description or image.",
+        whyNow:
+          "Every link shared before this is fixed is a first impression the product does not get to make again.",
+      },
+      preview: {
+        state: "ready_to_start",
+        previewSessionId: null,
+        operationRunId: null,
+        stage: null,
+        failureCode: null,
+        failureMessage: null,
+        expiresAt: null,
+        readyAt: null,
+        revalidationRequired: false,
+      },
+      validatedArtifactId: "validation_e2e",
+      review: {
+        state: "not_generated",
+        reviewArtifactId: null,
+        operationRunId: null,
+        failureCode: null,
+        failureMessage: null,
+        route: null,
+        beforeOrigin: null,
+        beforeCapturedAt: null,
+        afterCapturedAt: null,
+        width: null,
+        height: null,
+        expiresAt: null,
+      },
+      reviewImages: null,
+      approval: {
+        state: "not_eligible",
+        approvalId: null,
+        approvedAt: null,
+        revokedAt: null,
+        approvedCommitSha: null,
+        invalidationReason: null,
+        blockReason: "approval_review_required",
+        blockMessage: APPROVAL_BLOCK_MESSAGES.approval_review_required,
+        canApprove: false,
+        currentCommitSha: "94c3165",
+      },
+      merge: mergeCard({
+        state: "not_eligible",
+        failureCode: "merge_approval_required",
+        failureMessage: MERGE_FAILURE_MESSAGES.merge_approval_required,
+        canMerge: false,
+      }),
+    }),
+
+  /**
    * The earliest gate, still open — a change nobody has checked yet.
    *
    * Deliberately `null` rather than a run in flight. The section hands the

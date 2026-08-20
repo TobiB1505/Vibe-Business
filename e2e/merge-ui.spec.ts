@@ -274,6 +274,30 @@ test.describe("a change still moving shows its gates", () => {
     await expect(mergeSection(page).getByText("Ready to merge")).toHaveCount(0);
   });
 
+  /**
+   * The screen that found both of this sprint's dogfood defects, rebuilt.
+   *
+   * It asserts the two sentences that were wrong on it: a headline narrating
+   * work nobody was doing, and no statement of meaning at all above a branch
+   * name.
+   */
+  test("an agent-written change names whose turn it is, and what it was for", async ({ page }) => {
+    await page.goto("/e2e/change_agentic_review_required");
+
+    // Nothing is running: the preview has not been started and the comparison
+    // is waiting for one. The card used to claim Vibe was preparing something.
+    await expect(page.getByText("Ready for you to preview and compare.")).toBeVisible();
+    await expect(page.getByText("Vibe is preparing what you need to review.")).toHaveCount(0);
+
+    // And it leads with meaning rather than with a branch name.
+    await expect(page.getByText("What this change was for")).toBeVisible();
+    await expect(page.getByText("It does not describe what the change did")).toBeVisible();
+
+    // The rationale heading belongs to a written, capability-owned sentence.
+    // An agentic change has none, and must not borrow the stronger claim.
+    await expect(page.getByText("What Vibe changed")).toHaveCount(0);
+  });
+
   test("an unchecked change says so and offers nothing downstream", async ({ page }) => {
     await page.goto("/e2e/change_not_validated");
 
