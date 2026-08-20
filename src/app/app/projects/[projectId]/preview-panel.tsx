@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
+import { ConfirmPanel, useReturnFocus } from "@/components/ui/confirm-panel";
 import { Button } from "@/components/ui/button";
 import { useOperationPoll } from "@/lib/client/use-operation-poll";
 import { shouldRefreshForState } from "@/modules/operations/view";
@@ -104,17 +105,15 @@ function ConfirmDialog({
   pending: boolean;
 }) {
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="preview-confirm-title"
-      className="space-y-3 rounded-md border border-amber-line/60 bg-amber-tint-soft p-4"
+    <ConfirmPanel
+      title="Start temporary preview?"
+      tone="caution"
+      pending={pending}
+      onCancel={onCancel}
+      onConfirm={onConfirm}
+      confirmLabel="Start temporary preview"
     >
-      <h5 id="preview-confirm-title" className="text-sm font-medium text-fg">
-        Start temporary preview?
-      </h5>
-
-      <div className="space-y-2 text-sm text-fg-prose">
+      <>
         <p>
           Vibe will start the validated application in an isolated environment and make it
           temporarily available through a public, unlisted URL.
@@ -125,20 +124,8 @@ function ConfirmDialog({
         <p>Vibe will not add production secrets or production data.</p>
         <p>The preview expires automatically after 15 minutes.</p>
         <p>Your production site and default branch will not be changed.</p>
-      </div>
-
-      <div className="flex gap-2">
-        <Button type="button" variant="secondary" size="sm" onClick={onCancel} disabled={pending}>
-          Cancel
-        </Button>
-        {/* The amber stays where it carries meaning — the panel's tint and the
-            sentence about the unlisted URL — rather than on the button. Amber
-            reports a state; a button reports what happens when you press it. */}
-        <Button type="button" variant="primary" size="sm" onClick={onConfirm} disabled={pending}>
-          Start temporary preview
-        </Button>
-      </div>
-    </div>
+      </>
+    </ConfirmPanel>
   );
 }
 
@@ -178,6 +165,7 @@ export function PreviewPanel({
 }) {
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
+  const openerRef = useReturnFocus<HTMLButtonElement>(confirming);
   /**
    * The last action's answer, start or stop.
    *
@@ -523,6 +511,7 @@ export function PreviewPanel({
             public, unlisted URL. Your repository and production site are not changed.
           </p>
           <Button
+            ref={openerRef}
             type="button"
             variant="primary"
             size="sm"

@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { ConfirmPanel, useReturnFocus } from "@/components/ui/confirm-panel";
 import { Button } from "@/components/ui/button";
 import type { ApprovalCard } from "@/modules/approvals/view";
 import {
@@ -76,17 +77,14 @@ function ApproveDialog({
   pending: boolean;
 }) {
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="approve-confirm-title"
-      className="space-y-3 rounded-md border border-mint-line/60 bg-mint-tint-soft p-4"
+    <ConfirmPanel
+      title="Approve this change?"
+      pending={pending}
+      onCancel={onCancel}
+      onConfirm={onConfirm}
+      confirmLabel={pending ? "Approving…" : "Approve change"}
     >
-      <h5 id="approve-confirm-title" className="text-sm font-medium text-fg">
-        Approve this change?
-      </h5>
-
-      <div className="space-y-2 text-sm text-fg-prose">
+      <>
         <p>You are approving this exact prepared change for a future merge.</p>
         <p>Vibe will not merge or deploy anything yet.</p>
         <p>Your approval is tied to this exact commit and review.</p>
@@ -96,17 +94,8 @@ function ApproveDialog({
             Prepared commit: <code className="text-fg-body">{shortSha(commitSha)}</code>
           </p>
         )}
-      </div>
-
-      <div className="flex gap-2">
-        <Button type="button" variant="secondary" size="sm" onClick={onCancel} disabled={pending}>
-          Cancel
-        </Button>
-        <Button type="button" variant="primary" size="sm" onClick={onConfirm} disabled={pending}>
-          {pending ? "Approving…" : "Approve change"}
-        </Button>
-      </div>
-    </div>
+      </>
+    </ConfirmPanel>
   );
 }
 
@@ -120,35 +109,21 @@ function RevokeDialog({
   pending: boolean;
 }) {
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="revoke-confirm-title"
-      className="space-y-3 rounded-md border border-amber-line/60 bg-amber-tint-soft p-4"
+    <ConfirmPanel
+      title="Revoke this approval?"
+      tone="caution"
+      pending={pending}
+      onCancel={onCancel}
+      onConfirm={onConfirm}
+      confirmLabel={pending ? "Revoking…" : "Revoke approval"}
     >
-      <h5 id="revoke-confirm-title" className="text-sm font-medium text-fg">
-        Revoke this approval?
-      </h5>
-
-      <div className="space-y-2 text-sm text-fg-prose">
+      <>
         <p>This withdraws your approval of this change.</p>
         {/* Said plainly, because "revoke" can read as "undo" — and the record
             of who approved what is deliberately permanent (§16). */}
         <p className="text-fg-secondary">The approval record is kept for audit history.</p>
-      </div>
-
-      <div className="flex gap-2">
-        <Button type="button" variant="secondary" size="sm" onClick={onCancel} disabled={pending}>
-          Cancel
-        </Button>
-        {/* Not `danger`. Withdrawing an approval destroys nothing — the record
-            is kept, as the sentence above says — and coral would claim a
-            consequence this action does not have. */}
-        <Button type="button" variant="secondary" size="sm" onClick={onConfirm} disabled={pending}>
-          {pending ? "Revoking…" : "Revoke approval"}
-        </Button>
-      </div>
-    </div>
+      </>
+    </ConfirmPanel>
   );
 }
 
@@ -186,6 +161,10 @@ export function ApprovalPanel({
    */
   const [intent, setIntent] = useState<"approve" | "revoke" | null>(null);
   const [confirming, setConfirming] = useState<"approve" | "revoke" | null>(null);
+  // Only one of the four openers renders in any given state, so they share a
+  // ref: whichever exists when the confirmation closes is the one that gets
+  // focus back.
+  const openerRef = useReturnFocus<HTMLButtonElement>(confirming !== null);
 
   function approve() {
     if (!reviewArtifactId) return;
@@ -259,6 +238,7 @@ export function ApprovalPanel({
             */}
           {!merged && (
             <Button
+              ref={openerRef}
               type="button"
               variant="secondary"
               size="sm"
@@ -290,6 +270,7 @@ export function ApprovalPanel({
           )}
           {card.canApprove ? (
             <Button
+              ref={openerRef}
               type="button"
               variant="primary"
               size="sm"
@@ -310,6 +291,7 @@ export function ApprovalPanel({
           </p>
           {card.canApprove && (
             <Button
+              ref={openerRef}
               type="button"
               variant="primary"
               size="sm"
@@ -327,6 +309,7 @@ export function ApprovalPanel({
             Approving records that you reviewed this exact change. Nothing is merged or deployed.
           </p>
           <Button
+            ref={openerRef}
             type="button"
             variant="primary"
             size="sm"
