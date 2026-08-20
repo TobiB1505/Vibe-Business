@@ -54,13 +54,36 @@ export const METRIC_AVAILABILITY = [
   { metric: "harnessToolCalls", since: "2026-08-19T11:08:00Z", note: "derived from agent_execution_events" },
   { metric: "harnessReadOperations", since: "2026-08-19T11:08:00Z", note: "derived from agent_execution_events" },
   { metric: "harnessUniqueFilesRead", since: "2026-08-19T11:08:00Z", note: "derived from agent_execution_events" },
+  /**
+   * Repository context (Sprint 0053), recorded here by Sprint 0054.
+   *
+   * These dates are migration timestamps rather than first-observed values,
+   * because there is nothing to observe: the columns were added at
+   * 2026-08-20T20:00Z and the newest run in the dataset (#9) was created at
+   * 2026-08-20T15:07Z. **No delivered run has repository size at all.** That is
+   * the single most consequential gap in the predictive dataset, and the reason
+   * it is written down here is so a later analysis reads `unavailable` instead
+   * of quietly averaging six nulls into a repository of size zero.
+   */
+  { metric: "repoTreeEntries", since: "2026-08-20T20:00:00Z", note: "20260820200000_repository_context_size.sql; null for every run in the dataset" },
+  { metric: "repoFilesAnalyzed", since: "2026-08-20T20:00:00Z", note: "analysis effort at the pinned commit, bounded by the analyzer's read budget" },
+  { metric: "repoBytesAnalyzed", since: "2026-08-20T20:00:00Z", note: null },
+  { metric: "repoRoutesDetected", since: "2026-08-20T20:00:00Z", note: null },
+  { metric: "repoSurfacesDetected", since: "2026-08-20T20:00:00Z", note: null },
+  { metric: "contextCandidatesAvailable", since: "2026-08-20T20:00:00Z", note: "without it, a brief clipped at the cap is indistinguishable from a repository that offered exactly the cap" },
+  /**
+   * The one repository-context axis that *is* reconstructable for part of the
+   * dataset: added a day earlier, so runs #6–#9 carry it and #3–#5 do not.
+   * It is what makes the run #6 → #9 candidate movement (6 → 12) a measurement
+   * rather than an anecdote.
+   */
+  { metric: "contextCandidatesSent", since: "2026-08-19T18:00:00Z", note: "20260819180000_execution_context.sql; runs #6 onward" },
 ] as const;
 
 export type MetricName = (typeof METRIC_AVAILABILITY)[number]["metric"];
 
 export type MetricReading<T> =
-  | { status: "observed"; value: T }
-  /** The metric existed and the run genuinely produced nothing. */
+  /** The metric existed and was recorded — including a genuine zero. */
   | { status: "observed"; value: T }
   /** Instrumentation did not exist when this run happened. */
   | { status: "unavailable"; since: string }

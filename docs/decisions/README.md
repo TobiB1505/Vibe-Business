@@ -67,6 +67,7 @@ V0.1 foundational architecture decisions have been recorded:
 - [0035](0035-commit-message-compiler.md) — Commit Message Compiler: Conventional Commits from the trusted Action Step (Accepted, narrows Rule 57's application to the Planner's own already-trusted text)
 - [0036](0036-risk-adaptive-validation-depth.md) — Risk-Adaptive Independent Validation Depth: profile answers *which commands*, depth answers *how many this change deserves* (Accepted, extends Rule 65 with a second versioned axis; leaves Rule 66 untouched)
 - [0037](0037-automatic-validation-and-review-classification.md) — Automatic validation hand-off, and deterministic review classification (Accepted, establishes that one durable operation may enqueue the next; leaves the visual-review "nothing is automatic" rule intact)
+- [0038](0038-economy-intelligence-layer.md) — The Economy Intelligence layer (Accepted, extends 0024; predicts what a run will cost from pre-execution signals only, measures how wrong it was, and activates nothing — `CREDIT_RATE_CARDS` stays empty)
 
 Several architecture questions remain intentionally open — see [ARCHITECTURE.md §7](../../ARCHITECTURE.md#7-deferred--open-decisions).
 
