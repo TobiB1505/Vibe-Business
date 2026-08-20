@@ -187,6 +187,33 @@ async function loadOpportunities(
   return ((data ?? []) as OpportunityRow[]).map(mapOpportunity);
 }
 
+/**
+ * One Move, by its own id within its set (UI-5 dogfood).
+ *
+ * Both halves of the key are used deliberately. An opportunity id is only
+ * stable *within* a set — it is derived from category and rank — so reading by
+ * id alone would be a lookup that silently matches the wrong Move as soon as a
+ * second set exists. A prepared change stores both, which is why it can ask
+ * this question at all.
+ *
+ * RLS scopes the row to its owner; this adds no filter of its own for the same
+ * reason `getOpportunitySetById` does not.
+ */
+export async function getOpportunityById(
+  supabase: SupabaseClient,
+  params: { setId: string; opportunityId: string },
+): Promise<BusinessOpportunity | null> {
+  const { data, error } = await supabase
+    .from("business_opportunities")
+    .select(OPPORTUNITY_COLUMNS)
+    .eq("opportunity_set_id", params.setId)
+    .eq("id", params.opportunityId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? mapOpportunity(data as OpportunityRow) : null;
+}
+
 /** The set shown on the project page: the newest completed one. */
 export async function getLatestCompletedOpportunitySet(
   supabase: SupabaseClient,

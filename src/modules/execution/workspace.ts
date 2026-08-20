@@ -7,6 +7,7 @@ import { getBusinessImpactCard } from "@/modules/business-measurement/service";
 import { NoConnectedMetricSources } from "@/modules/business-measurement/source";
 import { getPreviewCard, getPreviewStatus } from "@/modules/change-preview/service";
 import { businessRationaleFor } from "@/modules/execution/business-rationale";
+import { changeOriginFrom } from "@/modules/execution/change-origin";
 import { deriveChangeProgress } from "@/modules/execution/change-progress";
 import { buildBranchUrl, buildCompareUrl } from "@/modules/execution/diff";
 import { listPreparedChangesForProject } from "@/modules/execution/store";
@@ -16,6 +17,7 @@ import { resolveMergeTarget, getMergeCard } from "@/modules/merge/service";
 import { buildMergeCard } from "@/modules/merge/view";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { VercelWorkflowExecutor } from "@/modules/operations/vercel/executor";
+import { getOpportunityById } from "@/modules/opportunities/store";
 import { getOutcomeCard } from "@/modules/outcome-verification/service";
 import { getReviewCard, getReviewImages } from "@/modules/review/service";
 import { SANDBOX_POLICY_VERSION } from "@/modules/validation/schema";
@@ -142,7 +144,7 @@ async function buildPreparedChangeCard(
    * preview — still do.
    */
 
-  const [validation, review, approval, merge, outcome, businessImpact] = await Promise.all([
+  const [validation, review, approval, merge, outcome, businessImpact, opportunity] = await Promise.all([
     getLatestValidation(supabase, { projectId, preparedChangeId: prepared.id }),
 
     // Review state, read from persisted rows. Like the preview card, this costs
@@ -200,6 +202,20 @@ async function buildPreparedChangeCard(
       projectId,
       preparedChangeId: prepared.id,
     }),
+
+    // The Move this change was prepared to address. One row, no provider call,
+    // and the only source of meaning an agent-produced change has: its
+    // capability is `agentic_execution_v1` for every agentic change ever
+    // written, so a per-capability rationale cannot say anything about it.
+    //
+    // Both ids are nullable on the row, and a change missing either is simply a
+    // change with no origin to show — not an error, and not worth a query.
+    prepared.opportunitySetId && prepared.opportunityId
+      ? getOpportunityById(supabase, {
+          setId: prepared.opportunitySetId,
+          opportunityId: prepared.opportunityId,
+        })
+      : Promise.resolve(null),
   ]);
 
   // Preview state is the server's answer, not something the panel derives
@@ -305,6 +321,16 @@ async function buildPreparedChangeCard(
     // Deterministic and free: a lookup on the capability, no provider call
     // and no model (§6).
     rationale: businessRationaleFor(prepared.capability),
+    /*
+     * The Move this change came from, narrowed to what a person reads.
+     *
+     * Not a second rationale: it is the request, written before the change
+     * existed, and the card labels it as one. It exists because an agentic
+     * change has no capability rationale and structurally cannot have one —
+     * the first real dogfood showed a card opening with a status line and then
+     * a branch name, which is the whole thing UI-5 set out to stop.
+     */
+    origin: changeOriginFrom(opportunity),
     businessImpact,
   };
 }

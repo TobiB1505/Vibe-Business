@@ -59,6 +59,9 @@ function baseChange(): Omit<
     // The real SEO capability's rationale, not invented copy: the browser
     // suite asserts against what the product would actually render.
     rationale: businessRationaleFor("nextjs_seo_foundations_v2"),
+    // Null wherever a rationale exists: the card renders one or the other, and
+    // `change_agentic_review_required` is the scenario that carries an origin.
+    origin: null,
     validation: {
       status: "passed",
       phases: [],

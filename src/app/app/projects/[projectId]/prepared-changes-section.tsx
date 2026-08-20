@@ -1,6 +1,7 @@
 import { preparedChangeAnchorId } from "@/components/layout/project-shell";
 import type { ApprovalCard } from "@/modules/approvals/view";
 import type { BusinessRationale } from "@/modules/execution/business-rationale";
+import type { ChangeOrigin as ChangeOriginData } from "@/modules/execution/change-origin";
 import type { ChangeProgress } from "@/modules/execution/change-progress";
 import type { MergeCard } from "@/modules/merge/view";
 import type { OutcomeCard } from "@/modules/outcome-verification/view";
@@ -9,6 +10,7 @@ import type { PreviewCard } from "@/modules/change-preview/view";
 import type { ReviewCard } from "@/modules/review/view";
 import type { ReviewImages } from "@/modules/review/service";
 import { ApprovalPanel } from "./approval-panel";
+import { ChangeOrigin } from "./change-origin";
 import { ChangeRationale } from "./change-rationale";
 import { MergePanel } from "./merge-panel";
 import { OutcomePanel } from "./outcome-panel";
@@ -118,6 +120,15 @@ export type PreparedChangeCard = {
    * after the change itself. Null for a capability with no written rationale.
    */
   rationale: BusinessRationale | null;
+  /**
+   * The Move this change was prepared to address (UI-5 dogfood).
+   *
+   * A weaker claim than a rationale and rendered only in its absence: the
+   * request, written by a model before the change existed. It exists because an
+   * agent-produced change has no capability rationale and cannot have one, so
+   * without it the card opens with a status line and then a branch name.
+   */
+  origin: ChangeOriginData | null;
 };
 
 export function PreparedChangesSection({
@@ -168,6 +179,11 @@ export function PreparedChangesSection({
                 a person was asked to authorize a change before the screen had
                 told them what it was for. */}
             <ChangeRationale rationale={change.rationale} />
+
+            {/* Only when there is no written rationale — otherwise two answers
+                to the same question would stack, and the written one is
+                stronger. In practice: every agent-produced change. */}
+            {!change.rationale && <ChangeOrigin origin={change.origin} />}
 
             {/* How it was built, demoted to where it belongs: true, checkable,
                 and not the first thing anyone needs. */}
