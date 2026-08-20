@@ -200,15 +200,43 @@ separate, explicitly named `fullActiveCpuUpperBound` is offered instead.
 
 #### What is derivable per run
 
-| | Agent microVM | Validation microVM |
-|---|---|---|
-| Wall duration | ✅ measured | ✅ measured |
-| **Active CPU** | ✅ **measured, all 11 rows** | ❌ not recorded |
-| Egress bytes | ✅ measured | ❌ mostly not recorded |
-| vCPU / RAM | derived from configuration | derived from configuration |
-| Creation count | 1, known | 1, known |
-| Snapshot | none taken | none taken |
-| **Result** | **complete cost** | memory + creation only |
+| | Agent microVM | Validation microVM (Sprint 0051+) | Validation microVM (historical) |
+|---|---|---|---|
+| Wall duration | ✅ measured | ✅ measured | ✅ measured |
+| **Active CPU** | ✅ measured, all 11 rows | ✅ measured, fixed at the source | ❌ never captured |
+| Egress bytes | ✅ measured | ✅ measured, same fix | ❌ never captured |
+| vCPU / RAM | derived from configuration | derived from configuration | derived from configuration |
+| Creation count | 1, known | 1, known | 1, known |
+| Snapshot | none taken | none taken | none taken |
+| **Result** | **complete cost** | **complete cost — a point estimate** | floor + upper bound only |
+
+### Correction — validation active CPU was a bug, not an absence (Sprint 0051)
+
+An earlier revision of this document listed validation active CPU as "not
+recorded" — true as a description of the data, wrong about the reason.
+Reading the compiled `@vercel/sandbox` SDK settled it: `captureValidatedArtifact`
+calls `sandbox.snapshot()` for every *passing* run, then read
+`this.sandbox.totalActiveCpuDurationMs` off the same local SDK instance. The
+SDK only refreshes that cached field from `.update()` or `.stop()` —
+`.snapshot()` refreshes an internal *session* object our code never read, and
+the `Snapshot` it returns carries no usage fields at all. So the value read was
+never the finished run's; it was the sandbox's state at construction, before
+anything had run — `undefined` on every real invocation.
+
+**Fixed at the source**, in `validation/vercel/provider.ts`: after a snapshot,
+the adapter now re-fetches the sandbox with a fresh `Sandbox.get({ name,
+resume: false })` — a real round trip against the provider's own record, which
+the SDK documents as cumulative "across all sessions," independent of the
+stale local cache. `stop()` (the failing-run path) was never affected; it
+reads usage from its own return value, which the SDK populates correctly, and
+that is why 7 of 8 failed validation rows already had it while 15 of 19
+passed rows did not.
+
+**Nothing historical changed.** There is no second copy of the number
+anywhere in the schema to recover — the bug was that the provider was never
+asked the right question, not that an answer was captured and discarded. Runs
+#3–#8 keep the floor/upper-bound figures below. Every validation from this fix
+forward gets a **complete point estimate** instead.
 
 ## Re-analysed run costs (PART I)
 
@@ -315,11 +343,11 @@ not control.
 
 | Gap | Consequence | Fixable by |
 |---|---|---|
-| **Rate card unverified** | Sandbox cost is estimated, not confirmed | Reading vercel.com/docs/sandbox/pricing from an unblocked network |
-| Validation `active_cpu_ms` not recorded | Validation cost has a floor and a bound, no point value | Recording the field the provider already returns |
+| **Rate card unverified** | Sandbox cost is estimated, not confirmed | Reading vercel.com/docs/sandbox/pricing from an unblocked network — attempted three times across two sprints, blocked every time |
+| ~~Validation `active_cpu_ms` not recorded~~ | ~~Validation cost has a floor and a bound~~ — **resolved (Sprint 0051)**: the bug is fixed at the source; every validation from now on gets a point estimate | done |
 | ~~`tool_calls_allowed` / `files_read` always 0~~ | ~~Tool use untestable~~ — **resolved**: correct as gateway counters; harness activity derived from `agent_execution_events` | done |
-| `active_cpu_ms` partial (7/27) | Cannot bill CPU instead of wall clock | Recording it for every run |
-| No workflow-invocation metering | Vercel function cost invisible | New metering |
+| Historical runs #3–#8 have no validation point estimate | The six existing runs keep floor + upper bound forever | Not fixable — no second copy of the number exists to recover |
+| Vercel Functions / Workflow invocation cost not instrumented | Believed immaterial (0.07–1.07% of a delivered run, reasoned not measured) | Not pursued — see PART H, Sprint 0051; revisit only if invocation count grows materially |
 | n = 6 | Correlations are thin | More runs |
 | All runs `non_production_economics` | No production-rate data at all | A production run |
 
@@ -327,14 +355,13 @@ not control.
 
 ## Open decisions
 
-1. **Verify the Vercel rate card.** The figures are the operator's and the code
-   says so (`sourceKind: "operator_supplied"`, `verified: false`). They
-   reproduce Vercel's own worked example, which is corroboration, not
-   confirmation.
-1b. **Record validation `active_cpu_ms`.** The provider returns it
-   (`activeCpuDurationMs` in the sandbox API response) and the agent path
-   already stores it. Doing the same for validation closes the last
-   point-value gap in a run's cost.
+1. **Verify the Vercel rate card. This is the one remaining blocker on Credit
+   pricing** (Sprint 0051's verdict: NOT READY, for this reason alone). The
+   figures are the operator's and the code says so
+   (`sourceKind: "operator_supplied"`, `verified: false`) after three
+   independent attempts across two sprints to reach the price table from this
+   environment. They reproduce Vercel's own worked example, which is
+   corroboration, not confirmation.
 2. **Price per run, not per token.** The data supports it: cost correlates with
    context volume, which the customer neither sees nor controls, and not with
    delivered work, which is what they think they are buying.
