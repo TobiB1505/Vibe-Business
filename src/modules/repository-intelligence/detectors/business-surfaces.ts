@@ -1,4 +1,5 @@
 import type { DetectionContext } from "../context";
+import { BUSINESS_SURFACE_LABELS } from "../schema";
 import type {
   BusinessSurfaceId,
   BusinessSurfaceSignal,
@@ -107,25 +108,8 @@ const MANIFEST_PATH = new RegExp(
   "i",
 );
 
-const SURFACE_NAMES: Record<BusinessSurfaceId, string> = {
-  authentication: "Authentication",
-  payments: "Payments",
-  pricing_page: "Pricing page",
-  checkout_billing: "Checkout / billing",
-  analytics: "Analytics",
-  seo_metadata: "SEO metadata",
-  sitemap: "Sitemap",
-  robots: "robots.txt",
-  blog_content: "Blog / content",
-  contact: "Contact",
-  docs_help: "Docs / help",
-  legal: "Legal pages",
-  onboarding: "Onboarding",
-  dashboard_app: "Dashboard / app area",
-};
-
 function notDetected(id: BusinessSurfaceId): BusinessSurfaceSignal {
-  return { id, name: SURFACE_NAMES[id], detected: false, confidence: "high", evidence: [] };
+  return { id, name: BUSINESS_SURFACE_LABELS[id], detected: false, confidence: "high", evidence: [] };
 }
 
 function detected(
@@ -133,7 +117,7 @@ function detected(
   items: Evidence[],
   confidence: BusinessSurfaceSignal["confidence"] = "high",
 ): BusinessSurfaceSignal {
-  return { id, name: SURFACE_NAMES[id], detected: true, confidence, evidence: items };
+  return { id, name: BUSINESS_SURFACE_LABELS[id], detected: true, confidence, evidence: items };
 }
 
 export function detectBusinessSurfaces(

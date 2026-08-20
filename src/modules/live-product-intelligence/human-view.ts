@@ -61,7 +61,16 @@ export type LiveProductHumanView = {
 };
 
 /** Readable names for the pages the scanner looks for. */
-const SURFACE_LABELS: Record<ProductSurfaceId, string> = {
+/**
+ * What each public surface is called when a person reads it (UI-7 §2).
+ *
+ * Deliberately different from `classifier.ts`'s `SURFACE_NAMES`, and the
+ * difference is the audience: that table names surfaces for the evidence pack
+ * a model reads ("Dashboard / app"), this one names them for a founder ("The
+ * product itself"). Two tables, two readers — which is why this one is now
+ * exported and the evidence layer reads it instead of the id.
+ */
+export const PRODUCT_SURFACE_LABELS: Record<ProductSurfaceId, string> = {
   homepage: "Homepage",
   pricing: "Pricing page",
   login: "Sign-in page",
@@ -172,8 +181,8 @@ export function buildLiveProductHumanView(
         ? "Either the site is not reachable the way a visitor would reach it, or it is built in a way this check cannot read."
         : undefined,
     tone: detected.length === 0 ? "attention" : "good",
-    found: detected.map((surface) => SURFACE_LABELS[surface.id] ?? surface.name),
-    missing: undetected.map((surface) => SURFACE_LABELS[surface.id] ?? surface.name),
+    found: detected.map((surface) => PRODUCT_SURFACE_LABELS[surface.id] ?? surface.name),
+    missing: undetected.map((surface) => PRODUCT_SURFACE_LABELS[surface.id] ?? surface.name),
   };
 
   const attentionCount = [conversionFinding, searchFinding, surfaceFinding].filter(
