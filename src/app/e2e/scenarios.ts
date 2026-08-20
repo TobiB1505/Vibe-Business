@@ -463,6 +463,11 @@ export const E2E_SCENARIOS = {
           "sitemap_excludes_private_prefix:/signup": "not_observed",
         }),
         observedAt: "2026-08-14T15:00:03.000Z",
+        // The window a `not_observed` row always carries — the database
+        // requires it to be bounded — so the dead-end copy renders the closing
+        // time rather than its fallback. `outcome_failed` deliberately leaves
+        // it null, which covers the other branch.
+        windowEndsAt: "2026-08-14T15:00:00.000Z",
         attemptCount: 7,
       }),
     ),
