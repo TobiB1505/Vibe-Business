@@ -11,15 +11,6 @@ import type { AuditEvidenceNotice } from "@/modules/business-audit/evidence-noti
 export function AuditEvidenceNotice({ notice }: { notice: AuditEvidenceNotice }) {
   if (notice.kind === "none") return null;
 
-  if (notice.kind === "deep_scan_ready") {
-    return (
-      <div className="flex items-baseline justify-between gap-3 rounded-md border border-line-2 px-3 py-2 text-sm">
-        <span className="text-fg-secondary">Authenticated product evidence</span>
-        <span className="text-mint">Ready</span>
-      </div>
-    );
-  }
-
   if (notice.kind === "deep_scan_stale") {
     return (
       <div className="space-y-2 rounded-md border border-line-2 px-3 py-2">
