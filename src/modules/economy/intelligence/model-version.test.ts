@@ -66,6 +66,7 @@ describe("economy-model.v1 is pinned", () => {
       effectiveFrom: "2026-08-20T00:00:00Z",
       marginTarget: 0.75,
       infrastructurePricingVersion: "vercel-sandbox-2026-08-20",
+      assumedValidationCostShare: 0.15,
       repositoryPolicy: {
         referenceTreeEntries: 1_200,
         referenceRoutes: 30,

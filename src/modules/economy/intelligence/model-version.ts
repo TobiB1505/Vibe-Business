@@ -90,6 +90,15 @@ export type EconomyModelVersion = {
   infrastructurePricingVersion: string;
   repositoryPolicy: RepositoryComplexityPolicy;
   validationAssumptions: Record<ValidationDepth, ValidationEffortAssumption>;
+  /**
+   * Roughly how much of a delivered run's cost is validation.
+   *
+   * Needed because a depth change must scale the validation *share* of an
+   * estimate, not the whole of it — the historical baseline already contains
+   * whatever validation those runs did, and multiplying the entire figure by a
+   * depth ratio would reprice the model spend along with it.
+   */
+  assumedValidationCostShare: number;
   adjustmentPolicy: AdjustmentPolicy;
   safetyPolicy: SafetyMarginPolicy;
 };
@@ -138,6 +147,14 @@ export const ECONOMY_MODEL_VERSIONS: readonly EconomyModelVersion[] = [
       standard: { expectedSteps: 4, expectedWallMs: 210_000, label: "assumed: install + typecheck + test + build" },
       deep: { expectedSteps: 4, expectedWallMs: 210_000, label: "assumed: same four steps as standard, until deep grows one" },
     },
+    // Derived from the dataset rather than picked: the floor-to-upper band on a
+    // delivered run *is* the validation active-CPU component, and it averages
+    // $0.0484 across the six validated runs against a mean floor of $0.3041 —
+    // 15.9%. Rounded down to 0.15, and an under-estimate either way, because the
+    // band captures validation's CPU uncertainty and not its memory or creation
+    // cost. Run #4 is excluded from the average: it was never validated at all,
+    // which is an absence rather than a zero.
+    assumedValidationCostShare: 0.15,
     adjustmentPolicy: {
       // A learning loop that can raise its own cost expectation by 3x in one
       // round is not a learning loop, it is an outage.
