@@ -23,6 +23,11 @@ export const metadata: Metadata = {
   metadataBase: new URL(getAppUrl()),
   title: "Vibe Business",
   description: "The business layer for AI-built products.",
+  // The default for every route that does not say otherwise: crawlable and
+  // followable. `src/app/app/layout.tsx` overrides this with `noindex,
+  // nofollow` for the whole signed-in area, since a search engine has no
+  // business indexing a dashboard.
+  robots: { index: true, follow: true },
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
