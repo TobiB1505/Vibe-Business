@@ -263,14 +263,29 @@ export const CALIBRATION_4_STANDARD_VALIDATION_HEAVY: CalibrationFixture = {
 /**
  * RUN 5 — the second `complex`, on a different pair of surfaces.
  *
- * `live.seo.sitemap_missing` implies `sitemap`; `live.seo.robots_txt_missing`
- * implies `robots`. Two named surfaces again, and a *different* pair from run
- * 2 — which is what separates "complex costs more" from "that one pair costs
- * more". With n=1 the two are indistinguishable.
+ * `live.seo.sitemap_missing` implies `sitemap`; `live.seo.canonical_missing`
+ * implies `seo_metadata`. Two named surfaces again, and a *different* pair from
+ * run 2 — which is what separates "complex costs more" from "that one pair
+ * costs more". With n=1 the two are indistinguishable.
  *
- * Both `src/app/sitemap.ts` and `src/app/robots.ts` exist, and the change
- * between them is the standard one: a robots file should point crawlers at the
- * sitemap it belongs with.
+ * ## Why not robots + sitemap, which the previous draft cited
+ *
+ * Because that pair is the one thing Vibe does **deterministically**.
+ * `CAPABILITY_REGISTRY`'s single entry matches a step citing both
+ * `ROBOTS_ABSENCE_EVIDENCE` and `SITEMAP_ABSENCE_EVIDENCE`, and the resolver
+ * checks the registry *before* it considers an agentic route. So that fixture
+ * would have resolved to `mode: "deterministic"` and been refused as
+ * `not_agentic` — or, if the snapshot happened to report the surfaces present,
+ * would have squeaked through as agentic on a technicality.
+ *
+ * Either outcome is wrong for a calibration: this set exists to measure what an
+ * *agent* costs, and a fixture whose route depends on how a snapshot classified
+ * two files measures nothing reliably. Every sitemap and robots evidence id is
+ * in one of those two lists, so the pair is unavailable at any price and the
+ * surface had to change rather than the wording.
+ *
+ * The work is still structural, still spans two surfaces, and still lands in
+ * code that runs rather than in copy.
  */
 export const CALIBRATION_5_COMPLEX_STRUCTURAL: CalibrationFixture = {
   id: "calibration-5-complex-structural",
@@ -281,31 +296,31 @@ export const CALIBRATION_5_COMPLEX_STRUCTURAL: CalibrationFixture = {
     "from the particular surfaces run 2 happened to touch.",
   expectedRiskClass: "moderate",
   expectedPricingClass: "complex",
-  expectedSurfaces: ["sitemap", "robots"],
+  expectedSurfaces: ["seo_metadata", "sitemap"],
 
   benchmarkIntent:
     "Two named surfaces that share one structural relationship, so the change is genuinely " +
     "broader rather than one edit cited twice.",
 
-  goal: "Make the robots file point crawlers at the sitemap it belongs with.",
+  goal: "Make the sitemap and the pages' canonical URLs agree on one base URL.",
   expectedChangedState:
-    "The generated robots output references the site's sitemap URL, derived from the same base " +
-    "URL the sitemap itself is built from rather than from a second hard-coded literal.",
+    "The generated sitemap and the pages' canonical URLs are built from a single base-URL " +
+    "source, so the two can no longer disagree about the site's own address.",
 
-  title: "Point the robots file at the sitemap",
+  title: "Build the sitemap and the canonical URLs from one base URL",
   description:
-    "Reference the sitemap URL from the generated robots output, taking the base URL from the " +
-    "same source the sitemap route already uses.",
+    "Derive the sitemap's entries and the pages' canonical URLs from the same base-URL value, " +
+    "instead of each route computing the site's address for itself.",
   purpose:
-    "A crawler that reads robots.txt is told nothing about where the sitemap is, so the sitemap " +
-    "is only found by guessing the conventional path.",
+    "The sitemap and the canonical tags each decide what the site's address is, so a change to " +
+    "one silently disagrees with the other and search engines are told two different things.",
   doneWhen:
-    "The robots output names the sitemap URL; the URL comes from the application's existing base " +
-    "URL rather than a duplicated literal; the existing robots rules are unchanged; and both " +
-    "routes keep their current tests passing.",
+    "The sitemap route and the canonical URLs read the same base-URL source; no route computes " +
+    "the site address independently; the existing sitemap and metadata route contracts are " +
+    "preserved; and both keep their current tests passing.",
   actor: "vibe",
   changeKind: "product_change",
-  evidenceIds: ["live.seo.sitemap_missing", "live.seo.robots_txt_missing"],
+  evidenceIds: ["live.seo.sitemap_missing", "live.seo.canonical_missing"],
 };
 
 export const CALIBRATION_FIXTURES: readonly CalibrationFixture[] = [

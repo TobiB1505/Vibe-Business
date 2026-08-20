@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { EXECUTION_PRICING_CLASSES } from "@/modules/economy/execution-class";
+import { ROBOTS_ABSENCE_EVIDENCE, SITEMAP_ABSENCE_EVIDENCE } from "@/modules/execution/capabilities";
 import { MAX_AGENTIC_V1_RISK, riskExceeds } from "@/modules/execution-contract/schema";
 import { deriveExecutionSurfaceRequirement } from "@/modules/execution-context/surface";
 import { SENSITIVE_EVIDENCE_PREFIXES } from "@/modules/validation/depth";
@@ -287,6 +288,52 @@ describe("the fixture modules do not import each other's values", () => {
 
     expect(source).toContain('from "./fixture-version"');
     expect(shared, "fixture-version.ts must import nothing").not.toMatch(/^import /m);
+  });
+});
+
+/**
+ * The second thing that was right in classification and wrong in reality.
+ *
+ * Vibe has exactly one deterministic capability, and the resolver consults the
+ * registry *before* it considers an agentic route. A step citing both halves of
+ * that capability's evidence therefore resolves to `mode: "deterministic"` — and
+ * the calibration harness, which only knows how to observe agent runs, sees
+ * `not_agentic` and refuses.
+ *
+ * Run 5 originally cited `live.seo.sitemap_missing` + `live.seo.robots_txt_missing`,
+ * which is precisely that pair. It survived every assertion above, because the
+ * pricing classifier and the surface resolver never look at the capability
+ * registry.
+ *
+ * The registry's own snapshot condition would probably have saved it here — this
+ * repository has both files, so `surfaceAbsent` is false — but that is the wrong
+ * thing to depend on. Whether a calibration run is an agent run at all would
+ * then hinge on how the analyzer classified two files, which is outside the
+ * fixture's control and can change between runs.
+ */
+describe("no fixture can route to a deterministic capability", () => {
+  it("never cites both halves of the one capability Vibe has", () => {
+    for (const fixture of CALIBRATION_FIXTURES) {
+      const citesRobots = fixture.evidenceIds.some((id) => ROBOTS_ABSENCE_EVIDENCE.includes(id));
+      const citesSitemap = fixture.evidenceIds.some((id) => SITEMAP_ABSENCE_EVIDENCE.includes(id));
+
+      expect(
+        citesRobots && citesSitemap,
+        `${fixture.id} cites the SEO foundations capability's full evidence pair — it would ` +
+          "resolve as deterministic and never reach the agent",
+      ).toBe(false);
+    }
+  });
+
+  /**
+   * Stated as a test because it is the reason the pair could not simply be
+   * reworded: *every* sitemap and robots evidence id is absence evidence.
+   */
+  it("leaves the pair unavailable rather than merely discouraged", () => {
+    expect(ROBOTS_ABSENCE_EVIDENCE).toContain("live.seo.robots_txt_missing");
+    expect(SITEMAP_ABSENCE_EVIDENCE).toContain("live.seo.sitemap_missing");
+    expect(ROBOTS_ABSENCE_EVIDENCE).toContain("repo.surface.robots");
+    expect(SITEMAP_ABSENCE_EVIDENCE).toContain("repo.surface.sitemap");
   });
 });
 
