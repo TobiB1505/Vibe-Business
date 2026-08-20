@@ -258,21 +258,38 @@ forward gets a **complete point estimate** instead.
 | #6 | $0.1444 | $0.0127 | $0.0168 | **$0.1739** | $0.2245 |
 | #7 | $0.2515 | $0.0151 | $0.0155 | **$0.2821** | $0.3289 |
 | #8 | $0.2144 | $0.0239 | $0.0158 | **$0.2541** | $0.3017 |
+| #9 | $0.3115 | $0.0195 | $0.0160 | **$0.3470** | $0.3954 |
 
-Floor: min **$0.1739**, median **$0.2833**, mean **$0.2970**, max **$0.4331**.
-Upper bound mean **$0.3373**.
+Floor (n=7): min **$0.1739**, median **$0.2845**, mean **$0.3041**, max
+**$0.4331**. Upper bound mean **$0.3456**.
 
-**Infrastructure adds 18.5% to the model spend** — material, and far from the
-order-of-magnitude unknown the previous revision had to leave open.
+**Infrastructure adds 17.3% to the model spend** — material, and far from the
+order-of-magnitude unknown the previous revision had to leave open. The share
+fell from 18.5% not because infrastructure got cheaper but because run #9's
+model spend was unusually high relative to its wall clock; see the finding
+below.
+
+Run #9 was added in Sprint 0053. Its two derived figures were recomputed with
+this repository's own `deriveSandboxCost` and `VERCEL_SANDBOX_RATES` rather than
+transcribed, and its model spend ($0.3115055 over 14 `ai_usage_events`) is
+exact. Every aggregate on this page is now produced by
+`economy/historical-runs.ts` and its siblings, so a dataset edit that broke one
+of them fails a test rather than leaving a stale number here.
 
 ### Cost per delivered run, revised
 
 Failure spend also rises once the agent microVM is priced: the two costly
-failures spent $0.3794 and $0.6842 including sandbox, plus $0.0060 for a third.
-Across all attempts **$2.8515**, delivering six runs:
+failures spent $0.3794 and $0.6842 including sandbox, plus $0.0060 for a third —
+**$1.0672** across all five failed attempts. With seven delivered runs at
+**$2.1289**, total attempt spend is **$3.1961**:
 
-**$0.4752 per delivered run** — a 60% uplift on the successful-run mean of
-$0.2970, and up from the model-spend-only figure of $0.4047.
+**$0.4566 per delivered run** — a 50% uplift on the successful-run mean of
+$0.3041.
+
+Down from $0.4752 at n=6, and worth reading carefully: the effective cost fell
+while the *mean run cost rose*. A fixed failure bill spread over one more
+delivered run does that. The two move independently, and quoting a margin from
+whichever is lower is exactly the mistake this section exists to prevent.
 
 ### Vercel Functions / Workflows: real prices, materiality unchanged
 
@@ -332,6 +349,71 @@ things Vibe controls — not of the task the customer asked for.
 n = 6. These correlations are directionally strong and statistically thin;
 treat the sign and the ranking as findings, the magnitudes as provisional.
 
+**Repository state is now recorded per run (Sprint 0053).**
+`agent_execution_runs` gained `repo_tree_entries`, `repo_files_analyzed`,
+`repo_bytes_analyzed`, `repo_routes_detected`, `repo_surfaces_detected` and
+`context_candidates_available` — projected from the pinned snapshot's own
+`AnalysisMetrics`, so nothing new is fetched and nothing about the repository is
+persisted beyond six integers (Rule 26). `context_candidates_available` is the
+one that de-saturates the existing metric: it makes "the brief was clipped"
+distinguishable from "the repository offered exactly twelve".
+
+`economy/cost-drivers.ts` splits measured spend across the three components that
+are actually metered — model, validation, infrastructure — and carries
+repository size **alongside** them as a correlate, deliberately not as a fourth
+share. A "50% Repository Context" slice would be a category error: repository
+size is not a billed component, and its entire cost effect is already inside the
+model share. Counting it again would double the model spend in every total and
+under-state the one component that dominates every run in this table. The
+honest statement, once n allows it, is a regression — which needs the two as
+separate quantities on the same row, which is the shape that exists now.
+
+These columns are null for every run in the table above, including run #9: they
+did not exist when those runs happened, and null is not zero. The first run that
+records them is the first data point.
+
+### Same step, same price, 2× the cost (Sprint 0053, 2026-08-20)
+
+Run #9 re-ran run #6's Action Step. Byte-identical `step_key`, on a real
+persisted plan step, classifying to the same Execution Pricing Class.
+
+| | Run #6 | Run #9 |
+|---|---|---|
+| Wall clock | 79.9s | **201.5s** |
+| Provider calls | 10 | **14** |
+| Model spend | $0.1444 | **$0.3115** |
+| Unique files read | 4 | **14** |
+| Files read outside the brief | 0 | **4** |
+| Brief candidates sent | 6 | **12 — the cap, exactly** |
+| **Cost floor** | **$0.1739** | **$0.3470** |
+
+**2.00× at the floor, 2.16× in model spend, with no change to the task.**
+
+The longer run is correct behaviour, not a regression. The agent read exactly
+the files this repository had gained since run #6 — `src/app/robots.ts`
+(changed by the domain migration), `src/app/robots.test.ts` (new) and
+`src/lib/env/app-url.ts` (new) — all inside the step's own subject area, then
+wrote its own regression test and ran it. More context was read because more
+relevant context now exists.
+
+**The pricing consequence.** Sprint 0052's price-stability property still holds
+and is still correct: a quote reads `riskClass`, `changeKind` and `evidenceIds`
+before execution, so both runs quote *identically*. That is precisely why this
+matters commercially rather than being self-correcting — the same price was
+charged for twice the cost, and nothing in the quote could have known.
+
+**The mechanism, and why it was invisible.** `context_candidates_sent` went
+6 → 12 against `BRIEF_BUDGET.maxCandidates = 12`. The metric is **saturated**:
+it cannot distinguish a repository offering twelve relevant files from one
+offering fifty. Every `context_*` column measures what Vibe *sent* — a bounded,
+Vibe-controlled compression — and none measured how large the thing being
+compressed was. Sprint 0053 added that (see PART D below).
+
+**What this does not license.** One observation. It establishes that cost is a
+function of repository state, not the size of that function. A regression of
+model spend against repository size needs n large enough to fit one, which is a
+PART Q checkpoint rather than a number available today.
+
 ---
 
 ## Credit scenarios (PART E)
@@ -382,12 +464,13 @@ not control.
 | Gap | Consequence | Fixable by |
 |---|---|---|
 | ~~Rate card unverified~~ | ~~Sandbox cost is estimated, not confirmed~~ — **resolved**: `founder_attested` by Vibe's own founder on 2026-08-20, after three failed environment-side attempts and one rejected AI-relayed claim | done |
-| ~~Validation `active_cpu_ms` not recorded~~ | ~~Validation cost has a floor and a bound~~ — **resolved (Sprint 0051)**: the bug is fixed at the source; every validation from now on gets a point estimate | done |
+| Validation `active_cpu_ms` not recorded — **RE-OPENED (Sprint 0053)** | Validation cost still has a floor and a bound, on new runs as well as old. Sprint 0051 marked this resolved. It was not: the deployment carrying that fix went live at 15:00:59 on 2026-08-20 and the validation row written **sixteen minutes later** (run #9) still records `active_cpu_ms: null`, identical to every pre-fix row. Nothing surfaced it because `readTerminalUsage`'s `catch` was completely silent — the defect hid an entire sprint behind a bare `catch`. | Sprint 0053 moved the usage read to **before** `snapshot()` terminates the sandbox, and made both failure modes log. **Not yet verified in production** — this environment has no Vercel Sandbox credential, so it is confirmed only by the next real run recording a non-null value |
 | ~~`tool_calls_allowed` / `files_read` always 0~~ | ~~Tool use untestable~~ — **resolved**: correct as gateway counters; harness activity derived from `agent_execution_events` | done |
 | Historical runs #3–#8 have no validation point estimate | The six existing runs keep floor + upper bound forever | Not fixable — no second copy of the number exists to recover |
 | Vercel Functions / Workflow invocation cost not instrumented | Immaterial under real prices too — 0.19–0.94% of a delivered run, event rate now attested, per-step duration still an explicit assumption | Not pursued — see PART H, Sprint 0051 and its addendum; revisit only if invocation count grows materially |
-| n = 6 | Correlations are thin | More runs |
-| All runs `non_production_economics` | No production-rate data at all | A production run |
+| n = 7 | Correlations are thin; the PART D table above is still the n=6 computation | More runs |
+| Repository size unmeasured for every run in the dataset | The one cost driver run #9 identified cannot yet be quantified | The columns exist as of Sprint 0053; the next run is the first observation |
+| All 12 runs `non_production_economics` | No production-rate data at all. Note `execution_origin = 'planner'` does **not** make a run production-rate — the flag is set by the internal dogfood allowlist path (`coding-agent/authorization.ts`), so run #9 looks like production traffic and is not | A production run |
 
 ---
 
@@ -415,6 +498,15 @@ per delivered run is unaffected ($0.4749 independently re-derived here,
 matching the $0.4752 already pinned in `workflow-invocation-cost.test.ts` to
 within half a cent) — only the *rate* changes, because the two zero-cost
 failures do not move a sum but do move a count.
+
+**Superseded arithmetic, same reasoning (Sprint 0053).** Run #9 delivered, so
+the same direct query now returns 5 failed / 7 succeeded: the rate is
+**5/12 = 41.7%**, and effective cost per delivered run is **$0.4566**. The
+5/11 figure above is left standing as the record of what Sprint 0052 found —
+it was right on the day. Nothing in `economy/failure-economics.ts` is
+hardcoded to either number; both derive from `HISTORICAL_RUNS.length` and
+`FAILED_ATTEMPT_COSTS`, so a delivered run moves the rate and the tests catch
+the move.
 
 **Three Execution Pricing Classes now exist** (`economy/execution-class.ts`):
 `small`/`standard`/`complex`, derived from `riskClass` + `changeKind` +
@@ -448,6 +540,10 @@ materially limits confidence in any `complex`-tier price.
    Sprint 0052**: the real failure rate is 45.5% (5 failed / 11 total, not the
    ~25–33% implied above), and `CREDIT_PRICING_V1.md` §8 shows every simulated
    rate card still clears its own failure-adjusted margin at that real rate.
+   **Updated by Sprint 0053**: 41.7% (5 / 12) after run #9 delivered — the
+   conclusion is unchanged and the direction is favourable, but a rate that
+   moves four points on one run is a rate with an n problem, not a rate that
+   improved.
 4. **Redo the Credit sizing in CREDIT_ECONOMICS.md** against $0.25/run rather
    than the modelled $15.
 5. **Sonnet 5 rises 50% on 2026-09-01** (already in `ai/pricing.ts`). Mean run
@@ -463,4 +559,8 @@ materially limits confidence in any `complex`-tier price.
    ~75% target margin) at **LOW confidence** — n=6, one `small` observation,
    zero `complex` observations. Verdict: **NOT READY TO IMPLEMENT**, pending
    more delivered runs across a wider evidence-family mix. See
-   `CREDIT_PRICING_V1.md` for the full simulation and reasoning.
+   `CREDIT_PRICING_V1.md` for the full simulation and reasoning. **Unchanged by
+   Sprint 0053**: n is now 7, `small` still has one observation and `complex`
+   still has zero, so no checkpoint moved and the recommendation was not re-run.
+   Run #9 adds a new *kind* of doubt rather than removing an old one — see the
+   same-step cost variance above.

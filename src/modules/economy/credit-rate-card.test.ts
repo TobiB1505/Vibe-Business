@@ -96,8 +96,8 @@ describe("PART G — simulateCreditRateCard arithmetic", () => {
 describe("simulateAllHistoricalRuns — the full PART G table", () => {
   const rows = simulateAllHistoricalRuns();
 
-  it("has 6 runs × 3 models = 18 rows", () => {
-    expect(rows).toHaveLength(18);
+  it("has 7 runs × 3 models = 21 rows", () => {
+    expect(rows).toHaveLength(21);
   });
 
   it("every row's class matches the run's own reconstructed classification", () => {

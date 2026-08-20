@@ -14,12 +14,26 @@ import {
  *
  * Read directly from Supabase (`dcbwlctscooefwnivxzv`) on 2026-08-20 by this
  * sprint, joining `agent_execution_runs` → `execution_specs` →
- * `action_plan_steps` for the six `status = 'succeeded'` runs, in creation
- * order. The economic cost floor/upper-bound figures are **not** recomputed
+ * `action_plan_steps` for the `status = 'succeeded'` runs, in creation order.
+ * Sprint 0053 added run #9 the same way — same query, same tables, same day —
+ * and recomputed its two derived figures with this repository's own
+ * `deriveSandboxCost` and `VERCEL_SANDBOX_RATES` rather than transcribing them
+ * from a document. The economic cost floor/upper-bound figures are **not** recomputed
  * here — they are copied from `docs/business/ECONOMY_MODEL.md`'s "Re-analysed
  * run costs (PART I)" table, which Sprint 0050/0051 already derived and
  * pinned in `run-economics.test.ts`. Restating them from a second source
  * would risk exactly the silent drift this sprint's own doctrine forbids.
+ *
+ * ## Run #9 is the first repeat of one step across a changed repository
+ *
+ * Runs #3–#6 repeat one step against an essentially unchanged tree. Run #9
+ * repeats that *same* step (byte-identical `step_key`) against a repository
+ * that had since gained `src/app/robots.ts`, `src/app/robots.test.ts` and
+ * `src/lib/env/app-url.ts` — and cost 2.00× run #6's floor (2.16× in model
+ * spend alone). Nothing about the
+ * task changed; the agent read the files the repository had grown, which is
+ * correct behaviour and an expensive one. It is the only same-step, changed-
+ * repository pair in this dataset, which is why it is worth its own note.
  *
  * ## Run #8 is honestly weaker evidence than #3–#7
  *
@@ -172,6 +186,30 @@ export const HISTORICAL_RUNS: readonly HistoricalRun[] = [
     economicCostFloorNanoUsd: 254_100_000, // $0.2541
     economicCostUpperNanoUsd: 301_700_000, // $0.3017
     providerCostNanoUsd: 214_400_000, // $0.2144
+    costIsPointEstimate: false,
+  },
+  {
+    run: 9,
+    title: "Add robots meta directives to public and signed-in pages",
+    createdAt: "2026-08-20T15:07:13.616Z",
+    riskClass: "moderate",
+    changeKind: "product_change",
+    evidenceIds: ["live.seo.robots_meta_missing"],
+    classificationConfidence: "confirmed",
+    confidenceNote:
+      "riskClass, changeKind and evidenceIds joined directly from execution_specs/action_plan_steps. " +
+      "This run has the same step_key as run #6 ('4-product_change-add-robots-meta-directives-to-" +
+      "public-and-signed-') on a real persisted plan step, which is what makes the two directly " +
+      "comparable and is the whole reason this entry matters: identical step, identical pricing " +
+      "class, 2.00x the cost floor and 2.16x the model spend. costIsPointEstimate stays false, " +
+      "but for a different reason " +
+      "than runs #3-8 — this run's *agent* sandbox did record active CPU (66,910 ms), and its " +
+      "*validation* sandbox still recorded null sixteen minutes after Sprint 0051's fix deployed. " +
+      "That null is the evidence Sprint 0051's fix did not work in production; see Sprint 0053's " +
+      "reordering in validation/vercel/provider.ts, which is not yet verified against a real run.",
+    economicCostFloorNanoUsd: 347_000_000, // $0.3470 (computed $0.347039)
+    economicCostUpperNanoUsd: 395_400_000, // $0.3954 (computed $0.395402)
+    providerCostNanoUsd: 311_505_500, // $0.3115055 — exact, 14 ai_usage_events
     costIsPointEstimate: false,
   },
 ];
