@@ -156,9 +156,13 @@ describe("negative results are never hidden (§25)", () => {
     // a §25 guarantee to one palette and broke the moment the design system
     // renamed its colours (UI-1) — while the guarantee itself was intact. What
     // must never change is that a fall does not wear the colour of a rise.
+    //
+    // The table now names a tone rather than a class (UI-6 §2), so this reads
+    // whichever it finds. Comparing tone names is comparing meanings, which is
+    // what the rule was always about.
     const tones = src.slice(src.indexOf("const RESULT_TONE"), src.indexOf("function BeforeAfter"));
     const toneFor = (state: string): string | null =>
-      tones.match(new RegExp(`${state}:\\s*"([^"]+)"`))?.[1] ?? null;
+      tones.match(new RegExp(`${state}:\\s*(?:statusToneText\\()?"([^"]+)"`))?.[1] ?? null;
 
     const improved = toneFor("improved");
     const degraded = toneFor("degraded");

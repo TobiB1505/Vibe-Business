@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { STATUS_GLYPHS, statusToneText } from "@/components/ui/status-pill";
 import { Button } from "@/components/ui/button";
 import type { OutcomeCheckStatus } from "@/modules/outcome-verification/schema";
 import { useOperationPoll } from "@/lib/client/use-operation-poll";
@@ -56,20 +57,30 @@ const POLL_INTERVAL_MS = 15_000;
  */
 
 const CHECK_MARK: Record<OutcomeCheckStatus, string> = {
-  passed: "✓",
-  failed: "✕",
+  passed: STATUS_GLYPHS.confirmed,
+  failed: STATUS_GLYPHS.refused,
   // Deliberately neither a tick nor a cross. "We did not see it" is a third
   // thing, and rendering it as a failure would blame a product that may simply
   // not have finished deploying (§22).
-  not_observed: "–",
-  error: "!",
+  not_observed: STATUS_GLYPHS.unseen,
+  error: STATUS_GLYPHS.unknown,
 };
 
+/*
+ * `failed` is `waiting`, not `problem`, and that is the whole argument of §22
+ * expressed as a colour: a check that did not hold in production may mean the
+ * new build is not serving yet. Coral would tell a founder their product is
+ * broken on the evidence that Vibe looked early.
+ *
+ * The sandbox's `failed` in `validation-panel.tsx` really is `problem`. Two
+ * different states share an English word; naming the tone is what makes the
+ * difference visible instead of looking like drift.
+ */
 const CHECK_TONE: Record<OutcomeCheckStatus, string> = {
-  passed: "text-mint",
-  failed: "text-amber",
-  not_observed: "text-fg-muted",
-  error: "text-fg-muted",
+  passed: statusToneText("success"),
+  failed: statusToneText("waiting"),
+  not_observed: statusToneText("neutral"),
+  error: statusToneText("neutral"),
 };
 
 const CHECK_SUFFIX: Record<OutcomeCheckStatus, string> = {

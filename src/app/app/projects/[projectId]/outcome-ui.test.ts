@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { actionLabels } from "./test-support";
+import { STATUS_GLYPHS } from "@/components/ui/status-pill";
 
 /**
  * The outcome trust boundary, asserted against the UI source
@@ -170,10 +171,21 @@ describe("the four outcome states read differently (§30, §31, §32, §23)", ()
   });
 
   it("marks a not-observed check as neither a tick nor a cross (§22)", () => {
+    // Two halves, because the glyphs moved into the shared vocabulary
+    // (UI-6 §2). The panel says which mark each state gets; `STATUS_GLYPHS`
+    // says what each mark is. Together they still prove that a check nobody
+    // observed renders as a dash — and additionally that the whole product
+    // draws its ticks and crosses from one table rather than three.
     const marks = src.slice(src.indexOf("const CHECK_MARK"), src.indexOf("const CHECK_TONE"));
-    expect(marks).toMatch(/not_observed:\s*"–"/);
-    expect(marks).toMatch(/passed:\s*"✓"/);
-    expect(marks).toMatch(/failed:\s*"✕"/);
+    expect(marks).toMatch(/not_observed:\s*STATUS_GLYPHS\.unseen/);
+    expect(marks).toMatch(/passed:\s*STATUS_GLYPHS\.confirmed/);
+    expect(marks).toMatch(/failed:\s*STATUS_GLYPHS\.refused/);
+
+    expect(STATUS_GLYPHS.unseen).toBe("–");
+    expect(STATUS_GLYPHS.confirmed).toBe("✓");
+    expect(STATUS_GLYPHS.refused).toBe("✕");
+    expect(STATUS_GLYPHS.unseen).not.toBe(STATUS_GLYPHS.confirmed);
+    expect(STATUS_GLYPHS.unseen).not.toBe(STATUS_GLYPHS.refused);
   });
 
   it("tells the user they can leave the page while it observes (§29)", () => {

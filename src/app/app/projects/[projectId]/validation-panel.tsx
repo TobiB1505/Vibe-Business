@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { STATUS_GLYPHS, statusToneText } from "@/components/ui/status-pill";
 import { Button } from "@/components/ui/button";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import type { StepSkipReason } from "@/modules/validation/schema";
@@ -50,21 +51,26 @@ import { getValidationProgressAction, validateChangeAction, type ValidateChangeA
 const POLL_INTERVAL_MS = 2500;
 
 const PHASE_SYMBOLS: Record<ValidationPhaseView["state"], string> = {
-  passed: "✓",
-  failed: "✕",
-  timed_out: "⏱",
-  skipped: "–",
-  active: "●",
-  pending: "○",
-  not_run: "○",
+  passed: STATUS_GLYPHS.confirmed,
+  failed: STATUS_GLYPHS.refused,
+  timed_out: STATUS_GLYPHS.expired,
+  skipped: STATUS_GLYPHS.skipped,
+  active: STATUS_GLYPHS.running,
+  pending: STATUS_GLYPHS.pending,
+  not_run: STATUS_GLYPHS.pending,
 };
 
+/*
+ * `problem`, unlike the outcome panel's `failed`. A command Vibe constructed
+ * exited non-zero inside an isolated VM: something really is wrong, it is
+ * attributable, and the user can act on it.
+ */
 const PHASE_TONES: Record<ValidationPhaseView["state"], string> = {
-  passed: "text-mint",
-  failed: "text-coral",
-  timed_out: "text-coral",
-  skipped: "text-fg-muted",
-  active: "text-mint-dim",
+  passed: statusToneText("success"),
+  failed: statusToneText("problem"),
+  timed_out: statusToneText("problem"),
+  skipped: statusToneText("neutral"),
+  active: statusToneText("active"),
   pending: "text-fg-meta",
   not_run: "text-fg-meta",
 };

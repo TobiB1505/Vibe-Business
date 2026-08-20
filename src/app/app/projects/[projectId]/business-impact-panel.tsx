@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { statusToneText } from "@/components/ui/status-pill";
 import { Button } from "@/components/ui/button";
 import type { BusinessImpactCard } from "@/modules/business-measurement/view";
 import {
@@ -70,12 +71,18 @@ function formatRelative(relative: number): string {
   return `${sign}${Math.abs(percent).toFixed(1)}%`;
 }
 
+/*
+ * `degraded` is `waiting`, not `problem`: an observed decline between two
+ * windows is a thing to look at, and the panel's own copy says it does not
+ * prove this change caused it. And `failed` here is Vibe's measurement
+ * failing, never the customer's business — which is why neither is coral.
+ */
 const RESULT_TONE: Record<string, string> = {
-  improved: "text-mint",
-  degraded: "text-amber",
-  neutral: "text-fg-prose",
-  insufficient_data: "text-fg-prose",
-  failed: "text-amber",
+  improved: statusToneText("success"),
+  degraded: statusToneText("waiting"),
+  neutral: statusToneText("neutral"),
+  insufficient_data: statusToneText("neutral"),
+  failed: statusToneText("waiting"),
 };
 
 function BeforeAfter({ card }: { card: BusinessImpactCard }) {
