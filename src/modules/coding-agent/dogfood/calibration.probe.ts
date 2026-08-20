@@ -119,6 +119,79 @@ function repositoryContextOf(run: RunRow | null): RepositoryContextSize | null {
   };
 }
 
+type SandboxRow = {
+  operation: string;
+  sandbox_duration_ms: number | null;
+  active_cpu_ms: number | null;
+  network_egress_bytes: number | null;
+};
+
+const SANDBOX_COLUMNS = "operation,sandbox_duration_ms,active_cpu_ms,network_egress_bytes";
+
+/**
+ * A query whose failure is a failure, not an absence.
+ *
+ * PostgREST answers a bad column with an error object rather than a throw, and
+ * `{ data: null }` is indistinguishable from "there is no such row". This bit
+ * immediately: the first version selected `active_cpu_ms` from `validation_runs`,
+ * where it does not exist, and the report said a validated run had `stage_not_run`
+ * — a query bug rendered as a fact about the run.
+ *
+ * That is the same shape as the silent `catch` that hid a metering defect for an
+ * entire sprint. A calibration harness whose whole purpose is telling absence
+ * from zero cannot afford it, so every read goes through here.
+ */
+async function required<T>(
+  query: PromiseLike<{ data: T | null; error: { message: string } | null }>,
+  label: string,
+): Promise<T> {
+  const { data, error } = await query;
+  if (error) throw new Error(`Reading ${label} failed: ${error.message}`);
+  if (data === null) throw new Error(`Reading ${label} returned nothing.`);
+  return data;
+}
+
+/**
+ * The validation run for a prepared change, and the sandbox it burned.
+ *
+ * Two reads, because they are two rows. `validation_runs` records the outcome
+ * and the wall duration; the CPU and egress live on the *sandbox* row, keyed by
+ * the validation run's own id rather than the agent run's. Reading the agent
+ * run's sandbox row and calling it validation would price the wrong VM.
+ *
+ * Null only when the change was never validated — an absence the economy layer
+ * reports as `stage_not_run`, which is genuinely different from unmeasured.
+ */
+async function loadValidation(
+  supabase: SupabaseClient,
+  preparedChangeId: string | null,
+): Promise<{ run: { status: string; validation_depth: ValidationDepth | null }; sandbox: SandboxRow | null } | null> {
+  if (!preparedChangeId) return null;
+
+  const runs = await required(
+    supabase
+      .from("validation_runs")
+      .select("id,status,validation_depth,sandbox_duration_ms")
+      .eq("prepared_change_id", preparedChangeId)
+      .order("created_at", { ascending: false })
+      .limit(1),
+    "validation_runs",
+  );
+
+  const validation = (runs as { id: string; status: string; validation_depth: ValidationDepth | null }[])[0];
+  if (!validation) return null;
+
+  const sandboxRows = await required(
+    supabase.from("sandbox_usage_events").select(SANDBOX_COLUMNS).eq("validation_run_id", validation.id),
+    "sandbox_usage_events (validation)",
+  );
+
+  return {
+    run: validation,
+    sandbox: (sandboxRows as SandboxRow[]).find((row) => row.operation === "change_validation") ?? null,
+  };
+}
+
 function sandboxUsageOf(
   row: { sandbox_duration_ms: number | null; active_cpu_ms: number | null; network_egress_bytes: number | null } | null,
   purpose: SandboxUsage["purpose"],
@@ -241,24 +314,22 @@ async function reconcile(supabase: SupabaseClient, fixture: CalibrationFixture):
 
   const snapshot = frozenSnapshot();
 
-  const [{ data: usage }, { data: sandboxRows }, { data: validation }] = await Promise.all([
-    supabase.from("ai_usage_events").select("provider_cost_usd,pricing_version,status").eq("job_id", run.id),
-    supabase
-      .from("sandbox_usage_events")
-      .select("operation,sandbox_duration_ms,active_cpu_ms,network_egress_bytes")
-      .eq("validation_run_id", run.id),
-    run.prepared_change_id
-      ? supabase
-          .from("validation_runs")
-          .select("status,validation_depth,sandbox_duration_ms,active_cpu_ms,network_egress_bytes")
-          .eq("prepared_change_id", run.prepared_change_id)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle()
-      : Promise.resolve({ data: null }),
+  const [usage, agentSandboxRows, validationRow] = await Promise.all([
+    required(
+      supabase.from("ai_usage_events").select("provider_cost_usd,pricing_version,status").eq("job_id", run.id),
+      "ai_usage_events",
+    ),
+    required(
+      supabase
+        .from("sandbox_usage_events")
+        .select(SANDBOX_COLUMNS)
+        .eq("validation_run_id", run.id),
+      "sandbox_usage_events (agent)",
+    ),
+    loadValidation(supabase, run.prepared_change_id),
   ]);
 
-  const rows = (usage ?? []) as { provider_cost_usd: string | number | null; pricing_version: string | null }[];
+  const rows = usage as { provider_cost_usd: string | number | null; pricing_version: string | null }[];
 
   /*
    * Null when no row carried a cost — an unmetered run is not a free one, and
@@ -273,20 +344,12 @@ async function reconcile(supabase: SupabaseClient, fixture: CalibrationFixture):
     priced.length === 0 ? null : priced.reduce((sum, cost) => sum + cost, 0);
 
   const agentSandboxRow =
-    ((sandboxRows ?? []) as { operation: string }[]).find((row) => row.operation === "agent_execution") ?? null;
-
-  const validationRow = validation as {
-    status: string;
-    validation_depth: ValidationDepth | null;
-    sandbox_duration_ms: number | null;
-    active_cpu_ms: number | null;
-    network_egress_bytes: number | null;
-  } | null;
+    (agentSandboxRows as SandboxRow[]).find((row) => row.operation === "agent_execution") ?? null;
 
   const actual = deriveActualExecutionEconomics({
     providerCostNanoUsd,
-    agentSandbox: sandboxUsageOf(agentSandboxRow as never, "agent_execution"),
-    validationSandbox: sandboxUsageOf(validationRow as never, "change_validation"),
+    agentSandbox: sandboxUsageOf(agentSandboxRow, "agent_execution"),
+    validationSandbox: validationRow ? sandboxUsageOf(validationRow.sandbox, "change_validation") : null,
     validationAttempted: validationRow !== null,
     workflowSteps:
       run.duration_ms === null
@@ -306,8 +369,8 @@ async function reconcile(supabase: SupabaseClient, fixture: CalibrationFixture):
     comparison: compareEstimateToActual(snapshot.estimate, actual),
     agentRunId: run.id,
     runStatus: run.status,
-    validationStatus: validationRow?.status ?? null,
-    actualValidationDepth: validationRow?.validation_depth ?? null,
+    validationStatus: validationRow?.run.status ?? null,
+    actualValidationDepth: validationRow?.run.validation_depth ?? null,
     drift: deriveRepositoryDrift(repositoryContextOf(previous), repositoryContextOf(run)),
     repositoryContextAtExecution: repositoryContextOf(run),
     actualProviderPricingVersion: rows.find((row) => row.pricing_version !== null)?.pricing_version ?? null,
