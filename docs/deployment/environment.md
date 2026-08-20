@@ -96,7 +96,7 @@ Nothing here needed to change:
 
 | Variable | Development | Preview | Production |
 |---|---|---|---|
-| `NEXT_PUBLIC_APP_URL` | unset | unset (auto via `VERCEL_URL`) | **your production custom domain**, e.g. `https://your-production-domain.com` |
+| `NEXT_PUBLIC_APP_URL` | unset | unset (auto via `VERCEL_URL`) | **`https://vibebusiness.de`** (the production custom domain) |
 | `VIBE_AGENT_GATEWAY_ORIGIN` | unset (agent execution unavailable locally) | set only if deliberately dogfooding the Coding Agent on that Preview | your production custom domain, or a pinned dogfood Preview — see above |
 | `VIBE_AGENT_GATEWAY_SECRET` | as needed for local dogfooding | as needed | required alongside the origin above |
 | `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` | required | required | required |
@@ -105,23 +105,61 @@ Nothing here needed to change:
 `VERCEL_URL` and `VERCEL_ENV` are injected automatically by Vercel on every
 build — never set them yourself.
 
+## Real incident — the apex-vs-`www` redirect broke Stripe webhooks
+
+Discovered 2026-08-20, on this exact production domain, worth recording
+because it will bite the next domain too if the checklist below skips it.
+
+Vercel let two hostnames exist for one project — `vibebusiness.de` and
+`www.vibebusiness.de` — and one of them was configured to **308-redirect**
+to the other rather than to serve the app directly. Stripe's webhook
+endpoint was registered against the redirecting hostname. Stripe does not
+follow redirects when delivering a webhook, so every `checkout.session.completed`
+event failed with `308 ERR` in the Stripe dashboard — silently, from the
+application's point of view, since the request never reached
+`src/app/api/billing/stripe/webhook/route.ts` at all. `curl`/`fetch` against
+the redirecting host shows exactly this:
+
+```
+POST https://vibebusiness.de/api/billing/stripe/webhook
+-> 308 Permanent Redirect
+   Location: https://www.vibebusiness.de/api/billing/stripe/webhook
+```
+
+**Fixed by making the apex domain (`vibebusiness.de`) canonical**: in Vercel
+(Project Settings → Domains), `www.vibebusiness.de` now redirects to
+`vibebusiness.de`, not the other way around — the conventional direction, and
+the one that matches `NEXT_PUBLIC_APP_URL`. Any URL configured against a
+custom domain (a Stripe webhook, a Supabase Redirect URL, a GitHub App
+Callback URL, `NEXT_PUBLIC_APP_URL` itself) must point at whichever hostname
+Vercel's Domains settings show as **not** redirecting — check that first,
+every time, rather than assuming the "obvious" form (with or without `www`)
+is the one that actually serves traffic.
+
 ## Migrating from a `*.vercel.app` domain to a custom one
 
-1. Add the custom domain in Vercel (Project Settings → Domains).
-2. Set `NEXT_PUBLIC_APP_URL` to the new domain in Vercel's **Production**
-   environment variables only. Preview and Development need no change.
+1. Add the custom domain in Vercel (Project Settings → Domains). **Before
+   configuring anything else against it**, confirm in that same Domains
+   screen which hostname is canonical and which one redirects — see the
+   incident above. Every step below must target the canonical one.
+2. Set `NEXT_PUBLIC_APP_URL` to the canonical domain in Vercel's
+   **Production** environment variables only. Preview and Development need
+   no change.
 3. Update Supabase's Site URL and add the new domain's `/auth/callback` and
    `/auth/confirm` Redirect URLs — see `docs/setup/supabase-auth.md`. Keep the
    old `*.vercel.app` entries until you have confirmed nothing still depends
    on them (an in-flight email link, a bookmarked preview).
 4. If a production GitHub App exists, update its Homepage URL and Callback
    URL — see `docs/setup/github-app.md`.
-5. Decide `VIBE_AGENT_GATEWAY_ORIGIN` deliberately (see above) — it does not
+5. If Stripe is configured, update the webhook endpoint URL in the Stripe
+   Dashboard (Developers → Webhooks) to the canonical domain.
+6. Decide `VIBE_AGENT_GATEWAY_ORIGIN` deliberately (see above) — it does not
    move automatically just because `NEXT_PUBLIC_APP_URL` did.
-6. Redeploy Production. Verify: the deployed site's `/robots.txt` and
+7. Redeploy Production. Verify: the deployed site's `/robots.txt` and
    `/sitemap.xml` name the new domain, sign-in and Google OAuth complete
-   successfully, and (if Stripe is configured) a Checkout session returns to
-   the new domain.
+   successfully, a Stripe test webhook event delivers with `200` (not
+   `308`) in the Stripe Dashboard's Webhooks → Event deliveries view, and a
+   Checkout session returns to the new domain.
 
 ## Local development
 

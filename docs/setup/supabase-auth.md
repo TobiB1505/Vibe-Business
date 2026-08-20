@@ -77,14 +77,14 @@ URL Google needs, and it is *not* one of Vibe's routes.
 
 ### Authentication → URL Configuration
 
-- **Site URL**: the production custom domain (e.g. `https://your-production-domain.com`)
+- **Site URL**: the production custom domain (e.g. `https://vibebusiness.de`)
   — this is the value `NEXT_PUBLIC_APP_URL` is set to in Vercel's Production
   environment (see [environment.md](../deployment/environment.md)).
 - **Redirect URLs** — the allow list for `redirectTo`. Add exactly:
   - `http://localhost:3000/auth/callback`
   - `http://localhost:3000/auth/confirm`
-  - `https://your-production-domain.com/auth/callback`
-  - `https://your-production-domain.com/auth/confirm`
+  - `https://vibebusiness.de/auth/callback`
+  - `https://vibebusiness.de/auth/confirm`
 
 **Migrating from a `*.vercel.app` domain to a custom one**: add the new domain's
 two entries above; do not remove the old `*.vercel.app` ones until you have
@@ -135,7 +135,7 @@ This is the single most common way to lose an afternoon.
    Vibe never sees this URL.
 
 2. Supabase "redirectTo" / Redirect URLs
-   https://your-production-domain.com/auth/callback
+   https://vibebusiness.de/auth/callback
    Owned by Vibe. Where Supabase returns after it has the tokens.
    This is src/app/auth/callback/route.ts.
 ```
