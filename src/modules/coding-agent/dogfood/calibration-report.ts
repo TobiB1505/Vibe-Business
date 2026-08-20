@@ -229,6 +229,7 @@ export function renderReconciliation(input: ReconciliationReportInput): string {
         ? " — every component resolved."
         : ` — incomplete. Missing: ${actual.actualCost.missing.join(", ")}.`),
     "",
+    ...bracketLines(actual),
     `Measurement confidence: **${actual.confidence}**.`,
     "",
     "## Prediction vs reality",
@@ -297,6 +298,25 @@ function explainCalibrationVariance(
     actualPricingVersion: input.actualProviderPricingVersion,
     predictionHadNoHistory: !input.snapshot.estimate.provenance.hadHistoricalNeighbours,
   });
+}
+
+/**
+ * The bracket an incomplete total needs to be read honestly.
+ *
+ * A floor alone understates a run whose sandbox CPU was never recorded, because
+ * that sandbox's *memory* charge falls out of the total along with the CPU. The
+ * two ends are what the run cost at 0% and 100% CPU on the unpriced sandbox —
+ * a range Vibe can defend, rather than a number it cannot.
+ */
+function bracketLines(actual: ActualExecutionEconomics): string[] {
+  if (actual.bracketLowNanoUsd === null || actual.bracketHighNanoUsd === null) return [];
+
+  return [
+    `Bracketed, the run cost between **${formatNanoUsd(actual.bracketLowNanoUsd)}** and ` +
+      `**${formatNanoUsd(actual.bracketHighNanoUsd)}** — the ends are the unpriced sandbox at 0% ` +
+      "and 100% active CPU. Neither end is the answer; the answer was not recorded.",
+    "",
+  ];
 }
 
 function componentRow(label: string, cost: ActualExecutionEconomics["components"]["model"]): string {

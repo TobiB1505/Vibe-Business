@@ -76,6 +76,20 @@ export type ActualExecutionEconomics = {
   /** Upper bound on the agent sandbox if its CPU had been fully active. Null when unknowable. */
   agentSandboxUpperBoundNanoUsd: number | null;
   validationSandboxUpperBoundNanoUsd: number | null;
+  /**
+   * What the run cost, bracketed, when a component could not be priced exactly.
+   *
+   * `actualCost.knownFloorNanoUsd` alone understates a run whose sandbox CPU
+   * was never recorded — the memory and creation charges for that same sandbox
+   * *are* derivable and simply fall out of the total along with the CPU. On
+   * calibration run 1 that gap was $0.0119 at the low end and $0.0479 at the
+   * high end against a $0.1388 floor: up to 34% of the answer, invisible.
+   *
+   * Both bounds are null when nothing is missing — a complete total needs no
+   * bracket, and offering one would imply doubt that is not there.
+   */
+  bracketLowNanoUsd: number | null;
+  bracketHighNanoUsd: number | null;
 };
 
 export type ActualEconomicsInput = {
@@ -120,6 +134,22 @@ export function deriveActualExecutionEconomics(
 
   const components: ActualEconomicsComponents = { model, agentSandbox, validation, infrastructure };
 
+  /*
+   * The parts of an unpriced sandbox that *are* derivable. A sandbox whose CPU
+   * was never recorded still has known memory and creation charges; they are
+   * excluded from the component total because the component as a whole is
+   * unknown, and the bracket is where they become visible again.
+   */
+  const unpricedFloor =
+    (agentSandbox.known ? 0 : (agent?.total.knownFloorNanoUsd ?? 0)) +
+    (validation.known || !input.validationAttempted ? 0 : (validationBreakdown?.total.knownFloorNanoUsd ?? 0));
+
+  const unpricedCeiling =
+    (agentSandbox.known ? 0 : (agent?.fullActiveCpuUpperBoundNanoUsd ?? 0)) +
+    (validation.known || !input.validationAttempted
+      ? 0
+      : (validationBreakdown?.fullActiveCpuUpperBoundNanoUsd ?? 0));
+
   const actualCost = sumCosts([
     ["model", model],
     ["agentSandbox", agentSandbox],
@@ -136,6 +166,8 @@ export function deriveActualExecutionEconomics(
       : null,
     agentSandboxUpperBoundNanoUsd: agent?.fullActiveCpuUpperBoundNanoUsd ?? null,
     validationSandboxUpperBoundNanoUsd: validationBreakdown?.fullActiveCpuUpperBoundNanoUsd ?? null,
+    bracketLowNanoUsd: actualCost.complete ? null : actualCost.knownFloorNanoUsd + unpricedFloor,
+    bracketHighNanoUsd: actualCost.complete ? null : actualCost.knownFloorNanoUsd + unpricedCeiling,
   };
 }
 

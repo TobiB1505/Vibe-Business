@@ -132,6 +132,11 @@ function actualFor(run: HistoricalRun): ActualExecutionEconomics {
     provenance: null,
     agentSandboxUpperBoundNanoUsd: null,
     validationSandboxUpperBoundNanoUsd: run.economicCostUpperNanoUsd - run.economicCostFloorNanoUsd,
+    // The dataset already carries both ends, so the bracket is the pinned pair
+    // rather than something re-derived from sandbox dimensions this table does
+    // not hold.
+    bracketLowNanoUsd: run.economicCostFloorNanoUsd,
+    bracketHighNanoUsd: run.economicCostUpperNanoUsd,
   };
 }
 

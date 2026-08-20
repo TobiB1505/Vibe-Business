@@ -207,6 +207,46 @@ describe("the reconciliation report explains the run without rewriting the predi
     expect(report).toContain(`$${(predicted.nanoUsd / 1e9).toFixed(4)}`);
   });
 
+  /**
+   * A floor alone understates a run whose sandbox CPU was never recorded: that
+   * sandbox's memory charge falls out of the total along with the CPU. On
+   * calibration run 1 the gap was up to 34% of the answer.
+   */
+  it("brackets an incomplete total instead of only flooring it", () => {
+    const input = reconciliationInput();
+    const incomplete = {
+      ...input,
+      actual: deriveActualExecutionEconomics({
+        providerCostNanoUsd: 112_600_000,
+        agentSandbox: sandbox(),
+        validationSandbox: sandbox({ purpose: "change_validation", wallMs: 252_835, activeCpuMs: null }),
+        validationAttempted: true,
+        workflowSteps: 30,
+        rates: VERCEL_SANDBOX_RATES,
+        functionsRates: VERCEL_FUNCTIONS_RATES,
+        stepWork: REALISTIC_STEP_WORK,
+      }),
+    };
+
+    const report = renderReconciliation(incomplete);
+
+    expect(report).toContain("Bracketed, the run cost between");
+    expect(report).toContain("0%");
+    expect(report).toContain("100% active CPU");
+    expect(incomplete.actual.bracketLowNanoUsd ?? 0).toBeGreaterThan(
+      incomplete.actual.actualCost.knownFloorNanoUsd,
+    );
+    expect(incomplete.actual.bracketHighNanoUsd ?? 0).toBeGreaterThan(
+      incomplete.actual.bracketLowNanoUsd ?? 0,
+    );
+  });
+
+  it("offers no bracket when nothing is missing", () => {
+    const report = renderReconciliation(reconciliationInput());
+
+    expect(report).not.toContain("Bracketed, the run cost between");
+  });
+
   it("names a floor as a floor when a component is missing", () => {
     const report = renderReconciliation(reconciliationInput(null));
 
