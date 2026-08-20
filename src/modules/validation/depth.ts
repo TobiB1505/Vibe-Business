@@ -176,8 +176,13 @@ const SENSITIVE_PATH_RULES: readonly { domain: string; pattern: RegExp }[] = [
  *
  * Keyed on the Vibe-minted evidence-id namespace, exactly as `risk.ts` and
  * `execution-context/surface.ts` already are — never on prose.
+ *
+ * Exported (Sprint 0052, Credit Economics v1) so `economy/execution-class.ts`
+ * can reuse the identical list rather than defining a second one that could
+ * silently drift from this one. One taxonomy, two consumers — not two lists
+ * that happen to agree today.
  */
-const SENSITIVE_EVIDENCE_PREFIXES: readonly string[] = [
+export const SENSITIVE_EVIDENCE_PREFIXES: readonly string[] = [
   "repo.surface.payments",
   "repo.surface.checkout_billing",
   "repo.surface.authentication",

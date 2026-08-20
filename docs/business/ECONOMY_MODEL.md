@@ -391,6 +391,39 @@ not control.
 
 ---
 
+## Sprint 0052 — Credit Economics v1 (simulation only)
+
+Full design, simulation and recommendation now live in
+[CREDIT_PRICING_V1.md](CREDIT_PRICING_V1.md). Nothing in that document is
+activated: `CREDIT_RATE_CARDS` is still `[]`, no Stripe/Reservation/Settlement
+logic changed, no real Credit moved. Two things from it correct this
+document's own numbers rather than restating them silently:
+
+**The historical failure count was 5, not 2 or 3.** This document's "Failed
+runs cost real money" section above (PART C-era analysis) named two failed
+runs by model cost ($0.3085, $0.6158), and the "Cost per delivered run,
+revised" section named a third once sandbox cost was added ($0.0060). Both
+were correct descriptions of "failures that cost money" — but a direct
+`select status, count(*) from agent_execution_runs group by status` on
+2026-08-20 (Sprint 0052) found **5 failed rows, not 3**: two additional
+attempts failed at provisioning with zero measurable cost (no sandbox wall
+duration, no billed model call), so a tally built by listing costly failures
+correctly never mentioned them. A failure **rate** has to count all attempts,
+costly or not: **5 failed / 11 total = 45.5%**, not the ~25–33% a reader
+would infer from this document's own earlier sections. The effective cost
+per delivered run is unaffected ($0.4749 independently re-derived here,
+matching the $0.4752 already pinned in `workflow-invocation-cost.test.ts` to
+within half a cent) — only the *rate* changes, because the two zero-cost
+failures do not move a sum but do move a count.
+
+**Three Execution Pricing Classes now exist** (`economy/execution-class.ts`):
+`small`/`standard`/`complex`, derived from `riskClass` + `changeKind` +
+`evidenceIds` only — pre-execution, deterministic, price-stable. All six
+historical runs classify as `standard` (5, evidence implies one named
+surface) or `small` (1, run #8, no named surface). **`complex` has zero
+historical coverage** — see `CREDIT_PRICING_V1.md` §5/§11 for why that
+materially limits confidence in any `complex`-tier price.
+
 ## Open decisions
 
 1. ~~**Verify the Vercel rate card.**~~ **Resolved.** Sprint 0051 named this
@@ -411,11 +444,23 @@ not control.
 3. **Decide who pays for failures.** $0.9243 of the $2.4282 spent across all
    eight attempted runs bought nothing. Charging only for delivered results is
    the customer-fair answer and needs a **61% uplift** on the succeeded-mean to
-   stay whole — price against $0.4047, not $0.2507.
+   stay whole — price against $0.4047, not $0.2507. **Quantified further by
+   Sprint 0052**: the real failure rate is 45.5% (5 failed / 11 total, not the
+   ~25–33% implied above), and `CREDIT_PRICING_V1.md` §8 shows every simulated
+   rate card still clears its own failure-adjusted margin at that real rate.
 4. **Redo the Credit sizing in CREDIT_ECONOMICS.md** against $0.25/run rather
    than the modelled $15.
 5. **Sonnet 5 rises 50% on 2026-09-01** (already in `ai/pricing.ts`). Mean run
-   cost moves from $0.2507 to roughly $0.376 with no code change.
+   cost moves from $0.2507 to roughly $0.376 with no code change. **Sprint
+   0052's stress test confirms this is the dominant margin risk** — a 50% AI
+   provider inflation drops the most conservative simulated rate card to
+   63–71% margin, far more than an equivalent infrastructure-cost shock.
 6. **Re-measure after Sprint 0047.** Risk-adaptive validation skips the unit
    suite on a `fast` run — 87s of the 311s validation microVM. None of the runs
    above ran under that policy.
+7. **Choose a v1 Credit Rate Card.** Sprint 0052 simulated three candidates
+   and recommends Model C (small=200/standard=300/complex=500 Credits,
+   ~75% target margin) at **LOW confidence** — n=6, one `small` observation,
+   zero `complex` observations. Verdict: **NOT READY TO IMPLEMENT**, pending
+   more delivered runs across a wider evidence-family mix. See
+   `CREDIT_PRICING_V1.md` for the full simulation and reasoning.
