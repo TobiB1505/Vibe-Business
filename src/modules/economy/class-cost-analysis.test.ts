@@ -23,10 +23,10 @@ describe("analyzeClassCostDifferentiation", () => {
     expect(small.meanFloorNanoUsd).toBe(254_100_000);
   });
 
-  it("standard has exactly 5 runs (#3-7) with a real standard deviation", () => {
+  it("standard has exactly 6 runs (#3-7 and #9) with a real standard deviation", () => {
     const standard = stats.find((s) => s.pricingClass === "standard")!;
-    expect(standard.runCount).toBe(5);
-    expect(standard.runs).toEqual([3, 4, 5, 6, 7]);
+    expect(standard.runCount).toBe(6);
+    expect(standard.runs).toEqual([3, 4, 5, 6, 7, 9]);
     expect(standard.standardDeviationNanoUsd).not.toBeNull();
     expect(standard.standardDeviationNanoUsd).toBeGreaterThan(0);
   });

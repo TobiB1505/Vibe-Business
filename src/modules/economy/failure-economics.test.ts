@@ -10,7 +10,8 @@ import {
 /**
  * Sprint 0052, PART H. `computeHistoricalFailureEconomics`'s inputs were
  * verified directly against `agent_execution_runs` on 2026-08-20
- * (`select status, count(*) ... group by status` → 5 failed, 6 succeeded),
+ * (`select status, count(*) ... group by status` → 5 failed, 6 succeeded; re-run
+ * on the same day after run #9 → 5 failed, 7 succeeded),
  * not copied from earlier sprints' prose, which only ever named the three
  * failures with nonzero cost. These tests pin that corrected historical
  * shape.
@@ -41,19 +42,24 @@ describe("the historical dataset really has 5 failed attempts, not 2 or 3", () =
 describe("computeHistoricalFailureEconomics", () => {
   const economics = computeHistoricalFailureEconomics();
 
-  it("counts 6 delivered, 5 failed, 11 total attempts", () => {
-    expect(economics.deliveredCount).toBe(6);
+  it("counts 7 delivered, 5 failed, 12 total attempts", () => {
+    expect(economics.deliveredCount).toBe(7);
     expect(economics.failedCount).toBe(5);
-    expect(economics.totalAttempts).toBe(11);
+    expect(economics.totalAttempts).toBe(12);
   });
 
-  it("the historical failure rate is 5/11, about 45.5% — not the ~2/8 or 3/9 implied by earlier prose", () => {
-    expect(economics.historicalFailureRate).toBeCloseTo(5 / 11, 10);
-    expect(Math.round(economics.historicalFailureRate * 1000) / 10).toBeCloseTo(45.5, 1);
+  /**
+   * 5/12 as of Sprint 0053, down from 5/11 — because run #9 delivered, not
+   * because any failure was reclassified. Both figures are re-derived from a
+   * direct `group by status` on the day; neither is a target.
+   */
+  it("the historical failure rate is 5/12, about 41.7% — not the ~2/8 or 3/9 implied by earlier prose", () => {
+    expect(economics.historicalFailureRate).toBeCloseTo(5 / 12, 10);
+    expect(Math.round(economics.historicalFailureRate * 1000) / 10).toBeCloseTo(41.7, 1);
   });
 
-  it("delivered floor sum matches the six pinned run floors exactly ($1.7819)", () => {
-    expect(economics.deliveredFloorNanoUsd).toBe(1_781_900_000);
+  it("delivered floor sum matches the seven pinned run floors exactly ($2.1289)", () => {
+    expect(economics.deliveredFloorNanoUsd).toBe(2_128_900_000);
   });
 
   it("failed floor sum is the sum of all five failed-attempt floors", () => {
@@ -61,20 +67,21 @@ describe("computeHistoricalFailureEconomics", () => {
     expect(economics.failedFloorNanoUsd).toBe(expected);
   });
 
-  it("total floor is delivered + failed, and effective cost per delivered run divides it by 6", () => {
+  it("total floor is delivered + failed, and effective cost per delivered run divides it by 7", () => {
     expect(economics.totalFloorNanoUsd).toBe(economics.deliveredFloorNanoUsd + economics.failedFloorNanoUsd);
     expect(economics.effectiveCostPerDeliveredRunNanoUsd).toBe(
-      Math.round(economics.totalFloorNanoUsd / 6),
+      Math.round(economics.totalFloorNanoUsd / 7),
     );
-    // Close to (not necessarily identical to) the previously-pinned $0.4752 —
-    // this sprint's direct query is the more precise, independently-derived
-    // figure; the two should agree to within a few tenths of a cent.
-    expect(economics.effectiveCostPerDeliveredRunNanoUsd / 1e9).toBeCloseTo(0.4752, 2);
+    // $0.4566, down from $0.4752 at n=6 — a fixed failure bill spread over one
+    // more delivered run. Worth noting that this fell while the *mean* run cost
+    // rose: the two move independently, and reading either as the other is how
+    // a margin gets quoted from the wrong number.
+    expect(economics.effectiveCostPerDeliveredRunNanoUsd / 1e9).toBeCloseTo(0.4566, 3);
   });
 
-  it("failure overhead per delivered run is the failed floor divided by 6, and is a material uplift", () => {
+  it("failure overhead per delivered run is the failed floor divided by 7, and is a material uplift", () => {
     expect(economics.failureOverheadPerDeliveredRunNanoUsd).toBe(
-      Math.round(economics.failedFloorNanoUsd / 6),
+      Math.round(economics.failedFloorNanoUsd / 7),
     );
     expect(economics.failureOverheadPerDeliveredRunNanoUsd).toBeGreaterThan(0);
   });

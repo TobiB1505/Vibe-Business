@@ -54,7 +54,7 @@ export type ReviewClassification = (typeof REVIEW_CLASSIFICATIONS)[number];
  * stored, so nothing can be reinterpreted under rules it was not decided by.
  * The version exists so a displayed recommendation can be traced to a policy.
  */
-export const REVIEW_CLASSIFICATION_VERSION = "review-classification-v1" as const;
+export const REVIEW_CLASSIFICATION_VERSION = "review-classification-v2" as const;
 
 /**
  * Files whose contents can only reach rendered output.
@@ -100,6 +100,16 @@ export type ClassifyReviewInput = {
   surface: ResolvedExecutionSurface | null;
   /** Evidence-derived scopes, for the explanation rather than the decision. */
   requirement: ExecutionSurfaceRequirement | null;
+  /**
+   * Paths a structural proof cleared: their non-metadata program text is
+   * byte-identical between base and head, so nothing that can reach the DOM
+   * changed (`render-impact.ts`).
+   *
+   * Absent or empty means **not proven** — never "proven visible". The path
+   * rule below is what decides in that case, exactly as it did before this
+   * input existed.
+   */
+  provenNonRendering?: readonly string[];
 };
 
 export type ReviewClassificationResult = {
@@ -119,6 +129,14 @@ export type ReviewClassificationResult = {
   routes: readonly string[];
   /** Evidence-derived scopes carried through, for display. */
   scopes: readonly string[];
+  /**
+   * Paths the path rule called visual and a structural proof then cleared.
+   * Sorted, and always a subset of what `visualPaths` would otherwise hold.
+   *
+   * Carried so the panel can say *why* a page file did not earn a screenshot,
+   * rather than leaving a reader to wonder whether the classifier missed it.
+   */
+  downgradedPaths: readonly string[];
 };
 
 /** Every route in the resolved surface, public and authenticated alike. */
@@ -149,21 +167,42 @@ function isVisual(path: string, routeSources: ReadonlySet<string>): boolean {
  * attention; recommending a screenshot comparison for something invisible
  * produces two identical images and the false impression that the change was
  * looked at.
+ *
+ * ## Why the proof can only ever subtract
+ *
+ * `provenNonRendering` is consulted **after** `isVisual` has already said yes,
+ * and nowhere else. So a proof can move a path from visual to code and can
+ * never move one the other way — that is a property of where the check sits,
+ * not a rule anyone has to remember. `touchedRoutes` derives from the surviving
+ * `visualPaths`, so a downgraded layout correctly stops naming a route too.
  */
 export function classifyReview(input: ClassifyReviewInput): ReviewClassificationResult {
   const routes = routesOf(input.surface);
   const routeSources = new Set(routes.map((route) => route.sourcePath));
+  const proven = new Set(input.provenNonRendering ?? []);
 
   const visualPaths: string[] = [];
   const codePaths: string[] = [];
+  const downgradedPaths: string[] = [];
 
   for (const path of input.changedPaths) {
-    if (isVisual(path, routeSources)) visualPaths.push(path);
-    else codePaths.push(path);
+    if (!isVisual(path, routeSources)) {
+      codePaths.push(path);
+      continue;
+    }
+
+    if (proven.has(path)) {
+      downgradedPaths.push(path);
+      codePaths.push(path);
+      continue;
+    }
+
+    visualPaths.push(path);
   }
 
   visualPaths.sort();
   codePaths.sort();
+  downgradedPaths.sort();
 
   const touchedRoutes = [
     ...new Set(
@@ -185,8 +224,23 @@ export function classifyReview(input: ClassifyReviewInput): ReviewClassification
     codePaths,
     routes: touchedRoutes,
     scopes: input.requirement?.scopes ?? [],
+    downgradedPaths,
   };
 }
+
+/**
+ * Why a page file did not earn a screenshot.
+ *
+ * Deliberately says what *did* change rather than implying nothing did.
+ * `metadata.title` really does render — in the browser tab, and on other
+ * people's sites through Open Graph. What is true is narrower and is exactly
+ * the point: `public_visual_review_v1` photographs the page, not the chrome, so
+ * a screenshot is the wrong instrument here and a diff is the right one.
+ */
+export const REVIEW_DOWNGRADE_NOTE =
+  "Some changed page files only alter page metadata — the title, description and " +
+  "search-engine directives. What a visitor sees on the page is unchanged, so a " +
+  "before/after screenshot would compare two identical images.";
 
 /** Vibe's own words for the panel. Never a model's. */
 export const REVIEW_CLASSIFICATION_LABELS: Record<ReviewClassification, string> = {

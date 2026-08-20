@@ -55,8 +55,12 @@ describe("PART I — the named scenario sets match the sprint's own specificatio
     expect(ALL_STRESS_SCENARIOS).toHaveLength(14);
   });
 
-  it("the historical failure rate baseline used by the isolated inflation axes is 5/11", () => {
-    expect(HISTORICAL_FAILURE_RATE).toBeCloseTo(5 / 11, 10);
+  it("the historical failure rate baseline used by the isolated inflation axes is 5/12", () => {
+    // 5/11 until Sprint 0053; run #9 delivered, so the denominator moved. The
+    // baseline is derived from the dataset rather than pinned as a constant,
+    // which is why adding a run updates it here instead of leaving a stale
+    // number quietly in the stress table.
+    expect(HISTORICAL_FAILURE_RATE).toBeCloseTo(5 / 12, 10);
   });
 });
 

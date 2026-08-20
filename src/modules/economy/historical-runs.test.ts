@@ -5,17 +5,21 @@ import { HISTORICAL_CLASSIFICATIONS, HISTORICAL_RUNS } from "./historical-runs";
  * Sprint 0052, PART D — pins the historical reconstruction so a future
  * change to the classifier or the evidence-surface mapping shows up as a
  * failing test here, not as a silently different table in a document.
+ *
+ * Sprint 0053 added run #9. Adding a run is deliberately mechanical and
+ * deliberately pinned twice: once in the module, once here, so a transcription
+ * slip fails a test instead of quietly repricing a tier.
  */
 
-describe("the six historical runs reconstruct as documented", () => {
-  it("has exactly six runs, #3 through #8, in creation order", () => {
-    expect(HISTORICAL_RUNS.map((r) => r.run)).toEqual([3, 4, 5, 6, 7, 8]);
+describe("the historical runs reconstruct as documented", () => {
+  it("has exactly seven runs, #3 through #9, in creation order", () => {
+    expect(HISTORICAL_RUNS.map((r) => r.run)).toEqual([3, 4, 5, 6, 7, 8, 9]);
     const createdAt = HISTORICAL_RUNS.map((r) => Date.parse(r.createdAt));
     expect([...createdAt].sort((a, b) => a - b)).toEqual(createdAt);
   });
 
-  it("runs #3-6 all cite the same live.seo.robots_meta_missing evidence family", () => {
-    for (const run of HISTORICAL_RUNS.filter((r) => [3, 4, 5, 6].includes(r.run))) {
+  it("runs #3-6 and #9 all cite the same live.seo.robots_meta_missing evidence family", () => {
+    for (const run of HISTORICAL_RUNS.filter((r) => [3, 4, 5, 6, 9].includes(r.run))) {
       expect(run.evidenceIds).toEqual(["live.seo.robots_meta_missing"]);
     }
   });
@@ -36,7 +40,7 @@ describe("the six historical runs reconstruct as documented", () => {
     }
   });
 
-  it("all six runs share riskClass=moderate and changeKind=product_change — zero variance on those axes", () => {
+  it("all seven runs share riskClass=moderate and changeKind=product_change — zero variance on those axes", () => {
     for (const run of HISTORICAL_RUNS) {
       expect(run.riskClass, `run #${run.run}`).toBe("moderate");
       expect(run.changeKind, `run #${run.run}`).toBe("product_change");
@@ -45,8 +49,8 @@ describe("the six historical runs reconstruct as documented", () => {
 });
 
 describe("v1 classification of the historical runs", () => {
-  it("runs #3-7 (one named surface: seo_metadata) classify as standard", () => {
-    for (const run of HISTORICAL_CLASSIFICATIONS.filter((r) => r.run >= 3 && r.run <= 7)) {
+  it("runs #3-7 and #9 (one named surface: seo_metadata) classify as standard", () => {
+    for (const run of HISTORICAL_CLASSIFICATIONS.filter((r) => r.run !== 8)) {
       expect(run.pricingClass, `run #${run.run}`).toBe("standard");
       expect(run.surfaces, `run #${run.run}`).toEqual(["seo_metadata"]);
     }
@@ -84,6 +88,7 @@ describe("economic cost figures match ECONOMY_MODEL.md's PART I table exactly", 
     6: { floor: 173_900_000, upper: 224_500_000 },
     7: { floor: 282_100_000, upper: 328_900_000 },
     8: { floor: 254_100_000, upper: 301_700_000 },
+    9: { floor: 347_000_000, upper: 395_400_000 },
   };
 
   it("matches every run's floor and upper-bound nanodollar figure", () => {
@@ -93,7 +98,14 @@ describe("economic cost figures match ECONOMY_MODEL.md's PART I table exactly", 
     }
   });
 
-  it("no historical run carries a point-estimate cost — Sprint 0051's fix applies only forward", () => {
+  /**
+   * Still true after run #9, and for a reason worth stating rather than
+   * inheriting: run #9 ran *after* Sprint 0051's fix deployed and its
+   * validation sandbox still recorded no active CPU. The absence of a point
+   * estimate here is not a historical artefact — it is live evidence that the
+   * fix did not work in production (Sprint 0053, Defect 3).
+   */
+  it("no historical run carries a point-estimate cost — including run #9, which ran after the fix", () => {
     for (const run of HISTORICAL_RUNS) {
       expect(run.costIsPointEstimate, `run #${run.run}`).toBe(false);
     }
@@ -107,6 +119,7 @@ describe("economic cost figures match ECONOMY_MODEL.md's PART I table exactly", 
       6: 144_400_000,
       7: 251_500_000,
       8: 214_400_000,
+      9: 311_505_500,
     };
     for (const run of HISTORICAL_RUNS) {
       expect(run.providerCostNanoUsd, `run #${run.run}`).toBe(expectedProviderCost[run.run]);
@@ -117,5 +130,61 @@ describe("economic cost figures match ECONOMY_MODEL.md's PART I table exactly", 
     for (const run of HISTORICAL_RUNS) {
       expect(run.economicCostFloorNanoUsd - run.providerCostNanoUsd, `run #${run.run}`).toBeGreaterThanOrEqual(0);
     }
+  });
+});
+
+/**
+ * The same step, twice, across a changed repository (Sprint 0053).
+ *
+ * This is the one comparison the n=6 dataset could not make. Runs #6 and #9
+ * share a byte-identical `step_key` on a real persisted plan step, classify
+ * identically, and differ only in the repository they ran against — which had
+ * gained three files the step genuinely needed. The cost more than doubled.
+ *
+ * Pinned because it is the empirical basis for Sprint 0053's repository-context
+ * metric, and because a future dataset edit that broke the pairing would
+ * silently remove the evidence for it.
+ */
+describe("run #9 repeats run #6's step against a grown repository", () => {
+  const run6 = HISTORICAL_RUNS.find((r) => r.run === 6)!;
+  const run9 = HISTORICAL_RUNS.find((r) => r.run === 9)!;
+
+  it("is the same step, at the same pricing class, with the same evidence", () => {
+    expect(run9.title).toBe(run6.title);
+    expect(run9.evidenceIds).toEqual(run6.evidenceIds);
+    expect(run9.changeKind).toBe(run6.changeKind);
+    expect(run9.riskClass).toBe(run6.riskClass);
+
+    const classOf = (run: number) =>
+      HISTORICAL_CLASSIFICATIONS.find((c) => c.run === run)?.pricingClass;
+    expect(classOf(9)).toBe(classOf(6));
+  });
+
+  it("cost more than twice as much anyway", () => {
+    const floorRatio = run9.economicCostFloorNanoUsd / run6.economicCostFloorNanoUsd;
+    const modelRatio = run9.providerCostNanoUsd / run6.providerCostNanoUsd;
+
+    // 2.00x at the floor, 2.16x in model spend. Asserted as bounds rather
+    // than exact figures: the point is the magnitude, and pinning six decimal
+    // places would make this test about arithmetic instead. The floor ratio is
+    // the *lower* of the two because infrastructure cost scales with wall
+    // clock, which grew less than the context re-reading did.
+    expect(floorRatio).toBeGreaterThan(1.9);
+    expect(modelRatio).toBeGreaterThan(2.1);
+  });
+
+  /**
+   * The property Sprint 0052 proved and this does *not* contradict. A price
+   * quoted before execution reads `riskClass`, `changeKind` and `evidenceIds`
+   * and nothing else, so both runs quote identically — which is exactly why
+   * the cost variance matters commercially rather than being self-correcting.
+   */
+  it("would have been quoted the same price both times", () => {
+    const c6 = HISTORICAL_CLASSIFICATIONS.find((c) => c.run === 6)!;
+    const c9 = HISTORICAL_CLASSIFICATIONS.find((c) => c.run === 9)!;
+
+    expect(c9.pricingClass).toBe(c6.pricingClass);
+    expect(c9.surfaces).toEqual(c6.surfaces);
+    expect(c9.reason).toBe(c6.reason);
   });
 });

@@ -45,6 +45,7 @@
     "react-dom": "19.2.8",
     "server-only": "0.0.1",
     "stripe": "22.5.0",
+    "typescript": "^5",
     "workflow": "4.8.2",
     "zod": "4.4.3"
   },
@@ -59,7 +60,6 @@
     "eslint-config-next": "16.3.0",
     "supabase": "2.111.0",
     "tailwindcss": "^4",
-    "typescript": "^5",
     "vitest": "4.1.10"
   }
 }

@@ -242,6 +242,61 @@ describe("live product", () => {
   });
 });
 
+/**
+ * How large the thing being compressed was (Sprint 0053).
+ *
+ * Production run `5ea8a9a0` re-ran run #6's step and cost 2.16× as much with no
+ * change to the task — the repository had grown underneath it. Nothing stored
+ * could express that, because `candidatesRendered` saturates at
+ * `BRIEF_BUDGET.maxCandidates` and every other context metric measures what
+ * Vibe sent rather than what it was selecting from.
+ */
+describe("repository scale", () => {
+  it("reads the pinned snapshot's own counts, re-deriving nothing", () => {
+    const snapshot = robotsSnapshot();
+    const scale = compile().repositoryScale;
+
+    expect(scale.treeEntries).toBe(snapshot.metrics.treeEntriesConsidered);
+    expect(scale.filesAnalyzed).toBe(snapshot.metrics.filesFetched);
+    expect(scale.bytesAnalyzed).toBe(snapshot.metrics.bytesFetched);
+    expect(scale.routesDetected).toBe(snapshot.routes.routes.length);
+    expect(scale.surfacesDetected).toBe(snapshot.businessSurfaces.length);
+  });
+
+  /**
+   * The de-saturating number. `candidatesAvailable` counts what the compiler
+   * had; `fileCandidates` counts what survived the cap. Their difference is
+   * exactly `truncated.candidatesOmitted`, and asserting the identity is what
+   * stops the two drifting into disagreement.
+   */
+  it("counts every candidate the cap discarded", () => {
+    const brief = compile();
+
+    expect(brief.repositoryScale.candidatesAvailable).toBe(
+      brief.fileCandidates.length + brief.truncated.candidatesOmitted,
+    );
+    expect(brief.repositoryScale.candidatesAvailable).toBeGreaterThan(0);
+  });
+
+  /**
+   * A stale snapshot describes a *different tree*. Reporting its size as this
+   * run's would be exactly the confidently-wrong number the freshness gate
+   * exists to refuse — and null, not zero, is how "not measured" is said.
+   */
+  it("measures nothing when the snapshot describes another commit", () => {
+    const scale = compile(FIXTURE_OTHER_SHA).repositoryScale;
+
+    expect(scale.treeEntries).toBeNull();
+    expect(scale.filesAnalyzed).toBeNull();
+    expect(scale.bytesAnalyzed).toBeNull();
+    expect(scale.routesDetected).toBeNull();
+    expect(scale.surfacesDetected).toBeNull();
+    // Zero is the *true* count here: a withheld brief genuinely offered
+    // nothing, which is a measurement rather than the absence of one.
+    expect(scale.candidatesAvailable).toBe(0);
+  });
+});
+
 describe("determinism", () => {
   it("compiles byte-identical briefs from identical inputs", () => {
     expect(JSON.stringify(compile())).toBe(JSON.stringify(compile()));

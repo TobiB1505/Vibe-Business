@@ -220,6 +220,57 @@ export type BriefSurface = {
   authenticatedPagesIncluded: number;
 };
 
+/**
+ * How large the thing being compressed was (Sprint 0053).
+ *
+ * Every other number on this brief measures **what Vibe sent** — a bounded,
+ * Vibe-controlled compression. None of them measures **how big the repository
+ * being compressed was**, and run #9 showed why that matters: the same Action
+ * Step, at the same pricing class, cost 2.16× what its previous pass cost,
+ * because the repository had grown three relevant files underneath it.
+ * `candidatesRendered` went 6 → 12 — against a cap of exactly 12, so the metric
+ * was saturated and could not tell a repository with twelve relevant files from
+ * one with fifty.
+ *
+ * These are read straight off the pinned snapshot's own `AnalysisMetrics` and
+ * route table. Nothing is re-derived and nothing is fetched: the analyzer
+ * already counted all of it, and this carries the counts onto the run so that
+ * repository shape and run cost are joinable in one query rather than by
+ * walking back to the snapshot.
+ *
+ * ## Why every field is nullable, and why null is never zero
+ *
+ * A run whose snapshot is stale or absent has no size *at the commit it ran
+ * against*. The snapshot describes a different tree, and reporting its size as
+ * this run's would be the confidently-wrong number the freshness gate exists to
+ * refuse. Null says "not measured"; zero would say "an empty repository".
+ *
+ * ## What this is not
+ *
+ * Not a copy of the repository, and not a step toward one (Rule 26). Six
+ * integers derived from intelligence Vibe already stores — no path, no name, no
+ * content.
+ */
+export type BriefRepositoryScale = {
+  /** Tree entries the analyzer considered at this commit. */
+  treeEntries: number | null;
+  /** Files whose contents it actually fetched. */
+  filesAnalyzed: number | null;
+  /** Bytes of those files. The analyzer's own read budget, not the tree's size. */
+  bytesAnalyzed: number | null;
+  /** Routes the analyzer resolved. The closest thing to "how much product". */
+  routesDetected: number | null;
+  /** Business surfaces it recognised. */
+  surfacesDetected: number | null;
+  /**
+   * Candidates the compiler had *before* `BRIEF_BUDGET.maxCandidates` cut the
+   * list. The one number that de-saturates `candidatesRendered`: it makes "the
+   * brief was clipped" visible instead of indistinguishable from "the
+   * repository happened to offer exactly twelve".
+   */
+  candidatesAvailable: number;
+};
+
 export type ExecutionBrief = {
   briefVersion: string;
 
@@ -244,6 +295,8 @@ export type ExecutionBrief = {
   freshness: BriefFreshness;
   truncated: BriefTruncation;
   surface: BriefSurface;
+  /** Observability only — never rendered into the prompt. */
+  repositoryScale: BriefRepositoryScale;
 };
 
 /* ---------------------------------------------------------------------------

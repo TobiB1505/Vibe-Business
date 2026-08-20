@@ -16,6 +16,46 @@ authorizes charging anyone.
 
 ---
 
+## Addendum — Sprint 0053, 2026-08-20
+
+**n is now 7.** Run #9 delivered after this document was written, and is in
+`economy/historical-runs.ts` and `ECONOMY_MODEL.md`'s PART I table.
+
+**Nothing below was re-run, deliberately.** Every margin, mean and stress
+figure in this document is a computation over the **six** runs available on the
+day, and is left stated that way. Restating them as seven-run figures without
+re-running them would be a fabrication; re-running them on one extra
+observation would be motion, not evidence. One run does not move a checkpoint —
+§13's own checkpoints are 25, 50 and 100.
+
+**Three things this document should say differently, and now does:**
+
+1. **The failure rate is 5/12 = 41.7%**, not 5/11 = 45.5%. Run #9 delivered;
+   no failure was reclassified. `economy/failure-economics.ts` derives this
+   rather than storing it, so §8's conclusion — every simulated card clears its
+   own failure-adjusted margin — holds a fortiori at the lower rate.
+
+2. **`execution_origin = 'planner'` does not mean production-rate.** All **12**
+   runs still carry `non_production_economics = true`, set by the internal
+   dogfood allowlist path (`coding-agent/authorization.ts`). Run #9 was
+   planner-originated and looks like customer traffic in every column except
+   that flag. §12's "no production-rate data exists anywhere" is unchanged, and
+   is worth re-reading with run #9 in mind.
+
+3. **A new kind of doubt, not a resolved one.** Run #9 re-ran run #6's Action
+   Step — same `step_key`, same pricing class, same quote — and cost **2.00× at
+   the floor, 2.16× in model spend**, because the repository had grown three
+   relevant files underneath it. §10's price-stability proof still holds and is
+   still correct; that is exactly what makes this a finding. The same price was
+   charged for twice the cost, and the quote could not have known. See
+   `ECONOMY_MODEL.md` → "Same step, same price, 2× the cost".
+
+**The verdict is unchanged: NOT READY TO IMPLEMENT.** `small` still has one
+observation, `complex` still has zero, and the recommendation below stands
+exactly as written.
+
+---
+
 ## 1. The Product Unit
 
 Vibe does not sell tokens, model time, provider calls, tool calls, sandbox
@@ -402,7 +442,9 @@ Specifically:
 ## Limitations of the n=6 dataset
 
 Every number in this document inherits these, stated once rather than
-re-qualified in every section above:
+re-qualified in every section above. As of Sprint 0053 the dataset is n=7; the
+list below describes the six runs every figure above was computed over, and
+item 7 records what the seventh added.
 
 1. Six delivered runs, five failed attempts, eleven total — a small sample for any rate, ratio, or standard deviation.
 2. `complex` (0 runs) and `small` (1 run) are the two tiers this document can say the least about; `standard` (5 runs) is comparatively solid.
@@ -410,6 +452,8 @@ re-qualified in every section above:
 4. Only three distinct evidence families appear across all six runs (`live.seo.robots_meta_missing`, `live.seo.canonical_missing`, `live.conversion.primary_cta`) — the real diversity of future customer tasks is unknown.
 5. Validation active CPU is unmeasured for all six historical runs (Sprint 0051's fix applies only forward), so every margin above uses a floor/upper-bound pair rather than a single point estimate.
 6. `riskClass` and `changeKind` show zero variance across the dataset (all `moderate`/`product_change`) — the escalation rules for `high`/`prohibited` risk and non-mutating steps are entirely untested against real data.
+7. **Added by run #9 (Sprint 0053):** cost is a function of **repository state**, not only of the task, and this dataset measures repository state for exactly zero of its runs. The same step at the same class cost 2× more against a repository that had grown three files. `agent_execution_runs` now records `repo_tree_entries`, `repo_files_analyzed`, `repo_bytes_analyzed`, `repo_routes_detected`, `repo_surfaces_detected` and `context_candidates_available`, but every historical row is null — the columns did not exist when those runs happened. This is the largest *newly identified* gap between what this document assumes and what it can defend, and unlike the `complex`-tier gap it is one that more runs alone will not close unless the size is recorded alongside them.
+8. **`context_candidates_sent` is saturated** in the runs above. Run #9 sent 12 against `BRIEF_BUDGET.maxCandidates = 12`, so that column cannot distinguish a repository offering twelve relevant files from one offering fifty. Any reasoning in this document that treats it as a measure of task size is reasoning about a capped number.
 
 ## Recalibration checkpoints (PART Q)
 
@@ -421,6 +465,7 @@ permanently provisional:
 - **After 50 delivered runs**: re-run `computeHistoricalFailureEconomics` — the 45.5% historical failure rate is dogfood/benchmark behaviour; production failure behaviour (different task diversity, different repositories) could differ materially in either direction.
 - **After 100 delivered runs**: re-run the full stress-test and margin-target evaluation against the *actual* observed class distribution, AI pricing (Sonnet's scheduled rise will have taken effect by then), and infrastructure rate, rather than this document's simulated stress points.
 - **On any `complex`-tier run**: treat it as a standing item regardless of count — the first real complex-tier cost observation is the single most valuable data point this pricing model is currently missing, and its cost should be compared against the assumed 1.5–2.5× standard-tier premium the three models embed.
+- **On repository-context size, from the first run that records it**: correlate model spend against `repo_routes_detected` / `repo_tree_entries` / `context_candidates_available` using `economy/cost-drivers.ts`. This is the driver run #9 identified and the one input this pricing model currently has *no* observations of. Two specific questions it answers and nothing else can: does a Credit's cost scale with repository size within a class (which would mean a flat per-class price silently cross-subsidises large repositories), and how often is the brief clipped at `maxCandidates` (which would mean the compiler's own cap, not the task, is setting the context bill). Repository size is a **correlate of the model share, never a fourth cost component** — see `cost-drivers.ts`'s own note on why a "50% Repository Context" slice would double-count model spend.
 - **On any material rate-card change upstream**: `ai/pricing.ts`'s scheduled Sonnet increase (2026-09-01, +50%) or any founder-attested infrastructure rate change should trigger an immediate re-run of §9's stress table — this document already shows AI inflation is the dominant margin risk, so this is not a hypothetical trigger.
 
 ---

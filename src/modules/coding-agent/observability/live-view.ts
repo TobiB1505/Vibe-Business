@@ -89,7 +89,18 @@ export type AgentRunMetrics = {
   completion: LiveRunRow["completion"];
 };
 
-export type ValidationState = "not_started" | "queued" | "running" | "passed" | "failed";
+/*
+ * Re-exported from `./poll`, which holds no server dependency (Sprint 0053).
+ *
+ * The predicate is needed by the client component that owns the run page's
+ * poll, and this module is `server-only` — importing it from a client
+ * component pulls Supabase into the browser bundle and fails the build. The
+ * re-export keeps one import path for server-side callers without making the
+ * client reach through a server module to get a pure function.
+ */
+export { validationStillSettling } from "./poll";
+export type { ValidationState } from "./poll";
+import type { ValidationState } from "./poll";
 
 export type AgentExecutionLiveModel = {
   operation: OperationView & { agentExecutionRunId: string | null };

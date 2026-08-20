@@ -949,6 +949,22 @@ export async function startAgentStep(
       contextFactsSent: instruction.briefed ? instruction.context.factsRendered : 0,
       contextCandidatesSent: instruction.briefed ? instruction.context.candidatesRendered : 0,
       /*
+       * How large the repository being compressed was (Sprint 0053).
+       *
+       * Recorded unconditionally on `instruction.briefed`, unlike the three
+       * lines above it. Those measure what reached the prompt, so a withheld
+       * brief genuinely sent zero bytes. This measures the *tree*, which was
+       * that size whether or not Vibe chose to describe it — and the compiler
+       * has already nulled every field when the snapshot was not fresh, which
+       * is the case where the size is genuinely unknown for this commit.
+       */
+      contextCandidatesAvailable: brief.repositoryScale.candidatesAvailable,
+      repoTreeEntries: brief.repositoryScale.treeEntries,
+      repoFilesAnalyzed: brief.repositoryScale.filesAnalyzed,
+      repoBytesAnalyzed: brief.repositoryScale.bytesAnalyzed,
+      repoRoutesDetected: brief.repositoryScale.routesDetected,
+      repoSurfacesDetected: brief.repositoryScale.surfacesDetected,
+      /*
        * What the step's own cited evidence said its surface was (Sprint 0044).
        *
        * Recorded even when nothing resolved, because an empty scope list is the
@@ -977,6 +993,11 @@ export async function startAgentStep(
         candidates: instruction.context.candidatesRendered,
         factsOmitted: instruction.context.factsOmitted,
         candidatesOmitted: instruction.context.candidatesOmitted,
+        // What the compiler was selecting from, beside what it selected. The
+        // pair is the point: 12 of 12 and 12 of 40 cost very different money.
+        candidatesAvailable: brief.repositoryScale.candidatesAvailable,
+        repositoryRoutes: brief.repositoryScale.routesDetected,
+        repositoryTreeEntries: brief.repositoryScale.treeEntries,
       },
     );
 

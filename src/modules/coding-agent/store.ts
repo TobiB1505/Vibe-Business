@@ -87,6 +87,20 @@ export type StoredAgentExecutionRun = {
   contextBytes: number | null;
   contextFactsSent: number | null;
   contextCandidatesSent: number | null;
+  /**
+   * How large the repository the brief was selected *from* was (Sprint 0053).
+   *
+   * `contextCandidatesSent` saturates at `BRIEF_BUDGET.maxCandidates`, so it
+   * cannot separate a repository with twelve relevant files from one with
+   * fifty. These do. Null means no fresh snapshot described this run's commit —
+   * never zero, which would claim an empty repository.
+   */
+  contextCandidatesAvailable: number | null;
+  repoTreeEntries: number | null;
+  repoFilesAnalyzed: number | null;
+  repoBytesAnalyzed: number | null;
+  repoRoutesDetected: number | null;
+  repoSurfacesDetected: number | null;
   contextCandidatesRead: number | null;
   uniqueFilesRead: number | null;
   repeatedFileReads: number | null;
@@ -177,6 +191,12 @@ type RunRow = {
   context_bytes: number | null;
   context_facts_sent: number | null;
   context_candidates_sent: number | null;
+  context_candidates_available: number | null;
+  repo_tree_entries: number | null;
+  repo_files_analyzed: number | null;
+  repo_bytes_analyzed: number | null;
+  repo_routes_detected: number | null;
+  repo_surfaces_detected: number | null;
   context_candidates_read: number | null;
   unique_files_read: number | null;
   repeated_file_reads: number | null;
@@ -217,6 +237,8 @@ const RUN_COLUMNS =
   "failure_code, assistant_messages, sdk_loop_iterations, tool_calls_allowed, tool_calls_denied, files_read, check_runs, " +
   "repair_attempts, observed_path_count, changed_file_count, changed_bytes, duration_ms, provider_session_id, " +
   "context_brief_version, context_freshness, context_bytes, context_facts_sent, context_candidates_sent, " +
+  "context_candidates_available, repo_tree_entries, repo_files_analyzed, repo_bytes_analyzed, " +
+  "repo_routes_detected, repo_surfaces_detected, " +
   "context_candidates_read, unique_files_read, repeated_file_reads, files_read_outside_context, " +
   "verification_mode, verification_plan_version, verification_commands, verification_refusals, " +
   "verification_ms, time_to_first_edit_ms, time_to_last_edit_ms, " +
@@ -264,6 +286,12 @@ function mapRun(row: RunRow): StoredAgentExecutionRun {
     contextBytes: row.context_bytes,
     contextFactsSent: row.context_facts_sent,
     contextCandidatesSent: row.context_candidates_sent,
+    contextCandidatesAvailable: row.context_candidates_available,
+    repoTreeEntries: row.repo_tree_entries,
+    repoFilesAnalyzed: row.repo_files_analyzed,
+    repoBytesAnalyzed: row.repo_bytes_analyzed,
+    repoRoutesDetected: row.repo_routes_detected,
+    repoSurfacesDetected: row.repo_surfaces_detected,
     contextCandidatesRead: row.context_candidates_read,
     uniqueFilesRead: row.unique_files_read,
     repeatedFileReads: row.repeated_file_reads,
@@ -512,6 +540,23 @@ export type AgentRunObservations = {
   contextFactsSent?: number;
   contextCandidatesSent?: number;
   contextCandidatesRead?: number;
+
+  /*
+   * How large the repository being compressed was (Sprint 0053).
+   *
+   * Separate from the context_* fields above on purpose: those measure what
+   * Vibe *sent*, and this measures what it was selecting *from*. Run #9 cost
+   * 2.16× what the same step cost in run #6 with no task change at all, and no
+   * stored number could express why. Nullable throughout — a run without a
+   * fresh snapshot has no size at its own commit, and null says so where zero
+   * would claim an empty repository.
+   */
+  contextCandidatesAvailable?: number | null;
+  repoTreeEntries?: number | null;
+  repoFilesAnalyzed?: number | null;
+  repoBytesAnalyzed?: number | null;
+  repoRoutesDetected?: number | null;
+  repoSurfacesDetected?: number | null;
   uniqueFilesRead?: number;
   repeatedFileReads?: number;
   filesReadOutsideContext?: number;
@@ -585,6 +630,12 @@ export async function recordAgentRunObservations(
   set("context_facts_sent", observations.contextFactsSent);
   set("context_candidates_sent", observations.contextCandidatesSent);
   set("context_candidates_read", observations.contextCandidatesRead);
+  set("context_candidates_available", observations.contextCandidatesAvailable);
+  set("repo_tree_entries", observations.repoTreeEntries);
+  set("repo_files_analyzed", observations.repoFilesAnalyzed);
+  set("repo_bytes_analyzed", observations.repoBytesAnalyzed);
+  set("repo_routes_detected", observations.repoRoutesDetected);
+  set("repo_surfaces_detected", observations.repoSurfacesDetected);
   set("unique_files_read", observations.uniqueFilesRead);
   set("repeated_file_reads", observations.repeatedFileReads);
   set("files_read_outside_context", observations.filesReadOutsideContext);

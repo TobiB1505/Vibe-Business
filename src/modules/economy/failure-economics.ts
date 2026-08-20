@@ -21,9 +21,13 @@ import { HISTORICAL_RUNS } from "./historical-runs";
  * the prose being trusted.
  *
  * **The direct query found five failed runs, not three or two:**
- * `agent_execution_runs` holds exactly 5 `failed` rows and 6 `succeeded` rows
+ * `agent_execution_runs` held exactly 5 `failed` rows and 6 `succeeded` rows
  * — 11 total attempts, confirmed by `select status, count(*) ... group by
- * status`. Two of the five failed runs recorded **zero** measurable cost —
+ * status`. Sprint 0053 re-ran the same query after run #9 and found **5
+ * failed, 7 succeeded — 12 attempts**, so the rate is now 5/12 (41.7%) rather
+ * than 5/11 (45.5%). Nothing here is hardcoded to either figure: every count
+ * derives from `HISTORICAL_RUNS.length` and `FAILED_ATTEMPT_COSTS`, so adding
+ * a delivered run moves the rate automatically and the tests catch the move. Two of the five failed runs recorded **zero** measurable cost —
  * no sandbox wall duration, no billed model call — because they failed at
  * provisioning, before anything billable happened. That is why earlier
  * sprints' prose only ever named three: the other two are real attempts that
