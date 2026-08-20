@@ -67,6 +67,15 @@ beforeEach(() => {
   // A session that already carries the requested lifetime: the ordinary case,
   // where nothing needs extending.
   listSessions.mockResolvedValue({ sessions: [{ status: "running", timeout: 600_000 }] });
+  // Since Sprint 0053 every `snapshot()` re-reads usage first, so tests about
+  // something else still need a record to read. Individual tests override it.
+  get.mockResolvedValue({
+    name: "vibe-validate-abc",
+    status: "running",
+    totalActiveCpuDurationMs: 1,
+    totalIngressBytes: 1,
+    totalEgressBytes: 1,
+  });
   create.mockResolvedValue({
     name: "vibe-validate-abc",
     runtime: "node24",
@@ -507,6 +516,182 @@ describe("capturing an artifact must not cost the ledger (Sprint 10B §5)", () =
 
     expect(usage.activeCpuDurationMs).toBeNull();
     expect(usage.networkEgressBytes).toBeNull();
+  });
+
+  /**
+   * Sprint 0053. The Sprint 0051 fix above did not work in production.
+   *
+   * The deployment carrying it went live at 15:00:59 on 2026-08-20. The
+   * validation sandbox row written sixteen minutes later still recorded
+   * `active_cpu_ms: null` — indistinguishable from every pre-fix row. The one
+   * difference between this call and `reconnect()`'s demonstrably working
+   * `Sandbox.get({ name, resume: false })` was *when* it ran: after
+   * `snapshot()` had already terminated the sandbox.
+   *
+   * So the order is now the contract, and it is asserted as an order rather
+   * than as an outcome — an outcome assertion passes on either ordering
+   * against a mock, which is precisely why the previous version of this file
+   * could not catch the defect.
+   */
+  it("reads usage while the sandbox is still alive, before the snapshot terminates it", async () => {
+    const calls: string[] = [];
+    create.mockResolvedValue({
+      name: "vibe-validate-abc",
+      runtime: "node24",
+      async snapshot() {
+        calls.push("snapshot");
+        return { snapshotId: "snap_4", sizeBytes: 10, expiresAt: null };
+      },
+      async stop() {
+        throw new Error("sandbox is no longer running");
+      },
+    });
+    get.mockImplementation(async () => {
+      calls.push("get");
+      return {
+        name: "vibe-validate-abc",
+        status: "running",
+        totalActiveCpuDurationMs: 61_366,
+        totalIngressBytes: 1000,
+        totalEgressBytes: 3_717_473,
+      };
+    });
+
+    const { createVercelSandboxProvider } = await import("./provider");
+    const sandbox = await createVercelSandboxProvider().create({
+      name: "vibe-validate-abc",
+      source: { kind: "git", repositoryUrl: "https://github.com/a/b.git", revision: "abc", credential: null },
+      networkPolicy: { mode: "deny_all" },
+      timeoutMs: 1000,
+      env: {},
+    });
+
+    await sandbox.snapshot({ expirationMs: 60_000 });
+
+    expect(calls).toEqual(["get", "snapshot"]);
+    expect((await sandbox.stop()).activeCpuDurationMs).toBe(61_366);
+  });
+
+  /**
+   * The hazard the reordering creates, and the reason the captured value is
+   * assigned only after the snapshot returns.
+   *
+   * `stop()` treats a recorded `terminalUsage` as proof the sandbox is already
+   * gone and refuses to call the provider again. Recording it before the
+   * snapshot would mean a *failed* snapshot left a live VM that nothing would
+   * ever stop — a leak lasting the sandbox's whole timeout, traded for one
+   * tidier line.
+   */
+  it("still stops the sandbox for real when the snapshot itself failed", async () => {
+    const stop = vi.fn(async () => ({
+      activeCpuDurationMs: 4242,
+      networkTransfer: { ingress: 1, egress: 2 },
+    }));
+    create.mockResolvedValue({
+      name: "vibe-validate-abc",
+      runtime: "node24",
+      async snapshot() {
+        throw new Error("snapshot rejected");
+      },
+      stop,
+    });
+
+    const { createVercelSandboxProvider } = await import("./provider");
+    const sandbox = await createVercelSandboxProvider().create({
+      name: "vibe-validate-abc",
+      source: { kind: "git", repositoryUrl: "https://github.com/a/b.git", revision: "abc", credential: null },
+      networkPolicy: { mode: "deny_all" },
+      timeoutMs: 1000,
+      env: {},
+    });
+
+    await expect(sandbox.snapshot({ expirationMs: 60_000 })).rejects.toThrow();
+
+    const usage = await sandbox.stop();
+    expect(stop).toHaveBeenCalledTimes(1);
+    expect(usage.activeCpuDurationMs).toBe(4242);
+  });
+
+  /**
+   * The silent `catch` is what hid the defect for an entire sprint: the read
+   * failed in production and nothing anywhere said so. Both halves are logged
+   * now — a failed call and a call that succeeded but carried no number are
+   * different bugs, and last sprint they were indistinguishable.
+   */
+  it("says out loud when the usage re-read fails, naming no error message", async () => {
+    const logged: unknown[][] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((...args) => {
+      logged.push(args);
+    });
+
+    create.mockResolvedValue({
+      name: "vibe-validate-abc",
+      runtime: "node24",
+      async snapshot() {
+        return { snapshotId: "snap_5", sizeBytes: 10, expiresAt: null };
+      },
+      async stop() {
+        throw new Error("sandbox is no longer running");
+      },
+    });
+    get.mockRejectedValue(
+      Object.assign(new Error("token=never-log-this"), { name: "APIError" }),
+    );
+
+    const { createVercelSandboxProvider } = await import("./provider");
+    const sandbox = await createVercelSandboxProvider().create({
+      name: "vibe-validate-abc",
+      source: { kind: "git", repositoryUrl: "https://github.com/a/b.git", revision: "abc", credential: null },
+      networkPolicy: { mode: "deny_all" },
+      timeoutMs: 1000,
+      env: {},
+    });
+
+    await sandbox.snapshot({ expirationMs: 60_000 });
+    spy.mockRestore();
+
+    const serialised = JSON.stringify(logged);
+    expect(serialised).toContain("the usage re-read failed");
+    expect(serialised).toContain("APIError");
+    // The name, never the message: a provider error carries request context
+    // and credential-bearing material.
+    expect(serialised).not.toContain("never-log-this");
+  });
+
+  it("says out loud when the re-read succeeded but carried no Active CPU", async () => {
+    const logged: unknown[][] = [];
+    const spy = vi.spyOn(console, "error").mockImplementation((...args) => {
+      logged.push(args);
+    });
+
+    create.mockResolvedValue({
+      name: "vibe-validate-abc",
+      runtime: "node24",
+      async snapshot() {
+        return { snapshotId: "snap_6", sizeBytes: 10, expiresAt: null };
+      },
+      async stop() {
+        throw new Error("sandbox is no longer running");
+      },
+    });
+    // Exactly the production shape: the call works, the field is absent.
+    get.mockResolvedValue({ name: "vibe-validate-abc", status: "running" });
+
+    const { createVercelSandboxProvider } = await import("./provider");
+    const sandbox = await createVercelSandboxProvider().create({
+      name: "vibe-validate-abc",
+      source: { kind: "git", repositoryUrl: "https://github.com/a/b.git", revision: "abc", credential: null },
+      networkPolicy: { mode: "deny_all" },
+      timeoutMs: 1000,
+      env: {},
+    });
+
+    await sandbox.snapshot({ expirationMs: 60_000 });
+    spy.mockRestore();
+
+    expect(JSON.stringify(logged)).toContain("carried no Active CPU");
+    // Still null, never a guess derived from wall duration (§25).
+    expect((await sandbox.stop()).activeCpuDurationMs).toBeNull();
   });
 
   it("passes the explicit expiry through to the provider", async () => {

@@ -298,6 +298,12 @@ class VercelSandboxHandle implements SandboxHandle {
   }
 
   async snapshot(input: { expirationMs: number }): Promise<SandboxArtifact> {
+    // Before the snapshot, not after (Sprint 0053) — see `readTerminalUsage`.
+    // Every validation command has already run by this point, so the total is
+    // complete for accounting purposes; only the snapshot operation itself is
+    // excluded, and it costs no meaningful Active CPU.
+    const usage = await this.readTerminalUsage();
+
     let snapshot: Awaited<ReturnType<Sandbox["snapshot"]>>;
     try {
       // Explicit expiry, never the provider's 30-day default — an unbounded
@@ -311,7 +317,11 @@ class VercelSandboxHandle implements SandboxHandle {
       throw new SanitizedSandboxProviderError(error);
     }
 
-    this.terminalUsage = await this.readTerminalUsage();
+    // Recorded only once the sandbox is genuinely terminated. `stop()` reads
+    // this field to decide it must *not* call the provider again, and a
+    // snapshot that threw left the sandbox running — assigning it earlier
+    // would leak a live VM for the rest of its timeout.
+    this.terminalUsage = usage;
 
     return {
       snapshotId: snapshot.snapshotId,
@@ -321,11 +331,12 @@ class VercelSandboxHandle implements SandboxHandle {
   }
 
   /**
-   * What the sandbox measured, read fresh after termination (Sprint 0051).
+   * What the sandbox measured, read fresh from the provider (Sprint 0051,
+   * corrected in Sprint 0053).
    *
-   * ## The bug this replaces
+   * ## The original bug
    *
-   * The previous implementation read `this.sandbox.totalActiveCpuDurationMs`
+   * The first implementation read `this.sandbox.totalActiveCpuDurationMs`
    * immediately after `sandbox.snapshot()` — the SDK's own cached copy of the
    * sandbox record, held on the local `Sandbox` instance since it was
    * constructed. Reading the SDK's compiled source settles what refreshes that
@@ -343,30 +354,67 @@ class VercelSandboxHandle implements SandboxHandle {
    * validation rows in Vibe's own history recorded `active_cpu_ms: null` for
    * exactly this reason.
    *
-   * ## Why a fresh `Sandbox.get()` is the fix, not another local read
+   * ## Why a fresh `Sandbox.get()`, not another local read
    *
    * `stop()` cannot be called here — the code's own long-standing comment is
    * right that a snapshotted sandbox refuses a second `stop()`. But the API
    * document for `totalActiveCpuDurationMs` says "cumulative ... across all
    * sessions": it is server-side, sandbox-level state, independent of which
-   * local instance asks for it. A fresh `Sandbox.get({name, resume: false})`
-   * is a real round trip against that record, taken after termination, so it
-   * reflects the finished total rather than a stale local cache.
+   * local instance asks for it. A fresh `Sandbox.get({ name, resume: false })`
+   * is a real round trip against that record rather than a stale local cache.
    *
-   * Best-effort. A failed re-read leaves usage `null` — never guessed from
-   * wall duration, which is exactly the mistake this fix exists to avoid
-   * making in a different place (§25).
+   * ## Why it is now read *before* the snapshot (Sprint 0053)
+   *
+   * The Sprint 0051 fix did not work in production. The deployment carrying it
+   * went live at 15:00:59 on 2026-08-20; the validation sandbox row written
+   * sixteen minutes later still recorded `active_cpu_ms: null`, identical to
+   * every pre-fix row. Nothing surfaced that, because the `catch` below was
+   * completely silent — the defect hid an entire sprint behind a bare `catch`.
+   *
+   * The one difference between this call and `reconnect()`'s demonstrably
+   * working `Sandbox.get({ name, resume: false })` was *when* it ran: after
+   * `snapshot()` had terminated the sandbox. So the read now happens first,
+   * while the sandbox is still the same object `reconnect()` succeeds against,
+   * and it no longer depends on the provider's post-termination behaviour.
+   *
+   * Best-effort in both directions. A failed read leaves usage `null` — never
+   * guessed from wall duration, which is exactly the mistake this fix exists to
+   * avoid making somewhere else (§25). And the failure is now *logged*: error
+   * name only, plus which fields the refreshed record carried, so the next
+   * silent null is diagnosable from production logs instead of from a database
+   * archaeology session.
    */
   private async readTerminalUsage(): Promise<SandboxUsage> {
     try {
       const refreshed = await Sandbox.get({ name: this.sandbox.name, resume: false });
-      return {
+      const usage: SandboxUsage = {
         activeCpuDurationMs: refreshed.totalActiveCpuDurationMs ?? null,
         networkIngressBytes: refreshed.totalIngressBytes ?? null,
         networkEgressBytes: refreshed.totalEgressBytes ?? null,
         costUsd: null,
       };
-    } catch {
+
+      // The read succeeding and the read being *useful* are different
+      // questions, and last sprint they were confused. Say which one happened.
+      if (usage.activeCpuDurationMs === null) {
+        console.error("[validation.sandbox] a usage re-read carried no Active CPU", {
+          sandbox: this.sandbox.name,
+          hasIngress: usage.networkIngressBytes !== null,
+          hasEgress: usage.networkEgressBytes !== null,
+        });
+      }
+
+      return usage;
+    } catch (error) {
+      // Never the error's message or cause: a provider error can carry request
+      // context and credential-bearing material (§15). The name and the
+      // sandbox name are enough to tell "the call failed" from "the call
+      // returned an empty record", which is the distinction that was missing.
+      console.error("[validation.sandbox] the usage re-read failed", {
+        sandbox: this.sandbox.name,
+        error: error instanceof Error ? error.name : typeof error,
+      });
+
       return {
         activeCpuDurationMs: null,
         networkIngressBytes: null,
