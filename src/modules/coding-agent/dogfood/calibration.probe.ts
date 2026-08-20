@@ -14,6 +14,7 @@ import { deriveRepositoryDrift } from "@/modules/economy/intelligence/repository
 import type { SandboxUsage } from "@/modules/economy/sandbox-cost";
 import { AGENT_WORKFLOW_FIXED_STEPS, REALISTIC_STEP_WORK, workflowEventCount } from "@/modules/economy/workflow-invocation-cost";
 import type { ValidationDepth } from "@/modules/validation/depth";
+import { classifyExecutionPricingClass } from "@/modules/economy/execution-class";
 import { calibrationFixtureForRun, type CalibrationFixture } from "./calibration";
 import { renderPrediction, renderReconciliation, repositoryContextFrom } from "./calibration-report";
 import { prepareBenchmark } from "./benchmark";
@@ -291,14 +292,39 @@ async function predict(
     prepared.compiled.contextCandidates,
   );
 
+  /*
+   * Classified from what the live preflight actually resolved, never from the
+   * fixture's own expectation. `calibration.test.ts` already proves the two
+   * agree offline, against surfaces derived from evidence alone — but a
+   * prediction is supposed to be an honest record of what the run's own
+   * pipeline concluded, and asserting the fixture's answer here would make the
+   * frozen report's "reason" field a claim reproducing the design intent
+   * rather than a claim about what actually happened.
+   */
+  const classification = classifyExecutionPricingClass({
+    riskClass: fixture.expectedRiskClass,
+    changeKind: fixture.changeKind,
+    evidenceIds: fixture.evidenceIds,
+    surfaces: prepared.compiled.surfaceBusinessSurfaces,
+  });
+
+  if (classification.pricingClass !== fixture.expectedPricingClass) {
+    throw new Error(
+      `${fixture.id} expects pricing class ${fixture.expectedPricingClass}, but the live preflight ` +
+        `resolves ${classification.pricingClass} (${classification.reason}) from surfaces ` +
+        `[${prepared.compiled.surfaceBusinessSurfaces.join(", ")}]. A calibration prediction must ` +
+        "not silently diverge from the class it was designed to observe.",
+    );
+  }
+
   // The previous calibration run against this project, so drift has a left side.
   const previous = PREVIOUS_RUN_ID ? await loadRun(supabase, PREVIOUS_RUN_ID) : null;
   const drift = deriveRepositoryDrift(repositoryContextOf(previous), repositoryContext);
 
   const snapshot = capturePredictionSnapshot({
     at,
-    pricingClass: fixture.expectedPricingClass,
-    pricingClassReason: "single_surface",
+    pricingClass: classification.pricingClass,
+    pricingClassReason: classification.reason,
     riskClass: fixture.expectedRiskClass,
     changeKind: fixture.changeKind,
     evidenceIds: fixture.evidenceIds,
