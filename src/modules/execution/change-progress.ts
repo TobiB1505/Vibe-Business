@@ -42,8 +42,12 @@ export type ChangeStage =
   | "validating"
   /** A safety check ran and did not pass. Nothing downstream can start. */
   | "validation_failed"
-  /** Checked, but the comparison a human reviews does not exist yet. */
+  /** Checked, and Vibe is building the comparison a human reviews. */
   | "reviewing"
+  /** Checked, and the comparison is the founder's to start. */
+  | "review_required"
+  /** A comparison was attempted or captured, and is not there to review. */
+  | "review_unavailable"
   /** Everything a person needs in order to decide is on screen. */
   | "awaiting_approval"
   /** A human approved this exact commit and the merge is available. */
@@ -91,7 +95,20 @@ const STAGE_HEADLINES: Record<ChangeStage, string> = {
   not_validated: "This change has not been checked yet.",
   validating: "Vibe is checking this change is safe.",
   validation_failed: "This change did not pass its safety checks.",
+  /*
+   * The same split, one gate later, and found the same way: by looking at a
+   * real card. "Vibe is preparing what you need to review" sat above a preview
+   * that was not started and a review waiting for one — nothing was running,
+   * and the next move was the founder's. A product that narrates work it is
+   * not doing teaches people to stop reading its status lines.
+   *
+   * `review_unavailable` names the state and leaves the reason to the panel
+   * below it, which knows whether the comparison failed or expired — the same
+   * division of labour `stalled` has with the merge panel.
+   */
   reviewing: "Vibe is preparing what you need to review.",
+  review_required: "Ready for you to preview and compare.",
+  review_unavailable: "The comparison for this change is not available.",
   awaiting_approval: "Ready for you to review and approve.",
   ready_to_merge: "Approved by you, ready to go into your repository.",
   merging: "Vibe is updating your repository.",
@@ -101,15 +118,23 @@ const STAGE_HEADLINES: Record<ChangeStage, string> = {
 };
 
 /**
- * Gate states that mean "an earlier gate has not happened", rather than
- * anything about this gate.
+ * Which review stage a change is on, or null once the comparison is ready.
  *
- * Each of these already carries a comment in its own module saying the panel
- * above has said this — they are the states a chain-aware card can finally act
- * on rather than repeat.
+ * A preview in flight counts as `reviewing`: it is the step a comparison is
+ * built from, and while it runs Vibe genuinely is preparing something. Every
+ * other preview state leaves the next move with the founder, which is what the
+ * `review_required` sentence says.
  */
-function reviewSettled(review: ReviewCard): boolean {
-  return review.state === "ready";
+function reviewGate(
+  review: ReviewCard,
+  preview: PreviewCard,
+): "reviewing" | "review_required" | "review_unavailable" | null {
+  if (review.state === "capturing") return "reviewing";
+  if (previewInFlight(preview)) return "reviewing";
+  if (review.state === "ready") return null;
+  if (review.state === "failed" || review.state === "expired") return "review_unavailable";
+
+  return "review_required";
 }
 
 /**
@@ -130,7 +155,10 @@ function validationGate(
   return "not_validated";
 }
 
-/** A preview is optional evidence: it never blocks, so it never holds a stage. */
+/**
+ * A preview never blocks a change — but while one is running, Vibe really is
+ * doing the work a comparison is built from, and the card may say so.
+ */
 function previewInFlight(preview: PreviewCard): boolean {
   return preview.state === "starting" || preview.state === "running" || preview.state === "stopping";
 }
@@ -199,10 +227,7 @@ export function deriveChangeProgress(input: ChangeProgressInput): ChangeProgress
         ? "stalled"
         : approved
           ? "ready_to_merge"
-          : (validationGate(validation) ??
-            (reviewSettled(review) && !previewInFlight(preview)
-              ? "awaiting_approval"
-              : "reviewing"));
+          : (validationGate(validation) ?? reviewGate(review, preview) ?? "awaiting_approval");
 
   return {
     stage,

@@ -111,25 +111,72 @@ describe("stage", () => {
     }
   });
 
+  /** A validated change that nobody has approved, varying only the review gate. */
+  function beforeApproval(overrides: Record<string, unknown>) {
+    return input({
+      approval: { state: "not_approved" },
+      merge: { state: "not_eligible", failureCode: "merge_approval_required" },
+      ...overrides,
+    });
+  }
+
   it("waits for the comparison a person reviews", () => {
-    const progress = deriveChangeProgress(
-      input({
-        review: { state: "capturing" },
-        approval: { state: "not_approved" },
-        merge: { state: "not_eligible", failureCode: "merge_approval_required" },
-      }),
-    );
+    const progress = deriveChangeProgress(beforeApproval({ review: { state: "capturing" } }));
 
     expect(progress.stage).toBe("reviewing");
   });
 
-  it("asks for a decision once the evidence is on screen", () => {
-    const progress = deriveChangeProgress(
-      input({
-        approval: { state: "not_approved" },
-        merge: { state: "not_eligible", failureCode: "merge_approval_required" },
-      }),
+  /**
+   * The same distinction as the validation gate, one step later — and found
+   * the same way, by looking at a real card rather than at a test.
+   *
+   * "Vibe is preparing what you need to review" sat above a preview that was
+   * not started and a review waiting for one. Nothing was running and the next
+   * move belonged to the founder.
+   */
+  it.each([
+    // Genuinely in flight, both ways a comparison can be being built.
+    [{ review: { state: "capturing" }, preview: { state: "stopped" } }, "reviewing"],
+    [{ review: { state: "not_generated" }, preview: { state: "running" } }, "reviewing"],
+    [{ review: { state: "not_generated" }, preview: { state: "starting" } }, "reviewing"],
+    // Nothing running. The founder starts the preview, or the comparison.
+    [{ review: { state: "not_generated" }, preview: { state: "ready_to_start" } }, "review_required"],
+    [{ review: { state: "not_generated" }, preview: { state: "stopped" } }, "review_required"],
+    // Attempted or captured, and not there to look at.
+    [{ review: { state: "failed" }, preview: { state: "stopped" } }, "review_unavailable"],
+    [{ review: { state: "expired" }, preview: { state: "stopped" } }, "review_unavailable"],
+  ] as const)("reads %o as %s", (gates, stage) => {
+    expect(deriveChangeProgress(beforeApproval(gates)).stage).toBe(stage);
+  });
+
+  it("never claims a comparison is being prepared when none is", () => {
+    // The screen this assertion comes from: preview not started, review
+    // waiting for one, and a headline saying Vibe was preparing something.
+    for (const gates of [
+      { review: { state: "not_generated" }, preview: { state: "ready_to_start" } },
+      { review: { state: "failed" }, preview: { state: "stopped" } },
+      { review: { state: "expired" }, preview: { state: "stopped" } },
+    ]) {
+      expect(deriveChangeProgress(beforeApproval(gates)).headline).not.toContain("is preparing");
+    }
+  });
+
+  it("keeps a settled review out of the review stages entirely", () => {
+    // The condition this replaced: ready *and* no preview in flight. Both
+    // halves still hold — a running preview outranks a ready comparison,
+    // because a person watching one start is not being asked to decide yet.
+    expect(deriveChangeProgress(beforeApproval({ review: { state: "ready" } })).stage).toBe(
+      "awaiting_approval",
     );
+    expect(
+      deriveChangeProgress(
+        beforeApproval({ review: { state: "ready" }, preview: { state: "starting" } }),
+      ).stage,
+    ).toBe("reviewing");
+  });
+
+  it("asks for a decision once the evidence is on screen", () => {
+    const progress = deriveChangeProgress(beforeApproval({}));
 
     expect(progress.stage).toBe("awaiting_approval");
   });
