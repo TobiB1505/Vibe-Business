@@ -40,9 +40,13 @@ describe("buildAuditEvidenceNotice", () => {
     });
   });
 
-  it("stops suggesting once a Deep Scan has succeeded", () => {
+  it("goes quiet once a current Deep Scan has succeeded", () => {
+    // Was `deep_scan_ready` — a row above the verdict reading "Authenticated
+    // product evidence · Ready", on every visit, forever (UI-7 §4). It had no
+    // action and never changed, which is rule 4 of this module's own list.
+    // The fact it carried now sits in the audit's provenance line instead.
     expect(notice({ hasSuccessfulDeepScan: true, authenticatedSurfacesLikely: true })).toEqual({
-      kind: "deep_scan_ready",
+      kind: "none",
     });
   });
 

@@ -95,6 +95,7 @@ export function AuditOverview({
   movesHref,
   hasMoves,
   movesByConclusion,
+  usedSignedInEvidence = false,
 }: {
   audit: BusinessReadinessAudit;
   generatedAt: string | null;
@@ -102,6 +103,14 @@ export function AuditOverview({
   hasMoves: boolean;
   /** Moves addressing each conclusion of this audit (UI-S2 §8). */
   movesByConclusion: Record<string, number>;
+  /**
+   * A Deep Scan informed this audit (UI-7 §4).
+   *
+   * Provenance, in the provenance line. It used to be a permanent status row
+   * above the verdict saying "Ready" — which had no action, never changed, and
+   * occupied the one place a paused question needs.
+   */
+  usedSignedInEvidence?: boolean;
 }) {
   const synthesis = audit.synthesis ?? null;
   const map = synthesis ? buildBusinessMap(synthesis) : null;
@@ -137,6 +146,12 @@ export function AuditOverview({
               <span>
                 {audit.overall.assessedDimensions} of {audit.overall.totalDimensions} areas scored
               </span>
+            </>
+          )}
+          {usedSignedInEvidence && (
+            <>
+              <span aria-hidden="true">·</span>
+              <span>saw your signed-in product</span>
             </>
           )}
           {generatedAt && (

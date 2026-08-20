@@ -80,6 +80,32 @@ export type BusinessSurfaceId =
   | "onboarding"
   | "dashboard_app";
 
+/**
+ * What each surface is called when a person reads it (UI-7 §2).
+ *
+ * Published here rather than kept private to the detector because the evidence
+ * layer needs the same words: a citation of `repo.surface.payments` used to
+ * reach the screen as "Surface payments", which is the id with its dots taken
+ * out. The names already existed — they were simply not reachable from the
+ * place that needed them.
+ */
+export const BUSINESS_SURFACE_LABELS: Record<BusinessSurfaceId, string> = {
+  authentication: "Authentication",
+  payments: "Payments",
+  pricing_page: "Pricing page",
+  checkout_billing: "Checkout / billing",
+  analytics: "Analytics",
+  seo_metadata: "SEO metadata",
+  sitemap: "Sitemap",
+  robots: "robots.txt",
+  blog_content: "Blog / content",
+  contact: "Contact",
+  docs_help: "Docs / help",
+  legal: "Legal pages",
+  onboarding: "Onboarding",
+  dashboard_app: "Dashboard / app area",
+};
+
 export type BusinessSurfaceSignal = {
   id: BusinessSurfaceId;
   name: string;

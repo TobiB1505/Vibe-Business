@@ -420,7 +420,7 @@ export function ActionPlanPanel({
         <Notice tone="waiting" label="Planned out of priority order">
           {defaultMoveTitle
             ? `You chose this Move yourself — Vibe's own top priority is currently "${defaultMoveTitle}".`
-            : "You chose this Move yourself, out of the engine's own priority order."}
+            : "You chose this Move yourself, rather than the Move Vibe ranked first."}
         </Notice>
       )}
 

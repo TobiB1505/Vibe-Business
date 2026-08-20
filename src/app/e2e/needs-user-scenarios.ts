@@ -4,7 +4,7 @@ import { selectBlockingQuestion, type PendingQuestion } from "@/modules/business
 import type { ProductProfile } from "@/modules/product-understanding/schema";
 
 /**
- * Browser fixtures for "Vibe needs u" (CORE-2a.4 §30, §31, §47, §48).
+ * Browser fixtures for "Vibe needs you" (CORE-2a.4 §30, §31, §47, §48).
  *
  * ## Why these come from the real gate
  *

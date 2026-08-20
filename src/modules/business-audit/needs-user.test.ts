@@ -12,7 +12,7 @@ import { FOUNDER_QUESTION_INTENTS, type FounderQuestionIntent } from "./founder-
 import type { BusinessLens, BusinessLensAssessment, LensMateriality } from "./schema";
 
 /**
- * The "Vibe needs u" gate (CORE-2a.4 §42–§50).
+ * The "Vibe needs you" gate (CORE-2a.4 §42–§50).
  *
  * ## What these are guarding
  *

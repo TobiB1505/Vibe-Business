@@ -17,8 +17,6 @@
 export type AuditEvidenceNotice =
   /** A Deep Scan exists that the displayed audit has not seen yet. */
   | { kind: "deep_scan_stale" }
-  /** Authenticated evidence is present and was used. */
-  | { kind: "deep_scan_ready" }
   /** Vibe has evidence of a signed-in product, but has never looked inside it. */
   | { kind: "deep_scan_suggested"; canStartDeepScan: boolean }
   /** Nothing useful to say — stay quiet. */
@@ -39,7 +37,21 @@ export function buildAuditEvidenceNotice(input: AuditEvidenceNoticeInput): Audit
   // Staleness first: it is the only state with an action attached, and it
   // implies the "ready" state it would otherwise be shadowed by.
   if (input.hasSuccessfulDeepScan && input.auditPredatesDeepScan) return { kind: "deep_scan_stale" };
-  if (input.hasSuccessfulDeepScan) return { kind: "deep_scan_ready" };
+
+  /*
+   * A current Deep Scan used to produce a fourth kind — a row reading
+   * "Authenticated product evidence · Ready", above the verdict, on every
+   * visit, forever (UI-7 §4). It is rule 4 of this file's own list: nothing
+   * useful to say. There is no action, nothing changed, and it sat in the
+   * space reserved for the one thing that ever needs to interrupt a verdict —
+   * the question Vibe is waiting on.
+   *
+   * The fact itself was worth keeping and did not need a notice to carry it.
+   * It is now a segment of the audit's own provenance line, beside the lens
+   * and signal counts, which is where a reader already looks to find out what
+   * this audit was made from.
+   */
+  if (input.hasSuccessfulDeepScan) return { kind: "none" };
 
   // Only offered where there is evidence to justify it. Suggesting a Deep Scan
   // for a product with no sign of a login would be noise on every audit.

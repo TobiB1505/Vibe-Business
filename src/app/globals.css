@@ -257,17 +257,35 @@
     );
 }
 
+/*
+ * The map settles (UI-7 §5).
+ *
+ * Three animations used to run `infinite`: the node halos breathing, the
+ * connections flowing, the radial sweep turning. None of them reports
+ * anything — the same map, unmoving, says exactly as much — so after the first
+ * few seconds they are motion for its own sake, next to a verdict a founder is
+ * trying to read, on a laptop that keeps compositing them for as long as the
+ * tab is open.
+ *
+ * The counts are chosen so all three stop at roughly the same moment, about
+ * eighteen seconds in: the map arrives alive and then holds still. Each
+ * keyframe set ends where it began, so settling needs no `forwards` and leaves
+ * nothing mid-gesture.
+ *
+ * Users who asked for reduced motion were already protected by the block
+ * above; this is for everyone else, who never got asked.
+ */
 .audit-map-node-halo {
   background: radial-gradient(
     circle,
     color-mix(in srgb, var(--color-mint) 15%, transparent),
     transparent 68%
   );
-  animation: audit-node-breathe 3.6s var(--ease-vibe) infinite;
+  animation: audit-node-breathe 3.6s var(--ease-vibe) 5;
 }
 
 .audit-map-connection-active {
-  animation: audit-line-flow 1.8s linear infinite;
+  animation: audit-line-flow 1.8s linear 10;
 }
 
 .audit-map-sweep {
@@ -279,7 +297,7 @@
   );
   -webkit-mask: radial-gradient(circle, transparent 58%, black 59%, black 61%, transparent 62%);
   mask: radial-gradient(circle, transparent 58%, black 59%, black 61%, transparent 62%);
-  animation: audit-radial-sweep 5.5s linear infinite;
+  animation: audit-radial-sweep 5.5s linear 3;
 }
 
 /*
