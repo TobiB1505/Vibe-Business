@@ -1,8 +1,18 @@
 # UI-5 — The Prepared Change Card
 
-**Status:** implemented, then corrected by its own first dogfood. Lint / typecheck / 4562 unit
-tests / build / 298 browser E2E green. Two things are deliberately **not** claimed — see *What has
-not been proved* below.
+**Status:** implemented, then corrected by its own first dogfood, then merged forward onto
+EXECUTION CORE-4. Validated on the merged tree: lint (0 errors) / typecheck / **5458 unit tests
+across 301 files** / build / **308 browser E2E** green. Those totals include Sprints 0040–0051,
+which landed on `main` while this branch was open — this sprint's own additions are 4562 unit tests
+and 298 browser tests at the point it was written. Two things are deliberately **not** claimed —
+see *What has not been proved* below.
+
+The merge brought in risk-adaptive validation depth (0047) and automatic review classification
+(0048), both of which touch the two gates this sprint rewrote. Checked rather than assumed: both
+are **recommendation resolvers** — `classification.ts` says so in its own words, "it starts
+nothing, gates nothing and authorizes nothing" — so nothing begins a validation or a review on a
+user's behalf, and "This change has not been checked yet." and "Ready for you to preview and
+compare." are still true sentences.
 
 Derived from the product UI/UX audit of 17.08.2026 (`docs/audits/2026-08-17-product-ux-audit/`,
 findings **F-2**, **F-3**, **F-11**, **F-12**, **F-24** and the execution-surface findings), which
