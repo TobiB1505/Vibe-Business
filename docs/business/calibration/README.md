@@ -55,20 +55,24 @@ money, and only a human can take it.**
 ### 1. Freeze the prediction
 
 ```bash
-NEXT_PUBLIC_SUPABASE_URL=… SUPABASE_SERVICE_ROLE_KEY=… \
-VIBE_INTERNAL_AGENT_DOGFOOD_PROJECT_IDS=<project-uuid> \
 VIBE_DOGFOOD_PROJECT_ID=<project-uuid> \
+VIBE_INTERNAL_AGENT_DOGFOOD_PROJECT_IDS=<project-uuid> \
 VIBE_CALIBRATION_RUN=1 \
 VIBE_CALIBRATION_OUT=docs/business/calibration \
 pnpm agent:calibrate
 ```
 
+Secrets come from **`.env.local`** — the probe config loads it, so the Supabase
+and GitHub App variables do not belong on the command line where they would land
+in shell history. Anything set explicitly in the shell still wins over the file.
+
 This compiles the fixture through the real pipeline and **spends nothing** — the
 preflight imports no provider client and no execution starter.
 
-It needs the **GitHub App variables** as well (`GITHUB_APP_ID`, `_SLUG`,
-`_CLIENT_ID`, `_CLIENT_SECRET`, `_PRIVATE_KEY`), because a prediction is pinned
-to a commit and knowing the commit means reading the repository.
+It reads the repository, so `.env.local` must carry the **GitHub App**
+variables (`GITHUB_APP_ID`, `_SLUG`, `_CLIENT_ID`, `_CLIENT_SECRET`,
+`_PRIVATE_KEY`) alongside the Supabase ones — a prediction is pinned to a commit,
+and knowing the commit means reading the repository.
 
 It writes `run-1-prediction.md` and `run-1-prediction.json`, and **refuses to
 overwrite either**. **Commit them before starting the run**: there is no
@@ -92,7 +96,6 @@ Wait for validation to finish, then note the agent run id.
 ### 3. Reconcile
 
 ```bash
-NEXT_PUBLIC_SUPABASE_URL=… SUPABASE_SERVICE_ROLE_KEY=… \
 VIBE_CALIBRATION_RUN=1 \
 VIBE_CALIBRATION_AGENT_RUN_ID=<agent-run-uuid> \
 VIBE_CALIBRATION_SNAPSHOT=docs/business/calibration/run-1-prediction.json \
