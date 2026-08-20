@@ -337,52 +337,61 @@ export async function getOpportunityExecutionSummaries(
 
   if (!snapshot?.result || !opportunities) return [];
 
+  // Held in a const so the narrowing above survives into the closures below.
+  const repository = snapshot.result;
+
   const hasProductionOrigin =
     (project.data as { production_url: string | null } | null)?.production_url != null;
 
-  const summaries: OpportunityExecutionSummary[] = [];
-
-  for (const opportunity of opportunities.set.opportunities) {
-    const capability = resolveExecutionCapability({
-      opportunity,
-      repository: snapshot.result,
-      hasProductionOrigin,
-    });
-
-    if (!capability.supported) {
-      summaries.push({
-        opportunityId: opportunity.id,
-        capability: null,
-        preparedChangeId: null,
-        branchName: null,
+  /*
+   * One reuse lookup per supported opportunity, and no opportunity's lookup
+   * depends on another's, so they go together (UI-4 §4). `map` preserves
+   * order, so the summaries are the same summaries in the same sequence.
+   *
+   * Capability resolution and identity computation stay synchronous and
+   * deterministic; an unsupported opportunity still resolves to a summary
+   * without touching the database at all.
+   */
+  return await Promise.all(
+    opportunities.set.opportunities.map(async (opportunity) => {
+      const capability = resolveExecutionCapability({
+        opportunity,
+        repository,
+        hasProductionOrigin,
       });
-      continue;
-    }
 
-    const identity = computeExecutionIdentity({
-      projectId,
-      opportunitySetId: opportunities.set.id,
-      opportunityId: opportunity.id,
-      capability: capability.capability,
-      capabilityVersion: capabilityVersionFor(capability.capability),
-      repositorySnapshotId: snapshot.id,
-      baseSha: snapshot.result.source.commitSha,
-    });
+      if (!capability.supported) {
+        return {
+          opportunityId: opportunity.id,
+          capability: null,
+          preparedChangeId: null,
+          branchName: null,
+        };
+      }
 
-    const prepared = await findReusablePreparedChange(supabase, {
-      projectId,
-      executionIdentity: identity,
-    });
+      const identity = computeExecutionIdentity({
+        projectId,
+        opportunitySetId: opportunities.set.id,
+        opportunityId: opportunity.id,
+        capability: capability.capability,
+        capabilityVersion: capabilityVersionFor(capability.capability),
+        repositorySnapshotId: snapshot.id,
+        baseSha: repository.source.commitSha,
+      });
 
-    summaries.push({
-      opportunityId: opportunity.id,
-      capability: capability.capability,
-      preparedChangeId: prepared?.id ?? null,
-      branchName: prepared?.branchName ?? null,
-    });
-  }
+      const prepared = await findReusablePreparedChange(supabase, {
+        projectId,
+        executionIdentity: identity,
+      });
 
-  return summaries;
+      return {
+        opportunityId: opportunity.id,
+        capability: capability.capability,
+        preparedChangeId: prepared?.id ?? null,
+        branchName: prepared?.branchName ?? null,
+      };
+    }),
+  );
 }
 
 /**

@@ -15,6 +15,7 @@ import {
   sanitizeCorrections,
 } from "@/modules/product-understanding/store";
 import { EDITABLE_FIELDS } from "@/modules/product-understanding/schema";
+import { isTerminal } from "@/modules/operations/schema";
 
 /**
  * Starting, confirming and correcting a product understanding
@@ -198,7 +199,9 @@ export async function getUnderstandingStatusAction(
   const operation = await getOperationStatus(supabase, { projectId, operationId });
   if (!operation) return { ok: false, error: "not_found" };
 
-  if (operation.status === "completed") {
+  // Stale is stale: a run that failed or was cancelled leaves the screen just
+  // as wrong as one that succeeded.
+  if (isTerminal(operation.status)) {
     revalidatePath(`/app/projects/${projectId}/understanding`);
   }
 

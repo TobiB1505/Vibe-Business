@@ -5,8 +5,9 @@ import { createClient } from "@/lib/supabase/server";
 import { requireSession } from "@/modules/auth/session";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { VercelWorkflowExecutor } from "@/modules/operations/vercel/executor";
-import { getReviewImages, startChangeReview } from "@/modules/review/service";
+import { getReviewCard, getReviewImages, startChangeReview } from "@/modules/review/service";
 import type { ReviewImages } from "@/modules/review/service";
+import type { ReviewCard } from "@/modules/review/view";
 
 /**
  * Review server actions (Sprint 11A §33, §34).
@@ -123,4 +124,40 @@ export async function getReviewImagesAction(
   // nothing from a uniform answer.
   if (!images) return { ok: false };
   return { ok: true, images };
+}
+
+/**
+ * One reading of the review's state (UI-4 §5).
+ *
+ * ## Why this exists
+ *
+ * The panel had no status action, so while a comparison was capturing it
+ * polled by calling `router.refresh()` every two and a half seconds. That
+ * re-rendered the whole prepared-change route each time — every card, its
+ * merge preflight, its signed image URLs — and a render can outlast the gap
+ * until the next one, so each refresh superseded the one still in flight. A
+ * capture of a minute cost roughly twenty-four full re-renders to learn one
+ * thing.
+ *
+ * This is the cheap question that was missing: the same read the page already
+ * performs for this card, and nothing else. The panel now refreshes on the
+ * transition, once.
+ *
+ * Read-only. Opening or watching a review must never capture, approve or
+ * spend anything — the failure copy is resolved identically to the page's, so
+ * a polled card and a rendered card cannot disagree about what happened.
+ */
+export async function getReviewStatusAction(
+  projectId: string,
+  preparedChangeId: string,
+): Promise<ReviewCard> {
+  await requireSession();
+  const supabase = await createClient();
+
+  return await getReviewCard(supabase, {
+    projectId,
+    preparedChangeId,
+    resolveFailureMessage: (code) =>
+      OPERATION_FAILURE_MESSAGES[code as keyof typeof OPERATION_FAILURE_MESSAGES] ?? null,
+  });
 }

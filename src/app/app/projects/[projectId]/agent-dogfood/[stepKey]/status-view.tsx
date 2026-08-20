@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState, useTransition } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/states";
 import { Surface } from "@/components/ui/surface";
@@ -11,6 +11,8 @@ import {
   REVIEW_CLASSIFICATION_NOTES,
 } from "@/modules/review/classification";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
+import { useOperationPoll } from "@/lib/client/use-operation-poll";
+import { operationPollPhase } from "@/modules/operations/view";
 import { EXECUTION_INTERRUPT_QUESTIONS } from "@/modules/execution-contract/view";
 import { AgentExecutionLiveView } from "@/modules/coding-agent/ui/agent-execution-live-view";
 import type { ExecutionInterruptAnswer } from "@/modules/execution-contract/schema";
@@ -40,25 +42,21 @@ export function StatusView({
   projectId: string;
   status: DogfoodRunStatus;
 }) {
-  const [status, setStatus] = useState(initial);
-  const [, startTransition] = useTransition();
+  const { latest: polled } = useOperationPoll<DogfoodRunStatus>({
+    key: initial.live.operation.operationId,
+    enabled: operationPollPhase(initial.live.operation) === "working",
+    intervalMs: POLL_INTERVAL_MS,
+    poll: async () => {
+      const next = await getDogfoodRunStatusAction(projectId, initial.live.operation.operationId);
+      return next ? { kind: "value", value: next } : { kind: "unavailable" };
+    },
+    // Stops on its own answer: the server render cannot know the run ended.
+    continueAfter: (next) => operationPollPhase(next.live.operation) === "working",
+  });
 
-  const operation = status.live.operation;
-
-  useEffect(() => {
-    if (!operation.shouldPoll) return;
-
-    const interval = setInterval(() => {
-      startTransition(async () => {
-        const next = await getDogfoodRunStatusAction(projectId, operation.operationId);
-        if (next) setStatus(next);
-      });
-    }, POLL_INTERVAL_MS);
-
-    return () => clearInterval(interval);
-  }, [projectId, operation.operationId, operation.shouldPoll]);
-
+  const status = polled ?? initial;
   const { live, openInterrupt } = status;
+  const operation = live.operation;
 
   return (
     <div className="flex flex-col gap-6">

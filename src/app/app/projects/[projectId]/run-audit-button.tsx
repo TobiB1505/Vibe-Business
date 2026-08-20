@@ -1,11 +1,16 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useActionState, useEffect, useState } from "react";
+import { useActionState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { CreditPrice } from "@/components/ui/credit-price";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
-import { OPERATION_STAGE_LABELS, type OperationView } from "@/modules/operations/view";
+import { useOperationPoll } from "@/lib/client/use-operation-poll";
+import {
+  freshestOperation,
+  operationPollPhase,
+  OPERATION_STAGE_LABELS, type OperationView,
+} from "@/modules/operations/view";
 import {
   getOperationStatusAction,
   startAuditAction,
@@ -48,7 +53,6 @@ export function RunAuditButton({
   const router = useRouter();
   const action = startAuditAction.bind(null, projectId);
   const [state, formAction, pending] = useActionState(action, initialState);
-  const [polled, setPolled] = useState<OperationView | null>(activeOperation);
 
   /*
    * Enter the lifecycle the moment a run is accepted (UI-S2 §22, §47).
@@ -84,30 +88,29 @@ export function RunAuditButton({
   // newer rather than syncing them — a poll result for the started operation
   // supersedes it; anything else means the poller has not caught up yet.
   const startedOperation = state?.ok && state.kind === "running" ? state.operation : null;
-  const operation =
-    startedOperation && polled?.operationId !== startedOperation.operationId ? startedOperation : polled;
 
-  const operationId = operation?.operationId ?? null;
-  const shouldPoll = operation?.shouldPoll ?? false;
+  /*
+   * What to watch, before the first reading lands: whichever of the server
+   * render and the start action's answer is newer.
+   */
+  const watching = freshestOperation(activeOperation, startedOperation);
 
-  useEffect(() => {
-    if (!operationId || !shouldPoll) return;
+  const { latest: polled } = useOperationPoll<OperationView>({
+    key: watching?.operationId ?? null,
+    enabled: operationPollPhase(watching) === "working",
+    intervalMs: POLL_INTERVAL_MS,
+    poll: async () => {
+      const operationId = watching?.operationId;
+      if (!operationId) return { kind: "unavailable" };
 
-    let cancelled = false;
-
-    const timer = setInterval(async () => {
       const result = await getOperationStatusAction(projectId, operationId);
-      // The component may have unmounted mid-request; a setState then is both
-      // useless and noisy.
-      if (cancelled) return;
-      if (result.ok) setPolled(result.operation);
-    }, POLL_INTERVAL_MS);
+      return result.ok ? { kind: "value", value: result.operation } : { kind: "unavailable" };
+    },
+    // Stops on its own answer: the server render cannot know the run ended.
+    continueAfter: (next) => operationPollPhase(next) === "working",
+  });
 
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [projectId, operationId, shouldPoll]);
+  const operation = freshestOperation(polled ?? activeOperation, startedOperation);
 
   const running = operation !== null && (operation.status === "queued" || operation.status === "running");
   const failed = operation?.status === "failed";

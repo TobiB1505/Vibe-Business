@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import type { OperationView } from "@/modules/operations/view";
+import { useOperationPoll } from "@/lib/client/use-operation-poll";
+import { operationPollPhase, type OperationView } from "@/modules/operations/view";
 import { getOperationStatusAction } from "../../projects/[projectId]/run-audit-action";
 
 const POLL_INTERVAL_MS = 2_500;
@@ -23,9 +23,9 @@ const POLL_INTERVAL_MS = 2_500;
  * ## What it does now
  *
  * Refreshes on any change worth showing: the stage moved, the run stopped, or
- * it crossed into stalled. `stage` and `stalled` are in the dependency list, so
- * after each refresh the effect re-arms against the freshly rendered values
- * rather than comparing against a stale closure.
+ * it crossed into stalled. The comparison is against the values this component
+ * was last rendered with, so after each refresh it is judging the freshly
+ * rendered screen rather than a stale closure.
  *
  * The stage copy itself stays on the server. This component decides *when* the
  * screen is out of date, never what it should say — which keeps one vocabulary
@@ -39,30 +39,27 @@ export function OperationWatcher({
   operation: OperationView | null;
 }) {
   const router = useRouter();
-  const operationId = operation?.operationId;
-  const shouldPoll = operation?.shouldPoll ?? false;
+  const operationId = operation?.operationId ?? null;
   const stage = operation?.stage;
   const stalled = operation?.stalled ?? false;
 
-  useEffect(() => {
-    if (!operationId || !shouldPoll) return;
-    let cancelled = false;
+  useOperationPoll<OperationView>({
+    key: operationId,
+    enabled: operationPollPhase(operation) === "working",
+    intervalMs: POLL_INTERVAL_MS,
+    poll: async () => {
+      if (!operationId) return { kind: "unavailable" };
 
-    const timer = window.setInterval(async () => {
       const result = await getOperationStatusAction(projectId, operationId);
-      if (cancelled || !result.ok) return;
-
-      const next = result.operation;
+      return result.ok ? { kind: "value", value: result.operation } : { kind: "unavailable" };
+    },
+    onReading: (next) => {
       const changed =
-        !next.shouldPoll || next.stage !== stage || next.stalled !== stalled;
-      if (changed) router.refresh();
-    }, POLL_INTERVAL_MS);
+        operationPollPhase(next) !== "working" || next.stage !== stage || next.stalled !== stalled;
 
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
-  }, [operationId, projectId, router, shouldPoll, stage, stalled]);
+      if (changed) router.refresh();
+    },
+  });
 
   return null;
 }

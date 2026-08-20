@@ -1,7 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
+import { useOperationPoll } from "@/lib/client/use-operation-poll";
+import { shouldRefreshForState } from "@/modules/operations/view";
 import { PREVIEW_STAGE_LABELS, type PreviewCard } from "@/modules/change-preview/view";
 import type { PreviewStage } from "@/modules/change-preview/schema";
 import { validateChangeAction } from "./validate-change-action";
@@ -221,54 +223,65 @@ export function PreviewPanel({
     previewState === "stopping" ||
     intent === "start";
 
-  const poll = useCallback(async () => {
-    if (!sessionId) return;
+  useOperationPoll<{
+    status: string;
+    stage: PreviewStage;
+    origin: string | null;
+    expiresAt: string;
+    verdict: "preview_available" | null;
+  }>({
+    key: sessionId,
+    enabled: shouldPoll,
+    intervalMs: POLL_INTERVAL_MS,
+    poll: async () => {
+      if (!sessionId) return { kind: "unavailable" };
 
-    const result = await getPreviewStatusAction(projectId, sessionId);
-    if (!result.ok) return;
+      const result = await getPreviewStatusAction(projectId, sessionId);
+      if (!result.ok) return { kind: "unavailable" };
 
-    setLive({
-      status: result.status,
-      origin: result.origin,
-      expiresAt: result.expiresAt,
-      verdict: result.verdict,
-    });
-    setStage(result.stage as PreviewStage);
+      return {
+        kind: "value",
+        value: {
+          status: result.status,
+          stage: result.stage as PreviewStage,
+          origin: result.origin,
+          expiresAt: result.expiresAt,
+          verdict: result.verdict,
+        },
+      };
+    },
+    onReading: (next) => {
+      setLive({
+        status: next.status,
+        origin: next.origin,
+        expiresAt: next.expiresAt,
+        verdict: next.verdict,
+      });
+      setStage(next.stage);
 
-    /**
-     * Refresh only when the server render is genuinely behind (§7).
-     *
-     * Refreshing on every tick looked harmless and was not. This page render
-     * costs a provider call and several reads, so a refresh can outlast the two
-     * seconds until the next one — and the next `router.refresh()` supersedes
-     * the one still in flight. At two-second intervals for a fifteen-minute
-     * preview, that is ~450 re-renders of which one may never land.
-     *
-     * The preview panel hid this from itself: `previewState` prefers the poll,
-     * so it rendered a running preview correctly while the page around it kept
-     * the state from *before* the preview existed. The Review section, reading
-     * that same stale render, said "Preview required" beside a running preview.
-     *
-     * So compare against what the card already shows and refresh on the
-     * transition only. Once the card agrees, there is nothing to fetch until
-     * the status changes again.
-     */
-    if (result.status !== card.state) router.refresh();
-  }, [projectId, sessionId, router, card.state]);
-
-  useEffect(() => {
-    if (!shouldPoll || !sessionId) return;
-
-    let cancelled = false;
-    const timer = setInterval(() => {
-      if (!cancelled) void poll();
-    }, POLL_INTERVAL_MS);
-
-    return () => {
-      cancelled = true;
-      clearInterval(timer);
-    };
-  }, [shouldPoll, sessionId, poll]);
+      /**
+       * Refresh only when the server render is genuinely behind (§7).
+       *
+       * Refreshing on every tick looked harmless and was not. This page render
+       * costs a provider call and several reads, so a refresh can outlast the
+       * two seconds until the next one — and the next `router.refresh()`
+       * supersedes the one still in flight. At two-second intervals for a
+       * fifteen-minute preview, that is ~450 re-renders of which one may never
+       * land.
+       *
+       * The preview panel hid this from itself: `previewState` prefers the
+       * poll, so it rendered a running preview correctly while the page around
+       * it kept the state from *before* the preview existed. The Review
+       * section, reading that same stale render, said "Preview required"
+       * beside a running preview.
+       *
+       * So compare against what the card already shows and refresh on the
+       * transition only. Once the card agrees, there is nothing to fetch until
+       * the status changes again.
+       */
+      if (shouldRefreshForState(next.status, card.state)) router.refresh();
+    },
+  });
 
   // Drives the countdown only. The server is what refuses an expired origin.
   useEffect(() => {

@@ -145,26 +145,53 @@ export default async function ProjectMovesPage({
   // answer, it does not decide what Vibe is willing to run.
   const validationSummaries: Record<string, ValidationSummary> = {};
 
-  for (const summary of executionSummaries) {
-    const opportunity = opportunities?.set.opportunities.find(
-      (entry) => entry.id === summary.opportunityId,
-    );
-    if (!opportunity) continue;
+  /*
+   * Three reads per Move, none of which depends on another Move's answer, so
+   * the whole grid goes at once rather than in a queue (UI-4 §4). A project
+   * with five Moves was paying fifteen sequential round trips for a page that
+   * had already resolved its own reads in parallel one block above.
+   *
+   * The keyed records are filled after the reads land, so an absent Move and
+   * an absent validation stay absent — an empty entry and a missing entry are
+   * different answers to `OpportunitiesPanel`.
+   */
+  const resolvedSummaries = await Promise.all(
+    executionSummaries.map(async (summary) => {
+      const opportunity = opportunities?.set.opportunities.find(
+        (entry) => entry.id === summary.opportunityId,
+      );
+      if (!opportunity) return null;
+
+      const [activeOperation, failedOperation, validation] = await Promise.all([
+        getActivePreparationFor(supabase, { projectId, opportunityId: summary.opportunityId }),
+        // Without this a failed preparation silently re-offers the start button
+        // instead of saying what went wrong.
+        getLatestFailedPreparationFor(supabase, {
+          projectId,
+          opportunityId: summary.opportunityId,
+        }),
+        summary.preparedChangeId
+          ? getLatestValidation(supabase, {
+              projectId,
+              preparedChangeId: summary.preparedChangeId,
+            })
+          : null,
+      ]);
+
+      return { summary, opportunity, activeOperation, failedOperation, validation };
+    }),
+  );
+
+  for (const resolved of resolvedSummaries) {
+    if (!resolved) continue;
+    const { summary, opportunity, activeOperation, failedOperation, validation } = resolved;
 
     executionStates[summary.opportunityId] = buildOpportunityActionState({
       opportunity,
       capability: summary.capability,
       preparedChangeId: summary.preparedChangeId,
-      activeOperation: await getActivePreparationFor(supabase, {
-        projectId,
-        opportunityId: summary.opportunityId,
-      }),
-      // Without this a failed preparation silently re-offers the start button
-      // instead of saying what went wrong.
-      failedOperation: await getLatestFailedPreparationFor(supabase, {
-        projectId,
-        opportunityId: summary.opportunityId,
-      }),
+      activeOperation,
+      failedOperation,
       blockedReason: null,
     });
 
@@ -175,20 +202,13 @@ export default async function ProjectMovesPage({
       );
     }
 
-    if (summary.preparedChangeId) {
-      const validation = await getLatestValidation(supabase, {
-        projectId,
-        preparedChangeId: summary.preparedChangeId,
+    if (validation) {
+      validationSummaries[summary.opportunityId] = buildValidationSummary(validation, {
+        currentPolicyVersion: SANDBOX_POLICY_VERSION,
+        failureMessage: validation.failureCode
+          ? (OPERATION_FAILURE_MESSAGES[validation.failureCode] ?? null)
+          : null,
       });
-
-      if (validation) {
-        validationSummaries[summary.opportunityId] = buildValidationSummary(validation, {
-          currentPolicyVersion: SANDBOX_POLICY_VERSION,
-          failureMessage: validation.failureCode
-            ? (OPERATION_FAILURE_MESSAGES[validation.failureCode] ?? null)
-            : null,
-        });
-      }
     }
   }
 
