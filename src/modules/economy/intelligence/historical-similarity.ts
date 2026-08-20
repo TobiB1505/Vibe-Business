@@ -120,6 +120,20 @@ export const SIMILARITY_ONLY_WEIGHTING: HistoricalWeighting = (run, similarityFa
   finalWeight: similarityFactor,
 });
 
+export const WEIGHTING_POLICY_NAMES = ["similarity_only"] as const;
+export type WeightingPolicyName = (typeof WEIGHTING_POLICY_NAMES)[number];
+
+/**
+ * Named policies, so a snapshot can record *which* weighting produced it.
+ *
+ * A snapshot that stored only the weights would reproduce the same answer and
+ * explain nothing; one that stored a function could not be serialised at all.
+ * A name is the only form that survives JSON and still identifies the rule.
+ */
+export const WEIGHTING_POLICIES: Record<WeightingPolicyName, HistoricalWeighting> = {
+  similarity_only: SIMILARITY_ONLY_WEIGHTING,
+};
+
 function evidenceOverlap(a: readonly string[], b: readonly string[]): number {
   if (a.length === 0 && b.length === 0) return 1;
   if (a.length === 0 || b.length === 0) return 0;
