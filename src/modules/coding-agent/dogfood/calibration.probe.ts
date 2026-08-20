@@ -17,7 +17,7 @@ import type { ValidationDepth } from "@/modules/validation/depth";
 import { classifyExecutionPricingClass } from "@/modules/economy/execution-class";
 import { calibrationFixtureForRun, type CalibrationFixture } from "./calibration";
 import { renderPrediction, renderReconciliation, repositoryContextFrom } from "./calibration-report";
-import { prepareBenchmark } from "./benchmark";
+import { prepareBenchmark, type BenchmarkPreparation } from "./benchmark";
 import { benchmarkStepKey } from "./fixtures";
 
 /**
@@ -256,6 +256,58 @@ function emit(name: string, body: string): void {
   console.log(`wrote ${path}`);
 }
 
+/**
+ * Why the run could not start, in enough detail to act on.
+ *
+ * `not_executable` is the outer wrapper and says nothing — the diagnosis lives
+ * one level down, in the preview the resolver returned. Reporting only the
+ * wrapper cost a debugging cycle on run 2: the operator saw "not_executable",
+ * which is equally consistent with a stale checkout, a moved default branch, a
+ * capability match, an unauthorised project and a missing snapshot.
+ *
+ * So this unwraps every layer that carries a reason. It names no secret and no
+ * repository content — only Vibe's own vocabulary of refusals (§15).
+ */
+function explainRefusal(prepared: Extract<BenchmarkPreparation, { ok: false }>): string {
+  if (prepared.reason !== "not_executable") {
+    const detail = "detail" in prepared && prepared.detail ? ` (${prepared.detail})` : "";
+    return `Preflight refused: ${prepared.reason}${detail}.`;
+  }
+
+  const { preview } = prepared;
+  const lines = [`Preflight refused: ${preview.reason}.`];
+
+  if (preview.resolution) {
+    lines.push(
+      `  resolved mode: ${preview.resolution.mode} (${preview.resolution.reason})`,
+      `  risk class: ${preview.resolution.riskClass}`,
+    );
+    if (preview.resolution.capability) {
+      lines.push(
+        `  a deterministic capability matched: ${preview.resolution.capability} — ` +
+          "this fixture is not an agentic run at all",
+      );
+    }
+    if (preview.resolution.unmetRequirements.length > 0) {
+      lines.push(`  unmet requirements: ${preview.resolution.unmetRequirements.join(", ")}`);
+    }
+    if (!preview.resolution.admission.admissible) {
+      lines.push(`  admission refused: ${preview.resolution.admission.refusal}`);
+    }
+  }
+
+  if (preview.preflight) {
+    if (preview.preflight.refusals.length > 0) {
+      lines.push(`  preflight refusals: ${preview.preflight.refusals.join(", ")}`);
+    }
+    if (!preview.preflight.validation.supported) {
+      lines.push(`  validation unsupported: ${preview.preflight.validation.reason}`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
 /** Mode one: compile the fixture, estimate, and produce the frozen record. */
 async function predict(
   supabase: SupabaseClient,
@@ -279,7 +331,7 @@ async function predict(
 
   if (!prepared.ok) {
     throw new Error(
-      `Preflight refused: ${"reason" in prepared ? prepared.reason : "unknown"}. ` +
+      `${explainRefusal(prepared)}\n` +
         "A calibration prediction must describe a run that could actually start.",
     );
   }
