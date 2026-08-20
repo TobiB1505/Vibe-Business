@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { describe, expect, it } from "vitest";
 import { storedCostToNanoUsd } from "@/modules/credits/projection";
@@ -45,11 +46,13 @@ import { benchmarkStepKey } from "./fixtures";
  * run is started by a human through the internal dogfood surface, which is
  * gated by the operator allowlist, and that remains the only start path.
  *
- * ## It writes nothing
+ * ## It writes no database row
  *
- * No row, no audit event, no file. The reports go to stdout and a human commits
- * them, which is what makes the prediction's freeze timestamp meaningful: it is
- * a commit that precedes the run.
+ * No row, no audit event. It will write two *files* when `VIBE_CALIBRATION_OUT`
+ * names a directory, because capturing clean markdown out of a test runner's
+ * stdout is friction with no upside — and a human still has to read and commit
+ * them, which is what makes the prediction's freeze timestamp meaningful: a
+ * commit that precedes the run.
  *
  * ## Which mode runs
  *
@@ -219,18 +222,44 @@ describe("economy calibration", () => {
       const supabase = serviceClient();
 
       if (!AGENT_RUN_ID) {
-        console.log(await predict(supabase, fixture));
+        const { report, snapshot } = await predict(supabase, fixture);
+
+        emit(`run-${fixture.calibrationRun}-prediction.md`, report);
+        emit(`run-${fixture.calibrationRun}-prediction.json`, JSON.stringify(snapshot, null, 2));
         return;
       }
 
-      console.log(await reconcile(supabase, fixture));
+      emit(`run-${fixture.calibrationRun}-actual.md`, await reconcile(supabase, fixture));
     },
     120_000,
   );
 });
 
-/** Mode one: compile the fixture, estimate, and print the frozen record. */
-async function predict(supabase: SupabaseClient, fixture: CalibrationFixture): Promise<string> {
+/**
+ * Writes to `VIBE_CALIBRATION_OUT` when it is set, and to stdout otherwise.
+ *
+ * Never overwrites. A prediction that could be silently rewritten after the run
+ * is not frozen, and the whole freeze argument rests on the file being older
+ * than the run it describes.
+ */
+function emit(name: string, body: string): void {
+  const dir = process.env.VIBE_CALIBRATION_OUT;
+  if (!dir) {
+    console.log(body);
+    return;
+  }
+
+  const path = join(dir, name);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, body, { flag: "wx" });
+  console.log(`wrote ${path}`);
+}
+
+/** Mode one: compile the fixture, estimate, and produce the frozen record. */
+async function predict(
+  supabase: SupabaseClient,
+  fixture: CalibrationFixture,
+): Promise<{ report: string; snapshot: PredictionSnapshot }> {
   expect(PROJECT_ID, "VIBE_DOGFOOD_PROJECT_ID is required — a calibration runs against a real project.").toBeTruthy();
 
   const { data: project } = await supabase
@@ -282,29 +311,20 @@ async function predict(supabase: SupabaseClient, fixture: CalibrationFixture): P
     economyModel,
   });
 
-  const report = renderPrediction({
-    fixture,
-    snapshot,
-    baseSha: prepared.compiled.baseSha,
-    projectId: PROJECT_ID!,
-    stepKey: benchmarkStepKey(fixture),
-  });
-
   /*
-   * The snapshot is printed alongside the report because reconciliation reads
-   * it back rather than recomputing it. Two artifacts, both committed before
-   * the run: the report for a human, the JSON for the second command.
+   * Two artifacts, both committed before the run: the report for a human, and
+   * the snapshot the reconciliation reads back rather than recomputing.
    */
-  return [
-    report,
-    "",
-    `<!-- Save the block below as docs/business/calibration/run-${fixture.calibrationRun}-prediction.json`,
-    "     and pass its path as VIBE_CALIBRATION_SNAPSHOT when reconciling. -->",
-    "",
-    "```json",
-    JSON.stringify(snapshot, null, 2),
-    "```",
-  ].join("\n");
+  return {
+    report: renderPrediction({
+      fixture,
+      snapshot,
+      baseSha: prepared.compiled.baseSha,
+      projectId: PROJECT_ID!,
+      stepKey: benchmarkStepKey(fixture),
+    }),
+    snapshot,
+  };
 }
 
 /** Mode two: read what the run cost, compare it to the frozen prediction, explain the gap. */

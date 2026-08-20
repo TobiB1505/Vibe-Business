@@ -59,16 +59,21 @@ NEXT_PUBLIC_SUPABASE_URL=… SUPABASE_SERVICE_ROLE_KEY=… \
 VIBE_INTERNAL_AGENT_DOGFOOD_PROJECT_IDS=<project-uuid> \
 VIBE_DOGFOOD_PROJECT_ID=<project-uuid> \
 VIBE_CALIBRATION_RUN=1 \
+VIBE_CALIBRATION_OUT=docs/business/calibration \
 pnpm agent:calibrate
 ```
 
 This compiles the fixture through the real pipeline and **spends nothing** — the
-preflight imports no provider client and no execution starter. It prints a
-report and a JSON snapshot.
+preflight imports no provider client and no execution starter.
 
-Save them as `run-1-prediction.md` and `run-1-prediction.json` and **commit them
-before starting the run**. That commit is the freeze: there is no predictions
-table, so git's timestamp is what proves the estimate preceded the run.
+It needs the **GitHub App variables** as well (`GITHUB_APP_ID`, `_SLUG`,
+`_CLIENT_ID`, `_CLIENT_SECRET`, `_PRIVATE_KEY`), because a prediction is pinned
+to a commit and knowing the commit means reading the repository.
+
+It writes `run-1-prediction.md` and `run-1-prediction.json`, and **refuses to
+overwrite either**. **Commit them before starting the run**: there is no
+predictions table, so git's timestamp is what proves the estimate preceded the
+run. Drop `VIBE_CALIBRATION_OUT` to print to stdout instead.
 
 ### 2. Start the run
 
@@ -91,16 +96,34 @@ NEXT_PUBLIC_SUPABASE_URL=… SUPABASE_SERVICE_ROLE_KEY=… \
 VIBE_CALIBRATION_RUN=1 \
 VIBE_CALIBRATION_AGENT_RUN_ID=<agent-run-uuid> \
 VIBE_CALIBRATION_SNAPSHOT=docs/business/calibration/run-1-prediction.json \
+VIBE_CALIBRATION_OUT=docs/business/calibration \
 pnpm agent:calibrate
 ```
 
 Reads the real ledger rows, compares them against the **frozen** prediction —
 never a recomputed one — and explains the variance from measured signals only.
-Save as `run-1-actual.md`.
+Writes `run-1-actual.md`. This half needs only Supabase.
 
 From run 2 onward, pass `VIBE_CALIBRATION_PREVIOUS_RUN_ID=<previous-run-uuid>`
 so repository drift has a left-hand side. Without it, drift is `unknown`, which
 is the honest answer and not the useful one.
+
+## Known open issue — validation CPU metering
+
+Every `passed` validation in production records `active_cpu_ms: null`; the one
+`failed` validation records it. That is the `snapshot()`-vs-`stop()` split
+Sprint 0051 diagnosed and Sprint 0053 tried to fix, and which
+[ECONOMY_MODEL.md](../ECONOMY_MODEL.md) still lists as *not verified in
+production* — no passing validation has run since the fix deployed.
+
+While it holds, a successful calibration run reports `validation: not_measured`,
+its total collapses to an incomplete floor, and the comparison is
+`actual_incomplete` — so the run contributes **nothing** to the learning
+dataset.
+
+**Run 1 is therefore also the verification of that fix.** If `active_cpu_ms`
+comes back non-null, all five runs are usable. If it is still null, stop after
+run 1 rather than pay for four more incomplete measurements.
 
 ## What this cannot tell us
 
