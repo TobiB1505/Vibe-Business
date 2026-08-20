@@ -199,8 +199,10 @@ const LABELS: Record<AuditEventType, string> = {
   "agent_execution.needs_user_input": "Vibe stopped to ask you something",
   // Says plainly that a safety check fired and nothing was written. A user
   // reading their own log should be able to tell this apart from a crash.
+  "agent_execution.change_verified": "Vibe checked its own change and accepted it",
   "agent_execution.change_rejected": "Vibe refused its own change and wrote nothing",
   "agent_execution.completed": "Vibe finished a change, ready for review",
+  "agent_execution.validation_enqueued": "Vibe sent the change for validation",
   "agent_execution.failed": "Vibe stopped without changing anything",
 };
 

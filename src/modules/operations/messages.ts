@@ -193,6 +193,8 @@ export const OPERATION_FAILURE_MESSAGES: Record<OperationFailureCode, string> = 
   agent_change_rejected:
     "Vibe checked the change and it fell outside what this step was allowed to touch, so nothing was written.",
   agent_produced_no_change: "Nothing ended up changing, so there is nothing to review.",
+  agent_wall_clock_exceeded:
+    "This change took longer than its time budget allows, so Vibe stopped it. Nothing was written to your repository.",
   agentic_pricing_not_configured: "Vibe can't make changes to your app for you yet.",
   agent_reservation_invalid:
     "The Credits held for this work no longer cover it, so nothing was started.",

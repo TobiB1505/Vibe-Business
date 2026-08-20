@@ -19,15 +19,42 @@ function read(relativePath: string): string {
 }
 
 describe("both pages gate on the real allowlist before rendering anything (§26, §27)", () => {
-  it("calls requireProjectAccess and the dogfood eligibility check", () => {
+  /**
+   * Two spellings are accepted, and only two.
+   *
+   * `isDogfoodEligibleProject` is the gate itself. `resolveDogfoodPlanRoutes`
+   * is the index page's single server call, and its **first statement** is that
+   * same gate — asserted below rather than assumed, and exercised behaviourally
+   * in `website-preflight.test.ts`. Allowing the second name is what let the
+   * index page stop resolving the plan inline; allowing anything else would
+   * turn this test into a formality.
+   */
+  const ACCEPTED_GATES = ["isDogfoodEligibleProject", "resolveDogfoodPlanRoutes"];
+
+  it("calls requireProjectAccess and reaches the dogfood eligibility check", () => {
     for (const file of ["page.tsx", "[stepKey]/page.tsx"]) {
       const source = read(file);
       expect(source, `${file} does not call requireProjectAccess`).toContain("requireProjectAccess");
-      expect(source, `${file} does not check isDogfoodEligibleProject`).toContain(
-        "isDogfoodEligibleProject",
-      );
+      expect(
+        ACCEPTED_GATES.some((gate) => source.includes(gate)),
+        `${file} reaches no known allowlist gate`,
+      ).toBe(true);
       expect(source, `${file} does not 404 an ineligible project`).toContain("notFound()");
     }
+  });
+
+  it("the index page's server call gates before it reads anything", () => {
+    const source = readFileSync(
+      join(process.cwd(), "src/modules/coding-agent/website-preflight.ts"),
+      "utf8",
+    );
+    const body = source.slice(source.indexOf("export async function resolveDogfoodPlanRoutes("));
+
+    // The allowlist check appears before the first database read in the body.
+    const gateAt = body.indexOf("isDogfoodEligibleProject");
+    const firstReadAt = body.indexOf("await");
+    expect(gateAt).toBeGreaterThan(-1);
+    expect(gateAt).toBeLessThan(firstReadAt);
   });
 });
 

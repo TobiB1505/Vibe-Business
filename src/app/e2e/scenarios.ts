@@ -67,6 +67,14 @@ function baseChange(): Omit<
       phases: [],
       failureMessage: null,
       sandboxDurationMs: 285_000,
+      // The deterministic SEO capability has no Action Step behind it, so the
+      // depth resolver has nothing to classify and lands on its safe default.
+      depth: {
+        depth: "standard",
+        label: "Standard",
+        reason: "Change not classified; validated in full",
+        notRun: [],
+      },
       underCurrentPolicy: true,
     },
     preview: {

@@ -188,7 +188,21 @@ export type ValidationFailureCode = ValidationBlockReason | ValidationFailureRea
 export const STEP_STATUSES = ["passed", "failed", "skipped", "timed_out"] as const;
 export type StepStatus = (typeof STEP_STATUSES)[number];
 
-export const STEP_SKIP_REASONS = ["script_not_present", "not_in_profile"] as const;
+/**
+ * Why a step did not run. Three genuinely different statements:
+ *
+ * - `script_not_present` — the repository defines no such script.
+ * - `not_in_profile` — the resolved profile does not include this step.
+ * - `outside_depth` — the profile includes it; this change did not need it
+ *   (Sprint 0047).
+ *
+ * The third was added rather than reusing the second, because a reader is
+ * entitled to know the difference between "your project cannot be checked this
+ * way" and "your change did not require it". The first dogfood of depth
+ * rendered a skipped step as "no script for this in the project", which was
+ * simply false.
+ */
+export const STEP_SKIP_REASONS = ["script_not_present", "not_in_profile", "outside_depth"] as const;
 export type StepSkipReason = (typeof STEP_SKIP_REASONS)[number];
 
 export type ValidationStepResult = {

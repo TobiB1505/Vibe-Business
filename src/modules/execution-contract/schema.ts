@@ -51,8 +51,16 @@ export const EXECUTION_SPEC_SCHEMA_VERSION = "execution-spec.v1" as const;
  * legitimately resolve differently — a new deterministic capability, a widened
  * agentic boundary, a changed dependency rule. A stored resolution must never
  * be reinterpreted under rules it was not decided by.
+ *
+ * **v2** is the changed dependency rule that clause anticipated: an unfinished
+ * prerequisite that is Vibe's own technical preparation no longer blocks a
+ * downstream agentic step, because that execution absorbs it (see
+ * `dependencies.ts`). A step that resolved `blocked` under v1 can resolve
+ * `agentic` under v2 with nothing about the plan or the repository having
+ * changed — which is exactly the situation this constant exists to keep
+ * legible, and why v1 rows are never re-read as though they were v2 answers.
  */
-export const EXECUTION_RESOLVER_VERSION = "execution-resolver-v1" as const;
+export const EXECUTION_RESOLVER_VERSION = "execution-resolver-v2" as const;
 
 /**
  * What the compiled policy permits and forbids.
@@ -215,8 +223,25 @@ export const EXECUTION_RESOLUTION_REASONS = [
   "founder_action_required",
   /** Waiting on a third party or an external system. */
   "external_party_required",
-  /** One or more prerequisite steps are unfinished (§27). */
+  /**
+   * One or more prerequisite steps are unfinished and must genuinely happen
+   * first (§27).
+   *
+   * Since resolver v2 this names a *hard* dependency only — a founder decision,
+   * real-world work, an external prerequisite, or a change to the product that
+   * has to exist before this one. Vibe's own technical preparation no longer
+   * reaches this reason; it is absorbed into the execution instead.
+   */
   "dependency_unsatisfied",
+  /**
+   * The prerequisites this step reaches form a loop (§32).
+   *
+   * Plan validation repairs cycles, so a stored plan should not contain one.
+   * The resolver refuses rather than trusting that: a loop has no order in
+   * which the work could happen, so there is nothing to absorb and nothing to
+   * wait for, and guessing which edge to ignore is not the resolver's call.
+   */
+  "dependency_cycle_detected",
   /** Vibe's own reasoning work, for which no executor exists. */
   "no_executor_for_vibe_work",
   /** The change kind cannot be produced by any execution route Vibe has. */
@@ -489,8 +514,23 @@ export type ExecutionResolution = {
   capability: ExecutionCapability | null;
   capabilityVersion: string | null;
 
-  /** Orders of the prerequisite steps that are unfinished. */
+  /**
+   * Orders of the unfinished prerequisites that genuinely block this step.
+   *
+   * Since resolver v2 this is the *hard* subset. A prerequisite classified as
+   * Vibe's own preparation is not here — it is in `absorbedPreparation`, because
+   * it is going to happen inside this execution rather than before it.
+   */
   blockedBy: readonly number[];
+  /**
+   * Prerequisite steps this execution would carry out itself, in plan order.
+   *
+   * Non-empty only for an agentic route: an agent reads context and acts on it,
+   * and no other route does. These steps are **not** marked complete and the
+   * plan is not rewritten — this records how the execution boundary was
+   * compiled, and nothing more.
+   */
+  absorbedPreparation: readonly number[];
   /** Every gate this step failed, so a report can tell the whole truth. */
   unmetRequirements: readonly ExecutionResolutionReason[];
 
@@ -512,5 +552,39 @@ export function isDeterministicReady(resolution: ExecutionResolution): boolean {
     resolution.mode === "deterministic" &&
     resolution.capability !== null &&
     resolution.admission.admissible
+  );
+}
+
+/**
+ * The earliest step Vibe could actually start, or null (semantics fix §17, §37).
+ *
+ * ## Why this is here and not in `action-plans/sequence.ts`
+ *
+ * Because they answer different questions, and collapsing them would move
+ * execution authority into the Planner layer — which §6 forbids.
+ *
+ * ```
+ * firstActionableStep   "what happens next in the plan?"   plan ordering
+ * firstExecutableStep   "what could Vibe start now?"       execution truth
+ * ```
+ *
+ * `sequence.ts` has no repository, no snapshot, no validation profile and no
+ * economics, so it cannot answer the second question and must not pretend to.
+ * It also keeps giving the right answer to its own: on the real SEO plan the
+ * first actionable step is still step 1, Vibe's own preparation, because
+ * nothing stands in front of it.
+ *
+ * What this function adds is that step 1 is no longer the *only* answer. After
+ * the dependency fix, steps 2–4 are executable while step 1 is unfinished, and
+ * this is where a surface asks which one — by reading the resolver, never by
+ * naming a step (§37).
+ */
+export function firstExecutableStep(
+  resolutions: readonly ExecutionResolution[],
+): ExecutionResolution | null {
+  return (
+    [...resolutions]
+      .sort((a, b) => a.stepOrder - b.stepOrder)
+      .find((resolution) => isAgentReady(resolution) || isDeterministicReady(resolution)) ?? null
   );
 }

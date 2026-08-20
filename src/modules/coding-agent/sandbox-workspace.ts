@@ -204,7 +204,13 @@ export function createSandboxWorkspace(deps: SandboxWorkspaceDeps): AgentWorkspa
       });
 
       if (content === null) return { kind: "absent" };
-      if (content.length > input.maxBytes) return { kind: "too_large" };
+      // Compared in bytes, because the budget is in bytes. `content.length`
+      // counts UTF-16 units, so a file of multi-byte characters passed a byte
+      // budget it had already exceeded — and arrived here *truncated to the
+      // read bound*, which run `b33635a1` recorded as two complete 262 145-byte
+      // additions. Had that change been accepted, Vibe would have written a
+      // half a file onto a branch and called it exact (§59).
+      if (Buffer.byteLength(content, "utf8") > input.maxBytes) return { kind: "too_large" };
       return { kind: "content", content };
     },
 

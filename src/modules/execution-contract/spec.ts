@@ -74,6 +74,41 @@ export type ApprovedBusinessDecision = {
   decision: string;
 };
 
+/**
+ * One preparatory step this execution performs itself (Core-4 semantics fix
+ * §12, §13, §14).
+ *
+ * ## What it is
+ *
+ * A Planner step classified as Vibe's own technical preparation, folded into
+ * the boundary of a downstream agentic execution instead of standing in front
+ * of it. The primary step is still the delivery target; this is context that
+ * tells the agent what to establish before it writes anything.
+ *
+ * ## What it is emphatically not
+ *
+ * **Authority.** Absorbed preparation grants no tool, no budget, no wider file
+ * scope, no side effect, no higher risk ceiling and no secret. The policy is
+ * compiled from the mode, execution class, risk class and write scope, and
+ * nothing here is an input to any of them — a preparation step that says
+ * *"deploy the result"* is a quoted sentence in a fenced user message, and the
+ * gateway has no deploy tool to give it.
+ *
+ * **Completion.** The Planner's step is not marked done, not rewritten, and not
+ * removed. This records how the execution boundary was compiled; the plan
+ * remains exactly as stored (§34).
+ */
+export type AbsorbedPreparation = {
+  stepOrder: number;
+  stepKey: string;
+  /** The preparation's own title, in the plan's recorded words. */
+  title: string;
+  /** Why the plan wanted it. */
+  purpose: string;
+  /** What the plan says finishing it looks like. */
+  doneWhen: string;
+};
+
 export type ExecutionObjective = {
   /** The plan's business goal. */
   goal: string;
@@ -89,6 +124,15 @@ export type ExecutionObjective = {
    * business change rather than for the literal instruction.
    */
   expectedChangedState: string;
+  /**
+   * Preparation this run performs before the change, in plan order (§12).
+   *
+   * Empty for every execution whose prerequisites were already satisfied, and
+   * for every non-agentic route. On the objective rather than in
+   * `businessContext` because it is part of *what the agent is asked to do* —
+   * business context is what the work rests on, and this is work.
+   */
+  preparation: readonly AbsorbedPreparation[];
 };
 
 export type ExecutionRepositoryBinding = {
@@ -211,9 +255,38 @@ export type BuildExecutionSpecInput = {
   credit: ExecutionCreditBinding;
   /** Fixture-supplied in tests; Core-4 derives it from the approved budget policy. */
   writeScope: ExecutionWriteScope;
+  /**
+   * The plan steps named by `resolution.absorbedPreparation` (§12, §13).
+   *
+   * Passed in rather than looked up, because a spec builder that reached into a
+   * plan could disagree with the resolver about which steps were absorbed. It
+   * is checked instead: exactly these orders, no more and no fewer, or the
+   * build refuses.
+   */
+  preparationSteps?: readonly ActionPlanStep[];
   operationRunId?: string | null;
   createdAt: string;
 };
+
+/**
+ * The caller's preparation steps did not match what the resolver absorbed.
+ *
+ * A loud failure rather than a reconciliation. The two halves disagreeing means
+ * the spec would describe an execution boundary nothing resolved, and quietly
+ * preferring either side would hide which one was wrong.
+ */
+export class ExecutionSpecPreparationMismatch extends Error {
+  constructor(
+    readonly expected: readonly number[],
+    readonly received: readonly number[],
+  ) {
+    super(
+      `The resolver absorbed preparation steps [${expected.join(", ")}], ` +
+        `but [${received.join(", ")}] were supplied. Re-resolve the step rather than reconciling these.`,
+    );
+    this.name = "ExecutionSpecPreparationMismatch";
+  }
+}
 
 export class ExecutionSpecNotBuildable extends Error {
   constructor(readonly mode: ExecutionMode) {
@@ -249,12 +322,26 @@ export function buildExecutionSpec(input: BuildExecutionSpecInput): ExecutionSpe
     throw new ExecutionSpecNotBuildable(resolution.mode);
   }
 
+  const preparationSteps = [...(input.preparationSteps ?? [])].sort((a, b) => a.order - b.order);
+  const absorbed = [...resolution.absorbedPreparation].sort((a, b) => a - b);
+  const supplied = preparationSteps.map((preparation) => preparation.order);
+  if (absorbed.length !== supplied.length || absorbed.some((order, index) => order !== supplied[index])) {
+    throw new ExecutionSpecPreparationMismatch(absorbed, supplied);
+  }
+
   const objective: ExecutionObjective = {
     goal: plan.goal,
     stepTitle: step.title,
     purpose: step.purpose,
     doneWhen: step.completionCriteria,
     expectedChangedState: plan.expectedOutcome,
+    preparation: preparationSteps.map((preparation) => ({
+      stepOrder: preparation.order,
+      stepKey: preparation.id,
+      title: preparation.title,
+      purpose: preparation.purpose,
+      doneWhen: preparation.completionCriteria,
+    })),
   };
 
   assertNoSecretMaterial("objective.goal", objective.goal);
@@ -262,6 +349,13 @@ export function buildExecutionSpec(input: BuildExecutionSpecInput): ExecutionSpe
   assertNoSecretMaterial("objective.purpose", objective.purpose);
   assertNoSecretMaterial("objective.doneWhen", objective.doneWhen);
   assertNoSecretMaterial("objective.expectedChangedState", objective.expectedChangedState);
+  // Preparation is Planner prose like the rest of the objective, and reaches the
+  // agent's user message the same way. It gets the same guard.
+  for (const preparation of objective.preparation) {
+    assertNoSecretMaterial(`objective.preparation[${preparation.stepKey}].title`, preparation.title);
+    assertNoSecretMaterial(`objective.preparation[${preparation.stepKey}].purpose`, preparation.purpose);
+    assertNoSecretMaterial(`objective.preparation[${preparation.stepKey}].doneWhen`, preparation.doneWhen);
+  }
   for (const decision of input.approvedDecisions) {
     assertNoSecretMaterial(`businessContext.approvedDecisions[${decision.key}]`, decision.decision);
   }
@@ -289,6 +383,9 @@ export function buildExecutionSpec(input: BuildExecutionSpecInput): ExecutionSpe
     capability: resolution.capability,
     capabilityVersion: resolution.capabilityVersion,
     businessContextHash,
+    // Two runs that deliver the same step but carry different preparation are
+    // different execution boundaries, so they are different specs (§13).
+    absorbedPreparationKeys: objective.preparation.map((preparation) => preparation.stepKey),
     specSchemaVersion: EXECUTION_SPEC_SCHEMA_VERSION,
     resolverVersion: EXECUTION_RESOLVER_VERSION,
     policyVersion: EXECUTION_POLICY_VERSION,

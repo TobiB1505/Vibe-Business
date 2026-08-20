@@ -181,6 +181,12 @@ describe("EXECUTION CORE-4 — agent preflight against a real project", () => {
       budget,
       credit: { quoteId: null, maxAuthorizedCredits: budget?.maxCredits ?? null },
       writeScope,
+      // Preparation the resolver folded into this boundary (semantics fix §12).
+      // Read from the plan by the orders the resolver named, never chosen here:
+      // `buildExecutionSpec` refuses if the two disagree.
+      preparationSteps: agentic.absorbedPreparation.map(
+        (order) => plan!.steps.find((candidate) => candidate.order === order)!,
+      ),
       createdAt: new Date().toISOString(),
     });
 
@@ -194,6 +200,12 @@ describe("EXECUTION CORE-4 — agent preflight against a real project", () => {
     });
 
     console.log(`Selected step        #${step.order} — ${step.title}`);
+    if (spec.objective.preparation.length > 0) {
+      console.log("absorbed preparation");
+      for (const preparation of spec.objective.preparation) {
+        console.log(`  #${preparation.stepOrder} — ${preparation.title}`);
+      }
+    }
     console.log(`spec identity        ${spec.identity}`);
     console.log("");
 

@@ -1,3 +1,5 @@
+import type { SandboxVerificationPolicy } from "@/modules/execution-context/verification";
+import type { SandboxCompletionPolicy } from "@/modules/execution-context/completion";
 import type { AgentProviderOutcome, AgentToolRequestName } from "./schema";
 
 /**
@@ -111,6 +113,17 @@ export type CodingAgentRequest = {
    * bypasses it.
    */
   invokeTool(name: string, input: unknown): Promise<AgentToolOutcome>;
+  /**
+   * How much self-checking this task is allowed (Sprint 0042).
+   *
+   * A provider carries it to wherever the harness runs and never interprets it.
+   * Optional because a provider that has no place to enforce it — anything not
+   * hosting the agent's own shell — correctly ignores it, and because a run
+   * without one behaves exactly as it did before the plan existed.
+   */
+  verification?: SandboxVerificationPolicy;
+  /** How much work is allowed after the code is written. Carried, never read. */
+  completion?: SandboxCompletionPolicy;
   /** Cancellation and wall-clock enforcement (§36). */
   signal: AbortSignal;
 };
@@ -136,8 +149,23 @@ export type AgentModelUsage = {
 
 export type CodingAgentResult = {
   outcome: AgentProviderOutcome;
-  /** Turns the provider actually took. Observed, never self-reported by the model. */
-  turns: number;
+  /**
+   * Model responses the run produced. Observed, never self-reported.
+   *
+   * **Not** the unit the budget's turn ceiling is in. That bounds the harness's
+   * own loop, which advances on tool results too — see `sdkLoopIterations`.
+   * Run `b33635a1` recorded 66 of these against a ceiling of 40 and overran
+   * nothing, because the number shown and the number bounded were different
+   * quantities sharing one name.
+   */
+  assistantMessages: number;
+  /**
+   * The harness's own loop count, in the unit the ceiling is in.
+   *
+   * Null when the harness never reported one. Null is the honest answer there;
+   * the message count is not a stand-in for it.
+   */
+  sdkLoopIterations: number | null;
   usage: readonly AgentModelUsage[];
   /**
    * The provider's session identity, when it exposes one (§38).
@@ -148,12 +176,156 @@ export type CodingAgentResult = {
   sessionId: string | null;
   /** How many tool calls the provider's own permission layer refused. */
   providerDeniedToolCalls: number;
+  /**
+   * Check commands the harness let through and refused, counted at the point
+   * the decision was made (Sprint 0042).
+   *
+   * Null for a provider that hosts no shell, and — importantly — null is not
+   * zero. Run #5 recorded zero verification commands while running a permitted
+   * targeted test, because `allowedTools` had auto-allowed Bash past the
+   * permission handler entirely. A counter written where the decision happens
+   * is the only thing that can disagree with one derived from the feed, and a
+   * disagreement is the bug report.
+   */
+  verificationCommands: number | null;
+  verificationRefusals: number | null;
+  /** Every tool call the policy hook saw. Zero beside many tool calls is a bug. */
+  policyDecisions: number | null;
+  /** Mutations that answered an observed failure. A real repair. */
+  repairCycles: number | null;
+  /** Files written while implementing. Breadth, never charged (Sprint 0044). */
+  implementationMutations: number | null;
+  /** Files written after the run converged. Each one cost a window. */
+  convergenceMutations: number | null;
+  /** Required verification operations the runtime allowed. */
+  requiredVerificationActions: number | null;
+  /** Of those, the ones a completion budget alone would have refused. */
+  requiredVerificationOverrides: number | null;
   durationMs: number;
   /**
    * A sanitized description of a provider failure. Never surfaced to a user,
    * never a raw provider object, never model text.
    */
   failureDetail: string | null;
+};
+
+/**
+ * A harness that outlives the step which started it
+ * (EXECUTION CORE-4 runtime placement, ADR 0029).
+ *
+ * ## Why this is a different interface rather than a longer `run()`
+ *
+ * Because the shape of the work changed, not just its duration.
+ * `CodingAgentProvider.run()` is one awaited call: whoever starts the agent
+ * stays alive until it finishes. That is exactly what a Vercel step cannot do —
+ * the first real run proved it by being killed at 300 seconds with the harness
+ * still working and the run row still reading `turns: 0`.
+ *
+ * Under this interface the three moments are three separate calls, each short
+ * enough to be its own durable step, and **none of them holds state between
+ * calls**. Every implementation must be reconstructible from scratch: the step
+ * that observes a run is a different function invocation from the one that
+ * started it, on a different machine, minutes later. What persists lives in the
+ * sandbox and in the database, never in this object.
+ *
+ * ## What each call may and may not do
+ *
+ * `start` may launch exactly one process, and must be safe to call after a
+ * retry — the caller's claim is the primary guard, and an implementation is
+ * expected to check the workspace as an independent second one.
+ *
+ * `observe` must be cheap and read-only. It is called on a timer for the whole
+ * length of a run, so anything expensive here is paid for tens of times.
+ *
+ * `collect` reads the finished result. It never waits for one.
+ */
+export interface DetachedCodingAgentProvider {
+  readonly id: string;
+  readonly harness: string;
+
+  /** Launches the harness and returns as soon as it is running. */
+  start(request: CodingAgentRequest): Promise<DetachedStartOutcome>;
+
+  /** What Vibe can see of the run right now. Never the agent's own account. */
+  observe(): Promise<DetachedObservation>;
+
+  /**
+   * The finished result.
+   *
+   * `startedAtMs` is passed in rather than remembered, because the object that
+   * started the run no longer exists — the duration belongs to the run, not to
+   * any one invocation of this provider.
+   */
+  collect(input: { startedAtMs: number }): Promise<CodingAgentResult>;
+}
+
+export type DetachedStartOutcome =
+  | { ok: true }
+  /** Sanitized. Never a raw provider object and never model text. */
+  | { ok: false; failureDetail: string };
+
+/**
+ * One line of the harness's progress feed, as Vibe read it back.
+ *
+ * Structurally incapable of carrying narration: a closed tag, a sequence, and
+ * bounded identifiers. Telemetry only — what the run actually changed is still
+ * established by comparing the workspace to the pinned commit (Rule 77).
+ */
+export type ObservedRuntimeEntry = {
+  sequence: number;
+  /**
+   * Milliseconds since the harness started.
+   *
+   * Relative, because the sandbox's clock is not this system's. Vibe adds it to
+   * the start time it recorded itself, which survives skew and gives a feed
+   * with real per-step durations rather than one timestamp per poll batch.
+   */
+  offsetMs?: number;
+  kind:
+    | "started"
+    | "turn"
+    | "tool"
+    | "finished"
+    | "verification"
+    | "verification_refused"
+    | "phase";
+  /** Model responses so far, on a `turn` line. */
+  assistantMessages?: number;
+  tool?: string;
+  path?: string;
+  command?: string;
+  subtype?: string;
+  /** Which check a verification line was about. Closed vocabulary (Sprint 0042). */
+  check?: string;
+  /** Why a check command was refused. Closed vocabulary. */
+  refusalReason?: string;
+  /** Which observed phase the run moved into. Closed vocabulary. */
+  phase?: string;
+};
+
+export type DetachedObservation = {
+  /** True once the harness has written anything at all. */
+  started: boolean;
+  /** True once it has written its result. The loop is over. */
+  finished: boolean;
+  /**
+   * Model responses Vibe has observed, from the harness's own progress file.
+   *
+   * An observation, not a claim: the file records that a response *happened*,
+   * which is a fact about what was billed. It is deliberately not the model's
+   * description of what it did (Rule 77) — and deliberately not comparable to
+   * the budget's turn ceiling, which counts the harness's loop instead.
+   */
+  assistantMessages: number;
+  /**
+   * The whole feed, every time — never a delta.
+   *
+   * The reader is a different function invocation with no memory of the last
+   * one, and the durable write is an upsert keyed on the harness's own
+   * sequence. Re-offering what is already stored is therefore free, and makes a
+   * lost poll cost nothing.
+   */
+  entries?: readonly ObservedRuntimeEntry[];
 };
 
 export interface CodingAgentProvider {

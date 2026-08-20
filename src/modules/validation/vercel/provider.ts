@@ -195,7 +195,8 @@ class VercelSandboxHandle implements SandboxHandle {
    *
    * `sandbox.snapshot()` shuts the sandbox down, so a later `stop()` would
    * throw and take the accounting with it. Capturing usage at the moment of
-   * termination keeps the ledger whole either way.
+   * termination — via a fresh `Sandbox.get()`, see `readTerminalUsage` —
+   * keeps the ledger whole either way.
    */
   private terminalUsage: SandboxUsage | null = null;
 
@@ -210,6 +211,7 @@ class VercelSandboxHandle implements SandboxHandle {
     command: { command: string; args: string[] };
     cwd: string;
     timeoutMs: number;
+    env?: Record<string, string>;
   }) {
     // Per-command deadline. The sandbox's own timeout is a backstop for the
     // whole run; this stops one hanging command consuming the entire budget.
@@ -224,6 +226,9 @@ class VercelSandboxHandle implements SandboxHandle {
         // for injection even if a value were ever attacker-influenced (§13).
         args: input.command.args,
         cwd: input.cwd,
+        // Omitted rather than passed as `{}` when there is nothing to add, so
+        // the ordinary validation path is byte-for-byte the call it always was.
+        ...(input.env ? { env: input.env } : {}),
         signal: controller.signal,
       });
 
@@ -306,19 +311,69 @@ class VercelSandboxHandle implements SandboxHandle {
       throw new SanitizedSandboxProviderError(error);
     }
 
-    // The sandbox is now unreachable, so read what it measured before losing it.
-    this.terminalUsage = {
-      activeCpuDurationMs: this.sandbox.totalActiveCpuDurationMs ?? null,
-      networkIngressBytes: this.sandbox.totalIngressBytes ?? null,
-      networkEgressBytes: this.sandbox.totalEgressBytes ?? null,
-      costUsd: null,
-    };
+    this.terminalUsage = await this.readTerminalUsage();
 
     return {
       snapshotId: snapshot.snapshotId,
       sizeBytes: snapshot.sizeBytes ?? null,
       expiresAt: snapshot.expiresAt ? snapshot.expiresAt.toISOString() : null,
     };
+  }
+
+  /**
+   * What the sandbox measured, read fresh after termination (Sprint 0051).
+   *
+   * ## The bug this replaces
+   *
+   * The previous implementation read `this.sandbox.totalActiveCpuDurationMs`
+   * immediately after `sandbox.snapshot()` — the SDK's own cached copy of the
+   * sandbox record, held on the local `Sandbox` instance since it was
+   * constructed. Reading the SDK's compiled source settles what refreshes that
+   * cache and what does not: `Sandbox.update()` reassigns it
+   * (`this.sandbox = response.json.sandbox`), and `Sandbox.stop()` does the
+   * same on its way out. `Sandbox.snapshot()` does neither — it forwards to
+   * `Session.snapshot()`, which only refreshes the SDK's internal *session*
+   * object, never the sandbox-level one our code was reading. And the
+   * `Snapshot` object `.snapshot()` returns carries no usage fields at all
+   * (only id, size, status, timestamps).
+   *
+   * So `this.sandbox.totalActiveCpuDurationMs` after a snapshot was never the
+   * finished run's usage — it was whatever the sandbox record looked like at
+   * construction, before any command had run. Fifteen of nineteen passing
+   * validation rows in Vibe's own history recorded `active_cpu_ms: null` for
+   * exactly this reason.
+   *
+   * ## Why a fresh `Sandbox.get()` is the fix, not another local read
+   *
+   * `stop()` cannot be called here — the code's own long-standing comment is
+   * right that a snapshotted sandbox refuses a second `stop()`. But the API
+   * document for `totalActiveCpuDurationMs` says "cumulative ... across all
+   * sessions": it is server-side, sandbox-level state, independent of which
+   * local instance asks for it. A fresh `Sandbox.get({name, resume: false})`
+   * is a real round trip against that record, taken after termination, so it
+   * reflects the finished total rather than a stale local cache.
+   *
+   * Best-effort. A failed re-read leaves usage `null` — never guessed from
+   * wall duration, which is exactly the mistake this fix exists to avoid
+   * making in a different place (§25).
+   */
+  private async readTerminalUsage(): Promise<SandboxUsage> {
+    try {
+      const refreshed = await Sandbox.get({ name: this.sandbox.name, resume: false });
+      return {
+        activeCpuDurationMs: refreshed.totalActiveCpuDurationMs ?? null,
+        networkIngressBytes: refreshed.totalIngressBytes ?? null,
+        networkEgressBytes: refreshed.totalEgressBytes ?? null,
+        costUsd: null,
+      };
+    } catch {
+      return {
+        activeCpuDurationMs: null,
+        networkIngressBytes: null,
+        networkEgressBytes: null,
+        costUsd: null,
+      };
+    }
   }
 
   async publicOrigin(port: number): Promise<string> {

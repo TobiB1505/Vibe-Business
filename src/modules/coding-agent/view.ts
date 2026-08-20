@@ -1,3 +1,7 @@
+import {
+  EXECUTION_ADMISSION_LABELS,
+} from "@/modules/execution-contract/view";
+import type { ExecutionAdmission } from "@/modules/execution-contract/schema";
 import type { AgentStartRefusal } from "./service";
 import type { PreflightRefusal } from "./preflight";
 
@@ -36,3 +40,44 @@ export const AGENT_START_REFUSAL_LABELS: Record<AgentStartRefusal, string> = {
   execution_start_failed: "Vibe couldn't start the run — try again.",
   agent_start_failed: "Vibe couldn't start the run — try again.",
 };
+
+/**
+ * Why a start attempt stopped before `startAgentExecution` was even reached.
+ *
+ * Separate from {@link AGENT_START_REFUSAL_LABELS} because these happen one
+ * step earlier — while recording the instruction package the run would execute.
+ * They were previously invisible: a refused insert was reported as "this isn't
+ * the kind of change Vibe can attempt", on a screen that had just said the
+ * opposite in the sentence above it.
+ */
+export const DOGFOOD_START_REFUSAL_LABELS = {
+  not_eligible: "This step is no longer eligible — the page will show why above.",
+  spec_not_persisted: "Vibe couldn't record what this run would do, so it didn't start one.",
+  project_not_found: "That project couldn't be found.",
+} as const;
+
+/**
+ * The refusal, said accurately.
+ *
+ * `not_admissible` is one preflight refusal standing in for nine different
+ * admission answers — a moved HEAD, an unread HEAD, a stale snapshot, a
+ * superseded plan, no approved price, and three Credit states. Rendering the
+ * generic label for all of them tells a founder "your code changed since Vibe
+ * last looked" when the truth might be that no Agent price exists, which is
+ * both wrong and unactionable.
+ *
+ * `EXECUTION_ADMISSION_LABELS` already carries the honest sentence for each, so
+ * this prefers it whenever the resolution knows which one applies. Every other
+ * refusal keeps its own copy: those are about the *classification*, which
+ * admission has nothing to say about.
+ */
+export function preflightRefusalLabel(
+  refusal: PreflightRefusal,
+  admission: ExecutionAdmission,
+): string {
+  if (refusal === "not_admissible" && !admission.admissible) {
+    return EXECUTION_ADMISSION_LABELS[admission.refusal];
+  }
+
+  return PREFLIGHT_REFUSAL_LABELS[refusal];
+}

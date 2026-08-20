@@ -2,8 +2,14 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getLatestCompletedActionPlan } from "@/modules/action-plans/store";
-import { createExecutionSpec } from "@/modules/execution-contract/service";
-import { resolveStepExecution, type RepositoryContext } from "@/modules/execution-contract/resolver";
+import type { ActionPlanStep } from "@/modules/action-plans/schema";
+import { benchmarkStep, fixtureForStepKey } from "./dogfood/fixtures";
+import { buildExecutionSpec, type ExecutionSpec } from "@/modules/execution-contract/spec";
+import {
+  resolvePlanExecution,
+  resolveStepExecution,
+  type RepositoryContext,
+} from "@/modules/execution-contract/resolver";
 import type { ExecutionResolution } from "@/modules/execution-contract/schema";
 import { resolveExecutionValidation } from "@/modules/execution-contract/validation-requirements";
 import { createGithubRepositoryReader } from "@/modules/github/repository-reader";
@@ -68,10 +74,27 @@ export type DogfoodStepPreview =
   | {
       eligible: true;
       stepTitle: string;
-      executionSpecId: string;
+      /**
+       * The instruction package, **built and not yet persisted**.
+       *
+       * A preview renders it; only a start writes it. Handing back a row id
+       * from a read path was what hid the fact that the row was never being
+       * created — see `operations/agent-execution/spec.ts`.
+       */
+      spec: ExecutionSpec;
+      /** Needed by the writer, and not derivable from the spec document. */
+      repositoryConnectionId: string;
       resolution: ExecutionResolution;
       preflight: AgentPreflight;
       economics: AgentEconomicPolicy;
+      /**
+       * Whether the repository's live HEAD was read and matched.
+       *
+       * False only for a compilation preflight that deliberately resolved
+       * against the analysed commit. A run must never be started from one: it
+       * says nothing about whether the default branch has moved.
+       */
+      revisionVerified: boolean;
     }
   | {
       eligible: false;
@@ -136,6 +159,95 @@ async function loadOwnedRepositoryConnection(
   };
 }
 
+/**
+ * Every step of the project's current plan, routed against **real** repository
+ * state.
+ *
+ * ## Why this exists rather than the index page resolving inline
+ *
+ * Because the index page did resolve inline, and it passed a repository
+ * context of all nulls — no connection, no snapshot — with a comment saying the
+ * list "only needs the route each step would take". A route is not independent
+ * of the repository. `classifyIntrinsic` needs a connection and a snapshot to
+ * reach `agentic` at all, so resolving against nulls does not show the route
+ * ignoring live state: it shows the route for a project that has no repository,
+ * which is `unsupported` for every product change, always.
+ *
+ * The visible consequence was that no step could *ever* be offered. Every
+ * implementation step read "waiting on an earlier step", the "Review this step"
+ * link was unreachable by construction, and the whole dogfood surface was a
+ * list of refusals for a project whose repository was connected, snapshotted
+ * and supported.
+ *
+ * ## What it deliberately does not read
+ *
+ * The live GitHub HEAD. That is one network call per page load to answer a
+ * question this page does not ask — admission, not classification — and
+ * `previewDogfoodStep` probes it for real on the step a founder actually
+ * opens. An unread HEAD is modelled honestly as `null`, which refuses
+ * admission; the index renders `mode` and `reason`, neither of which it
+ * touches.
+ */
+export type DogfoodPlanRoutes =
+  | { available: false; reason: Extract<DogfoodStepReason, "not_dogfood_eligible" | "no_action_plan"> }
+  | {
+      available: true;
+      plan: NonNullable<Awaited<ReturnType<typeof getLatestCompletedActionPlan>>>;
+      resolutions: readonly ExecutionResolution[];
+    };
+
+export async function resolveDogfoodPlanRoutes(
+  supabase: SupabaseClient,
+  params: { projectId: string; userId: string; env?: Record<string, string | undefined> },
+): Promise<DogfoodPlanRoutes> {
+  // The allowlist gate first, before anything is read (§26, §27).
+  if (!isDogfoodEligibleProject(params.projectId, params.env)) {
+    return { available: false, reason: "not_dogfood_eligible" };
+  }
+
+  const plan = await getLatestCompletedActionPlan(supabase, params.projectId);
+  if (!plan) return { available: false, reason: "no_action_plan" };
+
+  // Both may legitimately be absent, and the resolver says so per step with its
+  // own reasons — `repository_not_connected` and `repository_snapshot_missing`
+  // are real answers a founder can act on. What it must not do is invent them.
+  const [connection, snapshot] = await Promise.all([
+    loadOwnedRepositoryConnection(supabase, {
+      projectId: params.projectId,
+      userId: params.userId,
+    }),
+    getLatestSuccessfulSnapshot(supabase, params.projectId),
+  ]);
+
+  const repository: RepositoryContext = {
+    connection: connection
+      ? { id: connection.id, fullName: connection.fullName, defaultBranch: connection.defaultBranch }
+      : null,
+    snapshot: snapshot?.result ?? null,
+    snapshotId: snapshot?.id ?? null,
+    snapshotCommitSha: snapshot?.result?.source.commitSha ?? null,
+    // It is the newest successful one by construction — that is what the store
+    // function returns.
+    snapshotIsLatest: Boolean(snapshot?.result),
+    liveHead: null,
+  };
+
+  const economics = resolveAgentEconomics({ projectId: params.projectId, env: params.env });
+
+  return {
+    available: true,
+    plan,
+    resolutions: resolvePlanExecution({
+      // Nothing in the product completes a step yet (Core-3 `sequence.ts`), and
+      // since the semantics fix nothing needs to: Vibe's own preparation is
+      // absorbed into the run that follows it rather than waited on.
+      plan: { steps: plan.steps, completedSteps: new Set<number>(), isCurrent: true },
+      repository,
+      agenticBudgetAuthorized: economics !== null,
+    }),
+  };
+}
+
 export async function previewDogfoodStep(
   supabase: SupabaseClient,
   params: {
@@ -153,8 +265,131 @@ export async function previewDogfoodStep(
   const plan = await getLatestCompletedActionPlan(supabase, params.projectId);
   if (!plan) return { eligible: false, reason: "no_action_plan" };
 
+  /*
+   * An internal benchmark step is resolved from Vibe's own fixture registry
+   * (Sprint 0045).
+   *
+   * Recognised by its namespaced key, which a Planner step id can never carry.
+   * This is what lets a controlled benchmark be started through the *existing*
+   * Run button — the same allowlist gate, the same ownership re-resolution, the
+   * same idempotent `startAgentExecution` — instead of through a second start
+   * path that would have to be audited again.
+   */
+  const fixture = fixtureForStepKey(params.stepKey);
+  if (fixture) {
+    const snapshot = await getLatestSuccessfulSnapshot(supabase, params.projectId);
+    if (!snapshot?.result) return { eligible: false, reason: "repository_snapshot_missing" };
+
+    const step = benchmarkStep(fixture, snapshot.result);
+    return resolveExecutableStep(supabase, {
+      projectId: params.projectId,
+      userId: params.userId,
+      env: params.env,
+      step,
+      planSteps: [step],
+      lineage: {
+        id: plan.id,
+        goal: fixture.goal,
+        expectedOutcome: fixture.expectedChangedState,
+        assumptions: [],
+        opportunityId: plan.opportunityId,
+        businessAuditId: plan.businessAuditId,
+      },
+    });
+  }
+
   const step = plan.steps.find((candidate) => candidate.id === params.stepKey);
   if (!step) return { eligible: false, reason: "step_not_found" };
+
+  return resolveExecutableStep(supabase, {
+    projectId: params.projectId,
+    userId: params.userId,
+    env: params.env,
+    step,
+    /*
+     * Every step of the plan, because the resolver decides what to absorb.
+     *
+     * A caller that handed it only the step being run would be answering the
+     * resolver's question for it — which preparation steps this execution
+     * boundary carries — and `buildExecutionSpec` refuses when the two disagree.
+     */
+    planSteps: plan.steps,
+    lineage: {
+      id: plan.id,
+      goal: plan.goal,
+      expectedOutcome: plan.expectedOutcome,
+      assumptions: plan.assumptions,
+      opportunityId: plan.opportunityId,
+      businessAuditId: plan.businessAuditId,
+    },
+  });
+}
+
+/**
+ * Everything between a resolved `(step, lineage)` pair and an admissible spec.
+ *
+ * ## Why this is a seam
+ *
+ * Because it is the exact span the internal benchmark harness replaces, and
+ * nothing else. `previewDogfoodStep` reaches it by reading the project's real
+ * Action Plan; `coding-agent/dogfood/benchmark.ts` reaches it with a
+ * Vibe-authored fixture step. From here down the two are the same code —
+ * the same live HEAD read, the same resolver, the same risk classification, the
+ * same validation profile, the same write scope, the same preflight — which is
+ * what makes a benchmark representative of a real execution rather than a
+ * parallel implementation that resembles one.
+ *
+ * The lineage fields are supplied rather than looked up because a benchmark's
+ * business lineage is the project's own: it runs against the same audit and the
+ * same opportunity set a customer execution would, and only the *step* is
+ * authored by Vibe.
+ */
+export type ExecutableStepLineage = {
+  id: string;
+  goal: string | null;
+  expectedOutcome: string | null;
+  assumptions: readonly string[];
+  opportunityId: string | null;
+  businessAuditId: string | null;
+};
+
+export async function resolveExecutableStep(
+  supabase: SupabaseClient,
+  params: {
+    projectId: string;
+    userId: string;
+    env?: Record<string, string | undefined>;
+    step: ActionPlanStep;
+    planSteps: readonly ActionPlanStep[];
+    lineage: ExecutableStepLineage;
+    /**
+     * Resolve against the **analysed** commit instead of the live one.
+     *
+     * A compilation preflight only, and never a route to a run. Admission
+     * requires the default branch to be read *now* and to still point at the
+     * commit the snapshot describes (Rule 55, ADR 0014) — an unread HEAD is
+     * `source_revision_unverified`, and that is correct and stays correct.
+     *
+     * But "what would the Context Compiler, the surface resolver and the
+     * verification classifier produce for this step?" is a different question,
+     * and it is answerable without a network at all. The internal benchmark
+     * harness asks that one, in environments that hold no GitHub App
+     * credentials, and every preview produced this way is stamped
+     * `revisionVerified: false` so it cannot be mistaken for admission.
+     *
+     * Nothing in the product sets this. The website's Run button reaches this
+     * function without it and reads the live HEAD for real.
+     */
+    resolveAgainstAnalysedCommit?: boolean;
+  },
+): Promise<DogfoodStepPreview> {
+  // §26, §27: the gate, again, because this is now an entry point of its own.
+  if (!isDogfoodEligibleProject(params.projectId, params.env)) {
+    return { eligible: false, reason: "not_dogfood_eligible" };
+  }
+
+  const { step, planSteps, lineage } = params;
+  const plan = lineage;
 
   const connection = await loadOwnedRepositoryConnection(supabase, {
     projectId: params.projectId,
@@ -168,12 +403,18 @@ export async function previewDogfoodStep(
   // Live state, read now, for this session's own installation (§7, §16 of Core-3).
   // A failed read is not a crash — it is an unread HEAD, which the resolver
   // already treats as unknown rather than unchanged.
-  let liveHead: RepositoryContext["liveHead"] = null;
-  try {
-    const reader = createGithubRepositoryReader(connection.installationId, connection.owner, connection.name);
-    liveHead = await reader.getHead();
-  } catch (error) {
-    if (!(error instanceof GithubDomainError)) throw error;
+  const revisionVerified = params.resolveAgainstAnalysedCommit !== true;
+  let liveHead: RepositoryContext["liveHead"] = revisionVerified
+    ? null
+    : { commitSha: snapshot.result.source.commitSha, defaultBranch: connection.defaultBranch };
+
+  if (revisionVerified) {
+    try {
+      const reader = createGithubRepositoryReader(connection.installationId, connection.owner, connection.name);
+      liveHead = await reader.getHead();
+    } catch (error) {
+      if (!(error instanceof GithubDomainError)) throw error;
+    }
   }
 
   const repository: RepositoryContext = {
@@ -194,7 +435,7 @@ export async function previewDogfoodStep(
   const resolution = resolveStepExecution({
     step,
     plan: {
-      steps: plan.steps,
+      steps: planSteps,
       // Nothing in the product completes a step yet (Core-3 §sequence.ts).
       completedSteps: new Set<number>(),
       isCurrent: true,
@@ -226,7 +467,19 @@ export async function previewDogfoodStep(
     },
   };
 
-  const created = await createExecutionSpec(supabase, {
+  /*
+   * Built, not persisted.
+   *
+   * A preview is a read. Persisting on render would write an immutable,
+   * permanently auditable row every time somebody opened this page — and, more
+   * bluntly, it never worked: `execution_specs` has no insert policy, so the
+   * caller's cookie-scoped client was silently refused and this function
+   * reported `not_agentic` for a step it had just resolved as agentic.
+   *
+   * `startDogfoodRunAction` persists it, once, through
+   * `operations/agent-execution/spec.ts`, which holds the only client that may.
+   */
+  const spec = buildExecutionSpec({
     resolution,
     step,
     plan: {
@@ -252,18 +505,28 @@ export async function previewDogfoodStep(
     budget,
     credit: { quoteId: null, maxAuthorizedCredits: budget?.maxCredits ?? null },
     writeScope,
+    /*
+     * Preparation the resolver folded into this execution boundary
+     * (semantics fix §12, §13).
+     *
+     * Taken from `resolution.absorbedPreparation` rather than chosen here: the
+     * resolver decides which prerequisites are Vibe's own preparation, and a
+     * surface that picked its own set would be compiling a different execution
+     * than the one it classified. `buildExecutionSpec` refuses if the two
+     * disagree, so this cannot drift silently.
+     *
+     * The non-null assertion is safe by construction — every absorbed order
+     * came from a step in `plan.steps` a moment ago — and if that ever stopped
+     * being true the spec builder would throw rather than build something
+     * partial.
+     */
+    preparationSteps: resolution.absorbedPreparation.map(
+      (order) => planSteps.find((candidate) => candidate.order === order)!,
+    ),
     createdAt: new Date().toISOString(),
-    userId: params.userId,
-    repositoryConnectionId: connection.id,
   });
 
-  if (!created.ok) return { eligible: false, reason: "not_agentic", resolution };
-
-  const preflight = runAgentPreflight({
-    resolution,
-    spec: created.stored.spec,
-    economics,
-  });
+  const preflight = runAgentPreflight({ resolution, spec, economics });
 
   if (!preflight.passed || !economics) {
     return { eligible: false, reason: "preflight_refused", resolution, preflight };
@@ -272,9 +535,11 @@ export async function previewDogfoodStep(
   return {
     eligible: true,
     stepTitle: step.title,
-    executionSpecId: created.stored.id,
+    spec,
+    repositoryConnectionId: connection.id,
     resolution,
     preflight,
     economics,
+    revisionVerified,
   };
 }

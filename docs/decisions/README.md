@@ -57,6 +57,16 @@ V0.1 foundational architecture decisions have been recorded:
 - [0025](0025-stripe-payment-rail-and-credit-grants.md) — Stripe as Payment Rail, and Credit Grants as Provenance (Accepted)
 - [0026](0026-agentic-execution-contract.md) — Agentic Execution Contract (Accepted)
 - [0027](0027-coding-agent-provider-and-tool-gateway.md) — Agentic Coding: Provider Abstraction, Tool Gateway, and Independent Validation (Accepted)
+- [0028](0028-founder-selectable-action-plan-move.md) — Founder-Selectable Action Plan Move (Accepted)
+- [0029](0029-agent-runtime-placement-and-credential-broker.md) — Agent Runtime Placement: the Harness in the Sandbox, the Key Behind a Gateway (Accepted, amends 0027)
+- [0030](0030-agent-execution-observability.md) — Agent Execution Observability: one ordered event log, a reusable live view, derived economics (Accepted, extends 0027 and 0029)
+- [0031](0031-execution-context-intelligence.md) — Execution Context Intelligence: verify relevant facts, do not broadly rediscover (Accepted, extends 0027, 0029 and 0030)
+- [0032](0032-agent-verification-and-completion.md) — Agent Verification and Completion: the agent checks enough to converge, the validator checks enough to authorize (Accepted, extends 0027, 0029 and 0031)
+- [0033](0033-post-implementation-completion-control.md) — Post-Implementation Completion Control: stop paying for exploration after the job has converged (Accepted, extends 0027, 0029, 0031 and 0032)
+- [0034](0034-execution-surface-and-lifecycle.md) — Execution surfaces, and separating implementation breadth from convergence (Accepted, supersedes parts of 0031 and 0033)
+- [0035](0035-commit-message-compiler.md) — Commit Message Compiler: Conventional Commits from the trusted Action Step (Accepted, narrows Rule 57's application to the Planner's own already-trusted text)
+- [0036](0036-risk-adaptive-validation-depth.md) — Risk-Adaptive Independent Validation Depth: profile answers *which commands*, depth answers *how many this change deserves* (Accepted, extends Rule 65 with a second versioned axis; leaves Rule 66 untouched)
+- [0037](0037-automatic-validation-and-review-classification.md) — Automatic validation hand-off, and deterministic review classification (Accepted, establishes that one durable operation may enqueue the next; leaves the visual-review "nothing is automatic" rule intact)
 
 Several architecture questions remain intentionally open — see [ARCHITECTURE.md §7](../../ARCHITECTURE.md#7-deferred--open-decisions).
 

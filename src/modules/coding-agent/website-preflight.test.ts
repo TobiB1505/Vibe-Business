@@ -6,7 +6,8 @@ const getHead = vi.fn(async () => ({ defaultBranch: "main", commitSha: SNAPSHOT_
 const createGithubRepositoryReader = vi.fn(() => ({ getHead }));
 vi.mock("@/modules/github/repository-reader", () => ({ createGithubRepositoryReader }));
 
-const { previewDogfoodStep, isDogfoodEligibleProject } = await import("./website-preflight");
+const { previewDogfoodStep, isDogfoodEligibleProject, resolveDogfoodPlanRoutes } =
+  await import("./website-preflight");
 const { GithubDomainError } = await import("@/modules/github/errors");
 
 /**
@@ -118,8 +119,23 @@ describe("previewDogfoodStep — the gate runs before anything else is read (§2
   });
 });
 
-describe("previewDogfoodStep — the real chain (§7, §9)", () => {
-  it("resolves a real agentic step and persists a spec", async () => {
+/**
+ * The preview is a read (§7, §9).
+ *
+ * These two tests used to assert the opposite — that a preview persisted a spec
+ * row and returned its id — and they passed while the behaviour they described
+ * had **never once worked in production**. `execution_specs` has a select policy
+ * and deliberately no insert policy, so the caller's cookie-scoped client was
+ * refused every time; `FakeDatabase` models no RLS, so the write "succeeded"
+ * here and nowhere else.
+ *
+ * That is the lesson worth keeping: a fake that is more permissive than the
+ * real database can only prove that code runs, never that it is allowed to.
+ * The behaviour is now what it should always have been — building is a read,
+ * and only a click writes.
+ */
+describe("previewDogfoodStep — the real chain", () => {
+  it("resolves a real agentic step and builds its instruction package", async () => {
     seedOwnedRepository();
     seedSuccessfulSnapshot();
     seedCompletedPlan([AGENTIC_STEP]);
@@ -135,39 +151,53 @@ describe("previewDogfoodStep — the real chain (§7, §9)", () => {
     if (!preview.eligible) return;
     expect(preview.resolution.mode).toBe("agentic");
     expect(preview.preflight.passed).toBe(true);
-    expect(preview.executionSpecId).toBeTruthy();
+    expect(preview.spec.identity).toBeTruthy();
+    expect(preview.spec.projectId).toBe(PROJECT);
+    expect(preview.repositoryConnectionId).toBeTruthy();
+    // Live HEAD is read for real: this is the one thing the dev probe cannot do.
     expect(getHead).toHaveBeenCalledWith();
-
-    // The persisted spec is a real row, findable by identity — not a value
-    // invented in memory and handed to the caller.
-    const rows = db.rows("execution_specs");
-    expect(rows).toHaveLength(1);
-    expect(rows[0].id).toBe(preview.executionSpecId);
-    expect(rows[0].project_id).toBe(PROJECT);
   });
 
-  it("returns the same spec id on a second call against unchanged state (idempotent)", async () => {
+  it("writes nothing — rendering a page mints no immutable row", async () => {
     seedOwnedRepository();
     seedSuccessfulSnapshot();
     seedCompletedPlan([AGENTIC_STEP]);
 
-    const first = await previewDogfoodStep(fakeSupabase(db), {
-      projectId: PROJECT,
-      userId: USER,
-      stepKey: "1-ship-it",
-      env: ALLOWLIST,
-    });
-    const second = await previewDogfoodStep(fakeSupabase(db), {
+    await previewDogfoodStep(fakeSupabase(db), {
       projectId: PROJECT,
       userId: USER,
       stepKey: "1-ship-it",
       env: ALLOWLIST,
     });
 
+    expect(db.rows("execution_specs")).toHaveLength(0);
+    expect(db.rows("audit_events")).toHaveLength(0);
+  });
+
+  /**
+   * Identity, not a row id, is what makes a second look at the same step the
+   * same job — which is exactly why the start path can persist late and still
+   * be idempotent.
+   */
+  it("builds a byte-identical spec identity on a second call against unchanged state", async () => {
+    seedOwnedRepository();
+    seedSuccessfulSnapshot();
+    seedCompletedPlan([AGENTIC_STEP]);
+
+    const call = () =>
+      previewDogfoodStep(fakeSupabase(db), {
+        projectId: PROJECT,
+        userId: USER,
+        stepKey: "1-ship-it",
+        env: ALLOWLIST,
+      });
+
+    const first = await call();
+    const second = await call();
+
     expect(first.eligible && second.eligible).toBe(true);
     if (!first.eligible || !second.eligible) return;
-    expect(second.executionSpecId).toBe(first.executionSpecId);
-    expect(db.rows("execution_specs")).toHaveLength(1);
+    expect(second.spec.identity).toBe(first.spec.identity);
   });
 });
 
@@ -326,5 +356,207 @@ describe("previewDogfoodStep — non-agentic routes never produce a spec (§6)",
     expect(preview.reason).toBe("not_agentic");
     expect(preview.resolution?.mode).toBe("blocked");
     expect(db.rows("execution_specs")).toHaveLength(0);
+  });
+});
+
+/**
+ * The website reads the real resolver (semantics fix §37).
+ *
+ * No step id is named anywhere in this surface: eligibility is whatever
+ * `resolveStepExecution` says about the step the URL points at. So the fix to
+ * dependency semantics reaches the page for free, and this is the test that
+ * says it did.
+ */
+/**
+ * The index page's routing (the "waiting on an earlier step" defect).
+ *
+ * The list resolved every step against a repository context of all nulls, so
+ * `classifyIntrinsic` could never reach `agentic` — every implementation step
+ * read "waiting on an earlier step", and the link to the step page was
+ * unreachable by construction. The surface was a list of refusals for a project
+ * whose repository was connected, snapshotted and supported.
+ *
+ * These assert the list routes against what the project actually has.
+ */
+describe("resolveDogfoodPlanRoutes — the list routes against real repository state", () => {
+  const PREPARATION = {
+    ...AGENTIC_STEP,
+    step_key: "1-work-out-the-approach",
+    step_order: 1,
+    actor: "vibe",
+    change_kind: "analysis",
+    depends_on: [],
+    evidence_ids: ["live.seo.canonical_missing"],
+    execution_support: "vibe_prepares",
+    requires_approval: false,
+  };
+  const IMPLEMENTATION = { ...AGENTIC_STEP, step_key: "2-build", step_order: 2, depends_on: [1] };
+
+  it("offers the implementation step, with the preparation named rather than blocking", async () => {
+    seedOwnedRepository();
+    seedSuccessfulSnapshot();
+    seedCompletedPlan([PREPARATION, IMPLEMENTATION]);
+
+    const routes = await resolveDogfoodPlanRoutes(fakeSupabase(db), {
+      projectId: PROJECT,
+      userId: USER,
+      env: ALLOWLIST,
+    });
+
+    expect(routes.available).toBe(true);
+    if (!routes.available) return;
+
+    const [preparation, implementation] = routes.resolutions;
+    // Vibe's own thinking work: real, and still not a button.
+    expect(preparation.mode).toBe("unsupported");
+    // The regression, stated directly.
+    expect(implementation.mode).toBe("agentic");
+    expect(implementation.absorbedPreparation).toEqual([1]);
+  });
+
+  /**
+   * The exact shape of the defect: with no repository loaded, an
+   * agentic-eligible step cannot classify as agentic and its preparation
+   * becomes a hard blocker again. Pinned so the page cannot quietly go back to
+   * resolving against nulls.
+   */
+  it("says the repository is missing rather than inventing a route for one", async () => {
+    seedCompletedPlan([PREPARATION, IMPLEMENTATION]);
+
+    const routes = await resolveDogfoodPlanRoutes(fakeSupabase(db), {
+      projectId: PROJECT,
+      userId: USER,
+      env: ALLOWLIST,
+    });
+
+    expect(routes.available).toBe(true);
+    if (!routes.available) return;
+
+    const implementation = routes.resolutions[1];
+    expect(implementation.mode).not.toBe("agentic");
+    expect(implementation.absorbedPreparation).toEqual([]);
+    // The real gap is still reported underneath the dependency block, so the
+    // page can say something a founder can act on.
+    expect(implementation.unmetRequirements).toContain("repository_not_connected");
+    expect(implementation.unmetRequirements).toContain("repository_snapshot_missing");
+  });
+
+  it("refuses a project that is not on the allowlist, before reading a plan", async () => {
+    seedOwnedRepository();
+    seedSuccessfulSnapshot();
+    seedCompletedPlan([PREPARATION, IMPLEMENTATION]);
+
+    const routes = await resolveDogfoodPlanRoutes(fakeSupabase(db), {
+      projectId: PROJECT,
+      userId: USER,
+      env: {},
+    });
+
+    expect(routes).toEqual({ available: false, reason: "not_dogfood_eligible" });
+  });
+
+  it("reports an absent plan as its own state rather than an empty list", async () => {
+    seedOwnedRepository();
+    seedSuccessfulSnapshot();
+
+    const routes = await resolveDogfoodPlanRoutes(fakeSupabase(db), {
+      projectId: PROJECT,
+      userId: USER,
+      env: ALLOWLIST,
+    });
+
+    expect(routes).toEqual({ available: false, reason: "no_action_plan" });
+  });
+
+  /**
+   * The list must not reach GitHub. It renders classification, and admission —
+   * the only thing a live HEAD answers — is the step page's job.
+   */
+  it("makes no live GitHub call", async () => {
+    seedOwnedRepository();
+    seedSuccessfulSnapshot();
+    seedCompletedPlan([PREPARATION, IMPLEMENTATION]);
+
+    await resolveDogfoodPlanRoutes(fakeSupabase(db), {
+      projectId: PROJECT,
+      userId: USER,
+      env: ALLOWLIST,
+    });
+
+    expect(getHead).not.toHaveBeenCalled();
+  });
+});
+
+describe("previewDogfoodStep — Vibe's own preparation does not gate the click", () => {
+  const PREPARATION_STEP = {
+    ...AGENTIC_STEP,
+    step_key: "1-work-out-the-approach",
+    step_order: 1,
+    title: "Work out the repository-consistent approach",
+    actor: "vibe",
+    change_kind: "analysis",
+    depends_on: [],
+    evidence_ids: ["live.seo.canonical_missing"],
+    execution_support: "vibe_prepares",
+    requires_approval: false,
+  };
+
+  it("resolves the implementation step and builds a spec carrying the preparation", async () => {
+    seedOwnedRepository();
+    seedSuccessfulSnapshot();
+    seedCompletedPlan([
+      PREPARATION_STEP,
+      { ...AGENTIC_STEP, step_key: "2-build", step_order: 2, depends_on: [1] },
+    ]);
+
+    const preview = await previewDogfoodStep(fakeSupabase(db), {
+      projectId: PROJECT,
+      userId: USER,
+      stepKey: "2-build",
+      env: ALLOWLIST,
+    });
+
+    expect(preview.eligible).toBe(true);
+    if (!preview.eligible) return;
+    expect(preview.resolution.mode).toBe("agentic");
+    expect(preview.resolution.absorbedPreparation).toEqual([1]);
+
+    // The spec records the boundary that was compiled, so a run started from it
+    // is explainable later without re-resolving anything.
+    expect(preview.spec.objective.preparation).toEqual([
+      {
+        stepOrder: 1,
+        stepKey: "1-work-out-the-approach",
+        title: "Work out the repository-consistent approach",
+        purpose: "So a visitor can complete the flow.",
+        doneWhen: "A visitor can complete the flow end to end.",
+      },
+    ]);
+  });
+
+  /**
+   * The preparation step itself is still not independently runnable. Being
+   * absorbable is a statement about a *downstream* execution, never a claim
+   * that a click exists for the preparation.
+   */
+  it("still refuses the preparation step on its own", async () => {
+    seedOwnedRepository();
+    seedSuccessfulSnapshot();
+    seedCompletedPlan([
+      PREPARATION_STEP,
+      { ...AGENTIC_STEP, step_key: "2-build", step_order: 2, depends_on: [1] },
+    ]);
+
+    const preview = await previewDogfoodStep(fakeSupabase(db), {
+      projectId: PROJECT,
+      userId: USER,
+      stepKey: "1-work-out-the-approach",
+      env: ALLOWLIST,
+    });
+
+    expect(preview.eligible).toBe(false);
+    if (preview.eligible) return;
+    expect(preview.resolution?.mode).toBe("unsupported");
+    expect(preview.resolution?.reason).toBe("no_executor_for_vibe_work");
   });
 });

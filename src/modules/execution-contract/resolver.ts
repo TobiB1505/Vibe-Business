@@ -5,6 +5,7 @@ import {
 import type { ActionPlanStep } from "@/modules/action-plans/schema";
 import type { ExecutionCapability } from "@/modules/execution/schema";
 import type { RepositoryIntelligenceSnapshot } from "@/modules/repository-intelligence/schema";
+import { resolveExecutionDependencies } from "./dependencies";
 import { classifyExecutionRisk } from "./risk";
 import { resolveExecutionValidation } from "./validation-requirements";
 import {
@@ -52,12 +53,24 @@ import {
  * ## Precedence (§7, §27)
  *
  * ```
- * 1. unfinished prerequisites            → blocked        (§27)
- * 2. the step is not Vibe's to do        → needs_user_input / manual / blocked
- * 3. an existing deterministic executor  → deterministic  (§7)
- * 4. the bounded agentic boundary        → agentic        (§20)
- * 5. everything else                     → unsupported
+ * 1. the step is not Vibe's to do        → needs_user_input / manual / blocked
+ * 2. an existing deterministic executor  → deterministic  (§7)
+ * 3. the bounded agentic boundary        → agentic        (§20)
+ * 4. everything else                     → unsupported
+ * ─── then, against that route ───
+ * 5. hard unfinished prerequisites       → blocked        (§27)
  * ```
+ *
+ * ## Which prerequisites are hard (Core-4 semantics fix)
+ *
+ * Not all of them. A Planner step describes *what work is needed*; it does not
+ * define one runtime execution boundary per step. When the route is agentic,
+ * `dependencies.ts` separates prerequisites that must already exist — a founder
+ * decision, real-world work, an external party, a product change — from Vibe's
+ * own technical preparation, which the same bounded run performs itself.
+ *
+ * Preparation is absorbed and recorded; it is never marked complete, and the
+ * plan is never rewritten. One hard prerequisite still blocks everything.
  *
  * Deterministic before agentic is not an implementation convenience — §7 makes
  * it a rule. An existing executor is cheaper, more predictable, easier to
@@ -358,20 +371,35 @@ export function resolveStepExecution(input: ResolveExecutionInput): ExecutionRes
 
   const intrinsic = classifyIntrinsic(input);
 
-  // §27: a blocked step cannot become ready merely because a capability
-  // exists. Dependencies are checked *after* the intrinsic classification so
-  // the forecast is available, and *before* the mode is decided so nothing
-  // downstream can act on it.
-  const blockedBy = step.dependsOn
-    .filter((order) => !plan.completedSteps.has(order))
-    .slice()
-    .sort((a, b) => a - b);
+  /*
+   * §27, as amended by the Core-4 semantics fix.
+   *
+   * A blocked step still cannot become ready merely because a capability
+   * exists — dependencies are checked *after* the intrinsic classification so
+   * the forecast is available, and *before* the mode is decided so nothing
+   * downstream can act on it.
+   *
+   * What changed is which unfinished prerequisites count. `dependencies.ts`
+   * separates the ones that must already exist from Vibe's own technical
+   * preparation, and the latter is absorbed into the run rather than standing
+   * in front of it. `absorbable` is the gate: only an agentic route can carry
+   * preparation, so every other mode gets the pre-fix behaviour unchanged.
+   */
+  const dependencies = resolveExecutionDependencies({
+    step,
+    steps: plan.steps,
+    completed: plan.completedSteps,
+    capabilityContext: { repository: input.repository.snapshot },
+    absorbable: intrinsic.mode === "agentic",
+  });
 
+  const blockedBy = dependencies.hardBlockers;
   const blocked = blockedBy.length > 0;
   const mode: ExecutionMode = blocked ? "blocked" : intrinsic.mode;
-  const reason: ExecutionResolutionReason = blocked
-    ? "dependency_unsatisfied"
-    : intrinsic.reason;
+  const dependencyReason: ExecutionResolutionReason = dependencies.cycleDetected
+    ? "dependency_cycle_detected"
+    : "dependency_unsatisfied";
+  const reason: ExecutionResolutionReason = blocked ? dependencyReason : intrinsic.reason;
 
   return {
     resolverVersion: EXECUTION_RESOLVER_VERSION,
@@ -390,7 +418,10 @@ export function resolveStepExecution(input: ResolveExecutionInput): ExecutionRes
     capabilityVersion: blocked ? null : intrinsic.capabilityVersion,
 
     blockedBy,
-    unmetRequirements: blocked ? ["dependency_unsatisfied", ...intrinsic.unmet] : intrinsic.unmet,
+    // Never populated for a blocked step: absorption is all-or-nothing, and a
+    // run that is not happening has absorbed nothing.
+    absorbedPreparation: blocked ? [] : dependencies.absorbedPreparation,
+    unmetRequirements: blocked ? [dependencyReason, ...intrinsic.unmet] : intrinsic.unmet,
 
     requiresUserInput: intrinsic.mode === "needs_user_input",
 

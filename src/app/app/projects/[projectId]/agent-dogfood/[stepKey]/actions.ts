@@ -1,6 +1,8 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import type { ReviewClassificationResult } from "@/modules/review/classification";
+import { classifyReviewForPreparedChange } from "@/modules/review/classification-inputs";
 import { requireSession } from "@/modules/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -13,9 +15,14 @@ import {
 import { getAgentExecutionStatus, startAgentExecution } from "@/modules/coding-agent/service";
 import type { AgentStartRefusal } from "@/modules/coding-agent/service";
 import { previewDogfoodStep } from "@/modules/coding-agent/website-preflight";
+import { persistAgentExecutionSpec } from "@/modules/operations/agent-execution/server-writes";
 import { VercelWorkflowExecutor } from "@/modules/operations/vercel/executor";
-import type { OperationView } from "@/modules/operations/view";
 import type { ExecutionInterruptAnswer } from "@/modules/execution-contract/schema";
+import {
+  buildAgentExecutionLiveModel,
+  type AgentExecutionLiveModel,
+} from "@/modules/coding-agent/observability/live-view";
+import { readAgentRunForLiveView } from "@/modules/coding-agent/observability/run-view";
 
 /**
  * The internal dogfood website actions (EXECUTION CORE-4 website gate, §7,
@@ -28,7 +35,7 @@ import type { ExecutionInterruptAnswer } from "@/modules/execution-contract/sche
  */
 
 export type StartDogfoodRunState =
-  | { ok: false; error: AgentStartRefusal | "not_eligible" }
+  | { ok: false; error: AgentStartRefusal | "not_eligible" | "spec_not_persisted" }
   | null;
 
 /**
@@ -60,10 +67,33 @@ export async function startDogfoodRunAction(
 
   if (!preview.eligible) return { ok: false, error: "not_eligible" };
 
+  /*
+   * The write happens here, on the click, and nowhere else.
+   *
+   * The preview builds the spec; this persists it. Separated because an
+   * immutable audit row is not something a page render should mint, and
+   * because `execution_specs` accepts no insert from the caller's own client
+   * by design — the service-role writer lives in `operations/`, which is the
+   * only place Rule 53 permits it.
+   *
+   * Idempotent by the spec's identity: a double submission, a retry or two
+   * tabs on the same step all resolve to the same row, and then to the same
+   * run.
+   */
+  const persisted = await persistAgentExecutionSpec({
+    spec: preview.spec,
+    userId: session.userId,
+    repositoryConnectionId: preview.repositoryConnectionId,
+  });
+
+  if (!persisted.ok) {
+    return { ok: false, error: persisted.error === "project_not_found" ? "project_not_found" : "spec_not_persisted" };
+  }
+
   const outcome = await startAgentExecution(supabase, new VercelWorkflowExecutor(), {
     projectId,
     userId: session.userId,
-    executionSpecId: preview.executionSpecId,
+    executionSpecId: persisted.executionSpecId,
   });
 
   if (outcome.kind === "failed") return { ok: false, error: outcome.error };
@@ -78,9 +108,25 @@ export async function startDogfoodRunAction(
 }
 
 export type DogfoodRunStatus = {
-  operation: OperationView;
+  /**
+   * Everything the reusable live view renders.
+   *
+   * Assembled by a module rather than by this page, so the same model can be
+   * mounted in the production dashboard later without any of this logic moving
+   * with it (EXECUTION CORE-4 observability).
+   */
+  live: AgentExecutionLiveModel;
   activity: StoredAgentActivity[];
   openInterrupt: StoredExecutionInterrupt | null;
+  /**
+   * Which review this change deserves (Sprint 0048).
+   *
+   * Present only once a change has been prepared, and null whenever it cannot
+   * be answered — a recommendation nobody can justify is worse than none.
+   * Recomputed on read rather than stored: every input is already persisted,
+   * and this gates nothing, so there is no second copy to keep in step.
+   */
+  recommendedReview: ReviewClassificationResult | null;
 };
 
 /** Durable status, re-read from the database on every call (§16, §18, §20). */
@@ -99,18 +145,47 @@ export async function getDogfoodRunStatusAction(
   if (!operation) return null;
 
   if (!operation.agentExecutionRunId) {
-    return { operation, activity: [], openInterrupt: null };
+    return {
+      live: await buildAgentExecutionLiveModel(supabase, { operation, projectId, run: null }),
+      activity: [],
+      openInterrupt: null,
+      // No agent run yet, so no prepared change and nothing to recommend.
+      recommendedReview: null,
+    };
   }
 
-  const [activity, openInterrupt] = await Promise.all([
+  const [activity, openInterrupt, runView] = await Promise.all([
     listAgentActivity(supabase, { runId: operation.agentExecutionRunId, projectId }),
     findOpenInterruptForRun(supabase, {
       projectId,
       agentExecutionRunId: operation.agentExecutionRunId,
     }),
+    readAgentRunForLiveView(supabase, {
+      runId: operation.agentExecutionRunId,
+      projectId,
+    }),
   ]);
 
-  return { operation, activity, openInterrupt };
+  const live = await buildAgentExecutionLiveModel(supabase, {
+    operation,
+    projectId,
+    run: runView?.run ?? null,
+    limits: runView?.limits ?? null,
+    gatewayRequestCeiling: runView?.gatewayRequestCeiling ?? null,
+    validation: runView?.validation ?? "not_started",
+  });
+
+  // `resultId` is the prepared change id a completed run wrote. Classification
+  // is only meaningful once one exists, so it is not attempted before then.
+  const recommendedReview = operation.resultId
+    ? await classifyReviewForPreparedChange({
+        supabase,
+        projectId,
+        preparedChangeId: operation.resultId,
+      })
+    : null;
+
+  return { live, activity, openInterrupt, recommendedReview };
 }
 
 export type AnswerInterruptState =

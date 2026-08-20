@@ -36,6 +36,7 @@ compiled policy with a default-deny predicate is a fact.
 | `schema.ts` | modes, risk classes, stop reasons, interrupt types, activity events, versions |
 | `resolver.ts` | *what kind of route does this step need, and may it start now?* |
 | `risk.ts` | *how much could go wrong?* — from structured facts, never prose |
+| `dependencies.ts` | *does this prerequisite block, or does the run absorb it?* |
 | `policy.ts` | *what may an execution do?* — default deny, globally forbidden set |
 | `budget.ts` | *how much may it cost?* — no approved policy exists yet |
 | `validation-requirements.ts` | *what must independently pass?* — derived from the real profile |
@@ -49,7 +50,16 @@ compiled policy with a default-deny predicate is a fact.
 | `view.ts` | customer-safe copy for every internal enum |
 | `report.ts` / `dogfood.probe.ts` | the §38 dogfood |
 
-## Three things this module refuses to do
+## Four things this module refuses to do
+
+**It does not treat every Planner prerequisite as a runtime wall.** A plan
+describes what work is needed; it does not define one execution boundary per
+step. `dependencies.ts` separates prerequisites that must already *exist* — a
+founder decision, real-world work, an external party, a product change — from
+Vibe's own technical preparation, which an agentic run performs itself and
+records as absorbed. One hard prerequisite still blocks everything, and nothing
+is ever marked complete on the founder's behalf.
+
 
 **It does not read the Planner's `executionSupport`.** Not as a hint, not as a
 cross-check. Those fields were correct when written; they are a routing signal

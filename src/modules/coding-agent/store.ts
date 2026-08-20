@@ -12,6 +12,8 @@ import type {
 import { isValidInterruptAnswer } from "@/modules/execution-contract/interrupts";
 import type { AgentToolEvent, RaisedInterrupt } from "./gateway";
 import type { AgentFailureCode, AgentRunStatus } from "./schema";
+import type { FreshnessState } from "@/modules/execution-context/brief";
+import type { VerificationMode } from "@/modules/execution-context/verification";
 
 /**
  * Persistence for agentic execution (EXECUTION CORE-4 §22, §23, §24, §25).
@@ -55,16 +57,84 @@ export type StoredAgentExecutionRun = {
   creditReservationId: string | null;
   status: AgentRunStatus;
   failureCode: AgentFailureCode | null;
-  turns: number;
+  /** Model responses. Never comparable to the budget's turn ceiling. */
+  assistantMessages: number;
+  /** The harness's own loop count, in the ceiling's unit. Null if unreported. */
+  sdkLoopIterations: number | null;
   toolCallsAllowed: number;
   toolCallsDenied: number;
   filesRead: number;
   checkRuns: number;
   repairAttempts: number;
+  /** Paths Vibe observed as touched, before comparison against the base. */
+  observedPathCount: number;
+  /** Files in the verified candidate. Never what the runtime touched. */
   changedFileCount: number;
   changedBytes: number;
   durationMs: number | null;
   providerSessionId: string | null;
+
+  /*
+   * The Execution Brief this run was given, and what it read (PART L).
+   *
+   * Null throughout means the run had no brief — no snapshot to compile from,
+   * or one taken at a different commit. `contextFreshness` distinguishes the
+   * two cases that matter: `stale`/`unknown` say Vibe *had* intelligence and
+   * withheld it, which is a reason to re-analyse; null says there was none.
+   */
+  contextBriefVersion: string | null;
+  contextFreshness: FreshnessState | null;
+  contextBytes: number | null;
+  contextFactsSent: number | null;
+  contextCandidatesSent: number | null;
+  contextCandidatesRead: number | null;
+  uniqueFilesRead: number | null;
+  repeatedFileReads: number | null;
+  filesReadOutsideContext: number | null;
+
+  /**
+   * How much self-checking this run was allowed, and what it spent.
+   *
+   * Advisory throughout. `verificationMode` never authorized anything: a run
+   * whose every permitted check passed has proved only that the agent found no
+   * mistake it could see, and independent validation decides the rest.
+   */
+  verificationMode: VerificationMode | null;
+  verificationPlanVersion: string | null;
+  verificationCommands: number | null;
+  verificationRefusals: number | null;
+  verificationMs: number | null;
+  /** Offset of the first observed write. Where implementation actually began. */
+  timeToFirstEditMs: number | null;
+  /** Offset of the last observed write. The closest observable thing to "done". */
+  timeToLastEditMs: number | null;
+
+  /** Where time and money went after the code was written. Null without a budget. */
+  completionBudgetVersion: string | null;
+  postEditToolCalls: number | null;
+  postEditReads: number | null;
+  postEditReadsBeyondBrief: number | null;
+  postEditCommands: number | null;
+  postEditProviderCalls: number | null;
+  postEditProviderCostUsd: number | null;
+  completionRefusals: number | null;
+  /** Mutations that answered an observed failure. A real repair. */
+  repairCycles: number | null;
+  /** Files written while implementing. Breadth, never charged (Sprint 0044). */
+  implementationMutations: number | null;
+  /** Files written after the run converged. Each one cost a window. */
+  convergenceMutations: number | null;
+  /** Required verification operations the runtime allowed. */
+  requiredVerificationActions: number | null;
+  /** Of those, the ones a completion budget alone would have refused. */
+  requiredVerificationOverrides: number | null;
+  /** Tool calls the policy hook saw. Zero beside tool calls means it never ran. */
+  policyDecisions: number | null;
+
+  /** `planner` for a customer execution, `dogfood_fixture` for an internal benchmark. */
+  executionOrigin: string;
+  dogfoodFixtureId: string | null;
+
   preparedChangeId: string | null;
   createdAt: string;
   startedAt: string | null;
@@ -90,16 +160,50 @@ type RunRow = {
   credit_reservation_id: string | null;
   status: AgentRunStatus;
   failure_code: AgentFailureCode | null;
-  turns: number;
+  assistant_messages: number;
+  sdk_loop_iterations: number | null;
   tool_calls_allowed: number;
   tool_calls_denied: number;
   files_read: number;
   check_runs: number;
   repair_attempts: number;
+  observed_path_count: number;
   changed_file_count: number;
   changed_bytes: number;
   duration_ms: number | null;
   provider_session_id: string | null;
+  context_brief_version: string | null;
+  context_freshness: FreshnessState | null;
+  context_bytes: number | null;
+  context_facts_sent: number | null;
+  context_candidates_sent: number | null;
+  context_candidates_read: number | null;
+  unique_files_read: number | null;
+  repeated_file_reads: number | null;
+  files_read_outside_context: number | null;
+  verification_mode: VerificationMode | null;
+  verification_plan_version: string | null;
+  verification_commands: number | null;
+  verification_refusals: number | null;
+  verification_ms: number | null;
+  time_to_first_edit_ms: number | null;
+  time_to_last_edit_ms: number | null;
+  completion_budget_version: string | null;
+  post_edit_tool_calls: number | null;
+  post_edit_reads: number | null;
+  post_edit_reads_beyond_brief: number | null;
+  post_edit_commands: number | null;
+  post_edit_provider_calls: number | null;
+  post_edit_provider_cost_usd: string | number | null;
+  completion_refusals: number | null;
+  repair_cycles: number | null;
+  implementation_mutations: number | null;
+  convergence_mutations: number | null;
+  required_verification_actions: number | null;
+  required_verification_overrides: number | null;
+  policy_decisions: number | null;
+  execution_origin: string;
+  dogfood_fixture_id: string | null;
   prepared_change_id: string | null;
   created_at: string;
   started_at: string | null;
@@ -110,8 +214,17 @@ const RUN_COLUMNS =
   "id, project_id, user_id, operation_run_id, execution_spec_id, run_identity, provider, harness, " +
   "model, coding_agent_policy_version, prompt_compiler_version, budget_policy_version, " +
   "execution_policy_version, non_production_economics, base_sha, credit_reservation_id, status, " +
-  "failure_code, turns, tool_calls_allowed, tool_calls_denied, files_read, check_runs, " +
-  "repair_attempts, changed_file_count, changed_bytes, duration_ms, provider_session_id, " +
+  "failure_code, assistant_messages, sdk_loop_iterations, tool_calls_allowed, tool_calls_denied, files_read, check_runs, " +
+  "repair_attempts, observed_path_count, changed_file_count, changed_bytes, duration_ms, provider_session_id, " +
+  "context_brief_version, context_freshness, context_bytes, context_facts_sent, context_candidates_sent, " +
+  "context_candidates_read, unique_files_read, repeated_file_reads, files_read_outside_context, " +
+  "verification_mode, verification_plan_version, verification_commands, verification_refusals, " +
+  "verification_ms, time_to_first_edit_ms, time_to_last_edit_ms, " +
+  "completion_budget_version, post_edit_tool_calls, post_edit_reads, post_edit_reads_beyond_brief, " +
+  "post_edit_commands, post_edit_provider_calls, post_edit_provider_cost_usd, completion_refusals, " +
+  "repair_cycles, implementation_mutations, convergence_mutations, " +
+  "required_verification_actions, required_verification_overrides, policy_decisions, " +
+  "execution_origin, dogfood_fixture_id, " +
   "prepared_change_id, created_at, started_at, completed_at";
 
 function mapRun(row: RunRow): StoredAgentExecutionRun {
@@ -134,16 +247,51 @@ function mapRun(row: RunRow): StoredAgentExecutionRun {
     creditReservationId: row.credit_reservation_id,
     status: row.status,
     failureCode: row.failure_code,
-    turns: row.turns,
+    assistantMessages: row.assistant_messages,
+    sdkLoopIterations: row.sdk_loop_iterations,
     toolCallsAllowed: row.tool_calls_allowed,
     toolCallsDenied: row.tool_calls_denied,
     filesRead: row.files_read,
     checkRuns: row.check_runs,
     repairAttempts: row.repair_attempts,
+    observedPathCount: row.observed_path_count,
     changedFileCount: row.changed_file_count,
     changedBytes: row.changed_bytes,
     durationMs: row.duration_ms,
     providerSessionId: row.provider_session_id,
+    contextBriefVersion: row.context_brief_version,
+    contextFreshness: row.context_freshness,
+    contextBytes: row.context_bytes,
+    contextFactsSent: row.context_facts_sent,
+    contextCandidatesSent: row.context_candidates_sent,
+    contextCandidatesRead: row.context_candidates_read,
+    uniqueFilesRead: row.unique_files_read,
+    repeatedFileReads: row.repeated_file_reads,
+    filesReadOutsideContext: row.files_read_outside_context,
+    verificationMode: row.verification_mode,
+    verificationPlanVersion: row.verification_plan_version,
+    verificationCommands: row.verification_commands,
+    verificationRefusals: row.verification_refusals,
+    verificationMs: row.verification_ms,
+    timeToFirstEditMs: row.time_to_first_edit_ms,
+    timeToLastEditMs: row.time_to_last_edit_ms,
+    completionBudgetVersion: row.completion_budget_version,
+    postEditToolCalls: row.post_edit_tool_calls,
+    postEditReads: row.post_edit_reads,
+    postEditReadsBeyondBrief: row.post_edit_reads_beyond_brief,
+    postEditCommands: row.post_edit_commands,
+    postEditProviderCalls: row.post_edit_provider_calls,
+    postEditProviderCostUsd:
+      row.post_edit_provider_cost_usd === null ? null : Number(row.post_edit_provider_cost_usd),
+    completionRefusals: row.completion_refusals,
+    repairCycles: row.repair_cycles,
+    implementationMutations: row.implementation_mutations,
+    convergenceMutations: row.convergence_mutations,
+    requiredVerificationActions: row.required_verification_actions,
+    requiredVerificationOverrides: row.required_verification_overrides,
+    policyDecisions: row.policy_decisions,
+    executionOrigin: row.execution_origin,
+    dogfoodFixtureId: row.dogfood_fixture_id,
     preparedChangeId: row.prepared_change_id,
     createdAt: row.created_at,
     startedAt: row.started_at,
@@ -184,6 +332,16 @@ export async function claimAgentExecutionRun(
     nonProductionEconomics: boolean;
     baseSha: string;
     creditReservationId: string | null;
+    /**
+     * Where this execution's step came from.
+     *
+     * Derived from the persisted spec by the caller, never supplied by a
+     * browser or a fixture — a benchmark must be *visible* as one, so it cannot
+     * be the thing that decides whether it is labelled as one.
+     */
+    executionOrigin: "planner" | "dogfood_fixture";
+    /** The fixture id, when the origin is a benchmark. Null otherwise. */
+    dogfoodFixtureId: string | null;
   },
 ): Promise<ClaimAgentRunResult> {
   const { data, error } = await supabase
@@ -204,6 +362,8 @@ export async function claimAgentExecutionRun(
       non_production_economics: params.nonProductionEconomics,
       base_sha: params.baseSha,
       credit_reservation_id: params.creditReservationId,
+      execution_origin: params.executionOrigin,
+      dogfood_fixture_id: params.dogfoodFixtureId,
       status: "queued",
     })
     .select(RUN_COLUMNS)
@@ -275,17 +435,125 @@ export async function markAgentRunStarted(
   return (data ?? []).length > 0;
 }
 
+/**
+ * Records the model responses observed so far, mid-run.
+ *
+ * Separate from `recordAgentRunObservations` because the two answer different
+ * questions. That one writes the whole picture once the harness has stopped;
+ * this one writes the single number that must survive the harness *not*
+ * stopping.
+ *
+ * The first real run made that concrete: it reached Anthropic 27 times over
+ * five minutes and the run row still read zero, because the step was
+ * killed before the final write. A turn that happened is a fact about what a
+ * customer was charged for, and it must not depend on a later step succeeding.
+ *
+ * Monotonic by construction — the count only ever climbs, so a poll that races
+ * a stale read cannot walk it backwards.
+ *
+ * Writes `assistant_messages` and nothing else. `sdk_loop_iterations` has no
+ * mid-run value: the harness reports it once, in its terminal message, and
+ * filling the column with the message count in the meantime is precisely the
+ * unit switch this rename exists to end.
+ */
+export async function recordAgentMessageProgress(
+  supabase: SupabaseClient,
+  runId: string,
+  assistantMessages: number,
+): Promise<void> {
+  if (assistantMessages <= 0) return;
+
+  const { error } = await supabase
+    .from("agent_execution_runs")
+    .update({ assistant_messages: assistantMessages })
+    .eq("id", runId)
+    .lt("assistant_messages", assistantMessages);
+
+  if (error) throw error;
+}
+
+/**
+ * What was observed about a run, in parts.
+ *
+ * Every field optional, because the observations are produced at different
+ * moments by different durable steps and neither may clobber the other. The
+ * tool trail exists when the harness is started; the message count, the change set and
+ * the duration only exist when it has stopped — minutes and several function
+ * invocations later (ADR 0029, A1).
+ *
+ * A writer that took the whole record would force each step to invent values
+ * for the half it cannot know, and "zero" is not the same as "not yet".
+ */
 export type AgentRunObservations = {
-  turns: number;
-  toolCallsAllowed: number;
-  toolCallsDenied: number;
-  filesRead: number;
-  checkRuns: number;
-  repairAttempts: number;
-  changedFileCount: number;
-  changedBytes: number;
-  durationMs: number;
-  providerSessionId: string | null;
+  assistantMessages?: number;
+  sdkLoopIterations?: number | null;
+  toolCallsAllowed?: number;
+  toolCallsDenied?: number;
+  filesRead?: number;
+  checkRuns?: number;
+  repairAttempts?: number;
+  observedPathCount?: number;
+  changedFileCount?: number;
+  changedBytes?: number;
+  durationMs?: number;
+  providerSessionId?: string | null;
+
+  /*
+   * What the run was told before it started, and what it read afterwards
+   * (EXECUTION CONTEXT INTELLIGENCE, PART L).
+   *
+   * All optional and all nullable, because a brief is an optimisation that may
+   * legitimately be absent. Null means "this run had no brief"; zero would
+   * claim it had one that offered nothing.
+   */
+  contextBriefVersion?: string | null;
+  contextFreshness?: FreshnessState | null;
+  contextBytes?: number;
+  contextFactsSent?: number;
+  contextCandidatesSent?: number;
+  contextCandidatesRead?: number;
+  uniqueFilesRead?: number;
+  repeatedFileReads?: number;
+  filesReadOutsideContext?: number;
+
+  /*
+   * How much the run was allowed to check its own work, and what that cost
+   * (Sprint 0042).
+   *
+   * Nullable throughout for the same reason the context columns are: a run may
+   * legitimately have no plan, and null says so where zero would claim it had
+   * one that permitted nothing.
+   */
+  verificationMode?: VerificationMode | null;
+  verificationPlanVersion?: string | null;
+  verificationCommands?: number;
+  verificationRefusals?: number;
+  verificationMs?: number | null;
+  timeToFirstEditMs?: number | null;
+  timeToLastEditMs?: number | null;
+
+  /*
+   * Where the run's time and money went after the code was written
+   * (Sprint 0043). All nullable: a run with no completion budget, or one whose
+   * boundary could not be established, records null rather than a zero that
+   * would read as "nothing happened after the edit".
+   */
+  completionBudgetVersion?: string | null;
+  postEditToolCalls?: number;
+  postEditReads?: number;
+  postEditReadsBeyondBrief?: number;
+  postEditCommands?: number;
+  postEditProviderCalls?: number;
+  postEditProviderCostUsd?: number | null;
+  completionRefusals?: number;
+  repairCycles?: number;
+  implementationMutations?: number;
+  convergenceMutations?: number;
+  requiredVerificationActions?: number;
+  requiredVerificationOverrides?: number;
+  policyDecisions?: number | null;
+  contextSurfaceScopes?: string[] | null;
+  contextSurfacePages?: number | null;
 };
 
 /** Records what Vibe observed, without deciding the run's fate. */
@@ -294,21 +562,59 @@ export async function recordAgentRunObservations(
   runId: string,
   observations: AgentRunObservations,
 ): Promise<void> {
-  const { error } = await supabase
-    .from("agent_execution_runs")
-    .update({
-      turns: observations.turns,
-      tool_calls_allowed: observations.toolCallsAllowed,
-      tool_calls_denied: observations.toolCallsDenied,
-      files_read: observations.filesRead,
-      check_runs: observations.checkRuns,
-      repair_attempts: observations.repairAttempts,
-      changed_file_count: observations.changedFileCount,
-      changed_bytes: observations.changedBytes,
-      duration_ms: observations.durationMs,
-      provider_session_id: observations.providerSessionId,
-    })
-    .eq("id", runId);
+  const patch: Record<string, unknown> = {};
+  const set = (column: string, value: unknown) => {
+    if (value !== undefined) patch[column] = value;
+  };
+
+  set("assistant_messages", observations.assistantMessages);
+  set("sdk_loop_iterations", observations.sdkLoopIterations);
+  set("tool_calls_allowed", observations.toolCallsAllowed);
+  set("tool_calls_denied", observations.toolCallsDenied);
+  set("files_read", observations.filesRead);
+  set("check_runs", observations.checkRuns);
+  set("repair_attempts", observations.repairAttempts);
+  set("observed_path_count", observations.observedPathCount);
+  set("changed_file_count", observations.changedFileCount);
+  set("changed_bytes", observations.changedBytes);
+  set("duration_ms", observations.durationMs);
+  set("provider_session_id", observations.providerSessionId);
+  set("context_brief_version", observations.contextBriefVersion);
+  set("context_freshness", observations.contextFreshness);
+  set("context_bytes", observations.contextBytes);
+  set("context_facts_sent", observations.contextFactsSent);
+  set("context_candidates_sent", observations.contextCandidatesSent);
+  set("context_candidates_read", observations.contextCandidatesRead);
+  set("unique_files_read", observations.uniqueFilesRead);
+  set("repeated_file_reads", observations.repeatedFileReads);
+  set("files_read_outside_context", observations.filesReadOutsideContext);
+  set("verification_mode", observations.verificationMode);
+  set("verification_plan_version", observations.verificationPlanVersion);
+  set("verification_commands", observations.verificationCommands);
+  set("verification_refusals", observations.verificationRefusals);
+  set("verification_ms", observations.verificationMs);
+  set("time_to_first_edit_ms", observations.timeToFirstEditMs);
+  set("time_to_last_edit_ms", observations.timeToLastEditMs);
+  set("completion_budget_version", observations.completionBudgetVersion);
+  set("post_edit_tool_calls", observations.postEditToolCalls);
+  set("post_edit_reads", observations.postEditReads);
+  set("post_edit_reads_beyond_brief", observations.postEditReadsBeyondBrief);
+  set("post_edit_commands", observations.postEditCommands);
+  set("post_edit_provider_calls", observations.postEditProviderCalls);
+  set("post_edit_provider_cost_usd", observations.postEditProviderCostUsd);
+  set("completion_refusals", observations.completionRefusals);
+  set("repair_cycles", observations.repairCycles);
+  set("implementation_mutations", observations.implementationMutations);
+  set("convergence_mutations", observations.convergenceMutations);
+  set("required_verification_actions", observations.requiredVerificationActions);
+  set("required_verification_overrides", observations.requiredVerificationOverrides);
+  set("policy_decisions", observations.policyDecisions);
+  set("context_surface_scopes", observations.contextSurfaceScopes);
+  set("context_surface_pages", observations.contextSurfacePages);
+
+  if (Object.keys(patch).length === 0) return;
+
+  const { error } = await supabase.from("agent_execution_runs").update(patch).eq("id", runId);
 
   if (error) throw error;
 }

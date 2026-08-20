@@ -15,7 +15,7 @@ belongs in Supabase's provider configuration, not in Vibe's environment.
 | Supabase project | `Vibe-Business` |
 | Project ref | `dcbwlctscooefwnivxzv` |
 | Region | `eu-north-1` |
-| Production URL | `https://vibe-business-fawn.vercel.app` |
+| Production URL | Whatever `NEXT_PUBLIC_APP_URL` is set to in Vercel's Production environment (see [environment.md](../deployment/environment.md)) — no longer a fixed `*.vercel.app` value. |
 
 The ref is the hostname of `NEXT_PUBLIC_SUPABASE_URL`
 (`https://dcbwlctscooefwnivxzv.supabase.co`). If you ever need it and are not
@@ -77,12 +77,21 @@ URL Google needs, and it is *not* one of Vibe's routes.
 
 ### Authentication → URL Configuration
 
-- **Site URL**: `https://vibe-business-fawn.vercel.app`
+- **Site URL**: the production custom domain (e.g. `https://vibebusiness.de`)
+  — this is the value `NEXT_PUBLIC_APP_URL` is set to in Vercel's Production
+  environment (see [environment.md](../deployment/environment.md)).
 - **Redirect URLs** — the allow list for `redirectTo`. Add exactly:
   - `http://localhost:3000/auth/callback`
   - `http://localhost:3000/auth/confirm`
-  - `https://vibe-business-fawn.vercel.app/auth/callback`
-  - `https://vibe-business-fawn.vercel.app/auth/confirm`
+  - `https://vibebusiness.de/auth/callback`
+  - `https://vibebusiness.de/auth/confirm`
+
+**Migrating from a `*.vercel.app` domain to a custom one**: add the new domain's
+two entries above; do not remove the old `*.vercel.app` ones until you have
+confirmed nothing still depends on them (an in-flight email link, a bookmarked
+preview used for dogfooding). A stale entry left on the list is a dormant risk,
+not an active one — Supabase only ever sends a session to a URL something
+actually requested a redirect to.
 
 Preview deployments get a fresh hostname per deployment, so they are not on this
 list. Add a specific preview URL when you deliberately want to test auth on one;
@@ -126,7 +135,7 @@ This is the single most common way to lose an afternoon.
    Vibe never sees this URL.
 
 2. Supabase "redirectTo" / Redirect URLs
-   https://vibe-business-fawn.vercel.app/auth/callback
+   https://vibebusiness.de/auth/callback
    Owned by Vibe. Where Supabase returns after it has the tokens.
    This is src/app/auth/callback/route.ts.
 ```

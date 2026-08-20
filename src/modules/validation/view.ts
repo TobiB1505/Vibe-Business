@@ -1,10 +1,18 @@
-import type {
-  SourceIntegrity,
-  ValidationFailureCode,
-  ValidationStage,
-  ValidationStatus,
-  ValidationStepName,
-  ValidationStepResult,
+import {
+  VALIDATION_DEPTH_LABELS,
+  VALIDATION_DEPTH_REASON_LABELS,
+  type ValidationDepth,
+  type ValidationDepthReason,
+} from "./depth";
+import {
+  VALIDATION_STEPS,
+  type SourceIntegrity,
+  type StepSkipReason,
+  type ValidationFailureCode,
+  type ValidationStage,
+  type ValidationStatus,
+  type ValidationStepName,
+  type ValidationStepResult,
 } from "./schema";
 
 /**
@@ -72,6 +80,11 @@ export type ValidationPhaseView = {
   /** Bounded, already-sanitized failure output. Never present for a pass. */
   outputTail: string | null;
   outputTruncated: boolean;
+  /**
+   * Why a skipped phase was skipped, so the panel can say which of the three
+   * it was. Null unless `state` is `skipped`.
+   */
+  skipReason: StepSkipReason | null;
 };
 
 const PHASE_ORDER: readonly ValidationPhaseName[] = [
@@ -146,12 +159,14 @@ export function buildValidationProgress(run: ValidationProgressInput): Validatio
     let durationMs: number | null = null;
     let outputTail: string | null = null;
     let outputTruncated = false;
+    let skipReason: StepSkipReason | null = null;
 
     if (recorded) {
       // A recorded phase outranks everything else: it is the only evidence that
       // the work actually happened.
       state = recorded.status;
       durationMs = recorded.durationMs > 0 ? recorded.durationMs : null;
+      skipReason = recorded.status === "skipped" ? (recorded.skipReason ?? null) : null;
       if (recorded.status !== "passed" && recorded.status !== "skipped" && recorded.outputTail) {
         outputTail = recorded.outputTail;
         outputTruncated = recorded.outputTruncated;
@@ -187,6 +202,7 @@ export function buildValidationProgress(run: ValidationProgressInput): Validatio
       durationMs,
       outputTail,
       outputTruncated,
+      skipReason,
     };
   });
 }
@@ -203,6 +219,14 @@ export type ValidationSummary = {
   failureMessage: string | null;
   sandboxDurationMs: number | null;
   /**
+   * How much of the profile ran, and why (Sprint 0047).
+   *
+   * Null for runs validated before depth existed — those ran the full set, and
+   * saying "Standard" about them would be relabelling history. The panel shows
+   * nothing rather than a depth nobody chose.
+   */
+  depth: ValidationDepthView | null;
+  /**
    * Whether this result was produced under the integrity policy in force now.
    *
    * A stored pass describes the rules it was checked against. When those rules
@@ -213,10 +237,53 @@ export type ValidationSummary = {
   underCurrentPolicy: boolean;
 };
 
+/**
+ * The depth, as the panel renders it.
+ *
+ * Carries the label and the reason together because they only mean anything
+ * together: "Fast" alone invites "why did you skip things?", and the answer —
+ * "low-risk presentational change" — is the whole point of showing it.
+ */
+export type ValidationDepthView = {
+  depth: ValidationDepth;
+  label: string;
+  reason: string;
+  /** The steps this depth deliberately did not run. Empty at full depth. */
+  notRun: ValidationStepName[];
+};
+
+function buildDepthView(run: {
+  validationDepth: ValidationDepth | null;
+  validationDepthReason: string | null;
+  steps: Partial<Record<ValidationStepName, ValidationStepResult>>;
+}): ValidationDepthView | null {
+  if (!run.validationDepth) return null;
+
+  const reason = run.validationDepthReason as ValidationDepthReason | null;
+
+  return {
+    depth: run.validationDepth,
+    label: VALIDATION_DEPTH_LABELS[run.validationDepth],
+    // An unrecognised stored reason is shown as the generic sentence rather
+    // than as a raw enum: a future policy version may record a reason this
+    // build has no copy for, and leaking `sensitive_domain_changed` into the
+    // UI would be worse than saying less.
+    reason:
+      reason && reason in VALIDATION_DEPTH_REASON_LABELS
+        ? VALIDATION_DEPTH_REASON_LABELS[reason]
+        : "Validation depth chosen by policy",
+    notRun: VALIDATION_STEPS.filter(
+      (step) => run.steps[step]?.skipReason === "outside_depth",
+    ),
+  };
+}
+
 export function buildValidationSummary(
   run: ValidationProgressInput & {
     sandboxDurationMs: number | null;
     sandboxPolicyVersion: string;
+    validationDepth?: ValidationDepth | null;
+    validationDepthReason?: string | null;
   },
   options: { currentPolicyVersion: string; failureMessage: string | null },
 ): ValidationSummary {
@@ -225,6 +292,11 @@ export function buildValidationSummary(
     phases: buildValidationProgress(run),
     failureMessage: options.failureMessage,
     sandboxDurationMs: run.sandboxDurationMs,
+    depth: buildDepthView({
+      validationDepth: run.validationDepth ?? null,
+      validationDepthReason: run.validationDepthReason ?? null,
+      steps: run.steps,
+    }),
     underCurrentPolicy: run.sandboxPolicyVersion === options.currentPolicyVersion,
   };
 }

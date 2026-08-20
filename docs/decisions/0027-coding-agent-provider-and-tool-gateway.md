@@ -1,6 +1,6 @@
 # 0027 - Agentic Coding: Provider Abstraction, Tool Gateway, and Independent Validation
 
-Status: Accepted
+Status: Accepted; §2 and §3 amended by [0029](0029-agent-runtime-placement-and-credential-broker.md)
 Date: 2026-08-18
 Builds on [0005](0005-ai-provider-abstraction.md), [0006](0006-untrusted-repository-execution.md), [0011](0011-ai-inference-and-evidence-trust-boundary.md), [0013](0013-durable-operation-execution.md), [0014](0014-first-execution-safety.md), [0015](0015-untrusted-repository-execution-provider.md), [0026](0026-agentic-execution-contract.md)
 
@@ -32,6 +32,14 @@ One adapter is implemented. No speculative second provider.
 
 ### 2. The agent runs in Vibe's trusted process; only the workspace is in the sandbox
 
+> **Amended by [ADR 0029](0029-agent-runtime-placement-and-credential-broker.md).** This
+> topology could not run: `query()` spawns a native `claude` binary of 307-325 MB and a
+> Vercel function's whole deployment budget is 250 MB. The harness now runs inside the
+> execution's own sandbox and samples through a Vibe-operated gateway that injects the
+> Anthropic key outside the VM. The four overridden defaults below still hold, and 0029
+> adds a fifth. The section is kept as written because the reasoning about *why* each
+> default is wrong is what carried over.
+
 ```
 Vibe server process                                    TRUSTED
 ├── the tool gateway            (holds the policy)
@@ -56,6 +64,12 @@ Four SDK defaults are overridden explicitly, and each is load-bearing:
 | persist the session to disk | a durable record of reasoning and customer source | `persistSession: false` |
 
 ### 3. Every effect passes through one gateway, which refuses by lookup
+
+> **Amended by [ADR 0029](0029-agent-runtime-placement-and-credential-broker.md) §4-§5.**
+> With the harness inside the sandbox the agent writes with its own tools, so the gateway
+> is no longer the only door. What replaces it: the change set is observed off the
+> filesystem by Vibe's own commands, and write-scope enforcement moves from prevention to
+> `verifyCandidateChange`'s refusal, which always had the last word.
 
 `ExecutionToolGateway` is the only holder of an `AgentWorkspace`, and `AgentWorkspace` is the complete set of effects an agent can have — not the subset exposed today, the whole set. There is no generic `exec`, no `fetch`, no git operation and no way to name a machine.
 

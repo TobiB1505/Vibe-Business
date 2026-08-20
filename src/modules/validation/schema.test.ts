@@ -3,6 +3,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { SANDBOX_BUDGETS, SANDBOX_RESOURCES, STEP_DEADLINE_MS } from "./budgets";
+import { VALIDATION_DEPTH_POLICY_VERSION } from "./depth";
 import { installCommand } from "./commands";
 import { computeValidationIdentity } from "./identity";
 import { DEPENDENCY_HOSTS, SOURCE_HOSTS } from "./sandbox-port";
@@ -233,10 +234,49 @@ describe("the sandbox policy version tracks what it claims to (§9)", () => {
       preparedCommitSha: "2f05958e3410deaeb97029861abc05889139b4a7",
       validationProfile: "nextjs_node_v1" as const,
       validationProfileVersion: "nextjs-node-v1",
+      validationDepth: "standard" as const,
+      validationDepthPolicyVersion: VALIDATION_DEPTH_POLICY_VERSION,
     };
 
     expect(computeValidationIdentity({ ...base, sandboxPolicyVersion: "sandbox-policy-v2" })).not.toBe(
       computeValidationIdentity({ ...base, sandboxPolicyVersion: "sandbox-policy-v3" }),
+    );
+  });
+
+  it("changes the validation identity when the depth changes", () => {
+    // The same mechanism, applied to the axis Sprint 0047 added: a `fast` pass
+    // and a `deep` pass answer different questions about the same commit, so
+    // one must never be reused to satisfy a request for the other.
+    const base = {
+      preparedChangeId: "prepared_1",
+      preparedCommitSha: "2f05958e3410deaeb97029861abc05889139b4a7",
+      validationProfile: "nextjs_node_v1" as const,
+      validationProfileVersion: "nextjs-node-v1",
+      sandboxPolicyVersion: SANDBOX_POLICY_VERSION,
+      validationDepthPolicyVersion: VALIDATION_DEPTH_POLICY_VERSION,
+    };
+
+    const fast = computeValidationIdentity({ ...base, validationDepth: "fast" });
+    const standard = computeValidationIdentity({ ...base, validationDepth: "standard" });
+    const deep = computeValidationIdentity({ ...base, validationDepth: "deep" });
+
+    expect(new Set([fast, standard, deep]).size).toBe(3);
+  });
+
+  it("changes the validation identity when the depth policy version changes", () => {
+    const base = {
+      preparedChangeId: "prepared_1",
+      preparedCommitSha: "2f05958e3410deaeb97029861abc05889139b4a7",
+      validationProfile: "nextjs_node_v1" as const,
+      validationProfileVersion: "nextjs-node-v1",
+      sandboxPolicyVersion: SANDBOX_POLICY_VERSION,
+      validationDepth: "fast" as const,
+    };
+
+    expect(
+      computeValidationIdentity({ ...base, validationDepthPolicyVersion: "validation-depth-v1" }),
+    ).not.toBe(
+      computeValidationIdentity({ ...base, validationDepthPolicyVersion: "validation-depth-v2" }),
     );
   });
 });

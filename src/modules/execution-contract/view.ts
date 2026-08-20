@@ -70,6 +70,7 @@ export const EXECUTION_REASON_LABELS: Record<ExecutionResolutionReason, string> 
   founder_action_required: "This is real-world work that has to be done by a person.",
   external_party_required: "This is waiting on someone outside your business.",
   dependency_unsatisfied: "An earlier step has to finish first.",
+  dependency_cycle_detected: "The steps this depends on refer back to each other, so nothing can go first.",
   no_executor_for_vibe_work: "This is Vibe's own thinking work rather than a change to your product.",
   change_kind_not_executable: "This isn't a change to your product, so there is nothing for Vibe to build.",
   risk_class_not_permitted: "Vibe doesn't yet make changes this sensitive on your behalf.",

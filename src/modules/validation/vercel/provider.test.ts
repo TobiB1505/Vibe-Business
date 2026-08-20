@@ -375,18 +375,15 @@ describe("capturing an artifact must not cost the ledger (Sprint 10B §5)", () =
 
   /**
    * `sandbox.snapshot()` terminates the sandbox. A later `stop()` therefore
-   * throws — and `stop()` is where usage comes from. Without capturing usage at
-   * the moment of termination, retaining an artifact would silently cost us the
-   * accounting for the whole run.
+   * throws — and `stop()` is where usage used to come from. Without capturing
+   * usage at the moment of termination, retaining an artifact would silently
+   * cost us the accounting for the whole run.
    */
-  it("reports usage from a stop() that the provider would refuse", async () => {
+  it("captures usage at snapshot time rather than through a stop() the provider would refuse", async () => {
     let stopped = false;
     create.mockResolvedValue({
       name: "vibe-validate-abc",
       runtime: "node24",
-      totalActiveCpuDurationMs: 9876,
-      totalIngressBytes: 4242,
-      totalEgressBytes: 24,
       async snapshot() {
         stopped = true;
         return { snapshotId: "snap_1", sizeBytes: 10, expiresAt: new Date(1) };
@@ -396,6 +393,13 @@ describe("capturing an artifact must not cost the ledger (Sprint 10B §5)", () =
         if (stopped) throw new Error("sandbox is no longer running");
         return { activeCpuDurationMs: 1, networkTransfer: { ingress: 1, egress: 1 } };
       },
+    });
+    get.mockResolvedValue({
+      name: "vibe-validate-abc",
+      status: "stopped",
+      totalActiveCpuDurationMs: 9876,
+      totalIngressBytes: 4242,
+      totalEgressBytes: 24,
     });
 
     const { createVercelSandboxProvider } = await import("./provider");
@@ -414,6 +418,95 @@ describe("capturing an artifact must not cost the ledger (Sprint 10B §5)", () =
     const usage = await sandbox.stop();
     expect(usage.activeCpuDurationMs).toBe(9876);
     expect(usage.networkIngressBytes).toBe(4242);
+  });
+
+  /**
+   * Sprint 0051. The bug PART A found by reading the compiled SDK rather than
+   * guessing: `sandbox.snapshot()` does not refresh the local `Sandbox`
+   * instance's cached totals (only `.update()` and `.stop()` do), and the
+   * `Snapshot` object it returns carries no usage fields at all. Reading
+   * `this.sandbox.totalActiveCpuDurationMs` right after a snapshot was
+   * therefore always reading the pre-run value the sandbox was constructed
+   * with — never the finished run's — which is why 15 of 19 passing validation
+   * rows in Vibe's own history have `active_cpu_ms: null`.
+   *
+   * This is the regression test: even when the local instance still carries a
+   * stale (or absent) value, the fresh `Sandbox.get()` read must win.
+   */
+  it("ignores a stale local usage value and reads the fresh one from Sandbox.get after a snapshot", async () => {
+    create.mockResolvedValue({
+      name: "vibe-validate-abc",
+      runtime: "node24",
+      // What the real SDK actually looks like right after construction: no
+      // usage yet, because nothing has run.
+      totalActiveCpuDurationMs: undefined,
+      totalIngressBytes: undefined,
+      totalEgressBytes: undefined,
+      async snapshot() {
+        // The real SDK does not mutate these fields as a side effect either.
+        return { snapshotId: "snap_2", sizeBytes: 10, expiresAt: null };
+      },
+      async stop() {
+        throw new Error("sandbox is no longer running");
+      },
+    });
+    get.mockResolvedValue({
+      name: "vibe-validate-abc",
+      status: "stopped",
+      totalActiveCpuDurationMs: 61_366,
+      totalIngressBytes: 1000,
+      totalEgressBytes: 3_717_473,
+    });
+
+    const { createVercelSandboxProvider } = await import("./provider");
+    const sandbox = await createVercelSandboxProvider().create({
+      name: "vibe-validate-abc",
+      source: { kind: "git", repositoryUrl: "https://github.com/a/b.git", revision: "abc", credential: null },
+      networkPolicy: { mode: "deny_all" },
+      timeoutMs: 1000,
+      env: {},
+    });
+
+    await sandbox.snapshot({ expirationMs: 60_000 });
+    const usage = await sandbox.stop();
+
+    expect(usage.activeCpuDurationMs).toBe(61_366);
+    expect(usage.networkEgressBytes).toBe(3_717_473);
+    // The re-read asks by name and never resumes a stopped session — the same
+    // discipline `reconnect()` already holds to.
+    expect(get).toHaveBeenCalledWith(expect.objectContaining({
+      name: "vibe-validate-abc",
+      resume: false,
+    }));
+  });
+
+  it("leaves usage unknown, never guessed, when the fresh re-read fails", async () => {
+    create.mockResolvedValue({
+      name: "vibe-validate-abc",
+      runtime: "node24",
+      async snapshot() {
+        return { snapshotId: "snap_3", sizeBytes: 10, expiresAt: null };
+      },
+      async stop() {
+        throw new Error("sandbox is no longer running");
+      },
+    });
+    get.mockRejectedValue(new Error("network blip"));
+
+    const { createVercelSandboxProvider } = await import("./provider");
+    const sandbox = await createVercelSandboxProvider().create({
+      name: "vibe-validate-abc",
+      source: { kind: "git", repositoryUrl: "https://github.com/a/b.git", revision: "abc", credential: null },
+      networkPolicy: { mode: "deny_all" },
+      timeoutMs: 1000,
+      env: {},
+    });
+
+    await sandbox.snapshot({ expirationMs: 60_000 });
+    const usage = await sandbox.stop();
+
+    expect(usage.activeCpuDurationMs).toBeNull();
+    expect(usage.networkEgressBytes).toBeNull();
   });
 
   it("passes the explicit expiry through to the provider", async () => {
