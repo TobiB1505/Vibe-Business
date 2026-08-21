@@ -1,6 +1,6 @@
 # `execution-contract`
 
-The hard contract between the Action Planner and the future Coding Agent.
+The hard contract between the Action Planner and the Coding Agent.
 
 ```
 ActionPlanStep
@@ -15,7 +15,7 @@ Policy Compiler             default deny, outside any prompt
   write scope · required validation · Credit ceiling · interrupt rules
   stop conditions · freshness checks
       ↓
-FUTURE CODING AGENT         does not exist. Core-4 builds it.
+CODING AGENT                modules/coding-agent — ADR 0027, 0029
       ↓
 ProposedChange → PreparedChange → Validation → Review → Approval → Safe Merge
 ```
