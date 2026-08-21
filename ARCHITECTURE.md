@@ -1,11 +1,14 @@
 # Vibe Business — Architecture
 
-Status: V0.1 foundational architecture decided; implementation not yet started. This document distinguishes explicitly between:
+Status: V0.1 implemented. This document is the **map and the index** — how the pieces fit together, and where the decision behind each one is recorded. It is never a second copy of an ADR: where a decision is confirmed, the ADR is the source of truth for its context and consequences, and [§8](#8-decision-index) lists every one of them.
 
-- **Confirmed V0.1 decisions** — settled for V0.1, each backed by an ADR in [docs/decisions/](docs/decisions/README.md).
-- **Deferred / open decisions** — must still be made, several explicitly before the layer they affect can be implemented.
+Read the markers as three distinct states:
 
-Nothing outside the "Confirmed" sections should be read as final. Where a decision is confirmed, this document links to the ADR that recorded it — the ADR is the source of truth for context and consequences; this document is the map of how the confirmed pieces fit together.
+- **[Confirmed — ADR NNNN]** — decided and built. The ADR says why; the named module is where it lives.
+- **[Confirmed principle]** — a rule this architecture holds itself to, enforced somewhere concrete.
+- **[Open decision]** — genuinely undecided. [§7](#7-deferred--open-decisions) is the register of these and nothing else; work that is merely unbuilt belongs in [docs/ROADMAP.md](docs/ROADMAP.md), not here.
+
+This document must be true at HEAD. When a sprint makes a sentence in it false, correcting it is part of that sprint — see [ADR 0039](docs/decisions/0039-documentation-currency.md).
 
 ---
 
@@ -28,17 +31,25 @@ Nothing outside the "Confirmed" sections should be read as final. Where a decisi
 **[Confirmed principle]** The system implements this pipeline, corresponding to the Core Loop in [PRODUCT.md](PRODUCT.md#6-core-user-flow):
 
 ```
-Repository
-  → Analysis
+Onboarding
+  → Repository Intelligence · Live Product Intelligence · Deep Scan (optional)
+  → Product Understanding
+  → Business Readiness Audit
   → Opportunity
-  → Execution Job
-  → Branch
-  → Validation
+  → Action Plan
+  → Execution Contract  (an immutable spec + a compiled policy)
+  → Agent Execution     (in an isolated sandbox, behind a tool gateway)
+  → Prepared Change     (a commit on an isolated branch)
+  → Independent Validation
   → Preview
-  → Approval
-  → Merge
-  → (Measure)
+  → Visual Review
+  → Approval            (bound to one exact commit)
+  → Merge               (fast-forward, verified by read-back)
+  → Outcome Verification
+  → Business Measurement
 ```
+
+The three intelligence sources run in parallel and stay separately versioned — the disagreement between them is itself signal ([§3.3](#33-live-product-analysis-layer)). Everything from Execution Contract onwards runs as a durable operation ([§4](#4-cross-cutting-concerns)), not inside the request that started it.
 
 Each stage below is described as a logical layer/responsibility inside the modular monolith (ADR 0001), not as a separate service.
 
@@ -66,7 +77,7 @@ Each stage below is described as a logical layer/responsibility inside the modul
 
 **[Confirmed principle — bounded reads]** Repository analysis runs against explicit resource budgets (tree entries, file fetches, bytes, duration, path depth). Exceeding a budget degrades a snapshot to `partial` with machine-readable reasons; it never fails an otherwise useful analysis, and never triggers an unbounded crawl.
 
-**[Open decision]** Analysis techniques beyond the deterministic layer — specifically which findings warrant targeted LLM calls, and what gets cached vs. recomputed beyond snapshot reuse by commit SHA + analyzer version.
+**[Confirmed — ADR 0031]** Deterministic snapshots are the input to every AI consumer; no model reads a repository. Where a model needs repository facts — the coding agent — it receives a *compiled brief* bounded at 6 KB, selected from the snapshot the execution spec names, and withheld entirely unless that snapshot's commit matches the pinned base SHA. Reuse is keyed on commit SHA + analyzer version, and a reused result emits its own audit event. See [0031-execution-context-intelligence.md](docs/decisions/0031-execution-context-intelligence.md).
 
 ### 3.3 Live Product Analysis Layer
 
@@ -98,11 +109,13 @@ Each stage below is described as a logical layer/responsibility inside the modul
 
 **[Confirmed principle]** Converts Business Audit output into a small, ranked set of Opportunities (see [PRODUCT.md §11](PRODUCT.md#11-opportunity-model)), not a full report dump. Aggressive prioritization is a functional requirement, not a UI nicety.
 
-**[Open decision]** Ranking method (deterministic scoring, LLM-assisted ranking, or hybrid) is not yet decided.
+**[Confirmed — Sprint 8]** Ranking is LLM-assisted under a versioned rubric held in source control (`src/modules/opportunities/rubric.ts`), in one paid call. The rubric version is recorded on every opportunity set, so two sets carrying the same version mean the same thing. Each opportunity names the audit conclusion it addresses, so the lineage from finding to move is stored rather than re-inferred. See [docs/sprints/0008-opportunity-engine.md](docs/sprints/0008-opportunity-engine.md).
 
 ### 3.6 AI Execution Layer
 
-**[Confirmed — ADR 0005]** **Anthropic** is the AI provider for V0.1. Provider-specific logic (API calls, request/response shaping, model identifiers) is isolated behind an **`AIProvider`** boundary. No multi-provider routing and no agent orchestration beyond a single provider call in V0.1. See [0005-ai-provider-abstraction.md](docs/decisions/0005-ai-provider-abstraction.md).
+**[Confirmed — ADR 0005]** **Anthropic** is the AI provider for V0.1. Provider-specific logic (API calls, request/response shaping, model identifiers) is isolated behind an **`AIProvider`** boundary. No multi-provider routing. See [0005-ai-provider-abstraction.md](docs/decisions/0005-ai-provider-abstraction.md).
+
+**[Confirmed — ADR 0027, ADR 0029]** Single-call structured generation remains the default for every reasoning operation. **Agentic, multi-turn execution exists and is confined to `src/modules/coding-agent/`**, behind its own `CodingAgentProvider` boundary: the harness runs inside the execution's own sandbox holding no long-lived credential, and reaches the provider only through the Agent Gateway, which injects the real key and refuses everything else. What the agent may do is an explicitly named tool set — there is no web tool and no MCP server — and what it did is verified by Vibe's own observation, never by its account of itself.
 
 **[Confirmed — Sprint 4]** The interface is now implemented in `src/modules/ai/provider.ts` as **generic structured generation** (`countInputTokens`, `generateStructured`) rather than per-domain methods, so a new AI operation is a new caller rather than a change to every adapter. Only `src/modules/ai/anthropic/` may import a provider SDK. Model identifiers and effort levels live solely in `src/modules/ai/operations.ts`; nothing user-supplied may select a model.
 
@@ -116,41 +129,53 @@ Each stage below is described as a logical layer/responsibility inside the modul
 
 **[Confirmed — ADR 0006, security principle]** Repository code is **untrusted**. It must execute only in isolated, ephemeral environments with tightly scoped credentials and lifecycle — never directly inside the Vibe Business application process. This explicitly rules out running `npm install`, npm scripts, arbitrary shell scripts, build scripts, test scripts, postinstall hooks, or repository-provided executables in-process. See [0006-untrusted-repository-execution.md](docs/decisions/0006-untrusted-repository-execution.md).
 
-**[Deferred — ADR 0006]** The concrete sandbox/execution provider is **not yet decided**. This blocks full implementation of this layer until resolved.
+**[Confirmed — ADR 0015]** The provider is **Vercel Sandbox**: one Firecracker microVM per validation, created for that run and destroyed after it, cloning the pinned commit itself so no working copy ever exists in a Vibe process. The network is closed before any repository-controlled command runs, and the environment carries no credential — a build that needs one fails rather than being given one. Implemented in `src/modules/validation/vercel/`. See [0015-untrusted-repository-execution-provider.md](docs/decisions/0015-untrusted-repository-execution-provider.md).
 
 **[Confirmed principle]** Every proposed change is built and tested before it is presented to the user as a preview. A change that fails to build or fails tests must not reach the Preview Layer as a viable proposal.
 
-**[Open decision]** What "tested" means in V0.1 (existing project test suite only, generated smoke tests, or both) — depends on target project stacks.
+**[Confirmed — ADR 0015, ADR 0036]** "Tested" means the repository's **own** `install`, `typecheck`, `test` and `build`, resolved from the repository intelligence snapshot by `resolveValidationProfile`. No smoke tests are generated. Depth is risk-adaptive and is part of the validation identity, so a `fast` pass can never be reused to answer a `deep` question. A pass means those commands exited zero in an isolated VM — never that a change is safe, correct, reviewed or ready ([CLAUDE.md](CLAUDE.md) rule 66).
 
 ### 3.9 Preview Layer
 
-**[Confirmed — ADR 0004]** Preview generation sits behind a conceptual **`PreviewProvider`** boundary. **Vercel Preview Deployments** is the first implementation, used for repositories that are themselves Vercel-compatible. Vercel-specific behavior stays behind this boundary rather than leaking into the Opportunity Engine, AI Execution Layer, or Approval Layer. See [0004-vercel-as-initial-host-and-preview-provider.md](docs/decisions/0004-vercel-as-initial-host-and-preview-provider.md).
+**[Confirmed — ADR 0016]** A preview **restores the exact filesystem artifact captured from a passing validation** into a fresh sandbox and serves it on a temporary URL. It is not a deploy: no build is re-run, nothing enters the customer's hosting, and the environment grants nothing. Implemented in `src/modules/change-preview/`. The `PreviewProvider` boundary from [ADR 0004](docs/decisions/0004-vercel-as-initial-host-and-preview-provider.md) was left unimplemented deliberately — deploying needs authority this product does not have; see `src/modules/previews/README.md` for the comparison.
 
-**[Open decision]** Preview support for repositories that are not already Vercel-compatible is not covered by V0.1's first implementation.
+**[Confirmed — ADR 0017]** A preview is not a review. A **visual review artifact** captures a controlled before/after comparison at identical dimensions — a database CHECK refuses a `ready` artifact that has one side or mismatched sizes, because two images of different widths are not a comparison. It carries no score and no verdict, and the whole review path makes zero AI calls.
+
+**[Open decision]** Previewing a repository whose validated artifact cannot be started by a single detected dev/start command.
 
 ### 3.10 Approval Layer
 
 **[Confirmed principle]** Enforces the permission boundary defined in [PRODUCT.md §9](PRODUCT.md#9-approval-model). Merge to the default branch is only ever triggered by an explicit, attributable user approval action recorded in the Audit Log — never inferred, defaulted, or timed out into approval.
 
+**[Confirmed — ADR 0018]** An approval binds to an **immutable artifact identity** — project, prepared change, commit, base, validation run, review artifact and policy version, hashed, with a partial unique index on it. There is no `approved = true` and no "latest" lookup: change any part of the artifact and the old consent no longer covers it. Repository drift *after* an approval never rewrites what a human decided; it makes the merge unsafe, which is a different question asked at a different time.
+
+**[Confirmed — ADR 0019]** That second question is answered immediately before the write: Vibe fast-forwards the default branch to exactly the approved commit or refuses. Never a force-update, never a rewrite, never a merge or rebase to resolve drift, and the attempt is marked before it is made so an ambiguous outcome is resolved by *reading* rather than by writing again. `merged` means one sentence — the default branch points at the approved commit and Vibe read it back. Implemented in `src/modules/approvals/` and `src/modules/merge/`.
+
 ### 3.11 Usage/Credit Layer
 
 **[Confirmed principle]** Records the per-job usage schema defined in [PRODUCT.md §12](PRODUCT.md#12-credit-model) (`provider`, `model`, `input_tokens`, `output_tokens`, `provider_cost`, `tool_cost`, `vibe_credits_charged`, `job_id`, `user_id`, `timestamp`) for every AI job. Vibe Credits charged to the user are decoupled from raw provider cost in the data model, even if V0.1 uses a simple conversion.
 
-**[Confirmed — Sprint 4]** The **internal provider-cost half** of this layer exists as `ai_usage_events`: provider, model, operation, token counts, latency, status, failure code, and a cost derived from **effective-dated** model pricing using integer arithmetic (floats cannot represent sub-cent amounts exactly). It is insert-only under RLS and not readable through the public API — provider billing detail is not customer-facing. The customer-facing Vibe Credit ledger is **not** implemented; no margin, credits, or billing exist yet.
+**[Confirmed — Sprint 4]** The **internal provider-cost half** of this layer exists as `ai_usage_events`: provider, model, operation, token counts, latency, status, failure code, and a cost derived from **effective-dated** model pricing using integer arithmetic (floats cannot represent sub-cent amounts exactly). It is insert-only under RLS and not readable through the public API — provider billing detail is not customer-facing. Three sibling ledgers meter what tokens cannot: `sandbox_usage_events`, `deep_scan_provider_usage`, `review_browser_usage`. A cost Vibe does not know is recorded as unknown, never as zero.
+
+**[Confirmed — ADR 0024, ADR 0025]** The customer-facing **Vibe Credit ledger** exists: an append-only ledger with a materialized balance as its admission gate, grant lots spent expiring-soonest-first, and reserve → settle-or-release around every billable operation, each step under a unique idempotency key. Stripe is a funding rail only — the Credit amount is never read from a webhook payload, it is looked up from `src/modules/billing/catalog.ts`. Implemented in `src/modules/credits/` and `src/modules/billing/`.
+
+**[Confirmed — ADR 0038]** `src/modules/economy/` reads those ledgers and estimates what a run will cost *before* it starts, then measures how wrong that estimate was. It writes nothing, activates nothing, and is forbidden by test from importing billing.
+
+The one thing deliberately absent: **no consumption rate card is active.** `CREDIT_RATE_CARDS` ships empty, and unrated usage resolves to `rate_card_not_configured` with a null Credit amount rather than to zero (ADR 0024 §8).
 
 **[Confirmed principle — no secrets in the ledger]** Usage events never contain prompt text, model responses, reasoning, or API keys.
 
-**[Open decision]** Credit pricing / credit-to-cost conversion rate is not decided.
+**[Open decision — narrowed]** The **consumption** rate card is not decided: what a Credit buys per operation, and at what margin. Retail purchase pricing *is* decided (`src/modules/billing/catalog.ts`), and candidate consumption models are simulated against real runs in [docs/business/CREDIT_PRICING_V1.md](docs/business/CREDIT_PRICING_V1.md), whose own verdict is that the evidence is not yet sufficient to activate one.
 
 ### 3.12 Audit Log
 
-**[Confirmed — ADR 0007]** A **Postgres-based, append-only application audit log** (conceptually `audit_events`), stored in the same Supabase Postgres instance as the rest of the application. Records business-meaningful actions (e.g. `repository.connected`, `audit.completed`, `opportunity.created`, `execution.started`, `branch.created`, `preview.ready`, `approval.accepted`, `approval.rejected`, `pull_request.merged`, `credits.debited`) — it does not replace normal application/error logs, and is treated as append-only under normal operation. See [0007-audit-log.md](docs/decisions/0007-audit-log.md).
+**[Confirmed — ADR 0007]** A **Postgres-based, append-only application audit log** (`audit_events`), stored in the same Supabase Postgres instance as the rest of the application. It records business-meaningful actions — `repository.selected`, `business_audit.completed`, `opportunities.completed`, `agent_execution.started`, `change_validation.passed`, `change_preview.running`, `change_approval.created`, `change_merge.default_branch_updated`, `credit_charge.settled` — and does not replace normal application or error logs. The vocabulary is a closed list in `src/modules/audit-log/events.ts`; that file is authoritative, not this paragraph. See [0007-audit-log.md](docs/decisions/0007-audit-log.md).
 
 ---
 
 ## 4. Cross-Cutting Concerns
 
-**[Confirmed principle]** Cost awareness applies across every layer that calls an LLM (Analysis, Audit, Opportunity Engine, AI Execution). See [PRODUCT.md §13](PRODUCT.md#13-cost-principles): targeted context over full-repo dumps, caching, model routing by difficulty (architecturally enabled by ADR 0005, not implemented in V0.1), hard per-job budgets, usage logging from day one.
+**[Confirmed principle]** Cost awareness applies across every layer that calls an LLM (Analysis, Audit, Opportunity Engine, AI Execution). See [PRODUCT.md §13](PRODUCT.md#13-cost-principles): targeted context over full-repo dumps, caching, model routing by task difficulty — implemented as per-operation model and effort selection in `src/modules/ai/operations.ts`, the only file permitted to name a model — hard per-job budgets, usage logging from day one.
 
 **[Confirmed — ADR 0008]** Secrets (GitHub App private key/secret, Supabase service credentials, Anthropic API key, webhook secrets) are managed server-side via the hosting environment — **Vercel Environment Variables / Secret Configuration** for V0.1. Secrets must never be committed to Git, sent to client components, stored in public environment variables, written to application logs, included in AI prompts (unless unavoidable and specifically designed to be safe), or stored unencrypted as plain application fields. Any future persisted third-party/user credentials require a separate, dedicated secrets design. See [0008-secrets-management.md](docs/decisions/0008-secrets-management.md).
 
@@ -166,52 +191,131 @@ Each stage below is described as a logical layer/responsibility inside the modul
 
 **[Confirmed — ADR 0001]** Logical modules, living together in one Next.js/TypeScript codebase per ADR 0001:
 
-`auth` · `projects` · `onboarding` · `github` · `audits` · `opportunities` · `execution` · `previews` · `approvals` · `usage` · `credits` · `audit-log`
+| Group | Modules |
+|---|---|
+| Account and project | `auth` · `projects` · `onboarding` · `github` |
+| Intelligence | `repository-intelligence` · `live-product-intelligence` · `authenticated-product-intelligence` · `product-understanding` |
+| Reasoning | `business-audit` · `opportunities` · `action-plans` |
+| Execution | `execution-contract` · `execution-context` · `coding-agent` · `execution` |
+| Verification and delivery | `validation` · `change-preview` · `review` · `approvals` · `merge` |
+| Measurement | `outcome-verification` · `business-measurement` |
+| Platform | `operations` · `ai` · `audit-log` |
+| Economics | `credits` · `billing` · `economy` |
+
+Three names are **reserved and never used**: `audits`, `previews` and `usage` each contain a README and no code, superseded by `business-audit`, `change-preview`, and `ai/usage.ts` plus the four provider ledgers respectively. Each stub says so and points at its replacement.
 
 These are code-organization boundaries, not process/network boundaries, for as long as the modular monolith holds (see ADR 0001 "Revisit when").
 
 ---
 
-## 6. Domain Model (Conceptual Only)
+## 6. Domain Model
 
-**[Confirmed principle — conceptual only]** The following entities are expected to exist in the eventual data model, based on the layers above and the Core Loop in [PRODUCT.md](PRODUCT.md#6-core-user-flow). This is a naming/shape placeholder to keep layers conceptually aligned — **no fields, types, constraints, SQL schemas, or migrations are defined here.** The concrete schema is scoped to Sprint 0/1.
+**The schema is [supabase/migrations/](supabase/migrations/), and that is authoritative** — 49 tables across 55 migrations. This section names the aggregate roots so a reader can find their way in; it deliberately does not enumerate tables, because a hand-maintained list is wrong at the next migration and would compete with the migrations for the same job.
 
-- `User`
-- `Project`
-- `ProjectOnboarding`
-- `GitHubInstallation`
-- `RepositoryConnection`
-- `ProductAudit`
-- `AuditDimension`
-- `Opportunity`
-- `ExecutionJob`
-- `CodeChange`
-- `Preview`
-- `Approval`
-- `UsageEvent`
-- `CreditLedgerEntry`
-- `AuditEvent`
+| Aggregate root | Holds |
+|---|---|
+| `projects` | the unit everything else scopes to; plus onboarding state, founder intent, and user corrections to what Vibe concluded |
+| Intelligence snapshots | one immutable, versioned snapshot per source per run — repository, live product, authenticated Deep Scan — never merged into one payload |
+| `product_profiles` | Vibe's understanding of the product, joining those three under one input hash |
+| `business_readiness_audits` | the diagnosis, as a versioned JSONB document carrying its own prompt, rubric and evidence-pack versions |
+| `opportunity_sets` → `action_plans` | what to do next, and the steps to do it |
+| `execution_specs` | the immutable instruction package an execution runs under; database-trigger-protected against mutation |
+| `agent_execution_runs` | what one agent run was given, did, cost and produced |
+| `prepared_changes` → `validation_runs` → `preview_sessions` → `review_artifacts` | the artifact and everything independently established about it |
+| `change_approvals` → `change_merges` | one human decision bound to one commit, and the write it authorized |
+| `change_outcome_verifications`, `business_outcome_measurements` | what became true afterwards |
+| The four usage ledgers, `billing_credit_*` | what it cost Vibe, and what it cost the customer — separate systems on purpose |
+| `audit_events` | the append-only record of business-meaningful actions |
 
-Multi-tenant scoping (by `User`/`Project`) and Row Level Security, per [0002-supabase-postgres-and-auth.md](docs/decisions/0002-supabase-postgres-and-auth.md), apply once these entities are actually implemented as tables.
+**[Confirmed — ADR 0002]** Multi-tenant scoping and Row Level Security apply to **every** table. The posture escalates with consequence: full CRUD on a project's own rows, insert-and-select with linkage verification on approvals, insert-only with no update path on merges and outcome verifications, select-only on everything financial, and no policy at all on the Stripe event log. Clients cannot write a financial row.
 
 ---
 
 ## 7. Deferred / Open Decisions
 
-The following are explicitly **not decided** and should not be assumed by implementation work:
+This is the register of genuinely **undecided** questions, and nothing else. Work that is decided but unbuilt belongs in [docs/ROADMAP.md](docs/ROADMAP.md); conflating the two is how eight resolved items sat here for months.
 
-1. **Untrusted Repository Execution Provider** — concrete sandbox/isolation mechanism for building/testing repository code. Security principle is confirmed (ADR 0006); provider is deferred.
-2. **Preview integration for non-Vercel-compatible repositories** — V0.1's first `PreviewProvider` implementation only covers Vercel-compatible targets (ADR 0004).
-3. **`AIProvider` interface signature** — the boundary is confirmed (ADR 0005); its concrete shape is not.
-4. **Final database schema** — entities are named conceptually (§6); fields, types, and migrations are not defined.
-5. **Credit pricing / credit-to-provider-cost conversion** — the ledger schema is confirmed (PRODUCT.md §12); the actual pricing/conversion is not.
-6. **Analytics provider** — not chosen.
-7. ~~**Error monitoring / observability provider** — not chosen.~~ Resolved by [ADR 0022](docs/decisions/0022-sentry-observability.md): Sentry for error monitoring and baseline tracing.
-8. **Production hosting migration as a possible future product feature** — not scoped, not committed to.
-9. **Long-term storage for large build artifacts** — not chosen.
-10. ~~**Background job / queue technology** — required as a concept (§4), but the specific technology is not decided.~~ Resolved by [ADR 0013](docs/decisions/0013-durable-operation-execution.md): durable operations on Vercel Workflows.
+**Still open:**
 
-These should be resolved as explicit ADRs before significant implementation of the corresponding layer begins, per [CLAUDE.md](CLAUDE.md).
+1. **Credit consumption rate card** — what a Credit buys per operation, and at what margin. Narrowed rather than resolved: the ledger, the retail purchase price and the simulation exist ([§3.11](#311-usagecredit-layer)); the activation decision does not, and [docs/business/CREDIT_PRICING_V1.md](docs/business/CREDIT_PRICING_V1.md) argues the evidence is not yet sufficient to make it.
+2. **Analytics provider for the customer's product** — the metric-source port is vendor-neutral by design ([ADR 0021](docs/decisions/0021-business-outcome-measurement.md)) and no adapter is written, so every project resolves to `waiting_for_source`. Vibe's own product analytics is separate and already answered (`@vercel/analytics`).
+3. **Previewing a repository whose validated artifact cannot be started** by a single detected dev/start command ([§3.9](#39-preview-layer)).
+4. **Production hosting migration as a possible future product feature** — not scoped, not committed to.
+
+**Resolved since this list was written:**
+
+5. ~~Untrusted Repository Execution Provider~~ → [ADR 0015](docs/decisions/0015-untrusted-repository-execution-provider.md): Vercel Sandbox.
+6. ~~Preview integration for non-Vercel-compatible repositories~~ → obsolete as framed. [ADR 0016](docs/decisions/0016-temporary-preview-isolation.md) replaced deployment-based previews with a restored validation artifact, so Vercel compatibility stopped being the constraint.
+7. ~~`AIProvider` interface signature~~ → generic structured generation (`countInputTokens`, `generateStructured`), [§3.6](#36-ai-execution-layer).
+8. ~~Final database schema~~ → [supabase/migrations/](supabase/migrations/) is the schema, and is authoritative ([§6](#6-domain-model)).
+9. ~~Error monitoring / observability provider~~ → [ADR 0022](docs/decisions/0022-sentry-observability.md): Sentry.
+10. ~~Long-term storage for large build artifacts~~ → decided by *not* storing them long-term: a validated artifact is a provider snapshot with an explicit expiry, deleted when the preview ends ([ADR 0016](docs/decisions/0016-temporary-preview-isolation.md)); review screenshots live in a private bucket read only through signed URLs ([ADR 0017](docs/decisions/0017-visual-review-artifacts.md)).
+11. ~~Background job / queue technology~~ → [ADR 0013](docs/decisions/0013-durable-operation-execution.md): durable operations on Vercel Workflows.
+
+An open decision is resolved by writing an ADR, not by an implementation that quietly assumes an answer ([CLAUDE.md](CLAUDE.md) rules 13, 20).
+
+---
+
+## 8. Decision Index
+
+Every ADR, with the layer it governs. The ADR is the source of truth for its own decision; this index exists so that no decision is invisible from the map, and `src/lib/docs/documentation-currency.test.ts` fails if one is missing.
+
+| # | Decision | Layer |
+|---|---|---|
+| [0001](docs/decisions/0001-modular-monolith.md) | Modular monolith, Next.js + TypeScript | Overall shape |
+| [0002](docs/decisions/0002-supabase-postgres-and-auth.md) | Supabase Postgres and Auth | Storage, identity |
+| [0003](docs/decisions/0003-github-app-integration.md) | GitHub App integration, least privilege | §3.1 |
+| [0004](docs/decisions/0004-vercel-as-initial-host-and-preview-provider.md) | Vercel as host; `PreviewProvider` boundary | Hosting, §3.9 |
+| [0005](docs/decisions/0005-ai-provider-abstraction.md) | `AIProvider` abstraction, Anthropic first | §3.6 |
+| [0006](docs/decisions/0006-untrusted-repository-execution.md) | Repository code is untrusted and never runs in-process | §3.8 |
+| [0007](docs/decisions/0007-audit-log.md) | Append-only application audit log | §3.12 |
+| [0008](docs/decisions/0008-secrets-management.md) | Secrets management | Cross-cutting |
+| [0009](docs/decisions/0009-github-installation-ownership-verification.md) | Installation ownership verification | §3.1 |
+| [0010](docs/decisions/0010-safe-outbound-http-inspection.md) | Safe outbound HTTP: one SSRF boundary | §3.3 |
+| [0011](docs/decisions/0011-ai-inference-and-evidence-trust-boundary.md) | Inference and evidence trust boundary | §3.4 |
+| [0012](docs/decisions/0012-authenticated-browser-analysis.md) | Authenticated browser analysis (Deep Scan) | §3.3 |
+| [0013](docs/decisions/0013-durable-operation-execution.md) | Durable operation execution | §4 |
+| [0014](docs/decisions/0014-first-execution-safety.md) | First execution safety: model opinion authorizes nothing | §3.6, §3.7 |
+| [0015](docs/decisions/0015-untrusted-repository-execution-provider.md) | Vercel Sandbox as the execution provider | §3.8 |
+| [0016](docs/decisions/0016-temporary-preview-isolation.md) | Temporary preview isolation | §3.9 |
+| [0017](docs/decisions/0017-visual-review-artifacts.md) | Visual review artifacts | §3.9 |
+| [0018](docs/decisions/0018-human-approval-authority.md) | Approval binds to an immutable artifact identity | §3.10 |
+| [0019](docs/decisions/0019-safe-approved-change-merge.md) | Safe approved-change merge | §3.10 |
+| [0020](docs/decisions/0020-production-outcome-verification.md) | Production outcome verification | Measurement |
+| [0021](docs/decisions/0021-business-outcome-measurement.md) | Business outcome measurement | Measurement |
+| [0022](docs/decisions/0022-sentry-observability.md) | Sentry for errors and baseline tracing | Cross-cutting |
+| [0023](docs/decisions/0023-project-scoped-onboarding-orchestration.md) | Project-scoped onboarding orchestration | Onboarding |
+| [0024](docs/decisions/0024-vibe-credits-economic-layer.md) | Vibe Credits economic layer | §3.11 |
+| [0025](docs/decisions/0025-stripe-payment-rail-and-credit-grants.md) | Stripe payment rail and credit grants | §3.11 |
+| [0026](docs/decisions/0026-agentic-execution-contract.md) | Agentic execution contract | Execution contract |
+| [0027](docs/decisions/0027-coding-agent-provider-and-tool-gateway.md) | Coding agent provider and tool gateway | §3.6 |
+| [0028](docs/decisions/0028-founder-selectable-action-plan-move.md) | Founder-selectable action plan move | Action plans |
+| [0029](docs/decisions/0029-agent-runtime-placement-and-credential-broker.md) | Agent runtime placement and credential broker | §3.6, §3.8 |
+| [0030](docs/decisions/0030-agent-execution-observability.md) | Agent execution observability | §4 |
+| [0031](docs/decisions/0031-execution-context-intelligence.md) | Execution context intelligence | §3.2 |
+| [0032](docs/decisions/0032-agent-verification-and-completion.md) | Agent verification and completion | Execution |
+| [0033](docs/decisions/0033-post-implementation-completion-control.md) | Post-implementation completion control | Execution |
+| [0034](docs/decisions/0034-execution-surface-and-lifecycle.md) | Execution surface and lifecycle | Execution |
+| [0035](docs/decisions/0035-commit-message-compiler.md) | Commit message compiler | §3.7 |
+| [0036](docs/decisions/0036-risk-adaptive-validation-depth.md) | Risk-adaptive validation depth | §3.8 |
+| [0037](docs/decisions/0037-automatic-validation-and-review-classification.md) | Automatic validation and review classification | §3.8, §4 |
+| [0038](docs/decisions/0038-economy-intelligence-layer.md) | Economy intelligence layer | §3.11 |
+| [0039](docs/decisions/0039-documentation-currency.md) | Where truth lives, and how documentation stays current | This document |
+
+### Layers with no section above
+
+These exist, are governed by the ADRs named, and are described in depth by their module README rather than duplicated here.
+
+- **Onboarding** — `src/modules/onboarding/` · ADR 0023. Project-scoped, and reconciled from canonical records on read rather than trusted as stored state, so a run that finishes while the founder is away cannot strand the journey.
+- **Product Understanding** — `src/modules/product-understanding/` · answers "what is this product?" between the scanners and the audit. Deterministic derivation plus one cheap model call; a person's correction outranks everything and survives every re-scan.
+- **Deep Scan** — `src/modules/authenticated-product-intelligence/` · ADR 0012. A temporary browser the founder signs into themselves; strictly read-only, no persisted session, no screenshots, one included scan per project.
+- **Action Plans** — `src/modules/action-plans/` · ADR 0028. Turns a selected opportunity into steps. The model names the actor and the kind of change; the server alone decides what Vibe may execute.
+- **Execution Contract / Context** — `src/modules/execution-contract/`, `src/modules/execution-context/` · ADRs 0026, 0031, 0034. The immutable spec and compiled policy an execution runs under, and the bounded brief it starts from.
+- **Coding Agent** — `src/modules/coding-agent/` · ADRs 0027, 0029, 0032, 0033. The agent harness, its sandbox placement, its gateway, and how a run's result is verified against Vibe's own observation.
+- **Merge** — `src/modules/merge/` · ADR 0019.
+- **Outcome Verification / Business Measurement** — `src/modules/outcome-verification/`, `src/modules/business-measurement/` · ADRs 0020, 0021.
+- **Durable Operations** — `src/modules/operations/` · ADRs 0013, 0030, 0037. Also the only module permitted to use the service-role client.
+- **Billing and Economy** — `src/modules/billing/`, `src/modules/economy/` · ADRs 0025, 0038.
 
 ---
 
