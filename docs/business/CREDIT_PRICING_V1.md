@@ -382,6 +382,16 @@ on every dimension including combined stress.
 | standard | 5 | $0.3056 | $0.0961 |
 | complex | **0** | — | — |
 
+**This table is the six-run dataset, and is deliberately not updated.** Every
+figure in this document is computed over runs #3–#8 ([Limitations of the n=6 dataset](#limitations-of-the-n6-dataset), which
+records separately what run #9 added); freezing them is what keeps the
+document's argument checkable against the sprint that made it. It does mean the
+table no longer equals what `analyzeClassCostDifferentiation()` returns today —
+that function includes run #9, and now reports `standard` as **n=6, mean
+$0.3125, std dev $0.0876**, moving the ratio below from 1.20 to 1.23. The
+finding is unchanged in direction and in weakness; a reader comparing the two
+is seeing one more run, not a discrepancy.
+
 `standard` costs **~20% more** than `small` on average (ratio 1.20) — real,
 but modest, and resting on a single `small` observation. Every simulated
 rate card prices the *standard-vs-small* premium far above that: 50–100%

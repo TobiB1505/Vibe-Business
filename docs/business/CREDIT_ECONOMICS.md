@@ -2,6 +2,17 @@
 
 Status: recommendation. **Partly implemented by Billing Core-2** — see the implementation note at the end of this document for exactly which recommendations shipped, which were superseded by a founder decision, and which remain open. The body below is the original recommendation and is left unedited, so what was recommended stays distinguishable from what was built.
 
+> **Two numbers in this document have since been measured and are wrong here.**
+> [ECONOMY_MODEL.md](ECONOMY_MODEL.md) corrects them against real agent runs:
+> prompt caching **is** measured, and is 55–70% of agentic provider cost rather
+> than absent; and the modelled "~$15 retail" Agent task is two orders of
+> magnitude high — the six real runs cost $0.1444–$0.3465, mean $0.2507, with an
+> effective cost per *delivered* run of $0.4752 once failures and sandbox
+> infrastructure are counted. The body is left unedited per the paragraph above,
+> so read it as the recommendation it was; read `ECONOMY_MODEL.md` for what the
+> runs actually cost. Retail pricing itself is decided in
+> [CREDIT_PRICING_V1.md](CREDIT_PRICING_V1.md).
+
 Every number below is labeled:
 
 - **OBSERVED** — real, persisted Vibe data, re-queried live for this sprint

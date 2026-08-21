@@ -9,16 +9,29 @@ Deterministic analysis of a project's **public live website** — the counterpar
 ```
 url.ts          normalize + policy (https, no credentials, no internal hosts)
 net/safe-fetch  SSRF gate → DNS → address check → pinned request → manual redirects
-crawler.ts      same-origin BFS under explicit budgets, priority-ordered frontier
+robots.ts       robots.txt: which paths may be fetched, sitemap locations, crawl delay
+sitemap.ts      sitemap parsing as discovery *hints* only; indexes one level deep
+budgets.ts      central limits + the tracker every fetch has to ask
+crawler.ts      same-origin BFS under those budgets, priority-ordered frontier
 html.ts         bounded tag scanning; script/style removed before any text is read
 classifier.ts   product surfaces from path + title + heading + form structure
 cta.ts          rule-table CTA classification (extensible, not English-only)
 forms.ts        structural form classification — types only, never names or values
+brand.ts        brand signals from a served page — the live counterpart to the
+                repository brand detector
 signals.ts      SEO + conversion aggregation
 analyzer.ts     versioned LiveProductIntelligenceSnapshot
 store.ts        persistence, freshness-based reuse, in-flight guard
 service.ts      ownership check + audit events — the only entry point the UI calls
 ```
+
+Beside the pipeline:
+
+| File | Role |
+|---|---|
+| `errors.ts` | Typed domain errors. Callers switch on `code` and write their own copy; a raw socket error, TLS message or upstream body must never reach the browser, because that is what an SSRF probe is fishing for. |
+| `human-view.ts` | Presentation only: a deterministic translation of a snapshot into the customer's vocabulary. No model, no paraphrasing at render time. Reads the snapshot, changes nothing. |
+| `test-support.ts` | In-memory `DnsResolver` and `HttpTransport` doubles — see [Testing](#testing). |
 
 ## Non-negotiables
 

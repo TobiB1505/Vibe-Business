@@ -121,12 +121,22 @@ export const EXECUTION_BUDGET_POLICIES: readonly ExecutionBudgetPolicy[] = [];
  *
  * ## Where the numbers come from
  *
- * Nowhere, and that is stated rather than hidden. Vibe has never run an agent,
- * so every value below is a *conservative ceiling chosen to bound the first
- * experiment*, not a measurement and not a price. §17 asks for exactly this:
- * deliberately small limits, versioned, labelled as dogfood.
+ * They were chosen before Vibe had ever run an agent: every value below is a
+ * *conservative ceiling chosen to bound the first experiment*, not a
+ * measurement and not a price. §17 asks for exactly this — deliberately small
+ * limits, versioned, labelled as dogfood.
  *
- * They are sized against what is already measured elsewhere in this codebase:
+ * Runs #3–#8 have since happened, so the ceilings can now be checked against
+ * observation rather than only against sibling budgets, and they held: the six
+ * real runs cost **$0.1444–$0.3465** (mean $0.2507) against a $3.00 ceiling,
+ * and the largest changed eight files — exactly `maxChangedFiles`. See
+ * `docs/business/ECONOMY_MODEL.md`. They have deliberately **not** been retuned
+ * to fit: a ceiling that tracks the observed maximum stops bounding anything,
+ * and the one number the runs argue is wrong — that eight files was reached
+ * rather than approached — is a reason to watch it, not to raise it.
+ *
+ * The original sizing, against what was already measured elsewhere in this
+ * codebase:
  *
  *  - `maxWallClockMs` 20 minutes — the sandbox's own lifetime bound is 15
  *    minutes (`SANDBOX_BUDGETS.totalLifetimeMs`), so the agent cannot outlive

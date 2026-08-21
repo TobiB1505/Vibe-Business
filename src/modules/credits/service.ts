@@ -49,11 +49,22 @@ import { creditUnits, type CreditUnits, ZERO_CREDITS } from "./units";
  * and it is the difference between a billing system and a way to bill somebody
  * else.
  *
- * ## Shadow mode
+ * ## What is wired, and what is still inert
  *
- * Nothing in this file is wired into an existing product flow. `reserveCredits`
- * and `settleReservation` exist, are tested, and are called by nothing in
- * production yet — Billing Core 1 measures, it does not enforce (§5).
+ * This block used to say that nothing here was called in production. That was
+ * true for one sprint. Billing Core 2 wired it: `credits/operation-billing.ts`
+ * calls `reserveCredits`, `settleReservation` and `releaseReservation`, and
+ * `operations/billing.ts` wraps every durable operation start path, so an
+ * audit, an opportunity set, an action plan and an agent execution each reserve
+ * before provider work and settle or release after it.
+ *
+ * What is still inert is one level up and is a *pricing* fact, not a wiring
+ * one: `CREDIT_RATE_CARDS` in `rating.ts` is `[]`, so `retailChargeFor` returns
+ * null for an operation with no active retail price, `authorizeOperationCredits`
+ * reports `{ billable: false }`, and the reserve/settle path runs with nothing
+ * to hold. The machinery is live; the prices are not, and that emptiness is
+ * structural rather than a flag — see `rating.ts` and
+ * `docs/business/CREDIT_PRICING_V1.md`.
  */
 
 /* ---------------------------------------------------------------------------
