@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import { getAppUrl } from "@/lib/env/app-url";
+import { SITE_DESCRIPTION, SITE_TITLE } from "@/lib/site-metadata";
 import { fontVariables } from "./fonts";
 import "./globals.css";
 
@@ -23,8 +24,8 @@ export const metadata: Metadata = {
   // currently sets a relative metadata URL — this establishes the base
   // before one needs it, rather than after a wrong resolution ships.
   metadataBase: new URL(getAppUrl()),
-  title: "Vibe Business",
-  description: "The business layer for AI-built products.",
+  title: SITE_TITLE,
+  description: SITE_DESCRIPTION,
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

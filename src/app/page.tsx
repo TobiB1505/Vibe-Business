@@ -1,8 +1,30 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { MarketingShell } from "@/components/layout/marketing-shell";
 import { BusinessMapPreview } from "@/components/marketing/business-map-preview";
 import { buttonClasses } from "@/components/ui/button";
 import { MonoLabel } from "@/components/ui/typography";
+import { getAppUrl } from "@/lib/env/app-url";
+import { SITE_DESCRIPTION, SITE_TITLE } from "@/lib/site-metadata";
+
+/**
+ * Open Graph tags for the homepage, so a link shared to it renders a title
+ * and description instead of nothing.
+ *
+ * `title` and `description` reuse the same constants the root layout's own
+ * `<title>` / `<meta name="description">` are built from (`SITE_TITLE` /
+ * `SITE_DESCRIPTION`) rather than restating the copy as a second literal
+ * that could drift from it. `url` reuses `getAppUrl()` — the same function
+ * the root layout resolves `metadataBase` from — so it names this
+ * deployment's actual origin rather than a hardcoded domain.
+ */
+export const metadata: Metadata = {
+  openGraph: {
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    url: getAppUrl(),
+  },
+};
 
 /**
  * The landing page (UI-S1 §3–§6).
