@@ -158,7 +158,7 @@ Each stage below is described as a logical layer/responsibility inside the modul
 
 **[Confirmed principle]** Security-sensitive integrations (GitHub auth, tokens, webhooks, credentials) use least privilege and are never committed to the repository. See [CLAUDE.md](CLAUDE.md).
 
-**[Confirmed principle]** Background/asynchronous work (e.g. long-running analysis, execution jobs, isolated builds) is required as a concept — the pipeline in [§2](#2-core-flow) cannot run fully synchronously within a single request. The specific queue/background-job technology is explicitly **not decided** (see [§7](#7-deferred--open-decisions)); no such technology should be introduced before that decision is made, per [CLAUDE.md](CLAUDE.md).
+**[Confirmed — ADR 0013]** Background/asynchronous work runs as **durable operations on Vercel Workflows** — plain async TypeScript under a `"use workflow"` directive, with no separate queue, worker or scheduler service. The pipeline in [§2](#2-core-flow) cannot run synchronously within one request, and a durable operation owns its own lifetime: an `operation_runs` row survives the request that started it. **[Confirmed — ADR 0037]** one durable operation may enqueue the next. Implemented in `src/modules/operations/`. See [0013-durable-operation-execution.md](docs/decisions/0013-durable-operation-execution.md). A *further* background technology beside it still requires a new ADR ([CLAUDE.md](CLAUDE.md) rule 24).
 
 ---
 
@@ -209,7 +209,7 @@ The following are explicitly **not decided** and should not be assumed by implem
 7. ~~**Error monitoring / observability provider** — not chosen.~~ Resolved by [ADR 0022](docs/decisions/0022-sentry-observability.md): Sentry for error monitoring and baseline tracing.
 8. **Production hosting migration as a possible future product feature** — not scoped, not committed to.
 9. **Long-term storage for large build artifacts** — not chosen.
-10. **Background job / queue technology** — required as a concept (§4), but the specific technology is not decided. Do not introduce one before this decision is made.
+10. ~~**Background job / queue technology** — required as a concept (§4), but the specific technology is not decided.~~ Resolved by [ADR 0013](docs/decisions/0013-durable-operation-execution.md): durable operations on Vercel Workflows.
 
 These should be resolved as explicit ADRs before significant implementation of the corresponding layer begins, per [CLAUDE.md](CLAUDE.md).
 
