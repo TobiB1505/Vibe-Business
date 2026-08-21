@@ -89,9 +89,12 @@ This file governs how Claude Code (and any AI-assisted session) works in this re
 81. Bootstrap egress and execution egress are separate windows. Registry access exists only while installing; the agent never runs with a package registry reachable. The validation sandbox is unaffected and stays `deny_all` before any repository-controlled command.
 82. `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`, `settingSources: []`, `persistSession: false`, a per-run `CLAUDE_CONFIG_DIR` and a per-run `cwd` are mandatory wherever the harness runs. Auto memory loads regardless of `settingSources`, and the harness now runs inside the customer's own tree — which is exactly where a `CLAUDE.md` lives.
 
+83. A change that makes a current-state document false is not complete. **Current-state** documents must be true at HEAD — [README.md](README.md), [PRODUCT.md](PRODUCT.md), [ARCHITECTURE.md](ARCHITECTURE.md), this file, [docs/README.md](docs/README.md), [docs/ROADMAP.md](docs/ROADMAP.md), `docs/setup/`, `docs/deployment/` and every `src/modules/*/README.md` — and a false sentence in one of them is a defect with the standing of a failing test, repaired by the change that caused it rather than deferred. **Records** are the opposite and are never edited to match the present: `docs/sprints/`, `docs/decisions/`, `docs/audits/` and `docs/PROJECT_HISTORY_AND_LEARNINGS.md` say what was true when written, and are corrected only when they were wrong *at the time*, in the open, with a dated bracket that leaves the original standing. Retiring a claim means adding it to `RETIRED_CLAIMS` in `src/lib/docs/documentation-currency.test.ts`, scoped to the file it was retired from — history may still quote it. Rule numbers here are immutable: rewrite a rule in place, never renumber — see [ADR 0039](docs/decisions/0039-documentation-currency.md).
+
 ## Related Documents
 
 - [PRODUCT.md](PRODUCT.md) — product vision, scope, and non-goals
-- [ARCHITECTURE.md](ARCHITECTURE.md) — technical architecture: confirmed V0.1 decisions, deferred/open decisions
+- [ARCHITECTURE.md](ARCHITECTURE.md) — how the pieces fit together, and the index of every architecture decision
 - [docs/decisions/](docs/decisions/README.md) — architecture decision records
-- [docs/sprints/](docs/sprints/README.md) — sprint planning
+- [docs/sprints/](docs/sprints/README.md) — sprint records: what was built, and what it cost
+- [docs/ROADMAP.md](docs/ROADMAP.md) — known gaps, in the order they are worth closing
