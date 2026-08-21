@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { SANDBOX_BUDGETS } from "../budgets";
 
 /**
  * The Vercel Sandbox adapter's creation options (Sprint 10A §2, §24, §43).
@@ -486,6 +487,127 @@ describe("capturing an artifact must not cost the ledger (Sprint 10B §5)", () =
     // The order is the fix. Reading first is what Sprint 0053 did, and it is
     // why calibration run 1 still recorded null.
     expect(order).toEqual(["snapshot", "read-session"]);
+  });
+
+  /**
+   * The fourth chapter, and calibration run 2's actual production finding.
+   *
+   * Reading the right object at the right moment still returned nothing,
+   * because `createSnapshot` resolves once the stop is *requested*, not once
+   * the session has actually reached `stopped`. Run 2's own capture logged
+   * `sessionStatus: "snapshotting"` — a real, distinct, documented state, not
+   * an empty record. This asserts the poll: a session still in transition is
+   * re-read, via the same passive `Sandbox.get({ resume: false })` this file
+   * already uses elsewhere, until it reports `stopped` and the real figures.
+   */
+  describe("polling past a snapshot still in flight (calibration run 2)", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("re-reads a still-snapshotting session until it actually stops", async () => {
+      let pollsServed = 0;
+
+      create.mockResolvedValue({
+        name: "vibe-validate-abc",
+        runtime: "node24",
+        async snapshot() {
+          return { snapshotId: "snap_5", sizeBytes: 1, expiresAt: null };
+        },
+        // What createSnapshot's response actually carried: the stop was
+        // requested, not finished.
+        currentSession: () => ({ status: "snapshotting", activeCpuUsageMs: undefined, networkTransfer: undefined }),
+        async stop() {
+          throw new Error("sandbox is no longer running");
+        },
+      });
+
+      // Two more passive re-reads: still transitioning, then genuinely done.
+      get.mockImplementation(async () => {
+        pollsServed += 1;
+        const stopped = pollsServed >= 2;
+        return {
+          name: "vibe-validate-abc",
+          currentSession: () => ({
+            status: stopped ? "stopped" : "snapshotting",
+            activeCpuUsageMs: stopped ? 42_000 : undefined,
+            networkTransfer: stopped ? { ingress: 10, egress: 20 } : undefined,
+          }),
+        };
+      });
+
+      const { createVercelSandboxProvider } = await import("./provider");
+      const sandbox = await createVercelSandboxProvider().create({
+        name: "vibe-validate-abc",
+        source: { kind: "git", repositoryUrl: "https://github.com/a/b.git", revision: "abc", credential: null },
+        networkPolicy: { mode: "deny_all" },
+        timeoutMs: 1000,
+        env: {},
+      });
+
+      const snapshotPromise = sandbox.snapshot({ expirationMs: 60_000 });
+      await vi.runAllTimersAsync();
+      await snapshotPromise;
+      const usage = await sandbox.stop();
+
+      expect(usage.activeCpuDurationMs).toBe(42_000);
+      expect(usage.networkEgressBytes).toBe(20);
+      expect(pollsServed).toBe(2);
+    });
+
+    it("gives up after the poll budget rather than waiting on a stuck pipeline forever", async () => {
+      const errors: unknown[][] = [];
+      const spy = vi.spyOn(console, "error").mockImplementation((...args) => {
+        errors.push(args);
+      });
+
+      create.mockResolvedValue({
+        name: "vibe-validate-abc",
+        runtime: "node24",
+        async snapshot() {
+          return { snapshotId: "snap_6", sizeBytes: 1, expiresAt: null };
+        },
+        currentSession: () => ({ status: "snapshotting", activeCpuUsageMs: undefined, networkTransfer: undefined }),
+        async stop() {
+          throw new Error("sandbox is no longer running");
+        },
+      });
+
+      // Never converges: every re-read still reports snapshotting.
+      get.mockResolvedValue({
+        name: "vibe-validate-abc",
+        currentSession: () => ({ status: "snapshotting", activeCpuUsageMs: undefined, networkTransfer: undefined }),
+      });
+
+      const { createVercelSandboxProvider } = await import("./provider");
+      const sandbox = await createVercelSandboxProvider().create({
+        name: "vibe-validate-abc",
+        source: { kind: "git", repositoryUrl: "https://github.com/a/b.git", revision: "abc", credential: null },
+        networkPolicy: { mode: "deny_all" },
+        timeoutMs: 1000,
+        env: {},
+      });
+
+      const snapshotPromise = sandbox.snapshot({ expirationMs: 60_000 });
+      await vi.runAllTimersAsync();
+      await snapshotPromise;
+      const usage = await sandbox.stop();
+
+      // Never guessed — a pipeline that is genuinely still slow stays null,
+      // exactly like an empty record does.
+      expect(usage.activeCpuDurationMs).toBeNull();
+
+      const logged = JSON.stringify(errors);
+      expect(logged).toContain("reported no Active CPU");
+      expect(logged).toContain(`"pollAttempts":${SANDBOX_BUDGETS.terminalUsagePollMaxAttempts}`);
+      expect(logged).toContain('"sessionStatus":"snapshotting"');
+
+      spy.mockRestore();
+    });
   });
 
   /**

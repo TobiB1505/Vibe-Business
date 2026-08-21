@@ -37,6 +37,10 @@ import type {
  * `drives`/snapshots (no reuse across runs).
  */
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /** Maps the domain's policy vocabulary onto the SDK's. */
 function toProviderPolicy(policy: SandboxNetworkPolicy) {
   // `deny-all` blocks DNS resolution as well as egress, which is what makes it
@@ -315,7 +319,7 @@ class VercelSandboxHandle implements SandboxHandle {
     // exist, and the snapshot is what stops it — see `readTerminalUsage`. A
     // snapshot that threw left the sandbox running, so `stop()` must still find
     // this field unset and terminate it properly rather than leaking a live VM.
-    this.terminalUsage = this.readTerminalUsage();
+    this.terminalUsage = await this.readTerminalUsage();
 
     return {
       snapshotId: snapshot.snapshotId,
@@ -362,17 +366,53 @@ class VercelSandboxHandle implements SandboxHandle {
    * path. For a validation sandbox — one session, one run — session usage and
    * sandbox-cumulative usage are the same figure anyway.
    *
+   * ## The fourth read: right object, right moment, wrong assumption
+   *
+   * Calibration runs 1 and 2 both came back null even with this fix live.
+   * Run 2 is what broke the deadlock, because its capture logged the one
+   * field this file's own diagnostic already collects and nobody had needed
+   * yet: `sessionStatus`. It read `"snapshotting"` — a real, distinct,
+   * documented session state, not `"stopped"`.
+   *
+   * So `currentSession()` was reading the right object, immediately after
+   * the right call, and the SDK's own promise still held —
+   * `activeCpuUsageMs` really is "only reported once the VM is stopped" —
+   * but `createSnapshot` resolves once the stop is **requested**, not once
+   * the provider's metering pipeline has finished computing the figure and
+   * the session has actually reached `stopped`. Every earlier fix read
+   * *before* that transition finished; this was the first run to prove it
+   * with the session's own status rather than infer it from an empty record.
+   *
+   * The SDK's own `Sandbox` class polls exactly this transition internally
+   * (`waitForStopAndResume`, private, 500 ms interval) before resuming a
+   * stopped session for a new command. This does the same polling, publicly,
+   * for the same reason, without resuming anything: `Sandbox.get({ name,
+   * resume: false })` is the identical call this file already uses for a
+   * passive re-read elsewhere (`inspect`, `reconnect`).
+   *
    * ## Still best-effort, still never guessed
    *
    * A missing value stays `null` and is never inferred from wall duration
-   * (§25). The logging Sprint 0053 added stays, because it is the only reason
-   * this diagnosis took one run instead of another sprint: it distinguishes
-   * "the read failed" from "the read returned an empty record", which is the
-   * distinction that identified the bug.
+   * (§25). The logging stays and now also records how many polls ran and
+   * the status reached, so a metering pipeline that is genuinely still slow
+   * is distinguishable from a bug in this file — the same distinction that
+   * identified this one.
    */
-  private readTerminalUsage(): SandboxUsage {
+  private async readTerminalUsage(): Promise<SandboxUsage> {
     try {
-      const session = this.sandbox.currentSession();
+      let session = this.sandbox.currentSession();
+      let attempts = 0;
+
+      while (
+        (session.status === "snapshotting" || session.status === "stopping") &&
+        attempts < SANDBOX_BUDGETS.terminalUsagePollMaxAttempts
+      ) {
+        await sleep(SANDBOX_BUDGETS.terminalUsagePollIntervalMs);
+        const refreshed = await Sandbox.get({ name: this.sandbox.name, resume: false });
+        session = refreshed.currentSession();
+        attempts += 1;
+      }
+
       const usage: SandboxUsage = {
         activeCpuDurationMs: session.activeCpuUsageMs ?? null,
         networkIngressBytes: session.networkTransfer?.ingress ?? null,
@@ -384,6 +424,7 @@ class VercelSandboxHandle implements SandboxHandle {
         console.error("[validation.sandbox] a stopped session reported no Active CPU", {
           sandbox: this.sandbox.name,
           sessionStatus: session.status,
+          pollAttempts: attempts,
           hasNetworkTransfer: session.networkTransfer !== undefined,
         });
       }
