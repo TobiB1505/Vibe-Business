@@ -50,10 +50,18 @@ export default async function LoginPage({
         </>
       }
       intro="Sign in to see what Vibe found in your product and what it wants to do about it."
-      // Both of these are properties of the system as built: the GitHub App
-      // holds read permissions only, and a merge requires an explicit approval
-      // of one specific commit. Neither is a marketing claim.
-      assurances={["Read-only access to start", "Nothing merged without your approval"]}
+      // Both of these are properties of the system as built: a prepared change
+      // is written to its own branch, and the branch you ship from moves only
+      // on an explicit approval of one specific commit. Neither is a marketing
+      // claim.
+      //
+      // Neither characterises the *grant*, deliberately. The App holds
+      // `Contents: read and write` — execution creates a branch and a commit,
+      // and an approved merge fast-forwards the default branch. Saying
+      // "read-only" here was true until Sprint 11 and false afterwards, which
+      // is exactly the failure a claim about a permission invites: the
+      // permission changed and the sentence did not.
+      assurances={["Changes land on their own branch", "Nothing merged without your approval"]}
     >
       <div className="flex flex-col gap-2">
         <h1 className="text-fg text-headline font-bold">Sign in</h1>

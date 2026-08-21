@@ -59,8 +59,8 @@ function EmptyDashboard() {
         </h2>
         <p className="text-fg-prose max-w-[60ch] text-sm leading-relaxed">
           Connect a repository you have already built. Vibe reads the product, scores the business
-          around it, and shows you what to do next. Read-only to start — nothing is written to your
-          code until you approve a change.
+          around it, and shows you what to do next. Anything it prepares later lands on its own
+          branch — the branch you ship from moves only when you approve a change.
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-4">
