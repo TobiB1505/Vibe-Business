@@ -138,7 +138,7 @@ From run 2 onward, pass `VIBE_CALIBRATION_PREVIOUS_RUN_ID=<previous-run-uuid>`
 so repository drift has a left-hand side. Without it, drift is `unknown`, which
 is the honest answer and not the useful one.
 
-## Resolved during this sprint — validation CPU metering
+## Resolved and verified — validation CPU metering
 
 Every `passed` validation in production recorded `active_cpu_ms: null` through
 calibration runs 1 *and* 2 — the second observation with Sprint 0055's first
@@ -151,17 +151,16 @@ read straight from a Vercel runtime log rather than inferred. `createSnapshot`
 resolves once the stop is *requested*, not once the session has actually
 reached `stopped` and the provider's metering pipeline has finished — every
 attempt across Sprints 0051, 0053 and 0055's first pass read before that
-transition finished, regardless of which object each one read. The fix now
-polls the session's own status (bounded, 10 × 500 ms) via the same passive
+transition finished, regardless of which object each one read. The fix polls
+the session's own status (bounded, 10 × 500 ms) via the same passive
 `Sandbox.get({ resume: false })` this file already used elsewhere, and only
 gives up — loud, with the poll count logged — once the budget is spent.
-Committed and pushed; **not yet verified against a real production run**, the
-same caveat this section carried before run 1.
 
-A successful calibration run with `validation: not_measured` still means the
-run contributes nothing to the learning dataset — the comparison stays
-`actual_incomplete` regardless of which sprint's attempt is live. The next
-run with a `passed` validation is what verifies this one.
+**Run 3 verified it.** `active_cpu_ms: 291,529` and
+`network_egress_bytes: 2,196,890`, both real and non-null — the first
+calibration record with every economic component resolved: known floor
+$0.2506, no bracket, no missing-validation note. Every run from here
+contributes fully to the learning dataset, not just a classification.
 
 ## Known open issue — live-product evidence is never revalidated before a run
 
