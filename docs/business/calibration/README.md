@@ -155,6 +155,72 @@ dataset.
 comes back non-null, all five runs are usable. If it is still null, stop after
 run 1 rather than pay for four more incomplete measurements.
 
+## Known open issue — live-product evidence is never revalidated before a run
+
+Run 2 (`calibration-2-complex-multi-surface`) failed twice with
+`agent_produced_no_change`, and both times correctly: `src/app/privacy/page.tsx`
+and `src/app/terms/page.tsx` already export their own `metadata.description`.
+The fixture's evidence, `live.seo.meta_description_missing`, was true when the
+fixture was written and false by the time it ran. The agent read both files,
+found nothing to fix, and stopped — the honest outcome for a false premise, not
+a defect in the agent.
+
+Checked against the live site directly (`vibebusiness.de`) while diagnosing
+this: `/sitemap.xml` and `/robots.txt` both already resolve with real content.
+So `live.seo.sitemap_missing` — cited by run 3 and half of run 5 — is *also*
+false right now. Only `live.seo.canonical_missing` (the other half of run 5)
+and `live.seo.structured_data_missing` (run 4) checked out as still true.
+
+**This is not a fixture-authoring mistake to fix and move past.** It is a real
+gap in `src/modules/execution-contract/freshness.ts`. `FRESHNESS_CHECKS`
+revalidates repository state, plan currency, dependencies and ownership
+immediately before a run — but not the live-product evidence a step's
+classification and rationale rest on. The module's own comment gives the reason:
+
+> "It does not re-run a Business Audit... Re-auditing to change a file would be
+> a paid operation triggered on the user's behalf, which Rule 60 forbids
+> outright."
+
+That conflates two different operations. Re-running the full Business Audit —
+`business-audit/runner.ts`, which imports `AIProvider` and synthesizes evidence
+into priced findings — is correctly forbidden by Rule 60. Re-running the scan
+that *produces* a piece of live-product evidence is a different operation:
+`live-product-intelligence/service.ts`'s `inspectLiveProduct` has no
+`AIProvider` import anywhere in the module, is already a synchronous,
+user-triggerable, budget-bounded action (`inspect-live-action.ts`), and already
+carries a `reused` / `force` reuse policy. It costs nothing Rule 60 protects
+against.
+
+**What this means for a real user, not just this harness.** Nothing today stops
+someone from starting an agentic execution against an Action Plan step whose
+live-product premise resolved between the audit and the click — they fixed it
+themselves, an earlier step already covered it, or enough time passed. The
+agent behaves exactly as it did here: investigates, correctly finds nothing to
+do, and stops. Under `non_production_economics` that costs Vibe some model
+spend. Once Credits are live, it would cost a customer credits for a run that
+could not have produced anything.
+
+**Not addressed in this sprint** — Sprint 0055 is calibration, not feature
+work, and this is a real extension of the freshness contract, not a bug fix.
+Left for a follow-up sprint / ADR, with three open questions rather than a
+design already decided:
+
+1. **Scope the trigger.** Only steps citing `live.*` evidence need this: a
+   repository-only step should not pay crawl latency it has no use for.
+2. **Failure semantics.** Block admission the way `repository_head_moved`
+   already does (send the user to re-analyse), or re-derive the step's
+   classification from the fresh scan automatically? The second is more
+   convenient and more dangerous — Rule 57 keeps model output and derived data
+   away from silently steering paths/classification, and while this would be
+   deterministic code rather than a model, an execution's classification
+   moving underneath the user between audit and click is the same shape of
+   surprise. The first is more consistent with how repository drift is already
+   handled.
+3. **Reuse window.** `inspectLiveProduct` already has a "recent enough for
+   advice" freshness policy. Whether "recent enough for execution" should be
+   the same window or a stricter one — likely stricter, since a stale answer
+   here burns a run rather than just showing outdated advice — is undecided.
+
 ## What this cannot tell us
 
 Stated up front so the final report does not have to discover it:
