@@ -5,6 +5,10 @@ import { LegalPage, LegalSection } from "@/components/marketing/legal-page";
 export const metadata: Metadata = {
   title: "Privacy — Vibe Business",
   description: "What Vibe Business reads, what it keeps, and what it does not.",
+  openGraph: {
+    title: "Privacy — Vibe Business",
+    description: "What Vibe Business reads, what it keeps, and what it does not.",
+  },
 };
 
 /**

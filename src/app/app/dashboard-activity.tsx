@@ -28,8 +28,6 @@ export type DashboardActivityEntry = ActivityEntry & {
 };
 
 export function DashboardActivity({ entries }: { entries: DashboardActivityEntry[] }) {
-  if (entries.length === 0) return null;
-
   return (
     <Surface
       as="section"
@@ -41,26 +39,34 @@ export function DashboardActivity({ entries }: { entries: DashboardActivityEntry
       <MonoLabel as="h2" id="activity-heading">
         Recent activity
       </MonoLabel>
-      <ul className="flex flex-col gap-3">
-        {entries.map((entry) => (
-          <li key={entry.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <span aria-hidden className={`size-1.5 shrink-0 rounded-full ${DOT[entry.tone]}`} />
-            <span className="text-fg-body text-sm">{entry.title}</span>
-            <Link
-              href={`/app/projects/${entry.projectId}/activity`}
-              className="text-fg-muted hover:text-fg-body rounded-sm font-mono text-meta transition-interactive"
-            >
-              {entry.projectName}
-            </Link>
-            <time
-              dateTime={entry.at}
-              className="text-fg-meta ml-auto shrink-0 font-mono text-meta"
-            >
-              {formatTimestamp(entry.at) ?? entry.at}
-            </time>
-          </li>
-        ))}
-      </ul>
+      {entries.length === 0 ? (
+        <p className="text-fg-muted max-w-[62ch] text-sm">
+          Vibe writes an entry here every time it does something consequential — analysing a
+          repository, running an audit, preparing a change, and every approval and merge. Nothing
+          has happened on your projects yet.
+        </p>
+      ) : (
+        <ul className="flex flex-col gap-3">
+          {entries.map((entry) => (
+            <li key={entry.id} className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+              <span aria-hidden className={`size-1.5 shrink-0 rounded-full ${DOT[entry.tone]}`} />
+              <span className="text-fg-body text-sm">{entry.title}</span>
+              <Link
+                href={`/app/projects/${entry.projectId}/activity`}
+                className="text-fg-muted hover:text-fg-body rounded-sm font-mono text-meta transition-interactive"
+              >
+                {entry.projectName}
+              </Link>
+              <time
+                dateTime={entry.at}
+                className="text-fg-meta ml-auto shrink-0 font-mono text-meta"
+              >
+                {formatTimestamp(entry.at) ?? entry.at}
+              </time>
+            </li>
+          ))}
+        </ul>
+      )}
     </Surface>
   );
 }
