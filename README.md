@@ -1,8 +1,8 @@
 # Vibe Business
 
-**Status: Early development.** The application foundation exists (Sprint 0); no business functionality is built yet.
+**Status: Active development.** The Core Loop runs end to end — see [Current state](#current-state).
 
-Vibe Business is an early-stage platform exploring the business layer for AI-built products.
+Vibe Business is the business layer for AI-built products.
 
 Core thesis: Building software is becoming dramatically easier. Turning software into a business is not.
 
@@ -10,36 +10,57 @@ You vibe-coded the product. Now vibe the business.
 
 ## What this is
 
-Vibe Business is being designed for people who have already built a website, web app, or digital product using an AI/vibe-coding tool (Lovable, Claude Code, Codex, Cursor, Replit, v0, Bolt, or similar), and now face the business problems that follow a build: monetization, pricing, distribution, conversion, retention, and ongoing optimization.
+Vibe Business is for people who have already built a website, web app, or digital product using an AI/vibe-coding tool (Lovable, Claude Code, Codex, Cursor, Replit, v0, Bolt, or similar), and now face the business problems that follow a build: monetization, pricing, distribution, conversion, retention, and ongoing optimization.
 
-GitHub is the planned central integration layer, so the platform can work with projects regardless of which tool originally built them.
+GitHub is the central integration layer, so the platform works with projects regardless of which tool originally built them.
 
 ## Local Development
 
-**Requirements:** Node (see [.nvmrc](.nvmrc)), pnpm (`corepack enable` handles this — see [package.json](package.json)'s `packageManager` field).
+**Requirements:** Node — [.nvmrc](.nvmrc) pins the version CI uses; [package.json](package.json)'s `engines` states the minimum the code supports. pnpm (`corepack enable` handles this — see the `packageManager` field).
 
 ```bash
 pnpm install                # install dependencies
-cp .env.example .env.local  # then fill in your Supabase project's URL + anon key
+cp .env.example .env.local  # then fill in what you need — see below
 pnpm dev                    # start the dev server at http://localhost:3000
+
 pnpm lint                   # eslint
-pnpm typecheck              # tsc --noEmit (via `next typegen` first)
+pnpm typecheck              # next typegen && tsc --noEmit
 pnpm test                   # vitest
+pnpm test:e2e               # playwright (also run by CI)
 pnpm build                  # production build
 ```
 
-`pnpm build`, `pnpm lint`, `pnpm typecheck`, and `pnpm test` all run without any environment variables configured. A configured Supabase project (`.env.local`) is only needed to actually exercise the sign-in flow — see [.env.example](.env.example) and [src/modules/auth/README.md](src/modules/auth/README.md).
+`pnpm build`, `pnpm lint`, `pnpm typecheck` and `pnpm test` all run without any environment variables configured — CI runs them with no secrets at all.
+
+Running the *application* needs a configured Supabase project; individual features additionally need their own credentials (GitHub App, Anthropic, Browserbase, Stripe). [.env.example](.env.example) documents each variable and the feature that requires it, and [docs/setup/](docs/setup/github-app.md) covers the one-time setup each provider needs.
+
+Database migrations run through the Supabase CLI against a linked project:
+
+```bash
+pnpm db:status              # supabase migration list — always inspect before pushing
+pnpm db:push                # apply migrations to the linked project
+```
+
+Probe and dogfood scripts (`ai:probe-audit-schema`, `ai:dogfood-action-plan`, `billing:dogfood`, `execution:dogfood`, `agent:preflight`, `agent:canary`, `agent:dogfood`) are excluded from `pnpm test` on purpose: they run against real providers and real projects, and some of them spend money. Read the owning module's README before running one.
 
 ## Documentation
 
+- [docs/](docs/README.md) — index of everything below
 - [PRODUCT.md](PRODUCT.md) — product vision, target user, core flow, V0.1 scope and non-goals
-- [ARCHITECTURE.md](ARCHITECTURE.md) — technical architecture: confirmed V0.1 decisions and deferred/open decisions
+- [ARCHITECTURE.md](ARCHITECTURE.md) — how the pieces fit together, and the index of every architecture decision
 - [CLAUDE.md](CLAUDE.md) — working agreement for AI-assisted implementation sessions
 - [docs/decisions/](docs/decisions/README.md) — architecture decision records
-- [docs/sprints/](docs/sprints/README.md) — sprint planning
-- [docs/deployment/environment.md](docs/deployment/environment.md) — how development/preview/production URLs are resolved, and how to migrate to a custom production domain
-- [docs/PROJECT_HISTORY_AND_LEARNINGS.md](docs/PROJECT_HISTORY_AND_LEARNINGS.md) — how the product got here: history, evolution, measured results, and durable principles
+- [docs/sprints/](docs/sprints/README.md) — sprint log
+- [docs/ROADMAP.md](docs/ROADMAP.md) — known gaps, in the order they are worth closing
+- [docs/business/](docs/business/README.md) — measured unit economics and credit pricing analysis
+- [docs/setup/](docs/setup/github-app.md) — one-time environment setup (GitHub App, Supabase Auth, Sentry)
+- [docs/deployment/environment.md](docs/deployment/environment.md) — how development/preview/production URLs are resolved
+- [docs/PROJECT_HISTORY_AND_LEARNINGS.md](docs/PROJECT_HISTORY_AND_LEARNINGS.md) — how the product got here: history, measured results, durable principles
 
-## Current phase
+## Current state
 
-Sprint 0 (application bootstrap) is complete: a Next.js/TypeScript application with a modular structure, Supabase-backed auth foundation, and working lint/typecheck/test/build/CI. No business functionality — repository analysis, audits, opportunities, AI execution, previews, approvals, or credits — is implemented yet. See [docs/sprints/0000-application-bootstrap.md](docs/sprints/0000-application-bootstrap.md) and [ARCHITECTURE.md](ARCHITECTURE.md) for what's next.
+The V0.1 Core Loop is implemented end to end: a founder connects a repository and optionally a live URL, Vibe builds repository, live-product and (optionally) authenticated Deep Scan intelligence, forms a product understanding, produces a Business Readiness Audit, ranks opportunities, plans a move, prepares the change with a coding agent on an isolated branch, validates it in an isolated sandbox, previews it, captures a before/after comparison, takes an explicit human approval bound to that exact commit, fast-forwards the default branch, and then verifies what became true in production.
+
+Underneath it: durable operation execution, four provider usage ledgers, a Vibe Credits ledger with Stripe as the funding rail, an append-only application audit log, and an economy layer that estimates what a run will cost and measures how wrong the estimate was.
+
+What is deliberately **not** built: no production Credit rate card is active (`CREDIT_RATE_CARDS` ships empty), Vibe deploys nothing, and business outcome measurement has no connected data source yet. [docs/ROADMAP.md](docs/ROADMAP.md) records the gaps that are worth closing and what each one is blocked on.
