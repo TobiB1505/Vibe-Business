@@ -1,8 +1,16 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { MarketingShell } from "@/components/layout/marketing-shell";
 import { BusinessMapPreview } from "@/components/marketing/business-map-preview";
 import { buttonClasses } from "@/components/ui/button";
 import { MonoLabel } from "@/components/ui/typography";
+
+// Resolved against the root layout's `metadataBase` (itself derived from
+// `getAppUrl()`), so the emitted <link rel="canonical"> always points at
+// this deployment's own origin rather than a hardcoded one.
+export const metadata: Metadata = {
+  alternates: { canonical: "/" },
+};
 
 /**
  * The landing page (UI-S1 §3–§6).

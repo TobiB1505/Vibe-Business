@@ -5,6 +5,10 @@ import { LegalPage, LegalSection } from "@/components/marketing/legal-page";
 export const metadata: Metadata = {
   title: "Privacy — Vibe Business",
   description: "What Vibe Business reads, what it keeps, and what it does not.",
+  // Resolved against the root layout's `metadataBase` (itself derived from
+  // `getAppUrl()`), so the emitted <link rel="canonical"> always points at
+  // this deployment's own origin rather than a hardcoded one.
+  alternates: { canonical: "/privacy" },
 };
 
 /**

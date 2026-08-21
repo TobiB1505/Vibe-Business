@@ -5,6 +5,10 @@ import { LegalPage, LegalSection } from "@/components/marketing/legal-page";
 export const metadata: Metadata = {
   title: "Terms — Vibe Business",
   description: "The terms you agree to when you use Vibe Business.",
+  // Resolved against the root layout's `metadataBase` (itself derived from
+  // `getAppUrl()`), so the emitted <link rel="canonical"> always points at
+  // this deployment's own origin rather than a hardcoded one.
+  alternates: { canonical: "/terms" },
 };
 
 /**
