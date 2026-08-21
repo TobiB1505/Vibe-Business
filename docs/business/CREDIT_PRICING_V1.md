@@ -245,7 +245,11 @@ Three scenarios, exactly as specified — simulated, not decided:
 ## 7. Per-run margins (PART G)
 
 Every historical run under every model — `economy/credit-rate-card.ts`'s
-`simulateAllHistoricalRuns()`, 18 rows. Margin is shown against both the cost
+`simulateAllHistoricalRuns()`, 18 rows — the six-run dataset this document is
+computed over, and deliberately frozen there. That function returns 21 rows
+today because run #9 joined `HISTORICAL_RUNS`; see
+[§11](#11-economic-sensibility-check-part-k) for why the numbers here are not
+updated to follow it. Margin is shown against both the cost
 floor (best case) and the cost upper bound (worst case within what is
 actually known — validation active CPU is unmeasured for these six runs;
 Sprint 0051's point-estimate fix applies only forward).

@@ -21,7 +21,7 @@ GitHub Integration Layer — see [ARCHITECTURE.md §3.1](../../../ARCHITECTURE.m
 
 **Repository writes are not in this module** — they are in `modules/execution` (branch and commit) and `modules/merge` (fast-forwarding the default branch after an approval). This module owns connection, discovery, authentication and reading; it holds no write path of its own.
 
-**No pull request is ever opened**, here or anywhere: an approved change is delivered by moving a ref (`grep -rn "rest.pulls" src/` finds nothing).
+**No pull request is ever opened**, here or anywhere: an approved change is delivered by creating a branch and then fast-forwarding the default branch to one exact approved commit. No call to the GitHub pulls API exists anywhere under `src/`.
 
 **No repository code is executed and no working copy is held.** Files are read through the API into memory under explicit budgets; cloning happens inside the validation microVM, never in a Vibe process (rules 59, 61).
 
