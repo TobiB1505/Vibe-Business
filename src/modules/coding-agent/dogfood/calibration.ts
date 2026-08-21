@@ -120,7 +120,7 @@ export const CALIBRATION_1_SMALL_COPY: CalibrationFixture = {
 /**
  * RUN 2 — the first `complex`, by surface count.
  *
- * `live.seo.meta_description_missing` implies the `seo_metadata` surface;
+ * `live.seo.canonical_missing` implies the `seo_metadata` surface;
  * `repo.surface.legal` implies `legal`. Two named surfaces, so rule 4 fires:
  * `multi_surface` → `complex`. Neither id is in `SENSITIVE_EVIDENCE_PREFIXES`.
  *
@@ -134,6 +134,19 @@ export const CALIBRATION_1_SMALL_COPY: CalibrationFixture = {
  *
  * `calibration.test.ts` now checks every fixture's surfaces against paths that
  * exist on disk, which is the guard that was missing.
+ *
+ * ## Why not the meta description, which the second draft cited
+ *
+ * That guard checks that a *surface* exists — it never checks that the
+ * *defect* a live evidence id claims is still true. Run 2's first real attempt
+ * cited `live.seo.meta_description_missing`, and the agent correctly found
+ * nothing to do: `privacy/page.tsx` and `terms/page.tsx` already export their
+ * own `metadata.description`. Two independent runs (`8c14b567`-adjacent
+ * dogfood attempts) reproduced `agent_produced_no_change` before this was
+ * caught. Checked directly against the live site and the repository before
+ * choosing canonical links as the replacement — see
+ * `docs/business/calibration/README.md`'s "Known open issue" section for the
+ * full finding, including the production-scale version of this risk.
  */
 export const CALIBRATION_2_COMPLEX_MULTI_SURFACE: CalibrationFixture = {
   id: "calibration-2-complex-multi-surface",
@@ -147,40 +160,48 @@ export const CALIBRATION_2_COMPLEX_MULTI_SURFACE: CalibrationFixture = {
   expectedSurfaces: ["seo_metadata", "legal"],
 
   benchmarkIntent:
-    "Two named business surfaces in one step, on two pages that genuinely exist and genuinely " +
-    "share the defect.",
+    "Two named business surfaces in one step, on pages that genuinely exist and genuinely share " +
+    "the defect — checked live and in source, not assumed from an older dataset.",
 
-  goal: "Give the legal pages meta descriptions that say what each one covers.",
+  goal: "Add canonical link tags to the homepage, and to the privacy and terms pages.",
   expectedChangedState:
-    "The privacy and terms pages each carry their own meta description, written for that page, " +
-    "rather than inheriting the site-wide default.",
+    "The homepage and both legal pages each emit a canonical link tag pointing at their own " +
+    "resolved URL, computed from the app's base URL rather than hard-coded.",
 
-  title: "Give the privacy and terms pages their own meta descriptions",
+  title: "Add canonical link tags to the homepage and the legal pages",
   description:
-    "Add a page-specific meta description to the public privacy page and to the public terms " +
-    "page, each describing what that document covers.",
+    "Add a canonical link tag to the public homepage, the privacy page and the terms page, each " +
+    "computed from the application's own base URL rather than a hard-coded literal.",
   purpose:
-    "Both legal pages are described to search engines in words written for the site as a whole, " +
-    "so a visitor searching for Vibe's terms sees a summary of the product instead.",
+    "None of these pages states its own canonical URL, so a search engine has no signal for which " +
+    "address is authoritative when the same content is reachable at more than one URL.",
   doneWhen:
-    "The privacy page and the terms page each export their own metadata description; the " +
-    "site-wide default is left in place for pages with no override; no legal wording is altered; " +
-    "and no other page is changed.",
+    "The homepage, the privacy page and the terms page each emit a canonical link tag derived " +
+    "from the application's base URL; no page hard-codes its own origin; and no other page is " +
+    "changed.",
   actor: "vibe",
   changeKind: "product_change",
-  evidenceIds: ["live.seo.meta_description_missing", "repo.surface.legal"],
+  evidenceIds: ["live.seo.canonical_missing", "repo.surface.legal"],
 };
 
 /**
  * RUN 3 — `standard`, and the first calibration change that is logic.
  *
- * `live.seo.sitemap_missing` implies exactly one surface, `sitemap`, so rule 5
- * applies: `single_surface` → `standard`.
+ * `live.seo.open_graph_missing` implies exactly one surface, `seo_metadata`,
+ * so rule 5 applies: `single_surface` → `standard`.
  *
- * Chosen because a sitemap is generated rather than written: the change lands
- * in code that runs, not in copy. Every previous run in the dataset was
- * presentational, so this is the first data point on whether logic costs
- * differently at the same class.
+ * Originally built on `live.seo.sitemap_missing`. That evidence turned out to
+ * be false — `src/app/sitemap.ts` already exists and `/sitemap.xml` already
+ * resolves live — discovered while diagnosing run 2's identical failure mode
+ * (see run 2's docblock and `docs/business/calibration/README.md`). Open
+ * Graph tags are confirmed missing both live (zero `og:*` tags on the
+ * rendered homepage) and in source (no `openGraph` metadata anywhere under
+ * `src/app/`).
+ *
+ * Still the first data point on non-presentational work at this class: an
+ * Open Graph block is generated from values the app already holds (title,
+ * description, base URL), not typed by hand, the same "logic, not copy"
+ * property the sitemap task was chosen for.
  */
 export const CALIBRATION_3_STANDARD_LOGIC: CalibrationFixture = {
   id: "calibration-3-standard-logic",
@@ -191,30 +212,30 @@ export const CALIBRATION_3_STANDARD_LOGIC: CalibrationFixture = {
     "different kind of work, so `standard` can be tested for internal spread.",
   expectedRiskClass: "moderate",
   expectedPricingClass: "standard",
-  expectedSurfaces: ["sitemap"],
+  expectedSurfaces: ["seo_metadata"],
 
   benchmarkIntent:
-    "One named surface, and a change that lands in generated output rather than in copy.",
+    "One named surface, and a change that lands in generated metadata rather than in copy.",
 
-  goal: "Make the sitemap reflect the pages the site actually publishes.",
+  goal: "Give the homepage Open Graph metadata generated from its existing title and description.",
   expectedChangedState:
-    "The generated sitemap lists the public pages the site serves, with a last-modified value " +
-    "that is derived rather than hard-coded.",
+    "The homepage emits `og:title`, `og:description` and `og:url`, each derived from the page's " +
+    "existing metadata values rather than duplicated as new literals.",
 
-  title: "Make the sitemap list the pages the site actually has",
+  title: "Add Open Graph metadata to the homepage",
   description:
-    "Extend the generated sitemap so it covers the public routes the application serves, instead " +
-    "of a hand-maintained subset.",
+    "Add Open Graph tags to the public homepage, generated from the title, description and base " +
+    "URL the application's existing metadata already defines.",
   purpose:
-    "A sitemap that lists fewer pages than the site publishes tells search engines the product " +
-    "is smaller than it is, and it drifts silently every time a page is added.",
+    "The homepage has no Open Graph metadata, so a link to it shared anywhere — Slack, X, " +
+    "iMessage — renders with no title, no description and no preview image.",
   doneWhen:
-    "The sitemap is derived from the routes the application defines rather than from a hand-kept " +
-    "list; every entry it emits corresponds to a page that exists; no authenticated route is " +
-    "listed; and the existing sitemap route contract is preserved.",
+    "The homepage emits `og:title`, `og:description` and `og:url`; every value is derived from " +
+    "the application's existing metadata rather than a new hard-coded string; and no other page " +
+    "is changed.",
   actor: "vibe",
   changeKind: "product_change",
-  evidenceIds: ["live.seo.sitemap_missing"],
+  evidenceIds: ["live.seo.open_graph_missing"],
 };
 
 /**
@@ -261,66 +282,89 @@ export const CALIBRATION_4_STANDARD_VALIDATION_HEAVY: CalibrationFixture = {
 };
 
 /**
- * RUN 5 — the second `complex`, on a different pair of surfaces.
+ * RUN 5 — the second `complex`, on a different pair of surfaces, and the
+ * first calibration run outside SEO entirely.
  *
- * `live.seo.sitemap_missing` implies `sitemap`; `live.seo.canonical_missing`
- * implies `seo_metadata`. Two named surfaces again, and a *different* pair from
- * run 2 — which is what separates "complex costs more" from "that one pair
- * costs more". With n=1 the two are indistinguishable.
+ * `repo.surface.dashboard_app` implies `dashboard_app`; `repo.surface.legal`
+ * implies `legal`. Two named surfaces, and a *different* pair from run 2
+ * (`seo_metadata` + `legal`) — which is what separates "complex costs more"
+ * from "that one pair costs more". `deriveExecutionSurfaceRequirement` orders
+ * surfaces by `BUSINESS_SURFACE_IDS`, not by citation order, so the resolved
+ * order is `["legal", "dashboard_app"]` — verified against the real
+ * classifier, not assumed.
  *
  * ## Why not robots + sitemap, which the previous draft cited
  *
  * Because that pair is the one thing Vibe does **deterministically**.
  * `CAPABILITY_REGISTRY`'s single entry matches a step citing both
  * `ROBOTS_ABSENCE_EVIDENCE` and `SITEMAP_ABSENCE_EVIDENCE`, and the resolver
- * checks the registry *before* it considers an agentic route. So that fixture
- * would have resolved to `mode: "deterministic"` and been refused as
- * `not_agentic` — or, if the snapshot happened to report the surfaces present,
- * would have squeaked through as agentic on a technicality.
+ * checks the registry *before* it considers an agentic route. See
+ * `calibration.test.ts`'s "no fixture can route to a deterministic
+ * capability" guard.
  *
- * Either outcome is wrong for a calibration: this set exists to measure what an
- * *agent* costs, and a fixture whose route depends on how a snapshot classified
- * two files measures nothing reliably. Every sitemap and robots evidence id is
- * in one of those two lists, so the pair is unavailable at any price and the
- * surface had to change rather than the wording.
+ * ## Why not sitemap + canonical, the draft after that
  *
- * The work is still structural, still spans two surfaces, and still lands in
- * code that runs rather than in copy.
+ * `live.seo.sitemap_missing` turned out false — `/sitemap.xml` already
+ * resolves live. See run 2's docblock for the full story; the short version
+ * is that a live evidence id can go stale between when it was minted and
+ * when a fixture cites it, and nothing in this repository re-verifies it.
+ *
+ * ## Why outside SEO at all
+ *
+ * Every other calibration run stays inside `seo_metadata` / `sitemap` /
+ * `robots` / `legal`. Deliberately, this run reaches into `dashboard_app` —
+ * the authenticated application, not a public page — to see whether the
+ * agent's cost and behaviour on real app code differs from presentational
+ * public-page work. `dashboard_app` and `onboarding` are not in
+ * `SENSITIVE_EVIDENCE_PREFIXES`; only payments, checkout billing and
+ * authentication are. Nothing about the write-scope or capability machinery
+ * treats an authenticated surface differently from a public one — the
+ * `authenticated_pages` scope is already resolved and already counted
+ * (`authenticatedPagesResolved` in `execution_surface_resolved`) on every run,
+ * just never included until a step's own evidence asks for it.
  */
 export const CALIBRATION_5_COMPLEX_STRUCTURAL: CalibrationFixture = {
   id: "calibration-5-complex-structural",
   fixtureVersion: BENCHMARK_FIXTURE_VERSION,
   calibrationRun: 5,
   calibrationIntent:
-    "A second `complex` observation on a different surface pair, so the class can be told apart " +
-    "from the particular surfaces run 2 happened to touch.",
+    "A second `complex` observation on a different surface pair, and the first observation of " +
+    "the agent working outside SEO — on the authenticated dashboard rather than a public page.",
   expectedRiskClass: "moderate",
   expectedPricingClass: "complex",
-  expectedSurfaces: ["seo_metadata", "sitemap"],
+  expectedSurfaces: ["legal", "dashboard_app"],
 
   benchmarkIntent:
-    "Two named surfaces that share one structural relationship, so the change is genuinely " +
-    "broader rather than one edit cited twice.",
+    "Two unrelated named surfaces in one step — a real shape a founder's plan can take — so the " +
+    "class is told apart from run 2's particular pair rather than from a repeat of it.",
 
-  goal: "Make the sitemap and the pages' canonical URLs agree on one base URL.",
+  goal:
+    "Give the dashboard's Recent Activity section a first-activity empty state, and give the " +
+    "privacy and terms pages Open Graph metadata.",
   expectedChangedState:
-    "The generated sitemap and the pages' canonical URLs are built from a single base-URL " +
-    "source, so the two can no longer disagree about the site's own address.",
+    "A signed-in user with a project but no activity yet sees an explanatory empty state instead " +
+    "of nothing; the privacy and terms pages each emit their own Open Graph tags.",
 
-  title: "Build the sitemap and the canonical URLs from one base URL",
+  title: "Add a first-activity empty state and Open Graph tags for the legal pages",
   description:
-    "Derive the sitemap's entries and the pages' canonical URLs from the same base-URL value, " +
-    "instead of each route computing the site's address for itself.",
+    "In `DashboardActivity`, replace the bare `return null` for zero entries with a short " +
+    "explanatory empty state, matching the pattern `EmptyDashboard` already uses on the same " +
+    "page. Separately, add Open Graph tags to the privacy and terms pages, generated from their " +
+    "existing title and description metadata.",
   purpose:
-    "The sitemap and the canonical tags each decide what the site's address is, so a change to " +
-    "one silently disagrees with the other and search engines are told two different things.",
+    "A user with one project and no activity yet sees an empty section with no explanation, " +
+    "rather than the guidance every other empty state on this page already gives. Unrelated but " +
+    "in the same step: the legal pages have no Open Graph tags, so a shared link to either " +
+    "renders with no title or description.",
   doneWhen:
-    "The sitemap route and the canonical URLs read the same base-URL source; no route computes " +
-    "the site address independently; the existing sitemap and metadata route contracts are " +
-    "preserved; and both keep their current tests passing.",
+    "`DashboardActivity` renders an explanatory empty state instead of `null` when there is at " +
+    "least one project and zero activity entries; the privacy and terms pages each emit their " +
+    "own `og:title` and `og:description`, derived from their existing metadata; no credit " +
+    "balance, onboarding routing or audit logic is touched; and no other page or component is " +
+    "changed.",
   actor: "vibe",
   changeKind: "product_change",
-  evidenceIds: ["live.seo.sitemap_missing", "live.seo.canonical_missing"],
+  evidenceIds: ["repo.surface.dashboard_app", "repo.surface.legal"],
 };
 
 export const CALIBRATION_FIXTURES: readonly CalibrationFixture[] = [
