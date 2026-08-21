@@ -37,6 +37,10 @@ import type {
  * `drives`/snapshots (no reuse across runs).
  */
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /** Maps the domain's policy vocabulary onto the SDK's. */
 function toProviderPolicy(policy: SandboxNetworkPolicy) {
   // `deny-all` blocks DNS resolution as well as egress, which is what makes it
@@ -298,12 +302,6 @@ class VercelSandboxHandle implements SandboxHandle {
   }
 
   async snapshot(input: { expirationMs: number }): Promise<SandboxArtifact> {
-    // Before the snapshot, not after (Sprint 0053) — see `readTerminalUsage`.
-    // Every validation command has already run by this point, so the total is
-    // complete for accounting purposes; only the snapshot operation itself is
-    // excluded, and it costs no meaningful Active CPU.
-    const usage = await this.readTerminalUsage();
-
     let snapshot: Awaited<ReturnType<Sandbox["snapshot"]>>;
     try {
       // Explicit expiry, never the provider's 30-day default — an unbounded
@@ -317,11 +315,11 @@ class VercelSandboxHandle implements SandboxHandle {
       throw new SanitizedSandboxProviderError(error);
     }
 
-    // Recorded only once the sandbox is genuinely terminated. `stop()` reads
-    // this field to decide it must *not* call the provider again, and a
-    // snapshot that threw left the sandbox running — assigning it earlier
-    // would leak a live VM for the rest of its timeout.
-    this.terminalUsage = usage;
+    // Only now, and in this order. The VM has to be stopped before the numbers
+    // exist, and the snapshot is what stops it — see `readTerminalUsage`. A
+    // snapshot that threw left the sandbox running, so `stop()` must still find
+    // this field unset and terminate it properly rather than leaking a live VM.
+    this.terminalUsage = await this.readTerminalUsage();
 
     return {
       snapshotId: snapshot.snapshotId,
@@ -331,86 +329,111 @@ class VercelSandboxHandle implements SandboxHandle {
   }
 
   /**
-   * What the sandbox measured, read fresh from the provider (Sprint 0051,
-   * corrected in Sprint 0053).
+   * What the validation sandbox measured (Sprint 0051, 0053, and finally 0055).
    *
-   * ## The original bug
+   * ## Three sprints, two wrong objects, one wrong moment
    *
-   * The first implementation read `this.sandbox.totalActiveCpuDurationMs`
-   * immediately after `sandbox.snapshot()` — the SDK's own cached copy of the
-   * sandbox record, held on the local `Sandbox` instance since it was
-   * constructed. Reading the SDK's compiled source settles what refreshes that
-   * cache and what does not: `Sandbox.update()` reassigns it
-   * (`this.sandbox = response.json.sandbox`), and `Sandbox.stop()` does the
-   * same on its way out. `Sandbox.snapshot()` does neither — it forwards to
-   * `Session.snapshot()`, which only refreshes the SDK's internal *session*
-   * object, never the sandbox-level one our code was reading. And the
-   * `Snapshot` object `.snapshot()` returns carries no usage fields at all
-   * (only id, size, status, timestamps).
+   * The numbers live on the **session**, and only after the VM has stopped.
+   * The SDK says so in one line — `activeCpuUsageMs`: *"Only reported once the
+   * VM is stopped."* Every previous attempt read the **sandbox** record
+   * instead, and each failed for its own reason:
    *
-   * So `this.sandbox.totalActiveCpuDurationMs` after a snapshot was never the
-   * finished run's usage — it was whatever the sandbox record looked like at
-   * construction, before any command had run. Fifteen of nineteen passing
-   * validation rows in Vibe's own history recorded `active_cpu_ms: null` for
-   * exactly this reason.
+   * - **Sprint 0051** read `this.sandbox.totalActiveCpuDurationMs` right after
+   *   `snapshot()`. That is the SDK's cached sandbox record, and `snapshot()`
+   *   never refreshes it — only `update()` and `stop()` do. So the value was
+   *   whatever the record looked like at construction, before any command ran.
+   * - **Sprint 0051's own fix**, and **Sprint 0053's**, re-fetched with
+   *   `Sandbox.get({ name, resume: false })`. Sprint 0053 additionally moved
+   *   the call to *before* the snapshot, reasoning that the post-termination
+   *   read was the problem. That made it strictly worse: the VM was then still
+   *   running, so the provider had nothing to report at all.
    *
-   * ## Why a fresh `Sandbox.get()`, not another local read
+   * Calibration run 1 is what settled it, because Sprint 0053's logging
+   * survived to say which of the two failure modes happened. The re-read did
+   * not fail — it *succeeded and carried nothing*: no Active CPU, no ingress,
+   * no egress, all three absent from a sandbox that was still running.
    *
-   * `stop()` cannot be called here — the code's own long-standing comment is
-   * right that a snapshotted sandbox refuses a second `stop()`. But the API
-   * document for `totalActiveCpuDurationMs` says "cumulative ... across all
-   * sessions": it is server-side, sandbox-level state, independent of which
-   * local instance asks for it. A fresh `Sandbox.get({ name, resume: false })`
-   * is a real round trip against that record rather than a stale local cache.
+   * ## Why the session, and why after
    *
-   * ## Why it is now read *before* the snapshot (Sprint 0053)
+   * `Session.snapshot()` assigns `this.session` from the `createSnapshot`
+   * response, and that response's session object carries `activeCpuDurationMs`
+   * and `networkTransfer`. Sprint 0051 read the SDK correctly when it observed
+   * that a snapshot "only refreshes the internal session object" — and then
+   * treated that as the dead end, when it is exactly where the number is.
    *
-   * The Sprint 0051 fix did not work in production. The deployment carrying it
-   * went live at 15:00:59 on 2026-08-20; the validation sandbox row written
-   * sixteen minutes later still recorded `active_cpu_ms: null`, identical to
-   * every pre-fix row. Nothing surfaced that, because the `catch` below was
-   * completely silent — the defect hid an entire sprint behind a bare `catch`.
+   * So this reads `currentSession()` *after* the snapshot has stopped the VM,
+   * which is the same session-scoped pair `stop()` already returns on the other
+   * path. For a validation sandbox — one session, one run — session usage and
+   * sandbox-cumulative usage are the same figure anyway.
    *
-   * The one difference between this call and `reconnect()`'s demonstrably
-   * working `Sandbox.get({ name, resume: false })` was *when* it ran: after
-   * `snapshot()` had terminated the sandbox. So the read now happens first,
-   * while the sandbox is still the same object `reconnect()` succeeds against,
-   * and it no longer depends on the provider's post-termination behaviour.
+   * ## The fourth read: right object, right moment, wrong assumption
    *
-   * Best-effort in both directions. A failed read leaves usage `null` — never
-   * guessed from wall duration, which is exactly the mistake this fix exists to
-   * avoid making somewhere else (§25). And the failure is now *logged*: error
-   * name only, plus which fields the refreshed record carried, so the next
-   * silent null is diagnosable from production logs instead of from a database
-   * archaeology session.
+   * Calibration runs 1 and 2 both came back null even with this fix live.
+   * Run 2 is what broke the deadlock, because its capture logged the one
+   * field this file's own diagnostic already collects and nobody had needed
+   * yet: `sessionStatus`. It read `"snapshotting"` — a real, distinct,
+   * documented session state, not `"stopped"`.
+   *
+   * So `currentSession()` was reading the right object, immediately after
+   * the right call, and the SDK's own promise still held —
+   * `activeCpuUsageMs` really is "only reported once the VM is stopped" —
+   * but `createSnapshot` resolves once the stop is **requested**, not once
+   * the provider's metering pipeline has finished computing the figure and
+   * the session has actually reached `stopped`. Every earlier fix read
+   * *before* that transition finished; this was the first run to prove it
+   * with the session's own status rather than infer it from an empty record.
+   *
+   * The SDK's own `Sandbox` class polls exactly this transition internally
+   * (`waitForStopAndResume`, private, 500 ms interval) before resuming a
+   * stopped session for a new command. This does the same polling, publicly,
+   * for the same reason, without resuming anything: `Sandbox.get({ name,
+   * resume: false })` is the identical call this file already uses for a
+   * passive re-read elsewhere (`inspect`, `reconnect`).
+   *
+   * ## Still best-effort, still never guessed
+   *
+   * A missing value stays `null` and is never inferred from wall duration
+   * (§25). The logging stays and now also records how many polls ran and
+   * the status reached, so a metering pipeline that is genuinely still slow
+   * is distinguishable from a bug in this file — the same distinction that
+   * identified this one.
    */
   private async readTerminalUsage(): Promise<SandboxUsage> {
     try {
-      const refreshed = await Sandbox.get({ name: this.sandbox.name, resume: false });
+      let session = this.sandbox.currentSession();
+      let attempts = 0;
+
+      while (
+        (session.status === "snapshotting" || session.status === "stopping") &&
+        attempts < SANDBOX_BUDGETS.terminalUsagePollMaxAttempts
+      ) {
+        await sleep(SANDBOX_BUDGETS.terminalUsagePollIntervalMs);
+        const refreshed = await Sandbox.get({ name: this.sandbox.name, resume: false });
+        session = refreshed.currentSession();
+        attempts += 1;
+      }
+
       const usage: SandboxUsage = {
-        activeCpuDurationMs: refreshed.totalActiveCpuDurationMs ?? null,
-        networkIngressBytes: refreshed.totalIngressBytes ?? null,
-        networkEgressBytes: refreshed.totalEgressBytes ?? null,
+        activeCpuDurationMs: session.activeCpuUsageMs ?? null,
+        networkIngressBytes: session.networkTransfer?.ingress ?? null,
+        networkEgressBytes: session.networkTransfer?.egress ?? null,
         costUsd: null,
       };
 
-      // The read succeeding and the read being *useful* are different
-      // questions, and last sprint they were confused. Say which one happened.
       if (usage.activeCpuDurationMs === null) {
-        console.error("[validation.sandbox] a usage re-read carried no Active CPU", {
+        console.error("[validation.sandbox] a stopped session reported no Active CPU", {
           sandbox: this.sandbox.name,
-          hasIngress: usage.networkIngressBytes !== null,
-          hasEgress: usage.networkEgressBytes !== null,
+          sessionStatus: session.status,
+          pollAttempts: attempts,
+          hasNetworkTransfer: session.networkTransfer !== undefined,
         });
       }
 
       return usage;
     } catch (error) {
       // Never the error's message or cause: a provider error can carry request
-      // context and credential-bearing material (§15). The name and the
-      // sandbox name are enough to tell "the call failed" from "the call
-      // returned an empty record", which is the distinction that was missing.
-      console.error("[validation.sandbox] the usage re-read failed", {
+      // context and credential-bearing material (§15).
+      console.error("[validation.sandbox] reading the stopped session failed", {
         sandbox: this.sandbox.name,
         error: error instanceof Error ? error.name : typeof error,
       });

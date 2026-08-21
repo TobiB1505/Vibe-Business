@@ -21,6 +21,7 @@
     "agent:preflight": "vitest run --config vitest.probe.config.mts src/modules/coding-agent",
     "agent:canary": "vitest run --config vitest.canary.config.mts",
     "agent:dogfood": "vitest run --config vitest.probe.config.mts src/modules/coding-agent/dogfood/",
+    "agent:calibrate": "vitest run --config vitest.probe.config.mts src/modules/coding-agent/dogfood/calibration.probe.ts",
     "db:status": "supabase migration list",
     "db:push": "supabase db push",
     "db:lint": "supabase db lint --linked",

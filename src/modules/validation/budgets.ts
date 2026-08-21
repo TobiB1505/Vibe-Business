@@ -117,6 +117,31 @@ export const SANDBOX_BUDGETS = {
    * a larger number.
    */
   maxBuildIdentityFileBytes: 4 * 1024 * 1024,
+
+  /**
+   * How long to wait for a session's Active CPU figure after a snapshot.
+   *
+   * `createSnapshot` resolves once the stop is *requested*, not once the VM
+   * has actually reached `stopped` and the provider's metering pipeline has
+   * finished — a real gap, confirmed by reading the session status straight
+   * off a production read rather than assumed: calibration run 2's capture
+   * logged `sessionStatus: "snapshotting"`, a genuine in-flight state, not
+   * `"stopped"`. Every earlier attempt (Sprint 0051, 0053, 0055's first fix)
+   * read at some point before that transition finished, which is the one
+   * thing all three failures had in common regardless of which object they
+   * read. `terminalUsagePollIntervalMs` matches the SDK's own internal
+   * polling interval, used by `Sandbox`'s (private) `waitForStopAndResume`.
+   */
+  terminalUsagePollIntervalMs: 500,
+  /**
+   * Hard ceiling on the poll above — 5 s, well inside `STEP_OVERHEAD_MS`.
+   *
+   * A transition that has not finished by then is reported as still
+   * unresolved rather than waited on indefinitely: no budget in this module
+   * is a hint to wait longer, and a metering pipeline that is genuinely
+   * stuck is itself worth knowing about.
+   */
+  terminalUsagePollMaxAttempts: 10,
 } as const;
 
 /**

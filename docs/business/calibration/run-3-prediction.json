@@ -1,0 +1,576 @@
+{
+  "at": "2026-08-21T00:00:00.000Z",
+  "economyModelVersion": "economy-model.v1",
+  "providerPricingVersion": "claude-sonnet-5-introductory-2026",
+  "infrastructurePricingVersion": "vercel-sandbox-2026-08-20",
+  "inputs": {
+    "pricingClass": "standard",
+    "pricingClassReason": "single_surface",
+    "riskClass": "moderate",
+    "changeKind": "product_change",
+    "evidenceIds": [
+      "live.seo.open_graph_missing"
+    ],
+    "surfaces": [
+      "seo_metadata"
+    ],
+    "repositoryContext": {
+      "treeEntries": 1367,
+      "filesAnalyzed": 2,
+      "bytesAnalyzed": 16915,
+      "routesDetected": 33,
+      "surfacesDetected": 14,
+      "candidatesAvailable": 12,
+      "candidatesSent": 12
+    },
+    "expectedValidationDepth": null
+  },
+  "modelRates": {
+    "provider": "anthropic",
+    "model": "claude-sonnet-5",
+    "pricingVersion": "claude-sonnet-5-introductory-2026",
+    "inputNanoUsdPerToken": 2000,
+    "outputNanoUsdPerToken": 10000,
+    "cacheReadNanoUsdPerToken": 200,
+    "cacheWriteNanoUsdPerToken": 2500
+  },
+  "repositorySignal": {
+    "measured": true,
+    "complexityIndex": 1.078102329799393,
+    "multiplier": 1.0271235300716761,
+    "pressure": {
+      "candidatePressure": 1,
+      "clipped": false,
+      "signal": "unclipped"
+    },
+    "reasons": [
+      "tree_size",
+      "route_count",
+      "candidate_supply"
+    ]
+  },
+  "repositoryDrift": {
+    "changedFilesSinceLastExecution": 0,
+    "changedBytesSinceLastExecution": 0,
+    "newRelevantCandidates": -22,
+    "changedRoutes": 0,
+    "driftLevel": "high_change",
+    "measurable": [
+      "files",
+      "bytes",
+      "candidates",
+      "routes"
+    ],
+    "largestRelativeChange": 0.6470588235294118
+  },
+  "historicalExpectation": {
+    "matches": [
+      {
+        "run": 3,
+        "similarity": 0.8,
+        "matched": [
+          "pricing_class",
+          "change_kind",
+          "risk_class"
+        ],
+        "floorNanoUsd": 433100000,
+        "upperNanoUsd": 481400000,
+        "confidence": "confirmed",
+        "weight": {
+          "run": 3,
+          "similarityFactor": 0.8,
+          "ageFactor": 1,
+          "modelFactor": 1,
+          "repositoryFactor": 1,
+          "finalWeight": 0.8
+        }
+      },
+      {
+        "run": 4,
+        "similarity": 0.8,
+        "matched": [
+          "pricing_class",
+          "change_kind",
+          "risk_class"
+        ],
+        "floorNanoUsd": 284500000,
+        "upperNanoUsd": 284500000,
+        "confidence": "confirmed",
+        "weight": {
+          "run": 4,
+          "similarityFactor": 0.8,
+          "ageFactor": 1,
+          "modelFactor": 1,
+          "repositoryFactor": 1,
+          "finalWeight": 0.8
+        }
+      },
+      {
+        "run": 5,
+        "similarity": 0.8,
+        "matched": [
+          "pricing_class",
+          "change_kind",
+          "risk_class"
+        ],
+        "floorNanoUsd": 354200000,
+        "upperNanoUsd": 402700000,
+        "confidence": "confirmed",
+        "weight": {
+          "run": 5,
+          "similarityFactor": 0.8,
+          "ageFactor": 1,
+          "modelFactor": 1,
+          "repositoryFactor": 1,
+          "finalWeight": 0.8
+        }
+      },
+      {
+        "run": 6,
+        "similarity": 0.8,
+        "matched": [
+          "pricing_class",
+          "change_kind",
+          "risk_class"
+        ],
+        "floorNanoUsd": 173900000,
+        "upperNanoUsd": 224500000,
+        "confidence": "confirmed",
+        "weight": {
+          "run": 6,
+          "similarityFactor": 0.8,
+          "ageFactor": 1,
+          "modelFactor": 1,
+          "repositoryFactor": 1,
+          "finalWeight": 0.8
+        }
+      },
+      {
+        "run": 7,
+        "similarity": 0.8,
+        "matched": [
+          "pricing_class",
+          "change_kind",
+          "risk_class"
+        ],
+        "floorNanoUsd": 282100000,
+        "upperNanoUsd": 328900000,
+        "confidence": "confirmed",
+        "weight": {
+          "run": 7,
+          "similarityFactor": 0.8,
+          "ageFactor": 1,
+          "modelFactor": 1,
+          "repositoryFactor": 1,
+          "finalWeight": 0.8
+        }
+      },
+      {
+        "run": 9,
+        "similarity": 0.8,
+        "matched": [
+          "pricing_class",
+          "change_kind",
+          "risk_class"
+        ],
+        "floorNanoUsd": 347000000,
+        "upperNanoUsd": 395400000,
+        "confidence": "confirmed",
+        "weight": {
+          "run": 9,
+          "similarityFactor": 0.8,
+          "ageFactor": 1,
+          "modelFactor": 1,
+          "repositoryFactor": 1,
+          "finalWeight": 0.8
+        }
+      },
+      {
+        "run": 8,
+        "similarity": 0.35,
+        "matched": [
+          "change_kind",
+          "risk_class"
+        ],
+        "floorNanoUsd": 254100000,
+        "upperNanoUsd": 301700000,
+        "confidence": "limited",
+        "weight": {
+          "run": 8,
+          "similarityFactor": 0.35,
+          "ageFactor": 1,
+          "modelFactor": 1,
+          "repositoryFactor": 1,
+          "finalWeight": 0.35
+        }
+      }
+    ],
+    "expectedFloorNanoUsd": 308500000,
+    "expectedUpperNanoUsd": 349420388,
+    "basis": "class_matched",
+    "sampleSize": 7,
+    "confidence": "low"
+  },
+  "matchedRuns": [
+    {
+      "run": 3,
+      "title": "Add robots meta directives to public and signed-in pages",
+      "createdAt": "2026-08-19T11:08:29.928Z",
+      "riskClass": "moderate",
+      "changeKind": "product_change",
+      "evidenceIds": [
+        "live.seo.robots_meta_missing"
+      ],
+      "classificationConfidence": "confirmed",
+      "confidenceNote": "riskClass, changeKind and evidenceIds joined directly from execution_specs/action_plan_steps.",
+      "economicCostFloorNanoUsd": 433100000,
+      "economicCostUpperNanoUsd": 481400000,
+      "providerCostNanoUsd": 346506500,
+      "costIsPointEstimate": false
+    },
+    {
+      "run": 4,
+      "title": "Add robots meta directives to public and signed-in pages",
+      "createdAt": "2026-08-19T16:01:46.312Z",
+      "riskClass": "moderate",
+      "changeKind": "product_change",
+      "evidenceIds": [
+        "live.seo.robots_meta_missing"
+      ],
+      "classificationConfidence": "confirmed",
+      "confidenceNote": "riskClass, changeKind and evidenceIds joined directly from execution_specs/action_plan_steps. This run was never validated, so its floor and upper bound are identical — there is no validation-sandbox component to bound.",
+      "economicCostFloorNanoUsd": 284500000,
+      "economicCostUpperNanoUsd": 284500000,
+      "providerCostNanoUsd": 227170000,
+      "costIsPointEstimate": false
+    },
+    {
+      "run": 5,
+      "title": "Add robots meta directives to public and signed-in pages",
+      "createdAt": "2026-08-19T17:16:38.566Z",
+      "riskClass": "moderate",
+      "changeKind": "product_change",
+      "evidenceIds": [
+        "live.seo.robots_meta_missing"
+      ],
+      "classificationConfidence": "confirmed",
+      "confidenceNote": "riskClass, changeKind and evidenceIds joined directly from execution_specs/action_plan_steps.",
+      "economicCostFloorNanoUsd": 354200000,
+      "economicCostUpperNanoUsd": 402700000,
+      "providerCostNanoUsd": 319930000,
+      "costIsPointEstimate": false
+    },
+    {
+      "run": 6,
+      "title": "Add robots meta directives to public and signed-in pages",
+      "createdAt": "2026-08-19T18:45:03.611Z",
+      "riskClass": "moderate",
+      "changeKind": "product_change",
+      "evidenceIds": [
+        "live.seo.robots_meta_missing"
+      ],
+      "classificationConfidence": "confirmed",
+      "confidenceNote": "riskClass, changeKind and evidenceIds joined directly from execution_specs/action_plan_steps. This is the run whose actual changed files included an authenticated-area layout (src/app/app/layout.tsx, per Sprint 0047's own benchmark) even though its evidence family (live.seo.*) never implies the authenticated_pages scope — see the PART K limitation below.",
+      "economicCostFloorNanoUsd": 173900000,
+      "economicCostUpperNanoUsd": 224500000,
+      "providerCostNanoUsd": 144400000,
+      "costIsPointEstimate": false
+    },
+    {
+      "run": 7,
+      "title": "Add canonical URLs to public pages",
+      "createdAt": "2026-08-19T19:42:47.998Z",
+      "riskClass": "moderate",
+      "changeKind": "product_change",
+      "evidenceIds": [
+        "live.seo.canonical_missing"
+      ],
+      "classificationConfidence": "confirmed",
+      "confidenceNote": "riskClass, changeKind and evidenceIds joined directly from execution_specs/action_plan_steps.",
+      "economicCostFloorNanoUsd": 282100000,
+      "economicCostUpperNanoUsd": 328900000,
+      "providerCostNanoUsd": 251500000,
+      "costIsPointEstimate": false
+    },
+    {
+      "run": 8,
+      "title": "Improve the primary landing-page call to action",
+      "createdAt": "2026-08-19T22:19:42.892Z",
+      "riskClass": "moderate",
+      "changeKind": "product_change",
+      "evidenceIds": [
+        "live.conversion.primary_cta"
+      ],
+      "classificationConfidence": "limited",
+      "confidenceNote": "This run's action_plan_steps join is null (step_key 'dogfood-fixture--low-ui-primary-cta' never persisted a plan step). changeKind/evidenceIds are read from coding-agent/dogfood/fixtures.ts's LOW_UI_PRIMARY_CTA source instead — exact values, but reconstructed from a different table than a production classification would read, so this is marked limited rather than confirmed per the sprint's own rule.",
+      "economicCostFloorNanoUsd": 254100000,
+      "economicCostUpperNanoUsd": 301700000,
+      "providerCostNanoUsd": 214400000,
+      "costIsPointEstimate": false
+    },
+    {
+      "run": 9,
+      "title": "Add robots meta directives to public and signed-in pages",
+      "createdAt": "2026-08-20T15:07:13.616Z",
+      "riskClass": "moderate",
+      "changeKind": "product_change",
+      "evidenceIds": [
+        "live.seo.robots_meta_missing"
+      ],
+      "classificationConfidence": "confirmed",
+      "confidenceNote": "riskClass, changeKind and evidenceIds joined directly from execution_specs/action_plan_steps. This run has the same step_key as run #6 ('4-product_change-add-robots-meta-directives-to-public-and-signed-') on a real persisted plan step, which is what makes the two directly comparable and is the whole reason this entry matters: identical step, identical pricing class, 2.00x the cost floor and 2.16x the model spend. costIsPointEstimate stays false, but for a different reason than runs #3-8 — this run's *agent* sandbox did record active CPU (66,910 ms), and its *validation* sandbox still recorded null sixteen minutes after Sprint 0051's fix deployed. That null is the evidence Sprint 0051's fix did not work in production; see Sprint 0053's reordering in validation/vercel/provider.ts, which is not yet verified against a real run.",
+      "economicCostFloorNanoUsd": 347000000,
+      "economicCostUpperNanoUsd": 395400000,
+      "providerCostNanoUsd": 311505500,
+      "costIsPointEstimate": false
+    }
+  ],
+  "weightingPolicy": "similarity_only",
+  "cohortCorrection": 1,
+  "confidence": {
+    "historicalData": "low",
+    "repositorySignal": "high",
+    "providerPricing": "high",
+    "sampleSize": 7,
+    "overall": "low"
+  },
+  "safetyMargin": {
+    "expectedNanoUsd": 364397750,
+    "riskBufferFraction": 0.3,
+    "protectedCostNanoUsd": 473717075,
+    "basis": "low",
+    "clamped": false
+  },
+  "estimate": {
+    "pricingClass": "standard",
+    "pricingClassReason": "single_surface",
+    "estimatedCost": {
+      "known": true,
+      "nanoUsd": 364397750,
+      "basis": "estimated"
+    },
+    "estimatedCostUpperNanoUsd": 412732588,
+    "confidence": {
+      "historicalData": "low",
+      "repositorySignal": "high",
+      "providerPricing": "high",
+      "sampleSize": 7,
+      "overall": "low"
+    },
+    "costDrivers": [
+      {
+        "driver": "validation_depth",
+        "effect": "unknown",
+        "detail": "the depth this change will validate at is not yet resolved"
+      },
+      {
+        "driver": "repository_complexity",
+        "effect": "raises",
+        "detail": "complexity 1.03x against the reference repository"
+      },
+      {
+        "driver": "repository_drift",
+        "effect": "raises",
+        "detail": "the repository moved substantially since the last execution"
+      },
+      {
+        "driver": "historical_baseline",
+        "effect": "neutral",
+        "detail": "7 comparable run(s), class_matched"
+      }
+    ],
+    "reasons": [
+      "validation_depth_unknown",
+      "repository_measured",
+      "repository_drift_high",
+      "historical_neighbours"
+    ],
+    "economyModelVersion": "economy-model.v1",
+    "providerPricingVersion": "claude-sonnet-5-introductory-2026",
+    "repositorySignal": {
+      "measured": true,
+      "complexityIndex": 1.078102329799393,
+      "multiplier": 1.0271235300716761,
+      "pressure": {
+        "candidatePressure": 1,
+        "clipped": false,
+        "signal": "unclipped"
+      },
+      "reasons": [
+        "tree_size",
+        "route_count",
+        "candidate_supply"
+      ]
+    },
+    "repositoryDrift": {
+      "changedFilesSinceLastExecution": 0,
+      "changedBytesSinceLastExecution": 0,
+      "newRelevantCandidates": -22,
+      "changedRoutes": 0,
+      "driftLevel": "high_change",
+      "measurable": [
+        "files",
+        "bytes",
+        "candidates",
+        "routes"
+      ],
+      "largestRelativeChange": 0.6470588235294118
+    },
+    "historicalExpectation": {
+      "matches": [
+        {
+          "run": 3,
+          "similarity": 0.8,
+          "matched": [
+            "pricing_class",
+            "change_kind",
+            "risk_class"
+          ],
+          "floorNanoUsd": 433100000,
+          "upperNanoUsd": 481400000,
+          "confidence": "confirmed",
+          "weight": {
+            "run": 3,
+            "similarityFactor": 0.8,
+            "ageFactor": 1,
+            "modelFactor": 1,
+            "repositoryFactor": 1,
+            "finalWeight": 0.8
+          }
+        },
+        {
+          "run": 4,
+          "similarity": 0.8,
+          "matched": [
+            "pricing_class",
+            "change_kind",
+            "risk_class"
+          ],
+          "floorNanoUsd": 284500000,
+          "upperNanoUsd": 284500000,
+          "confidence": "confirmed",
+          "weight": {
+            "run": 4,
+            "similarityFactor": 0.8,
+            "ageFactor": 1,
+            "modelFactor": 1,
+            "repositoryFactor": 1,
+            "finalWeight": 0.8
+          }
+        },
+        {
+          "run": 5,
+          "similarity": 0.8,
+          "matched": [
+            "pricing_class",
+            "change_kind",
+            "risk_class"
+          ],
+          "floorNanoUsd": 354200000,
+          "upperNanoUsd": 402700000,
+          "confidence": "confirmed",
+          "weight": {
+            "run": 5,
+            "similarityFactor": 0.8,
+            "ageFactor": 1,
+            "modelFactor": 1,
+            "repositoryFactor": 1,
+            "finalWeight": 0.8
+          }
+        },
+        {
+          "run": 6,
+          "similarity": 0.8,
+          "matched": [
+            "pricing_class",
+            "change_kind",
+            "risk_class"
+          ],
+          "floorNanoUsd": 173900000,
+          "upperNanoUsd": 224500000,
+          "confidence": "confirmed",
+          "weight": {
+            "run": 6,
+            "similarityFactor": 0.8,
+            "ageFactor": 1,
+            "modelFactor": 1,
+            "repositoryFactor": 1,
+            "finalWeight": 0.8
+          }
+        },
+        {
+          "run": 7,
+          "similarity": 0.8,
+          "matched": [
+            "pricing_class",
+            "change_kind",
+            "risk_class"
+          ],
+          "floorNanoUsd": 282100000,
+          "upperNanoUsd": 328900000,
+          "confidence": "confirmed",
+          "weight": {
+            "run": 7,
+            "similarityFactor": 0.8,
+            "ageFactor": 1,
+            "modelFactor": 1,
+            "repositoryFactor": 1,
+            "finalWeight": 0.8
+          }
+        },
+        {
+          "run": 9,
+          "similarity": 0.8,
+          "matched": [
+            "pricing_class",
+            "change_kind",
+            "risk_class"
+          ],
+          "floorNanoUsd": 347000000,
+          "upperNanoUsd": 395400000,
+          "confidence": "confirmed",
+          "weight": {
+            "run": 9,
+            "similarityFactor": 0.8,
+            "ageFactor": 1,
+            "modelFactor": 1,
+            "repositoryFactor": 1,
+            "finalWeight": 0.8
+          }
+        },
+        {
+          "run": 8,
+          "similarity": 0.35,
+          "matched": [
+            "change_kind",
+            "risk_class"
+          ],
+          "floorNanoUsd": 254100000,
+          "upperNanoUsd": 301700000,
+          "confidence": "limited",
+          "weight": {
+            "run": 8,
+            "similarityFactor": 0.35,
+            "ageFactor": 1,
+            "modelFactor": 1,
+            "repositoryFactor": 1,
+            "finalWeight": 0.35
+          }
+        }
+      ],
+      "expectedFloorNanoUsd": 308500000,
+      "expectedUpperNanoUsd": 349420388,
+      "basis": "class_matched",
+      "sampleSize": 7,
+      "confidence": "low"
+    },
+    "cohortCorrection": 1,
+    "provenance": {
+      "hadHistoricalNeighbours": true,
+      "hadRepositoryContext": true,
+      "hadRepositoryDrift": true,
+      "hadValidationDepth": false,
+      "hadModelRates": true
+    }
+  }
+}
