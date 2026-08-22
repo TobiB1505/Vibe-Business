@@ -6,6 +6,7 @@ import { getReservation } from "../store";
 import { creditsToUnits } from "../units";
 import {
   createAgentScaffolding,
+  deleteAgentScaffolding,
   createRunningAgentRun,
   deleteAgentRun,
   type AgentScaffolding,
@@ -106,12 +107,25 @@ describe.skipIf(!configured)("E — one agent run, one billing authority", () =>
   afterAll(async () => {
     const supabase = admin.current;
     if (!supabase || !owner.userId) return;
-    // The scaffolding chain restricts on delete, so the user goes last and the
-    // billing rows go through the ordered teardown the harness already owns.
-    reports.push(await teardownFixture(supabase, owner.userId).catch(() => ({
-      userId: owner.userId,
-      remaining: { teardown_failed: 1 },
-    })));
+    // The scaffolding goes first, in the explicit order `deleteAgentScaffolding`
+    // owns — see its own comment for the RESTRICT/CASCADE ordering hazard that
+    // made this necessary. The billing rows and the user then go through the
+    // teardown the harness already owns.
+    if (scaffolding.current) {
+      await deleteAgentScaffolding(supabase, scaffolding.current, owner.userId);
+    }
+    reports.push(
+      await teardownFixture(supabase, owner.userId).catch((error: unknown) => {
+        // Logged rather than embedded in the report: `TeardownReport.remaining`
+        // is a count map, and forcing a message into it would make every other
+        // reader of the type handle a value that is never actually a count.
+        console.error(
+          "[e2b] scaffolding teardown failed:",
+          error instanceof Error ? error.message : error,
+        );
+        return { userId: owner.userId, remaining: { teardown_failed: 1 } };
+      }),
+    );
     expect(reports.filter((report) => !isClean(report))).toEqual([]);
   });
 
