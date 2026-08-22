@@ -25,6 +25,20 @@ import { authorizeOperationCredits } from "../operation-billing";
 
 /** 64 characters, which is what `prepared_changes.execution_identity` requires. */
 const IDENTITY_64 = "e2b0000000000000000000000000000000000000000000000000000000000000";
+
+/**
+ * A per-iteration identity of exactly 64 characters.
+ *
+ * `prepared_changes_single_active_idx` is unique on
+ * `(project_id, execution_identity)` for any row still `preparing` or
+ * `prepared`, and this suite keeps one project for the whole run — so a shared
+ * identity would give every iteration after the first a `23505` from the
+ * fixture rather than from the race.
+ */
+function identity64(label: string): string {
+  const safe = label.replace(/[^a-z0-9-]/gi, "").slice(0, 40);
+  return `e2b-${safe}`.padEnd(64, "0").slice(0, 64);
+}
 const BASE_SHA = "1f4b0c9d7a2e5f8b3c6d9e0a1b2c3d4e5f607182";
 
 async function insert(
@@ -206,7 +220,9 @@ export async function createRunningAgentRun(
     user_id: userId,
     operation_type: "agent_execution",
     status: "running",
-    stage: "executing",
+    // The one value the operation_runs stage CHECK constraint allows for an
+    // agent run genuinely in flight — "executing" is not in that list.
+    stage: "running_agent",
     input_identity: params.identity,
     subject_id: scaffolding.executionSpecId,
   });
@@ -237,7 +253,7 @@ export async function createRunningAgentRun(
     base_sha: BASE_SHA,
     branch_name: `vibe/e2b-${params.identity}`,
     commit_sha: BASE_SHA,
-    execution_identity: IDENTITY_64,
+    execution_identity: identity64(params.identity),
     status: "prepared",
     completed_at: new Date().toISOString(),
   });

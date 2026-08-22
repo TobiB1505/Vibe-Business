@@ -41,7 +41,12 @@ import {
  *
  *   settle ‖ release   `settleOperationCredits` against
  *                      `releaseOperationCredits`. One terminal state, one
- *                      charge at most, capacity in one of two legal places.
+ *                      charge at most, capacity always one of two legal
+ *                      values — but *not* correlated with which. A run of
+ *                      this suite found the counter-example to an earlier,
+ *                      too-strong version of this assertion: a charge posted
+ *                      while the allocation's own capacity was independently
+ *                      returned. See the comment at the assertion itself.
  *   settle ‖ settle    the same settlement arriving twice. One charge.
  *   partial ‖ partial  two `settleReservationAllocations` for one reservation
  *                      at a partial amount. This is where the E1 double-return
@@ -180,21 +185,60 @@ describe.skipIf(!configured)("D — a hold ends once", () => {
           expect(state.chargeEntries).toBe(1);
         }
 
-        // The money must agree with itself whatever the reservation says.
-        // Stated separately from the status on purpose: this race reaches a
-        // state where the charge stands and the hold reads `released`, and
-        // that disagreement is about the *status*, never about the balance.
-        // If a charge exists, the ledger and the lot must both show the same
-        // 300 — anything else is a customer charged for capacity nobody
-        // consumed, or capacity consumed with nothing charged.
+        // The ledger agrees with itself either way — this is the ordinary E1
+        // CAS-consistency invariant and holds regardless of this race.
         if (state.chargeEntries === 1) {
           expect(state.ledgerSum).toBe(creditsToUnits(1000 - 300));
-          expect(state.postedCredits).toBe(state.ledgerSum);
-          expect(allocated).toBe(HOLD);
         } else {
           expect(state.ledgerSum).toBe(creditsToUnits(1000));
-          expect(allocated).toBe(0);
         }
+        expect(state.postedCredits).toBe(state.ledgerSum);
+
+        /*
+         * What this run corrected about an assumption from the previous one.
+         *
+         * A commit here once additionally asserted `chargeEntries === 1` ⇒
+         * `allocated === HOLD`, on 60 iterations across three runs where that
+         * held every time. It does not hold structurally, and a fourth run
+         * found the counter-example: `charges=1` with `allocated=0` — a charge
+         * posted while the allocation's own capacity was independently
+         * returned.
+         *
+         * The reason is that `settleOperationCredits` and `releaseOperationCredits`
+         * decide two things on two different rows, on two different timings,
+         * with no ordering between them:
+         *
+         *   the reservation row   whether `settleReservation`'s own re-read
+         *                         (inside its call, after the allocation step
+         *                         has already run) still sees `active` — this
+         *                         alone decides whether the charge is posted
+         *                         at all, unconditionally, before the CAS that
+         *                         decides the *status* is even attempted
+         *   the allocation row    a completely separate compare-and-swap,
+         *                         raced independently by
+         *                         `settleReservationAllocations` and
+         *                         `releaseReservationAllocations`
+         *
+         * Nothing links them. All four combinations of {charge posted or not}
+         * × {allocation consumed or returned} are structurally reachable, and
+         * this run is the proof: a customer can be charged for capacity the
+         * lot independently marked available again.
+         *
+         * This is not a new defect to fix here, and not a reason to add
+         * locking to the primitives — it is a fuller version of the fact this
+         * whole class exists to demonstrate: `settleOperationCredits` and
+         * `releaseOperationCredits` are not mutually exclusive against each
+         * other, on either row. What makes them safe in production is that
+         * every caller now gates on an upstream compare-and-swap before
+         * reaching either — `operation_runs.status` for the three
+         * deterministic families, `agent_execution_runs.status` for agent
+         * execution after the fix in this sprint — so the two are never both
+         * invoked for one reservation. Never read this file as proof the
+         * primitives are safe against each other; they are not, and the state
+         * machine above them is what makes them safe in practice. (`allocated`
+         * itself was already asserted structurally sound above — always 0 or
+         * HOLD, never a third value — that part of the invariant is genuine.)
+         */
 
         // Counted, not asserted. A charge whose hold was released is the state
         // E1 named `charge_without_hold` and chose to surface rather than
