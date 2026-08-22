@@ -70,14 +70,24 @@ describe("the concurrency harness runs only against a disposable local stack", (
   });
 
   /**
-   * The failure this exists for: somebody copies the application's variables
-   * into the harness names. Checks one and two would pass on a local URL, and
-   * the run would hold a key that opens the deployed database.
+   * The failure this exists for: code under test that builds its own client.
+   *
+   * `expireStaleAgentExecution` reads `NEXT_PUBLIC_SUPABASE_URL` and
+   * `SUPABASE_SERVICE_ROLE_KEY` itself rather than accepting a client, so
+   * checking only the harness's own target would let a scenario reach a
+   * database this guard never looked at.
    */
-  it("refuses the application's own service role key", () => {
-    process.env.SUPABASE_SERVICE_ROLE_KEY = "the-real-one";
-    Object.assign(process.env, { ...LOCAL, CONCURRENCY_SERVICE_ROLE_KEY: "the-real-one" });
-    expect(() => resolveTarget()).toThrow(/carries the application's service role key/);
+  it("refuses when the application's own url is not loopback", () => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "https://dcbwlctscooefwnivxzv.supabase.co";
+    Object.assign(process.env, LOCAL);
+    expect(() => resolveTarget()).toThrow(/NEXT_PUBLIC_SUPABASE_URL does not point at loopback/);
+  });
+
+  it("accepts an application url that names the same local stack", () => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = "http://127.0.0.1:54321";
+    process.env.SUPABASE_SERVICE_ROLE_KEY = "local-demo-key";
+    Object.assign(process.env, LOCAL);
+    expect(() => resolveTarget()).not.toThrow();
   });
 
   it("refuses to fall back to the application's variables", () => {

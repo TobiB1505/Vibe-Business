@@ -26,6 +26,19 @@ name: Billing concurrency
 
 on:
   workflow_dispatch:
+  # Bring-up again, and removed again before merge: the corrective commits for
+  # the two defects E2b found need a real-database run, and this branch still
+  # has no pull request to trigger one.
+  push:
+    branches: [claude/vibe-intelligence-architecture-fpjyel]
+    paths:
+      - "src/modules/credits/**"
+      - "src/modules/operations/**"
+      - "src/modules/coding-agent/**"
+      - "supabase/migrations/**"
+      - "supabase/config.toml"
+      - ".github/workflows/concurrency.yml"
+      - "vitest.concurrency.config.mts"
   pull_request:
     paths:
       - "src/modules/credits/**"
@@ -102,6 +115,26 @@ jobs:
           echo "CONCURRENCY_SUPABASE_URL=$api" >> "$GITHUB_ENV"
           echo "::add-mask::$key"
           echo "CONCURRENCY_SERVICE_ROLE_KEY=$key" >> "$GITHUB_ENV"
+
+          # Race class E drives `expireStaleAgentExecution`, which builds its
+          # own client from the application's variables rather than accepting
+          # one — it runs in a request handler in production, where there is no
+          # client to hand it. So those variables must also name this stack.
+          #
+          # This does not widen what the suite can reach: the target guard
+          # refuses to run at all unless NEXT_PUBLIC_SUPABASE_URL is loopback
+          # too, precisely so that code building its own client cannot slip past
+          # a check that only looked at the harness's.
+          anon=$(grep -m1 '^ANON_KEY=' /tmp/stack.env | cut -d= -f2- | tr -d '"')
+          if [ -z "$anon" ]; then
+            echo "Could not read ANON_KEY from the CLI."
+            cut -d= -f1 /tmp/stack.env
+            exit 1
+          fi
+          echo "::add-mask::$anon"
+          echo "NEXT_PUBLIC_SUPABASE_URL=$api" >> "$GITHUB_ENV"
+          echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$anon" >> "$GITHUB_ENV"
+          echo "SUPABASE_SERVICE_ROLE_KEY=$key" >> "$GITHUB_ENV"
 
       # Proves the run reached the database at all, and separates "the stack did
       # not come up" from "a race failed" before any race runs. It is also where

@@ -106,12 +106,30 @@ export function resolveTarget(): Target {
     throw new UnsafeTargetError(`${URL_VAR} names the deployed project`);
   }
 
-  // 3. The application's own variables must not be what we are holding. If
-  //    somebody exports them into this process, an accidental copy into the
-  //    harness names would otherwise pass checks 1 and 2 on a local value and
-  //    fail open on a remote one.
-  if (serviceRoleKey === process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    throw new UnsafeTargetError(`${KEY_VAR} carries the application's service role key`);
+  // 3. The application's own URL, if set at all, must be loopback too.
+  //
+  //    Not the same check as 1, and it is here because of what class E drives:
+  //    `expireStaleAgentExecution` builds its **own** client from
+  //    `NEXT_PUBLIC_SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` rather than
+  //    accepting one. Checking only the harness's target would let the code
+  //    under test reach a database this guard never looked at — which is
+  //    exactly the shape of defect the suite exists to find, applied to itself.
+  //
+  //    So the rule is about the whole process, not about one client: if the
+  //    application's variables are present, they must name the same disposable
+  //    local stack. When they are unset, nothing can build such a client and
+  //    there is nothing to check.
+  const applicationUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (applicationUrl) {
+    let applicationHost: string;
+    try {
+      applicationHost = new URL(applicationUrl).hostname;
+    } catch {
+      throw new UnsafeTargetError("NEXT_PUBLIC_SUPABASE_URL is set but is not a URL");
+    }
+    if (!LOOPBACK_HOSTS.has(applicationHost)) {
+      throw new UnsafeTargetError("NEXT_PUBLIC_SUPABASE_URL does not point at loopback");
+    }
   }
 
   return { url, serviceRoleKey };
