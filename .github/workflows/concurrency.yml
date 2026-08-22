@@ -13,16 +13,33 @@ name: Billing concurrency
 # started here, from this repository's own config.toml and migrations, and
 # deleted when the job ends.
 #
-# Bring-up: `workflow_dispatch` plus a push trigger scoped to the branch this
-# was developed on. GitHub only exposes `workflow_dispatch` for workflows that
-# exist on the default branch, so before this merges the push trigger is the
-# only way to run it at all. It is replaced by a path-filtered `pull_request`
-# trigger once the job has been green twice — see ADR 0040.
+# Runs on pull requests that touch the paths that can break it, and on demand.
+# Not on every change: it starts four containers and takes minutes, and a UI
+# change cannot make a billing race fail. A change outside these paths that
+# would break it is therefore not caught — a stated limit of ADR 0040, not an
+# oversight.
+#
+# `workflow_dispatch` only becomes reachable once this file is on the default
+# branch; until then the `pull_request` trigger is what runs it. The gate was
+# introduced on a branch-scoped push trigger and moved here after two green
+# runs, the second of them at 5646e53.
 
 on:
   workflow_dispatch:
+  # Bring-up only, removed before this branch merges: `workflow_dispatch` is
+  # unreachable until the file is on the default branch, and this branch has no
+  # pull request, so without this there is no way to execute a change to the
+  # gate before shipping it.
   push:
     branches: [claude/vibe-intelligence-architecture-fpjyel]
+    paths:
+      - "src/modules/credits/**"
+      - "src/modules/operations/**"
+      - "supabase/migrations/**"
+      - "supabase/config.toml"
+      - ".github/workflows/concurrency.yml"
+      - "vitest.concurrency.config.mts"
+  pull_request:
     paths:
       - "src/modules/credits/**"
       - "src/modules/operations/**"

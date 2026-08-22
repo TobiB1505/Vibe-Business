@@ -178,8 +178,22 @@ describe.skipIf(!configured)("D — a hold ends once", () => {
         // without the money question being answered.
         if (reservation?.status === "settled") {
           expect(state.chargeEntries).toBe(1);
+        }
+
+        // The money must agree with itself whatever the reservation says.
+        // Stated separately from the status on purpose: this race reaches a
+        // state where the charge stands and the hold reads `released`, and
+        // that disagreement is about the *status*, never about the balance.
+        // If a charge exists, the ledger and the lot must both show the same
+        // 300 — anything else is a customer charged for capacity nobody
+        // consumed, or capacity consumed with nothing charged.
+        if (state.chargeEntries === 1) {
           expect(state.ledgerSum).toBe(creditsToUnits(1000 - 300));
+          expect(state.postedCredits).toBe(state.ledgerSum);
           expect(allocated).toBe(HOLD);
+        } else {
+          expect(state.ledgerSum).toBe(creditsToUnits(1000));
+          expect(allocated).toBe(0);
         }
 
         // Counted, not asserted. A charge whose hold was released is the state
