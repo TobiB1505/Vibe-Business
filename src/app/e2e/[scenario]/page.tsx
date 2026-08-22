@@ -47,6 +47,12 @@ import { BillingView } from "@/app/app/billing/billing-view";
 import { E2E_BILLING_SCENARIOS, isE2eBillingScenario } from "../billing-scenarios";
 import { E2E_MOVES_SCENARIOS, isE2eMovesScenario } from "../moves-scenarios";
 import {
+  E2E_DASHBOARD_SCENARIOS,
+  isE2eDashboardScenario,
+} from "../dashboard-scenarios";
+import { ProjectCard } from "@/app/app/project-card";
+import { AccountShell } from "@/components/layout/account-shell";
+import {
   E2E_ONBOARDING_SCENARIOS,
   isE2eOnboardingScenario,
   isE2eOnboardingStaticScenario,
@@ -172,6 +178,35 @@ export default async function E2eScenarioPage({
           plannedOpportunityId={null}
         />
       </main>
+    );
+  }
+
+  /*
+   * The dashboard's project cards (UI-8). The same `ProjectCard` the dashboard
+   * renders, in the same grid, given `DashboardProject` values whose score
+   * history the real `buildScoreHistory` produced.
+   */
+  if (isE2eDashboardScenario(scenario)) {
+    const projects = E2E_DASHBOARD_SCENARIOS[scenario]();
+    /*
+     * Inside the real `AccountShell`, not a bare `<main>`. The rail is the
+     * larger half of what UI-8 changed, and rendering the cards without it
+     * would leave the frame — the thing on every signed-in screen — the one
+     * part no test has ever looked at.
+     *
+     * The rail's active state cannot be asserted here: this route is
+     * `/e2e/…`, so no account section matches. That rule lives in
+     * `nav-active.test.ts`, against the real `ACCOUNT_SECTIONS`.
+     */
+    return (
+      <AccountShell email="founder@example.com" credits="2,480">
+        {label}
+        <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {projects.map((project) => (
+            <ProjectCard key={project.id} project={project} />
+          ))}
+        </ul>
+      </AccountShell>
     );
   }
 

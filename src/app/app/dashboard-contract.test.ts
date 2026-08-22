@@ -26,6 +26,8 @@ function source(path: string): string {
 const page = source(join(APP_DIR, "page.tsx"));
 const readModel = source(join(MODULES, "projects/dashboard.ts"));
 const attention = source(join(MODULES, "projects/attention.ts"));
+const shell = source(join(process.cwd(), "src/components/layout/account-shell.tsx"));
+const card = source(join(APP_DIR, "project-card.tsx"));
 
 describe("the dashboard is summary-only", () => {
   /**
@@ -186,5 +188,60 @@ describe("attention is presentation, not a new engine", () => {
     for (const forbidden of ["generateStructured(", "countInputTokens(", "AIProvider", "anthropic"]) {
       expect(attention, `attention.ts references ${forbidden}`).not.toContain(forbidden);
     }
+  });
+});
+
+/**
+ * The dashboard grew a score trend and a navigation rail (UI-8). Both are the
+ * kind of feature that pays for itself in queries if nobody is watching: a
+ * trend wants an audit history, and a rail wants a project list on every
+ * screen it renders. Neither got one, and these are what keep it that way.
+ */
+describe("the score trend costs nothing extra", () => {
+  it("reads the audits table exactly once", () => {
+    // The trend is built from rows the read model already fetched and used to
+    // throw away. A second `from("business_readiness_audits")` would mean it
+    // stopped being free — which is the moment it stops being worth having.
+    const reads = readModel.match(/from\("business_readiness_audits"\)/g) ?? [];
+
+    expect(reads).toHaveLength(1);
+  });
+
+  it("derives the history in a pure function rather than a query", () => {
+    expect(readModel).toContain("export function buildScoreHistory");
+    // Asserted on the function body: a `.limit()` or a second `select` inside
+    // it would be a query hiding in a helper named like a reducer.
+    const body = readModel.slice(
+      readModel.indexOf("export function buildScoreHistory"),
+      readModel.indexOf("export function scoreDeltaFrom"),
+    );
+    expect(body).not.toContain("supabase");
+    expect(body).not.toContain("await ");
+  });
+
+  it("never renders an unscored audit as a zero", () => {
+    // Rule 44, asserted where it would be broken: the skip has to happen
+    // before the value is pushed, not be filtered out afterwards by a `> 0`.
+    expect(readModel).toContain("if (row.overall_score === null) continue;");
+  });
+
+  it("draws no trend line for a project whose latest audit produced no score", () => {
+    expect(card).toContain('project.scoreState === "scored"');
+  });
+});
+
+describe("the account rail reads nothing", () => {
+  it("makes no database call of its own", () => {
+    // It renders on `loading.tsx` and `not-found.tsx` too, where there is no
+    // session to read with. A shell that fetched for itself would put a round
+    // trip behind every signed-in navigation (§100).
+    for (const forbidden of ["supabase", "from(", "createClient", "requireSession", "await "]) {
+      expect(shell, `account-shell.tsx contains ${forbidden}`).not.toContain(forbidden);
+    }
+  });
+
+  it("lists no projects, so its cost cannot scale with them", () => {
+    expect(shell).not.toContain("getDashboardOverview");
+    expect(shell).not.toContain("DashboardProject");
   });
 });

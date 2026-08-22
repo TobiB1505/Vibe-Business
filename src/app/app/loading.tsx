@@ -1,10 +1,10 @@
-import { AppShell } from "@/components/layout/app-shell";
+import { AccountShell } from "@/components/layout/account-shell";
 import { SkeletonBlock, SkeletonText } from "@/components/ui/skeleton";
 
 /**
  * Shown while the dashboard resolves its reads (UI-4 §1).
  *
- * This supplies `AppShell` itself. The `/app` layout deliberately renders no
+ * This supplies `AccountShell` itself. The `/app` layout deliberately renders no
  * chrome — it is an authorization gate and nothing else — so a bare skeleton
  * here would drop the header and read as a different application for as long
  * as the wait lasted.
@@ -14,18 +14,24 @@ import { SkeletonBlock, SkeletonText } from "@/components/ui/skeleton";
  */
 export default function Loading() {
   return (
-    <AppShell>
+    <AccountShell>
       <div className="flex flex-col gap-10">
         <header className="flex flex-col gap-3">
           <SkeletonBlock className="h-9 w-2/3 max-w-[28rem] rounded-full" />
           <SkeletonText lines={1} className="max-w-[52ch]" />
         </header>
-        <div role="status" aria-label="Loading your projects" className="flex flex-col gap-3">
-          <SkeletonBlock className="h-20 w-full" />
-          <SkeletonBlock className="h-20 w-full" />
-          <SkeletonBlock className="h-20 w-full" />
+        {/* The same grid the cards land in, so the page does not reflow from
+            three stacked bars into a grid the moment the reads resolve. */}
+        <div
+          role="status"
+          aria-label="Loading your projects"
+          className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3"
+        >
+          <SkeletonBlock className="h-56 w-full" />
+          <SkeletonBlock className="h-56 w-full" />
+          <SkeletonBlock className="h-56 w-full" />
         </div>
       </div>
-    </AppShell>
+    </AccountShell>
   );
 }

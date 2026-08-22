@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { AppShell } from "@/components/layout/app-shell";
+import { AccountShell } from "@/components/layout/account-shell";
 import { buttonClasses } from "@/components/ui/button";
 import { Notice } from "@/components/ui/states";
 import { Surface } from "@/components/ui/surface";
@@ -14,7 +14,7 @@ import { getDashboardOverview } from "@/modules/projects/dashboard";
 import { getOnboardingRouting } from "@/modules/onboarding/store";
 import { AttentionList } from "./attention-list";
 import { DashboardActivity, type DashboardActivityEntry } from "./dashboard-activity";
-import { ProjectRow } from "./project-list";
+import { ProjectCard } from "./project-card";
 
 /**
  * The global dashboard (Sprint UI-3).
@@ -140,7 +140,7 @@ export default async function AppHomePage({
         : `${attention.length} ${attention.length === 1 ? "thing needs" : "things need"} your attention.`;
 
   return (
-    <AppShell email={session.email} credits={creditBalance?.display ?? null}>
+    <AccountShell email={session.email} credits={creditBalance?.display ?? null}>
       <div className="flex flex-col gap-10">
         {connectError && (
           <Notice tone="problem" label="Connection failed">
@@ -196,9 +196,14 @@ export default async function AppHomePage({
                   Connect another project
                 </Link>
               </div>
-              <ul className="flex flex-col gap-3">
+              {/* A grid, not a list of rows: one project's facts belong
+                  inside one boundary, and comparison is the grid's job rather
+                  than each value's. `items-stretch` is implicit in grid, so
+                  every card is the height of the tallest in its row and the
+                  action buttons line up. */}
+              <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {projects.map((project) => (
-                  <ProjectRow key={project.id} project={project} />
+                  <ProjectCard key={project.id} project={project} />
                 ))}
               </ul>
             </section>
@@ -207,6 +212,6 @@ export default async function AppHomePage({
           </>
         )}
       </div>
-    </AppShell>
+    </AccountShell>
   );
 }
