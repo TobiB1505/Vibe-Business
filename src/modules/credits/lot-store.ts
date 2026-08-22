@@ -10,6 +10,7 @@ import {
   type CreditSourceKind,
   type HeldAllocation,
 } from "./lots";
+import { CONTENTION_ATTEMPTS, retryDelayMs, sleep } from "./contention";
 import { creditUnits, type CreditUnits } from "./units";
 
 /**
@@ -182,16 +183,6 @@ export async function listAllLots(
  * Allocation
  * ------------------------------------------------------------------------ */
 
-const ALLOCATION_ATTEMPTS = 10;
-
-function retryDelayMs(attempt: number): number {
-  return Math.round(Math.random() * 15 * (attempt + 1));
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 /**
  * Takes capacity from one lot, atomically.
  *
@@ -209,7 +200,7 @@ async function takeFromLot(
   lotId: string,
   amount: CreditUnits,
 ): Promise<boolean> {
-  for (let attempt = 0; attempt < ALLOCATION_ATTEMPTS; attempt += 1) {
+  for (let attempt = 0; attempt < CONTENTION_ATTEMPTS; attempt += 1) {
     const { data: current, error: readError } = await supabase
       .from("billing_credit_grants")
       .select("initial_credit_units, allocated_credit_units, expired_credit_units, status, expires_at")
@@ -261,7 +252,7 @@ async function returnToLot(
 ): Promise<void> {
   if (amount <= 0) return;
 
-  for (let attempt = 0; attempt < ALLOCATION_ATTEMPTS; attempt += 1) {
+  for (let attempt = 0; attempt < CONTENTION_ATTEMPTS; attempt += 1) {
     const { data: current, error: readError } = await supabase
       .from("billing_credit_grants")
       .select("allocated_credit_units")

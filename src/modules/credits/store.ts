@@ -9,6 +9,7 @@ import {
   type ReservationStatus,
 } from "./schema";
 import type { ReleaseReason } from "./balance";
+import { CONTENTION_ATTEMPTS, retryDelayMs, sleep } from "./contention";
 import { creditUnits, type CreditUnits, ZERO_CREDITS } from "./units";
 
 /**
@@ -509,42 +510,6 @@ export async function claimReservation(
 }
 
 /**
- * How many times a contended hold is re-attempted before giving up.
- *
- * Found too low at 3 by the PR #46 merge-verification stress test: 20 truly
- * concurrent 100-credit requests against an exact 1000-credit balance should
- * admit exactly 10, and with no backoff between immediate retries, only 8 did
- * — 12 callers were told `insufficient_credits` while 200 credits of their own
- * genuine, fundable demand sat unclaimed. That is not a safety violation
- * (nothing overspent, nothing double-reserved), but it is a liveness defect
- * with a customer-facing consequence: a caller who *did* have enough Credits
- * was told they did not.
- *
- * Ten attempts, combined with the jittered backoff in {@link admitHold}, was
- * verified against the same live-database scenario that found the bug: 20
- * concurrent requests against an exact 1000-credit balance now admit exactly
- * 10, repeatably.
- */
-const HOLD_ATTEMPTS = 10;
-
-/**
- * Jittered delay before a retry, in milliseconds.
- *
- * The bug this exists to fix was not "too few attempts" alone — it was
- * immediate, unstaggered retries against the same contended row, which lets
- * many callers keep colliding with each other in near lockstep. A small
- * random delay that grows with the attempt number desynchronizes them, the
- * same reasoning behind backoff in any compare-and-swap loop.
- */
-function retryDelayMs(attempt: number): number {
-  return Math.round(Math.random() * 15 * (attempt + 1));
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/**
  * Takes the hold against the account row, atomically (§12, §48).
  *
  * ## Why compare-and-swap, and why it retries
@@ -577,7 +542,7 @@ async function admitHold(
   creditAccountId: string,
   requested: CreditUnits,
 ): Promise<{ ok: true } | { ok: false; refusal: ReservationRefusal }> {
-  for (let attempt = 0; attempt < HOLD_ATTEMPTS; attempt += 1) {
+  for (let attempt = 0; attempt < CONTENTION_ATTEMPTS; attempt += 1) {
     const { data: current, error: readError } = await supabase
       .from("billing_credit_accounts")
       .select("posted_credits, reserved_credits")
