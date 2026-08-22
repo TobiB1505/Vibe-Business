@@ -1,5 +1,31 @@
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
+import { applyEnv, parseEnvFile } from "./src/lib/env/load-local-env";
+
+/**
+ * Loads `.env.local` the way `pnpm dev` already does, for the probe scripts.
+ *
+ * Next.js reads it automatically via its own bundled `dotenv`; Vitest does
+ * not, and nothing in this repo's probe tooling did either — every
+ * `pnpm agent:calibrate` invocation meant pasting five or six secrets onto the
+ * command line, where they land in shell history. Ten invocations for one
+ * calibration sprint is ten chances to leak a key.
+ *
+ * The parsing itself lives in `src/lib/env/load-local-env.ts`, with its own
+ * tests. It went through two real bugs in production use before landing here
+ * — an empty pre-set variable defeating the file, and a multiline quoted PEM
+ * truncated to its first line — which is exactly why it is no longer inline
+ * config-file logic that nothing exercised.
+ */
+function loadLocalEnv(): void {
+  const path = fileURLToPath(new URL("./.env.local", import.meta.url));
+  if (!existsSync(path)) return;
+
+  applyEnv(parseEnvFile(readFileSync(path, "utf8")), process.env);
+}
+
+loadLocalEnv();
 
 /**
  * Config for the dev-only provider probes (`pnpm ai:probe-audit-schema`).

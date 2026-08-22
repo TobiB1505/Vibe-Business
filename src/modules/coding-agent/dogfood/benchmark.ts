@@ -6,6 +6,7 @@ import {
   loadExecutionBrief,
   completionBudgetFor,
 } from "@/modules/execution-context/service";
+import type { BriefRepositoryScale } from "@/modules/execution-context/brief";
 import { renderExecutionBrief } from "@/modules/execution-context/render";
 import { assertPolicyConsistency } from "@/modules/execution-context/policy";
 import { AGENTIC_EXECUTION_CONFIG } from "@/modules/ai/operations";
@@ -69,6 +70,17 @@ export type BenchmarkCompilation = {
   publicPagesIncluded: number;
   authenticatedPagesResolved: number;
   authenticatedPagesIncluded: number;
+
+  /**
+   * How large the repository was at the pinned commit, exactly as the run
+   * itself will record it (Sprint 0053's `repo_*` columns).
+   *
+   * Projected here because a calibration prediction has to be made from the
+   * same repository the run will work against, and the only pre-run moment that
+   * knows it is this compilation. Null throughout when the snapshot is stale or
+   * absent — the same absence the run would record, not a zero.
+   */
+  repositoryScale: BriefRepositoryScale | null;
 
   contextFreshness: string;
   contextBytes: number;
@@ -242,6 +254,8 @@ async function compileBenchmark(
     publicPagesIncluded: brief?.surface.publicPagesIncluded ?? 0,
     authenticatedPagesResolved: brief?.surface.authenticatedPagesResolved ?? 0,
     authenticatedPagesIncluded: brief?.surface.authenticatedPagesIncluded ?? 0,
+
+    repositoryScale: brief?.repositoryScale ?? null,
 
     contextFreshness: brief?.freshness.state ?? "none",
     contextBytes: rendered?.bytes ?? 0,

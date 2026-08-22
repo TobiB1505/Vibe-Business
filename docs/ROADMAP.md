@@ -1,6 +1,6 @@
 # Roadmap
 
-**Date:** 2026-08-21 · **Repository state:** `main` @ `bd7dc42` · **Derived from:** [the intelligence architecture review](audits/2026-08-21-intelligence-architecture-review/README.md) and [the economics architecture review](audits/2026-08-21-economics-architecture-review/README.md)
+**Date:** 2026-08-22 · **Repository state:** `main` @ `3c2c246` · **Derived from:** [the intelligence architecture review](audits/2026-08-21-intelligence-architecture-review/README.md) and [the economics architecture review](audits/2026-08-21-economics-architecture-review/README.md)
 
 ## What may be in this file
 
@@ -54,8 +54,8 @@ Audit, opportunities and planner each rebuild it from *current* snapshots. Citat
 
 ## Then — measurement truth, then breadth
 
-**Validation CPU is unmeasured, so no calibration run can be compared.**
-`sandbox_usage_events.active_cpu_ms` is null on passing validation runs; both completed calibration runs are `actual_incomplete` and contribute nothing to the learning dataset. Three sprints have now attempted the fix; the economics branch's latest attempt is committed and unverified.
+**The calibration dataset is too thin to calibrate anything.**
+*Narrowed by Sprint 0055 (2026-08-22): validation CPU is no longer the blocker — the fix is verified, and runs 3, 4 and 5 recorded non-null `active_cpu_ms` every time.* What remains is the sample: three comparable runs at a mean absolute error of **53.4%**, roughly double the backtest's 24.3%, against a cohort sample floor of 20 below which the correction is exactly 1. Runs 1 and 2 stay `actual_incomplete` and contribute nothing. More runs is the only thing that closes this; a cleverer formula is not.
 
 **Cache tokens are invisible to the billing projection.**
 `credits/projection.ts` re-prices from input and output only, and `credits/schema.ts` explains the absent cache SKU with a reason that is no longer true — the columns exist and `ai/usage.ts` writes them. `ECONOMY_MODEL.md` measured cache at 55–70% of agent provider cost.

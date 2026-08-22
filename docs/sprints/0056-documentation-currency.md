@@ -95,7 +95,7 @@ Deliberately **not** asserted, and stated in the test's own docblock: module REA
 - **Accuracy of the replacements.** Assertion E checks that an ADR is *mentioned*, not that the sentence mentioning it is true. A Decision Index row can be wrong and stay green.
 - **Completeness of `RETIRED_CLAIMS`.** It holds the drift this sprint found and says nothing about drift it missed.
 - **Eleven modules still have no README**, measured and deliberately not asserted.
-- **Sprint 0054 is still duplicated**, and 0055 is claimed only by calibration work on a branch this sprint does not touch.
+- **Sprint 0054 is still duplicated.** (Sprint 0055 landed on `main` while this branch was open and is merged in here; its arrival made one `docs/ROADMAP.md` entry false, which rule 83 then required correcting before this merges — the first time the rule was applied to something other than this sprint's own work.)
 - **The two reviews and the roadmap are unasserted prose.** Only their links are checked.
 
 ## Gate — the guard was watched failing
@@ -137,4 +137,4 @@ Both changes were then discarded.
 
 ## Validation
 
-lint 0 errors (15 pre-existing warnings, none new) / typecheck / **5,918 tests** / build / **312 E2E** green (run against the pre-installed Chromium: this environment ships Playwright build 1194 and the project pins 1234, so `pnpm test:e2e` cannot download its own browser here). No migration, no schema change, no deployment.
+lint 0 errors (15 pre-existing warnings, none new) / typecheck / **5,988 tests** (5,918 on this sprint's own tree; Sprint 0055 merged in and brought 70 more) / build / **312 E2E** green (run against the pre-installed Chromium: this environment ships Playwright build 1194 and the project pins 1234, so `pnpm test:e2e` cannot download its own browser here). No migration, no schema change, no deployment.
