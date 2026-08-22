@@ -46,7 +46,7 @@ async function forbidExternalCalls(page: Page): Promise<void> {
  * of. A page-wide matcher would have failed on the label rather than on the UI.
  */
 function rail(page: Page) {
-  return page.getByRole("list", { name: /Product loop|Gates/ });
+  return page.locator("[data-stage-rail]");
 }
 
 /** One step of the rail, addressed by its visible label. */

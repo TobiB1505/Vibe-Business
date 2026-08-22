@@ -1,5 +1,7 @@
+"use client";
+
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { StatusDot, type StatusTone } from "./status-pill";
 import { cn } from "@/lib/utils/cn";
 
@@ -36,6 +38,17 @@ import { cn } from "@/lib/utils/cn";
  * state amber exists for. `merge_stalled` is the one that comes closest to a
  * failure, and even that is "this change cannot go in *as it is*". The note
  * beside it carries the specifics; the colour only says "look here".
+ *
+ * ## Why this is a client component
+ *
+ * For one effect, and it is the same one UI-7 §6 had to add to `ProjectNav`.
+ * Seven steps do not fit on a phone, so the row scrolls — and a row that
+ * scrolls without bringing the live step into view fails at the single job it
+ * has. Measured at 390px: the current step sat under the fade at the right
+ * edge, so the rail answered "where am I?" with the four steps you are past.
+ *
+ * It takes only serialisable props, so nothing above it has to leave the
+ * server.
  */
 
 export type StageRailState =
@@ -95,7 +108,15 @@ function StepBody({ step }: { step: StageRailStep }) {
   );
 }
 
-function Step({ step, orientation }: { step: StageRailStep; orientation: StageRailOrientation }) {
+function Step({
+  step,
+  orientation,
+  liveRef,
+}: {
+  step: StageRailStep;
+  orientation: StageRailOrientation;
+  liveRef?: React.Ref<HTMLLIElement>;
+}) {
   const live = step.state === "active" || step.state === "blocked";
 
   const inner: ReactNode = step.href ? (
@@ -103,7 +124,14 @@ function Step({ step, orientation }: { step: StageRailStep; orientation: StageRa
       href={step.href}
       aria-current={live ? "step" : undefined}
       className={cn(
-        "rounded-nav flex items-center gap-2.5 px-2 py-1.5",
+        // `relative` is load-bearing. The state text below is `sr-only`, which
+        // is absolutely positioned — with no positioned ancestor its containing
+        // block is the page, so it escapes this row's scroll container and
+        // lands wherever the step would have been. Seven of those pushed the
+        // *document* to 578px against a 375px viewport while the rail itself
+        // looked correct: a page that scrolls sideways on a phone, caused by
+        // text nobody can see.
+        "rounded-nav relative flex items-center gap-2.5 px-2 py-1.5",
         "transition-interactive hover:bg-surface-hover",
       )}
     >
@@ -112,29 +140,33 @@ function Step({ step, orientation }: { step: StageRailStep; orientation: StageRa
   ) : (
     <span
       aria-current={live ? "step" : undefined}
-      className="flex items-center gap-2.5 px-2 py-1.5"
+      className="relative flex items-center gap-2.5 px-2 py-1.5"
     >
       <StepBody step={step} />
     </span>
   );
 
   return (
-    <li className={cn("flex min-w-0", orientation === "vertical" && "flex-col")}>
+    <li
+      ref={liveRef}
+      className={cn(
+        "flex",
+        // A scrolling row only works if its items keep their natural width.
+        // Without this they compress instead of overflowing, and on a phone
+        // seven labels collapse into each other rather than running off the
+        // edge under the mask — which is what the mask exists to signal.
+        orientation === "horizontal" ? "shrink-0" : "min-w-0 flex-col",
+      )}
+    >
       {inner}
       {/*
-       * The note is the whole reason a blocked step is worth marking at all: a
-       * rail that says "something is wrong here" and makes you go looking is
-       * worse than one that says nothing. Only ever on the live step.
+       * In a column the note belongs to its step and reads as part of it. In a
+       * row it cannot: placed inline it sits *between* two steps, pushing every
+       * later one sideways and breaking the rhythm the rail is made of. The
+       * horizontal note is rendered under the whole rail instead.
        */}
-      {live && step.note && (
-        <p
-          className={cn(
-            "text-fg-secondary text-caption px-2 pb-1",
-            orientation === "horizontal" && "max-w-[28ch]",
-          )}
-        >
-          {step.note}
-        </p>
+      {orientation === "vertical" && live && step.note && (
+        <p className="text-fg-secondary text-caption px-2 pb-1">{step.note}</p>
       )}
     </li>
   );
@@ -154,23 +186,72 @@ export function StageRail({
   orientation?: StageRailOrientation;
   className?: string;
 }) {
-  return (
+  const stripRef = useRef<HTMLOListElement>(null);
+  const activeRef = useRef<HTMLLIElement>(null);
+
+  useEffect(() => {
+    const strip = stripRef.current;
+    const active = activeRef.current;
+    if (!strip || !active) return;
+    // Nothing to do when the whole rail fits, which is every desktop width.
+    if (strip.scrollWidth <= strip.clientWidth) return;
+
+    // `scrollLeft` rather than `scrollIntoView`: the latter can scroll the
+    // *page* as well, and moving the whole workspace to reveal a progress step
+    // is a worse answer than not revealing it. Same choice as `ProjectNav`.
+    const overshoot = active.offsetLeft + active.offsetWidth - strip.clientWidth;
+    strip.scrollLeft = Math.max(0, Math.min(active.offsetLeft - 16, overshoot + 16));
+  }, [steps]);
+
+  // The note of whichever step is live. At most one step is ever live, so at
+  // most one note is ever shown.
+  const liveNote =
+    steps.find((step) => (step.state === "active" || step.state === "blocked") && step.note)
+      ?.note ?? null;
+
+  const list = (
     <ol
+      ref={stripRef}
       aria-label={label}
+      // The scope every assertion about this rail is written against, so a test
+      // about absence cannot be satisfied by text elsewhere on the page.
+      data-stage-rail={orientation === "vertical" ? "" : undefined}
       className={cn(
         // Seven steps do not fit on a phone. The horizontal strip visibly runs
         // off its edge rather than appearing to end — a mask rather than an
         // overlay, so it cannot sit on top of a link and swallow a tap. The
         // same fix, and the same reason, as `ProjectNav` (UI-7 §6).
+        // `min-w-0` is load-bearing, not tidiness: a flex child defaults to
+        // `min-width: auto`, so without it this row reports its full content
+        // width to the document even though it scrolls internally — and the
+        // page then overflows sideways on a phone while the rail itself looks
+        // correct. Measured at 375px: 578px of document against a 375px
+        // viewport.
         orientation === "horizontal" &&
-          "flex items-start gap-1 overflow-x-auto [mask-image:linear-gradient(to_right,black_calc(100%-2rem),transparent)] sm:[mask-image:none]",
+          "flex min-w-0 items-start gap-1 overflow-x-auto [mask-image:linear-gradient(to_right,black_calc(100%-2rem),transparent)] sm:[mask-image:none]",
         orientation === "vertical" && "flex flex-col gap-0.5",
-        className,
+        orientation === "vertical" && className,
       )}
     >
       {steps.map((step) => (
-        <Step key={step.id} step={step} orientation={orientation} />
+        <Step
+          key={step.id}
+          step={step}
+          orientation={orientation}
+          liveRef={
+            step.state === "active" || step.state === "blocked" ? activeRef : undefined
+          }
+        />
       ))}
     </ol>
+  );
+
+  if (orientation === "vertical") return list;
+
+  return (
+    <div data-stage-rail className={cn("flex min-w-0 flex-col gap-1.5", className)}>
+      {list}
+      {liveNote && <p className="text-fg-secondary text-caption px-2">{liveNote}</p>}
+    </div>
   );
 }

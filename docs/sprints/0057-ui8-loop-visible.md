@@ -102,8 +102,17 @@ So the prototype's nine 0–100 meters show numbers the domain does not produce,
 - **The agent live feed is still only on the dogfood route.** `AgentExecutionLiveView` and its `customer`/`internal` event split remain unmounted on any customer surface. The guardrail the sprint agreed for it — that `customerEvents` is the sole source, enforced by a test rather than by the `developerDetails` prop — is unwritten because the mount is unwritten.
 - **`review-panel.tsx` was not restyled** to the prototype's two-column *Current / Vibe proposal*. The shape is right and matches ADR 0017; only the layout work is outstanding.
 - **`CostDisclosure` is wired at one of three call sites.** `run-audit-button.tsx` and `action-plan-panel.tsx` still render a bare `CreditPrice`, so the balance appears next to the price on `/moves` and nowhere else.
-- **No screenshots were reviewed by eye.** Sprint 0033 recorded that looking at the screen found what its tests did not; this sprint has the browser assertions and not the look. The 375px overflow check is automated; visual density at 1440 is not.
 - **The transition test does not prove a live re-render.** Both halves of the blocked → unblocked pair are server-rendered fixtures. It establishes that nothing between the facts and the pixels holds state of its own — not that a page updates without a reload, which this harness has no database to demonstrate.
+
+## What looking at it found that the tests did not
+
+Sprint 0033 recorded that reviewing screenshots by eye found what its tests did not. It did so again here, twice, and both were real defects that every assertion in the suite was happy with.
+
+**The blocked note was rendered inline, between two steps.** On a desktop it pushed *Prepare*, *Review* and *Merged* sideways and broke the rhythm the rail is made of; on a phone it wrapped into a narrow column that overlapped the steps behind it. The note now renders under the whole rail in the horizontal orientation, and stays with its step in the vertical one, where a column reads correctly.
+
+**Seven steps compressed instead of overflowing.** Without `shrink-0` the labels collided into each other at 390px rather than running off the edge under the mask — so the mask, whose whole job is to say "this continues", had nothing to say. With that fixed the live step then sat *under* the fade, which is the defect UI-7 §6 had already fixed once for `ProjectNav`; `StageRail` is now a client component for the same one effect, using `scrollLeft` rather than `scrollIntoView` for the same reason.
+
+**And a bug the eye found and the measurement then explained.** Fixing the compression turned the 375px overflow assertion red — 578px of document against a 375px viewport. The cause was the `sr-only` state text: absolutely positioned with no positioned ancestor, so its containing block was the page rather than the row, and seven invisible spans escaped the scroll container and landed where their steps would have been. A page that scrolls sideways on a phone, caused by text nobody can see, introduced by the accessibility fix. `relative` on each step is the fix, and the reason is written beside it.
 
 ## Environment note
 
