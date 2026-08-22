@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { grantCreditLot } from "../grants";
 import { claimReservation, ensureCreditAccount, type CreditAccount } from "../store";
 import { creditsToUnits } from "../units";
@@ -6,12 +6,14 @@ import {
   client,
   clients,
   createFixtureUser,
-  deleteFixtureUser,
   forEachIteration,
+  isClean,
   isConfigured,
   ITERATIONS,
   readInvariants,
   resolveTarget,
+  teardownFixture,
+  type TeardownReport,
 } from "./harness";
 
 /**
@@ -49,6 +51,16 @@ describe.skipIf(!configured)("A — twenty holds against a balance that funds ex
   // Before the first write of the run, not after it.
   beforeAll(() => {
     resolveTarget();
+  });
+
+  // Every iteration's teardown lands here and is checked once, after the tests.
+  // Checked rather than assumed: leftovers would turn the next iteration's
+  // exact counts into someone else's rows, and the assertion that failed would
+  // be scenarios away from the cause. Checked *after* rather than inside the
+  // loop so a genuine race failure keeps precedence over a cleanup problem.
+  const reports: TeardownReport[] = [];
+  afterAll(() => {
+    expect(reports.filter((report) => !isClean(report))).toEqual([]);
   });
 
   it(`admits every fundable caller and no more, ${ITERATIONS} times`, async () => {
@@ -136,7 +148,7 @@ describe.skipIf(!configured)("A — twenty holds against a balance that funds ex
         );
         expect(ids.size).toBe(FUNDABLE);
       } finally {
-        await deleteFixtureUser(admin, userId);
+        reports.push(await teardownFixture(admin, userId));
       }
     });
 
@@ -184,7 +196,7 @@ describe.skipIf(!configured)("A — twenty holds against a balance that funds ex
       expect(state.reservedCredits).toBe(0);
       expect(state.activeReservations).toBe(0);
     } finally {
-      await deleteFixtureUser(admin, userId);
+      reports.push(await teardownFixture(admin, userId));
     }
   });
 });

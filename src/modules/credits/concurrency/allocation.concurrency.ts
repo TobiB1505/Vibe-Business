@@ -1,4 +1,4 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { grantCreditLot } from "../grants";
 import { allocateReservation, listActiveLots, type AllocateResult } from "../lot-store";
 import { claimReservation, ensureCreditAccount } from "../store";
@@ -8,14 +8,16 @@ import {
   client,
   clients,
   createFixtureUser,
-  deleteFixtureUser,
   forEachIteration,
+  isClean,
   isConfigured,
   ITERATIONS,
   readAllocatedAcrossLots,
   readAllocationPairs,
   resolveTarget,
+  teardownFixture,
   type ClassifiedError,
+  type TeardownReport,
 } from "./harness";
 
 /**
@@ -53,6 +55,16 @@ type Outcome = { ok: true; result: AllocateResult } | { ok: false; error: Classi
 describe.skipIf(!configured)("C — two allocations of one reservation, at once", () => {
   beforeAll(() => {
     resolveTarget();
+  });
+
+  // Every iteration's teardown lands here and is checked once, after the tests.
+  // Checked rather than assumed: leftovers would turn the next iteration's
+  // exact counts into someone else's rows, and the assertion that failed would
+  // be scenarios away from the cause. Checked *after* rather than inside the
+  // loop so a genuine race failure keeps precedence over a cleanup problem.
+  const reports: TeardownReport[] = [];
+  afterAll(() => {
+    expect(reports.filter((report) => !isClean(report))).toEqual([]);
   });
 
   it(`persists exactly one allocation per lot, ${ITERATIONS} times`, async () => {
@@ -126,7 +138,7 @@ describe.skipIf(!configured)("C — two allocations of one reservation, at once"
         codes.push(failure.error.pgCode);
         expect(failure.error).toEqual({ pgCode: "23505", kind: "unique_violation" });
       } finally {
-        await deleteFixtureUser(admin, userId);
+        reports.push(await teardownFixture(admin, userId));
       }
     });
 
@@ -174,7 +186,7 @@ describe.skipIf(!configured)("C — two allocations of one reservation, at once"
       expect(await readAllocationPairs(admin, claim.reservation.id)).toHaveLength(1);
       expect(await readAllocatedAcrossLots(admin, account.id)).toBe(HOLD);
     } finally {
-      await deleteFixtureUser(admin, userId);
+      reports.push(await teardownFixture(admin, userId));
     }
   });
 });

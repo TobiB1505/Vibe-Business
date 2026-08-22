@@ -237,10 +237,90 @@ export async function createFixtureUser(
   return { userId: data.user.id, email };
 }
 
-/** Removes a fixture user, and everything that cascades from it. */
-export async function deleteFixtureUser(supabase: SupabaseClient, userId: string): Promise<void> {
-  const { error } = await supabase.auth.admin.deleteUser(userId);
-  if (error) throw error;
+/** What a teardown removed, and what it could not. */
+export type TeardownReport = { userId: string; remaining: Record<string, number> };
+
+/**
+ * Tables an iteration can write, in the order they must be deleted.
+ *
+ * Deleting the auth user does **not** clean up on its own, and finding that out
+ * from a failing `finally` would have masked whichever race actually failed.
+ * `billing_credit_accounts` cascades from `auth.users`, and
+ * `billing_credit_grants`, `billing_credit_reservations` and
+ * `billing_credit_ledger` cascade from the account — but
+ * `billing_credit_allocations` references grants and reservations
+ * `ON DELETE RESTRICT`. A cascade that reaches a grant while an allocation
+ * still points at it raises `23503`, and PostgreSQL does not promise to
+ * process the cascade in an order that avoids it.
+ *
+ * So the allocations go first, explicitly.
+ */
+const FIXTURE_TABLES = [
+  "billing_credit_allocations",
+  "billing_credit_reservations",
+  "billing_credit_grants",
+  "billing_credit_ledger",
+] as const;
+
+/**
+ * Removes everything an iteration created, then checks that it did.
+ *
+ * The check is the point. A teardown that assumes it worked turns the next
+ * iteration's exact counts into someone else's leftovers, and the assertion
+ * that fails is three scenarios away from the cause. The report is returned
+ * rather than thrown so that a genuine race failure keeps precedence over a
+ * cleanup problem — the caller asserts on it after the loop, where a failing
+ * loop has already won.
+ */
+export async function teardownFixture(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<TeardownReport> {
+  const account = await supabase
+    .from("billing_credit_accounts")
+    .select("id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (account.error) throw account.error;
+
+  const accountId = (account.data as { id: string } | null)?.id ?? null;
+  const remaining: Record<string, number> = {};
+
+  if (accountId) {
+    for (const table of FIXTURE_TABLES) {
+      const { error } = await supabase.from(table).delete().eq("credit_account_id", accountId);
+      if (error) throw error;
+    }
+
+    const { error } = await supabase.from("billing_credit_accounts").delete().eq("id", accountId);
+    if (error) throw error;
+
+    for (const table of FIXTURE_TABLES) {
+      const { count, error: countError } = await supabase
+        .from(table)
+        .select("id", { count: "exact", head: true })
+        .eq("credit_account_id", accountId);
+      if (countError) throw countError;
+      if ((count ?? 0) > 0) remaining[table] = count ?? 0;
+    }
+  }
+
+  const { error: userError } = await supabase.auth.admin.deleteUser(userId);
+  if (userError) throw userError;
+
+  const survivors = await supabase
+    .from("billing_credit_accounts")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", userId);
+  if (survivors.error) throw survivors.error;
+  if ((survivors.count ?? 0) > 0) remaining.billing_credit_accounts = survivors.count ?? 0;
+
+  return { userId, remaining };
+}
+
+/** True when a teardown removed everything it was responsible for. */
+export function isClean(report: TeardownReport): boolean {
+  return Object.keys(report.remaining).length === 0;
 }
 
 /* ---------------------------------------------------------------------------

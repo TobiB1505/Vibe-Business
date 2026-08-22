@@ -1,50 +1,73 @@
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { grantCreditLot } from "../grants";
-import { allocateReservation, listActiveLots } from "../lot-store";
-import { releaseReservation, settleReservation } from "../service";
+import { allocateReservation, listActiveLots, settleReservationAllocations } from "../lot-store";
+import { releaseOperationCredits, settleOperationCredits } from "../operation-billing";
 import { claimReservation, ensureCreditAccount, getReservation } from "../store";
 import { creditsToUnits } from "../units";
 import {
   client,
   clients,
   createFixtureUser,
-  deleteFixtureUser,
   forEachIteration,
+  isClean,
   isConfigured,
   ITERATIONS,
   readAllocatedAcrossLots,
+  readAllocationPairs,
   readInvariants,
   resolveTarget,
+  teardownFixture,
+  type TeardownReport,
 } from "./harness";
 
 /**
- * Race class D — a hold ends once, and its capacity comes back once.
+ * Race class D — a hold ends once, and its capacity moves once.
  *
- * Two collisions from the existing domain, no invented rules:
+ * ## Which functions, and why not the ones this first reached for
  *
- *   settle ‖ release   two callers finish the same operation differently.
- *   settle ‖ settle    the same settlement arriving twice at once.
+ * The first version of this file drove `settleReservation` and
+ * `releaseReservation` from `service.ts` and asserted what happened to lot
+ * capacity. Run #1 of the CI gate reported `expected 300000 to be 100000`, and
+ * the code says why: those two functions own the *account* — the ledger entry
+ * and the reservation row — and never touch `billing_credit_allocations`.
+ * Lots belong to `operation-billing.ts`, one layer up, which settles the
+ * allocations and then calls into `service.ts`.
+ *
+ * That was a defect in the test rather than in the product, and it is recorded
+ * here rather than quietly corrected, because the fix changes what the file
+ * proves: it now drives the entry points production actually calls.
+ *
+ * ## Three collisions, and what each can show
+ *
+ *   settle ‖ release   `settleOperationCredits` against
+ *                      `releaseOperationCredits`. One terminal state, one
+ *                      charge at most, capacity in one of two legal places.
+ *   settle ‖ settle    the same settlement arriving twice. One charge.
+ *   partial ‖ partial  two `settleReservationAllocations` for one reservation
+ *                      at a partial amount. This is where the E1 double-return
+ *                      defect lives, and it is unreachable through
+ *                      `settleOperationCredits`, which settles at the full
+ *                      reserved amount — a fixed-price operation has nothing
+ *                      to hand back, so nothing can be handed back twice.
  *
  * ## What is asserted, and what is only counted
  *
- * E1 established three defects here, and those are what this asserts: two
- * charges for one hold; capacity handed back twice, which inflated a lot beyond
- * what it ever held (`300000` becoming `0`); and a hold left active by a
- * settlement that crashed between the charge and the close.
+ * The three defects E1 established: two charges for one hold; capacity handed
+ * back twice, which inflated a lot beyond what it ever held; and a hold left
+ * active by a settlement that stopped between its charge and its close.
  *
  * It does **not** assert a terminal-state truth table. A settlement that posts
  * its charge while a release wins the close leaves a charge whose hold was
- * given back — and E1's answer to that was to make `settleReservation` *report*
- * it as `charge_without_hold` rather than to prevent it. Inventing a rule here
- * that the domain does not hold would be writing new business logic inside a
- * concurrency test. So that combination is counted and printed, as evidence
- * about how often real interleaving produces it, and the outcome distribution
- * goes in the sprint record.
+ * given back, and E1's answer to that was to make `settleReservation` *report*
+ * it as `charge_without_hold` rather than to prevent it. Asserting a rule the
+ * domain does not hold would be writing new business logic inside a
+ * concurrency test, so that combination is counted and printed instead.
  */
 
 const LOT = creditsToUnits(1000);
 const HOLD = creditsToUnits(300);
-const CONSUMED = creditsToUnits(100);
+const PARTIAL = creditsToUnits(100);
+const POLICY = "e2b-concurrency";
 
 const configured = isConfigured();
 
@@ -95,6 +118,16 @@ describe.skipIf(!configured)("D — a hold ends once", () => {
     resolveTarget();
   });
 
+  // Every iteration's teardown lands here and is checked once, after the tests.
+  // Checked rather than assumed: leftovers would turn the next iteration's
+  // exact counts into someone else's rows, and the assertion that failed would
+  // be scenarios away from the cause. Checked *after* rather than inside the
+  // loop so a genuine race failure keeps precedence over a cleanup problem.
+  const reports: TeardownReport[] = [];
+  afterAll(() => {
+    expect(reports.filter((report) => !isClean(report))).toEqual([]);
+  });
+
   it(`leaves one terminal state when a settle and a release race, ${ITERATIONS} times`, async () => {
     const admin = client();
     const outcomes: Record<string, number> = {};
@@ -105,12 +138,11 @@ describe.skipIf(!configured)("D — a hold ends once", () => {
       try {
         const [settler, releaser] = clients(2);
         await Promise.all([
-          settleReservation(settler, {
+          settleOperationCredits(settler, {
             reservationId: fixture.reservationId,
-            actualCredits: CONSUMED,
-            rateCardVersion: null,
+            policyVersion: POLICY,
           }).catch(() => undefined),
-          releaseReservation(releaser, {
+          releaseOperationCredits(releaser, {
             reservationId: fixture.reservationId,
             reason: "cancelled_before_usage",
           }).catch(() => undefined),
@@ -123,9 +155,9 @@ describe.skipIf(!configured)("D — a hold ends once", () => {
         // The money question is answered at most once, whoever answered it.
         expect(state.chargeEntries).toBeLessThanOrEqual(1);
 
-        // The hold is over. A settlement that crashed between its charge and
-        // its close used to leave this `active` forever — the state E1's
-        // retry path exists to finish.
+        // The hold is over. A settlement that stopped between its charge and
+        // its close used to leave this `active` forever — the state E1's retry
+        // path exists to finish.
         expect(reservation?.status).not.toBe("active");
         expect(["settled", "released", "expired"]).toContain(reservation?.status);
 
@@ -135,24 +167,30 @@ describe.skipIf(!configured)("D — a hold ends once", () => {
         expect(state.activeReservations).toBe(0);
         expect(state.available).toBeGreaterThanOrEqual(0);
 
-        // Capacity came back exactly once. The settle keeps 100 of the 300 and
-        // returns 200; the release returns all 300. Anything else — and in
-        // particular anything below zero, or a value implying two returns —
-        // is the E1 double-return defect.
-        expect([0, CONSUMED as number]).toContain(allocated);
+        // Two legal places for the capacity and no third. A fixed-price
+        // settlement consumes the whole hold, so the lot keeps all 300; a
+        // release hands all 300 back, so it keeps none. Any other value means
+        // capacity moved a number of times that is not one.
+        expect([0, HOLD as number]).toContain(allocated);
 
-        // Settling means the charge exists: `settleReservation` posts it before
-        // it closes, so a `settled` row with no charge would mean the close
-        // happened without the money question being answered.
-        if (reservation?.status === "settled") expect(state.chargeEntries).toBe(1);
+        // Settling means the charge exists: the charge is posted before the
+        // close, so a `settled` row with no charge would mean the hold ended
+        // without the money question being answered.
+        if (reservation?.status === "settled") {
+          expect(state.chargeEntries).toBe(1);
+          expect(state.ledgerSum).toBe(creditsToUnits(1000 - 300));
+          expect(allocated).toBe(HOLD);
+        }
 
         // Counted, not asserted. A charge whose hold was released is the state
         // E1 named `charge_without_hold` and chose to surface rather than
         // forbid; how often real interleaving reaches it is evidence.
-        const key = `${reservation?.status ?? "missing"}/charges=${state.chargeEntries}/allocated=${allocated}`;
+        const key =
+          `${reservation?.status ?? "missing"}` +
+          `/charges=${state.chargeEntries}/allocated=${allocated}`;
         outcomes[key] = (outcomes[key] ?? 0) + 1;
       } finally {
-        await deleteFixtureUser(admin, fixture.userId);
+        reports.push(await teardownFixture(admin, fixture.userId));
       }
     });
 
@@ -165,7 +203,7 @@ describe.skipIf(!configured)("D — a hold ends once", () => {
     );
   });
 
-  it(`charges once and returns capacity once when two settlements race, ${ITERATIONS} times`, async () => {
+  it(`charges once when two settlements race, ${ITERATIONS} times`, async () => {
     const admin = client();
 
     await forEachIteration(async (iteration) => {
@@ -175,10 +213,9 @@ describe.skipIf(!configured)("D — a hold ends once", () => {
         const settlers = clients(2);
         await Promise.all(
           settlers.map((settler) =>
-            settleReservation(settler, {
+            settleOperationCredits(settler, {
               reservationId: fixture.reservationId,
-              actualCredits: CONSUMED,
-              rateCardVersion: null,
+              policyVersion: POLICY,
             }).catch(() => undefined),
           ),
         );
@@ -190,19 +227,70 @@ describe.skipIf(!configured)("D — a hold ends once", () => {
         // once, and a second settlement must inherit that answer rather than
         // post beside it.
         expect(state.chargeEntries).toBe(1);
-        expect(state.ledgerSum).toBe(creditsToUnits(1000 - 100));
+        expect(state.ledgerSum).toBe(creditsToUnits(1000 - 300));
         expect(state.postedCredits).toBe(state.ledgerSum);
 
         expect(reservation?.status).toBe("settled");
         expect(state.reservedCredits).toBe(0);
         expect(state.activeReservations).toBe(0);
 
-        // The E1 defect exactly: 100 consumed of 300 held means 200 comes back
-        // and 100 stays taken. Returning twice leaves 0 — a lot reporting more
-        // free capacity than it has.
-        expect(await readAllocatedAcrossLots(admin, fixture.accountId)).toBe(CONSUMED);
+        // The whole hold was consumed, so all of it stays taken. Zero here
+        // would mean a settlement handed back capacity the customer paid for.
+        expect(await readAllocatedAcrossLots(admin, fixture.accountId)).toBe(HOLD);
+
+        // Every allocation resolved, none left held.
+        const rows = await readAllocationPairs(admin, fixture.reservationId);
+        expect(rows).toHaveLength(1);
       } finally {
-        await deleteFixtureUser(admin, fixture.userId);
+        reports.push(await teardownFixture(admin, fixture.userId));
+      }
+    });
+  });
+
+  /**
+   * The E1 double-return defect, at the layer that owns it.
+   *
+   * `settleReservationAllocations` is the only place a hold is settled for
+   * *less* than it reserved, and therefore the only place capacity comes back
+   * during a settlement. Both writers carried `.eq("status", "held")` as a
+   * compare-and-swap and then never looked at whether the swap won, while
+   * `returnToLot` ran unconditionally on the next line — so two concurrent
+   * settlements both handed capacity back and the lot ended below what it
+   * genuinely still held.
+   *
+   * Unreachable through `settleOperationCredits`, which settles at the full
+   * reserved amount: a fixed-price operation has nothing to hand back, so
+   * nothing can be handed back twice.
+   */
+  it(`returns partial capacity once when two settlements race, ${ITERATIONS} times`, async () => {
+    const admin = client();
+
+    await forEachIteration(async (iteration) => {
+      const fixture = await heldAndAllocated(admin, `partial-${iteration}`);
+
+      try {
+        expect(await readAllocatedAcrossLots(admin, fixture.accountId)).toBe(HOLD);
+
+        const settlers = clients(2);
+        await Promise.all(
+          settlers.map((settler) =>
+            settleReservationAllocations(settler, {
+              reservationId: fixture.reservationId,
+              actualCredits: PARTIAL,
+            }).catch(() => undefined),
+          ),
+        );
+
+        // 100 consumed of 300 held: 200 comes back and 100 stays taken.
+        // Returning twice leaves 0 — a lot reporting more free capacity than
+        // it has, which is how an account overspends without any constraint
+        // noticing. This is the `300000` becoming `0` from E1.
+        expect(await readAllocatedAcrossLots(admin, fixture.accountId)).toBe(PARTIAL);
+
+        const rows = await readAllocationPairs(admin, fixture.reservationId);
+        expect(rows).toHaveLength(1);
+      } finally {
+        reports.push(await teardownFixture(admin, fixture.userId));
       }
     });
   });
