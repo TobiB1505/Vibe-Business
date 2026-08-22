@@ -1,4 +1,6 @@
+import { deriveChangeSteps } from "@/modules/execution/change-steps";
 import { preparedChangeAnchorId } from "@/components/layout/project-shell";
+import { StageRail } from "@/components/ui/stage-rail";
 import type { ApprovalCard } from "@/modules/approvals/view";
 import type { BusinessRationale } from "@/modules/execution/business-rationale";
 import type { ChangeOrigin as ChangeOriginData } from "@/modules/execution/change-origin";
@@ -179,6 +181,22 @@ export function PreparedChangesSection({
             <p role="status" className="text-fg text-sm font-medium">
               {change.progress.headline}
             </p>
+
+            {/* The same answer, laid out (UI-8 §2). The sentence above says
+                where the change is; this says where that sits in the four
+                gates it has to pass. Both read `progress.stage` — a rail that
+                consulted the cards directly could disagree with the headline
+                immediately above it, which is the defect `change-progress.ts`
+                exists to end. */}
+            <StageRail
+              steps={deriveChangeSteps(change.progress.stage).map((step) => ({
+                id: step.id,
+                label: step.label,
+                state: step.state,
+              }))}
+              label="Gates for this change"
+              orientation="horizontal"
+            />
 
             {/* What it is and why, immediately under that. This block used to
                 sit ninth of eleven — below the Approve and Merge controls — so
