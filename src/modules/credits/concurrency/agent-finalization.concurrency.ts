@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { finishAgentExecutionStep } from "@/modules/operations/agent-execution/execution";
 import { expireStaleAgentExecution } from "@/modules/operations/agent-execution/server-writes";
 import { grantCreditLot } from "../grants";
@@ -6,7 +6,6 @@ import { getReservation } from "../store";
 import { creditsToUnits } from "../units";
 import {
   createAgentScaffolding,
-  deleteAgentScaffolding,
   createRunningAgentRun,
   deleteAgentRun,
   type AgentScaffolding,
@@ -16,12 +15,9 @@ import {
   clients,
   createFixtureUser,
   forEachIteration,
-  isClean,
   isConfigured,
   ITERATIONS,
   resolveTarget,
-  teardownFixture,
-  type TeardownReport,
 } from "./harness";
 
 /**
@@ -80,7 +76,6 @@ describe.skipIf(!configured)("E — one agent run, one billing authority", () =>
   const admin = { current: null as ReturnType<typeof client> | null };
   const owner = { userId: "" };
   const scaffolding = { current: null as AgentScaffolding | null };
-  const reports: TeardownReport[] = [];
 
   beforeAll(async () => {
     resolveTarget();
@@ -104,30 +99,19 @@ describe.skipIf(!configured)("E — one agent run, one billing authority", () =>
     scaffolding.current = await createAgentScaffolding(supabase, user.userId, "agent");
   });
 
-  afterAll(async () => {
-    const supabase = admin.current;
-    if (!supabase || !owner.userId) return;
-    // The scaffolding goes first, in the explicit order `deleteAgentScaffolding`
-    // owns — see its own comment for the RESTRICT/CASCADE ordering hazard that
-    // made this necessary. The billing rows and the user then go through the
-    // teardown the harness already owns.
-    if (scaffolding.current) {
-      await deleteAgentScaffolding(supabase, scaffolding.current, owner.userId);
-    }
-    reports.push(
-      await teardownFixture(supabase, owner.userId).catch((error: unknown) => {
-        // Logged rather than embedded in the report: `TeardownReport.remaining`
-        // is a count map, and forcing a message into it would make every other
-        // reader of the type handle a value that is never actually a count.
-        console.error(
-          "[e2b] scaffolding teardown failed:",
-          error instanceof Error ? error.message : error,
-        );
-        return { userId: owner.userId, remaining: { teardown_failed: 1 } };
-      }),
-    );
-    expect(reports.filter((report) => !isClean(report))).toEqual([]);
-  });
+  // No teardown. `execution_specs` carries a `BEFORE UPDATE OR DELETE` trigger
+  // that unconditionally rejects mutation, including a mutation arriving as
+  // `ON DELETE CASCADE` — so once this suite's scaffolding creates one such
+  // row, neither the project nor the user above it can ever be deleted from
+  // this database. See `deleteAgentScaffolding`'s former home in
+  // `agent-fixture.ts` for the full trace of that discovery.
+  //
+  // That is not a gap to patch: the disposable database itself is the
+  // cleanup, torn down whole (`supabase stop --no-backup`) at the end of the
+  // job, exactly as ADR 0040 already reasons for the gate as a whole. The
+  // only rows genuinely scoped to one iteration — and so the only ones that
+  // would collide across iterations if left — are cleaned up by
+  // `deleteAgentRun` in each `it` block's `finally`.
 
   async function runningRun(iteration: number, label: string) {
     const supabase = admin.current!;

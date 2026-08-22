@@ -298,61 +298,39 @@ export async function deleteAgentRun(
 }
 
 /**
- * Removes the scaffolding, in the one order that does not trip a `23503`.
+ * Why the scaffolding — and the auth user underneath it — is never deleted.
  *
- * Found by a real run rather than reasoned out in advance: `teardownFixture`'s
- * `auth.admin.deleteUser` cascades on two independent paths at once —
- * `github_installations.user_id → auth.users` directly, and
- * `projects.user_id → auth.users → repository_connections.project_id`
- * indirectly, and `repository_connections.github_installation_id` references
- * `github_installations` `ON DELETE RESTRICT`. PostgreSQL does not resolve
- * mixed CASCADE/RESTRICT graphs as one dependency order; it can attempt the
- * direct cascade to `github_installations` before the indirect one has removed
- * the row that still references it, and the RESTRICT fires.
+ * A first version of this file tried to delete the ten scaffolding rows in
+ * FK-dependency order before the shared teardown's `deleteUser` call. It got
+ * as far as `execution_specs` and stopped there permanently:
  *
- * So the ten scaffolding rows are deleted here, explicitly, in dependency
- * order — every row that RESTRICT-references another goes before what it
- * references — and the shared `teardownFixture` + `deleteUser` call that
- * follows only ever cascades through relationships with nothing left to
- * violate.
+ * ```
+ * Error: could not delete execution_specs: 23001
+ * ```
+ *
+ * `23001` is `restrict_violation`, and the source is not a foreign key —
+ * `20260818131106_execution_specs.sql` puts a `BEFORE UPDATE OR DELETE`
+ * trigger on the table that unconditionally raises that code, for every
+ * caller including the service role: "execution_specs rows are immutable.
+ * Re-resolve the step and insert a new spec instead." The comment above the
+ * trigger in that migration explains why — it is enforced in the database
+ * *because* "nothing updates this table" is a claim about every future line
+ * of code, and a trigger is a claim about the table, not a convention someone
+ * could forget.
+ *
+ * That trigger fires identically on a cascaded delete — `ON DELETE CASCADE`
+ * still issues a real `DELETE` on the child row, which still fires `BEFORE
+ * DELETE`. So `execution_specs.project_id → projects ON DELETE CASCADE` means
+ * deleting the *project* fails too, and `projects.user_id → auth.users ON
+ * DELETE CASCADE` means deleting the *user* fails the same way. A project
+ * that has ever had one execution spec is permanently rooted in this
+ * database, by design, and so is the user that created it.
+ *
+ * This is not a gap to work around. The disposable database itself is the
+ * cleanup — `supabase stop --no-backup` deletes the whole stack's volumes at
+ * the end of the job — exactly the same reasoning ADR 0040 already gives for
+ * the gate as a whole. So this suite's shared user, project and scaffolding
+ * are created once and simply left; only the genuinely ephemeral rows each
+ * iteration writes (`deleteAgentRun`, below) are cleaned up as the suite runs,
+ * because those are what would otherwise collide across iterations.
  */
-export async function deleteAgentScaffolding(
-  supabase: SupabaseClient,
-  scaffolding: AgentScaffolding,
-  userId: string,
-): Promise<void> {
-  const byProject = async (table: string): Promise<void> => {
-    const { error } = await supabase
-      .from(table)
-      .delete()
-      .eq("project_id", scaffolding.projectId);
-    if (error) throw new Error(`could not delete ${table}: ${error.code ?? "unknown"}`);
-  };
-
-  // execution_specs RESTRICT-references three of the next four tables, and by
-  // this point every agent_execution_runs row that RESTRICT-referenced it has
-  // already gone with its own operation_runs row (deleteAgentRun, per
-  // iteration) — so it is safe to remove first.
-  await byProject("execution_specs");
-  await byProject("action_plans");
-  await byProject("opportunity_sets");
-  await byProject("business_readiness_audits");
-  await byProject("repository_intelligence_snapshots");
-  await byProject("repository_connections");
-  await byProject("product_profiles");
-  await byProject("live_product_intelligence_snapshots");
-
-  // Nothing left references it; both remaining rows could also fall to the
-  // user cascade, but removing them here makes the ordering explicit rather
-  // than relying on it.
-  const { error: installationError } = await supabase
-    .from("github_installations")
-    .delete()
-    .eq("user_id", userId);
-  if (installationError) {
-    throw new Error(`could not delete github_installations: ${installationError.code ?? "unknown"}`);
-  }
-
-  const { error: projectError } = await supabase.from("projects").delete().eq("id", scaffolding.projectId);
-  if (projectError) throw new Error(`could not delete projects: ${projectError.code ?? "unknown"}`);
-}
