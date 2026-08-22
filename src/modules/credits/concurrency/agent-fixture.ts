@@ -223,7 +223,11 @@ export async function createRunningAgentRun(
     // The one value the operation_runs stage CHECK constraint allows for an
     // agent run genuinely in flight — "executing" is not in that list.
     stage: "running_agent",
-    input_identity: params.identity,
+    // operation_runs.input_identity carries the same "exactly 64 characters"
+    // CHECK as prepared_changes.execution_identity — the constraint this
+    // fixture's own CI run first missed here and only padded on the other
+    // table.
+    input_identity: identity64(params.identity),
     subject_id: scaffolding.executionSpecId,
   });
 
@@ -263,7 +267,9 @@ export async function createRunningAgentRun(
     user_id: userId,
     operation_run_id: operationRunId,
     execution_spec_id: scaffolding.executionSpecId,
-    run_identity: params.identity,
+    // agent_execution_runs.run_identity carries the same "exactly 64
+    // characters" CHECK as the other two identity columns above.
+    run_identity: identity64(params.identity),
     provider: "e2b_provider",
     harness: "e2b_harness",
     model: "claude-sonnet-5",
