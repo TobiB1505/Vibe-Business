@@ -1,4 +1,4 @@
-import { AppShell } from "@/components/layout/app-shell";
+import { AccountShell } from "@/components/layout/account-shell";
 import { SkeletonBlock, SkeletonText } from "@/components/ui/skeleton";
 
 /**
@@ -11,12 +11,12 @@ import { SkeletonBlock, SkeletonText } from "@/components/ui/skeleton";
  */
 export default function Loading() {
   return (
-    <AppShell>
+    <AccountShell>
       <div role="status" aria-label="Loading your billing details" className="flex flex-col gap-6">
         <SkeletonBlock className="h-9 w-1/2 max-w-[24rem] rounded-full" />
         <SkeletonText lines={2} className="max-w-[62ch]" />
         <SkeletonBlock className="h-48 w-full" />
       </div>
-    </AppShell>
+    </AccountShell>
   );
 }

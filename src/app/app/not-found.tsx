@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AppShell } from "@/components/layout/app-shell";
+import { AccountShell } from "@/components/layout/account-shell";
 import { buttonClasses } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/states";
 
@@ -20,7 +20,7 @@ import { EmptyState } from "@/components/ui/states";
  */
 export default function AppNotFound() {
   return (
-    <AppShell>
+    <AccountShell>
       <EmptyState
         title="This page isn't here"
         description="The link may be out of date, or the project may have been disconnected. Your other projects are unaffected."
@@ -30,6 +30,6 @@ export default function AppNotFound() {
           </Link>
         }
       />
-    </AppShell>
+    </AccountShell>
   );
 }

@@ -33,7 +33,7 @@ import { MonoLabel } from "@/components/ui/typography";
  * **It reads nothing.** No session, no Credits, no project list, not even the
  * header's balance. This screen renders precisely when reading data is what
  * failed, so a boundary that needed a query to draw itself would be a boundary
- * that fails to draw. That is why it does not reuse `AppShell`.
+ * that fails to draw. That is why it does not reuse `AccountShell`.
  *
  * **It does not diagnose.** We know something threw; we do not know whether it
  * was momentary. So the copy says a retry is worth trying and stops short of
