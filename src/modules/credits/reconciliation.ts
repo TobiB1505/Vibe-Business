@@ -109,7 +109,7 @@ async function reconcileAiUsage(
   let query = supabase
     .from("ai_usage_events")
     .select(
-      "id, user_id, project_id, operation, provider, model, job_id, status, input_tokens, output_tokens, thinking_tokens, provider_cost_usd, pricing_version, created_at",
+      "id, user_id, project_id, operation, provider, model, job_id, status, input_tokens, output_tokens, thinking_tokens, cache_read_input_tokens, cache_creation_input_tokens, provider_cost_usd, pricing_version, created_at",
     )
     .order("created_at", { ascending: true })
     .limit(scope.limit ?? DEFAULT_LIMIT);

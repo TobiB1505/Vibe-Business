@@ -57,8 +57,8 @@ Audit, opportunities and planner each rebuild it from *current* snapshots. Citat
 **The calibration dataset is too thin to calibrate anything.**
 *Narrowed by Sprint 0055 (2026-08-22): validation CPU is no longer the blocker — the fix is verified, and runs 3, 4 and 5 recorded non-null `active_cpu_ms` every time.* What remains is the sample: three comparable runs at a mean absolute error of **53.4%**, roughly double the backtest's 24.3%, against a cohort sample floor of 20 below which the correction is exactly 1. Runs 1 and 2 stay `actual_incomplete` and contribute nothing. More runs is the only thing that closes this; a cleverer formula is not.
 
-**Cache tokens are invisible to the billing projection.**
-`credits/projection.ts` re-prices from input and output only, and `credits/schema.ts` explains the absent cache SKU with a reason that is no longer true — the columns exist and `ai/usage.ts` writes them. `ECONOMY_MODEL.md` measured cache at 55–70% of agent provider cost.
+**Cache token quantities are not metered, though their cost now is.**
+*Narrowed by Sprint 0057 E2 (2026-08-22): the cost half is closed. `costForAiRow` prices cache reads and writes, which repaired 234 of the live ledger's 314 AI rows — every row carrying cache tokens was reported by `reconcileAiUsage` as a §69 cost mismatch, because the ledger priced cache and the projection did not.* What remains is the metering half: there is still no `anthropic_cache_read_tokens` or `anthropic_cache_write_tokens` SKU, and adding one is a migration because `billing_usage_events.sku` carries a CHECK constraint listing every value. It becomes chargeable-behaviour rather than reporting detail the moment a Credit rate card exists, since `rating.ts` rates per SKU quantity — `ECONOMY_MODEL.md` measured cache at 55–70% of agent provider cost, and a card would charge for none of it. `CREDIT_RATE_CARDS` is empty, so nothing is mischarged today.
 
 **Sandbox rates are founder-attested and unverified.**
 `economy/infrastructure-rates.ts` carries `sourceKind: "founder_attested"` on every rate. One reconciled invoice would move the whole sandbox cost layer from attested to verified.
