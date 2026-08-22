@@ -2314,6 +2314,28 @@ export async function finishAgentExecutionStep(
       preparedChangeId: outcome.preparedChangeId,
     });
 
+    // Whoever wins the status swap owns the billing finalization.
+    //
+    // `expireStaleAgentExecution` can finalize this same run from a web request
+    // process — it runs on every status poll — so "the workflow is here" is not
+    // evidence that the workflow is entitled to charge. Without this gate both
+    // processes finalize: E2b measured the result 20 times out of 20 against
+    // real PostgreSQL, a charge standing against a hold recorded as released.
+    //
+    // Nothing new is invented. This is the pattern the three deterministic
+    // families already use on `operation_runs.status` — see
+    // `business-audit/execution.ts`, where `settleOperationBilling` sits behind
+    // `if (!transitioned) return`. Agent execution had the same primitive
+    // available, returning the same boolean, and discarded it.
+    //
+    // The cost of returning here rather than gating the charge alone: an
+    // attempt that wins the swap and then dies before `completeOperationRun`
+    // leaves an operation row nothing finishes, because the retry loses the
+    // swap and stops. That window exists today for the same reason — a crash
+    // between two adjacent writes — and is narrower than the alternative, which
+    // is letting a process that lost the swap keep writing.
+    if (!transitioned) return;
+
     if (run.creditReservationId) {
       await settleOperationCredits(deps.supabase, {
         reservationId: run.creditReservationId,
@@ -2326,21 +2348,22 @@ export async function finishAgentExecutionStep(
       resultId: outcome.preparedChangeId,
     });
 
-    if (transitioned) {
-      await recordAuditEvent(deps.supabase, {
-        userId: run.userId,
+    // No longer conditional: reaching this line *is* having won the swap, so a
+    // second guard on the same fact would only suggest there is a path where
+    // the two disagree.
+    await recordAuditEvent(deps.supabase, {
+      userId: run.userId,
+      projectId: run.projectId,
+      eventType: "agent_execution.completed",
+      metadata: {
         projectId: run.projectId,
-        eventType: "agent_execution.completed",
-        metadata: {
-          projectId: run.projectId,
-          operationId,
-          agentExecutionRunId: run.id,
-          preparedChangeId: outcome.preparedChangeId,
-          model: run.model,
-          nonProductionEconomics: run.nonProductionEconomics,
-        },
-      });
-    }
+        operationId,
+        agentExecutionRunId: run.id,
+        preparedChangeId: outcome.preparedChangeId,
+        model: run.model,
+        nonProductionEconomics: run.nonProductionEconomics,
+      },
+    });
 
     await recordLifecycle(deps, run, "execution_completed", "Ready for review", {
       preparedChangeId: outcome.preparedChangeId,
@@ -2349,10 +2372,15 @@ export async function finishAgentExecutionStep(
   }
 
   await cancelOpenInterrupts(deps.supabase, run.id);
-  await failAgentRun(deps.supabase, {
+  const failed = await failAgentRun(deps.supabase, {
     runId: run.id,
     failureCode: toAgentFailureCode(outcome.failureCode),
   });
+
+  // The same authority, in the other direction. Releasing a hold whose
+  // settlement belongs to whoever won the swap is how Vibe loses the charge for
+  // work it delivered.
+  if (!failed) return;
 
   if (run.creditReservationId) {
     await releaseOperationCredits(deps.supabase, {
