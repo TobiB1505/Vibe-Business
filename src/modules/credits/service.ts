@@ -354,6 +354,24 @@ export async function reserveCredits(
  * Settling
  * ------------------------------------------------------------------------ */
 
+/** One settlement, announced once. Called only where a close actually happened. */
+async function announceSettlement(
+  supabase: SupabaseClient,
+  reservation: { creditAccountId: string; projectId: string | null; id: string },
+  chargedCredits: CreditUnits,
+): Promise<void> {
+  await recordAuditEvent(supabase, {
+    userId: (await accountOwner(supabase, reservation.creditAccountId)) ?? "",
+    projectId: reservation.projectId,
+    eventType: "credit_charge.settled",
+    metadata: {
+      projectId: reservation.projectId,
+      reservationId: reservation.id,
+      chargedCredits,
+    },
+  });
+}
+
 export type SettleResult =
   | { ok: true; chargedCredits: CreditUnits; releasedCredits: CreditUnits; alreadySettled: boolean }
   | { ok: false; refusal: SettlementRefusal; shortfall?: CreditUnits };
@@ -366,14 +384,37 @@ export type SettleResult =
  * The charge is posted *before* the reservation is closed. Both steps are
  * idempotent, so a crash between them is recoverable in the safe direction: a
  * posted charge with a still-active hold overstates what is reserved (the
- * customer temporarily has less available than they should, and a retry
- * fixes it), whereas closing first and crashing would release the hold and
- * lose the charge — the customer would have consumed real provider spend for
- * nothing.
+ * customer temporarily has less available than they should), whereas closing
+ * first and crashing would release the hold and lose the charge — the customer
+ * would have consumed real provider spend for nothing.
  *
- * A retried settlement finds the existing ledger entry by its idempotency key
- * and posts nothing. It never asks "did that HTTP call succeed?" — it reads
- * what is durably true and lets the observation decide (§27).
+ * ## The retry has two questions, not one (§I1)
+ *
+ * That ordering argument used to end with "and a retry fixes it", and the
+ * retry did not: the early return on an existing charge sat *before*
+ * `closeReservation`, so the recovery path this comment described was the one
+ * path the code could not take. A charge could be booked against a hold that
+ * stayed active forever.
+ *
+ * The fix is to stop answering two questions with one branch:
+ *
+ *   does a charge exist?        the *financial* question. Answered once, by the
+ *                               ledger's unique index, and never re-decided
+ *                               here. This is what `alreadySettled` reports.
+ *   is the reservation closed?  the *cleanup* question. Answered by the
+ *                               reservation row, and a retry's job is to
+ *                               finish it.
+ *
+ * Four states follow, and only one of them is new. A charge with an active
+ * hold: close it, and report the settlement. A charge with an already-settled
+ * hold, whether closed by the first attempt or by a concurrent one: nothing to
+ * do, report the settlement. And a charge whose hold was *released* — the
+ * customer charged, and the capacity that charge should have consumed handed
+ * back — which is `charge_without_hold`, a refusal rather than a success,
+ * because it is the inconsistency this split exists to surface.
+ *
+ * It never asks "did that HTTP call succeed?" — it reads what is durably true
+ * and lets the observation decide (§27).
  */
 export async function settleReservation(
   supabase: SupabaseClient,
@@ -395,12 +436,36 @@ export async function settleReservation(
     idempotencyKey,
   });
   if (existingCharge) {
-    return {
+    const charged = creditUnits(-existingCharge.creditDelta);
+    const settled: SettleResult = {
       ok: true,
-      chargedCredits: creditUnits(-existingCharge.creditDelta),
+      chargedCredits: charged,
       releasedCredits: creditUnits(reservation.reservedCredits + existingCharge.creditDelta),
       alreadySettled: true,
     };
+
+    if (reservation.status === "settled") return settled;
+
+    // The hold was given back and the charge stands. Both halves happened and
+    // they disagree, so this is reported rather than smoothed over.
+    if (reservation.status !== "active") {
+      return { ok: false, refusal: "charge_without_hold" };
+    }
+
+    // The crash window: charge durable, hold still open. Finish the cleanup the
+    // first attempt did not. `closeReservation` is guarded on `status='active'`,
+    // so losing this race to a concurrent settlement is a successful no-op.
+    const { closed } = await closeReservation(supabase, {
+      reservationId: reservation.id,
+      creditAccountId: reservation.creditAccountId,
+      heldCredits: reservation.reservedCredits,
+      status: "settled",
+      settledCredits: charged,
+      rateCardVersion: params.rateCardVersion,
+    });
+
+    if (closed) await announceSettlement(supabase, reservation, charged);
+    return settled;
   }
 
   const decision = decideSettlement(reservation, params.actualCredits);
@@ -421,7 +486,7 @@ export async function settleReservation(
     });
   }
 
-  await closeReservation(supabase, {
+  const { closed } = await closeReservation(supabase, {
     reservationId: reservation.id,
     creditAccountId: reservation.creditAccountId,
     heldCredits: reservation.reservedCredits,
@@ -430,16 +495,10 @@ export async function settleReservation(
     rateCardVersion: params.rateCardVersion,
   });
 
-  await recordAuditEvent(supabase, {
-    userId: (await accountOwner(supabase, reservation.creditAccountId)) ?? "",
-    projectId: reservation.projectId,
-    eventType: "credit_charge.settled",
-    metadata: {
-      projectId: reservation.projectId,
-      reservationId: reservation.id,
-      chargedCredits: params.actualCredits,
-    },
-  });
+  // Gated on the close, exactly as `releaseReservation` gates its own. Losing
+  // the race means somebody else settled this and announced it; announcing it
+  // again would make the activity feed count attempts rather than facts.
+  if (closed) await announceSettlement(supabase, reservation, params.actualCredits);
 
   return {
     ok: true,

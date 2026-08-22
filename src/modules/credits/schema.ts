@@ -284,5 +284,15 @@ export const SETTLEMENT_REFUSALS = [
   "reservation_not_found",
   "reservation_not_active",
   "invalid_amount",
+  /**
+   * A charge exists and the hold it was taken against was given back (§I1).
+   *
+   * Not a retry, and not a refusal of anything the caller asked for — both
+   * halves of the settlement already happened, and they disagree. The customer
+   * was charged, and the capacity that charge was supposed to consume was
+   * returned to them. Reporting this as a success would hide the one state
+   * separating the money question from the cleanup question exists to reveal.
+   */
+  "charge_without_hold",
 ] as const;
 export type SettlementRefusal = (typeof SETTLEMENT_REFUSALS)[number];
