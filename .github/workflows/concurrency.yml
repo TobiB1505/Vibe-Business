@@ -1,0 +1,131 @@
+name: Billing concurrency
+
+# A real-database concurrency gate (Sprint 0057 E2b, ADR 0040).
+#
+# Everything in `pnpm test` that claims a database-level financial invariant
+# runs against `FakeDatabase` — a hand-written re-implementation — or
+# string-matches migration text. This job runs the same application billing
+# functions through the path production actually uses:
+#
+#   application billing code -> @supabase/supabase-js -> PostgREST -> PostgreSQL
+#
+# It holds no repository secret and can reach no deployed database. The stack is
+# started here, from this repository's own config.toml and migrations, and
+# deleted when the job ends.
+#
+# Bring-up: `workflow_dispatch` plus a push trigger scoped to the branch this
+# was developed on. GitHub only exposes `workflow_dispatch` for workflows that
+# exist on the default branch, so before this merges the push trigger is the
+# only way to run it at all. It is replaced by a path-filtered `pull_request`
+# trigger once the job has been green twice — see ADR 0040.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [claude/vibe-intelligence-architecture-fpjyel]
+    paths:
+      - "src/modules/credits/**"
+      - "src/modules/operations/**"
+      - "supabase/migrations/**"
+      - "supabase/config.toml"
+      - ".github/workflows/concurrency.yml"
+      - "vitest.concurrency.config.mts"
+
+# No secret is available to this job. The target guard in
+# `src/modules/credits/concurrency/harness.ts` reads only its own variable
+# names, so adding one later would not make a deployed database reachable.
+permissions:
+  contents: read
+
+jobs:
+  concurrency:
+    name: Race matrix against real PostgreSQL
+    runs-on: ubuntu-latest
+    # Generous against the container start, which dominates the job and is the
+    # least predictable part of it. A hang should still end, not sit for six
+    # hours.
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      # The Supabase CLI is a pinned devDependency, so this installs it too.
+      # No `supabase/setup-cli` action, and therefore no second pinned version
+      # to keep in step with package.json.
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Four containers, not thirteen. `kong` stays because it is the gateway
+      # hop production has; `gotrue` stays because billing_credit_accounts
+      # references auth.users and fixture users are created over HTTP rather
+      # than by writing the auth schema. Everything else is Studio, mail,
+      # storage, analytics and realtime — none of which any billing row touches.
+      - name: Start a disposable Supabase stack
+        run: |
+          pnpm exec supabase start \
+            -x realtime,storage-api,imgproxy,mailpit,postgres-meta,studio,edge-runtime,logflare,vector,supavisor
+
+      # The credentials are the local stack's own, printed by the CLI. They are
+      # mapped onto the harness's variable names — never the application's —
+      # which is what the target guard checks.
+      #
+      # Extracted by the CLI's default names rather than by `--override-name`,
+      # so this does not depend on guessing the internal key path for the
+      # service role key. If either name is missing the step fails and prints
+      # the names the CLI did emit — names only, never values — which turns an
+      # unknown into a diagnosis instead of an empty environment.
+      - name: Point the harness at the local stack
+        run: |
+          pnpm exec supabase status -o env > /tmp/stack.env
+          api=$(grep -m1 '^API_URL=' /tmp/stack.env | cut -d= -f2- | tr -d '"')
+          key=$(grep -m1 '^SERVICE_ROLE_KEY=' /tmp/stack.env | cut -d= -f2- | tr -d '"')
+          if [ -z "$api" ] || [ -z "$key" ]; then
+            echo "Could not read API_URL and SERVICE_ROLE_KEY from the CLI."
+            echo "Variable names it emitted:"
+            cut -d= -f1 /tmp/stack.env
+            exit 1
+          fi
+          echo "CONCURRENCY_SUPABASE_URL=$api" >> "$GITHUB_ENV"
+          echo "::add-mask::$key"
+          echo "CONCURRENCY_SERVICE_ROLE_KEY=$key" >> "$GITHUB_ENV"
+
+      # Proves the run reached the database at all, and separates "the stack did
+      # not come up" from "a race failed" before any race runs. It is also where
+      # the auto_expose_new_tables assumption is checked: a 42501 here means the
+      # local privilege model does not match the deployed one, and ADR 0040 says
+      # to stop and record that rather than add a GRANT migration.
+      - name: Verify the data API can see the billing tables
+        run: |
+          status=$(curl -s -o /tmp/probe.json -w '%{http_code}' \
+            "$CONCURRENCY_SUPABASE_URL/rest/v1/billing_credit_accounts?select=id&limit=1" \
+            -H "apikey: $CONCURRENCY_SERVICE_ROLE_KEY" \
+            -H "Authorization: Bearer $CONCURRENCY_SERVICE_ROLE_KEY")
+          echo "HTTP $status"
+          if [ "$status" != "200" ]; then
+            echo "The data API did not serve billing_credit_accounts."
+            # The body carries a SQLSTATE and a hint, and no row data on a
+            # failed select, so it is safe to print and it is the whole
+            # diagnosis. 42501 means the auto_expose_new_tables assumption in
+            # ADR 0040 was wrong.
+            cat /tmp/probe.json
+            exit 1
+          fi
+
+      - name: Run the race matrix
+        run: pnpm billing:concurrency
+
+      # Deletes the data volumes. Runs even when a race failed, because a
+      # leftover stack is a leftover stack either way.
+      - name: Stop and delete the stack
+        if: always()
+        run: pnpm exec supabase stop --no-backup
