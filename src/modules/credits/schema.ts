@@ -108,19 +108,23 @@ export type UsageSourceKind = (typeof USAGE_SOURCE_KINDS)[number];
  * Every entry here is something Vibe **actually observes today**.
  *
  * There is deliberately no `anthropic_cache_read_tokens` or
- * `anthropic_cache_write_tokens` — but the original reason for that is now
- * void, and keeping a stale reason is worse than having none. When this list
- * was written the adapter did not report cache usage and `ai_usage_events` had
- * no column for it. Both are false today: the columns were added by
- * `20260818210000_agent_execution.sql` and `ai/usage.ts` writes them on every
- * agent turn.
+ * `anthropic_cache_write_tokens`, and this list has now outlived two reasons
+ * for that. The first — that the adapter did not report cache usage and
+ * `ai_usage_events` had no column for it — was made false by
+ * `20260818210000_agent_execution.sql` and `ai/usage.ts`. The second, that
+ * `credits/projection.ts` re-priced from input and output alone so a cache unit
+ * would meter something nothing charged for, was made false by Sprint 0057 E2:
+ * `costForAiRow` prices cache reads and writes, and the whole call cost rides
+ * on the input row exactly as it always has.
  *
- * What still holds is narrower and is a decision rather than an absence: a
- * cache SKU would have to be priced, and `credits/projection.ts` re-prices from
- * input and output alone. Adding the unit here without the pricing arm would
- * meter something no projection charges for. `ECONOMY_MODEL.md` measured cache
- * at 55–70% of agent provider cost, so this is a real gap, and it is recorded
- * as one in `docs/ROADMAP.md` rather than closed by widening this list.
+ * What is left is a genuine absence rather than a decision, and it is narrower
+ * than either: the *quantity* of cache tokens is not metered. Adding it is a
+ * migration, because `billing_usage_events.sku` carries a CHECK constraint
+ * listing every value — so it is not a comment's decision to make. It matters
+ * once a Credit rate card exists, since `rating.ts` rates per SKU quantity and
+ * would charge a customer nothing for the 55–70% of agent provider cost
+ * `ECONOMY_MODEL.md` measured in cache. `CREDIT_RATE_CARDS` is empty today, so
+ * nothing is currently mischarged. It is recorded in `docs/ROADMAP.md`.
  *
  * `anthropic_thinking_tokens` is recorded because it is billed, but see
  * `rating.ts`: it is already contained in the output-token count the provider
@@ -284,5 +288,15 @@ export const SETTLEMENT_REFUSALS = [
   "reservation_not_found",
   "reservation_not_active",
   "invalid_amount",
+  /**
+   * A charge exists and the hold it was taken against was given back (§I1).
+   *
+   * Not a retry, and not a refusal of anything the caller asked for — both
+   * halves of the settlement already happened, and they disagree. The customer
+   * was charged, and the capacity that charge was supposed to consume was
+   * returned to them. Reporting this as a success would hide the one state
+   * separating the money question from the cleanup question exists to reveal.
+   */
+  "charge_without_hold",
 ] as const;
 export type SettlementRefusal = (typeof SETTLEMENT_REFUSALS)[number];

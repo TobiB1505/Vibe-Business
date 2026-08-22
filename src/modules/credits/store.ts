@@ -8,8 +8,9 @@ import {
   type ReservationRefusal,
   type ReservationStatus,
 } from "./schema";
-import type { ReleaseReason } from "./balance";
-import { creditUnits, type CreditUnits, ZERO_CREDITS } from "./units";
+import { postedBalance, type ReleaseReason } from "./balance";
+import { CONTENTION_ATTEMPTS, retryDelayMs, sleep } from "./contention";
+import { creditUnits, subtractCredits, type CreditUnits, ZERO_CREDITS } from "./units";
 
 /**
  * Billing persistence (BILLING CORE-1 §12, §26, §27, §33, §36).
@@ -279,7 +280,18 @@ export async function postLedgerEntry(
       // The write we were asked to make is already durable. Returning it —
       // rather than posting a second entry — is the whole exactly-once
       // contract.
-      if (existing) return { entry: existing, alreadyPosted: true };
+      //
+      // But it is not licence to report success blindly (§I3). A replay is
+      // most likely *because* the first attempt failed, and the way it fails
+      // is a committed entry whose materialization did not land. Answering
+      // "already posted, all good" there would turn a reported error into a
+      // silent one on the very next request — ERROR then SUCCESS, with the
+      // ledger and the cache still disagreeing. So the replay proves the
+      // materialization before it inherits the first attempt's success.
+      if (existing) {
+        await assertPostedBalanceMaterialized(supabase, params.creditAccountId);
+        return { entry: existing, alreadyPosted: true };
+      }
     }
     throw error;
   }
@@ -290,17 +302,23 @@ export async function postLedgerEntry(
 }
 
 /**
- * Moves the materialized posted balance by a signed delta.
+ * Proves the materialized posted balance still equals the ledger that defines it.
  *
- * Read-modify-write on a single row, which Postgres serializes. Separated from
- * the ledger insert because the insert is the durable financial fact and this
- * is a cache: if this call were lost, `reconcileBalance` would detect the drift
- * and the ledger would still be the truth.
+ * Deliberately only on the replay path, and deliberately only the posted side.
+ * This is the one place where a caller is about to inherit an earlier attempt's
+ * success without doing the work itself, so it is the one place that has to
+ * check the earlier attempt actually finished. Running it on every post would
+ * put a full ledger scan on the hot path to answer a question the write itself
+ * already answers.
+ *
+ * It reconciles rather than repairs. Repair is a reconciliation decision with
+ * its own ADR — who repairs, on what trigger, with what audit trail — and
+ * inventing one here would be exactly the kind of quiet architecture this
+ * sprint is cleaning up after.
  */
-async function applyPostedDelta(
+async function assertPostedBalanceMaterialized(
   supabase: SupabaseClient,
   creditAccountId: string,
-  delta: CreditUnits,
 ): Promise<void> {
   const { data, error } = await supabase
     .from("billing_credit_accounts")
@@ -310,13 +328,120 @@ async function applyPostedDelta(
 
   if (error) throw error;
 
-  const next = creditUnits((data as { posted_credits: number }).posted_credits + delta);
-  const { error: updateError } = await supabase
-    .from("billing_credit_accounts")
-    .update({ posted_credits: next })
-    .eq("id", creditAccountId);
+  const materialized = creditUnits((data as { posted_credits: number }).posted_credits);
+  const entries = await listLedgerEntries(supabase, creditAccountId);
+  const expected = postedBalance(entries.map((entry) => ({ kind: entry.kind, creditDelta: entry.creditDelta })));
 
-  if (updateError) throw updateError;
+  if (materialized === expected) return;
+
+  throw new MaterializationError({
+    creditAccountId,
+    column: "posted_credits",
+    attemptedDelta: subtractCredits(expected, materialized),
+    detail:
+      `a replayed entry found the cache at ${materialized} where the ledger says ${expected}, ` +
+      "so an earlier materialization did not land",
+  });
+}
+
+/**
+ * Raised when a committed ledger entry could not be materialized (§I3).
+ *
+ * The ledger is authority and the account row is a cache of it, so this is not
+ * a lost write to a convenience field: it means the two now disagree, with the
+ * money already durably booked. There is no repairer in this codebase —
+ * `reconcileBalance` computes drift and nothing acts on it — so the only
+ * honest response is to fail loudly and let a person see it.
+ *
+ * Never caught and converted into a refusal. A refusal says "this did not
+ * happen"; this says "part of it did".
+ */
+export class MaterializationError extends Error {
+  readonly creditAccountId: string;
+  readonly column: "posted_credits" | "reserved_credits";
+  readonly attemptedDelta: number;
+
+  constructor(params: {
+    creditAccountId: string;
+    column: "posted_credits" | "reserved_credits";
+    attemptedDelta: number;
+    detail: string;
+  }) {
+    super(
+      `[billing] ${params.column} could not be materialized for account ${params.creditAccountId}: ` +
+        `${params.detail}. The ledger is authority and now disagrees with the cache.`,
+    );
+    this.name = "MaterializationError";
+    this.creditAccountId = params.creditAccountId;
+    this.column = params.column;
+    this.attemptedDelta = params.attemptedDelta;
+  }
+}
+
+/**
+ * Moves the materialized posted balance by a signed delta.
+ *
+ * ## Why this is a compare-and-swap
+ *
+ * It was not, and the comment that justified that said "read-modify-write on a
+ * single row, which Postgres serializes". Postgres serializes concurrent
+ * UPDATEs *of one row*; it does not serialize a SELECT and a separate UPDATE
+ * issued as two round-trips with no transaction and no guard. Two ledger
+ * entries posting at once — a settlement charge and an expiry sweep, both
+ * reachable from the same request — could each read the same balance and the
+ * second would erase the first. One entry's delta simply vanished from the
+ * cache while staying in the ledger.
+ *
+ * So the write is guarded by the value it read, exactly as {@link admitHold}
+ * has been since PR #46, and a lost swap is retried against a fresh read.
+ *
+ * ## Why exhaustion throws
+ *
+ * By the time this runs, `postLedgerEntry` has already committed the ledger
+ * row. Giving up quietly would leave the canonical record and its cache
+ * disagreeing with nothing to notice — and the previous comment's claim that
+ * `reconcileBalance` "would detect the drift" was never true in the sense it
+ * implied: that function has one caller, which logs and then returns the
+ * drifted figure anyway. Fixing that is a reconciliation decision this sprint
+ * deliberately does not make, so the least it can do is refuse to be silent.
+ */
+async function applyPostedDelta(
+  supabase: SupabaseClient,
+  creditAccountId: string,
+  delta: CreditUnits,
+): Promise<void> {
+  for (let attempt = 0; attempt < CONTENTION_ATTEMPTS; attempt += 1) {
+    const { data, error } = await supabase
+      .from("billing_credit_accounts")
+      .select("posted_credits")
+      .eq("id", creditAccountId)
+      .single();
+
+    if (error) throw error;
+
+    const posted = (data as { posted_credits: number }).posted_credits;
+    const next = creditUnits(posted + delta);
+
+    const { data: updated, error: updateError } = await supabase
+      .from("billing_credit_accounts")
+      .update({ posted_credits: next })
+      .eq("id", creditAccountId)
+      // The swap: only if nobody has moved this column since it was read.
+      .eq("posted_credits", posted)
+      .select("id");
+
+    if (updateError) throw updateError;
+    if (updated && updated.length > 0) return;
+
+    await sleep(retryDelayMs(attempt));
+  }
+
+  throw new MaterializationError({
+    creditAccountId,
+    column: "posted_credits",
+    attemptedDelta: delta,
+    detail: `sustained contention across ${CONTENTION_ATTEMPTS} attempts`,
+  });
 }
 
 /* ---------------------------------------------------------------------------
@@ -509,42 +634,6 @@ export async function claimReservation(
 }
 
 /**
- * How many times a contended hold is re-attempted before giving up.
- *
- * Found too low at 3 by the PR #46 merge-verification stress test: 20 truly
- * concurrent 100-credit requests against an exact 1000-credit balance should
- * admit exactly 10, and with no backoff between immediate retries, only 8 did
- * — 12 callers were told `insufficient_credits` while 200 credits of their own
- * genuine, fundable demand sat unclaimed. That is not a safety violation
- * (nothing overspent, nothing double-reserved), but it is a liveness defect
- * with a customer-facing consequence: a caller who *did* have enough Credits
- * was told they did not.
- *
- * Ten attempts, combined with the jittered backoff in {@link admitHold}, was
- * verified against the same live-database scenario that found the bug: 20
- * concurrent requests against an exact 1000-credit balance now admit exactly
- * 10, repeatably.
- */
-const HOLD_ATTEMPTS = 10;
-
-/**
- * Jittered delay before a retry, in milliseconds.
- *
- * The bug this exists to fix was not "too few attempts" alone — it was
- * immediate, unstaggered retries against the same contended row, which lets
- * many callers keep colliding with each other in near lockstep. A small
- * random delay that grows with the attempt number desynchronizes them, the
- * same reasoning behind backoff in any compare-and-swap loop.
- */
-function retryDelayMs(attempt: number): number {
-  return Math.round(Math.random() * 15 * (attempt + 1));
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/**
  * Takes the hold against the account row, atomically (§12, §48).
  *
  * ## Why compare-and-swap, and why it retries
@@ -577,7 +666,7 @@ async function admitHold(
   creditAccountId: string,
   requested: CreditUnits,
 ): Promise<{ ok: true } | { ok: false; refusal: ReservationRefusal }> {
-  for (let attempt = 0; attempt < HOLD_ATTEMPTS; attempt += 1) {
+  for (let attempt = 0; attempt < CONTENTION_ATTEMPTS; attempt += 1) {
     const { data: current, error: readError } = await supabase
       .from("billing_credit_accounts")
       .select("posted_credits, reserved_credits")
@@ -683,29 +772,63 @@ export async function closeReservation(
   return { closed: true };
 }
 
-/** Decrements the materialized hold. Only ever called once per reservation. */
+/**
+ * Decrements the materialized hold.
+ *
+ * Called at most once per reservation — `closeReservation` guards on
+ * `status = 'active'` and only calls through when a row actually flipped. That
+ * exclusivity was previously taken as licence to skip the compare-and-swap,
+ * and it is the wrong invariant: the *reservation* is closed once, but the
+ * column is **account**-scoped. Two reservations closing at the same moment
+ * both read the same total and each writes its own subtraction, so the later
+ * write erases the earlier one and a hold that was released stays counted.
+ *
+ * Worse in the other direction: an unguarded write here can erase an increment
+ * {@link admitHold} has just made and already returned success for, leaving the
+ * account **under**-reserved — a live hold the cache does not count.
+ * `billing_credit_accounts_available_non_negative` is `posted - reserved >= 0`
+ * and is structurally blind to that, because it only ever catches `reserved`
+ * growing too large.
+ *
+ * Exhaustion throws for the same reason {@link applyPostedDelta} does: the
+ * reservation row is already durably closed by the time this runs.
+ */
 async function releaseHeldCredits(
   supabase: SupabaseClient,
   creditAccountId: string,
   held: CreditUnits,
 ): Promise<void> {
-  const { data, error } = await supabase
-    .from("billing_credit_accounts")
-    .select("reserved_credits")
-    .eq("id", creditAccountId)
-    .single();
+  for (let attempt = 0; attempt < CONTENTION_ATTEMPTS; attempt += 1) {
+    const { data, error } = await supabase
+      .from("billing_credit_accounts")
+      .select("reserved_credits")
+      .eq("id", creditAccountId)
+      .single();
 
-  if (error) throw error;
+    if (error) throw error;
 
-  const next = creditUnits(
-    Math.max(0, (data as { reserved_credits: number }).reserved_credits - held),
-  );
-  const { error: updateError } = await supabase
-    .from("billing_credit_accounts")
-    .update({ reserved_credits: next })
-    .eq("id", creditAccountId);
+    const reserved = (data as { reserved_credits: number }).reserved_credits;
+    const next = creditUnits(Math.max(0, reserved - held));
 
-  if (updateError) throw updateError;
+    const { data: updated, error: updateError } = await supabase
+      .from("billing_credit_accounts")
+      .update({ reserved_credits: next })
+      .eq("id", creditAccountId)
+      .eq("reserved_credits", reserved)
+      .select("id");
+
+    if (updateError) throw updateError;
+    if (updated && updated.length > 0) return;
+
+    await sleep(retryDelayMs(attempt));
+  }
+
+  throw new MaterializationError({
+    creditAccountId,
+    column: "reserved_credits",
+    attemptedDelta: -held,
+    detail: `sustained contention across ${CONTENTION_ATTEMPTS} attempts`,
+  });
 }
 
 /* ---------------------------------------------------------------------------

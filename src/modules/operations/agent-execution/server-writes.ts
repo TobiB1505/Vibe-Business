@@ -324,7 +324,26 @@ export async function expireStaleAgentExecution(params: {
     startedAt: run.started_at,
   });
 
-  await failAgentRun(supabase, { runId: run.id, failureCode: "agent_provider_failed" });
+  const failed = await failAgentRun(supabase, {
+    runId: run.id,
+    failureCode: "agent_provider_failed",
+  });
+
+  /*
+   * Losing the swap means the workflow was alive after all and finished first.
+   *
+   * The status read above is a read-then-act across three writes, and the
+   * workflow finalizes from its own process — so between that read and this
+   * swap the run can legitimately complete. Whoever wins the swap owns the
+   * billing finalization; this attempt lost, so it releases nothing and reports
+   * that it expired nothing.
+   *
+   * Without this, both processes finalized: E2b measured a charge standing
+   * against a hold recorded as released, 20 times out of 20, against real
+   * PostgreSQL.
+   */
+  if (!failed) return { expired: false };
+
   await failOperationRun(supabase, {
     operationId: params.operationRunId,
     failureCode: "agent_wall_clock_exceeded",

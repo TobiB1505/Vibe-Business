@@ -6,6 +6,7 @@ import {
   ensureCreditAccount,
   getCreditBalance,
   listActiveReservations,
+  MaterializationError,
   postLedgerEntry,
   projectUsageEvents,
   type CreditAccount,
@@ -331,5 +332,242 @@ describe("database-level financial invariants", () => {
         reason: "nothing",
       }),
     ).rejects.toMatchObject({ message: "credit_delta <> 0" });
+  });
+});
+
+/**
+ * Sprint 0057 — the two money-cache writers that had no compare-and-swap.
+ *
+ * `admitHold` has guarded its write since PR #46. `applyPostedDelta` and
+ * `releaseHeldCredits` did not, and the docblock above the first justified that
+ * with "read-modify-write on a single row, which Postgres serializes" — which
+ * Postgres does for concurrent UPDATEs of one row, and does not for a SELECT
+ * and a separate UPDATE issued as two round-trips with no transaction.
+ *
+ * These interleave the way `concurrent reservations cannot overspend` does:
+ * both callers read before either writes. The fake serializes each statement
+ * but not a sequence, so this is the same window a real deployment has.
+ */
+describe("the materialized balance cannot be silently overwritten", () => {
+  it("does not lose a posted delta when two entries interleave", async () => {
+    const account = await fundedAccount(1000);
+
+    // Two grants, posted concurrently. Both read `posted_credits` at 1000.
+    await Promise.all([
+      postLedgerEntry(supabase(), {
+        creditAccountId: account.id,
+        kind: "grant",
+        creditDelta: creditsToUnits(100),
+        idempotencyKey: "concurrent:a",
+        reason: "test",
+      }),
+      postLedgerEntry(supabase(), {
+        creditAccountId: account.id,
+        kind: "grant",
+        creditDelta: creditsToUnits(200),
+        idempotencyKey: "concurrent:b",
+        reason: "test",
+      }),
+    ]);
+
+    // The ledger is authority and holds all three entries; the cache must
+    // agree with it. A lost update shows up here as 1100 or 1200.
+    const balance = await getCreditBalance(supabase(), USER);
+    expect(balance?.posted).toBe(creditsToUnits(1300));
+  });
+
+  it("does not lose a hold when two reservations are closed at once", async () => {
+    const account = await fundedAccount(1000);
+
+    const first = await claimReservation(supabase(), {
+      account,
+      reservedCredits: creditsToUnits(300),
+      idempotencyKey: "hold:first",
+      projectId: PROJECT,
+    });
+    const afterFirst = (await ensureCreditAccount(supabase(), USER)).account;
+    const second = await claimReservation(supabase(), {
+      account: afterFirst,
+      reservedCredits: creditsToUnits(400),
+      idempotencyKey: "hold:second",
+      projectId: PROJECT,
+    });
+    expect(first.ok && second.ok).toBe(true);
+    if (!first.ok || !second.ok) return;
+
+    // 700 held across two reservations. Two operations finish at the same
+    // moment and both close: each reads `reserved_credits` at 700, one writes
+    // 400 and the other 300, and the later write erases the earlier one.
+    await Promise.all([
+      closeReservation(supabase(), {
+        reservationId: first.reservation.id,
+        creditAccountId: account.id,
+        heldCredits: creditsToUnits(300),
+        status: "released",
+        releaseReason: "cancelled_before_usage",
+      }),
+      closeReservation(supabase(), {
+        reservationId: second.reservation.id,
+        creditAccountId: account.id,
+        heldCredits: creditsToUnits(400),
+        status: "released",
+        releaseReason: "cancelled_before_usage",
+      }),
+    ]);
+
+    // Both holds are closed, so nothing is reserved. A lost update leaves 300
+    // or 400 behind — capacity the customer paid for and can no longer spend.
+    const active = await listActiveReservations(supabase(), account.id);
+    expect(active).toHaveLength(0);
+    const balance = await getCreditBalance(supabase(), USER);
+    expect(balance?.reserved).toBe(ZERO_CREDITS);
+  });
+});
+
+/**
+ * Sprint 0057, Proof 2 — an idempotent replay may not launder a drift.
+ *
+ * `postLedgerEntry` commits the ledger row and *then* materializes it. If the
+ * materialization fails, the caller is told so. But the retry that follows hits
+ * the unique index, takes the `alreadyPosted` early return, and — before this
+ * sprint — reported success without ever touching the cache. Ledger and balance
+ * still disagreed, and the second request said everything was fine.
+ *
+ * The forbidden sequence is `ERROR → SUCCESS` with the drift untouched between
+ * them. Here the drift is created directly, because what matters is what the
+ * replay does when it finds one, not how it got there.
+ */
+describe("an idempotent replay does not report success over a drift", () => {
+  it("refuses when the ledger and the materialized balance disagree", async () => {
+    const account = await fundedAccount(1000);
+
+    await postLedgerEntry(supabase(), {
+      creditAccountId: account.id,
+      kind: "grant",
+      creditDelta: creditsToUnits(500),
+      idempotencyKey: "replayed",
+      reason: "test",
+    });
+
+    // Exactly what a failed materialization leaves behind: the entry is
+    // durable, the cache never moved.
+    const row = db.current
+      .rows("billing_credit_accounts")
+      .find((candidate) => (candidate as { id: string }).id === account.id) as {
+      posted_credits: number;
+    };
+    row.posted_credits = creditsToUnits(1000);
+
+    // The replay. It must not answer "already posted, all good".
+    await expect(
+      postLedgerEntry(supabase(), {
+        creditAccountId: account.id,
+        kind: "grant",
+        creditDelta: creditsToUnits(500),
+        idempotencyKey: "replayed",
+        reason: "test",
+      }),
+    ).rejects.toBeInstanceOf(MaterializationError);
+  });
+
+  it("still reports an ordinary replay as already posted", async () => {
+    const account = await fundedAccount(1000);
+
+    const first = await postLedgerEntry(supabase(), {
+      creditAccountId: account.id,
+      kind: "grant",
+      creditDelta: creditsToUnits(500),
+      idempotencyKey: "clean-replay",
+      reason: "test",
+    });
+    const second = await postLedgerEntry(supabase(), {
+      creditAccountId: account.id,
+      kind: "grant",
+      creditDelta: creditsToUnits(500),
+      idempotencyKey: "clean-replay",
+      reason: "test",
+    });
+
+    expect(first.alreadyPosted).toBe(false);
+    expect(second.alreadyPosted).toBe(true);
+    expect(second.entry.id).toBe(first.entry.id);
+    // Exactly one delta applied, and the cache agrees with the ledger.
+    const balance = await getCreditBalance(supabase(), USER);
+    expect(balance?.posted).toBe(creditsToUnits(1500));
+  });
+});
+
+/**
+ * Sprint 0057 — what a compare-and-swap does when it never wins.
+ *
+ * The retry bounds liveness, so it has to end somewhere. What it must not do is
+ * end quietly: `postLedgerEntry` has already committed the ledger row by the
+ * time the materialization runs, so giving up without a sound leaves the
+ * canonical record and its cache disagreeing with nothing to notice (§I3).
+ *
+ * A client whose account-row swaps never match models sustained contention
+ * without depending on timing. Ten lost swaps is not a plausible production
+ * event; a silent one is the failure mode being ruled out.
+ */
+describe("a materialization that never wins its swap fails loudly", () => {
+  /** Passes everything through, but no guarded write to the account row ever matches. */
+  function alwaysContended(): ReturnType<typeof supabase> {
+    const real = supabase();
+    const lost = {
+      eq: () => lost,
+      select: () => lost,
+      single: async () => ({ data: null, error: null }),
+      then: (onfulfilled: (value: { data: unknown; error: unknown }) => unknown) =>
+        Promise.resolve({ data: [], error: null }).then(onfulfilled),
+    };
+    return {
+      from(table: string) {
+        const target = (real as unknown as { from: (t: string) => Record<string, unknown> }).from(table);
+        if (table !== "billing_credit_accounts") return target;
+        return {
+          ...target,
+          update: (payload: Record<string, unknown>) =>
+            "posted_credits" in payload || "reserved_credits" in payload
+              ? lost
+              : (target.update as (p: Record<string, unknown>) => unknown)(payload),
+        };
+      },
+    } as unknown as ReturnType<typeof supabase>;
+  }
+
+  it("throws MaterializationError rather than returning", async () => {
+    const account = await fundedAccount(1000);
+
+    await expect(
+      postLedgerEntry(alwaysContended(), {
+        creditAccountId: account.id,
+        kind: "grant",
+        creditDelta: creditsToUnits(250),
+        idempotencyKey: "contended",
+        reason: "test",
+      }),
+    ).rejects.toBeInstanceOf(MaterializationError);
+  });
+
+  it("names the account and the column it could not move", async () => {
+    const account = await fundedAccount(1000);
+
+    let failure: MaterializationError | null = null;
+    try {
+      await postLedgerEntry(alwaysContended(), {
+        creditAccountId: account.id,
+        kind: "grant",
+        creditDelta: creditsToUnits(250),
+        idempotencyKey: "contended:named",
+        reason: "test",
+      });
+    } catch (error) {
+      failure = error as MaterializationError;
+    }
+
+    expect(failure).toBeInstanceOf(MaterializationError);
+    expect(failure?.creditAccountId).toBe(account.id);
+    expect(failure?.column).toBe("posted_credits");
+    expect(failure?.attemptedDelta).toBe(creditsToUnits(250));
   });
 });

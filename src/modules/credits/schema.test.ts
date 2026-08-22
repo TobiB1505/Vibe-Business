@@ -135,6 +135,15 @@ describe("the financial invariants exist in the database", () => {
   it("allows at most one active reservation per operation", () => {
     expect(sql()).toContain("billing_credit_reservations_single_active_operation_idx");
   });
+
+  it("permits one allocation row per reservation and lot", () => {
+    // The house rule stated in `store.ts`: "The guarantee is the unique index,
+    // not this check." `billing_credit_allocations` was the one table in the
+    // billing schema where it was not applied, so a retried authorization
+    // completing a missing allocation had only application code between it and
+    // a second full set of rows (Sprint 0057).
+    expect(sql()).toContain("billing_credit_allocations_reservation_lot_idx");
+  });
 });
 
 /**

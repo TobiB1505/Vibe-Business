@@ -1,6 +1,6 @@
 # Roadmap
 
-**Date:** 2026-08-22 · **Repository state:** `main` @ `3c2c246` · **Derived from:** [the intelligence architecture review](audits/2026-08-21-intelligence-architecture-review/README.md) and [the economics architecture review](audits/2026-08-21-economics-architecture-review/README.md)
+**Date:** 2026-08-22 · **Repository state:** `main` @ `e0a35b3`, plus Sprint 0057 on its branch · **Derived from:** [the intelligence architecture review](audits/2026-08-21-intelligence-architecture-review/README.md) and [the economics architecture review](audits/2026-08-21-economics-architecture-review/README.md)
 
 ## What may be in this file
 
@@ -17,26 +17,46 @@ The order below is dependency order. Correctness before foundation, foundation b
 
 ## Now — financial correctness
 
-These are the only entries on this list where the current behaviour can silently cost money or lose it.
+*Most of this section was closed by [Sprint 0057](sprints/0057-e1-ledger-hold-correctness.md). What remains is what a local fix could not reach.*
 
-**The materialized credit balance can drift, and nothing would notice.**
-`credits/store.ts` guards `admitHold`, `takeFromLot` and `returnToLot` with a compare-and-swap and a bounded retry — the fix for the livelock recorded in `25e8f4a` — but `applyPostedDelta` and `releaseHeldCredits` are plain read-modify-write. The comment above the first says drift would be caught by `reconcileBalance`, which has no production caller.
+**Nothing repairs a drifted balance, and nothing ever reads the detector.**
+`credits/balance.ts` computes drift and `service.ts` logs it — then returns the drifted figure anyway. Its only caller, `getBillingBalance`, has no caller of its own outside the module, and `reconcileLotAllocation` has none at all. Sprint 0057 made the failure that produces drift loud (`MaterializationError`) rather than silent, which is the input a repairer would need; it deliberately did not invent one. Who repairs, on what trigger, with what audit trail is ADR-sized.
 
-**A retried settlement can leave a hold open forever.**
-`credits/service.ts` returns early when it finds an existing charge for the idempotency key, before `closeReservation`. The ordering comment above it argues a crash between charge and close is safe "because a retry fixes it"; the retry takes the early return instead.
+**An orphaned hold is never reclaimed, and terminal operation status cannot authorize reclaiming it.**
+`completeOperationRun` runs before `settleOperationBilling` (`business-audit/execution.ts:661/672`, and the same in action-plans and opportunities), so a sweeper keyed on a terminal operation would race settlement and produce a charge whose hold had been released. Sprint 0057 removed its planned sweeper on that evidence rather than shipping a heuristic. Closing this needs a lease — a running execution renews its claim — or a finalization marker on the reservation proving settlement can no longer arrive.
 
-**A retried authorization can produce a hold with no lot behind it.**
-`credits/operation-billing.ts` returns early on `alreadyHeld` without allocating, and the reservation row is inserted before `admitHold`. A crash in that window leaves an active reservation funded by nothing, which then settles at full price.
+**`returnToLot` can permanently strand lot capacity.**
+`lot-store.ts` logs and returns after ten contended attempts, on the argument that returning capacity is "the customer-favourable direction". It is the opposite: the customer keeps paying for Credits they can no longer spend, and nothing reconciles it. A money-losing path, deferred because the fix is a durable repair mechanism rather than a local correction.
 
-**Nothing ties a charge to the lots that funded it.**
-`settleReservationAllocations` runs before `settleReservation`, and the release path releases allocations before checking status. There is no database constraint linking a `billing_credit_ledger` charge to its `billing_credit_allocations` rows, so an interleaving can consume lot capacity against no charge.
+**A zero-credit settlement is not idempotent.**
+`service.ts` skips `postLedgerEntry` when `actualCredits === 0`, because the `credit_delta <> 0` CHECK forbids a zero-delta row. So the retry cannot find an existing charge, falls through, and refuses with `reservation_not_active`.
 
 **No test exercises a real Postgres constraint.**
-Every "database-level financial invariant" test runs against `FakeDatabase`'s hand-written re-implementation or string-matches migration text — `credits/schema.test.ts` says so in its own docblock. The 20-way concurrency scenario that found the livelock exists only in a commit message, so nothing would fail if `HOLD_ATTEMPTS` returned to 3.
+Every "database-level financial invariant" test runs against `FakeDatabase`'s hand-written re-implementation or string-matches migration text — `credits/schema.test.ts` says so in its own docblock. Sprint 0057 E1 reproduced eleven defects against that fake and was explicit about the ceiling: it models statement atomicity honestly and does not serialize sequences, so it reproduces lost updates faithfully and cannot reach MVCC, `40001`, deadlocks, or the livelock class.
+
+*Attempted and blocked by [Sprint 0057 E2](sprints/0057-e2-real-postgres-concurrency.md) (2026-08-22).* Two of the three sub-gaps moved. The `UNIQUE (reservation_id, grant_id)` index is no longer asserted as a string: `pg_index` on the live database confirms it is unique on `(reservation_id, grant_id)` in that order. The 20-way concurrency scenario is committed and measured — it fails at one attempt and passes at two, so it pins that the retry loop is load-bearing and **not** that `CONTENTION_ATTEMPTS` is 10; lowering it to 3 still passes, because the fake converges in fewer rounds than a real network.
+
+*Closed for four race classes by [Sprint 0057 E2b](sprints/0057-e2b-ci-postgres-concurrency.md) (2026-08-22).* The third of E2a's three options turned out to be the reachable one: a GitHub-hosted runner has Docker, no egress policy of ours, and deletes the stack when the job ends. Hold safety and liveness, lost updates on both materialised columns, the allocation unique index (PostgreSQL raised `23505` and it reached the client path) and settlement interleaving each ran 20 times against PostgreSQL 17 through PostgREST, with no secret and no `pg` driver.
+
+What stays open is narrower and is stated in that record: the local stack has no Supavisor and no network latency, so it is not the deployed topology; twenty iterations miss a 5% race 36% of the time; `CONTENTION_ATTEMPTS = 10` is still not shown to be minimal, because the round count is not observable from outside `admitHold`; and the gate is path-filtered, so a change elsewhere that breaks it is not caught.
 
 ---
 
 ## Next — one shared evidence foundation
+
+**`settleOperationCredits` and `releaseOperationCredits` are not mutually exclusive against each other, and one caller pair that could reach both concurrently already existed.**
+Class D ([Sprint 0057 E2b](sprints/0057-e2b-ci-postgres-concurrency.md)) measured the primitives directly: 20 of 20 iterations of `settleOperationCredits` racing `releaseOperationCredits` on one reservation ended `released` with the charge standing and the lot's capacity consumed — deterministically, because settle does strictly more work before its close than release does. That remains true and is not itself a defect; the primitives were never meant to be the authority boundary.
+
+What E2b's initial verification pass found, checking whether that boundary existed anywhere above the primitives for agent execution specifically, is that it did not: `finishAgentExecutionStep` (the workflow) and `expireStaleAgentExecution` (the request-time staleness backstop) both read `agent_execution_runs.status` and called into settlement or release without ever checking whether they had won anything. Both are real production callers, both are reachable — the workflow runs durably while the page polling status can independently declare the same run stale — and until the fix described below, nothing prevented the exact `charge_without_hold` state class D demonstrated at the primitive level from happening for a real customer's agent run.
+
+The fix reuses a compare-and-swap that already existed rather than inventing an authority: `completeAgentRun` and `failAgentRun` are CAS on `agent_execution_runs.status` and both already returned whether they won — the return value was simply never checked. `execution.ts`'s `finishAgentExecutionStep` and `server-writes.ts`'s `expireStaleAgentExecution` now return immediately on losing that swap, before either reaches settlement or release, making the swap the single billing authority for one agent run — no lease, no heartbeat, no sweeper, no new table, the same pattern the three deterministic operation families already use on `operation_runs.status`. Proven against real PostgreSQL (class E, `agent-finalization.concurrency.ts`): 20 iterations with both actors racing, 20 more with the workflow winning deterministically, 20 more with the expiry winning deterministically — in every case exactly one billing terminal effect, and the `charges === 1 && reservationStatus === "released"` combination asserted impossible rather than merely counted.
+
+Two things this fix does **not** claim. First, it does not decide whether declaring a run stale at `started_at` + the sandbox limit + a grace window is *correct* — only that whichever side wins now closes the money exactly once. Whether a run can be genuinely, safely considered stale on that basis at all is the still-open lease/liveness question named above ("An orphaned hold is never reclaimed…"). Second, it does not make the primitives themselves mutually exclusive — class D's finding stands unchanged. Any future caller pair that can reach `settleOperationCredits` and `releaseOperationCredits` concurrently for one reservation needs its own upstream authority established the same way; nothing enforces that structurally today outside agent execution.
+
+A second, unrelated defect surfaced by the same verification pass: `startAgentExecution` took the Credit hold before calling `executor.start()` (money before work), but when the executor refused (`!started.ok`) nothing ever closed that hold — a deterministic leak, not a race, because the run never reaches a state the staleness backstop will touch (`queued` is deliberately ignored) and there is no reservation sweeper. Fixed by calling the same `releaseOperationBilling` the adjacent `agent_reservation_invalid` branch already used. Proven against real PostgreSQL (`agent-start-failure.concurrency.ts`): 20 iterations, each ending with the operation failed, the reservation released, no charge posted, and every lot's allocated capacity back to zero.
+
+**A newly provisioned Vibe database would have no working Data API.**
+None of the 54 files in `supabase/migrations/` contains a `GRANT`. The deployed project's billing tables are reachable through PostgREST only because of Postgres default privileges the Supabase platform applied — `public / tables` to `anon`, `authenticated` and `service_role`, read back from `information_schema.role_table_grants`. Supabase is moving that default to *revoke*, and `supabase/config.toml` documents the replacement behaviour: unset means new entities are not auto-exposed. So the API surface of every table is defined by a platform default rather than by this repository, against Rule 34. Sprint 0057 E2b set `auto_expose_new_tables = true` as **local/CI parity only**, and that field is removed on **2026-10-30**. Closing this means deriving PostgREST rights entirely from versioned repository configuration, under a deliberate least-privilege decision per role — `anon` currently holds `INSERT`, `UPDATE` and `DELETE` on every billing table, with RLS as the only thing refusing the write.
 
 **Live-product evidence is never revalidated before a run that costs money.**
 `execution-contract/freshness.ts` re-checks repository state, plan currency, dependencies and ownership immediately before a write, but not the live-product evidence a step's classification and rationale rest on. Two calibration runs on the economics branch failed with `agent_produced_no_change` because `live.seo.meta_description_missing` had become false since the fixture was written — both times the agent was right and the premise was wrong. Re-running the scan that produces that evidence is free and deterministic; Rule 60 forbids spending the user's money, not observing.
@@ -57,8 +77,8 @@ Audit, opportunities and planner each rebuild it from *current* snapshots. Citat
 **The calibration dataset is too thin to calibrate anything.**
 *Narrowed by Sprint 0055 (2026-08-22): validation CPU is no longer the blocker — the fix is verified, and runs 3, 4 and 5 recorded non-null `active_cpu_ms` every time.* What remains is the sample: three comparable runs at a mean absolute error of **53.4%**, roughly double the backtest's 24.3%, against a cohort sample floor of 20 below which the correction is exactly 1. Runs 1 and 2 stay `actual_incomplete` and contribute nothing. More runs is the only thing that closes this; a cleverer formula is not.
 
-**Cache tokens are invisible to the billing projection.**
-`credits/projection.ts` re-prices from input and output only, and `credits/schema.ts` explains the absent cache SKU with a reason that is no longer true — the columns exist and `ai/usage.ts` writes them. `ECONOMY_MODEL.md` measured cache at 55–70% of agent provider cost.
+**Cache token quantities are not metered, though their cost now is.**
+*Narrowed by Sprint 0057 E2 (2026-08-22): the cost half is closed. `costForAiRow` prices cache reads and writes, which repaired 234 of the live ledger's 314 AI rows — every row carrying cache tokens was reported by `reconcileAiUsage` as a §69 cost mismatch, because the ledger priced cache and the projection did not.* What remains is the metering half: there is still no `anthropic_cache_read_tokens` or `anthropic_cache_write_tokens` SKU, and adding one is a migration because `billing_usage_events.sku` carries a CHECK constraint listing every value. It becomes chargeable-behaviour rather than reporting detail the moment a Credit rate card exists, since `rating.ts` rates per SKU quantity — `ECONOMY_MODEL.md` measured cache at 55–70% of agent provider cost, and a card would charge for none of it. `CREDIT_RATE_CARDS` is empty, so nothing is mischarged today.
 
 **Sandbox rates are founder-attested and unverified.**
 `economy/infrastructure-rates.ts` carries `sourceKind: "founder_attested"` on every rate. One reconciled invoice would move the whole sandbox cost layer from attested to verified.

@@ -36,6 +36,10 @@ function aiRow(overrides: Partial<AiUsageRow> = {}): AiUsageRow {
     input_tokens: 20_000,
     output_tokens: 4_000,
     thinking_tokens: 1_200,
+    // Null is the honest default: no operation but an agent turn has a cache
+    // breakpoint, so every other row in the live ledger carries nulls here.
+    cache_read_input_tokens: null,
+    cache_creation_input_tokens: null,
     provider_cost_usd: null,
     pricing_version: null,
     // Inside the introductory Sonnet window: $2/MTok in, $10/MTok out.
@@ -77,6 +81,64 @@ describe("AI usage projection", () => {
     // 20_000 * 2_000 + 4_000 * 10_000 = 40_000_000 + 40_000_000 nanodollars.
     expect(projectedCost).toBe(80_000_000);
     expect(events[0].providerPricingVersion).toBe(authoritative.pricingVersion);
+  });
+
+  /**
+   * Sprint 0057 E2 — cache tokens are billed, and only one side priced them.
+   *
+   * `ai/usage.ts` passes `cacheReadInputTokens` and `cacheCreationInputTokens`
+   * into `calculateProviderCost` and stores the result in `provider_cost_usd`.
+   * This module re-priced from input and output alone, so for every agent turn
+   * the two figures disagreed by the whole cache bill — and `reconciliation.ts`
+   * reported each disagreement as a §69 semantic mismatch, which is exactly
+   * what a §69 mismatch is supposed to mean.
+   *
+   * Measured against the live ledger before this was written: 314 AI usage
+   * rows, 234 of them carrying cache tokens, and 234 mismatches. Not a
+   * coincidence — the same 234 rows.
+   */
+  it("recomputes the cost of a cached agent turn exactly as the ledger stored it", () => {
+    // The shape `recordAIUsage` writes for an agent turn: a small uncached
+    // prompt, a large cache read of the transcript, and a cache write.
+    const written = calculateProviderCost({
+      model: "claude-sonnet-5",
+      inputTokens: 1_200,
+      outputTokens: 300,
+      cacheReadInputTokens: 40_000,
+      cacheCreationInputTokens: 2_000,
+      at: new Date("2026-08-14T18:00:00.000Z"),
+    });
+
+    const row = aiRow({
+      input_tokens: 1_200,
+      output_tokens: 300,
+      thinking_tokens: null,
+      cache_read_input_tokens: 40_000,
+      cache_creation_input_tokens: 2_000,
+      provider_cost_usd: written.totalUsd,
+    });
+
+    const events = projectAiUsage(row);
+    const projectedCost = events.reduce((total, event) => total + (event.rawCostNanoUsd ?? 0), 0);
+
+    // 1_200 * 2_000 + 300 * 10_000 + 40_000 * 200 + 2_000 * 2_500
+    //   = 2_400_000 + 3_000_000 + 8_000_000 + 5_000_000
+    expect(projectedCost).toBe(18_400_000);
+    expect(projectedCost).toBe(written.totalNanoUsd);
+    // The §69 comparison `reconciliation.ts` actually makes.
+    expect(projectedCost).toBe(storedCostToNanoUsd(row.provider_cost_usd));
+  });
+
+  /**
+   * The other half of the same guarantee: pricing a field that is absent must
+   * not move a number that was already right. Every operation before agentic
+   * execution is a single request with no cache breakpoint, so its columns are
+   * null and its arithmetic has to stay byte-identical — a cost book whose
+   * history moves when a column is added is not a cost book.
+   */
+  it("leaves a call without cache tokens priced exactly as before", () => {
+    const events = projectAiUsage(aiRow({ cache_read_input_tokens: null, cache_creation_input_tokens: null }));
+    expect(events[0].rawCostNanoUsd).toBe(80_000_000);
   });
 
   /**

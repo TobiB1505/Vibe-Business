@@ -10,6 +10,7 @@ import {
   type CreditSourceKind,
   type HeldAllocation,
 } from "./lots";
+import { CONTENTION_ATTEMPTS, retryDelayMs, sleep } from "./contention";
 import { creditUnits, type CreditUnits } from "./units";
 
 /**
@@ -182,16 +183,6 @@ export async function listAllLots(
  * Allocation
  * ------------------------------------------------------------------------ */
 
-const ALLOCATION_ATTEMPTS = 10;
-
-function retryDelayMs(attempt: number): number {
-  return Math.round(Math.random() * 15 * (attempt + 1));
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
 /**
  * Takes capacity from one lot, atomically.
  *
@@ -209,7 +200,7 @@ async function takeFromLot(
   lotId: string,
   amount: CreditUnits,
 ): Promise<boolean> {
-  for (let attempt = 0; attempt < ALLOCATION_ATTEMPTS; attempt += 1) {
+  for (let attempt = 0; attempt < CONTENTION_ATTEMPTS; attempt += 1) {
     const { data: current, error: readError } = await supabase
       .from("billing_credit_grants")
       .select("initial_credit_units, allocated_credit_units, expired_credit_units, status, expires_at")
@@ -261,7 +252,7 @@ async function returnToLot(
 ): Promise<void> {
   if (amount <= 0) return;
 
-  for (let attempt = 0; attempt < ALLOCATION_ATTEMPTS; attempt += 1) {
+  for (let attempt = 0; attempt < CONTENTION_ATTEMPTS; attempt += 1) {
     const { data: current, error: readError } = await supabase
       .from("billing_credit_grants")
       .select("allocated_credit_units")
@@ -321,34 +312,46 @@ export async function allocateReservation(
   if (!plan.ok) return { ok: false, refusal: "insufficient_credits" };
 
   const taken: { lotId: string; creditUnits: CreditUnits }[] = [];
+  // One flag, one unwind. A bare `finally` would hand capacity back on success
+  // too; two unwind paths would hand it back twice for one failure.
+  let committed = false;
 
-  for (const allocation of plan.allocations) {
-    const ok = await takeFromLot(supabase, allocation.lotId, allocation.creditUnits);
-    if (!ok) {
-      for (const undo of taken) await returnToLot(supabase, undo.lotId, undo.creditUnits);
-      return { ok: false, refusal: "insufficient_credits" };
+  try {
+    for (const allocation of plan.allocations) {
+      const ok = await takeFromLot(supabase, allocation.lotId, allocation.creditUnits);
+      if (!ok) return { ok: false, refusal: "insufficient_credits" };
+      taken.push({ lotId: allocation.lotId, creditUnits: allocation.creditUnits });
     }
-    taken.push({ lotId: allocation.lotId, creditUnits: allocation.creditUnits });
-  }
 
-  if (taken.length > 0) {
-    const { error } = await supabase.from("billing_credit_allocations").insert(
-      taken.map((allocation) => ({
-        grant_id: allocation.lotId,
-        credit_account_id: params.creditAccountId,
-        reservation_id: params.reservationId,
-        credit_units: allocation.creditUnits,
-        status: "held",
-      })),
-    );
+    if (taken.length > 0) {
+      // One batch insert, so the rows are all-or-nothing. That is what makes
+      // "zero allocation rows" a state a recovery can reason about rather than
+      // guess at — see `operation-billing.ts` and §I2.
+      const { error } = await supabase.from("billing_credit_allocations").insert(
+        taken.map((allocation) => ({
+          grant_id: allocation.lotId,
+          credit_account_id: params.creditAccountId,
+          reservation_id: params.reservationId,
+          credit_units: allocation.creditUnits,
+          status: "held",
+        })),
+      );
 
-    if (error) {
+      if (error) throw error;
+    }
+
+    committed = true;
+    return { ok: true, allocations: taken };
+  } finally {
+    // Covers every way out that is not a commit: a refused take, a thrown
+    // insert, and — the one the previous shape missed entirely — a throw from
+    // `takeFromLot` itself, which escaped with capacity taken and nothing given
+    // back. That was the partial allocation this function's docblock calls
+    // impossible.
+    if (!committed) {
       for (const undo of taken) await returnToLot(supabase, undo.lotId, undo.creditUnits);
-      throw error;
     }
   }
-
-  return { ok: true, allocations: taken };
 }
 
 type AllocationRow = {
@@ -409,25 +412,26 @@ export async function settleReservationAllocations(
   const settledAt = new Date().toISOString();
 
   for (const settlement of settlements) {
-    if (settlement.outcome === "consumed") {
-      const { error } = await supabase
-        .from("billing_credit_allocations")
-        .update({ status: "consumed", consumed_units: settlement.consumedUnits, settled_at: settledAt })
-        .eq("id", settlement.allocationId)
-        .eq("status", "held");
+    const patch =
+      settlement.outcome === "consumed"
+        ? { status: "consumed", consumed_units: settlement.consumedUnits, settled_at: settledAt }
+        : { status: "released", released_at: settledAt };
 
-      if (error) throw error;
-      await returnToLot(supabase, settlement.lotId, settlement.releasedUnits);
-      continue;
-    }
-
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("billing_credit_allocations")
-      .update({ status: "released", released_at: settledAt })
+      .update(patch)
       .eq("id", settlement.allocationId)
-      .eq("status", "held");
+      // The swap. `.select("id")` is what makes its outcome observable — without
+      // it a lost swap and a won one are the same empty response.
+      .eq("status", "held")
+      .select("id");
 
     if (error) throw error;
+    // Lost the swap: somebody else moved this allocation out of `held` and has
+    // already returned its capacity. Returning it again would inflate the lot
+    // past what it ever held.
+    if (!data || data.length === 0) continue;
+
     await returnToLot(supabase, settlement.lotId, settlement.releasedUnits);
   }
 }
@@ -443,13 +447,18 @@ export async function releaseReservationAllocations(
   for (const allocation of allocations) {
     if (allocation.status !== "held") continue;
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from("billing_credit_allocations")
       .update({ status: "released", released_at: releasedAt })
       .eq("id", allocation.id)
-      .eq("status", "held");
+      .eq("status", "held")
+      .select("id");
 
     if (error) throw error;
+    // Lost to a concurrent settlement, which has already accounted for this
+    // allocation. Its capacity is not ours to return.
+    if (!data || data.length === 0) continue;
+
     await returnToLot(supabase, allocation.grantId, allocation.creditUnits);
   }
 }

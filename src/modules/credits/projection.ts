@@ -39,6 +39,13 @@ export type AiUsageRow = {
   input_tokens: number | null;
   output_tokens: number | null;
   thinking_tokens: number | null;
+  /**
+   * Cache tokens, as `20260818210000_agent_execution.sql` added them and
+   * `ai/usage.ts` writes them. Null for every single-request operation, which
+   * is every operation that is not an agent turn.
+   */
+  cache_read_input_tokens: number | null;
+  cache_creation_input_tokens: number | null;
   provider_cost_usd: string | number | null;
   pricing_version: string | null;
   created_at: string;
@@ -56,6 +63,11 @@ const NANO_USD_PER_USD = 1_000_000_000;
  * would reintroduce exactly the imprecision `pricing.ts` exists to avoid. The
  * recomputation runs at the row's own `created_at`, so an effective-dated price
  * change does not re-price history.
+ *
+ * Recomputing means the *same* inputs `recordAIUsage` priced, cache tokens
+ * included. Pricing from input and output alone made every agent turn disagree
+ * with the ledger by its whole cache bill — 234 of the live ledger's 314 rows
+ * — and §69 correctly reported each one as a semantic mismatch.
  */
 function costForAiRow(row: AiUsageRow): {
   rawCostNanoUsd: number | null;
@@ -75,6 +87,13 @@ function costForAiRow(row: AiUsageRow): {
       model: row.model,
       inputTokens: row.input_tokens ?? 0,
       outputTokens: row.output_tokens ?? 0,
+      // Passed for the same reason `recordAIUsage` passes them: the provider
+      // bills cache reads and writes separately from the uncached input, so a
+      // recomputation that omits them is not the same number. Null columns
+      // default to zero inside `calculateProviderCost`, which is why a
+      // pre-agent row's arithmetic is unchanged by this.
+      cacheReadInputTokens: row.cache_read_input_tokens ?? 0,
+      cacheCreationInputTokens: row.cache_creation_input_tokens ?? 0,
       at: new Date(row.created_at),
     });
     return {

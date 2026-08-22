@@ -17,6 +17,7 @@
     "ai:probe-audit-schema": "vitest run --config vitest.probe.config.mts src/modules/ai/probe",
     "ai:dogfood-action-plan": "vitest run --config vitest.probe.config.mts src/modules/action-plans",
     "billing:dogfood": "vitest run --config vitest.probe.config.mts src/modules/credits",
+    "billing:concurrency": "vitest run --config vitest.concurrency.config.mts",
     "execution:dogfood": "vitest run --config vitest.probe.config.mts src/modules/execution-contract",
     "agent:preflight": "vitest run --config vitest.probe.config.mts src/modules/coding-agent",
     "agent:canary": "vitest run --config vitest.canary.config.mts",
