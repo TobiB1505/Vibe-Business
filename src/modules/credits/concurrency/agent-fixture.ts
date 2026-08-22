@@ -34,10 +34,20 @@ const IDENTITY_64 = "e2b00000000000000000000000000000000000000000000000000000000
  * `prepared`, and this suite keeps one project for the whole run — so a shared
  * identity would give every iteration after the first a `23505` from the
  * fixture rather than from the race.
+ *
+ * The `.` before the zero-padding is load-bearing, not decoration: without a
+ * delimiter outside the label's own alphabet, `"start-1"` and `"start-10"`
+ * zero-pad to the *same* 64 characters — the digit `"0"` that continues one
+ * label is indistinguishable from the padding that finishes the other. A
+ * defect-B regression this sprint found exactly that collision between
+ * iterations 1 and 10, surfaced as a real `23505` because that fixture's rows
+ * are never deleted between iterations. `.` cannot appear in `safe` (the
+ * sanitizer excludes it) and padding can never produce it, so its position
+ * unambiguously marks where the real label ends.
  */
 function identity64(label: string): string {
   const safe = label.replace(/[^a-z0-9-]/gi, "").slice(0, 40);
-  return `e2b-${safe}`.padEnd(64, "0").slice(0, 64);
+  return `e2b-${safe}.`.padEnd(64, "0").slice(0, 64);
 }
 const BASE_SHA = "1f4b0c9d7a2e5f8b3c6d9e0a1b2c3d4e5f607182";
 
