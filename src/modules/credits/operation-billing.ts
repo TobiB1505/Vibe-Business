@@ -6,6 +6,7 @@ import { sweepExpiredCredits } from "./grants";
 import {
   allocateReservation,
   listActiveLots,
+  listReservationAllocations,
   releaseReservationAllocations,
   settleReservationAllocations,
 } from "./lot-store";
@@ -184,8 +185,60 @@ export async function authorizeOperationCredits(
     };
   }
 
-  // A retry of the same request: the hold and its allocations already exist.
+  // A retry of the same request. The hold exists; whether its allocations do is
+  // a separate question, and the answer used to be assumed (§I2).
+  //
+  // `claimReservation` inserts the reservation before `admitHold`, and the
+  // allocation happens after the claim returns, so an active hold with no lots
+  // behind it is a state two ordinary windows produce: a crash between the two
+  // calls, and a concurrent caller landing on this idempotency key. Settling
+  // such a hold charges full price while `settleReservationAllocations` finds
+  // nothing held and returns immediately — a charge with no lot provenance.
+  //
+  // So the branch classifies rather than guesses. Allocating on an empty set is
+  // safe only because `allocateReservation` unwinds every non-commit exit,
+  // which is what makes zero rows mean zero capacity taken; an unexpected
+  // partial state is refused rather than allocated on top of.
   if (claim.alreadyHeld) {
+    const held = await listReservationAllocations(supabase, claim.reservation.id);
+    const heldUnits = held
+      .filter((allocation) => allocation.status === "held")
+      .reduce<number>((total, allocation) => total + allocation.creditUnits, 0);
+
+    if (held.length > 0 && heldUnits !== price.creditUnits) {
+      // Neither complete nor empty. Nothing in this codebase produces it, so
+      // acting would be inventing a recovery for a state nobody has explained.
+      return {
+        ok: false,
+        refusal: "insufficient_credits",
+        requiredCredits: price.creditUnits,
+        availableCredits: await availableSpendableCredits(supabase, account.id, now),
+      };
+    }
+
+    if (held.length === 0) {
+      const recovered = await allocateReservation(supabase, {
+        creditAccountId: account.id,
+        reservationId: claim.reservation.id,
+        creditUnits: price.creditUnits,
+        now,
+      });
+
+      if (!recovered.ok) {
+        await releaseReservation(supabase, {
+          reservationId: claim.reservation.id,
+          reason: "cancelled_before_usage",
+        });
+
+        return {
+          ok: false,
+          refusal: "insufficient_credits",
+          requiredCredits: price.creditUnits,
+          availableCredits: await availableSpendableCredits(supabase, account.id, now),
+        };
+      }
+    }
+
     return {
       ok: true,
       billable: true,
@@ -338,6 +391,15 @@ export async function releaseOperationCredits(
 ): Promise<{ ok: true; releasedCredits: CreditUnits; alreadyClosed: boolean } | { ok: false; refusal: string }> {
   const reservation = await getReservation(supabase, params.reservationId);
   if (!reservation) return { ok: false, refusal: "reservation_not_found" };
+
+  // Checked before the lots are touched, matching the `settled` pre-check its
+  // settle counterpart has always had. Without it, releasing a reservation that
+  // was already charged walked its allocations first, handed their capacity
+  // back for a hold the customer had paid for, and only then noticed the
+  // reservation was not active — reporting success either way.
+  if (reservation.status !== "active") {
+    return { ok: false, refusal: `reservation_${reservation.status}` };
+  }
 
   await releaseReservationAllocations(supabase, params.reservationId);
 

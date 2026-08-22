@@ -6,6 +6,7 @@ import { checkBudgetBinding } from "@/modules/execution-contract/budget";
 import type { StoredExecutionSpec } from "@/modules/execution-contract/store";
 import { findExecutionSpecByIdentity } from "@/modules/execution-contract/store";
 import { getReservation } from "@/modules/credits/store";
+import { releaseOperationBilling } from "@/modules/operations/billing";
 import {
   claimAgentExecutionRunRow,
   expireStaleAgentExecution,
@@ -257,6 +258,18 @@ export async function startAgentExecution(
         operationId: operation.id,
         failureCode: "agent_reservation_invalid",
       });
+      // The run never started, so no settlement is coming for this hold and
+      // nothing else will ever close it. Leaving it active suppressed capacity
+      // the customer could spend, indefinitely — there is no reservation
+      // sweeper, and Sprint 0057 established that a terminal operation status
+      // cannot safely authorize one (`completeOperationRun` runs *before*
+      // `settleOperationBilling`, so terminal does not imply finalized).
+      //
+      // This release is safe precisely because it does not reason about time or
+      // about operation state: the binding check refused, so the work has not
+      // begun and cannot begin. `releaseOperationBilling` is itself guarded on
+      // an active reservation, so a hold already closed is untouched.
+      await releaseOperationBilling(supabase, { operationRunId: operation.id });
       return { kind: "failed", error: "credit_reservation_insufficient" };
     }
   }

@@ -703,3 +703,116 @@ describe("ownership (§65)", () => {
     expect(result).toMatchObject({ ok: false, refusal: "account_not_found" });
   });
 });
+
+/**
+ * Sprint 0057 — a retried authorization allocates, and only from a state it
+ * can explain (§I2).
+ *
+ * `claimReservation` inserts the reservation row *before* `admitHold`, and
+ * `authorizeOperationCredits` allocates only after the claim returns. So there
+ * are two windows in which a durable, active reservation exists with no
+ * allocations behind it — a crash between the claim and the allocation, and a
+ * concurrent caller landing on the idempotency key mid-claim.
+ *
+ * The `alreadyHeld` branch returned on the comment "the hold and its
+ * allocations already exist", which in those windows is simply false. The hold
+ * then settled at full price with no lot provenance:
+ * `settleReservationAllocations` finds nothing held and returns immediately.
+ *
+ * A blind "no rows, so allocate" would be unsafe on its own — it is safe only
+ * because `allocateReservation` now unwinds every way out that is not a commit,
+ * which is what makes zero rows mean zero capacity taken.
+ */
+describe("a retried authorization completes a missing allocation", () => {
+  it("allocates when the hold exists and its allocations do not", async () => {
+    await fund("purchase", 200, null, "grant:retry");
+
+    const first = await authorizeOperationCredits(supabase(), {
+      projectId: PROJECT,
+      operation: "business_audit",
+      idempotencyKey: "operation:retried",
+      operationRunId: "op-retried",
+    });
+    if (!first.ok || !first.billable) throw new Error("fixture could not authorize");
+
+    // Exactly what a crash between the claim and the allocation leaves behind.
+    db.current.rows("billing_credit_allocations").length = 0;
+    expect(await listReservationAllocations(supabase(), first.reservationId)).toHaveLength(0);
+
+    const retry = await authorizeOperationCredits(supabase(), {
+      projectId: PROJECT,
+      operation: "business_audit",
+      idempotencyKey: "operation:retried",
+      operationRunId: "op-retried",
+    });
+
+    expect(retry).toMatchObject({ ok: true, billable: true, alreadyHeld: true });
+    // The hold now has lots behind it, so a settlement can consume them.
+    expect(await listReservationAllocations(supabase(), first.reservationId)).not.toHaveLength(0);
+  });
+
+  it("returns unchanged when the allocations are already complete", async () => {
+    await fund("purchase", 200, null, "grant:complete");
+
+    const first = await authorizeOperationCredits(supabase(), {
+      projectId: PROJECT,
+      operation: "business_audit",
+      idempotencyKey: "operation:complete",
+      operationRunId: "op-complete",
+    });
+    if (!first.ok || !first.billable) throw new Error("fixture could not authorize");
+    const before = await listReservationAllocations(supabase(), first.reservationId);
+
+    const retry = await authorizeOperationCredits(supabase(), {
+      projectId: PROJECT,
+      operation: "business_audit",
+      idempotencyKey: "operation:complete",
+      operationRunId: "op-complete",
+    });
+
+    expect(retry).toMatchObject({ ok: true, billable: true, alreadyHeld: true });
+    // No second set of rows, and no second take from the lot.
+    expect(await listReservationAllocations(supabase(), first.reservationId)).toHaveLength(
+      before.length,
+    );
+  });
+});
+
+/**
+ * Sprint 0057 — releasing checks the reservation's state before touching lots.
+ *
+ * `settleOperationCredits` has had a `status === "settled"` pre-check since it
+ * was written. Its release counterpart had none, and released allocations
+ * *first*: called on a settled reservation it walked the allocations, handed
+ * their capacity back for a hold that had already been charged, and only then
+ * discovered the reservation was not active — reporting success.
+ */
+describe("releasing an operation's credits checks the reservation first", () => {
+  it("does not return capacity for a reservation that was already settled", async () => {
+    await fund("purchase", 200, null, "grant:settled");
+
+    const authorized = await authorizeOperationCredits(supabase(), {
+      projectId: PROJECT,
+      operation: "business_audit",
+      idempotencyKey: "operation:settled",
+      operationRunId: "op-settled",
+    });
+    if (!authorized.ok || !authorized.billable) throw new Error("fixture could not authorize");
+
+    await settleOperationCredits(supabase(), {
+      reservationId: authorized.reservationId,
+      policyVersion: authorized.policyVersion,
+    });
+    const afterSettle = await available();
+
+    const released = await releaseOperationCredits(supabase(), {
+      reservationId: authorized.reservationId,
+      reason: "cancelled_before_usage",
+    });
+
+    // The charge stands, so its capacity stays consumed. Handing it back would
+    // give the customer Credits they have already spent.
+    expect(released).toMatchObject({ ok: false });
+    expect(await available()).toBe(afterSettle);
+  });
+});
