@@ -53,7 +53,71 @@ export type DashboardProject = {
   preparedCount: number;
   /** Prepared changes whose latest validation failed. */
   failedValidationCount: number;
+  /**
+   * The project's last few real business scores, oldest first.
+   *
+   * Empty or single-entry means there is no trend to show — not that the trend
+   * is flat. See `buildScoreHistory`.
+   */
+  scoreHistory: number[];
+  /**
+   * Change from the previous scored audit to the latest one. Null when fewer
+   * than two audits produced a score, which is a different fact from `0`.
+   */
+  scoreDelta: number | null;
 };
+
+/**
+ * How many points a score trend is drawn from.
+ *
+ * A dashboard card is showing direction, not history — eight audits is already
+ * more than the eye reads off a 100px line, and the page behind it is where a
+ * full history belongs.
+ */
+export const SCORE_HISTORY_LIMIT = 8;
+
+/**
+ * The last few real scores, oldest first, from audit rows newest first.
+ *
+ * ## Why an audit with no score is skipped rather than zeroed
+ *
+ * A completed audit stores `overall_score = null` when the evidence could not
+ * support a verdict (Sprint 4). That is "we looked and could not say" — it is
+ * not a bad score, and CLAUDE.md rule 44 says it must never be counted as one.
+ * Folded into a series as `0` it would draw a cliff down to the axis and back,
+ * so the product would show a project collapsing because one scan found less
+ * than usual. It is left out; the line simply joins the two real scores
+ * either side of it.
+ *
+ * ## Why fewer than two points returns fewer than two points
+ *
+ * Nothing here pads, interpolates or invents a starting value. One audit means
+ * one point, and the caller renders no trend at all — a single point drawn as
+ * a flat line would claim a project has not moved when in fact it has only
+ * been measured once.
+ *
+ * Pure and exported so it is tested directly, the same way `attention.ts` is.
+ */
+export function buildScoreHistory(
+  rowsNewestFirst: readonly { overall_score: number | null }[],
+  limit: number = SCORE_HISTORY_LIMIT,
+): number[] {
+  const newestFirst: number[] = [];
+
+  for (const row of rowsNewestFirst) {
+    if (row.overall_score === null) continue;
+    newestFirst.push(row.overall_score);
+    if (newestFirst.length === limit) break;
+  }
+
+  return newestFirst.reverse();
+}
+
+/** The latest score minus the one before it, or null when there is no pair. */
+export function scoreDeltaFrom(history: readonly number[]): number | null {
+  if (history.length < 2) return null;
+  return history[history.length - 1] - history[history.length - 2];
+}
 
 /**
  * ## Why there is no `lastActivityAt`
@@ -116,6 +180,24 @@ function firstPerKey<T>(rows: T[], key: (row: T) => string): Map<string, T> {
   return result;
 }
 
+/**
+ * Every row per key, in the order they arrived.
+ *
+ * `firstPerKey`'s sibling, for the one case where the rest of the rows are not
+ * waste: the audits query has always returned a project's whole completed
+ * history and thrown all but the newest away.
+ */
+function groupPerKey<T>(rows: T[], key: (row: T) => string): Map<string, T[]> {
+  const result = new Map<string, T[]>();
+  for (const row of rows) {
+    const id = key(row);
+    const group = result.get(id);
+    if (group) group.push(row);
+    else result.set(id, [row]);
+  }
+  return result;
+}
+
 function countPerKey<T>(rows: T[], key: (row: T) => string): Map<string, number> {
   const result = new Map<string, number>();
   for (const row of rows) {
@@ -154,6 +236,13 @@ export async function getDashboardOverview(
     supabase
       // `overall_score` is a column. The audit's JSONB document is never read
       // here: a dashboard does not need dimensions, evidence or findings.
+      //
+      // Known and deliberately left alone (UI-8): this read has no `.limit()`,
+      // so it grows with a project's audit history. Adding one would introduce
+      // the starvation bug documented above for `lastActivityAt` — an actively
+      // audited project would consume the window and a quieter one would lose
+      // its *current* score, which is far worse than reading a few extra rows.
+      // The fix is a `distinct on` view or a latest-audit column, not a cap.
       .from("business_readiness_audits")
       .select("project_id, overall_score, assessed_dimensions, total_dimensions, created_at")
       .in("project_id", projectIds)
@@ -189,10 +278,13 @@ export async function getDashboardOverview(
   }
 
   const repoByProject = firstPerKey((repos.data ?? []) as RepoRow[], (row) => row.project_id);
-  const latestAuditByProject = firstPerKey(
-    (audits.data ?? []) as AuditRow[],
-    (row) => row.project_id,
-  );
+  /*
+   * Grouped rather than reduced. The newest row per project is the score; the
+   * rows behind it are the trend, and they were already fetched and discarded.
+   * A score history therefore costs no extra query — which is the only reason
+   * this dashboard can show one at all (`dashboard-contract.test.ts`).
+   */
+  const auditsByProject = groupPerKey((audits.data ?? []) as AuditRow[], (row) => row.project_id);
   const latestSetByProject = firstPerKey((sets.data ?? []) as SetRow[], (row) => row.project_id);
   const preparedRows = (prepared.data ?? []) as PreparedRow[];
   const preparedByProject = countPerKey(preparedRows, (row) => row.project_id);
@@ -237,9 +329,11 @@ export async function getDashboardOverview(
   }
 
   const dashboardProjects: DashboardProject[] = projects.map((project) => {
-    const audit = latestAuditByProject.get(project.id) ?? null;
+    const auditRows = auditsByProject.get(project.id) ?? [];
+    const audit = auditRows[0] ?? null;
     const set = latestSetByProject.get(project.id) ?? null;
     const repo = repoByProject.get(project.id) ?? null;
+    const scoreHistory = buildScoreHistory(auditRows);
 
     /**
      * Three states, not two. A completed audit with too little evidence
@@ -263,6 +357,8 @@ export async function getDashboardOverview(
       nextMovesCount: set ? (opportunityCountBySet.get(set.id) ?? 0) : null,
       preparedCount: preparedByProject.get(project.id) ?? 0,
       failedValidationCount: failedByProject.get(project.id) ?? 0,
+      scoreHistory,
+      scoreDelta: scoreDeltaFrom(scoreHistory),
     };
   });
 

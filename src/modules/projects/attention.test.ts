@@ -13,6 +13,10 @@ function project(overrides: Partial<DashboardProject> = {}): DashboardProject {
     nextMovesCount: 0,
     preparedCount: 0,
     failedValidationCount: 0,
+    // The trend is presentation only — `attention.ts` never reads it. Present
+    // here so the fixture stays a complete `DashboardProject`.
+    scoreHistory: [40],
+    scoreDelta: null,
     ...overrides,
   };
 }
