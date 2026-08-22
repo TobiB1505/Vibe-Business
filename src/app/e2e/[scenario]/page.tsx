@@ -41,6 +41,11 @@ import {
 } from "@/app/app/onboarding/[projectId]/operation-states";
 import { RetryProductScan } from "@/app/app/onboarding/[projectId]/phase-actions";
 import { UnderstandingStatus } from "@/app/app/onboarding/[projectId]/understanding-status";
+import { StageRail } from "@/components/ui/stage-rail";
+import {
+  E2E_LOOP_SCENARIOS,
+  isE2eLoopScenario,
+} from "../loop-scenarios";
 import { OpportunitiesPanel } from "@/app/app/projects/[projectId]/opportunities-panel";
 import { ProductLogo } from "@/components/brand/product-logo";
 import { BillingView } from "@/app/app/billing/billing-view";
@@ -143,6 +148,21 @@ export default async function E2eScenarioPage({
           overview={fixture.overview}
           stripeReady={fixture.stripeReady}
           checkoutState={"checkoutState" in fixture ? fixture.checkoutState : undefined}
+        />
+      </main>
+    );
+  }
+
+  // The progress spine (UI-8 §1, §2). Both rails, rendered from the real
+  // derivations rather than from a hand-written list of steps.
+  if (isE2eLoopScenario(scenario)) {
+    return (
+      <main className="mx-auto max-w-4xl p-8">
+        {label}
+        <StageRail
+          steps={E2E_LOOP_SCENARIOS[scenario]()}
+          label={scenario.startsWith("gates_") ? "Gates for this change" : "Product loop"}
+          orientation="horizontal"
         />
       </main>
     );
