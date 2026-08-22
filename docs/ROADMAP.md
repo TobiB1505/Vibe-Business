@@ -1,6 +1,6 @@
 # Roadmap
 
-**Date:** 2026-08-22 · **Repository state:** `main` @ `3c2c246` · **Derived from:** [the intelligence architecture review](audits/2026-08-21-intelligence-architecture-review/README.md) and [the economics architecture review](audits/2026-08-21-economics-architecture-review/README.md)
+**Date:** 2026-08-22 · **Repository state:** `main` @ `e0a35b3`, plus Sprint 0057 on its branch · **Derived from:** [the intelligence architecture review](audits/2026-08-21-intelligence-architecture-review/README.md) and [the economics architecture review](audits/2026-08-21-economics-architecture-review/README.md)
 
 ## What may be in this file
 
@@ -17,22 +17,22 @@ The order below is dependency order. Correctness before foundation, foundation b
 
 ## Now — financial correctness
 
-These are the only entries on this list where the current behaviour can silently cost money or lose it.
+*Most of this section was closed by [Sprint 0057](sprints/0057-e1-ledger-hold-correctness.md). What remains is what a local fix could not reach.*
 
-**The materialized credit balance can drift, and nothing would notice.**
-`credits/store.ts` guards `admitHold`, `takeFromLot` and `returnToLot` with a compare-and-swap and a bounded retry — the fix for the livelock recorded in `25e8f4a` — but `applyPostedDelta` and `releaseHeldCredits` are plain read-modify-write. The comment above the first says drift would be caught by `reconcileBalance`, which has no production caller.
+**Nothing repairs a drifted balance, and nothing ever reads the detector.**
+`credits/balance.ts` computes drift and `service.ts` logs it — then returns the drifted figure anyway. Its only caller, `getBillingBalance`, has no caller of its own outside the module, and `reconcileLotAllocation` has none at all. Sprint 0057 made the failure that produces drift loud (`MaterializationError`) rather than silent, which is the input a repairer would need; it deliberately did not invent one. Who repairs, on what trigger, with what audit trail is ADR-sized.
 
-**A retried settlement can leave a hold open forever.**
-`credits/service.ts` returns early when it finds an existing charge for the idempotency key, before `closeReservation`. The ordering comment above it argues a crash between charge and close is safe "because a retry fixes it"; the retry takes the early return instead.
+**An orphaned hold is never reclaimed, and terminal operation status cannot authorize reclaiming it.**
+`completeOperationRun` runs before `settleOperationBilling` (`business-audit/execution.ts:661/672`, and the same in action-plans and opportunities), so a sweeper keyed on a terminal operation would race settlement and produce a charge whose hold had been released. Sprint 0057 removed its planned sweeper on that evidence rather than shipping a heuristic. Closing this needs a lease — a running execution renews its claim — or a finalization marker on the reservation proving settlement can no longer arrive.
 
-**A retried authorization can produce a hold with no lot behind it.**
-`credits/operation-billing.ts` returns early on `alreadyHeld` without allocating, and the reservation row is inserted before `admitHold`. A crash in that window leaves an active reservation funded by nothing, which then settles at full price.
+**`returnToLot` can permanently strand lot capacity.**
+`lot-store.ts` logs and returns after ten contended attempts, on the argument that returning capacity is "the customer-favourable direction". It is the opposite: the customer keeps paying for Credits they can no longer spend, and nothing reconciles it. A money-losing path, deferred because the fix is a durable repair mechanism rather than a local correction.
 
-**Nothing ties a charge to the lots that funded it.**
-`settleReservationAllocations` runs before `settleReservation`, and the release path releases allocations before checking status. There is no database constraint linking a `billing_credit_ledger` charge to its `billing_credit_allocations` rows, so an interleaving can consume lot capacity against no charge.
+**A zero-credit settlement is not idempotent.**
+`service.ts` skips `postLedgerEntry` when `actualCredits === 0`, because the `credit_delta <> 0` CHECK forbids a zero-delta row. So the retry cannot find an existing charge, falls through, and refuses with `reservation_not_active`.
 
 **No test exercises a real Postgres constraint.**
-Every "database-level financial invariant" test runs against `FakeDatabase`'s hand-written re-implementation or string-matches migration text — `credits/schema.test.ts` says so in its own docblock. The 20-way concurrency scenario that found the livelock exists only in a commit message, so nothing would fail if `HOLD_ATTEMPTS` returned to 3.
+Every "database-level financial invariant" test runs against `FakeDatabase`'s hand-written re-implementation or string-matches migration text — `credits/schema.test.ts` says so in its own docblock. Sprint 0057 reproduced eleven defects against that fake and was explicit about the ceiling: it models statement atomicity honestly and does not serialize sequences, so it reproduces lost updates faithfully and cannot reach MVCC, `40001`, deadlocks, or the livelock class. The 20-way concurrency scenario that found the original livelock exists only in a commit message, so nothing would fail if `CONTENTION_ATTEMPTS` returned to 3 — and the new `UNIQUE (reservation_id, grant_id)` index is asserted only as a string. **This is E2, and it is next with nothing scheduled in between: financial correctness is not marked validated until it is green.**
 
 ---
 
