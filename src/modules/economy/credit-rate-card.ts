@@ -140,7 +140,7 @@ export function historicalRunCostInput(run: HistoricalRun): RunEconomicCost {
 }
 
 /**
- * Every historical run under every scenario — 6 runs × 3 models, 18 rows
+ * Every historical run under every scenario — 7 runs × 3 models, 21 rows
  * (PART G's full table). Nothing here writes anything; it is read by the
  * documentation generator's own test and by `ECONOMY_MODEL.md`'s table,
  * kept in sync via the pinning test rather than retyped by hand.

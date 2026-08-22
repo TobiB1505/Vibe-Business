@@ -2,7 +2,7 @@
 
 Preview Layer — see [ARCHITECTURE.md §3.9](../../../ARCHITECTURE.md#39-preview-layer) and [ADR 0004](../../../docs/decisions/0004-vercel-as-initial-host-and-preview-provider.md) (`PreviewProvider` boundary, Vercel Preview Deployments first).
 
-**Status:** boundary reserved only. No `PreviewProvider` implementation exists yet.
+**Reserved boundary, never implemented — and deliberately so.** No `PreviewProvider` exists here. Previewing a change was built in [`modules/change-preview`](../change-preview) instead, on the reasoning [ADR 0016](../../../docs/decisions/0016-temporary-preview-isolation.md) records: the deploy route needs authority this product does not have. The table below is why the two names still exist separately.
 
 ## Not to be confused with `modules/change-preview`
 

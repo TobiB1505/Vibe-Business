@@ -14,7 +14,8 @@ export const metadata: Metadata = {
  * what Vibe does to a repository, and each states a rule the system enforces
  * rather than a promise it makes:
  *
- * - changes land on isolated branches, never the default one (rule 58);
+ * - changes land on isolated branches, and the default branch is reachable
+ *   only through the approval architecture below (rule 58);
  * - the default branch moves only after a human approves one exact reviewed
  *   commit, and only by fast-forward to it (rules 67, 71);
  * - "merged" means the branch was moved and read back — never deployed, and

@@ -245,7 +245,11 @@ Three scenarios, exactly as specified — simulated, not decided:
 ## 7. Per-run margins (PART G)
 
 Every historical run under every model — `economy/credit-rate-card.ts`'s
-`simulateAllHistoricalRuns()`, 18 rows. Margin is shown against both the cost
+`simulateAllHistoricalRuns()`, 18 rows — the six-run dataset this document is
+computed over, and deliberately frozen there. That function returns 21 rows
+today because run #9 joined `HISTORICAL_RUNS`; see
+[§11](#11-economic-sensibility-check-part-k) for why the numbers here are not
+updated to follow it. Margin is shown against both the cost
 floor (best case) and the cost upper bound (worst case within what is
 actually known — validation active CPU is unmeasured for these six runs;
 Sprint 0051's point-estimate fix applies only forward).
@@ -381,6 +385,16 @@ on every dimension including combined stress.
 | small | 1 | $0.2541 | — (one point, no spread) |
 | standard | 5 | $0.3056 | $0.0961 |
 | complex | **0** | — | — |
+
+**This table is the six-run dataset, and is deliberately not updated.** Every
+figure in this document is computed over runs #3–#8 ([Limitations of the n=6 dataset](#limitations-of-the-n6-dataset), which
+records separately what run #9 added); freezing them is what keeps the
+document's argument checkable against the sprint that made it. It does mean the
+table no longer equals what `analyzeClassCostDifferentiation()` returns today —
+that function includes run #9, and now reports `standard` as **n=6, mean
+$0.3125, std dev $0.0876**, moving the ratio below from 1.20 to 1.23. The
+finding is unchanged in direction and in weakness; a reader comparing the two
+is seeing one more run, not a discrepancy.
 
 `standard` costs **~20% more** than `small` on average (ratio 1.20) — real,
 but modest, and resting on a single `small` observation. Every simulated

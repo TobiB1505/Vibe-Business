@@ -105,12 +105,22 @@ export type UsageSourceKind = (typeof USAGE_SOURCE_KINDS)[number];
 /**
  * Measurable provider units (§17).
  *
- * Every entry here is something Vibe **actually observes today**. There is
- * deliberately no `anthropic_cache_read_tokens` or `anthropic_cache_write_tokens`:
- * the provider adapter does not report cache usage and `ai_usage_events` has no
- * column for it, so a cache SKU would be a phantom — a unit that always reads
- * zero while looking like a measurement. Adding one is a change to the AI
- * adapter first and this list second.
+ * Every entry here is something Vibe **actually observes today**.
+ *
+ * There is deliberately no `anthropic_cache_read_tokens` or
+ * `anthropic_cache_write_tokens` — but the original reason for that is now
+ * void, and keeping a stale reason is worse than having none. When this list
+ * was written the adapter did not report cache usage and `ai_usage_events` had
+ * no column for it. Both are false today: the columns were added by
+ * `20260818210000_agent_execution.sql` and `ai/usage.ts` writes them on every
+ * agent turn.
+ *
+ * What still holds is narrower and is a decision rather than an absence: a
+ * cache SKU would have to be priced, and `credits/projection.ts` re-prices from
+ * input and output alone. Adding the unit here without the pricing arm would
+ * meter something no projection charges for. `ECONOMY_MODEL.md` measured cache
+ * at 55–70% of agent provider cost, so this is a real gap, and it is recorded
+ * as one in `docs/ROADMAP.md` rather than closed by widening this list.
  *
  * `anthropic_thinking_tokens` is recorded because it is billed, but see
  * `rating.ts`: it is already contained in the output-token count the provider

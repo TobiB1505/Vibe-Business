@@ -1,6 +1,6 @@
 # Vibe Business — Product Document
 
-Status: Early concept / pre-implementation
+Status: V0.1 scope implemented — see [§7](#7-v01-scope). This document remains the source of truth for *intent*; [docs/sprints/](docs/sprints/README.md) records what shipped and [docs/ROADMAP.md](docs/ROADMAP.md) records what is known to be missing.
 Audience: Team members, contributors, future Claude Code sessions
 
 This document is the source of truth for what Vibe Business is, who it is for, and what V0.1 must and must not do. It is written to remain understandable months from now, independent of any single chat conversation that produced it.
@@ -113,7 +113,7 @@ The first complete product loop ("Core Loop V0.1"):
 8. Vibe Business creates a separate Git branch.
 9. AI prepares a concrete code improvement on that branch.
 10. The project is built and tested.
-11. An isolated preview deployment is created.
+11. A temporary isolated preview of the validated change is created — never a deploy into the user's own hosting ([ADR 0016](docs/decisions/0016-temporary-preview-isolation.md)).
 12. User sees Current vs. Vibe Proposal.
 13. User chooses Reject or Approve.
 14. Only after explicit approval is the change merged.
@@ -149,7 +149,9 @@ V0.1 exists to prove the Core Loop end-to-end. It requires, at minimum:
 - Vibe Credit ledger
 - Audit logging
 
-The exact technical implementation of each of these is determined only after the architecture decisions in [ARCHITECTURE.md](ARCHITECTURE.md) are made — this document defines *what* V0.1 must do, not *how*.
+**All of the above are implemented.** This document defines *what* V0.1 must do; the *how* is recorded in [ARCHITECTURE.md](ARCHITECTURE.md) and in the ADRs it indexes.
+
+Two qualifications that matter more than the checklist: the Vibe Credit ledger exists and charges fixed per-operation prices, but **no consumption rate card is active** — `CREDIT_RATE_CARDS` ships empty by design ([ADR 0024](docs/decisions/0024-vibe-credits-economic-layer.md) §8). And "build/test validation" means the repository's own install, typecheck, test and build run in an isolated microVM ([ADR 0015](docs/decisions/0015-untrusted-repository-execution-provider.md)) — a pass proves those commands exited zero, never that a change is correct or ready ([CLAUDE.md](CLAUDE.md) rule 66).
 
 ---
 
@@ -210,7 +212,7 @@ Guiding principle: **Prepare autonomously. Execute consequential actions with ap
 
 ## 10. Business Readiness Concept
 
-The Business Readiness Audit evaluates a product across dimensions relevant to turning it into a business. Planned dimensions:
+The Business Readiness Audit evaluates a product across dimensions relevant to turning it into a business. Dimensions:
 
 | Dimension | Question it answers |
 |---|---|
@@ -220,7 +222,9 @@ The Business Readiness Audit evaluates a product across dimensions relevant to t
 | Conversion | Does the product meaningfully guide visitors toward the desired action? |
 | Retention | Are there mechanisms that bring users back or keep them engaged? |
 
-Not all dimensions need to be fully automated in V0.1. The underlying data model should not unnecessarily block these dimensions from being expanded later.
+All five are scored, and the data model did stay open: the audit now also reasons through nine business lenses, each carrying a health reading and a separate judgement about whether it matters *now* — added without changing the five dimensions, which remain the scored technical record.
+
+A dimension the evidence cannot support returns `insufficient_evidence` with a null score, is excluded from the overall figure, and is never counted as zero.
 
 ---
 
@@ -229,16 +233,21 @@ Not all dimensions need to be fully automated in V0.1. The underlying data model
 The durable product model is:
 
 ```
-Understand → Diagnose → Prioritize → Execute → Measure
+Understand → Diagnose → Prioritize → Plan → Execute → Measure
 ```
 
 | Stage | What it is | Status |
 |---|---|---|
-| Understand | Repository, public product, Deep Scan, Business Context | Built |
+| Understand | Repository, public product, Deep Scan, Founder Intent | Built |
 | Diagnose | Business Readiness Audit | Built |
 | Prioritize | Opportunity Engine | Built |
-| Execute | Vibe makes the change | **Not built** |
-| Measure | Impact of a change | **Not built** |
+| Plan | Action Plan — the move a founder selects, broken into steps ([ADR 0028](docs/decisions/0028-founder-selectable-action-plan-move.md)) | Built |
+| Execute | Vibe prepares the change, validates it, and merges it after approval | Built |
+| Measure | What became true in production after the change | Built for delivery; **no connected data source** for business outcomes |
+
+`Plan` was not in the original model. It was added because an opportunity names a problem and an execution needs a step, and nothing was turning one into the other.
+
+The honest reading of `Measure`: Vibe verifies what a merged change made observable in production ([ADR 0020](docs/decisions/0020-production-outcome-verification.md)), and can compare a business metric across two windows ([ADR 0021](docs/decisions/0021-business-outcome-measurement.md)) — but no metric source is connected, so every project resolves to `waiting_for_source`. Vibe never claims a change *caused* a business result.
 
 Vibe Business does not present users with large audit reports. After an analysis, the system surfaces a small number of highly prioritized opportunities. Example:
 
@@ -252,7 +261,7 @@ The system should prioritize as aggressively as possible rather than presenting 
 
 ## 12. Credit Model
 
-Vibe Business plans to use a hybrid monetization model long-term:
+Vibe Business uses a hybrid monetization model:
 
 **Subscription + Vibe Credits**
 
@@ -273,6 +282,8 @@ Credits must **not** be directly equated with underlying provider tokens. Actual
 - `timestamp`
 
 This separation allows models and providers to change later without redesigning the user-facing credit system.
+
+**How it was actually built.** The separation held; the single record did not, because the units are not comparable. Provider tokens (`ai_usage_events`), sandbox time (`sandbox_usage_events`), Deep Scan browser seconds (`deep_scan_provider_usage`) and visual-review browser seconds (`review_browser_usage`) are four ledgers, each with its own meter and its own honesty about what it cannot price — an unknown cost is recorded as unknown, never as zero. `vibe_credits_charged` was never a column on any of them: customer Credits live in their own append-only ledger, which is the separation this section asked for, made structural rather than conventional. See [ADR 0024](docs/decisions/0024-vibe-credits-economic-layer.md).
 
 ### 12.1 Deep Scan entitlement
 
@@ -300,7 +311,7 @@ The invariant, enforced by derivation rather than a flag: a completed snapshot m
 
 **Cost is separate from AI cost.** A Deep Scan bills browser wall-clock seconds, not tokens, so provider usage is recorded in its own place and never merged into the token ledger above. Provider cost is left null rather than derived from an assumed rate.
 
-Until Vibe Credits exist, a request for an additional Deep Scan returns a typed refusal and the UI explains that additional scans are coming with Credits. No price is shown, no balance is invented, and the user is never sent into a checkout that does not exist.
+Vibe Credits now exist ([ADR 0024](docs/decisions/0024-vibe-credits-economic-layer.md)), but Deep Scan is not wired to them: a request for an additional Deep Scan returns a typed `credits_required` refusal and the UI explains that additional scans are coming with Credits. No price is shown, no balance is invented, and the user is never sent into a checkout that does not exist. Pricing a Deep Scan means pricing browser seconds, and no measured basis for that exists yet.
 
 ---
 
@@ -323,12 +334,14 @@ Every significant AI job is expected to eventually carry a maximum budget.
 
 ## 14. Success Criteria for V0.1
 
+**Met**, on Vibe Business's own repository. The chain ran end to end on 14.08.2026 — prepare, validate, preview, review, approve, merge — and production outcome verification followed on 15.08.2026. See [docs/PROJECT_HISTORY_AND_LEARNINGS.md](docs/PROJECT_HISTORY_AND_LEARNINGS.md) §21–§22 and [docs/business/ECONOMY_MODEL.md](docs/business/ECONOMY_MODEL.md) for the measured runs.
+
 V0.1 is successful if it demonstrates, end-to-end, for at least one real repository:
 
 - A user can connect GitHub and select a repository.
 - Vibe Business produces a Business Readiness Audit and a small set of prioritized opportunities from repository (and optionally live URL) analysis.
 - The user can select one opportunity and have Vibe Business prepare a real code change on an isolated branch.
-- The change is built, tested, and made available as an isolated preview.
+- The change is built, tested, and made available as a temporary isolated preview.
 - The user can compare current vs. proposed and explicitly approve or reject.
 - An approved change merges only after that explicit approval; a rejected change never touches the default branch.
 - Every AI job involved is logged with usage/cost data sufficient to populate the credit ledger described in [Credit Model](#12-credit-model).

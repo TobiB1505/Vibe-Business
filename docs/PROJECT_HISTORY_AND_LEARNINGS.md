@@ -1803,6 +1803,74 @@ Details: [`docs/sprints/0037-billing-core1-credits-ledger.md`](sprints/0037-bill
 
 ---
 
+## 40. Dokumente, die nichts zum Scheitern bringen, verfallen
+
+Am 21.08.2026 beschrieben README, PRODUCT.md und ARCHITECTURE.md immer noch
+Sprint 0 — nach vierundfünfzig Sprints und achtunddreißig ADRs. Der eigentliche
+Befund ist aber nicht, dass sie veraltet waren, sondern **warum sie es fünfzig
+Sprints lang bleiben konnten**.
+
+Es lag nicht daran, dass es niemand bemerkt hat. Sprint 0032 hat es bemerkt: Er
+fand, dass `/login` und `/signup` dem Nutzer "Read-only access to start"
+versprechen, während Execution Refs schreibt und ein genehmigter Merge den
+Default-Branch bewegt. Er hat den Befund präzise als offenes Risiko notiert — und
+ihn dann zwanzig Sprints lang stehen lassen. Denn eine Notiz erzeugt keine
+Verpflichtung.
+
+**Nichts in diesem Repository ist fehlgeschlagen, wenn ein Dokument aufhörte,
+wahr zu sein.** Lint nicht, `tsc` nicht, fünftausend Tests nicht, der Build
+nicht. Das ist der Mechanismus, und er ist wichtiger als die Aufmerksamkeit
+einzelner Sessions.
+
+Drei Dinge machten die Drift betrieblich schädlich statt nur unordentlich. Erstens
+eine **falsche Vertrauensaussage gegenüber dem Kunden**, gezeigt *bevor* er die
+GitHub App installiert. Zweitens ein **Setup-Dokument, das eine kaputte
+Installation herstellt** — wer ihm folgte, bekam eine App, auf der jede Execution
+und jeder Merge fehlschlägt. Und drittens: **CLAUDE.md Regel 1 verpflichtet jede
+AI-Session auf PRODUCT.md und ARCHITECTURE.md**, bevor sie substanzielle Arbeit
+beginnt. Diese Dokumente sagten, die Implementierung habe nicht begonnen, der
+Sandbox-Provider sei unentschieden, das Credit-Ledger existiere nicht — und Regel
+24 verbot eine Technologie, die in `package.json` steht und in Produktion läuft.
+In den meisten Projekten kostet Dokumentations-Drift einen Leser etwas Zeit. Hier
+sind die Dokumente ein *Input* für den Prozess, der den Code schreibt. Ein
+falscher Satz ist damit näher an einem vergifteten Test-Fixture als an einem
+veralteten Kommentar.
+
+Das durable Prinzip:
+
+> **Aktualität, die nur durch Aufmerksamkeit gehalten wird, wird nicht gehalten.**
+> Ein Dokument, dessen Falschheit nichts zum Scheitern bringt, verfällt — nicht
+> weil jemand nachlässig ist, sondern weil nichts es zurückholt. Wenn Aktualität
+> zählt, muss sie ausführbar sein.
+
+Daraus folgt eine zweite Unterscheidung, die vorher fehlte: **Zeitform ist Teil
+des Vertrags eines Dokuments.** Aufzeichnungen — Sprints, ADRs, Audits, diese
+Historie — sagen, was zum Zeitpunkt des Schreibens wahr war, und werden *nicht*
+an die Gegenwart angepasst; ein Sprint-Dokument, das HEAD widerspricht, arbeitet
+korrekt. Ist-Zustands-Dokumente müssen bei HEAD wahr sein, und ein falscher Satz
+darin ist ein Defekt mit dem Rang eines fehlschlagenden Tests. Eine Aufzeichnung
+wird nur korrigiert, wenn sie *beim Schreiben* falsch war — und dann offen, mit
+datierter Klammer, die das Original stehen lässt.
+
+Sprint 0037 lieferte das Lehrbeispiel: Er schreibt, Retries seien "bounded at 3";
+`git log -S` zeigt, dass der Wert im Commit dieses Sprints selbst 10 war. Also nie
+wahr, nicht überholt. Zwei Fehlerarten, die identisch aussehen und
+entgegengesetzte Behandlung brauchen.
+
+Konkret hinterlässt der Sprint deshalb nicht nur korrigierte Dokumente, sondern
+`src/lib/docs/documentation-currency.test.ts` — und die Liste `RETIRED_CLAIMS`
+ist **pro Datei** gebunden, nicht repository-weit. Ein globales Verbot der
+Zeichenkette würde genau die Dokumente brechen, die richtig funktionieren: Sprint
+0032 *zitiert* die Read-only-Zusage als den Defekt, den er gefunden hat. **Die
+Historie darf es sagen; ein Ist-Zustands-Dokument nicht.**
+
+Und eine bewusste Nicht-Aufräumung: Die Regelnummern in CLAUDE.md sind
+unveränderlich. Rund 380 Referenzen auf Regelnummern existieren in `src/` und
+`docs/`; eine Umnummerierung würde jede einzelne still auf eine andere Regel
+zeigen lassen, **und nichts würde fehlschlagen**. Das ist der schlechteste
+verfügbare Fehlermodus. Regeln werden an Ort und Stelle neu geschrieben, nie
+verschoben.
+
 ## Empfohlene zusätzliche Dokumentstruktur
 
 Ich würde neben diesem History-Dokument künftig zusätzlich pflegen:

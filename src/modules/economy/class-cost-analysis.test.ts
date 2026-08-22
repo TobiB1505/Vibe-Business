@@ -41,7 +41,7 @@ describe("analyzeClassCostDifferentiation", () => {
     expect(complex.runs).toEqual([]);
   });
 
-  it("standard's mean cost is materially above small's, but this is a 5-vs-1 comparison, not a robust one", () => {
+  it("standard's mean cost is materially above small's, but this is a 6-vs-1 comparison, not a robust one", () => {
     const small = stats.find((s) => s.pricingClass === "small")!;
     const standard = stats.find((s) => s.pricingClass === "standard")!;
     expect(standard.meanFloorNanoUsd!).toBeGreaterThan(small.meanFloorNanoUsd!);
@@ -53,7 +53,9 @@ describe("smallVersusStandardCostGapRatio", () => {
     const ratio = smallVersusStandardCostGapRatio();
     expect(ratio).not.toBeNull();
     expect(ratio!).toBeGreaterThan(1);
-    // Real figures: standard mean $0.30556, small mean $0.2541 -> ratio ~1.20
+    // Real figures: standard mean $0.31247 (six runs, #9 included), small mean
+    // $0.2541 -> ratio ~1.23. CREDIT_PRICING_V1.md's table is frozen at the
+    // five-run figure on purpose and says so; this is the live number.
     expect(ratio!).toBeCloseTo(1.2, 1);
   });
 });

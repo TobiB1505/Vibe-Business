@@ -27,7 +27,7 @@ export default async function SignupPage({
         </>
       }
       intro="Create an account, connect a repository, and Vibe reads it once to work out how business-ready it is."
-      assurances={["Read-only access to start", "Nothing merged without your approval"]}
+      assurances={["Changes land on their own branch", "Nothing merged without your approval"]}
     >
       <div className="flex flex-col gap-2">
         <h1 className="text-fg text-headline font-bold">Create account</h1>

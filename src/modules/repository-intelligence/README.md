@@ -14,7 +14,7 @@ Turns a connected GitHub repository into a versioned, evidence-carrying snapshot
 | `candidates.ts` | High-value file *discovery* (free, from the tree) vs. *fetching* (dependency manifests only). |
 | `parsers/` | Manifest parsing, strictly as data. |
 | `context.ts` | Assembles the read-only input every detector works from. |
-| `detectors/` | Pure functions: `stack`, `integrations`, `routes`, `monorepo`, `business-surfaces`. |
+| `detectors/` | Pure functions: `stack`, `integrations`, `routes`, `monorepo`, `business-surfaces`, `brand`. |
 | `analyzer.ts` | Orchestrates the pipeline and builds the snapshot. |
 | `schema.ts` | The versioned output contract + `ANALYZER_VERSION`. |
 | `human-view.ts` | Presentation only: a deterministic translation of a snapshot into business capabilities ([Sprint UI-3.6](../../../docs/sprints/0020-ui36-repository-intelligence-human-first.md)). Reads the snapshot, changes nothing. |

@@ -39,13 +39,12 @@ Under **"Identifying and authorizing users"**:
 Under **Permissions & events → Repository permissions**, set exactly:
 
 - **Metadata: Read-only**
-- **Contents: Read-only**
+- **Contents: Read and write**
 
 …and nothing else.
 
 Do **not** set:
-- **Contents: Read and write** — Sprint 2 only *reads* repository files. Write access is not needed until a sprint actually creates branches or commits.
-- Pull requests (not needed until a later sprint opens PRs)
+- **Pull requests** — Vibe never opens one. An approved change is delivered by creating a branch and then fast-forwarding the default branch to one exact commit (`src/modules/merge/github/adapter.ts`), so the pull-request API is never called.
 - Actions, Administration, Issues, Workflows
 - Any Organization or Account permission
 
@@ -54,17 +53,22 @@ Why each one:
 | Permission | Needed for |
 |---|---|
 | Metadata: Read-only | Listing the repositories an installation can access, and their basic facts (name, owner, default branch, visibility, URL) — `src/modules/github/repositories.ts` |
-| Contents: Read-only | Reading the Git tree and a small number of manifest files to build repository intelligence — `src/modules/github/repository-reader.ts` |
+| Contents: Read and write | **Read** — the Git tree and a small number of manifest files, to build repository intelligence (`src/modules/github/repository-reader.ts`). **Write** — creating the blob, tree, commit and branch ref a prepared change lands on (`src/modules/execution/github/adapter.ts`), and fast-forwarding the default branch after an explicit human approval (`src/modules/merge/github/adapter.ts`). |
 
-### ⚠️ Existing installations must approve the added permission
+Read access alone is not enough to run the product: both write paths check the permission the installation *actually carries* and refuse when it is not `write`, so an App configured read-only will connect and analyse, and then fail at every prepared change and every merge.
 
-**Contents: Read-only was added in Sprint 2.** GitHub does not grant a newly requested permission to an existing installation automatically — repository intelligence will fail with a "needs read-only access to repository contents" message until the update is approved.
+### ⚠️ Existing installations must approve a changed permission
+
+GitHub does not grant a newly requested permission to an existing installation automatically. Two upgrades have happened:
+
+- **Contents: Read-only** was added in Sprint 2 — repository intelligence fails with a "needs read-only access to repository contents" message until it is approved.
+- **Contents: Read and write** is required from Sprint 11 onwards — preparing a change and merging one both refuse until it is approved.
 
 To update an App you already created:
 
 1. GitHub → **Settings** → **Developer settings** → **GitHub Apps** → *your app*
 2. **Permissions & events** → **Repository permissions**
-3. Set **Contents** to **Read-only**
+3. Set **Contents** to **Read and write**
 4. **Save changes**
 
 GitHub then emails the account/organisation owner a request to approve the updated permissions. Until that approval happens:

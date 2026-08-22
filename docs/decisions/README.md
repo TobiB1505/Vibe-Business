@@ -68,6 +68,7 @@ V0.1 foundational architecture decisions have been recorded:
 - [0036](0036-risk-adaptive-validation-depth.md) — Risk-Adaptive Independent Validation Depth: profile answers *which commands*, depth answers *how many this change deserves* (Accepted, extends Rule 65 with a second versioned axis; leaves Rule 66 untouched)
 - [0037](0037-automatic-validation-and-review-classification.md) — Automatic validation hand-off, and deterministic review classification (Accepted, establishes that one durable operation may enqueue the next; leaves the visual-review "nothing is automatic" rule intact)
 - [0038](0038-economy-intelligence-layer.md) — The Economy Intelligence layer (Accepted, extends 0024; predicts what a run will cost from pre-execution signals only, measures how wrong it was, and activates nothing — `CREDIT_RATE_CARDS` stays empty)
+- [0039](0039-documentation-currency.md) — Where truth lives, and how documentation stays current (Accepted; one authoritative home per claim, records are immutable and current-state documents must be true at HEAD, and the structural half is asserted by `src/lib/docs/documentation-currency.test.ts`)
 
 Several architecture questions remain intentionally open — see [ARCHITECTURE.md §7](../../ARCHITECTURE.md#7-deferred--open-decisions).
 
