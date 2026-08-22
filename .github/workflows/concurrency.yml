@@ -22,27 +22,17 @@ name: Billing concurrency
 # `workflow_dispatch` only becomes reachable once this file is on the default
 # branch; until then the `pull_request` trigger is what runs it. The gate was
 # brought up on a branch-scoped push trigger and moved here after three runs —
-# cf010db red on a defect in the test, 5646e53 and 59fa9d8 green.
+# cf010db red on a defect in the test, 5646e53 and 59fa9d8 green — then brought
+# up on that trigger a second time for the two corrective defect-A/defect-B
+# fixes E2b's verification found, green as of c37304c, and removed again here.
 
 on:
   workflow_dispatch:
-  # Bring-up again, and removed again before merge: the corrective commits for
-  # the two defects E2b found need a real-database run, and this branch still
-  # has no pull request to trigger one.
-  push:
-    branches: [claude/vibe-intelligence-architecture-fpjyel]
-    paths:
-      - "src/modules/credits/**"
-      - "src/modules/operations/**"
-      - "src/modules/coding-agent/**"
-      - "supabase/migrations/**"
-      - "supabase/config.toml"
-      - ".github/workflows/concurrency.yml"
-      - "vitest.concurrency.config.mts"
   pull_request:
     paths:
       - "src/modules/credits/**"
       - "src/modules/operations/**"
+      - "src/modules/coding-agent/**"
       - "supabase/migrations/**"
       - "supabase/config.toml"
       - ".github/workflows/concurrency.yml"
