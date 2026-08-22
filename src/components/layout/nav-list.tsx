@@ -3,11 +3,18 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
-import type { ProjectNavItem } from "./project-shell";
 import { cn } from "@/lib/utils/cn";
+import { isNavItemActive } from "./nav-active";
 
 /**
- * Workspace navigation (Sprint UI-2 Part 2).
+ * The one navigation renderer in the product (Sprint UI-2 Part 2, generalised
+ * in UI-8).
+ *
+ * It began as `ProjectNav`, serving the project workspace rail. The account
+ * level now has a rail too, and the choice was a second renderer or one that
+ * does not care whose sections it is drawing. Nothing in here was ever
+ * project-specific except the name and one hard-coded id — so this is that
+ * component with `exact` replacing the id, and both shells feeding it.
  *
  * ## Why this is a client component
  *
@@ -22,10 +29,9 @@ import { cn } from "@/lib/utils/cn";
  *
  * ## Matching
  *
- * Overview is the index route, so it is active only on an exact match —
- * `startsWith` would light it up on every child route. Every other section is
- * matched exactly too, with the boundary check reserved for future child routes
- * (a prepared-change detail page would keep "Prepared" active).
+ * Decided by `isNavItemActive`, which is a pure module so the rule can be
+ * tested — the browser harness renders fixtures, not real routes, and cannot
+ * reach it.
  *
  * ## On a phone this is a strip, and it had two problems (UI-7 §6)
  *
@@ -39,7 +45,27 @@ import { cn } from "@/lib/utils/cn";
  * marked current anywhere on screen — so the one job the active state has,
  * telling you where you are, failed exactly where orientation is hardest.
  */
-export function ProjectNav({ items }: { items: ProjectNavItem[] }) {
+
+export type NavItem = {
+  /** Stable across renders; used as the React key only. */
+  id: string;
+  label: string;
+  href: string;
+  /**
+   * Match this item's href exactly rather than as a path prefix. Set on an
+   * index route, whose path is a prefix of every sibling's.
+   */
+  exact?: boolean;
+  /**
+   * A count beside the label — waiting moves, prepared changes. Only pass a
+   * number the domain actually produced; an absent count is absent, not zero.
+   */
+  count?: number | null;
+  /** Mint when the count is something Vibe is offering to act on. */
+  countTone?: "accent" | "neutral";
+};
+
+export function NavList({ items }: { items: readonly NavItem[] }) {
   const pathname = usePathname();
   const stripRef = useRef<HTMLUListElement>(null);
   const activeRef = useRef<HTMLLIElement>(null);
@@ -58,15 +84,6 @@ export function ProjectNav({ items }: { items: ProjectNavItem[] }) {
     strip.scrollLeft = Math.max(0, Math.min(active.offsetLeft - 16, overshoot + 16));
   }, [pathname]);
 
-  function isActive(href: string): boolean {
-    if (pathname === href) return true;
-    // A child route keeps its parent section active — but only at a real path
-    // boundary, so `/prepared` never matches `/prepared-something-else`.
-    const overviewHref = items.find((item) => item.id === "overview")?.href;
-    if (href === overviewHref) return false;
-    return pathname.startsWith(`${href}/`);
-  }
-
   return (
     <ul
       ref={stripRef}
@@ -81,7 +98,7 @@ export function ProjectNav({ items }: { items: ProjectNavItem[] }) {
       )}
     >
       {items.map((item) => {
-        const current = isActive(item.href);
+        const current = isNavItemActive(pathname, item);
 
         return (
           <li key={item.id} ref={current ? activeRef : undefined} className="lg:w-full">

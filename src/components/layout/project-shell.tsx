@@ -3,7 +3,7 @@ import type { ReactNode } from "react";
 import { VibeLockup } from "@/components/brand/vibe-mark";
 import { StatusDot, type StatusTone } from "@/components/ui/status-pill";
 import { MonoLabel } from "@/components/ui/typography";
-import { ProjectNav } from "./project-nav";
+import { NavList, type NavItem } from "./nav-list";
 import { cn } from "@/lib/utils/cn";
 
 /**
@@ -89,18 +89,14 @@ export function preparedChangeHref(preparedHref: string, preparedChangeId: strin
   return `${preparedHref}#${preparedChangeAnchorId(preparedChangeId)}`;
 }
 
-export type ProjectNavItem = {
-  id: ProjectSectionId;
-  label: string;
-  href: string;
-  /**
-   * A count beside the label — waiting moves, prepared changes. Only pass a
-   * number the domain actually produced; an absent count is absent, not zero.
-   */
-  count?: number | null;
-  /** Mint when the count is something Vibe is offering to act on. */
-  countTone?: "accent" | "neutral";
-};
+/**
+ * One workspace section as a navigation entry.
+ *
+ * `NavList` renders both rails, so the shape is shared; the narrowing here is
+ * that a project item's id must be a real section, which is what keeps a
+ * typo out of a nav that mirrors `PROJECT_SECTIONS`.
+ */
+export type ProjectNavItem = NavItem & { id: ProjectSectionId };
 
 export function ProjectSidebar({
   projectName,
@@ -150,7 +146,7 @@ export function ProjectSidebar({
         </div>
       </div>
 
-      <ProjectNav items={items} />
+      <NavList items={items} />
 
     </nav>
   );

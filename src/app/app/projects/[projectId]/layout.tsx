@@ -85,6 +85,9 @@ export default async function ProjectLayout({
     id: section.id,
     label: section.label,
     href: projectSectionHref(project.id, section.id),
+    // Overview is the index route, so its path is a prefix of every sibling's.
+    // Without this it would render as current on all eight sections.
+    exact: section.segment === "",
     count:
       section.id === "next-moves"
         ? countFor(counts.nextMoves)
