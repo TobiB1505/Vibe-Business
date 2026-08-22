@@ -10,6 +10,8 @@
 
 The [economics review](../audits/2026-08-21-economics-architecture-review/README.md) named four defects (F1–F4) and reproduced exactly one of them line by line. Verification for this sprint found roughly twelve, including three the review never mentions and one whose direction it gets backwards.
 
+*[Clarified 2026-08-22, during E2 — the original counts stand and are not changed.] Two different counts appear in this record and they cover different things. "Roughly twelve" counts **findings**: everything verification turned up, including what was deferred rather than fixed (no reconciliation repairer), what a migration closed rather than a test (the missing unique constraint), and one whose fix is covered by another scenario's assertion. ["Eleven reproductions"](#eleven-reproductions-each-observed-failing-first) counts **red tests observed failing before the fix**. Neither number is wrong; the relationship between them was never stated.*
+
 The one it got backwards matters most. F1 is described as a drift risk on a cache. It is worse than that: an unguarded write in `releaseHeldCredits` can **erase a hold that `admitHold` has already granted and returned success for**, leaving the account *under*-reserved — a live hold the cache does not count. `billing_credit_accounts_available_non_negative` is `posted - reserved >= 0`, so it only ever catches `reserved` growing too large and is structurally blind to this direction.
 
 Three defects the review does not list at all:
