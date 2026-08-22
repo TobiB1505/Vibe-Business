@@ -21,24 +21,11 @@ name: Billing concurrency
 #
 # `workflow_dispatch` only becomes reachable once this file is on the default
 # branch; until then the `pull_request` trigger is what runs it. The gate was
-# introduced on a branch-scoped push trigger and moved here after two green
-# runs, the second of them at 5646e53.
+# brought up on a branch-scoped push trigger and moved here after three runs —
+# cf010db red on a defect in the test, 5646e53 and 59fa9d8 green.
 
 on:
   workflow_dispatch:
-  # Bring-up only, removed before this branch merges: `workflow_dispatch` is
-  # unreachable until the file is on the default branch, and this branch has no
-  # pull request, so without this there is no way to execute a change to the
-  # gate before shipping it.
-  push:
-    branches: [claude/vibe-intelligence-architecture-fpjyel]
-    paths:
-      - "src/modules/credits/**"
-      - "src/modules/operations/**"
-      - "supabase/migrations/**"
-      - "supabase/config.toml"
-      - ".github/workflows/concurrency.yml"
-      - "vitest.concurrency.config.mts"
   pull_request:
     paths:
       - "src/modules/credits/**"
