@@ -91,6 +91,9 @@ All four snapshot tables retain every version; no code compares two. A re-scan t
 **The unit that is charged and the unit that is sold are different things.**
 An agent run settles at the reserved fixed price when the prepared change exists; validation runs afterwards, unreserved and uncapped. A validation failure after a successful preparation still charges.
 
+**The one component that draws a score honestly has never drawn one.**
+`src/components/ui/score-display.ts` encodes Rule 44 in code — a `null` dimension renders an empty track and the text `n/a`, never a `0` — and its only caller is its own test. `ScoreMeter` was deleted by UI-6 for want of a home, and Sprint 0057 confirmed the nine lenses are not where it belongs: `business-audit/schema.ts:146` says they are "not scores", and `business-map.tsx:132` already draws their health in words. The scored layer is the five dimensions, which UI-1.2 removed from the customer's face as a competing verdict. So the rule is enforced nowhere a customer can see, and the honest fix is a decision about whether dimension scores are ever shown again — not a component.
+
 **No operator can correct a charge.**
 `refundCharge` is implemented, tested through its decision function, constrained by a database CHECK — and has zero callers. So does the adjustment kind. There is no admin surface of any kind.
 
