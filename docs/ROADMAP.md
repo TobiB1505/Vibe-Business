@@ -42,6 +42,9 @@ What remains is the run itself, and it is blocked on infrastructure rather than 
 
 ## Next — one shared evidence foundation
 
+**A newly provisioned Vibe database would have no working Data API.**
+None of the 54 files in `supabase/migrations/` contains a `GRANT`. The deployed project's billing tables are reachable through PostgREST only because of Postgres default privileges the Supabase platform applied — `public / tables` to `anon`, `authenticated` and `service_role`, read back from `information_schema.role_table_grants`. Supabase is moving that default to *revoke*, and `supabase/config.toml` documents the replacement behaviour: unset means new entities are not auto-exposed. So the API surface of every table is defined by a platform default rather than by this repository, against Rule 34. Sprint 0057 E2b set `auto_expose_new_tables = true` as **local/CI parity only**, and that field is removed on **2026-10-30**. Closing this means deriving PostgREST rights entirely from versioned repository configuration, under a deliberate least-privilege decision per role — `anon` currently holds `INSERT`, `UPDATE` and `DELETE` on every billing table, with RLS as the only thing refusing the write.
+
 **Live-product evidence is never revalidated before a run that costs money.**
 `execution-contract/freshness.ts` re-checks repository state, plan currency, dependencies and ownership immediately before a write, but not the live-product evidence a step's classification and rationale rest on. Two calibration runs on the economics branch failed with `agent_produced_no_change` because `live.seo.meta_description_missing` had become false since the fixture was written — both times the agent was right and the premise was wrong. Re-running the scan that produces that evidence is free and deterministic; Rule 60 forbids spending the user's money, not observing.
 

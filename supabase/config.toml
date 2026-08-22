@@ -21,7 +21,21 @@ max_rows = 1000
 # without explicit GRANTs. When unset, new entities are NOT auto-exposed, matching the new cloud
 # default. Set to `true` to keep the legacy behaviour of auto-exposing new entities; this is
 # deprecated and the field is removed on 2026-10-30 once the always-revoked behaviour is permanent.
-# auto_expose_new_tables = true
+#
+# Set for local/CI parity only (Sprint 0057 E2b, ADR 0040). None of this
+# repository's 54 migrations contains a GRANT, and the deployed project's
+# billing tables are reachable through PostgREST because of Postgres default
+# privileges the platform applied — public/tables to anon, authenticated and
+# service_role. Without this line a fresh local stack refuses the concurrency
+# harness with 42501 while the deployed project works, so the suite would be
+# testing a privilege model that exists nowhere.
+#
+# This is NOT the intended permission architecture, and it has an expiry date
+# printed two lines above. A newly provisioned Vibe database should derive its
+# PostgREST rights entirely from versioned repository configuration, under a
+# deliberate least-privilege decision per role. That is recorded as an open gap
+# in docs/ROADMAP.md and is deliberately not closed inside a concurrency sprint.
+auto_expose_new_tables = true
 
 [api.tls]
 # Enable HTTPS endpoints locally using a self-signed certificate.
