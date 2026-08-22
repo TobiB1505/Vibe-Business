@@ -157,6 +157,9 @@ export default async function E2eScenarioPage({
         {label}
         <OpportunitiesPanel
           projectId="project_e2e"
+          // A fixed balance, so a browser assertion about the cost panel reads
+          // the same on every run. The real value comes from the billing read.
+          balanceDisplay="2,480"
           opportunities={fixture.opportunities}
           executionStates={fixture.executionStates}
           branchUrls={{}}

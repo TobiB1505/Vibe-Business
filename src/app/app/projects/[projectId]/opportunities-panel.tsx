@@ -7,7 +7,7 @@ import { CategoryChip, StatusPill, type StatusTone } from "@/components/ui/statu
 import { Surface } from "@/components/ui/surface";
 import { MonoLabel } from "@/components/ui/typography";
 import { Notice } from "@/components/ui/states";
-import { CreditPrice } from "@/components/ui/credit-price";
+import { CostDisclosure } from "@/components/ui/cost-disclosure";
 import { describeEvidenceId } from "@/modules/business-audit/evidence-labels";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { useOperationPoll } from "@/lib/client/use-operation-poll";
@@ -247,6 +247,7 @@ export function OpportunitiesPanel({
   movesHref,
   preparedHref,
   plannedOpportunityId,
+  balanceDisplay,
 }: {
   projectId: string;
   opportunities: BusinessOpportunity[];
@@ -268,6 +269,11 @@ export function OpportunitiesPanel({
   preparedHref: string;
   /** Which Move the Action Plan section below is currently about (§83). */
   plannedOpportunityId: string | null;
+  /**
+   * The founder's Credit balance, formatted. Null when it could not be read —
+   * the balance line is then absent rather than showing a zero.
+   */
+  balanceDisplay: string | null;
 }) {
   const action = startOpportunitiesAction.bind(null, projectId);
   const [state, formAction, pending] = useActionState(action, initialState);
@@ -438,27 +444,37 @@ export function OpportunitiesPanel({
       )}
 
       {!running && blockNotice === null && (
-        <form action={formAction} className="flex items-center gap-3">
-          <input type="hidden" name="force" value={hasOpportunities ? "true" : "false"} />
-          {/* Refreshing an existing set is secondary — the primary action in
-              this section is whatever a move itself offers. Finding them the
-              first time is the section's own primary. */}
-          <Button
-            type="submit"
-            disabled={pending}
-            variant={hasOpportunities ? "secondary" : "primary"}
-          >
-            {pending
-              ? "Starting…"
-              : hasOpportunities
-                ? "Refresh my next moves"
-                : "Find my next moves"}
-          </Button>
-          {/* The cost, before the click (BILLING CORE-2 §55). Reads the same
-              policy the reservation will, so there is no second copy of the
-              price to drift out of step with what is charged. */}
-          <CreditPrice operation="opportunity_generation" />
-        </form>
+        /*
+         * The cost, the balance and what the click will do, before the click
+         * (BILLING CORE-2 §55, UI-8 §4). `CostDisclosure` reads the same policy
+         * the reservation will, so there is no second copy of the price to
+         * drift out of step with what is charged.
+         */
+        <CostDisclosure subject="opportunity_generation" balanceDisplay={balanceDisplay}>
+          <p className="text-fg-prose text-sm">
+            {hasOpportunities
+              ? "Refreshing runs the ranking model over your current audit again. Your existing moves stay until it finishes."
+              : "Ranking runs a model over the audit you already have. Nothing is prepared and nothing is changed in your repository."}
+          </p>
+          <form action={formAction} className="flex items-center gap-3">
+            <input type="hidden" name="force" value={hasOpportunities ? "true" : "false"} />
+            {/* Refreshing an existing set is secondary — the primary action in
+                this section is whatever a move itself offers. Finding them the
+                first time is the section's own primary. */}
+            <Button
+              type="submit"
+              disabled={pending}
+              busy={pending}
+              variant={hasOpportunities ? "secondary" : "primary"}
+            >
+              {pending
+                ? "Starting…"
+                : hasOpportunities
+                  ? "Refresh my next moves"
+                  : "Find my next moves"}
+            </Button>
+          </form>
+        </CostDisclosure>
       )}
 
       {operation?.status === "failed" && operation.failureCode && (

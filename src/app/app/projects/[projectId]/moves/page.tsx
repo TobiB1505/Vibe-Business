@@ -20,6 +20,7 @@ import {
   getActiveOpportunityOperation,
 } from "@/modules/operations/service";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
+import { getHeaderCreditBalance } from "@/modules/billing/overview";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
 import { getActionPlanReadiness, getLatestActionPlan } from "@/modules/action-plans/service";
 import {
@@ -59,7 +60,7 @@ export default async function ProjectMovesPage({
   searchParams: Promise<{ [MOVES_CONTEXT_PARAM]?: string; [PLAN_OPPORTUNITY_PARAM]?: string }>;
 }) {
   const { projectId } = await params;
-  const { supabase, project } = await requireProjectAccess(projectId);
+  const { supabase, userId, project } = await requireProjectAccess(projectId);
   const resolvedSearchParams = await searchParams;
 
   // A founder's explicit choice of which Move to plan (§83). Absent, this is
@@ -77,6 +78,7 @@ export default async function ProjectMovesPage({
     actionPlanReadiness,
     actionPlanView,
     activeActionPlanOperation,
+    creditBalance,
   ] = await Promise.all([
     getLatestOpportunities(supabase, projectId),
     getOpportunityReadiness(supabase, projectId),
@@ -85,6 +87,9 @@ export default async function ProjectMovesPage({
     getActionPlanReadiness(supabase, projectId, requestedOpportunityId),
     getLatestActionPlan(supabase, projectId),
     getActiveActionPlanOperation(supabase, projectId),
+    // One row and its active lots — the same minimal query the app header
+    // uses. A balance is only useful beside the price it has to cover.
+    getHeaderCreditBalance(supabase, { userId }),
   ]);
 
   /*
@@ -246,6 +251,7 @@ export default async function ProjectMovesPage({
         // Which Move the section below is currently about, so every other
         // card can offer "Plan this Move" and the selected one does not
         // redundantly link to itself (§83).
+        balanceDisplay={creditBalance?.display ?? null}
         plannedOpportunityId={plannedMove?.id ?? null}
       />
 
