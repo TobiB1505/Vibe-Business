@@ -53,6 +53,44 @@ function usd(nano: number): string {
   return `$${nanoUsdToUsdString(nano)}`;
 }
 
+/**
+ * Every financial figure this probe promises not to move.
+ *
+ * Counts and balances together: a row count alone would miss a run that
+ * changed a balance in place, and a balance alone would miss one that added an
+ * offsetting pair.
+ */
+async function readFinancialState(supabase: ReturnType<typeof client>): Promise<{
+  accounts: number;
+  ledgerEntries: number;
+  reservations: number;
+  postedCredits: number;
+  reservedCredits: number;
+}> {
+  const count = async (table: string): Promise<number> => {
+    const { count: rows, error } = await supabase
+      .from(table)
+      .select("id", { count: "exact", head: true });
+    if (error) throw error;
+    return rows ?? 0;
+  };
+
+  const { data: balances, error } = await supabase
+    .from("billing_credit_accounts")
+    .select("posted_credits, reserved_credits");
+  if (error) throw error;
+
+  const rows = (balances ?? []) as { posted_credits: number; reserved_credits: number }[];
+
+  return {
+    accounts: await count("billing_credit_accounts"),
+    ledgerEntries: await count("billing_credit_ledger"),
+    reservations: await count("billing_credit_reservations"),
+    postedCredits: rows.reduce((total, row) => total + row.posted_credits, 0),
+    reservedCredits: rows.reduce((total, row) => total + row.reserved_credits, 0),
+  };
+}
+
 describe.skipIf(!configured)("billing shadow dogfood", () => {
   /**
    * §69 — the reconciliation that must hold exactly.
@@ -157,6 +195,22 @@ describe.skipIf(!configured)("billing shadow dogfood", () => {
   it("reconciles real usage twice with no duplicates", async () => {
     const supabase = client();
 
+    // The financial picture before this probe touches anything (§5, §43).
+    //
+    // This used to assert the credit tables were *globally* empty, which was
+    // true when Core-1 shipped in shadow mode and stopped being true the moment
+    // Core-2 wired Credits into the operation start paths. A probe asserting
+    // the database is empty is asserting something about the product's history
+    // rather than about itself, and it fails for the good reason that the
+    // product moved on.
+    //
+    // What shadow mode actually claims is narrower and still worth proving:
+    // *this run* writes `billing_usage_events` and nothing else. So the claim
+    // is measured rather than assumed — captured here, compared afterwards.
+    // It is also strictly stronger in one direction, because it would catch a
+    // probe that removed rows as well as one that added them.
+    const financialStateBefore = await readFinancialState(supabase);
+
     const first = await reconcileUsage(supabase, { limit: 1000 });
     const second = await reconcileUsage(supabase, { limit: 1000 });
 
@@ -183,18 +237,19 @@ describe.skipIf(!configured)("billing shadow dogfood", () => {
     expect(second.totals.eventsInserted).toBe(0);
     expect(second.totals.eventsAlreadyPresent).toBeGreaterThan(0);
 
-    // Shadow mode: nothing financial was written.
-    const { count: accounts } = await supabase
-      .from("billing_credit_accounts")
-      .select("id", { count: "exact", head: true });
-    const { count: ledger } = await supabase
-      .from("billing_credit_ledger")
-      .select("id", { count: "exact", head: true });
+    // Shadow mode: nothing financial was written *by this run*.
+    const financialStateAfter = await readFinancialState(supabase);
 
-    console.log(`\ncredit accounts created: ${accounts ?? 0}`);
-    console.log(`ledger entries posted:   ${ledger ?? 0}`);
-    expect(accounts ?? 0).toBe(0);
-    expect(ledger ?? 0).toBe(0);
+    console.log(`\ncredit accounts:   ${financialStateBefore.accounts} → ${financialStateAfter.accounts}`);
+    console.log(`ledger entries:    ${financialStateBefore.ledgerEntries} → ${financialStateAfter.ledgerEntries}`);
+    console.log(`reservations:      ${financialStateBefore.reservations} → ${financialStateAfter.reservations}`);
+    console.log(`posted (all):      ${financialStateBefore.postedCredits} → ${financialStateAfter.postedCredits}`);
+    console.log(`reserved (all):    ${financialStateBefore.reservedCredits} → ${financialStateAfter.reservedCredits}`);
+    console.log("customer charged: NO (shadow mode)");
+
+    // Counts *and* balances, because a probe could in principle move credits
+    // without changing a row count.
+    expect(financialStateAfter).toEqual(financialStateBefore);
     // Generous: two full reconciliation passes over every provider ledger,
     // each insert a separate round trip. This is a dogfood, not a unit test.
   }, 300_000);
