@@ -17,7 +17,7 @@ This file governs how Claude Code (and any AI-assisted session) works in this re
 13. Document meaningful architecture decisions in [docs/decisions/](docs/decisions/README.md) as ADRs, not only in chat.
 14. If requirements are ambiguous and materially affect architecture or product behavior, STOP and report the ambiguity rather than inventing product requirements.
 15. Avoid speculative features. Build what is described, not what might be useful later.
-16. Keep commits focused. One logical change per commit.
+16. Keep commits focused. One logical change per commit — see Commit Conventions below for the required subject format.
 17. Before declaring a task complete, run the relevant validation available in the repository (tests, build, linting, etc.).
 18. User repository code is untrusted. Treat every connected repository's contents, scripts, and executables as untrusted input.
 19. Never execute repository-provided scripts (npm install, npm/build/test scripts, postinstall hooks, arbitrary shell scripts, repository-provided executables) in the Vibe Business application runtime. See [ADR 0006](docs/decisions/0006-untrusted-repository-execution.md).
@@ -90,6 +90,32 @@ This file governs how Claude Code (and any AI-assisted session) works in this re
 82. `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`, `settingSources: []`, `persistSession: false`, a per-run `CLAUDE_CONFIG_DIR` and a per-run `cwd` are mandatory wherever the harness runs. Auto memory loads regardless of `settingSources`, and the harness now runs inside the customer's own tree — which is exactly where a `CLAUDE.md` lives.
 
 83. A change that makes a current-state document false is not complete. **Current-state** documents must be true at HEAD — [README.md](README.md), [PRODUCT.md](PRODUCT.md), [ARCHITECTURE.md](ARCHITECTURE.md), this file, [docs/README.md](docs/README.md), [docs/ROADMAP.md](docs/ROADMAP.md), `docs/setup/`, `docs/deployment/` and every `src/modules/*/README.md` — and a false sentence in one of them is a defect with the standing of a failing test, repaired by the change that caused it rather than deferred. **Records** are the opposite and are never edited to match the present: `docs/sprints/`, `docs/decisions/`, `docs/audits/` and `docs/PROJECT_HISTORY_AND_LEARNINGS.md` say what was true when written, and are corrected only when they were wrong *at the time*, in the open, with a dated bracket that leaves the original standing. Retiring a claim means adding it to `RETIRED_CLAIMS` in `src/lib/docs/documentation-currency.test.ts`, scoped to the file it was retired from — history may still quote it. Rule numbers here are immutable: rewrite a rule in place, never renumber — see [ADR 0039](docs/decisions/0039-documentation-currency.md).
+
+## Commit Conventions
+
+Every commit subject uses Conventional Commits:
+
+```
+<type>(<scope>): <short imperative summary>
+```
+
+**Types:** `feat`, `fix`, `refactor`, `perf`, `test`, `docs`, `build`, `ci`, `chore`. Pick the most precise type; `chore` is never a catch-all when `feat`, `fix`, `refactor`, `test`, `docs`, `build`, or `ci` fits.
+
+**Scope** is a short, stable domain name, used whenever the change clearly belongs to one: `ui`, `billing`, `audit`, `execution`, `agent`, `review`, `merge`, `auth`, `repo`, `docs`. Optional when no domain fits cleanly; don't invent a new one-off scope per commit.
+
+**Subject:** imperative mood, lowercase after `:`, no trailing period, target under 72 characters. State what changed, not the change's backstory or justification, and avoid narrative phrasing ("what we did", "make sure", "now", "finally", or any sentence that reads like a story rather than a diff summary).
+
+**Body:** when a change needs explanation, put it here, not in an overlong subject. Use it for the why and for invariants worth calling out.
+
+```
+feat(billing): add action cost disclosure
+
+Show the retail price, available balance, and consequence before
+paid operations. Preserve the distinction between free and unpriced
+operations.
+```
+
+This governs commit subjects going forward; it does not rewrite published history. Rule 16's atomicity requirement still applies — never bundle unrelated changes into one commit to produce a tidier Conventional Commits title.
 
 ## Related Documents
 
