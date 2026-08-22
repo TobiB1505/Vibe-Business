@@ -349,3 +349,73 @@ describe("§56 — a double click buys one agent", () => {
     expect(executor.starts).toHaveLength(1);
   });
 });
+
+/**
+ * A run that never started must not keep the customer's Credits.
+ *
+ * ## The leak
+ *
+ * `startAgentExecution` reserves Credits, claims an `agent_execution_runs` row
+ * as `queued`, and then asks the executor to enqueue durable work. When that
+ * enqueue fails it failed the operation and returned — and nothing released the
+ * hold. Its own comment said it did ("and releases the hold, because nothing
+ * was spent"); the code did not.
+ *
+ * ## Why nothing else cleans it up
+ *
+ * This is not a race and not a window. It is deterministic, and permanent:
+ *
+ * ```
+ * agent_execution_runs.status = queued
+ * expireStaleAgentExecution   ignores queued, deliberately and correctly
+ * reservation sweeper         does not exist
+ * ```
+ *
+ * So the hold suppresses capacity the customer could spend, for as long as the
+ * account exists — which is exactly the failure the `agent_reservation_invalid`
+ * branch a few lines above was written to avoid, and it uses the same release
+ * primitive this now uses.
+ */
+describe("a failed start returns the hold", () => {
+  it("releases the reservation when the executor cannot enqueue the run", async () => {
+    const failing = new FakeExecutor({ fail: true });
+
+    const outcome = await withEnv(ALLOWLISTED, () =>
+      startAgentExecution(fakeSupabase(db), failing, {
+        projectId: PROJECT,
+        userId: USER,
+        executionSpecId: "spec-1",
+      }),
+    );
+
+    expect(await outcome).toEqual({ kind: "failed", error: "execution_start_failed" });
+
+    // The hold was taken, so it has to be given back — asserted on the rows,
+    // not on the return value.
+    const reservations = db.rows("billing_credit_reservations") as unknown as {
+      status: string;
+    }[];
+    expect(reservations).toHaveLength(1);
+    expect(reservations[0].status).not.toBe("active");
+
+    const account = db.rows("billing_credit_accounts")[0] as unknown as {
+      posted_credits: number;
+      reserved_credits: number;
+    };
+    expect(account.reserved_credits).toBe(0);
+    // Nothing was delivered, so nothing is charged either.
+    expect(account.posted_credits).toBe(creditsToUnits(500));
+    expect(
+      db.rows("billing_credit_ledger").filter((row) => (row as { kind: string }).kind === "charge"),
+    ).toHaveLength(0);
+
+    // And no lot capacity stays taken for a run that never ran.
+    const lots = db.rows("billing_credit_grants") as unknown as {
+      allocated_credit_units: number;
+    }[];
+    expect(lots.reduce((total, lot) => total + lot.allocated_credit_units, 0)).toBe(0);
+
+    // The operation is terminal so the identity index is free to try again.
+    expect((db.rows("operation_runs")[0] as unknown as { status: string }).status).toBe("failed");
+  });
+});
