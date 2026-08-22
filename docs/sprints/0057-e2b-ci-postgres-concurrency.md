@@ -128,6 +128,40 @@ Any wider sentence is wrong. It is four classes, twenty iterations, one local to
 
 The deferred items are untouched and nothing here argued for them: the stale-hold sweeper, the lease/reconciliation model, and any drift repairer.
 
+## Verification found two real defects; the fixes below are corrective work it triggered
+
+Everything above this section is what the original two runs closed. What follows did not happen as planned work — it happened because the record above was checked rather than trusted, and the check found two real financial-correctness defects. **This is not part of the original E1 fix set the seven commits above closed; it is corrective work the E2b verification pass triggered, done under E2b because the proof it needed was the same real-PostgreSQL gate.**
+
+The question asked was concrete: is a concurrent `settleOperationCredits`/`releaseOperationCredits` race on the same reservation structurally unreachable in production, or does class D's "nothing today calls both paths concurrently" line actually hold? Enumerating every caller answered it. It does not hold.
+
+### Defect A — no billing authority above the primitives, for agent execution
+
+`finishAgentExecutionStep` (the durable workflow) and `expireStaleAgentExecution` (the request-time staleness backstop `getAgentExecutionStatus` calls on every poll) both read `agent_execution_runs.status` and called into settlement or release without checking whether they had won anything. Both are real, both run concurrently in production — the workflow durably in the background, the backstop from whichever browser tab happens to poll the run page — and nothing prevented exactly the `charge_without_hold` state class D demonstrated at the primitive level.
+
+The fix needed no new mechanism. `completeAgentRun` and `failAgentRun` were already compare-and-swap on `agent_execution_runs.status` and already returned whether they won; the boolean was simply never checked. `78b1888` makes both callers return immediately on losing that swap, before either reaches billing — the same pattern the three deterministic operation families already use on `operation_runs.status`. It is deliberately narrow: it decides who may finalize the money, not whether the 40-minute-plus-grace staleness deadline is itself a correct liveness signal. A run genuinely still working past that deadline still gets failed by a wrong-but-uncontested expiry; that is the pre-existing, still-open lease/liveness gap in `docs/ROADMAP.md`, unchanged by this fix and not silently resolved by it.
+
+Proof, in two layers:
+
+- **Unit/fake** (`billing-authority.test.ts`, `78b1888`): drives the real callers — not the raw primitives again, which would only re-prove the symptom — against `FakeDatabase`. Three of four assertions were red before the fix, confirming the defect; all four green after.
+- **Real PostgreSQL** (`agent-finalization.concurrency.ts`, class E): three scenarios, 20 iterations each — both actors racing with whoever is due, the workflow winning deterministically when the expiry is not yet due, and the expiry winning deterministically with the late workflow arriving after. Every iteration: exactly one agent-run terminal transition, exactly one billing terminal effect, the `charges === 1 && reservationStatus === "released"` combination asserted impossible rather than counted, and the hold closed either way. Getting this to run at all took six more CI round-trips (the corrective commits below) — every one of them a real fact about the schema (an invalid `stage` value, two more 64-character identity columns, `ON DELETE RESTRICT`/`CASCADE` ordering, the `execution_specs` immutability trigger reaching through a cascade, and a zero-padding collision between iterations 1 and 10 in the fixture's own identity helper) rather than a flaw in the fix itself, which was green against the fake on the very first attempt and never changed after `78b1888`.
+
+### Defect B — a failed start leaked its hold, deterministically
+
+`startAgentExecution` takes the Credit hold before calling `executor.start()` — money before work — and its own comment already said the hold would be released if that call refused. The code never did it. Not a race: the run row this path claims stays `queued` forever, `expireStaleAgentExecution` ignores `queued` by design (a run that has not been picked up yet cannot safely be declared dead), and there is no reservation sweeper. Every failed start suppressed capacity the customer could spend for as long as the account existed.
+
+`2d99764` calls the same `releaseOperationBilling` the adjacent `agent_reservation_invalid` branch already used — reusing the existing guard-on-active-reservation primitive rather than adding a new one.
+
+Proof, in two layers:
+
+- **Unit/fake** (`service.test.ts`, `2d99764`): a `FakeExecutor({ fail: true })` drives `startAgentExecution` through the real `!started.ok` branch and asserts the persisted end state — reservation inactive, zero reserved credits, posted credits unchanged, zero charge-kind ledger rows, zero lot capacity still allocated, operation failed.
+- **Real PostgreSQL** (`agent-start-failure.concurrency.ts`, `c37304c`): the same refusing executor against a real database, 20 iterations, each asserting the operation lands `failed`, the reservation reads `released`, no charge posts, and every lot on the account reads back to zero allocated. Each iteration needs its own execution spec — the branch under test fails the *operation* without touching the `agent_execution_runs` row `claimAgentExecutionRunRow` wrote moments earlier, which stays `queued`, one of the statuses the run-identity uniqueness index still treats as live — so a shared spec would make every iteration after the first see a live run and return `"running"` instead of exercising the failure. Building that fixture is what surfaced the zero-padding collision named above, in the one shared `identity64` helper every class in this suite uses; `c37304c` fixed it at the shared function.
+
+### What this closes, and what it deliberately still does not
+
+Closed: for agent execution specifically, a concurrent settle/release race on one reservation is no longer reachable through the two callers named above, proven under real MVCC in both winner directions, and a failed start no longer strands its hold, proven the same way.
+
+Still open, unchanged by this work: whether `started_at` + the sandbox limit + a grace window is the *right* way to decide a run is stale (the lease/liveness gap in `docs/ROADMAP.md`); that `settleOperationCredits` and `releaseOperationCredits` are mutually exclusive as primitives — they are not, and class D's finding stands; and that any future caller pair reaching both of those primitives concurrently for one reservation is safe — each needs the same kind of upstream authority established for it explicitly, nothing enforces it structurally.
+
 ## Commits
 
 ```
@@ -147,6 +181,37 @@ The gate was brought up on a branch-scoped push trigger, because
 `workflow_dispatch` is unreachable until a workflow file is on the default
 branch and this branch has no pull request — so without it there would have
 been no way to execute a change to the gate before shipping it. It was removed
-once the suite was green twice, and the final trigger is `pull_request` on the
+once the suite was green twice, and the final trigger was `pull_request` on the
 billing, operations, migration and configuration paths, plus `workflow_dispatch`
 for when it reaches the default branch.
+
+### Corrective commits (Defect A, Defect B) and their CI runs
+
+The push trigger above was reinstated for exactly this work — the two fixes
+needed a real-database run and the branch still had no pull request — and
+removed again once green.
+
+```
+78b1888  fix(agent): make the run-status swap the only billing authority
+2d99764  fix(agent): release the hold when a run never starts
+2113221  test(billing): race the workflow finalizer against the stale-run expiry
+           run #4   FAILED — fixture: invalid operation_runs.stage value
+bee0113  fix(billing): correct D's over-strong claim, fix E's fixture stage
+           run #5   FAILED — fixture: operation_runs.input_identity not 64 chars
+ccc6bb3  fix(billing): pad the fixture's other two 64-char identities
+           run #6   FAILED — teardown: RESTRICT/CASCADE ordering hazard, 23503
+e11f2cd  fix(billing): delete the scaffolding in an FK-safe order before teardown
+           run #7   FAILED — teardown: execution_specs immutability trigger, 23001
+5f92b6d  fix(credits): stop the class E teardown from fighting an immutable table
+           run #8   GREEN — class E: 15/15
+b4b1589  test(credits): prove Defect B's release against real PostgreSQL
+           run #9   FAILED — fixture: identity64 zero-pad collision, 23505
+c37304c  fix(credits): stop the shared identity helper colliding on padding
+           run #10  GREEN — classes A–E plus Defect B: 16/16
+```
+
+Every failure after `78b1888`/`2d99764` was in the harness or the fixture,
+never in the fix under test: the fix's own unit-level proof
+(`billing-authority.test.ts`, `service.test.ts`) was green on its first attempt
+and was never touched again. Six round-trips bought a working real-database
+harness, not a corrected fix.
