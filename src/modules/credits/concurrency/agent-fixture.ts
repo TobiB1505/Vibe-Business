@@ -55,6 +55,9 @@ export type AgentScaffolding = {
   projectId: string;
   executionSpecId: string;
   repositorySnapshotId: string;
+  actionPlanId: string;
+  businessAuditId: string;
+  repositoryConnectionId: string;
 };
 
 /** The inert chain, from the GitHub installation down to the execution spec. */
@@ -186,7 +189,50 @@ export async function createAgentScaffolding(
     risk_policy_version: "e2b",
   });
 
-  return { projectId, executionSpecId, repositorySnapshotId };
+  return {
+    projectId,
+    executionSpecId,
+    repositorySnapshotId,
+    actionPlanId,
+    businessAuditId: auditId,
+    repositoryConnectionId: connectionId,
+  };
+}
+
+/**
+ * One more execution spec on the same action plan, for a caller that needs a
+ * fresh `run_identity` each attempt rather than the shared one `scaffolding`
+ * already carries.
+ *
+ * `execution_specs_identity_idx` is unique on `(project_id, spec_identity)`
+ * unconditionally — unlike the run-identity and input-identity indexes above
+ * it, this one is not scoped to a status, so no two calls may share a label.
+ */
+export async function createIterationExecutionSpec(
+  supabase: SupabaseClient,
+  scaffolding: AgentScaffolding,
+  label: string,
+): Promise<string> {
+  return insert(supabase, "execution_specs", {
+    project_id: scaffolding.projectId,
+    action_plan_id: scaffolding.actionPlanId,
+    step_key: `e2b-step-${label}`,
+    step_order: 1,
+    business_audit_id: scaffolding.businessAuditId,
+    opportunity_id: "e2b-move",
+    spec_identity: identity64(label),
+    mode: "agentic",
+    execution_class: "application_code_change",
+    risk_class: "moderate",
+    repository_connection_id: scaffolding.repositoryConnectionId,
+    base_sha: BASE_SHA,
+    repository_snapshot_id: scaffolding.repositorySnapshotId,
+    spec: { e2b: true },
+    schema_version: "e2b",
+    resolver_version: "e2b",
+    policy_version: "e2b",
+    risk_policy_version: "e2b",
+  });
 }
 
 export type AgentRunFixture = {
