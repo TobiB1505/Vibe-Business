@@ -1,13 +1,19 @@
 import Link from "next/link";
 import { WorkspaceSection, projectSectionHref } from "@/components/layout/project-shell";
+import { StageRail, type StageRailStep } from "@/components/ui/stage-rail";
 import { Surface } from "@/components/ui/surface";
 import { MonoLabel } from "@/components/ui/typography";
 import { listAuditEventsForProject } from "@/modules/audit-log/queries";
 import { buildActivityFeed } from "@/modules/audit-log/view";
 import { getLatestSuccessfulAudit } from "@/modules/business-audit/store";
+import {
+  getPreparedChangeVerdicts,
+  toPreparedChangeLoopFacts,
+} from "@/modules/execution/loop-facts";
+import { deriveLoopStage, loopBlockMessage } from "@/modules/execution/loop-stage";
 import { listPreparedChangeSummaries } from "@/modules/execution/workspace";
 import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intelligence/store";
-import { getLatestOpportunities } from "@/modules/opportunities/service";
+import { getLatestOpportunities, getOpportunityReadiness } from "@/modules/opportunities/service";
 import { getLatestProfile } from "@/modules/product-understanding/store";
 import { getFounderIntent } from "@/modules/projects/founder-intent-store";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
@@ -64,6 +70,8 @@ export default async function ProjectOverviewPage({
     opportunities,
     preparedSummaries,
     activity,
+    movesReadiness,
+    changeVerdicts,
   ] = await Promise.all([
     getLatestSuccessfulSnapshot(supabase, projectId),
     getLatestSuccessfulLiveSnapshot(supabase, projectId),
@@ -81,9 +89,43 @@ export default async function ProjectOverviewPage({
       userId,
       limit: RECENT_ACTIVITY_COUNT,
     }),
+    getOpportunityReadiness(supabase, projectId),
+    getPreparedChangeVerdicts(supabase, projectId),
   ]);
 
   const recentActivity = buildActivityFeed(activity.events);
+
+  /**
+   * Where this project is in the seven-step loop (UI-8 §1).
+   *
+   * Every fact below is one this page had already loaded, plus two verdicts
+   * that cost two small queries — see `loop-facts.ts` for why the full
+   * prepared-change workspace is deliberately not consulted here.
+   *
+   * `auditBlockedReason` is passed as null on purpose. The audit's own denial
+   * reasons come from the entitlement read that `/score` performs, and `/score`
+   * renders them in full, next to the control that acts on each one. A rail
+   * that duplicated them would either pay for that read on the project's home
+   * page or guess — and the two prerequisites that matter most, a missing or
+   * stale Product Profile, already stop the *scan* step from completing.
+   */
+  const loop = deriveLoopStage({
+    repositoryConnected: project.repository !== null,
+    hasProductProfile: productProfile !== null,
+    hasAudit: Boolean(latestAudit?.result),
+    auditBlockedReason: null,
+    hasMoves: opportunities !== null,
+    movesBlockedReason: movesReadiness.blockedReason,
+    preparedChanges: toPreparedChangeLoopFacts(preparedSummaries, changeVerdicts),
+  });
+
+  const loopSteps: StageRailStep[] = loop.map((stage) => ({
+    id: stage.id,
+    label: stage.label,
+    state: stage.state,
+    href: projectSectionHref(project.id, stage.sectionId),
+    note: stage.blockReason ? loopBlockMessage(stage.blockReason) : null,
+  }));
 
   /**
    * Evidence readiness (Sprint 3 §31). Each entry is derived from a snapshot
@@ -158,6 +200,16 @@ export default async function ProjectOverviewPage({
       description="What Vibe knows about this project so far, and where that knowledge came from."
     >
       <div className="flex flex-col gap-5">
+        {/*
+         * Orientation before numbers. The tiles below say what the project has;
+         * this says where it is — and it links each step to the section that
+         * owns it, so the rail never becomes a second way to navigate.
+         */}
+        <Surface level="section" padding="md" className="flex flex-col gap-3">
+          <MonoLabel>Your progress</MonoLabel>
+          <StageRail steps={loopSteps} label="Product loop" orientation="horizontal" />
+        </Surface>
+
         <ul className="grid gap-4 sm:grid-cols-3">
           {summaries.map((summary) => (
             <li key={summary.id}>

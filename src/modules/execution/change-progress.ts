@@ -173,7 +173,7 @@ function previewInFlight(preview: PreviewCard): boolean {
  * "it is your turn". Drift, a moved branch, a lost commit, a protection rule
  * and a failed write are the ones a person actually has to act on.
  */
-const STALLING_MERGE_FAILURES = new Set([
+export const STALLING_MERGE_FAILURES = new Set([
   "merge_repository_changed",
   "merge_prepared_branch_changed",
   "merge_prepared_commit_missing",
