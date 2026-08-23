@@ -42,6 +42,16 @@ export type StoredAudit = {
    */
   productProfileId: string | null;
   founderIntentHash: string | null;
+  /**
+   * The repository and live snapshots this run reasoned from.
+   *
+   * Written since the table existed and, until now, never read back — which is
+   * why a consumer rebuilding this audit's evidence pack had no way to check
+   * that it was rebuilding from the same observations. See
+   * `operations/opportunities/execution.ts`'s `loadSources`.
+   */
+  repositorySnapshotId: string | null;
+  liveSnapshotId: string | null;
   createdAt: string;
   completedAt: string | null;
 };
@@ -59,12 +69,14 @@ type AuditRow = {
   result: BusinessReadinessAudit | null;
   product_profile_id: string | null;
   founder_intent_hash: string | null;
+  repository_snapshot_id: string | null;
+  live_snapshot_id: string | null;
   created_at: string;
   completed_at: string | null;
 };
 
 const AUDIT_COLUMNS =
-  "id, project_id, status, access_mode, input_hash, overall_score, assessed_dimensions, total_dimensions, failure_code, result, product_profile_id, founder_intent_hash, created_at, completed_at";
+  "id, project_id, status, access_mode, input_hash, overall_score, assessed_dimensions, total_dimensions, failure_code, result, product_profile_id, founder_intent_hash, repository_snapshot_id, live_snapshot_id, created_at, completed_at";
 
 function mapRow(row: AuditRow): StoredAudit {
   return {
@@ -80,6 +92,8 @@ function mapRow(row: AuditRow): StoredAudit {
     result: row.result,
     productProfileId: row.product_profile_id,
     founderIntentHash: row.founder_intent_hash,
+    repositorySnapshotId: row.repository_snapshot_id,
+    liveSnapshotId: row.live_snapshot_id,
     createdAt: row.created_at,
     completedAt: row.completed_at,
   };

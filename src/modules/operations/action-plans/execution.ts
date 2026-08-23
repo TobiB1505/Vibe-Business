@@ -31,6 +31,7 @@ import {
   type BuildEvidencePackV3Input,
   type EvidencePackV3,
 } from "@/modules/business-audit/evidence-v3";
+import { verifyPackProvenance } from "@/modules/business-audit/pack-provenance";
 import { getLatestSuccessfulAudit } from "@/modules/business-audit/store";
 import { getLatestSuccessfulAuthenticatedSnapshot } from "@/modules/authenticated-product-intelligence/store";
 import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intelligence/store";
@@ -181,6 +182,25 @@ async function loadSources(
   if (inputHash !== operation.inputIdentity) {
     return { ok: false, failureCode: "inputs_changed" };
   }
+
+  /*
+   * And the *evidence* can be superseded without the audit being.
+   *
+   * The hash above carries the profile and the founder intent, so it catches
+   * those moving between the click and this step. It carries no snapshot id, so
+   * it does not catch a scan finishing — and the pack rebuilt below is built
+   * from whatever `getLatestSuccessfulSnapshot` returns now, not from what the
+   * audit reasoned over. Planning against one run's diagnosis using another
+   * run's evidence is a paid call about a state that no longer exists. See
+   * `business-audit/pack-provenance.ts`.
+   */
+  const provenance = verifyPackProvenance(audit, {
+    repositorySnapshotId: repositorySnapshot.id,
+    liveSnapshotId: liveSnapshot.id,
+    productProfileId: profile.stored.id,
+    founderIntentHash: founderIntent.intentHash,
+  });
+  if (!provenance.matches) return { ok: false, failureCode: "inputs_changed" };
 
   const sources: BuildEvidencePackV3Input = {
     productProfile: profile.profile,

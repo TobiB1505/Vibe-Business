@@ -92,6 +92,14 @@ function seed(options: { inputIdentity?: string } = {}) {
     input_hash: AUDIT_HASH,
     result: fakeAudit(),
     overall_score: 40,
+    // The observations this audit reasoned from. `not null` on the real table,
+    // and the fixture omitted them — which made every test here describe an
+    // audit that could not exist, and left the rebuild-provenance check with
+    // nothing to check.
+    repository_snapshot_id: "repo_snapshot_1",
+    live_snapshot_id: "live_snapshot_1",
+    product_profile_id: "profile_1",
+    founder_intent_hash: "c".repeat(64),
     created_at: "2026-08-02T00:00:00.000Z",
     completed_at: "2026-08-02T00:00:00.000Z",
   });
@@ -325,6 +333,61 @@ describe("guards", () => {
 
     expect(outcome).toEqual({ ok: false, failureCode: "inputs_changed" });
     expect(setRows()).toHaveLength(0);
+    expect(provider.requests).toHaveLength(0);
+  });
+
+  /*
+   * The race the identity hash cannot see.
+   *
+   * `computeOpportunityInputHash` contains the audit's id, the audit's own
+   * stored `input_hash`, and version constants — no snapshot id. The audit row
+   * is not rewritten when a scan finishes, so a scan completing between the
+   * click and this step leaves every field of that hash identical while moving
+   * what `getLatestSuccessfulSnapshot` returns.
+   *
+   * The pack rebuilt here would then be built from the new scan while the
+   * audit's conclusions, which the model is asked to prioritize, were written
+   * from the old one. Nothing crashes: the citations are ids a builder still
+   * mints, so they still render — pointing at a different observation than the
+   * sentence above them. It is a paid call producing advice about a state that
+   * no longer exists, and it is invisible from the outside.
+   */
+  it("refuses when a repository scan finished between the click and the step", async () => {
+    db.seed("repository_intelligence_snapshots", {
+      id: "repo_snapshot_2",
+      project_id: PROJECT,
+      status: "completed",
+      result: fakeRepositorySnapshot(),
+      created_at: "2026-08-04T00:00:00.000Z",
+    });
+
+    // The identity the operation was created for is untouched by that scan —
+    // which is the whole point. Asserted, so this test cannot pass for the
+    // trivial reason that the older guard caught it.
+    expect(operationRow().input_identity).toBe(identity());
+
+    const outcome = await runPipeline();
+
+    expect(outcome).toEqual({ ok: false, failureCode: "inputs_changed" });
+    expect(provider.requests).toHaveLength(0);
+    expect(setRows()).toHaveLength(0);
+  });
+
+  it("refuses when a live scan finished between the click and the step", async () => {
+    db.seed("live_product_intelligence_snapshots", {
+      id: "live_snapshot_2",
+      project_id: PROJECT,
+      status: "completed",
+      result: fakeLiveSnapshot(),
+      created_at: "2026-08-04T00:00:00.000Z",
+      completed_at: "2026-08-04T00:00:00.000Z",
+    });
+
+    expect(operationRow().input_identity).toBe(identity());
+
+    const outcome = await runPipeline();
+
+    expect(outcome).toEqual({ ok: false, failureCode: "inputs_changed" });
     expect(provider.requests).toHaveLength(0);
   });
 
