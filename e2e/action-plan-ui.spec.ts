@@ -361,12 +361,22 @@ test.describe("ready plan — reasoning disclosure", () => {
     const disclosure = page.getByText("Why Vibe planned this");
     await expect(disclosure).toBeVisible();
 
-    // The fixture step cites `live.seo.robots_txt_missing`. Since the polarity
-    // fix (`fix(audit): stop claiming presence from an id that does not encode
-    // it`), an id renders as the check that was made rather than as a claim the
-    // id cannot support — "Seo robots txt — not observed", not "robots txt
-    // missing". The evidence is still shown; only its wording moved.
-    const evidenceLine = page.getByText("Seo robots txt", { exact: false });
+    /*
+     * The fixture step cites `live.seo.robots_txt_missing`, and this line has
+     * now been re-pinned twice as the words underneath it improved.
+     *
+     * It first read "robots txt missing" — the raw id with its punctuation
+     * removed. The polarity fix taught the labeller the `_missing` suffix and
+     * it became "Seo robots txt — not observed", which is what this assertion
+     * was moved to. Neither was a label anybody wrote; both were the id
+     * showing through, and "Seo" is not a word.
+     *
+     * `live.seo.*` now resolves through `SEO_LABELS`, the table the live module
+     * had already written for this exact audience. Pinning the real sentence
+     * means the next such improvement has to be a deliberate change to a label
+     * rather than a silent change to an identifier.
+     */
+    const evidenceLine = page.getByText("Instructions for search engines", { exact: false });
     await expect(evidenceLine).not.toBeVisible();
     await disclosure.click();
     await expect(evidenceLine).toBeVisible();

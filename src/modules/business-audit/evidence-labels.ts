@@ -1,7 +1,7 @@
 import { AUTHENTICATED_SURFACE_LABELS } from "@/modules/authenticated-product-intelligence/schema";
 import type { AuthenticatedSurfaceId } from "@/modules/authenticated-product-intelligence/schema";
-import { PRODUCT_SURFACE_LABELS } from "@/modules/live-product-intelligence/human-view";
-import type { ProductSurfaceId } from "@/modules/live-product-intelligence/schema";
+import { PRODUCT_SURFACE_LABELS, SEO_LABELS } from "@/modules/live-product-intelligence/human-view";
+import type { ProductSurfaceId, SeoSignalId } from "@/modules/live-product-intelligence/schema";
 import {
   CAPABILITY_LABELS,
   JOURNEY_STAGE_LABELS,
@@ -209,6 +209,10 @@ function isLiveSurface(value: string): value is ProductSurfaceId {
   return Object.hasOwn(PRODUCT_SURFACE_LABELS, value);
 }
 
+function isSeoSignal(value: string): value is SeoSignalId {
+  return Object.hasOwn(SEO_LABELS, value);
+}
+
 function isJourneyStage(value: string): value is JourneyStageId {
   return Object.hasOwn(JOURNEY_STAGE_LABELS, value);
 }
@@ -274,11 +278,33 @@ function describeFamily(prefix: string, body: string, source: string): EvidenceI
       return curated(source, `${humanize(body.slice("technical.".length))}, in your stack`);
   }
 
-  if (prefix === "live" && body.startsWith("surface.")) {
-    const id = body.slice("surface.".length);
-    // Same polarity-free id as `repo.surface.*` above, same inversion, same
-    // reason for naming the check instead of its outcome.
-    if (isLiveSurface(id)) return curated(source, `${PRODUCT_SURFACE_LABELS[id]}, checked on your live site`);
+  if (prefix === "live") {
+    if (body.startsWith("surface.")) {
+      const id = body.slice("surface.".length);
+      // Same polarity-free id as `repo.surface.*` above, same inversion, same
+      // reason for naming the check instead of its outcome.
+      if (isLiveSurface(id))
+        return curated(source, `${PRODUCT_SURFACE_LABELS[id]}, checked on your live site`);
+    }
+
+    /*
+     * The one live family whose polarity really is in the id.
+     *
+     * `buildLiveEvidence` mints `live.seo.<signal>` only when the signal is
+     * present and `live.seo.<signal>_missing` only when it is absent, so —
+     * unlike the surfaces above — a bare positive reading is honest here and
+     * the caller's "— not observed" suffix lands on the right half.
+     *
+     * The words come from `SEO_LABELS`, which the live module already wrote for
+     * exactly this audience. Until now nothing consulted it from here, so a
+     * founder opening "Why?" on a technical-SEO Move read `Seo sitemap` and
+     * `Seo canonical — not observed`: the id with its punctuation removed,
+     * capitalised, presented as prose. "Seo" is not a word.
+     */
+    if (body.startsWith("seo.")) {
+      const id = body.slice("seo.".length);
+      if (isSeoSignal(id)) return curated(source, SEO_LABELS[id]);
+    }
   }
 
   return null;
