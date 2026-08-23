@@ -59,6 +59,24 @@ Defect 3 is proven red-then-green: removing the `live.seo.*` branch turns 21 tes
 
 **Defects 1 and 2 are not proven here, and cannot be.** This environment has no PostgreSQL target configured, so `*.concurrency.ts` skips itself; the CI job is the only place these run. What is established is the diagnosis — both errors are quoted from the job log, and both mechanisms are arithmetic or a constraint predicate rather than a hypothesis. The verdict is CI's, and this sprint is not finished until run #18 is green.
 
+## What the green run measured
+
+Run #18 is green: eight files, nineteen tests, sixty iterations each, 155 seconds against real PostgreSQL. It also produced the number [Sprint 0069](0069-postgres-constraint-gap-closure.md) said it could not:
+
+```
+C — 60 iterations of 2 concurrent allocations
+  takeFromLot/returnToLot CAS rounds per iteration:
+  min 2, max 2, mean 2.00  (CONTENTION_ATTEMPTS = 10; 8 rounds of headroom)
+
+A — 60 iterations of 20 concurrent holds
+  admitted per iteration: 10/20, every iteration
+  race wall-clock: min 54ms, max 109ms, mean 63ms
+```
+
+0069 made the round count observable and then said plainly that the measurement stayed open, because this environment has no target to run it against. It does not stay open any more: a genuine two-way collision needs **exactly two rounds**, every time, across sixty iterations — eight of the ten allowed are headroom. That is not proof that ten is right for a wider collision, and 0069's framing of the limit stands. It is the first real data behind the constant.
+
+Worth stating why it appears here rather than there: the run that could have produced it was red, for the funding defect above.
+
 ## What this does not do
 
 **It does not add a local way to run the gate.** Doing so would mean a second Postgres in the developer loop, which ADR 0040 considered and rejected. The correct fix for "nobody read the check" is to read the check.
