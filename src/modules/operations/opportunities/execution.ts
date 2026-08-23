@@ -10,6 +10,7 @@ import {
   trimEvidencePackV3,
   type BuildEvidencePackV3Input,
 } from "@/modules/business-audit/evidence-v3";
+import { verifyPackProvenance } from "@/modules/business-audit/pack-provenance";
 import { getLatestSuccessfulAudit } from "@/modules/business-audit/store";
 import { getLatestSuccessfulAuthenticatedSnapshot } from "@/modules/authenticated-product-intelligence/store";
 import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intelligence/store";
@@ -137,6 +138,24 @@ async function loadSources(
   if (inputHash !== operation.inputIdentity) {
     return { ok: false, failureCode: "inputs_changed" };
   }
+
+  /*
+   * And the *evidence* can be superseded without the audit being.
+   *
+   * The hash above contains no snapshot id — a scan finishing between the click
+   * and this step moves what `getLatestSuccessfulSnapshot` returns without
+   * moving anything it hashes. The pack rebuilt below would then be a different
+   * pack than the one the audit's conclusions were written from, and the paid
+   * call would prioritize one run's diagnosis using another run's evidence. See
+   * `business-audit/pack-provenance.ts`.
+   */
+  const provenance = verifyPackProvenance(audit, {
+    repositorySnapshotId: repositorySnapshot.id,
+    liveSnapshotId: liveSnapshot.id,
+    productProfileId: profile.stored.id,
+    founderIntentHash: founderIntent.intentHash,
+  });
+  if (!provenance.matches) return { ok: false, failureCode: "inputs_changed" };
 
   return {
     ok: true,
