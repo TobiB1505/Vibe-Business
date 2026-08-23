@@ -30,20 +30,58 @@ function layoutSource(): string {
   return readFileSync(join(ROUTE_DIR, "layout.tsx"), "utf8");
 }
 
-/** Every `page.tsx` under the project route, including the index. */
-function routeFiles(): { name: string; source: string }[] {
-  const files = [{ name: "page.tsx", source: readFileSync(join(ROUTE_DIR, "page.tsx"), "utf8") }];
+/**
+ * Every `page.tsx` under the project route, at any depth, including the index.
+ *
+ * ## Why this recurses
+ *
+ * It used to walk exactly one directory level, which was true of the route tree
+ * when it was written and stopped being true twice over. `agent-dogfood/[stepKey]`
+ * has always been a second level and has never been covered by a single
+ * assertion below — it authorizes itself correctly, and nothing here knew that.
+ * A nested route is not a special case; it is the shape a route tree takes as
+ * soon as one section owns a child.
+ *
+ * The failure mode this closes is the quiet one: a route that is *not* walked
+ * passes every rule in this file, because a rule applied to a list that does
+ * not contain the file cannot fail. `name` is the path relative to the route
+ * directory, so the lookups further down address a nested route the same way
+ * they address a top-level one.
+ */
+function routeFiles(directory: string = ROUTE_DIR, prefix = ""): { name: string; source: string }[] {
+  const files: { name: string; source: string }[] = [];
 
-  for (const entry of readdirSync(ROUTE_DIR, { withFileTypes: true })) {
+  const page = join(directory, "page.tsx");
+  if (existsSync(page)) {
+    files.push({ name: `${prefix}page.tsx`, source: readFileSync(page, "utf8") });
+  }
+
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
-    const candidate = join(ROUTE_DIR, entry.name, "page.tsx");
-    if (existsSync(candidate)) {
-      files.push({ name: `${entry.name}/page.tsx`, source: readFileSync(candidate, "utf8") });
-    }
+    files.push(...routeFiles(join(directory, entry.name), `${prefix}${entry.name}/`));
   }
 
   return files;
 }
+
+describe("the walk itself", () => {
+  /**
+   * A rule applied to a list is only as good as the list. Every assertion below
+   * iterates `routeFiles()`, so a walk that silently returned three files would
+   * make this whole suite pass while checking almost nothing — the same failure
+   * UI-6 found in four action-allowlist tests and closed by making the
+   * extractor throw rather than return empty.
+   */
+  it("finds the index, and finds nested routes", () => {
+    const names = routeFiles().map((file) => file.name);
+
+    expect(names).toContain("page.tsx");
+    // The route that proves recursion: it has always existed one level down and
+    // was never walked before.
+    expect(names).toContain("agent-dogfood/[stepKey]/page.tsx");
+    expect(names.length).toBeGreaterThanOrEqual(PROJECT_SECTIONS.length);
+  });
+});
 
 describe("every workspace section is reachable", () => {
   it("has a route file for each navigation entry", () => {
