@@ -432,6 +432,80 @@ describe("prerequisites and ownership", () => {
     const retry = await start();
     expect(retry.kind).toBe("started");
   });
+
+  /**
+   * The failed-start release is gated on winning the terminal CAS, not on
+   * `executor.start` having returned `!ok`.
+   *
+   * `executor.start` returning `!ok` says this attempt failed; it does not say
+   * the workflow is not running. `VercelWorkflowExecutor.start` wraps a network
+   * call, so a throw on the *response* — timeout, connection reset — after the
+   * run was already enqueued server-side yields `{ ok: false }` for a workflow
+   * that is alive and will finish, settle, and charge.
+   *
+   * Before the fix this branch called `failOperationRun` and discarded its
+   * boolean, then released unconditionally — the exact unchecked-CAS shape
+   * Sprint 0057 E2b's class D proved produces `charge_without_hold`: the
+   * concurrent winner's charge stands while this path marks the hold released.
+   * That is the same defect the agent-execution finalizers were fixed for, in
+   * three more places (`business_audit`, `opportunity_generation`,
+   * `action_planning`) plus one in `coding-agent/service.ts`.
+   *
+   * The concurrent finalizer is simulated the way the FakeDatabase-level tests
+   * for the original defect did it: the operation is moved to a terminal status
+   * out of band, so this path's own CAS must lose.
+   */
+  it("does not release a hold it did not win the right to release", async () => {
+    // Consume the free entitlement and fund the wallet, so the run takes a real
+    // Credit hold rather than riding the free audit — the hold is the subject.
+    db.seed("repository_connections", { id: "conn_1", project_id: PROJECT, github_repository_id: 12345 });
+    db.seed("free_audit_grants", { id: "grant_1", user_id: USER, github_repository_id: 12345 });
+    const { grantCreditLot } = await import("@/modules/credits/grants");
+    await grantCreditLot(fakeSupabase(db), {
+      userId: USER,
+      sourceKind: "purchase",
+      credits: creditsToUnits(100),
+      reason: "test funding",
+      idempotencyKey: `test-fund:${USER}:race`,
+    });
+
+    /*
+     * Fails the start, but only after something else has already finalized the
+     * operation — the interleaving where a live workflow finished while this
+     * caller was still waiting on a start response it never got.
+     */
+    class RacedExecutor extends FakeExecutor {
+      constructor() {
+        super({ fail: true });
+      }
+
+      async start(input: Parameters<FakeExecutor["start"]>[0]) {
+        const operation = db.rows("operation_runs")[0];
+        operation.status = "completed";
+        operation.result_id = "audit_1";
+        operation.completed_at = "2026-08-02T00:00:00.000Z";
+        return super.start(input);
+      }
+    }
+
+    const outcome = await startBusinessAuditOperation(fakeSupabase(db), new RacedExecutor(), {
+      projectId: PROJECT,
+      userId: USER,
+      force: true,
+    });
+
+    expect(outcome).toEqual({ kind: "failed", error: "execution_start_failed" });
+
+    // The winner's terminal state stands — this path must not overwrite it.
+    expect(db.rows("operation_runs")[0].status).toBe("completed");
+
+    // The property the fix exists for: the hold is left for the winner to
+    // settle. Releasing it here is what would have let a charge stand against
+    // a hold recorded as released.
+    const reservations = db.rows("billing_credit_reservations");
+    expect(reservations).toHaveLength(1);
+    expect(reservations[0].status).toBe("active");
+  });
 });
 
 describe("reading operation state", () => {

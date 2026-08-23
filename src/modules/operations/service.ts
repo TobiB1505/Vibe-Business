@@ -364,8 +364,18 @@ export async function startBusinessAuditOperation(
     // the identity's unique index free, so the user can simply try again. The
     // hold is returned by the same terminal-failure path every other failure
     // uses, so nothing stays reserved for work that never started.
-    await failOperationRun(supabase, { operationId: operation.id, failureCode: "execution_start_failed" });
-    await releaseHoldForFailedStart(operation.id);
+    //
+    // The release only happens on winning the terminal-transition CAS — a
+    // concurrent finalizer (the staleness sweep, a retried call to this same
+    // function) may have already closed this operation and its hold, and
+    // releasing again here would be exactly the unchecked-CAS shape class D
+    // proved unsafe (Sprint 0057 E2b). Losing does not change what this
+    // invocation tells its own caller: the start still failed either way.
+    const failed = await failOperationRun(supabase, {
+      operationId: operation.id,
+      failureCode: "execution_start_failed",
+    });
+    if (failed) await releaseHoldForFailedStart(operation.id);
     return { kind: "failed", error: "execution_start_failed" };
   }
 
@@ -561,8 +571,13 @@ export async function startOpportunityOperation(
   });
 
   if (!started.ok) {
-    await failOperationRun(supabase, { operationId: operation.id, failureCode: "execution_start_failed" });
-    await releaseHoldForFailedStart(operation.id);
+    // Release only on winning the terminal-transition CAS — see the identical
+    // comment on `startBusinessAuditOperation`'s own failed-start branch.
+    const failed = await failOperationRun(supabase, {
+      operationId: operation.id,
+      failureCode: "execution_start_failed",
+    });
+    if (failed) await releaseHoldForFailedStart(operation.id);
     return { kind: "failed", error: "execution_start_failed" };
   }
 
@@ -856,11 +871,13 @@ export async function startActionPlanOperation(
   });
 
   if (!started.ok) {
-    await failOperationRun(supabase, {
+    // Release only on winning the terminal-transition CAS — see the identical
+    // comment on `startBusinessAuditOperation`'s own failed-start branch.
+    const failed = await failOperationRun(supabase, {
       operationId: operation.id,
       failureCode: "execution_start_failed",
     });
-    await releaseHoldForFailedStart(operation.id);
+    if (failed) await releaseHoldForFailedStart(operation.id);
     return { kind: "failed", error: "execution_start_failed" };
   }
 
