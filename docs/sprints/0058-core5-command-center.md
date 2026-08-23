@@ -2,7 +2,7 @@
 
 **Status:** implemented, not merged. **No backend change** — no migration, no schema, no new
 module, no new provider, no AI call, no money spent. Lint (0 errors) / typecheck / **6,076 unit
-tests across 336 files** / build / **316 browser E2E** green.
+tests across 336 files** / build / **327 browser E2E** green.
 
 ## Problem
 
@@ -109,19 +109,26 @@ empty lists.
 ## What was verified, and how
 
 `pnpm lint` (0 errors) · `pnpm typecheck` · `pnpm test` (6,076 across 336 files) · `pnpm build` ·
-`pnpm test:e2e` (316).
+`pnpm test:e2e` (327).
 
 Four new source assertions were **watched failing** before being trusted — a PR control added to
 the agent card, a raw `dimension.score` printed instead of `scoreDisplay`, a causal headline on an
 experiment card, and a source row whose link was hidden behind `ready`. All four went red; the
 mutations were then reverted.
 
-Two claims are asserted in a browser rather than in source, because both are claims about pixels:
+Four claims are asserted in a browser rather than in source, because all four are about pixels:
 
 - every unassessable dimension reads `n/a` with an empty track and never `0` — run against the
   fixture where all five are `insufficient_evidence`;
 - the prepared change's branch, SHA and every changed path are hidden by default and **all** come
-  back on one click. "One click away" is not a claim a `<details>` element existing can settle.
+  back on one click. "One click away" is not a claim a `<details>` element existing can settle;
+- Home shows no score, and no `0`, before an audit has run — and separates that from an audit that
+  ran and could not be scored, and from an engine that ran and found no move;
+- the agent card names its readiness in words and shows no internal state name on screen.
+
+Every Command Center fixture is built by the real `buildHomeView` / `buildAgentContext` rather than
+by hand, so the browser checks the same decision the unit tests check, one layer out. The no-zero
+assertion was verified by making Home print one.
 
 ## What has not been proved
 
@@ -132,11 +139,6 @@ things and this sprint has three: domain state tested, SQL/RLS untouched, browse
 tested against fixtures, and **no walk through a real signed-in project**. The seven screens have
 not been seen with a real audit behind them.
 
-**Home has no e2e coverage of its own.** `buildHomeView` is unit-tested against every absence case,
-and `HomeStatus` is asserted at source level for using those states — but no fixture scenario
-renders it, so nothing proves in a browser that a project with no audit shows no zero on Home.
-`business-health.tsx` got that treatment; Home did not.
-
 **The Agent page cannot show a running agent.** There is no project-scoped read of the latest agent
 run — every lookup is keyed by `operationRunId` or `(projectId, runIdentity)`
 (`coding-agent/store.ts`), and the live view is reached through an operation id the dogfood page
@@ -146,6 +148,23 @@ needs a read model that does not exist, which is backend work and outside a UI s
 
 **No claim about whether these are the right seven.** This is an information architecture. It was
 chosen to match the model `PRODUCT.md` §11 already states, not validated against users.
+
+## Three flaky auth tests, fixed rather than tolerated
+
+Adding the Command Center fixtures perturbed the build's timing enough to start failing
+`e2e/auth.spec.ts` intermittently — first one test, then a second, roughly one run in three and one
+in ten. Bisecting established the change was the trigger and not the cause: all three assert a
+*pending* state on a progressively-enhanced `useActionState` form, which is only true once React
+has hydrated. Before hydration the same click is a native form POST, the browser leaves the page,
+and the assertion fails against a control that no longer exists.
+
+Two of them needed a second fix as well. The pending window only stays open while the request is in
+flight, and Supabase is unreachable in this suite, so the window is as long as a DNS failure takes —
+which is not reliably long. The Google hand-off test had already discovered this and held the route
+open; the other two now do the same.
+
+Neither fix weakens an assertion: the disabled-state claims are unchanged, and what was removed is
+the race in front of them. Ten consecutive clean runs of the spec, two of the full suite.
 
 ## Documentation
 
