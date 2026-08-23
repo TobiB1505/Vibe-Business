@@ -17,7 +17,12 @@ name: Billing concurrency
 # Not on every change: it starts four containers and takes minutes, and a UI
 # change cannot make a billing race fail. A change outside these paths that
 # would break it is therefore not caught — a stated limit of ADR 0040, not an
-# oversight.
+# oversight. The path list was widened once, after ADR 0040's own gap was
+# checked and found narrower than intended: `src/modules/billing/**` (the
+# Stripe webhook's `grantCreditLot` calls, and `getBillingOverview`'s live
+# repair) and two `src/app/app/**` server-action directories (`ensureWelcomeGrant`)
+# reach the same tested primitives from outside the original three directories
+# — see ADR 0040's revision notice.
 #
 # `workflow_dispatch` only becomes reachable once this file is on the default
 # branch; until then the `pull_request` trigger is what runs it. The gate was
@@ -33,6 +38,9 @@ on:
       - "src/modules/credits/**"
       - "src/modules/operations/**"
       - "src/modules/coding-agent/**"
+      - "src/modules/billing/**"
+      - "src/app/app/billing/**"
+      - "src/app/app/connect/github/repositories/**"
       - "supabase/migrations/**"
       - "supabase/config.toml"
       - ".github/workflows/concurrency.yml"

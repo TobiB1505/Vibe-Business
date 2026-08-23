@@ -322,6 +322,17 @@ export async function reconcileAndRepairLotAllocations(
  * ------------------------------------------------------------------------ */
 
 /**
+ * Test-only observability hook into `takeFromLot`/`returnToLot`'s
+ * compare-and-swap retry loop, threaded optionally through
+ * {@link allocateReservation}. Production never passes one, so this changes
+ * no behavior — it exists because the round count a real call needed was
+ * otherwise unobservable from outside these two functions (Sprint 0057 E2b),
+ * which made `CONTENTION_ATTEMPTS`'s minimality unmeasurable rather than
+ * merely unmeasured. See `src/modules/credits/concurrency/allocation.concurrency.ts`.
+ */
+type ContentionObserver = (fn: "takeFromLot" | "returnToLot", attempt: number) => void;
+
+/**
  * Takes capacity from one lot, atomically.
  *
  * The same compare-and-swap `admitHold` uses on the account row, applied to a
@@ -337,8 +348,10 @@ async function takeFromLot(
   supabase: SupabaseClient,
   lotId: string,
   amount: CreditUnits,
+  onContentionRound?: ContentionObserver,
 ): Promise<boolean> {
   for (let attempt = 0; attempt < CONTENTION_ATTEMPTS; attempt += 1) {
+    onContentionRound?.("takeFromLot", attempt);
     const { data: current, error: readError } = await supabase
       .from("billing_credit_grants")
       .select("initial_credit_units, allocated_credit_units, expired_credit_units, status, expires_at")
@@ -401,10 +414,12 @@ async function returnToLot(
   supabase: SupabaseClient,
   lotId: string,
   amount: CreditUnits,
+  onContentionRound?: ContentionObserver,
 ): Promise<void> {
   if (amount <= 0) return;
 
   for (let attempt = 0; attempt < CONTENTION_ATTEMPTS; attempt += 1) {
+    onContentionRound?.("returnToLot", attempt);
     const { data: current, error: readError } = await supabase
       .from("billing_credit_grants")
       .select("allocated_credit_units")
@@ -495,6 +510,8 @@ export async function allocateReservation(
     reservationId: string;
     creditUnits: CreditUnits;
     now?: Date;
+    /** Test-only; see {@link ContentionObserver}. Never set by production callers. */
+    onContentionRound?: ContentionObserver;
   },
 ): Promise<AllocateResult> {
   const now = params.now ?? new Date();
@@ -510,7 +527,12 @@ export async function allocateReservation(
 
   try {
     for (const allocation of plan.allocations) {
-      const ok = await takeFromLot(supabase, allocation.lotId, allocation.creditUnits);
+      const ok = await takeFromLot(
+        supabase,
+        allocation.lotId,
+        allocation.creditUnits,
+        params.onContentionRound,
+      );
       if (!ok) return { ok: false, refusal: "insufficient_credits" };
       taken.push({ lotId: allocation.lotId, creditUnits: allocation.creditUnits });
     }
@@ -541,7 +563,9 @@ export async function allocateReservation(
     // back. That was the partial allocation this function's docblock calls
     // impossible.
     if (!committed) {
-      for (const undo of taken) await returnToLot(supabase, undo.lotId, undo.creditUnits);
+      for (const undo of taken) {
+        await returnToLot(supabase, undo.lotId, undo.creditUnits, params.onContentionRound);
+      }
     }
   }
 }

@@ -152,10 +152,14 @@ describe.skipIf(!configured)("A — twenty holds against a balance that funds ex
       }
     });
 
-    // Reported, not asserted. How many compare-and-swap rounds a caller needed
-    // is not observable from outside `admitHold`, and instrumenting the
-    // function under test would change it. Wall-clock is the closest honest
-    // proxy: the backoff sleeps, so a race that needed many rounds took longer.
+    // Reported, not asserted, as a general race-duration signal. `admitHold`
+    // no longer runs a compare-and-swap retry loop at all (ADR 0042 §P3
+    // converted it to a single row-locked `.rpc()` call), so this is no
+    // longer a round-count proxy the way it was when this class was written
+    // — a caller here either wins the row lock quickly or queues behind it,
+    // it does not retry. `CONTENTION_ATTEMPTS` still bounds two CAS retry
+    // loops elsewhere (`takeFromLot`/`returnToLot`, `credits/lot-store.ts`);
+    // see `allocation.concurrency.ts`'s round-count reporting for that.
     const total = durations.reduce((sum, value) => sum + value, 0);
     console.log(
       `\nA — ${ITERATIONS} iterations of ${CALLERS} concurrent holds\n` +

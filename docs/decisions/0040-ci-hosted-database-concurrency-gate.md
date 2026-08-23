@@ -4,6 +4,8 @@ Status: Accepted
 
 Date: 2026-08-22
 
+> **Revision, 2026-08-23, closing part of the "not established" gap this ADR named itself.** This ADR's own "What this decision does not establish" section named a real limit of the path filter — "a change outside these paths that would break it is not caught" — without checking whether the filter's three directories (`src/modules/credits/**`, `src/modules/operations/**`, `src/modules/coding-agent/**`) were actually the full set of production call sites reaching the tested primitives. They were not: `src/modules/billing/webhook-service.ts`'s Stripe-funded `grantCreditLot` calls, `src/modules/billing/overview.ts`'s live `getBillingOverview` repair calls, and two `src/app/app/**` server-action directories calling `ensureWelcomeGrant` all reach `postLedgerEntry`/`reconcileAndRepair*` from outside the filter. §7 and the workflow's own `paths:` list are revised below to include them. This is a widening of an already-accepted filter's boundary, not a reversal of the filtering decision itself — the cost reasoning in Consequences is unchanged, and stays true at the wider boundary. Sixty-iteration confidence (was twenty) and `CONTENTION_ATTEMPTS` round-count observability (was unmeasurable) are recorded as closed in [docs/ROADMAP.md](../ROADMAP.md); local/CI parity with the deployed project's Supavisor and network-latency topology is investigated and found not closable within this suite's own constraints — recorded there, not reopened here.
+
 ## Context
 
 Every "database-level financial invariant" test in this repository runs against
@@ -81,8 +83,12 @@ Concretely:
    `workflow_dispatch` first, because the first run is an experiment with four
    named unknowns. Only after it is green twice does it also run on pull
    requests touching `src/modules/credits/**`, `src/modules/operations/**`,
-   `supabase/migrations/**` and its own configuration. A UI change does not pay
-   for a container start.
+   `src/modules/coding-agent/**`, `supabase/migrations/**` and its own
+   configuration. A UI change does not pay for a container start. **Widened
+   once** (see the revision notice above) to also include
+   `src/modules/billing/**` and two `src/app/app/**` server-action
+   directories, once found to reach the same tested primitives from outside
+   the original three.
 
 ### Local data API parity, and what it is not
 

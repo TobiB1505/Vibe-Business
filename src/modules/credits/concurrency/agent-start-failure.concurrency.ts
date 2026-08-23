@@ -44,8 +44,8 @@ import {
  *
  * It exercises a different production caller — `startAgentExecution`, not
  * `finishAgentExecutionStep` or `expireStaleAgentExecution` — and it is not a
- * race: one actor, one deterministic branch. Twenty iterations here are not
- * about catching a rare interleaving; they are what the shared harness
+ * race: one actor, one deterministic branch. Running `ITERATIONS` times here
+ * is not about catching a rare interleaving; it is what the shared harness
  * affords for cheap and a guard against a fix that only works once.
  *
  * ## Why every iteration gets its own execution spec

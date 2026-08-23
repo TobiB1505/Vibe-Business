@@ -28,7 +28,7 @@ describe("the concurrency suite is actually pointed at a database", () => {
    * The one place `42501` is expected to surface if ADR 0040's
    * `auto_expose_new_tables` assumption is wrong. It is checked here, before
    * any race, so the diagnosis is "the data API cannot see the table" rather
-   * than twenty failing assertions further down.
+   * than dozens of failing assertions further down.
    */
   it("can read a billing table through the data API", async () => {
     const { error } = await client()
@@ -45,6 +45,6 @@ describe("the concurrency suite is actually pointed at a database", () => {
   });
 
   it("runs each race class the number of times the record claims", () => {
-    expect(ITERATIONS).toBe(20);
+    expect(ITERATIONS).toBe(60);
   });
 });
