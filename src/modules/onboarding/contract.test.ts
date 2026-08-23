@@ -137,6 +137,21 @@ describe("onboarding orchestrates canonical domains", () => {
     expect(completion).toContain("if (!allowed) redirect(onboardingHref(projectId))");
   });
 
+  /**
+   * Where a finished setup lands.
+   *
+   * It used to be the product workspace, which meant a founder had never seen
+   * the account dashboard after onboarding — and the workspace has no route to
+   * the level above it except the rail. Asserted rather than left to a code
+   * reading, because it is a product decision that a refactor could reverse
+   * without anything noticing.
+   */
+  it("finishes on the account dashboard, not inside the product", () => {
+    const completion = ACTIONS.slice(ACTIONS.indexOf("export async function completeOnboardingAction"));
+    expect(completion).toContain('redirect("/app")');
+    expect(completion).not.toContain("redirect(`/app/projects/${projectId}`)");
+  });
+
   it("renders only real opportunity data and an honest no-move fallback", () => {
     expect(PAGE).toContain("onboarding.opportunities?.set.opportunities[0]");
     expect(PAGE).toContain("No actual Next Move is available yet");
