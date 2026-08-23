@@ -47,6 +47,7 @@ every branch — which is why Preview needs zero manual configuration at all.
 | Robots | `src/app/robots.ts` | The `sitemap:` directive's URL |
 | Root metadata | `src/app/layout.tsx` | `metadataBase`, for resolving any future relative Open Graph/alternate URL |
 | Stripe Checkout / Customer Portal | `src/modules/billing/checkout.ts` | The return-URL fallback, only when `STRIPE_BILLING_RETURN_URL` is not explicitly set |
+| Meta Pixel gate | `src/lib/analytics/meta-pixel.ts` | Not a URL — reads `getAppEnvironment()`, so the advertising tag ships on Production only ([ADR 0041](../decisions/0041-marketing-attribution-pixel.md)) |
 
 ## What deliberately does NOT read it
 

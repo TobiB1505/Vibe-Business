@@ -21,6 +21,8 @@ export const metadata: Metadata = {
  *   cookies and query strings from anything persisted.
  * - "never asks for or stores the model's reasoning" — rule 43.
  * - "never stores what was sent to or returned by the model" — rule 47.
+ * - "not present once you are signed in" — [ADR 0041](docs/decisions/0041-marketing-attribution-pixel.md),
+ *   which renders the Meta Pixel on public paths only and on production only.
  *
  * What is deliberately absent: retention periods, deletion timelines, a legal
  * basis table, a subprocessor list with contract dates, and any certification.
@@ -31,7 +33,7 @@ export default function PrivacyPage() {
   return (
     <LegalPage
       title="Privacy"
-      updated="17 August 2026"
+      updated="23 August 2026"
       summary="Vibe reads your project to work out what you built and how business-ready it is. It keeps what it concluded and where it saw the evidence — not your code, and not the pages it visited."
       pending={[
         "The name and registered address of the company operating Vibe Business",
@@ -39,6 +41,7 @@ export default function PrivacyPage() {
         "How long each kind of record is kept, and how to have it deleted",
         "The legal basis for processing, and the transfer mechanism for data handled outside your region",
         "A reviewed list of subprocessors and the agreements covering them",
+        "Consent for advertising cookies where the law requires asking first, and a way to decline",
       ]}
     >
       <LegalSection heading="What Vibe collects about you">
@@ -113,8 +116,24 @@ export default function PrivacyPage() {
         <p>
           Running Vibe involves other companies. As things currently stand these are Supabase
           (database and sign-in), Vercel (hosting and change checking), Anthropic (AI processing),
-          GitHub (reading the repository you connect), and Sentry (error monitoring, configured not
-          to send identifying data). This list will be reviewed and formalised before public launch.
+          GitHub (reading the repository you connect), Sentry (error monitoring, configured not to
+          send identifying data), and Meta (advertising measurement on Vibe&apos;s public pages).
+          This list will be reviewed and formalised before public launch.
+        </p>
+      </LegalSection>
+
+      <LegalSection heading="Advertising measurement">
+        <p>
+          Vibe advertises, and its public pages — this one, the home page, sign-in and sign-up —
+          carry Meta&apos;s pixel so that a visit can be attributed to the ad that produced it. It
+          reports that a page was viewed, and the address of that page. Nothing is passed to it
+          about you: not your email address, not your account, not what you connected.
+        </p>
+        <p>
+          It is not present once you are signed in. Everything under your dashboard is outside its
+          reach entirely — the tag is not loaded there — so the projects you work on are never part
+          of what Meta sees. It also runs only on the live product, never on development or preview
+          builds.
         </p>
       </LegalSection>
 
