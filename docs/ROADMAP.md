@@ -92,6 +92,9 @@ All eight document-level SEO signals and the entire brand block are read from th
 **A client-rendered product produces an almost empty scan with no warning.**
 There is no rendering signal, so "we could not read this" is indistinguishable from "there is nothing here" — the failure mode the audit's own `insufficient_evidence` rule exists to prevent.
 
+**The product's own name and logo are stored and unreachable from any list.**
+`product_profiles.result` holds the identity block and the brand colours, and `ProductLogo` is built and battle-tested — but the profile is a JSONB document with no batch read, and `dashboard-contract.test.ts` bans the dashboard read model from parsing documents precisely to keep it on columns. So every card on `/app` and `/app/products` shows the *project* name and an initials tile, which is the name a founder typed at connection time rather than the name their product goes by. Closing it means denormalised columns written at insert time in `product-understanding/store.ts` — the pattern `business_readiness_audits.overall_score` already uses — plus a backfill. Named as a follow-up by [Sprint 0059](sprints/0059-core6-account-dashboard.md).
+
 ---
 
 ## Later — the loop, and what it is blocked on
