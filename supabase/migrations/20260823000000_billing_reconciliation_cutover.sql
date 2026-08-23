@@ -172,6 +172,17 @@ comment on column public.billing_credit_allocations.capacity_materialized_at is
 -- marker for the phase it has actually resolved, leaving the other NULL —
 -- that NULL is not a defect the backfill missed, it is the true state: that
 -- phase genuinely has not happened yet.
+--
+-- Documentation only, no behavioural consequence: the four UPDATE statements
+-- below against billing_credit_reservations and billing_credit_allocations
+-- fire those tables' existing `set_updated_at` trigger, so every backfilled
+-- row's `updated_at` moves to this migration's execution time. That is a
+-- bookkeeping side effect of the trigger already in place before this
+-- migration, not a business state transition — nothing reconciles against
+-- `updated_at`, and no domain fact (status, the amounts, the terminal
+-- timestamps this backfill reads) changes. A future reader of `updated_at`
+-- on an old reservation or allocation row should expect to see this
+-- migration's timestamp there and know why.
 -- ---------------------------------------------------------------------
 update public.billing_credit_ledger
 set materialized_at = created_at
