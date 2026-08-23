@@ -8,6 +8,8 @@ import {
   decideSettlement,
   reconcileBalance,
   totalRefunded,
+  type ActiveReservation,
+  type LedgerDelta,
   type ReleaseReason,
 } from "./balance";
 import { rateUsage, type CreditRateCard } from "./rating";
@@ -29,6 +31,7 @@ import {
   listLedgerEntries,
   postLedgerEntry,
   repairAccountBalance,
+  type CreditAccount,
   type CreditReservation,
 } from "./store";
 import { creditUnits, type CreditUnits, ZERO_CREDITS } from "./units";
@@ -127,6 +130,132 @@ export type BillingBalanceView = {
 };
 
 /**
+ * Detects and, when enabled, repairs drift between an account's materialized
+ * `posted_credits`/`reserved_credits` and the ledger/reservation rows that
+ * define them (ADR 0041 §P3).
+ *
+ * Extracted so `getBillingOverview` — the read a customer actually makes —
+ * can trigger the same check `getBillingBalance` always has, without either
+ * caller re-fetching what the other already loaded. Every automatic action
+ * here posts through `recordAuditEvent`: `credit_drift.detected` on any
+ * disagreement, `credit_drift.repaired` only once a post-repair re-check
+ * confirms `consistent: true`, `credit_drift.repair_failed` when the repair
+ * RPC itself errors or — the more surprising case — completes without error
+ * but the account is still inconsistent afterward (a repair that ran and did
+ * not close the gap it exists to close is exactly as reportable as one that
+ * threw).
+ *
+ * ## The repair call is gated, and unreachable while unset (ADR 0041 §P3, Rollout)
+ *
+ * `BILLING_REPAIR_ENABLED` is a server-only environment variable, read only
+ * here and at the lot-level equivalent, defaulting unset. While unset this
+ * behaves exactly as it always has: drift is logged and audited and nothing
+ * acts on it — `repairAccountBalance` is not called-and-skipped, it is simply
+ * never reached, so this deploy carries no behavioural change until an
+ * operator has independently verified the drain conditions the ADR names and
+ * sets the flag.
+ *
+ * ## Never throws
+ *
+ * A repair failure degrades to `consistent: false` with the caller's
+ * already-loaded, unrepaired account returned — never propagated. The read
+ * this is triggered from (a customer's own balance page) must survive a
+ * repair defect exactly as it already survives ordinary drift.
+ */
+export async function reconcileAndRepairBalance(
+  supabase: SupabaseClient,
+  params: {
+    account: CreditAccount;
+    entries: readonly LedgerDelta[];
+    reservations: readonly ActiveReservation[];
+    userId: string;
+  },
+): Promise<{ account: CreditAccount; consistent: boolean }> {
+  let account = params.account;
+
+  const reconcile = () =>
+    reconcileBalance(
+      { posted: account.postedCredits, reserved: account.reservedCredits },
+      params.entries,
+      params.reservations,
+    );
+
+  let reconciliation = reconcile();
+  if (reconciliation.consistent) return { account, consistent: true };
+
+  // Observable, never silent (§66). A drifted balance is a financial defect.
+  console.error("[billing] materialized balance disagrees with the ledger", {
+    creditAccountId: account.id,
+    postedDrift: reconciliation.drift.posted,
+    reservedDrift: reconciliation.drift.reserved,
+  });
+
+  await recordAuditEvent(supabase, {
+    userId: params.userId,
+    eventType: "credit_drift.detected",
+    metadata: {
+      creditAccountId: account.id,
+      postedDrift: reconciliation.drift.posted,
+      reservedDrift: reconciliation.drift.reserved,
+    },
+  });
+
+  if (process.env.BILLING_REPAIR_ENABLED !== "true") {
+    return { account, consistent: false };
+  }
+
+  try {
+    await repairAccountBalance(supabase, account.id);
+  } catch (error) {
+    await recordAuditEvent(supabase, {
+      userId: params.userId,
+      eventType: "credit_drift.repair_failed",
+      metadata: {
+        creditAccountId: account.id,
+        code: (error as { code?: string })?.code ?? null,
+        message: error instanceof Error ? error.message : String(error),
+      },
+    });
+    return { account, consistent: false };
+  }
+
+  const repaired = await findCreditAccountByUser(supabase, params.userId);
+  if (!repaired) return { account, consistent: false };
+
+  const before = account;
+  account = repaired;
+  reconciliation = reconcile();
+
+  if (!reconciliation.consistent) {
+    await recordAuditEvent(supabase, {
+      userId: params.userId,
+      eventType: "credit_drift.repair_failed",
+      metadata: {
+        creditAccountId: account.id,
+        reason: "still_inconsistent_after_repair",
+        postedDrift: reconciliation.drift.posted,
+        reservedDrift: reconciliation.drift.reserved,
+      },
+    });
+    return { account, consistent: false };
+  }
+
+  await recordAuditEvent(supabase, {
+    userId: params.userId,
+    eventType: "credit_drift.repaired",
+    metadata: {
+      creditAccountId: account.id,
+      postedBefore: before.postedCredits,
+      reservedBefore: before.reservedCredits,
+      postedAfter: account.postedCredits,
+      reservedAfter: account.reservedCredits,
+    },
+  });
+
+  return { account, consistent: true };
+}
+
+/**
  * The customer balance read model (§35).
  *
  * Returns the balance *and* whether it reconciles, because a figure nobody
@@ -134,58 +263,27 @@ export type BillingBalanceView = {
  * has found a real defect, not a rounding artefact — the ledger is authority
  * and the materialized figure is a cache of it.
  *
- * ## The repair call is gated, and unreachable while unset (ADR 0041 §P3, Rollout)
- *
- * `BILLING_REPAIR_ENABLED` is a server-only environment variable, read only
- * here and at the lot-level equivalent, defaulting unset. While unset this
- * function behaves exactly as it always has: drift is logged and nothing acts
- * on it — `repairAccountBalance` is not called-and-skipped, it is simply
- * never reached, so this deploy carries no behavioural change until an
- * operator has independently verified the drain conditions the ADR names and
- * sets the flag.
+ * A thin wrapper: fetches what `reconcileAndRepairBalance` needs and shapes
+ * its result. See that function for the detect/audit/repair behaviour.
  */
 export async function getBillingBalance(
   supabase: SupabaseClient,
   userId: string,
 ): Promise<BillingBalanceView | null> {
-  let account = await findCreditAccountByUser(supabase, userId);
-  if (!account) return null;
+  const initialAccount = await findCreditAccountByUser(supabase, userId);
+  if (!initialAccount) return null;
 
   const [entries, reservations] = await Promise.all([
-    listLedgerEntries(supabase, account.id),
-    listActiveReservations(supabase, account.id),
+    listLedgerEntries(supabase, initialAccount.id),
+    listActiveReservations(supabase, initialAccount.id),
   ]);
 
-  const mappedEntries = entries.map((entry) => ({ kind: entry.kind, creditDelta: entry.creditDelta }));
-  const mappedReservations = reservations.map((reservation) => ({ reservedCredits: reservation.reservedCredits }));
-
-  let reconciliation = reconcileBalance(
-    { posted: account.postedCredits, reserved: account.reservedCredits },
-    mappedEntries,
-    mappedReservations,
-  );
-
-  if (!reconciliation.consistent) {
-    // Observable, never silent (§66). A drifted balance is a financial defect.
-    console.error("[billing] materialized balance disagrees with the ledger", {
-      creditAccountId: account.id,
-      postedDrift: reconciliation.drift.posted,
-      reservedDrift: reconciliation.drift.reserved,
-    });
-
-    if (process.env.BILLING_REPAIR_ENABLED === "true") {
-      await repairAccountBalance(supabase, account.id);
-      const repaired = await findCreditAccountByUser(supabase, userId);
-      if (repaired) {
-        account = repaired;
-        reconciliation = reconcileBalance(
-          { posted: account.postedCredits, reserved: account.reservedCredits },
-          mappedEntries,
-          mappedReservations,
-        );
-      }
-    }
-  }
+  const { account, consistent } = await reconcileAndRepairBalance(supabase, {
+    account: initialAccount,
+    entries: entries.map((entry) => ({ kind: entry.kind, creditDelta: entry.creditDelta })),
+    reservations: reservations.map((reservation) => ({ reservedCredits: reservation.reservedCredits })),
+    userId,
+  });
 
   return {
     balance: {
@@ -193,7 +291,7 @@ export async function getBillingBalance(
       reserved: account.reservedCredits,
       available: creditUnits(account.postedCredits - account.reservedCredits),
     },
-    consistent: reconciliation.consistent,
+    consistent,
   };
 }
 

@@ -1,9 +1,11 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { recordAuditEvent } from "@/modules/audit-log/events";
 import {
   lotsDueForExpiry,
   planAllocation,
+  reconcileLotAllocation,
   settleAcrossLots,
   type AllocationPlan,
   type CreditLot,
@@ -185,6 +187,136 @@ export async function listAllLots(
   return ((data ?? []) as LotRow[]).map(mapLot);
 }
 
+async function findLotById(supabase: SupabaseClient, lotId: string): Promise<CreditLot | null> {
+  const { data, error } = await supabase
+    .from("billing_credit_grants")
+    .select(LOT_COLUMNS)
+    .eq("id", lotId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? mapLot(data as LotRow) : null;
+}
+
+/**
+ * Detects and, when enabled, repairs drift between each of an account's
+ * lots' materialized `allocated_credit_units` and the allocation rows that
+ * define it (ADR 0041 §P3).
+ *
+ * Mirrors `reconcileAndRepairBalance` (`credits/service.ts`) in shape: the
+ * allocation rows are authority, the materialized figure on the grant is a
+ * cache of them, and a lot found inconsistent has found a real defect —
+ * proven one-directional by the ADR (only ever overstates `allocated_credit_units`,
+ * from an unreturned capacity return, never understates it), so drift here
+ * can only *understate* what `spendableCapacity` reports a customer can spend.
+ *
+ * Every automatic action posts through `recordAuditEvent`, the same three
+ * events the account side uses. Never throws: a repair failure for one lot is
+ * audited and that lot's un-repaired figure is kept, so one bad lot cannot
+ * fail every other lot in the same account or the read this is triggered
+ * from.
+ *
+ * Returns the lots array with any repaired lot's `allocatedCreditUnits`
+ * corrected in place, so a caller computing `spendableCapacity` from the
+ * result sees the correction within the same request — re-reading only the
+ * one lot row repair touched, not re-fetching allocations, since repair
+ * changes the grant's cache and each allocation's marker, never the
+ * allocation's own `status`/`credit_units`/`consumed_units` this already read.
+ */
+export async function reconcileAndRepairLotAllocations(
+  supabase: SupabaseClient,
+  params: {
+    lots: readonly CreditLot[];
+    allocationsByGrant: ReadonlyMap<string, LotAllocationSummary[]>;
+    userId: string;
+  },
+): Promise<{ lots: CreditLot[]; consistent: boolean }> {
+  const corrected: CreditLot[] = [];
+  let allConsistent = true;
+
+  for (const lot of params.lots) {
+    const allocations = params.allocationsByGrant.get(lot.id) ?? [];
+    const reconciliation = reconcileLotAllocation(lot, allocations);
+
+    if (reconciliation.consistent) {
+      corrected.push(lot);
+      continue;
+    }
+
+    // Observable, never silent (§66). A drifted lot is a financial defect.
+    console.error("[billing] a lot's materialized allocation disagrees with its allocation rows", {
+      grantId: lot.id,
+      drift: reconciliation.drift,
+    });
+
+    await recordAuditEvent(supabase, {
+      userId: params.userId,
+      eventType: "credit_drift.detected",
+      metadata: { grantId: lot.id, drift: reconciliation.drift },
+    });
+
+    if (process.env.BILLING_REPAIR_ENABLED !== "true") {
+      allConsistent = false;
+      corrected.push(lot);
+      continue;
+    }
+
+    try {
+      await repairLotAllocation(supabase, lot.id);
+    } catch (error) {
+      allConsistent = false;
+      await recordAuditEvent(supabase, {
+        userId: params.userId,
+        eventType: "credit_drift.repair_failed",
+        metadata: {
+          grantId: lot.id,
+          code: (error as { code?: string })?.code ?? null,
+          message: error instanceof Error ? error.message : String(error),
+        },
+      });
+      corrected.push(lot);
+      continue;
+    }
+
+    const refreshed = await findLotById(supabase, lot.id);
+    if (!refreshed) {
+      allConsistent = false;
+      corrected.push(lot);
+      continue;
+    }
+
+    const reCheck = reconcileLotAllocation(refreshed, allocations);
+    if (!reCheck.consistent) {
+      allConsistent = false;
+      await recordAuditEvent(supabase, {
+        userId: params.userId,
+        eventType: "credit_drift.repair_failed",
+        metadata: {
+          grantId: lot.id,
+          reason: "still_inconsistent_after_repair",
+          drift: reCheck.drift,
+        },
+      });
+      corrected.push(refreshed);
+      continue;
+    }
+
+    await recordAuditEvent(supabase, {
+      userId: params.userId,
+      eventType: "credit_drift.repaired",
+      metadata: {
+        grantId: lot.id,
+        allocatedBefore: lot.allocatedCreditUnits,
+        allocatedAfter: refreshed.allocatedCreditUnits,
+      },
+    });
+
+    corrected.push(refreshed);
+  }
+
+  return { lots: corrected, consistent: allConsistent };
+}
+
 /* ---------------------------------------------------------------------------
  * Allocation
  * ------------------------------------------------------------------------ */
@@ -327,6 +459,23 @@ async function materializeAllocationCapacity(supabase: SupabaseClient, allocatio
   if (error) throw error;
 }
 
+/**
+ * Repairs one lot's materialized `allocated_credit_units` from its allocation
+ * rows (ADR 0041 §P3).
+ *
+ * A thin `.rpc()` call onto `repair_lot_allocation`, mirroring
+ * `repairAccountBalance` (`credits/store.ts`) exactly: it scans for
+ * allocations whose `capacity_materialized_at` marker is still unset and
+ * delegates each to `materialize_allocation_capacity`, so it shares that
+ * primitive's exact locking and idempotency rather than recomputing a total.
+ * Only ever called from behind `BILLING_REPAIR_ENABLED` — see
+ * `reconcileAndRepairLotAllocations` (`credits/lots.ts`).
+ */
+export async function repairLotAllocation(supabase: SupabaseClient, grantId: string): Promise<void> {
+  const { error } = await supabase.rpc("repair_lot_allocation", { p_grant_id: grantId });
+  if (error) throw error;
+}
+
 export type AllocateResult =
   | { ok: true; allocations: { lotId: string; creditUnits: CreditUnits }[] }
   | { ok: false; refusal: "insufficient_credits" };
@@ -406,6 +555,49 @@ type AllocationRow = {
 };
 
 const ALLOCATION_COLUMNS = "id, grant_id, credit_units, status, consumed_units";
+
+export type LotAllocationSummary = {
+  status: AllocationRow["status"];
+  creditUnits: CreditUnits;
+  consumedUnits: CreditUnits | null;
+};
+
+/**
+ * Every allocation row for a set of lots, grouped by the lot (`grant_id`)
+ * each belongs to — one batched query rather than one per lot (ADR 0041 §P3).
+ *
+ * Shaped for {@link reconcileLotAllocation} directly. A lot with no
+ * allocations at all is not a special case here: it is simply absent from
+ * the returned map, and `reconcileLotAllocation` already treats a missing/
+ * empty allocation list as `expected: 0`.
+ */
+export async function listAllocationsForGrants(
+  supabase: SupabaseClient,
+  grantIds: readonly string[],
+): Promise<Map<string, LotAllocationSummary[]>> {
+  const byGrant = new Map<string, LotAllocationSummary[]>();
+  if (grantIds.length === 0) return byGrant;
+
+  const { data, error } = await supabase
+    .from("billing_credit_allocations")
+    .select(ALLOCATION_COLUMNS)
+    .in("grant_id", grantIds);
+
+  if (error) throw error;
+
+  for (const row of (data ?? []) as AllocationRow[]) {
+    const summary: LotAllocationSummary = {
+      status: row.status,
+      creditUnits: creditUnits(row.credit_units),
+      consumedUnits: row.consumed_units == null ? null : creditUnits(row.consumed_units),
+    };
+    const existing = byGrant.get(row.grant_id);
+    if (existing) existing.push(summary);
+    else byGrant.set(row.grant_id, [summary]);
+  }
+
+  return byGrant;
+}
 
 export async function listReservationAllocations(
   supabase: SupabaseClient,

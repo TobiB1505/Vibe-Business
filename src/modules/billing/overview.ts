@@ -2,9 +2,14 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { findNextExpiry } from "@/modules/credits/grants";
-import { listActiveLots } from "@/modules/credits/lot-store";
+import {
+  listActiveLots,
+  listAllocationsForGrants,
+  reconcileAndRepairLotAllocations,
+} from "@/modules/credits/lot-store";
 import { spendableCapacity } from "@/modules/credits/lots";
-import { findCreditAccountByUser, listLedgerEntries } from "@/modules/credits/store";
+import { reconcileAndRepairBalance } from "@/modules/credits/service";
+import { findCreditAccountByUser, listActiveReservations, listLedgerEntries } from "@/modules/credits/store";
 import { formatCreditsForDisplay, type CreditUnits, ZERO_CREDITS } from "@/modules/credits/units";
 import { welcomeGrantIdempotencyKey, type PlanKey } from "./catalog";
 import { findActiveSubscription } from "./store";
@@ -161,10 +166,37 @@ export async function getBillingOverview(
     };
   }
 
-  const [lots, entries, expiry] = await Promise.all([
+  const [lots, entries, expiry, reservations] = await Promise.all([
     listActiveLots(supabase, account.id),
     listLedgerEntries(supabase, account.id),
     findNextExpiry(supabase, account.id, now),
+    listActiveReservations(supabase, account.id),
+  ]);
+
+  /*
+   * Reconciliation and, when enabled, repair — for both materialized caches
+   * this page's own numbers ultimately rest on (ADR 0041 §P3).
+   *
+   * This is the one place a customer deliberately looks at their balance, so
+   * it is the read the ADR's own doctrine names as the trigger: repair fires
+   * from a read a caller was already making, never from a schedule. Run
+   * concurrently — neither reconciliation depends on the other's outcome —
+   * and only the lot result is consumed further: `availableCredits` below is
+   * derived from lots, never from the account's posted/reserved cache, so
+   * correcting the account side here is a side effect (drift detection, the
+   * audit trail, the underlying row) rather than something this page's own
+   * return value needs.
+   */
+  const allocationsByGrant = await listAllocationsForGrants(supabase, lots.map((lot) => lot.id));
+
+  const [lotReconciliation] = await Promise.all([
+    reconcileAndRepairLotAllocations(supabase, { lots, allocationsByGrant, userId: params.userId }),
+    reconcileAndRepairBalance(supabase, {
+      account,
+      entries: entries.map((entry) => ({ kind: entry.kind, creditDelta: entry.creditDelta })),
+      reservations: reservations.map((reservation) => ({ reservedCredits: reservation.reservedCredits })),
+      userId: params.userId,
+    }),
   ]);
 
   /*
@@ -174,9 +206,10 @@ export async function getBillingOverview(
    * is the honest one: it is exactly what a new operation could actually use.
    * Showing the posted figure would promise Credits that a reservation would
    * then refuse — the worst possible disagreement between a number and a
-   * button.
+   * button. Computed from `lotReconciliation.lots`, not the raw `lots` read
+   * above, so a repair this same call just made is reflected immediately.
    */
-  const availableCredits = spendableCapacity(lots, now);
+  const availableCredits = spendableCapacity(lotReconciliation.lots, now);
 
   const welcomeKey = welcomeGrantIdempotencyKey(params.userId);
   const welcomeGranted = entries.some((entry) => entry.idempotencyKey === welcomeKey);

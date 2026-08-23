@@ -44,6 +44,14 @@ describe("activity tone", () => {
   it("marks the one event that means bytes moved as a success", () => {
     expect(toneFor("change_merge.default_branch_updated")).toBe("success");
   });
+
+  it("marks a failed repair as a problem, though its name does not end in .failed", () => {
+    // `credit_drift.repair_failed` would fall to the "neutral" default under
+    // the plain `.endsWith(".failed")` heuristic (ADR 0041 §P3) — stated
+    // explicitly instead.
+    expect(toneFor("credit_drift.repair_failed")).toBe("problem");
+    expect(toneFor("credit_drift.repaired")).toBe("success");
+  });
 });
 
 describe("activity entries", () => {
