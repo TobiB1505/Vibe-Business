@@ -25,14 +25,20 @@ import { creditUnits, type CreditUnits } from "./units";
  * billing_credit_grants.allocated_credit_units  provenance      (this file)
  * ```
  *
- * A reservation is still admitted by the single conditional UPDATE in
- * `store.ts` — that primitive was proven under real concurrency and is not
- * touched. Allocation runs *after* admission and answers a different question:
+ * A reservation is still admitted by the row-locked `materialize_reservation_hold`
+ * primitive `store.ts` calls — proven under real concurrency and not touched
+ * here. Allocation runs *after* admission and answers a different question:
  * not "may this hold exist?" but "whose Credits fund it?".
  *
- * Both layers use the same compare-and-swap shape for the same reason: PostgREST
- * cannot express a column-relative update, and a read-then-write without a guard
- * has a race window two concurrent operations fit through.
+ * `takeFromLot` keeps the compare-and-swap shape PostgREST forces on every
+ * writer with no independent durable row to lock instead: read, guard the
+ * write on the value read, retry on a lost swap. `materializeAllocationCapacity`
+ * (ADR 0041 §P3) does not need that shape, because by the time it is called an
+ * allocation row already exists in its terminal status — the row itself is
+ * what a Postgres row lock serializes on, so there is no swap to lose. Only
+ * `allocateReservation`'s unwind of a plan that never committed an allocation
+ * row stays on the old shape, for the same reason `takeFromLot` does: nothing
+ * durable exists yet for the primitive to read.
  *
  * ## Two gates, and why allocation can still refuse
  *
@@ -244,7 +250,21 @@ async function takeFromLot(
   return false;
 }
 
-/** Hands capacity back to a lot after a release or a partial settlement. */
+/**
+ * Hands capacity back to a lot directly, with no allocation row behind it.
+ *
+ * The one remaining caller is `allocateReservation`'s failure-unwind path,
+ * which undoes a `takeFromLot` for a plan that never committed — no
+ * `billing_credit_allocations` row was ever inserted for it, because that
+ * insert only happens after every take in the plan succeeds. That is the
+ * same structural reason `takeFromLot` itself keeps this CAS-retry shape
+ * rather than moving to `materialize_allocation_capacity` (ADR 0041 §P3):
+ * that primitive locks and reads an *allocation row's own* status and
+ * consumed amount, and there is no row here for it to read. Every caller
+ * that does have one — `settleReservationAllocations`,
+ * `releaseReservationAllocations` — uses {@link materializeAllocationCapacity}
+ * instead.
+ */
 async function returnToLot(
   supabase: SupabaseClient,
   lotId: string,
@@ -282,6 +302,29 @@ async function returnToLot(
   // thrown — failing the settlement that is giving Credits back would be worse
   // than a reconcilable drift on a cache.
   console.error("[billing] could not return capacity to a credit lot", { lotId, amount });
+}
+
+/**
+ * Returns one allocation's unconsumed capacity to its lot, atomically
+ * (ADR 0041 §P3).
+ *
+ * A thin `.rpc()` call onto `materialize_allocation_capacity`. The function
+ * locks the allocation row and its lot, reads the amount to return from the
+ * allocation row's own `credit_units`/`consumed_units` and its
+ * `capacity_materialized_at` marker, and applies it exactly once — so callers
+ * pass only the allocation id, never a pre-computed amount, and it is safe to
+ * call twice for the same allocation from any two callers (a hot-path settle
+ * or release, and a future repair scan) in any order.
+ *
+ * Both callers here flip the allocation row to its terminal status
+ * immediately before calling this, so the row this reads back is exactly the
+ * one they just wrote.
+ */
+async function materializeAllocationCapacity(supabase: SupabaseClient, allocationId: string): Promise<void> {
+  const { error } = await supabase.rpc("materialize_allocation_capacity", {
+    p_allocation_id: allocationId,
+  });
+  if (error) throw error;
 }
 
 export type AllocateResult =
@@ -432,7 +475,7 @@ export async function settleReservationAllocations(
     // past what it ever held.
     if (!data || data.length === 0) continue;
 
-    await returnToLot(supabase, settlement.lotId, settlement.releasedUnits);
+    await materializeAllocationCapacity(supabase, settlement.allocationId);
   }
 }
 
@@ -459,7 +502,7 @@ export async function releaseReservationAllocations(
     // allocation. Its capacity is not ours to return.
     if (!data || data.length === 0) continue;
 
-    await returnToLot(supabase, allocation.grantId, allocation.creditUnits);
+    await materializeAllocationCapacity(supabase, allocation.id);
   }
 }
 

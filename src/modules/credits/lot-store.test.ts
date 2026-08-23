@@ -233,3 +233,49 @@ describe("an ordinary allocation still works", () => {
     expect(rows[0].creditUnits as CreditUnits).toBe(creditsToUnits(300));
   });
 });
+
+/**
+ * ADR 0041 §P3 — capacity return is now one `.rpc()` call, not a retry loop.
+ *
+ * `settleReservationAllocations`/`releaseReservationAllocations` flip the
+ * allocation row's status and then call `materialize_allocation_capacity`
+ * with the allocation's id. There is no longer a compare-and-swap around that
+ * call to exhaust, so an error the function raises — anything other than the
+ * status flip's own guard already having refused a lost race — must reach the
+ * caller rather than being swallowed silently, exactly as `store.ts`'s
+ * equivalent calls do.
+ */
+describe("an unrecognized capacity-return failure is never swallowed", () => {
+  /** Every `.rpc()` call fails with an error neither settle nor release path recognizes. */
+  function rpcAlwaysErrors(): ReturnType<typeof supabase> {
+    const real = supabase();
+    return {
+      ...real,
+      rpc: () => ({
+        then: (onfulfilled: (value: { data: null; error: unknown }) => unknown) =>
+          Promise.resolve({ data: null, error: { code: "53300", message: "too many connections" } }).then(
+            onfulfilled,
+          ),
+      }),
+    } as unknown as ReturnType<typeof supabase>;
+  }
+
+  it("propagates a failure to return capacity on settlement", async () => {
+    const { reservationId } = await heldAgainstLot(300);
+
+    await expect(
+      settleReservationAllocations(rpcAlwaysErrors(), {
+        reservationId,
+        actualCredits: creditsToUnits(100),
+      }),
+    ).rejects.toMatchObject({ code: "53300" });
+  });
+
+  it("propagates a failure to return capacity on release", async () => {
+    const { reservationId } = await heldAgainstLot(300);
+
+    await expect(releaseReservationAllocations(rpcAlwaysErrors(), reservationId)).rejects.toMatchObject({
+      code: "53300",
+    });
+  });
+});
