@@ -442,6 +442,21 @@ export type SettleResult =
  *
  * It never asks "did that HTTP call succeed?" — it reads what is durably true
  * and lets the observation decide (§27).
+ *
+ * ## Why `settled` is checked before the ledger, not after (ADR 0041 §P4)
+ *
+ * A charge existing in the ledger used to be the only idempotency key this
+ * function trusted — correct for every settlement that charges something, and
+ * silently wrong for the one that legitimately charges nothing: `credit_delta
+ * <> 0` forbids a zero-delta ledger row, so a zero-credit settlement posts no
+ * charge at all, and a retry that only looks for one finds nothing, falls
+ * through to `decideSettlement`, and is refused `reservation_not_active`
+ * against a reservation it already, correctly, settled. The reservation row
+ * itself is guaranteed to reach a terminal status for every legitimate
+ * settlement, charged or not — and it already carries the exact amount
+ * (`settledCredits`, set by `closeReservation`) — so it is the idempotency key
+ * for the case the ledger cannot represent, checked first rather than
+ * inferred from an absence.
  */
 export async function settleReservation(
   supabase: SupabaseClient,
@@ -456,8 +471,23 @@ export async function settleReservation(
 
   const idempotencyKey = `settle:${reservation.id}`;
 
-  // Already durably settled? Then this is a retry, and the answer is the
-  // charge that already exists — not a second one.
+  // Already durably settled — including the zero-credit outcome, which posts
+  // no ledger row at all, so this is checked before any ledger lookup rather
+  // than inferred from one finding nothing (see the docblock above).
+  if (reservation.status === "settled") {
+    const charged = reservation.settledCredits ?? ZERO_CREDITS;
+    return {
+      ok: true,
+      chargedCredits: charged,
+      releasedCredits: creditUnits(reservation.reservedCredits - charged),
+      alreadySettled: true,
+    };
+  }
+
+  // Already durably charged? Then this is a retry, and the answer is the
+  // charge that already exists — not a second one. Reservation status here is
+  // never 'settled' (handled above), so finding a charge against it is the
+  // anomaly the next check surfaces, not the ordinary replay case.
   const existingCharge = await findLedgerEntryByIdempotencyKey(supabase, {
     creditAccountId: reservation.creditAccountId,
     idempotencyKey,
@@ -470,8 +500,6 @@ export async function settleReservation(
       releasedCredits: creditUnits(reservation.reservedCredits + existingCharge.creditDelta),
       alreadySettled: true,
     };
-
-    if (reservation.status === "settled") return settled;
 
     // The hold was given back and the charge stands. Both halves happened and
     // they disagree, so this is reported rather than smoothed over.

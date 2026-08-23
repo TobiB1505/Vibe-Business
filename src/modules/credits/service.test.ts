@@ -201,3 +201,84 @@ describe("a retried settlement closes the hold its charge was taken against", ()
     expect(settled).toHaveLength(0);
   });
 });
+
+/**
+ * ADR 0041 §P4 — a zero-credit settlement is idempotent.
+ *
+ * `credit_delta <> 0` forbids a zero-delta ledger row, so a zero-credit
+ * settlement posts no charge at all — the whole hold is simply released. A
+ * retry that only looks for an existing charge in the ledger finds nothing,
+ * falls through to `decideSettlement`, and is refused `reservation_not_active`
+ * against a reservation it already, correctly, settled. `reservation.status
+ * === "settled"` is checked before any ledger lookup so this case has an
+ * idempotency key at all.
+ */
+describe("a zero-credit settlement is idempotent", () => {
+  it("reports a retried zero-credit settlement as already settled, not refused", async () => {
+    const { id } = await heldReservation(300);
+
+    const first = await settleReservation(supabase(), {
+      reservationId: id,
+      actualCredits: ZERO_CREDITS,
+      rateCardVersion: null,
+    });
+    expect(first).toMatchObject({ ok: true, chargedCredits: ZERO_CREDITS, alreadySettled: false });
+
+    const retry = await settleReservation(supabase(), {
+      reservationId: id,
+      actualCredits: ZERO_CREDITS,
+      rateCardVersion: null,
+    });
+
+    expect(retry).toMatchObject({
+      ok: true,
+      chargedCredits: ZERO_CREDITS,
+      releasedCredits: creditsToUnits(300),
+      alreadySettled: true,
+    });
+    expect((await getReservation(supabase(), id))?.status).toBe("settled");
+  });
+
+  it("posts no ledger row for a zero-credit settlement, retried or not", async () => {
+    const { id } = await heldReservation(300);
+
+    await settleReservation(supabase(), { reservationId: id, actualCredits: ZERO_CREDITS, rateCardVersion: null });
+    await settleReservation(supabase(), { reservationId: id, actualCredits: ZERO_CREDITS, rateCardVersion: null });
+
+    const charges = db.current
+      .rows("billing_credit_ledger")
+      .filter((row) => (row as { kind: string }).kind === "charge");
+    expect(charges).toHaveLength(0);
+  });
+
+  it("gives back the whole hold on a zero-credit settlement", async () => {
+    const { id } = await heldReservation(300);
+
+    await settleReservation(supabase(), { reservationId: id, actualCredits: ZERO_CREDITS, rateCardVersion: null });
+
+    const balance = await getCreditBalance(supabase(), USER);
+    expect(balance?.reserved).toBe(ZERO_CREDITS);
+  });
+
+  it("still reports a nonzero settlement's replay from the settled reservation row, not the ledger", async () => {
+    const { id } = await heldReservation(300);
+
+    await settleReservation(supabase(), {
+      reservationId: id,
+      actualCredits: creditsToUnits(200),
+      rateCardVersion: null,
+    });
+    const retry = await settleReservation(supabase(), {
+      reservationId: id,
+      actualCredits: creditsToUnits(200),
+      rateCardVersion: null,
+    });
+
+    expect(retry).toMatchObject({
+      ok: true,
+      chargedCredits: creditsToUnits(200),
+      releasedCredits: creditsToUnits(100),
+      alreadySettled: true,
+    });
+  });
+});
