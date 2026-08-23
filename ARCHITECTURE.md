@@ -306,6 +306,7 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0040](docs/decisions/0040-ci-hosted-database-concurrency-gate.md) | Where a real-database concurrency test runs, and what it may reach | §3.11 |
 | [0041](docs/decisions/0041-marketing-attribution-pixel.md) | The Meta Pixel, and the two boundaries it runs inside | Cross-cutting |
 | [0042](docs/decisions/0042-billing-reconciliation-authority.md) | Billing reconciliation authority: CAS-based finalization authority plus marker-based cache repair, closing drift repair, orphaned holds, stranded lot capacity and zero-credit idempotency (Proposed, unimplemented) | §3.11 |
+| [0043](docs/decisions/0043-data-api-privilege-model.md) | Where the Data API's privileges come from: explicit per-table, per-role grants in the repository, replacing an expiring platform default | §3.11 |
 
 ### Layers with no section above
 
