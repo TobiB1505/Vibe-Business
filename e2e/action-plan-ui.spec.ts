@@ -361,7 +361,12 @@ test.describe("ready plan — reasoning disclosure", () => {
     const disclosure = page.getByText("Why Vibe planned this");
     await expect(disclosure).toBeVisible();
 
-    const evidenceLine = page.getByText("robots txt missing", { exact: false });
+    // The fixture step cites `live.seo.robots_txt_missing`. Since the polarity
+    // fix (`fix(audit): stop claiming presence from an id that does not encode
+    // it`), an id renders as the check that was made rather than as a claim the
+    // id cannot support — "Seo robots txt — not observed", not "robots txt
+    // missing". The evidence is still shown; only its wording moved.
+    const evidenceLine = page.getByText("Seo robots txt", { exact: false });
     await expect(evidenceLine).not.toBeVisible();
     await disclosure.click();
     await expect(evidenceLine).toBeVisible();
