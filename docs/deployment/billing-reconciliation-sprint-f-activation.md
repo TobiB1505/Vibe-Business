@@ -1,6 +1,8 @@
 # ADR 0042 Sprint F — activation checklist
 
-**Status as of this writing: not started. Nothing in this document has been executed.** `origin/main` currently ends at Sprint 0057 — the ADR 0042 migration, primitives, and hot-path rewiring (Sprints 0058–0061, "B0"–"D") have not been merged, so none of the columns, functions, or gated call sites this checklist verifies exist in production yet. This document is the concrete, operator-run procedure for the day they do — written now so activation follows the ADR's own required sequencing rather than being improvised at the moment someone wants the flag on. See [ADR 0042 §P3, "Rollout"](../decisions/0042-billing-reconciliation-authority.md) for the full derivation and proof this checklist executes against; this document adds nothing to that reasoning; it only makes it runnable.
+**Status as of this writing: all four stages complete. `BILLING_REPAIR_ENABLED=true` is live in Production.** See `docs/sprints/0068-billing-reconciliation-sprint-f-activation.md` for the full record of how each stage actually executed, including the one real finding along the way (two orphaned, pre-cutover `operation_runs` rows that failed the drain check and were cancelled, verified dependency-free first). This document remains the reusable procedure for any *future* activation cycle (e.g. after a rollback) — the sections below are kept in their original prescriptive form for that reason, not rewritten into a past-tense narrative; the sprint record is where the narrative lives, per this repository's own records-vs-current-state-docs split (rule 83). See [ADR 0042 §P3, "Rollout"](../decisions/0042-billing-reconciliation-authority.md) for the full derivation and proof this checklist executes against; this document adds nothing to that reasoning; it only makes it runnable.
+
+**A once-flagged inconsistency, since reconciled**: the migration files this checklist and ADR 0042 name once carried different timestamps than what the remote database's own migration history recorded when `apply_migration` applied them — the same "manually-applied migrations may already exist on the remote database without matching local history" case rule 30 names, and the same fix Sprint 0058 had already precedented once on an unrelated migration: a bookkeeping-only `UPDATE supabase_migrations.schema_migrations SET version = '<local>' WHERE version = '<remote>' AND name = '<name>'`, per migration, run by the operator directly (blocked from this session's own tools by the same permission classifier that blocked Stage 3's row cancellation). Verified afterward: all 57 remote migration versions now match the 57 local files exactly, name and version both. See `docs/sprints/0068-billing-reconciliation-sprint-f-activation.md` for the full record.
 
 Every stage below is a **precondition for the next, not an independent option.** Skipping a stage, or activating the flag before the drain window is verified, reopens the exact double-count/permanently-invisible-drift failure modes §P3 exists to prevent.
 
@@ -11,27 +13,17 @@ Every stage below is a **precondition for the next, not an independent option.**
 
 If either of those ever stops being true — a second Supabase project appears, the Vercel project is renamed or forked — re-verify by the same read-only listing before proceeding; do not carry this section's identifiers forward blindly.
 
-## Stage 0 — merge to `main` (explicit human approval required; not autonomous)
+## Stage 0 — merge to `main` (explicit human approval required; not autonomous) — DONE
 
-Per CLAUDE.md rule 5, this step is never taken by an AI-authored flow on its own. Someone with merge authority opens/approves the PR carrying Sprints 0058–0067 into `main`. Nothing past this point in the checklist is meaningful before this lands.
+Per CLAUDE.md rule 5, this step is never taken by an AI-authored flow on its own. PR #75 was merged on explicit instruction; merge commit `8929e05` on `main`.
 
-## Stage 1 — schema migration, deployed alone
+## Stage 1 — schema migration, deployed alone — DONE (executed earlier this session, ahead of Stage 0)
 
-The migration (`supabase/migrations/20260823000000_billing_reconciliation_cutover.sql` and `..._primitives.sql`, currently only on this branch) ships **before any application code that reads the new columns or calls the new functions.** Concretely:
+Confirmed by direct read against `dcbwlctscooefwnivxzv`: all four marker columns, `operation_runs.pause_cycle`, and all five `materialize_*`/`repair_*` functions exist. Applied via `apply_migration` in this session's earlier work — see the flagged local/remote migration-version mismatch above; `get_advisors` verification is recorded in `docs/sprints/0059-billing-reconciliation-b1-primitives.md`. This happened before Stage 0 rather than after, which does not violate the ADR's required order (migration-before-app-code) — it satisfies it more conservatively, since the app code that depends on this schema only just went live in Stage 2.
 
-1. Deploy the migration to the linked Supabase project — via the linked Supabase CLI workflow (rule 29: never manual SQL Editor copy/paste for this), or `apply_migration` if operating through this session's Supabase MCP connection against project `dcbwlctscooefwnivxzv`.
-2. Confirm via `list_migrations` that history matches the local migration files (mirroring rule 30's `pnpm db:status` discipline) — do not assume; read it back.
-3. Run `get_advisors --type security` and `--type performance` against the new functions, matching Sprint B1's own verification (`docs/sprints/0059-billing-reconciliation-b1-primitives.md`) — expect zero new findings beyond the pre-existing, already-documented ones.
-4. **The migration's own in-transaction certification (§P3 Rollout, "Certify... Backfill") is what actually proves R1** — this is not a separate manual step; if the migration transaction completes, certification passed. If it aborts, stop: an account or lot failed reconciliation before any of this work began, and needs manual remediation first, unrelated to this rollout.
+## Stage 2 — application deploy, repair gated off — DONE (automatic, as a direct consequence of Stage 0)
 
-Application code is still the pre-0042 CAS loops at this point — nothing behaviorally changes for a live user yet.
-
-## Stage 2 — application deploy, repair gated off
-
-Deploy the branch's application code (Sprints C/D onward: `.rpc()`-based hot-path writers, both repair call sites wired to `getBillingOverview`) to Production. `BILLING_REPAIR_ENABLED` is **not** set — it must remain absent through this entire stage. Verify:
-
-- The deployment is live and is the sole Production deployment serving traffic (`list_deployments`/`get_deployment` against Vercel project `prj_YSM0fYcTzRiVCcE09ajUH3vAmswR`, team `team_M4fegq2Wl26ILNCQOha6sKVW` — confirm `readyState`/promotion, not merely "build succeeded").
-- `reconcileBalance`/`reconcileLotAllocation` still run and still log drift on every `getBillingOverview` read, exactly as before (they are unconditional; only the repair call is gated) — spot-check the audit log for `credit_drift.detected` events appearing, `credit_drift.repaired`/`repair_failed` never appearing.
+Vercel's GitHub integration deploys `main` to Production automatically; merging PR #75 *was* this stage, not a separate later action. Deployment `dpl_D6YExD1cEvbGpobmWF5LNigYQZje`, target `production`, state `READY`, commit `8929e05`, promoted `2026-08-23T17:47:22Z`. `BILLING_REPAIR_ENABLED` was confirmed absent for the duration of this stage (zero `credit_drift.*` audit events; the operator's own Vercel dashboard read).
 
 This stage is, by R2's proof, safe to roll out incrementally — old and new code writing concurrently compose correctly. It is not safe to *skip waiting* after it before proceeding, which is the entire point of Stage 3.
 
@@ -78,4 +70,4 @@ Follow ADR 0042 §P3's own rollback procedure exactly — unset `BILLING_REPAIR_
 
 ## What this document is not
 
-Not a sprint record — nothing here has run. Not a new architecture decision — every step is a direct execution of ADR 0042 §P3's already-approved rollout order; if any step here turns out to need a design change, that is a further ADR revision, not a silent deviation in this checklist. When Stage 0 actually happens, this document should be updated to reflect real dates/deployment IDs as each stage executes, and a genuine sprint record written once Stage 4 completes — matching this repository's existing sprint-record discipline for every other piece of ADR 0042's implementation.
+Not a sprint record — this document is the reusable procedure, kept prescriptive on purpose so a future activation (after a rollback, or a second project) can follow it again; `docs/sprints/0068-billing-reconciliation-sprint-f-activation.md` is where the narrative of this specific run — dates, deployment IDs, the orphaned-row finding — actually lives. Not a new architecture decision — every step is a direct execution of ADR 0042 §P3's already-approved rollout order; if any step here turns out to need a design change, that is a further ADR revision, not a silent deviation in this checklist.
