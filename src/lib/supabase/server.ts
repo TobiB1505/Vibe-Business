@@ -3,6 +3,7 @@ import "server-only";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { getPublicEnv } from "@/lib/env/env";
+import { withJwtClockSkewRetry } from "@/lib/supabase/clock-skew";
 
 /**
  * Supabase client for Server Components, Route Handlers, and Server Actions.
@@ -17,6 +18,13 @@ export async function createClient() {
     env.NEXT_PUBLIC_SUPABASE_URL,
     env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     {
+      /**
+       * Every request this client makes goes through the clock-skew retry.
+       * It is installed here rather than at a call site because the failure it
+       * absorbs belongs to the session's first second, not to any one query —
+       * see src/lib/supabase/clock-skew.ts.
+       */
+      global: { fetch: withJwtClockSkewRetry() },
       cookies: {
         getAll() {
           return cookieStore.getAll();
