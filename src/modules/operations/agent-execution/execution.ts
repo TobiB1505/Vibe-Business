@@ -1115,8 +1115,32 @@ export async function startAgentStep(
       agentExecutionRunId: context.run.id,
       interrupt,
     });
-    await pauseAgentRunForUser(deps.supabase, context.run.id);
+    const paused = await pauseAgentRunForUser(deps.supabase, context.run.id);
     await pauseOperationForUser(deps.supabase, operationId);
+
+    /*
+     * Release-on-pause (ADR 0041 §P2).
+     *
+     * Real inference already ran to reach this interrupt — activity and tool
+     * events were already recorded above — so the release is
+     * `abandoned_with_usage`, not `cancelled_before_usage`. Guarded on
+     * `paused`, the actual winner of `pauseAgentRunForUser`'s CAS, mirroring
+     * `expireStaleAgentExecution`'s own "whoever wins the swap owns
+     * finalization" rule.
+     *
+     * No re-acquire on resume: traced directly, no code path in this
+     * repository ever transitions a run out of `needs_user_input` after its
+     * interrupt is answered (`answerExecutionInterrupt` only marks the
+     * interrupt row). Building that resume is a separate, larger feature: this
+     * fix stops the leak `pauseAgentRunForUser` left standing, it does not
+     * make the run resumable.
+     */
+    if (paused && context.run.creditReservationId) {
+      await releaseOperationCredits(deps.supabase, {
+        reservationId: context.run.creditReservationId,
+        reason: "abandoned_with_usage",
+      });
+    }
 
     await recordAuditEvent(deps.supabase, {
       userId: context.run.userId,

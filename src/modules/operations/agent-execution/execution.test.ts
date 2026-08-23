@@ -239,6 +239,9 @@ function seed(overrides: { runStatus?: string; specMode?: string } = {}) {
     input_identity: "run-identity-1",
     subject_id: specRow.id,
     created_at: "2026-08-18T00:00:00.000Z",
+    // `operation_runs.pause_cycle smallint not null default 0` (ADR 0041
+    // §P2) — `db.seed` does not apply column defaults, unlike a real INSERT.
+    pause_cycle: 0,
   });
 
   const run = db.seed("agent_execution_runs", {
@@ -556,6 +559,62 @@ describe("§25 — a question pauses the run", () => {
 
     // The write after the question was never attempted.
     expect(provider.attempted.map((entry) => entry.tool)).toEqual(["request_decision"]);
+  });
+
+  /**
+   * ADR 0041 §P2 — a question that pauses the run releases its Credits with
+   * `abandoned_with_usage`: real inference already ran to reach the interrupt
+   * (the activity and tool events recorded above are proof of that), so this
+   * is neither `cancelled_before_usage` nor a failure — Vibe already paid the
+   * provider, and the release says so.
+   *
+   * No re-acquire is asserted here on resume, because there is no resume:
+   * traced directly against this repository, no code path transitions a run
+   * out of `needs_user_input` after its interrupt is answered
+   * (`answerExecutionInterrupt` only marks the interrupt row). This fix stops
+   * the leak; it does not make the run resumable.
+   */
+  it("releases the hold with abandoned_with_usage when a question pauses a funded run", async () => {
+    const { operation, run } = seed();
+    db.rows("agent_execution_runs").find((row) => row.id === run.id)!.credit_reservation_id =
+      "reservation-1";
+    db.seed("billing_credit_accounts", {
+      id: "account-1",
+      user_id: USER,
+      status: "active",
+      posted_credits: creditsToUnits(1_000),
+      reserved_credits: creditsToUnits(100),
+    });
+    db.seed("billing_credit_reservations", {
+      id: "reservation-1",
+      credit_account_id: "account-1",
+      project_id: PROJECT,
+      user_id: USER,
+      operation_run_id: operation.id,
+      status: "active",
+      reserved_credits: creditsToUnits(100),
+      created_at: "2026-08-18T00:00:00.000Z",
+      // Matches Sprint B0's phase-aware backfill for a pre-existing active
+      // reservation — see the identical comment in `lifecycle.test.ts`.
+      admitted_at: "2026-08-18T00:00:00.000Z",
+    });
+
+    const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES, results: SANDBOX_RESULTS });
+    await provisionAgentWorkspaceStep(deps({ sandboxProvider: sandbox }), operation.id);
+    const provider = fakeDetachedAgentProvider({
+      calls: [{ tool: "request_decision", input: { situation: "business_decision_required" } }],
+    });
+
+    const outcome = await runAgent(deps({ provider, sandboxProvider: sandbox }), operation.id, [
+      "typecheck",
+    ]);
+
+    expect(outcome).toMatchObject({ ok: true, paused: true });
+    expect(db.rows("billing_credit_reservations")[0]).toMatchObject({
+      status: "released",
+      release_reason: "abandoned_with_usage",
+    });
+    expect(db.rows("billing_credit_accounts")[0].reserved_credits).toBe(0);
   });
 });
 

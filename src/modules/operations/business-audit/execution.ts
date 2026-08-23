@@ -1,5 +1,10 @@
 import "server-only";
-import { operationHasCreditHold, releaseOperationBilling, settleOperationBilling } from "../billing";
+import {
+  holdOperationCredits,
+  operationHasCreditHold,
+  releaseOperationBilling,
+  settleOperationBilling,
+} from "../billing";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { AIProvider } from "@/modules/ai/provider";
@@ -447,7 +452,25 @@ export async function checkFounderQuestionStep(
 
   await setOperationStage(deps.supabase, { operationId, stage: "asking_founder" });
   await pauseAuditForQuestion(deps.supabase, { auditId, question: decision.question });
-  await pauseOperationForUser(deps.supabase, operationId);
+  const { paused } = await pauseOperationForUser(deps.supabase, operationId);
+
+  /*
+   * Release-on-pause (ADR 0041 §P2).
+   *
+   * No provider call has been made for this question — inference is Step 5,
+   * well after this one — so the release is `cancelled_before_usage`, not
+   * `abandoned_with_usage`. Guarded on `paused`: only the attempt that actually
+   * won `pauseOperationForUser`'s CAS releases, mirroring the "whoever wins the
+   * swap owns finalization" rule this codebase already uses for settlement —
+   * though `releaseOperationBilling` is itself idempotent either way, so a
+   * second attempt here would simply no-op rather than double-release.
+   *
+   * `runInferenceStep` re-acquires a fresh hold before spending, if this
+   * operation is credits-funded and the resume finds none active.
+   */
+  if (paused) {
+    await releaseOperationBilling(deps.supabase, { operationRunId: operationId, reason: "cancelled_before_usage" });
+  }
 
   await recordAuditEvent(deps.supabase, {
     userId: operation.userId,
@@ -551,6 +574,40 @@ export async function runInferenceStep(
 
   const resolved = await resolveInputs(deps.supabase, operation);
   if (!resolved.ok) return resolved;
+
+  /*
+   * Re-acquires a hold a pause released (ADR 0041 §P2).
+   *
+   * `accessMode` was decided once, in `prepareEvidenceStep`, and is fixed for
+   * this audit's whole life — it is not re-derived here. What can have changed
+   * since is whether the reservation that funded it is still active: a pause
+   * between then and now releases it (`checkFounderQuestionStep`), and nothing
+   * upstream of this line re-took it. This is the last point before the paid
+   * call, so it is the right place to verify — not `prepareEvidenceStep`,
+   * which only ever runs once per operation (guarded on `resultId` above) and
+   * would not re-run on a resume regardless.
+   *
+   * The idempotency key is scoped to the operation's current pause cycle, not
+   * the bare operation id: reusing `operation:<id>` would find the first (now
+   * released) reservation and replay it rather than take a fresh one. Retrying
+   * this exact step for the same cycle lands on the same reservation; a later
+   * pause/resume cycle takes a distinct one.
+   */
+  if (
+    existing?.accessMode === "credits" &&
+    !(await operationHasCreditHold(deps.supabase, operationId))
+  ) {
+    const reacquired = await holdOperationCredits(deps.supabase, {
+      projectId: operation.projectId,
+      operationRunId: operationId,
+      operation: "business_audit",
+      idempotencyKey: `operation:${operationId}:resume:${operation.pauseCycle}`,
+    });
+
+    if (!reacquired.ok || !reacquired.hold.billable) {
+      return { ok: false, failureCode: "insufficient_credits" };
+    }
+  }
 
   const config = BUSINESS_READINESS_AUDIT_CONFIG;
 

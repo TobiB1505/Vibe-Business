@@ -998,6 +998,12 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
         // value Postgres always fills.
         if (this.table === "change_approvals") row.approved_at ??= row.created_at;
 
+        // `operation_runs.pause_cycle smallint not null default 0` (ADR 0041
+        // §P2). `createOperationRun` deliberately never sends this column, so
+        // without the default modelled here `pauseOperationForUser`'s read
+        // would see `undefined` where Postgres always fills `0`.
+        if (this.table === "operation_runs") row.pause_cycle ??= 0;
+
         const violation = this.db.checkConstraints(this.table, row);
         if (violation) return { data: null, error: violation };
 
