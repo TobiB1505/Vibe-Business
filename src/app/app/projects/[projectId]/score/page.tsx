@@ -1,5 +1,5 @@
 import { EmptyState, Notice } from "@/components/ui/states";
-import { WorkspaceSection } from "@/components/layout/project-shell";
+import { WorkspaceSection, projectSectionHref } from "@/components/layout/project-shell";
 import {
   getAuditAccessStatus,
   getAuditCurrency,
@@ -254,7 +254,10 @@ export default async function ProjectScorePage({
           </div>
         )}
 
-        <AuditEvidenceNotice notice={auditEvidenceNotice} />
+        <AuditEvidenceNotice
+          notice={auditEvidenceNotice}
+          deepScanHref={projectSectionHref(project.id, "deep-scan")}
+        />
 
         {missingPrerequisites.length > 0 && (
           <Notice tone="waiting" label="Why this is blocked">

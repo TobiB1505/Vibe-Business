@@ -157,6 +157,59 @@ export const BLOCKED_ACTION_LABELS: Record<Exclude<BlockedAction["kind"], "none"
   enable_github_write: "Enable GitHub write access",
 };
 
+/**
+ * Where each blocked action actually sends someone (UI dead-end fix).
+ *
+ * ## Why this is here rather than in the panel
+ *
+ * Because it was in the panel, and the panel got it wrong in a way nothing
+ * could catch. `prepare-change-panel.tsx` resolved all four actions to two
+ * bare fragments — `#github-access` and `#business-audit` — written when the
+ * workspace was a single page. The UI-2 route split gave each section its own
+ * URL and left both fragments behind: neither id exists on the page the panel
+ * renders on, so every one of these links has scrolled nowhere since.
+ *
+ * That is the exact dead end this module's own docblock says it exists to
+ * prevent, and it survived because a fragment that resolves to nothing throws
+ * nothing, logs nothing and renders identically to one that works.
+ *
+ * So the mapping moves into data, beside the actions it maps, where a test can
+ * assert that every actionable kind resolves to a destination. The caller
+ * supplies the destinations, because a route is a UI fact and this module has
+ * no business knowing what the workspace's segments are called.
+ */
+export type BlockedActionDestinations = {
+  /** Where Vibe re-reads the code and the live product. */
+  product: string;
+  /** Where the business audit is run. */
+  audit: string;
+  /** Where next moves are produced. */
+  moves: string;
+  /** Where the repository connection — and its permissions — are managed. */
+  repository: string;
+};
+
+export function blockedActionHref(
+  action: BlockedAction,
+  destinations: BlockedActionDestinations,
+): string | null {
+  switch (action.kind) {
+    case "refresh_repository_intelligence":
+      return destinations.product;
+    case "update_audit":
+      return destinations.audit;
+    case "refresh_opportunities":
+      return destinations.moves;
+    case "enable_github_write":
+      return destinations.repository;
+    case "none":
+      // Deliberately null rather than a fallback destination. "Nothing to do
+      // here" is a real answer, and sending someone somewhere plausible would
+      // be worse than the sentence they already have.
+      return null;
+  }
+}
+
 /** The capability's user-facing name. Never the internal identifier. */
 export const CAPABILITY_LABELS: Record<ExecutionCapability, string> = {
   nextjs_seo_foundations_v1: "SEO foundations",

@@ -5,6 +5,7 @@ import {
   BLOCKED_ACTION_LABELS,
   BLOCKED_MESSAGES,
   blockedAction,
+  blockedActionHref,
   buildOpportunityActionState,
   type OpportunityActionInput,
 } from "./view";
@@ -148,6 +149,47 @@ describe("blocked states always offer a way forward or an explanation (§6, §7)
 
   it("points a missing permission at the GitHub upgrade", () => {
     expect(blockedAction("github_write_permission_required")).toEqual({ kind: "enable_github_write" });
+  });
+
+  /**
+   * The half that was missing until the dead-end fix: an action with a label
+   * and no working destination is still a dead end, and that is what shipped —
+   * two bare fragments, neither of which names an element on the page the
+   * panel renders on.
+   */
+  const DESTINATIONS = {
+    product: "/app/projects/p/product",
+    audit: "/app/projects/p/health",
+    moves: "/app/projects/p/plan",
+    repository: "/app/projects/p/settings",
+  };
+
+  it.each(ALL)("resolves a real destination for %s, or none at all", (reason) => {
+    const action = blockedAction(reason);
+    const href = blockedActionHref(action, DESTINATIONS);
+
+    if (action.kind === "none") {
+      expect(href).toBeNull();
+      return;
+    }
+
+    // Never a bare fragment: the workspace is seven routes, so "#somewhere" is
+    // only ever right by accident.
+    expect(href).not.toBeNull();
+    expect(href!.startsWith("/")).toBe(true);
+  });
+
+  it("sends each action somewhere the user can actually act", () => {
+    expect(blockedActionHref({ kind: "refresh_repository_intelligence" }, DESTINATIONS)).toBe(
+      DESTINATIONS.product,
+    );
+    expect(blockedActionHref({ kind: "update_audit" }, DESTINATIONS)).toBe(DESTINATIONS.audit);
+    expect(blockedActionHref({ kind: "refresh_opportunities" }, DESTINATIONS)).toBe(
+      DESTINATIONS.moves,
+    );
+    expect(blockedActionHref({ kind: "enable_github_write" }, DESTINATIONS)).toBe(
+      DESTINATIONS.repository,
+    );
   });
 });
 

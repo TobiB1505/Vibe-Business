@@ -165,6 +165,12 @@ export default async function E2eScenarioPage({
           activeOperation={null}
           blockedReason={fixture.blockedReason}
           auditHref="/app/projects/project_e2e/score"
+          blockedDestinations={{
+            product: "/app/projects/project_e2e/understanding",
+            audit: "/app/projects/project_e2e/score",
+            moves: "/app/projects/project_e2e/moves",
+            repository: "/app/projects/project_e2e",
+          }}
           lineage={fixture.lineage}
           movesContext={fixture.movesContext}
           movesHref="/app/projects/project_e2e/moves"

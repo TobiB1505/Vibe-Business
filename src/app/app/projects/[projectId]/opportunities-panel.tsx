@@ -23,7 +23,10 @@ import {
   type MoveLineageMap,
   type MovesContext,
 } from "@/modules/opportunities/lineage";
-import type { OpportunityActionState } from "@/modules/execution/view";
+import type {
+  BlockedActionDestinations,
+  OpportunityActionState,
+} from "@/modules/execution/view";
 import { PrepareChangePanel } from "./prepare-change-panel";
 import type { ValidationSummary } from "./validation-panel";
 import {
@@ -90,6 +93,7 @@ function OpportunityCard({
   validationSummary,
   lineageHeadline,
   preparedHref,
+  blockedDestinations,
   emphasis,
   movesHref,
   isPlannedMove,
@@ -103,6 +107,7 @@ function OpportunityCard({
   /** The audit finding this Move answers, in the audit's words. Null if unresolved. */
   lineageHeadline: string | null;
   preparedHref: string;
+  blockedDestinations: BlockedActionDestinations;
   /** The engine's rank 1, or the top of a contextual group. */
   emphasis: boolean;
   movesHref: string;
@@ -209,6 +214,7 @@ function OpportunityCard({
           branchUrl={branchUrl}
           validationSummary={validationSummary}
           preparedHref={preparedHref}
+          blockedDestinations={blockedDestinations}
         />
       )}
 
@@ -246,6 +252,7 @@ export function OpportunitiesPanel({
   movesContext,
   movesHref,
   preparedHref,
+  blockedDestinations,
   plannedOpportunityId,
 }: {
   projectId: string;
@@ -266,6 +273,12 @@ export function OpportunitiesPanel({
   movesContext: MovesContext | null;
   movesHref: string;
   preparedHref: string;
+  /**
+   * Where each blocked state's one way forward leads. Built by the route from
+   * `projectSectionHref`, never hard-coded here — the panel does not know what
+   * the workspace's segments are called.
+   */
+  blockedDestinations: BlockedActionDestinations;
   /** Which Move the Action Plan section below is currently about (§83). */
   plannedOpportunityId: string | null;
 }) {
@@ -327,6 +340,7 @@ export function OpportunitiesPanel({
       validationSummary={validationSummaries[opportunity.id] ?? null}
       lineageHeadline={inContext ? null : (lineage[opportunity.id]?.headline ?? null)}
       preparedHref={preparedHref}
+      blockedDestinations={blockedDestinations}
       emphasis={emphasis}
       movesHref={movesHref}
       isPlannedMove={opportunity.id === plannedOpportunityId}

@@ -243,6 +243,18 @@ export default async function ProjectMovesPage({
         // (`BUSINESS_AUDIT_ANCHOR`); the route it now lives on is a UI fact, so
         // it is supplied here rather than hard-coded in the domain.
         auditHref={projectSectionHref(project.id, "business-audit")}
+        /*
+          Where a blocked Move's one way forward leads. Built here, from the
+          same helper every other cross-link uses, so the destinations cannot
+          drift from the routes that exist — which is exactly what the two
+          hard-coded fragments they replace had done.
+        */
+        blockedDestinations={{
+          product: projectSectionHref(project.id, "understanding"),
+          audit: projectSectionHref(project.id, "business-audit"),
+          moves: projectSectionHref(project.id, "next-moves"),
+          repository: projectSectionHref(project.id, "overview"),
+        }}
         // Which Move the section below is currently about, so every other
         // card can offer "Plan this Move" and the selected one does not
         // redundantly link to itself (§83).
