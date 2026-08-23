@@ -1,10 +1,10 @@
-# Sprint 0065 — ADR 0041 §P3: wiring the repair trigger, for both caches
+# Sprint 0065 — ADR 0042 §P3: wiring the repair trigger, for both caches
 
 Status: **Implemented and tested against `FakeDatabase`. No migration — a TypeScript-only change.** All five RPC primitives and their marker columns were already deployed (Sprint B0/B1); this sprint only adds callers.
 
 ## The gap this closes
 
-ADR 0041 §P3's own "Shape of the change" table names the repair trigger's location as "`getBillingBalance` (`service.ts`) **and the lot-level equivalent**" — as if both already existed. Sprint C wired the account side; Sprint D wired two of the lot-side hot-path writers but explicitly left the trigger itself unscoped, naming the exact gap: "unlike the account side there is no existing 'lot balance read' to attach a gated `BILLING_REPAIR_ENABLED` call to... `reconcileLotAllocation` still has zero callers outside its own test." This sprint closes that, and — per explicit instruction after the research below surfaced it — a second gap alongside it.
+ADR 0042 §P3's own "Shape of the change" table names the repair trigger's location as "`getBillingBalance` (`service.ts`) **and the lot-level equivalent**" — as if both already existed. Sprint C wired the account side; Sprint D wired two of the lot-side hot-path writers but explicitly left the trigger itself unscoped, naming the exact gap: "unlike the account side there is no existing 'lot balance read' to attach a gated `BILLING_REPAIR_ENABLED` call to... `reconcileLotAllocation` still has zero callers outside its own test." This sprint closes that, and — per explicit instruction after the research below surfaced it — a second gap alongside it.
 
 ## What was found before anything was wired
 
@@ -14,7 +14,7 @@ Also established before writing any code: lot drift is proven one-directional by
 
 ## What shipped
 
-**`AuditEventType` gains `credit_drift.detected`/`repaired`/`repair_failed`** (`audit-log/events.ts`) — named in ADR 0041's own "Audit trail" section from the start, never implemented until now: `getBillingBalance` only ever logged via `console.error`, and neither it nor `repairAccountBalance` called `recordAuditEvent`. Account-level (no `projectId`), so structurally excluded from every project-scoped activity feed — confirmed by reading each feed's own query, all of which filter `.eq`/`.in` on `project_id`, which never matches a `NULL` row.
+**`AuditEventType` gains `credit_drift.detected`/`repaired`/`repair_failed`** (`audit-log/events.ts`) — named in ADR 0042's own "Audit trail" section from the start, never implemented until now: `getBillingBalance` only ever logged via `console.error`, and neither it nor `repairAccountBalance` called `recordAuditEvent`. Account-level (no `projectId`), so structurally excluded from every project-scoped activity feed — confirmed by reading each feed's own query, all of which filter `.eq`/`.in` on `project_id`, which never matches a `NULL` row.
 
 **`reconcileAndRepairBalance`** (`credits/service.ts`) — extracted from `getBillingBalance`'s existing detect/log/gate/repair/re-check body, now also posting the three audit events and, a real behavior fix bundled with the extraction: catching a `repairAccountBalance` RPC failure instead of letting it propagate uncaught out of the caller. `getBillingBalance` becomes a thin wrapper around it; its exported signature and behavior are unchanged for existing callers.
 

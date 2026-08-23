@@ -396,7 +396,7 @@ export async function startBusinessAuditOperation(
  * another project simply does not exist for this caller, and RLS makes that
  * true for another user's project even if the ids were guessed.
  *
- * ## The backstop for a workflow that stopped carrying its run (ADR 0041 §P2)
+ * ## The backstop for a workflow that stopped carrying its run (ADR 0042 §P2)
  *
  * The same repair `getAgentExecutionStatus` already runs before its own read
  * (`expireStaleAgentExecution`), generalized: a read is the moment somebody

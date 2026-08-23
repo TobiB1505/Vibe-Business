@@ -506,7 +506,7 @@ describe("reading operation state", () => {
   });
 
   /**
-   * ADR 0041 §P2 — the same backstop `getAgentExecutionStatus` already runs
+   * ADR 0042 §P2 — the same backstop `getAgentExecutionStatus` already runs
    * before its own read (`expireStaleAgentExecution`), generalized. A page
    * that has been polling a dead run should see it fail on the very read that
    * notices, not stay `running` forever (`staleness.test.ts` covers the

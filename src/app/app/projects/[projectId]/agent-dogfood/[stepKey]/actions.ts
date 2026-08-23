@@ -244,7 +244,7 @@ export type AnswerInterruptState =
  * offered.
  *
  * `resumeAnsweredAgentExecution` runs after every success, including a replay
- * of an already-answered interrupt (ADR 0041 §P2): it is what starts the
+ * of an already-answered interrupt (ADR 0042 §P2): it is what starts the
  * fresh workflow instance a resume needs, and calling it defensively closes
  * the narrow window between an answer landing and a resume that never
  * followed it — a crash there today would otherwise leave the run paused

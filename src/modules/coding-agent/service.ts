@@ -375,7 +375,7 @@ export async function startAgentExecution(
 }
 
 /**
- * Restarts a paused agent execution after its question is answered (ADR 0041
+ * Restarts a paused agent execution after its question is answered (ADR 0042
  * §P2).
  *
  * Not a new run. The workflow instance that paused already terminated —

@@ -11,7 +11,7 @@ import { creditsToUnits } from "@/modules/credits/units";
 import { getBillingOverview, getHeaderCreditBalance } from "./overview";
 
 /**
- * `getBillingOverview`/`getHeaderCreditBalance` (ADR 0041 §P3).
+ * `getBillingOverview`/`getHeaderCreditBalance` (ADR 0042 §P3).
  *
  * `getBillingOverview` is the one read a customer actually makes when they
  * look at their balance, which is why it — not `getHeaderCreditBalance`, not
@@ -88,7 +88,7 @@ async function accountWithDriftedLot(credits: number): Promise<{ accountId: stri
   return { accountId: account.id };
 }
 
-describe("getBillingOverview repairs lot drift within the same call (ADR 0041 §P3)", () => {
+describe("getBillingOverview repairs lot drift within the same call (ADR 0042 §P3)", () => {
   it("reflects a repaired lot's capacity in availableCredits when the flag is set", async () => {
     process.env.BILLING_REPAIR_ENABLED = "true";
     await accountWithDriftedLot(100);
@@ -146,7 +146,7 @@ describe("getBillingOverview repairs lot drift within the same call (ADR 0041 §
   });
 });
 
-describe("getHeaderCreditBalance does not trigger repair (ADR 0041 §P3)", () => {
+describe("getHeaderCreditBalance does not trigger repair (ADR 0042 §P3)", () => {
   it("still reads the drifted figure even when the flag is set", async () => {
     process.env.BILLING_REPAIR_ENABLED = "true";
     await accountWithDriftedLot(100);

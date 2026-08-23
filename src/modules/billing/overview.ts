@@ -175,7 +175,7 @@ export async function getBillingOverview(
 
   /*
    * Reconciliation and, when enabled, repair — for both materialized caches
-   * this page's own numbers ultimately rest on (ADR 0041 §P3).
+   * this page's own numbers ultimately rest on (ADR 0042 §P3).
    *
    * This is the one place a customer deliberately looks at their balance, so
    * it is the read the ADR's own doctrine names as the trigger: repair fires

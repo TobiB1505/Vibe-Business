@@ -259,7 +259,7 @@ export type AuditEventType =
   | "credit_refund.posted"
 
   /*
-   * ADR 0041 §P3. A materialized cache (an account's posted/reserved
+   * ADR 0042 §P3. A materialized cache (an account's posted/reserved
    * figures, or a lot's allocated figure) disagreeing with the durable rows
    * it summarizes — found and, when `BILLING_REPAIR_ENABLED` is set,
    * corrected at `getBillingOverview`, the one read a customer already

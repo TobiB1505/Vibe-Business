@@ -35,7 +35,7 @@ import { creditUnits, type CreditUnits } from "./units";
  * `takeFromLot` keeps the compare-and-swap shape PostgREST forces on every
  * writer with no independent durable row to lock instead: read, guard the
  * write on the value read, retry on a lost swap. `materializeAllocationCapacity`
- * (ADR 0041 §P3) does not need that shape, because by the time it is called an
+ * (ADR 0042 §P3) does not need that shape, because by the time it is called an
  * allocation row already exists in its terminal status — the row itself is
  * what a Postgres row lock serializes on, so there is no swap to lose. Only
  * `allocateReservation`'s unwind of a plan that never committed an allocation
@@ -201,7 +201,7 @@ async function findLotById(supabase: SupabaseClient, lotId: string): Promise<Cre
 /**
  * Detects and, when enabled, repairs drift between each of an account's
  * lots' materialized `allocated_credit_units` and the allocation rows that
- * define it (ADR 0041 §P3).
+ * define it (ADR 0042 §P3).
  *
  * Mirrors `reconcileAndRepairBalance` (`credits/service.ts`) in shape: the
  * allocation rows are authority, the materialized figure on the grant is a
@@ -390,7 +390,7 @@ async function takeFromLot(
  * `billing_credit_allocations` row was ever inserted for it, because that
  * insert only happens after every take in the plan succeeds. That is the
  * same structural reason `takeFromLot` itself keeps this CAS-retry shape
- * rather than moving to `materialize_allocation_capacity` (ADR 0041 §P3):
+ * rather than moving to `materialize_allocation_capacity` (ADR 0042 §P3):
  * that primitive locks and reads an *allocation row's own* status and
  * consumed amount, and there is no row here for it to read. Every caller
  * that does have one — `settleReservationAllocations`,
@@ -438,7 +438,7 @@ async function returnToLot(
 
 /**
  * Returns one allocation's unconsumed capacity to its lot, atomically
- * (ADR 0041 §P3).
+ * (ADR 0042 §P3).
  *
  * A thin `.rpc()` call onto `materialize_allocation_capacity`. The function
  * locks the allocation row and its lot, reads the amount to return from the
@@ -461,7 +461,7 @@ async function materializeAllocationCapacity(supabase: SupabaseClient, allocatio
 
 /**
  * Repairs one lot's materialized `allocated_credit_units` from its allocation
- * rows (ADR 0041 §P3).
+ * rows (ADR 0042 §P3).
  *
  * A thin `.rpc()` call onto `repair_lot_allocation`, mirroring
  * `repairAccountBalance` (`credits/store.ts`) exactly: it scans for
@@ -564,7 +564,7 @@ export type LotAllocationSummary = {
 
 /**
  * Every allocation row for a set of lots, grouped by the lot (`grant_id`)
- * each belongs to — one batched query rather than one per lot (ADR 0041 §P3).
+ * each belongs to — one batched query rather than one per lot (ADR 0042 §P3).
  *
  * Shaped for {@link reconcileLotAllocation} directly. A lot with no
  * allocations at all is not a special case here: it is simply absent from

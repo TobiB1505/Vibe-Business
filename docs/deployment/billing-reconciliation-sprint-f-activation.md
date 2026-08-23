@@ -1,6 +1,6 @@
-# ADR 0041 Sprint F — activation checklist
+# ADR 0042 Sprint F — activation checklist
 
-**Status as of this writing: not started. Nothing in this document has been executed.** `origin/main` currently ends at Sprint 0057 — the ADR 0041 migration, primitives, and hot-path rewiring (Sprints 0058–0061, "B0"–"D") have not been merged, so none of the columns, functions, or gated call sites this checklist verifies exist in production yet. This document is the concrete, operator-run procedure for the day they do — written now so activation follows the ADR's own required sequencing rather than being improvised at the moment someone wants the flag on. See [ADR 0041 §P3, "Rollout"](../decisions/0041-billing-reconciliation-authority.md) for the full derivation and proof this checklist executes against; this document adds nothing to that reasoning; it only makes it runnable.
+**Status as of this writing: not started. Nothing in this document has been executed.** `origin/main` currently ends at Sprint 0057 — the ADR 0042 migration, primitives, and hot-path rewiring (Sprints 0058–0061, "B0"–"D") have not been merged, so none of the columns, functions, or gated call sites this checklist verifies exist in production yet. This document is the concrete, operator-run procedure for the day they do — written now so activation follows the ADR's own required sequencing rather than being improvised at the moment someone wants the flag on. See [ADR 0042 §P3, "Rollout"](../decisions/0042-billing-reconciliation-authority.md) for the full derivation and proof this checklist executes against; this document adds nothing to that reasoning; it only makes it runnable.
 
 Every stage below is a **precondition for the next, not an independent option.** Skipping a stage, or activating the flag before the drain window is verified, reopens the exact double-count/permanently-invisible-drift failure modes §P3 exists to prevent.
 
@@ -24,7 +24,7 @@ The migration (`supabase/migrations/20260823000000_billing_reconciliation_cutove
 3. Run `get_advisors --type security` and `--type performance` against the new functions, matching Sprint B1's own verification (`docs/sprints/0059-billing-reconciliation-b1-primitives.md`) — expect zero new findings beyond the pre-existing, already-documented ones.
 4. **The migration's own in-transaction certification (§P3 Rollout, "Certify... Backfill") is what actually proves R1** — this is not a separate manual step; if the migration transaction completes, certification passed. If it aborts, stop: an account or lot failed reconciliation before any of this work began, and needs manual remediation first, unrelated to this rollout.
 
-Application code is still the pre-0041 CAS loops at this point — nothing behaviorally changes for a live user yet.
+Application code is still the pre-0042 CAS loops at this point — nothing behaviorally changes for a live user yet.
 
 ## Stage 2 — application deploy, repair gated off
 
@@ -42,7 +42,7 @@ Both conditions below must return a clean result **at the same sitting** — do 
 **(a) No in-flight ordinary invocation from before Stage 2's deploy.**
 Confirm, via Vercel's deployment status for `prj_YSM0fYcTzRiVCcE09ajUH3vAmswR`, that Stage 2's deployment has been the sole Production-serving deployment for at least the platform's configured maximum function duration, measured from its actual promotion timestamp — not from when it was triggered.
 
-**(b) No non-terminal legacy workflow instance.** Run, against the Supabase project (`dcbwlctscooefwnivxzv`), exactly the queries ADR 0041 §P3 specifies — reproduced here verbatim so this checklist never drifts from the derivation:
+**(b) No non-terminal legacy workflow instance.** Run, against the Supabase project (`dcbwlctscooefwnivxzv`), exactly the queries ADR 0042 §P3 specifies — reproduced here verbatim so this checklist never drifts from the derivation:
 
 ```sql
 SELECT id FROM operation_runs
@@ -68,14 +68,14 @@ WHERE r.created_at < :cutover_deployment_at
 Only once Stage 3 passes cleanly, in one sitting:
 
 1. Set `BILLING_REPAIR_ENABLED=true` as a **Production-only**, server-only Vercel environment variable (never `NEXT_PUBLIC_*` — it must not reach the client bundle) on project `prj_YSM0fYcTzRiVCcE09ajUH3vAmswR`.
-2. **Read it back** — do not treat the write call's own success response as the guarantee (this codebase's own "independent read decides success" discipline, ADR 0041 §P3 rollback section and rule 73).
+2. **Read it back** — do not treat the write call's own success response as the guarantee (this codebase's own "independent read decides success" discipline, ADR 0042 §P3 rollback section and rule 73).
 3. Trigger a fresh deploy/redeploy so the running instances actually pick up the new environment variable (Vercel environment variable changes do not retroactively affect already-running serverless instances).
 4. Confirm activation by observing the audit log: the next `getBillingOverview` read against a genuinely drifted account/lot (if any exist) produces `credit_drift.repaired` or `credit_drift.repair_failed`, not silent `console.error` — and a read against an already-consistent account/lot changes nothing (matching Sprint B1's own "byte-for-byte identical" proof, now checked against live traffic instead of a one-off script).
 
 ## Rollback, if anything looks wrong post-activation
 
-Follow ADR 0041 §P3's own rollback procedure exactly — unset `BILLING_REPAIR_ENABLED`, **read it back to confirm it is actually off**, redeploy old application code, and treat any future reactivation as a **fresh** Stage 3 drain proof, never a resumption of this one. Do not attempt an ad hoc fix (rule: never recompute/overwrite a cache directly — that is the exact failure mode this whole ADR exists to prevent).
+Follow ADR 0042 §P3's own rollback procedure exactly — unset `BILLING_REPAIR_ENABLED`, **read it back to confirm it is actually off**, redeploy old application code, and treat any future reactivation as a **fresh** Stage 3 drain proof, never a resumption of this one. Do not attempt an ad hoc fix (rule: never recompute/overwrite a cache directly — that is the exact failure mode this whole ADR exists to prevent).
 
 ## What this document is not
 
-Not a sprint record — nothing here has run. Not a new architecture decision — every step is a direct execution of ADR 0041 §P3's already-approved rollout order; if any step here turns out to need a design change, that is a further ADR revision, not a silent deviation in this checklist. When Stage 0 actually happens, this document should be updated to reflect real dates/deployment IDs as each stage executes, and a genuine sprint record written once Stage 4 completes — matching this repository's existing sprint-record discipline for every other piece of ADR 0041's implementation.
+Not a sprint record — nothing here has run. Not a new architecture decision — every step is a direct execution of ADR 0042 §P3's already-approved rollout order; if any step here turns out to need a design change, that is a further ADR revision, not a silent deviation in this checklist. When Stage 0 actually happens, this document should be updated to reflect real dates/deployment IDs as each stage executes, and a genuine sprint record written once Stage 4 completes — matching this repository's existing sprint-record discipline for every other piece of ADR 0042's implementation.

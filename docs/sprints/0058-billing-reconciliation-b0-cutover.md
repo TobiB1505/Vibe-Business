@@ -1,10 +1,10 @@
-# Sprint 0058 — ADR 0041 Sprint B0: certified, lock-protected reconciliation cutover
+# Sprint 0058 — ADR 0042 Sprint B0: certified, lock-protected reconciliation cutover
 
 Status: **Deployed and verified against real Postgres.** No functions yet (Sprint B1), no application code change, no billing behaviour change — schema only.
 
 ## What shipped
 
-`supabase/migrations/20260823000000_billing_reconciliation_cutover.sql`, matching [ADR 0041](../decisions/0041-billing-reconciliation-authority.md) §P3 "Rollout" exactly:
+`supabase/migrations/20260823000000_billing_reconciliation_cutover.sql`, matching [ADR 0042](../decisions/0042-billing-reconciliation-authority.md) §P3 "Rollout" exactly:
 
 1. Five `LOCK TABLE ... NOWAIT` statements, fixed order, modes derived per table from its actual writers (`share` on `billing_credit_accounts`/`billing_credit_grants`; `access exclusive` on the three tables gaining a column, forced by their own `ADD COLUMN` regardless).
 2. An in-transaction certification, mirroring `reconcileBalance`/`reconcileLotAllocation` exactly, that aborts the whole migration on any drift.
@@ -36,8 +36,8 @@ Verified by independent read-back, not by the call returning success:
 
 ## What this does not do
 
-No repair function exists yet (`materialize_*`/`repair_*`, Sprint B1). No application code was changed. `BILLING_REPAIR_ENABLED` does not exist yet, so there is nothing to gate. This migration authorizes nothing and changes no billing behaviour — see ADR 0041 §P3 Rollout for why the schema and the activation are deliberately separate steps.
+No repair function exists yet (`materialize_*`/`repair_*`, Sprint B1). No application code was changed. `BILLING_REPAIR_ENABLED` does not exist yet, so there is nothing to gate. This migration authorizes nothing and changes no billing behaviour — see ADR 0042 §P3 Rollout for why the schema and the activation are deliberately separate steps.
 
 ## Next
 
-Sprint B1 (the three shared materialization primitives plus the two repair scans, reviewed before anything calls them) is the next piece of ADR 0041's implementation, per the sprint breakdown in the implementation plan.
+Sprint B1 (the three shared materialization primitives plus the two repair scans, reviewed before anything calls them) is the next piece of ADR 0042's implementation, per the sprint breakdown in the implementation plan.

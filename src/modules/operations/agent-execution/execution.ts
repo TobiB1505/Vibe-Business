@@ -795,7 +795,7 @@ export async function startAgentStep(
   if (!claimed) return { ok: false, failureCode: "inference_interrupted" };
 
   /*
-   * Re-acquires a hold a pause released (ADR 0041 §P2).
+   * Re-acquires a hold a pause released (ADR 0042 §P2).
    *
    * `context.run.creditReservationId` is the historical pointer left by
    * `claimAgentExecutionRun` — non-null exactly when this run was billable at
@@ -1172,7 +1172,7 @@ export async function startAgentStep(
     await pauseOperationForUser(deps.supabase, operationId);
 
     /*
-     * Release-on-pause (ADR 0041 §P2).
+     * Release-on-pause (ADR 0042 §P2).
      *
      * Real inference already ran to reach this interrupt — activity and tool
      * events were already recorded above — so the release is

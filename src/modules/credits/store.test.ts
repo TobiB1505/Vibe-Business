@@ -335,7 +335,7 @@ describe("database-level financial invariants", () => {
 });
 
 /**
- * ADR 0041 §P3 — the shared materialization primitives cannot lose a write.
+ * ADR 0042 §P3 — the shared materialization primitives cannot lose a write.
  *
  * `applyPostedDelta` and `releaseHeldCredits` used to be two independent
  * compare-and-swap loops in this file, each its own read-then-guarded-update
@@ -429,7 +429,7 @@ describe("the materialized balance cannot be silently overwritten", () => {
 });
 
 /**
- * ADR 0041 §P3 — an idempotent replay heals a crash it finds, instead of
+ * ADR 0042 §P3 — an idempotent replay heals a crash it finds, instead of
  * reporting drift for someone else to fix.
  *
  * `postLedgerEntry` inserts the ledger row and *then* materializes it. A crash
@@ -506,7 +506,7 @@ describe("an idempotent replay heals an unmaterialized entry", () => {
 });
 
 /**
- * ADR 0041 §P3 — an unexpected materialization error propagates rather than
+ * ADR 0042 §P3 — an unexpected materialization error propagates rather than
  * being swallowed.
  *
  * There is no retry loop left to exhaust: `postLedgerEntry` and

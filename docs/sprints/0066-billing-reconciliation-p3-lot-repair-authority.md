@@ -1,10 +1,10 @@
-# Sprint 0066 — ADR 0041 §P3: lot repair authority, proven under real PostgreSQL
+# Sprint 0066 — ADR 0042 §P3: lot repair authority, proven under real PostgreSQL
 
 Status: **Implemented. No migration, no production code change — proof and documentation only.** No new SQL function, no new column, no change to `reconcileLotAllocation`, `materialize_allocation_capacity`, or `repair_lot_allocation`.
 
 ## The gap this closes
 
-Sprint 0065 wired `reconcileAndRepairLotAllocations` to `getBillingOverview`, reusing `reconcileLotAllocation` and `repair_lot_allocation` unchanged — the right call for wiring a trigger to an already-designed mechanism, but the mechanism's own correctness for the lot side was inherited from ADR 0041 §P3's account-side proof, never independently re-derived, and never proven under real PostgreSQL at all. Explicit instruction for this sprint: derive the lot side's source of truth from the actual code against four named candidates (Allocations, Reservations, Ledger, Allocation History), formalize repair authority, prove idempotency, and add real PostgreSQL tests — architecture first, presented and approved before any implementation.
+Sprint 0065 wired `reconcileAndRepairLotAllocations` to `getBillingOverview`, reusing `reconcileLotAllocation` and `repair_lot_allocation` unchanged — the right call for wiring a trigger to an already-designed mechanism, but the mechanism's own correctness for the lot side was inherited from ADR 0042 §P3's account-side proof, never independently re-derived, and never proven under real PostgreSQL at all. Explicit instruction for this sprint: derive the lot side's source of truth from the actual code against four named candidates (Allocations, Reservations, Ledger, Allocation History), formalize repair authority, prove idempotency, and add real PostgreSQL tests — architecture first, presented and approved before any implementation.
 
 ## What the derivation found
 
@@ -28,7 +28,7 @@ This produced a precise scope decision, not a vague one: `reconcileLotAllocation
 
 **A new `FakeDatabase`-level invariant test**, `operation-billing.test.ts`'s "keeps an allocation's settled sum equal to the reservation's own settled figure" — drives `settleReservationAllocations`/`settleReservation` (`service.ts`) directly with a partial amount (there is no production caller that does this today; every operation family settles at the full reserved amount through `settleOperationCredits`) and asserts the allocations' summed `consumedUnits` equals the reservation's own `settledCredits`. Documents the property a future variable-cost caller would depend on, as a checked test rather than an implicit assumption nothing would catch breaking.
 
-**ADR 0041 revised in place**, sixth revision, per rule 83 — a new §P3 subsection, "Lot Repair Authority," carrying the full derivation above (all four candidates, the decision, the materialization-vs-recording-drift split, and the closed proof gap), plus a revision notice at the top matching the document's own established style. Nothing in P1, P2, P4, or the account-side steady-state design is reopened.
+**ADR 0042 revised in place**, sixth revision, per rule 83 — a new §P3 subsection, "Lot Repair Authority," carrying the full derivation above (all four candidates, the decision, the materialization-vs-recording-drift split, and the closed proof gap), plus a revision notice at the top matching the document's own established style. Nothing in P1, P2, P4, or the account-side steady-state design is reopened.
 
 ## Tests
 

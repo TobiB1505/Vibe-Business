@@ -421,7 +421,7 @@ describe("a failed start returns the hold", () => {
 });
 
 /**
- * `resumeAnsweredAgentExecution` (ADR 0041 §P2).
+ * `resumeAnsweredAgentExecution` (ADR 0042 §P2).
  *
  * Restores an operation paused on a question to `queued` and starts a fresh
  * workflow instance for it — the workflow instance that paused already

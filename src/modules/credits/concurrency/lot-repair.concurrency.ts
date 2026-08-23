@@ -25,7 +25,7 @@ import {
 
 /**
  * Class R — a lot's capacity converges correctly whether the hot path or a
- * repair scan materializes an allocation's return first (ADR 0041 §P3, Lot
+ * repair scan materializes an allocation's return first (ADR 0042 §P3, Lot
  * Repair Authority Design).
  *
  * Named "R" for repair, deliberately not the next letter after E — "F" is

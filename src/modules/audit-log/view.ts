@@ -178,7 +178,7 @@ const LABELS: Record<AuditEventType, string> = {
   "credit_charge.settled": "Credits charged",
   "credit_refund.posted": "Credits refunded",
 
-  // ADR 0041 §P3. Account-level (no `projectId`), so structurally excluded
+  // ADR 0042 §P3. Account-level (no `projectId`), so structurally excluded
   // from every project-scoped feed above — every query backing one filters
   // on `project_id`, which never matches a NULL row. Labelled anyway, plainly,
   // because the `Record<AuditEventType, string>` type requires it and a future

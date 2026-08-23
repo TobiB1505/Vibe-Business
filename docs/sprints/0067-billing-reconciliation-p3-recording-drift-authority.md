@@ -1,4 +1,4 @@
-# Sprint 0067 — ADR 0041 §P3: recording drift authority, derived and found absent
+# Sprint 0067 — ADR 0042 §P3: recording drift authority, derived and found absent
 
 Status: **Implemented. No migration, no production code change — derivation and documentation only.** No new SQL function, no new column, no change to `settleReservation`, `settleReservationAllocations`, `decideSettlement`, or `settleOperationCredits`.
 
@@ -19,7 +19,7 @@ Three parallel research passes traced `settleReservation` (`service.ts`), `settl
 
 ## What shipped
 
-**ADR 0041 revised in place**, seventh revision, per rule 83 — a new §P3 subsection, "Recording Drift Authority," carrying the full derivation above (the single-variable mechanism, the structural absence of cross-table arbitration, the crash-window trace, the two named preconditions), plus a revision notice at the top matching the document's own established style. Nothing in P1, P2, P4, the account-side steady-state design, or the Lot Repair Authority subsection is reopened.
+**ADR 0042 revised in place**, seventh revision, per rule 83 — a new §P3 subsection, "Recording Drift Authority," carrying the full derivation above (the single-variable mechanism, the structural absence of cross-table arbitration, the crash-window trace, the two named preconditions), plus a revision notice at the top matching the document's own established style. Nothing in P1, P2, P4, the account-side steady-state design, or the Lot Repair Authority subsection is reopened.
 
 **No test, no code, no migration.** Unlike Sprint 0066, this sprint does not add a concurrency test or a `FakeDatabase` invariant test, because it does not establish a new property that needs pinning — Sprint 0066's own new test (`operation-billing.test.ts`, "keeps an allocation's settled sum equal to the reservation's own settled figure") already documents the one property this derivation depends on, and no new mechanism exists here to test.
 

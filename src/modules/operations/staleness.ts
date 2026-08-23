@@ -11,7 +11,7 @@ import { failOperationRun, getOperationRunById } from "./store";
 import type { OperationType } from "./schema";
 
 /**
- * The backstop for a durable operation nothing is carrying any more (ADR 0041
+ * The backstop for a durable operation nothing is carrying any more (ADR 0042
  * §P2), generalizing `expireStaleAgentExecution`
  * (`agent-execution/server-writes.ts`) — the first, working precedent for this
  * exact shape — to the three deterministic operation families that share
@@ -67,7 +67,7 @@ const OPERATION_STALE_DEADLINE_MS: Partial<Record<OperationType, number>> = {
  * `expireStaleAgentExecution`: `queued` may simply not have been picked up
  * yet, and failing that would race a run about to start. `needs_user` is never
  * reached here regardless of age — it is not a staleness question at all (ADR
- * 0041 §P2); its Credits are released at the moment of pause, not swept later.
+ * 0042 §P2); its Credits are released at the moment of pause, not swept later.
  *
  * Service-role, because `operation_runs` and the billing tables accept no
  * write from a browser's client and must not (Rule 53).

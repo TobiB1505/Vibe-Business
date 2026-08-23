@@ -302,7 +302,7 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0038](docs/decisions/0038-economy-intelligence-layer.md) | Economy intelligence layer | §3.11 |
 | [0039](docs/decisions/0039-documentation-currency.md) | Where truth lives, and how documentation stays current | This document |
 | [0040](docs/decisions/0040-ci-hosted-database-concurrency-gate.md) | Where a real-database concurrency test runs, and what it may reach | §3.11 |
-| [0041](docs/decisions/0041-billing-reconciliation-authority.md) | Billing reconciliation authority: CAS-based finalization authority plus marker-based cache repair, closing drift repair, orphaned holds, stranded lot capacity and zero-credit idempotency (Proposed, unimplemented) | §3.11 |
+| [0042](docs/decisions/0042-billing-reconciliation-authority.md) | Billing reconciliation authority: CAS-based finalization authority plus marker-based cache repair, closing drift repair, orphaned holds, stranded lot capacity and zero-credit idempotency (Proposed, unimplemented) | §3.11 |
 
 ### Layers with no section above
 

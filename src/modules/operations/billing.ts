@@ -128,7 +128,7 @@ export async function checkOperationAffordability(
  *
  * `idempotencyKey` overrides that default only for an operation that
  * legitimately takes more than one hold across its lifetime — today, only a
- * business-audit re-acquiring its hold after a pause released it (ADR 0041
+ * business-audit re-acquiring its hold after a pause released it (ADR 0042
  * §P2). The default key cannot be reused there: it would find the first
  * (now released) reservation and replay it rather than taking a fresh one.
  */
@@ -233,7 +233,7 @@ export async function settleOperationBilling(
  * `reason` overrides the `providerUsageOccurred`-derived default for a release
  * neither of its two outcomes describes — today, only a paused operation
  * releasing its hold before any provider call for the pause's own reason
- * (`cancelled_before_usage`, ADR 0041 §P2): stopping to ask a question is
+ * (`cancelled_before_usage`, ADR 0042 §P2): stopping to ask a question is
  * neither a failure nor abandonment, and forcing it through the boolean would
  * misrecord why the Credits came back.
  */

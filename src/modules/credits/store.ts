@@ -26,7 +26,7 @@ import { creditUnits, type CreditUnits, ZERO_CREDITS } from "./units";
  * Two concurrent operations must not both reserve the same credits. The
  * guarantee is not the balance read in {@link getCreditBalance} — by the time
  * a caller acts on that number it is already stale. It is the row lock inside
- * `materialize_reservation_hold` (ADR 0041 §P3), which re-evaluates
+ * `materialize_reservation_hold` (ADR 0042 §P3), which re-evaluates
  * `posted - reserved >= amount` while holding the account row via
  * `SELECT ... FOR UPDATE`, so the loser of a race blocks until the winner
  * commits and then sees its result, not the value either of them originally
@@ -307,7 +307,7 @@ export async function postLedgerEntry(
 /**
  * Applies one ledger entry's delta to the materialized posted balance.
  *
- * A thin `.rpc()` call onto `materialize_ledger_entry` (ADR 0041 §P3): the
+ * A thin `.rpc()` call onto `materialize_ledger_entry` (ADR 0042 §P3): the
  * function locks the ledger row and the account row it belongs to, checks the
  * ledger row's own `materialized_at` marker, and either applies the delta and
  * sets the marker or no-ops if it is already set — all inside one Postgres
@@ -512,7 +512,7 @@ export async function claimReservation(
 /**
  * Takes the hold against the account row, atomically (§12, §48).
  *
- * A thin `.rpc()` call onto `materialize_reservation_hold` (ADR 0041 §P3).
+ * A thin `.rpc()` call onto `materialize_reservation_hold` (ADR 0042 §P3).
  * The function locks the reservation row and its account with
  * `SELECT ... FOR UPDATE`, then — because the row this call passes was just
  * inserted `active` with no `admitted_at` — takes its admit branch: adds
@@ -631,12 +631,12 @@ async function releaseHeldCredits(supabase: SupabaseClient, reservationId: strin
 /**
  * Repairs an account's materialized figures from the ledger and reservations.
  *
- * A thin `.rpc()` call onto `repair_account_balance` (ADR 0041 §P3): it scans
+ * A thin `.rpc()` call onto `repair_account_balance` (ADR 0042 §P3): it scans
  * for rows whose marker is still unset and delegates to
  * `materialize_ledger_entry`/`materialize_reservation_hold` for each, so it
  * shares their exact locking and idempotency rather than recomputing a total
  * from scratch. Only ever called from behind `BILLING_REPAIR_ENABLED` — see
- * `getBillingBalance` in `service.ts` and ADR 0041's Rollout section.
+ * `getBillingBalance` in `service.ts` and ADR 0042's Rollout section.
  */
 export async function repairAccountBalance(supabase: SupabaseClient, creditAccountId: string): Promise<void> {
   const { error } = await supabase.rpc("repair_account_balance", { p_account_id: creditAccountId });

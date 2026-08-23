@@ -47,7 +47,7 @@ describe("activity tone", () => {
 
   it("marks a failed repair as a problem, though its name does not end in .failed", () => {
     // `credit_drift.repair_failed` would fall to the "neutral" default under
-    // the plain `.endsWith(".failed")` heuristic (ADR 0041 §P3) — stated
+    // the plain `.endsWith(".failed")` heuristic (ADR 0042 §P3) — stated
     // explicitly instead.
     expect(toneFor("credit_drift.repair_failed")).toBe("problem");
     expect(toneFor("credit_drift.repaired")).toBe("success");

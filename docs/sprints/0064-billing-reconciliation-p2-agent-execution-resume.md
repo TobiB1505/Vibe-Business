@@ -1,4 +1,4 @@
-# Sprint 0064 — ADR 0041 §P2: agent-execution pause/resume ownership
+# Sprint 0064 — ADR 0042 §P2: agent-execution pause/resume ownership
 
 Status: **Application code only, no migration.** Reaches production through the normal PR/merge/Vercel deploy path.
 

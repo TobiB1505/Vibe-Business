@@ -455,7 +455,7 @@ export async function checkFounderQuestionStep(
   const { paused } = await pauseOperationForUser(deps.supabase, operationId);
 
   /*
-   * Release-on-pause (ADR 0041 §P2).
+   * Release-on-pause (ADR 0042 §P2).
    *
    * No provider call has been made for this question — inference is Step 5,
    * well after this one — so the release is `cancelled_before_usage`, not
@@ -576,7 +576,7 @@ export async function runInferenceStep(
   if (!resolved.ok) return resolved;
 
   /*
-   * Re-acquires a hold a pause released (ADR 0041 §P2).
+   * Re-acquires a hold a pause released (ADR 0042 §P2).
    *
    * `accessMode` was decided once, in `prepareEvidenceStep`, and is fixed for
    * this audit's whole life — it is not re-derived here. What can have changed

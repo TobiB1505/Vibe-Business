@@ -998,7 +998,7 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
         // value Postgres always fills.
         if (this.table === "change_approvals") row.approved_at ??= row.created_at;
 
-        // `operation_runs.pause_cycle smallint not null default 0` (ADR 0041
+        // `operation_runs.pause_cycle smallint not null default 0` (ADR 0042
         // §P2). `createOperationRun` deliberately never sends this column, so
         // without the default modelled here `pauseOperationForUser`'s read
         // would see `undefined` where Postgres always fills `0`.
@@ -1128,7 +1128,7 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
 }
 
 /**
- * Hand-written mirrors of the five ADR 0041 §P3 Postgres functions
+ * Hand-written mirrors of the five ADR 0042 §P3 Postgres functions
  * (`supabase/migrations/20260823010000_billing_reconciliation_primitives.sql`),
  * for the same reason `checkConstraints` mirrors the migration's CHECKs: a
  * fake that stays silent about what a real function does is not testing the

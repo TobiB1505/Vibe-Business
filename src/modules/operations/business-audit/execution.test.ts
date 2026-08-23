@@ -101,7 +101,7 @@ function seed(options: { inputIdentity?: string } = {}) {
     started_at: null,
     completed_at: null,
     created_at: "2026-08-02T00:00:00.000Z",
-    // `operation_runs.pause_cycle smallint not null default 0` (ADR 0041
+    // `operation_runs.pause_cycle smallint not null default 0` (ADR 0042
     // §P2) — the fake's `db.seed` does not apply column defaults, unlike a
     // real INSERT, so it is stated here explicitly.
     pause_cycle: 0,
@@ -435,7 +435,7 @@ describe("a Credit-funded re-run", () => {
 });
 
 /**
- * ADR 0041 §P2 — a paused, credits-funded audit does not hold Credits while it
+ * ADR 0042 §P2 — a paused, credits-funded audit does not hold Credits while it
  * waits, and does not spend without a valid hold when it resumes.
  *
  * `seed()`'s fixture (via `seedProductUnderstanding`) already carries a
@@ -448,7 +448,7 @@ describe("a Credit-funded re-run", () => {
  * assessed it as materially urgent ("now") — matching identity, so
  * `lensesReflectCurrentFacts` is true and the lens is not discarded.
  */
-describe("pause and resume (ADR 0041 §P2)", () => {
+describe("pause and resume (ADR 0042 §P2)", () => {
   /** Makes `checkFounderQuestionStep` genuinely stop for the `first_customer` question. */
   function askFounderQuestion() {
     const profile = db.rows("product_profiles").find((row) => row.id === "profile_1")!;

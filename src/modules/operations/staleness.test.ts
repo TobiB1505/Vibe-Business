@@ -3,7 +3,7 @@ import { creditsToUnits } from "@/modules/credits/units";
 import { FakeDatabase, fakeSupabase } from "./test-support";
 
 /**
- * ADR 0041 §P2 — the backstop for a durable operation nothing is carrying any
+ * ADR 0042 §P2 — the backstop for a durable operation nothing is carrying any
  * more, generalizing `expireStaleAgentExecution`'s already-proven shape
  * (`agent-execution/lifecycle.test.ts`) to `business_audit`,
  * `opportunity_generation` and `action_planning`.
@@ -119,7 +119,7 @@ describe("an operation nothing is carrying any more", () => {
   });
 
   /**
-   * `needs_user` is never a staleness question (ADR 0041 §P2) — its Credits
+   * `needs_user` is never a staleness question (ADR 0042 §P2) — its Credits
    * are released at the moment of pause, not swept later, however long it
    * waits. Age alone must never trigger this path for it.
    */

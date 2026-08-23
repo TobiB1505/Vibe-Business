@@ -449,7 +449,7 @@ export async function findActiveAgentRunByIdentity(
  * ambiguity in favour of doing more work.
  *
  * `needs_user_input` is a valid source because a resumed run re-enters here
- * too (ADR 0041 §P2): `started_at` is re-stamped on every win, not only the
+ * too (ADR 0042 §P2): `started_at` is re-stamped on every win, not only the
  * first, because `expireStaleAgentExecution` computes its deadline from it —
  * an un-restamped run could have a customer's answer, submitted days later,
  * declared stale on the very next status read.
@@ -471,7 +471,7 @@ export async function markAgentRunStarted(
 
 /**
  * Points the run at a freshly re-acquired reservation after a resume (ADR
- * 0041 §P2).
+ * 0042 §P2).
  *
  * Unscoped by status: the caller only reaches this after already winning
  * `markAgentRunStarted`'s CAS, so ownership of the row is already settled;

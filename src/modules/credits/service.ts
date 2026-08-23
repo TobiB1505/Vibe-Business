@@ -132,7 +132,7 @@ export type BillingBalanceView = {
 /**
  * Detects and, when enabled, repairs drift between an account's materialized
  * `posted_credits`/`reserved_credits` and the ledger/reservation rows that
- * define them (ADR 0041 §P3).
+ * define them (ADR 0042 §P3).
  *
  * Extracted so `getBillingOverview` — the read a customer actually makes —
  * can trigger the same check `getBillingBalance` always has, without either
@@ -145,7 +145,7 @@ export type BillingBalanceView = {
  * not close the gap it exists to close is exactly as reportable as one that
  * threw).
  *
- * ## The repair call is gated, and unreachable while unset (ADR 0041 §P3, Rollout)
+ * ## The repair call is gated, and unreachable while unset (ADR 0042 §P3, Rollout)
  *
  * `BILLING_REPAIR_ENABLED` is a server-only environment variable, read only
  * here and at the lot-level equivalent, defaulting unset. While unset this
@@ -541,7 +541,7 @@ export type SettleResult =
  * It never asks "did that HTTP call succeed?" — it reads what is durably true
  * and lets the observation decide (§27).
  *
- * ## Why `settled` is checked before the ledger, not after (ADR 0041 §P4)
+ * ## Why `settled` is checked before the ledger, not after (ADR 0042 §P4)
  *
  * A charge existing in the ledger used to be the only idempotency key this
  * function trusted — correct for every settlement that charges something, and

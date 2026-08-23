@@ -254,7 +254,7 @@ describe("an ordinary allocation still works", () => {
 });
 
 /**
- * ADR 0041 §P3 — capacity return is now one `.rpc()` call, not a retry loop.
+ * ADR 0042 §P3 — capacity return is now one `.rpc()` call, not a retry loop.
  *
  * `settleReservationAllocations`/`releaseReservationAllocations` flip the
  * allocation row's status and then call `materialize_allocation_capacity`
@@ -285,7 +285,7 @@ describe("an unrecognized capacity-return failure is never swallowed", () => {
   });
 });
 
-describe("listAllocationsForGrants (ADR 0041 §P3)", () => {
+describe("listAllocationsForGrants (ADR 0042 §P3)", () => {
   it("groups allocation rows by the lot they belong to", async () => {
     const { accountId, lotId: lotId1 } = await heldAgainstLot(300);
     // `accountWithLot`'s own `lotId` is unreliable once an account already
@@ -336,7 +336,7 @@ describe("listAllocationsForGrants (ADR 0041 §P3)", () => {
   });
 });
 
-describe("repairLotAllocation (ADR 0041 §P3)", () => {
+describe("repairLotAllocation (ADR 0042 §P3)", () => {
   it("calls repair_lot_allocation for the lot", async () => {
     const { lotId } = await accountWithLot(100);
 
@@ -353,11 +353,11 @@ describe("repairLotAllocation (ADR 0041 §P3)", () => {
 });
 
 /**
- * `reconcileAndRepairLotAllocations` (ADR 0041 §P3) — the lot-side repair
+ * `reconcileAndRepairLotAllocations` (ADR 0042 §P3) — the lot-side repair
  * trigger wired into `getBillingOverview`. Mirrors `reconcileAndRepairBalance`
  * (`credits/service.test.ts`) in shape and in what each test proves.
  */
-describe("reconcileAndRepairLotAllocations (ADR 0041 §P3)", () => {
+describe("reconcileAndRepairLotAllocations (ADR 0042 §P3)", () => {
   const previousFlag = process.env.BILLING_REPAIR_ENABLED;
 
   beforeEach(() => {

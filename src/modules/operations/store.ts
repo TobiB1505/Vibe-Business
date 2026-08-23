@@ -36,7 +36,7 @@ export type StoredOperationRun = {
   completedAt: string | null;
   createdAt: string;
   updatedAt: string;
-  /** How many times this operation has been paused for the user (ADR 0041 §P2). */
+  /** How many times this operation has been paused for the user (ADR 0042 §P2). */
   pauseCycle: number;
 };
 
@@ -336,7 +336,7 @@ export async function findPausedOperationForAudit(
  * Guarded on the current status so a replayed step cannot re-pause an
  * operation the founder has already answered.
  *
- * ## `pauseCycle` (ADR 0041 §P2)
+ * ## `pauseCycle` (ADR 0042 §P2)
  *
  * Any held Credits are released by the caller once this returns — the pause
  * itself never touches billing, matching every other call in this file. What

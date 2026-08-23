@@ -4,7 +4,7 @@ import { markAgentRunStarted, updateAgentRunCreditReservation } from "./store";
 
 /**
  * `markAgentRunStarted`'s CAS, and the pointer a resume re-acquire updates
- * (ADR 0041 §P2).
+ * (ADR 0042 §P2).
  *
  * Both are exercised end-to-end through `startAgentStep` in
  * `operations/agent-execution/execution.test.ts`; this file isolates the two
@@ -43,7 +43,7 @@ describe("markAgentRunStarted", () => {
   });
 
   /**
-   * The widened half of the guard (ADR 0041 §P2): a resumed run re-enters
+   * The widened half of the guard (ADR 0042 §P2): a resumed run re-enters
    * from `needs_user_input`, not `queued`, and must both win the CAS and get
    * a fresh `started_at` — the original timestamp could already be past
    * `expireStaleAgentExecution`'s deadline by the time a customer answers.

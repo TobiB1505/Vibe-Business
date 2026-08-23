@@ -205,7 +205,7 @@ describe("a retried settlement closes the hold its charge was taken against", ()
 });
 
 /**
- * ADR 0041 §P4 — a zero-credit settlement is idempotent.
+ * ADR 0042 §P4 — a zero-credit settlement is idempotent.
  *
  * `credit_delta <> 0` forbids a zero-delta ledger row, so a zero-credit
  * settlement posts no charge at all — the whole hold is simply released. A
@@ -286,12 +286,12 @@ describe("a zero-credit settlement is idempotent", () => {
 });
 
 /**
- * `reconcileAndRepairBalance` (ADR 0041 §P3) — the account-side repair
+ * `reconcileAndRepairBalance` (ADR 0042 §P3) — the account-side repair
  * trigger `getBillingOverview` now calls alongside its lot-side counterpart
  * (see `credits/lot-store.test.ts`'s `reconcileAndRepairLotAllocations`,
  * which mirrors these tests exactly).
  */
-describe("reconcileAndRepairBalance (ADR 0041 §P3)", () => {
+describe("reconcileAndRepairBalance (ADR 0042 §P3)", () => {
   const previousFlag = process.env.BILLING_REPAIR_ENABLED;
 
   beforeEach(() => {

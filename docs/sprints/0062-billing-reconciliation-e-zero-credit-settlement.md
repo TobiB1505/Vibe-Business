@@ -1,6 +1,6 @@
-# Sprint 0062 — ADR 0041 P4: zero-credit settlement idempotency
+# Sprint 0062 — ADR 0042 P4: zero-credit settlement idempotency
 
-Status: **Implemented and tested against `FakeDatabase`.** No migration, no new column, no new function — a pure logic fix in `credits/service.ts`. (Named "Sprint E" only as the next entry in this document's own sequence; ADR 0041's text names P4 as an obligation, not a lettered sprint the way P3's B0/F are.)
+Status: **Implemented and tested against `FakeDatabase`.** No migration, no new column, no new function — a pure logic fix in `credits/service.ts`. (Named "Sprint E" only as the next entry in this document's own sequence; ADR 0042's text names P4 as an obligation, not a lettered sprint the way P3's B0/F are.)
 
 ## The bug
 
@@ -14,7 +14,7 @@ Confirmed as a real regression rather than assumed: the new test (`reports a ret
 
 `settleReservation` now checks `reservation.status === "settled"` directly, before the ledger lookup, and returns success computed from the reservation row itself — `settledCredits` (set by `closeReservation` for every settlement, charged or not) and `reservedCredits` — rather than from a ledger entry that may not exist. The ledger lookup and its `charge_without_hold` anomaly detection are unchanged and still run for every status the new check does not short-circuit (`active`, `released`, `expired`); the `if (reservation.status === "settled") return settled;` line inside the old ledger-lookup branch is removed as dead, since that branch is only reached once the top-level check has already ruled the status out.
 
-Matches ADR 0041 §P4 exactly: *"the reservation row is guaranteed to exist and reach a terminal status for every legitimate settlement, charged or not, and is therefore the correct idempotency key for the case the ledger cannot represent."*
+Matches ADR 0042 §P4 exactly: *"the reservation row is guaranteed to exist and reach a terminal status for every legitimate settlement, charged or not, and is therefore the correct idempotency key for the case the ledger cannot represent."*
 
 ## Tests
 

@@ -610,7 +610,7 @@ describe("reservation allocation (§16, §75)", () => {
   });
 
   /**
-   * ADR 0041 §P3, Lot Repair Authority Design — a checked property, not an
+   * ADR 0042 §P3, Lot Repair Authority Design — a checked property, not an
    * assumption. Nothing in the schema or in `settleReservationAllocations`
    * itself ties the allocations' own settled sum to what the reservation row
    * ends up recording; the two agree in production today only because

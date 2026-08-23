@@ -1,10 +1,10 @@
-# Sprint 0059 — ADR 0041 Sprint B1: the shared materialization primitives
+# Sprint 0059 — ADR 0042 Sprint B1: the shared materialization primitives
 
 Status: **Deployed and verified against real Postgres.** No wiring — nothing in `src/` calls any of these five functions yet. No billing behaviour changed.
 
 ## What shipped
 
-`supabase/migrations/20260823010000_billing_reconciliation_primitives.sql`, matching [ADR 0041](../decisions/0041-billing-reconciliation-authority.md) §P3 exactly:
+`supabase/migrations/20260823010000_billing_reconciliation_primitives.sql`, matching [ADR 0042](../decisions/0042-billing-reconciliation-authority.md) §P3 exactly:
 
 - `materialize_ledger_entry(uuid)`, `materialize_reservation_hold(uuid)`, `materialize_allocation_capacity(uuid)` — one idempotent, transactional primitive per cache, each locking exactly one durable row (`SELECT ... FOR UPDATE`) and checking its own marker inside the same transaction as the effect it applies. Safe to call twice, from any two callers, in any order.
 - `repair_account_balance(uuid)`, `repair_lot_allocation(uuid)` — thin scans that find rows with a `NULL` marker and call the primitive above on each. Neither recomputes or overwrites a cache column directly.
@@ -12,7 +12,7 @@ Status: **Deployed and verified against real Postgres.** No wiring — nothing i
 
 ## Re-derived proof, against this actual code
 
-Two concurrent calls to the same primitive for the same row: both attempt `SELECT ... FOR UPDATE`; one blocks until the other commits; the second re-reads the row, sees the committed marker, and no-ops. Exactly once, regardless of arrival order — including the specific failure ADR 0041's second revision found in the prior repair-only design: a repair that recomputes a total can fold in a hot-path writer's not-yet-applied delta, and that writer's own next attempt then re-applies it. These primitives never recompute a total — each applies exactly one row's own delta, gated by that row's own marker — so the class of bug does not exist to reappear.
+Two concurrent calls to the same primitive for the same row: both attempt `SELECT ... FOR UPDATE`; one blocks until the other commits; the second re-reads the row, sees the committed marker, and no-ops. Exactly once, regardless of arrival order — including the specific failure ADR 0042's second revision found in the prior repair-only design: a repair that recomputes a total can fold in a hot-path writer's not-yet-applied delta, and that writer's own next attempt then re-applies it. These primitives never recompute a total — each applies exactly one row's own delta, gated by that row's own marker — so the class of bug does not exist to reappear.
 
 `materialize_reservation_hold`'s two-phase branching checked against `voidReservation`'s actual behaviour: a reservation voided before its admit ever succeeded never sets `admitted_at`, so it never passes the admit branch (`status != 'active'`) and never reaches the release branch either (`admitted_at IS NULL` blocks it) — nothing is ever subtracted for a hold that was never added.
 
@@ -26,4 +26,4 @@ Sprint B0's backfill already marked every existing row materialized for its curr
 
 ## What this does not do
 
-Nothing calls these functions yet. `BILLING_REPAIR_ENABLED` does not exist. `getBillingBalance` still only logs drift. Sprints C and D wire the hot-path writers and the repair trigger; Sprint F activates it, gated on the drain conditions ADR 0041 §P3 Rollout defines.
+Nothing calls these functions yet. `BILLING_REPAIR_ENABLED` does not exist. `getBillingBalance` still only logs drift. Sprints C and D wire the hot-path writers and the repair trigger; Sprint F activates it, gated on the drain conditions ADR 0042 §P3 Rollout defines.

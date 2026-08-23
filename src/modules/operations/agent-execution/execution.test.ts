@@ -239,7 +239,7 @@ function seed(overrides: { runStatus?: string; specMode?: string } = {}) {
     input_identity: "run-identity-1",
     subject_id: specRow.id,
     created_at: "2026-08-18T00:00:00.000Z",
-    // `operation_runs.pause_cycle smallint not null default 0` (ADR 0041
+    // `operation_runs.pause_cycle smallint not null default 0` (ADR 0042
     // §P2) — `db.seed` does not apply column defaults, unlike a real INSERT.
     pause_cycle: 0,
   });
@@ -562,7 +562,7 @@ describe("§25 — a question pauses the run", () => {
   });
 
   /**
-   * ADR 0041 §P2 — a question that pauses the run releases its Credits with
+   * ADR 0042 §P2 — a question that pauses the run releases its Credits with
    * `abandoned_with_usage`: real inference already ran to reach the interrupt
    * (the activity and tool events recorded above are proof of that), so this
    * is neither `cancelled_before_usage` nor a failure — Vibe already paid the
@@ -618,7 +618,7 @@ describe("§25 — a question pauses the run", () => {
   });
 });
 
-describe("ADR 0041 §P2 — agent-execution resume: reservation ownership across a pause/resume cycle", () => {
+describe("ADR 0042 §P2 — agent-execution resume: reservation ownership across a pause/resume cycle", () => {
   /**
    * Funds the account and takes the first hold through the real billing path,
    * so the tests below assert against a reservation the ledger actually
