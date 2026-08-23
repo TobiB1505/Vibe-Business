@@ -2,8 +2,9 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { startAgentExecution } from "@/modules/coding-agent/service";
 import type { OperationExecutor } from "@/modules/operations/executor";
 import { grantCreditLot } from "../grants";
+import { internalChargeFor } from "../internal";
+import { creditUnits } from "../units";
 import { findOperationReservation } from "../operation-billing";
-import { creditsToUnits } from "../units";
 import {
   createAgentScaffolding,
   createIterationExecutionSpec,
@@ -64,7 +65,26 @@ import {
  * class E's per-iteration identity for the same reason.
  */
 
-const FUNDING = creditsToUnits(5000);
+/**
+ * Funded for the whole suite, derived rather than guessed.
+ *
+ * Sharper here than in class E: the second scenario's whole point is that the
+ * hold is *left active* for the winner to settle, and this suite has no winner
+ * to settle it. Every iteration of it therefore takes 100 Credits of capacity
+ * and never gives it back, so the account must cover both scenarios at full
+ * price for every iteration.
+ *
+ * It was a flat `creditsToUnits(5000)`, sized for twenty iterations. See class
+ * E's note for what that cost when Sprint 0069 raised them to sixty, and for
+ * why this is the exact worst case rather than a padded one.
+ */
+const SCENARIOS = 2;
+const HOLD =
+  internalChargeFor("agent_execution_dogfood")?.creditUnits ??
+  (() => {
+    throw new Error("no internal price for agent_execution_dogfood");
+  })();
+const FUNDING = creditUnits(HOLD * SCENARIOS * ITERATIONS);
 
 const configured = isConfigured();
 
@@ -208,11 +228,36 @@ describe.skipIf(!configured)("Defect B — a failed start releases its hold", ()
         name: "e2b-racing-executor",
         start: async ({ operationId }) => {
           const winner = client();
+
+          /*
+           * The winner writes a result, because a real winner has one.
+           *
+           * `operation_runs` carries `operation_runs_completed_has_result`:
+           * `status <> 'completed' or result_id is not null`. The finalizer
+           * this models — `finishAgentExecutionStep` → `completeOperationRun`
+           * — always passes the agent run's id, so a completed operation
+           * without one is a row production cannot produce.
+           *
+           * This fixture used to omit it, and the update was rejected on the
+           * first iteration of every run. The scenario has therefore never
+           * once executed against real PostgreSQL, including in the CI run of
+           * the sprint that introduced it and claimed it as proof. The row is
+           * already there to point at: `claimAgentExecutionRunRow` runs
+           * immediately before `executor.start`.
+           */
+          const claimed = await winner
+            .from("agent_execution_runs")
+            .select("id")
+            .eq("operation_run_id", operationId)
+            .single();
+          if (claimed.error) throw claimed.error;
+
           const { error } = await winner
             .from("operation_runs")
             .update({
               status: "completed",
               stage: "completed",
+              result_id: (claimed.data as { id: string }).id,
               completed_at: new Date().toISOString(),
             })
             .eq("id", operationId)

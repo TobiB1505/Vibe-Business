@@ -2,8 +2,9 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { finishAgentExecutionStep } from "@/modules/operations/agent-execution/execution";
 import { expireStaleAgentExecution } from "@/modules/operations/agent-execution/server-writes";
 import { grantCreditLot } from "../grants";
+import { internalChargeFor } from "../internal";
+import { creditUnits } from "../units";
 import { getReservation } from "../store";
-import { creditsToUnits } from "../units";
 import {
   createAgentScaffolding,
   createRunningAgentRun,
@@ -58,7 +59,33 @@ import {
  * still fails a run that was merely slow. That stays open.
  */
 
-const FUNDING = creditsToUnits(5000);
+/**
+ * Funded for the whole suite, derived rather than guessed.
+ *
+ * Every iteration takes one `agent_execution_dogfood` hold, and a hold that
+ * *settles* is spent for good — nothing returns it. So the account has to cover
+ * the worst case where all three scenarios charge on every iteration, and that
+ * total moves whenever `ITERATIONS` does.
+ *
+ * It was a flat `creditsToUnits(5000)`, sized for twenty iterations and left
+ * behind when Sprint 0069 raised them to sixty. The suite then exhausted the
+ * account part-way through and failed in `createRunningAgentRun` with "fixture
+ * could not reserve Credits" — a fixture running out of money, reported as
+ * though the billing code had refused. Deriving it means the two numbers cannot
+ * drift apart again.
+ *
+ * Deliberately the exact worst case rather than a padded one. Each iteration of
+ * each scenario takes exactly one hold, so running out means the suite took
+ * more holds than it has iterations — a defect in the suite, and one worth
+ * failing on rather than hiding under headroom.
+ */
+const SCENARIOS = 3;
+const HOLD =
+  internalChargeFor("agent_execution_dogfood")?.creditUnits ??
+  (() => {
+    throw new Error("no internal price for agent_execution_dogfood");
+  })();
+const FUNDING = creditUnits(HOLD * SCENARIOS * ITERATIONS);
 
 /** Long before any deadline this suite computes, so staleness is unambiguous. */
 const STARTED_AT = "2026-01-01T00:00:00.000Z";
