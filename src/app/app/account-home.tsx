@@ -3,6 +3,7 @@ import { buttonClasses } from "@/components/ui/button";
 import { Notice } from "@/components/ui/states";
 import { Surface } from "@/components/ui/surface";
 import { MonoLabel } from "@/components/ui/typography";
+import { ArrowRightIcon, PlusIcon } from "@/components/ui/dashboard-icons";
 import { buildAttentionItems, orderProjectsByAttention } from "@/modules/projects/attention";
 import type { DashboardProject } from "@/modules/projects/dashboard";
 import { BusinessSignalPanel } from "./business-signal-panel";
@@ -24,12 +25,12 @@ import { ProductCard } from "./product-card";
  *
  * The page keeps what a page owns: the session, the reads, the redirects.
  *
- * ## The three sections, in the order they answer the question
+ * ## The four objects, in the order they answer the question
  *
  * Where things stand for the product that needs attention, the one move it
- * needs, and every product as an index. There is no attention list and no
- * activity feed — both left in CORE-6, and the ordering the attention list
- * uniquely contributed is what arranges the grid.
+ * needs, every product as an index, and the route to add another. There is no
+ * attention list and no activity feed — both left in CORE-6, and the ordering
+ * the attention list uniquely contributed is what arranges the grid.
  */
 
 const CONNECT_ERROR_MESSAGES: Record<string, string> = {
@@ -100,15 +101,15 @@ export function AccountHome({
    * server's clock is not the user's. Inventing either would be exactly the
    * fake personalisation this product avoids.
    */
-  const headline =
-    projects.length === 0
-      ? "Welcome to Vibe Business."
-      : attention.length === 0
-        ? "Nothing needs your attention."
-        : `${attention.length} ${attention.length === 1 ? "thing needs" : "things need"} your attention.`;
+  const headline = projects.length === 0 ? "Welcome to Vibe Business." : "Welcome back.";
+
+  const summary =
+    attention.length === 0
+      ? "Your business command center is up to date."
+      : `${attention.length} ${attention.length === 1 ? "thing needs" : "things need"} your attention across your products.`;
 
   return (
-    <div className="flex flex-col gap-10" data-testid="account-home">
+    <div className="flex flex-col gap-7" data-testid="account-home">
       {connectError && (
         <Notice tone="problem" label="Connection failed">
           {CONNECT_ERROR_MESSAGES[connectError] ?? "GitHub connection failed. Please try again."}
@@ -132,19 +133,17 @@ export function AccountHome({
         </Notice>
       )}
 
-      <header className="flex flex-col gap-2">
-        <h1 className="text-fg text-headline sm:text-display font-bold text-balance">{headline}</h1>
+      <header className="flex flex-col gap-2 pb-2">
+        <h1 className="text-fg text-headline sm:text-display font-bold tracking-[-0.04em] text-balance">
+          {headline}
+        </h1>
         {projects.length > 0 && (
-          <p className="text-fg-muted text-sm">
-            {attention.length === 0
-              ? "Vibe is watching your products. Anything that needs a decision will appear here."
-              : "Vibe ranked them from what it found in your products."}
-          </p>
+          <p className="text-fg-muted text-base">{summary}</p>
         )}
       </header>
 
       {hero && (
-        <section aria-labelledby="signal-heading" className="grid gap-5 lg:grid-cols-[3fr_2fr]">
+        <section aria-labelledby="signal-heading" className="flex flex-col gap-5">
           <h2 id="signal-heading" className="sr-only">
             {hero.name}
           </h2>
@@ -161,11 +160,9 @@ export function AccountHome({
             <h2 id="products-heading" className="text-fg text-title font-bold">
               Your products
             </h2>
-            <Link
-              href="/app/connect/github"
-              className={buttonClasses({ variant: "secondary", size: "sm" })}
-            >
-              Connect a product
+            <Link href="/app/products" className={buttonClasses({ variant: "secondary", size: "sm" })}>
+              View all products
+              <ArrowRightIcon size={16} />
             </Link>
           </div>
           {/*
@@ -180,6 +177,29 @@ export function AccountHome({
               </li>
             ))}
           </ul>
+
+          <Surface
+            level="section"
+            padding="lg"
+            className="border-mint-line/70 flex flex-col gap-5 sm:flex-row sm:items-center"
+          >
+            <div className="bg-mint-tint text-mint flex size-16 shrink-0 items-center justify-center rounded-panel">
+              <PlusIcon size={30} />
+            </div>
+            <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+              <h3 className="text-fg text-title font-semibold">Connect a new product</h3>
+              <p className="text-fg-muted max-w-[52ch] text-sm leading-relaxed">
+                Add another repository to bring its business signal, priorities, and prepared work
+                into one command center.
+              </p>
+            </div>
+            <Link
+              href="/app/connect/github"
+              className={buttonClasses({ variant: "secondary", size: "sm" })}
+            >
+              Connect product
+            </Link>
+          </Surface>
         </section>
       )}
     </div>

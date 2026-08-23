@@ -98,9 +98,14 @@ export function sparklineBreakCaption(breakCount: number): string | null {
 export function Sparkline({
   segments,
   className,
+  variant = "compact",
+  tone = "neutral",
 }: {
   segments: ScoreSegment[];
   className?: string;
+  /** `chart` adds a soft area and occupies the hero's full chart height. */
+  variant?: "compact" | "chart";
+  tone?: "neutral" | "mint" | "amber" | "coral";
 }) {
   // Global index across every segment, so a break costs horizontal distance
   // and the timeline reads left to right without restarting.
@@ -147,9 +152,26 @@ export function Sparkline({
        * line rather than a circle for exactly this reason.
        */
       preserveAspectRatio="none"
-      className={cn("text-fg-secondary h-14 w-full", className)}
+      className={cn(
+        "w-full",
+        variant === "chart" ? "h-40" : "h-8",
+        tone === "mint" && "text-mint",
+        tone === "amber" && "text-amber",
+        tone === "coral" && "text-coral",
+        tone === "neutral" && (variant === "chart" ? "text-mint" : "text-fg-secondary"),
+        className,
+      )}
       fill="none"
     >
+      {variant === "chart" && (
+        <defs>
+          <linearGradient id="business-signal-area" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="currentColor" stopOpacity="0.22" />
+            <stop offset="100%" stopColor="currentColor" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+      )}
+
       {breaks.map((x) => (
         <line
           key={`break-${x}`}
@@ -164,8 +186,10 @@ export function Sparkline({
         />
       ))}
 
-      {runs.map((run) =>
-        run.length === 1 ? (
+      {runs.map((run) => {
+        const key = `run-${run[0].x}`;
+
+        return run.length === 1 ? (
           // A single reading has no line in it, and a path of one point draws
           // nothing. A round cap on a zero-length line is a dot — and unlike a
           // circle it stays round under the horizontal stretch above.
@@ -181,17 +205,27 @@ export function Sparkline({
             vectorEffect="non-scaling-stroke"
           />
         ) : (
-          <polyline
-            key={`run-${run[0].x}`}
-            points={run.map((p) => `${p.x},${p.y}`).join(" ")}
-            className="stroke-current"
-            strokeWidth={2}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            vectorEffect="non-scaling-stroke"
-          />
-        ),
-      )}
+          <g key={key}>
+            {variant === "chart" && (
+              <polygon
+                points={`${run[0].x},${HEIGHT} ${run
+                  .map((p) => `${p.x},${p.y}`)
+                  .join(" ")} ${run[run.length - 1].x},${HEIGHT}`}
+                fill="url(#business-signal-area)"
+                stroke="none"
+              />
+            )}
+            <polyline
+              points={run.map((p) => `${p.x},${p.y}`).join(" ")}
+              className="stroke-current"
+              strokeWidth={variant === "chart" ? 2.5 : 2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              vectorEffect="non-scaling-stroke"
+            />
+          </g>
+        );
+      })}
     </svg>
   );
 }

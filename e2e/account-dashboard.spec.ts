@@ -13,11 +13,10 @@ import { expect, test } from "@playwright/test";
  *
  * ## What the numbers are
  *
- * CORE-6 removed the attention list and the activity feed from `/app` and
- * replaced them with a hero and product cards. Counted as labels, headings,
- * sentences and controls at three products, the screen went from about 68
- * elements to 33 — the halving the sprint was asked for, taken by removing two
- * whole sections rather than by shrinking type.
+ * CORE-6 removed the attention list and the activity feed from `/app`. The
+ * reference-led pass that followed adds useful structure inside the same four
+ * objects — signal, next move, products and connect — without bringing either
+ * feed back.
  *
  * The ceiling below is 36, so a couple of small additions still fit and a
  * fourth section (five elements or more) does not. It is measured against
@@ -53,21 +52,30 @@ test.describe("the account dashboard stays calmer than the project workspace", (
   });
 
   /**
-   * The reference this screen was drawn from gives every card three
-   * `label: value` rows, which at three cards is nine metadata pairs in one
-   * band. One label per card is what replaced that: the score is a number with
-   * its timestamp, and only the move is named.
-   */
-  test("gives a product card one labelled pair and one action", async ({ page }) => {
+ * The reference gives every card three useful `label: value` rows. Those rows
+ * are now present, but the card still gets exactly one action — three ways out
+ * of one card would turn a summary into a miniature workspace.
+ */
+  test("gives a product card three facts and one action", async ({ page }) => {
     await page.goto(THREE);
 
     const cards = page.getByTestId("product-card");
     await expect(cards).toHaveCount(3);
 
     for (const card of await cards.all()) {
-      expect(await card.locator("[data-mono-label]").count()).toBeLessThanOrEqual(1);
+      await expect(card.locator("dt")).toHaveCount(3);
       expect(await card.locator("a, button").count()).toBeLessThanOrEqual(1);
     }
+  });
+
+  test("keeps the reference hierarchy without inventing a time filter", async ({ page }) => {
+    await page.goto(THREE);
+
+    await expect(page.getByRole("heading", { name: "Business signal" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Next move" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Your products" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Connect a new product" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /last 7 days/i })).toHaveCount(0);
   });
 
   /**
@@ -119,3 +127,15 @@ test.describe("the hero is about one named product", () => {
     await expect(page.getByText("0", { exact: true })).toHaveCount(0);
   });
 });
+
+for (const width of [1440, 1024, 768, 375]) {
+  test(`the dashboard and account rail fit at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.goto(THREE);
+
+    const overflow = await page.evaluate(
+      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    );
+    expect(overflow).toBeLessThanOrEqual(0);
+  });
+}

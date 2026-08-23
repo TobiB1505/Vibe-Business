@@ -1,45 +1,14 @@
 import Link from "next/link";
 import { buttonClasses } from "@/components/ui/button";
+import { InfoIcon } from "@/components/ui/dashboard-icons";
 import { scoreDisplay, type ScoreTone } from "@/components/ui/score-display";
 import { Sparkline, sparklineBreakCaption } from "@/components/ui/sparkline";
 import { statusToneText, type StatusTone } from "@/components/ui/status-pill";
 import { Surface } from "@/components/ui/surface";
-import { MonoLabel } from "@/components/ui/typography";
-import { formatTimestamp } from "@/lib/utils/format-datetime";
-import type { DashboardProject } from "@/modules/projects/dashboard";
-import { buildScoreSeries } from "@/modules/projects/score-series";
+import { formatDate, formatTimestamp } from "@/lib/utils/format-datetime";
 import { cn } from "@/lib/utils/cn";
-
-/**
- * The Business Signal, for one named product (CORE-6).
- *
- * ## Why it names a product instead of scoring the account
- *
- * The reference shows one number for everything. There is no such number, and
- * there must not be: an average across three audits would be a figure no audit
- * produced, taken over readings that `score-series.ts` says are frequently not
- * comparable with each other at all. Averaging incomparable numbers is exactly
- * the dishonesty the whole comparability rule exists to prevent, done once more
- * at a higher level.
- *
- * So the hero is **the product that most needs attention** — the same one
- * `orderProjectsByAttention` puts first in the grid below. With one product it
- * reads exactly like the reference. With three it says which of the three it
- * is talking about, which also settles what the Next Move card beside it is
- * about.
- *
- * ## What it deliberately does not show
- *
- * - **The audit's conclusion sentence.** "Your business is on track" is
- *   `synthesis.overall`, and it lives inside the audit's JSONB document. The
- *   dashboard read model does not open that document, by contract, and
- *   weakening a load-bearing guard for one sentence is a bad trade. It is one
- *   click away on Business Health.
- * - **A date-range filter.** "Last 7 days" implies a time filter over data
- *   that does not exist: audits happen when someone runs one, not on a
- *   schedule, and a founder can have two readings in a year.
- * - **A zero.** An unscored product gets a sentence where the number would be.
- */
+import type { DashboardProject } from "@/modules/projects/dashboard";
+import { buildScoreSeries, type ScoreSeries } from "@/modules/projects/score-series";
 
 const SCORE_TONE: Record<ScoreTone, StatusTone> = {
   strong: "success",
@@ -48,9 +17,8 @@ const SCORE_TONE: Record<ScoreTone, StatusTone> = {
   unscored: "neutral",
 };
 
-/** Geometry for the ring. The arc is a stroked circle, rotated to start at 12. */
-const RING_SIZE = 132;
-const RING_STROKE = 8;
+const RING_SIZE = 152;
+const RING_STROKE = 9;
 const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 
@@ -69,7 +37,7 @@ function ScoreRing({ score }: { score: number }) {
           cx={RING_SIZE / 2}
           cy={RING_SIZE / 2}
           r={RING_RADIUS}
-          className="stroke-line-track"
+          className="stroke-line-strong"
           strokeWidth={RING_STROKE}
         />
         <circle
@@ -83,52 +51,103 @@ function ScoreRing({ score }: { score: number }) {
           strokeDashoffset={RING_CIRCUMFERENCE * (1 - fillPercent / 100)}
         />
       </svg>
-      {/*
-        The number sits inside the ring rather than beside it: one object, read
-        once. `text-hero` is used here and nowhere else on this screen — the
-        hierarchy is what replaces the rows this dashboard removed.
-      */}
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span
           className={cn(
-            "font-mono text-hero leading-none tabular-nums",
+            "text-[3.25rem] leading-none font-bold tracking-[-0.06em] tabular-nums",
             statusToneText(SCORE_TONE[tone]),
           )}
         >
           {score}
         </span>
-        <span className="text-fg-meta font-mono text-meta">/ 100</span>
+        <span className="text-fg-meta mt-1 text-sm font-medium">/ 100</span>
       </div>
     </div>
   );
 }
 
-/**
- * How the score moved, in words.
- *
- * Null delta is the common case and it is not a failure to report — it means
- * there is no second reading measured the same way, which is the truth far
- * more often than a dashboard would like. It says so rather than printing a
- * neutral "0".
- */
-function TrendReading({ delta }: { delta: number | null }) {
+function SignalCopy({ project }: { project: DashboardProject }) {
+  const tone = scoreDisplay(project.score).tone;
+  const heading =
+    tone === "strong"
+      ? "A strong business foundation"
+      : tone === "partial"
+        ? "The foundation is taking shape"
+        : "This product needs attention";
+
+  return (
+    <div className="flex min-w-0 flex-col gap-2">
+      <h3 className="text-fg text-xl font-semibold tracking-[-0.025em]">{heading}</h3>
+      <p className="text-fg-prose max-w-[34ch] text-sm leading-relaxed">
+        Vibe ranked this product first based on its latest audit and the work currently waiting.
+      </p>
+      <Link
+        href={`/app/projects/${project.id}/health`}
+        className="text-mint hover:text-mint-hover mt-1 w-fit text-sm font-semibold transition-interactive"
+      >
+        {project.name}
+      </Link>
+    </div>
+  );
+}
+
+function TrendPill({ delta }: { delta: number | null }) {
   if (delta === null) {
-    return (
-      <p className="text-fg-meta text-meta">No comparable reading before this one.</p>
-    );
+    return <p className="text-fg-meta text-xs">No comparable reading before this one.</p>;
   }
 
   const tone = delta > 0 ? "success" : delta < 0 ? "problem" : "neutral";
   const sign = delta > 0 ? "+" : "";
 
   return (
-    <p className="text-fg-meta text-meta">
-      <span className={cn("font-mono tabular-nums", statusToneText(tone))}>
-        {sign}
-        {delta}
-      </span>{" "}
-      since the previous audit
-    </p>
+    <span
+      className={cn(
+        "w-fit rounded-full border px-3 py-1 text-xs font-semibold tabular-nums",
+        tone === "success" && "bg-mint-tint border-mint-line text-mint",
+        tone === "problem" && "bg-coral-tint border-coral-line text-coral",
+        tone === "neutral" && "bg-surface-hover border-line-4 text-fg-muted",
+      )}
+    >
+      {sign}
+      {delta} since previous audit
+    </span>
+  );
+}
+
+function ScoreChart({ series, tone }: { series: ScoreSeries; tone: "mint" | "amber" | "coral" }) {
+  const points = series.segments.flatMap((segment) => segment.points);
+  const firstDate = formatDate(points[0]?.recordedAt);
+  const lastDate = formatDate(points[points.length - 1]?.recordedAt);
+
+  return (
+    <div className="flex min-w-0 flex-col gap-3">
+      <div className="relative min-h-44 pl-9">
+        <div className="text-fg-meta absolute inset-y-0 left-0 flex flex-col justify-between py-0.5 text-[0.6875rem] tabular-nums">
+          <span>100</span>
+          <span>75</span>
+          <span>50</span>
+          <span>25</span>
+          <span>0</span>
+        </div>
+        <div className="relative h-40">
+          <div className="absolute inset-0 flex flex-col justify-between py-1" aria-hidden>
+            {[0, 1, 2, 3, 4].map((line) => (
+              <span key={line} className="border-line-1 block border-t" />
+            ))}
+          </div>
+          <div className="relative z-10">
+            <Sparkline segments={series.segments} variant="chart" tone={tone} />
+          </div>
+        </div>
+        {(firstDate || lastDate) && (
+          <div className="text-fg-meta flex justify-between pt-2 text-xs">
+            <span>{firstDate !== lastDate ? firstDate : null}</span>
+            <span>{lastDate}</span>
+          </div>
+        )}
+      </div>
+      <TrendPill delta={series.delta} />
+    </div>
   );
 }
 
@@ -137,52 +156,55 @@ export function BusinessSignalPanel({ project }: { project: DashboardProject }) 
   const analysed = formatTimestamp(project.lastAnalysedAt);
   const caption = sparklineBreakCaption(series.breakCount);
   const scored = project.scoreState === "scored" && project.score !== null;
+  const chartTone =
+    scoreDisplay(project.score).tone === "strong"
+      ? "mint"
+      : scoreDisplay(project.score).tone === "partial"
+        ? "amber"
+        : "coral";
 
   return (
-    <Surface level="card" padding="lg" className="flex h-full flex-col gap-6">
-      <div className="flex flex-col gap-1.5">
-        <MonoLabel>Business Signal</MonoLabel>
-        {/*
-          Which product this is about. A link, because the number is a summary
-          of a screen that explains it.
-        */}
-        <Link
-          href={`/app/projects/${project.id}/health`}
-          className="text-fg hover:text-mint text-title w-fit font-bold transition-interactive"
-        >
-          {project.name}
-        </Link>
+    <Surface level="card" padding="lg" className="flex flex-col gap-7">
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-center gap-2">
+          <h2 className="text-fg text-sm font-semibold">Business signal</h2>
+          <span title="The latest comparable business-readiness readings">
+            <InfoIcon size={16} className="text-fg-meta" />
+          </span>
+        </div>
+        {analysed && <p className="text-fg-meta hidden text-xs sm:block">Analysed {analysed}</p>}
       </div>
 
       {scored ? (
-        <div className="flex flex-wrap items-center gap-x-8 gap-y-6">
+        <div className="grid items-center gap-8 xl:grid-cols-[9.5rem_minmax(13rem,0.8fr)_minmax(20rem,1.4fr)]">
           <ScoreRing score={project.score as number} />
-
-          <div className="flex min-w-[15rem] flex-1 flex-col gap-2">
-            <Sparkline segments={series.segments} />
-            <TrendReading delta={series.delta} />
-            {analysed && (
-              <p className="text-fg-meta font-mono text-meta">Analysed {analysed}</p>
-            )}
-          </div>
+          <SignalCopy project={project} />
+          <ScoreChart series={series} tone={chartTone} />
         </div>
       ) : (
-        <div className="flex flex-col items-start gap-4">
-          <p className="text-fg-prose max-w-[52ch] text-base leading-relaxed">
+        <div className="flex flex-col items-start gap-4 py-3">
+          <h3 className="text-fg text-xl font-semibold">
+            {project.scoreState === "insufficient_coverage"
+              ? "More evidence is needed"
+              : "Your first signal is waiting"}
+          </h3>
+          <p className="text-fg-prose max-w-[58ch] text-sm leading-relaxed">
             {project.scoreState === "insufficient_coverage"
               ? "Vibe looked and there wasn't enough evidence to score this product. Connecting more of it, or publishing a live site, gives the audit something to read."
-              : "Vibe hasn't analysed this product yet. The business audit is what produces a score and the moves that follow from it."}
+              : "Vibe hasn't analysed this product yet. The business audit produces the first score and the moves that follow from it."}
           </p>
           <Link
             href={`/app/projects/${project.id}/health`}
             className={buttonClasses({ variant: "primary", size: "sm" })}
           >
-            {project.scoreState === "insufficient_coverage" ? "Open Business Health" : "Analyse product"}
+            {project.scoreState === "insufficient_coverage"
+              ? "Open business health"
+              : "Analyse product"}
           </Link>
         </div>
       )}
 
-      {caption && <p className="text-fg-meta max-w-[52ch] text-meta leading-relaxed">{caption}</p>}
+      {caption && <p className="text-fg-meta max-w-[62ch] text-xs leading-relaxed">{caption}</p>}
     </Surface>
   );
 }

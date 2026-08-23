@@ -82,4 +82,9 @@ describe("the chart is a shape, not a diagram", () => {
   it("clamps rather than trusting a score to be in range", () => {
     expect(code).toContain("Math.max(0, Math.min(score, 100))");
   });
+
+  it("adds an area only for the dashboard hero variant", () => {
+    expect(code).toContain('variant === "chart"');
+    expect(code).toContain("business-signal-area");
+  });
 });

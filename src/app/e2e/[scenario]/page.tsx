@@ -37,6 +37,8 @@ import {
 import { E2E_NEEDS_USER_SCENARIOS, isE2eNeedsUserScenario } from "../needs-user-scenarios";
 import { E2E_ACCOUNT_SCENARIOS, isE2eAccountScenario } from "../account-scenarios";
 import { AccountHome } from "@/app/app/account-home";
+import { AccountMenu } from "@/components/layout/account-menu";
+import { AccountShell, AccountSidebar } from "@/components/layout/account-shell";
 import { E2E_SCENARIOS, isE2eScenario } from "../scenarios";
 import { E2E_INTELLIGENCE_SCENARIOS, isE2eIntelligenceScenario } from "../intelligence-scenarios";
 import {
@@ -378,10 +380,26 @@ export default async function E2eScenarioPage({
    */
   if (isE2eAccountScenario(scenario)) {
     return (
-      <main className="mx-auto max-w-[72rem] p-8">
-        {label}
+      <AccountShell
+        sidebar={
+          <AccountSidebar
+            credits="2,480"
+            footer={
+              <AccountMenu
+                identity={{
+                  displayName: "Tobi",
+                  initials: "TB",
+                  avatarUrl: null,
+                  fromGithub: true,
+                }}
+              />
+            }
+          />
+        }
+      >
+        <div className="sr-only">{label}</div>
         <AccountHome projects={E2E_ACCOUNT_SCENARIOS[scenario]()} />
-      </main>
+      </AccountShell>
     );
   }
 

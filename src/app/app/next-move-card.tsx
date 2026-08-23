@@ -1,78 +1,63 @@
 import Link from "next/link";
 import { buttonClasses } from "@/components/ui/button";
+import { ArrowRightIcon, InfoIcon, RocketIcon } from "@/components/ui/dashboard-icons";
 import { Surface } from "@/components/ui/surface";
-import { MonoLabel } from "@/components/ui/typography";
 import { EFFORT_LABELS, IMPACT_LABELS } from "@/modules/opportunities/schema";
 import type { DashboardProject } from "@/modules/projects/dashboard";
 
-/**
- * The one thing to do next (CORE-6).
- *
- * ## Whose move it is
- *
- * The hero product's — named on the panel beside this card, not repeated here.
- * The reference was drawn with three products and an unattributed "Next move",
- * which is ambiguous the moment a founder has more than one; naming the
- * product once, on the panel that owns both halves, answers it without saying
- * it twice.
- *
- * ## Why chips are allowed here and nowhere else on this screen
- *
- * Because there is exactly one of this card. Impact and effort are the
- * engine's own ratings and they are what makes "next" a decision rather than a
- * list position. Repeated on every product card they would be nine chips in
- * one band, which is the density this sprint exists to remove — so the product
- * cards get the title as a sentence and nothing else.
- *
- * Confidence is deliberately absent even here. Three ratings of equal weight
- * is a table; two is a judgement. `/plan` shows all three, with room to
- * explain them.
- *
- * ## What is not built
- *
- * The reference's "43% of users drop off". There is no analytics source in
- * this product, and there is no honest way to render that number. The Move's
- * own `problem` sentence goes in its place — the model's validated statement
- * of the same thing, without a measurement nobody took.
- */
+/** The one highest-value action for the product leading the dashboard. */
 export function NextMoveCard({ project }: { project: DashboardProject }) {
   const planHref = `/app/projects/${project.id}/plan`;
   const move = project.topMove;
 
   return (
-    <Surface level="panel" padding="lg" className="flex h-full flex-col gap-4">
-      <MonoLabel>Next move</MonoLabel>
+    <Surface level="panel" padding="lg" className="flex flex-col gap-6">
+      <div className="flex items-center gap-2">
+        <h2 className="text-fg text-sm font-semibold">Next move</h2>
+        <span title="The highest-ranked move from the latest business audit">
+          <InfoIcon size={16} className="text-fg-meta" />
+        </span>
+      </div>
 
-      {move ? (
-        <>
-          <h3 className="text-fg text-title leading-snug font-semibold text-balance">
-            {move.title}
-          </h3>
-          <p className="text-fg-prose max-w-[52ch] text-sm leading-relaxed">{move.problem}</p>
-          {/* The engine's own ratings, named rather than re-derived here. */}
-          <p className="text-fg-meta font-mono text-meta">
-            {IMPACT_LABELS[move.impact]} · {EFFORT_LABELS[move.effort]}
-          </p>
-        </>
-      ) : (
-        <p className="text-fg-muted max-w-[52ch] text-sm leading-relaxed">
-          {project.nextMovesCount === null
-            ? "Vibe hasn't worked out what to do next yet. That comes from the business audit."
-            : "Vibe looked and didn't find a move worth putting ahead of the others right now."}
-        </p>
-      )}
+      <div className="grid items-center gap-5 md:grid-cols-[4.5rem_minmax(0,1fr)_auto]">
+        <div className="bg-mint-tint-soft text-mint flex size-16 items-center justify-center rounded-panel">
+          <RocketIcon size={28} />
+        </div>
 
-      <div className="mt-auto pt-1">
-        {/*
-          Primary only when there is a move to review. With nothing here the
-          hero beside this card is the one thing to do, and two filled buttons
-          side by side make a founder choose between them.
-        */}
+        <div className="flex min-w-0 flex-col gap-2">
+          {move ? (
+            <>
+              <h3 className="text-fg text-lg font-semibold tracking-[-0.02em] text-balance">
+                {move.title}
+              </h3>
+              <p className="text-fg-prose max-w-[54ch] text-sm leading-relaxed">{move.problem}</p>
+              <div className="flex flex-wrap gap-2 pt-1">
+                <span className="bg-mint-tint text-mint border-mint-line rounded-full border px-3 py-1 text-xs font-semibold">
+                  {IMPACT_LABELS[move.impact]} impact
+                </span>
+                <span className="bg-amber-tint text-amber border-amber-line rounded-full border px-3 py-1 text-xs font-semibold">
+                  {EFFORT_LABELS[move.effort]} effort
+                </span>
+              </div>
+            </>
+          ) : (
+            <>
+              <h3 className="text-fg text-lg font-semibold">No move waiting right now</h3>
+              <p className="text-fg-muted max-w-[54ch] text-sm leading-relaxed">
+                {project.nextMovesCount === null
+                  ? "Run the business audit to turn Vibe's findings into a prioritised action plan."
+                  : "Vibe looked and didn't find a move worth putting ahead of the others right now."}
+              </p>
+            </>
+          )}
+        </div>
+
         <Link
           href={planHref}
-          className={buttonClasses({ variant: move ? "primary" : "secondary", size: "sm" })}
+          className={buttonClasses({ variant: "secondary", size: "md" })}
         >
-          {move ? "Review this move" : "Open Action Plan"}
+          {move ? "View action plan" : "Open action plan"}
+          <ArrowRightIcon size={16} />
         </Link>
       </div>
     </Surface>

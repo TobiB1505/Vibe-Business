@@ -4,6 +4,12 @@ Status: Accepted
 
 Date: 2026-08-23
 
+**Visual amendment:** [UI-8](../sprints/0060-account-dashboard-reference-fidelity.md) later
+refined the composition toward the supplied SaaS reference — full-width signal, horizontal next
+move, richer product cards and a visible connect surface. The decisions in this record remain:
+mutually exclusive account/project rails, one named product rather than an account average, the
+same score-comparability rule, no fake date filter and no additional dashboard read.
+
 ## Context
 
 [ADR 0041](0041-command-center-information-architecture.md) rebuilt the *project*
