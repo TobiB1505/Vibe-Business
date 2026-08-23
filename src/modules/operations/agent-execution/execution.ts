@@ -77,10 +77,15 @@ import {
   recordAgentToolEvents,
   recordAgentMessageProgress,
   markAgentRunStarted,
+  updateAgentRunCreditReservation,
   type StoredAgentExecutionRun,
 } from "@/modules/coding-agent/store";
 import { recordAgentSandboxUsage } from "@/modules/coding-agent/usage";
-import { releaseOperationCredits, settleOperationCredits } from "@/modules/credits/operation-billing";
+import {
+  authorizeOperationCredits,
+  releaseOperationCredits,
+  settleOperationCredits,
+} from "@/modules/credits/operation-billing";
 import { findExecutionSpecByIdentity } from "@/modules/execution-contract/store";
 import { agentBranchNameFor } from "@/modules/execution/identity";
 import { prepareChangeOnBranch } from "@/modules/execution/github-writer";
@@ -109,6 +114,7 @@ import {
   type SandboxProvider,
 } from "@/modules/validation/sandbox-port";
 import { SANDBOX_ENVIRONMENT } from "@/modules/validation/orchestrator";
+import { operationHasCreditHold } from "../billing";
 import type { OperationFailureCode } from "../failures";
 import {
   completeOperationRun,
@@ -788,6 +794,53 @@ export async function startAgentStep(
   const claimed = await markAgentRunStarted(deps.supabase, context.run.id);
   if (!claimed) return { ok: false, failureCode: "inference_interrupted" };
 
+  /*
+   * Re-acquires a hold a pause released (ADR 0042 §P2).
+   *
+   * `context.run.creditReservationId` is the historical pointer left by
+   * `claimAgentExecutionRun` — non-null exactly when this run was billable at
+   * claim time, and never cleared by a release. On a fresh, never-paused run
+   * that pointer's reservation is still active, so `operationHasCreditHold`
+   * is true and this is a no-op — the same code path covers first entry and
+   * resume without branching on which one this is.
+   *
+   * The idempotency key is scoped to the operation's current pause cycle, not
+   * the bare operation id, mirroring `runInferenceStep`'s identical re-acquire
+   * for business_audit: reusing `operation:<id>` would find the first (now
+   * released) reservation and replay it rather than take a fresh one. A
+   * retried entry for the same cycle lands on the same reservation; a later
+   * pause/resume cycle takes a distinct one.
+   *
+   * Must land before any terminal transition: `completeAgentRun` /
+   * `failAgentRun` finalize whatever `credit_reservation_id` currently names,
+   * so the pointer is updated here, immediately once a fresh reservation
+   * exists, rather than left to a later step.
+   *
+   * Tracked in a local rather than re-read off `context.run` below: `context`
+   * was loaded once at the top of this call and never refreshed, so a second
+   * interrupt raised later in this same invocation must consult this variable
+   * — not the stale snapshot — or its own release would name the reservation
+   * this step just replaced rather than the one it is actually holding.
+   */
+  let creditReservationId = context.run.creditReservationId;
+  if (creditReservationId && !(await operationHasCreditHold(deps.supabase, operationId))) {
+    const reacquired = await authorizeOperationCredits(deps.supabase, {
+      projectId: context.run.projectId,
+      operation: "agent_execution_dogfood",
+      idempotencyKey: `operation:${operationId}:resume:${context.operation.pauseCycle}`,
+      operationRunId: operationId,
+    });
+
+    if (!reacquired.ok) {
+      return { ok: false, failureCode: "insufficient_credits" };
+    }
+
+    creditReservationId = reacquired.billable ? reacquired.reservationId : null;
+    if (creditReservationId) {
+      await updateAgentRunCreditReservation(deps.supabase, context.run.id, creditReservationId);
+    }
+  }
+
   await setOperationStage(deps.supabase, { operationId, stage: "running_agent" });
 
   await recordLifecycle(deps, context.run, "agent_started", "Started working on the change", {
@@ -1115,8 +1168,31 @@ export async function startAgentStep(
       agentExecutionRunId: context.run.id,
       interrupt,
     });
-    await pauseAgentRunForUser(deps.supabase, context.run.id);
+    const paused = await pauseAgentRunForUser(deps.supabase, context.run.id);
     await pauseOperationForUser(deps.supabase, operationId);
+
+    /*
+     * Release-on-pause (ADR 0042 §P2).
+     *
+     * Real inference already ran to reach this interrupt — activity and tool
+     * events were already recorded above — so the release is
+     * `abandoned_with_usage`, not `cancelled_before_usage`. Guarded on
+     * `paused`, the actual winner of `pauseAgentRunForUser`'s CAS, mirroring
+     * `expireStaleAgentExecution`'s own "whoever wins the swap owns
+     * finalization" rule.
+     *
+     * `creditReservationId`, not `context.run.creditReservationId`: a resume
+     * can raise a second interrupt within this same invocation, after the
+     * re-acquire above has already replaced the reservation this run holds.
+     * Releasing the stale snapshot would name the reservation this step just
+     * moved away from rather than the one actually funding it.
+     */
+    if (paused && creditReservationId) {
+      await releaseOperationCredits(deps.supabase, {
+        reservationId: creditReservationId,
+        reason: "abandoned_with_usage",
+      });
+    }
 
     await recordAuditEvent(deps.supabase, {
       userId: context.run.userId,

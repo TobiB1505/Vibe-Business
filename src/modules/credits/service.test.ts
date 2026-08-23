@@ -1,12 +1,14 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { FakeDatabase, fakeSupabase } from "@/modules/operations/test-support";
-import { releaseReservation, settleReservation } from "./service";
+import { reconcileAndRepairBalance, releaseReservation, settleReservation } from "./service";
 import {
   claimReservation,
   closeReservation,
   ensureCreditAccount,
   getCreditBalance,
   getReservation,
+  listActiveReservations,
+  listLedgerEntries,
   postLedgerEntry,
   type CreditAccount,
 } from "./store";
@@ -199,5 +201,230 @@ describe("a retried settlement closes the hold its charge was taken against", ()
       .rows("audit_log_events")
       .filter((row) => (row as { event_type: string }).event_type === "credit_charge.settled");
     expect(settled).toHaveLength(0);
+  });
+});
+
+/**
+ * ADR 0042 §P4 — a zero-credit settlement is idempotent.
+ *
+ * `credit_delta <> 0` forbids a zero-delta ledger row, so a zero-credit
+ * settlement posts no charge at all — the whole hold is simply released. A
+ * retry that only looks for an existing charge in the ledger finds nothing,
+ * falls through to `decideSettlement`, and is refused `reservation_not_active`
+ * against a reservation it already, correctly, settled. `reservation.status
+ * === "settled"` is checked before any ledger lookup so this case has an
+ * idempotency key at all.
+ */
+describe("a zero-credit settlement is idempotent", () => {
+  it("reports a retried zero-credit settlement as already settled, not refused", async () => {
+    const { id } = await heldReservation(300);
+
+    const first = await settleReservation(supabase(), {
+      reservationId: id,
+      actualCredits: ZERO_CREDITS,
+      rateCardVersion: null,
+    });
+    expect(first).toMatchObject({ ok: true, chargedCredits: ZERO_CREDITS, alreadySettled: false });
+
+    const retry = await settleReservation(supabase(), {
+      reservationId: id,
+      actualCredits: ZERO_CREDITS,
+      rateCardVersion: null,
+    });
+
+    expect(retry).toMatchObject({
+      ok: true,
+      chargedCredits: ZERO_CREDITS,
+      releasedCredits: creditsToUnits(300),
+      alreadySettled: true,
+    });
+    expect((await getReservation(supabase(), id))?.status).toBe("settled");
+  });
+
+  it("posts no ledger row for a zero-credit settlement, retried or not", async () => {
+    const { id } = await heldReservation(300);
+
+    await settleReservation(supabase(), { reservationId: id, actualCredits: ZERO_CREDITS, rateCardVersion: null });
+    await settleReservation(supabase(), { reservationId: id, actualCredits: ZERO_CREDITS, rateCardVersion: null });
+
+    const charges = db.current
+      .rows("billing_credit_ledger")
+      .filter((row) => (row as { kind: string }).kind === "charge");
+    expect(charges).toHaveLength(0);
+  });
+
+  it("gives back the whole hold on a zero-credit settlement", async () => {
+    const { id } = await heldReservation(300);
+
+    await settleReservation(supabase(), { reservationId: id, actualCredits: ZERO_CREDITS, rateCardVersion: null });
+
+    const balance = await getCreditBalance(supabase(), USER);
+    expect(balance?.reserved).toBe(ZERO_CREDITS);
+  });
+
+  it("still reports a nonzero settlement's replay from the settled reservation row, not the ledger", async () => {
+    const { id } = await heldReservation(300);
+
+    await settleReservation(supabase(), {
+      reservationId: id,
+      actualCredits: creditsToUnits(200),
+      rateCardVersion: null,
+    });
+    const retry = await settleReservation(supabase(), {
+      reservationId: id,
+      actualCredits: creditsToUnits(200),
+      rateCardVersion: null,
+    });
+
+    expect(retry).toMatchObject({
+      ok: true,
+      chargedCredits: creditsToUnits(200),
+      releasedCredits: creditsToUnits(100),
+      alreadySettled: true,
+    });
+  });
+});
+
+/**
+ * `reconcileAndRepairBalance` (ADR 0042 §P3) — the account-side repair
+ * trigger `getBillingOverview` now calls alongside its lot-side counterpart
+ * (see `credits/lot-store.test.ts`'s `reconcileAndRepairLotAllocations`,
+ * which mirrors these tests exactly).
+ */
+describe("reconcileAndRepairBalance (ADR 0042 §P3)", () => {
+  const previousFlag = process.env.BILLING_REPAIR_ENABLED;
+
+  beforeEach(() => {
+    delete process.env.BILLING_REPAIR_ENABLED;
+  });
+
+  afterEach(() => {
+    if (previousFlag === undefined) delete process.env.BILLING_REPAIR_ENABLED;
+    else process.env.BILLING_REPAIR_ENABLED = previousFlag;
+  });
+
+  /** Only what this sprint writes — `postLedgerEntry` posts its own unrelated events. */
+  function driftEvents() {
+    return db.current
+      .rows("audit_events")
+      .filter((row) => String(row.event_type).startsWith("credit_drift."));
+  }
+
+  async function reconcilableInputs(account: CreditAccount) {
+    const entries = (await listLedgerEntries(supabase(), account.id)).map((entry) => ({
+      kind: entry.kind,
+      creditDelta: entry.creditDelta,
+    }));
+    const reservations = (await listActiveReservations(supabase(), account.id)).map((reservation) => ({
+      reservedCredits: reservation.reservedCredits,
+    }));
+    return { entries, reservations };
+  }
+
+  /**
+   * A crash between the ledger insert and its materialize call, left behind
+   * directly — `postLedgerEntry` itself never leaves this state on its own,
+   * the same technique `store.test.ts`'s self-heal test uses.
+   */
+  async function driftedAccount(credits: number) {
+    const account = await fundedAccount(credits);
+    await supabase()
+      .from("billing_credit_ledger")
+      .insert({
+        credit_account_id: account.id,
+        kind: "grant",
+        credit_delta: creditsToUnits(500),
+        idempotency_key: "crashed-before-materialize",
+      });
+
+    const { entries, reservations } = await reconcilableInputs(account);
+    return { account, entries, reservations };
+  }
+
+  /** Every `.rpc()` call fails with an error the repair path does not recognize. */
+  function rpcAlwaysErrors(): ReturnType<typeof supabase> {
+    const real = supabase();
+    return {
+      ...real,
+      rpc: () => ({
+        then: (onfulfilled: (value: { data: null; error: unknown }) => unknown) =>
+          Promise.resolve({ data: null, error: { code: "53300", message: "too many connections" } }).then(
+            onfulfilled,
+          ),
+      }),
+    } as unknown as ReturnType<typeof supabase>;
+  }
+
+  it("is a no-op when the account's figures already agree with the ledger", async () => {
+    const account = await fundedAccount(1000);
+    const { entries, reservations } = await reconcilableInputs(account);
+
+    const result = await reconcileAndRepairBalance(supabase(), { account, entries, reservations, userId: USER });
+
+    expect(result).toEqual({ account, consistent: true });
+    expect(driftEvents()).toHaveLength(0);
+  });
+
+  it("detects and audits drift without repairing while the flag is unset", async () => {
+    const { account, entries, reservations } = await driftedAccount(1000);
+
+    const result = await reconcileAndRepairBalance(supabase(), { account, entries, reservations, userId: USER });
+
+    expect(result.consistent).toBe(false);
+    // Unchanged: repair never ran, so the cache still misses the crashed entry.
+    expect(result.account.postedCredits).toBe(creditsToUnits(1000));
+
+    const events = driftEvents();
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      user_id: USER,
+      event_type: "credit_drift.detected",
+      metadata: { creditAccountId: account.id, postedDrift: -creditsToUnits(500), reservedDrift: 0 },
+    });
+  });
+
+  it("repairs and audits when the flag is set", async () => {
+    process.env.BILLING_REPAIR_ENABLED = "true";
+    const { account, entries, reservations } = await driftedAccount(1000);
+
+    const result = await reconcileAndRepairBalance(supabase(), { account, entries, reservations, userId: USER });
+
+    expect(result.consistent).toBe(true);
+    expect(result.account.postedCredits).toBe(creditsToUnits(1500));
+
+    const events = driftEvents();
+    expect(events.map((event) => event.event_type)).toEqual([
+      "credit_drift.detected",
+      "credit_drift.repaired",
+    ]);
+    expect(events[1]).toMatchObject({
+      metadata: {
+        creditAccountId: account.id,
+        postedBefore: creditsToUnits(1000),
+        postedAfter: creditsToUnits(1500),
+      },
+    });
+  });
+
+  it("audits repair_failed and keeps the unrepaired figure when the repair RPC throws", async () => {
+    process.env.BILLING_REPAIR_ENABLED = "true";
+    const { account, entries, reservations } = await driftedAccount(1000);
+
+    const result = await reconcileAndRepairBalance(rpcAlwaysErrors(), {
+      account,
+      entries,
+      reservations,
+      userId: USER,
+    });
+
+    expect(result.consistent).toBe(false);
+    expect(result.account.postedCredits).toBe(creditsToUnits(1000));
+
+    const events = driftEvents();
+    expect(events.map((event) => event.event_type)).toEqual([
+      "credit_drift.detected",
+      "credit_drift.repair_failed",
+    ]);
+    expect(events[1]).toMatchObject({ metadata: { creditAccountId: account.id, code: "53300" } });
   });
 });

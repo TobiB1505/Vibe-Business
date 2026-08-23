@@ -239,6 +239,9 @@ function seed(overrides: { runStatus?: string; specMode?: string } = {}) {
     input_identity: "run-identity-1",
     subject_id: specRow.id,
     created_at: "2026-08-18T00:00:00.000Z",
+    // `operation_runs.pause_cycle smallint not null default 0` (ADR 0042
+    // §P2) — `db.seed` does not apply column defaults, unlike a real INSERT.
+    pause_cycle: 0,
   });
 
   const run = db.seed("agent_execution_runs", {
@@ -556,6 +559,245 @@ describe("§25 — a question pauses the run", () => {
 
     // The write after the question was never attempted.
     expect(provider.attempted.map((entry) => entry.tool)).toEqual(["request_decision"]);
+  });
+
+  /**
+   * ADR 0042 §P2 — a question that pauses the run releases its Credits with
+   * `abandoned_with_usage`: real inference already ran to reach the interrupt
+   * (the activity and tool events recorded above are proof of that), so this
+   * is neither `cancelled_before_usage` nor a failure — Vibe already paid the
+   * provider, and the release says so.
+   *
+   * No re-acquire is asserted here on resume, because there is no resume:
+   * traced directly against this repository, no code path transitions a run
+   * out of `needs_user_input` after its interrupt is answered
+   * (`answerExecutionInterrupt` only marks the interrupt row). This fix stops
+   * the leak; it does not make the run resumable.
+   */
+  it("releases the hold with abandoned_with_usage when a question pauses a funded run", async () => {
+    const { operation, run } = seed();
+    db.rows("agent_execution_runs").find((row) => row.id === run.id)!.credit_reservation_id =
+      "reservation-1";
+    db.seed("billing_credit_accounts", {
+      id: "account-1",
+      user_id: USER,
+      status: "active",
+      posted_credits: creditsToUnits(1_000),
+      reserved_credits: creditsToUnits(100),
+    });
+    db.seed("billing_credit_reservations", {
+      id: "reservation-1",
+      credit_account_id: "account-1",
+      project_id: PROJECT,
+      user_id: USER,
+      operation_run_id: operation.id,
+      status: "active",
+      reserved_credits: creditsToUnits(100),
+      created_at: "2026-08-18T00:00:00.000Z",
+      // Matches Sprint B0's phase-aware backfill for a pre-existing active
+      // reservation — see the identical comment in `lifecycle.test.ts`.
+      admitted_at: "2026-08-18T00:00:00.000Z",
+    });
+
+    const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES, results: SANDBOX_RESULTS });
+    await provisionAgentWorkspaceStep(deps({ sandboxProvider: sandbox }), operation.id);
+    const provider = fakeDetachedAgentProvider({
+      calls: [{ tool: "request_decision", input: { situation: "business_decision_required" } }],
+    });
+
+    const outcome = await runAgent(deps({ provider, sandboxProvider: sandbox }), operation.id, [
+      "typecheck",
+    ]);
+
+    expect(outcome).toMatchObject({ ok: true, paused: true });
+    expect(db.rows("billing_credit_reservations")[0]).toMatchObject({
+      status: "released",
+      release_reason: "abandoned_with_usage",
+    });
+    expect(db.rows("billing_credit_accounts")[0].reserved_credits).toBe(0);
+  });
+});
+
+describe("ADR 0042 §P2 — agent-execution resume: reservation ownership across a pause/resume cycle", () => {
+  /**
+   * Funds the account and takes the first hold through the real billing path,
+   * so the tests below assert against a reservation the ledger actually
+   * agrees exists — the same technique the failure-release test above uses.
+   */
+  async function fundAndReserve(operationId: string): Promise<string> {
+    const { grantCreditLot } = await import("@/modules/credits/grants");
+    await grantCreditLot(fakeSupabase(db), {
+      userId: USER,
+      sourceKind: "purchase",
+      credits: creditsToUnits(500),
+      reason: "internal dogfood funding",
+      idempotencyKey: "fund-1",
+    });
+
+    const { authorizeOperationCredits } = await import("@/modules/credits/operation-billing");
+    const authorized = await authorizeOperationCredits(fakeSupabase(db), {
+      projectId: PROJECT,
+      operation: "agent_execution_dogfood",
+      idempotencyKey: operationId,
+      operationRunId: operationId,
+    });
+    if (!authorized.ok || !authorized.billable) throw new Error("fixture did not reserve");
+    return authorized.reservationId;
+  }
+
+  /** A question, immediately: `startAgentStep` pauses before there is anything to watch. */
+  function pausingProvider() {
+    return fakeDetachedAgentProvider({
+      calls: [{ tool: "request_decision", input: { situation: "business_decision_required" } }],
+    });
+  }
+
+  /** The answer arrived: the operation is put back in the queue (§P2, existing primitive). */
+  async function resumeOperation(operationId: string) {
+    const { requeueAnsweredOperation } = await import("../store");
+    const requeued = await requeueAnsweredOperation(fakeSupabase(db), operationId);
+    expect(requeued.requeued).toBe(true);
+  }
+
+  it("re-acquires a fresh, distinct reservation and updates the pointer when a paused run is resumed", async () => {
+    const { operation, run } = seed();
+    const reservationR0 = await fundAndReserve(operation.id);
+    db.rows("agent_execution_runs").find((row) => row.id === run.id)!.credit_reservation_id =
+      reservationR0;
+
+    const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES, results: SANDBOX_RESULTS });
+    const paused = deps({ sandboxProvider: sandbox, provider: pausingProvider() });
+    await provisionAgentWorkspaceStep(paused, operation.id);
+
+    const pausedOutcome = await runAgent(paused, operation.id, ["typecheck"]);
+    expect(pausedOutcome).toMatchObject({ ok: true, paused: true });
+    expect(db.rows("billing_credit_reservations")[0].status).toBe("released");
+    const startedAtBeforeResume = db.rows("agent_execution_runs")[0].started_at;
+
+    await resumeOperation(operation.id);
+
+    const resumed = deps({ sandboxProvider: sandbox, provider: fakeDetachedAgentProvider() });
+    const resumedOutcome = await runAgent(resumed, operation.id, ["typecheck"]);
+    expect(resumedOutcome.ok).toBe(true);
+
+    const reservations = db.rows("billing_credit_reservations");
+    expect(reservations).toHaveLength(2);
+    expect(reservations[0]).toMatchObject({ id: reservationR0, status: "released" });
+    expect(reservations[1].status).toBe("active");
+    expect(reservations[1].id).not.toBe(reservationR0);
+
+    const runRow = db.rows("agent_execution_runs")[0];
+    expect(runRow.credit_reservation_id).toBe(reservations[1].id);
+    // The widened `markAgentRunStarted` CAS re-stamps `started_at` on the
+    // resume, not only on first entry — otherwise a customer's answer,
+    // submitted days later, could read as already expired.
+    expect(runRow.started_at).not.toBe(startedAtBeforeResume);
+  });
+
+  it("keys the resume reservation to the pause cycle, so a second pause/resume cycle takes a third, distinct reservation", async () => {
+    const { operation, run } = seed();
+    const reservationR0 = await fundAndReserve(operation.id);
+    db.rows("agent_execution_runs").find((row) => row.id === run.id)!.credit_reservation_id =
+      reservationR0;
+
+    const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES, results: SANDBOX_RESULTS });
+
+    // Cycle 1: pause, resume, pause again.
+    await provisionAgentWorkspaceStep(deps({ sandboxProvider: sandbox }), operation.id);
+    await runAgent(deps({ sandboxProvider: sandbox, provider: pausingProvider() }), operation.id, [
+      "typecheck",
+    ]);
+    await resumeOperation(operation.id);
+    await runAgent(deps({ sandboxProvider: sandbox, provider: pausingProvider() }), operation.id, [
+      "typecheck",
+    ]);
+
+    let reservations = db.rows("billing_credit_reservations");
+    expect(reservations).toHaveLength(2);
+    expect(reservations.map((reservation) => reservation.status)).toEqual(["released", "released"]);
+
+    // Cycle 2: resume once more, taking a third, still-distinct reservation.
+    await resumeOperation(operation.id);
+    const finalOutcome = await runAgent(
+      deps({ sandboxProvider: sandbox, provider: fakeDetachedAgentProvider() }),
+      operation.id,
+      ["typecheck"],
+    );
+    expect(finalOutcome.ok).toBe(true);
+
+    reservations = db.rows("billing_credit_reservations");
+    expect(reservations).toHaveLength(3);
+    expect(reservations.map((reservation) => reservation.status)).toEqual([
+      "released",
+      "released",
+      "active",
+    ]);
+    expect(new Set(reservations.map((reservation) => reservation.id)).size).toBe(3);
+    expect(db.rows("agent_execution_runs")[0].credit_reservation_id).toBe(reservations[2].id);
+  });
+
+  it("settles the re-acquired reservation on completion after resume, not the original released one", async () => {
+    const { operation, run } = seed();
+    const reservationR0 = await fundAndReserve(operation.id);
+    db.rows("agent_execution_runs").find((row) => row.id === run.id)!.credit_reservation_id =
+      reservationR0;
+
+    const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES, results: SANDBOX_RESULTS });
+    await provisionAgentWorkspaceStep(deps({ sandboxProvider: sandbox }), operation.id);
+    await runAgent(deps({ sandboxProvider: sandbox, provider: pausingProvider() }), operation.id, [
+      "typecheck",
+    ]);
+    await resumeOperation(operation.id);
+
+    const resumedDeps = deps({ sandboxProvider: sandbox, provider: fakeDetachedAgentProvider() });
+    const resumedOutcome = await runAgent(resumedDeps, operation.id, ["typecheck"]);
+    expect(resumedOutcome.ok).toBe(true);
+
+    const freshReservationId = db.rows("agent_execution_runs")[0].credit_reservation_id as string;
+    expect(freshReservationId).not.toBe(reservationR0);
+
+    await finishAgentExecutionStep(resumedDeps, operation.id, {
+      kind: "succeeded",
+      preparedChangeId: "change-1",
+    });
+
+    const reservations = db.rows("billing_credit_reservations");
+    const released = reservations.find((reservation) => reservation.id === reservationR0)!;
+    const settled = reservations.find((reservation) => reservation.id === freshReservationId)!;
+    expect(released.status).toBe("released");
+    expect(settled.status).toBe("settled");
+  });
+
+  it("releases the re-acquired reservation on failure after resume, not the original released one", async () => {
+    const { operation, run } = seed();
+    const reservationR0 = await fundAndReserve(operation.id);
+    db.rows("agent_execution_runs").find((row) => row.id === run.id)!.credit_reservation_id =
+      reservationR0;
+
+    const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES, results: SANDBOX_RESULTS });
+    await provisionAgentWorkspaceStep(deps({ sandboxProvider: sandbox }), operation.id);
+    await runAgent(deps({ sandboxProvider: sandbox, provider: pausingProvider() }), operation.id, [
+      "typecheck",
+    ]);
+    await resumeOperation(operation.id);
+
+    const resumedDeps = deps({ sandboxProvider: sandbox, provider: fakeDetachedAgentProvider() });
+    const resumedOutcome = await runAgent(resumedDeps, operation.id, ["typecheck"]);
+    expect(resumedOutcome.ok).toBe(true);
+
+    const freshReservationId = db.rows("agent_execution_runs")[0].credit_reservation_id as string;
+
+    await finishAgentExecutionStep(resumedDeps, operation.id, {
+      kind: "failed",
+      failureCode: "agent_change_rejected",
+    });
+
+    const reservations = db.rows("billing_credit_reservations");
+    const originallyReleased = reservations.find((reservation) => reservation.id === reservationR0)!;
+    const freshlyReleased = reservations.find((reservation) => reservation.id === freshReservationId)!;
+    expect(originallyReleased.status).toBe("released");
+    expect(freshlyReleased.status).toBe("released");
+    expect(freshlyReleased.release_reason).toBe("abandoned_with_usage");
   });
 });
 

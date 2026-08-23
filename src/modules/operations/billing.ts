@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { ReleaseReason } from "@/modules/credits/balance";
 import {
   authorizeOperationCredits,
   availableSpendableCredits,
@@ -119,11 +120,17 @@ export async function checkOperationAffordability(
 /**
  * Holds an operation's price before any provider work begins (§39, §43, §78).
  *
- * The idempotency key is the operation run id, which is what makes a
+ * The idempotency key defaults to the operation run id, which is what makes a
  * double-click safe: the second click loses the operation's own
  * `operation_runs_single_active_idx` and never reaches here, and if it somehow
  * did, the same key would return the same hold rather than take a second one.
  * Two clicks cannot spend 70 Credits.
+ *
+ * `idempotencyKey` overrides that default only for an operation that
+ * legitimately takes more than one hold across its lifetime — today, only a
+ * business-audit re-acquiring its hold after a pause released it (ADR 0042
+ * §P2). The default key cannot be reused there: it would find the first
+ * (now released) reservation and replay it rather than taking a fresh one.
  */
 export async function holdOperationCredits(
   supabase: SupabaseClient,
@@ -132,12 +139,13 @@ export async function holdOperationCredits(
     operationRunId: string;
     operation: RetailOperationKind;
     now?: Date;
+    idempotencyKey?: string;
   },
 ): Promise<{ ok: true; hold: OperationBillingHold } | { ok: false } & OperationBillingRefusal> {
   const authorized = await authorizeOperationCredits(supabase, {
     projectId: params.projectId,
     operation: params.operation,
-    idempotencyKey: `operation:${params.operationRunId}`,
+    idempotencyKey: params.idempotencyKey ?? `operation:${params.operationRunId}`,
     operationRunId: params.operationRunId,
     now: params.now,
   });
@@ -221,16 +229,23 @@ export async function settleOperationBilling(
  * `abandoned_with_usage` records the honest version of that when inference had
  * already run — real provider spend happened, and the release refuses to
  * pretend it did not, even though the customer is not charged for it.
+ *
+ * `reason` overrides the `providerUsageOccurred`-derived default for a release
+ * neither of its two outcomes describes — today, only a paused operation
+ * releasing its hold before any provider call for the pause's own reason
+ * (`cancelled_before_usage`, ADR 0042 §P2): stopping to ask a question is
+ * neither a failure nor abandonment, and forcing it through the boolean would
+ * misrecord why the Credits came back.
  */
 export async function releaseOperationBilling(
   supabase: SupabaseClient,
-  params: { operationRunId: string; providerUsageOccurred?: boolean },
+  params: { operationRunId: string; providerUsageOccurred?: boolean; reason?: ReleaseReason },
 ): Promise<void> {
   const reservation = await findOperationReservation(supabase, params.operationRunId);
   if (!reservation || reservation.status !== "active") return;
 
   await releaseOperationCredits(supabase, {
     reservationId: reservation.id,
-    reason: params.providerUsageOccurred ? "abandoned_with_usage" : "failed_without_usage",
+    reason: params.reason ?? (params.providerUsageOccurred ? "abandoned_with_usage" : "failed_without_usage"),
   });
 }

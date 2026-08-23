@@ -71,6 +71,7 @@ V0.1 foundational architecture decisions have been recorded:
 - [0039](0039-documentation-currency.md) — Where truth lives, and how documentation stays current (Accepted; one authoritative home per claim, records are immutable and current-state documents must be true at HEAD, and the structural half is asserted by `src/lib/docs/documentation-currency.test.ts`)
 - [0040](0040-ci-hosted-database-concurrency-gate.md) — Where a real-database concurrency test runs, and what it may reach (Accepted; a disposable local Supabase stack on a GitHub runner, no secret of any kind, no PostgreSQL driver, and a target guard that makes the deployed project unreachable by construction rather than by policy)
 - [0041](0041-marketing-attribution-pixel.md) — The Meta Pixel, and the two boundaries it runs inside (Accepted; production deployments only and public pages only, so the identifiers in `/app` paths never reach an advertising network — `PageView` and nothing else)
+- [0042](0042-billing-reconciliation-authority.md) — Billing Reconciliation Authority: one terminal-CAS authority doctrine, one idempotent materialization primitive shared by the hot path and repair, and a certified, drain-gated cutover, closing drift repair, orphaned holds, stranded lot capacity and zero-credit settlement idempotency (Accepted; design only, no implementation)
 
 Several architecture questions remain intentionally open — see [ARCHITECTURE.md §7](../../ARCHITECTURE.md#7-deferred--open-decisions).
 

@@ -44,6 +44,7 @@ import {
   getOperationRun,
   type StoredOperationRun,
 } from "./store";
+import { expireStaleOperation } from "./staleness";
 import { buildOperationView, type OperationView } from "./view";
 
 /**
@@ -394,11 +395,24 @@ export async function startBusinessAuditOperation(
  * Ownership is enforced by the query itself: an operation id belonging to
  * another project simply does not exist for this caller, and RLS makes that
  * true for another user's project even if the ids were guessed.
+ *
+ * ## The backstop for a workflow that stopped carrying its run (ADR 0042 §P2)
+ *
+ * The same repair `getAgentExecutionStatus` already runs before its own read
+ * (`expireStaleAgentExecution`), generalized: a read is the moment somebody
+ * cares, so it is the right moment to notice and repair an operation nothing
+ * is carrying any more, and it needs no scheduler this product has not decided
+ * to introduce (rule 24). Idempotent and bounded to one operation — a hundred
+ * page loads repair it once — and a no-op for `agent_execution` and every
+ * never-billed operation type, which either have their own mechanism or none
+ * to run (`staleness.ts`).
  */
 export async function getOperationStatus(
   supabase: SupabaseClient,
   params: { projectId: string; operationId: string },
 ): Promise<OperationView | null> {
+  await expireStaleOperation({ operationId: params.operationId });
+
   const operation = await getOperationRun(supabase, params);
   return operation ? view(operation) : null;
 }

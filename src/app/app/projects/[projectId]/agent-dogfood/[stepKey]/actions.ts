@@ -18,7 +18,11 @@ import {
   type StoredAgentActivity,
   type StoredExecutionInterrupt,
 } from "@/modules/coding-agent/store";
-import { getAgentExecutionStatus, startAgentExecution } from "@/modules/coding-agent/service";
+import {
+  getAgentExecutionStatus,
+  resumeAnsweredAgentExecution,
+  startAgentExecution,
+} from "@/modules/coding-agent/service";
 import type { AgentStartRefusal } from "@/modules/coding-agent/service";
 import { previewDogfoodStep } from "@/modules/coding-agent/website-preflight";
 import { persistAgentExecutionSpec } from "@/modules/operations/agent-execution/server-writes";
@@ -238,6 +242,14 @@ export type AnswerInterruptState =
  * validates the answer against the stored schema — the browser cannot answer
  * a question it cannot see, and it cannot supply an answer shape the run never
  * offered.
+ *
+ * `resumeAnsweredAgentExecution` runs after every success, including a replay
+ * of an already-answered interrupt (ADR 0042 §P2): it is what starts the
+ * fresh workflow instance a resume needs, and calling it defensively closes
+ * the narrow window between an answer landing and a resume that never
+ * followed it — a crash there today would otherwise leave the run paused
+ * forever. Both steps are independently idempotent, so a retried submission
+ * neither re-answers nor starts a second instance.
  */
 export async function answerDogfoodInterruptAction(
   projectId: string,
@@ -255,5 +267,12 @@ export async function answerDogfoodInterruptAction(
   });
 
   if (!result.ok) return { ok: false, error: result.reason };
+
+  await resumeAnsweredAgentExecution(supabase, new VercelWorkflowExecutor(), {
+    projectId,
+    userId: session.userId,
+    agentExecutionRunId: result.interrupt.agentExecutionRunId,
+  });
+
   return { ok: true };
 }

@@ -36,6 +36,8 @@ export type StoredOperationRun = {
   completedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  /** How many times this operation has been paused for the user (ADR 0042 §P2). */
+  pauseCycle: number;
 };
 
 type OperationRow = {
@@ -56,10 +58,11 @@ type OperationRow = {
   completed_at: string | null;
   created_at: string;
   updated_at: string;
+  pause_cycle: number;
 };
 
 const OPERATION_COLUMNS =
-  "id, project_id, user_id, operation_type, status, stage, input_identity, workflow_run_id, execution_provider, subject_id, result_id, inference_started_at, failure_code, started_at, completed_at, created_at, updated_at";
+  "id, project_id, user_id, operation_type, status, stage, input_identity, workflow_run_id, execution_provider, subject_id, result_id, inference_started_at, failure_code, started_at, completed_at, created_at, updated_at, pause_cycle";
 
 function mapRow(row: OperationRow): StoredOperationRun {
   return {
@@ -80,6 +83,7 @@ function mapRow(row: OperationRow): StoredOperationRun {
     completedAt: row.completed_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
+    pauseCycle: row.pause_cycle,
   };
 }
 
@@ -331,18 +335,44 @@ export async function findPausedOperationForAudit(
  *
  * Guarded on the current status so a replayed step cannot re-pause an
  * operation the founder has already answered.
+ *
+ * ## `pauseCycle` (ADR 0042 §P2)
+ *
+ * Any held Credits are released by the caller once this returns — the pause
+ * itself never touches billing, matching every other call in this file. What
+ * this function *does* provide is the number the release's later re-acquire
+ * needs: `pause_cycle`, read fresh and incremented in the same guarded UPDATE.
+ * No separate CAS is needed for it — the status guard already ensures at most
+ * one caller's write ever lands for a given pause, so whichever value that
+ * caller computed is the only one ever observed. `null` means this call lost
+ * the guard (the operation was not `queued`/`running`), so there is no new
+ * cycle to report.
  */
 export async function pauseOperationForUser(
   supabase: SupabaseClient,
   operationId: string,
-): Promise<void> {
-  const { error } = await supabase
+): Promise<{ paused: boolean; pauseCycle: number | null }> {
+  const { data: current, error: readError } = await supabase
     .from("operation_runs")
-    .update({ status: "needs_user" })
+    .select("pause_cycle")
     .eq("id", operationId)
-    .in("status", ["queued", "running"]);
+    .single();
+
+  if (readError) throw readError;
+
+  const nextCycle = (current as { pause_cycle: number }).pause_cycle + 1;
+
+  const { data, error } = await supabase
+    .from("operation_runs")
+    .update({ status: "needs_user", pause_cycle: nextCycle })
+    .eq("id", operationId)
+    .in("status", ["queued", "running"])
+    .select("id");
 
   if (error) throw error;
+
+  const paused = (data ?? []).length > 0;
+  return { paused, pauseCycle: paused ? nextCycle : null };
 }
 
 /**

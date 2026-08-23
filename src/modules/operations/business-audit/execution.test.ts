@@ -3,7 +3,11 @@ import { BUSINESS_READINESS_AUDIT_CONFIG } from "@/modules/ai/operations";
 import { EVIDENCE_PACK_V3_VERSION } from "@/modules/business-audit/evidence-v3";
 import { PROMPT_VERSION } from "@/modules/business-audit/prompt";
 import { RUBRIC_VERSION } from "@/modules/business-audit/rubric";
-import { BUSINESS_AUDIT_SCHEMA_VERSION, BUSINESS_AUDIT_VERSION } from "@/modules/business-audit/schema";
+import {
+  BUSINESS_AUDIT_SCHEMA_VERSION,
+  BUSINESS_AUDIT_VERSION,
+  MIN_SUPPORTED_AUDIT_CONTRACT_VERSION,
+} from "@/modules/business-audit/schema";
 import { computeAuditInputHash } from "@/modules/business-audit/store";
 import { creditsToUnits } from "@/modules/credits/units";
 import {
@@ -13,6 +17,7 @@ import {
 } from "@/modules/business-audit/test-support";
 import { FakeDatabase, fakeSupabase, seedProductUnderstanding } from "../test-support";
 import {
+  checkFounderQuestionStep,
   completeOperationStep,
   countTokensStep,
   failOperationStep,
@@ -96,6 +101,10 @@ function seed(options: { inputIdentity?: string } = {}) {
     started_at: null,
     completed_at: null,
     created_at: "2026-08-02T00:00:00.000Z",
+    // `operation_runs.pause_cycle smallint not null default 0` (ADR 0042
+    // §P2) — the fake's `db.seed` does not apply column defaults, unlike a
+    // real INSERT, so it is stated here explicitly.
+    pause_cycle: 0,
   });
   operationId = String(operation.id);
 }
@@ -422,6 +431,205 @@ describe("a Credit-funded re-run", () => {
 
     expect(outcome).toEqual({ ok: false, failureCode: "credits_required" });
     expect(provider.requests).toHaveLength(0);
+  });
+});
+
+/**
+ * ADR 0042 §P2 — a paused, credits-funded audit does not hold Credits while it
+ * waits, and does not spend without a valid hold when it resumes.
+ *
+ * `seed()`'s fixture (via `seedProductUnderstanding`) already carries a
+ * complete founder intent and a confident profile, so there is nothing left
+ * to ask about by default — confirmed directly before writing this, not
+ * assumed. `askFounderQuestion()` below reproduces the one recipe
+ * `needs-user.test.ts` uses for a *confident* intent that still stops the
+ * audit: an unconfirmed, AI-inferred audience the profile never asked the
+ * founder to confirm, with a previous completed audit whose `audience` lens
+ * assessed it as materially urgent ("now") — matching identity, so
+ * `lensesReflectCurrentFacts` is true and the lens is not discarded.
+ */
+describe("pause and resume (ADR 0042 §P2)", () => {
+  /** Makes `checkFounderQuestionStep` genuinely stop for the `first_customer` question. */
+  function askFounderQuestion() {
+    const profile = db.rows("product_profiles").find((row) => row.id === "profile_1")!;
+    profile.result = {
+      ...(profile.result as Record<string, unknown>),
+      audience: {
+        ...(profile.result as { audience: Record<string, unknown> }).audience,
+        primaryAudience: {
+          value: "Software founders and builders",
+          confidence: "unclear",
+          sources: ["ai_inferred"],
+          evidence: [],
+        },
+      },
+    };
+
+    db.seed("business_readiness_audits", {
+      id: "previous_audit",
+      project_id: PROJECT,
+      status: "completed",
+      access_mode: "included_first_audit",
+      input_hash: "previous-hash",
+      overall_score: 50,
+      assessed_dimensions: 5,
+      total_dimensions: 5,
+      failure_code: null,
+      asked_intents: [],
+      product_profile_id: "profile_1",
+      founder_intent_hash: CONTEXT_HASH,
+      result: {
+        // Matches the current contract exactly, so entitlement decides
+        // `credits_required` from the exhausted grant below rather than
+        // `system_contract_refresh` from a stale one — the two are easy to
+        // conflate, and this fixture wants the former specifically.
+        contractVersion: MIN_SUPPORTED_AUDIT_CONTRACT_VERSION,
+        synthesis: {
+          lenses: [
+            {
+              lens: "audience",
+              health: "weak",
+              materiality: "now",
+              summary: "Internal reasoning for audience.",
+              evidenceIds: [],
+              missingContext: ["Who the first paying customer actually is"],
+            },
+          ],
+        },
+      },
+      created_at: "2026-08-01T12:00:00.000Z",
+      completed_at: "2026-08-01T12:00:00.000Z",
+    });
+  }
+
+  /** Spends the included audit, durably, so the run is Credit-funded. */
+  function consumeIncludedEntitlement() {
+    db.seed("repository_connections", { id: "conn_1", project_id: PROJECT, github_repository_id: 12345 });
+    db.seed("free_audit_grants", { id: "grant_1", user_id: USER, github_repository_id: 12345 });
+  }
+
+  /** Takes a real hold through the real billing path, not a hand-written row. */
+  async function holdCredits() {
+    const { grantCreditLot } = await import("@/modules/credits/grants");
+    const { holdOperationCredits } = await import("../billing");
+    await grantCreditLot(fakeSupabase(db), {
+      userId: USER,
+      sourceKind: "purchase",
+      credits: creditsToUnits(100),
+      reason: "test funding",
+      idempotencyKey: "test-fund:pause",
+    });
+    const held = await holdOperationCredits(fakeSupabase(db), {
+      projectId: PROJECT,
+      operationRunId: operationId,
+      operation: "business_audit",
+    });
+    expect(held.ok).toBe(true);
+  }
+
+  function reservations() {
+    return db
+      .rows("billing_credit_reservations")
+      .filter((row) => row.operation_run_id === operationId)
+      .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)));
+  }
+
+  /** Answers the question and resumes, exactly as `resumeAnsweredAuditOperation` does. */
+  async function resume() {
+    const { requeueAnsweredOperation } = await import("../store");
+    const { requeued } = await requeueAnsweredOperation(fakeSupabase(db), operationId);
+    expect(requeued).toBe(true);
+  }
+
+  it("releases the hold when the founder question pauses the operation", async () => {
+    consumeIncludedEntitlement();
+    await holdCredits();
+    askFounderQuestion();
+    await prepareEvidenceStep(deps(), operationId);
+
+    const paused = await checkFounderQuestionStep(deps(), operationId);
+
+    expect(paused).toMatchObject({ ok: true, paused: true });
+    expect(operationRow().status).toBe("needs_user");
+    expect(operationRow().pause_cycle).toBe(1);
+    expect(reservations()).toHaveLength(1);
+    expect(reservations()[0]).toMatchObject({ status: "released", release_reason: "cancelled_before_usage" });
+  });
+
+  it("does not pause a second time for the same question once it is asked", async () => {
+    consumeIncludedEntitlement();
+    await holdCredits();
+    askFounderQuestion();
+    await prepareEvidenceStep(deps(), operationId);
+    await checkFounderQuestionStep(deps(), operationId);
+    await resume();
+
+    const second = await checkFounderQuestionStep(deps(), operationId);
+
+    expect(second).toMatchObject({ ok: true, paused: false });
+  });
+
+  it("re-acquires a fresh active hold on resume, before spending", async () => {
+    consumeIncludedEntitlement();
+    await holdCredits();
+    askFounderQuestion();
+    await prepareEvidenceStep(deps(), operationId);
+    await checkFounderQuestionStep(deps(), operationId);
+    await resume();
+    await checkFounderQuestionStep(deps(), operationId);
+    expect(reservations()).toHaveLength(1);
+
+    const outcome = await runInferenceStep(deps(), operationId, 100);
+
+    expect(outcome.ok).toBe(true);
+    expect(reservations()).toHaveLength(2);
+    expect(reservations()[0].status).toBe("released");
+    expect(reservations()[1].status).toBe("active");
+    expect(reservations()[0].idempotency_key).not.toBe(reservations()[1].idempotency_key);
+    expect(reservations()[1].idempotency_key).toBe(`operation:${operationId}:resume:1`);
+  });
+
+  it("finishes the audit against the re-acquired hold, settling it on completion", async () => {
+    consumeIncludedEntitlement();
+    await holdCredits();
+    askFounderQuestion();
+    await prepareEvidenceStep(deps(), operationId);
+    await checkFounderQuestionStep(deps(), operationId);
+    await resume();
+    await checkFounderQuestionStep(deps(), operationId);
+
+    const counted = await countTokensStep(deps(), operationId);
+    expect(counted.ok).toBe(true);
+    if (!counted.ok) return;
+    const inferred = await runInferenceStep(deps(), operationId, counted.estimatedInputTokens);
+    expect(inferred.ok).toBe(true);
+    if (!inferred.ok) return;
+    await completeOperationStep(deps(), operationId, inferred.auditId);
+
+    expect(reservations()).toHaveLength(2);
+    expect(reservations()[0].status).toBe("released");
+    expect(reservations()[1].status).toBe("settled");
+    expect(auditRows()[0].status).toBe("completed");
+  });
+
+  it("does not take a second reservation when the resume step is retried for the same cycle", async () => {
+    consumeIncludedEntitlement();
+    await holdCredits();
+    askFounderQuestion();
+    await prepareEvidenceStep(deps(), operationId);
+    await checkFounderQuestionStep(deps(), operationId);
+    await resume();
+    await checkFounderQuestionStep(deps(), operationId);
+
+    const first = await runInferenceStep(deps(), operationId, 100);
+    expect(first.ok).toBe(true);
+
+    // A retry of this exact step for the same pause cycle — the durable
+    // workflow re-entering after a crash between the re-acquire and the paid
+    // call. `inferenceStartedAt` is now set, so this itself refuses before
+    // spending again, but the reservation count is the property under test:
+    // the idempotency key must not have taken a second hold on the way here.
+    expect(reservations()).toHaveLength(2);
   });
 });
 

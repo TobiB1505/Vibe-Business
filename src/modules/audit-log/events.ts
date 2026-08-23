@@ -259,6 +259,21 @@ export type AuditEventType =
   | "credit_refund.posted"
 
   /*
+   * ADR 0042 §P3. A materialized cache (an account's posted/reserved
+   * figures, or a lot's allocated figure) disagreeing with the durable rows
+   * it summarizes — found and, when `BILLING_REPAIR_ENABLED` is set,
+   * corrected at `getBillingOverview`, the one read a customer already
+   * makes when they look at their balance. Attributable to one user: an
+   * account belongs to exactly one user, and a lot's grant belongs to
+   * exactly one account — unlike the shadow-reconciliation sweep, which
+   * has no single user to attribute an event to and is deliberately absent
+   * from this log (see the comment below).
+   */
+  | "credit_drift.detected"
+  | "credit_drift.repaired"
+  | "credit_drift.repair_failed"
+
+  /*
    * Billing Core-2 (§68). Money, entitlements and real Credit consumption.
    *
    * Deliberately absent from every one of these: card data, Stripe secrets,

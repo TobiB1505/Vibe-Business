@@ -178,6 +178,15 @@ const LABELS: Record<AuditEventType, string> = {
   "credit_charge.settled": "Credits charged",
   "credit_refund.posted": "Credits refunded",
 
+  // ADR 0042 §P3. Account-level (no `projectId`), so structurally excluded
+  // from every project-scoped feed above — every query backing one filters
+  // on `project_id`, which never matches a NULL row. Labelled anyway, plainly,
+  // because the `Record<AuditEventType, string>` type requires it and a future
+  // account-level activity surface should not find these unlabelled.
+  "credit_drift.detected": "Balance reconciliation found a discrepancy",
+  "credit_drift.repaired": "Balance reconciliation corrected automatically",
+  "credit_drift.repair_failed": "Balance reconciliation could not complete",
+
   // Billing Core-2 (§53, §94). Human labels, never raw enums: a customer reads
   // "Credits added", not "grant lot posted, source_kind=subscription".
   "billing.credit_lot_granted": "Credits added",
@@ -212,6 +221,10 @@ const LABELS: Record<AuditEventType, string> = {
  * above it are the ones whose suffix would mislead.
  */
 const EXPLICIT_TONES: Partial<Record<AuditEventType, ActivityTone>> = {
+  // `.repair_failed` does not end in `.failed`, so the suffix heuristic below
+  // would miss it and default to "neutral" — stated explicitly instead.
+  "credit_drift.repair_failed": "problem",
+  "credit_drift.repaired": "success",
   // Not a failure of Vibe's, and not a success either: the product did not show
   // the change within the window. Sprint 12A made that distinction the point.
   "change_outcome.not_observed": "waiting",

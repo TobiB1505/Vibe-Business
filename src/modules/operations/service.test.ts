@@ -504,4 +504,30 @@ describe("reading operation state", () => {
     // A refusal is not a "try again" — the same input would be refused again.
     expect(status?.retryAllowed).toBe(false);
   });
+
+  /**
+   * ADR 0042 §P2 — the same backstop `getAgentExecutionStatus` already runs
+   * before its own read (`expireStaleAgentExecution`), generalized. A page
+   * that has been polling a dead run should see it fail on the very read that
+   * notices, not stay `running` forever (`staleness.test.ts` covers the
+   * mechanism itself in full; this proves only that `getOperationStatus`
+   * actually calls it).
+   */
+  it("fails an operation nothing is carrying any more on the read that notices", async () => {
+    await start();
+    const operation = db.rows("operation_runs")[0];
+    operation.status = "running";
+    operation.started_at = new Date(Date.now() - 60 * 60_000).toISOString();
+
+    const status = await getOperationStatus(fakeSupabase(db), {
+      projectId: PROJECT,
+      operationId: String(operation.id),
+    });
+
+    expect(status?.status).toBe("failed");
+    expect(db.rows("operation_runs")[0]).toMatchObject({
+      status: "failed",
+      failure_code: "operation_wall_clock_exceeded",
+    });
+  });
 });

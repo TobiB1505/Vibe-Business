@@ -998,6 +998,12 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
         // value Postgres always fills.
         if (this.table === "change_approvals") row.approved_at ??= row.created_at;
 
+        // `operation_runs.pause_cycle smallint not null default 0` (ADR 0042
+        // §P2). `createOperationRun` deliberately never sends this column, so
+        // without the default modelled here `pauseOperationForUser`'s read
+        // would see `undefined` where Postgres always fills `0`.
+        if (this.table === "operation_runs") row.pause_cycle ??= 0;
+
         const violation = this.db.checkConstraints(this.table, row);
         if (violation) return { data: null, error: violation };
 
@@ -1121,6 +1127,161 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
   }
 }
 
+/**
+ * Hand-written mirrors of the five ADR 0042 §P3 Postgres functions
+ * (`supabase/migrations/20260823010000_billing_reconciliation_primitives.sql`),
+ * for the same reason `checkConstraints` mirrors the migration's CHECKs: a
+ * fake that stays silent about what a real function does is not testing the
+ * hot path, it is testing an approximation of it. Every write below goes
+ * through `checkConstraints`, so a correction this codebase would refuse in
+ * Postgres (an overspend, over-allocation) is refused here too — the same
+ * `23514` a real constraint violation raises.
+ *
+ * Kept intentionally close to the SQL line by line, so a change to one is
+ * easy to miss in the other only if nobody is looking — not because the
+ * shapes have drifted apart.
+ */
+function updateWithConstraints(db: FakeDatabase, table: string, target: Row, patch: Row): QueryError {
+  const candidate = { ...target, ...patch, updated_at: new Date().toISOString() };
+  const violation = db.checkConstraints(table, candidate, target.id);
+  if (violation) return violation;
+  Object.assign(target, candidate);
+  return null;
+}
+
+function fakeMaterializeLedgerEntry(db: FakeDatabase, entryId: unknown): QueryError {
+  const entry = db.rows("billing_credit_ledger").find((row) => row.id === entryId);
+  if (!entry) return { message: `materialize_ledger_entry: no ledger entry ${String(entryId)}` };
+  if (entry.materialized_at != null) return null;
+
+  const account = db.rows("billing_credit_accounts").find((row) => row.id === entry.credit_account_id);
+  if (!account) return { message: `materialize_ledger_entry: no account ${String(entry.credit_account_id)}` };
+
+  const violation = updateWithConstraints(db, "billing_credit_accounts", account, {
+    posted_credits: Number(account.posted_credits ?? 0) + Number(entry.credit_delta ?? 0),
+  });
+  if (violation) return violation;
+
+  entry.materialized_at = new Date().toISOString();
+  return null;
+}
+
+function fakeMaterializeReservationHold(db: FakeDatabase, reservationId: unknown): QueryError {
+  const reservation = db.rows("billing_credit_reservations").find((row) => row.id === reservationId);
+  if (!reservation) {
+    return { message: `materialize_reservation_hold: no reservation ${String(reservationId)}` };
+  }
+
+  const account = db
+    .rows("billing_credit_accounts")
+    .find((row) => row.id === reservation.credit_account_id);
+  if (!account) {
+    return { message: `materialize_reservation_hold: no account ${String(reservation.credit_account_id)}` };
+  }
+
+  const reservedCredits = Number(reservation.reserved_credits ?? 0);
+
+  if (reservation.status === "active" && reservation.admitted_at == null) {
+    const violation = updateWithConstraints(db, "billing_credit_accounts", account, {
+      reserved_credits: Number(account.reserved_credits ?? 0) + reservedCredits,
+    });
+    if (violation) return violation;
+    reservation.admitted_at = new Date().toISOString();
+    return null;
+  }
+
+  const terminal = ["settled", "released", "expired"].includes(String(reservation.status));
+  if (terminal && reservation.admitted_at != null && reservation.hold_released_at == null) {
+    const violation = updateWithConstraints(db, "billing_credit_accounts", account, {
+      reserved_credits: Number(account.reserved_credits ?? 0) - reservedCredits,
+    });
+    if (violation) return violation;
+    reservation.hold_released_at = new Date().toISOString();
+    return null;
+  }
+
+  // Nothing pending for this row's current phase — idempotent no-op.
+  return null;
+}
+
+function fakeMaterializeAllocationCapacity(db: FakeDatabase, allocationId: unknown): QueryError {
+  const allocation = db.rows("billing_credit_allocations").find((row) => row.id === allocationId);
+  if (!allocation) {
+    return { message: `materialize_allocation_capacity: no allocation ${String(allocationId)}` };
+  }
+
+  if (!["consumed", "released"].includes(String(allocation.status))) return null;
+  if (allocation.capacity_materialized_at != null) return null;
+
+  const grant = db.rows("billing_credit_grants").find((row) => row.id === allocation.grant_id);
+  if (!grant) return { message: `materialize_allocation_capacity: no lot ${String(allocation.grant_id)}` };
+
+  const creditUnits = Number(allocation.credit_units ?? 0);
+  const consumedUnits = Number(allocation.consumed_units ?? 0);
+  const returnedUnits = creditUnits - consumedUnits;
+
+  if (returnedUnits > 0) {
+    const violation = updateWithConstraints(db, "billing_credit_grants", grant, {
+      allocated_credit_units: Number(grant.allocated_credit_units ?? 0) - returnedUnits,
+    });
+    if (violation) return violation;
+  }
+
+  allocation.capacity_materialized_at = new Date().toISOString();
+  return null;
+}
+
+function fakeRepairAccountBalance(db: FakeDatabase, accountId: unknown): QueryError {
+  const entries = db
+    .rows("billing_credit_ledger")
+    .filter((row) => row.credit_account_id === accountId && row.materialized_at == null);
+  for (const entry of entries) {
+    const violation = fakeMaterializeLedgerEntry(db, entry.id);
+    if (violation) return violation;
+  }
+
+  const reservations = db.rows("billing_credit_reservations").filter((row) => {
+    if (row.credit_account_id !== accountId) return false;
+    if (row.status === "active" && row.admitted_at == null) return true;
+    return (
+      ["settled", "released", "expired"].includes(String(row.status)) &&
+      row.admitted_at != null &&
+      row.hold_released_at == null
+    );
+  });
+  for (const reservation of reservations) {
+    const violation = fakeMaterializeReservationHold(db, reservation.id);
+    if (violation) return violation;
+  }
+
+  return null;
+}
+
+function fakeRepairLotAllocation(db: FakeDatabase, grantId: unknown): QueryError {
+  const allocations = db
+    .rows("billing_credit_allocations")
+    .filter(
+      (row) =>
+        row.grant_id === grantId &&
+        ["consumed", "released"].includes(String(row.status)) &&
+        row.capacity_materialized_at == null,
+    );
+  for (const allocation of allocations) {
+    const violation = fakeMaterializeAllocationCapacity(db, allocation.id);
+    if (violation) return violation;
+  }
+  return null;
+}
+
+const FAKE_RPC_HANDLERS: Record<string, (db: FakeDatabase, params: Record<string, unknown>) => QueryError> = {
+  materialize_ledger_entry: (db, params) => fakeMaterializeLedgerEntry(db, params.p_entry_id),
+  materialize_reservation_hold: (db, params) => fakeMaterializeReservationHold(db, params.p_reservation_id),
+  materialize_allocation_capacity: (db, params) =>
+    fakeMaterializeAllocationCapacity(db, params.p_allocation_id),
+  repair_account_balance: (db, params) => fakeRepairAccountBalance(db, params.p_account_id),
+  repair_lot_allocation: (db, params) => fakeRepairLotAllocation(db, params.p_grant_id),
+};
+
 export function fakeSupabase(db: FakeDatabase): SupabaseClient {
   return {
     from(table: string) {
@@ -1131,6 +1292,18 @@ export function fakeSupabase(db: FakeDatabase): SupabaseClient {
         delete: () => new FakeQuery(db, table, "delete"),
         upsert: (payload: Row | Row[], options?: { onConflict?: string }) =>
           new FakeQuery(db, table, "upsert", payload, options?.onConflict),
+      };
+    },
+    rpc(name: string, params?: Record<string, unknown>) {
+      const handler = FAKE_RPC_HANDLERS[name];
+      const run = async (): Promise<{ data: null; error: QueryError }> => {
+        if (!handler) return { data: null, error: { message: `fakeSupabase: unknown rpc "${name}"` } };
+        const error = handler(db, params ?? {});
+        return { data: null, error };
+      };
+      return {
+        then: (onfulfilled?: (value: { data: null; error: QueryError }) => unknown, onrejected?: (reason: unknown) => unknown) =>
+          run().then(onfulfilled, onrejected),
       };
     },
   } as unknown as SupabaseClient;

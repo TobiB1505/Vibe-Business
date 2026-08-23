@@ -353,6 +353,13 @@ describe("a run nothing is carrying any more", () => {
       status: "active",
       reserved_credits: creditsToUnits(100),
       created_at: startedAt,
+      // The account's reserved_credits above already counts this hold, so —
+      // matching Sprint B0's phase-aware backfill for a pre-existing active
+      // reservation — the hold is already admitted. Without this,
+      // `materialize_reservation_hold`'s release branch (which requires
+      // `admitted_at IS NOT NULL`) never fires, and releasing this reservation
+      // would leave the account's reserved_credits untouched.
+      admitted_at: startedAt,
     });
 
     const row = db.rows("agent_execution_runs").find((entry) => entry.id === run.id)!;
