@@ -9,40 +9,48 @@ import { listPreparedChangeSummaries } from "@/modules/execution/workspace";
 import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intelligence/store";
 import { getLatestOpportunities } from "@/modules/opportunities/service";
 import { getLatestProfile } from "@/modules/product-understanding/store";
+import { buildHomeView } from "@/modules/projects/command-center";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import { getLatestSuccessfulAuthenticatedSnapshot } from "@/modules/authenticated-product-intelligence/store";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
+import { HomeStatus } from "./home-status";
 import { InspectButton } from "./inspect-button";
 import { InspectLiveButton } from "./inspect-live-button";
 import { IntelligenceSummary, LIVE_PRODUCT_ANCHOR } from "./intelligence-summary";
 import { LiveIntelligenceSummary } from "./live-intelligence-summary";
 
 /**
- * Overview (Sprint UI-2 Part 2).
+ * Home (Sprint UI-2 Part 2 as Overview; rebuilt by CORE-5).
  *
- * ## A summary, not the workspace
+ * ## What this screen is for
  *
- * Before the split this route rendered all seven sections and loaded
- * everything they needed. It now loads *summaries*: the latest audit's score,
- * how many opportunities exist, how many prepared changes exist, whether a Deep
- * Scan has run, and the few most recent activity entries. Each links to the
- * route that owns the detail.
+ * Overview answered "what does Vibe know about this project, and where did it
+ * come from" — a provenance screen, and a reasonable one, but not what someone
+ * opening their own product at nine in the morning wants first. Home answers
+ * four questions instead: what your product is, how the business is doing, what
+ * is most in the way, and what to do about it. `HomeStatus` is those four, and
+ * `buildHomeView` decides them in testable data rather than in JSX.
  *
- * The expensive reads it no longer performs: the prepared-change workspace
+ * Everything below the card is context: the evidence Vibe is working from, and
+ * the last few things it did.
+ *
+ * ## Cost
+ *
+ * The same reads Overview made, unchanged. It loads *summaries*: the latest
+ * audit, the opportunity set, a prepared-change count, and the few most recent
+ * activity entries.
+ *
+ * The expensive reads it does not perform: the prepared-change workspace
  * (review-image signing, preview origins, the GitHub merge preflight, outcome
  * and impact per change), and the per-opportunity execution assembly.
  * `listPreparedChangeSummaries` is the cheap read that replaces the first — it
  * exists precisely so a count does not cost a workspace.
- *
- * What stays here in full: the evidence and connection surfaces that are about
- * the project itself rather than about one section — business context, the
- * production URL, both intelligence snapshots, and disconnecting.
  */
 
 const RECENT_ACTIVITY_COUNT = 5;
 
-export default async function ProjectOverviewPage({
+export default async function ProjectHomePage({
   params,
 }: {
   params: Promise<{ projectId: string }>;
@@ -110,40 +118,15 @@ export default async function ProjectOverviewPage({
     },
   ];
 
-  /**
-   * The summary tiles. Every value is real or absent — a project with no
-   * opportunity set shows "Not identified yet", never a zero, because zero
-   * opportunities and "never asked" are different statements.
-   */
-  const summaries: { id: string; label: string; value: string; href: string }[] = [
-    {
-      id: "business-audit",
-      label: "Business health",
-      value: latestAudit?.result
-        ? latestAudit.result.overall.score === null
-          ? "Not enough coverage"
-          : `${latestAudit.result.overall.score} / 100`
-        : "Not analyzed yet",
-      href: projectSectionHref(project.id, "business-audit"),
-    },
-    {
-      id: "action-plan",
-      label: "Action plan",
-      value: opportunities
-        ? `${opportunities.set.opportunities.length} identified`
-        : "Not identified yet",
-      href: projectSectionHref(project.id, "action-plan"),
-    },
-    {
-      id: "agent",
-      label: "Agent",
-      value:
-        preparedSummaries.length > 0
-          ? `${preparedSummaries.length} ${preparedSummaries.length === 1 ? "change" : "changes"}`
-          : "None yet",
-      href: projectSectionHref(project.id, "agent"),
-    },
-  ];
+  const home = buildHomeView({
+    profile: productProfile?.profile ?? null,
+    audit: latestAudit?.result ?? null,
+    // Null when the engine has never produced a set — which is a different
+    // fact from a set that came back empty, and the view model keeps them
+    // apart.
+    opportunities: opportunities?.set.opportunities ?? null,
+    preparedCount: preparedSummaries.length,
+  });
 
   return (
     <WorkspaceSection
@@ -152,19 +135,13 @@ export default async function ProjectOverviewPage({
       description="Where your product stands right now, and the next move Vibe would make."
     >
       <div className="flex flex-col gap-5">
-        <ul className="grid gap-4 sm:grid-cols-3">
-          {summaries.map((summary) => (
-            <li key={summary.id}>
-              <Link
-                href={summary.href}
-                className="rounded-panel bg-surface-3 border-line-3 hover:border-line-4 flex h-full flex-col gap-2 border p-5 transition-[border-color]"
-              >
-                <MonoLabel>{summary.label}</MonoLabel>
-                <span className="text-fg text-title font-bold">{summary.value}</span>
-              </Link>
-            </li>
-          ))}
-        </ul>
+        <HomeStatus
+          view={home}
+          planHref={projectSectionHref(project.id, "action-plan")}
+          agentHref={projectSectionHref(project.id, "agent")}
+          productHref={projectSectionHref(project.id, "my-product")}
+          healthHref={projectSectionHref(project.id, "business-audit")}
+        />
 
         <Surface level="panel" padding="lg" className="flex flex-col gap-4">
           <MonoLabel>Project context</MonoLabel>
