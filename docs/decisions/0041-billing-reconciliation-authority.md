@@ -1,6 +1,6 @@
 # 0041 - Billing Reconciliation Authority
 
-Status: Proposed
+Status: Accepted
 Date: 2026-08-22
 Builds on [0013](0013-durable-operation-execution.md) (durable execution, and rule 24's origin), [0024](0024-vibe-credits-economic-layer.md) (the economic layer this governs)
 
@@ -11,6 +11,8 @@ Builds on [0013](0013-durable-operation-execution.md) (durable execution, and ru
 > **Third revision, 2026-08-22, before Sprint B began.** The steady-state mechanism from the second revision (hot path and repair sharing the transactional `materialize_*` primitives) is accepted and unchanged by this revision. What was missing is how the system safely *reaches* that steady state from today's schema and today's already-running code — a fourth proof obligation, answered in a new §P3 subsection, "Rollout." It establishes, with evidence rather than an assumption: existing rows cannot be replayed merely because the marker columns are new (R1); an old-code writer mid-deploy cannot create a row a newly-activated repair misreads as pending (R2); and there is one precise, operator-verified point before which repair cannot act on a `NULL` marker as evidence of anything (R3). Nothing in P1, P2 or P4 changes.
 
 > **Fourth revision, 2026-08-22, before Sprint B began.** Two details inside the accepted Rollout mechanism were underspecified, not wrong: (1) R1's "certifies, in SQL, inside its own transaction" did not itself close the READ COMMITTED race between the certification's reads and a concurrent writer's commit — closed below with explicit table locks, in a fixed order, derived from each writer's actual statement type, with `NOWAIT` so an unobtainable lock fails the migration rather than hanging it. (2) R3's "drain window... verified operationally" named the right idea without naming the exact, mechanical, observable condition — named below as an exhaustive enumeration of every writer source this codebase's own architecture permits (rule 24 bounds the enumeration to two categories: ordinary invocations and Vercel Workflow instances — nothing else is allowed to exist), with the workflow condition defined to explicitly cover a run parked in `needs_user`/`needs_user_input` at cutover time, which is financially resolved by P2 but not execution-drained. P1, P2, P3's steady-state design and P4 are unchanged; nothing here reopens them.
+
+> **Fifth revision, 2026-08-22, approved for implementation.** Final check before Sprint B0/F: whether `created_at < cutover` actually identifies writer origin, or only entity-creation time — verified against three named cases (a `needs_user` row resumed post-cutover; a reservation processed later than its own creation; a long-lived run) directly against production code, not assumed, with a belt-and-braces direct query against `billing_credit_reservations` added alongside the transitive argument. All three hold. **This ADR is approved. B0–F are implementation-ready; no further architecture changes precede them.**
 
 ## Context
 
@@ -186,6 +188,23 @@ WHERE created_at < :cutover_deployment_at
 -- and the equivalent query against agent_execution_runs, excluding 'needs_user_input'
 ```
 returns zero rows. This needs no assumption about whether Vercel Workflows re-pins a resumed step to the deployment active at resume time or keeps it pinned to the one it started under — the condition requires there to be **none left**, which is true regardless of which platform behavior turns out to hold, and is checkable from this application's own state, not from platform introspection this document cannot verify.
+
+**Whether `created_at` actually represents writer origin, verified against three cases, not assumed:**
+
+1. **A row created pre-cutover, resumed post-cutover.** `requeueAnsweredOperation` (`operations/store.ts:354`) is `UPDATE operation_runs SET status = 'queued', stage = 'preparing' WHERE id = ... AND status = 'needs_user'` — an update of the existing row, never a re-insert, and `created_at` is not in its `SET` list. So `created_at` is set exactly once, at true origin, and stays fixed across every resume for the row's entire lifetime — resuming it a hundred times does not move it forward. The resume request itself is an *ordinary* invocation, covered by condition (a), not by the row's age; condition (b) only has to keep the row in the checked set for as long as it stays non-terminal, which `created_at < cutover` combined with the status filter already does, regardless of how many times it is resumed in between.
+2. **A reservation processed later than it was created.** Verified, not assumed, that a reservation has no lifecycle independent of an owning `operation_runs` row: the only production callers of `authorizeOperationCredits`/`claimReservation` — `holdOperationCredits` (`operations/billing.ts:127`) and `holdAgentExecutionCredits` (`agent-execution/server-writes.ts:169`, via `authorizeOperationCredits`) — both require a non-null `operationRunId`; the one function that would allow a null one (`reserveCredits`, `credits/service.ts:312`) has zero production callers, only tests. `allocateReservation` is called only from within `operation-billing.ts`, the same authorization path. A reservation or allocation is therefore only ever settled or released as part of *its owning operation's own execution steps*, gated by that operation's terminal CAS — the same authority P1 already establishes. Checking `operation_runs`/`agent_execution_runs` checks every reservation and allocation transitively.
+   **Belt and braces, matching R1's own "two independent evaluations, not one trusted blindly":** the drain check additionally runs
+   ```sql
+   SELECT r.id FROM billing_credit_reservations r
+   LEFT JOIN operation_runs o ON o.id = r.operation_run_id
+   WHERE r.created_at < :cutover_deployment_at
+     AND r.status = 'active'
+     AND (o.id IS NULL OR o.status NOT IN (<fully terminal — excludes 'needs_user'>));
+   ```
+   which must also return zero rows — not because the transitive argument above is doubted, but because it is cheap to check directly rather than ask an operator to trust it.
+3. **A long-lived run.** The query has no upper bound on `created_at`, only a lower one, combined with non-terminal status. A run alive for hours, days or weeks stays caught for exactly as long as it stays non-terminal — there is no age past which it silently drops out of the check.
+
+`created_at` is sound as the writer-origin signal *because* it is paired with a non-terminal status check on a row that is never re-created and never re-timestamped by a resume — not because entity-creation time is a correct proxy in general. Where that pairing could theoretically be insufficient (an independent reservation lifecycle), it is checked directly above rather than assumed away.
 
 **The gate itself.** A server-only environment variable, `BILLING_REPAIR_ENABLED`, read only at the two repair-trigger call sites (`getBillingBalance` and the lot-level equivalent), defaulting unset (repair inert) and stays unset until an operator has independently verified both (a) and (b) above. While unset, those call sites behave exactly as they do today, unchanged: `reconcileBalance`/`reconcileLotAllocation` still run and still log drift; `repair_account_balance`/`repair_lot_allocation` are never invoked — not called-and-skipped, simply never reached, so the guarantee does not depend on a conditional inside the repair path being correct.
 
