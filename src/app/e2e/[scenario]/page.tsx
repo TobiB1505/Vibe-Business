@@ -35,6 +35,8 @@ import {
   isE2eAuditCreditScenario,
 } from "../audit-credit-scenarios";
 import { E2E_NEEDS_USER_SCENARIOS, isE2eNeedsUserScenario } from "../needs-user-scenarios";
+import { E2E_ACCOUNT_SCENARIOS, isE2eAccountScenario } from "../account-scenarios";
+import { AccountHome } from "@/app/app/account-home";
 import { E2E_SCENARIOS, isE2eScenario } from "../scenarios";
 import { E2E_INTELLIGENCE_SCENARIOS, isE2eIntelligenceScenario } from "../intelligence-scenarios";
 import {
@@ -369,6 +371,20 @@ export default async function E2eScenarioPage({
    * produced, so what the browser checks is the same decision the unit tests
    * check — one layer further out.
    */
+  /*
+   * The account dashboard, rendered through the same component `/app` renders.
+   * The density budget in `e2e/account-dashboard.spec.ts` counts this screen,
+   * so a composition assembled here instead would measure nothing real.
+   */
+  if (isE2eAccountScenario(scenario)) {
+    return (
+      <main className="mx-auto max-w-[72rem] p-8">
+        {label}
+        <AccountHome projects={E2E_ACCOUNT_SCENARIOS[scenario]()} />
+      </main>
+    );
+  }
+
   if (isE2eHomeScenario(scenario)) {
     return (
       <main className="mx-auto max-w-[70rem] p-8">

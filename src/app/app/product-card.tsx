@@ -26,6 +26,11 @@ import { cn } from "@/lib/utils/cn";
  *   "Review change" and "Run audit" are different situations.
  * - **No repository line.** `owner/repo` on every card is the account level
  *   borrowing the project level's density. Repositories are their own subject.
+ * - **No "Business Signal" label.** The hero panel above names the reading
+ *   once; repeating the words over every card's number is the label doing no
+ *   work three times. A tone-coloured figure with `/ 100` under a panel that
+ *   just named it is not ambiguous, and one labelled pair per card is what the
+ *   density budget holds this screen to.
  * - **No "Last updated".** That number was built once and removed, because
  *   reading it across projects without an N+1 made it silently wrong for
  *   whichever product you used least (`dashboard.ts`). What is here instead is
@@ -72,7 +77,6 @@ function ScoreReading({ project }: { project: DashboardProject }) {
 
     return (
       <div className="flex flex-col gap-1">
-        <MonoLabel>Business Signal</MonoLabel>
         <p className="flex items-baseline gap-1.5">
           <span
             className={cn("font-mono text-display leading-none tabular-nums", statusToneText(SCORE_TONE[tone]))}
@@ -88,7 +92,6 @@ function ScoreReading({ project }: { project: DashboardProject }) {
 
   return (
     <div className="flex flex-col gap-1">
-      <MonoLabel>Business Signal</MonoLabel>
       {/*
         A sentence where the number would be, at the same weight as the rest of
         the card rather than at the number's size — nothing here is a reading.
