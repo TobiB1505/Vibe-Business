@@ -98,10 +98,23 @@ describe("ExecutionSpec — what it carries (§9)", () => {
     expect(spec.policy.network).toEqual({ mode: "none" });
   });
 
-  it("names what must be re-checked immediately before a write (§29)", () => {
-    const spec = buildFixtureSpec();
-    expect(spec.freshnessChecks).toContain("repository_head_unchanged");
-    expect(spec.freshnessChecks).toContain("action_plan_current");
+  /**
+   * §29's premises are re-checked by `evaluateAdmission`, not carried on the spec.
+   *
+   * The spec used to carry a `freshnessChecks` list naming six of them, read by
+   * `evaluateFreshness` — which had no production caller, so the list was
+   * written into every immutable `execution_specs` row and never consulted. It
+   * was also stale in both directions: it never learned the live-product
+   * premise Sprint 0072 added, while every premise it did name is enforced
+   * somewhere that runs (`plan.isCurrent`, `snapshotIsLatest`, the live HEAD
+   * comparison and the capability re-match in the resolver; ownership by RLS
+   * and each durable step's own project check).
+   *
+   * A second, unread description of a contract is worse than none: it reads as
+   * the authority and is not. This pins that the spec no longer carries one.
+   */
+  it("does not carry a second, unread copy of the freshness contract (§29)", () => {
+    expect(buildFixtureSpec()).not.toHaveProperty("freshnessChecks");
   });
 
   it("binds the Credit ceiling and its quote (§24)", () => {

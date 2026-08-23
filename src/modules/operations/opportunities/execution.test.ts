@@ -8,6 +8,7 @@ import {
 import { OPPORTUNITY_PROMPT_VERSION } from "@/modules/opportunities/prompt";
 import { OPPORTUNITY_RUBRIC_VERSION } from "@/modules/opportunities/rubric";
 import { OPPORTUNITY_ENGINE_VERSION, OPPORTUNITY_SET_SCHEMA_VERSION } from "@/modules/opportunities/schema";
+import { computeAuditInputHash } from "@/modules/business-audit/store";
 import { computeOpportunityInputHash } from "@/modules/opportunities/store";
 import { fakeAudit, fakeWireOpportunity } from "@/modules/opportunities/test-support";
 import type { ExecutionDeps } from "../business-audit/execution";
@@ -31,7 +32,39 @@ import {
 const USER = "user_1";
 const PROJECT = "project_1";
 const AUDIT = "audit_1";
-const AUDIT_HASH = "a".repeat(64);
+const PROFILE = "profile_1";
+const INTENT_HASH = "c".repeat(64);
+
+/**
+ * The audit's real identity, not a placeholder.
+ *
+ * `verifyPackProvenance` recomputes this digest from the row's versions and a
+ * fresh load of its five sources, so a fixture with an invented `input_hash`
+ * describes an audit that could not exist — and every test here would fail on
+ * provenance rather than on what it means to assert.
+ */
+const AUDIT_VERSIONS = {
+  schemaVersion: "business-readiness-audit.v1",
+  auditVersion: "business-audit-v1",
+  evidencePackVersion: "business-evidence.v3",
+  promptVersion: "business-audit-prompt-v2",
+  rubricVersion: "business-readiness-rubric-v1",
+  profileSchemaVersion: "product-profile.v1",
+  profileBuilderVersion: "profile-builder-v1",
+  provider: "anthropic",
+  model: "claude-sonnet-5",
+} as const;
+
+const AUDIT_HASH = computeAuditInputHash({
+  repositorySnapshotId: "repo_snapshot_1",
+  liveSnapshotId: "live_snapshot_1",
+  productProfileId: PROFILE,
+  founderIntentHash: INTENT_HASH,
+  // This fixture seeds no Deep Scan, and null is what that means.
+  authenticatedSnapshotId: null,
+  ...AUDIT_VERSIONS,
+});
+
 
 function identity() {
   return computeOpportunityInputHash({
@@ -84,7 +117,7 @@ function seed(options: { inputIdentity?: string } = {}) {
     created_at: "2026-08-01T00:00:00.000Z",
     completed_at: "2026-08-01T00:00:00.000Z",
   });
-  seedProductUnderstanding(db, { projectId: PROJECT });
+  seedProductUnderstanding(db, { projectId: PROJECT, profileId: PROFILE, intentHash: INTENT_HASH });
   db.seed("business_readiness_audits", {
     id: AUDIT,
     project_id: PROJECT,
@@ -98,8 +131,20 @@ function seed(options: { inputIdentity?: string } = {}) {
     // nothing to check.
     repository_snapshot_id: "repo_snapshot_1",
     live_snapshot_id: "live_snapshot_1",
-    product_profile_id: "profile_1",
-    founder_intent_hash: "c".repeat(64),
+    product_profile_id: PROFILE,
+    founder_intent_hash: INTENT_HASH,
+    // The reproducibility set. Without it `evidence_pack_version` is undefined
+    // and the provenance check silently takes its pre-CORE-2 fallback — so the
+    // path this fixture exists to exercise would never run.
+    schema_version: "business-readiness-audit.v1",
+    audit_version: "business-audit-v1",
+    evidence_pack_version: "business-evidence.v3",
+    prompt_version: "business-audit-prompt-v2",
+    rubric_version: "business-readiness-rubric-v1",
+    product_profile_schema_version: "product-profile.v1",
+    product_profile_builder_version: "profile-builder-v1",
+    provider: "anthropic",
+    model: "claude-sonnet-5",
     created_at: "2026-08-02T00:00:00.000Z",
     completed_at: "2026-08-02T00:00:00.000Z",
   });

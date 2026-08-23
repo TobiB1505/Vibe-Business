@@ -1,4 +1,4 @@
-import type { StoredAudit } from "./store";
+import { computeAuditInputHash, type StoredAudit } from "./store";
 
 /**
  * Did this evidence pack come from the observations the audit reasoned from?
@@ -24,11 +24,8 @@ import type { StoredAudit } from "./store";
  *
  * What that produces is not a crash. The audit's citations are ids like
  * `repo.surface.payments`, minted by a builder that still mints them, so they
- * still render; they simply now point at a different observation than the one
- * the sentence above them was written from. The pack's own labels — "Repository
- * surface not detected: Payments" — would describe the new scan while the
- * audit's conclusion describes the old one, and the model is asked to
- * prioritize the one using the other. That is a paid call producing advice
+ * still render; they simply now point at a different observation than the
+ * sentence above them was written from. That is a paid call producing advice
  * about a state that no longer exists, and neither the model nor the founder
  * has any way to see it happened.
  *
@@ -38,59 +35,112 @@ import type { StoredAudit } from "./store";
  * audit reasoned from?" — which is what makes a rebuilt pack the audit's pack.
  */
 
+/** The five source identities an audit's `input_hash` is built from. */
 export type LoadedPackSources = {
   repositorySnapshotId: string;
   liveSnapshotId: string;
   productProfileId: string;
   founderIntentHash: string;
+  /** Null is a real value: "no Deep Scan exists", distinct from any id. */
+  authenticatedSnapshotId: string | null;
 };
 
-/** Which observation moved. `inputs_changed` either way; this names it. */
 export type PackProvenance =
-  | { matches: true }
+  | { matches: true; verifiedBy: "input_hash" | "recorded_columns" }
   | {
       matches: false;
-      diverged: "repository" | "live" | "product_profile" | "founder_intent";
+      verifiedBy: "input_hash" | "recorded_columns";
+      /** Which observation moved. `input_hash` cannot name one; it says so. */
+      diverged: "repository" | "live" | "product_profile" | "founder_intent" | "unattributed";
     };
+
+/** The pack version whose rows are guaranteed to carry the full CORE-2 set. */
+const V3 = "business-evidence.v3";
 
 /**
  * Compares what a rebuild just loaded against what the audit recorded.
  *
- * `repository_snapshot_id` and `live_snapshot_id` are `not null` on the table
- * and have been since it existed, so a null here cannot come from production —
+ * ## The exact path, for a v3 audit
+ *
+ * `computeAuditInputHash` already *is* the definition of "the same inputs":
+ * fourteen values, of which nine are versions the row stores and five are the
+ * source identities a rebuild just loaded. Recomputing it from the row's own
+ * versions and the fresh sources, then comparing to the row's `input_hash`,
+ * therefore verifies all five sources at once — including the **Deep Scan
+ * snapshot, which has no column at all** and which no field-by-field check can
+ * reach. It also inherits that function's care with null: `authenticatedSnapshotId`
+ * is carried through as JSON null rather than a sentinel, so "no Deep Scan"
+ * cannot be forged by a snapshot whose id happens to match.
+ *
+ * The versions must come from the row, never from the current constants. A
+ * version bump is a legitimate reason to buy a *new* audit; it is not a reason
+ * to refuse to reuse an existing one's conclusions, and comparing against
+ * today's constants would answer a question nobody asked.
+ *
+ * The price of the exactness is attribution: a mismatched digest says something
+ * moved, not what. The verdict says `unattributed` rather than guessing, and
+ * the failure code is `inputs_changed` either way.
+ *
+ * ## The fallback, for anything older
+ *
+ * `business_readiness_audits_v3_has_profile` guarantees the profile columns are
+ * present *only* for v3 rows. A pre-CORE-2 row was hashed by an older shape of
+ * this function, so recomputing it would refuse forever rather than detect
+ * anything. Those fall back to comparing the columns that do exist — which is
+ * what this module did in its first version, and is still strictly more than
+ * nothing.
+ *
+ * There, `repository_snapshot_id` and `live_snapshot_id` are `not null` on the
+ * table and have been since it existed, so a null cannot come from production —
  * only from a fixture that did not describe a real audit. It is treated as a
  * mismatch rather than skipped: a guard that passes on absent data is a guard
- * that passes vacuously, and this one is worth more than that.
- *
- * `product_profile_id` and `founder_intent_hash` are genuinely nullable — rows
- * written before CORE-2 have neither, and back-filling one would be inventing a
- * fact. Those are skipped when absent. A pre-CORE-2 audit therefore keeps the
- * coverage it always had for the profile, and gains the snapshot check.
- *
- * The Deep Scan snapshot is *not* compared, because the audit table has no
- * column for it: `computeAuditInputHash` takes `authenticatedSnapshotId` from a
- * live lookup and hashes it, but nothing writes it to a column, so there is
- * nothing on the row to compare against. That gap is named rather than papered
- * over — closing it needs a column and a migration.
+ * that passes vacuously. `product_profile_id` and `founder_intent_hash` are
+ * genuinely nullable there and are skipped when absent, because back-filling
+ * one would be inventing a fact.
  */
 export function verifyPackProvenance(
-  audit: Pick<
-    StoredAudit,
-    "repositorySnapshotId" | "liveSnapshotId" | "productProfileId" | "founderIntentHash"
-  >,
+  audit: StoredAudit,
   loaded: LoadedPackSources,
 ): PackProvenance {
+  if (audit.evidencePackVersion === V3) {
+    // Guaranteed non-null by `business_readiness_audits_v3_has_profile`. The
+    // fallbacks are unreachable for a v3 row and exist so a row that somehow
+    // violated the constraint mismatches rather than throws.
+    const recomputed = computeAuditInputHash({
+      repositorySnapshotId: loaded.repositorySnapshotId,
+      liveSnapshotId: loaded.liveSnapshotId,
+      productProfileId: loaded.productProfileId,
+      founderIntentHash: loaded.founderIntentHash,
+      authenticatedSnapshotId: loaded.authenticatedSnapshotId,
+      schemaVersion: audit.schemaVersion,
+      auditVersion: audit.auditVersion,
+      evidencePackVersion: audit.evidencePackVersion,
+      promptVersion: audit.promptVersion,
+      rubricVersion: audit.rubricVersion,
+      profileSchemaVersion: audit.productProfileSchemaVersion ?? "",
+      profileBuilderVersion: audit.productProfileBuilderVersion ?? "",
+      provider: audit.provider,
+      model: audit.model,
+    });
+
+    return recomputed === audit.inputHash
+      ? { matches: true, verifiedBy: "input_hash" }
+      : { matches: false, verifiedBy: "input_hash", diverged: "unattributed" };
+  }
+
+  const verifiedBy = "recorded_columns" as const;
+
   if (audit.repositorySnapshotId !== loaded.repositorySnapshotId) {
-    return { matches: false, diverged: "repository" };
+    return { matches: false, verifiedBy, diverged: "repository" };
   }
   if (audit.liveSnapshotId !== loaded.liveSnapshotId) {
-    return { matches: false, diverged: "live" };
+    return { matches: false, verifiedBy, diverged: "live" };
   }
   if (audit.productProfileId !== null && audit.productProfileId !== loaded.productProfileId) {
-    return { matches: false, diverged: "product_profile" };
+    return { matches: false, verifiedBy, diverged: "product_profile" };
   }
   if (audit.founderIntentHash !== null && audit.founderIntentHash !== loaded.founderIntentHash) {
-    return { matches: false, diverged: "founder_intent" };
+    return { matches: false, verifiedBy, diverged: "founder_intent" };
   }
-  return { matches: true };
+  return { matches: true, verifiedBy };
 }

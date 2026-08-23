@@ -1,11 +1,6 @@
 import type { ActionPlanStep } from "@/modules/action-plans/schema";
 import type { ExecutionCapability } from "@/modules/execution/schema";
 import type { ExecutionBudget, ExecutionCreditBinding } from "./budget";
-import {
-  AGENTIC_FRESHNESS_CHECKS,
-  DETERMINISTIC_FRESHNESS_CHECKS,
-  type FreshnessCheck,
-} from "./freshness";
 import { computeBusinessContextHash, computeExecutionSpecIdentity } from "./identity";
 import { compileExecutionPolicy, type ExecutionPolicy, type ExecutionWriteScope } from "./policy";
 import { assertNoSecretMaterial } from "./secrets";
@@ -40,7 +35,7 @@ import type { ExecutionValidationRequirement } from "./validation-requirements";
  * If the spec were the prompt, every business and safety rule in this module
  * would end up as sentences in one enormous string, where they would be
  * advisory, unversioned and impossible to test. Keeping them structured is what
- * makes `isToolAllowed`, `checkWriteScope` and `evaluateFreshness` mean
+ * makes `isToolAllowed` and `checkWriteScope` mean
  * anything. Core-3 defines the boundary and stops there: no prompt compiler is
  * built, and no model is called.
  *
@@ -220,9 +215,6 @@ export type ExecutionSpec = {
   /* When to stop (§21, §22, §23) */
   interruptRules: ExecutionInterruptRules;
   stopConditions: readonly ExecutionStopReason[];
-
-  /* What must be re-checked immediately before a write (§29) */
-  freshnessChecks: readonly FreshnessCheck[];
 
   /* Versions (§36) */
   resolverVersion: typeof EXECUTION_RESOLVER_VERSION;
@@ -434,11 +426,6 @@ export function buildExecutionSpec(input: BuildExecutionSpecInput): ExecutionSpe
       mayInferFromExistingPatterns: true,
     },
     stopConditions: EXECUTION_STOP_REASONS,
-
-    freshnessChecks:
-      resolution.mode === "deterministic"
-        ? DETERMINISTIC_FRESHNESS_CHECKS
-        : AGENTIC_FRESHNESS_CHECKS,
 
     resolverVersion: EXECUTION_RESOLVER_VERSION,
     policyVersion: EXECUTION_POLICY_VERSION,
