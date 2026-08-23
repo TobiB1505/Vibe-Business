@@ -19,12 +19,13 @@ import { describe, expect, it } from "vitest";
 /**
  * Where the account dashboard renders from.
  *
- * One constant rather than a filename, because the surface is about to grow a
- * shell: the credit balance and the session read move out of `page.tsx` and
- * into a layout, and a test naming only `page.tsx` would go quiet at exactly
- * that moment — every assertion below would still pass, against a file that no
- * longer performs the reads. Same failure the workspace route contract had
- * when it walked one directory level.
+ * Constants rather than one filename, because the surface has a shell and a
+ * composition either side of the page: the credit balance reads in the layout
+ * and the screen is assembled in `account-home.tsx`. A test naming only
+ * `page.tsx` would have gone quiet the moment either moved — every assertion
+ * below would still pass, against a file that no longer performs the reads.
+ * Same failure the workspace route contract had when it walked one directory
+ * level.
  *
  * So the surface is *derived*: every render file that exists here is guarded,
  * and moving a read from one to another cannot escape the contract.
@@ -35,15 +36,33 @@ const MODULES = join(process.cwd(), "src/modules");
 /** Render files, in the order React composes them. */
 const SURFACE_FILES = ["layout.tsx", "page.tsx"] as const;
 
+/**
+ * The composition the page renders, which lives one directory up because the
+ * browser harness renders it too.
+ *
+ * It is on the surface for the same reason the layout is: it is a Server
+ * Component, so it can `await` anything the page can, and a contract that
+ * stopped at the route folder would be one `mv` away from guarding nothing.
+ */
+const COMPOSITION = join(process.cwd(), "src/app/app/account-home.tsx");
+
 function source(path: string): string {
   return readFileSync(path, "utf8");
 }
 
 function accountSurface(): { name: string; source: string }[] {
-  const found = SURFACE_FILES.flatMap((name) => {
+  const found: { name: string; source: string }[] = SURFACE_FILES.flatMap((name) => {
     const path = join(ACCOUNT_DIR, name);
     return existsSync(path) ? [{ name, source: source(path) }] : [];
   });
+
+  if (!existsSync(COMPOSITION)) {
+    throw new Error(
+      `${COMPOSITION} was not found. If the dashboard's composition moved, move this ` +
+        "constant with it — do not delete the assertion.",
+    );
+  }
+  found.push({ name: "account-home.tsx", source: source(COMPOSITION) });
 
   // A list that quietly came back empty would make every assertion below
   // vacuous. `page.tsx` is the one file that must always be here.
