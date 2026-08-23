@@ -442,11 +442,17 @@ export async function findActiveAgentRunByIdentity(
 /**
  * Marks a run as having entered the paid loop.
  *
- * Scoped to `queued`, so it reports whether *this* call performed the
- * transition. That is the hinge of §37: a step that re-enters and finds the run
- * already `running` knows the provider may already have been billed, and
- * refuses to run a second agent rather than resolving the ambiguity in favour
- * of doing more work.
+ * Scoped to `queued` or `needs_user_input`, so it reports whether *this* call
+ * performed the transition. That is the hinge of §37: a step that re-enters
+ * and finds the run already `running` knows the provider may already have
+ * been billed, and refuses to run a second agent rather than resolving the
+ * ambiguity in favour of doing more work.
+ *
+ * `needs_user_input` is a valid source because a resumed run re-enters here
+ * too (ADR 0041 §P2): `started_at` is re-stamped on every win, not only the
+ * first, because `expireStaleAgentExecution` computes its deadline from it —
+ * an un-restamped run could have a customer's answer, submitted days later,
+ * declared stale on the very next status read.
  */
 export async function markAgentRunStarted(
   supabase: SupabaseClient,
@@ -456,11 +462,36 @@ export async function markAgentRunStarted(
     .from("agent_execution_runs")
     .update({ status: "running", started_at: new Date().toISOString() })
     .eq("id", runId)
-    .eq("status", "queued")
+    .in("status", ["queued", "needs_user_input"])
     .select("id");
 
   if (error) throw error;
   return (data ?? []).length > 0;
+}
+
+/**
+ * Points the run at a freshly re-acquired reservation after a resume (ADR
+ * 0041 §P2).
+ *
+ * Unscoped by status: the caller only reaches this after already winning
+ * `markAgentRunStarted`'s CAS, so ownership of the row is already settled;
+ * this write just records which reservation that ownership now spends
+ * against. Must land before any terminal transition — `completeAgentRun` /
+ * `failAgentRun` finalize whatever `credit_reservation_id` currently names,
+ * and a stale pointer would settle or release the wrong (already-released)
+ * reservation.
+ */
+export async function updateAgentRunCreditReservation(
+  supabase: SupabaseClient,
+  runId: string,
+  reservationId: string,
+): Promise<void> {
+  const { error } = await supabase
+    .from("agent_execution_runs")
+    .update({ credit_reservation_id: reservationId })
+    .eq("id", runId);
+
+  if (error) throw error;
 }
 
 /**

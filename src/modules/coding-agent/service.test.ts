@@ -20,7 +20,7 @@ vi.mock("@/lib/supabase/service", () => ({
   createServiceClient: () => fakeSupabase(serviceDb.current),
 }));
 
-const { startAgentExecution } = await import("./service");
+const { startAgentExecution, resumeAnsweredAgentExecution } = await import("./service");
 
 /**
  * Starting an agent execution
@@ -417,5 +417,101 @@ describe("a failed start returns the hold", () => {
 
     // The operation is terminal so the identity index is free to try again.
     expect((db.rows("operation_runs")[0] as unknown as { status: string }).status).toBe("failed");
+  });
+});
+
+/**
+ * `resumeAnsweredAgentExecution` (ADR 0041 §P2).
+ *
+ * Restores an operation paused on a question to `queued` and starts a fresh
+ * workflow instance for it — the workflow instance that paused already
+ * terminated, so there is nothing to suspend and resume. Billing is not this
+ * function's concern: `startAgentStep` re-acquires a hold, if one is needed,
+ * once the fresh instance actually reaches it — proven in
+ * `operations/agent-execution/execution.test.ts`, not here.
+ */
+describe("resumeAnsweredAgentExecution", () => {
+  async function seedPausedRun(): Promise<{ agentExecutionRunId: string }> {
+    const started = await withEnv(ALLOWLISTED, () =>
+      startAgentExecution(fakeSupabase(db), executor, {
+        projectId: PROJECT,
+        userId: USER,
+        executionSpecId: "spec-1",
+      }),
+    );
+    if (started.kind !== "started") throw new Error("fixture did not start");
+
+    // Simulates what a real pause leaves behind (proven separately in
+    // `operations/agent-execution/execution.test.ts`): both rows paused, in
+    // step.
+    db.rows("agent_execution_runs")[0].status = "needs_user_input";
+    db.rows("operation_runs")[0].status = "needs_user";
+
+    return { agentExecutionRunId: started.agentExecutionRunId };
+  }
+
+  it("requeues the operation and starts a fresh workflow instance", async () => {
+    const { agentExecutionRunId } = await seedPausedRun();
+    const startsBefore = executor.starts.length;
+
+    const result = await resumeAnsweredAgentExecution(fakeSupabase(db), executor, {
+      projectId: PROJECT,
+      userId: USER,
+      agentExecutionRunId,
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(db.rows("operation_runs")[0].status).toBe("queued");
+    expect(executor.starts).toHaveLength(startsBefore + 1);
+    expect(executor.starts.at(-1)).toMatchObject({ operationType: "agent_execution" });
+  });
+
+  it("is idempotent: a double submission starts no second workflow", async () => {
+    const { agentExecutionRunId } = await seedPausedRun();
+    const startsBefore = executor.starts.length;
+
+    await resumeAnsweredAgentExecution(fakeSupabase(db), executor, {
+      projectId: PROJECT,
+      userId: USER,
+      agentExecutionRunId,
+    });
+    const second = await resumeAnsweredAgentExecution(fakeSupabase(db), executor, {
+      projectId: PROJECT,
+      userId: USER,
+      agentExecutionRunId,
+    });
+
+    // The second call finds the operation already `queued`, not `needs_user`
+    // — `requeueAnsweredOperation`'s own guard — and reports success without
+    // starting anything a second time.
+    expect(second).toEqual({ ok: true });
+    expect(executor.starts).toHaveLength(startsBefore + 1);
+  });
+
+  it("refuses for a project the caller does not own", async () => {
+    const { agentExecutionRunId } = await seedPausedRun();
+
+    const result = await resumeAnsweredAgentExecution(fakeSupabase(db), executor, {
+      projectId: PROJECT,
+      userId: OTHER_USER,
+      agentExecutionRunId,
+    });
+
+    expect(result).toEqual({ ok: false });
+    expect(db.rows("operation_runs")[0].status).toBe("needs_user");
+  });
+
+  it("fails the operation and reports not ok when the executor cannot start", async () => {
+    const { agentExecutionRunId } = await seedPausedRun();
+    const failing = new FakeExecutor({ fail: true });
+
+    const result = await resumeAnsweredAgentExecution(fakeSupabase(db), failing, {
+      projectId: PROJECT,
+      userId: USER,
+      agentExecutionRunId,
+    });
+
+    expect(result).toEqual({ ok: false });
+    expect(db.rows("operation_runs")[0].status).toBe("failed");
   });
 });
