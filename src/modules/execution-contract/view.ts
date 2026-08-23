@@ -92,6 +92,8 @@ export const EXECUTION_ADMISSION_LABELS: Record<ExecutionAdmissionRefusal, strin
   source_revision_unverified: "Vibe couldn't confirm which version of your code is current.",
   repository_head_moved: "Your code has changed since Vibe last read it.",
   repository_snapshot_stale: "Vibe has a newer read of your code than this plan used.",
+  live_premise_no_longer_true: "This is already fixed on your live site, so there's nothing to change.",
+  live_premise_unverified: "Vibe couldn't finish checking your live site, so it won't start work it can't justify.",
   action_plan_superseded: "This plan has been replaced by a newer one.",
   agentic_pricing_not_configured: "Vibe isn't building changes like this for anyone yet.",
   credit_reservation_required: "This needs Credits set aside before it can start.",

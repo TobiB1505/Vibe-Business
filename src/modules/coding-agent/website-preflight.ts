@@ -8,8 +8,15 @@ import { buildExecutionSpec, type ExecutionSpec } from "@/modules/execution-cont
 import {
   resolvePlanExecution,
   resolveStepExecution,
+  type LiveEvidenceContext,
   type RepositoryContext,
 } from "@/modules/execution-contract/resolver";
+import {
+  citedLiveEvidenceIds,
+  evaluateLivePremise,
+} from "@/modules/execution-contract/live-premise";
+import { inspectLiveProduct } from "@/modules/live-product-intelligence/service";
+import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intelligence/store";
 import type { ExecutionResolution } from "@/modules/execution-contract/schema";
 import { resolveExecutionValidation } from "@/modules/execution-contract/validation-requirements";
 import { createGithubRepositoryReader } from "@/modules/github/repository-reader";
@@ -295,6 +302,7 @@ export async function previewDogfoodStep(
         opportunityId: plan.opportunityId,
         businessAuditId: plan.businessAuditId,
       },
+      planGeneratedAt: plan.createdAt,
     });
   }
 
@@ -322,6 +330,7 @@ export async function previewDogfoodStep(
       opportunityId: plan.opportunityId,
       businessAuditId: plan.businessAuditId,
     },
+    planGeneratedAt: plan.createdAt,
   });
 }
 
@@ -353,6 +362,87 @@ export type ExecutableStepLineage = {
   businessAuditId: string | null;
 };
 
+/**
+ * Establishes whether the live defects a step cites are still real (Rule 55).
+ *
+ * The I/O half of the live-premise check; `execution-contract/live-premise.ts`
+ * holds the pure decision and `resolver.ts` does the refusing. Split that way
+ * for the same reason `liveHead` is: the resolver is a pure function, and a
+ * crawl is not.
+ *
+ * ## When it re-scans, and why not always
+ *
+ * A snapshot taken *after* the plan was generated already reflects a site the
+ * plan could not have been written against, so it answers the question without
+ * spending anything. Only a snapshot older than the plan is uninformative —
+ * the site may have changed in exactly the window that matters — and only then
+ * is a fresh crawl worth the seconds it costs a user waiting on a click.
+ *
+ * ## Why re-crawling is allowed at all
+ *
+ * Rule 60 forbids triggering a *paid* refresh on the user's behalf. This is not
+ * one: `live-product-intelligence` imports no `AIProvider` and touches no
+ * billable provider — it is bounded static HTTP through the safe-fetch boundary
+ * (Rules 35, 39). The rule's target is re-running the Business Audit, which
+ * does synthesize with a model. Observing costs nothing; concluding costs money.
+ *
+ * A refusal is always safe here and a false pass never is, so every failure —
+ * no production URL, a crawl error, another inspection already running —
+ * resolves to `unverified` rather than to an assumption.
+ */
+async function establishLivePremise(
+  supabase: SupabaseClient,
+  params: {
+    projectId: string;
+    userId: string;
+    evidenceIds: readonly string[];
+    /** When the plan was generated, or null where a caller cannot say. */
+    planGeneratedAt: string | null;
+  },
+): Promise<LiveEvidenceContext> {
+  // Nothing cited, nothing to establish — and no crawl for a step that would
+  // not be judged by one either way.
+  if (citedLiveEvidenceIds(params.evidenceIds).length === 0) {
+    return { status: "not_applicable" };
+  }
+
+  const latest = await getLatestSuccessfulLiveSnapshot(supabase, params.projectId);
+
+  const observedAfterPlan =
+    latest?.completedAt != null &&
+    params.planGeneratedAt != null &&
+    Date.parse(latest.completedAt) > Date.parse(params.planGeneratedAt);
+
+  if (latest?.result && observedAfterPlan) {
+    return evaluateLivePremise({
+      evidenceIds: params.evidenceIds,
+      snapshot: latest.result,
+      completeness: latest.completeness === "complete" ? "complete" : "partial",
+    });
+  }
+
+  const inspected = await inspectLiveProduct(
+    supabase,
+    { projectId: params.projectId, userId: params.userId },
+    // The stored snapshot is older than the plan, so reuse would answer with
+    // the very observation whose age is the problem.
+    { force: true },
+  );
+
+  if (!inspected.ok) {
+    return {
+      status: "unverified",
+      reason: `the live site could not be re-checked (${inspected.error})`,
+    };
+  }
+
+  return evaluateLivePremise({
+    evidenceIds: params.evidenceIds,
+    snapshot: inspected.snapshot.result,
+    completeness: inspected.snapshot.completeness === "complete" ? "complete" : "partial",
+  });
+}
+
 export async function resolveExecutableStep(
   supabase: SupabaseClient,
   params: {
@@ -362,6 +452,13 @@ export async function resolveExecutableStep(
     step: ActionPlanStep;
     planSteps: readonly ActionPlanStep[];
     lineage: ExecutableStepLineage;
+    /**
+     * When the plan was generated, so the live premise can tell an observation
+     * that postdates the plan from one that cannot speak to it. Null where a
+     * caller genuinely cannot say, which forces a fresh crawl rather than an
+     * assumption.
+     */
+    planGeneratedAt: string | null;
     /**
      * Resolve against the **analysed** commit instead of the live one.
      *
@@ -432,6 +529,13 @@ export async function resolveExecutableStep(
 
   const economics = resolveAgentEconomics({ projectId: params.projectId, env: params.env });
 
+  const liveEvidence = await establishLivePremise(supabase, {
+    projectId: params.projectId,
+    userId: params.userId,
+    evidenceIds: step.evidenceIds,
+    planGeneratedAt: params.planGeneratedAt,
+  });
+
   const resolution = resolveStepExecution({
     step,
     plan: {
@@ -442,6 +546,7 @@ export async function resolveExecutableStep(
     },
     repository,
     agenticBudgetAuthorized: economics !== null,
+    liveEvidence,
   });
 
   if (resolution.mode !== "agentic") {

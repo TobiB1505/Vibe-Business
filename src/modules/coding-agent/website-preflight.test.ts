@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FakeDatabase, fakeSupabase } from "@/modules/operations/test-support";
 import { fakeSnapshot } from "@/modules/execution-contract/test-support";
+import { fakeLiveSnapshot } from "@/modules/business-audit/test-support";
 
 const getHead = vi.fn(async () => ({ defaultBranch: "main", commitSha: SNAPSHOT_SHA }));
 const createGithubRepositoryReader = vi.fn(() => ({ getHead }));
@@ -56,7 +57,39 @@ function seedSuccessfulSnapshot(overrides: Record<string, unknown> = {}) {
   });
 }
 
+/**
+ * A live observation taken *after* the plan, still finding the cited defect.
+ *
+ * The steps here cite `live.*` evidence, and a step citing a live defect for a
+ * project Vibe has never looked at is not a state the product can produce — so
+ * the fixture was describing an impossible world. Seeding the observation makes
+ * these tests represent a real one, and makes them additionally prove the
+ * live-premise check passes when the premise genuinely holds.
+ *
+ * Completed a day after the plan, so it is the informative case that needs no
+ * fresh crawl. `fakeLiveSnapshot` mints `canonical: present: false`, which is
+ * exactly the `live.seo.canonical_missing` these steps cite.
+ */
+function seedLiveSnapshot(overrides: Record<string, unknown> = {}) {
+  db.seed("live_product_intelligence_snapshots", {
+    id: "live-1",
+    project_id: PROJECT,
+    status: "completed",
+    source_origin: "https://example.com",
+    configured_url: "https://example.com",
+    analyzer_version: "live_product_intelligence.v1",
+    completeness: "complete",
+    completeness_reasons: [],
+    failure_code: null,
+    result: fakeLiveSnapshot(),
+    created_at: "2026-08-19T00:00:00.000Z",
+    completed_at: "2026-08-19T00:00:01.000Z",
+    ...overrides,
+  });
+}
+
 function seedCompletedPlan(steps: Record<string, unknown>[]) {
+  seedLiveSnapshot();
   db.seed("action_plans", {
     id: "plan-1",
     project_id: PROJECT,
@@ -558,5 +591,102 @@ describe("previewDogfoodStep — Vibe's own preparation does not gate the click"
     if (preview.eligible) return;
     expect(preview.resolution?.mode).toBe("unsupported");
     expect(preview.resolution?.reason).toBe("no_executor_for_vibe_work");
+  });
+});
+
+/**
+ * The live premise, rechecked before the money (Rule 55).
+ *
+ * Three of five dogfood calibration fixtures cited a `live.seo.*` defect that
+ * had been fixed between the audit and the run. All three reached the agent,
+ * which read the files, correctly found nothing to do, and failed with
+ * `agent_produced_no_change` — a paid run that could not have produced
+ * anything. `docs/business/calibration/README.md` records it.
+ *
+ * These tests are that failure at the gate that spends: the refusal has to
+ * land in the preview, before `startAgentExecution` is ever reached.
+ */
+describe("previewDogfoodStep — a fixed defect does not buy a run", () => {
+  /** Cites a defect the seeded live snapshot still finds. */
+  const CITES_CANONICAL = {
+    ...AGENTIC_STEP,
+    evidence_ids: ["live.seo.canonical_missing"],
+  };
+
+  it("refuses when the cited defect is gone from a complete scan", async () => {
+    seedOwnedRepository();
+    seedSuccessfulSnapshot();
+    seedCompletedPlan([CITES_CANONICAL]);
+    // The observation that postdates the plan no longer finds it: the site
+    // grew a canonical tag, so the id is not minted at all any more.
+    db.rows("live_product_intelligence_snapshots")[0].result = fakeLiveSnapshot({
+      seoSignals: [
+        { id: "title", name: "Title", present: true, evidence: [] },
+        { id: "canonical", name: "Canonical URL", present: true, evidence: [] },
+      ],
+    });
+
+    const preview = await previewDogfoodStep(fakeSupabase(db), {
+      projectId: PROJECT,
+      userId: USER,
+      stepKey: "1-ship-it",
+      env: ALLOWLIST,
+    });
+
+    expect(preview.eligible).toBe(false);
+    if (preview.eligible) return;
+    expect(preview.resolution?.admission).toEqual({
+      admissible: false,
+      refusal: "live_premise_no_longer_true",
+    });
+  });
+
+  it("allows the run when the cited defect is still there", async () => {
+    // The control, so the refusal above cannot be satisfied by a change that
+    // simply stopped admitting anything.
+    seedOwnedRepository();
+    seedSuccessfulSnapshot();
+    seedCompletedPlan([CITES_CANONICAL]);
+
+    const preview = await previewDogfoodStep(fakeSupabase(db), {
+      projectId: PROJECT,
+      userId: USER,
+      stepKey: "1-ship-it",
+      env: ALLOWLIST,
+    });
+
+    expect(preview.eligible).toBe(true);
+    if (!preview.eligible) return;
+    expect(preview.resolution.admission).toEqual({ admissible: true });
+  });
+
+  /**
+   * A budget-degraded crawl (Rule 39) that did not reach the cited surface
+   * says nothing about whether the defect is fixed. Unobserved must never read
+   * as fine — the same posture an unread repository HEAD already has.
+   */
+  it("refuses rather than guessing when the scan came back partial", async () => {
+    seedOwnedRepository();
+    seedSuccessfulSnapshot();
+    seedCompletedPlan([CITES_CANONICAL]);
+    const snapshot = db.rows("live_product_intelligence_snapshots")[0];
+    snapshot.completeness = "partial";
+    snapshot.result = fakeLiveSnapshot({
+      seoSignals: [{ id: "title", name: "Title", present: true, evidence: [] }],
+    });
+
+    const preview = await previewDogfoodStep(fakeSupabase(db), {
+      projectId: PROJECT,
+      userId: USER,
+      stepKey: "1-ship-it",
+      env: ALLOWLIST,
+    });
+
+    expect(preview.eligible).toBe(false);
+    if (preview.eligible) return;
+    expect(preview.resolution?.admission).toEqual({
+      admissible: false,
+      refusal: "live_premise_unverified",
+    });
   });
 });
