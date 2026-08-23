@@ -444,19 +444,25 @@ export async function readAllocationPairs(
  * How many times each race class is run.
  *
  * A race that occurs with probability *p* per attempt is missed by *n* attempts
- * with probability (1 − *p*)ⁿ. At twenty: a 15% race is missed 3.9% of the
- * time, a 10% race 12%, a 5% race 36%. So twenty catches races of middling
- * frequency reliably and rare ones still not — which is the honest claim, and
- * repetition raises the chance of observing a defect rather than proving its
- * absence.
+ * with probability (1 − *p*)ⁿ. At sixty: a 15% race is missed 0.006% of the
+ * time, a 10% race 0.18%, a 5% race 4.6% — the threshold this constant was
+ * raised from twenty specifically to close (twenty missed a 5% race 36% of
+ * the time; sixty was the smallest round number that got that under 5%). So
+ * sixty catches races of middling frequency and most rare ones reliably —
+ * which is still the honest claim, not proof of absence: a 1% race is still
+ * missed 54.7% of the time at sixty repetitions, and repetition raises the
+ * chance of observing a defect rather than proving its absence, no matter
+ * how high the count goes.
  *
- * Twenty is also what the runtime affords: four classes at twenty iterations
- * sits inside the container start that dominates the job.
+ * Sixty is also what the runtime affords: measured against the 20-iteration
+ * baseline (~0.28s/iteration across the race matrix, per Sprint 0057 E2b's
+ * own timing), the full suite at sixty iterations is estimated at roughly
+ * 5-6 minutes total, comfortably inside this job's 30-minute timeout.
  *
  * There is no retry and no tolerance threshold anywhere in this suite. One
- * safety violation in twenty iterations is a defect, not noise.
+ * safety violation in sixty iterations is a defect, not noise.
  */
-export const ITERATIONS = 20;
+export const ITERATIONS = 60;
 
 /** Runs `body` for each iteration index, sequentially, so counts stay exact. */
 export async function forEachIteration(

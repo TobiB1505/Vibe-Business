@@ -1,4 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { CONTENTION_ATTEMPTS } from "../contention";
 import { grantCreditLot } from "../grants";
 import { allocateReservation, listActiveLots, type AllocateResult } from "../lot-store";
 import { claimReservation, ensureCreditAccount } from "../store";
@@ -70,6 +71,19 @@ describe.skipIf(!configured)("C — two allocations of one reservation, at once"
   it(`persists exactly one allocation per lot, ${ITERATIONS} times`, async () => {
     const admin = client();
     const codes: (string | null)[] = [];
+    // Rounds a real caller needed against `takeFromLot`'s CAS retry loop —
+    // unobservable before this class threaded an optional test-only callback
+    // through `allocateReservation` (Sprint 0057 E2b named this gap: "how
+    // many compare-and-swap rounds a caller needed is not observable from
+    // outside `admitHold`" — that referred to `admitHold`, since converted
+    // to a single RPC call and no longer CAS-bounded at all; the same
+    // question for the two loops that remain, `takeFromLot`/`returnToLot`,
+    // is answered here instead). Reported per iteration's peak round count
+    // across both racers, not asserted against a specific value — this
+    // shows what `CONTENTION_ATTEMPTS = 10` actually has headroom for under
+    // this class's two-way collision, not that 10 is proven minimal for
+    // every contention level this constant is meant to survive.
+    const roundsPerIteration: number[] = [];
 
     await forEachIteration(async (iteration) => {
       const { userId } = await createFixtureUser(admin, `alloc-${iteration}`);
@@ -98,6 +112,7 @@ describe.skipIf(!configured)("C — two allocations of one reservation, at once"
         if (!claim.ok) throw new Error("fixture could not take a hold");
 
         // Two independent clients allocating the same reservation.
+        let maxRound = 0;
         const racers = clients(RACERS);
         const outcomes: Outcome[] = await Promise.all(
           racers.map((racer) =>
@@ -105,11 +120,15 @@ describe.skipIf(!configured)("C — two allocations of one reservation, at once"
               creditAccountId: account.id,
               reservationId: claim.reservation.id,
               creditUnits: HOLD,
+              onContentionRound: (_fn, attempt) => {
+                if (attempt + 1 > maxRound) maxRound = attempt + 1;
+              },
             })
               .then((result): Outcome => ({ ok: true, result }))
               .catch((error: unknown): Outcome => ({ ok: false, error: classifyError(error) })),
           ),
         );
+        roundsPerIteration.push(maxRound);
 
         const succeeded = outcomes.filter((outcome) => outcome.ok);
         const threw = outcomes.filter((outcome) => !outcome.ok);
@@ -143,10 +162,14 @@ describe.skipIf(!configured)("C — two allocations of one reservation, at once"
     });
 
     const distinct = [...new Set(codes)];
+    const maxRoundsSeen = Math.max(...roundsPerIteration);
     console.log(
       `\nC — ${ITERATIONS} iterations of ${RACERS} concurrent allocations\n` +
         `  SQLSTATE reaching the client path: ${distinct.join(", ")}\n` +
-        `  allocation rows persisted per iteration: 1`,
+        `  allocation rows persisted per iteration: 1\n` +
+        `  takeFromLot/returnToLot CAS rounds per iteration: min ${Math.min(...roundsPerIteration)}, ` +
+        `max ${maxRoundsSeen}, mean ${(roundsPerIteration.reduce((sum, value) => sum + value, 0) / roundsPerIteration.length).toFixed(2)} ` +
+        `(CONTENTION_ATTEMPTS = ${CONTENTION_ATTEMPTS}; ${CONTENTION_ATTEMPTS - maxRoundsSeen} rounds of headroom observed under this class's two-way collision)`,
     );
   });
 
