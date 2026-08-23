@@ -21,6 +21,14 @@ import {
   isE2eActionPlanScenario,
 } from "../action-plan-scenarios";
 import { E2E_AUDIT_SCENARIOS, isE2eAuditScenario } from "../audit-scenarios";
+import {
+  E2E_AGENT_SCENARIOS,
+  E2E_HOME_SCENARIOS,
+  isE2eAgentScenario,
+  isE2eHomeScenario,
+} from "../command-center-scenarios";
+import { AgentPanel } from "@/app/app/projects/[projectId]/agent-panel";
+import { HomeStatus } from "@/app/app/projects/[projectId]/home-status";
 import { AppErrorPreview } from "../app-error-preview";
 import {
   E2E_AUDIT_CREDIT_SCENARIOS,
@@ -352,6 +360,43 @@ export default async function E2eScenarioPage({
    */
   if (scenario === "app-error" || scenario === "app-error-no-digest") {
     return <AppErrorPreview digest={scenario === "app-error" ? "1813753987@E394" : undefined} />;
+  }
+
+  /*
+   * The Command Center's two new surfaces (CORE-5).
+   *
+   * Both render the real component over a view model the real builder
+   * produced, so what the browser checks is the same decision the unit tests
+   * check — one layer further out.
+   */
+  if (isE2eHomeScenario(scenario)) {
+    return (
+      <main className="mx-auto max-w-[70rem] p-8">
+        {label}
+        <HomeStatus
+          view={E2E_HOME_SCENARIOS[scenario]()}
+          planHref="/app/projects/project_e2e/plan"
+          agentHref="/app/projects/project_e2e/agent"
+          productHref="/app/projects/project_e2e/product"
+          healthHref="/app/projects/project_e2e/health"
+        />
+      </main>
+    );
+  }
+
+  if (isE2eAgentScenario(scenario)) {
+    return (
+      <main className="mx-auto max-w-[70rem] p-8">
+        {label}
+        <AgentPanel
+          context={E2E_AGENT_SCENARIOS[scenario]()}
+          preparedCount={scenario === "agent-ready" ? 2 : 0}
+          planHref="/app/projects/project_e2e/plan"
+          productHref="/app/projects/project_e2e/product"
+          executionHref={null}
+        />
+      </main>
+    );
   }
 
   if (isE2eAuditScenario(scenario)) {
