@@ -63,7 +63,15 @@ export function NextMoveCard({ project }: { project: DashboardProject }) {
       )}
 
       <div className="mt-auto pt-1">
-        <Link href={planHref} className={buttonClasses({ variant: "primary", size: "sm" })}>
+        {/*
+          Primary only when there is a move to review. With nothing here the
+          hero beside this card is the one thing to do, and two filled buttons
+          side by side make a founder choose between them.
+        */}
+        <Link
+          href={planHref}
+          className={buttonClasses({ variant: move ? "primary" : "secondary", size: "sm" })}
+        >
           {move ? "Review this move" : "Open Action Plan"}
         </Link>
       </div>
