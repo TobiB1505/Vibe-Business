@@ -8,9 +8,8 @@ import {
   type ReservationRefusal,
   type ReservationStatus,
 } from "./schema";
-import { postedBalance, type ReleaseReason } from "./balance";
-import { CONTENTION_ATTEMPTS, retryDelayMs, sleep } from "./contention";
-import { creditUnits, subtractCredits, type CreditUnits, ZERO_CREDITS } from "./units";
+import { type ReleaseReason } from "./balance";
+import { creditUnits, type CreditUnits, ZERO_CREDITS } from "./units";
 
 /**
  * Billing persistence (BILLING CORE-1 §12, §26, §27, §33, §36).
@@ -26,12 +25,14 @@ import { creditUnits, subtractCredits, type CreditUnits, ZERO_CREDITS } from "./
  *
  * Two concurrent operations must not both reserve the same credits. The
  * guarantee is not the balance read in {@link getCreditBalance} — by the time
- * a caller acts on that number it is already stale. It is the single
- * conditional UPDATE in {@link claimReservation}, which re-evaluates
- * `posted - reserved >= amount` while holding the account row, so the loser of
- * a race updates zero rows and is told so. Postgres serializes concurrent
- * updates to one row; the second transaction sees the first's committed value,
- * not the value either of them originally read.
+ * a caller acts on that number it is already stale. It is the row lock inside
+ * `materialize_reservation_hold` (ADR 0041 §P3), which re-evaluates
+ * `posted - reserved >= amount` while holding the account row via
+ * `SELECT ... FOR UPDATE`, so the loser of a race blocks until the winner
+ * commits and then sees its result, not the value either of them originally
+ * read. `admitHold` below is a thin `.rpc()` call onto that function; the
+ * conditional UPDATE is no longer expressed in this file, only invoked from
+ * it.
  *
  * That is the same shape the rest of this codebase already uses for
  * concurrency — `operation_runs_single_active_idx` and the included-audit
@@ -283,13 +284,15 @@ export async function postLedgerEntry(
       //
       // But it is not licence to report success blindly (§I3). A replay is
       // most likely *because* the first attempt failed, and the way it fails
-      // is a committed entry whose materialization did not land. Answering
-      // "already posted, all good" there would turn a reported error into a
-      // silent one on the very next request — ERROR then SUCCESS, with the
-      // ledger and the cache still disagreeing. So the replay proves the
-      // materialization before it inherits the first attempt's success.
+      // is a committed entry whose materialization did not land. Re-invoking
+      // the materializer heals that rather than merely detecting it:
+      // `materialize_ledger_entry` locks the ledger row, checks its own
+      // `materialized_at` marker, and no-ops if the first attempt actually
+      // finished — so a genuine replay is free and an unfinished one is
+      // completed here, in front of the caller, instead of being reported as
+      // drift for someone else to fix later.
       if (existing) {
-        await assertPostedBalanceMaterialized(supabase, params.creditAccountId);
+        await materializeLedgerEntry(supabase, existing.id);
         return { entry: existing, alreadyPosted: true };
       }
     }
@@ -297,151 +300,24 @@ export async function postLedgerEntry(
   }
 
   const entry = mapLedgerEntry(data as LedgerRow);
-  await applyPostedDelta(supabase, params.creditAccountId, params.creditDelta);
+  await materializeLedgerEntry(supabase, entry.id);
   return { entry, alreadyPosted: false };
 }
 
 /**
- * Proves the materialized posted balance still equals the ledger that defines it.
+ * Applies one ledger entry's delta to the materialized posted balance.
  *
- * Deliberately only on the replay path, and deliberately only the posted side.
- * This is the one place where a caller is about to inherit an earlier attempt's
- * success without doing the work itself, so it is the one place that has to
- * check the earlier attempt actually finished. Running it on every post would
- * put a full ledger scan on the hot path to answer a question the write itself
- * already answers.
- *
- * It reconciles rather than repairs. Repair is a reconciliation decision with
- * its own ADR — who repairs, on what trigger, with what audit trail — and
- * inventing one here would be exactly the kind of quiet architecture this
- * sprint is cleaning up after.
+ * A thin `.rpc()` call onto `materialize_ledger_entry` (ADR 0041 §P3): the
+ * function locks the ledger row and the account row it belongs to, checks the
+ * ledger row's own `materialized_at` marker, and either applies the delta and
+ * sets the marker or no-ops if it is already set — all inside one Postgres
+ * transaction. That is what makes it safe to call twice for the same entry,
+ * from any two callers, in any order: the hot-path caller right after insert,
+ * and a replayed request's self-heal above.
  */
-async function assertPostedBalanceMaterialized(
-  supabase: SupabaseClient,
-  creditAccountId: string,
-): Promise<void> {
-  const { data, error } = await supabase
-    .from("billing_credit_accounts")
-    .select("posted_credits")
-    .eq("id", creditAccountId)
-    .single();
-
+async function materializeLedgerEntry(supabase: SupabaseClient, ledgerEntryId: string): Promise<void> {
+  const { error } = await supabase.rpc("materialize_ledger_entry", { p_entry_id: ledgerEntryId });
   if (error) throw error;
-
-  const materialized = creditUnits((data as { posted_credits: number }).posted_credits);
-  const entries = await listLedgerEntries(supabase, creditAccountId);
-  const expected = postedBalance(entries.map((entry) => ({ kind: entry.kind, creditDelta: entry.creditDelta })));
-
-  if (materialized === expected) return;
-
-  throw new MaterializationError({
-    creditAccountId,
-    column: "posted_credits",
-    attemptedDelta: subtractCredits(expected, materialized),
-    detail:
-      `a replayed entry found the cache at ${materialized} where the ledger says ${expected}, ` +
-      "so an earlier materialization did not land",
-  });
-}
-
-/**
- * Raised when a committed ledger entry could not be materialized (§I3).
- *
- * The ledger is authority and the account row is a cache of it, so this is not
- * a lost write to a convenience field: it means the two now disagree, with the
- * money already durably booked. There is no repairer in this codebase —
- * `reconcileBalance` computes drift and nothing acts on it — so the only
- * honest response is to fail loudly and let a person see it.
- *
- * Never caught and converted into a refusal. A refusal says "this did not
- * happen"; this says "part of it did".
- */
-export class MaterializationError extends Error {
-  readonly creditAccountId: string;
-  readonly column: "posted_credits" | "reserved_credits";
-  readonly attemptedDelta: number;
-
-  constructor(params: {
-    creditAccountId: string;
-    column: "posted_credits" | "reserved_credits";
-    attemptedDelta: number;
-    detail: string;
-  }) {
-    super(
-      `[billing] ${params.column} could not be materialized for account ${params.creditAccountId}: ` +
-        `${params.detail}. The ledger is authority and now disagrees with the cache.`,
-    );
-    this.name = "MaterializationError";
-    this.creditAccountId = params.creditAccountId;
-    this.column = params.column;
-    this.attemptedDelta = params.attemptedDelta;
-  }
-}
-
-/**
- * Moves the materialized posted balance by a signed delta.
- *
- * ## Why this is a compare-and-swap
- *
- * It was not, and the comment that justified that said "read-modify-write on a
- * single row, which Postgres serializes". Postgres serializes concurrent
- * UPDATEs *of one row*; it does not serialize a SELECT and a separate UPDATE
- * issued as two round-trips with no transaction and no guard. Two ledger
- * entries posting at once — a settlement charge and an expiry sweep, both
- * reachable from the same request — could each read the same balance and the
- * second would erase the first. One entry's delta simply vanished from the
- * cache while staying in the ledger.
- *
- * So the write is guarded by the value it read, exactly as {@link admitHold}
- * has been since PR #46, and a lost swap is retried against a fresh read.
- *
- * ## Why exhaustion throws
- *
- * By the time this runs, `postLedgerEntry` has already committed the ledger
- * row. Giving up quietly would leave the canonical record and its cache
- * disagreeing with nothing to notice — and the previous comment's claim that
- * `reconcileBalance` "would detect the drift" was never true in the sense it
- * implied: that function has one caller, which logs and then returns the
- * drifted figure anyway. Fixing that is a reconciliation decision this sprint
- * deliberately does not make, so the least it can do is refuse to be silent.
- */
-async function applyPostedDelta(
-  supabase: SupabaseClient,
-  creditAccountId: string,
-  delta: CreditUnits,
-): Promise<void> {
-  for (let attempt = 0; attempt < CONTENTION_ATTEMPTS; attempt += 1) {
-    const { data, error } = await supabase
-      .from("billing_credit_accounts")
-      .select("posted_credits")
-      .eq("id", creditAccountId)
-      .single();
-
-    if (error) throw error;
-
-    const posted = (data as { posted_credits: number }).posted_credits;
-    const next = creditUnits(posted + delta);
-
-    const { data: updated, error: updateError } = await supabase
-      .from("billing_credit_accounts")
-      .update({ posted_credits: next })
-      .eq("id", creditAccountId)
-      // The swap: only if nobody has moved this column since it was read.
-      .eq("posted_credits", posted)
-      .select("id");
-
-    if (updateError) throw updateError;
-    if (updated && updated.length > 0) return;
-
-    await sleep(retryDelayMs(attempt));
-  }
-
-  throw new MaterializationError({
-    creditAccountId,
-    column: "posted_credits",
-    attemptedDelta: delta,
-    detail: `sustained contention across ${CONTENTION_ATTEMPTS} attempts`,
-  });
 }
 
 /* ---------------------------------------------------------------------------
@@ -622,7 +498,7 @@ export async function claimReservation(
   }
 
   const reservation = mapReservation(data as ReservationRow);
-  const admitted = await admitHold(supabase, params.account.id, params.reservedCredits);
+  const admitted = await admitHold(supabase, reservation.id);
 
   if (!admitted.ok) {
     // The hold was not taken, so the row that claimed it must not stay active.
@@ -636,75 +512,34 @@ export async function claimReservation(
 /**
  * Takes the hold against the account row, atomically (§12, §48).
  *
- * ## Why compare-and-swap, and why it retries
- *
- * PostgREST cannot express a column-relative update — there is no way to say
- * `set reserved_credits = reserved_credits + $1` through it. So the update
- * carries the *new* value and is guarded by `eq(reserved_credits, <the value
- * we read>)`: a classic compare-and-swap. If another caller moved the column
- * in between, zero rows match and this attempt did not happen.
- *
- * CAS alone is safe but too strict. Two callers reserving 700 each against
- * 1500 would both read `reserved = 0`, the first would win, and the second
- * would be refused despite the balance covering it — a funded customer told
- * "insufficient credits" because somebody else was quick. So a failed swap
- * re-reads the account and distinguishes the two causes: if available is now
- * genuinely below the request, that is a real refusal; otherwise it was
- * contention and the attempt is repeated against the fresh value, after a
- * short jittered delay ({@link retryDelayMs}) so many simultaneous losers do
- * not immediately collide with each other again in lockstep.
- *
- * The safety direction never depends on the retry or the backoff. Overspending
- * is prevented by the swap itself and, underneath it, by
- * `billing_credit_accounts_available_non_negative` — a caller that somehow
- * retried zero times, or a thousand, could never post a reservation the
- * account could not cover. What the retry count and backoff affect is only
- * *liveness*: whether a genuinely fundable request is told so.
+ * A thin `.rpc()` call onto `materialize_reservation_hold` (ADR 0041 §P3).
+ * The function locks the reservation row and its account with
+ * `SELECT ... FOR UPDATE`, then — because the row this call passes was just
+ * inserted `active` with no `admitted_at` — takes its admit branch: adds
+ * `reserved_credits` and stamps `admitted_at`. There is no explicit
+ * availability check in that branch; admission safety is the CHECK constraint
+ * underneath it, `billing_credit_accounts_available_non_negative`, exactly as
+ * it always has been for this codebase's overspend doctrine — a caller could
+ * never post a reservation the account could not cover, whether or not any
+ * application code checked first. So a violation of that constraint means the
+ * same thing an explicit refusal would: there were not enough credits.
  */
 async function admitHold(
   supabase: SupabaseClient,
-  creditAccountId: string,
-  requested: CreditUnits,
+  reservationId: string,
 ): Promise<{ ok: true } | { ok: false; refusal: ReservationRefusal }> {
-  for (let attempt = 0; attempt < CONTENTION_ATTEMPTS; attempt += 1) {
-    const { data: current, error: readError } = await supabase
-      .from("billing_credit_accounts")
-      .select("posted_credits, reserved_credits")
-      .eq("id", creditAccountId)
-      .single();
+  const { error } = await supabase.rpc("materialize_reservation_hold", {
+    p_reservation_id: reservationId,
+  });
 
-    if (readError) throw readError;
-
-    const row = current as { posted_credits: number; reserved_credits: number };
-    const available = row.posted_credits - row.reserved_credits;
-    if (available < requested) return { ok: false, refusal: "insufficient_credits" };
-
-    const { data: updated, error: updateError } = await supabase
-      .from("billing_credit_accounts")
-      .update({ reserved_credits: row.reserved_credits + requested })
-      .eq("id", creditAccountId)
-      // The swap: only if nobody has moved this column since it was read.
-      .eq("reserved_credits", row.reserved_credits)
-      .select("id");
-
-    if (updateError) {
-      // The backstop constraint refusing means the same thing the predicate
-      // does — there were not enough credits.
-      if (updateError.code === POSTGRES_CHECK_VIOLATION) {
-        return { ok: false, refusal: "insufficient_credits" };
-      }
-      throw updateError;
+  if (error) {
+    if (error.code === POSTGRES_CHECK_VIOLATION) {
+      return { ok: false, refusal: "insufficient_credits" };
     }
-
-    if (updated && updated.length > 0) return { ok: true };
-    // Lost the swap. Back off briefly so we don't immediately collide with
-    // the same losers again, then re-read and decide again.
-    await sleep(retryDelayMs(attempt));
+    throw error;
   }
 
-  // Sustained contention rather than a balance problem. Refusing is safe and
-  // the caller may try again; silently proceeding would not be.
-  return { ok: false, refusal: "insufficient_credits" };
+  return { ok: true };
 }
 
 /** Marks a reservation that never took a hold as released, so it holds nothing. */
@@ -768,67 +603,44 @@ export async function closeReservation(
   if (error) throw error;
   if (!data || data.length === 0) return { closed: false };
 
-  await releaseHeldCredits(supabase, params.creditAccountId, params.heldCredits);
+  await releaseHeldCredits(supabase, params.reservationId);
   return { closed: true };
 }
 
 /**
  * Decrements the materialized hold.
  *
- * Called at most once per reservation — `closeReservation` guards on
- * `status = 'active'` and only calls through when a row actually flipped. That
- * exclusivity was previously taken as licence to skip the compare-and-swap,
- * and it is the wrong invariant: the *reservation* is closed once, but the
- * column is **account**-scoped. Two reservations closing at the same moment
- * both read the same total and each writes its own subtraction, so the later
- * write erases the earlier one and a hold that was released stays counted.
- *
- * Worse in the other direction: an unguarded write here can erase an increment
- * {@link admitHold} has just made and already returned success for, leaving the
- * account **under**-reserved — a live hold the cache does not count.
- * `billing_credit_accounts_available_non_negative` is `posted - reserved >= 0`
- * and is structurally blind to that, because it only ever catches `reserved`
- * growing too large.
- *
- * Exhaustion throws for the same reason {@link applyPostedDelta} does: the
- * reservation row is already durably closed by the time this runs.
+ * The same `.rpc()` call onto `materialize_reservation_hold` as
+ * {@link admitHold}, called instead at the point where `closeReservation` has
+ * just flipped the row out of `active` — so the function's row lock finds
+ * `admitted_at` set and `hold_released_at` still null, takes its release
+ * branch, and subtracts `reserved_credits` exactly once. Called at most once
+ * per reservation, for the same reason it always was: `closeReservation`
+ * guards on `status = 'active'` and only calls through when a row actually
+ * flipped. The function's own row lock is what makes that guarantee hold even
+ * under concurrency — two reservations closing at once each lock their own
+ * row, not the account's total, so neither can erase the other's subtraction.
  */
-async function releaseHeldCredits(
-  supabase: SupabaseClient,
-  creditAccountId: string,
-  held: CreditUnits,
-): Promise<void> {
-  for (let attempt = 0; attempt < CONTENTION_ATTEMPTS; attempt += 1) {
-    const { data, error } = await supabase
-      .from("billing_credit_accounts")
-      .select("reserved_credits")
-      .eq("id", creditAccountId)
-      .single();
-
-    if (error) throw error;
-
-    const reserved = (data as { reserved_credits: number }).reserved_credits;
-    const next = creditUnits(Math.max(0, reserved - held));
-
-    const { data: updated, error: updateError } = await supabase
-      .from("billing_credit_accounts")
-      .update({ reserved_credits: next })
-      .eq("id", creditAccountId)
-      .eq("reserved_credits", reserved)
-      .select("id");
-
-    if (updateError) throw updateError;
-    if (updated && updated.length > 0) return;
-
-    await sleep(retryDelayMs(attempt));
-  }
-
-  throw new MaterializationError({
-    creditAccountId,
-    column: "reserved_credits",
-    attemptedDelta: -held,
-    detail: `sustained contention across ${CONTENTION_ATTEMPTS} attempts`,
+async function releaseHeldCredits(supabase: SupabaseClient, reservationId: string): Promise<void> {
+  const { error } = await supabase.rpc("materialize_reservation_hold", {
+    p_reservation_id: reservationId,
   });
+  if (error) throw error;
+}
+
+/**
+ * Repairs an account's materialized figures from the ledger and reservations.
+ *
+ * A thin `.rpc()` call onto `repair_account_balance` (ADR 0041 §P3): it scans
+ * for rows whose marker is still unset and delegates to
+ * `materialize_ledger_entry`/`materialize_reservation_hold` for each, so it
+ * shares their exact locking and idempotency rather than recomputing a total
+ * from scratch. Only ever called from behind `BILLING_REPAIR_ENABLED` — see
+ * `getBillingBalance` in `service.ts` and ADR 0041's Rollout section.
+ */
+export async function repairAccountBalance(supabase: SupabaseClient, creditAccountId: string): Promise<void> {
+  const { error } = await supabase.rpc("repair_account_balance", { p_account_id: creditAccountId });
+  if (error) throw error;
 }
 
 /* ---------------------------------------------------------------------------

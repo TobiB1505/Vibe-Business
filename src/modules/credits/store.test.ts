@@ -6,7 +6,6 @@ import {
   ensureCreditAccount,
   getCreditBalance,
   listActiveReservations,
-  MaterializationError,
   postLedgerEntry,
   projectUsageEvents,
   type CreditAccount,
@@ -336,17 +335,22 @@ describe("database-level financial invariants", () => {
 });
 
 /**
- * Sprint 0057 — the two money-cache writers that had no compare-and-swap.
+ * ADR 0041 §P3 — the shared materialization primitives cannot lose a write.
  *
- * `admitHold` has guarded its write since PR #46. `applyPostedDelta` and
- * `releaseHeldCredits` did not, and the docblock above the first justified that
- * with "read-modify-write on a single row, which Postgres serializes" — which
- * Postgres does for concurrent UPDATEs of one row, and does not for a SELECT
- * and a separate UPDATE issued as two round-trips with no transaction.
+ * `applyPostedDelta` and `releaseHeldCredits` used to be two independent
+ * compare-and-swap loops in this file, each its own read-then-guarded-update
+ * round trip with a window between them. Sprint C replaced both with a single
+ * `.rpc()` call onto `materialize_ledger_entry`/`materialize_reservation_hold`
+ * — one Postgres statement that locks the row it touches with
+ * `SELECT ... FOR UPDATE` before reading or writing anything, so there is no
+ * round trip for a second caller to land inside of.
  *
- * These interleave the way `concurrent reservations cannot overspend` does:
- * both callers read before either writes. The fake serializes each statement
- * but not a sequence, so this is the same window a real deployment has.
+ * `fakeSupabase`'s `.rpc()` mirrors that: each handler call runs to
+ * completion — read, constraint check, write — before any other queued
+ * microtask runs, so two concurrent calls against the same account row can
+ * never interleave their reads. That is not a looser stand-in for the real
+ * guarantee; it is the same guarantee, because the real guarantee is also
+ * "the whole thing happens as one unit against one locked row."
  */
 describe("the materialized balance cannot be silently overwritten", () => {
   it("does not lose a posted delta when two entries interleave", async () => {
@@ -425,49 +429,53 @@ describe("the materialized balance cannot be silently overwritten", () => {
 });
 
 /**
- * Sprint 0057, Proof 2 — an idempotent replay may not launder a drift.
+ * ADR 0041 §P3 — an idempotent replay heals a crash it finds, instead of
+ * reporting drift for someone else to fix.
  *
- * `postLedgerEntry` commits the ledger row and *then* materializes it. If the
- * materialization fails, the caller is told so. But the retry that follows hits
- * the unique index, takes the `alreadyPosted` early return, and — before this
- * sprint — reported success without ever touching the cache. Ledger and balance
- * still disagreed, and the second request said everything was fine.
- *
- * The forbidden sequence is `ERROR → SUCCESS` with the drift untouched between
- * them. Here the drift is created directly, because what matters is what the
- * replay does when it finds one, not how it got there.
+ * `postLedgerEntry` inserts the ledger row and *then* materializes it. A crash
+ * between those two steps leaves a durable entry with `materialized_at IS
+ * NULL` — the exact case Sprint B0's certification named and Sprint B1's
+ * primitives exist to repair. The replay that follows hits the unique index,
+ * takes the `alreadyPosted` branch, and re-invokes the materializer on that
+ * same entry: `materialize_ledger_entry` checks the row's own marker, finds it
+ * unset, and finishes what the first attempt started — no scan, no comparison
+ * against the ledger total, just this one row's own pending effect applied
+ * once.
  */
-describe("an idempotent replay does not report success over a drift", () => {
-  it("refuses when the ledger and the materialized balance disagree", async () => {
+describe("an idempotent replay heals an unmaterialized entry", () => {
+  it("finishes materializing a ledger entry a crash left pending", async () => {
     const account = await fundedAccount(1000);
 
-    await postLedgerEntry(supabase(), {
+    // What a crash between "insert the ledger row" and "materialize it"
+    // leaves behind: the entry exists, but never moved the cache. Written
+    // directly, because `postLedgerEntry` itself never leaves this state on
+    // its own — that is the scenario, not a call it would make.
+    const { data: pending } = await supabase()
+      .from("billing_credit_ledger")
+      .insert({
+        credit_account_id: account.id,
+        kind: "grant",
+        credit_delta: creditsToUnits(500),
+        idempotency_key: "crashed-before-materialize",
+      })
+      .select("id")
+      .single();
+
+    // The replay. It must not answer "already posted" without finishing the
+    // materialization the first attempt never completed.
+    const replay = await postLedgerEntry(supabase(), {
       creditAccountId: account.id,
       kind: "grant",
       creditDelta: creditsToUnits(500),
-      idempotencyKey: "replayed",
+      idempotencyKey: "crashed-before-materialize",
       reason: "test",
     });
 
-    // Exactly what a failed materialization leaves behind: the entry is
-    // durable, the cache never moved.
-    const row = db.current
-      .rows("billing_credit_accounts")
-      .find((candidate) => (candidate as { id: string }).id === account.id) as {
-      posted_credits: number;
-    };
-    row.posted_credits = creditsToUnits(1000);
+    expect(replay.alreadyPosted).toBe(true);
+    expect(replay.entry.id).toBe((pending as { id: string }).id);
 
-    // The replay. It must not answer "already posted, all good".
-    await expect(
-      postLedgerEntry(supabase(), {
-        creditAccountId: account.id,
-        kind: "grant",
-        creditDelta: creditsToUnits(500),
-        idempotencyKey: "replayed",
-        reason: "test",
-      }),
-    ).rejects.toBeInstanceOf(MaterializationError);
+    const balance = await getCreditBalance(supabase(), USER);
+    expect(balance?.posted).toBe(creditsToUnits(1500));
   });
 
   it("still reports an ordinary replay as already posted", async () => {
@@ -498,76 +506,57 @@ describe("an idempotent replay does not report success over a drift", () => {
 });
 
 /**
- * Sprint 0057 — what a compare-and-swap does when it never wins.
+ * ADR 0041 §P3 — an unexpected materialization error propagates rather than
+ * being swallowed.
  *
- * The retry bounds liveness, so it has to end somewhere. What it must not do is
- * end quietly: `postLedgerEntry` has already committed the ledger row by the
- * time the materialization runs, so giving up without a sound leaves the
- * canonical record and its cache disagreeing with nothing to notice (§I3).
- *
- * A client whose account-row swaps never match models sustained contention
- * without depending on timing. Ten lost swaps is not a plausible production
- * event; a silent one is the failure mode being ruled out.
+ * There is no retry loop left to exhaust: `postLedgerEntry` and
+ * `claimReservation` each make one `.rpc()` call, and its only recognized
+ * refusal is the specific constraint violation each already translates
+ * (`23514` on the account row). Anything else the call could fail with — a
+ * network error, a function that does not exist, a row genuinely missing —
+ * must reach the caller as a thrown error, not a quiet no-op, because by the
+ * time this runs the ledger row (or the reservation row) is already durably
+ * committed.
  */
-describe("a materialization that never wins its swap fails loudly", () => {
-  /** Passes everything through, but no guarded write to the account row ever matches. */
-  function alwaysContended(): ReturnType<typeof supabase> {
+describe("an unrecognized materialization failure is never swallowed", () => {
+  /** Passes everything through, but every `.rpc()` call fails with an error `admitHold`/`materializeLedgerEntry` do not specifically handle. */
+  function rpcAlwaysErrors(): ReturnType<typeof supabase> {
     const real = supabase();
-    const lost = {
-      eq: () => lost,
-      select: () => lost,
-      single: async () => ({ data: null, error: null }),
-      then: (onfulfilled: (value: { data: unknown; error: unknown }) => unknown) =>
-        Promise.resolve({ data: [], error: null }).then(onfulfilled),
-    };
     return {
-      from(table: string) {
-        const target = (real as unknown as { from: (t: string) => Record<string, unknown> }).from(table);
-        if (table !== "billing_credit_accounts") return target;
-        return {
-          ...target,
-          update: (payload: Record<string, unknown>) =>
-            "posted_credits" in payload || "reserved_credits" in payload
-              ? lost
-              : (target.update as (p: Record<string, unknown>) => unknown)(payload),
-        };
-      },
+      ...real,
+      rpc: () => ({
+        then: (onfulfilled: (value: { data: null; error: unknown }) => unknown) =>
+          Promise.resolve({ data: null, error: { code: "53300", message: "too many connections" } }).then(
+            onfulfilled,
+          ),
+      }),
     } as unknown as ReturnType<typeof supabase>;
   }
 
-  it("throws MaterializationError rather than returning", async () => {
+  it("propagates a posting failure that is not a recognized refusal", async () => {
     const account = await fundedAccount(1000);
 
     await expect(
-      postLedgerEntry(alwaysContended(), {
+      postLedgerEntry(rpcAlwaysErrors(), {
         creditAccountId: account.id,
         kind: "grant",
         creditDelta: creditsToUnits(250),
-        idempotencyKey: "contended",
+        idempotencyKey: "rpc-error",
         reason: "test",
       }),
-    ).rejects.toBeInstanceOf(MaterializationError);
+    ).rejects.toMatchObject({ code: "53300" });
   });
 
-  it("names the account and the column it could not move", async () => {
+  it("propagates an admission failure that is not the insufficient-credits refusal", async () => {
     const account = await fundedAccount(1000);
 
-    let failure: MaterializationError | null = null;
-    try {
-      await postLedgerEntry(alwaysContended(), {
-        creditAccountId: account.id,
-        kind: "grant",
-        creditDelta: creditsToUnits(250),
-        idempotencyKey: "contended:named",
-        reason: "test",
-      });
-    } catch (error) {
-      failure = error as MaterializationError;
-    }
-
-    expect(failure).toBeInstanceOf(MaterializationError);
-    expect(failure?.creditAccountId).toBe(account.id);
-    expect(failure?.column).toBe("posted_credits");
-    expect(failure?.attemptedDelta).toBe(creditsToUnits(250));
+    await expect(
+      claimReservation(rpcAlwaysErrors(), {
+        account,
+        reservedCredits: creditsToUnits(250),
+        idempotencyKey: "rpc-error:reserve",
+        projectId: PROJECT,
+      }),
+    ).rejects.toMatchObject({ code: "53300" });
   });
 });

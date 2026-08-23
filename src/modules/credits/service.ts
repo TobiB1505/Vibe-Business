@@ -28,6 +28,7 @@ import {
   listActiveReservations,
   listLedgerEntries,
   postLedgerEntry,
+  repairAccountBalance,
   type CreditReservation,
 } from "./store";
 import { creditUnits, type CreditUnits, ZERO_CREDITS } from "./units";
@@ -132,12 +133,22 @@ export type BillingBalanceView = {
  * checks is a second source of truth. A caller that finds `consistent: false`
  * has found a real defect, not a rounding artefact — the ledger is authority
  * and the materialized figure is a cache of it.
+ *
+ * ## The repair call is gated, and unreachable while unset (ADR 0041 §P3, Rollout)
+ *
+ * `BILLING_REPAIR_ENABLED` is a server-only environment variable, read only
+ * here and at the lot-level equivalent, defaulting unset. While unset this
+ * function behaves exactly as it always has: drift is logged and nothing acts
+ * on it — `repairAccountBalance` is not called-and-skipped, it is simply
+ * never reached, so this deploy carries no behavioural change until an
+ * operator has independently verified the drain conditions the ADR names and
+ * sets the flag.
  */
 export async function getBillingBalance(
   supabase: SupabaseClient,
   userId: string,
 ): Promise<BillingBalanceView | null> {
-  const account = await findCreditAccountByUser(supabase, userId);
+  let account = await findCreditAccountByUser(supabase, userId);
   if (!account) return null;
 
   const [entries, reservations] = await Promise.all([
@@ -145,10 +156,13 @@ export async function getBillingBalance(
     listActiveReservations(supabase, account.id),
   ]);
 
-  const reconciliation = reconcileBalance(
+  const mappedEntries = entries.map((entry) => ({ kind: entry.kind, creditDelta: entry.creditDelta }));
+  const mappedReservations = reservations.map((reservation) => ({ reservedCredits: reservation.reservedCredits }));
+
+  let reconciliation = reconcileBalance(
     { posted: account.postedCredits, reserved: account.reservedCredits },
-    entries.map((entry) => ({ kind: entry.kind, creditDelta: entry.creditDelta })),
-    reservations.map((reservation) => ({ reservedCredits: reservation.reservedCredits })),
+    mappedEntries,
+    mappedReservations,
   );
 
   if (!reconciliation.consistent) {
@@ -158,6 +172,19 @@ export async function getBillingBalance(
       postedDrift: reconciliation.drift.posted,
       reservedDrift: reconciliation.drift.reserved,
     });
+
+    if (process.env.BILLING_REPAIR_ENABLED === "true") {
+      await repairAccountBalance(supabase, account.id);
+      const repaired = await findCreditAccountByUser(supabase, userId);
+      if (repaired) {
+        account = repaired;
+        reconciliation = reconcileBalance(
+          { posted: account.postedCredits, reserved: account.reservedCredits },
+          mappedEntries,
+          mappedReservations,
+        );
+      }
+    }
   }
 
   return {
