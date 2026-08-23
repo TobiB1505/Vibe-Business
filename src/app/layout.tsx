@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
+import { MetaPixel } from "@/components/analytics/meta-pixel";
+import { isMetaPixelEnabled } from "@/lib/analytics/meta-pixel";
 import { getAppUrl } from "@/lib/env/app-url";
 import { fontVariables } from "./fonts";
 import "./globals.css";
@@ -34,6 +36,14 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         {children}
         <Analytics />
         <SpeedInsights />
+        {/*
+          Advertising attribution, and the only third-party tag here that is
+          conditional. It is evaluated on the server, so a deployment that is
+          not Production ships no Meta script at all rather than shipping one
+          that decides at runtime not to fire. The component itself excludes
+          the authenticated surface — see src/lib/analytics/meta-pixel.ts.
+        */}
+        {isMetaPixelEnabled() && <MetaPixel />}
       </body>
     </html>
   );

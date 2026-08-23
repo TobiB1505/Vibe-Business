@@ -181,6 +181,8 @@ The one thing deliberately absent: **no consumption rate card is active.** `CRED
 
 **[Confirmed — ADR 0022]** Application error monitoring and baseline tracing use **Sentry** through `@sentry/nextjs` across the browser, Node.js, and Edge runtimes. Default PII collection is disabled; Session Replay, Logs, Profiling, Metrics, and AI monitoring are not enabled by this decision. Production source maps and releases are uploaded only from authenticated builds. See [0022-sentry-observability.md](docs/decisions/0022-sentry-observability.md).
 
+**[Confirmed — ADR 0041]** Advertising attribution uses the **Meta Pixel**, mounted by the root layout inside two boundaries enforced in code: production deployments only (a Preview or development build ships no Meta script at all) and public pages only (the tag is absent on `/app` and below, so the project identifiers in those paths never reach an advertising network). `PageView` is the only event sent, and no user data is passed to `fbq`. Implemented in `src/lib/analytics/meta-pixel.ts` and `src/components/analytics/meta-pixel.tsx`. See [0041-marketing-attribution-pixel.md](docs/decisions/0041-marketing-attribution-pixel.md).
+
 **[Confirmed principle]** Security-sensitive integrations (GitHub auth, tokens, webhooks, credentials) use least privilege and are never committed to the repository. See [CLAUDE.md](CLAUDE.md).
 
 **[Confirmed — ADR 0013]** Background/asynchronous work runs as **durable operations on Vercel Workflows** — plain async TypeScript under a `"use workflow"` directive, with no separate queue, worker or scheduler service. The pipeline in [§2](#2-core-flow) cannot run synchronously within one request, and a durable operation owns its own lifetime: an `operation_runs` row survives the request that started it. **[Confirmed — ADR 0037]** one durable operation may enqueue the next. Implemented in `src/modules/operations/`. See [0013-durable-operation-execution.md](docs/decisions/0013-durable-operation-execution.md). A *further* background technology beside it still requires a new ADR ([CLAUDE.md](CLAUDE.md) rule 24).
@@ -238,7 +240,7 @@ This is the register of genuinely **undecided** questions, and nothing else. Wor
 **Still open:**
 
 1. **Credit consumption rate card** — what a Credit buys per operation, and at what margin. Narrowed rather than resolved: the ledger, the retail purchase price and the simulation exist ([§3.11](#311-usagecredit-layer)); the activation decision does not, and [docs/business/CREDIT_PRICING_V1.md](docs/business/CREDIT_PRICING_V1.md) argues the evidence is not yet sufficient to make it.
-2. **Analytics provider for the customer's product** — the metric-source port is vendor-neutral by design ([ADR 0021](docs/decisions/0021-business-outcome-measurement.md)) and no adapter is written, so every project resolves to `waiting_for_source`. Vibe's own product analytics is separate and already answered (`@vercel/analytics`).
+2. **Analytics provider for the customer's product** — the metric-source port is vendor-neutral by design ([ADR 0021](docs/decisions/0021-business-outcome-measurement.md)) and no adapter is written, so every project resolves to `waiting_for_source`. Vibe's own product analytics is separate and already answered (`@vercel/analytics`), as is Vibe's own ad attribution ([ADR 0041](docs/decisions/0041-marketing-attribution-pixel.md)).
 3. **Previewing a repository whose validated artifact cannot be started** by a single detected dev/start command ([§3.9](#39-preview-layer)).
 4. **Production hosting migration as a possible future product feature** — not scoped, not committed to.
 
@@ -302,6 +304,7 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0038](docs/decisions/0038-economy-intelligence-layer.md) | Economy intelligence layer | §3.11 |
 | [0039](docs/decisions/0039-documentation-currency.md) | Where truth lives, and how documentation stays current | This document |
 | [0040](docs/decisions/0040-ci-hosted-database-concurrency-gate.md) | Where a real-database concurrency test runs, and what it may reach | §3.11 |
+| [0041](docs/decisions/0041-marketing-attribution-pixel.md) | The Meta Pixel, and the two boundaries it runs inside | Cross-cutting |
 
 ### Layers with no section above
 
