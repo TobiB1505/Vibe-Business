@@ -141,7 +141,20 @@ describe("resolving a requirement into repository evidence (PART C)", () => {
   });
 
   it("derives the private area from the analyzer's own evidence, not a path rule", () => {
-    expect(resolve().authenticatedRoots).toEqual(["src/app/app"]);
+    /*
+     * Two roots, from two evidence directories — the fixture mirrors this
+     * repository, whose account pages moved into an `(account)` route group.
+     *
+     * That the nested one appears alongside its parent is correct and inert:
+     * `underAuthenticatedRoot` matches on a path prefix, so `src/app/app`
+     * already covers everything beneath it. The point the test is making is
+     * unchanged — the roots come from what the analyzer saw, not from a rule
+     * that says "anything under /app is private".
+     */
+    expect(resolve().authenticatedRoots).toEqual([
+      "src/app/app",
+      "src/app/app/(account)",
+    ]);
   });
 
   it("excludes nothing when the analyzer never found a signed-in area", () => {

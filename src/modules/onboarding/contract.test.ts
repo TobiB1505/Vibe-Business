@@ -12,7 +12,7 @@ const MIGRATION = readFileSync(
 );
 const ACTIONS = readFileSync(join(ONBOARDING_APP, "[projectId]/actions.ts"), "utf8");
 const PAGE = readFileSync(join(ONBOARDING_APP, "[projectId]/page.tsx"), "utf8");
-const APP_HOME = readFileSync(join(ROOT, "src/app/app/page.tsx"), "utf8");
+const APP_HOME = readFileSync(join(ROOT, "src/app/app/(account)/page.tsx"), "utf8");
 const ONBOARDING_SHELL = readFileSync(
   join(ONBOARDING_APP, "onboarding-shell.tsx"),
   "utf8",

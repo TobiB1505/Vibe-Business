@@ -1,6 +1,5 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { AppShell } from "@/components/layout/app-shell";
 import { buttonClasses } from "@/components/ui/button";
 import { Notice } from "@/components/ui/states";
 import { Surface } from "@/components/ui/surface";
@@ -9,12 +8,11 @@ import { createClient } from "@/lib/supabase/server";
 import { requireSession } from "@/modules/auth/session";
 import { buildActivityEntry } from "@/modules/audit-log/view";
 import { buildAttentionItems } from "@/modules/projects/attention";
-import { getHeaderCreditBalance } from "@/modules/billing/overview";
 import { getDashboardOverview } from "@/modules/projects/dashboard";
 import { getOnboardingRouting } from "@/modules/onboarding/store";
-import { AttentionList } from "./attention-list";
-import { DashboardActivity, type DashboardActivityEntry } from "./dashboard-activity";
-import { ProjectRow } from "./project-list";
+import { AttentionList } from "../attention-list";
+import { DashboardActivity, type DashboardActivityEntry } from "../dashboard-activity";
+import { ProjectRow } from "../project-list";
 
 /**
  * The global dashboard (Sprint UI-3).
@@ -83,14 +81,12 @@ export default async function AppHomePage({
 
   const supabase = await createClient();
   /*
-   * Two independent reads, in parallel (§100). The Credit balance is one
-   * account row plus its active lots — never a lifetime ledger scan — because
-   * this renders on every signed-in navigation.
+   * One read. The Credit balance used to be the second half of a
+   * `Promise.all` here; it belongs to the shell, and the shell is a layout as
+   * of CORE-6 — reading it in both places would cost every dashboard render a
+   * duplicate wallet lookup for a number this page does not render.
    */
-  const [{ projects, recentActivity }, creditBalance] = await Promise.all([
-    getDashboardOverview(supabase, session.userId),
-    getHeaderCreditBalance(supabase, { userId: session.userId }),
-  ]);
+  const { projects, recentActivity } = await getDashboardOverview(supabase, session.userId);
 
   /*
    * First login and interrupted activation resolve on the server. Connection
@@ -140,7 +136,7 @@ export default async function AppHomePage({
         : `${attention.length} ${attention.length === 1 ? "thing needs" : "things need"} your attention.`;
 
   return (
-    <AppShell email={session.email} credits={creditBalance?.display ?? null}>
+    <>
       <div className="flex flex-col gap-10">
         {connectError && (
           <Notice tone="problem" label="Connection failed">
@@ -207,6 +203,6 @@ export default async function AppHomePage({
           </>
         )}
       </div>
-    </AppShell>
+    </>
   );
 }

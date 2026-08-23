@@ -98,7 +98,7 @@ export const OUTCOME_ROUTES: RouteSummary[] = [
   { path: "/", kind: "page", dynamic: false, sourcePath: "src/app/page.tsx" },
   { path: "/login", kind: "page", dynamic: false, sourcePath: "src/app/login/page.tsx" },
   { path: "/signup", kind: "page", dynamic: false, sourcePath: "src/app/signup/page.tsx" },
-  { path: "/app", kind: "page", dynamic: false, sourcePath: "src/app/app/page.tsx" },
+  { path: "/app", kind: "page", dynamic: false, sourcePath: "src/app/app/(account)/page.tsx" },
   {
     path: "/app/projects/[projectId]",
     kind: "page",

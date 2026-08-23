@@ -52,7 +52,7 @@ import { RetryProductScan } from "@/app/app/onboarding/[projectId]/phase-actions
 import { UnderstandingStatus } from "@/app/app/onboarding/[projectId]/understanding-status";
 import { OpportunitiesPanel } from "@/app/app/projects/[projectId]/opportunities-panel";
 import { ProductLogo } from "@/components/brand/product-logo";
-import { BillingView } from "@/app/app/billing/billing-view";
+import { BillingView } from "@/app/app/(account)/billing/billing-view";
 import { E2E_BILLING_SCENARIOS, isE2eBillingScenario } from "../billing-scenarios";
 import { E2E_MOVES_SCENARIOS, isE2eMovesScenario } from "../moves-scenarios";
 import {

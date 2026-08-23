@@ -1,4 +1,3 @@
-import { AppShell } from "@/components/layout/app-shell";
 import { SkeletonBlock, SkeletonText } from "@/components/ui/skeleton";
 
 /**
@@ -14,7 +13,7 @@ import { SkeletonBlock, SkeletonText } from "@/components/ui/skeleton";
  */
 export default function Loading() {
   return (
-    <AppShell>
+    <>
       <div className="flex flex-col gap-10">
         <header className="flex flex-col gap-3">
           <SkeletonBlock className="h-9 w-2/3 max-w-[28rem] rounded-full" />
@@ -26,6 +25,6 @@ export default function Loading() {
           <SkeletonBlock className="h-20 w-full" />
         </div>
       </div>
-    </AppShell>
+    </>
   );
 }

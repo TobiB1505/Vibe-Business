@@ -231,7 +231,7 @@ const RETIRED_CLAIMS: readonly { path: string; claim: string; retiredBy: string 
     retiredBy: "Sprint 0056 — as src/app/login/page.tsx.",
   },
   {
-    path: "src/app/app/page.tsx",
+    path: "src/app/app/(account)/page.tsx",
     claim: "Read-only access to start",
     retiredBy: "Sprint 0056 — as src/app/login/page.tsx.",
   },

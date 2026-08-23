@@ -29,7 +29,7 @@ import { describe, expect, it } from "vitest";
  * So the surface is *derived*: every render file that exists here is guarded,
  * and moving a read from one to another cannot escape the contract.
  */
-const ACCOUNT_DIR = join(process.cwd(), "src/app/app");
+const ACCOUNT_DIR = join(process.cwd(), "src/app/app/(account)");
 const MODULES = join(process.cwd(), "src/modules");
 
 /** Render files, in the order React composes them. */

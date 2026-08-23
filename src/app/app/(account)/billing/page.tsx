@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { AppShell } from "@/components/layout/app-shell";
 import { hasStripeConfiguration } from "@/lib/env/stripe";
 import { createClient } from "@/lib/supabase/server";
 import { requireSession } from "@/modules/auth/session";
@@ -37,12 +36,12 @@ export default async function BillingPage({
   ]);
 
   return (
-    <AppShell email={session.email} credits={overview.displayAvailable}>
+    <>
       <BillingView
         overview={overview}
         stripeReady={hasStripeConfiguration()}
         checkoutState={params.checkout}
       />
-    </AppShell>
+    </>
   );
 }
