@@ -360,6 +360,39 @@ test.describe("a change still moving shows its gates", () => {
     await expect(page.getByText("What Vibe changed")).toHaveCount(0);
   });
 
+  /**
+   * Machine detail is subordinated, never removed (CORE-5).
+   *
+   * The branch name, the short SHA and every changed path used to sit open on
+   * the card, which is what made this screen read as a build log. They are one
+   * click away now — and "one click away" is a claim about a real browser, not
+   * about a `<details>` element existing, so it is asserted here.
+   *
+   * Checkability is the point of this product: a founder who wants to know
+   * precisely which files moved must always be able to find out.
+   */
+  test("folds the branch and changed paths away, and gives them all back on a click", async ({
+    page,
+  }) => {
+    await page.goto("/e2e/change_agentic_review_required");
+
+    const card = page.getByTestId("prepared-change").first();
+    const summary = card.locator("summary").filter({ hasText: /how this was built/i });
+    const paths = card.getByText("src/app/page.tsx", { exact: true });
+
+    // Closed by default: the count is visible, the paths are not.
+    await expect(summary).toBeVisible();
+    await expect(summary).toContainText("3 files changed");
+    await expect(paths).toBeHidden();
+
+    await summary.click();
+
+    // Every path, exactly as stored. Nothing was summarised or truncated.
+    for (const path of ["e2e/auth.spec.ts", "e2e/first-ten-minutes.spec.ts", "src/app/page.tsx"]) {
+      await expect(card.getByText(path, { exact: true })).toBeVisible();
+    }
+  });
+
   test("an unchecked change says so and offers nothing downstream", async ({ page }) => {
     await page.goto("/e2e/change_not_validated");
 
