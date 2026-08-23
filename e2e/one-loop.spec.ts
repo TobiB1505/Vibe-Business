@@ -44,7 +44,7 @@ test.describe("the audit hands off to the moves that answer it", () => {
     await expect(primary).toBeVisible();
     // The seam: the link carries the finding's stable key, so the Moves page
     // opens knowing what the founder came to solve.
-    await expect(primary).toHaveAttribute("href", /\/moves\?from=blocker-1$/);
+    await expect(primary).toHaveAttribute("href", /\/plan\?from=blocker-1$/);
   });
 
   test("a secondary priority gets a quieter link of its own", async ({ page }) => {
@@ -53,7 +53,7 @@ test.describe("the audit hands off to the moves that answer it", () => {
     const secondary = page.getByTestId("current-priorities").getByRole("link", {
       name: "See the move for this",
     });
-    await expect(secondary).toHaveAttribute("href", /\/moves\?from=blocker-2$/);
+    await expect(secondary).toHaveAttribute("href", /\/plan\?from=blocker-2$/);
   });
 
   /** §5: the key is an address, never something a founder reads. */
@@ -165,7 +165,7 @@ test.describe("the default moves list", () => {
       const link = cards.nth(index).getByRole("link", { name: "Plan this Move" });
       await expect(link).toBeVisible();
       const href = await link.getAttribute("href");
-      expect(href).toMatch(/\/app\/projects\/project_e2e\/moves\?plan=.+#plan-this-move$/);
+      expect(href).toMatch(/\/app\/projects\/project_e2e\/plan\?plan=.+#plan-this-move$/);
     }
   });
 });
@@ -261,7 +261,7 @@ test.describe("preparing leads to the prepared change", () => {
     await expect(link).toHaveText("Review prepared change");
     await expect(link).toHaveAttribute(
       "href",
-      "/app/projects/project_e2e/prepared#prepared-change-prepared_change_e2e",
+      "/app/projects/project_e2e/agent#prepared-change-prepared_change_e2e",
     );
   });
 

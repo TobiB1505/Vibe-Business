@@ -60,13 +60,13 @@ function primaryAction(project: DashboardProject): { label: string; href: string
     return { label: "Finish setup", href: base, accent: true };
   }
   if (project.preparedCount > 0) {
-    return { label: "Review change", href: `${base}/prepared`, accent: false };
+    return { label: "Review change", href: `${base}/agent`, accent: false };
   }
   if (project.nextMovesCount !== null && project.nextMovesCount > 0) {
-    return { label: "Review moves", href: `${base}/moves`, accent: false };
+    return { label: "Review moves", href: `${base}/plan`, accent: false };
   }
   if (project.scoreState === "not_audited") {
-    return { label: "Analyse project", href: `${base}/score`, accent: true };
+    return { label: "Analyse project", href: `${base}/health`, accent: true };
   }
   return { label: "Open", href: base, accent: false };
 }

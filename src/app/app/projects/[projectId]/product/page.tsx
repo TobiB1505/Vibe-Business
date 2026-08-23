@@ -58,8 +58,8 @@ export default async function ProductUnderstandingPage({
 
   return (
     <WorkspaceSection
-      id="understanding"
-      title="Product"
+      id="my-product"
+      title="My Product"
       description="What Vibe understands about the product you built, and where that understanding came from."
       actions={
         // The start control lives in the header when a profile already exists,

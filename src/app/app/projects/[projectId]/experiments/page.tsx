@@ -51,12 +51,12 @@ export default async function ProjectImpactPage({
     repositoryConnected: project.repository !== null,
   });
 
-  const preparedHref = projectSectionHref(project.id, "prepared");
+  const preparedHref = projectSectionHref(project.id, "agent");
 
   return (
     <WorkspaceSection
-      id="impact"
-      title="Impact"
+      id="experiments"
+      title="Experiments"
       description="What actually changed after a merge — and what Vibe refuses to claim it caused."
     >
       {impact.entries.length > 0 ? (

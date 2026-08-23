@@ -1,4 +1,8 @@
 import { describe, expect, it } from "vitest";
+import {
+  PROJECT_SECTIONS,
+  PROJECT_SUBSECTIONS,
+} from "@/components/layout/project-shell";
 import { ATTENTION_DISPLAY_LIMIT, buildAttentionItems } from "./attention";
 import type { DashboardProject } from "./dashboard";
 
@@ -134,7 +138,18 @@ describe("every item can be acted on", () => {
       project({ id: "p4", name: "d", repositoryFullName: null }),
     ]);
 
-    const allowed = new Set(["", "score", "moves", "prepared", "deep-scan", "impact", "activity"]);
+    /*
+     * Taken from the workspace's own table rather than written out here.
+     * `attention.ts` is a domain module and deliberately builds its hrefs
+     * itself rather than importing from `components/` — so this is the only
+     * thing standing between it and a segment rename, and a hand-copied list
+     * would have been renamed in exactly the same way it was written: not at
+     * all. CORE-5 renamed every one of these.
+     */
+    const allowed = new Set<string>([
+      ...PROJECT_SECTIONS.map((section) => section.segment),
+      ...PROJECT_SUBSECTIONS.map((section) => section.segment),
+    ]);
     for (const item of items) {
       const match = item.action.href.match(/^\/app\/projects\/([^/]+)(?:\/(.+))?$/);
       expect(match, `${item.kind} has a malformed href: ${item.action.href}`).not.toBeNull();

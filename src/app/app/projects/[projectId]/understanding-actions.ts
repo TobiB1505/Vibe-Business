@@ -57,7 +57,7 @@ export async function startUnderstandingAction(
   if (outcome.kind === "failed") return { ok: false, error: outcome.error };
 
   if (outcome.kind === "reused") {
-    revalidatePath(`/app/projects/${projectId}/understanding`);
+    revalidatePath(`/app/projects/${projectId}/product`);
     return { ok: true, kind: "reused" };
   }
 
@@ -105,7 +105,7 @@ export async function confirmUnderstandingAction(
     });
   }
 
-  revalidatePath(`/app/projects/${projectId}/understanding`);
+  revalidatePath(`/app/projects/${projectId}/product`);
   // A second click is a no-op, not a failure: the profile is confirmed either
   // way, and telling the user otherwise would be wrong.
   return { ok: true };
@@ -171,7 +171,7 @@ export async function saveCorrectionsAction(
     },
   });
 
-  revalidatePath(`/app/projects/${projectId}/understanding`);
+  revalidatePath(`/app/projects/${projectId}/product`);
   return { ok: true };
 }
 
@@ -202,7 +202,7 @@ export async function getUnderstandingStatusAction(
   // Stale is stale: a run that failed or was cancelled leaves the screen just
   // as wrong as one that succeeded.
   if (isTerminal(operation.status)) {
-    revalidatePath(`/app/projects/${projectId}/understanding`);
+    revalidatePath(`/app/projects/${projectId}/product`);
   }
 
   return { ok: true, operation };

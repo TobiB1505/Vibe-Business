@@ -48,7 +48,7 @@ import type { ValidationSummary } from "../validation-panel";
  * So this route loads execution *summaries* and, per opportunity with one, its
  * validation summary. What it does **not** load is the prepared-change
  * workspace — no preview, no review images, no approval, no merge preflight,
- * no outcome, no impact. Those belong to `/prepared`, and this route reaching
+ * no outcome, no impact. Those belong to `/agent`, and this route reaching
  * for them is how the coupling would grow back.
  */
 export default async function ProjectMovesPage({
@@ -212,12 +212,16 @@ export default async function ProjectMovesPage({
     }
   }
 
-  const opportunityCount = opportunities?.set.opportunities.length ?? null;
-
   return (
     <WorkspaceSection
-      id="next-moves"
-      title={opportunityCount ? "Next moves" : "Opportunities"}
+      id="action-plan"
+      /*
+       * One title now, where it used to swap between "Next moves" and
+       * "Opportunities" depending on whether a set existed. The section is a
+       * place, and a place does not rename itself according to how full it is —
+       * the state belongs in the panel, which already says it.
+       */
+      title="Action Plan"
       /*
        * Was: "The order is the engine's, and it is shown as produced." True,
        * and written about the implementation rather than to the founder
@@ -237,8 +241,8 @@ export default async function ProjectMovesPage({
         blockedReason={opportunityReadiness.blockedReason}
         lineage={lineage}
         movesContext={movesContext}
-        movesHref={projectSectionHref(project.id, "next-moves")}
-        preparedHref={projectSectionHref(project.id, "prepared")}
+        movesHref={projectSectionHref(project.id, "action-plan")}
+        preparedHref={projectSectionHref(project.id, "agent")}
         // Where a blocked set sends the user. The domain still owns the anchor
         // (`BUSINESS_AUDIT_ANCHOR`); the route it now lives on is a UI fact, so
         // it is supplied here rather than hard-coded in the domain.
@@ -250,10 +254,10 @@ export default async function ProjectMovesPage({
           hard-coded fragments they replace had done.
         */
         blockedDestinations={{
-          product: projectSectionHref(project.id, "understanding"),
+          product: projectSectionHref(project.id, "my-product"),
           audit: projectSectionHref(project.id, "business-audit"),
-          moves: projectSectionHref(project.id, "next-moves"),
-          repository: projectSectionHref(project.id, "overview"),
+          moves: projectSectionHref(project.id, "action-plan"),
+          repository: projectSectionHref(project.id, "settings"),
         }}
         // Which Move the section below is currently about, so every other
         // card can offer "Plan this Move" and the selected one does not
@@ -295,7 +299,7 @@ export default async function ProjectMovesPage({
           // fixed now.
           activeOperation={activeActionPlanOperation}
           auditHref={projectSectionHref(project.id, "business-audit")}
-          understandingHref={projectSectionHref(project.id, "understanding")}
+          understandingHref={projectSectionHref(project.id, "my-product")}
         />
       </div>
     </WorkspaceSection>

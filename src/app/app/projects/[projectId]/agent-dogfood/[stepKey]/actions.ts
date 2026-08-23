@@ -105,7 +105,7 @@ export async function startDogfoodRunAction(
   if (outcome.kind === "failed") return { ok: false, error: outcome.error };
 
   if (outcome.kind === "reused") {
-    redirect(`/app/projects/${projectId}/prepared`);
+    redirect(`/app/projects/${projectId}/agent`);
   }
 
   redirect(

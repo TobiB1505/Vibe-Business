@@ -326,7 +326,7 @@ test.describe("next moves handoff (§39, §40; reworked in UI-S2 §8, §19)", ()
 
     const cta = page.getByRole("link", { name: /what vibe would do/i });
     await expect(cta).toBeVisible();
-    await expect(cta).toHaveAttribute("href", /\/moves\?from=blocker-1$/);
+    await expect(cta).toHaveAttribute("href", /\/plan\?from=blocker-1$/);
   });
 
   /**
@@ -342,7 +342,7 @@ test.describe("next moves handoff (§39, §40; reworked in UI-S2 §8, §19)", ()
 
     const findMoves = page.getByRole("link", { name: "Find my next moves" });
     await expect(findMoves).toBeVisible();
-    await expect(findMoves).toHaveAttribute("href", /\/moves$/);
+    await expect(findMoves).toHaveAttribute("href", /\/plan$/);
   });
 });
 

@@ -12,9 +12,9 @@ import { SkeletonSection } from "@/components/ui/skeleton";
 export default function Loading() {
   return (
     <WorkspaceSection
-      id="understanding"
-      title="Product"
-      description="What Vibe understands about the product you built, and where that understanding came from."
+      id="experiments"
+      title="Experiments"
+      description="What actually changed after a merge — and what Vibe refuses to claim it caused."
     >
       <SkeletonSection />
     </WorkspaceSection>

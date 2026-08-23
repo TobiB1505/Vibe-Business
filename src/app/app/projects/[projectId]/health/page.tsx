@@ -226,7 +226,7 @@ export default async function ProjectScorePage({
     // the only way out of that state. It now resolves on this route.
     <WorkspaceSection
       id="business-audit"
-      title="Business audit"
+      title="Business Health"
       description="What Vibe makes of this product as a business, and what it would do about it."
       actions={
         <RunAuditButton
@@ -302,7 +302,7 @@ export default async function ProjectScorePage({
           <AuditOverview
             audit={latestAudit.result}
             generatedAt={latestAudit.completedAt ?? latestAudit.createdAt}
-            movesHref={`/app/projects/${project.id}/moves`}
+            movesHref={projectSectionHref(project.id, "action-plan")}
             hasMoves={hasMoves}
             movesByConclusion={contextualMoves}
             // Provenance rather than a notice: a current Deep Scan is a fact

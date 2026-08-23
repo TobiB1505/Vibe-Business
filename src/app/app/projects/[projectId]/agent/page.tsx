@@ -43,8 +43,8 @@ export default async function ProjectPreparedPage({
 
   return (
     <WorkspaceSection
-      id="prepared"
-      title="Prepared"
+      id="agent"
+      title="Agent"
       description="Each change moves through validation, preview, review and your approval before anything can be merged."
     >
       {changes.length > 0 ? (

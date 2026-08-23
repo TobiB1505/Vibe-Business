@@ -47,7 +47,7 @@ export function DashboardActivity({ entries }: { entries: DashboardActivityEntry
             <span aria-hidden className={`size-1.5 shrink-0 rounded-full ${DOT[entry.tone]}`} />
             <span className="text-fg-body text-sm">{entry.title}</span>
             <Link
-              href={`/app/projects/${entry.projectId}/activity`}
+              href={`/app/projects/${entry.projectId}/settings/activity`}
               className="text-fg-muted hover:text-fg-body rounded-sm font-mono text-meta transition-interactive"
             >
               {entry.projectName}

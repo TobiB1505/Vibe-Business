@@ -9,18 +9,14 @@ import { listPreparedChangeSummaries } from "@/modules/execution/workspace";
 import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intelligence/store";
 import { getLatestOpportunities } from "@/modules/opportunities/service";
 import { getLatestProfile } from "@/modules/product-understanding/store";
-import { getFounderIntent } from "@/modules/projects/founder-intent-store";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import { getLatestSuccessfulAuthenticatedSnapshot } from "@/modules/authenticated-product-intelligence/store";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
-import { FounderIntentForm } from "./founder-intent-form";
-import { DisconnectButton } from "./disconnect-button";
 import { InspectButton } from "./inspect-button";
 import { InspectLiveButton } from "./inspect-live-button";
 import { IntelligenceSummary, LIVE_PRODUCT_ANCHOR } from "./intelligence-summary";
 import { LiveIntelligenceSummary } from "./live-intelligence-summary";
-import { ProductionUrlForm } from "./production-url-form";
 
 /**
  * Overview (Sprint UI-2 Part 2).
@@ -58,7 +54,6 @@ export default async function ProjectOverviewPage({
     latestSnapshot,
     latestLiveSnapshot,
     productProfile,
-    founderIntent,
     latestAudit,
     latestDeepScanSnapshot,
     opportunities,
@@ -68,7 +63,6 @@ export default async function ProjectOverviewPage({
     getLatestSuccessfulSnapshot(supabase, projectId),
     getLatestSuccessfulLiveSnapshot(supabase, projectId),
     getLatestProfile(supabase, projectId),
-    getFounderIntent(supabase, projectId),
     getLatestSuccessfulAudit(supabase, projectId),
     getLatestSuccessfulAuthenticatedSnapshot(supabase, projectId),
     getLatestOpportunities(supabase, projectId),
@@ -124,7 +118,7 @@ export default async function ProjectOverviewPage({
   const summaries: { id: string; label: string; value: string; href: string }[] = [
     {
       id: "business-audit",
-      label: "Business score",
+      label: "Business health",
       value: latestAudit?.result
         ? latestAudit.result.overall.score === null
           ? "Not enough coverage"
@@ -133,29 +127,29 @@ export default async function ProjectOverviewPage({
       href: projectSectionHref(project.id, "business-audit"),
     },
     {
-      id: "next-moves",
-      label: "Next moves",
+      id: "action-plan",
+      label: "Action plan",
       value: opportunities
         ? `${opportunities.set.opportunities.length} identified`
         : "Not identified yet",
-      href: projectSectionHref(project.id, "next-moves"),
+      href: projectSectionHref(project.id, "action-plan"),
     },
     {
-      id: "prepared",
-      label: "Prepared",
+      id: "agent",
+      label: "Agent",
       value:
         preparedSummaries.length > 0
           ? `${preparedSummaries.length} ${preparedSummaries.length === 1 ? "change" : "changes"}`
           : "None yet",
-      href: projectSectionHref(project.id, "prepared"),
+      href: projectSectionHref(project.id, "agent"),
     },
   ];
 
   return (
     <WorkspaceSection
-      id="overview"
-      title="Overview"
-      description="What Vibe knows about this project so far, and where that knowledge came from."
+      id="home"
+      title="Home"
+      description="Where your product stands right now, and the next move Vibe would make."
     >
       <div className="flex flex-col gap-5">
         <ul className="grid gap-4 sm:grid-cols-3">
@@ -215,34 +209,6 @@ export default async function ProjectOverviewPage({
             </ul>
           </Surface>
         )}
-
-        {/*
-          CORE-2a.3 §32, §33: this influences every audit, so it cannot be
-          invisible. The split in the heading is the one that matters — the
-          Product Profile is what Vibe *worked out*, and this is what only the
-          founder can say. Keeping them apart in the UI is what stops the two
-          collapsing back into one "business context" blob.
-        */}
-        <Surface level="section" padding="lg" className="flex flex-col gap-3">
-          <div className="flex flex-col gap-2">
-            <h3 className="text-fg text-base font-semibold">What you told Vibe</h3>
-            <p className="text-fg-muted max-w-[65ch] text-sm">
-              Vibe works out what your product is on its own. This is the part only you know —
-              and it changes which problems Vibe puts first.
-            </p>
-          </div>
-          <FounderIntentForm projectId={project.id} intent={founderIntent.intent} />
-        </Surface>
-
-        <Surface level="section" padding="lg" className="flex flex-col gap-3">
-          <div className="flex flex-col gap-2">
-            <h3 className="text-fg text-base font-semibold">Production website</h3>
-            {project.productionUrl === null && (
-              <p className="text-fg-muted text-sm">Not configured</p>
-            )}
-          </div>
-          <ProductionUrlForm projectId={project.id} currentUrl={project.productionUrl} />
-        </Surface>
 
         {project.productionUrl && (
           <Surface
@@ -312,12 +278,6 @@ export default async function ProjectOverviewPage({
           </Surface>
         )}
 
-        <div className="border-line-1 flex flex-wrap items-center justify-between gap-4 border-t pt-6">
-          <p className="text-fg-muted text-xs">
-            Disconnecting removes Vibe&apos;s access to this repository.
-          </p>
-          <DisconnectButton projectId={project.id} />
-        </div>
       </div>
     </WorkspaceSection>
   );

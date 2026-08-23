@@ -23,8 +23,8 @@ const copyOf = (source: string) =>
 
 const LINEAGE = read("src/modules/opportunities/lineage.ts");
 const SERVICE = read("src/modules/opportunities/service.ts");
-const MOVES_PAGE = read("src/app/app/projects/[projectId]/moves/page.tsx");
-const SCORE_PAGE = read("src/app/app/projects/[projectId]/score/page.tsx");
+const MOVES_PAGE = read("src/app/app/projects/[projectId]/plan/page.tsx");
+const SCORE_PAGE = read("src/app/app/projects/[projectId]/health/page.tsx");
 const PANEL = read("src/app/app/projects/[projectId]/opportunities-panel.tsx");
 const PRIORITIES = read("src/app/app/projects/[projectId]/current-priorities.tsx");
 const PREPARE_PANEL = read("src/app/app/projects/[projectId]/prepare-change-panel.tsx");

@@ -102,7 +102,7 @@ function itemsForProject(project: DashboardProject): AttentionItem[] {
         "changes failed validation",
       )}`,
       detail: "Vibe built the change in an isolated environment and it did not pass.",
-      action: { label: "Review change", href: projectHref(project.id, "prepared") },
+      action: { label: "Review change", href: projectHref(project.id, "agent") },
     });
   }
 
@@ -119,7 +119,7 @@ function itemsForProject(project: DashboardProject): AttentionItem[] {
       projectName: project.name,
       title: `${waiting} prepared ${plural(waiting, "change is", "changes are")} waiting for you`,
       detail: "Nothing merges until you review and approve it.",
-      action: { label: "Review change", href: projectHref(project.id, "prepared") },
+      action: { label: "Review change", href: projectHref(project.id, "agent") },
     });
   }
 
@@ -137,7 +137,7 @@ function itemsForProject(project: DashboardProject): AttentionItem[] {
         "moves are",
       )} waiting`,
       detail: "Vibe ranked these from your latest business audit.",
-      action: { label: "Review moves", href: projectHref(project.id, "moves") },
+      action: { label: "Review moves", href: projectHref(project.id, "plan") },
     });
   }
 
@@ -164,7 +164,7 @@ function itemsForProject(project: DashboardProject): AttentionItem[] {
       projectName: project.name,
       title: "Never analysed",
       detail: "A business audit is what produces a score and the moves that follow from it.",
-      action: { label: "Run audit", href: projectHref(project.id, "score") },
+      action: { label: "Run audit", href: projectHref(project.id, "health") },
     });
   }
 

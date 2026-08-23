@@ -12,9 +12,9 @@ import { SkeletonSection } from "@/components/ui/skeleton";
 export default function Loading() {
   return (
     <WorkspaceSection
-      id="prepared"
-      title="Prepared"
-      description="Each change moves through validation, preview, review and your approval before anything can be merged."
+      id="action-plan"
+      title="Action Plan"
+      description="The few things worth doing next, in the order Vibe would do them."
     >
       <SkeletonSection />
     </WorkspaceSection>

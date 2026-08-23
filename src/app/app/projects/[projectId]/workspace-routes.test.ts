@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import { PROJECT_SECTIONS, projectSectionHref } from "@/components/layout/project-shell";
 
 /**
- * The workspace routes as a set (Sprint UI-2 Part 2).
+ * The workspace routes as a set (Sprint UI-2 Part 2; renamed by CORE-5).
  *
  * ## Why these are asserted centrally
  *
@@ -20,8 +20,8 @@ import { PROJECT_SECTIONS, projectSectionHref } from "@/components/layout/projec
  *     the file tree would look wrong.
  *  2. **Rendering starts nothing.** Sprints 12A and 12B established that
  *     opening a project must never start a verification or a measurement. That
- *     used to be one file to check. It is now seven, and a new route added
- *     later is an eighth that no existing test would notice.
+ *     used to be one file to check. It is now nine, and a new route added later
+ *     is a tenth that no existing test would notice.
  */
 
 const ROUTE_DIR = join(process.cwd(), "src/app/app/projects/[projectId]");
@@ -104,8 +104,8 @@ describe("every workspace section is reachable", () => {
     }
   });
 
-  it("keeps Overview at the project's own URL", () => {
-    expect(projectSectionHref("abc", "overview")).toBe("/app/projects/abc");
+  it("keeps Home at the project's own URL", () => {
+    expect(projectSectionHref("abc", "home")).toBe("/app/projects/abc");
   });
 
   it("gives every other section a distinct child URL", () => {
@@ -177,30 +177,34 @@ describe("routes load only what they render", () => {
     return routeFiles().find((file) => file.name === name)?.source ?? "";
   }
 
-  it("does not build the prepared workspace outside the Prepared route", () => {
+  it("does not build the prepared workspace outside the Agent route", () => {
     // This is the expensive read: signed review-image URLs, preview origins and
     // the GitHub merge preflight. Before the split every section paid it.
     for (const file of routeFiles()) {
-      if (file.name === "prepared/page.tsx") continue;
+      if (file.name === "agent/page.tsx") continue;
       expect(file.source, `${file.name} builds the prepared workspace`).not.toContain(
         "getPreparedChangeWorkspace(",
       );
     }
   });
 
-  it("uses the cheap summary read where Overview only needs a count", () => {
+  it("uses the cheap summary read where Home only needs a count", () => {
     expect(source("page.tsx")).toContain("listPreparedChangeSummaries");
     expect(source("page.tsx")).not.toContain("getPreparedChangeWorkspace");
   });
 
   it("keeps the audit read off routes that do not show a score", () => {
-    for (const name of ["activity/page.tsx", "deep-scan/page.tsx", "prepared/page.tsx"]) {
+    for (const name of [
+      "settings/activity/page.tsx",
+      "product/deep-scan/page.tsx",
+      "agent/page.tsx",
+    ]) {
       expect(source(name), name).not.toContain("getLatestSuccessfulAudit");
     }
   });
 
   it("keeps Activity to its own read", () => {
-    const activity = source("activity/page.tsx");
+    const activity = source("settings/activity/page.tsx");
     expect(activity).toContain("listAuditEventsForProject");
     expect(activity).not.toContain("getPreparedChangeWorkspace");
     expect(activity).not.toContain("getProjectImpact");
@@ -210,9 +214,9 @@ describe("routes load only what they render", () => {
   it("carries the Deep Scan duration ceiling on the Deep Scan route only", () => {
     // 120s exists for the browser session's own budget. Applying it to every
     // route would make the whole workspace a long-running function.
-    expect(source("deep-scan/page.tsx")).toContain("maxDuration");
+    expect(source("product/deep-scan/page.tsx")).toContain("maxDuration");
     for (const file of routeFiles()) {
-      if (file.name === "deep-scan/page.tsx") continue;
+      if (file.name === "product/deep-scan/page.tsx") continue;
       expect(file.source, `${file.name} declares maxDuration`).not.toContain("maxDuration");
     }
   });

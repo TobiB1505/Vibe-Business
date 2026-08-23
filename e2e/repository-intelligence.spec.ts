@@ -95,7 +95,7 @@ test.describe("the answer comes first", () => {
     await expect(page.getByText("You may not know what visitors do after they arrive.")).toBeVisible();
     await expect(page.getByRole("link", { name: "Review next moves" }).first()).toHaveAttribute(
       "href",
-      "/app/projects/project_e2e/moves",
+      "/app/projects/project_e2e/plan",
     );
     await expect(page.getByRole("link", { name: "Check the live product" }).first()).toHaveAttribute(
       "href",

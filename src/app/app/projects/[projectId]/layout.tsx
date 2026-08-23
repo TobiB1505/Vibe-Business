@@ -86,14 +86,14 @@ export default async function ProjectLayout({
     label: section.label,
     href: projectSectionHref(project.id, section.id),
     count:
-      section.id === "next-moves"
+      section.id === "action-plan"
         ? countFor(counts.nextMoves)
-        : section.id === "prepared"
+        : section.id === "agent"
           ? countFor(counts.prepared)
           : null,
-    // Mint on Next moves: those are things Vibe is offering to act on.
-    // Prepared is a neutral queue count, not an invitation.
-    countTone: section.id === "next-moves" ? "accent" : "neutral",
+    // Mint on Action Plan: those are things Vibe is offering to act on.
+    // Agent is a neutral queue count, not an invitation.
+    countTone: section.id === "action-plan" ? "accent" : "neutral",
   }));
 
   return (

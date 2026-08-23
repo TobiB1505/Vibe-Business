@@ -54,7 +54,7 @@ const STATUS_TONE: Record<CapabilityStatus, StatusTone> = {
 };
 
 function nextStepHref(step: CapabilityNextStep, projectId: string): string {
-  if (step.target === "next-moves") return projectSectionHref(projectId, "next-moves");
+  if (step.target === "next-moves") return projectSectionHref(projectId, "action-plan");
   if (step.target === "deep-scan") return projectSectionHref(projectId, "deep-scan");
   // The live check lives further down this same route, so this is a jump
   // rather than a navigation.

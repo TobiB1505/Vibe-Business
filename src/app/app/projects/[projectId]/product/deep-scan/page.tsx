@@ -11,7 +11,7 @@ import { buildDeepScanViewModel } from "@/modules/authenticated-product-intellig
 import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intelligence/store";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
-import { DeepScanPanel } from "../deep-scan-panel";
+import { DeepScanPanel } from "../../deep-scan-panel";
 
 /**
  * Deep Scan (Sprint UI-2 Part 2).

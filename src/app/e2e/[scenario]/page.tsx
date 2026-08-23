@@ -164,17 +164,17 @@ export default async function E2eScenarioPage({
           stale={fixture.stale}
           activeOperation={null}
           blockedReason={fixture.blockedReason}
-          auditHref="/app/projects/project_e2e/score"
+          auditHref="/app/projects/project_e2e/health"
           blockedDestinations={{
-            product: "/app/projects/project_e2e/understanding",
-            audit: "/app/projects/project_e2e/score",
-            moves: "/app/projects/project_e2e/moves",
-            repository: "/app/projects/project_e2e",
+            product: "/app/projects/project_e2e/product",
+            audit: "/app/projects/project_e2e/health",
+            moves: "/app/projects/project_e2e/plan",
+            repository: "/app/projects/project_e2e/settings",
           }}
           lineage={fixture.lineage}
           movesContext={fixture.movesContext}
-          movesHref="/app/projects/project_e2e/moves"
-          preparedHref="/app/projects/project_e2e/prepared"
+          movesHref="/app/projects/project_e2e/plan"
+          preparedHref="/app/projects/project_e2e/agent"
           plannedOpportunityId={null}
         />
       </main>
@@ -362,7 +362,7 @@ export default async function E2eScenarioPage({
         <AuditOverview
           audit={auditResult}
           generatedAt={auditResult.generatedAt}
-          movesHref="/app/projects/project_e2e/moves"
+          movesHref="/app/projects/project_e2e/plan"
           hasMoves={hasMoves}
           /*
            * The lineage the real page computes (UI-S2 §8). Two Moves on the
@@ -394,8 +394,8 @@ export default async function E2eScenarioPage({
           readiness={fixture.readiness}
           planView={fixture.planView}
           activeOperation={fixture.activeOperation}
-          auditHref="/app/projects/project_e2e/score"
-          understandingHref="/app/projects/project_e2e/understanding"
+          auditHref="/app/projects/project_e2e/health"
+          understandingHref="/app/projects/project_e2e/product"
         />
       </main>
     );

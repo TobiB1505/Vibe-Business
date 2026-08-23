@@ -21,7 +21,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * Neither number was invented for a badge:
  *
  * - **`nextMoves`** counts the opportunities in the *latest completed set*,
- *   which is exactly what `/moves` renders. Not every opportunity row the
+ *   which is exactly what the Action Plan renders. Not every opportunity row the
  *   project has ever produced — regenerating opportunities creates a new set,
  *   and the old ones are history, not a backlog.
  * - **`prepared`** counts prepared changes with `status = 'prepared'`, which is
@@ -71,7 +71,7 @@ async function countNextMoves(
   supabase: SupabaseClient,
   projectId: string,
 ): Promise<number | null> {
-  // The latest *completed* set — the same one `/moves` renders. One row, one
+  // The latest *completed* set — the same one the Action Plan renders. One row, one
   // column.
   const { data: set, error: setError } = await supabase
     .from("opportunity_sets")

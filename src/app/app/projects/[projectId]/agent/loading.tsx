@@ -12,9 +12,9 @@ import { SkeletonSection } from "@/components/ui/skeleton";
 export default function Loading() {
   return (
     <WorkspaceSection
-      id="impact"
-      title="Impact"
-      description="What actually changed after a merge — and what Vibe refuses to claim it caused."
+      id="agent"
+      title="Agent"
+      description="Each change moves through validation, preview, review and your approval before anything can be merged."
     >
       <SkeletonSection />
     </WorkspaceSection>
