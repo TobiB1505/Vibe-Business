@@ -105,6 +105,9 @@ Three metrics are defined and the port is vendor-neutral, but no adapter exists;
 **Snapshot history is complete, immutable, and never read.**
 All four snapshot tables retain every version; no code compares two. A re-scan that loses the pricing page produces a new audit with no note that anything disappeared.
 
+**No surface can show an agent run in flight.**
+Every lookup in `coding-agent/store.ts` is keyed by `operationRunId` or by `(projectId, runIdentity)`; there is no `getLatestAgentRun(projectId)` and no listing. The live model (`coding-agent/observability/live-view.ts`) is real and complete, and is reachable only through an operation id the internal dogfood page carries in `?run=`. So the customer-facing Agent page added by [Sprint 0058](sprints/0058-core5-command-center.md) can say what the agent knows and what it has produced, and can say nothing about what it is doing now — for a product whose central promise is an AI engineer working on your business, that is the missing half of the screen.
+
 **Nothing learns from a run.**
 `agent_execution_runs` carries around ninety observation columns and `execution-context/verification.ts` names the feedback in prose — a validation failure on a run whose agent verification was `low` "is exactly the signal that would justify moving a task class up a mode" — and nothing reads it. `economy/intelligence/` is the one correctly-built learning layer and is deliberately unwired.
 
