@@ -103,22 +103,40 @@ test.describe("answer first (§6, §8, §9)", () => {
   });
 
   /**
-   * UI-1.2 §20 — the five legacy dimensions are gone from the customer UI.
+   * UI-1.2 §20 removed the five dimensions from the customer UI; CORE-5 brings
+   * the *readings* back and leaves the removal in place. The distinction is
+   * the whole of UI-1.2's argument and is worth stating precisely.
    *
-   * Asserted by count rather than by visibility, which is the stronger claim:
-   * a closed `<details>` is invisible but still shipped, and this test has to
-   * fail the moment the old breakdown is rendered again in any state. The
-   * dimensions are still measured, still stored and still cited — they are
-   * simply no longer a second verdict competing with the nine lenses.
+   * What stays gone: the collapsed **technical breakdown** — a `<details>`
+   * holding per-dimension summaries, strengths, gaps and evidence ids, sitting
+   * beside the nine lenses as a second verdict. "A page that offers two
+   * answers has not made one."
+   *
+   * What comes back: five numbers under a heading, below the conclusion and
+   * below the map, answering "how is each part doing" rather than "what should
+   * I conclude". No summaries, no findings, no evidence ids, and nothing that
+   * competes for the judgment the synthesis already made.
    */
-  test("does not ship the legacy five-dimension breakdown at all", async ({ page }) => {
+  test("does not ship the legacy technical breakdown", async ({ page }) => {
     await page.goto(COMPLETE);
 
+    // Asserted by count rather than by visibility, which is the stronger
+    // claim: a closed `<details>` is invisible but still shipped.
     await expect(page.locator("summary").filter({ hasText: /technical breakdown/i })).toHaveCount(
       0,
     );
-    await expect(page.getByText(/Do people understand what you built/i)).toHaveCount(0);
     await expect(page.getByTestId("audit-technical-breakdown")).toHaveCount(0);
+  });
+
+  test("shows the five readings once, and only as readings", async ({ page }) => {
+    await page.goto(COMPLETE);
+
+    await expect(page.getByText(/how each part is doing/i)).toBeVisible();
+    // Once — not once in a breakdown and again in a readings list.
+    await expect(page.getByText(/Do people understand what you built/i)).toHaveCount(1);
+    // A reading carries a number and nothing else. The audit's per-dimension
+    // prose stays out of the customer UI.
+    await expect(page.getByText(/authenticated app area reached/i)).toHaveCount(0);
   });
 });
 
@@ -296,6 +314,36 @@ test.describe("missing evidence is never a weakness (CLAUDE.md rule 44)", () => 
 
     await expect(page.getByText(/\/ 100 readiness/i)).toHaveCount(0);
     await expect(page.getByText(/\b0\s*\/\s*100\b/)).toHaveCount(0);
+  });
+
+  /**
+   * The same rule one layer down (CORE-5). The per-dimension readings are
+   * where a null score becomes a bar width, so this is the place a zero would
+   * actually get drawn — five empty tracks with "0" beside them would tell a
+   * founder their business scored nothing in every area Vibe simply could not
+   * reach.
+   */
+  test("reads every unassessable dimension as n/a, never as zero", async ({ page }) => {
+    await page.goto(UNCERTAIN);
+
+    const readings = page.getByText(/how each part is doing/i);
+    await expect(readings).toBeVisible();
+
+    // Every dimension in this fixture is `insufficient_evidence`.
+    await expect(page.getByText("n/a", { exact: true })).toHaveCount(5);
+    await expect(page.getByText(/didn.t find enough to judge this one/i)).toHaveCount(5);
+
+    // And no bar is filled, because there is nothing to fill it with.
+    const bars = page.locator('[style*="width:0%"], [style*="width: 0%"]');
+    await expect(bars).toHaveCount(5);
+  });
+
+  test("shows a real reading as a number out of 100", async ({ page }) => {
+    await page.goto(SYNTHESIS);
+
+    await expect(page.getByText(/how each part is doing/i)).toBeVisible();
+    // At least one scored dimension, printed with its scale rather than bare.
+    await expect(page.getByText("/ 100").first()).toBeVisible();
   });
 
   /**

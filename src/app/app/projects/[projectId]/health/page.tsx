@@ -30,6 +30,7 @@ import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/s
 import { AuditCreditNotice } from "../audit-credit-notice";
 import { AuditEvidenceNotice } from "../audit-evidence-notice";
 import { AuditOverview } from "../audit-overview";
+import { BusinessHealth } from "../business-health";
 import {
   AuditAnalyzing,
   AuditPreparing,
@@ -297,21 +298,27 @@ export default async function ProjectScorePage({
         {auditStage === "analyzing" && <AuditAnalyzing />}
 
         {latestAudit?.result ? (
-          // Answer first, evidence second, tech last — all three owned by the
-          // component, so the reading order cannot be reassembled here (§14).
-          <AuditOverview
-            audit={latestAudit.result}
-            generatedAt={latestAudit.completedAt ?? latestAudit.createdAt}
-            movesHref={projectSectionHref(project.id, "action-plan")}
-            hasMoves={hasMoves}
-            movesByConclusion={contextualMoves}
-            // Provenance rather than a notice: a current Deep Scan is a fact
-            // about what this audit was made from, not something to interrupt
-            // the verdict with (UI-7 §4).
-            usedSignedInEvidence={
-              Boolean(latestDeepScanSnapshot?.result) && !auditCurrency.newDeepScanEvidence
-            }
-          />
+          <>
+            {/* Answer first, evidence second, tech last — all three owned by
+                the component, so the reading order cannot be reassembled here
+                (§14). */}
+            <AuditOverview
+              audit={latestAudit.result}
+              generatedAt={latestAudit.completedAt ?? latestAudit.createdAt}
+              movesHref={projectSectionHref(project.id, "action-plan")}
+              hasMoves={hasMoves}
+              movesByConclusion={contextualMoves}
+              // Provenance rather than a notice: a current Deep Scan is a fact
+              // about what this audit was made from, not something to interrupt
+              // the verdict with (UI-7 §4).
+              usedSignedInEvidence={
+                Boolean(latestDeepScanSnapshot?.result) && !auditCurrency.newDeepScanEvidence
+              }
+            />
+            {/* Readings, under the conclusion and under the map — never a
+                second verdict competing with them. See the component. */}
+            <BusinessHealth audit={latestAudit.result} />
+          </>
         ) : auditStage !== null ? null : (
           // Not scored is not a score of zero. No meter, no number.
           <EmptyState

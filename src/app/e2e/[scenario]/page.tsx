@@ -6,6 +6,7 @@ import {
 } from "@/app/app/projects/[projectId]/prepared-changes-section";
 import { IntelligenceSummary } from "@/app/app/projects/[projectId]/intelligence-summary";
 import { AuditOverview } from "@/app/app/projects/[projectId]/audit-overview";
+import { BusinessHealth } from "@/app/app/projects/[projectId]/business-health";
 import { AuditCreditNotice } from "@/app/app/projects/[projectId]/audit-credit-notice";
 import { RunAuditButton } from "@/app/app/projects/[projectId]/run-audit-button";
 import { auditBlockedByCredits } from "@/modules/business-audit/entitlement";
@@ -373,6 +374,13 @@ export default async function E2eScenarioPage({
            */
           movesByConclusion={hasMoves ? { "blocker-1": 2, "blocker-2": 1 } : {}}
         />
+        {/*
+          The same pair the real Business Health route renders. Included here
+          because the "unknown is never drawn as zero" rule (CLAUDE.md rule 44)
+          is a claim about pixels, and this component is where a dimension's
+          number becomes a bar width.
+        */}
+        <BusinessHealth audit={auditResult} />
       </main>
     );
   }
