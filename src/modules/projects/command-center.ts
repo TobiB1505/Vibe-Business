@@ -3,7 +3,11 @@ import type { BusinessOpportunity, OpportunityImpact } from "@/modules/opportuni
 import type { ProductProfile } from "@/modules/product-understanding/schema";
 
 /**
- * What Home says (CORE-5).
+ * What the Command Center says (CORE-5).
+ *
+ * Two view models, both read by exactly one screen: Home's four answers, and
+ * the Agent page's account of what it knows. They share a file because they
+ * share the reason for existing, below.
  *
  * ## Why this is a module and not JSX
  *
@@ -168,4 +172,87 @@ export function buildHomeView(input: BuildHomeViewInput): HomeView {
     nextMove: nextMoveFrom(input.opportunities),
     preparedCount: input.preparedCount,
   };
+}
+
+// ---------------------------------------------------------------------
+// The agent's own readiness
+// ---------------------------------------------------------------------
+
+/**
+ * What Vibe's engineer knows before it is asked to do anything (CORE-5).
+ *
+ * ## Why this is stated in business terms
+ *
+ * Because the alternative is what every other surface in this codebase says
+ * to itself: "repository snapshot: present", "product profile: ready". Those
+ * are true and they describe Vibe's plumbing. A founder looking at the Agent
+ * page is deciding whether to trust a change to their product, and what
+ * answers that is whether the thing writing it understands the business — not
+ * whether a row exists in a table.
+ *
+ * ## Why it is derived rather than asserted
+ *
+ * Each row is `true` only because an artifact exists. Nothing here is a
+ * setting, a flag or an aspiration: no product profile, no "knows what you
+ * built". The agent cannot claim context it does not have.
+ */
+export type AgentContextRow = {
+  id: string;
+  /** What the agent knows, in the founder's words. */
+  label: string;
+  /** One line on what that means for the work. */
+  detail: string;
+  ready: boolean;
+};
+
+/**
+ * Three states rather than a boolean.
+ *
+ * "Not briefed" and "knows two of three things" lead to different sentences
+ * and different next steps, and collapsing them would tell a founder with a
+ * nearly-ready agent the same thing as one who has connected nothing.
+ */
+export type AgentReadiness = "ready" | "partial" | "not_briefed";
+
+export type AgentContext = {
+  readiness: AgentReadiness;
+  rows: AgentContextRow[];
+};
+
+export type BuildAgentContextInput = {
+  /** Vibe has worked out what the product is. */
+  hasProductUnderstanding: boolean;
+  /** A repository is connected and Vibe has read it. */
+  hasRepositoryUnderstanding: boolean;
+  /** Vibe has identified what the business should do next. */
+  hasBusinessGoals: boolean;
+};
+
+export function buildAgentContext(input: BuildAgentContextInput): AgentContext {
+  const rows: AgentContextRow[] = [
+    {
+      id: "product",
+      label: "Knows what you built",
+      detail: "Vibe has its own understanding of your product, not just your description of it.",
+      ready: input.hasProductUnderstanding,
+    },
+    {
+      id: "repository",
+      label: "Can read your code",
+      detail: "Vibe has read the repository it would be changing.",
+      ready: input.hasRepositoryUnderstanding,
+    },
+    {
+      id: "goals",
+      label: "Knows what the business needs next",
+      detail: "Work is chosen from the moves your audit produced, not from a blank prompt.",
+      ready: input.hasBusinessGoals,
+    },
+  ];
+
+  const readyCount = rows.filter((row) => row.ready).length;
+  const readiness: AgentReadiness =
+    readyCount === rows.length ? "ready" : readyCount === 0 ? "not_briefed" : "partial";
+
+  return { readiness, rows };
 }

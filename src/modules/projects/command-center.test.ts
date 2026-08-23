@@ -8,7 +8,7 @@ import {
   type BusinessConclusion,
   type BusinessReadinessAudit,
 } from "@/modules/business-audit/schema";
-import { buildHomeView } from "./command-center";
+import { buildAgentContext, buildHomeView } from "./command-center";
 
 /**
  * Home's view model (CORE-5).
@@ -260,5 +260,57 @@ describe("prepared changes", () => {
       buildHomeView({ profile: null, audit: null, opportunities: null, preparedCount: 3 })
         .preparedCount,
     ).toBe(3);
+  });
+});
+
+describe("what the agent knows before it is asked to do anything", () => {
+  const briefed = {
+    hasProductUnderstanding: true,
+    hasRepositoryUnderstanding: true,
+    hasBusinessGoals: true,
+  };
+
+  it("is ready only when it has all three", () => {
+    expect(buildAgentContext(briefed).readiness).toBe("ready");
+  });
+
+  /**
+   * A founder who has connected nothing and one who is a repository scan away
+   * need different sentences and different next steps. A boolean cannot carry
+   * that, which is why this is three states.
+   */
+  it("separates knowing nothing from knowing most of it", () => {
+    expect(
+      buildAgentContext({
+        hasProductUnderstanding: false,
+        hasRepositoryUnderstanding: false,
+        hasBusinessGoals: false,
+      }).readiness,
+    ).toBe("not_briefed");
+
+    expect(buildAgentContext({ ...briefed, hasBusinessGoals: false }).readiness).toBe("partial");
+  });
+
+  it("marks a row ready only when the artifact behind it exists", () => {
+    const context = buildAgentContext({ ...briefed, hasRepositoryUnderstanding: false });
+    const byId = Object.fromEntries(context.rows.map((row) => [row.id, row.ready]));
+
+    expect(byId).toEqual({ product: true, repository: false, goals: true });
+  });
+
+  /**
+   * The Agent page is where a founder decides whether to trust a change to
+   * their product. Vibe's own vocabulary for its own subsystems is not what
+   * answers that, and it is what every other surface reaches for by default.
+   */
+  it("describes context in the founder's terms, never as internal state", () => {
+    const text = buildAgentContext(briefed)
+      .rows.flatMap((row) => [row.label, row.detail])
+      .join(" ")
+      .toLowerCase();
+
+    for (const jargon of ["snapshot", "profile", "intelligence", "opportunity set", "null"]) {
+      expect(text, `agent context says "${jargon}"`).not.toContain(jargon);
+    }
   });
 });
