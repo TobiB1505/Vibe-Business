@@ -28,6 +28,7 @@ import { describe, expect, it } from "vitest";
  */
 
 const CSS = readFileSync(join(process.cwd(), "src/app/globals.css"), "utf8");
+const FONTS = readFileSync(join(process.cwd(), "src/app/fonts.ts"), "utf8");
 
 function token(name: string): string {
   const match = CSS.match(new RegExp(`--color-${name}:\\s*([^;]+);`));
@@ -118,6 +119,19 @@ describe("the foreground ramp is legible on a panel", () => {
         `${TEXT_STEPS[i - 1]} and ${TEXT_STEPS[i]} are the same colour to a reader`,
       ).toBeGreaterThan(3);
     }
+  });
+});
+
+describe("the interface typography is neutral and local-first", () => {
+  it("uses the native SaaS interface stack rather than Space Grotesk", () => {
+    expect(CSS).toContain('Inter, "SF Pro Display", "SF Pro Text"');
+    expect(CSS).toContain('"Segoe UI Variable"');
+    expect(CSS).not.toContain("var(--font-space-grotesk)");
+  });
+
+  it("does not preload a sans webfont the interface no longer uses", () => {
+    expect(FONTS).not.toContain("spaceGroteskLatin");
+    expect(FONTS).toContain("jetBrainsMonoLatin");
   });
 });
 

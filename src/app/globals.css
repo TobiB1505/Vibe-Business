@@ -18,8 +18,8 @@
      Two backgrounds, not a grey scale. `ground` is the board behind the
      app frame; `app` is the frame itself. Everything above them is white
      at low alpha, which is what keeps depth readable without solid greys. */
-  --color-ground: #050505;
-  --color-app: #0a0908;
+  --color-ground: #030506;
+  --color-app: #070a0c;
 
   /* ── Accent ──────────────────────────────────────────────────────────
      Mint is Vibe: the primary action, the active state, the brand. It is
@@ -107,21 +107,18 @@
   --color-coral-line: rgb(255 122 92 / 0.26);
 
   /* ── Type ────────────────────────────────────────────────────────────
-     Space Grotesk for everything a person wrote. JetBrains Mono for
-     everything a machine produced: SHAs, branches, timestamps, scores,
-     counts, credits, state labels. The `--font-*` variables are bound to
-     the next/font loaders in `fonts.ts`, which self-hosts both families so
-     a build needs no network access.
+     Product UI uses the operating system's native interface family. On
+     Apple devices that is SF Pro, on Windows Segoe UI Variable. Inter is
+     preferred when a host already has it. This is intentionally quieter and
+     more neutral than the former Space Grotesk face: hierarchy should come
+     from size, weight and space rather than recognisable letter shapes.
 
-     Each typeface appears once per writing system, because every self-hosted
-     face declares a single `unicode-range` and is therefore its own family.
-     Listing only the first would quietly drop Polish, Czech, Turkish, Greek,
-     Cyrillic and Vietnamese text to a system font. Only the leading faces are
-     preloaded; the rest are fetched on first use, as they were before. */
+     JetBrains Mono remains self-hosted for genuinely technical output — SHAs,
+     branch names and code. Dashboard scores and status labels use the UI face;
+     a number is not automatically developer tooling. */
   --font-sans:
-    var(--font-space-grotesk), var(--font-space-grotesk-latin-ext),
-    var(--font-space-grotesk-vietnamese), ui-sans-serif, system-ui, -apple-system,
-    "Segoe UI", sans-serif;
+    Inter, "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont,
+    "Segoe UI Variable", "Segoe UI", ui-sans-serif, system-ui, Arial, sans-serif;
   --font-mono:
     var(--font-jetbrains-mono), var(--font-jetbrains-mono-latin-ext),
     var(--font-jetbrains-mono-cyrillic), var(--font-jetbrains-mono-cyrillic-ext),
@@ -167,14 +164,13 @@
   --text-ui: 0.8125rem;
 
   /* ── Shape ───────────────────────────────────────────────────────────
-     Radii scale with the element. Every interactive control is a full
-     pill — that is a rule, not a preference, so `rounded-full` on buttons
-     is intentional everywhere it appears. */
+     Radii scale with the element. Controls and navigation use a precise
+     ten-pixel corner; pills are reserved for statuses and compact filters. */
   --radius-nav: 10px;
   --radius-well: 14px;
   --radius-field: 12px;
-  --radius-panel: 18px;
-  --radius-card: 22px;
+  --radius-panel: 14px;
+  --radius-card: 16px;
 
   /* ── Elevation ───────────────────────────────────────────────────────
      The inset highlight belongs to the primary card only. */

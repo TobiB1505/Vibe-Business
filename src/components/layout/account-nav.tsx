@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { AccountSection } from "./account-shell";
 import { accountSectionHref } from "./account-shell";
+import { DashboardIcon, type DashboardIconName } from "@/components/ui/dashboard-icons";
 import { cn } from "@/lib/utils/cn";
 
 /**
@@ -33,7 +34,7 @@ export function AccountNav({
   soon,
 }: {
   items: AccountSection[];
-  soon: { id: string; label: string }[];
+  soon: { id: string; label: string; icon: DashboardIconName }[];
 }) {
   const pathname = usePathname();
 
@@ -46,7 +47,7 @@ export function AccountNav({
   return (
     <ul
       className={cn(
-        "flex gap-1 overflow-x-auto lg:flex-col lg:overflow-visible",
+        "flex items-center gap-1 overflow-x-auto lg:flex-col lg:items-stretch lg:overflow-visible",
         // The strip below `lg` runs off its right edge rather than appearing to
         // end. A mask rather than an overlay, so it cannot sit on a link and
         // swallow a tap.
@@ -64,29 +65,33 @@ export function AccountNav({
               href={href}
               aria-current={current ? "page" : undefined}
               className={cn(
-                "rounded-nav flex items-center gap-3 px-3 py-2.5 text-sm",
+                "rounded-nav flex items-center gap-3 px-3 py-3 text-sm font-medium",
                 "transition-[color,background-color,border-color] duration-150 ease-vibe",
                 current
-                  ? "bg-mint-tint border-mint-line text-mint border font-semibold"
+                  ? "bg-mint-tint border-mint-line text-mint border font-semibold shadow-[inset_0_1px_0_rgb(255_255_255/0.04)]"
                   : "text-fg-secondary hover:bg-surface-2 hover:text-fg-body",
               )}
             >
+              <DashboardIcon name={item.icon} size={19} className="shrink-0" />
               <span className="whitespace-nowrap">{item.label}</span>
             </Link>
           </li>
         );
       })}
 
+      <li aria-hidden className="border-line-1 my-3 hidden border-t lg:block" />
+
       {soon.map((item) => (
         <li
           key={item.id}
-          className="text-fg-disabled flex items-center gap-3 px-3 py-2.5 text-sm lg:w-full"
+          className="text-fg-disabled flex items-center gap-3 px-3 py-3 text-sm font-medium lg:w-full"
         >
+          <DashboardIcon name={item.icon} size={19} className="shrink-0" />
           <span className="whitespace-nowrap">{item.label}</span>
           <span
             className={cn(
               "bg-surface-hover text-fg-meta ml-auto rounded-full px-2 py-0.5",
-              "font-mono text-[0.65625rem] tracking-[0.08em] uppercase",
+              "text-[0.625rem] font-semibold tracking-[0.04em] uppercase",
             )}
           >
             Soon

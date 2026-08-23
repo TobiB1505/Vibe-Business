@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { VibeLockup } from "@/components/brand/vibe-mark";
+import type { DashboardIconName } from "@/components/ui/dashboard-icons";
 import { AccountNav } from "./account-nav";
 import { cn } from "@/lib/utils/cn";
 
@@ -29,10 +30,11 @@ import { cn } from "@/lib/utils/cn";
  *
  * ## Why it looks like `ProjectShell`
  *
- * Same rail width, same sticky behaviour, same collapse to a scrollable strip
- * below `lg`. Entering a product should read as one object changing its
- * contents, not as arriving in a different application — which is exactly what
- * the two-shells-in-a-trench-coat version felt like.
+ * Same sticky behaviour and the same collapse to a scrollable strip below
+ * `lg`. The account rail is slightly wider because it also carries the visible
+ * account destinations from the supplied dashboard reference. Entering a
+ * product should still read as one object changing context, not as arriving in
+ * a different application.
  *
  * ## No top bar
  *
@@ -45,6 +47,7 @@ import { cn } from "@/lib/utils/cn";
 export type AccountSection = {
   id: string;
   label: string;
+  icon: DashboardIconName;
   /** The URL segment under `/app`. Empty for Home, which is `/app` itself. */
   segment: string;
 };
@@ -57,9 +60,14 @@ export type AccountSection = {
  * and `SOON_SECTIONS` below is how a planned area says so honestly.
  */
 export const ACCOUNT_SECTIONS = [
-  { id: "home", label: "Home", segment: "" },
-  { id: "products", label: "My Products", segment: "products" },
-  { id: "repositories", label: "Repositories", segment: "repositories" },
+  { id: "home", label: "Home", icon: "home", segment: "" },
+  { id: "products", label: "My Products", icon: "products", segment: "products" },
+  {
+    id: "repositories",
+    label: "Repositories",
+    icon: "repositories",
+    segment: "repositories",
+  },
 ] as const satisfies readonly AccountSection[];
 
 /**
@@ -75,8 +83,8 @@ export const ACCOUNT_SECTIONS = [
  * Team, no annual, no seats". There is no sharing primitive to expose.
  */
 export const SOON_SECTIONS = [
-  { id: "experiments", label: "Experiments" },
-  { id: "team", label: "Team" },
+  { id: "experiments", label: "Experiments", icon: "experiments" },
+  { id: "team", label: "Team", icon: "team" },
 ] as const;
 
 export function accountSectionHref(sectionId: string): string {
@@ -106,10 +114,10 @@ export function AccountSidebar({
         // Desktop: a full-height rail that stays put while content scrolls.
         // Below `lg` it becomes a strip at the top, for the same reason
         // `ProjectSidebar` does — a 248px rail on a 375px screen eats the page.
-        "lg:sticky lg:top-0 lg:h-dvh lg:w-62 lg:overflow-y-auto lg:border-r lg:border-b-0 lg:p-5",
+        "lg:sticky lg:top-0 lg:h-dvh lg:w-[17.5rem] lg:overflow-y-auto lg:border-r lg:border-b-0 lg:px-6 lg:py-7",
       )}
     >
-      <div className="hidden px-1 lg:block">
+      <div className="px-1">
         <Link href="/app" className="rounded-nav" aria-label="Vibe Business — home">
           <VibeLockup />
         </Link>
@@ -123,11 +131,11 @@ export function AccountSidebar({
           <Link
             href="/app/billing"
             className={cn(
-              "rounded-nav text-fg-muted hover:text-fg-body hover:bg-surface-2 px-3 py-2",
-              "flex items-baseline gap-1.5 text-ui transition-interactive",
+              "rounded-nav text-fg-muted hover:text-fg-body hover:bg-surface-2 hidden px-3 py-2.5",
+              "items-baseline gap-1.5 text-sm transition-interactive lg:flex",
             )}
           >
-            <span className="text-fg-body font-mono tabular-nums">{credits}</span>
+            <span className="text-fg-body font-semibold tabular-nums">{credits}</span>
             <span>Credits</span>
           </Link>
         )}
@@ -154,7 +162,9 @@ export function AccountShell({
           already takes 248px, and this screen's job is to be calm rather than
           to fit more in.
         */}
-        <main className="mx-auto w-full max-w-[72rem] px-5 py-10 sm:px-8 sm:py-14">{children}</main>
+        <main className="mx-auto w-full max-w-[78rem] px-5 py-9 sm:px-8 sm:py-11 xl:px-10">
+          {children}
+        </main>
       </div>
     </div>
   );

@@ -1,8 +1,9 @@
 import localFont from "next/font/local";
 
 /**
- * The two product typefaces, self-hosted from files committed to this
- * repository.
+ * The technical product typeface, self-hosted from files committed to this
+ * repository. The interface face itself is the platform-native stack declared
+ * in `globals.css`.
  *
  * ## Why local files rather than `next/font/google`
  *
@@ -15,11 +16,9 @@ import localFont from "next/font/local";
  *
  * ## These are the bytes that were already shipping
  *
- * Every file was taken verbatim from the `next/font/google` output of the
- * commit this change is based on — same typeface, same variable-axis
- * instancing, same subsetting. The emitted files keep their original content
- * hashes, and the rendered text was measured before and after: identical to
- * the pixel across four screens and every weight. See `fonts/README.md`.
+ * Every JetBrains Mono file was taken verbatim from the `next/font/google`
+ * output of the commit this change is based on — same typeface, same
+ * variable-axis instancing, same subsetting. See `fonts/README.md`.
  *
  * ## Why one call per writing system
  *
@@ -43,48 +42,14 @@ import localFont from "next/font/local";
  *
  * The constants are named after the typeface rather than its role, because
  * `next/font` derives the CSS family name from the identifier and that name
- * is what a browser's dev tools show. `spaceGroteskLatin` is legible there;
- * `sansLatin` is not.
+ * is what a browser's dev tools show. `jetBrainsMonoLatin` is legible there;
+ * `monoLatin` is not.
  *
  * `weight: "400 700"` is written out in every call because `next/font` is a
  * compile-time transform that rejects anything which is not an explicit
  * literal. These are variable fonts, so that span is interpolated and there
  * is no file per weight.
  */
-
-/* Space Grotesk ----------------------------------------------------- */
-const spaceGroteskLatin = localFont({
-  src: "./fonts/space-grotesk-latin.woff2",
-  weight: "400 700",
-  style: "normal",
-  display: "swap",
-  variable: "--font-space-grotesk",
-  preload: true,
-  // Metrics are read from the file itself, so text shown before the
-  // webfont arrives occupies the same space and nothing jumps.
-  adjustFontFallback: "Arial",
-  declarations: [{ prop: "unicode-range", value: "U+0000-00FF,U+131,U+152-153,U+2BB-2BC,U+2C6,U+2DA,U+2DC,U+304,U+308,U+329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD" }],
-});
-const spaceGroteskLatinExt = localFont({
-  src: "./fonts/space-grotesk-latin-ext.woff2",
-  weight: "400 700",
-  style: "normal",
-  display: "swap",
-  variable: "--font-space-grotesk-latin-ext",
-  preload: false,
-  adjustFontFallback: false,
-  declarations: [{ prop: "unicode-range", value: "U+100-2BA,U+2BD-2C5,U+2C7-2CC,U+2CE-2D7,U+2DD-2FF,U+304,U+308,U+329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF" }],
-});
-const spaceGroteskVietnamese = localFont({
-  src: "./fonts/space-grotesk-vietnamese.woff2",
-  weight: "400 700",
-  style: "normal",
-  display: "swap",
-  variable: "--font-space-grotesk-vietnamese",
-  preload: false,
-  adjustFontFallback: false,
-  declarations: [{ prop: "unicode-range", value: "U+102-103,U+110-111,U+128-129,U+168-169,U+1A0-1A1,U+1AF-1B0,U+300-301,U+303-304,U+308-309,U+323,U+329,U+1EA0-1EF9,U+20AB" }],
-});
 
 /* JetBrains Mono ---------------------------------------------------- */
 const jetBrainsMonoLatin = localFont({
@@ -158,9 +123,6 @@ const jetBrainsMonoVietnamese = localFont({
  * `unicode-range` falls through to the system stack.
  */
 export const fontVariables = [
-  spaceGroteskLatin.variable,
-  spaceGroteskLatinExt.variable,
-  spaceGroteskVietnamese.variable,
   jetBrainsMonoLatin.variable,
   jetBrainsMonoLatinExt.variable,
   jetBrainsMonoCyrillic.variable,
