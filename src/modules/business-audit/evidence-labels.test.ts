@@ -3,7 +3,7 @@ import { describeEvidenceId } from "./evidence-labels";
 import { buildLiveEvidence, buildRepositoryEvidence } from "./evidence";
 import { fakeLiveSnapshot, fakeRepositorySnapshot } from "./test-support";
 import { AUTHENTICATED_SURFACE_LABELS } from "@/modules/authenticated-product-intelligence/schema";
-import { PRODUCT_SURFACE_LABELS } from "@/modules/live-product-intelligence/human-view";
+import { PRODUCT_SURFACE_LABELS, SEO_LABELS } from "@/modules/live-product-intelligence/human-view";
 import { BUSINESS_SURFACE_LABELS } from "@/modules/repository-intelligence/schema";
 import {
   BUSINESS_SIGNAL_IDS,
@@ -77,6 +77,27 @@ describe("polarity survives", () => {
     expect(describeEvidenceId("live.surface.homepage").detail).toBe(
       "Homepage, checked on your live site",
     );
+  });
+
+  /**
+   * The one live family whose polarity is genuinely in the id.
+   *
+   * `buildLiveEvidence` mints `live.seo.<signal>` only when present and
+   * `live.seo.<signal>_missing` only when absent, so a bare positive reading is
+   * honest here — unlike `live.surface.*` above, where the same id is minted
+   * either way and a positive reading inverts the finding.
+   *
+   * The words come from `SEO_LABELS`, which `live-product-intelligence` already
+   * wrote for this audience. Nothing consulted it from here until now, so the
+   * "Why?" disclosure on a technical-SEO Move read `Seo sitemap` — the id with
+   * its punctuation removed and a capital on the front.
+   */
+  it("gives an SEO signal the words the live module already wrote for it", () => {
+    expect(describeEvidenceId("live.seo.sitemap").detail).toBe("A map of your pages");
+    expect(describeEvidenceId("live.seo.robots_txt_missing").detail).toBe(
+      "Instructions for search engines — not observed",
+    );
+    expect(describeEvidenceId("live.seo.title").certainty).toBe("curated");
   });
 
   it("describes an action control as present, never as working", () => {
@@ -160,6 +181,7 @@ const LITERAL_IDS = [
 const FAMILY_IDS = [
   ...Object.keys(BUSINESS_SURFACE_LABELS).map((id) => `repo.surface.${id}`),
   ...Object.keys(PRODUCT_SURFACE_LABELS).map((id) => `live.surface.${id}`),
+  ...Object.keys(SEO_LABELS).flatMap((id) => [`live.seo.${id}`, `live.seo.${id}_missing`]),
   ...Object.keys(AUTHENTICATED_SURFACE_LABELS).flatMap((id) => [
     `auth.surface.${id}`,
     `auth.surface.${id}_not_observed`,

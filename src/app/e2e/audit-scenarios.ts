@@ -139,7 +139,7 @@ const VIBE_SYNTHESIS: AuditSynthesis = {
       // defect (UI-7 §2). The real id for the same fact.
       "repo.surface.payments_not_observed",
     ]),
-    lensAssessment("acquisition", "weak", "soon", ["live.seo.canonical_not_observed"]),
+    lensAssessment("acquisition", "weak", "soon", ["live.seo.canonical_missing"]),
     lensAssessment("business_readiness", "weak", "later", ["live.surface.terms_not_observed"]),
     lensAssessment("measurement", "weak", "later", ["repo.analytics.none"]),
     lensAssessment("retention", "adequate", "later", ["auth.surface.dashboard"]),

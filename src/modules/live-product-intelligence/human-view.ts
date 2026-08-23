@@ -88,8 +88,12 @@ export const PRODUCT_SURFACE_LABELS: Record<ProductSurfaceId, string> = {
 /**
  * Search signals in the words of someone who has to care about the outcome
  * rather than the mechanism.
+ *
+ * Exported for the same reason `PRODUCT_SURFACE_LABELS` is: `evidence-labels.ts`
+ * has to render a `live.seo.*` citation, and a second table written there would
+ * be a second set of words for the same ten signals.
  */
-const SEO_LABELS: Record<SeoSignalId, string> = {
+export const SEO_LABELS: Record<SeoSignalId, string> = {
   title: "A page title",
   meta_description: "A description for search results",
   canonical: "Which version of a page is the real one",
