@@ -21,6 +21,7 @@ function project(overrides: Partial<DashboardProject> = {}): DashboardProject {
     nextMovesCount: 0,
     topMoveTitle: null,
     lastAnalysedAt: null,
+  scoreHistory: [],
     preparedCount: 0,
     failedValidationCount: 0,
     ...overrides,

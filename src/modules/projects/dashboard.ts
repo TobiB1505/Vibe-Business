@@ -2,6 +2,8 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import type { AuditContract } from "./score-series";
+
 /**
  * The global dashboard read model (Sprint UI-3).
  *
@@ -9,8 +11,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  *
  * `/app` used to answer "which projects do I have". The dashboard answers
  * "what needs my attention", and that needs a little more per project — a
- * score, the top move by name, how many are waiting, whether something is
- * prepared, when the product was last analysed.
+ * score and how that score has moved, the top move by name, how many are
+ * waiting, whether something is prepared, when the product was last analysed.
  *
  * It no longer reads the audit-event log. The activity strip that read it left
  * the account dashboard in CORE-6 (an append-only feed with no action on the
@@ -42,6 +44,21 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type ProjectScoreState = "scored" | "not_audited" | "insufficient_coverage";
 
+/**
+ * One completed audit, reduced to what a trend needs: the number, when it was
+ * produced, and the seven columns that decide whether it may be compared with
+ * the reading beside it.
+ *
+ * The versions are carried rather than resolved here on purpose. Deciding what
+ * "comparable" means is a rule with a history behind it, and it lives in
+ * `score-series.ts` where it is tested; this module's job is to read columns.
+ */
+export type AuditReading = {
+  score: number | null;
+  recordedAt: string;
+  contract: AuditContract;
+};
+
 export type DashboardProject = {
   id: string;
   name: string;
@@ -67,6 +84,20 @@ export type DashboardProject = {
    * label for it must say that rather than implying general activity.
    */
   lastAnalysedAt: string | null;
+  /**
+   * Every completed audit for this product, newest first.
+   *
+   * These rows were already fetched and already discarded: the query is
+   * unbounded and ordered newest-first, and `firstPerKey` kept one per project
+   * and threw the rest away. Keeping them costs no round trip and no extra
+   * row — only seven small text columns per row on a select that was already
+   * being made.
+   *
+   * It is deliberately the *readings*, not a chart. `buildScoreSeries` turns
+   * them into something drawable, and it is the only thing that decides where
+   * the line breaks.
+   */
+  scoreHistory: AuditReading[];
   /** Prepared changes still in `prepared` status. */
   preparedCount: number;
   /** Prepared changes whose latest validation failed. */
@@ -102,11 +133,31 @@ type AuditRow = {
   assessed_dimensions: number | null;
   total_dimensions: number | null;
   created_at: string;
+  // The reproducibility set. Seven `not null` text columns, already on the
+  // table since Sprint 4 — no migration was needed to chart the trend.
+  schema_version: string;
+  audit_version: string;
+  evidence_pack_version: string;
+  prompt_version: string;
+  rubric_version: string;
+  provider: string;
+  model: string;
 };
 type SetRow = { id: string; project_id: string; created_at: string };
 type OpportunityRow = { opportunity_set_id: string; rank: number; title: string };
 type PreparedRow = { id: string; project_id: string };
 type ValidationRow = { prepared_change_id: string; status: string; created_at: string };
+/**
+ * One string rather than a concatenation: `supabase-js` reads the select list
+ * at the type level, and a `+` between two fragments erases the row type.
+ *
+ * The last seven are the reproducibility set. They ride along on a query that
+ * was already being made, which is the whole reason the Business Signal trend
+ * needed no migration.
+ */
+const AUDIT_COLUMNS =
+  "project_id, overall_score, assessed_dimensions, total_dimensions, created_at, schema_version, audit_version, evidence_pack_version, prompt_version, rubric_version, provider, model";
+
 /**
  * Rows are fetched newest-first and reduced to the first per key. Postgres has
  * `distinct on`, PostgREST does not expose it, and adding a view for it would
@@ -121,6 +172,21 @@ function firstPerKey<T>(rows: T[], key: (row: T) => string): Map<string, T> {
   return result;
 }
 
+/**
+ * The same rows, all of them, grouped rather than reduced. Input order is
+ * preserved inside each group, so a newest-first read stays newest-first.
+ */
+function groupPerKey<T>(rows: T[], key: (row: T) => string): Map<string, T[]> {
+  const result = new Map<string, T[]>();
+  for (const row of rows) {
+    const id = key(row);
+    const group = result.get(id);
+    if (group) group.push(row);
+    else result.set(id, [row]);
+  }
+  return result;
+}
+
 function countPerKey<T>(rows: T[], key: (row: T) => string): Map<string, number> {
   const result = new Map<string, number>();
   for (const row of rows) {
@@ -128,6 +194,23 @@ function countPerKey<T>(rows: T[], key: (row: T) => string): Map<string, number>
     result.set(id, (result.get(id) ?? 0) + 1);
   }
   return result;
+}
+
+/** Column names to field names. No rule lives here — see `score-series.ts`. */
+function auditReading(row: AuditRow): AuditReading {
+  return {
+    score: row.overall_score,
+    recordedAt: row.created_at,
+    contract: {
+      schemaVersion: row.schema_version,
+      auditVersion: row.audit_version,
+      evidencePackVersion: row.evidence_pack_version,
+      promptVersion: row.prompt_version,
+      rubricVersion: row.rubric_version,
+      provider: row.provider,
+      model: row.model,
+    },
+  };
 }
 
 export async function getDashboardOverview(
@@ -160,7 +243,7 @@ export async function getDashboardOverview(
       // `overall_score` is a column. The audit's JSONB document is never read
       // here: a dashboard does not need dimensions, evidence or findings.
       .from("business_readiness_audits")
-      .select("project_id, overall_score, assessed_dimensions, total_dimensions, created_at")
+      .select(AUDIT_COLUMNS)
       .in("project_id", projectIds)
       .eq("status", "completed")
       .order("created_at", { ascending: false }),
@@ -184,10 +267,9 @@ export async function getDashboardOverview(
   }
 
   const repoByProject = firstPerKey((repos.data ?? []) as RepoRow[], (row) => row.project_id);
-  const latestAuditByProject = firstPerKey(
-    (audits.data ?? []) as AuditRow[],
-    (row) => row.project_id,
-  );
+  const auditRows = (audits.data ?? []) as AuditRow[];
+  const latestAuditByProject = firstPerKey(auditRows, (row) => row.project_id);
+  const auditsByProject = groupPerKey(auditRows, (row) => row.project_id);
   const latestSetByProject = firstPerKey((sets.data ?? []) as SetRow[], (row) => row.project_id);
   const preparedRows = (prepared.data ?? []) as PreparedRow[];
   const preparedByProject = countPerKey(preparedRows, (row) => row.project_id);
@@ -264,6 +346,7 @@ export async function getDashboardOverview(
       scoreState,
       topMoveTitle: set ? (topMoveBySet.get(set.id)?.title ?? null) : null,
       lastAnalysedAt: audit?.created_at ?? null,
+      scoreHistory: (auditsByProject.get(project.id) ?? []).map(auditReading),
       nextMovesCount: set ? (opportunityCountBySet.get(set.id) ?? 0) : null,
       preparedCount: preparedByProject.get(project.id) ?? 0,
       failedValidationCount: failedByProject.get(project.id) ?? 0,
