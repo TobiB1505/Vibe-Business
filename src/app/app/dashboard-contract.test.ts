@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
@@ -16,16 +16,53 @@ import { describe, expect, it } from "vitest";
  * projects.
  */
 
-const APP_DIR = join(process.cwd(), "src/app/app");
+/**
+ * Where the account dashboard renders from.
+ *
+ * One constant rather than a filename, because the surface is about to grow a
+ * shell: the credit balance and the session read move out of `page.tsx` and
+ * into a layout, and a test naming only `page.tsx` would go quiet at exactly
+ * that moment — every assertion below would still pass, against a file that no
+ * longer performs the reads. Same failure the workspace route contract had
+ * when it walked one directory level.
+ *
+ * So the surface is *derived*: every render file that exists here is guarded,
+ * and moving a read from one to another cannot escape the contract.
+ */
+const ACCOUNT_DIR = join(process.cwd(), "src/app/app");
 const MODULES = join(process.cwd(), "src/modules");
+
+/** Render files, in the order React composes them. */
+const SURFACE_FILES = ["layout.tsx", "page.tsx"] as const;
 
 function source(path: string): string {
   return readFileSync(path, "utf8");
 }
 
-const page = source(join(APP_DIR, "page.tsx"));
+function accountSurface(): { name: string; source: string }[] {
+  const found = SURFACE_FILES.flatMap((name) => {
+    const path = join(ACCOUNT_DIR, name);
+    return existsSync(path) ? [{ name, source: source(path) }] : [];
+  });
+
+  // A list that quietly came back empty would make every assertion below
+  // vacuous. `page.tsx` is the one file that must always be here.
+  if (!found.some((file) => file.name === "page.tsx")) {
+    throw new Error(
+      `the account dashboard's page was not found under ${ACCOUNT_DIR}. ` +
+        "If the route moved, move ACCOUNT_DIR with it — do not delete the assertion.",
+    );
+  }
+
+  return found;
+}
+
+const surface = accountSurface();
 const readModel = source(join(MODULES, "projects/dashboard.ts"));
 const attention = source(join(MODULES, "projects/attention.ts"));
+
+/** Every guarded file: the render surface plus the read model behind it. */
+const guarded = [...surface, { name: "dashboard.ts", source: readModel }];
 
 describe("the dashboard is summary-only", () => {
   /**
@@ -52,26 +89,23 @@ describe("the dashboard is summary-only", () => {
     "buildValidationSummary",
   ];
 
-  it("calls no per-project detail read from the page", () => {
-    for (const forbidden of FORBIDDEN) {
-      expect(page, `page.tsx calls ${forbidden}`).not.toContain(`${forbidden}(`);
-    }
-  });
-
-  it("calls no per-project detail read from the read model either", () => {
-    // Moving the loop one file down would satisfy the assertion above while
-    // changing nothing about the cost.
-    for (const forbidden of FORBIDDEN) {
-      expect(readModel, `dashboard.ts calls ${forbidden}`).not.toContain(`${forbidden}(`);
+  it("calls no per-project detail read from anywhere on the surface", () => {
+    // Both the render files and the read model, because moving the loop one
+    // file down would satisfy a page-only assertion while changing nothing
+    // about the cost.
+    for (const file of guarded) {
+      for (const forbidden of FORBIDDEN) {
+        expect(file.source, `${file.name} calls ${forbidden}`).not.toContain(`${forbidden}(`);
+      }
     }
   });
 
   it("never reaches for a provider, a sandbox or GitHub", () => {
-    for (const src of [page, readModel]) {
-      expect(src).not.toContain("createVercelSandboxProvider");
-      expect(src).not.toContain("createGithubMergePort");
-      expect(src).not.toContain("checkInstallationStillAccessible");
-      expect(src).not.toContain("VercelWorkflowExecutor");
+    for (const file of guarded) {
+      expect(file.source, file.name).not.toContain("createVercelSandboxProvider");
+      expect(file.source, file.name).not.toContain("createGithubMergePort");
+      expect(file.source, file.name).not.toContain("checkInstallationStillAccessible");
+      expect(file.source, file.name).not.toContain("VercelWorkflowExecutor");
     }
   });
 
@@ -85,35 +119,42 @@ describe("the dashboard is summary-only", () => {
      * per-project billing reads are the ones that would turn it into an N+1,
      * and none of them belongs on this page.
      */
-    expect(page).toContain("getHeaderCreditBalance");
+    // On the surface, not on one named file: the balance renders in the shell,
+    // and the shell is a layout as soon as the account has one.
+    expect(
+      surface.some((file) => file.source.includes("getHeaderCreditBalance")),
+      "no account render file reads getHeaderCreditBalance",
+    ).toBe(true);
 
-    for (const forbidden of [
-      "getBillingOverview",
-      "authorizeOperationCredits",
-      "checkOperationAffordability",
-      "listLedgerEntries",
-      "sweepExpiredCredits",
-    ]) {
-      expect(page, `page.tsx calls ${forbidden}`).not.toContain(`${forbidden}(`);
+    for (const file of surface) {
+      for (const forbidden of [
+        "getBillingOverview",
+        "authorizeOperationCredits",
+        "checkOperationAffordability",
+        "listLedgerEntries",
+        "sweepExpiredCredits",
+      ]) {
+        expect(file.source, `${file.name} calls ${forbidden}`).not.toContain(`${forbidden}(`);
+      }
     }
   });
 
   it("moves no financial state on a page render", () => {
     // §99: a GET must never grant, expire, reserve or charge. The dashboard is
     // a Server Component, so this is that rule stated where it can fail.
-    for (const src of [page, readModel]) {
-      expect(src).not.toContain("ensureWelcomeGrant");
-      expect(src).not.toContain("grantCreditLot");
-      expect(src).not.toContain("settleOperationCredits");
+    for (const file of guarded) {
+      expect(file.source, file.name).not.toContain("ensureWelcomeGrant");
+      expect(file.source, file.name).not.toContain("grantCreditLot");
+      expect(file.source, file.name).not.toContain("settleOperationCredits");
     }
   });
 
   it("keeps the service-role client out", () => {
     // It bypasses RLS. A dashboard reading across every project is the last
     // place that should hold a key which ignores ownership.
-    for (const src of [page, readModel]) {
-      expect(src).not.toContain("createServiceRoleClient");
-      expect(src).not.toContain("supabase-service");
+    for (const file of guarded) {
+      expect(file.source, file.name).not.toContain("createServiceRoleClient");
+      expect(file.source, file.name).not.toContain("supabase-service");
     }
   });
 
