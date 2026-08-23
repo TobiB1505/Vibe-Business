@@ -9,17 +9,25 @@ import { requireSession } from "@/modules/auth/session";
 import { buildAttentionItems, orderProjectsByAttention } from "@/modules/projects/attention";
 import { getDashboardOverview } from "@/modules/projects/dashboard";
 import { getOnboardingRouting } from "@/modules/onboarding/store";
+import { BusinessSignalPanel } from "../business-signal-panel";
+import { NextMoveCard } from "../next-move-card";
 import { ProductCard } from "../product-card";
 
 /**
- * The global dashboard (Sprint UI-3).
+ * The account dashboard (Sprint UI-3, rebuilt in CORE-6).
  *
- * ## What changed
+ * ## What it answers, in the order it answers it
  *
- * `/app` answered "which projects do I have". It now answers "what needs my
- * attention", and the section order is the argument: attention, then projects,
- * then activity. A project list is what you fall back to when nothing is
- * pending — not the first thing the product says.
+ * `/app` once answered "which projects do I have". It answers "where do things
+ * stand, and what is the one thing to do" — and the section order is the
+ * argument: the product that needs attention, the move it needs, then every
+ * product as an index.
+ *
+ * There is no attention list and no activity feed. Both were removed in CORE-6
+ * rather than restyled: the attention list said per-product what each card's
+ * single action already says, and its one unique contribution — the ordering —
+ * is now what arranges the grid; the activity feed was eight rows of metadata
+ * with no action on the calmest screen in the product.
  *
  * ## Cost
  *
@@ -111,6 +119,15 @@ export default async function AppHomePage({
   const attention = buildAttentionItems(projects);
   const projectNames = new Map(projects.map((project) => [project.id, project.name]));
 
+  /*
+   * Most-urgent first. The same ordering carries both halves of this screen:
+   * the grid below, and the one product the hero panel is about — so the
+   * number at the top of the page and the cards under it can never disagree
+   * about which product matters most.
+   */
+  const ordered = orderProjectsByAttention(projects);
+  const hero = ordered[0] ?? null;
+
   /**
    * The headline states a fact or says there is nothing. No greeting by name
    * and no time of day: the session carries an email, not a name, and the
@@ -157,11 +174,21 @@ export default async function AppHomePage({
           {projects.length > 0 && (
             <p className="text-fg-muted text-sm">
               {attention.length === 0
-                ? "Vibe is watching your projects. Anything that needs a decision will appear here."
-                : "Vibe ranked these from what it found in your projects."}
+                ? "Vibe is watching your products. Anything that needs a decision will appear here."
+                : "Vibe ranked them from what it found in your products."}
             </p>
           )}
         </header>
+
+        {hero && (
+          <section aria-labelledby="signal-heading" className="grid gap-5 lg:grid-cols-[3fr_2fr]">
+            <h2 id="signal-heading" className="sr-only">
+              {hero.name}
+            </h2>
+            <BusinessSignalPanel project={hero} />
+            <NextMoveCard project={hero} />
+          </section>
+        )}
 
         {projects.length === 0 ? (
           <EmptyDashboard />
@@ -184,7 +211,7 @@ export default async function AppHomePage({
               contributed that a card cannot, so the grid inherits it.
             */}
             <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {orderProjectsByAttention(projects).map((project) => (
+              {ordered.map((project) => (
                 <li key={project.id}>
                   <ProductCard project={project} />
                 </li>

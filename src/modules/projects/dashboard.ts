@@ -45,6 +45,22 @@ import type { AuditContract } from "./score-series";
 export type ProjectScoreState = "scored" | "not_audited" | "insufficient_coverage";
 
 /**
+ * The highest-ranked Move, reduced to what a card can show.
+ *
+ * Four columns, no document. `why_now`, the evidence ids, the category and the
+ * execution fields all stay on the Action Plan, where there is room to be
+ * accurate about them — this is the one sentence and the two words a founder
+ * needs to decide whether to click.
+ */
+export type DashboardMove = {
+  title: string;
+  /** The Move's own statement of what is wrong. One sentence, model-written. */
+  problem: string;
+  impact: "high" | "medium" | "low";
+  effort: "high" | "medium" | "low";
+};
+
+/**
  * One completed audit, reduced to what a trend needs: the number, when it was
  * produced, and the seven columns that decide whether it may be compared with
  * the reading beside it.
@@ -70,11 +86,11 @@ export type DashboardProject = {
   /** Opportunities in the latest completed set. Null when never generated. */
   nextMovesCount: number | null;
   /**
-   * The title of the rank-1 Move, so a card can name the work rather than
-   * count it. Null when no set exists, and also when a set exists and is
-   * empty — the count beside it is what distinguishes those two.
+   * The rank-1 Move of the latest completed set, so a card can name the work
+   * rather than count it. Null when no set exists, and also when a set exists
+   * and is empty — `nextMovesCount` beside it distinguishes those two.
    */
-  topMoveTitle: string | null;
+  topMove: DashboardMove | null;
   /**
    * When the latest completed audit ran.
    *
@@ -144,7 +160,14 @@ type AuditRow = {
   model: string;
 };
 type SetRow = { id: string; project_id: string; created_at: string };
-type OpportunityRow = { opportunity_set_id: string; rank: number; title: string };
+type OpportunityRow = {
+  opportunity_set_id: string;
+  rank: number;
+  title: string;
+  problem: string;
+  impact: DashboardMove["impact"];
+  effort: DashboardMove["effort"];
+};
 type PreparedRow = { id: string; project_id: string };
 type ValidationRow = { prepared_change_id: string; status: string; created_at: string };
 /**
@@ -194,6 +217,12 @@ function countPerKey<T>(rows: T[], key: (row: T) => string): Map<string, number>
     result.set(id, (result.get(id) ?? 0) + 1);
   }
   return result;
+}
+
+/** Column names to field names. Nothing is dropped and nothing is derived. */
+function dashboardMove(row: OpportunityRow | undefined): DashboardMove | null {
+  if (!row) return null;
+  return { title: row.title, problem: row.problem, impact: row.impact, effort: row.effort };
 }
 
 /** Column names to field names. No rule lives here — see `score-series.ts`. */
@@ -282,11 +311,11 @@ export async function getDashboardOverview(
     setIds.length > 0
       ? supabase
           .from("business_opportunities")
-          // `rank` and `title` ride along on the query that was already
-          // counting these rows, so the top Move's name costs no round trip.
+          // The Move's own columns ride along on the query that was already
+          // counting these rows, so naming the top Move costs no round trip.
           // Ordering by rank is what lets `firstPerKey` below return rank 1 by
           // construction rather than by a second pass.
-          .select("opportunity_set_id, rank, title")
+          .select("opportunity_set_id, rank, title, problem, impact, effort")
           .in("opportunity_set_id", setIds)
           .order("rank", { ascending: true })
       : Promise.resolve({ data: [], error: null }),
@@ -344,7 +373,7 @@ export async function getDashboardOverview(
       defaultBranch: repo?.default_branch ?? null,
       score: audit?.overall_score ?? null,
       scoreState,
-      topMoveTitle: set ? (topMoveBySet.get(set.id)?.title ?? null) : null,
+      topMove: (set && dashboardMove(topMoveBySet.get(set.id))) || null,
       lastAnalysedAt: audit?.created_at ?? null,
       scoreHistory: (auditsByProject.get(project.id) ?? []).map(auditReading),
       nextMovesCount: set ? (opportunityCountBySet.get(set.id) ?? 0) : null,

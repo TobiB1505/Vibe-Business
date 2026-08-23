@@ -138,7 +138,7 @@ export function ProductCard({ project }: { project: DashboardProject }) {
           been generated, and one that came back empty.
         */}
         <p className="text-fg-prose line-clamp-2 text-sm leading-relaxed">
-          {project.topMoveTitle ??
+          {project.topMove?.title ??
             (project.nextMovesCount === null
               ? "Vibe hasn't worked out what to do next yet."
               : "Nothing waiting right now.")}
