@@ -49,6 +49,21 @@ export type DashboardProject = {
   scoreState: ProjectScoreState;
   /** Opportunities in the latest completed set. Null when never generated. */
   nextMovesCount: number | null;
+  /**
+   * The title of the rank-1 Move, so a card can name the work rather than
+   * count it. Null when no set exists, and also when a set exists and is
+   * empty — the count beside it is what distinguishes those two.
+   */
+  topMoveTitle: string | null;
+  /**
+   * When the latest completed audit ran.
+   *
+   * Deliberately *not* a last-activity timestamp. See the note above on why
+   * `lastActivityAt` was refused: it cannot be read honestly here without an
+   * N+1. This is one exact fact — when Vibe last judged this product — and any
+   * label for it must say that rather than implying general activity.
+   */
+  lastAnalysedAt: string | null;
   /** Prepared changes still in `prepared` status. */
   preparedCount: number;
   /** Prepared changes whose latest validation failed. */
@@ -88,7 +103,7 @@ type AuditRow = {
   created_at: string;
 };
 type SetRow = { id: string; project_id: string; created_at: string };
-type OpportunityRow = { opportunity_set_id: string };
+type OpportunityRow = { opportunity_set_id: string; rank: number; title: string };
 type PreparedRow = { id: string; project_id: string };
 type ValidationRow = { prepared_change_id: string; status: string; created_at: string };
 type EventRow = {
@@ -204,7 +219,15 @@ export async function getDashboardOverview(
 
   const [opportunities, validations] = await Promise.all([
     setIds.length > 0
-      ? supabase.from("business_opportunities").select("opportunity_set_id").in("opportunity_set_id", setIds)
+      ? supabase
+          .from("business_opportunities")
+          // `rank` and `title` ride along on the query that was already
+          // counting these rows, so the top Move's name costs no round trip.
+          // Ordering by rank is what lets `firstPerKey` below return rank 1 by
+          // construction rather than by a second pass.
+          .select("opportunity_set_id, rank, title")
+          .in("opportunity_set_id", setIds)
+          .order("rank", { ascending: true })
       : Promise.resolve({ data: [], error: null }),
     preparedIds.length > 0
       ? supabase
@@ -218,10 +241,10 @@ export async function getDashboardOverview(
   if (opportunities.error) throw opportunities.error;
   if (validations.error) throw validations.error;
 
-  const opportunityCountBySet = countPerKey(
-    (opportunities.data ?? []) as OpportunityRow[],
-    (row) => row.opportunity_set_id,
-  );
+  const opportunityRows = (opportunities.data ?? []) as OpportunityRow[];
+  const opportunityCountBySet = countPerKey(opportunityRows, (row) => row.opportunity_set_id);
+  // Ordered by rank above, so the first row for a set *is* rank 1.
+  const topMoveBySet = firstPerKey(opportunityRows, (row) => row.opportunity_set_id);
 
   // Only the *latest* run per change decides: an earlier failure followed by a
   // passing re-run is not a failure.
@@ -260,6 +283,8 @@ export async function getDashboardOverview(
       defaultBranch: repo?.default_branch ?? null,
       score: audit?.overall_score ?? null,
       scoreState,
+      topMoveTitle: set ? (topMoveBySet.get(set.id)?.title ?? null) : null,
+      lastAnalysedAt: audit?.created_at ?? null,
       nextMovesCount: set ? (opportunityCountBySet.get(set.id) ?? 0) : null,
       preparedCount: preparedByProject.get(project.id) ?? 0,
       failedValidationCount: failedByProject.get(project.id) ?? 0,
