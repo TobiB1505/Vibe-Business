@@ -1,8 +1,6 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { AuditEventRecord } from "@/modules/audit-log/queries";
-import { mapAuditEventRow } from "@/modules/audit-log/queries";
 
 /**
  * The global dashboard read model (Sprint UI-3).
@@ -11,8 +9,13 @@ import { mapAuditEventRow } from "@/modules/audit-log/queries";
  *
  * `/app` used to answer "which projects do I have". The dashboard answers
  * "what needs my attention", and that needs a little more per project — a
- * score, how many moves are waiting, whether something is prepared, when
- * anything last happened.
+ * score, the top move by name, how many are waiting, whether something is
+ * prepared, when the product was last analysed.
+ *
+ * It no longer reads the audit-event log. The activity strip that read it left
+ * the account dashboard in CORE-6 (an append-only feed with no action on the
+ * calmest screen in the product), and the query left with it rather than
+ * staying to feed nothing.
  *
  * ## Why it is one module rather than reused per-project reads
  *
@@ -89,8 +92,6 @@ export type DashboardProject = {
 
 export type DashboardOverview = {
   projects: DashboardProject[];
-  /** Newest events across every project the caller owns. */
-  recentActivity: (AuditEventRecord & { projectId: string })[];
 };
 
 type ProjectRow = { id: string; name: string };
@@ -106,17 +107,6 @@ type SetRow = { id: string; project_id: string; created_at: string };
 type OpportunityRow = { opportunity_set_id: string; rank: number; title: string };
 type PreparedRow = { id: string; project_id: string };
 type ValidationRow = { prepared_change_id: string; status: string; created_at: string };
-type EventRow = {
-  id: string;
-  project_id: string;
-  event_type: string;
-  created_at: string;
-  metadata: Record<string, unknown> | null;
-};
-
-/** How many events the dashboard's activity strip shows. */
-export const DASHBOARD_ACTIVITY_LIMIT = 8;
-
 /**
  * Rows are fetched newest-first and reduced to the first per key. Postgres has
  * `distinct on`, PostgREST does not expose it, and adding a view for it would
@@ -155,13 +145,13 @@ export async function getDashboardOverview(
   if (projectsError) throw projectsError;
 
   const projects = (projectRows ?? []) as ProjectRow[];
-  if (projects.length === 0) return { projects: [], recentActivity: [] };
+  if (projects.length === 0) return { projects: [] };
 
   const projectIds = projects.map((project) => project.id);
 
-  // Five `.in(...)` queries, run together, then two dependent ones below.
+  // Four `.in(...)` queries, run together, then two dependent ones below.
   // None of them scales with the number of projects — that is the design.
-  const [repos, audits, sets, prepared, events] = await Promise.all([
+  const [repos, audits, sets, prepared] = await Promise.all([
     supabase
       .from("repository_connections")
       .select("project_id, full_name, default_branch")
@@ -187,19 +177,9 @@ export async function getDashboardOverview(
       // The same filter the Prepared route lists by, so a count here and the
       // page behind it cannot disagree.
       .eq("status", "prepared"),
-    supabase
-      .from("audit_events")
-      .select("id, project_id, event_type, created_at, metadata")
-      .eq("user_id", userId)
-      .in("project_id", projectIds)
-      .order("created_at", { ascending: false })
-      .order("id", { ascending: false })
-      // Only the activity strip reads this, and it shows eight. The margin is
-      // for events that resolve to a project the caller no longer owns.
-      .limit(DASHBOARD_ACTIVITY_LIMIT * 3),
   ]);
 
-  for (const result of [repos, audits, sets, prepared, events]) {
+  for (const result of [repos, audits, sets, prepared]) {
     if (result.error) throw result.error;
   }
 
@@ -211,7 +191,6 @@ export async function getDashboardOverview(
   const latestSetByProject = firstPerKey((sets.data ?? []) as SetRow[], (row) => row.project_id);
   const preparedRows = (prepared.data ?? []) as PreparedRow[];
   const preparedByProject = countPerKey(preparedRows, (row) => row.project_id);
-  const eventRows = (events.data ?? []) as EventRow[];
 
   // Two dependent queries, each still a single round trip for all projects.
   const setIds = [...latestSetByProject.values()].map((set) => set.id);
@@ -291,10 +270,5 @@ export async function getDashboardOverview(
     };
   });
 
-  const recentActivity = eventRows.slice(0, DASHBOARD_ACTIVITY_LIMIT).map((row) => ({
-    ...mapAuditEventRow(row),
-    projectId: row.project_id,
-  }));
-
-  return { projects: dashboardProjects, recentActivity };
+  return { projects: dashboardProjects };
 }

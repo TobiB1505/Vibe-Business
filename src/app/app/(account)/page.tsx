@@ -6,13 +6,10 @@ import { Surface } from "@/components/ui/surface";
 import { MonoLabel } from "@/components/ui/typography";
 import { createClient } from "@/lib/supabase/server";
 import { requireSession } from "@/modules/auth/session";
-import { buildActivityEntry } from "@/modules/audit-log/view";
-import { buildAttentionItems } from "@/modules/projects/attention";
+import { buildAttentionItems, orderProjectsByAttention } from "@/modules/projects/attention";
 import { getDashboardOverview } from "@/modules/projects/dashboard";
 import { getOnboardingRouting } from "@/modules/onboarding/store";
-import { AttentionList } from "../attention-list";
-import { DashboardActivity, type DashboardActivityEntry } from "../dashboard-activity";
-import { ProjectRow } from "../project-list";
+import { ProductCard } from "../product-card";
 
 /**
  * The global dashboard (Sprint UI-3).
@@ -86,7 +83,7 @@ export default async function AppHomePage({
    * of CORE-6 — reading it in both places would cost every dashboard render a
    * duplicate wallet lookup for a number this page does not render.
    */
-  const { projects, recentActivity } = await getDashboardOverview(supabase, session.userId);
+  const { projects } = await getDashboardOverview(supabase, session.userId);
 
   /*
    * First login and interrupted activation resolve on the server. Connection
@@ -113,14 +110,6 @@ export default async function AppHomePage({
 
   const attention = buildAttentionItems(projects);
   const projectNames = new Map(projects.map((project) => [project.id, project.name]));
-
-  const activityEntries: DashboardActivityEntry[] = recentActivity.map((event) => ({
-    ...buildActivityEntry(event),
-    projectId: event.projectId,
-    // Only ever a project the caller owns — `projects` is the same RLS-scoped
-    // read the events were filtered by.
-    projectName: projectNames.get(event.projectId) ?? "",
-  }));
 
   /**
    * The headline states a fact or says there is nothing. No greeting by name
@@ -177,30 +166,31 @@ export default async function AppHomePage({
         {projects.length === 0 ? (
           <EmptyDashboard />
         ) : (
-          <>
-            {attention.length > 0 && <AttentionList items={attention} />}
-
-            <section aria-labelledby="projects-heading" className="flex flex-col gap-4">
-              <div className="flex flex-wrap items-end justify-between gap-4">
-                <h2 id="projects-heading" className="text-fg text-title font-bold">
-                  Your projects
-                </h2>
-                <Link
-                  href="/app/connect/github"
-                  className={buttonClasses({ variant: "secondary", size: "sm" })}
-                >
-                  Connect another project
-                </Link>
-              </div>
-              <ul className="flex flex-col gap-3">
-                {projects.map((project) => (
-                  <ProjectRow key={project.id} project={project} />
-                ))}
-              </ul>
-            </section>
-
-            <DashboardActivity entries={activityEntries} />
-          </>
+          <section aria-labelledby="products-heading" className="flex flex-col gap-5">
+            <div className="flex flex-wrap items-end justify-between gap-4">
+              <h2 id="products-heading" className="text-fg text-title font-bold">
+                Your products
+              </h2>
+              <Link
+                href="/app/connect/github"
+                className={buttonClasses({ variant: "secondary", size: "sm" })}
+              >
+                Connect a product
+              </Link>
+            </div>
+            {/*
+              Ordered by what needs attention, not by when it was created —
+              that ordering is the one thing the removed attention list
+              contributed that a card cannot, so the grid inherits it.
+            */}
+            <ul className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {orderProjectsByAttention(projects).map((project) => (
+                <li key={project.id}>
+                  <ProductCard project={project} />
+                </li>
+              ))}
+            </ul>
+          </section>
         )}
       </div>
     </>

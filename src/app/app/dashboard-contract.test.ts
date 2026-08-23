@@ -181,22 +181,41 @@ describe("the dashboard does not scale its queries with its projects", () => {
     }
   });
 
-  it("bounds the activity read", () => {
-    // The rule is that the read is bounded at all, not that the bound is a
-    // literal — it is expressed as a multiple of the display limit, which is
-    // the more honest way to write it.
-    expect(readModel).toMatch(/\.limit\([^)]+\)/);
-    expect(readModel).not.toMatch(/from\("audit_events"\)[\s\S]{0,400}?;\s*$/m);
+  /**
+   * An append-only log grows forever, so a dashboard query over one is fine on
+   * day one and a full-table scan by month six. This used to be phrased as
+   * "the `audit_events` read is bounded"; CORE-6 removed that read entirely
+   * when the activity strip left the account dashboard, so the stronger and
+   * simpler statement is now true and is what gets asserted.
+   *
+   * Should an event read ever come back, this fails and the bound has to be
+   * argued for again rather than inherited.
+   */
+  it("reads no append-only event log at all", () => {
+    expect(readModel).not.toContain('from("audit_events")');
   });
 
-  it("never reads an unbounded event history", () => {
-    // An append-only log grows forever. A dashboard query without a ceiling is
-    // fine on day one and a full-table scan by month six.
-    const activityQuery = readModel.slice(
-      readModel.indexOf('from("audit_events")'),
-      readModel.indexOf('from("audit_events")') + 500,
+  /**
+   * The audits read is deliberately *not* bounded, and that is not an
+   * oversight worth "fixing".
+   *
+   * It is ordered newest-first across every project and reduced to the latest
+   * per project. A `.limit()` on it would starve exactly the project the
+   * `lastActivityAt` note in `dashboard.ts` describes: a quiet product whose
+   * newest audit falls outside a window filled by a busy one would render as
+   * never analysed. Correctness beats the ceiling here, and the row is one
+   * integer plus four small columns.
+   */
+  it("does not truncate a cross-project latest-per-project read", () => {
+    const auditsQuery = readModel.slice(
+      readModel.indexOf('from("business_readiness_audits")'),
+      readModel.indexOf('from("opportunity_sets")'),
     );
-    expect(activityQuery).toContain(".limit(");
+
+    expect(auditsQuery.length).toBeGreaterThan(0);
+    expect(auditsQuery, "a limit here silently drops a quiet project's score").not.toContain(
+      ".limit(",
+    );
   });
 });
 
