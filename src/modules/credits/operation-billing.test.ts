@@ -1,15 +1,20 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { FakeDatabase, fakeSupabase } from "@/modules/operations/test-support";
 import { grantCreditLot } from "./grants";
-import { allocateReservation, listActiveLots, listReservationAllocations } from "./lot-store";
+import {
+  allocateReservation,
+  listActiveLots,
+  listReservationAllocations,
+  settleReservationAllocations,
+} from "./lot-store";
 import {
   authorizeOperationCredits,
   availableSpendableCredits,
   releaseOperationCredits,
   settleOperationCredits,
 } from "./operation-billing";
-import { getBillingBalance } from "./service";
-import { ensureCreditAccount, listLedgerEntries } from "./store";
+import { getBillingBalance, settleReservation } from "./service";
+import { ensureCreditAccount, getReservation, listLedgerEntries } from "./store";
 import { creditsToUnits, ZERO_CREDITS } from "./units";
 
 /**
@@ -602,6 +607,53 @@ describe("reservation allocation (§16, §75)", () => {
 
     const allocations = await listReservationAllocations(supabase(), held.reservationId);
     expect(allocations.every((allocation) => allocation.status === "released")).toBe(true);
+  });
+
+  /**
+   * ADR 0041 §P3, Lot Repair Authority Design — a checked property, not an
+   * assumption. Nothing in the schema or in `settleReservationAllocations`
+   * itself ties the allocations' own settled sum to what the reservation row
+   * ends up recording; the two agree in production today only because
+   * `settleOperationCredits` is the one caller of both and happens to pass
+   * the identical value to each. Every operation family settles at the full
+   * reserved amount through that one function — there is no production
+   * caller of a *partial* settlement today — so this drives the two lower
+   * functions directly, with a partial amount, to prove the property a
+   * future variable-cost caller would depend on, rather than leaving it
+   * implicit until one exists.
+   */
+  it("keeps an allocation's settled sum equal to the reservation's own settled figure", async () => {
+    await fund("purchase", 300, null, "p1");
+
+    const held = await authorizeOperationCredits(supabase(), {
+      projectId: PROJECT,
+      operation: "business_audit",
+      idempotencyKey: "operation:op-1",
+      operationRunId: "op-1",
+    });
+    if (!held.ok || !held.billable) throw new Error("expected a hold");
+
+    const PARTIAL = creditsToUnits(10);
+    await settleReservationAllocations(supabase(), {
+      reservationId: held.reservationId,
+      actualCredits: PARTIAL,
+    });
+    await settleReservation(supabase(), {
+      reservationId: held.reservationId,
+      actualCredits: PARTIAL,
+      rateCardVersion: "test",
+    });
+
+    const allocations = await listReservationAllocations(supabase(), held.reservationId);
+    const allocatedSum = allocations.reduce(
+      (total, allocation) => total + (allocation.consumedUnits ?? 0),
+      0,
+    );
+
+    const reservation = await getReservation(supabase(), held.reservationId);
+    expect(allocatedSum).toBe(PARTIAL);
+    expect(reservation?.settledCredits).toBe(PARTIAL);
+    expect(allocatedSum).toBe(reservation?.settledCredits);
   });
 });
 
