@@ -322,27 +322,22 @@ export async function startAgentExecution(
     // The rows exist but nothing is carrying them. Failing immediately keeps
     // the identity free so the user can simply try again — and releases the
     // hold, because nothing was spent.
-    await failOperationRun(supabase, {
+    //
+    // Unlike the `agent_reservation_invalid` branch above, this point is
+    // reached *after* `claimAgentExecutionRunRow` succeeded — a run row
+    // exists, so `expireStaleAgentExecution` or a retried call to this same
+    // function could in principle race this exact release. Release is
+    // therefore gated on winning the terminal-transition CAS, the same
+    // pattern class D (Sprint 0057 E2b) established is required wherever
+    // `settleOperationCredits`/`releaseOperationCredits` could be reached
+    // concurrently for one reservation — not on `executor.start`'s own
+    // `!ok` result, which only says this attempt failed, not that no other
+    // path could also be finalizing this operation right now.
+    const failed = await failOperationRun(supabase, {
       operationId: operation.id,
       failureCode: "execution_start_failed",
     });
-    /*
-     * The release the comment above had always promised and the code never did.
-     *
-     * Nothing else would ever have made it: the run row is `queued`, and
-     * `expireStaleAgentExecution` ignores `queued` deliberately and correctly —
-     * a run that has taken no provider call yet may simply not have been picked
-     * up, and failing that would race one about to start. There is no
-     * reservation sweeper. So the hold suppressed capacity the customer could
-     * spend for as long as the account existed. Not a race and not a window: a
-     * deterministic leak.
-     *
-     * The same primitive the `agent_reservation_invalid` branch above uses, for
-     * the same reason and with the same guarantee — `releaseOperationBilling`
-     * is itself guarded on an active reservation, so a hold already closed is
-     * untouched.
-     */
-    await releaseOperationBilling(supabase, { operationRunId: operation.id });
+    if (failed) await releaseOperationBilling(supabase, { operationRunId: operation.id });
     return { kind: "failed", error: "execution_start_failed" };
   }
 

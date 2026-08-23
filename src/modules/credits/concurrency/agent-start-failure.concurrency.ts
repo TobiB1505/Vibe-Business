@@ -163,4 +163,104 @@ describe.skipIf(!configured)("Defect B — a failed start releases its hold", ()
       expect(allocated).toBe(0);
     });
   });
+
+  /**
+   * ...and does not release one it did not win the right to release.
+   *
+   * The scenario above is correct precisely because nothing else was
+   * finalizing that operation. `executor.start` returning `!ok` says only that
+   * *this attempt* failed — not that no workflow is running.
+   * `VercelWorkflowExecutor.start` wraps a network call, so a throw on the
+   * *response* of an enqueue that already succeeded server-side yields
+   * `{ ok: false }` for a live run that will finish, settle, and charge.
+   *
+   * Releasing unconditionally there is the unchecked-compare-and-swap shape
+   * class D proved produces `charge_without_hold`: the winner's charge stands
+   * against a hold this path recorded as released. Four production sites had
+   * it — three in `operations/service.ts` (`business_audit`,
+   * `opportunity_generation`, `action_planning`) and this one — all now gate
+   * the release on `failOperationRun`'s own CAS, the same authority the agent
+   * finalizers were fixed onto in class E.
+   *
+   * Deterministic by construction rather than a timing race, and said so
+   * plainly: the executor finalizes the operation through an independent
+   * client *before* refusing, so the losing side is decided rather than
+   * hoped for. What real PostgreSQL supplies here that `FakeDatabase` cannot
+   * is that the CAS's `.in("status", ACTIVE_STATUSES)` predicate is evaluated
+   * by Postgres against a row another connection already committed.
+   */
+  it(`leaves a hold alone when another finalizer already won, ${ITERATIONS} times`, async () => {
+    await forEachIteration(async (iteration) => {
+      const supabase = admin.current!;
+
+      const executionSpecId = await createIterationExecutionSpec(
+        supabase,
+        scaffolding.current!,
+        `start-failure-raced-${iteration}`,
+      );
+
+      /*
+       * Wins the terminal transition through its own client, then refuses —
+       * the interleaving where a live workflow finished while this caller was
+       * still waiting on a start response it never received.
+       */
+      const racingExecutor: OperationExecutor = {
+        name: "e2b-racing-executor",
+        start: async ({ operationId }) => {
+          const winner = client();
+          const { error } = await winner
+            .from("operation_runs")
+            .update({
+              status: "completed",
+              stage: "completed",
+              completed_at: new Date().toISOString(),
+            })
+            .eq("id", operationId)
+            .in("status", ["queued", "running"])
+            .select("id");
+          if (error) throw error;
+          return { ok: false, error: "execution_start_failed" };
+        },
+      };
+
+      const outcome = await startAgentExecution(supabase, racingExecutor, {
+        projectId: scaffolding.current!.projectId,
+        userId: owner.userId,
+        executionSpecId,
+      });
+
+      expect(outcome).toEqual({ kind: "failed", error: "execution_start_failed" });
+
+      const latest = await supabase
+        .from("operation_runs")
+        .select("id, status")
+        .eq("project_id", scaffolding.current!.projectId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+      if (latest.error) throw latest.error;
+      const row = latest.data as { id: string; status: string };
+
+      // The winner's terminal state stands — the loser must not overwrite it.
+      expect(row.status).toBe("completed");
+
+      // The property this test exists for: the hold is left for the winner to
+      // settle. Releasing it here is what would let a charge stand against a
+      // hold recorded as released.
+      const reservation = await findOperationReservation(supabase, row.id);
+      expect(reservation).not.toBeNull();
+      expect(reservation!.status).toBe("active");
+
+      // Cleanup, so the next iteration starts from an account with nothing
+      // held — this scenario deliberately leaves a live hold behind, unlike
+      // every other one in this file.
+      await supabase
+        .from("operation_runs")
+        .update({ status: "failed", failure_code: "execution_start_failed" })
+        .eq("id", row.id);
+      const { releaseOperationBilling } = await import("@/modules/operations/billing");
+      await releaseOperationBilling(supabase, { operationRunId: row.id });
+      expect(await readAllocatedAcrossLots(supabase, creditAccountId.current)).toBe(0);
+    });
+  });
 });

@@ -418,6 +418,57 @@ describe("a failed start returns the hold", () => {
     // The operation is terminal so the identity index is free to try again.
     expect((db.rows("operation_runs")[0] as unknown as { status: string }).status).toBe("failed");
   });
+
+  /**
+   * ...but only when this path actually won the right to release it.
+   *
+   * The release above is correct precisely because nothing else was finalizing
+   * that operation. This point is reached *after* `claimAgentExecutionRunRow`
+   * succeeded, so a run row exists — and `executor.start` returning `!ok` says
+   * only that this attempt failed, not that no workflow is running. A throw on
+   * the *response* of an enqueue that already succeeded server-side yields
+   * `{ ok: false }` for a live run that will finish, settle, and charge.
+   *
+   * Releasing unconditionally there is the unchecked-CAS shape Sprint 0057
+   * E2b's class D proved produces `charge_without_hold`: the winner's charge
+   * stands against a hold this path recorded as released. So the release is
+   * gated on `failOperationRun`'s own compare-and-swap, exactly as the agent
+   * finalizers were fixed to do.
+   */
+  it("leaves the hold alone when something else already finalized the operation", async () => {
+    /** Fails the enqueue, but only after a concurrent finalizer has won. */
+    class RacedExecutor extends FakeExecutor {
+      constructor() {
+        super({ fail: true });
+      }
+
+      async start(input: Parameters<FakeExecutor["start"]>[0]) {
+        const operation = db.rows("operation_runs")[0] as unknown as {
+          status: string;
+          completed_at: string | null;
+        };
+        operation.status = "completed";
+        operation.completed_at = "2026-08-02T00:00:00.000Z";
+        return super.start(input);
+      }
+    }
+
+    const outcome = await withEnv(ALLOWLISTED, () =>
+      startAgentExecution(fakeSupabase(db), new RacedExecutor(), {
+        projectId: PROJECT,
+        userId: USER,
+        executionSpecId: "spec-1",
+      }),
+    );
+
+    expect(await outcome).toEqual({ kind: "failed", error: "execution_start_failed" });
+
+    // The winner's terminal state stands, and its hold is left for it to settle.
+    expect((db.rows("operation_runs")[0] as unknown as { status: string }).status).toBe("completed");
+    const reservations = db.rows("billing_credit_reservations") as unknown as { status: string }[];
+    expect(reservations).toHaveLength(1);
+    expect(reservations[0].status).toBe("active");
+  });
 });
 
 /**
