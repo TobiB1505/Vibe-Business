@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { describeEvidenceId } from "./evidence-labels";
+import { buildLiveEvidence, buildRepositoryEvidence } from "./evidence";
+import { fakeLiveSnapshot, fakeRepositorySnapshot } from "./test-support";
 import { AUTHENTICATED_SURFACE_LABELS } from "@/modules/authenticated-product-intelligence/schema";
 import { PRODUCT_SURFACE_LABELS } from "@/modules/live-product-intelligence/human-view";
 import { BUSINESS_SURFACE_LABELS } from "@/modules/repository-intelligence/schema";
@@ -44,9 +46,36 @@ describe("polarity survives", () => {
     });
   });
 
+  /**
+   * Uses an id a minter really emits.
+   *
+   * This asserted `repo.surface.payments_not_observed` — a string nothing in
+   * the product has ever produced. The repository namespace has no absence
+   * suffix of its own: `buildRepositoryEvidence` mints the same
+   * `repo.surface.payments` whether it found the surface or not, which is the
+   * ambiguity that made "Payments, in your code" render over a pack saying
+   * "Repository surface not detected". `product-understanding/evidence.ts` is
+   * the one that spells repository absence, and it spells it `.not_found`.
+   */
   it("carries absence through a family label too", () => {
-    expect(describeEvidenceId("repo.surface.payments_not_observed").detail).toBe(
-      "Payments, in your code — not observed",
+    expect(describeEvidenceId("repo.surface.robots.not_found").detail).toBe(
+      "robots.txt, checked in your code — not observed",
+    );
+  });
+
+  /**
+   * The inversion itself, pinned.
+   *
+   * A polarity-free id must not be rendered as a claim of presence. The pack
+   * that mints this id for an undetected surface labels it "Repository surface
+   * not detected: Payments"; a screen that turned that into "Payments, in your
+   * code" told the founder the opposite of what was found, and marked it
+   * `curated` while doing so.
+   */
+  it("does not claim presence from an id that does not encode it", () => {
+    expect(describeEvidenceId("repo.surface.payments").detail).toBe("Payments, checked in your code");
+    expect(describeEvidenceId("live.surface.homepage").detail).toBe(
+      "Homepage, checked on your live site",
     );
   });
 
@@ -206,5 +235,39 @@ describe("the fallback still exists, for citations nothing produces any more", (
 
   it("marks itself, so falling through is visible rather than quiet", () => {
     expect(describeEvidenceId("live.brand.new_family").certainty).toBe("derived");
+  });
+});
+
+/**
+ * The guard the list above cannot be.
+ *
+ * `FAMILY_IDS` is derived from the same label tables `describeEvidenceId`
+ * resolves against, so it is circular: it proves every id built *from* the
+ * table is *in* the table. An id a builder mints and the table has never heard
+ * of falls straight through to `derived` prose, and this suite passes.
+ *
+ * These harvest from the real builders instead. That is what turns "the label
+ * tables are self-consistent" into "the screen can read what the product
+ * actually cites".
+ */
+describe("every id the builders actually mint is readable", () => {
+  const minted = [
+    ...buildRepositoryEvidence(fakeRepositorySnapshot()),
+    ...buildLiveEvidence(fakeLiveSnapshot()),
+  ].map((entry) => entry.id);
+
+  it("mints something to check", () => {
+    // Guards the guard: an empty harvest would make every assertion below
+    // vacuous and green.
+    expect(minted.length).toBeGreaterThan(10);
+  });
+
+  it.each(minted)("%s is readable", (id) => {
+    const described = describeEvidenceId(id);
+    // Not asserting `curated` — some namespaces legitimately have no curated
+    // family and read fine derived. What must never happen is an identifier
+    // reaching the screen with its shape intact.
+    expect(described.detail).not.toMatch(/_/);
+    expect(described.detail.length).toBeGreaterThan(0);
   });
 });

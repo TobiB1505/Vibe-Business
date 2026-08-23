@@ -167,14 +167,22 @@ const BUSINESS_SIGNAL_DETAILS: Record<BusinessSignalId, string> = {
 /**
  * The two ways an id says "this was looked for and not there".
  *
- * `_not_observed` is the authenticated and repository vocabulary;
- * `_not_found` is the product-understanding one. Recognising only the first is
- * why `profile.journey.checkout_not_found` reached the screen as "Journey
- * checkout not found" — the id fell out the bottom with its suffix still
- * attached, which is also why it read as prose and nobody noticed for a
- * sprint.
+ * Three dialects, because three places mint absence and none agreed:
+ * `_not_observed` is the **authenticated** vocabulary (`evidence-v2.ts`'s
+ * `auth.surface.*`, and only that — the claim this comment used to make, that
+ * it was also the repository vocabulary, was false; no minter has ever emitted
+ * `repo.surface.*_not_observed`). `_missing` is the live-SEO vocabulary
+ * (`buildLiveEvidence`, the one place polarity was put in the id). `_not_found`
+ * and `.not_found` are the product-understanding ones, which spell the same
+ * idea with a dot and an underscore in different builders.
+ *
+ * Recognising only the first two is why `profile.journey.checkout_not_found`
+ * reached the screen as "Journey checkout not found" — the id fell out the
+ * bottom with its suffix still attached, which is also why it read as prose
+ * and nobody noticed for a sprint. `live.seo.*_missing` was falling out the
+ * same way until this list learned it.
  */
-const ABSENCE_SUFFIXES = ["_not_observed", "_not_found"] as const;
+const ABSENCE_SUFFIXES = ["_not_observed", "_not_found", ".not_found", "_missing"] as const;
 
 function splitAbsence(rest: string): { observed: boolean; body: string } {
   for (const suffix of ABSENCE_SUFFIXES) {
@@ -227,7 +235,16 @@ function describeFamily(prefix: string, body: string, source: string): EvidenceI
   if (prefix === "repo") {
     if (body.startsWith("surface.")) {
       const id = body.slice("surface.".length);
-      if (isRepoSurface(id)) return curated(source, `${BUSINESS_SURFACE_LABELS[id]}, in your code`);
+      // Deliberately does not say "in your code". `buildRepositoryEvidence`
+      // mints `repo.surface.<id>` for a surface it found *and* for one it
+      // looked for and did not find — the polarity is only in the pack's
+      // label, which this function cannot see (it resolves from the id alone,
+      // by design, so a stored citation stays readable). Asserting presence
+      // therefore inverted the meaning outright: a repository with no payments
+      // surface produced the id, and the founder was shown "Payments, in your
+      // code" as a `curated` fact. Naming the check rather than its outcome is
+      // the only honest sentence available from a polarity-free id.
+      if (isRepoSurface(id)) return curated(source, `${BUSINESS_SURFACE_LABELS[id]}, checked in your code`);
     }
     if (body.startsWith("framework."))
       return curated(source, `Built with ${humanize(body.slice("framework.".length))}`);
@@ -259,7 +276,9 @@ function describeFamily(prefix: string, body: string, source: string): EvidenceI
 
   if (prefix === "live" && body.startsWith("surface.")) {
     const id = body.slice("surface.".length);
-    if (isLiveSurface(id)) return curated(source, `${PRODUCT_SURFACE_LABELS[id]}, on your live site`);
+    // Same polarity-free id as `repo.surface.*` above, same inversion, same
+    // reason for naming the check instead of its outcome.
+    if (isLiveSurface(id)) return curated(source, `${PRODUCT_SURFACE_LABELS[id]}, checked on your live site`);
   }
 
   return null;
