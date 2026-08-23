@@ -194,6 +194,17 @@ export async function prepareBenchmark(
       opportunityId: plan.opportunityId,
       businessAuditId: plan.businessAuditId,
     },
+    /*
+     * The benchmark's premise is the *fixture's*, not the plan's.
+     *
+     * A fixture cites live evidence that was true when it was written, and
+     * three of them went stale exactly that way — which is the failure this
+     * check exists for, and the benchmark is where it was first observed. Null
+     * rather than `plan.createdAt`: the fixture has no meaningful relationship
+     * to when the project's plan was generated, so claiming one would make a
+     * stale fixture look freshly verified. Null forces the live scan.
+     */
+    planGeneratedAt: null,
   });
 
   if (!preview.eligible) return { ok: false, reason: "not_executable", preview };

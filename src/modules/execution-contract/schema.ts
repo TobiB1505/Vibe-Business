@@ -287,6 +287,26 @@ export const EXECUTION_ADMISSION_REFUSALS = [
   "repository_head_moved",
   /** A newer repository snapshot exists; the premise is not the current one. */
   "repository_snapshot_stale",
+  /**
+   * A live-product defect the step cites has since been fixed (Rule 55).
+   *
+   * The step's own `evidenceIds` name what it is for — `live.seo.canonical_missing`
+   * and its siblings are minted only while the defect is present, so an id that
+   * a fresh scan no longer mints is a premise that stopped being true. Three of
+   * five calibration fixtures ran into exactly this and failed with
+   * `agent_produced_no_change`: the agent read the files, correctly found
+   * nothing to fix, and the run was paid for anyway.
+   */
+  "live_premise_no_longer_true",
+  /**
+   * The live premise could not be observed, which is not the same as fine.
+   *
+   * A crawl that hit a budget degrades to `partial` (Rule 39) and may simply
+   * not have reached the surface the cited evidence is about. Absence of an id
+   * from a partial pack means unobserved, never fixed — so it refuses rather
+   * than passing quietly, the same way an unread HEAD does above.
+   */
+  "live_premise_unverified",
   /** The plan is no longer the project's current plan. */
   "action_plan_superseded",
   /** No approved Credit policy prices agentic execution yet (§24, §25). */

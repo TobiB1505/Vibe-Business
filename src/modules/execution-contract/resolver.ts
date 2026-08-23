@@ -123,6 +123,38 @@ export type PlanContext = {
   isCurrent: boolean;
 };
 
+/**
+ * Whether the live-product defects this step cites are still real (Rule 55).
+ *
+ * A step's `evidenceIds` name what it is for, and the `live.*` ones are minted
+ * only while the defect is present — `business-audit/evidence.ts` appends
+ * `_missing` to a signal's id exactly when `signal.present` is false, so a
+ * fixed defect does not flip a boolean, its id stops being minted at all.
+ * Re-running the scan and rebuilding the pack therefore answers "is this still
+ * true?" by set membership, with no threshold and no comparison of values.
+ *
+ * Passed in rather than observed here, for the same reason `liveHead` is: the
+ * resolver is a pure function of its inputs, and a crawl is I/O. The caller
+ * that can do the crawl decides; this module only refuses on the verdict.
+ *
+ * Three states, because two would lie. `verified` means a fresh-enough pack
+ * still mints every cited id. `stale` means at least one is gone — the premise
+ * was true when the plan was written and is not now. `unverified` means the
+ * scan could not establish it, which a budget-degraded `partial` snapshot
+ * (Rule 39) produces whenever it did not reach the cited surface; that is not
+ * evidence of a fix, and it refuses rather than passing.
+ */
+export type LiveEvidenceContext =
+  | { status: "verified" }
+  | { status: "stale"; fixedEvidenceIds: readonly string[] }
+  | { status: "unverified"; reason: string }
+  /**
+   * The step cites no `live.*` evidence at all, so there is nothing to
+   * revalidate and no scan was run. Distinct from `verified` so that "we
+   * checked and it holds" is never confused with "there was nothing to check".
+   */
+  | { status: "not_applicable" };
+
 export type ResolveExecutionInput = {
   step: ActionPlanStep;
   plan: PlanContext;
@@ -134,6 +166,22 @@ export type ResolveExecutionInput = {
    * read here so the resolver stays a pure function of its inputs.
    */
   agenticBudgetAuthorized: boolean;
+  /**
+   * The live-premise verdict, or `undefined` where no caller established one.
+   *
+   * Optional, and deliberately *not* refused on when absent. Report-shaped
+   * callers classify every step in a plan and spend nothing; forcing a crawl
+   * per step to render a list would be absurd, and refusing without one would
+   * print "this is already fixed" next to steps nobody looked at — a false
+   * statement, which is worse than a missing one.
+   *
+   * So the obligation is split. This module refuses a verdict that came back
+   * *bad*; requiring that a verdict exist at all belongs to the path that
+   * spends money, immediately in front of the Credit hold. That mirrors how
+   * `liveHead` works one field up, where the reading is done by the caller
+   * that can do I/O and the refusal is decided here.
+   */
+  liveEvidence?: LiveEvidenceContext;
 };
 
 /* ---------------------------------------------------------------------------
@@ -347,6 +395,23 @@ function evaluateAdmission(
     // No merge reasoning, no rebase, no cleverness. A moved default branch
     // blocks (§16, Rule 56).
     return { admissible: false, refusal: "repository_head_moved" };
+  }
+
+  // The live premise, on the same footing as the repository one above: a
+  // defect the step cites and that a fresh scan no longer finds is a premise
+  // that stopped being true, and running against it spends the user's money to
+  // produce nothing (three of five calibration fixtures did exactly that).
+  //
+  // Only a verdict that came back bad refuses here. An absent verdict does
+  // not — see `liveEvidence`'s own note for why the plan report must not print
+  // "already fixed" beside steps nobody checked, and where the obligation to
+  // *have* a verdict lives instead.
+  if (input.liveEvidence?.status === "stale") {
+    return { admissible: false, refusal: "live_premise_no_longer_true" };
+  }
+
+  if (input.liveEvidence?.status === "unverified") {
+    return { admissible: false, refusal: "live_premise_unverified" };
   }
 
   if (mode === "agentic" && !input.agenticBudgetAuthorized) {
