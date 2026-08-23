@@ -13,6 +13,13 @@ const MIGRATION = readFileSync(
 const ACTIONS = readFileSync(join(ONBOARDING_APP, "[projectId]/actions.ts"), "utf8");
 const PAGE = readFileSync(join(ONBOARDING_APP, "[projectId]/page.tsx"), "utf8");
 const APP_HOME = readFileSync(join(ROOT, "src/app/app/(account)/page.tsx"), "utf8");
+/*
+ * The dashboard's composition. CORE-6 split `/app` in two: the page owns the
+ * session, the reads and the redirects, and this owns everything that reaches
+ * the screen. The routing assertions below stay on the page; the *offer* to
+ * resume is rendered, so it is asserted here.
+ */
+const APP_HOME_VIEW = readFileSync(join(ROOT, "src/app/app/account-home.tsx"), "utf8");
 const ONBOARDING_SHELL = readFileSync(
   join(ONBOARDING_APP, "onboarding-shell.tsx"),
   "utf8",
@@ -83,7 +90,7 @@ describe("onboarding orchestrates canonical domains", () => {
   it("stops redirecting into onboarding once any project has finished setup", () => {
     expect(APP_HOME).toContain("!routing.hasCompleted");
     expect(APP_HOME).toContain("routing.hasCompleted ? routing.resumableProjectId : null");
-    expect(APP_HOME).toContain("Continue setup");
+    expect(APP_HOME_VIEW).toContain("Continue setup");
   });
 
   it("offers a way out of the shell exactly when leaving leads somewhere", () => {

@@ -37,14 +37,19 @@ const MODULES = join(process.cwd(), "src/modules");
 const SURFACE_FILES = ["layout.tsx", "page.tsx"] as const;
 
 /**
- * The composition the page renders, which lives one directory up because the
- * browser harness renders it too.
+ * Everything else that renders every project the account owns.
  *
- * It is on the surface for the same reason the layout is: it is a Server
- * Component, so it can `await` anything the page can, and a contract that
- * stopped at the route folder would be one `mv` away from guarding nothing.
+ * `account-home.tsx` is the composition `/app` renders — one directory up
+ * because the browser harness renders it too. `products/page.tsx` is the full
+ * index, which reaches the same read model by a route nobody would think to
+ * check. Both are Server Components, so both can `await` anything the page
+ * can, and a contract that stopped at one filename would be one `mv` away from
+ * guarding nothing.
  */
-const COMPOSITION = join(process.cwd(), "src/app/app/account-home.tsx");
+const CROSS_PROJECT_FILES = [
+  ["account-home.tsx", "src/app/app/account-home.tsx"],
+  ["products/page.tsx", "src/app/app/(account)/products/page.tsx"],
+] as const;
 
 function source(path: string): string {
   return readFileSync(path, "utf8");
@@ -56,13 +61,16 @@ function accountSurface(): { name: string; source: string }[] {
     return existsSync(path) ? [{ name, source: source(path) }] : [];
   });
 
-  if (!existsSync(COMPOSITION)) {
-    throw new Error(
-      `${COMPOSITION} was not found. If the dashboard's composition moved, move this ` +
-        "constant with it — do not delete the assertion.",
-    );
+  for (const [name, relative] of CROSS_PROJECT_FILES) {
+    const path = join(process.cwd(), relative);
+    if (!existsSync(path)) {
+      throw new Error(
+        `${relative} was not found. If it moved, move CROSS_PROJECT_FILES with it — ` +
+          "do not delete the assertion.",
+      );
+    }
+    found.push({ name, source: source(path) });
   }
-  found.push({ name: "account-home.tsx", source: source(COMPOSITION) });
 
   // A list that quietly came back empty would make every assertion below
   // vacuous. `page.tsx` is the one file that must always be here.

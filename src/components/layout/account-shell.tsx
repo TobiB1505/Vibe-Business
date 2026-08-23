@@ -58,6 +58,8 @@ export type AccountSection = {
  */
 export const ACCOUNT_SECTIONS = [
   { id: "home", label: "Home", segment: "" },
+  { id: "products", label: "My Products", segment: "products" },
+  { id: "repositories", label: "Repositories", segment: "repositories" },
 ] as const satisfies readonly AccountSection[];
 
 /**
