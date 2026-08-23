@@ -138,6 +138,15 @@ export function Sparkline({
     <svg
       aria-hidden
       viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
+      /*
+       * The default `xMidYMid meet` letterboxes: at a fixed height in a wide
+       * column the whole chart shrinks to the middle third and leaves two
+       * margins of nothing. Stretching horizontally is right here because
+       * nothing in this shape depends on the aspect — every stroke is
+       * `non-scaling-stroke`, and the one round marker is a capped zero-length
+       * line rather than a circle for exactly this reason.
+       */
+      preserveAspectRatio="none"
       className={cn("text-fg-secondary h-14 w-full", className)}
       fill="none"
     >
@@ -157,21 +166,26 @@ export function Sparkline({
 
       {runs.map((run) =>
         run.length === 1 ? (
-          // A single reading has no line in it. A dot says "one measurement",
-          // where a zero-length path would say nothing at all.
-          <circle
+          // A single reading has no line in it, and a path of one point draws
+          // nothing. A round cap on a zero-length line is a dot — and unlike a
+          // circle it stays round under the horizontal stretch above.
+          <line
             key={`point-${run[0].x}`}
-            cx={run[0].x}
-            cy={run[0].y}
-            r={2.5}
-            className="fill-current"
+            x1={run[0].x}
+            y1={run[0].y}
+            x2={run[0].x}
+            y2={run[0].y}
+            className="stroke-current"
+            strokeWidth={5}
+            strokeLinecap="round"
+            vectorEffect="non-scaling-stroke"
           />
         ) : (
           <polyline
             key={`run-${run[0].x}`}
             points={run.map((p) => `${p.x},${p.y}`).join(" ")}
             className="stroke-current"
-            strokeWidth={1.5}
+            strokeWidth={2}
             strokeLinecap="round"
             strokeLinejoin="round"
             vectorEffect="non-scaling-stroke"
