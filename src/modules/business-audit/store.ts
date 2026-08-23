@@ -52,6 +52,30 @@ export type StoredAudit = {
    */
   repositorySnapshotId: string | null;
   liveSnapshotId: string | null;
+  /**
+   * The reproducibility set, as this row recorded it.
+   *
+   * Read back so that `verifyPackProvenance` can recompute this audit's own
+   * `input_hash` from the row's versions and a fresh load of its five sources.
+   * The versions have to come from the row rather than from the current
+   * constants: comparing against today's constants would answer "is this audit
+   * reproducible now?", and the question being asked is the narrower "are these
+   * the observations it reasoned from?".
+   *
+   * The Deep Scan is the reason this exists. `computeAuditInputHash` hashes
+   * `authenticatedSnapshotId`, but no column stores it, so it is the one source
+   * a field-by-field comparison structurally cannot reach. Through the hash it
+   * is covered like every other.
+   */
+  schemaVersion: string;
+  auditVersion: string;
+  evidencePackVersion: string;
+  promptVersion: string;
+  rubricVersion: string;
+  productProfileSchemaVersion: string | null;
+  productProfileBuilderVersion: string | null;
+  provider: string;
+  model: string;
   createdAt: string;
   completedAt: string | null;
 };
@@ -71,12 +95,21 @@ type AuditRow = {
   founder_intent_hash: string | null;
   repository_snapshot_id: string | null;
   live_snapshot_id: string | null;
+  schema_version: string;
+  audit_version: string;
+  evidence_pack_version: string;
+  prompt_version: string;
+  rubric_version: string;
+  product_profile_schema_version: string | null;
+  product_profile_builder_version: string | null;
+  provider: string;
+  model: string;
   created_at: string;
   completed_at: string | null;
 };
 
 const AUDIT_COLUMNS =
-  "id, project_id, status, access_mode, input_hash, overall_score, assessed_dimensions, total_dimensions, failure_code, result, product_profile_id, founder_intent_hash, repository_snapshot_id, live_snapshot_id, created_at, completed_at";
+  "id, project_id, status, access_mode, input_hash, overall_score, assessed_dimensions, total_dimensions, failure_code, result, product_profile_id, founder_intent_hash, repository_snapshot_id, live_snapshot_id, schema_version, audit_version, evidence_pack_version, prompt_version, rubric_version, product_profile_schema_version, product_profile_builder_version, provider, model, created_at, completed_at";
 
 function mapRow(row: AuditRow): StoredAudit {
   return {
@@ -94,6 +127,15 @@ function mapRow(row: AuditRow): StoredAudit {
     founderIntentHash: row.founder_intent_hash,
     repositorySnapshotId: row.repository_snapshot_id,
     liveSnapshotId: row.live_snapshot_id,
+    schemaVersion: row.schema_version,
+    auditVersion: row.audit_version,
+    evidencePackVersion: row.evidence_pack_version,
+    promptVersion: row.prompt_version,
+    rubricVersion: row.rubric_version,
+    productProfileSchemaVersion: row.product_profile_schema_version,
+    productProfileBuilderVersion: row.product_profile_builder_version,
+    provider: row.provider,
+    model: row.model,
     createdAt: row.created_at,
     completedAt: row.completed_at,
   };

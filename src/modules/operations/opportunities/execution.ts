@@ -154,6 +154,9 @@ async function loadSources(
     liveSnapshotId: liveSnapshot.id,
     productProfileId: profile.stored.id,
     founderIntentHash: founderIntent.intentHash,
+    // Null when no Deep Scan exists, which is a real state and not a gap. The
+    // audit's own identity hash distinguishes it from every possible id.
+    authenticatedSnapshotId: authenticatedSnapshot?.id ?? null,
   });
   if (!provenance.matches) return { ok: false, failureCode: "inputs_changed" };
 
