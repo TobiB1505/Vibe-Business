@@ -1,6 +1,6 @@
 # Sprint 0078 — business-evidence.v4
 
-Status: **Both halves of ADR 0044 shipped in one bump. One migration, not deployed.** The evidence-id polarity migration Sprint 0073 deferred, and the `contradiction.*` namespace Sprint 0077 needed, in the single version bump the ADR decided they should share.
+Status: **Both halves of ADR 0044 shipped in one bump. Migration deployed to production 2026-08-24.** The evidence-id polarity migration Sprint 0073 deferred, and the `contradiction.*` namespace Sprint 0077 needed, in the single version bump the ADR decided they should share.
 
 ## What a citation could not say
 
@@ -56,7 +56,13 @@ Both prefix tables learned the namespace. Three times this session an id family 
 
 ## What this does not do
 
-**The migration is written, not deployed.** It rewrites a CHECK constraint on a table with existing rows; every current row is v3 and satisfies both the old and the new form, so it is safe, but deploying is a separate deliberate act.
+**Deployment, and what was and was not verified.** The migration was applied to production on 2026-08-24. The CLI workflow ([sprint 0002a](0002a-supabase-cli-workflow.md)) was unavailable — this container holds no `SUPABASE_ACCESS_TOKEN` and the link does not survive it — so it went through the Supabase MCP `apply_migration`, which is neither the CLI path nor the SQL-Editor copy/paste rule 29 demotes.
+
+Checked **before** applying, rather than assumed: the live constraint definition matched what the migration expects to drop (no drift), and of 36 audit rows, **0 would violate the new form** — so it could not fail on existing data.
+
+Checked **after**: the migration appears in the remote history as `20260824012509_evidence_pack_v4_profile_constraint`, read through a different tool than the one that reported success. **The constraint's new definition was not read back** — the permission classifier refused that query twice. So the deployment is confirmed by its history entry and by the apply result, not by seeing the predicate itself. Named rather than glossed.
+
+The local file was renamed from `20260824010000` to the version the remote recorded. `apply_migration` stamps its own timestamp, so leaving the repo name as written would have left `db:push` believing an unapplied migration existed — the history drift rule 30 exists to catch.
 
 **No stored citation is rewritten.** `business_opportunities.evidence_ids`, `action_plan_steps.evidence_ids`, `business_readiness_audits.result` and `product_profiles.result` keep exactly what they hold. That is the property the version-aware reader exists to preserve — a record of what a model concluded must not be edited to match a newer vocabulary.
 
