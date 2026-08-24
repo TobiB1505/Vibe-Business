@@ -11,8 +11,14 @@ import {
 } from "@/modules/product-understanding/schema";
 import type { FounderIntent } from "@/modules/projects/founder-intent";
 import { describeFounderIntent } from "./customer-language";
-import { buildLiveEvidence, buildRepositoryEvidence, type EvidenceItem } from "./evidence";
+import {
+  buildLiveEvidence,
+  buildRepositoryEvidence,
+  type EvidenceItem,
+  type SurfaceIdScheme,
+} from "./evidence";
 import { buildAuthenticatedEvidence, type EvidenceItemV2 } from "./evidence-v2";
+import { buildIntelligenceCrossChecks } from "@/modules/repository-intelligence/cross-check";
 
 /**
  * Evidence Pack **v3** — the Product Profile becomes required audit context
@@ -59,12 +65,41 @@ import { buildAuthenticatedEvidence, type EvidenceItemV2 } from "./evidence-v2";
 
 export const EVIDENCE_PACK_V3_VERSION = "business-evidence.v3" as const;
 
+/**
+ * Evidence Pack **v4** — surface citations carry their own polarity.
+ *
+ * Structurally identical to v3, and deliberately built by the same function: a
+ * copied four-hundred-line builder would be a second place for the pack to
+ * drift, which is the very thing v3's own comment gives as the reason it reuses
+ * the v1 scanner halves rather than reimplementing them.
+ *
+ * What differs is one parameter. `buildRepositoryEvidence` and
+ * `buildLiveEvidence` mint `repo.surface_absent.<id>` for a surface they did
+ * not find, instead of the polarity-free `repo.surface.<id>` every pack through
+ * v3 emitted for both outcomes — see `evidence-ids.ts` for why polarity lives
+ * in the namespace rather than in a suffix.
+ *
+ * **Both versions stay buildable, permanently.** A stored audit's citations are
+ * resolved by rebuilding its pack, and `opportunities/validate.ts` discards an
+ * opportunity whose evidence cannot be verified against that pack. A v3 audit
+ * rebuilt under v4 ids would lose every absence citation it recorded, so the
+ * rebuild picks the scheme the audit was written under.
+ */
+export const EVIDENCE_PACK_V4_VERSION = "business-evidence.v4" as const;
+
+/** Every pack version this module can build, newest first. */
+export type EvidencePackVersion =
+  | typeof EVIDENCE_PACK_V4_VERSION
+  | typeof EVIDENCE_PACK_V3_VERSION;
+
 export type EvidenceCategoryV3 =
   | "product_profile"
   | "founder_intent"
   | "repository"
   | "live_product"
-  | "authenticated_product";
+  | "authenticated_product"
+  /** A disagreement *between* two of the layers above (v4 and later). */
+  | "contradiction";
 
 export type EvidenceItemV3 = {
   id: string;
@@ -74,7 +109,7 @@ export type EvidenceItemV3 = {
 };
 
 export type EvidencePackV3 = {
-  version: typeof EVIDENCE_PACK_V3_VERSION;
+  version: EvidencePackVersion;
   items: EvidenceItemV3[];
   absentSources: string[];
   trimmed: boolean;
@@ -294,6 +329,61 @@ export type BuildEvidencePackV3Input = {
 };
 
 export function buildEvidencePackV3(input: BuildEvidencePackV3Input): EvidencePackV3 {
+  return buildEvidencePack(input, EVIDENCE_PACK_V3_VERSION);
+}
+
+/** The v4 pack: same contents, surface citations carrying their own polarity. */
+export function buildEvidencePackV4(input: BuildEvidencePackV3Input): EvidencePackV3 {
+  return buildEvidencePack(input, EVIDENCE_PACK_V4_VERSION);
+}
+
+/**
+ * Rebuilds the pack a stored artifact was written under.
+ *
+ * The version comes from the row, never from the newest constant. Handing this
+ * today's version for a v3 audit would rebuild ids that audit never cited, and
+ * `opportunities/validate.ts` would then discard the opportunities whose
+ * evidence "could not be verified" — silently, as a data-quality note.
+ */
+export function buildEvidencePackForVersion(
+  input: BuildEvidencePackV3Input,
+  packVersion: string,
+): EvidencePackV3 {
+  return packVersion === EVIDENCE_PACK_V4_VERSION
+    ? buildEvidencePackV4(input)
+    : buildEvidencePackV3(input);
+}
+
+/**
+ * Disagreements between the layers, as evidence the model can cite (v4).
+ *
+ * `buildIntelligenceCrossChecks` has computed these since Sprint UI-3.6 and
+ * nothing but the project page ever read them, so the most valuable thing this
+ * product notices — *the code says one thing and the running product says
+ * another* — never reached a single model call.
+ *
+ * They are minted at **priority 3**, the highest, and deliberately so. A
+ * contradiction is not one more observation to weigh alongside the two facts
+ * that produced it; it is the thing those two facts are *for*. If trimming has
+ * to drop something, this is the last item that should go.
+ *
+ * The label is the cross-check's own founder-facing title, which is already
+ * written in business language and already avoids naming files or internals.
+ */
+function buildContradictionEvidence(input: BuildEvidencePackV3Input): EvidenceItemV3[] {
+  return buildIntelligenceCrossChecks(
+    input.repository,
+    input.liveProduct,
+    input.authenticatedProduct,
+  ).map((check) => item(`contradiction.${check.id.replace(/-/g, "_")}`, "contradiction", check.title, 3));
+}
+
+function buildEvidencePack(
+  input: BuildEvidencePackV3Input,
+  version: EvidencePackVersion,
+): EvidencePackV3 {
+  const scheme: SurfaceIdScheme =
+    version === EVIDENCE_PACK_V4_VERSION ? "polarised" : "polarity_free";
   const profileItems = buildProductProfileEvidence(input.productProfile);
   const intentItems = buildFounderIntentEvidence(input.founderIntent);
 
@@ -301,10 +391,11 @@ export function buildEvidencePackV3(input: BuildEvidencePackV3Input): EvidencePa
   // Their ids are what the audit's "why does Vibe think this?" disclosure
   // resolves against, and re-deriving them here would be a second place for
   // those ids to drift.
-  const scannerItems: Array<EvidenceItem | EvidenceItemV2> = [
-    ...buildRepositoryEvidence(input.repository),
-    ...buildLiveEvidence(input.liveProduct),
+  const scannerItems: Array<EvidenceItem | EvidenceItemV2 | EvidenceItemV3> = [
+    ...buildRepositoryEvidence(input.repository, scheme),
+    ...buildLiveEvidence(input.liveProduct, scheme),
     ...(input.authenticatedProduct ? buildAuthenticatedEvidence(input.authenticatedProduct) : []),
+    ...(version === EVIDENCE_PACK_V4_VERSION ? buildContradictionEvidence(input) : []),
   ];
 
   const byId = new Map<string, EvidenceItemV3>();
@@ -347,7 +438,7 @@ export function buildEvidencePackV3(input: BuildEvidencePackV3Input): EvidencePa
   );
 
   return {
-    version: EVIDENCE_PACK_V3_VERSION,
+    version,
     items: ordered,
     absentSources,
     trimmed: false,

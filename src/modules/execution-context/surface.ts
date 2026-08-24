@@ -1,3 +1,4 @@
+import { SURFACE_NAMESPACES } from "@/modules/business-audit/evidence-ids";
 import type { StepChangeKind } from "@/modules/action-plans/schema";
 import type {
   BusinessSurfaceId,
@@ -247,8 +248,8 @@ export function implicationOf(evidenceId: string): Implication {
     return { scopes: ["authenticated_pages"], surfaces: ["dashboard_app"] };
   }
 
-  if (evidenceId.startsWith("live.surface.")) {
-    const live = evidenceId.slice("live.surface.".length) as ProductSurfaceId;
+  if (evidenceId.startsWith("live.surface.") || evidenceId.startsWith("live.surface_absent.")) {
+    const live = stripSurfaceNamespace(evidenceId, "live") as ProductSurfaceId;
     const surface = LIVE_SURFACE_TO_BUSINESS[live];
     if (!surface) return NOTHING;
     return surface === "dashboard_app"
@@ -256,8 +257,8 @@ export function implicationOf(evidenceId: string): Implication {
       : { scopes: ["named_surface"], surfaces: [surface] };
   }
 
-  if (evidenceId.startsWith("repo.surface.")) {
-    const id = evidenceId.slice("repo.surface.".length);
+  if (evidenceId.startsWith("repo.surface.") || evidenceId.startsWith("repo.surface_absent.")) {
+    const id = stripSurfaceNamespace(evidenceId, "repo");
     if (!BUSINESS_SURFACE_SET.has(id)) return NOTHING;
     const surface = id as BusinessSurfaceId;
     return surface === "dashboard_app"
@@ -271,6 +272,23 @@ export function implicationOf(evidenceId: string): Implication {
 /** `live.seo.canonical_missing` names the `canonical` signal. */
 function stripMissing(value: string): string {
   return value.endsWith("_missing") ? value.slice(0, -"_missing".length) : value;
+}
+
+/**
+ * `repo.surface.<id>` and `repo.surface_absent.<id>` both imply the same surface.
+ *
+ * Polarity is deliberately dropped, exactly as `stripMissing` above already
+ * drops it for `live.seo.*`: "add a pricing page" and "change the pricing page"
+ * are both steps about the pricing surface, and the agent needs the same scope
+ * for either. Without this a `business-evidence.v4` absence citation would fall
+ * to `NOTHING` — not an error, just an agent that quietly stopped being told
+ * which surface its work is about.
+ */
+function stripSurfaceNamespace(evidenceId: string, namespace: "repo" | "live"): string {
+  const { present, absent } = SURFACE_NAMESPACES[namespace];
+  return evidenceId.startsWith(absent)
+    ? evidenceId.slice(absent.length)
+    : evidenceId.slice(present.length);
 }
 
 export type DeriveSurfaceRequirementInput = {

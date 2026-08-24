@@ -36,7 +36,10 @@ describe("runBusinessReadinessAudit — happy path", () => {
 
     expect(outcome.audit.schemaVersion).toBe("business-readiness-audit.v1");
     expect(outcome.audit.auditVersion).toBe("business-audit-v1");
-    expect(outcome.audit.evidencePackVersion).toBe("business-evidence.v3");
+    // The bump (ADR 0044). A fresh audit is written under the newest pack, so
+    // its surface citations carry their own polarity. Stored v3 audits keep
+    // recording v3 and are read under v3 rules — see `evidence-ids.ts`.
+    expect(outcome.audit.evidencePackVersion).toBe("business-evidence.v4");
     expect(outcome.audit.promptVersion).toBe(PROMPT_VERSION);
     expect(outcome.audit.rubricVersion).toBe(RUBRIC_VERSION);
     expect(outcome.audit.provider).toBe("fake");

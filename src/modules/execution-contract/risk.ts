@@ -1,3 +1,4 @@
+import { SURFACE_NAMESPACES } from "@/modules/business-audit/evidence-ids";
 import type { StepChangeKind } from "@/modules/action-plans/schema";
 import type { ExecutionRiskClass } from "./schema";
 
@@ -60,10 +61,26 @@ const SECURITY_SURFACES: readonly string[] = ["authentication", "login", "signup
  */
 const MUTATING_CHANGE_KINDS: readonly StepChangeKind[] = ["product_change", "external_setup"];
 
-/** `repo.surface.<id>` / `live.surface.<id>` → `<id>`, or null for other ids. */
+/**
+ * `repo.surface.<id>` / `live.surface.<id>` → `<id>`, or null for other ids.
+ *
+ * **Polarity is deliberately ignored.** Since `business-evidence.v4` a surface
+ * that was *not* found is cited under its own namespace
+ * (`repo.surface_absent.payments`), and a step citing that is a step about
+ * adding payments — which is exactly as prohibited as a step modifying one.
+ * Risk here is a statement about the surface, not about which direction the
+ * change runs.
+ *
+ * Getting this wrong is the whole reason Sprint 0073 refused to rename the ids
+ * on its own: `payments` matched the financial list, `payments_missing` would
+ * not have, and a payments change would have fallen from `prohibited` to
+ * `moderate` with nothing failing.
+ */
 function surfaceIdOf(evidenceId: string): string | null {
-  for (const prefix of ["repo.surface.", "live.surface."]) {
-    if (evidenceId.startsWith(prefix)) return evidenceId.slice(prefix.length);
+  for (const namespace of ["repo", "live"] as const) {
+    const { present, absent } = SURFACE_NAMESPACES[namespace];
+    if (evidenceId.startsWith(absent)) return evidenceId.slice(absent.length);
+    if (evidenceId.startsWith(present)) return evidenceId.slice(present.length);
   }
   return null;
 }

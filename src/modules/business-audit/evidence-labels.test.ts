@@ -293,3 +293,88 @@ describe("every id the builders actually mint is readable", () => {
     expect(described.detail.length).toBeGreaterThan(0);
   });
 });
+
+/**
+ * What `business-evidence.v4` bought.
+ *
+ * Sprint 0073 had to delete the sentence "Payments, in your code" because the
+ * id could not support it: `buildRepositoryEvidence` minted
+ * `repo.surface.payments` whether it found a payments surface or not, so
+ * asserting presence inverted the meaning for every repository that had none.
+ * The honest fallback named the check instead.
+ *
+ * v4 mints that id only when the surface *was* found. The sentence is true now,
+ * and this is where it comes back.
+ */
+describe("a v4 citation may finally claim what a v3 one could not", () => {
+  const V4 = "business-evidence.v4";
+
+  it("says a present surface is present", () => {
+    expect(describeEvidenceId("repo.surface.payments", V4).detail).toBe("Payments, in your code");
+    expect(describeEvidenceId("live.surface.pricing", V4).detail).toBe(
+      "Pricing page, on your live site",
+    );
+  });
+
+  it("still only names the check for a v3 citation", () => {
+    // The same id, stored under a pack that could not encode polarity. Reading
+    // it as presence is the inversion 0073 existed to fix, so it must not
+    // happen just because the code now knows how to say more.
+    expect(describeEvidenceId("repo.surface.payments", "business-evidence.v3").detail).toBe(
+      "Payments, checked in your code",
+    );
+  });
+
+  it("reads an unknown version as the weaker claim", () => {
+    // Understating a v4 citation costs precision. Overstating a v3 one shows a
+    // founder the opposite of what was found, so the default leans that way.
+    expect(describeEvidenceId("repo.surface.payments").detail).toBe(
+      "Payments, checked in your code",
+    );
+  });
+
+  /**
+   * Absence needs no version at all, which is the point of the namespace.
+   * `repo.surface_absent.<id>` has meant one thing in every pack that emits it.
+   */
+  it.each([null, "business-evidence.v3", "business-evidence.v4"])(
+    "reads absence the same way under %s",
+    (version) => {
+      expect(describeEvidenceId("repo.surface_absent.payments", version).detail).toBe(
+        "Payments — not found in your code",
+      );
+      expect(describeEvidenceId("live.surface_absent.pricing", version).certainty).toBe("curated");
+    },
+  );
+});
+
+/**
+ * The contradiction namespace, in both prefix tables.
+ *
+ * Three times this session an id family reached the screen with no curated
+ * label and rendered as the identifier with its punctuation removed. A fourth
+ * would be careless rather than unlucky, so the namespace is pinned in the
+ * label table *and* in the caption table — the pair that disagreed once before
+ * and produced "from what Vibe understood · Signal pricing surface".
+ */
+describe("a disagreement between layers reads as one", () => {
+  it("is curated, not derived prose", () => {
+    const described = describeEvidenceId("contradiction.pricing_not_reachable");
+
+    expect(described.certainty).toBe("curated");
+    expect(described.source).toBe("Two things Vibe compared");
+    expect(described.detail).not.toMatch(/_/);
+  });
+
+  it("names the comparison rather than either half", () => {
+    // Naming one layer would hide that the citation exists precisely because
+    // the two did not agree.
+    expect(describeEvidenceId("contradiction.billing_not_offered_publicly").detail).toBe(
+      "Billing not offered publicly — the two did not agree",
+    );
+  });
+
+  it("is known to the caption table too", () => {
+    expect(evidenceSource("contradiction.anything")).not.toBeNull();
+  });
+});

@@ -1,7 +1,7 @@
 import type { AIProvider, AIUsage, ProviderErrorDiagnostic, StructuredRequest } from "@/modules/ai/provider";
 import type { OperationConfig } from "@/modules/ai/operations";
 import {
-  buildEvidencePackV3,
+  buildEvidencePackForVersion,
   evidenceIdSetV3,
   trimEvidencePackV3,
   type BuildEvidencePackV3Input,
@@ -115,7 +115,16 @@ export async function runOpportunityGeneration(
 ): Promise<OpportunityRunOutcome> {
   const { provider, config, audit } = input;
 
-  let pack = buildEvidencePackV3(input);
+  /*
+   * The audit's own pack version, never the newest one.
+   *
+   * This rebuilds the pack the audit's citations were minted against, so the
+   * model sees the same ids the audit cited. Building today's version for an
+   * older audit would mint ids it never referenced, and `validate.ts` discards
+   * an opportunity whose evidence cannot be verified against the pack — a paid
+   * run quietly returning fewer Moves, reported as a data-quality note.
+   */
+  let pack = buildEvidencePackForVersion(input, audit.evidencePackVersion);
   let request = buildOpportunityRequest(audit, pack, config);
 
   // Cost gate: count before spending.

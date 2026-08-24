@@ -140,6 +140,38 @@ describe("a v3 audit is verified through its own identity hash", () => {
   });
 });
 
+/**
+ * The trap ADR 0044 named, pinned.
+ *
+ * The discriminator was `=== "business-evidence.v3"`. On the day a v4 pack
+ * shipped, every new audit would have taken the pre-CORE-2 column comparison
+ * instead — the weaker path, which cannot see the Deep Scan at all — and
+ * nothing would have failed. The strongest provenance guarantee would simply
+ * have gone quiet for every audit written from then on.
+ */
+describe("a newer pack keeps the strong path", () => {
+  it("verifies a v4 audit by its identity hash, not by columns", () => {
+    const v4 = audit({ evidencePackVersion: "business-evidence.v4" });
+    v4.inputHash = hashFor(SOURCES, "business-evidence.v4");
+
+    expect(verifyPackProvenance(v4, SOURCES)).toEqual({
+      matches: true,
+      verifiedBy: "input_hash",
+    });
+  });
+
+  it("still sees the Deep Scan move under v4", () => {
+    const v4 = audit({ evidencePackVersion: "business-evidence.v4" });
+    v4.inputHash = hashFor(SOURCES, "business-evidence.v4");
+
+    // The column path cannot detect this — there is no column for it. If the
+    // discriminator ever narrows again, this is the assertion that goes red.
+    expect(
+      verifyPackProvenance(v4, { ...SOURCES, authenticatedSnapshotId: "auth_2" }),
+    ).toEqual({ matches: false, verifiedBy: "input_hash", diverged: "unattributed" });
+  });
+});
+
 describe("an older audit falls back to the columns it does record", () => {
   /**
    * A pre-CORE-2 row was hashed by an older shape of `computeAuditInputHash`,

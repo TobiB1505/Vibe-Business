@@ -6,7 +6,7 @@ import { OPPORTUNITY_GENERATION_CONFIG } from "@/modules/ai/operations";
 import { recordAIUsage } from "@/modules/ai/usage";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import {
-  buildEvidencePackV3,
+  buildEvidencePackForVersion,
   trimEvidencePackV3,
   type BuildEvidencePackV3Input,
 } from "@/modules/business-audit/evidence-v3";
@@ -231,7 +231,9 @@ export async function countOpportunityTokensStep(
   if (!resolved.ok) return resolved;
 
   const config = OPPORTUNITY_GENERATION_CONFIG;
-  const pack = buildEvidencePackV3(resolved.sources);
+  // The audit's own version, so the count measures the request that will be
+  // billed rather than a differently-shaped one. See `evidence-v3.ts`.
+  const pack = buildEvidencePackForVersion(resolved.sources, resolved.audit.evidencePackVersion);
   const counted = await deps.provider.countInputTokens(
     buildOpportunityRequest(resolved.audit, pack, config),
   );

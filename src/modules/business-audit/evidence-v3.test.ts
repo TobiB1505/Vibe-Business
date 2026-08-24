@@ -3,7 +3,9 @@ import { EMPTY_FOUNDER_INTENT } from "@/modules/projects/founder-intent";
 import type { ProductProfile } from "@/modules/product-understanding/schema";
 import {
   EVIDENCE_PACK_V3_VERSION,
+  EVIDENCE_PACK_V4_VERSION,
   buildEvidencePackV3,
+  buildEvidencePackV4,
   evidenceIdSetV3,
   renderEvidencePackV3,
   trimEvidencePackV3,
@@ -325,5 +327,79 @@ describe("rendering treats everything as untrusted data (CORE-2 §33, ADR 0011)"
 
     expect(injectedAt).toBeGreaterThan(fenceStart);
     expect(injectedAt).toBeLessThan(fenceEnd);
+  });
+});
+
+/**
+ * Contradictions reach the model (v4).
+ *
+ * `buildIntelligenceCrossChecks` has computed these since Sprint UI-3.6 and
+ * only the project page ever read them, so the most valuable thing this product
+ * notices — the code says one thing and the running product says another —
+ * never reached a single model call.
+ */
+describe("a disagreement between layers is evidence", () => {
+  /**
+   * A deliberately inconsistent product.
+   *
+   * The default fixtures describe a consistent one (authentication in the code,
+   * sign-in reachable live), so they correctly produce no contradiction at all.
+   * Reaching for them here would have made every assertion below pass against
+   * an empty list.
+   */
+  function contradictory(): BuildEvidencePackV3Input {
+    const repository = fakeRepositorySnapshot();
+    for (const surface of repository.businessSurfaces) {
+      if (surface.id === "pricing_page") surface.detected = true;
+    }
+
+    const liveProduct = fakeLiveSnapshot();
+    for (const surface of liveProduct.productSurfaces) {
+      if (surface.id === "pricing") surface.detected = false;
+    }
+
+    return {
+      productProfile: fakeProductProfile(),
+      founderIntent: EMPTY_FOUNDER_INTENT,
+      repository,
+      liveProduct,
+      authenticatedProduct: null,
+    };
+  }
+
+  const contradictionsIn = (pack: { items: { id: string }[] }) =>
+    pack.items.filter((entry) => entry.id.startsWith("contradiction."));
+
+  it("carries the disagreement into a v4 pack", () => {
+    const found = contradictionsIn(buildEvidencePackV4(contradictory()));
+
+    expect(found.map((entry) => entry.id)).toContain("contradiction.pricing_not_reachable");
+  });
+
+  /**
+   * Highest priority, and deliberately so: a contradiction is not one more
+   * observation to weigh beside the two facts that produced it, it is what
+   * those two facts are for. Trimming must drop it last.
+   */
+  it("mints it at the highest priority", () => {
+    const found = buildEvidencePackV4(contradictory()).items.filter((entry) =>
+      entry.id.startsWith("contradiction."),
+    );
+
+    expect(found.every((entry) => entry.priority === 3)).toBe(true);
+  });
+
+  /**
+   * A v3 pack must not grow items it never had. Its version is what a stored
+   * audit's citations are resolved against, so adding to it retroactively would
+   * change what an old audit is judged to have seen.
+   */
+  it("does not appear in a v3 pack", () => {
+    expect(contradictionsIn(buildEvidencePackV3(contradictory()))).toEqual([]);
+  });
+
+  it("records the version it was built as", () => {
+    expect(buildEvidencePackV4(contradictory()).version).toBe(EVIDENCE_PACK_V4_VERSION);
+    expect(buildEvidencePackV3(contradictory()).version).toBe(EVIDENCE_PACK_V3_VERSION);
   });
 });
