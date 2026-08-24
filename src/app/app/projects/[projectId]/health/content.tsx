@@ -10,7 +10,11 @@ import {
   auditBlockedByCredits,
   resolveAuditCreditGate,
 } from "@/modules/business-audit/entitlement";
-import { getLatestSuccessfulAudit, getPausedAudit } from "@/modules/business-audit/store";
+import {
+  getLatestSuccessfulAudit,
+  getPausedAudit,
+  getProjectAuditReadings,
+} from "@/modules/business-audit/store";
 import { buildAuditEvidenceNotice } from "@/modules/business-audit/evidence-notice";
 import { getDeepScanAccessStatus } from "@/modules/authenticated-product-intelligence/service";
 import { isBrowserProviderConfigured } from "@/modules/authenticated-product-intelligence/browserbase/client";
@@ -24,13 +28,13 @@ import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intellig
 import { getActiveBusinessAuditOperation } from "@/modules/operations/service";
 import { movesPerConclusion, resolveMoveLineage } from "@/modules/opportunities/lineage";
 import { getLatestOpportunities } from "@/modules/opportunities/service";
+import { buildBusinessBrainView } from "@/modules/projects/business-brain-view";
 
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import { AuditCreditNotice } from "../audit-credit-notice";
 import { AuditEvidenceNotice } from "../audit-evidence-notice";
 import { AuditOverview } from "../audit-overview";
-import { BusinessHealth } from "../business-health";
 import {
   AuditAnalyzing,
   AuditPreparing,
@@ -92,6 +96,7 @@ export async function ProjectBusinessHealth({ access }: { access: ProjectAccess 
     latestDeepScanSession,
     opportunities,
     pausedAudit,
+    auditReadings,
   ] = await Promise.all([
     getLatestSuccessfulAudit(supabase, projectId),
     getAuditCurrency(supabase, projectId),
@@ -112,6 +117,7 @@ export async function ProjectBusinessHealth({ access }: { access: ProjectAccess 
     // and a different device: browser state is never authoritative here
     // (§33, §34, §35).
     getPausedAudit(supabase, projectId),
+    getProjectAuditReadings(supabase, projectId),
   ]);
 
   const hasMoves = (opportunities?.set.opportunities.length ?? 0) > 0;
@@ -127,15 +133,39 @@ export async function ProjectBusinessHealth({ access }: { access: ProjectAccess 
    *
    * Costs no extra query: both halves are already loaded above.
    */
-  const contextualMoves =
+  const contextualLineage =
     latestAudit?.result && opportunities && opportunities.set.businessAuditId === latestAudit.id
-      ? movesPerConclusion(
-          resolveMoveLineage({
-            sourceAudit: latestAudit.result,
-            opportunities: opportunities.set.opportunities,
-          }),
-        )
+      ? resolveMoveLineage({
+          sourceAudit: latestAudit.result,
+          opportunities: opportunities.set.opportunities,
+        })
       : {};
+  const contextualMoves = movesPerConclusion(contextualLineage);
+  const contextualMoveDetails = Object.fromEntries(
+    (opportunities?.set.opportunities ?? [])
+      .slice()
+      .sort((a, b) => a.rank - b.rank)
+      .flatMap((move) => {
+        const key = contextualLineage[move.id]?.conclusionKey;
+        return key
+          ? [[key, { title: move.title, impact: move.impact, effort: move.effort }] as const]
+          : [];
+      })
+      .filter(([key], index, entries) => entries.findIndex(([candidate]) => candidate === key) === index),
+  );
+
+  const usedSignedInEvidence =
+    Boolean(latestDeepScanSnapshot?.result) && !auditCurrency.newDeepScanEvidence;
+  const businessBrainView = latestAudit?.result
+    ? buildBusinessBrainView({
+        audit: latestAudit.result,
+        lastScanAt: latestAudit.completedAt ?? latestAudit.createdAt,
+        auditReadings,
+        movesByConclusion: contextualMoves,
+        moveByConclusion: contextualMoveDetails,
+        usedSignedInEvidence,
+      })
+    : null;
 
   const deepScanModel = deepScanAccess
     ? buildDeepScanViewModel({
@@ -303,28 +333,17 @@ export async function ProjectBusinessHealth({ access }: { access: ProjectAccess 
         {auditStage === "preparing" && <AuditPreparing />}
         {auditStage === "analyzing" && <AuditAnalyzing />}
 
-        {latestAudit?.result ? (
-          <>
-            {/* Answer first, evidence second, tech last — all three owned by
-                the component, so the reading order cannot be reassembled here
-                (§14). */}
-            <AuditOverview
-              audit={latestAudit.result}
-              generatedAt={latestAudit.completedAt ?? latestAudit.createdAt}
-              movesHref={projectSectionHref(project.id, "action-plan")}
-              hasMoves={hasMoves}
-              movesByConclusion={contextualMoves}
-              // Provenance rather than a notice: a current Deep Scan is a fact
-              // about what this audit was made from, not something to interrupt
-              // the verdict with (UI-7 §4).
-              usedSignedInEvidence={
-                Boolean(latestDeepScanSnapshot?.result) && !auditCurrency.newDeepScanEvidence
-              }
-            />
-            {/* Readings, under the conclusion and under the map — never a
-                second verdict competing with them. See the component. */}
-            <BusinessHealth audit={latestAudit.result} />
-          </>
+        {businessBrainView ? (
+          <AuditOverview
+            view={businessBrainView}
+            movesHref={projectSectionHref(project.id, "action-plan")}
+            hasMoves={hasMoves}
+          />
+        ) : latestAudit?.result ? (
+          <Notice tone="info" label="Older audit">
+            This audit predates the nine-area Business Brain. Re-scan when you want Vibe to build
+            the connected view from the current audit contract.
+          </Notice>
         ) : auditStage !== null ? null : (
           // Not scored is not a score of zero. No meter, no number.
           <EmptyState

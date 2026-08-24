@@ -1,639 +1,463 @@
 "use client";
 
-import { useId } from "react";
-import {
-  HEALTH_LABELS,
-  MATERIALITY_LABELS,
-  lensesByRing,
-  type BusinessMap as BusinessMapModel,
-  type LensNode,
-  type MapRing,
-} from "@/modules/business-audit/map-view";
+import { useEffect, useId, useState } from "react";
+import { motion, useReducedMotion } from "motion/react";
 import type { BusinessLens } from "@/modules/business-audit/schema";
+import { cn } from "@/lib/utils/cn";
+import type {
+  BusinessBrainNode,
+  BusinessBrainView,
+} from "@/modules/projects/business-brain-view";
 
-/**
- * The Business Map / Business Brain (AUDIT UI-1, direction 1b; UI-11).
- *
- * ## The one idea
- *
- * Nine areas of a business as one connected system, and **distance from the
- * centre is when something matters** — not how bad it is. That separation is
- * the architecture CORE-2a.3.1 spent a sprint building, made visible: a weak
- * area sitting quietly in the outer ring is the picture of "real, and not your
- * problem this month".
- *
- * ## Why the geometry is not the interface
- *
- * A circle cannot be read by a screen reader, and stops being legible
- * somewhere around a phone. The desktop nodes are therefore real, labelled
- * buttons over an aria-hidden SVG; on a phone those same judgments become the
- * grouped list below. Geometry is never the only interface (§18, §52).
- *
- * That also solves mobile without a second component: below the breakpoint the
- * circle is simply not rendered, and the same list groups itself under Now,
- * Soon and Later (§17, §46, §64).
- *
- * ## Colour never carries meaning alone
- *
- * Mint means Vibe's attention, never "healthy" (§4, §7). Health is a word and
- * a bar; priority is a ring and a word. Neither is a hue on its own.
- */
+const VIEWBOX = { width: 780, height: 690 };
+const CORE = { x: 390, y: 350 };
 
-const RING_LABELS: Record<MapRing, string> = {
-  now: "Needs attention now",
-  soon: "Soon",
-  later: "Later",
+const NODE_POSITIONS: Record<BusinessLens, { x: number; y: number }> = {
+  offer: { x: 390, y: 82 },
+  audience: { x: 565, y: 145 },
+  acquisition: { x: 662, y: 270 },
+  conversion: { x: 660, y: 424 },
+  revenue_economics: { x: 548, y: 555 },
+  business_readiness: { x: 370, y: 596 },
+  retention: { x: 190, y: 548 },
+  measurement: { x: 112, y: 397 },
+  scalability: { x: 162, y: 212 },
 };
 
-/**
- * Outward, as a fraction of the map radius.
- *
- * Pushed out in UI-1.2 (§2), and the numbers are not taste.
- *
- * Nine lenses sit at fixed angles 40° apart, so two cards on one ring are
- * `2r·sin20°` apart along the chord — but they only overlap when they are close
- * on *both* axes, so the binding constraint is the pair whose separation splits
- * evenly between x and y. At the radii this shipped with, that pair's clearance
- * was negative and the Now ring overlapped itself on every audit.
- *
- * Which lenses land on which ring changes between audits, so these were chosen
- * to clear the worst arrangement the data can produce — all nine lenses on one
- * ring — rather than the arrangement in one fixture. That is also what the
- * browser test asserts, because none of this is visible to a unit test: the
- * view model was right the whole time and the geometry lives in CSS.
- */
-const RING_RADIUS: Record<MapRing, number> = {
-  now: 0.66,
-  soon: 0.8,
-  later: 0.98,
+const NODE_GLYPHS: Record<BusinessLens, string> = {
+  offer: "◇",
+  audience: "◎",
+  acquisition: "↗",
+  conversion: "▽",
+  revenue_economics: "$",
+  business_readiness: "⬡",
+  retention: "↻",
+  measurement: "⌁",
+  scalability: "□",
 };
 
-const VIEWBOX = 760;
-const CENTRE = VIEWBOX / 2;
-const RADIUS = VIEWBOX / 2 - 54;
+function relationPath(from: BusinessLens, to: BusinessLens): string {
+  const a = NODE_POSITIONS[from];
+  const b = NODE_POSITIONS[to];
+  const midpoint = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  const control = {
+    x: midpoint.x + (CORE.x - midpoint.x) * 0.32,
+    y: midpoint.y + (CORE.y - midpoint.y) * 0.32,
+  };
+  return `M ${a.x} ${a.y} Q ${control.x} ${control.y} ${b.x} ${b.y}`;
+}
 
+function corePath(node: BusinessBrainNode): string {
+  const at = NODE_POSITIONS[node.id];
+  const bendX = CORE.x + (at.x - CORE.x) * 0.45;
+  const bendY = CORE.y + (at.y - CORE.y) * 0.45;
+  const perpendicular = node.id.length % 2 === 0 ? 18 : -18;
+  return `M ${CORE.x} ${CORE.y} Q ${bendX + perpendicular} ${bendY - perpendicular} ${at.x} ${at.y}`;
+}
 
-/**
- * Where a ring's name can sit without a card on top of it.
- *
- * Two wrong answers preceded this one, and both are worth keeping. A fixed
- * bearing was clear for Soon and Later and buried Now, because Conversion
- * happens to be a Now lens sitting almost exactly there — and which lenses land
- * on which ring is the thing that changes between audits. Avoiding only the
- * nodes *on the same ring* then failed too: the rings are about 60px apart and
- * a lens card is wider than that, so a neighbouring ring's card reaches across.
- *
- * So every node counts, whatever its ring. The nine sit evenly, which leaves
- * midpoints 20° from their neighbours — ample clearance at these radii — and
- * the downward tie-break puts all three labels on one vertical, reading near to
- * far like an axis.
- */
-function labelBearing(map: BusinessMapModel): number {
-  const occupied = map.nodes.map((node) => node.angle);
-  if (occupied.length === 0) return 180;
+function useDocumentVisible(): boolean {
+  // False on the server keeps reduced-motion and signal markup hydration-safe.
+  const [visible, setVisible] = useState(false);
 
-  let best = 180;
-  let bestGap = -1;
+  useEffect(() => {
+    const update = () => setVisible(document.visibilityState === "visible");
+    update();
+    document.addEventListener("visibilitychange", update);
+    return () => document.removeEventListener("visibilitychange", update);
+  }, []);
 
-  for (let bearing = 0; bearing < 360; bearing += 10) {
-    const gap = Math.min(
-      ...occupied.map((angle) => {
-        const delta = Math.abs(((bearing - angle) % 360) + 360) % 360;
-        return Math.min(delta, 360 - delta);
-      }),
-    );
-    /*
-     * Ties break to the left (§2). Nine evenly spaced nodes leave nine equal
-     * gaps, so the tie-break is what actually chooses — and the left flank is
-     * the far side from the priorities column, which keeps the axis away from
-     * the densest reading on the panel.
-     */
-    if (gap > bestGap || (gap === bestGap && Math.abs(bearing - 180) < Math.abs(best - 180))) {
-      bestGap = gap;
-      best = bearing;
-    }
+  return visible;
+}
+
+function toneClasses(node: BusinessBrainNode, selected: boolean) {
+  if (selected) {
+    return "border-mint/85 bg-[#0b1715] shadow-[0_0_42px_-12px_rgb(0_229_160/0.8)]";
   }
-
-  return best;
+  if (node.health === "weak") {
+    return "border-coral/45 bg-[#171110] shadow-[0_0_34px_-18px_rgb(255_122_92/0.65)]";
+  }
+  if (node.health === "strong") {
+    return "border-mint/45 bg-[#0a1513] shadow-[0_0_34px_-18px_rgb(0_229_160/0.55)]";
+  }
+  if (node.health === "adequate") return "border-amber/35 bg-[#15140e]";
+  return "border-line-strong bg-[#0d1111]";
 }
 
-function position(node: LensNode): { x: number; y: number } {
-  const radians = (node.angle * Math.PI) / 180;
-  const distance = RADIUS * RING_RADIUS[node.ring];
-  return { x: CENTRE + Math.cos(radians) * distance, y: CENTRE + Math.sin(radians) * distance };
+function statusTone(node: BusinessBrainNode): string {
+  if (node.health === "strong") return "text-mint";
+  if (node.health === "adequate") return "text-amber";
+  if (node.health === "weak") return "text-coral";
+  return "text-fg-muted";
 }
 
-/**
- * Health as four filled segments.
- *
- * Deliberately the same device the audit report uses, and deliberately *not*
- * colour alone: the bar is readable in greyscale and the word sits beside it.
- */
-function HealthBar({ health }: { health: LensNode["health"] }) {
-  const filled = { strong: 4, adequate: 3, weak: 1, unclear: 0, blocked_by_missing_context: 0 }[
-    health
-  ];
-  const tone =
-    health === "strong"
-      ? "bg-fg"
-      : health === "adequate"
-        ? "bg-amber"
-        : health === "weak"
-          ? "bg-coral"
-          : "bg-fg-disabled";
-
-  return (
-    <span className="flex gap-[3px]" aria-hidden="true">
-      {[0, 1, 2, 3].map((index) => (
-        <span
-          key={index}
-          className={`h-1 w-3 rounded-full ${index < filled ? tone : "bg-line-3"} ${
-            filled === 0 ? "opacity-40" : ""
-          }`}
-        />
-      ))}
-    </span>
-  );
-}
-
-function MobileLensButton({
+function NodeButton({
   node,
+  index,
   selected,
-  onSelect,
-}: {
-  node: LensNode;
-  selected: boolean;
-  onSelect: (lens: BusinessLens) => void;
-}) {
-  const isNow = node.ring === "now";
-
-  return (
-    <button
-      type="button"
-      onClick={() => onSelect(node.lens)}
-      aria-pressed={selected}
-      className={`rounded-panel flex w-full items-center gap-3 border px-4 py-3.5 text-left transition-interactive ${
-        selected
-          ? "border-mint/60 bg-mint/[0.06]"
-          : isNow
-            ? "border-mint/25 bg-surface-3 hover:border-mint/45"
-            : "border-line-2 bg-surface-1 hover:border-line-4"
-      }`}
-    >
-      {node.blockerRank !== null && (
-        <span
-          className={`flex size-5 shrink-0 items-center justify-center rounded-full font-mono text-[0.625rem] ${
-            isNow ? "bg-mint text-mint-ink" : "bg-surface-4 text-fg-secondary"
-          }`}
-        >
-          {node.blockerRank}
-        </span>
-      )}
-
-      <span className="flex min-w-0 flex-1 flex-col gap-1.5">
-        <span className={`text-[0.9375rem] font-medium ${isNow ? "text-fg" : "text-fg-body"}`}>
-          {node.label}
-        </span>
-        <span className="text-fg-meta flex flex-wrap items-center gap-2 font-mono text-[0.625rem] uppercase">
-          <HealthBar health={node.health} />
-          {HEALTH_LABELS[node.health]}
-          <span aria-hidden="true">·</span>
-          {MATERIALITY_LABELS[node.materiality]}
-        </span>
-      </span>
-    </button>
-  );
-}
-
-function MapNode({
-  node,
-  selected,
+  related,
   dimmed,
+  reducedMotion,
   onSelect,
+  onHover,
 }: {
-  node: LensNode;
+  node: BusinessBrainNode;
+  index: number;
   selected: boolean;
+  related: boolean;
   dimmed: boolean;
-  onSelect: (lens: BusinessLens) => void;
+  reducedMotion: boolean;
+  onSelect: (id: BusinessLens) => void;
+  onHover: (id: BusinessLens | null) => void;
 }) {
-  const { x, y } = position(node);
-  const isNow = node.ring === "now";
-  const isSoon = node.ring === "soon";
+  const at = NODE_POSITIONS[node.id];
 
   return (
-    <li
-      data-ring={node.ring}
-      className={`business-brain-node absolute z-10 -translate-x-1/2 -translate-y-1/2 transition-opacity duration-200 ${
-        /*
-           Softened from 30% once a lens opens by default.
-           Selection is now the arrival state, so the map would otherwise
-           always be seen with eight of nine areas faded — the emphasis has to
-           come from the mint on the selected node and its connections, not
-           from making everything else hard to read.
-         */
-        dimmed ? "opacity-65" : "opacity-100"
-      }`}
+    <motion.li
+      className="business-brain-node absolute z-20"
       style={{
-        left: `${(x / VIEWBOX) * 100}%`,
-        top: `${(y / VIEWBOX) * 100}%`,
-        animationDelay: `${620 + (node.ring === "now" ? 0 : node.ring === "soon" ? 140 : 280) + node.angle * 1.2}ms`,
+        left: `${(at.x / VIEWBOX.width) * 100}%`,
+        top: `${(at.y / VIEWBOX.height) * 100}%`,
+      }}
+      initial={
+        reducedMotion
+          ? { opacity: 0, x: "-50%", y: "-50%" }
+          : { opacity: 0, scale: 0.78, x: "-50%", y: "calc(-50% + 10px)" }
+      }
+      animate={{ opacity: dimmed ? 0.34 : 1, scale: 1, x: "-50%", y: "-50%" }}
+      transition={{
+        opacity: { duration: reducedMotion ? 0.08 : 0.24 },
+        scale: {
+          type: "spring",
+          stiffness: 230,
+          damping: 24,
+          delay: reducedMotion ? 0 : 0.45 + index * 0.065,
+        },
+        y: {
+          type: "spring",
+          stiffness: 230,
+          damping: 24,
+          delay: reducedMotion ? 0 : 0.45 + index * 0.065,
+        },
       }}
     >
-      {isNow && (
+      <motion.button
+        type="button"
+        layout
+        aria-pressed={selected}
+        aria-label={`${node.label}, not individually scored, ${node.healthLabel}, priority ${node.priorityLabel}`}
+        onClick={() => onSelect(node.id)}
+        onHoverStart={() => onHover(node.id)}
+        onHoverEnd={() => onHover(null)}
+        onFocus={() => onHover(node.id)}
+        onBlur={() => onHover(null)}
+        whileHover={reducedMotion ? undefined : { scale: 1.06, y: -3 }}
+        whileFocus={reducedMotion ? undefined : { scale: 1.035 }}
+        whileTap={reducedMotion ? undefined : { scale: 0.985 }}
+        transition={{ type: "spring", stiffness: 360, damping: 24 }}
+        className={cn(
+          "group relative flex w-[7.35rem] cursor-pointer flex-col items-center rounded-[1.05rem] border px-3 py-3 text-center outline-none",
+          "focus-visible:ring-mint focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-app",
+          toneClasses(node, selected),
+          related && !selected &&
+            "border-mint/55 shadow-[0_0_30px_-16px_rgb(0_229_160/0.62)]",
+        )}
+      >
         <span
           aria-hidden="true"
-          className={`audit-map-node-halo pointer-events-none absolute top-1/2 left-1/2 size-32 -translate-x-1/2 -translate-y-1/2 rounded-full ${
-            selected ? "opacity-100" : "opacity-60"
-          }`}
-        />
-      )}
-      <button
-        type="button"
-        onClick={() => onSelect(node.lens)}
-        aria-pressed={selected}
-        aria-label={`${node.label}. Health ${HEALTH_LABELS[node.health]}. Priority ${MATERIALITY_LABELS[node.materiality]}.${
-          node.blockerRank !== null ? ` Part of priority ${node.blockerRank}.` : ""
-        }`}
-        className={`relative flex flex-col text-left transition-[color,background-color,border-color,box-shadow,transform] duration-200 ease-vibe ${
-          isNow
-            ? "w-[5.75rem] gap-2 rounded-[0.8rem] border border-mint/45 bg-app/95 px-2 py-2.5 shadow-[0_0_34px_-14px_rgb(0_229_160/0.65)] hover:-translate-y-0.5 hover:border-mint/70"
-            : isSoon
-              ? "border-line-strong bg-app/95 w-[5.75rem] gap-1.5 rounded-[0.7rem] border px-2 py-2 hover:border-white/20"
-              : "border-line-2 bg-app/90 w-[5.5rem] gap-1.5 rounded-[0.65rem] border px-2 py-1.5 hover:border-line-strong"
-        } ${selected ? "border-mint! bg-mint-tint-soft shadow-[0_0_42px_-12px_rgb(0_229_160/0.75)]" : ""}`}
-      >
-        <span className="flex w-full items-start gap-2">
-          {node.blockerRank !== null && (
-            <span
-              className={`mt-px flex size-5 shrink-0 items-center justify-center rounded-sm font-mono text-[0.625rem] font-bold ${
-                isNow ? "bg-mint text-mint-ink" : "bg-surface-4 text-fg-secondary"
-              }`}
-            >
-              {node.blockerRank}
-            </span>
+          className={cn(
+            "mb-1.5 flex size-6 items-center justify-center text-lg leading-none",
+            selected || related ? "text-mint" : statusTone(node),
           )}
-          <span
-            className={`min-w-0 leading-[1.2] font-semibold tracking-[-0.015em] ${
-              isNow
-                ? "text-fg text-[0.875rem]"
-                : isSoon
-                  ? "text-fg-body text-ui"
-                  : "text-fg-secondary text-[0.75rem]"
-            }`}
-          >
-            {node.label}
-          </span>
+        >
+          {NODE_GLYPHS[node.id]}
         </span>
-
-        <span className="flex w-full flex-col gap-1.5">
-          <HealthBar health={node.health} />
-          <span
-            className={`flex items-center justify-between gap-2 font-mono text-[0.5625rem] tracking-[0.09em] uppercase ${
-              isNow ? "text-fg-secondary" : "text-fg-meta"
-            }`}
-          >
-            <span>{HEALTH_LABELS[node.health]}</span>
-            <span className={isNow ? "text-mint" : undefined}>
-              {MATERIALITY_LABELS[node.materiality]}
-            </span>
-          </span>
+        <span className="text-fg text-[0.79rem] leading-[1.15] font-semibold tracking-[-0.015em]">
+          {node.label}
         </span>
-      </button>
-    </li>
+        <span className={cn("mt-1.5 text-[0.72rem] font-medium", statusTone(node))}>
+          {node.healthLabel}
+        </span>
+        <span className="text-fg-meta mt-0.5 text-[0.63rem]">{node.priorityLabel}</span>
+        {node.blockerRank !== null && (
+          <span className="bg-coral text-app absolute -top-2 -right-2 flex size-5 items-center justify-center rounded-full text-[0.62rem] font-bold shadow-lg">
+            {node.blockerRank}
+          </span>
+        )}
+      </motion.button>
+    </motion.li>
   );
 }
 
-export function BusinessMap({
-  map,
-  score,
+function MobileBrain({
+  view,
   selected,
   onSelect,
 }: {
-  map: BusinessMapModel;
-  score: number | null;
+  view: BusinessBrainView;
   selected: BusinessLens | null;
-  onSelect: (lens: BusinessLens) => void;
+  onSelect: (id: BusinessLens) => void;
 }) {
-  const glowId = useId();
-  const groups = lensesByRing(map);
-
-  const highlighted = selected
-    ? new Set(
-        map.connections
-          .filter((edge) => edge.from === selected || edge.to === selected)
-          .flatMap((edge) => [edge.from, edge.to]),
-      )
-    : null;
-
   return (
-    <div className="min-w-0">
-      {/*
-        Lines and rings are decoration. Every node over them is a real button,
-        while mobile swaps the whole geometry for the grouped list (§18).
-      */}
-      <div
-        className="business-brain-map relative mx-auto hidden aspect-square w-full max-w-[46rem] md:block"
-        data-testid="business-map-radial"
-      >
-        <svg
-          viewBox={`0 0 ${VIEWBOX} ${VIEWBOX}`}
-          className="pointer-events-none absolute inset-0 h-full w-full"
-          aria-hidden="true"
-        >
-          <defs>
-            <radialGradient id={glowId}>
-              <stop offset="0%" stopColor="var(--color-mint)" stopOpacity="0.16" />
-              <stop offset="62%" stopColor="var(--color-mint)" stopOpacity="0" />
-            </radialGradient>
-          </defs>
+    <div className="flex flex-col gap-6 md:hidden" data-testid="business-map-list">
+      <div className="business-brain-mobile-core mx-auto flex size-44 flex-col items-center justify-center rounded-full text-center">
+        <span className="text-fg text-5xl leading-none font-semibold tracking-[-0.05em]">
+          {view.overall.score ?? "—"}
+        </span>
+        <span className="text-fg mt-2 text-sm font-semibold">Business Health</span>
+        <span className="text-amber mt-2 text-xs">{view.overall.stateLabel}</span>
+      </div>
 
-          <circle cx={CENTRE} cy={CENTRE} r={RADIUS} fill={`url(#${glowId})`} />
-
-          <circle
-            cx={CENTRE}
-            cy={CENTRE}
-            r={RADIUS * 0.58}
-            fill="none"
-            stroke="var(--color-mint)"
-            strokeOpacity="0.09"
-            strokeWidth="38"
-            className="business-brain-aura"
-          />
-
-          {(["later", "soon", "now"] as const).map((ring) => (
-            <circle
-              key={ring}
-              cx={CENTRE}
-              cy={CENTRE}
-              r={RADIUS * RING_RADIUS[ring]}
-              fill="none"
-              stroke={ring === "now" ? "var(--color-mint)" : "var(--color-line-strong)"}
-              strokeOpacity={ring === "now" ? 0.24 : ring === "soon" ? 0.62 : 0.45}
-              strokeDasharray={ring === "later" ? "4 7" : undefined}
-              className="business-brain-ring"
-              style={{ animationDelay: `${180 + ({ now: 0, soon: 130, later: 260 }[ring])}ms` }}
-            />
+      <div className="-mx-4 overflow-x-auto px-4 pb-2 [scrollbar-width:none]">
+        <ul className="flex w-max snap-x gap-2.5" aria-label="Business dimensions">
+          {view.nodes.map((node) => (
+            <li key={node.id} className="w-40 snap-center">
+              <button
+                type="button"
+                aria-pressed={selected === node.id}
+                aria-label={`${node.label}, not individually scored, ${node.healthLabel}, priority ${node.priorityLabel}`}
+                onClick={() => onSelect(node.id)}
+                className={cn(
+                  "border-line-2 bg-surface-2 flex min-h-32 w-full flex-col rounded-xl border p-4 text-left",
+                  "focus-visible:ring-mint focus-visible:ring-2",
+                  selected === node.id && "border-mint/60 bg-mint/[0.06]",
+                )}
+              >
+                <span aria-hidden className="text-mint text-xl">
+                  {NODE_GLYPHS[node.id]}
+                </span>
+                <span className="text-fg mt-3 text-sm font-semibold">{node.label}</span>
+                <span className={cn("mt-auto pt-2 text-xs", statusTone(node))}>
+                  {node.healthLabel}
+                </span>
+              </button>
+            </li>
           ))}
-
-          {/*
-            The rings, named on the map itself.
-            Three unlabelled circles are a claim the reader has to reverse-
-            engineer. Placed straight down from the centre, which is the one
-            bearing with no lens on it: the nine sit every 40° from twelve
-            o'clock, so 190° very nearly *is* Business Readiness — the first
-            attempt put "NOW" underneath that card. Downward also reads in the
-            right order, near to far.
-          */}
-          {(["now", "soon", "later"] as const).map((ring) => {
-            const at = labelBearing(map);
-            /*
-             * Halfway between this ring and the next one inward.
-             *
-             * Cards are centred *on* a ring, so the ring line is the one radius
-             * guaranteed to be occupied — a label drawn there disappears under
-             * whichever card is nearest, which is what kept happening to NOW.
-             * The gap between two rings is the only band no card can sit in.
-             */
-            const inner = ring === "now" ? 0 : ring === "soon" ? RING_RADIUS.now : RING_RADIUS.soon;
-            const r = (RADIUS * (RING_RADIUS[ring] + inner)) / 2;
-            const radians = (at * Math.PI) / 180;
-            return (
-              <text
-                key={`label-${ring}`}
-                x={CENTRE + Math.cos(radians) * r}
-                y={CENTRE + Math.sin(radians) * r + 4}
-                textAnchor="middle"
-                className={`font-mono text-[11px] tracking-[0.14em] ${
-                  ring === "now" ? "fill-mint" : "fill-fg-meta"
-                }`}
-              >
-                {ring.toUpperCase()}
-              </text>
-            );
-          })}
-
-          {map.nodes.map((node) => {
-            const point = position(node);
-            return (
-              <line
-                key={`spoke-${node.lens}`}
-                x1={CENTRE}
-                y1={CENTRE}
-                x2={point.x}
-                y2={point.y}
-                stroke={node.ring === "now" ? "var(--color-mint)" : "var(--color-line-3)"}
-                strokeOpacity={node.ring === "now" ? 0.22 : 0.34}
-                className="business-brain-spoke"
-                style={{ animationDelay: `${430 + node.angle * 1.1}ms` }}
-              />
-            );
-          })}
-
-          {map.connections.map((edge) => {
-            const from = map.nodes.find((node) => node.lens === edge.from);
-            const to = map.nodes.find((node) => node.lens === edge.to);
-            if (!from || !to) return null;
-            const a = position(from);
-            const b = position(to);
-            const active = edge.from === selected || edge.to === selected;
-
-            return (
-              <line
-                key={`${edge.from}-${edge.to}`}
-                x1={a.x}
-                y1={a.y}
-                x2={b.x}
-                y2={b.y}
-                /*
-                 * Visual QA finding: at `--color-line-4` (0.11 white) times a
-                 * 0.52 stroke opacity, a resting connection resolves to about
-                 * 5.7% white on a near-black ground — below what anyone
-                 * notices. The rings survive that alpha because they are long
-                 * smooth circles; these are short chords ending under opaque
-                 * node cards, and they disappeared entirely in the 1440px
-                 * capture.
-                 *
-                 * They carry direction 1b's central claim — that this is one
-                 * connected system rather than nine cards — so they are now the
-                 * strongest marks on the canvas rather than the faintest, at
-                 * roughly double the rings' weight and still well short of the
-                 * mint an active edge gets.
-                 */
-                stroke={active ? "var(--color-mint)" : "var(--color-line-strong)"}
-                strokeOpacity={active ? 0.78 : 1}
-                strokeWidth={active ? 1.8 : 1.2}
-                strokeDasharray={active ? "6 8" : "3 6"}
-                className={`business-brain-connection ${active ? "audit-map-connection-active" : ""}`}
-                style={{ animationDelay: `${520 + from.angle * 1.2}ms` }}
-              />
-            );
-          })}
-
-          <circle cx={CENTRE} cy={CENTRE} r="49" fill="var(--color-app)" fillOpacity="0.88" />
-          <circle
-            cx={CENTRE}
-            cy={CENTRE}
-            r="49"
-            fill="none"
-            stroke="var(--color-mint)"
-            strokeOpacity="0.28"
-            strokeWidth="2"
-          />
-        </svg>
-
-        {/*
-          The score belongs here rather than in a headline (§9). In the middle
-          of the map it reads as one reading among nine areas — which is what it
-          is — instead of answering a question the founder did not ask. The
-          panel's own "closer to centre = sooner" caption carries the geometry,
-          so the centre does not have to restate it.
-        */}
-        <span
-          aria-hidden="true"
-          className="audit-map-sweep pointer-events-none absolute inset-0"
-        />
-
-        <div className="business-brain-core pointer-events-none absolute top-1/2 left-1/2 z-10 flex size-28 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-full text-center">
-          {score !== null ? (
-            <>
-              {/*
-                Out of what, and which way up (UI-7 §3). "43 READINESS" gave a
-                reader a number with no scale and no direction — the "/100"
-                existed only on the legacy meta line, which most audits no
-                longer render. The visual pair is hidden from assistive tech in
-                favour of the sentence below it, because "43 readiness slash
-                100" is not a thing anyone wants read aloud.
-              */}
-              <span aria-hidden="true" className="text-fg text-[1.75rem] leading-none font-semibold tracking-[-0.03em]">
-                {score}
-              </span>
-              <span
-                aria-hidden="true"
-                className="text-fg-meta mt-1 font-mono text-[0.5625rem] tracking-[0.14em] uppercase"
-              >
-                readiness /100
-              </span>
-              <span className="sr-only">
-                Business readiness score: {score} out of 100. Higher is more ready.
-              </span>
-            </>
-          ) : (
-            // Not scored is not a score of zero (CLAUDE.md rule 44).
-            <span className="text-fg-meta font-mono text-[0.5625rem] tracking-[0.14em] uppercase">
-              not scored
-            </span>
-          )}
-        </div>
-
-        <ul className="contents" aria-label="Business lenses">
-          {map.nodes.map((node) => {
-            const dimmed =
-              highlighted !== null && !highlighted.has(node.lens) && node.lens !== selected;
-            return (
-              <MapNode
-                key={node.lens}
-                node={node}
-                selected={node.lens === selected}
-                dimmed={dimmed}
-                onSelect={onSelect}
-              />
-            );
-          })}
         </ul>
       </div>
-
-      {/*
-        The legend, and it is not decoration.
-        The map encodes two independent things at once — a bar for health, a
-        distance for priority — and without a key the reader has to infer that
-        from nine samples. Naming the health scale is also what keeps colour
-        from carrying meaning alone (§4, §18, §52).
-
-        The connection entry says "judged together", not the mockup's "holds
-        up": the audit records which lenses share a root problem, never which
-        one blocks which, and a directional word here would be the frontend
-        inventing causality.
-      */}
-      <ul
-        aria-hidden="true"
-        className="text-fg-meta mx-auto mt-2 hidden max-w-[39rem] flex-wrap items-center justify-center gap-x-5 gap-y-2 font-mono text-[0.625rem] tracking-[0.1em] uppercase md:flex"
-      >
-        {(
-          [
-            ["strong", "bg-fg", 4],
-            ["adequate", "bg-amber", 3],
-            ["weak", "bg-coral", 1],
-            ["unknown", "bg-fg-disabled", 0],
-          ] as const
-        ).map(([label, tone, filled]) => (
-          <li key={label} className="flex items-center gap-1.5">
-            <span className="flex gap-[2px]">
-              {[0, 1, 2, 3].map((index) => (
-                <span
-                  key={index}
-                  className={`h-2 w-[3px] rounded-[1px] ${
-                    index < filled ? tone : "bg-line-3"
-                  } ${filled === 0 ? "opacity-40" : ""}`}
-                />
-              ))}
-            </span>
-            {label}
-          </li>
-        ))}
-        <li className="flex items-center gap-1.5">
-          <span className="border-line-strong w-4 border-t border-dashed" />
-          judged together
-        </li>
-        {/*
-          The numbered badge, which had no key at all (UI-7 §3). Three nodes can
-          carry a "1" at once — it says which of the audit's priorities an area
-          belongs to, not that three areas are somehow all first — and without
-          this line a reader had to infer that from the nodes themselves.
-        */}
-        <li className="flex items-center gap-1.5">
-          <span className="bg-surface-4 text-fg-secondary flex size-4 items-center justify-center rounded-sm font-mono text-[0.5rem] font-bold">
-            1
-          </span>
-          part of priority 1
-        </li>
-      </ul>
-
-      {/*
-        The interface. Grouped by when each area matters, which is the same
-        information architecture the circle draws — and the only one that
-        survives a phone or a screen reader.
-      */}
-      <div className="flex min-w-0 flex-col gap-6 md:hidden" data-testid="business-map-list">
-        {groups.map((group) => (
-          <section key={group.ring} className="flex flex-col gap-2">
-            <h3
-              id={`business-map-${glowId}-${group.ring}`}
-              className={`font-mono text-meta tracking-[0.14em] uppercase ${
-                group.ring === "now" ? "text-mint" : "text-fg-meta"
-              }`}
-            >
-              {RING_LABELS[group.ring]}
-            </h3>
-            <ul
-              className="flex flex-col gap-1.5"
-              aria-labelledby={`business-map-${glowId}-${group.ring}`}
-            >
-              {group.nodes.map((node) => (
-                <li key={node.lens}>
-                  <MobileLensButton
-                    node={node}
-                    selected={node.lens === selected}
-                    onSelect={onSelect}
-                  />
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))}
-      </div>
+      <p className="text-fg-muted text-center text-xs">
+        Swipe through the nine business areas.
+      </p>
     </div>
   );
 }
 
-/** Exported for the detail panel, which shows the same bar beside the word. */
-export { HealthBar };
+export function BusinessMap({
+  view,
+  selected,
+  hovered,
+  onSelect,
+  onHover,
+}: {
+  view: BusinessBrainView;
+  selected: BusinessLens | null;
+  hovered: BusinessLens | null;
+  onSelect: (id: BusinessLens) => void;
+  onHover: (id: BusinessLens | null) => void;
+}) {
+  const reducedMotion = Boolean(useReducedMotion());
+  const visible = useDocumentVisible();
+  const gradientId = useId().replace(/:/g, "");
+  const active = hovered ?? selected;
+  const related = new Set<BusinessLens>();
+  if (active) {
+    related.add(active);
+    for (const relationship of view.relationships) {
+      if (relationship.from === active || relationship.to === active) {
+        related.add(relationship.from);
+        related.add(relationship.to);
+      }
+    }
+  }
+  const selectedAt = selected ? NODE_POSITIONS[selected] : null;
+  const focusOffset = selectedAt
+    ? { x: (CORE.x - selectedAt.x) * 0.055, y: (CORE.y - selectedAt.y) * 0.045 }
+    : { x: 0, y: 0 };
+
+  return (
+    <div className="min-w-0">
+      <motion.div
+        className="business-brain-canvas relative mx-auto hidden aspect-[780/690] w-full max-w-[57rem] md:block"
+        data-testid="business-map-radial"
+        animate={
+          reducedMotion
+            ? { opacity: 1 }
+            : { x: focusOffset.x, y: focusOffset.y, scale: selected ? 1.012 : 1 }
+        }
+        transition={{ type: "spring", stiffness: 150, damping: 24 }}
+      >
+        <svg
+          viewBox={`0 0 ${VIEWBOX.width} ${VIEWBOX.height}`}
+          className="pointer-events-none absolute inset-0 size-full overflow-visible"
+          aria-hidden="true"
+        >
+          <defs>
+            <radialGradient id={gradientId}>
+              <stop offset="0" stopColor="var(--color-mint)" stopOpacity="0.18" />
+              <stop offset="0.48" stopColor="var(--color-mint)" stopOpacity="0.045" />
+              <stop offset="1" stopColor="var(--color-mint)" stopOpacity="0" />
+            </radialGradient>
+            <filter id={`${gradientId}-glow`} x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation="4" result="blur" />
+              <feMerge>
+                <feMergeNode in="blur" />
+                <feMergeNode in="SourceGraphic" />
+              </feMerge>
+            </filter>
+          </defs>
+
+          <motion.ellipse
+            cx={CORE.x}
+            cy={CORE.y}
+            rx="330"
+            ry="278"
+            fill={`url(#${gradientId})`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: reducedMotion ? 0.08 : 0.35, delay: reducedMotion ? 0 : 0.15 }}
+          />
+
+          {[0, 1, 2].map((ring) => (
+            <motion.ellipse
+              key={ring}
+              cx={CORE.x}
+              cy={CORE.y}
+              rx={190 + ring * 66}
+              ry={150 + ring * 56}
+              fill="none"
+              stroke="var(--color-mint)"
+              strokeOpacity={0.12 - ring * 0.025}
+              strokeWidth="1"
+              strokeDasharray={ring === 2 ? "3 8" : "2 12"}
+              initial={reducedMotion ? { opacity: 0 } : { opacity: 0, pathLength: 0 }}
+              animate={{ opacity: 1, pathLength: 1 }}
+              transition={{
+                duration: reducedMotion ? 0.08 : 0.75,
+                delay: reducedMotion ? 0 : 0.15 + ring * 0.08,
+              }}
+            />
+          ))}
+
+          {view.nodes.map((node, index) => {
+            const isActive = active === node.id || related.has(node.id);
+            return (
+              <motion.path
+                key={`core-${node.id}`}
+                d={corePath(node)}
+                fill="none"
+                stroke={isActive ? "var(--color-mint)" : "var(--color-line-strong)"}
+                strokeOpacity={active ? (isActive ? 0.56 : 0.07) : 0.22}
+                strokeWidth={isActive ? 1.7 : 1}
+                strokeDasharray={isActive ? "5 8" : "2 9"}
+                initial={reducedMotion ? { opacity: 0 } : { opacity: 0, pathLength: 0 }}
+                animate={{ opacity: 1, pathLength: 1 }}
+                transition={{
+                  duration: reducedMotion ? 0.08 : 0.62,
+                  delay: reducedMotion ? 0 : 0.7 + index * 0.035,
+                }}
+              />
+            );
+          })}
+
+          {view.relationships.map((relationship, index) => {
+            const isActive = active === relationship.from || active === relationship.to;
+            const dimmed = active !== null && !isActive;
+            const d = relationPath(relationship.from, relationship.to);
+            return (
+              <g key={relationship.id}>
+                <motion.path
+                  d={d}
+                  fill="none"
+                  stroke={isActive ? "var(--color-mint)" : "var(--color-line-strong)"}
+                  strokeOpacity={dimmed ? 0.06 : isActive ? 0.88 : 0.34}
+                  strokeWidth={isActive ? 2.2 : 1.25}
+                  initial={reducedMotion ? { opacity: 0 } : { opacity: 0, pathLength: 0 }}
+                  animate={{ opacity: 1, pathLength: 1 }}
+                  transition={{
+                    duration: reducedMotion ? 0.08 : 0.7,
+                    delay: reducedMotion ? 0 : 0.72 + index * 0.07,
+                  }}
+                />
+                {!reducedMotion && visible && (isActive || (!active && index === 0)) && (
+                  <motion.path
+                    d={d}
+                    fill="none"
+                    stroke="var(--color-mint)"
+                    strokeWidth={isActive ? 3 : 2}
+                    strokeLinecap="round"
+                    strokeDasharray="1 30"
+                    filter={`url(#${gradientId}-glow)`}
+                    initial={{ strokeDashoffset: 0, opacity: 0 }}
+                    animate={{ strokeDashoffset: -180, opacity: isActive ? 0.9 : 0.42 }}
+                    transition={{
+                      strokeDashoffset: {
+                        duration: isActive ? 1.8 : 7.5,
+                        repeat: Infinity,
+                        ease: "linear",
+                      },
+                      opacity: { duration: 0.2 },
+                    }}
+                  />
+                )}
+              </g>
+            );
+          })}
+        </svg>
+
+        <motion.div
+          className="business-brain-core pointer-events-none absolute top-1/2 left-1/2 z-10 flex size-44 flex-col items-center justify-center rounded-full text-center"
+          initial={
+            reducedMotion
+              ? { opacity: 0, x: "-50%", y: "-50%" }
+              : { opacity: 0, scale: 0.72, x: "-50%", y: "-50%" }
+          }
+          animate={
+            reducedMotion || !visible
+              ? { opacity: 1, scale: 1, x: "-50%", y: "-50%" }
+              : { opacity: 1, scale: [1, 1.018, 1], x: "-50%", y: "-50%" }
+          }
+          transition={
+            reducedMotion
+              ? { duration: 0.08 }
+              : {
+                  opacity: { duration: 0.45, delay: 0.3 },
+                  scale: { duration: 6.8, delay: 0.3, repeat: Infinity, ease: "easeInOut" },
+                }
+          }
+        >
+          <span className="text-fg text-[3.35rem] leading-none font-semibold tracking-[-0.06em] tabular-nums">
+            {view.overall.score ?? "—"}
+          </span>
+          <span className="text-fg mt-2 text-sm font-semibold">Business Health</span>
+          <span
+            className={cn(
+              "mt-2 rounded-full px-3 py-1 text-[0.7rem] font-medium",
+              view.overall.state === "weak"
+                ? "bg-amber/10 text-amber"
+                : "bg-mint/10 text-mint",
+            )}
+          >
+            {view.overall.stateLabel}
+          </span>
+        </motion.div>
+
+        <ul className="contents" aria-label="Business dimensions">
+          {view.nodes.map((node, index) => (
+            <NodeButton
+              key={node.id}
+              node={node}
+              index={index}
+              selected={selected === node.id}
+              related={active !== null && related.has(node.id)}
+              dimmed={active !== null && !related.has(node.id)}
+              reducedMotion={reducedMotion}
+              onSelect={onSelect}
+              onHover={onHover}
+            />
+          ))}
+        </ul>
+      </motion.div>
+
+      <MobileBrain view={view} selected={selected} onSelect={onSelect} />
+    </div>
+  );
+}

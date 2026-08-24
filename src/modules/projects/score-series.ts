@@ -1,5 +1,3 @@
-import type { AuditReading } from "./dashboard";
-
 /**
  * The Business Signal over time (CORE-6).
  *
@@ -50,6 +48,13 @@ export type AuditContract = {
   rubricVersion: string;
   provider: string;
   model: string;
+};
+
+/** One persisted score reading plus the contract that gives it meaning. */
+export type AuditReading = {
+  score: number | null;
+  recordedAt: string;
+  contract: AuditContract;
 };
 
 export type ScorePoint = {

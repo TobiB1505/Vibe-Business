@@ -27,8 +27,9 @@ const MOVES_PAGE = read("src/app/app/projects/[projectId]/plan/page.tsx");
 const SCORE_PAGE = read("src/app/app/projects/[projectId]/health/content.tsx");
 const PANEL = read("src/app/app/projects/[projectId]/opportunities-panel.tsx");
 const PRIORITIES = read(
-  "src/app/app/projects/[projectId]/business-brain/current-priorities.tsx",
+  "src/app/app/projects/[projectId]/business-brain/audit-intelligence.tsx",
 );
+const BRAIN_VIEW = read("src/modules/projects/business-brain-view.ts");
 const PREPARE_PANEL = read("src/app/app/projects/[projectId]/prepare-change-panel.tsx");
 const PREPARED_SECTION = read("src/app/app/projects/[projectId]/prepared-changes-section.tsx");
 const RUN_AUDIT = read("src/app/app/projects/[projectId]/run-audit-button.tsx");
@@ -98,21 +99,21 @@ describe("lineage comes from stored identity", () => {
 describe("the audit hands off to the moves that answer it", () => {
   /** Regression 3: the audit's primary action becomes inert again. */
   it("gives the top priority a link carrying its conclusion key", () => {
-    expect(PRIORITIES).toContain("movesContextHref(movesHref, key)");
-    expect(PRIORITIES).toContain('conclusionKey("blocker", index)');
+    expect(PRIORITIES).toContain("movesContextHref(movesHref, priority.key)");
+    expect(BRAIN_VIEW).toContain('conclusionKey("blocker", index)');
   });
 
   /** §5: the key is an address. It must not be rendered anywhere. */
   it("renders the finding's headline rather than its key", () => {
     const rendered = copyOf(PRIORITIES);
-    expect(rendered).toContain("blocker.headline");
+    expect(rendered).toContain("priority.headline");
     expect(rendered).not.toMatch(/>\s*\{key\}/);
     expect(copyOf(PANEL)).not.toContain("conclusionKey}");
   });
 
   /** §19: the no-moves state must lead somewhere. */
   it("offers a way forward when nothing addresses the finding", () => {
-    expect(PRIORITIES).toContain("Find my next moves");
+    expect(PRIORITIES).toContain("Find next moves");
     expect(copyOf(PRIORITIES)).not.toContain("hasn&rsquo;t worked out the next moves");
   });
 });

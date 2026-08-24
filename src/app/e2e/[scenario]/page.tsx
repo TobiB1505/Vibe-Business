@@ -6,7 +6,7 @@ import {
 } from "@/app/app/projects/[projectId]/prepared-changes-section";
 import { IntelligenceSummary } from "@/app/app/projects/[projectId]/intelligence-summary";
 import { AuditOverview } from "@/app/app/projects/[projectId]/audit-overview";
-import { BusinessHealth } from "@/app/app/projects/[projectId]/business-health";
+import { buildBusinessBrainView } from "@/modules/projects/business-brain-view";
 import { AuditCreditNotice } from "@/app/app/projects/[projectId]/audit-credit-notice";
 import { RunAuditButton } from "@/app/app/projects/[projectId]/run-audit-button";
 import { auditBlockedByCredits } from "@/modules/business-audit/entitlement";
@@ -498,30 +498,39 @@ export default async function E2eScenarioPage({
   if (isE2eAuditScenario(scenario)) {
     const auditResult = E2E_AUDIT_SCENARIOS[scenario]();
     const hasMoves = scenario !== "audit-synthesis-no-moves";
+    const view = buildBusinessBrainView({
+      audit: auditResult,
+      lastScanAt: auditResult.generatedAt,
+      auditReadings: [],
+      movesByConclusion: hasMoves ? { "blocker-1": 2, "blocker-2": 1 } : {},
+      moveByConclusion: hasMoves
+        ? {
+            "blocker-1": {
+              title: "Make pricing visible",
+              impact: "high",
+              effort: "medium",
+            },
+            "blocker-2": {
+              title: "Measure the customer journey",
+              impact: "medium",
+              effort: "medium",
+            },
+          }
+        : {},
+      usedSignedInEvidence: true,
+    });
     return (
       <main className="mx-auto max-w-[90rem] p-8">
         {label}
-        <AuditOverview
-          audit={auditResult}
-          generatedAt={auditResult.generatedAt}
-          movesHref="/app/projects/project_e2e/plan"
-          hasMoves={hasMoves}
-          /*
-           * The lineage the real page computes (UI-S2 §8). Two Moves on the
-           * top blocker and one on the second, so the browser can check that
-           * the primary priority carries its key, that a secondary priority
-           * gets a quieter link, and that a blocker with nothing behind it
-           * gets no link at all.
-           */
-          movesByConclusion={hasMoves ? { "blocker-1": 2, "blocker-2": 1 } : {}}
-        />
-        {/*
-          The same pair the real Business Health route renders. Included here
-          because the "unknown is never drawn as zero" rule (CLAUDE.md rule 44)
-          is a claim about pixels, and this component is where a dimension's
-          number becomes a bar width.
-        */}
-        <BusinessHealth audit={auditResult} />
+        {view ? (
+          <AuditOverview
+            view={view}
+            movesHref="/app/projects/project_e2e/plan"
+            hasMoves={hasMoves}
+          />
+        ) : (
+          <p>This fixture predates the Business Brain.</p>
+        )}
       </main>
     );
   }

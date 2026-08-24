@@ -180,6 +180,69 @@ export async function getLatestSuccessfulAudit(
   return data ? mapRow(data as AuditRow) : null;
 }
 
+type AuditReadingRow = {
+  overall_score: number | null;
+  created_at: string;
+  schema_version: string;
+  audit_version: string;
+  evidence_pack_version: string;
+  prompt_version: string;
+  rubric_version: string;
+  provider: string;
+  model: string;
+};
+
+export type StoredAuditReading = {
+  score: number | null;
+  recordedAt: string;
+  contract: {
+    schemaVersion: string;
+    auditVersion: string;
+    evidencePackVersion: string;
+    promptVersion: string;
+    rubricVersion: string;
+    provider: string;
+    model: string;
+  };
+};
+
+/**
+ * The project-scoped history needed by Business Health.
+ *
+ * This intentionally reads the score column and reproducibility columns only.
+ * The Business Brain never opens historical audit documents merely to draw a
+ * trend, and the comparability rule remains owned by `score-series.ts`.
+ */
+export async function getProjectAuditReadings(
+  supabase: SupabaseClient,
+  projectId: string,
+): Promise<StoredAuditReading[]> {
+  const { data, error } = await supabase
+    .from("business_readiness_audits")
+    .select(
+      "overall_score, created_at, schema_version, audit_version, evidence_pack_version, prompt_version, rubric_version, provider, model",
+    )
+    .eq("project_id", projectId)
+    .eq("status", "completed")
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+
+  return ((data ?? []) as AuditReadingRow[]).map((row) => ({
+    score: row.overall_score,
+    recordedAt: row.created_at,
+    contract: {
+      schemaVersion: row.schema_version,
+      auditVersion: row.audit_version,
+      evidencePackVersion: row.evidence_pack_version,
+      promptVersion: row.prompt_version,
+      rubricVersion: row.rubric_version,
+      provider: row.provider,
+      model: row.model,
+    },
+  }));
+}
+
 /**
  * Finds an existing successful audit for identical inputs. Reuse is the
  * default because inference costs real money and an identical input

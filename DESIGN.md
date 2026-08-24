@@ -69,13 +69,15 @@ Controls and navigation use precise 10px corners. Panels use 14px, major cards 1
 
 Primary buttons use mint once per action area; secondary controls use the shared bordered surface. Focus is always the global mint `:focus-visible` ring. Search owns an explicit clear action. Short filter and sort menus use native selects only where platform popup geometry is accepted. Tables keep headers, range feedback and pagination stable.
 
-Motion communicates interaction state only. Use the shared transition utility and respect reduced motion; never animate static dashboard furniture continuously.
+Motion communicates interaction state only on ordinary product surfaces. Use the shared transition utility and respect reduced motion; never animate static dashboard furniture continuously. The narrowly-scoped Business Brain exception is defined below.
 
 ## Signature Surface: Business Brain
 
-The project Home is the deliberate exception to the product's otherwise quiet presentation. Its Business Brain may use a contained mint aura, traced connections and staged node entry to make the nine business areas read as one system. This is a semantic visualization, not a new decorative language: ring distance still means priority timing, health stays explicit in text, and the centre is the only aggregate score.
+The project Home is the deliberate exception to the product's otherwise quiet presentation. Its Business Brain may use a contained mint aura, traced connections and staged node entry to make the nine business areas read as one system. This is a semantic visualization, not a new decorative language: health and priority stay explicit in text, a relationship line exists only where the audit grouped areas into the same conclusion, and the centre is the only aggregate score.
 
-The choreography must settle. On entry, rings, edges, nodes and the core may reveal in sequence; a selected node may briefly wake its real connections. No ambient animation loops forever, nothing moves before its meaning is available, and `prefers-reduced-motion` removes the sequence without hiding content. Coral is reserved for a real critical gap and amber for incomplete or waiting states, even inside this signature surface.
+The entrance choreography settles within roughly 1.5 seconds. After that, only a very slow core breath and one bounded low-opacity signal path may remain active; document visibility pauses both. Hover and selection may wake only real related paths and must dim unrelated nodes without removing their labels. `prefers-reduced-motion` removes staged transforms, signal movement and pulsing without hiding content. Coral is reserved for a real critical gap and amber for incomplete or waiting states, even inside this signature surface.
+
+Motion for React owns the Business Brain's entrance, presence, layout, hover and selected-state transitions. CSS is limited to static atmosphere, surfaces and the global reduced-motion backstop. This exception must not be copied into settings, billing, tables or ordinary dashboard cards.
 
 ## Do's and Don'ts
 

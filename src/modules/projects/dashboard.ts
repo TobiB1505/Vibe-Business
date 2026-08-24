@@ -2,7 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import type { AuditContract } from "./score-series";
+import type { AuditReading } from "./score-series";
 
 /**
  * The global dashboard read model (Sprint UI-3).
@@ -69,11 +69,7 @@ export type DashboardMove = {
  * "comparable" means is a rule with a history behind it, and it lives in
  * `score-series.ts` where it is tested; this module's job is to read columns.
  */
-export type AuditReading = {
-  score: number | null;
-  recordedAt: string;
-  contract: AuditContract;
-};
+export type { AuditReading } from "./score-series";
 
 export type DashboardProject = {
   id: string;

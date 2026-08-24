@@ -15,6 +15,7 @@
 | Architecture and provider boundaries | `ARCHITECTURE.md` | Architecture contract | 2026-08-24 |
 | Account/project context swap | `docs/decisions/0042-account-dashboard-and-context-swap.md` | ADR | 2026-08-24 |
 | Project Home and Business Health | `docs/decisions/0043-business-health-is-project-home.md` | ADR | 2026-08-24 |
+| Business Brain interaction and view model | `docs/decisions/0044-signature-business-brain.md` | ADR | 2026-08-24 |
 | GitHub permissions and repository connection | `docs/decisions/0003-github-app-integration.md`, `docs/decisions/0009-github-installation-ownership-verification.md` | ADR | 2026-08-24 |
 | Safe approved merge behavior | `docs/decisions/0018-human-approval-authority.md`, `docs/decisions/0019-safe-approved-change-merge.md` | ADR | 2026-08-24 |
 | Billing | `PRODUCT.md#12-credit-model` | Product contract | 2026-08-24 |
@@ -42,7 +43,7 @@
 | Button | shared contained owner | tokenized surface/accent change | global mint ring | visibly unavailable, no pointer action | stable geometry + `aria-busy` | local recovery |
 | Search | committed URL query + explicit clear | shared interactive transition | global mint ring | n/a | retain dataset frame | no-results is distinct from failure |
 | Table/list | comfortable density | row surface cue | controls receive visible focus | n/a | stable frame | persistent scoped state |
-| Business Brain | staged but complete | connected edge cue | node uses the global mint ring | n/a | server lifecycle remains authoritative | existing notices and recovery |
+| Business Brain | staged but complete | real related paths and nodes gain emphasis | node uses the global mint ring | n/a | server lifecycle remains authoritative | existing notices and recovery |
 
 ## Dataset navigation
 
@@ -68,7 +69,7 @@
 - Account sidebar becomes the established top strip below `lg`; project and account rails never nest.
 - Project Home is the canonical Business Health surface at `/app/projects/:projectId`; `/health` is a compatibility alias and is never a second rail item.
 - `#business-audit` remains the stable recovery anchor and resolves on canonical project Home.
-- The radial Business Brain becomes a priority-grouped list on narrow screens. Labels, health, materiality, selection and detail remain available; geometry is never the only interface.
+- The radial Business Brain becomes a horizontally browsable dimension rail plus the same detail panel on narrow screens. Labels, health, priority, selection and detail remain available; geometry is never the only interface.
 - Repository comparison uses a semantic table at desktop and labeled record rows on narrow screens. Identity, product, visibility, default branch, connected time and open action remain available.
 - Technical values truncate only where their full value is also available through the external repository link or the mobile full-name row.
 
@@ -80,9 +81,10 @@
 
 ## Motion and sensory behavior
 
-- Business Brain entry motion is finite and communicates the existing map topology: rings, connections, nodes, then the centre reading.
-- Selection may briefly emphasize only the edges connected to the chosen lens. The visualization settles and has no perpetual ambient loop.
-- Reduced-motion mode removes reveal delays and pulses while preserving every node, connection meaning, score and action at first paint.
+- Business Brain entry motion is staged through Motion for React: low-opacity network, centre, nine nodes, real relationships, then the default decision panel.
+- After entrance, a very slow centre breath and at most one low-opacity signal path may continue. They pause while the document is hidden and never imply a new scan or live recalculation.
+- Hover and keyboard focus emphasize only real related paths and nodes. Selection uses one continuous layout/presence transition and replaces the default right panel with the selected area rather than appending a report below the map.
+- Reduced-motion mode removes reveal delays, signal movement, pulse and map repositioning while preserving every node, relationship meaning, score and action at first paint.
 - Motion never implies live activity, a recalculation or a score change.
 
 ## Verification

@@ -305,6 +305,7 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0041](docs/decisions/0041-command-center-information-architecture.md) | The project workspace is a command center, not an admin panel | Web surface |
 | [0042](docs/decisions/0042-account-dashboard-and-context-swap.md) | The account level is a dashboard of its own; the sidebar swaps context | Web surface |
 | [0043](docs/decisions/0043-business-health-is-project-home.md) | Business Health is the canonical project Home | Web surface |
+| [0044](docs/decisions/0044-signature-business-brain.md) | Signature Business Brain view model and interaction | Web surface, read models |
 
 ### Layers with no section above
 
