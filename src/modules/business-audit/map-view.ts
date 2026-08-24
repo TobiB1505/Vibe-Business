@@ -57,6 +57,7 @@ export type LensNode = {
   /** Human label for the lens, since the key is internal vocabulary. */
   label: string;
   health: LensHealth;
+  score: number | null;
   materiality: LensMateriality;
   ring: MapRing;
   summary: string;
@@ -250,6 +251,7 @@ export function buildBusinessMap(synthesis: AuditSynthesis): BusinessMap {
       // An unassessed lens reads as unknown rather than being hidden: nine
       // areas are the framework, and a missing one is information too.
       health: assessment?.health ?? "unclear",
+      score: assessment?.score ?? null,
       materiality,
       ring: ringFor(materiality),
       summary: assessment?.summary ?? "",

@@ -18,7 +18,7 @@ function reading(score: number | null, recordedAt: string, version = "rubric-v1"
 }
 
 describe("buildBusinessBrainView", () => {
-  it("keeps absent lens scores absent while carrying the real nine-lens graph", () => {
+  it("carries validated lens scores while preserving absent ones", () => {
     const view = buildBusinessBrainView({
       audit: E2E_AUDIT_SCENARIOS["audit-synthesis"](),
       lastScanAt: "2026-08-16T09:00:00.000Z",
@@ -30,7 +30,8 @@ describe("buildBusinessBrainView", () => {
     });
 
     expect(view?.nodes).toHaveLength(9);
-    expect(view?.nodes.every((node) => node.score === null)).toBe(true);
+    expect(view?.nodes.find((node) => node.id === "offer")?.score).toBe(62);
+    expect(view?.nodes.find((node) => node.id === "scalability")?.score).toBeNull();
     expect(view?.relationships).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ from: "conversion", to: "revenue_economics" }),

@@ -157,7 +157,7 @@ export function fakePlannedAudit(
 ): BusinessReadinessAudit {
   return fakeAudit({
     synthesis: {
-      version: "business-audit-synthesis-v5",
+      version: "business-audit-synthesis-v6",
       lenses: [fakeLens(), fakeLens({ lens: "offer", health: "unclear", materiality: "soon" })],
       overall: "A working product without a defined first customer.",
       strengths: [],

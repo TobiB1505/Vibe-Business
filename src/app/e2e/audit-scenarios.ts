@@ -56,7 +56,7 @@ function audit(
 ): BusinessReadinessAudit {
   return {
     schemaVersion: "business-readiness-audit.v1",
-    auditVersion: "business-audit-v1",
+    auditVersion: "business-audit-v2",
     evidencePackVersion: "business-evidence.v3",
     promptVersion: "business-audit-prompt-v1",
     rubricVersion: "business-readiness-rubric-v1",
@@ -98,9 +98,23 @@ function lensAssessment(
   evidenceIds: string[],
   missingContext: string[] = [],
 ): BusinessLensAssessment {
+  // Fixture-only values make the visual contract testable. Production values
+  // come exclusively from a validated audit and old audits remain null.
+  const fixtureScores: Record<BusinessLensAssessment["lens"], number | null> = {
+    offer: 62,
+    audience: 41,
+    revenue_economics: 38,
+    acquisition: 44,
+    conversion: 58,
+    retention: 61,
+    measurement: 31,
+    business_readiness: 36,
+    scalability: null,
+  };
   return {
     lens,
     health,
+    score: fixtureScores[lens],
     materiality,
     summary: `What Vibe worked out about ${lens.replace(/_/g, " ")}.`,
     evidenceIds,

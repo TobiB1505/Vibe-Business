@@ -48,7 +48,7 @@ export const FAKE_EVIDENCE_IDS = new Set([
 export function fakeAudit(overrides: Partial<BusinessReadinessAudit> = {}): BusinessReadinessAudit {
   return {
     schemaVersion: "business-readiness-audit.v1",
-    auditVersion: "business-audit-v1",
+    auditVersion: "business-audit-v2",
     evidencePackVersion: "business-evidence.v2",
     promptVersion: "business-audit-prompt-v2",
     rubricVersion: "business-readiness-rubric-v1",

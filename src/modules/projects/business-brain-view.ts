@@ -45,8 +45,8 @@ export type BusinessBrainMove = {
 export type BusinessBrainNode = {
   id: BusinessLens;
   label: string;
-  /** The current audit contract does not score lenses numerically. */
-  score: null;
+  /** Null for legacy, unclear, founder-blocked or unsupported assessments. */
+  score: number | null;
   health: LensHealth;
   healthLabel: string;
   priority: LensMateriality;
@@ -203,7 +203,7 @@ export function buildBusinessBrainView(params: {
   const nodes = map.nodes.map((node): BusinessBrainNode => ({
     id: node.lens,
     label: node.label,
-    score: null,
+    score: node.score ?? null,
     health: node.health,
     healthLabel: HEALTH_LABELS[node.health],
     priority: node.materiality,

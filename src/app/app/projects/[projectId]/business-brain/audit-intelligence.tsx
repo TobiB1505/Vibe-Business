@@ -13,7 +13,7 @@ import type {
   BusinessBrainPriority,
   BusinessBrainView,
 } from "@/modules/projects/business-brain-view";
-import { BusinessMap } from "./business-map";
+import { BusinessLensIcon, BusinessMap } from "./business-map";
 
 const PANEL_TRANSITION = { type: "spring" as const, stiffness: 220, damping: 26 };
 
@@ -61,11 +61,11 @@ function PriorityCard({
       <span
         aria-hidden="true"
         className={cn(
-          "absolute -top-10 -right-8 flex size-28 items-center justify-center rounded-full border text-4xl",
+          "absolute -top-7 -right-5 flex size-28 items-center justify-center rounded-full border",
           critical ? "border-coral/15 text-coral/60" : "border-mint/15 text-mint/60",
         )}
       >
-        {critical ? "!" : "↗"}
+        {lens ? <BusinessLensIcon lens={lens} className="size-11" /> : <span className="text-4xl">!</span>}
       </span>
       <div className="relative flex flex-col gap-4 pr-12">
         <span className={cn("text-xs font-semibold", critical ? "text-coral" : "text-mint")}>
@@ -75,7 +75,9 @@ function PriorityCard({
           <h3 className="text-fg text-[1.15rem] leading-snug font-semibold tracking-[-0.025em]">
             {priority.headline}
           </h3>
-          <p className="text-fg-muted text-sm leading-relaxed">{priority.explanation}</p>
+          <p className="text-fg-muted line-clamp-3 text-sm leading-relaxed">
+            {priority.whyItMatters ?? priority.explanation}
+          </p>
         </div>
         {priority.move && (
           <div className="flex flex-wrap gap-2">
@@ -156,13 +158,15 @@ function RecentChanges({ view }: { view: BusinessBrainView }) {
 function ScoringContext({ view }: { view: BusinessBrainView }) {
   return (
     <section className="business-brain-side-card flex gap-4 p-5">
-      <span aria-hidden="true" className="border-mint/20 bg-mint/5 text-mint flex size-11 shrink-0 items-center justify-center rounded-full border text-xl">
-        ◉
+      <span aria-hidden="true" className="border-mint/20 bg-mint/5 text-mint flex size-11 shrink-0 items-center justify-center rounded-full border">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="size-6">
+          <path d="M9.5 4.5A3.5 3.5 0 0 0 6 8v1a3 3 0 0 0-1 5.8V16a3.5 3.5 0 0 0 4.5 3.3V4.5ZM14.5 4.5A3.5 3.5 0 0 1 18 8v1a3 3 0 0 1 1 5.8V16a3.5 3.5 0 0 1-4.5 3.3V4.5ZM9.5 9H7.7M14.5 9h1.8M9.5 14H7M14.5 14H17" />
+        </svg>
       </span>
       <div className="flex min-w-0 flex-col gap-2">
-        <h3 className="text-fg text-sm font-semibold">How Vibe sees your business</h3>
+        <h3 className="text-fg text-sm font-semibold">How we score your business</h3>
         <p className="text-fg-muted text-xs leading-relaxed">
-          {view.overall.summary ?? "Vibe combines the assessable evidence into one connected business view."}
+          Vibe evaluates evidence from your codebase, website, product signals and your own inputs. Missing or inconclusive evidence stays unscored.
         </p>
         <p className="text-fg-meta text-xs">
           {view.overall.assessedDimensions} of {view.overall.totalDimensions} scored areas · {view.signalCount} signals · {view.sourceCount} {view.sourceCount === 1 ? "source" : "sources"}
@@ -286,7 +290,7 @@ function SelectedPanel({
           {node.priorityLabel}
         </span>
         <span className="bg-surface-4 text-fg-muted rounded-full px-3 py-1.5 text-xs">
-          No individual score
+          {node.score === null ? "Not scored" : `${node.score} / 100`}
         </span>
       </div>
 
@@ -471,12 +475,12 @@ export function AuditIntelligence({
 
           <footer className="border-line-1 relative z-10 mt-2 flex flex-wrap items-center justify-between gap-4 border-t pt-4">
             <ul className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs" aria-label="Business health legend">
-              <li className="text-mint flex items-center gap-2"><span className="bg-mint size-2 rounded-full shadow-[0_0_10px_rgb(0_229_160/0.8)]" />Strong</li>
-              <li className="text-amber flex items-center gap-2"><span className="bg-amber size-2 rounded-full" />Adequate</li>
-              <li className="text-coral flex items-center gap-2"><span className="bg-coral size-2 rounded-full" />Weak</li>
-              <li className="text-fg-muted flex items-center gap-2"><span className="bg-fg-disabled size-2 rounded-full" />Unknown</li>
+              <li className="text-mint flex items-center gap-2"><span className="bg-mint size-2 rounded-full shadow-[0_0_10px_rgb(0_229_160/0.8)]" /><span>Strong <span className="text-fg-meta">70–100</span></span></li>
+              <li className="text-amber flex items-center gap-2"><span className="bg-amber size-2 rounded-full" /><span>Adequate <span className="text-fg-meta">50–69</span></span></li>
+              <li className="text-coral flex items-center gap-2"><span className="bg-coral size-2 rounded-full" /><span>Weak <span className="text-fg-meta">0–49</span></span></li>
+              <li className="text-fg-muted flex items-center gap-2"><span className="bg-fg-disabled size-2 rounded-full" />Not scored —</li>
             </ul>
-            <p className="text-fg-meta text-xs">Unknown is never scored as zero.</p>
+            <p className="text-fg-meta text-xs">Missing evidence is never scored as zero.</p>
           </footer>
         </motion.section>
 

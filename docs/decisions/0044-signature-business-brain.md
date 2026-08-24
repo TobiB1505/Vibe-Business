@@ -4,6 +4,9 @@ Status: Accepted
 
 Date: 2026-08-24
 
+Amended by [ADR 0045](0045-business-lens-diagnostic-scores.md), which adds
+nullable evidence-grounded lens scores without changing this view-model boundary.
+
 ## Context
 
 ADR 0043 made Business Health the project Home and allowed a bounded theatrical

@@ -289,9 +289,9 @@
 .business-brain-stage {
   isolation: isolate;
   background:
-    radial-gradient(circle at 48% 46%, rgb(0 229 160 / 0.075), transparent 42%),
-    radial-gradient(circle at 78% 80%, rgb(255 122 92 / 0.03), transparent 32%),
-    linear-gradient(145deg, rgb(255 255 255 / 0.042), rgb(255 255 255 / 0.012));
+    radial-gradient(circle at 48% 46%, rgb(0 229 160 / 0.07), transparent 43%),
+    radial-gradient(circle at 78% 80%, rgb(255 122 92 / 0.035), transparent 34%),
+    linear-gradient(145deg, rgb(8 15 16 / 0.98), rgb(3 6 7 / 0.99));
   box-shadow:
     0 1px 0 rgb(255 255 255 / 0.07) inset,
     0 40px 100px -48px rgb(0 0 0 / 0.95),
@@ -299,11 +299,12 @@
 }
 
 .business-brain-grid {
-  background-image:
-    linear-gradient(rgb(255 255 255 / 0.018) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(255 255 255 / 0.018) 1px, transparent 1px);
-  background-size: 44px 44px;
-  mask-image: radial-gradient(circle at 48% 48%, black, transparent 78%);
+  background:
+    radial-gradient(circle at 18% 24%, rgb(0 229 160 / 0.05), transparent 1px),
+    radial-gradient(circle at 76% 18%, rgb(232 181 74 / 0.04), transparent 1px),
+    radial-gradient(circle at 62% 74%, rgb(0 229 160 / 0.035), transparent 1px);
+  background-size: 73px 83px, 109px 97px, 127px 119px;
+  mask-image: radial-gradient(circle at 48% 48%, black 38%, transparent 88%);
 }
 
 .business-brain-canvas::before {
@@ -316,16 +317,86 @@
   pointer-events: none;
 }
 
+.business-brain-planet {
+  position: relative;
+  border-color: rgb(var(--planet-rgb) / 0.46);
+  color: var(--planet-accent);
+  background:
+    radial-gradient(circle at 32% 23%, rgb(var(--planet-rgb) / 0.24), transparent 32%),
+    radial-gradient(circle at 66% 73%, rgb(var(--planet-rgb) / 0.09), transparent 48%),
+    linear-gradient(155deg, rgb(17 24 24 / 0.98), rgb(5 8 9 / 0.99) 72%);
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.025) inset,
+    0 1px 0 rgb(255 255 255 / 0.09) inset,
+    0 22px 38px -26px rgb(0 0 0 / 0.95),
+    0 0 34px -18px rgb(var(--planet-rgb) / 0.72);
+}
+
+.business-brain-planet::before {
+  position: absolute;
+  inset: 7%;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 34% 22%, rgb(255 255 255 / 0.1), transparent 22%),
+    repeating-radial-gradient(circle at 38% 32%, transparent 0 7px, rgb(255 255 255 / 0.012) 8px 9px);
+  content: "";
+  opacity: 0.75;
+  pointer-events: none;
+}
+
+.business-brain-planet::after {
+  position: absolute;
+  inset: -9px;
+  border: 1px solid rgb(var(--planet-rgb) / 0);
+  border-radius: inherit;
+  content: "";
+  pointer-events: none;
+}
+
+.business-brain-planet[data-priority="now"]::after {
+  border-color: rgb(var(--planet-rgb) / 0.22);
+  box-shadow: 0 0 24px -12px rgb(var(--planet-rgb) / 0.8);
+}
+
+.business-brain-planet[data-selected="true"] {
+  border-color: rgb(var(--planet-rgb) / 0.9);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.12) inset,
+    0 0 0 1px rgb(var(--planet-rgb) / 0.16),
+    0 0 48px -12px rgb(var(--planet-rgb) / 0.92);
+}
+
+.business-brain-planet[data-related="true"]:not([data-selected="true"]) {
+  border-color: rgb(var(--planet-rgb) / 0.66);
+  box-shadow: 0 0 36px -14px rgb(var(--planet-rgb) / 0.72);
+}
+
+.business-brain-planet-icon {
+  position: relative;
+  z-index: 1;
+  color: var(--planet-accent);
+  filter: drop-shadow(0 0 7px rgb(var(--planet-rgb) / 0.55));
+}
+
+.business-brain-status-dot {
+  background: currentcolor;
+  box-shadow: 0 0 7px currentcolor;
+}
+
 .business-brain-core,
 .business-brain-mobile-core {
   background:
-    radial-gradient(circle at 50% 35%, rgb(0 229 160 / 0.13), transparent 56%),
-    linear-gradient(160deg, rgb(13 26 23 / 0.98), rgb(5 9 9 / 0.98));
+    radial-gradient(circle at 34% 20%, rgb(132 255 223 / 0.22), transparent 24%),
+    radial-gradient(circle at 50% 35%, rgb(0 229 160 / 0.17), transparent 55%),
+    radial-gradient(circle at 73% 78%, rgb(232 181 74 / 0.12), transparent 36%),
+    repeating-radial-gradient(circle at 42% 40%, transparent 0 12px, rgb(0 229 160 / 0.018) 13px 14px),
+    linear-gradient(160deg, rgb(10 30 25 / 0.99), rgb(3 8 8 / 0.99));
   border: 1px solid rgb(0 229 160 / 0.42);
   box-shadow:
-    0 0 0 10px rgb(0 229 160 / 0.025),
-    0 0 0 22px rgb(0 229 160 / 0.018),
-    0 0 55px -12px rgb(0 229 160 / 0.58),
+    0 0 0 11px rgb(0 229 160 / 0.028),
+    0 0 0 25px rgb(0 229 160 / 0.016),
+    0 0 74px -10px rgb(0 229 160 / 0.67),
+    24px 30px 56px -36px rgb(232 181 74 / 0.46),
     0 1px 0 rgb(255 255 255 / 0.09) inset;
 }
 

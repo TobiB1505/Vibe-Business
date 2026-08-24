@@ -97,6 +97,7 @@ export function buildModelOutput(
       BUSINESS_LENSES.map((lens) => ({
         lens,
         health: "adequate",
+        score: 60,
         materiality: "soon",
         summary: `Internal reasoning for ${lens}.`,
         evidenceIds: ["live.site.title"],

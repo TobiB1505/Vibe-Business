@@ -46,18 +46,18 @@ test.describe("signature Business Brain", () => {
     }
   });
 
-  test("keeps absent lens scores absent instead of copying reference numbers", async ({ page }) => {
+  test("shows validated lens scores and keeps unsupported lenses absent", async ({ page }) => {
     await page.goto(SYNTHESIS);
 
     await expect(lens(page, /revenue & economics/i)).toHaveAttribute(
       "aria-label",
-      /not individually scored.*weak.*priority soon/i,
+      /score 38 out of 100.*weak.*priority soon/i,
     );
     await expect(lens(page, /scalability/i)).toHaveAttribute(
       "aria-label",
-      /not individually scored.*unknown/i,
+      /not scored.*unknown/i,
     );
-    await expect(page.getByText(/unknown is never scored as zero/i)).toBeVisible();
+    await expect(page.getByText(/missing evidence is never scored as zero/i)).toBeVisible();
   });
 
   test("shows only the highest real priority by default and the exact remaining count", async ({
@@ -129,7 +129,7 @@ test.describe("signature Business Brain", () => {
     await page.goto(SYNTHESIS);
 
     await expect(page.getByTestId("business-map-radial")).toBeVisible();
-    await expect(page.locator('path[stroke-dasharray="1 30"]')).toHaveCount(0);
+    await expect(page.locator("[data-business-signal]")).toHaveCount(0);
     const animationDuration = await page.locator(".business-brain-node").first().evaluate(
       (element) => getComputedStyle(element).animationDuration,
     );
