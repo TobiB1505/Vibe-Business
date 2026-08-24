@@ -63,6 +63,30 @@ function mapRow(row: SnapshotRow): StoredLiveSnapshot {
 const SNAPSHOT_COLUMNS =
   "id, project_id, status, source_origin, configured_url, analyzer_version, completeness, completeness_reasons, failure_code, result, created_at, completed_at";
 
+/**
+ * The newest attempt regardless of outcome, for honest status rows.
+ *
+ * "Vibe couldn't reach your product last time" and "Vibe hasn't visited it
+ * yet" are different sentences, and only the failed row can tell them apart.
+ * Display-only: everything that consumes results keeps reading successful
+ * snapshots.
+ */
+export async function getLatestLiveSnapshotAttempt(
+  supabase: SupabaseClient,
+  projectId: string,
+): Promise<StoredLiveSnapshot | null> {
+  const { data, error } = await supabase
+    .from("live_product_intelligence_snapshots")
+    .select(SNAPSHOT_COLUMNS)
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? mapRow(data as SnapshotRow) : null;
+}
+
 /** The snapshot shown on the project page: the newest successful run. */
 export async function getLatestSuccessfulLiveSnapshot(
   supabase: SupabaseClient,
