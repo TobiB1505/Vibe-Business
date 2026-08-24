@@ -1,6 +1,10 @@
 # Self-hosted fonts
 
-Nine `woff2` files: the two product typefaces, split by writing system.
+The interface uses the native UI font stack from `globals.css`. The bundled
+`woff2` files provide JetBrains Mono for technical output, split by writing
+system. The former Space Grotesk files are retained only so older branches can
+be checked out without re-downloading assets; the current application does not
+load them.
 
 ## Why they are committed
 
@@ -38,13 +42,12 @@ re-subsetted or substituted.
 | JetBrains Mono | greek | `jetbrains-mono-greek.woff2` | 6,800 |
 | JetBrains Mono | vietnamese | `jetbrains-mono-vietnamese.woff2` | 5,872 |
 
-Both are variable fonts. The design system uses weights 400–700, which is the
-axis span declared in `../fonts.ts`; the browser interpolates within it, so
-there is no file per weight.
+JetBrains Mono is a variable font. The design system uses weights 400–700,
+which is the axis span declared in `../fonts.ts`; the browser interpolates
+within it, so there is no file per weight.
 
-Only the two `latin` files are preloaded. The others are fetched by the
-browser when a page actually contains a character from their range — the same
-behaviour Google's own CSS produced.
+Only the JetBrains Mono `latin` file is preloaded. The others are fetched when
+a page contains a character from their range.
 
 ## Licence
 

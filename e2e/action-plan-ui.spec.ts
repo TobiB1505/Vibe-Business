@@ -25,7 +25,7 @@ import { expect, type Page, test } from "@playwright/test";
  *
  * ## What it does not prove
  *
- * The server wiring in `moves/page.tsx` that assembles these props from
+ * The server wiring in `plan/page.tsx` that assembles these props from
  * Supabase, or RLS. There is no isolated database in this environment, so
  * every state here comes from `action-plan-scenarios.ts`, written by hand
  * from the domain's own types — no AI call backs any of it.
@@ -130,7 +130,7 @@ test.describe("blocked", () => {
     await expect(page.getByText("Why this is blocked")).toBeVisible();
     const action = page.getByRole("link", { name: "Find your next moves" });
     await expect(action).toBeVisible();
-    await expect(action).toHaveAttribute("href", "#next-moves");
+    await expect(action).toHaveAttribute("href", "#action-plan");
     await expect(page.getByRole("button", { name: "Plan this move" })).not.toBeVisible();
   });
 
@@ -139,7 +139,7 @@ test.describe("blocked", () => {
 
     const action = page.getByRole("link", { name: "Run a business audit" });
     await expect(action).toBeVisible();
-    await expect(action).toHaveAttribute("href", /\/score#business-audit$/);
+    await expect(action).toHaveAttribute("href", /\/projects\/project_e2e#business-audit$/);
   });
 });
 

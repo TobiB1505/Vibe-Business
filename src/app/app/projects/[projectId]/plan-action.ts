@@ -53,7 +53,7 @@ export async function startPlanAction(
   if (outcome.kind === "failed") return { ok: false, error: outcome.error };
 
   if (outcome.kind === "reused") {
-    revalidatePath(`/app/projects/${projectId}/moves`);
+    revalidatePath(`/app/projects/${projectId}/plan`);
     return { ok: true, kind: "reused" };
   }
 

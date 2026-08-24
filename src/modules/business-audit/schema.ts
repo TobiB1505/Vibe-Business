@@ -13,7 +13,7 @@
 export const BUSINESS_AUDIT_SCHEMA_VERSION = "business-readiness-audit.v1" as const;
 
 /** Bumped when the audit's structure or scoring rules change materially. */
-export const BUSINESS_AUDIT_VERSION = "business-audit-v1" as const;
+export const BUSINESS_AUDIT_VERSION = "business-audit-v2" as const;
 
 export const AUDIT_DIMENSIONS = [
   "product",
@@ -263,6 +263,15 @@ export type BusinessLensAssessment = {
   /** How this area of the business actually looks. Never a priority claim. */
   health: LensHealth;
   /**
+   * Evidence-grounded diagnostic score for this lens.
+   *
+   * Optional only for backwards compatibility with audits written before the
+   * planet view introduced lens scoring. New audits always emit the field.
+   * Unclear, founder-blocked, unsupported or internally inconsistent results
+   * remain null — absence is never converted into zero.
+   */
+  score?: number | null;
+  /**
    * When it needs attention.
    *
    * Independent of `health` by design (§3, §5). A lens may be `weak` and
@@ -296,7 +305,7 @@ export type BusinessLensAssessment = {
  * improving are independent events, and an audit has to be able to say which
  * of them it carries.
  */
-export const AUDIT_SYNTHESIS_VERSION = "business-audit-synthesis-v5" as const;
+export const AUDIT_SYNTHESIS_VERSION = "business-audit-synthesis-v6" as const;
 
 /**
  * The **audit contract** version (CORE-2a.2 §21–§23).
@@ -314,7 +323,7 @@ export const AUDIT_SYNTHESIS_VERSION = "business-audit-synthesis-v5" as const;
  * "what does Vibe currently think about this business?" — which is exactly the
  * question the refresh decision asks.
  */
-export const AUDIT_CONTRACT_VERSION = "business-audit-contract-v6" as const;
+export const AUDIT_CONTRACT_VERSION = "business-audit-contract-v7" as const;
 
 /**
  * The oldest contract still treated as current.
@@ -323,12 +332,17 @@ export const AUDIT_CONTRACT_VERSION = "business-audit-contract-v6" as const;
  * obsolete every stored audit: a change that adds something without
  * invalidating older results can raise the current version and leave the
  * minimum alone. Today they are equal, and v4 is the second time that has been
- * the right call: a v3 audit ranked a lens's importance on a scale that no
- * longer exists, so its "these are your three biggest problems" is not an
- * answer this contract would give. The findings were fine; the ordering was
- * the product.
+ * the right call. Contract v7 adds nullable diagnostic lens scores without
+ * invalidating v6's qualitative health and priority judgment, so v6 remains
+ * the supported minimum while new audits write v7.
  */
 export const MIN_SUPPORTED_AUDIT_CONTRACT_VERSION = "business-audit-contract-v6" as const;
+
+/** Additive contracts that remain truthful current answers. */
+export const SUPPORTED_AUDIT_CONTRACT_VERSIONS = [
+  MIN_SUPPORTED_AUDIT_CONTRACT_VERSION,
+  AUDIT_CONTRACT_VERSION,
+] as const;
 
 /**
  * How a conclusion reads, not how severe it is.

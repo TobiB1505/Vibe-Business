@@ -9,12 +9,12 @@ import { fontVariables } from "./fonts";
 import "./globals.css";
 
 /**
- * The two product typefaces are declared in `./fonts.ts` and exposed to the
- * design tokens as CSS variables (`--font-sans` / `--font-mono` in
- * globals.css).
+ * The technical typeface is declared in `./fonts.ts` and exposed to the
+ * design tokens as `--font-mono`. The product UI uses the native interface
+ * stack declared as `--font-sans` in globals.css.
  *
- * They are self-hosted from files in this repository, so a build needs no
- * network access for them and a page makes no third-party font request.
+ * The bundled face is self-hosted, so a build needs no network access and a
+ * page makes no third-party font request.
  * Components must reach them through `font-sans` / `font-mono`; a
  * `font-family` declaration anywhere else in the codebase is a bug.
  */

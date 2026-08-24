@@ -3,9 +3,9 @@
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { MonoLabel } from "@/components/ui/typography";
-import { buildBusinessMap, type BusinessMap as BusinessMapModel } from "@/modules/business-audit/map-view";
 import type { AuditSynthesis, BusinessLens, BusinessReadinessAudit } from "@/modules/business-audit/schema";
-import { BusinessMap } from "../../projects/[projectId]/business-map";
+import { buildBusinessBrainView } from "@/modules/projects/business-brain-view";
+import { BusinessMap } from "../../projects/[projectId]/business-brain/business-map";
 import { revealAuditAndFindFirstMoveAction } from "./actions";
 
 export function OnboardingAuditReveal({
@@ -16,10 +16,16 @@ export function OnboardingAuditReveal({
   projectId: string;
 }) {
   const synthesis: AuditSynthesis | null = audit.synthesis ?? null;
-  const map: BusinessMapModel | null = synthesis ? buildBusinessMap(synthesis) : null;
+  const view = buildBusinessBrainView({
+    audit,
+    lastScanAt: audit.generatedAt,
+    auditReadings: [],
+    movesByConclusion: {},
+  });
   const [selected, setSelected] = useState<BusinessLens | null>(
     synthesis?.blockers[0]?.lenses[0] ?? null,
   );
+  const [hovered, setHovered] = useState<BusinessLens | null>(null);
   const reveal = revealAuditAndFindFirstMoveAction.bind(null, projectId);
   const blocker = synthesis?.blockers[0] ?? null;
 
@@ -35,9 +41,15 @@ export function OnboardingAuditReveal({
         )}
       </header>
 
-      {map && (
+      {view && (
         <section className="border-line-2 bg-surface-1 overflow-hidden rounded-2xl border p-3 sm:p-5">
-          <BusinessMap map={map} score={audit.overall.score} selected={selected} onSelect={setSelected} />
+          <BusinessMap
+            view={view}
+            selected={selected}
+            hovered={hovered}
+            onSelect={setSelected}
+            onHover={setHovered}
+          />
         </section>
       )}
 

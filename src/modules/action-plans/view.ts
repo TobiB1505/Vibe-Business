@@ -13,7 +13,7 @@ import type {
  * kept separate from the components that render it — the same split
  * `opportunities/view.ts` already draws. Nothing here is a React component
  * and nothing here imports one, so this stays testable without a DOM and
- * reusable by both the `/moves` panel and onboarding's First Move summary.
+ * reusable by both the Action Plan's panel and onboarding's First Move summary.
  *
  * The rule this file exists to enforce: a component may render `StepActor`,
  * `ExecutionSupport` or a `PlanStalenessReason` only through a lookup here.

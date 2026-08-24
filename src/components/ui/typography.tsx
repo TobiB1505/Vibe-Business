@@ -32,6 +32,13 @@ export function MonoLabel({
   return (
     <Component
       id={id}
+      /*
+       * A stable hook for the account dashboard's density budget. Counting
+       * these is how "at most one labelled metadata pair per card" becomes an
+       * assertion instead of an intention — matching on the class list would
+       * break the moment the ramp moves.
+       */
+      data-mono-label=""
       className={cn(
         "text-fg-meta font-mono text-[0.65625rem] tracking-[0.16em] uppercase",
         className,

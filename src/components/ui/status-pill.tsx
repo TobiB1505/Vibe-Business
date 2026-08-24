@@ -4,9 +4,10 @@ import { cn } from "@/lib/utils/cn";
 /**
  * Status pills (UI-0).
  *
- * Mono, uppercase, wide tracking — because a status is a machine state, and
- * the type system says machine output is mono. The label is always rendered as
- * text, so the state never depends on colour alone.
+ * Compact, uppercase and explicit. Statuses use the interface face rather
+ * than the technical mono face: they are decisions for a person to read, not
+ * log output. The label is always rendered as text, so state never depends on
+ * colour alone.
  *
  * The tones are deliberately more specific than the palette:
  *
@@ -132,7 +133,7 @@ export function StatusPill({
     <span
       className={cn(
         "inline-flex items-center gap-2 rounded-full border px-3 py-1",
-        "font-mono text-[0.65625rem] tracking-[0.1em] uppercase",
+        "text-[0.65625rem] font-semibold tracking-[0.06em] uppercase",
         TONE_CLASSES[tone],
         className,
       )}
@@ -152,7 +153,7 @@ export function CategoryChip({ children, className }: { children: ReactNode; cla
     <span
       className={cn(
         "bg-surface-hover border-line-4 text-fg-prose inline-flex items-center rounded-full border px-2.5 py-1",
-        "font-mono text-[0.65625rem] lowercase",
+        "text-[0.65625rem] font-medium lowercase",
         className,
       )}
     >

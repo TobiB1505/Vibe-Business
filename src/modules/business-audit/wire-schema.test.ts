@@ -55,11 +55,10 @@ describe("ANTHROPIC_AUDIT_OUTPUT_SCHEMA", () => {
      * the same lesson. Grow this deliberately, not by accident.
      */
     expect(metrics.objectCount).toBe(4);
-    // One per dimension key would be 5. The single union is `score`'s
-    // integer-or-null: CORE-2a.1 deliberately did NOT add a second one for
-    // `whyItMatters`, and CORE-2a.3 added nine lens assessments without adding
-    // one either — every lens field is a plain string, enum or array.
-    expect(metrics.unionCount).toBe(1);
+    // One per dimension key would be 5. The two unions are the dimension score
+    // and the lens diagnostic score, each integer-or-null and each declared
+    // once. `whyItMatters` deliberately remains a required string on the wire.
+    expect(metrics.unionCount).toBe(2);
   });
 
   it("keeps the structured-outputs subset: every object closed, every property required", () => {

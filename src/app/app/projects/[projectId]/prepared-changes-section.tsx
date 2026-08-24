@@ -161,11 +161,14 @@ export function PreparedChangesSection({
              * header when the browser jumps to it — without it the fragment
              * lands with the heading hidden behind the chrome.
              *
-             * The card itself is unchanged: no new state, no new layout, no
-             * redesign (§53).
+             * The card is a level-2 panel (CORE-5). It used to be a
+             * hand-rolled `rounded-lg border border-line-2`, which is what the
+             * surface system exists to stop being written by hand — and, on a
+             * page whose one primary object is the agent card above, a panel is
+             * also the right level for it.
              */
             id={preparedChangeAnchorId(change.id)}
-            className="scroll-mt-24 space-y-3 rounded-lg border border-line-2 p-4 target:border-mint/50"
+            className="rounded-panel bg-surface-3 border-line-3 scroll-mt-24 space-y-3 border p-5 target:border-mint/50"
             data-testid="prepared-change"
             data-prepared-change-id={change.id}
           >
@@ -191,26 +194,53 @@ export function PreparedChangesSection({
                 stronger. In practice: every agent-produced change. */}
             {!change.rationale && <ChangeOrigin origin={change.origin} />}
 
-            {/* How it was built, demoted to where it belongs: true, checkable,
-                and not the first thing anyone needs. */}
-            <div className="space-y-1 border-t border-line-2 pt-3">
-              <p className="font-mono text-xs text-fg-muted">
-                {change.branchName}
-                {" · "}
-                {change.commitSha ? `${change.commitSha.slice(0, 7)} on ${change.baseBranch}` : change.baseBranch}
-                {" · "}
-                {change.filePaths.length} file{change.filePaths.length === 1 ? "" : "s"}
-              </p>
+            {/*
+              * How it was built (UI-5; folded by CORE-5).
+              *
+              * UI-5 moved this below the meaning, which was the important half.
+              * What it left above the fold was still a branch name, a short
+              * SHA, a base branch and every changed path in mono — a build log,
+              * on the screen that is meant to read as a colleague's work.
+              *
+              * It is one click away now rather than gone. Every path is still
+              * there, still exact, still copyable: checkability is the point of
+              * this product, and a founder who wants to know precisely which
+              * files moved must always be able to find out. What changed is
+              * that they are asked for rather than presented first.
+              *
+              * The two links stay outside the fold. A stalled change's compare
+              * link is the only way forward from that state, and "the work is
+              * still on its branch" is reassurance that must not be hidden
+              * behind a disclosure.
+              */}
+            <details className="group space-y-2 border-t border-line-2 pt-3">
+              <summary className="cursor-pointer list-none text-xs text-fg-muted hover:text-fg-prose">
+                <span className="group-open:hidden">
+                  How this was built — {change.filePaths.length} file
+                  {change.filePaths.length === 1 ? "" : "s"} changed
+                </span>
+                <span className="hidden group-open:inline">How this was built</span>
+              </summary>
 
-              {/* Paths only. File contents live on the branch, never in our rows. */}
-              <ul className="space-y-0.5">
-                {change.filePaths.map((path) => (
-                  <li key={path} className="font-mono text-xs text-fg-meta">
-                    {path}
-                  </li>
-                ))}
-              </ul>
+              <div className="rounded-well border-line-2 bg-well space-y-1 border p-3">
+                <p className="font-mono text-xs text-fg-muted">
+                  {change.branchName}
+                  {" · "}
+                  {change.commitSha ? `${change.commitSha.slice(0, 7)} on ${change.baseBranch}` : change.baseBranch}
+                </p>
 
+                {/* Paths only. File contents live on the branch, never in our rows. */}
+                <ul className="space-y-0.5">
+                  {change.filePaths.map((path) => (
+                    <li key={path} className="font-mono text-xs text-fg-meta">
+                      {path}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </details>
+
+            <div className="space-y-1">
               {change.branchUrl && (
                 <a
                   href={change.branchUrl}

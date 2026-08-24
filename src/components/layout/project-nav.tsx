@@ -22,22 +22,23 @@ import { cn } from "@/lib/utils/cn";
  *
  * ## Matching
  *
- * Overview is the index route, so it is active only on an exact match —
+ * Home is the index route, so it is active only on an exact match —
  * `startsWith` would light it up on every child route. Every other section is
- * matched exactly too, with the boundary check reserved for future child routes
- * (a prepared-change detail page would keep "Prepared" active).
+ * matched exactly too, with the boundary check carrying the real child routes:
+ * `/product/deep-scan` keeps My Product active, and `/settings/activity` keeps
+ * Settings active.
  *
  * ## On a phone this is a strip, and it had two problems (UI-7 §6)
  *
- * Eight sections scroll sideways in a container about three of them wide, and
+ * The sections scroll sideways in a container about three of them wide, and
  * nothing said so: no fade, no cut-off item, just a row that appeared to end
- * after "Business score". Half the workspace was undiscoverable unless you
- * happened to swipe a list that did not look like a list.
+ * partway through. Half the workspace was undiscoverable unless you happened to
+ * swipe a list that did not look like a list.
  *
- * Worse, the active item was not brought into view. Open Impact or Activity on
- * a phone and the strip showed Overview through Business score, with nothing
- * marked current anywhere on screen — so the one job the active state has,
- * telling you where you are, failed exactly where orientation is hardest.
+ * Worse, the active item was not brought into view. Open one of the later
+ * sections on a phone and the strip showed the first few, with nothing marked
+ * current anywhere on screen — so the one job the active state has, telling you
+ * where you are, failed exactly where orientation is hardest.
  */
 export function ProjectNav({ items }: { items: ProjectNavItem[] }) {
   const pathname = usePathname();
@@ -61,9 +62,9 @@ export function ProjectNav({ items }: { items: ProjectNavItem[] }) {
   function isActive(href: string): boolean {
     if (pathname === href) return true;
     // A child route keeps its parent section active — but only at a real path
-    // boundary, so `/prepared` never matches `/prepared-something-else`.
-    const overviewHref = items.find((item) => item.id === "overview")?.href;
-    if (href === overviewHref) return false;
+    // boundary, so `/product` never matches `/product-something-else`.
+    const homeHref = items.find((item) => item.id === "home")?.href;
+    if (href === homeHref) return false;
     return pathname.startsWith(`${href}/`);
   }
 

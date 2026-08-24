@@ -204,7 +204,7 @@ describe("every fixture names a surface this repository actually has", () => {
     contact: ["src/app/contact/page.tsx"],
     blog_content: ["src/app/blog/page.tsx"],
     onboarding: ["src/app/app/onboarding/page.tsx"],
-    dashboard_app: ["src/app/app/page.tsx"],
+    dashboard_app: ["src/app/app/(account)/page.tsx"],
   };
 
   it("knows where every surface the fixtures name would live", () => {

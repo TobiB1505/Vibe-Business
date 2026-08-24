@@ -185,8 +185,8 @@ const CONCLUSION_ITEM_SCHEMA = {
  * Deliberately lean. This is the audit's working-out, not its output, and every
  * field added here is compiled into the grammar and generated on every run —
  * so it carries its health, its materiality, a short internal note and its
- * grounding, and nothing else. No score: the five dimensions are the scored
- * layer and giving the lenses numbers too would invite the two to disagree.
+ * grounding, and an evidence-grounded diagnostic score. The lens scores do
+ * not replace the five scored dimensions or determine the overall score.
  *
  * `health` and `materiality` are two fields rather than one because they are
  * two questions (CORE-2a.3.1 §3). When there was only a state enum with no way
@@ -205,6 +205,11 @@ const LENS_ITEM_SCHEMA = {
       description:
         "How this area of the business ACTUALLY LOOKS. Say weak when it is genuinely poor; unclear means the evidence does not settle it, not that the answer is uncomfortable. Never a statement about priority.",
     },
+    score: {
+      anyOf: [{ type: "integer", minimum: 0, maximum: 100 }, { type: "null" }],
+      description:
+        "Evidence-grounded diagnostic score for this lens. Use null when health is unclear or blocked, evidence is insufficient, or a precise score is not defensible. Never turn missing evidence into zero.",
+    },
     materiality: {
       type: "string",
       enum: [...LENS_MATERIALITY],
@@ -222,7 +227,15 @@ const LENS_ITEM_SCHEMA = {
       description: "What only the founder could tell you. Empty unless the lens is blocked on it.",
     },
   },
-  required: ["lens", "health", "materiality", "summary", "evidenceIds", "missingContext"],
+  required: [
+    "lens",
+    "health",
+    "score",
+    "materiality",
+    "summary",
+    "evidenceIds",
+    "missingContext",
+  ],
   additionalProperties: false,
 } as const;
 

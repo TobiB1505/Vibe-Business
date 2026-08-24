@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
 /**
  * The auth screens, in a real browser, against a production build.
@@ -18,6 +18,37 @@ import { expect, test } from "@playwright/test";
  * dogfooding against a real project — which has not happened for this sprint.
  * Nothing here should be read as evidence that Google sign-in works.
  */
+
+/**
+ * Wait for React to take a progressively-enhanced form over before clicking it.
+ *
+ * The three tests below assert a *pending* state: a click flips a
+ * `useActionState` transition and the control disables itself. That is only
+ * true once React has hydrated. Before it, the same click is a native form
+ * POST — the browser leaves the page, and the assertion fails with "waiting
+ * for navigation to finish" against a control that no longer exists.
+ *
+ * That race was being lost intermittently, in whichever of these three tests
+ * happened to run first on a cold worker. The route hold in the Google test
+ * removed a *different* race (the hand-off completing before the assertions
+ * ran) and could never address this one, because this one happens before any
+ * request is made.
+ *
+ * `__reactFiber$…` is a React internal, used deliberately: it is the only
+ * signal that says "React has attached to *this* element", which is exactly
+ * the precondition. Nothing on these pages changes visibly on hydration, so
+ * there is no product-level marker to wait for instead — and inventing one
+ * would mean changing shipped code to suit a test.
+ */
+async function waitForHydration(page: Page, testId: string): Promise<void> {
+  await page.waitForFunction(
+    (id) => {
+      const element = document.querySelector(`[data-testid="${id}"]`);
+      return Boolean(element) && Object.keys(element!).some((key) => key.startsWith("__reactFiber$"));
+    },
+    testId,
+  );
+}
 
 test.describe("the login screen at rest", () => {
   test("offers both ways in, with nothing disabled", async ({ page }) => {
@@ -52,6 +83,7 @@ test.describe("submitting the email form", () => {
 
     await page.getByLabel("Email address").fill("user@example.com");
     await page.getByLabel("Password").fill("hunter22");
+    await waitForHydration(page, "email-signin");
     await page.getByTestId("email-signin").click();
 
     // Supabase is unreachable here, so the pending window is long enough to
@@ -111,6 +143,8 @@ test.describe("starting Google sign-in", () => {
     await page.route("**e2e-placeholder.supabase.co/**", () => {
       // Deliberately never settled.
     });
+
+    await waitForHydration(page, "google-signin");
 
     await page.getByTestId("google-signin").click();
 
@@ -260,7 +294,24 @@ test.describe("password recovery", () => {
     page,
   }) => {
     await page.goto("/forgot-password");
+
+    /*
+     * Hold the request open, the same way the Google hand-off test does and
+     * for the same reason: the assertion below is only true *while* the
+     * submission is in flight.
+     *
+     * Supabase is unreachable here, so the request fails at DNS — and a DNS
+     * failure is not reliably slow. When it resolved quickly the pending
+     * window closed before the assertion ran, the button was enabled again,
+     * and the test failed claiming a control that cannot be double-submitted
+     * can be. Roughly one run in ten.
+     */
+    await page.route("**e2e-placeholder.supabase.co/**", () => {
+      // Deliberately never settled.
+    });
+
     await page.getByLabel("Email address").fill("user@example.com");
+    await waitForHydration(page, "send-reset-link");
     await page.getByTestId("send-reset-link").click();
 
     await expect(page.getByTestId("send-reset-link")).toBeDisabled();

@@ -420,5 +420,15 @@ export async function completeOnboardingAction(projectId: string): Promise<void>
     // the log should not flatten them into one.
     auditParked: surface === "parked_no_live_product",
   });
-  redirect(`/app/projects/${projectId}`);
+  /*
+   * The account dashboard, not the product workspace.
+   *
+   * Onboarding used to hand a founder straight into `/app/projects/{id}`,
+   * which meant nobody had ever seen `/app` after finishing setup — the screen
+   * that exists to say where everything stands was reachable only by typing
+   * the URL or by clicking the logo. Landing here is also what makes a second
+   * product discoverable: the workspace has no route to the level above it
+   * except the rail's own exit.
+   */
+  redirect("/app");
 }

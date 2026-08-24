@@ -6,6 +6,7 @@ import {
 } from "@/app/app/projects/[projectId]/prepared-changes-section";
 import { IntelligenceSummary } from "@/app/app/projects/[projectId]/intelligence-summary";
 import { AuditOverview } from "@/app/app/projects/[projectId]/audit-overview";
+import { buildBusinessBrainView } from "@/modules/projects/business-brain-view";
 import { AuditCreditNotice } from "@/app/app/projects/[projectId]/audit-credit-notice";
 import { RunAuditButton } from "@/app/app/projects/[projectId]/run-audit-button";
 import { auditBlockedByCredits } from "@/modules/business-audit/entitlement";
@@ -20,12 +21,33 @@ import {
   isE2eActionPlanScenario,
 } from "../action-plan-scenarios";
 import { E2E_AUDIT_SCENARIOS, isE2eAuditScenario } from "../audit-scenarios";
+import {
+  E2E_AGENT_SCENARIOS,
+  E2E_HOME_SCENARIOS,
+  isE2eAgentScenario,
+  isE2eHomeScenario,
+} from "../command-center-scenarios";
+import { AgentPanel } from "@/app/app/projects/[projectId]/agent-panel";
+import { HomeStatus } from "@/app/app/projects/[projectId]/home-status";
 import { AppErrorPreview } from "../app-error-preview";
 import {
   E2E_AUDIT_CREDIT_SCENARIOS,
   isE2eAuditCreditScenario,
 } from "../audit-credit-scenarios";
 import { E2E_NEEDS_USER_SCENARIOS, isE2eNeedsUserScenario } from "../needs-user-scenarios";
+import {
+  E2E_ACCOUNT_SCENARIOS,
+  E2E_PRODUCTS_SCENARIOS,
+  E2E_REPOSITORIES_SCENARIOS,
+  isE2eAccountScenario,
+  isE2eProductsScenario,
+  isE2eRepositoriesScenario,
+} from "../account-scenarios";
+import { AccountHome } from "@/app/app/account-home";
+import { ProductsIndex } from "@/app/app/(account)/products/products-index";
+import { RepositoriesIndex } from "@/app/app/(account)/repositories/repositories-index";
+import { AccountMenu } from "@/components/layout/account-menu";
+import { AccountShell, AccountSidebar } from "@/components/layout/account-shell";
 import { E2E_SCENARIOS, isE2eScenario } from "../scenarios";
 import { E2E_INTELLIGENCE_SCENARIOS, isE2eIntelligenceScenario } from "../intelligence-scenarios";
 import {
@@ -43,7 +65,7 @@ import { RetryProductScan } from "@/app/app/onboarding/[projectId]/phase-actions
 import { UnderstandingStatus } from "@/app/app/onboarding/[projectId]/understanding-status";
 import { OpportunitiesPanel } from "@/app/app/projects/[projectId]/opportunities-panel";
 import { ProductLogo } from "@/components/brand/product-logo";
-import { BillingView } from "@/app/app/billing/billing-view";
+import { BillingView } from "@/app/app/(account)/billing/billing-view";
 import { E2E_BILLING_SCENARIOS, isE2eBillingScenario } from "../billing-scenarios";
 import { E2E_MOVES_SCENARIOS, isE2eMovesScenario } from "../moves-scenarios";
 import {
@@ -164,11 +186,17 @@ export default async function E2eScenarioPage({
           stale={fixture.stale}
           activeOperation={null}
           blockedReason={fixture.blockedReason}
-          auditHref="/app/projects/project_e2e/score"
+          auditHref="/app/projects/project_e2e#business-audit"
+          blockedDestinations={{
+            product: "/app/projects/project_e2e/product",
+            audit: "/app/projects/project_e2e#business-audit",
+            moves: "/app/projects/project_e2e/plan",
+            repository: "/app/projects/project_e2e/settings",
+          }}
           lineage={fixture.lineage}
           movesContext={fixture.movesContext}
-          movesHref="/app/projects/project_e2e/moves"
-          preparedHref="/app/projects/project_e2e/prepared"
+          movesHref="/app/projects/project_e2e/plan"
+          preparedHref="/app/projects/project_e2e/agent"
           plannedOpportunityId={null}
         />
       </main>
@@ -347,26 +375,162 @@ export default async function E2eScenarioPage({
     return <AppErrorPreview digest={scenario === "app-error" ? "1813753987@E394" : undefined} />;
   }
 
+  /*
+   * The Command Center's two new surfaces (CORE-5).
+   *
+   * Both render the real component over a view model the real builder
+   * produced, so what the browser checks is the same decision the unit tests
+   * check — one layer further out.
+   */
+  /*
+   * The account dashboard, rendered through the same component `/app` renders.
+   * The density budget in `e2e/account-dashboard.spec.ts` counts this screen,
+   * so a composition assembled here instead would measure nothing real.
+   */
+  if (isE2eAccountScenario(scenario)) {
+    return (
+      <AccountShell
+        sidebar={
+          <AccountSidebar
+            credits="2,480"
+            footer={
+              <AccountMenu
+                identity={{
+                  displayName: "Tobi",
+                  initials: "TB",
+                  avatarUrl: null,
+                  fromGithub: true,
+                }}
+              />
+            }
+          />
+        }
+      >
+        <div className="sr-only">{label}</div>
+        <AccountHome projects={E2E_ACCOUNT_SCENARIOS[scenario]()} />
+      </AccountShell>
+    );
+  }
+
+  if (isE2eProductsScenario(scenario)) {
+    return (
+      <AccountShell
+        sidebar={
+          <AccountSidebar
+            credits="2,480"
+            footer={
+              <AccountMenu
+                identity={{
+                  displayName: "Tobi",
+                  initials: "TB",
+                  avatarUrl: null,
+                  fromGithub: true,
+                }}
+              />
+            }
+          />
+        }
+      >
+        <div className="sr-only">{label}</div>
+        <ProductsIndex products={E2E_PRODUCTS_SCENARIOS[scenario]()} />
+      </AccountShell>
+    );
+  }
+
+  if (isE2eRepositoriesScenario(scenario)) {
+    return (
+      <AccountShell
+        sidebar={
+          <AccountSidebar
+            credits="2,480"
+            footer={
+              <AccountMenu
+                identity={{
+                  displayName: "Tobi",
+                  initials: "TB",
+                  avatarUrl: null,
+                  fromGithub: true,
+                }}
+              />
+            }
+          />
+        }
+      >
+        <div className="sr-only">{label}</div>
+        <RepositoriesIndex
+          repositories={E2E_REPOSITORIES_SCENARIOS[scenario]()}
+          githubLogin={scenario === "account-repositories-empty" ? null : "TobiB1505"}
+        />
+      </AccountShell>
+    );
+  }
+
+  if (isE2eHomeScenario(scenario)) {
+    return (
+      <main className="mx-auto max-w-[70rem] p-8">
+        {label}
+        <HomeStatus
+          view={E2E_HOME_SCENARIOS[scenario]()}
+          planHref="/app/projects/project_e2e/plan"
+          agentHref="/app/projects/project_e2e/agent"
+          productHref="/app/projects/project_e2e/product"
+          healthHref="/app/projects/project_e2e#business-audit"
+        />
+      </main>
+    );
+  }
+
+  if (isE2eAgentScenario(scenario)) {
+    return (
+      <main className="mx-auto max-w-[70rem] p-8">
+        {label}
+        <AgentPanel
+          context={E2E_AGENT_SCENARIOS[scenario]()}
+          preparedCount={scenario === "agent-ready" ? 2 : 0}
+          planHref="/app/projects/project_e2e/plan"
+          productHref="/app/projects/project_e2e/product"
+          executionHref={null}
+        />
+      </main>
+    );
+  }
+
   if (isE2eAuditScenario(scenario)) {
     const auditResult = E2E_AUDIT_SCENARIOS[scenario]();
     const hasMoves = scenario !== "audit-synthesis-no-moves";
+    const view = buildBusinessBrainView({
+      audit: auditResult,
+      lastScanAt: auditResult.generatedAt,
+      auditReadings: [],
+      movesByConclusion: hasMoves ? { "blocker-1": 2, "blocker-2": 1 } : {},
+      moveByConclusion: hasMoves
+        ? {
+            "blocker-1": {
+              title: "Make pricing visible",
+              impact: "high",
+              effort: "medium",
+            },
+            "blocker-2": {
+              title: "Measure the customer journey",
+              impact: "medium",
+              effort: "medium",
+            },
+          }
+        : {},
+      usedSignedInEvidence: true,
+    });
     return (
       <main className="mx-auto max-w-[90rem] p-8">
         {label}
-        <AuditOverview
-          audit={auditResult}
-          generatedAt={auditResult.generatedAt}
-          movesHref="/app/projects/project_e2e/moves"
-          hasMoves={hasMoves}
-          /*
-           * The lineage the real page computes (UI-S2 §8). Two Moves on the
-           * top blocker and one on the second, so the browser can check that
-           * the primary priority carries its key, that a secondary priority
-           * gets a quieter link, and that a blocker with nothing behind it
-           * gets no link at all.
-           */
-          movesByConclusion={hasMoves ? { "blocker-1": 2, "blocker-2": 1 } : {}}
-        />
+        {view ? (
+          <AuditOverview
+            view={view}
+            movesHref="/app/projects/project_e2e/plan"
+            hasMoves={hasMoves}
+          />
+        ) : (
+          <p>This fixture predates the Business Brain.</p>
+        )}
       </main>
     );
   }
@@ -388,8 +552,8 @@ export default async function E2eScenarioPage({
           readiness={fixture.readiness}
           planView={fixture.planView}
           activeOperation={fixture.activeOperation}
-          auditHref="/app/projects/project_e2e/score"
-          understandingHref="/app/projects/project_e2e/understanding"
+          auditHref="/app/projects/project_e2e#business-audit"
+          understandingHref="/app/projects/project_e2e/product"
         />
       </main>
     );

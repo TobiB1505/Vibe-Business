@@ -57,7 +57,7 @@ export default async function AgentDogfoodPage({
           title="No Action Plan yet"
           description="The coding agent starts from a real Action Plan step. Plan a Move for this project first — from its current top opportunity — then come back here."
           action={
-            <Link href={`/app/projects/${projectId}/moves`} className={buttonClasses({ variant: "primary", size: "sm" })}>
+            <Link href={`/app/projects/${projectId}/plan`} className={buttonClasses({ variant: "primary", size: "sm" })}>
               Go to Moves
             </Link>
           }

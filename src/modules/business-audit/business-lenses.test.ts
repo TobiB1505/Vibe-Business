@@ -20,6 +20,7 @@ function lens(overrides: Record<string, unknown> = {}) {
   return {
     lens: "offer",
     health: "adequate",
+    score: 60,
     materiality: "soon",
     summary: "Internal reasoning.",
     evidenceIds: ["live.site.title"],
@@ -120,8 +121,19 @@ describe("no forced coverage (§15, §44)", () => {
   });
 
   it("keeps an unclear lens rather than forcing a verdict", () => {
-    const result = audit([lens({ lens: "acquisition", health: "unclear" })]);
+    const result = audit([lens({ lens: "acquisition", health: "unclear", score: null })]);
     expect(synthesisOf(result).lenses[0]!.health).toBe("unclear");
+    expect(synthesisOf(result).lenses[0]!.score).toBeNull();
+  });
+
+  it("keeps lens scores honest and nulls contradictions", () => {
+    const result = audit([
+      lens({ lens: "offer", health: "strong", score: 82 }),
+      lens({ lens: "audience", health: "weak", score: 74 }),
+      lens({ lens: "scalability", health: "unclear", score: 0 }),
+    ]);
+
+    expect(synthesisOf(result).lenses.map((entry) => entry.score)).toEqual([82, null, null]);
   });
 });
 

@@ -4,10 +4,9 @@ import { cn } from "@/lib/utils/cn";
 /**
  * The button system (UI-0).
  *
- * Every interactive control is a full pill — that is a rule of the visual
- * system, not a per-button choice. The variants below are the complete set;
- * a screen that needs a sixth should get a design decision, not a one-off
- * `className`.
+ * Interactive controls use the same restrained radius as navigation. Pills
+ * remain reserved for statuses and filters; using them for every action made
+ * the product feel softer and less precise than the work it performs.
  *
  * `primary` is mint, and mint means Vibe. One primary per screen area. A
  * destructive control never borrows the accent, which is why `danger` is coral
@@ -31,7 +30,7 @@ const SIZE_CLASSES: Record<ButtonSize, string> = {
 };
 
 const BASE_CLASSES =
-  "inline-flex items-center justify-center gap-2 rounded-full " +
+  "inline-flex items-center justify-center gap-2 rounded-nav " +
   // Not `transition-colors`: that list includes `outline-color`, which would
   // fade the focus ring in over 150ms, so the indicator arrives after the
   // keyboard user has already started deciding where they are. This file
@@ -61,18 +60,15 @@ export function buttonClasses({
 export const buttonClassName = buttonClasses();
 
 /**
- * The one control that is not a pill (UI-6 §1).
+ * The one control that is visually inline rather than contained (UI-6 §1).
  *
  * ## Why this exists rather than a fifth `Button` variant
  *
- * Because the pill rule above is real and worth keeping: a `Button` is always
- * a pill, and a variant that was not one would make that sentence false.
- *
- * But nine controls in this product are genuinely not buttons in the visual
+ * Nine controls in this product are genuinely not buttons in the visual
  * sense — "Sign out" in the header, "Change" beside a value, "More context"
  * under a paragraph, "Cancel" beside a form's real action. Rendering those as
- * pills would give a header two competing controls and turn every inline
- * affordance into furniture. They were written nine separate times instead,
+ * contained buttons would give a header two competing controls and turn every
+ * inline affordance into furniture. They were written nine separate times instead,
  * each with its own size, colour and hover, which is how a third button system
  * appears without anyone deciding to build one.
  *

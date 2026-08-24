@@ -96,7 +96,7 @@ export function StatusView({
           label="ready for review"
           action={
             <Link
-              href={`/app/projects/${projectId}/prepared`}
+              href={`/app/projects/${projectId}/agent`}
               className="text-mint text-sm font-semibold underline underline-offset-2"
             >
               Review change
