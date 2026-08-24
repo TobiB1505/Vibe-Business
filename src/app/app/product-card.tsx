@@ -6,7 +6,7 @@ import { statusToneText, type StatusTone } from "@/components/ui/status-pill";
 import { Surface } from "@/components/ui/surface";
 import { formatDate } from "@/lib/utils/format-datetime";
 import { cn } from "@/lib/utils/cn";
-import { initialsFrom } from "@/modules/auth/identity-view";
+import { initialsFrom } from "@/modules/auth/initials";
 import type { DashboardProject } from "@/modules/projects/dashboard";
 import { buildScoreSeries } from "@/modules/projects/score-series";
 

@@ -11,7 +11,7 @@ import { Sparkline } from "@/components/ui/sparkline";
 import { StatusPill, statusToneText, type StatusTone } from "@/components/ui/status-pill";
 import { formatDate } from "@/lib/utils/format-datetime";
 import { cn } from "@/lib/utils/cn";
-import { initialsFrom } from "@/modules/auth/identity-view";
+import { initialsFrom } from "@/modules/auth/initials";
 import type { ProductOverviewItem } from "@/modules/projects/product-summary";
 import { buildScoreSeries } from "@/modules/projects/score-series";
 import { productListStatus } from "./product-list-state";

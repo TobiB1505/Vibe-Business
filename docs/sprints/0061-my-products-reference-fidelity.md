@@ -44,7 +44,12 @@ contains an `await`, and the dashboard cost contract now guards this module expl
   score sorting and no horizontal overflow at 1440, 1024, 768 and 375 pixels.
 - Production build: the normal Turbopack build again remained in “Creating an optimized production
   build” without an error and was stopped after one minute. UI-8 records the same behaviour and the
-  pre-existing diagnostic Webpack `node:crypto` failure; this record does not call the build green.
+  pre-existing diagnostic Webpack `node:crypto` failure; this record does not call the local build
+  green. The first hosted build caught a separate real boundary defect: the interactive product
+  card imported `initialsFrom` from the account identity module, which also imports server-only
+  GitHub access. The pure formatter now lives in `auth/initials.ts`, both product cards import that
+  client-safe module, and a source contract prevents the server-only edge from returning. Hosted
+  rebuild verification is pending the fix commit being pushed.
 - Browser preview comparison: pending. Repository policy prevents starting branch code outside the
   approved isolated runtime, and this repository has no Sites hosting configuration. The existing
   Vercel preview remains the correct safe dogfood surface after push.

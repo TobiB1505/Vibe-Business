@@ -1,5 +1,8 @@
 import { githubAvatarUrl } from "@/modules/github/identity";
 import type { GithubIdentity } from "@/modules/github/types";
+import { initialsFrom } from "./initials";
+
+export { initialsFrom } from "./initials";
 
 /**
  * Who to show in the account rail (CORE-6).
@@ -35,26 +38,6 @@ export type AccountIdentity = {
   /** True when the name came from GitHub rather than from an address. */
   fromGithub: boolean;
 };
-
-/**
- * Two characters where the handle has two parts, otherwise the first two of
- * the single token.
- *
- * Splitting on separators first is what makes `ada-lovelace` read as `AL`
- * rather than `AD`. Digits are kept — a login like `tobib1505` is one token and
- * `TO` is the honest shorthand for it.
- */
-export function initialsFrom(handle: string): string {
-  const parts = handle
-    .split(/[^\p{L}\p{N}]+/u)
-    .map((part) => part.trim())
-    .filter(Boolean);
-
-  if (parts.length === 0) return "";
-  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase();
-
-  return `${parts[0]![0]}${parts[1]![0]}`.toUpperCase();
-}
 
 export function buildAccountIdentity(input: {
   email: string | null;
