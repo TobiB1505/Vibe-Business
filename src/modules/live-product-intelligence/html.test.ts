@@ -172,3 +172,121 @@ describe("parseAttributes", () => {
     expect(parseAttributes(`HREF="/a"`)).toEqual({ href: "/a" });
   });
 });
+
+/**
+ * Prices a page declares about itself (schema.org `Offer`).
+ *
+ * The JSON-LD walk already ran on every page and kept only the `@type` values,
+ * throwing the payload away — so the one place a site states its own prices in
+ * machine-readable form was parsed and discarded. These are facts the operator
+ * published, which is why they are worth more than a number read off the
+ * rendered page: that could be a discount, a struck-through price, or an
+ * "from" figure.
+ */
+function ld(json: string): string {
+  return `<html><head><script type="application/ld+json">${json}</script></head><body></body></html>`;
+}
+
+describe("parseHtml — declared offers", () => {
+  it("reads a bare offer", () => {
+    const parsed = parseHtml(ld('{"@type":"Offer","price":"29.00","priceCurrency":"usd"}'));
+
+    expect(parsed.offers).toEqual([{ price: 29, currency: "USD", period: null, name: null }]);
+  });
+
+  /**
+   * The common real shape: the offer has no name, the product does. Carrying
+   * the enclosing name down the walk is what turns a bare amount into
+   * something a founder can recognise as one of their plans.
+   */
+  it("carries the product name down onto its offer", () => {
+    const parsed = parseHtml(
+      ld('{"@type":"Product","name":"Pro","offers":{"@type":"Offer","price":29,"priceCurrency":"EUR"}}'),
+    );
+
+    expect(parsed.offers).toEqual([{ price: 29, currency: "EUR", period: null, name: "Pro" }]);
+  });
+
+  it("reads a billing period from a unit code", () => {
+    const parsed = parseHtml(
+      ld(
+        '{"@type":"Offer","price":"9.99","priceCurrency":"GBP","priceSpecification":{"@type":"UnitPriceSpecification","price":"9.99","priceCurrency":"GBP","referenceQuantity":{"@type":"QuantitativeValue","unitCode":"MON"}}}',
+      ),
+    );
+
+    expect(parsed.offers.some((offer) => offer.period === "month")).toBe(true);
+  });
+
+  it("reads a billing period from an ISO 8601 duration", () => {
+    const parsed = parseHtml(
+      ld('{"@type":"Offer","price":"290","priceCurrency":"EUR","billingDuration":"P1Y"}'),
+    );
+
+    expect(parsed.offers[0]?.period).toBe("year");
+  });
+
+  /**
+   * A quarterly plan is not a monthly one.
+   *
+   * `P3M` states a real billing period this vocabulary has no name for, and
+   * rounding it to "month" would understate what a customer is charged by two
+   * thirds. Unnamed is the honest answer.
+   */
+  it("refuses a period it cannot name exactly", () => {
+    const parsed = parseHtml(
+      ld('{"@type":"Offer","price":"75","priceCurrency":"EUR","billingDuration":"P3M"}'),
+    );
+
+    expect(parsed.offers[0]?.period).toBeNull();
+    expect(parsed.offers[0]?.price).toBe(75);
+  });
+});
+
+/**
+ * What must be refused.
+ *
+ * A misparsed price is worse than a missing one: it reaches a founder as a
+ * statement about their own business. Every case here is dropped whole rather
+ * than half-recorded.
+ */
+describe("parseHtml — offers it declines to read", () => {
+  it.each([
+    ["no currency", '{"@type":"Offer","price":"29"}'],
+    ["a currency that is not a code", '{"@type":"Offer","price":"29","priceCurrency":"$"}'],
+    ["a price carrying its symbol", '{"@type":"Offer","price":"$29","priceCurrency":"USD"}'],
+    ["a comma-grouped price", '{"@type":"Offer","price":"1,299","priceCurrency":"USD"}'],
+    ["a range", '{"@type":"Offer","price":"29-99","priceCurrency":"USD"}'],
+    ["a negative price", '{"@type":"Offer","price":-5,"priceCurrency":"USD"}'],
+  ])("drops an offer with %s", (_case, json) => {
+    expect(parseHtml(ld(json)).offers).toEqual([]);
+  });
+
+  it("survives invalid JSON-LD without losing the rest of the page", () => {
+    const parsed = parseHtml(
+      `<html><head><title>Acme</title><script type="application/ld+json">{not json</script></head><body></body></html>`,
+    );
+
+    expect(parsed.offers).toEqual([]);
+    expect(parsed.title).toBe("Acme");
+    // The page still *declares* structured data, which is a fact about it.
+    expect(parsed.hasStructuredData).toBe(true);
+  });
+
+  it("caps how many it will record", () => {
+    const many = Array.from(
+      { length: 30 },
+      (_, index) => `{"@type":"Offer","price":${index + 1},"priceCurrency":"EUR"}`,
+    ).join(",");
+    const parsed = parseHtml(ld(`[${many}]`));
+
+    expect(parsed.offers.length).toBeGreaterThan(0);
+    expect(parsed.offers.length).toBeLessThanOrEqual(12);
+  });
+
+  it("still records the types it always did", () => {
+    // The walk was extended, not replaced. A regression here would silently
+    // change page classification, which reads these.
+    const parsed = parseHtml(ld('{"@type":"Product","name":"Pro"}'));
+    expect(parsed.structuredDataTypes).toContain("Product");
+  });
+});
