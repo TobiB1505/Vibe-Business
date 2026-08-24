@@ -188,8 +188,9 @@ describe("routes load only what they render", () => {
     }
   });
 
-  it("uses the cheap summary read where Home only needs a count", () => {
-    expect(source("page.tsx")).toContain("listPreparedChangeSummaries");
+  it("keeps Home on the shared Business Health read model", () => {
+    expect(source("page.tsx")).toContain("ProjectBusinessHealth");
+    expect(source("page.tsx")).not.toContain("listPreparedChangeSummaries");
     expect(source("page.tsx")).not.toContain("getPreparedChangeWorkspace");
   });
 

@@ -14,7 +14,7 @@ export default function Loading() {
     <WorkspaceSection
       id="business-audit"
       title="Business Health"
-      description="What Vibe makes of this product as a business, and what it would do about it."
+      description="Your whole business in one connected view — what is working, what matters and where to move next."
     >
       <SkeletonSection />
     </WorkspaceSection>

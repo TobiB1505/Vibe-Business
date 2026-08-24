@@ -275,14 +275,75 @@
   background:
     radial-gradient(
       circle at 30% 34%,
-      color-mix(in srgb, var(--color-mint) 9%, transparent),
-      transparent 46%
+      color-mix(in srgb, var(--color-mint) 16%, transparent),
+      transparent 42%
     ),
     radial-gradient(
-      circle at 88% 92%,
-      color-mix(in srgb, var(--color-amber) 3%, transparent),
-      transparent 36%
+      circle at 72% 78%,
+      color-mix(in srgb, var(--color-coral) 5%, transparent),
+      transparent 34%
     );
+}
+
+/*
+ * UI-11 — Business Health is the project's opening scene.
+ *
+ * The visual excess is deliberately bounded to this one surface. The map
+ * arrives as a connected system and then settles; selecting a real node is
+ * what wakes its real edges again. No infinite ambient compositor remains.
+ */
+.business-brain-stage {
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 38% 45%, rgb(0 229 160 / 0.055), transparent 38%),
+    linear-gradient(145deg, rgb(255 255 255 / 0.045), rgb(255 255 255 / 0.018));
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.07) inset,
+    0 40px 100px -48px rgb(0 0 0 / 0.95),
+    0 0 90px -62px rgb(0 229 160 / 0.55);
+}
+
+.business-brain-map::before {
+  position: absolute;
+  inset: 8%;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgb(0 229 160 / 0.08), transparent 66%);
+  content: "";
+  filter: blur(18px);
+  pointer-events: none;
+  animation: business-brain-bloom 1200ms var(--ease-vibe) both;
+}
+
+.business-brain-ring {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: business-brain-ring-in 800ms var(--ease-vibe) forwards;
+}
+
+.business-brain-spoke,
+.business-brain-connection {
+  opacity: 0;
+  animation: business-brain-edge-in 700ms var(--ease-vibe) forwards;
+}
+
+.business-brain-node {
+  opacity: 0;
+  filter: blur(5px);
+  animation: business-brain-node-in 560ms var(--ease-vibe) forwards;
+}
+
+.business-brain-core {
+  opacity: 0;
+  scale: 0.86;
+  animation: business-brain-core-in 720ms var(--ease-vibe) 460ms forwards;
+}
+
+.business-brain-aura {
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: business-brain-aura-in 1500ms var(--ease-vibe) 300ms forwards;
 }
 
 /*
@@ -295,10 +356,9 @@
  * trying to read, on a laptop that keeps compositing them for as long as the
  * tab is open.
  *
- * The counts are chosen so all three stop at roughly the same moment, about
- * eighteen seconds in: the map arrives alive and then holds still. Each
- * keyframe set ends where it began, so settling needs no `forwards` and leaves
- * nothing mid-gesture.
+ * The counts are chosen so the choreography settles in under eight seconds:
+ * the map arrives alive and then holds still. Each pulse keyframe ends where
+ * it began, so settling needs no `forwards` and leaves nothing mid-gesture.
  *
  * Users who asked for reduced motion were already protected by the block
  * above; this is for everyone else, who never got asked.
@@ -309,11 +369,13 @@
     color-mix(in srgb, var(--color-mint) 15%, transparent),
     transparent 68%
   );
-  animation: audit-node-breathe 3.6s var(--ease-vibe) 5;
+  animation: audit-node-breathe 2.4s var(--ease-vibe) 3;
 }
 
 .audit-map-connection-active {
-  animation: audit-line-flow 1.8s linear 10;
+  animation:
+    business-brain-edge-in 300ms var(--ease-vibe) forwards,
+    audit-line-flow 1.4s linear 3 300ms;
 }
 
 .audit-map-sweep {
@@ -325,7 +387,7 @@
   );
   -webkit-mask: radial-gradient(circle, transparent 58%, black 59%, black 61%, transparent 62%);
   mask: radial-gradient(circle, transparent 58%, black 59%, black 61%, transparent 62%);
-  animation: audit-radial-sweep 5.5s linear 3;
+  animation: audit-radial-sweep 1.8s var(--ease-vibe) 1 420ms both;
 }
 
 /*
@@ -370,7 +432,89 @@
 }
 
 @keyframes audit-radial-sweep {
+  from {
+    opacity: 0;
+    transform: rotate(-35deg);
+  }
+  25%,
+  75% {
+    opacity: 1;
+  }
   to {
+    opacity: 0;
     transform: rotate(360deg);
+  }
+}
+
+@keyframes business-brain-bloom {
+  from {
+    opacity: 0;
+    scale: 0.82;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+@keyframes business-brain-ring-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes business-brain-edge-in {
+  from {
+    opacity: 0;
+    stroke-dashoffset: 32;
+  }
+  to {
+    opacity: 1;
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes business-brain-node-in {
+  from {
+    opacity: 0;
+    filter: blur(5px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+
+@keyframes business-brain-core-in {
+  from {
+    opacity: 0;
+    scale: 0.86;
+  }
+  70% {
+    opacity: 1;
+    scale: 1.06;
+  }
+  to {
+    opacity: 1;
+    scale: 1;
+  }
+}
+
+@keyframes business-brain-aura-in {
+  from {
+    opacity: 0;
+    transform: scale(0.72);
+  }
+  55% {
+    opacity: 0.8;
+  }
+  to {
+    opacity: 0.22;
+    transform: scale(1.08);
   }
 }

@@ -71,11 +71,19 @@ Primary buttons use mint once per action area; secondary controls use the shared
 
 Motion communicates interaction state only. Use the shared transition utility and respect reduced motion; never animate static dashboard furniture continuously.
 
+## Signature Surface: Business Brain
+
+The project Home is the deliberate exception to the product's otherwise quiet presentation. Its Business Brain may use a contained mint aura, traced connections and staged node entry to make the nine business areas read as one system. This is a semantic visualization, not a new decorative language: ring distance still means priority timing, health stays explicit in text, and the centre is the only aggregate score.
+
+The choreography must settle. On entry, rings, edges, nodes and the core may reveal in sequence; a selected node may briefly wake its real connections. No ambient animation loops forever, nothing moves before its meaning is available, and `prefers-reduced-motion` removes the sequence without hiding content. Coral is reserved for a real critical gap and amber for incomplete or waiting states, even inside this signature surface.
+
 ## Do's and Don'ts
 
 - Do keep account metrics honest and derived from stored domain data.
 - Do preserve full repository and branch identity through responsive transformations.
 - Do use one visual accent and a quiet foreground hierarchy.
+- Do reserve cinematic motion and luminous depth for the Business Brain on project Home.
 - Don't invent “active”, trend, pull-request or activity data for reference fidelity.
 - Don't duplicate shared surfaces, buttons, status pills or icon grammar in screen-local systems.
 - Don't let a table impose viewport height or overflow rules on the account shell.
+- Don't copy the Business Brain glow or choreography onto ordinary cards, forms or index pages.

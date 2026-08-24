@@ -24,7 +24,7 @@ import { getProjectWorkspaceCounts } from "@/modules/projects/workspace-counts";
  * ## What it loads, and why that list is short
  *
  * A layout runs on *every* route beneath it, so anything loaded here is paid
- * for by all seven sections. It therefore loads only what the frame itself
+ * for by all six sections. It therefore loads only what the frame itself
  * renders: the project's identity and its repository connection.
  *
  * The audit, opportunities, prepared changes, Deep Scan, impact and activity

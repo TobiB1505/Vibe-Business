@@ -139,7 +139,7 @@ test.describe("blocked", () => {
 
     const action = page.getByRole("link", { name: "Run a business audit" });
     await expect(action).toBeVisible();
-    await expect(action).toHaveAttribute("href", /\/health#business-audit$/);
+    await expect(action).toHaveAttribute("href", /\/projects\/project_e2e#business-audit$/);
   });
 });
 

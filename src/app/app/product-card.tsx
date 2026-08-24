@@ -26,7 +26,7 @@ function primaryAction(project: DashboardProject): { label: string; href: string
     return { label: "Review moves", href: `${base}/plan` };
   }
   if (project.scoreState === "not_audited") {
-    return { label: "Analyse product", href: `${base}/health` };
+    return { label: "Analyse product", href: base };
   }
   return { label: "Open dashboard", href: base };
 }

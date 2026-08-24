@@ -186,10 +186,10 @@ export default async function E2eScenarioPage({
           stale={fixture.stale}
           activeOperation={null}
           blockedReason={fixture.blockedReason}
-          auditHref="/app/projects/project_e2e/health"
+          auditHref="/app/projects/project_e2e#business-audit"
           blockedDestinations={{
             product: "/app/projects/project_e2e/product",
-            audit: "/app/projects/project_e2e/health",
+            audit: "/app/projects/project_e2e#business-audit",
             moves: "/app/projects/project_e2e/plan",
             repository: "/app/projects/project_e2e/settings",
           }}
@@ -474,7 +474,7 @@ export default async function E2eScenarioPage({
           planHref="/app/projects/project_e2e/plan"
           agentHref="/app/projects/project_e2e/agent"
           productHref="/app/projects/project_e2e/product"
-          healthHref="/app/projects/project_e2e/health"
+          healthHref="/app/projects/project_e2e#business-audit"
         />
       </main>
     );
@@ -543,7 +543,7 @@ export default async function E2eScenarioPage({
           readiness={fixture.readiness}
           planView={fixture.planView}
           activeOperation={fixture.activeOperation}
-          auditHref="/app/projects/project_e2e/health"
+          auditHref="/app/projects/project_e2e#business-audit"
           understandingHref="/app/projects/project_e2e/product"
         />
       </main>

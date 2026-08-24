@@ -12,7 +12,7 @@ import {
 import type { BusinessLens } from "@/modules/business-audit/schema";
 
 /**
- * The Business Map (AUDIT UI-1, direction 1b).
+ * The Business Map / Business Brain (AUDIT UI-1, direction 1b; UI-11).
  *
  * ## The one idea
  *
@@ -222,7 +222,8 @@ function MapNode({
 
   return (
     <li
-      className={`absolute z-10 -translate-x-1/2 -translate-y-1/2 transition-opacity duration-200 ${
+      data-ring={node.ring}
+      className={`business-brain-node absolute z-10 -translate-x-1/2 -translate-y-1/2 transition-opacity duration-200 ${
         /*
            Softened from 30% once a lens opens by default.
            Selection is now the arrival state, so the map would otherwise
@@ -232,7 +233,11 @@ function MapNode({
          */
         dimmed ? "opacity-65" : "opacity-100"
       }`}
-      style={{ left: `${(x / VIEWBOX) * 100}%`, top: `${(y / VIEWBOX) * 100}%` }}
+      style={{
+        left: `${(x / VIEWBOX) * 100}%`,
+        top: `${(y / VIEWBOX) * 100}%`,
+        animationDelay: `${620 + (node.ring === "now" ? 0 : node.ring === "soon" ? 140 : 280) + node.angle * 1.2}ms`,
+      }}
     >
       {isNow && (
         <span
@@ -327,7 +332,7 @@ export function BusinessMap({
         while mobile swaps the whole geometry for the grouped list (§18).
       */}
       <div
-        className="relative mx-auto hidden aspect-square w-full max-w-[39rem] md:block"
+        className="business-brain-map relative mx-auto hidden aspect-square w-full max-w-[46rem] md:block"
         data-testid="business-map-radial"
       >
         <svg
@@ -344,6 +349,17 @@ export function BusinessMap({
 
           <circle cx={CENTRE} cy={CENTRE} r={RADIUS} fill={`url(#${glowId})`} />
 
+          <circle
+            cx={CENTRE}
+            cy={CENTRE}
+            r={RADIUS * 0.58}
+            fill="none"
+            stroke="var(--color-mint)"
+            strokeOpacity="0.09"
+            strokeWidth="38"
+            className="business-brain-aura"
+          />
+
           {(["later", "soon", "now"] as const).map((ring) => (
             <circle
               key={ring}
@@ -354,6 +370,8 @@ export function BusinessMap({
               stroke={ring === "now" ? "var(--color-mint)" : "var(--color-line-strong)"}
               strokeOpacity={ring === "now" ? 0.24 : ring === "soon" ? 0.62 : 0.45}
               strokeDasharray={ring === "later" ? "4 7" : undefined}
+              className="business-brain-ring"
+              style={{ animationDelay: `${180 + ({ now: 0, soon: 130, later: 260 }[ring])}ms` }}
             />
           ))}
 
@@ -405,6 +423,8 @@ export function BusinessMap({
                 y2={point.y}
                 stroke={node.ring === "now" ? "var(--color-mint)" : "var(--color-line-3)"}
                 strokeOpacity={node.ring === "now" ? 0.22 : 0.34}
+                className="business-brain-spoke"
+                style={{ animationDelay: `${430 + node.angle * 1.1}ms` }}
               />
             );
           })}
@@ -443,7 +463,8 @@ export function BusinessMap({
                 strokeOpacity={active ? 0.78 : 1}
                 strokeWidth={active ? 1.8 : 1.2}
                 strokeDasharray={active ? "6 8" : "3 6"}
-                className={active ? "audit-map-connection-active" : undefined}
+                className={`business-brain-connection ${active ? "audit-map-connection-active" : ""}`}
+                style={{ animationDelay: `${520 + from.angle * 1.2}ms` }}
               />
             );
           })}
@@ -467,7 +488,12 @@ export function BusinessMap({
           panel's own "closer to centre = sooner" caption carries the geometry,
           so the centre does not have to restate it.
         */}
-        <div className="pointer-events-none absolute top-1/2 left-1/2 z-10 flex size-24 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-full text-center">
+        <span
+          aria-hidden="true"
+          className="audit-map-sweep pointer-events-none absolute inset-0"
+        />
+
+        <div className="business-brain-core pointer-events-none absolute top-1/2 left-1/2 z-10 flex size-28 -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center rounded-full text-center">
           {score !== null ? (
             <>
               {/*

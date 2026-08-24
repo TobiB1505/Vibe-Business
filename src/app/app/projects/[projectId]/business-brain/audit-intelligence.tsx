@@ -7,8 +7,8 @@ import type { BusinessMap as BusinessMapModel } from "@/modules/business-audit/m
 import type { BusinessConclusion, BusinessLens } from "@/modules/business-audit/schema";
 import { BusinessMap } from "./business-map";
 import { CurrentPriorities } from "./current-priorities";
-import { LensDetail } from "./lens-detail";
-import { SelectedProblem } from "./selected-problem";
+import { LensDetail } from "../lens-detail";
+import { SelectedProblem } from "../selected-problem";
 
 /**
  * The intelligence panel (AUDIT UI-1.2 §24).
@@ -83,7 +83,11 @@ export function AuditIntelligence({
 
   return (
     <div className="flex flex-col gap-5" data-testid="audit-intelligence">
-      <Surface level="panel" padding="none" className="relative overflow-hidden p-4 sm:p-5 lg:p-6">
+      <Surface
+        level="card"
+        padding="none"
+        className="business-brain-stage relative overflow-hidden p-4 sm:p-5 lg:p-6"
+      >
         <span
           aria-hidden="true"
           className="audit-intelligence-glow pointer-events-none absolute inset-0"
@@ -91,9 +95,12 @@ export function AuditIntelligence({
 
         <div className="relative flex flex-col gap-5">
           <div className="flex flex-wrap items-baseline justify-between gap-3">
-            <MonoLabel as="h2" className="text-fg-secondary">
-              Business intelligence
-            </MonoLabel>
+            <div className="flex flex-col gap-1.5">
+              <MonoLabel as="h2" className="text-mint">
+                Your Business Brain
+              </MonoLabel>
+              <p className="text-fg-muted text-xs">Select any area to see what Vibe found.</p>
+            </div>
             <span className="text-fg-meta font-mono text-meta">
               closer to centre = sooner
             </span>
@@ -105,14 +112,14 @@ export function AuditIntelligence({
             rather than whatever is left over. §26: the map may stay taller;
             padding the shorter column with filler would undo this sprint.
           */}
-          <div className="grid min-w-0 gap-7 xl:grid-cols-[minmax(0,1.6fr)_minmax(21rem,1fr)] xl:items-start">
+          <div className="grid min-w-0 gap-7 xl:grid-cols-[minmax(0,1.82fr)_minmax(20rem,.78fr)] xl:items-start">
             <section
               className="order-2 flex min-w-0 flex-col gap-3 xl:order-1"
               data-testid="audit-map-panel"
             >
               <div className="flex flex-wrap items-baseline justify-between gap-2 px-1">
                 <h3 className="text-fg text-lg font-semibold tracking-[-0.025em]">
-                  How Vibe sees your business
+                  One business. Nine connected areas.
                 </h3>
                 <span className="text-fg-meta font-mono text-[0.625rem] md:hidden">
                   ordered by priority

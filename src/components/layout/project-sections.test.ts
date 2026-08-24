@@ -12,17 +12,20 @@ import { PROJECT_SECTIONS, PROJECT_SUBSECTIONS, projectSectionHref } from "./pro
  * silently scrolls nowhere and the dead end comes back.
  *
  * A rename on either side fails here rather than in a user's browser — which is
- * what CORE-5 relied on when the label became "Business Health" and the segment
- * became `/health` while the id deliberately did not move.
+ * what UI-11 relies on now that Business Health is canonical Home while the
+ * audit id deliberately does not move.
  */
 
-/** The rail and the two routes beneath it. Both carry anchors; both need ids. */
+/** The rail and the two routes beneath it. */
 const ALL_SECTIONS = [...PROJECT_SECTIONS, ...PROJECT_SUBSECTIONS];
 
 describe("project workspace sections", () => {
-  it("keeps a section whose id matches the anchor the opportunity engine links to", () => {
+  it("keeps the opportunity engine's audit anchor on canonical Home", () => {
     const target = BUSINESS_AUDIT_ANCHOR.replace(/^#/, "");
-    expect(PROJECT_SECTIONS.map((section) => section.id)).toContain(target);
+    expect(PROJECT_SECTIONS.map((section) => section.id)).not.toContain(target);
+    expect(projectSectionHref("abc", "business-audit")).toBe(
+      `/app/projects/abc${BUSINESS_AUDIT_ANCHOR}`,
+    );
   });
 
   it("gives every section a unique id, so an anchor cannot be ambiguous", () => {

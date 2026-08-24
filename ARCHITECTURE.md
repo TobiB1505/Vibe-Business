@@ -304,6 +304,7 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0040](docs/decisions/0040-ci-hosted-database-concurrency-gate.md) | Where a real-database concurrency test runs, and what it may reach | §3.11 |
 | [0041](docs/decisions/0041-command-center-information-architecture.md) | The project workspace is a command center, not an admin panel | Web surface |
 | [0042](docs/decisions/0042-account-dashboard-and-context-swap.md) | The account level is a dashboard of its own; the sidebar swaps context | Web surface |
+| [0043](docs/decisions/0043-business-health-is-project-home.md) | Business Health is the canonical project Home | Web surface |
 
 ### Layers with no section above
 

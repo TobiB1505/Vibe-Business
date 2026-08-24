@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils/cn";
  */
 
 /**
- * The Command Center: seven sections, in navigation order (CORE-5).
+ * The Command Center: six sections, in navigation order (UI-11).
  *
  * ## What changed, and why the shape did not
  *
@@ -25,10 +25,10 @@ import { cn } from "@/lib/utils/cn";
  * of those is a true description of what the route holds and none of them is
  * how a founder thinks about their own business.
  *
- * These seven follow the product's own durable model (`PRODUCT.md` §11:
- * Understand → Diagnose → Prioritize → Plan → Execute → Measure) with a Home
- * above it and a Settings beside it. Nothing behind them moved: the same read
- * models, the same panels, the same gates.
+ * Business Health now *is* Home. Diagnosis is the project's opening context,
+ * not a second destination beside a summary of the same diagnosis. The
+ * remaining sections continue the product's durable model (`PRODUCT.md` §11:
+ * Understand → Diagnose → Prioritize → Plan → Execute → Measure).
  *
  * `segment` is the URL segment under `/app/projects/[projectId]`. Home is the
  * index route and therefore has an empty segment — it is the project's own URL,
@@ -36,9 +36,8 @@ import { cn } from "@/lib/utils/cn";
  *
  * Each maps to the work it owns:
  *
- *   home         — what the product is, how it is doing, what to do next
+ *   home         — the diagnosis, business map and what to do next
  *   my-product   — the product profile, its sources and what it can do
- *   business-audit — the audit: conclusion, business map, scored dimensions
  *   action-plan  — `opportunities-panel` + `action-plan-panel`
  *   agent        — `prepared-changes-section` (validation, preview, review,
  *                  approval and merge all live inside a prepared change)
@@ -55,17 +54,6 @@ export const PROJECT_SECTIONS = [
     id: "my-product",
     label: "My Product",
     segment: "product",
-  },
-  {
-    // The section keeps the id `business-audit` because the Opportunity engine
-    // publishes `BUSINESS_AUDIT_ANCHOR = "#business-audit"` and links a blocked
-    // set at it — that link is the only way out of that state. The route is
-    // `/health` (the product's word), and the anchor still resolves *on* that
-    // route, so the tested domain constant keeps working untouched.
-    // `project-sections.test.ts` fails if the two ever drift apart.
-    id: "business-audit",
-    label: "Business Health",
-    segment: "health",
   },
   { id: "action-plan", label: "Action Plan", segment: "plan" },
   { id: "agent", label: "Agent", segment: "agent" },
@@ -100,19 +88,24 @@ export type ProjectSectionId = (typeof PROJECT_SECTIONS)[number]["id"];
 export type ProjectSubsectionId = (typeof PROJECT_SUBSECTIONS)[number]["id"];
 
 /**
- * Anything with a URL and an anchor in this workspace — the seven in the rail
- * and the two beneath them. `WorkspaceSection` takes this rather than
- * `ProjectSectionId` so a child route keeps its heading, its `scroll-mt` and
- * its `aria-labelledby` without being smuggled into the navigation.
+ * Anything with a URL and an anchor in this workspace — the six in the rail,
+ * the two beneath them and the stable audit recovery anchor.
+ * `WorkspaceSection` takes this rather than `ProjectSectionId` so a child route
+ * keeps its heading, its `scroll-mt` and its `aria-labelledby` without being
+ * smuggled into the navigation.
  */
-export type WorkspaceSectionId = ProjectSectionId | ProjectSubsectionId;
+export type WorkspaceSectionId = ProjectSectionId | ProjectSubsectionId | "business-audit";
 
 /** The canonical URL of one workspace section. One place builds these. */
 export function projectSectionHref(projectId: string, sectionId: WorkspaceSectionId): string {
+  const base = `/app/projects/${projectId}`;
+  // Opportunity blocked states already publish this id as their only recovery
+  // path. It now lands on the canonical Home anchor rather than disappearing.
+  if (sectionId === "business-audit") return `${base}#business-audit`;
+
   const section = [...PROJECT_SECTIONS, ...PROJECT_SUBSECTIONS].find(
     (candidate) => candidate.id === sectionId,
   );
-  const base = `/app/projects/${projectId}`;
   return section && section.segment ? `${base}/${section.segment}` : base;
 }
 

@@ -82,7 +82,7 @@ function SignalCopy({ project }: { project: DashboardProject }) {
         Vibe ranked this product first based on its latest audit and the work currently waiting.
       </p>
       <Link
-        href={`/app/projects/${project.id}/health`}
+        href={`/app/projects/${project.id}`}
         className="text-mint hover:text-mint-hover mt-1 w-fit text-sm font-semibold transition-interactive"
       >
         {project.name}
@@ -194,7 +194,7 @@ export function BusinessSignalPanel({ project }: { project: DashboardProject }) 
               : "Vibe hasn't analysed this product yet. The business audit produces the first score and the moves that follow from it."}
           </p>
           <Link
-            href={`/app/projects/${project.id}/health`}
+            href={`/app/projects/${project.id}`}
             className={buttonClasses({ variant: "primary", size: "sm" })}
           >
             {project.scoreState === "insufficient_coverage"

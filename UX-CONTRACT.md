@@ -14,6 +14,7 @@
 | Product scope and approval | `PRODUCT.md` | Product contract | 2026-08-24 |
 | Architecture and provider boundaries | `ARCHITECTURE.md` | Architecture contract | 2026-08-24 |
 | Account/project context swap | `docs/decisions/0042-account-dashboard-and-context-swap.md` | ADR | 2026-08-24 |
+| Project Home and Business Health | `docs/decisions/0043-business-health-is-project-home.md` | ADR | 2026-08-24 |
 | GitHub permissions and repository connection | `docs/decisions/0003-github-app-integration.md`, `docs/decisions/0009-github-installation-ownership-verification.md` | ADR | 2026-08-24 |
 | Safe approved merge behavior | `docs/decisions/0018-human-approval-authority.md`, `docs/decisions/0019-safe-approved-change-merge.md` | ADR | 2026-08-24 |
 | Billing | `PRODUCT.md#12-credit-model` | Product contract | 2026-08-24 |
@@ -41,6 +42,7 @@
 | Button | shared contained owner | tokenized surface/accent change | global mint ring | visibly unavailable, no pointer action | stable geometry + `aria-busy` | local recovery |
 | Search | committed URL query + explicit clear | shared interactive transition | global mint ring | n/a | retain dataset frame | no-results is distinct from failure |
 | Table/list | comfortable density | row surface cue | controls receive visible focus | n/a | stable frame | persistent scoped state |
+| Business Brain | staged but complete | connected edge cue | node uses the global mint ring | n/a | server lifecycle remains authoritative | existing notices and recovery |
 
 ## Dataset navigation
 
@@ -64,6 +66,9 @@
 
 - Every route has a truthful metadata title.
 - Account sidebar becomes the established top strip below `lg`; project and account rails never nest.
+- Project Home is the canonical Business Health surface at `/app/projects/:projectId`; `/health` is a compatibility alias and is never a second rail item.
+- `#business-audit` remains the stable recovery anchor and resolves on canonical project Home.
+- The radial Business Brain becomes a priority-grouped list on narrow screens. Labels, health, materiality, selection and detail remain available; geometry is never the only interface.
 - Repository comparison uses a semantic table at desktop and labeled record rows on narrow screens. Identity, product, visibility, default branch, connected time and open action remain available.
 - Technical values truncate only where their full value is also available through the external repository link or the mobile full-name row.
 
@@ -73,9 +78,16 @@
 - Search and sorting are local over the loaded account inventory, so no stale request or spinner exists.
 - GitHub live status is not fetched on the index. Stored connection metadata is labeled honestly and revalidation stays at the consequential workflow that needs it.
 
+## Motion and sensory behavior
+
+- Business Brain entry motion is finite and communicates the existing map topology: rings, connections, nodes, then the centre reading.
+- Selection may briefly emphasize only the edges connected to the chosen lens. The visualization settles and has no perpetual ambient loop.
+- Reduced-motion mode removes reveal delays and pulses while preserving every node, connection meaning, score and action at first paint.
+- Motion never implies live activity, a recalculation or a score change.
+
 ## Verification
 
 - Static: lint, typecheck, unit tests, strict premium audit.
-- Browser: repository success, empty, no-results, search clear, filter, sort, pagination, URL restoration and 1440/1024/768/375 widths.
+- Browser: repository success, empty, no-results, search clear, filter, sort, pagination, URL restoration and 1440/1024/768/375 widths; Business Health reading order, map interaction, canonical recovery link, responsive transformation and reduced motion.
 - Canonical sibling: `/app/products` and the account shell.
-- Repository evidence: `e2e/account-repositories.spec.ts`.
+- Repository evidence: `e2e/account-repositories.spec.ts`, `e2e/business-audit.spec.ts`, `e2e/action-plan-ui.spec.ts`.

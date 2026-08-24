@@ -59,7 +59,7 @@ test.describe("answer first (§6, §8, §9)", () => {
     await page.goto(SYNTHESIS);
 
     const conclusion = await topOf(page, /what vibe thinks/i);
-    const map = await topOf(page, /how vibe sees your business/i);
+    const map = await topOf(page, /one business. nine connected areas/i);
 
     expect(conclusion).toBeLessThan(map);
   });
@@ -74,7 +74,7 @@ test.describe("answer first (§6, §8, §9)", () => {
 
     const order = [
       await topOf(page, /what vibe thinks/i),
-      await topOf(page, /business intelligence/i),
+      await topOf(page, /your business brain/i),
       await topOf(page, /what.s already working/i),
     ];
 
@@ -206,7 +206,26 @@ test.describe("the map shows nine areas and remains accessible (§10, §18, §52
     await mapLens(page, /revenue & economics/i).click();
 
     await expect(page.getByRole("heading", { name: /^revenue & economics$/i })).toBeVisible();
-    await expect(page.getByRole("heading", { name: /how vibe sees your business/i })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: /one business. nine connected areas/i }),
+    ).toBeVisible();
+  });
+
+  test("removes the cinematic timing when reduced motion is requested", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto(SYNTHESIS);
+
+    const animationDurations = await page.locator(".business-brain-node").first().evaluate((node) =>
+      getComputedStyle(node)
+        .animationDuration.split(",")
+        .map((duration) => {
+          const value = Number.parseFloat(duration);
+          return duration.trim().endsWith("ms") ? value : value * 1000;
+        }),
+    );
+
+    expect(Math.max(...animationDurations)).toBeLessThanOrEqual(1);
+    await expect(mapLens(page, /revenue & economics/i)).toBeVisible();
   });
 });
 
@@ -355,7 +374,9 @@ test.describe("missing evidence is never a weakness (CLAUDE.md rule 44)", () => 
     await page.goto(PARTIAL);
 
     await expect(page.getByText(/before vibe reasoned in business areas/i)).toBeVisible();
-    await expect(page.getByRole("heading", { name: /how vibe sees your business/i })).toHaveCount(0);
+    await expect(
+      page.getByRole("heading", { name: /one business. nine connected areas/i }),
+    ).toHaveCount(0);
     await expect(page.getByText(/areas scored/i).first()).toBeVisible();
   });
 });
@@ -400,8 +421,8 @@ test.describe("accessibility (§52)", () => {
 
     for (const name of [
       /what vibe thinks/i,
-      /how vibe sees your business/i,
-      /current priorities/i,
+      /one business. nine connected areas/i,
+      /what matters now/i,
       /what.s already working/i,
     ]) {
       await expect(page.getByRole("heading", { name })).toBeVisible();
@@ -479,7 +500,7 @@ test.describe("375px (§46, §64)", () => {
 
     const order = [
       await topOf(page, /what vibe thinks/i),
-      await topOf(page, /current priorities/i),
+      await topOf(page, /what matters now/i),
       await topOf(page, /needs attention now/i),
     ];
 
@@ -571,7 +592,7 @@ test.describe("responsive intelligence panel", () => {
       await page.goto(SYNTHESIS);
 
       await expect(page.getByTestId("business-map-radial")).toBeVisible();
-      await expect(page.getByRole("heading", { name: /current priorities/i })).toBeVisible();
+      await expect(page.getByRole("heading", { name: /what matters now/i })).toBeVisible();
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
       );

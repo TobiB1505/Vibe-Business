@@ -12,7 +12,7 @@ import {
 } from "@/modules/business-audit/map-view";
 import { BUSINESS_LENSES } from "@/modules/business-audit/schema";
 import { MonoLabel } from "@/components/ui/typography";
-import { HealthBar } from "./business-map";
+import { HealthBar } from "./business-brain/business-map";
 
 /**
  * One lens, opened (AUDIT UI-1 §23).

@@ -164,7 +164,7 @@ function itemsForProject(project: DashboardProject): AttentionItem[] {
       projectName: project.name,
       title: "Never analysed",
       detail: "A business audit is what produces a score and the moves that follow from it.",
-      action: { label: "Run audit", href: projectHref(project.id, "health") },
+      action: { label: "Run audit", href: projectHref(project.id) },
     });
   }
 

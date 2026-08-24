@@ -9,7 +9,7 @@ import { movesContextHref } from "@/modules/opportunities/lineage";
 import { MonoLabel } from "@/components/ui/typography";
 
 /**
- * Current priorities (AUDIT UI-1.2 §5, §6, §11, §30).
+ * What matters now (AUDIT UI-1.2 §5, §6, §11, §30; UI-11).
  *
  * ## The one job
  *
@@ -78,7 +78,7 @@ export function CurrentPriorities({
     return (
       <section className="flex flex-col gap-3" data-testid="current-priorities">
         <MonoLabel as="h3" className="text-fg-secondary">
-          Current priorities
+          What matters now
         </MonoLabel>
         {/* §15 — no filler. Zero blockers is a real and good result. */}
         <p className="text-fg-prose text-sm leading-relaxed">
@@ -91,13 +91,14 @@ export function CurrentPriorities({
   return (
     <section className="flex flex-col gap-3" data-testid="current-priorities">
       <MonoLabel as="h3" className="text-fg-secondary">
-        Current priorities
+        What matters now
       </MonoLabel>
 
       <ol className="flex flex-col gap-2.5">
         {blockers.map((blocker, index) => {
           const lens = primaryLensOf(blocker);
           const isPrimary = index === 0;
+          const isCritical = blocker.tone === "critical";
           const isSelected = lens !== null && lens === selected;
           const materiality = materialityOf(blocker, map);
 
@@ -123,14 +124,20 @@ export function CurrentPriorities({
                 data-primary={isPrimary ? "true" : undefined}
                 className={`rounded-panel flex w-full flex-col items-start gap-2 border p-4 text-left transition-interactive ${
                   isPrimary
-                    ? "border-mint/45 bg-mint/[0.05] hover:border-mint/70"
+                    ? isCritical
+                      ? "border-coral-line bg-coral-tint-soft shadow-[0_20px_55px_-38px_rgb(255_122_92/0.9)] hover:border-coral"
+                      : "border-mint/45 bg-mint/[0.05] shadow-[0_20px_55px_-38px_rgb(0_229_160/0.8)] hover:border-mint/70"
                     : "border-line-2 bg-surface-1 hover:border-line-4"
                 } ${isSelected ? "ring-mint/25 ring-2" : ""}`}
               >
                 <span className="flex w-full items-center gap-2">
                   <span
                     className={`flex size-5 shrink-0 items-center justify-center rounded-full font-mono text-[0.625rem] ${
-                      isPrimary ? "bg-mint text-mint-ink" : "bg-surface-4 text-fg-secondary"
+                      isPrimary
+                        ? isCritical
+                          ? "bg-coral text-app"
+                          : "bg-mint text-mint-ink"
+                        : "bg-surface-4 text-fg-secondary"
                     }`}
                   >
                     {index + 1}
@@ -141,7 +148,7 @@ export function CurrentPriorities({
                   {materiality && (
                     <span
                       className={`shrink-0 font-mono text-[0.625rem] tracking-[0.08em] uppercase ${
-                        isPrimary ? "text-mint" : "text-fg-meta"
+                        isPrimary ? (isCritical ? "text-coral" : "text-mint") : "text-fg-meta"
                       }`}
                     >
                       {materiality}
@@ -166,8 +173,10 @@ export function CurrentPriorities({
                 </span>
 
                 {isPrimary && (
-                  <span className="text-mint mt-0.5 font-mono text-[0.625rem] tracking-[0.08em] uppercase">
-                    Start here
+                  <span
+                    className={`${isCritical ? "text-coral" : "text-mint"} mt-0.5 font-mono text-[0.625rem] tracking-[0.08em] uppercase`}
+                  >
+                    #1 priority · start here
                   </span>
                 )}
               </button>

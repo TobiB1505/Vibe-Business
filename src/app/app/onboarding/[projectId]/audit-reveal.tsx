@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { MonoLabel } from "@/components/ui/typography";
 import { buildBusinessMap, type BusinessMap as BusinessMapModel } from "@/modules/business-audit/map-view";
 import type { AuditSynthesis, BusinessLens, BusinessReadinessAudit } from "@/modules/business-audit/schema";
-import { BusinessMap } from "../../projects/[projectId]/business-map";
+import { BusinessMap } from "../../projects/[projectId]/business-brain/business-map";
 import { revealAuditAndFindFirstMoveAction } from "./actions";
 
 export function OnboardingAuditReveal({

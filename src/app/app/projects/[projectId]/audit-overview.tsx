@@ -2,7 +2,7 @@ import { buildBusinessMap } from "@/modules/business-audit/map-view";
 import type { BusinessReadinessAudit } from "@/modules/business-audit/schema";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
 import { MonoLabel } from "@/components/ui/typography";
-import { AuditIntelligence } from "./audit-intelligence";
+import { AuditIntelligence } from "./business-brain/audit-intelligence";
 
 /**
  * The completed audit (AUDIT UI-1, direction 1b; density pass AUDIT UI-1.2).
