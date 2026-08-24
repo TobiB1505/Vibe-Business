@@ -54,8 +54,22 @@ export type PackProvenance =
       diverged: "repository" | "live" | "product_profile" | "founder_intent" | "unattributed";
     };
 
-/** The pack version whose rows are guaranteed to carry the full CORE-2 set. */
-const V3 = "business-evidence.v3";
+/**
+ * Pack versions whose rows are guaranteed to carry the full CORE-2 set.
+ *
+ * A list rather than an equality test, and that is the whole point. This read
+ * `=== "business-evidence.v3"`, so the day a v4 pack shipped, every new audit
+ * would have fallen through to the pre-CORE-2 column comparison below — the
+ * weaker path, written for rows that predate the profile columns entirely — and
+ * the Deep Scan would have stopped being checked at all. Nothing would have
+ * failed; the strongest provenance guarantee would simply have gone quiet.
+ *
+ * `business_readiness_audits_v3_has_profile` is what a member of this list has
+ * to satisfy: `product_profile_id`, both profile version columns and
+ * `founder_intent_hash` all present. That constraint names v3 explicitly, so
+ * adding a version here means widening the constraint in the same migration.
+ */
+const HASH_VERIFIABLE_PACKS: readonly string[] = ["business-evidence.v3", "business-evidence.v4"];
 
 /**
  * Compares what a rebuild just loaded against what the audit recorded.
@@ -102,7 +116,7 @@ export function verifyPackProvenance(
   audit: StoredAudit,
   loaded: LoadedPackSources,
 ): PackProvenance {
-  if (audit.evidencePackVersion === V3) {
+  if (HASH_VERIFIABLE_PACKS.includes(audit.evidencePackVersion)) {
     // Guaranteed non-null by `business_readiness_audits_v3_has_profile`. The
     // fallbacks are unreachable for a v3 row and exist so a row that somehow
     // violated the constraint mismatches rather than throws.
