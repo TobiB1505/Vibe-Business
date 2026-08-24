@@ -1,6 +1,6 @@
 # Sprint 0079 — what a site says it charges
 
-Status: **Both halves shipped, kept apart. No migration, no pack version bump.**
+Status: **Pricing shipped in two kept-apart halves; the homepage-only SEO signals now count coverage. Brand deliberately untouched. No migration, no pack version bump.**
 
 ## The entry, verified
 
@@ -58,6 +58,26 @@ Most sites publish no `Offer` at all, so the declared path alone is honest and a
 **The parser refuses more than it accepts.** Plain integers, a two-digit decimal after either separator, and three-digit grouping by either separator. One digit after a separator — `29,9` — is ambiguous across locales and is dropped rather than guessed at.
 
 A test caught the parser silently normalising `"29..99"` into `29.99`: a price invented out of a typo, which is the one outcome this module exists to avoid. And tags are replaced with a space rather than removed, so `<td>10</td><td>29</td>` cannot fuse into a price that was never on the page.
+
+## The homepage-only half
+
+Eight of the ten SEO signals are document-level, and all eight were read from the homepage alone. A site whose homepage has a description and whose four other pages do not was reported as entirely fine.
+
+**`present` stays the homepage's answer**, and that is the load-bearing decision rather than caution. `buildLiveEvidence` mints `live.seo.<id>` and `live.seo.<id>_missing` straight off that boolean, and those citations are stored in four durable places — redefining it to mean "every page" would silently change what every already-stored citation asserted. It is the same class of problem [Sprint 0078](0078-evidence-pack-v4.md) spent a whole version bump on.
+
+So the wider fact is **additive**: an optional coverage count beside it. Absent on `robots_txt` and `sitemap`, where a per-page number would be a category error dressed as a number.
+
+**One predicate** decides "has it" for the homepage and for every other page. Two definitions would be two ways for the same signal to be true — which is how a headline and its own detail end up disagreeing on screen.
+
+The id is `live.seo.coverage.<id>`, **not** a `_partial` suffix. Four absence dialects already exist and Sprint 0073 named that as too many; a fifth would be the same mistake with a new word. A namespace level also stays clear of `live-premise.ts`, which selects the ids it revalidates by `endsWith("_missing")`.
+
+Minted only for a real shortfall: a signal the homepage lacks is already `_missing`, and a coverage id there would report one gap twice in weaker words. Proven red by removing the `present` check.
+
+## The brand block is not a defect
+
+The entry groups "the entire brand block" with the SEO complaint. Checked rather than assumed: `buildBrandSignals` produces a site name, logo assets, colours and typefaces — **site identity that does not meaningfully vary per page**, declared where it is declared, on the homepage.
+
+Widening it would mostly surface the same asset found five times. Named here as a claim that did not survive checking, rather than "fixed" to look thorough.
 
 ## What this does not do
 
