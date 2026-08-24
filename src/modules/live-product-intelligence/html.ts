@@ -1,3 +1,4 @@
+import { observePrices, type ObservedPrice } from "./pricing-text";
 /**
  * HTML extraction (Sprint 3 §12).
  *
@@ -49,6 +50,31 @@ export type ParsedForm = {
 
 export type ParsedHeading = { level: 1 | 2 | 3; text: string };
 
+/**
+ * A price the page **declares about itself** in JSON-LD (schema.org `Offer`).
+ *
+ * Not a number scraped off the rendered page. This is the operator's own
+ * machine-readable statement of what something costs, which is why it is kept
+ * separately from anything read out of visible text: one is a fact the site
+ * published, the other is an observation that could be a discount, a
+ * struck-through price or an "from" figure.
+ *
+ * Derived fields only (Rule 37) — an amount, a currency code, a period and a
+ * short plan label. No page source, no body text.
+ */
+export type ParsedOffer = {
+  /** As declared, e.g. `29` or `9.99`. Finite and non-negative. */
+  price: number;
+  /** ISO 4217, upper-cased. Three letters or the offer is discarded. */
+  currency: string;
+  /** The billing period, when the page states one. Null is "did not say". */
+  period: OfferPeriod | null;
+  /** The plan or product name this offer belongs to, when it has one. */
+  name: string | null;
+};
+
+export type OfferPeriod = "day" | "week" | "month" | "year" | "one_time";
+
 /** A declared icon: `rel` says what it is for, `href` where it lives. */
 export type ParsedIcon = { rel: string; href: string; sizes: string | null };
 
@@ -74,6 +100,15 @@ export type ParsedHtml = {
   openGraph: Record<string, string>;
   structuredDataTypes: string[];
   hasStructuredData: boolean;
+  /** Prices the page declares in JSON-LD. Empty when it declares none. */
+  offers: ParsedOffer[];
+  /**
+   * Prices read off the visible text — the weaker source, kept apart.
+   *
+   * See `pricing-text.ts` for why these carry a token rather than a currency
+   * code, and why they are never merged with `offers`.
+   */
+  observedPrices: ObservedPrice[];
   headings: ParsedHeading[];
   links: ParsedLink[];
   buttons: string[];
@@ -163,8 +198,81 @@ function inAnyRegion(index: number, regions: Region[]): boolean {
  * execute the script block, which is exactly why structured data is read
  * this way and not by evaluating the tag.
  */
-function extractStructuredDataTypes(html: string): string[] {
+/**
+ * ISO 4217 is three letters. Anything else is not a currency we will repeat
+ * back to a founder as one.
+ */
+const CURRENCY = /^[A-Za-z]{3}$/;
+
+/** The most an offer's plan label may carry. A name, never a paragraph. */
+const MAX_OFFER_NAME = 80;
+
+/** schema.org UN/CEFACT unit codes that state a billing period. */
+const UNIT_CODE_PERIODS: Record<string, OfferPeriod> = {
+  DAY: "day",
+  WEE: "week",
+  MON: "month",
+  ANN: "year",
+  // Both appear in the wild for a year.
+  YER: "year",
+};
+
+/** ISO 8601 durations schema.org uses for a billing period. */
+function periodFromDuration(value: string): OfferPeriod | null {
+  const match = /^P(?:(\d+)Y|(\d+)M|(\d+)W|(\d+)D)$/i.exec(value.trim());
+  if (!match) return null;
+  // Only a period of exactly one is a billing period we can name. "P3M" is a
+  // quarterly plan, and calling it monthly would be a quiet third of a lie.
+  const [, years, months, weeks, days] = match;
+  if (years === "1") return "year";
+  if (months === "1") return "month";
+  if (weeks === "1") return "week";
+  if (days === "1") return "day";
+  return null;
+}
+
+function offerPeriodOf(record: Record<string, unknown>): OfferPeriod | null {
+  const unit = record["unitCode"];
+  if (typeof unit === "string") {
+    const period = UNIT_CODE_PERIODS[unit.trim().toUpperCase()];
+    if (period) return period;
+  }
+
+  for (const key of ["billingDuration", "billingPeriod", "duration"]) {
+    const value = record[key];
+    if (typeof value === "string") {
+      const period = periodFromDuration(value);
+      if (period) return period;
+    }
+  }
+
+  const reference = record["referenceQuantity"];
+  if (reference !== null && typeof reference === "object" && !Array.isArray(reference)) {
+    return offerPeriodOf(reference as Record<string, unknown>);
+  }
+
+  return null;
+}
+
+/**
+ * A declared amount, or null.
+ *
+ * schema.org allows both a number and a string, and sites publish `"29.00"`,
+ * `"29"` and `29` interchangeably. A value carrying anything else — a currency
+ * symbol, a range, a comma-grouped thousand — is refused rather than guessed
+ * at, because a misparsed price is worse than a missing one.
+ */
+function declaredPrice(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) && value >= 0 ? value : null;
+  if (typeof value !== "string") return null;
+  if (!/^\d+(?:\.\d+)?$/.test(value.trim())) return null;
+  const parsed = Number(value.trim());
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function extractStructuredData(html: string): { types: string[]; offers: ParsedOffer[] } {
   const types = new Set<string>();
+  const offers: ParsedOffer[] = [];
   const pattern =
     /<script\b[^>]{0,500}type\s*=\s*["']application\/ld\+json["'][^>]{0,500}>([\s\S]{0,100000}?)<\/script>/gi;
 
@@ -174,10 +282,12 @@ function extractStructuredDataTypes(html: string): string[] {
     blocks += 1;
     try {
       const parsed: unknown = JSON.parse(match[1].trim());
-      const visit = (node: unknown, depth: number) => {
-        if (depth > 4 || types.size >= 12) return;
+      const visit = (node: unknown, depth: number, inheritedName: string | null) => {
+        // Depth is bounded for types *and* offers together: a document deep
+        // enough to hide an offer below this is a document we decline to trust.
+        if (depth > 4 || (types.size >= 12 && offers.length >= MAX_OFFERS)) return;
         if (Array.isArray(node)) {
-          for (const item of node.slice(0, 20)) visit(item, depth + 1);
+          for (const item of node.slice(0, 20)) visit(item, depth + 1, inheritedName);
           return;
         }
         if (node === null || typeof node !== "object") return;
@@ -187,16 +297,67 @@ function extractStructuredDataTypes(html: string): string[] {
         if (Array.isArray(type)) {
           for (const item of type) if (typeof item === "string") types.add(item.slice(0, 60));
         }
-        const graph = record["@graph"];
-        if (graph !== undefined) visit(graph, depth + 1);
+
+        /*
+         * The name an offer belongs to is carried *down*, not looked up.
+         *
+         * `{"@type":"Product","name":"Pro","offers":{...}}` is the common
+         * shape, and the offer itself usually has no name of its own. Passing
+         * the enclosing product's name down the walk is what turns a bare
+         * amount into "Pro — 29 USD / month".
+         */
+        const own = record["name"];
+        const name =
+          typeof own === "string" && own.trim().length > 0
+            ? own.trim().slice(0, MAX_OFFER_NAME)
+            : inheritedName;
+
+        collectOffer(record, name, offers);
+
+        for (const key of ["@graph", "offers", "priceSpecification", "hasVariant", "itemOffered"]) {
+          const child = record[key];
+          if (child !== undefined) visit(child, depth + 1, name);
+        }
       };
-      visit(parsed, 0);
+      visit(parsed, 0, null);
     } catch {
       // Invalid JSON-LD is a fact about the page, not an error worth
       // failing an otherwise useful analysis over.
     }
   }
-  return [...types];
+  return { types: [...types], offers };
+}
+
+/** At most this many declared prices per page. A price list, not a catalogue. */
+const MAX_OFFERS = 12;
+
+/**
+ * Records one offer, if this node actually is one.
+ *
+ * Deliberately strict about what counts. A node needs a parseable amount *and*
+ * a three-letter currency; an offer missing either is dropped rather than
+ * half-recorded, because "29" with no currency is not a price a founder can be
+ * shown and a defaulted one would be an invention.
+ */
+function collectOffer(
+  record: Record<string, unknown>,
+  name: string | null,
+  offers: ParsedOffer[],
+): void {
+  if (offers.length >= MAX_OFFERS) return;
+
+  const price = declaredPrice(record["price"]);
+  if (price === null) return;
+
+  const currency = record["priceCurrency"];
+  if (typeof currency !== "string" || !CURRENCY.test(currency.trim())) return;
+
+  offers.push({
+    price,
+    currency: currency.trim().toUpperCase(),
+    period: offerPeriodOf(record),
+    name,
+  });
 }
 
 /** `rel` values worth recording. Anything else is not an icon we can use. */
@@ -327,7 +488,7 @@ export function parseHtml(html: string): ParsedHtml {
   // as real tags.
   const withoutComments = html.replace(/<!--[\s\S]{0,50000}?-->/g, " ");
 
-  const structuredDataTypes = extractStructuredDataTypes(withoutComments);
+  const { types: structuredDataTypes, offers } = extractStructuredData(withoutComments);
   // Read before `<style>` bodies are stripped below. Only custom-property
   // *declarations* are taken — never the stylesheet text itself.
   const styleTokens = extractStyleTokens(withoutComments);
@@ -489,6 +650,8 @@ export function parseHtml(html: string): ParsedHtml {
     hasViewportMeta,
     openGraph,
     structuredDataTypes,
+    offers,
+    observedPrices: observePrices(content),
     hasStructuredData,
     headings,
     links,

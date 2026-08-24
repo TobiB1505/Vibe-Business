@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { analyzeLiveProduct } from "./analyzer";
+import { buildPricingSignals, buildSeoSignals } from "./signals";
+import type { FetchedPage } from "./crawler";
+import type { ParsedOffer } from "./html";
+import type { ObservedPrice } from "./pricing-text";
 import { DEFAULT_CRAWL_BUDGETS } from "./budgets";
 import { LiveProductDomainError } from "./errors";
 import {
@@ -227,5 +231,235 @@ describe("analyzeLiveProduct — failures", () => {
     ).rejects.toMatchObject({ code: "unsafe_destination" });
 
     expect(dependencies.transport.requests).toHaveLength(0);
+  });
+});
+
+/**
+ * What the site says it charges.
+ *
+ * Monetization is one of the five dimensions the audit scores, and the
+ * snapshot could previously say a pricing *page* existed and nothing about
+ * what was on it.
+ */
+describe("buildPricingSignals", () => {
+  const page = (
+    finalPath: string,
+    offers: ParsedOffer[],
+    observedPrices: ObservedPrice[] = [],
+  ): FetchedPage =>
+    ({
+      requestedPath: finalPath,
+      finalPath,
+      status: 200,
+      bytes: 100,
+      depth: 1,
+      redirected: false,
+      // Both lists, always. `parseHtml` sets each on every page, so a fixture
+      // omitting one describes a page that cannot exist — and the builder
+      // reading it would throw rather than reveal anything about the code.
+      html: { offers, observedPrices } as unknown as FetchedPage["html"],
+    }) as FetchedPage;
+
+  it("records what each page declares, and where", () => {
+    const signals = buildPricingSignals({
+      pages: [
+        page("/", [{ price: 0, currency: "EUR", period: null, name: "Free" }]),
+        page("/pricing", [{ price: 29, currency: "EUR", period: "month", name: "Pro" }]),
+      ],
+      pricingPageReached: true,
+    });
+
+    expect(signals.declaredPricePoints).toEqual([
+      { price: 0, currency: "EUR", period: null, planName: "Free", path: "/" },
+      { price: 29, currency: "EUR", period: "month", planName: "Pro", path: "/pricing" },
+    ]);
+    expect(signals.hasFreeDeclaredTier).toBe(true);
+    expect(signals.declaredCurrencies).toEqual(["EUR"]);
+  });
+
+  /**
+   * Read from every page, not only the pricing surface. Plenty of products
+   * declare their Offer on the homepage, and a founder asking "does my site
+   * say what this costs" is not asking "does /pricing say it".
+   */
+  it("finds an offer declared away from the pricing page", () => {
+    const signals = buildPricingSignals({
+      pages: [page("/", [{ price: 19, currency: "USD", period: "month", name: null }])],
+      pricingPageReached: false,
+    });
+
+    expect(signals.declaredPricePoints).toHaveLength(1);
+    expect(signals.declaredPricePoints[0]?.path).toBe("/");
+  });
+
+  it("notices more than one currency", () => {
+    const signals = buildPricingSignals({
+      pages: [
+        page("/pricing", [
+          { price: 29, currency: "EUR", period: "month", name: "Pro" },
+          { price: 32, currency: "USD", period: "month", name: "Pro" },
+        ]),
+      ],
+      pricingPageReached: true,
+    });
+
+    expect(signals.declaredCurrencies).toEqual(["EUR", "USD"]);
+  });
+
+  /**
+   * The distinction the whole type exists to keep.
+   *
+   * No declared price is not a free product, and it is not even a finding
+   * unless the pricing page was actually read — otherwise it reports Vibe's
+   * own coverage gap as a fact about the founder's business.
+   */
+  it("does not mistake silence for a free product", () => {
+    const signals = buildPricingSignals({ pages: [page("/", [])], pricingPageReached: false });
+
+    expect(signals.declaredPricePoints).toEqual([]);
+    expect(signals.hasFreeDeclaredTier).toBe(false);
+    expect(signals.pricingPageReached).toBe(false);
+  });
+
+  it("treats a declared zero as a stated free tier", () => {
+    // Zero *is* a price when the site publishes it. That is different from
+    // publishing nothing, which the case above covers.
+    const signals = buildPricingSignals({
+      pages: [page("/pricing", [{ price: 0, currency: "USD", period: "month", name: "Starter" }])],
+      pricingPageReached: true,
+    });
+
+    expect(signals.hasFreeDeclaredTier).toBe(true);
+  });
+});
+
+/**
+ * The two sources stay apart.
+ *
+ * A declared offer is what the operator published; an observed one is a glyph
+ * and a number that sat next to each other. Merging them would launder the
+ * second into the first, and the whole value of the declared list is that a
+ * founder can trust it more.
+ */
+describe("buildPricingSignals — observed prices", () => {
+  const page = (
+    finalPath: string,
+    offers: ParsedOffer[],
+    observedPrices: ObservedPrice[] = [],
+  ): FetchedPage =>
+    ({
+      requestedPath: finalPath,
+      finalPath,
+      status: 200,
+      bytes: 100,
+      depth: 1,
+      redirected: false,
+      html: { offers, observedPrices } as unknown as FetchedPage["html"],
+    }) as FetchedPage;
+
+  it("keeps an observation out of the declared list", () => {
+    const signals = buildPricingSignals({
+      pages: [page("/pricing", [], [{ amount: 29, currencyToken: "$", period: "month" }])],
+      pricingPageReached: true,
+    });
+
+    expect(signals.declaredPricePoints).toEqual([]);
+    expect(signals.observedPricePoints).toEqual([
+      { amount: 29, currencyToken: "$", period: "month", path: "/pricing" },
+    ]);
+  });
+
+  /**
+   * An observed zero is not a stated free tier.
+   *
+   * `hasFreeDeclaredTier` is named for the declared list and must stay that
+   * way: a "0" somewhere on a page is not the site saying it has a free plan.
+   */
+  it("does not let an observed zero claim a free tier", () => {
+    const signals = buildPricingSignals({
+      pages: [page("/pricing", [], [{ amount: 0, currencyToken: "$", period: null }])],
+      pricingPageReached: true,
+    });
+
+    expect(signals.hasFreeDeclaredTier).toBe(false);
+  });
+
+  it("does not let an observation into the declared currency list", () => {
+    const signals = buildPricingSignals({
+      pages: [page("/pricing", [], [{ amount: 29, currencyToken: "USD", period: null }])],
+      pricingPageReached: true,
+    });
+
+    expect(signals.declaredCurrencies).toEqual([]);
+  });
+});
+
+/**
+ * The half the homepage could not see.
+ *
+ * Eight of the ten SEO signals are document-level, and all eight were read from
+ * the homepage alone — so a site whose homepage has a description and whose
+ * four other pages do not was reported as entirely fine.
+ */
+describe("buildSeoSignals — coverage", () => {
+  const page = (finalPath: string, html: Partial<FetchedPage["html"]>): FetchedPage =>
+    ({
+      requestedPath: finalPath,
+      finalPath,
+      status: 200,
+      bytes: 100,
+      depth: finalPath === "/" ? 0 : 1,
+      redirected: false,
+      html: { openGraph: {}, ...html } as unknown as FetchedPage["html"],
+    }) as FetchedPage;
+
+  const seo = (pages: FetchedPage[]) =>
+    buildSeoSignals({ homepage: pages[0], pages, robotsTxtPresent: true, sitemapPresent: true });
+
+  const find = (pages: FetchedPage[], id: string) =>
+    seo(pages).find((signal) => signal.id === id);
+
+  it("counts how many inspected pages carry a signal", () => {
+    const signal = find(
+      [
+        page("/", { title: "Acme" }),
+        page("/pricing", { title: "Pricing" }),
+        page("/about", { title: null }),
+      ],
+      "title",
+    );
+
+    expect(signal?.coverage).toEqual({ pagesWith: 2, pagesInspected: 3 });
+  });
+
+  /**
+   * The property that keeps stored citations meaning what they meant.
+   *
+   * `live.seo.title` and `live.seo.title_missing` are minted straight off
+   * `present`, and those are stored in four durable places. Redefining it to
+   * mean "every page" would silently change what every one of them asserted.
+   */
+  it("leaves present meaning the homepage", () => {
+    const signal = find([page("/", { title: "Acme" }), page("/about", { title: null })], "title");
+
+    expect(signal?.present).toBe(true);
+    expect(signal?.coverage?.pagesWith).toBe(1);
+  });
+
+  /**
+   * robots.txt and sitemap.xml are properties of the site, not of a page. A
+   * per-page count there would be a category error dressed as a number.
+   */
+  it.each(["robots_txt", "sitemap"])("does not put a page count on %s", (id) => {
+    expect(find([page("/", { title: "Acme" })], id)?.coverage).toBeUndefined();
+  });
+
+  it("reports full coverage when every page carries it", () => {
+    const signal = find(
+      [page("/", { hasViewportMeta: true }), page("/pricing", { hasViewportMeta: true })],
+      "viewport",
+    );
+
+    expect(signal?.coverage).toEqual({ pagesWith: 2, pagesInspected: 2 });
   });
 });

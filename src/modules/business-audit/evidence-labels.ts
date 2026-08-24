@@ -126,6 +126,11 @@ const LITERAL_DETAILS: Record<string, string> = {
    * itself said "Signal pricing surface".
    */
   "profile.completeness": "How much Vibe could work out about your product",
+  // Monetization facts the site states about itself. Literal rather than a
+  // family, because each is one specific sentence and there are exactly three.
+  "live.pricing.free_tier": "Your site states a free tier",
+  "live.pricing.multiple_currencies": "Your site states prices in more than one currency",
+  "live.pricing.none_declared": "Your pricing page states no machine-readable price",
   "profile.identity.name": "What your product is called",
   "profile.identity.category": "What kind of product this is",
   "profile.identity.description": "What your product does",
@@ -368,6 +373,44 @@ function describeFamily(
      * `Seo canonical — not observed`: the id with its punctuation removed,
      * capitalised, presented as prose. "Seo" is not a word.
      */
+    /*
+     * What the site says it charges.
+     *
+     * The tail carries a plan name, a currency and an amount, and humanising
+     * it would produce "Pro usd 29" — an identifier wearing a capital letter.
+     * The pack's own label is the readable sentence ("Price stated on your
+     * site — Pro: 29 USD per month"), so this names the kind of fact and
+     * leaves the number to the pack.
+     */
+    if (body.startsWith("pricing.declared.")) {
+      return curated(source, "A price your site states");
+    }
+
+    /*
+     * The weaker sibling, and the label says so.
+     *
+     * "A number that looks like a price" is deliberately unflattering. It is
+     * what the observation actually is, and a founder deciding whether to
+     * believe the headline above it deserves to know which of the two sources
+     * they are looking at.
+     */
+    if (body.startsWith("pricing.observed.")) {
+      return curated(source, "A number on your page that looks like a price");
+    }
+
+    /*
+     * A signal the homepage has and other pages do not.
+     *
+     * Its own namespace level rather than a fifth absence suffix — see the
+     * minting site. The label names the shortfall rather than the signal,
+     * because "A page title" over a coverage finding would read as though the
+     * title were the problem.
+     */
+    if (body.startsWith("seo.coverage.")) {
+      const id = body.slice("seo.coverage.".length);
+      if (isSeoSignal(id)) return curated(source, `${SEO_LABELS[id]} — missing on some of your pages`);
+    }
+
     if (body.startsWith("seo.")) {
       const id = body.slice("seo.".length);
       if (isSeoSignal(id)) return curated(source, SEO_LABELS[id]);

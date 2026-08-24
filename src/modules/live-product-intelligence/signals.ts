@@ -3,12 +3,16 @@ import { detectCtas, selectPrimaryCta, type CtaCandidate } from "./cta";
 import { toFormSignal } from "./forms";
 import type { FetchedPage } from "./crawler";
 import type {
+  DeclaredPricePoint,
+  ObservedPricePoint,
+  PricingSignals,
   ConversionSignals,
   LiveEvidence,
   PageSummary,
   ProductSurfaceId,
   ProductSurfaceSignal,
   SeoSignal,
+  SeoSignalCoverage,
   SeoSignalId,
   SiteMetadata,
 } from "./schema";
@@ -72,19 +76,59 @@ export function buildSiteMetadata(homepage: FetchedPage | undefined): SiteMetada
   };
 }
 
+/**
+ * Whether one page carries one document-level signal.
+ *
+ * The single definition of "has it", used for the homepage's `present` and for
+ * every other page's coverage count. Two definitions would be two ways for the
+ * same signal to be true, which is how a headline and its own detail end up
+ * disagreeing on screen.
+ */
+const HAS_SIGNAL: Partial<Record<SeoSignalId, (page: FetchedPage) => boolean>> = {
+  title: (page) => Boolean(page.html.title),
+  meta_description: (page) => Boolean(page.html.metaDescription),
+  canonical: (page) => Boolean(page.html.canonical),
+  language: (page) => Boolean(page.html.language),
+  viewport: (page) => page.html.hasViewportMeta,
+  open_graph: (page) => Object.keys(page.html.openGraph).length > 0,
+  structured_data: (page) => page.html.hasStructuredData,
+  robots_meta: (page) => Boolean(page.html.robotsMeta),
+};
+
 export function buildSeoSignals(input: {
   homepage: FetchedPage | undefined;
+  /** Every page the crawl read, homepage included. Coverage is counted here. */
+  pages: FetchedPage[];
   robotsTxtPresent: boolean;
   sitemapPresent: boolean;
 }): SeoSignal[] {
-  const { homepage, robotsTxtPresent, sitemapPresent } = input;
+  const { homepage, pages, robotsTxtPresent, sitemapPresent } = input;
   const path = homepage?.finalPath ?? "/";
+
+  /*
+   * Coverage answers the question the homepage could not.
+   *
+   * `present` stays what it was — the homepage — because the evidence ids
+   * minted from it are already stored in four durable places. This is the
+   * additive half: a site whose homepage has a description and whose four
+   * other pages do not was reported as entirely fine.
+   *
+   * Omitted for `robots_txt` and `sitemap`, which are properties of the site
+   * rather than of a page, so a per-page count would be a category error
+   * dressed as a number.
+   */
+  const coverageOf = (id: SeoSignalId): SeoSignalCoverage | undefined => {
+    const has = HAS_SIGNAL[id];
+    if (!has || pages.length === 0) return undefined;
+    return { pagesWith: pages.filter((page) => has(page)).length, pagesInspected: pages.length };
+  };
 
   const signal = (id: SeoSignalId, present: boolean, evidence: LiveEvidence[] = []): SeoSignal => ({
     id,
     name: SEO_SIGNAL_NAMES[id],
     present,
     evidence,
+    ...(coverageOf(id) ? { coverage: coverageOf(id) } : {}),
   });
 
   const pageEvidence = (detail?: string): LiveEvidence[] =>
@@ -204,6 +248,64 @@ export function buildProductSurfaces(input: {
   });
 
   return { surfaces, perPageSurfaces };
+}
+
+/**
+ * What the site says it charges.
+ *
+ * Read from **every** page the crawl reached, not only the pricing surface.
+ * Plenty of products declare their `Offer` on the homepage, and a founder
+ * asking "does my site say what this costs" is not asking "does /pricing say
+ * it". The path each offer was found on is recorded so the answer stays
+ * checkable.
+ *
+ * `pricingPageReached` is carried alongside because everything else is close
+ * to meaningless without it: no declared prices on a site whose pricing page
+ * was never fetched says nothing at all, while the same emptiness on a site
+ * whose pricing page *was* read is a real finding.
+ *
+ * Deliberately not merged with a text-scraped price. A declared offer is the
+ * operator's own statement; a number lifted from rendered text could be a
+ * discount, a struck-through figure or an "from" amount, and putting them in
+ * one list would launder the second into the first.
+ */
+export function buildPricingSignals(input: {
+  pages: FetchedPage[];
+  pricingPageReached: boolean;
+}): PricingSignals {
+  const declaredPricePoints: DeclaredPricePoint[] = [];
+  const observedPricePoints: ObservedPricePoint[] = [];
+
+  for (const page of input.pages) {
+    for (const observed of page.html.observedPrices) {
+      observedPricePoints.push({
+        amount: observed.amount,
+        currencyToken: observed.currencyToken,
+        period: observed.period,
+        path: page.finalPath,
+      });
+    }
+
+    for (const offer of page.html.offers) {
+      declaredPricePoints.push({
+        price: offer.price,
+        currency: offer.currency,
+        period: offer.period,
+        planName: offer.name,
+        path: page.finalPath,
+      });
+    }
+  }
+
+  return {
+    pricingPageReached: input.pricingPageReached,
+    declaredPricePoints,
+    // Zero is a price, and a declared zero is a stated free tier. Absence of
+    // any offer is not — see the type's own note.
+    hasFreeDeclaredTier: declaredPricePoints.some((point) => point.price === 0),
+    declaredCurrencies: [...new Set(declaredPricePoints.map((point) => point.currency))].sort(),
+    observedPricePoints,
+  };
 }
 
 export function buildConversionSignals(input: {

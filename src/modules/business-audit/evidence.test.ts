@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import type { LiveProductIntelligenceSnapshot } from "@/modules/live-product-intelligence/schema";
 import {
   buildEvidencePack,
+  buildLiveEvidence,
   evidenceIdSet,
   EVIDENCE_PACK_VERSION,
   renderEvidencePack,
@@ -196,5 +198,179 @@ describe("trimEvidencePack", () => {
     const trimmed = trimEvidencePack(buildEvidencePack(input()), 2);
     const ids = trimmed.items.map((entry) => entry.id);
     expect(ids).toEqual([...ids].sort());
+  });
+});
+
+/**
+ * Pricing reaches the model (Sprint 0079).
+ *
+ * The pack could say a pricing *page* existed and nothing about what was on
+ * it, for a product whose audit scores monetization as one of five dimensions.
+ */
+describe("what the site says it charges", () => {
+  const withPricing = (pricing: LiveProductIntelligenceSnapshot["pricing"]) =>
+    buildLiveEvidence({ ...fakeLiveSnapshot(), pricing }).map((entry) => entry.id);
+
+  it("cites each declared price", () => {
+    const ids = withPricing({
+      pricingPageReached: true,
+      declaredPricePoints: [
+        { price: 29, currency: "EUR", period: "month", planName: "Pro", path: "/pricing" },
+      ],
+      hasFreeDeclaredTier: false,
+      declaredCurrencies: ["EUR"],
+      observedPricePoints: [],
+    });
+
+    expect(ids.some((id) => id.startsWith("live.pricing.declared."))).toBe(true);
+  });
+
+  it("states a free tier and more than one currency as their own facts", () => {
+    const ids = withPricing({
+      pricingPageReached: true,
+      declaredPricePoints: [
+        { price: 0, currency: "EUR", period: null, planName: "Free", path: "/pricing" },
+        { price: 32, currency: "USD", period: "month", planName: "Pro", path: "/pricing" },
+      ],
+      hasFreeDeclaredTier: true,
+      declaredCurrencies: ["EUR", "USD"],
+      observedPricePoints: [],
+    });
+
+    expect(ids).toContain("live.pricing.free_tier");
+    expect(ids).toContain("live.pricing.multiple_currencies");
+  });
+
+  /**
+   * The guard that matters most.
+   *
+   * "No declared price" is only a finding once the pricing page was actually
+   * read. Minting it otherwise hands a model Vibe's own coverage gap as though
+   * it were a fact about the founder's business — the failure the audit's
+   * `insufficient_evidence` rule exists to prevent.
+   */
+  it("does not report an absence it did not observe", () => {
+    const unreached = withPricing({
+      pricingPageReached: false,
+      declaredPricePoints: [],
+      hasFreeDeclaredTier: false,
+      declaredCurrencies: [],
+      observedPricePoints: [],
+    });
+    const reached = withPricing({
+      pricingPageReached: true,
+      declaredPricePoints: [],
+      hasFreeDeclaredTier: false,
+      declaredCurrencies: [],
+      observedPricePoints: [],
+    });
+
+    expect(unreached).not.toContain("live.pricing.none_declared");
+    expect(reached).toContain("live.pricing.none_declared");
+  });
+
+  /**
+   * A snapshot taken before pricing existed must mint nothing.
+   *
+   * The Opportunity Engine and the Action Planner rebuild a stored audit's
+   * pack from its snapshots. A builder that read this unconditionally would
+   * mint ids for an old snapshot the audit never cited.
+   */
+  it("mints nothing for a snapshot that predates pricing", () => {
+    const ids = buildLiveEvidence({ ...fakeLiveSnapshot(), pricing: undefined }).map(
+      (entry) => entry.id,
+    );
+
+    expect(ids.some((id) => id.startsWith("live.pricing."))).toBe(false);
+  });
+});
+
+/**
+ * The observed half arrives labelled as weaker.
+ *
+ * Nothing stops a model treating a weak fact as a strong one except the words
+ * the fact arrives in, so the downgrade lives in the sentence itself.
+ */
+describe("an observed price says so", () => {
+  const ids = () =>
+    buildLiveEvidence({
+      ...fakeLiveSnapshot(),
+      pricing: {
+        pricingPageReached: true,
+        declaredPricePoints: [],
+        hasFreeDeclaredTier: false,
+        declaredCurrencies: [],
+        observedPricePoints: [
+          { amount: 29, currencyToken: "$", period: "month", path: "/pricing" },
+        ],
+      },
+    });
+
+  it("mints it under its own namespace", () => {
+    expect(ids().some((entry) => entry.id.startsWith("live.pricing.observed."))).toBe(true);
+    expect(ids().some((entry) => entry.id.startsWith("live.pricing.declared."))).toBe(false);
+  });
+
+  it("does not present it as a stated price", () => {
+    const entry = ids().find((candidate) => candidate.id.startsWith("live.pricing.observed."));
+
+    expect(entry?.label).toContain("not stated as a price");
+    // The token as written, never a currency code the page did not give.
+    expect(entry?.label).toContain("$29");
+    expect(entry?.label).not.toContain("USD");
+  });
+
+  it("ranks below a declared price so trimming drops it first", () => {
+    const observed = ids().find((entry) => entry.id.startsWith("live.pricing.observed."));
+    expect(observed?.priority).toBe(2);
+  });
+});
+
+/**
+ * A signal the homepage has and other pages do not.
+ *
+ * Minted only when there is a genuine shortfall: a signal the homepage lacks
+ * is already reported by `live.seo.<id>_missing`, and one every page carries
+ * is not a finding at all.
+ */
+describe("seo coverage reaches the model", () => {
+  const withCoverage = (
+    present: boolean,
+    coverage: { pagesWith: number; pagesInspected: number } | undefined,
+  ) => {
+    const snapshot = fakeLiveSnapshot();
+    return buildLiveEvidence({
+      ...snapshot,
+      seoSignals: snapshot.seoSignals.map((signal) =>
+        signal.id === "title" ? { ...signal, present, coverage } : signal,
+      ),
+    }).map((entry) => entry.id);
+  };
+
+  it("names the shortfall", () => {
+    expect(withCoverage(true, { pagesWith: 1, pagesInspected: 4 })).toContain(
+      "live.seo.coverage.title",
+    );
+  });
+
+  it("says nothing when every page carries it", () => {
+    expect(withCoverage(true, { pagesWith: 4, pagesInspected: 4 })).not.toContain(
+      "live.seo.coverage.title",
+    );
+  });
+
+  /**
+   * A signal the homepage lacks is already `live.seo.title_missing`. Adding a
+   * coverage id there would report the same gap twice, in weaker words.
+   */
+  it("does not duplicate an outright absence", () => {
+    const ids = withCoverage(false, { pagesWith: 0, pagesInspected: 4 });
+
+    expect(ids).toContain("live.seo.title_missing");
+    expect(ids).not.toContain("live.seo.coverage.title");
+  });
+
+  it("mints nothing for a snapshot that predates coverage", () => {
+    expect(withCoverage(true, undefined)).not.toContain("live.seo.coverage.title");
   });
 });

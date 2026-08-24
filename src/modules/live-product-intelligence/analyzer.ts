@@ -11,6 +11,7 @@ import {
 } from "./schema";
 import {
   buildConversionSignals,
+  buildPricingSignals,
   buildPageSummaries,
   buildProductSurfaces,
   buildSeoSignals,
@@ -106,12 +107,21 @@ export async function analyzeLiveProduct(
     productSurfaces: surfaces,
     seoSignals: buildSeoSignals({
       homepage,
+      pages: outcome.pages,
       robotsTxtPresent: outcome.robots.exists,
       sitemapPresent: outcome.sitemapPresent,
     }),
     conversionSignals: buildConversionSignals({
       pages: outcome.pages,
       discoveredPaths: outcome.discoveredPaths,
+    }),
+    pricing: buildPricingSignals({
+      pages: outcome.pages,
+      // The surface detector already decided this; asking it again here would
+      // be a second definition of "reached" that could drift from the first.
+      pricingPageReached: surfaces.some(
+        (surface) => surface.id === "pricing" && surface.detected,
+      ),
     }),
     brandSignals: buildBrandSignals({ homepage, effectiveOrigin: outcome.effectiveOrigin }),
     metrics: {

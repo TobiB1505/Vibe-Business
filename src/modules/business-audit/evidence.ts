@@ -27,6 +27,12 @@ import type { BusinessContext } from "@/modules/projects/business-context";
 
 export const EVIDENCE_PACK_VERSION = "business-evidence.v1" as const;
 
+/** Price points cited individually. A price list, not a catalogue. */
+const MAX_DECLARED_PRICE_EVIDENCE = 8;
+
+/** Observed prices cited individually. Fewer than declared: they are weaker. */
+const MAX_OBSERVED_PRICE_EVIDENCE = 6;
+
 /**
  * Which id scheme a builder mints surfaces under.
  *
@@ -304,7 +310,113 @@ export function buildLiveEvidence(
     );
   }
 
+  /*
+   * What the site says it charges (Sprint 0079).
+   *
+   * Monetization is one of the five dimensions the audit scores, and until
+   * now the pack could tell a model that a pricing *page* existed and nothing
+   * whatsoever about what was on it. A declared `Offer` is the operator's own
+   * machine-readable statement, so it is worth stating plainly.
+   *
+   * Absence is minted only when the pricing surface was actually reached.
+   * "No declared price on a site whose pricing page we never fetched" is not
+   * a finding, and a model handed it as one would reason from Vibe's own
+   * coverage gap as though it were the founder's business.
+   */
+  const pricing = snapshot.pricing;
+  if (pricing) {
+    for (const point of pricing.declaredPricePoints.slice(0, MAX_DECLARED_PRICE_EVIDENCE)) {
+      const period = point.period === null ? "" : ` per ${point.period.replace("_", " ")}`;
+      const plan = point.planName === null ? "" : `${point.planName}: `;
+      items.push(
+        item(
+          `live.pricing.declared.${slug(`${point.planName ?? "plan"}_${point.currency}_${point.price}`)}`,
+          "live_product",
+          `Price stated on your site — ${plan}${point.price} ${point.currency}${period}`,
+          3,
+        ),
+      );
+    }
+
+    if (pricing.hasFreeDeclaredTier) {
+      items.push(
+        item("live.pricing.free_tier", "live_product", "Your site states a free tier", 2),
+      );
+    }
+
+    if (pricing.declaredCurrencies.length > 1) {
+      items.push(
+        item(
+          "live.pricing.multiple_currencies",
+          "live_product",
+          `Your site states prices in ${pricing.declaredCurrencies.join(", ")}`,
+          2,
+        ),
+      );
+    }
+
+    /*
+     * Observed prices say so in the sentence itself.
+     *
+     * The model is told "seen on the page" rather than "your price is", and
+     * gets the token as written rather than a currency code, because the page
+     * wrote a glyph and `$` is not USD. Downgrading the wording is the whole
+     * mechanism here: nothing stops a model treating a weaker fact as a strong
+     * one except the words the fact arrives in.
+     *
+     * Priority 2, below the declared ones at 3, so trimming drops these first.
+     */
+    for (const point of pricing.observedPricePoints.slice(0, MAX_OBSERVED_PRICE_EVIDENCE)) {
+      const period = point.period === null ? "" : ` per ${point.period.replace("_", " ")}`;
+      items.push(
+        item(
+          `live.pricing.observed.${slug(`${point.currencyToken}_${point.amount}`)}`,
+          "live_product",
+          `Seen on your page, not stated as a price — ${point.currencyToken}${point.amount}${period}`,
+          2,
+        ),
+      );
+    }
+
+    if (pricing.pricingPageReached && pricing.declaredPricePoints.length === 0) {
+      items.push(
+        item(
+          "live.pricing.none_declared",
+          "live_product",
+          "Your pricing page was read and states no machine-readable price",
+          2,
+        ),
+      );
+    }
+  }
+
   for (const signal of snapshot.seoSignals) {
+    /*
+     * The half the homepage could not see (Sprint 0079).
+     *
+     * `present` is the homepage's answer and stays that way — the ids minted
+     * from it are stored in four durable places. This is the additive fact: a
+     * site whose homepage has a description and whose four other pages do not
+     * was reported as entirely fine.
+     *
+     * `live.seo.coverage.<id>` rather than a `_partial` suffix, deliberately.
+     * Four absence dialects already exist and Sprint 0073 named that as too
+     * many; a fifth would be the same mistake with a new word. A namespace
+     * level also stays clear of `live-premise.ts`, which selects the ids it
+     * revalidates by `endsWith("_missing")`.
+     */
+    const coverage = signal.coverage;
+    if (coverage && signal.present && coverage.pagesWith < coverage.pagesInspected) {
+      items.push(
+        item(
+          `live.seo.coverage.${slug(signal.id)}`,
+          "live_product",
+          `${signal.name}: on your homepage, missing on ${coverage.pagesInspected - coverage.pagesWith} of ${coverage.pagesInspected} pages Vibe read`,
+          2,
+        ),
+      );
+    }
+
     items.push(
       item(
         `live.seo.${slug(signal.id)}${signal.present ? "" : "_missing"}`,
