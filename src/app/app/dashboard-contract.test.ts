@@ -41,10 +41,10 @@ const SURFACE_FILES = ["layout.tsx", "page.tsx"] as const;
  *
  * `account-home.tsx` is the composition `/app` renders — one directory up
  * because the browser harness renders it too. `products/page.tsx` is the full
- * index, which reaches the same read model by a route nobody would think to
- * check. Both are Server Components, so both can `await` anything the page
- * can, and a contract that stopped at one filename would be one `mv` away from
- * guarding nothing.
+ * index, which reaches its richer account-wide read model by a route nobody
+ * would think to check. Both are Server Components, so both can `await`
+ * anything the page can, and a contract that stopped at one filename would be
+ * one `mv` away from guarding nothing.
  */
 const CROSS_PROJECT_FILES = [
   ["account-home.tsx", "src/app/app/account-home.tsx"],
@@ -86,10 +86,15 @@ function accountSurface(): { name: string; source: string }[] {
 
 const surface = accountSurface();
 const readModel = source(join(MODULES, "projects/dashboard.ts"));
+const productsReadModel = source(join(MODULES, "projects/products-overview.ts"));
 const attention = source(join(MODULES, "projects/attention.ts"));
 
 /** Every guarded file: the render surface plus the read model behind it. */
-const guarded = [...surface, { name: "dashboard.ts", source: readModel }];
+const guarded = [
+  ...surface,
+  { name: "dashboard.ts", source: readModel },
+  { name: "products-overview.ts", source: productsReadModel },
+];
 
 describe("the dashboard is summary-only", () => {
   /**
@@ -113,6 +118,8 @@ describe("the dashboard is summary-only", () => {
     "getBusinessImpactCard",
     "getLatestSuccessfulAudit",
     "getLatestOpportunities",
+    "getLatestProfile",
+    "getFounderIntent",
     "buildValidationSummary",
   ];
 
@@ -197,15 +204,26 @@ describe("the dashboard is summary-only", () => {
 describe("the dashboard does not scale its queries with its projects", () => {
   it("filters by a project id list rather than one project at a time", () => {
     expect(readModel).toContain('.in("project_id"');
+    expect(productsReadModel).toContain('.in("project_id"');
   });
 
   it("has no await inside a loop over projects", () => {
     // The N+1 shape, asserted structurally: an `await` inside `for (const
     // … of projects)` is the exact thing this module exists to avoid.
-    const loops = readModel.match(/for\s*\(const[^)]*\)\s*\{[\s\S]*?\n  \}/g) ?? [];
-    for (const loop of loops) {
-      expect(loop, "a loop in dashboard.ts awaits").not.toContain("await ");
+    for (const [name, model] of [
+      ["dashboard.ts", readModel],
+      ["products-overview.ts", productsReadModel],
+    ] as const) {
+      const loops = model.match(/for\s*\(const[^)]*\)\s*\{[\s\S]*?\n  \}/g) ?? [];
+      for (const loop of loops) {
+        expect(loop, `a loop in ${name} awaits`).not.toContain("await ");
+      }
     }
+  });
+
+  it("bounds profile documents to the exact latest-audit profile ids", () => {
+    expect(productsReadModel).toContain('.in("id", profileIds)');
+    expect(productsReadModel).not.toContain('from("product_profiles").select("*")');
   });
 
   /**

@@ -80,6 +80,10 @@ export type DashboardProject = {
   name: string;
   repositoryFullName: string | null;
   defaultBranch: string | null;
+  /** Captured GitHub visibility. Optional so older fixtures remain honest. */
+  repositoryPrivate?: boolean | null;
+  /** Exact Product Profile used by the latest completed audit, when recorded. */
+  productProfileId?: string | null;
   /** Null unless a completed audit produced one. Never zero as a stand-in. */
   score: number | null;
   scoreState: ProjectScoreState;
@@ -142,9 +146,15 @@ export type DashboardOverview = {
 };
 
 type ProjectRow = { id: string; name: string };
-type RepoRow = { project_id: string; full_name: string; default_branch: string };
+type RepoRow = {
+  project_id: string;
+  full_name: string;
+  default_branch: string;
+  private: boolean;
+};
 type AuditRow = {
   project_id: string;
+  product_profile_id: string | null;
   overall_score: number | null;
   assessed_dimensions: number | null;
   total_dimensions: number | null;
@@ -179,7 +189,7 @@ type ValidationRow = { prepared_change_id: string; status: string; created_at: s
  * needed no migration.
  */
 const AUDIT_COLUMNS =
-  "project_id, overall_score, assessed_dimensions, total_dimensions, created_at, schema_version, audit_version, evidence_pack_version, prompt_version, rubric_version, provider, model";
+  "project_id, product_profile_id, overall_score, assessed_dimensions, total_dimensions, created_at, schema_version, audit_version, evidence_pack_version, prompt_version, rubric_version, provider, model";
 
 /**
  * Rows are fetched newest-first and reduced to the first per key. Postgres has
@@ -266,7 +276,7 @@ export async function getDashboardOverview(
   const [repos, audits, sets, prepared] = await Promise.all([
     supabase
       .from("repository_connections")
-      .select("project_id, full_name, default_branch")
+      .select("project_id, full_name, default_branch, private")
       .in("project_id", projectIds),
     supabase
       // `overall_score` is a column. The audit's JSONB document is never read
@@ -371,6 +381,8 @@ export async function getDashboardOverview(
       name: project.name,
       repositoryFullName: repo?.full_name ?? null,
       defaultBranch: repo?.default_branch ?? null,
+      repositoryPrivate: repo?.private ?? null,
+      productProfileId: audit?.product_profile_id ?? null,
       score: audit?.overall_score ?? null,
       scoreState,
       topMove: (set && dashboardMove(topMoveBySet.get(set.id))) || null,
