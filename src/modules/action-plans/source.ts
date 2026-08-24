@@ -101,22 +101,30 @@ export type PlannerSourceResolution =
 /**
  * How closely a conclusion matches a Move, for legacy reconstruction only.
  *
- * Evidence overlap is weighted above dimension overlap, and by a margin dimensions
- * cannot close. Two conclusions routinely touch the same dimension — that is what a
- * dimension is for — while citing the same observed fact is a much stronger statement
+ * Evidence overlap is weighted above lens overlap, and by a margin lenses
+ * cannot close. Two conclusions routinely touch the same lens — that is what a
+ * lens is for — while citing the same observed fact is a much stronger statement
  * that they are about the same thing.
+ *
+ * A Move stored before the lens attribution (ADR 0050 §5) carries no lenses,
+ * so its affinity rests entirely on evidence overlap — which the threshold
+ * below already required. The one behavioural narrowing: a tie between two
+ * candidates that the retired dimension overlap used to break now resolves to
+ * ambiguous, and ambiguous was always the honest answer there.
  */
 function affinity(conclusion: BusinessConclusion, opportunity: BusinessOpportunity): number {
   const cited = new Set(opportunity.evidenceIds);
   const evidenceOverlap = conclusion.evidenceIds.filter((id) => cited.has(id)).length;
 
-  const dimensions = new Set([opportunity.primaryDimension, ...opportunity.secondaryDimensions]);
-  const dimensionOverlap = conclusion.dimensions.filter((id) => dimensions.has(id)).length;
+  const lenses = new Set(
+    opportunity.primaryLens === null ? [] : [opportunity.primaryLens, ...opportunity.secondaryLenses],
+  );
+  const lensOverlap = (conclusion.lenses ?? []).filter((id) => lenses.has(id)).length;
 
-  return evidenceOverlap * 10 + dimensionOverlap;
+  return evidenceOverlap * 10 + lensOverlap;
 }
 
-/** True when a score could only have come from shared evidence, not shared dimensions. */
+/** True when a score could only have come from shared evidence, not shared lenses. */
 function restsOnSharedEvidence(score: number): boolean {
   return score >= 10;
 }
@@ -127,7 +135,7 @@ function restsOnSharedEvidence(score: number): boolean {
  * Resolves only when the answer is unambiguous on the existing deterministic rules:
  *
  *  1. the best candidate must rest on **shared evidence**, not merely a shared
- *     dimension — a dimension in common is what two unrelated conclusions have;
+ *     lens — a lens in common is what two unrelated conclusions have;
  *  2. no other candidate may tie it.
  *
  * Anything else is unresolved. "Highest score wins" is explicitly not the rule (§5): a

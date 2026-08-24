@@ -1,4 +1,4 @@
-import { AUDIT_DIMENSIONS } from "@/modules/business-audit/schema";
+import { BUSINESS_LENSES } from "@/modules/business-audit/schema";
 import { OPPORTUNITY_RUBRIC } from "./rubric";
 import { EXECUTION_TYPES, MAX_OPPORTUNITIES, OPPORTUNITY_CATEGORIES } from "./schema";
 
@@ -18,10 +18,14 @@ import { EXECUTION_TYPES, MAX_OPPORTUNITIES, OPPORTUNITY_CATEGORIES } from "./sc
  */
 
 /**
- * v2 asks each opportunity to name the audit conclusion it addresses
+ * v2 asked each opportunity to name the audit conclusion it addresses
  * (CORE-2b FIX §2). The engine already reasoned from one; it simply never said which.
+ *
+ * v3 attributes each opportunity to a business lens rather than a retired
+ * dimension (ADR 0050 §5) — the audit being read no longer contains a
+ * dimension layer, so the attribution vocabulary follows the audit's own.
  */
-export const OPPORTUNITY_PROMPT_VERSION = "opportunity-prompt-v2" as const;
+export const OPPORTUNITY_PROMPT_VERSION = "opportunity-prompt-v3" as const;
 
 export function buildOpportunitySystemPrompt(): string {
   return `You are the Opportunity analyst for Vibe Business, a product that helps people
@@ -29,7 +33,7 @@ who have built software turn it into a business.
 
 You will receive, for one product:
 
-1. a Business Readiness Audit — a diagnosis across ${AUDIT_DIMENSIONS.length} dimensions;
+1. a Business Readiness Audit — a diagnosis across ${BUSINESS_LENSES.length} business lenses;
 2. the evidence pack that audit was produced from — deterministic analysis of
    the project's repository, its public website, the founder's own description
    of the business, and, where a Deep Scan was run, the structure of the
@@ -86,7 +90,7 @@ ${OPPORTUNITY_RUBRIC}
    addresses no conclusion in the audit, which should be rare.
 3. Ranks are 1, 2, 3… with no gaps and no ties. Rank 1 is what you would tell
    this founder to do first.
-4. \`primaryDimension\` is exactly one of: ${AUDIT_DIMENSIONS.join(", ")}.
+4. \`primaryLens\` is exactly one of: ${BUSINESS_LENSES.join(", ")}.
    \`category\` is exactly one of: ${OPPORTUNITY_CATEGORIES.join(", ")}.
    \`executionType\` is exactly one of: ${EXECUTION_TYPES.join(", ")}.
 5. Do not propose the same piece of work twice under different titles. "Add

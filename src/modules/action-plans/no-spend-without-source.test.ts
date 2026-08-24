@@ -66,8 +66,8 @@ const UNRESOLVABLE = [
     opportunity: fakeOpportunity({
       sourceConclusionKey: null,
       evidenceIds: ["repo.surface.payments"],
-      primaryDimension: "distribution",
-      secondaryDimensions: [],
+      primaryLens: "acquisition",
+      secondaryLenses: [],
     }),
     reason: "no_legacy_match",
   },
@@ -75,7 +75,7 @@ const UNRESOLVABLE = [
     name: "a legacy Move matching two conclusions equally",
     audit: fakePlannedAudit({
       synthesis: {
-        version: "business-audit-synthesis-v6",
+        version: "business-audit-synthesis-v7",
         lenses: [],
         overall: "…",
         strengths: [],

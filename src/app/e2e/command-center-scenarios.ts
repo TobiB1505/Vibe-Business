@@ -41,7 +41,6 @@ function conclusion(overrides: Partial<BusinessConclusion> = {}): BusinessConclu
     explanation: "Vibe couldn't find prices or anything to buy.",
     whyItMatters: "Until someone can pay, nothing else you improve turns into revenue.",
     evidenceIds: ["live.surface.pricing"],
-    dimensions: ["monetization"],
     lenses: ["revenue_economics"],
     tone: "critical",
     confidence: "high",

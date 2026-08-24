@@ -375,14 +375,14 @@ describe("the rubric raises conclusions above the evidence under them (§19–§
 describe("the rubric keeps conclusions above the scanner record (§13, §14)", () => {
   const flowed = BUSINESS_READINESS_RUBRIC.toLowerCase().replace(/\s+/g, " ");
 
-  it("states which half of the rubric is the audit", () => {
+  it("states that the lens reasoning is the whole audit", () => {
     expect(flowed).toContain("the business reasoning is the audit");
-    expect(flowed).toContain("the five scored dimensions are the technical record");
+    expect(flowed).toContain("what you write here is the whole record");
   });
 
-  it("forbids building a conclusion out of a dimension's gaps", () => {
-    expect(flowed).toContain("never build a conclusion out of a dimension's gaps");
-    expect(flowed).toContain("a gap says what a scanner did not detect");
+  it("forbids building a conclusion out of a scanner inventory", () => {
+    expect(flowed).toContain("never build a conclusion out of a lens summary's missing-surface inventory");
+    expect(flowed).toContain("undetected surface says what a scanner did not find");
   });
 
   /** §12, §13 — the abstraction step gets its own field and its own moment. */
@@ -421,19 +421,18 @@ describe("the prompt orders the work before the model starts (§24)", () => {
   const prompt = buildSystemPrompt();
   const flowed = prompt.toLowerCase().replace(/\s+/g, " ");
 
-  it("asks for the lenses first and the dimensions last", () => {
+  it("asks for the lenses first", () => {
     expect(flowed).toContain("assess the nine business lenses. this is where the thinking happens");
-    expect(flowed).toContain("only then record the technical breakdown");
   });
 
-  it("explains why the order matters rather than just asserting it", () => {
+  it("keeps the conclusions from becoming an inventory of absences", () => {
     expect(flowed).toContain(
-      "puts a list of undetected surfaces in front of you at the exact moment you should be naming a business problem",
+      "if your explanation reads as a list of things that are missing, you have written the evidence instead of the judgment",
     );
   });
 
-  it("forbids a conclusion that paraphrases a dimension's gaps", () => {
-    expect(flowed).toContain("never let a conclusion be a paraphrase of a dimension's gaps");
+  it("forbids a conclusion that paraphrases the missing-surface inventory", () => {
+    expect(flowed).toContain("never let a conclusion be a paraphrase of a lens summary's missing-surface inventory");
     expect(flowed).toContain("you have written the evidence instead of the judgment");
   });
 });

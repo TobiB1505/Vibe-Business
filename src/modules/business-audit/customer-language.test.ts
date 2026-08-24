@@ -133,7 +133,6 @@ function conclusion(overrides: Partial<BusinessConclusion> = {}): BusinessConclu
     explanation: "Vibe couldn't find prices or anything to buy.",
     whyItMatters: null,
     evidenceIds: ["live.surface.pricing"],
-    dimensions: ["monetization"],
     lenses: ["revenue_economics"],
     tone: "critical",
     confidence: "high",
@@ -238,30 +237,33 @@ describe("raw evidence and technical detail are not censored", () => {
   ]);
 
   function run(overrides: Record<string, unknown>) {
-    const normalized = normalizeAnthropicAuditOutput(buildModelOutput(overrides.dimensions ?? {}, overrides.extras ?? {}));
+    const normalized = normalizeAnthropicAuditOutput(buildModelOutput(overrides.extras ?? {}));
     if (!normalized.ok) throw new Error("fixture failed normalization");
     return validateAuditOutput(normalized.data, KNOWN);
   }
 
-  it("accepts an audit whose DIMENSION findings use precise technical terms", () => {
+  it("accepts an audit whose LENS summaries use precise technical terms", () => {
     const result = run({
-      dimensions: {
-        distribution: {
-          assessmentStatus: "assessable",
-          score: 40,
-          strengths: [],
-          gaps: ["Canonical URL and structured data are absent"],
-          unknowns: [],
-          evidenceIds: ["live.seo.canonical_missing"],
-        },
+      extras: {
+        lenses: [
+          {
+            lens: "acquisition",
+            health: "weak",
+            score: 40,
+            materiality: "soon",
+            summary: "Canonical URL and structured data are absent.",
+            evidenceIds: ["live.seo.canonical_missing"],
+            missingContext: [],
+          },
+        ],
       },
     });
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    const distribution = result.audit.dimensions.find((d) => d.id === "distribution");
+    const acquisition = result.audit.synthesis?.lenses.find((l) => l.lens === "acquisition");
     // The precision survives exactly as written — this is the technical record.
-    expect(distribution?.gaps).toEqual(["Canonical URL and structured data are absent"]);
+    expect(acquisition?.summary).toBe("Canonical URL and structured data are absent.");
   });
 
   it("does not reject an audit because an evidence id looks like jargon", () => {
@@ -275,7 +277,6 @@ describe("raw evidence and technical detail are not censored", () => {
             whyItMatters: "",
             tone: "critical",
             confidence: "high",
-            dimensions: ["monetization"],
             evidenceIds: ["profile.signal.pricing_surface"],
           },
         ],
@@ -295,7 +296,6 @@ describe("raw evidence and technical detail are not censored", () => {
             whyItMatters: "",
             tone: "critical",
             confidence: "high",
-            dimensions: ["monetization"],
             evidenceIds: ["profile.signal.pricing_surface"],
           },
         ],
@@ -338,7 +338,6 @@ describe("the contract holds at real audit cardinality", () => {
           "Vibe reached a dashboard and a project workspace behind the login.",
         whyItMatters: null,
         evidenceIds: ["a", "b", "c", "d", "e", "f", "g"],
-        dimensions: ["product", "conversion", "retention"],
       }),
       conclusion({
         tone: "positive",
@@ -346,7 +345,6 @@ describe("the contract holds at real audit cardinality", () => {
         explanation: "There is a signed-in workspace, not just a landing page.",
         whyItMatters: null,
         evidenceIds: ["h", "i"],
-        dimensions: ["retention"],
       }),
       conclusion({
         tone: "positive",
@@ -354,7 +352,6 @@ describe("the contract holds at real audit cardinality", () => {
         explanation: "Your site has a title, a description and a sitemap.",
         whyItMatters: null,
         evidenceIds: ["j", "k", "l"],
-        dimensions: ["distribution"],
       }),
     ],
     blockers: [
@@ -369,7 +366,6 @@ describe("the contract holds at real audit cardinality", () => {
           "Without a visible price or way to pay, even an interested visitor has no path to " +
           "becoming a paying customer.",
         evidenceIds: ["m", "n", "o", "p", "q", "r", "s", "t"],
-        dimensions: ["monetization", "conversion"],
       }),
       conclusion({
         tone: "attention",
@@ -377,7 +373,6 @@ describe("the contract holds at real audit cardinality", () => {
         explanation: "There's no blog or docs, and no stated way you're bringing people in.",
         whyItMatters: "Growth is likely to depend entirely on traffic you drive yourself.",
         evidenceIds: ["u", "v", "w"],
-        dimensions: ["distribution"],
       }),
       conclusion({
         tone: "attention",
@@ -385,7 +380,6 @@ describe("the contract holds at real audit cardinality", () => {
         explanation: "Nothing measuring usage was found in your code or in the signed-in app.",
         whyItMatters: "It will be hard to know whether the changes you make actually help.",
         evidenceIds: ["x", "y", "z"],
-        dimensions: ["retention", "conversion"],
       }),
     ],
   };
@@ -451,12 +445,9 @@ describe("a language rejection says which words leaked", () => {
     const provider = new FakeProvider({
       result: {
         ok: true,
-        data: buildModelOutput(
-          {},
-          {
-            overallConclusion: "There is no pricing surface and no checkout surface.",
-          },
-        ),
+        data: buildModelOutput({
+          overallConclusion: "There is no pricing surface and no checkout surface.",
+        }),
         usage: { inputTokens: 100, outputTokens: 100, thinkingTokens: 0 },
         model: "claude-sonnet-5",
         latencyMs: 10,
@@ -492,7 +483,7 @@ describe("a language rejection says which words leaked", () => {
     const provider = new FakeProvider({
       result: {
         ok: true,
-        data: buildModelOutput({}, { overallConclusion: "No pricing surface exists." }),
+        data: buildModelOutput({ overallConclusion: "No pricing surface exists." }),
         usage: { inputTokens: 4_000, outputTokens: 9_000, thinkingTokens: 3_000 },
         model: "claude-sonnet-5",
         latencyMs: 90_000,
@@ -563,12 +554,18 @@ describe("the jargon leak path, not just the jargon (§25, §54)", () => {
     expect(leaked.ok).toBe(true);
   });
 
-  /** The structural half. Order is the fix; the blocklist is only the alarm. */
-  it("generates the conclusions before the dimensions that carry the phrase", async () => {
+  /**
+   * The structural half, completed by ADR 0050: the scanner-language dimension
+   * block the conclusions used to paraphrase no longer exists in the response
+   * at all. The order that fixed the leak — reasoning before prose — survives
+   * as lenses before conclusions.
+   */
+  it("generates the lens reasoning before the founder-facing conclusions", async () => {
     const { ANTHROPIC_AUDIT_OUTPUT_SCHEMA } = await import("./wire-schema");
     const keys = Object.keys(ANTHROPIC_AUDIT_OUTPUT_SCHEMA.properties as Record<string, unknown>);
 
-    expect(keys.indexOf("conclusions")).toBeLessThan(keys.indexOf("dimensions"));
+    expect(keys).not.toContain("dimensions");
+    expect(keys.indexOf("lenses")).toBeLessThan(keys.indexOf("conclusions"));
   });
 });
 

@@ -331,8 +331,8 @@ describe("priority is not execution suitability", () => {
         rank: 2,
         title: "Add discoverability foundations",
         category: "seo",
-        primaryDimension: "distribution",
-        secondaryDimensions: [],
+        primaryLens: "acquisition",
+        secondaryLenses: [],
         // The one thing Vibe can actually execute today.
         executionType: "code_change",
         executionReadiness: "ready",
@@ -413,7 +413,7 @@ describe("Move → Conclusion lineage", () => {
   it("does not reconstruct when the Move already states its source", () => {
     const audit = fakePlannedAudit({
       synthesis: {
-        version: "business-audit-synthesis-v6",
+        version: "business-audit-synthesis-v7",
         lenses: [],
         overall: "…",
         strengths: [],
@@ -422,12 +422,10 @@ describe("Move → Conclusion lineage", () => {
           fakeConclusion({
             rootProblem: "The overlap-heavy conclusion.",
             evidenceIds: ["profile.identity.description", "live.site.title"],
-            dimensions: ["product", "conversion"],
           }),
           fakeConclusion({
             rootProblem: "The conclusion the engine actually reasoned from.",
             evidenceIds: ["repo.surface.payments"],
-            dimensions: ["monetization"],
           }),
         ],
       },
@@ -468,7 +466,7 @@ describe("Move → Conclusion lineage", () => {
   it("refuses an ambiguous legacy match rather than picking the top score", () => {
     const audit = fakePlannedAudit({
       synthesis: {
-        version: "business-audit-synthesis-v6",
+        version: "business-audit-synthesis-v7",
         lenses: [],
         overall: "…",
         strengths: [],
@@ -485,21 +483,21 @@ describe("Move → Conclusion lineage", () => {
   });
 
   /**
-   * §5 — a shared dimension is not a match.
+   * §5 — a shared lens is not a match.
    *
-   * Two unrelated conclusions routinely touch the same dimension; that is what a
-   * dimension is for. Only shared evidence is a statement that they are about the same
-   * thing, so a dimension-only overlap resolves to nothing.
+   * Two unrelated conclusions routinely touch the same lens; that is what a
+   * lens is for. Only shared evidence is a statement that they are about the same
+   * thing, so a lens-only overlap resolves to nothing.
    */
-  it("does not resolve on a shared dimension alone", () => {
+  it("does not resolve on a shared lens alone", () => {
     const audit = fakePlannedAudit({
       synthesis: {
-        version: "business-audit-synthesis-v6",
+        version: "business-audit-synthesis-v7",
         lenses: [],
         overall: "…",
         strengths: [],
         blockers: [
-          fakeConclusion({ evidenceIds: ["repo.surface.payments"], dimensions: ["product"] }),
+          fakeConclusion({ evidenceIds: ["repo.surface.payments"], lenses: ["offer"] }),
         ],
       },
     });
@@ -509,8 +507,8 @@ describe("Move → Conclusion lineage", () => {
       fakeOpportunity({
         sourceConclusionKey: null,
         evidenceIds: ["live.site.title"],
-        primaryDimension: "product",
-        secondaryDimensions: [],
+        primaryLens: "offer",
+        secondaryLenses: [],
       }),
     );
 
@@ -524,8 +522,8 @@ describe("Move → Conclusion lineage", () => {
       fakeOpportunity({
         sourceConclusionKey: null,
         evidenceIds: ["repo.surface.payments"],
-        primaryDimension: "distribution",
-        secondaryDimensions: [],
+        primaryLens: "acquisition",
+        secondaryLenses: [],
       }),
     );
 
@@ -572,7 +570,7 @@ describe("Move → Conclusion lineage", () => {
   it("binds to the audience blocker rather than an unrelated weak one", () => {
     const audit = fakePlannedAudit({
       synthesis: {
-        version: "business-audit-synthesis-v6",
+        version: "business-audit-synthesis-v7",
         lenses: [],
         overall: "…",
         strengths: [],
@@ -580,7 +578,6 @@ describe("Move → Conclusion lineage", () => {
           fakeConclusion({
             rootProblem: "Nothing about this business is legally set up.",
             evidenceIds: ["repo.surface.payments"],
-            dimensions: ["monetization"],
             lenses: ["business_readiness"],
           }),
           fakeConclusion(),

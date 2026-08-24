@@ -10,7 +10,6 @@ import {
   AUDIT_SYNTHESIS_VERSION,
   BUSINESS_AUDIT_SCHEMA_VERSION,
   BUSINESS_AUDIT_VERSION,
-  DIMENSION_LABELS,
   type BusinessReadinessAudit,
 } from "@/modules/business-audit/schema";
 import { renderOpportunityInput } from "./render";
@@ -38,31 +37,16 @@ function auditWith(overrides: Partial<BusinessReadinessAudit> = {}): BusinessRea
   return {
     schemaVersion: BUSINESS_AUDIT_SCHEMA_VERSION,
     auditVersion: BUSINESS_AUDIT_VERSION,
-    contractVersion: "business-audit-contract-v5",
-    evidencePackVersion: "business-evidence.v3",
-    promptVersion: "business-audit-prompt-v4",
-    rubricVersion: "business-readiness-rubric-v7",
+    contractVersion: "business-audit-contract-v8",
+    evidencePackVersion: "business-evidence.v4",
+    promptVersion: "business-audit-prompt-v5",
+    rubricVersion: "business-readiness-rubric-v11",
     provider: "anthropic",
     model: "claude-sonnet-5",
-    dimensions: [
-      {
-        id: "monetization",
-        label: DIMENSION_LABELS.monetization,
-        assessmentStatus: "assessable",
-        // The real Vibe Business number, and the one that must not lead.
-        score: 10,
-        confidence: "high",
-        summary: "No pricing is shown and no payment integration exists.",
-        strengths: [],
-        gaps: ["No pricing surface on the live site", "No checkout/billing surface detected"],
-        unknowns: [],
-        evidenceIds: ["live.site.title"],
-      },
-    ],
     overall: {
       score: 46,
-      assessedDimensions: 1,
-      totalDimensions: 5,
+      scoredLenses: 5,
+      eligibleLenses: 9,
       insufficientCoverageReason: null,
     },
     synthesis: {
@@ -94,7 +78,6 @@ function auditWith(overrides: Partial<BusinessReadinessAudit> = {}): BusinessRea
           explanation: "The product is aimed broadly and nothing narrows it down.",
           whyItMatters: "It makes every other decision harder to focus.",
           evidenceIds: ["live.site.title"],
-          dimensions: ["product"],
           lenses: ["audience"],
           tone: "critical",
           confidence: "high",
@@ -107,6 +90,31 @@ function auditWith(overrides: Partial<BusinessReadinessAudit> = {}): BusinessRea
     generatedAt: "2026-08-16T15:55:18.220Z",
     ...overrides,
   };
+}
+
+
+/**
+ * A stored v6/v7 audit as it sits in the database: the dimension payload is a
+ * record inside the JSONB, invisible to the v8 domain type and read by the
+ * renderer through its legacy guard (ADR 0050).
+ */
+function legacyAuditWith(overrides: Partial<BusinessReadinessAudit> = {}): BusinessReadinessAudit {
+  return {
+    ...auditWith(overrides),
+    dimensions: [
+      {
+        id: "monetization",
+        score: 10,
+        assessmentStatus: "assessable",
+        confidence: "high",
+        summary: "No pricing is shown and no payment integration exists.",
+        strengths: [],
+        gaps: ["No pricing surface on the live site", "No checkout/billing surface detected"],
+        unknowns: [],
+        evidenceIds: ["live.site.title"],
+      },
+    ],
+  } as BusinessReadinessAudit;
 }
 
 function render(audit: BusinessReadinessAudit): string {
@@ -123,7 +131,8 @@ function render(audit: BusinessReadinessAudit): string {
 }
 
 describe("judgment reaches the engine before the scanner record", () => {
-  const rendered = render(auditWith());
+  // A stored legacy audit — the only kind that still has a technical breakdown.
+  const rendered = render(legacyAuditWith());
 
   it("puts the business conclusions above the technical breakdown", () => {
     expect(rendered.indexOf("What the audit concluded about this business")).toBeGreaterThan(-1);
@@ -178,12 +187,16 @@ describe("materiality reaches the engine at all (§33)", () => {
 });
 
 describe("nothing was removed to make room (§33, §5)", () => {
-  const rendered = render(auditWith());
+  const rendered = render(legacyAuditWith());
 
-  it("still carries the dimension scores, findings and citations", () => {
+  it("still carries a stored audit's dimension scores, findings and citations", () => {
     expect(rendered).toContain("10/100");
     expect(rendered).toContain("No pricing surface on the live site");
     expect(rendered).toContain("Cited: live.site.title");
+  });
+
+  it("renders a v8 audit without a technical breakdown, because it has none", () => {
+    expect(render(auditWith())).not.toContain("Technical breakdown");
   });
 
   it("still carries the overall readiness score", () => {
@@ -195,7 +208,7 @@ describe("nothing was removed to make room (§33, §5)", () => {
    * the engine is not allowed to stop working because an old audit is selected.
    */
   it("renders an audit that has no synthesis at all", () => {
-    const rendered = render(auditWith({ synthesis: null }));
+    const rendered = render(legacyAuditWith({ synthesis: null }));
 
     expect(rendered).toContain("Technical breakdown");
     expect(rendered).toContain("10/100");

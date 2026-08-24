@@ -10,7 +10,7 @@ import {
 } from "./evidence-v3";
 import { PROMPT_VERSION, buildSystemPrompt } from "./prompt";
 import { RUBRIC_VERSION } from "./rubric";
-import { computeOverallReadiness } from "./scoring";
+import { computeOverallScore } from "./scoring";
 import {
   AUDIT_CONTRACT_VERSION,
   BUSINESS_AUDIT_SCHEMA_VERSION,
@@ -200,10 +200,10 @@ export async function runBusinessReadinessAudit(input: RunAuditInput): Promise<A
     };
   }
 
-  // Transport → domain, before any business rule runs. The provider's array
-  // form is converted to the dimension-keyed shape and the guarantees the
-  // array gave up (exactly five, each once, none unknown) are enforced here.
-  // Tokens were billed either way, so a failure is reported with its usage.
+  // Transport → domain, before any business rule runs. Since ADR 0050 this
+  // is a pass-through of the lens/conclusion shape; the invariants live in
+  // `validateAuditOutput`. Tokens were billed either way, so a failure is
+  // reported with its usage.
   const normalized = normalizeAnthropicAuditOutput(result.data);
   if (!normalized.ok) {
     return {
@@ -235,7 +235,7 @@ export async function runBusinessReadinessAudit(input: RunAuditInput): Promise<A
     };
   }
 
-  const { dimensions, synthesis, keyFindings, limitations, notes } = validation.audit;
+  const { synthesis, keyFindings, limitations, notes } = validation.audit;
 
   const validationNotes = [...notes];
   if (pack.trimmed) {
@@ -251,9 +251,10 @@ export async function runBusinessReadinessAudit(input: RunAuditInput): Promise<A
     rubricVersion: RUBRIC_VERSION,
     provider: provider.name,
     model: result.model,
-    dimensions,
-    // Computed here, never taken from the model (Sprint 4 §7).
-    overall: computeOverallReadiness(dimensions),
+    // Computed here, never taken from the model (Sprint 4 §7, rewritten by
+    // ADR 0050): the mean over validated lens scores, with a coverage
+    // threshold over the lenses that can apply.
+    overall: computeOverallScore(synthesis?.lenses ?? []),
     synthesis,
     keyFindings,
     limitations,

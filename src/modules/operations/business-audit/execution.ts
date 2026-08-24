@@ -693,7 +693,7 @@ export async function runInferenceStep(
       model: config.model,
       promptVersion: PROMPT_VERSION,
       overallScore: outcome.audit.overall.score,
-      coverage: `${outcome.audit.overall.assessedDimensions}/${outcome.audit.overall.totalDimensions}`,
+      coverage: `${outcome.audit.overall.scoredLenses}/${outcome.audit.overall.eligibleLenses}`,
       // The completion half of the funnel step, and the point at which the
       // free audit is provably consumed — for an included run. A refresh
       // completes here too and consumes nothing, which is why the mode is read

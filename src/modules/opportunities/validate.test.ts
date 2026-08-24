@@ -24,9 +24,9 @@ describe("counts and ranks", () => {
   it("keeps a well-formed set of three", () => {
     const { opportunities } = expectOk(
       validate([
-        fakeWireOpportunity({ rank: 1, category: "monetization", primaryDimension: "monetization" }),
-        fakeWireOpportunity({ rank: 2, category: "positioning", primaryDimension: "product" }),
-        fakeWireOpportunity({ rank: 3, category: "analytics", primaryDimension: "retention" }),
+        fakeWireOpportunity({ rank: 1, category: "monetization", primaryLens: "revenue_economics" }),
+        fakeWireOpportunity({ rank: 2, category: "positioning", primaryLens: "offer" }),
+        fakeWireOpportunity({ rank: 3, category: "analytics", primaryLens: "retention" }),
       ]),
     );
 
@@ -36,7 +36,7 @@ describe("counts and ranks", () => {
 
   it("caps the set at the maximum", () => {
     const categories = ["monetization", "positioning", "analytics", "seo", "onboarding", "trust"] as const;
-    const dimensions = ["monetization", "product", "retention", "distribution", "conversion", "product"] as const;
+    const lenses = ["revenue_economics", "offer", "retention", "acquisition", "conversion", "offer"] as const;
 
     const { opportunities, notes } = expectOk(
       validate(
@@ -44,7 +44,7 @@ describe("counts and ranks", () => {
           fakeWireOpportunity({
             rank: index + 1,
             category,
-            primaryDimension: dimensions[index],
+            primaryLens: lenses[index],
           }),
         ),
       ),
@@ -59,9 +59,9 @@ describe("counts and ranks", () => {
     // after any discard the model's numbering is stale by construction.
     const { opportunities } = expectOk(
       validate([
-        fakeWireOpportunity({ rank: 7, category: "monetization", primaryDimension: "monetization" }),
-        fakeWireOpportunity({ rank: 7, category: "positioning", primaryDimension: "product" }),
-        fakeWireOpportunity({ rank: 99, category: "seo", primaryDimension: "distribution" }),
+        fakeWireOpportunity({ rank: 7, category: "monetization", primaryLens: "revenue_economics" }),
+        fakeWireOpportunity({ rank: 7, category: "positioning", primaryLens: "offer" }),
+        fakeWireOpportunity({ rank: 99, category: "seo", primaryLens: "acquisition" }),
       ]),
     );
 
@@ -72,9 +72,9 @@ describe("counts and ranks", () => {
   it("preserves the model's ordering when renumbering", () => {
     const { opportunities } = expectOk(
       validate([
-        fakeWireOpportunity({ rank: 3, title: "Third", category: "seo", primaryDimension: "distribution" }),
-        fakeWireOpportunity({ rank: 1, title: "First", category: "monetization", primaryDimension: "monetization" }),
-        fakeWireOpportunity({ rank: 2, title: "Second", category: "positioning", primaryDimension: "product" }),
+        fakeWireOpportunity({ rank: 3, title: "Third", category: "seo", primaryLens: "acquisition" }),
+        fakeWireOpportunity({ rank: 1, title: "First", category: "monetization", primaryLens: "revenue_economics" }),
+        fakeWireOpportunity({ rank: 2, title: "Second", category: "positioning", primaryLens: "offer" }),
       ]),
     );
 
@@ -87,12 +87,12 @@ describe("evidence discipline (§14)", () => {
     const { opportunities, notes } = expectOk(
       validate([
         fakeWireOpportunity({
-          evidenceIds: ["intent.monetization_model", "repo.completely.invented"],
+          evidenceIds: ["intent.how_it_earns", "repo.completely.invented"],
         }),
       ]),
     );
 
-    expect(opportunities[0].evidenceIds).toEqual(["intent.monetization_model"]);
+    expect(opportunities[0].evidenceIds).toEqual(["intent.how_it_earns"]);
     expect(notes.join(" ")).toContain("did not exist");
   });
 
@@ -111,8 +111,8 @@ describe("evidence discipline (§14)", () => {
   it("keeps the valid opportunities when only one is unsupported", () => {
     const { opportunities } = expectOk(
       validate([
-        fakeWireOpportunity({ rank: 1, category: "monetization", primaryDimension: "monetization" }),
-        fakeWireOpportunity({ rank: 2, category: "seo", primaryDimension: "distribution", evidenceIds: ["nope"] }),
+        fakeWireOpportunity({ rank: 1, category: "monetization", primaryLens: "revenue_economics" }),
+        fakeWireOpportunity({ rank: 2, category: "seo", primaryLens: "acquisition", evidenceIds: ["nope"] }),
       ]),
     );
 
@@ -121,13 +121,26 @@ describe("evidence discipline (§14)", () => {
   });
 });
 
+describe("lens attribution (ADR 0050 §5)", () => {
+  it("attributes a Move to a business lens, not a legacy dimension", () => {
+    const { opportunities } = expectOk(validate([fakeWireOpportunity()]));
+
+    expect(opportunities[0].primaryLens).toBe("revenue_economics");
+    expect(opportunities[0].secondaryLenses).toEqual(["conversion"]);
+    // The five-dimension vocabulary is gone from the contract entirely; a
+    // validated Move must not carry it even as a dead key.
+    expect(opportunities[0]).not.toHaveProperty("primaryDimension");
+    expect(opportunities[0]).not.toHaveProperty("secondaryDimensions");
+  });
+});
+
 describe("duplicate protection (§17)", () => {
   it("merges two attempts at the same work, keeping the higher-ranked one", () => {
     const { opportunities, notes } = expectOk(
       validate([
-        fakeWireOpportunity({ rank: 1, title: "Add pricing", category: "monetization", primaryDimension: "monetization" }),
-        fakeWireOpportunity({ rank: 2, title: "Create a pricing page", category: "monetization", primaryDimension: "monetization" }),
-        fakeWireOpportunity({ rank: 3, title: "Instrument retention", category: "analytics", primaryDimension: "retention" }),
+        fakeWireOpportunity({ rank: 1, title: "Add pricing", category: "monetization", primaryLens: "revenue_economics" }),
+        fakeWireOpportunity({ rank: 2, title: "Create a pricing page", category: "monetization", primaryLens: "revenue_economics" }),
+        fakeWireOpportunity({ rank: 3, title: "Instrument retention", category: "analytics", primaryLens: "retention" }),
       ]),
     );
 
@@ -135,11 +148,11 @@ describe("duplicate protection (§17)", () => {
     expect(notes.join(" ")).toContain("duplicate");
   });
 
-  it("does not merge the same category applied to different dimensions", () => {
+  it("does not merge the same category applied to different lenses", () => {
     const { opportunities } = expectOk(
       validate([
-        fakeWireOpportunity({ rank: 1, category: "analytics", primaryDimension: "retention" }),
-        fakeWireOpportunity({ rank: 2, category: "analytics", primaryDimension: "distribution" }),
+        fakeWireOpportunity({ rank: 1, category: "analytics", primaryLens: "retention" }),
+        fakeWireOpportunity({ rank: 2, category: "analytics", primaryLens: "acquisition" }),
       ]),
     );
 
@@ -153,7 +166,7 @@ describe("field validity (§38)", () => {
     ["effort", { effort: "2.5 hours" }],
     ["confidence", { confidence: "certain" }],
     ["category", { category: "growth-hacking" }],
-    ["primary dimension", { primaryDimension: "virality" }],
+    ["primary lens", { primaryLens: "virality" }],
     ["execution type", { executionType: "deploy_to_production" }],
     ["execution readiness", { executionReadiness: "automatic" }],
   ])("rejects an opportunity with an invalid %s", (_label, override) => {
@@ -166,12 +179,12 @@ describe("field validity (§38)", () => {
     expect(validate([fakeWireOpportunity({ title: null })]).ok).toBe(false);
   });
 
-  it("drops a secondary dimension that repeats the primary one", () => {
+  it("drops a secondary lens that repeats the primary one", () => {
     const { opportunities } = expectOk(
-      validate([fakeWireOpportunity({ primaryDimension: "monetization", secondaryDimensions: ["monetization", "conversion"] })]),
+      validate([fakeWireOpportunity({ primaryLens: "revenue_economics", secondaryLenses: ["revenue_economics", "conversion"] })]),
     );
 
-    expect(opportunities[0].secondaryDimensions).toEqual(["conversion"]);
+    expect(opportunities[0].secondaryLenses).toEqual(["conversion"]);
   });
 
   it("keeps dependencies as stated, capped", () => {
@@ -187,8 +200,8 @@ describe("field validity (§38)", () => {
 describe("determinism", () => {
   it("produces identical output for identical input", () => {
     const entries = [
-      fakeWireOpportunity({ rank: 1, category: "monetization", primaryDimension: "monetization" }),
-      fakeWireOpportunity({ rank: 2, category: "positioning", primaryDimension: "product" }),
+      fakeWireOpportunity({ rank: 1, category: "monetization", primaryLens: "revenue_economics" }),
+      fakeWireOpportunity({ rank: 2, category: "positioning", primaryLens: "offer" }),
     ];
 
     expect(expectOk(validate(entries))).toEqual(expectOk(validate(entries)));

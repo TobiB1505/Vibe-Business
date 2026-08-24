@@ -31,7 +31,7 @@ function lens(overrides: Record<string, unknown> = {}) {
 
 function audit(lenses: Record<string, unknown>[], conclusions?: Record<string, unknown>[]) {
   const normalized = normalizeAnthropicAuditOutput(
-    buildModelOutput({}, conclusions ? { lenses, conclusions } : { lenses }),
+    buildModelOutput(conclusions ? { lenses, conclusions } : { lenses }),
   );
   if (!normalized.ok) throw new Error(`normalization failed: ${normalized.reason}`);
   const result = validateAuditOutput(normalized.data, KNOWN);

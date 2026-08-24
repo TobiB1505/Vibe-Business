@@ -14,14 +14,38 @@ import {
 } from "@/modules/projects/founder-intent";
 import type { ConfidenceTone, UnderstandingView } from "@/modules/product-understanding/view";
 
+export type UnderstandingSourceState = "ready" | "partial" | "failed" | "none";
+
 export type UnderstandingSource = {
   id: string;
   label: string;
   detail: string;
-  ready: boolean;
-  pending: string;
+  state: UnderstandingSourceState;
+  note?: string | null;
   href: string;
   action: string;
+};
+
+const SOURCE_STATE: Record<
+  UnderstandingSourceState,
+  { label: string; className: string }
+> = {
+  ready: {
+    label: "Available",
+    className: "border-mint/20 bg-mint/[0.06] text-mint",
+  },
+  partial: {
+    label: "Partially available",
+    className: "border-amber/20 bg-amber/[0.06] text-amber",
+  },
+  failed: {
+    label: "Last scan failed",
+    className: "border-coral-line bg-coral-tint-soft text-coral",
+  },
+  none: {
+    label: "Not available yet",
+    className: "border-line-2 bg-surface-3 text-fg-muted",
+  },
 };
 
 const TONE_TEXT: Record<ConfidenceTone, string> = {
@@ -105,7 +129,9 @@ export function UnderstandingPanel({
   actions: React.ReactNode;
 }) {
   const { headline, brand } = view;
-  const sourceCount = sources?.filter((source) => source.ready).length ?? view.sources.filter((source) => source.used).length;
+  const sourceCount =
+    sources?.filter((source) => source.state === "ready" || source.state === "partial").length ??
+    view.sources.filter((source) => source.used).length;
   const sourceTotal = sources?.length ?? view.sources.length;
   const understoodLabel = formatTimestamp(understoodAt);
   const context = founderIntent
@@ -120,8 +146,7 @@ export function UnderstandingPanel({
     id: ["code", "live", "deep-scan"][index] ?? `source-${index}`,
     label: source.label,
     detail: source.label,
-    ready: source.used,
-    pending: source.label,
+    state: source.used ? "ready" : "none",
     href: "#product-evidence",
     action: "View evidence",
   }));
@@ -252,9 +277,11 @@ export function UnderstandingPanel({
         <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {renderedSources.map((source) => (
             <li key={source.id} className="border-line-1 bg-surface-2 flex min-h-40 flex-col rounded-xl border p-4">
-              <div className="flex items-start justify-between gap-3"><span className="border-line-2 bg-surface-3 text-fg-secondary flex size-9 items-center justify-center rounded-full border"><ProductGlyph kind={sourceKind(source.id)} /></span><span className={source.ready ? "border-mint/20 bg-mint/[0.06] text-mint rounded-full border px-2 py-1 text-[0.65rem]" : "border-line-2 bg-surface-3 text-fg-muted rounded-full border px-2 py-1 text-[0.65rem]"}>{source.ready ? "Available" : "Not available yet"}</span></div>
+              <div className="flex items-start justify-between gap-3"><span className="border-line-2 bg-surface-3 text-fg-secondary flex size-9 items-center justify-center rounded-full border"><ProductGlyph kind={sourceKind(source.id)} /></span><span className={`${SOURCE_STATE[source.state].className} rounded-full border px-2 py-1 text-[0.65rem]`}>{SOURCE_STATE[source.state].label}</span></div>
               <h3 className="text-fg mt-4 text-sm font-semibold">{source.label}</h3>
-              <p className="text-fg-muted mt-1 flex-1 text-xs leading-5">{source.ready ? source.detail : source.pending}</p>
+              <p className="text-fg-muted mt-1 text-xs leading-5">{source.detail}</p>
+              {source.note && <p className="text-fg-meta mt-2 flex-1 text-[0.68rem] leading-5">{source.note}</p>}
+              {!source.note && <span className="flex-1" aria-hidden />}
               <Link href={source.href} className="text-fg-secondary hover:text-mint mt-4 w-fit rounded-sm text-xs underline underline-offset-4 transition-interactive focus-visible:ring-2 focus-visible:ring-mint">{source.action}</Link>
             </li>
           ))}

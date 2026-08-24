@@ -126,40 +126,6 @@ describe("experiments report observations, never causes", () => {
   });
 });
 
-describe("a score is never drawn as a zero it does not have", () => {
-  /**
-   * CLAUDE.md rule 44, at the one place in this sprint where a number becomes
-   * a bar width. `scoreDisplay` is the only thing allowed to make that
-   * conversion, because it is the only thing that knows `null` renders as an
-   * empty track and the word "n/a" rather than as 0%.
-   *
-   * Asserted structurally rather than by copy: a component that read
-   * `dimension.score` directly would compile, render, and be wrong only for
-   * the projects whose evidence was thin — which is the population least
-   * likely to be looking.
-   */
-  it("routes every dimension reading through scoreDisplay", () => {
-    const src = source("business-health.tsx");
-
-    expect(src).toContain("scoreDisplay(dimension.score)");
-    // No second path: nothing else may touch the raw number.
-    const rawReads = [...src.matchAll(/dimension\.score/g)];
-    expect(rawReads).toHaveLength(1);
-  });
-
-  it("never prints a scale beside a value that is not a number", () => {
-    const copy = renderedCopy("business-health.tsx");
-    // The suffix is attached inside `!display.unscored`, so "n/a / 100" is
-    // unreachable. This pins that the guard exists rather than trusting it.
-    expect(copy).toContain("!display.unscored &&");
-  });
-
-  it("says why a reading is absent rather than leaving a blank", () => {
-    const copy = renderedCopy("business-health.tsx");
-    expect(copy).toMatch(/didn&apos;t find enough to judge this one/);
-  });
-});
-
 describe("home tells the truth about what it does not know", () => {
   /**
    * Home's four answers are decided in `buildHomeView` and asserted in
@@ -181,6 +147,60 @@ describe("home tells the truth about what it does not know", () => {
     const src = source("home-status.tsx");
     expect(src).toContain('nextMove.kind === "none_found"');
     expect(src).toContain('nextMove.kind === "not_identified"');
+  });
+});
+
+describe("one Product Scan, in the founder's words", () => {
+  /**
+   * The two per-module controls ("Inspect repository" / "Inspect live
+   * product") merge into one customer-facing scan. The words "repository
+   * intelligence" and "live product check" are Vibe's names for its own
+   * subsystems, and they leave every customer string with the merge — module
+   * names, file paths and event names are unaffected.
+   */
+  it("offers one scan control for both sources, not one per module", () => {
+    const page = source("product/page.tsx");
+    expect(page).toContain("ProductScanButton");
+    expect(page).not.toContain("InspectButton");
+    expect(page).not.toContain("InspectLiveButton");
+  });
+
+  it("runs the live source from the same scan when a site is set", () => {
+    const action = source("product-scan-action.ts");
+    expect(action).toContain("inspectRepository(");
+    expect(action).toContain("inspectLiveProduct(");
+  });
+
+  it("tells a founder when a source was read, partially read, or failed", () => {
+    // The reference-fidelity dossier owns these source cards now; their
+    // contract still carries the unified scan's four honest states.
+    const src = source("understanding-panel.tsx");
+    // Three honest states, not a boolean: a client-rendered site was visited
+    // and partly unread, which is neither "ready" nor "not yet".
+    expect(src).toContain('"partial"');
+    expect(src).toContain('"failed"');
+  });
+
+  it("derives the partial wording from the one function that knows why", () => {
+    // Not re-written per surface: describeIncompleteness is the sentence the
+    // live summary already shows, and the source row must agree with it.
+    expect(source("product/page.tsx")).toContain("describeIncompleteness");
+  });
+
+  it("never shows a founder the modules' own names", () => {
+    for (const file of [
+      "product/page.tsx",
+      "product-scan-button.tsx",
+      "intelligence-summary.tsx",
+      "live-intelligence-summary.tsx",
+      "health/content.tsx",
+    ]) {
+      const copy = renderedCopy(file);
+      expect(copy, file).not.toContain("Repository intelligence");
+      expect(copy, file).not.toContain("repository intelligence");
+      expect(copy, file).not.toContain("Live product check");
+      expect(copy, file).not.toContain("live product intelligence");
+    }
   });
 });
 

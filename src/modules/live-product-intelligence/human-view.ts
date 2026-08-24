@@ -252,7 +252,7 @@ export function buildLiveProductHumanView(
  * rather than absent, and a founder told only that the check "did not finish
  * completely" would reasonably conclude their product has no calls to action.
  */
-function describeIncompleteness(snapshot: LiveProductIntelligenceSnapshot): string | null {
+export function describeIncompleteness(snapshot: LiveProductIntelligenceSnapshot): string | null {
   if (snapshot.completeness.status === "complete") return null;
 
   const clientRendered = snapshot.readability?.clientRendered ?? 0;

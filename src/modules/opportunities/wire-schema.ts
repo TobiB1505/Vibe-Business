@@ -1,4 +1,4 @@
-import { AUDIT_DIMENSIONS } from "@/modules/business-audit/schema";
+import { BUSINESS_LENSES } from "@/modules/business-audit/schema";
 import {
   EXECUTION_READINESS,
   EXECUTION_TYPES,
@@ -67,15 +67,15 @@ const OPPORTUNITY_ITEM_SCHEMA = {
       description: "Confidence the problem is real and matters now. Independent of impact.",
     },
     category: { type: "string", enum: [...OPPORTUNITY_CATEGORIES] },
-    primaryDimension: {
+    primaryLens: {
       type: "string",
-      enum: [...AUDIT_DIMENSIONS],
-      description: "Exactly one readiness dimension this most belongs to.",
+      enum: [...BUSINESS_LENSES],
+      description: "Exactly one business lens this most belongs to — the same vocabulary as the audit's lens map.",
     },
-    secondaryDimensions: {
+    secondaryLenses: {
       type: "array",
-      items: { type: "string", enum: [...AUDIT_DIMENSIONS] },
-      description: "At most 2 other dimensions this also touches. May be empty.",
+      items: { type: "string", enum: [...BUSINESS_LENSES] },
+      description: "At most 2 other lenses this also touches. May be empty.",
     },
     evidenceIds: {
       type: "array",
@@ -105,8 +105,8 @@ const OPPORTUNITY_ITEM_SCHEMA = {
     "effort",
     "confidence",
     "category",
-    "primaryDimension",
-    "secondaryDimensions",
+    "primaryLens",
+    "secondaryLenses",
     "evidenceIds",
     "executionType",
     "executionReadiness",
@@ -145,8 +145,8 @@ export type WireOpportunity = {
   effort: unknown;
   confidence: unknown;
   category: unknown;
-  primaryDimension: unknown;
-  secondaryDimensions: unknown;
+  primaryLens: unknown;
+  secondaryLenses: unknown;
   evidenceIds: unknown;
   executionType: unknown;
   executionReadiness: unknown;

@@ -6,110 +6,30 @@
  * or code changes — that boundary belongs to Sprint 5's Opportunity Engine,
  * and blurring it here would make both harder to evaluate (Sprint 4 §31).
  *
- * The dimensions are exactly the five in PRODUCT.md §10. They are not
- * extended casually.
+ * The framework is the nine business lenses below — the only one, since
+ * [ADR 0050](../../../docs/decisions/0050-lenses-are-the-audit.md). The five
+ * scored dimensions this file carried from Sprint 4 until then live on only
+ * inside stored v6/v7 audit payloads, which are records.
  */
 
-export const BUSINESS_AUDIT_SCHEMA_VERSION = "business-readiness-audit.v1" as const;
+export const BUSINESS_AUDIT_SCHEMA_VERSION = "business-readiness-audit.v2" as const;
 
 /** Bumped when the audit's structure or scoring rules change materially. */
-export const BUSINESS_AUDIT_VERSION = "business-audit-v2" as const;
-
-export const AUDIT_DIMENSIONS = [
-  "product",
-  "monetization",
-  "distribution",
-  "conversion",
-  "retention",
-] as const;
-
-export type AuditDimensionId = (typeof AUDIT_DIMENSIONS)[number];
-
-export const DIMENSION_LABELS: Record<AuditDimensionId, string> = {
-  product: "Product",
-  monetization: "Monetization",
-  distribution: "Distribution",
-  conversion: "Conversion",
-  retention: "Retention",
-};
+export const BUSINESS_AUDIT_VERSION = "business-audit-v3" as const;
 
 /**
- * The same five dimensions, phrased as the question each one answers
- * (Sprint UI-3.5).
- *
- * "Monetization: 28" is a category and a number. "Making money from it is
- * still unclear" is the same finding said to someone who has to decide what to
- * do about it — and this product's audience built something with an AI tool
- * and is now trying to build a business, not read an analyst report.
- *
- * The ids, the scoring and the stored payload are untouched: this is a label
- * table, and `DIMENSION_LABELS` above is still what technical views show.
+ * Shared with the Opportunity Engine, which grades its own conviction on the
+ * same coarse scale the audit uses.
  */
-export const DIMENSION_QUESTIONS: Record<AuditDimensionId, string> = {
-  product: "Do people understand what you built?",
-  monetization: "Can you make money from it?",
-  distribution: "Can people discover you?",
-  conversion: "Do visitors become customers?",
-  retention: "Do people come back?",
-};
-
-/**
- * The same five dimensions as **noun phrases**, for use inside a sentence.
- *
- * `DIMENSION_QUESTIONS` reads correctly as a standalone label above a meter and
- * is wrong everywhere else. The first dogfood put one inside a sentence and got:
- *
- *   "Where you're strongest: do people understand what you built? Where you're
- *    weakest: can you make money from it?"
- *
- * — a question mark mid-clause and a sentence that parses as nothing. The unit
- * test asserted that exact string, so the test enforced the defect rather than
- * catching it.
- *
- * Two label sets rather than one clever transformation: there is no rule that
- * turns "Do people come back?" into "keeping people coming back" reliably, and
- * a regex that tried would fail differently for each new dimension.
- */
-export const DIMENSION_TOPICS: Record<AuditDimensionId, string> = {
-  product: "explaining what you built",
-  monetization: "making money from it",
-  distribution: "helping people discover you",
-  conversion: "turning visitors into customers",
-  retention: "bringing people back",
-};
-
-/**
- * How much of a dimension the available evidence could actually support.
- *
- * `insufficient_evidence` is a legitimate, useful outcome — not a failure
- * and never a low score. See `scoring.ts` for why this distinction is
- * enforced in code rather than trusted to the model.
- */
-export type AssessmentStatus = "assessable" | "partial" | "insufficient_evidence";
-
 export type Confidence = "high" | "medium" | "low";
-
-export type DimensionAssessment = {
-  id: AuditDimensionId;
-  label: string;
-  assessmentStatus: AssessmentStatus;
-  /** 0–100, or null when the evidence cannot support a score. */
-  score: number | null;
-  confidence: Confidence;
-  summary: string;
-  strengths: string[];
-  gaps: string[];
-  /** What could not be determined — stated, not silently omitted. */
-  unknowns: string[];
-  /** Evidence ids justifying this assessment. Validated against the pack. */
-  evidenceIds: string[];
-};
 
 export type OverallReadiness = {
   /** Deterministically computed by the application, never by the model. */
   score: number | null;
-  assessedDimensions: number;
-  totalDimensions: number;
+  /** Lenses carrying a non-null validated score (ADR 0050). */
+  scoredLenses: number;
+  /** Nine minus the lenses the audit judged `not_material`. */
+  eligibleLenses: number;
   /** Why `score` is null, when it is. */
   insufficientCoverageReason: string | null;
 };
@@ -126,36 +46,13 @@ export type KeyFinding = {
 /**
  * The nine lenses the audit reasons through before it concludes anything.
  *
- * ## Why these exist on top of the five dimensions
+ * ## The only framework (ADR 0050)
  *
- * The five dimensions are the *scored* layer and are unchanged — they are
- * PRODUCT.md §10's contract and every stored score means what it always meant.
- * What they are not is a complete way to think about a business, and the audit
- * had drifted toward answering the question its scanners could answer most
- * easily: *which business-related product features are missing?*
- *
- * That produced honest, useless conclusions. "No pricing page", "no checkout",
- * "no analytics" are three observations about surfaces. The question a founder
- * actually needs answered is *what does this product still need in order to
- * become a functioning business?* — and "we have not decided how value becomes
- * revenue" is a different problem from "the pricing page is missing", with a
- * different fix, even though the same scanner evidence sits underneath both.
- *
- * ## What they are not
- *
- * Not UI cards, not scores, not nine mandatory findings. They are an internal
- * reasoning pass whose output is a handful of synthesized conclusions. A single
- * blocker routinely spans several lenses — an unclear path from usage to
- * revenue is offer, revenue and scalability at once — and forcing it into one
- * would be the artificial taxonomy this framework exists to avoid.
- *
- * ## Why they are universal
- *
- * Nine lenses, one framework, every product type. There is deliberately no
- * `SaaSAudit` or `MarketplaceAudit`: a portfolio site and a marketplace both
- * have an offer, an audience and economics, and what differs is which lenses
- * *matter* — which is `materiality`, a property of the assessment rather than
- * of the framework.
+ * These were introduced as the reasoning layer *beside* five scored
+ * dimensions. Since contract v8 they are the whole audit: each lens carries
+ * its own validated score (ADR 0049), and the overall score is computed from
+ * them in `scoring.ts`. The dimension layer survives only inside stored
+ * v6/v7 payloads, which are records.
  */
 export const BUSINESS_LENSES = [
   /** Why should anyone want this? Value, promise, differentiation. */
@@ -305,7 +202,7 @@ export type BusinessLensAssessment = {
  * improving are independent events, and an audit has to be able to say which
  * of them it carries.
  */
-export const AUDIT_SYNTHESIS_VERSION = "business-audit-synthesis-v6" as const;
+export const AUDIT_SYNTHESIS_VERSION = "business-audit-synthesis-v7" as const;
 
 /**
  * The **audit contract** version (CORE-2a.2 §21–§23).
@@ -323,7 +220,7 @@ export const AUDIT_SYNTHESIS_VERSION = "business-audit-synthesis-v6" as const;
  * "what does Vibe currently think about this business?" — which is exactly the
  * question the refresh decision asks.
  */
-export const AUDIT_CONTRACT_VERSION = "business-audit-contract-v7" as const;
+export const AUDIT_CONTRACT_VERSION = "business-audit-contract-v8" as const;
 
 /**
  * The oldest contract still treated as current.
@@ -341,6 +238,7 @@ export const MIN_SUPPORTED_AUDIT_CONTRACT_VERSION = "business-audit-contract-v6"
 /** Additive contracts that remain truthful current answers. */
 export const SUPPORTED_AUDIT_CONTRACT_VERSIONS = [
   MIN_SUPPORTED_AUDIT_CONTRACT_VERSION,
+  "business-audit-contract-v7",
   AUDIT_CONTRACT_VERSION,
 ] as const;
 
@@ -358,7 +256,7 @@ export type ConclusionTone = (typeof CONCLUSION_TONES)[number];
 /**
  * One business-level conclusion drawn from several pieces of evidence.
  *
- * This is the layer CORE-2a.1 exists to add. The dimensions below it answer
+ * This is the layer CORE-2a.1 exists to add. The lens assessments answer
  * *"how does this business area look?"*; a conclusion answers *"what do these
  * observations mean together?"* — which is the level a founder should read
  * first, and the level the previous audit never produced.
@@ -369,11 +267,6 @@ export type ConclusionTone = (typeof CONCLUSION_TONES)[number];
  * **one** business problem — *people still don't have a clear path to paying
  * you* — and listing them five times is enumeration wearing the costume
  * of thoroughness.
- *
- * `dimensions` is a list on purpose (§12). A buying path that is unclear spans
- * monetization, conversion and the customer journey, and forcing it into one
- * scored dimension would be an artificial taxonomy boundary. Dimension scores
- * stay separate and unchanged.
  */
 export type BusinessConclusion = {
   /**
@@ -403,8 +296,6 @@ export type BusinessConclusion = {
   whyItMatters: string | null;
   /** At least one, validated against the pack. Never empty (§10). */
   evidenceIds: string[];
-  /** Which scored dimensions this conclusion touches. May be several (§12). */
-  dimensions: AuditDimensionId[];
   /**
    * Which reasoning lenses this conclusion came from (CORE-2a.3 §40).
    *
@@ -422,7 +313,7 @@ export type BusinessConclusion = {
  *
  * Bounded by the contract rather than by the UI: these are few because the
  * model chose the ones that matter, not because React hides the rest
- * (DoD 8). Everything not chosen remains in the dimension assessments and in
+ * (DoD 8). Everything not chosen remains in the lens assessments and in
  * the evidence pack, both untouched.
  */
 export type AuditSynthesis = {
@@ -462,7 +353,6 @@ export type BusinessReadinessAudit = {
   rubricVersion: string;
   provider: string;
   model: string;
-  dimensions: DimensionAssessment[];
   overall: OverallReadiness;
   /**
    * The business-level judgment (CORE-2a.1).

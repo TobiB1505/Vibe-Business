@@ -155,7 +155,7 @@ export function IntelligenceSummary({
       <div className="flex flex-col gap-2">
         {/* The system's own name stays, one step down from the question it
             answers (§12). */}
-        <MonoLabel>What Vibe learned from your code · Repository intelligence</MonoLabel>
+        <MonoLabel>What Vibe learned from your code</MonoLabel>
         <h3 className="text-fg text-title font-bold">{view.headline}</h3>
         <p className="text-fg-muted max-w-[70ch] text-sm">{view.subhead}</p>
         {/* The line that keeps every "Likely" below honest, so it is set at

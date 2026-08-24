@@ -13,7 +13,7 @@ import { fakeConclusion, fakePlannedAudit } from "@/modules/action-plans/test-su
 function auditWith(blockers: number, strengths: number) {
   return fakePlannedAudit({
     synthesis: {
-      version: "business-audit-synthesis-v6",
+      version: "business-audit-synthesis-v7",
       lenses: [],
       overall: "…",
       strengths: Array.from({ length: strengths }, (unused, index) =>
@@ -90,7 +90,7 @@ describe("findConclusionByKey", () => {
       findConclusionByKey(
         fakePlannedAudit({
           synthesis: {
-            version: "business-audit-synthesis-v6",
+            version: "business-audit-synthesis-v7",
             lenses: [],
             overall: "…",
             strengths: [],

@@ -6,24 +6,19 @@ import {
   findUnconfirmedAssertions,
 } from "./lens-priority";
 import {
-  AUDIT_DIMENSIONS,
   AUDIT_SYNTHESIS_VERSION,
   BUSINESS_LENSES,
   LENS_HEALTH,
   LENS_MATERIALITY,
   CONCLUSION_TONES,
-  DIMENSION_LABELS,
-  type AssessmentStatus,
-  type AuditDimensionId,
   type AuditSynthesis,
   type BusinessConclusion,
   type BusinessLens,
   type BusinessLensAssessment,
   type LensHealth,
   type LensMateriality,
-  type Confidence,
   type ConclusionTone,
-  type DimensionAssessment,
+  type Confidence,
   type KeyFinding,
 } from "./schema";
 
@@ -38,10 +33,9 @@ import {
  *     Unknown ids are dropped and recorded — a citation that cannot be
  *     resolved is worse than no citation, because the UI would render it as
  *     proof.
- *  2. **Unknown stays unknown.** A dimension marked `insufficient_evidence`
- *     is forced to a null score, and a dimension claiming to be assessable
- *     with no surviving evidence is demoted. The model is asked to respect
- *     this; the application guarantees it.
+ *  2. **Unknown stays unknown.** A lens score with no surviving evidence, or
+ *     one that contradicts its own health band, is forced to null. The model
+ *     is asked to respect this; the application guarantees it.
  *  3. **Ranges hold.** Scores are integers in 0–100, and list lengths are
  *     capped, because the JSON Schema subset used by structured outputs
  *     cannot express either.
@@ -55,13 +49,10 @@ export type ValidationFailure = "structured_output_schema_invalid";
  * These name only schema field names — never model content — so they are
  * safe to persist and log. A bounded enum rather than a free-text sentence
  * because the value is stored: prose would eventually carry a fragment of
- * whatever the model returned, and the dimension codes are derived from
- * `AUDIT_DIMENSIONS` so a new dimension cannot be forgotten here.
+ * whatever the model returned.
  */
 export type ValidationReason =
   | "response_not_object"
-  | "dimensions_missing"
-  | `dimension_missing_${AuditDimensionId}`
   /**
    * A customer-facing conclusion used our vocabulary instead of the founder's
    * (CORE-2a.2 §12).
@@ -81,7 +72,6 @@ export type ValidationReason =
   | "customer_language_violation";
 
 export type ValidatedAudit = {
-  dimensions: DimensionAssessment[];
   /** Null when the model returned nothing usable at this layer. */
   synthesis: AuditSynthesis | null;
   keyFindings: KeyFinding[];
@@ -128,7 +118,6 @@ const MAX_KEY_FINDINGS = 5;
 const MAX_LIMITATIONS = 5;
 const MAX_TEXT_LENGTH = 600;
 
-const STATUSES: AssessmentStatus[] = ["assessable", "partial", "insufficient_evidence"];
 const CONFIDENCES: Confidence[] = ["high", "medium", "low"];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -257,17 +246,6 @@ function validateLenses(value: unknown, known: Set<string>, dropped: Set<string>
   return assessments;
 }
 
-function cleanDimensionList(value: unknown): AuditDimensionId[] {
-  if (!Array.isArray(value)) return [];
-  const kept: AuditDimensionId[] = [];
-  for (const entry of value) {
-    if (typeof entry !== "string") continue;
-    const id = entry.trim() as AuditDimensionId;
-    if (AUDIT_DIMENSIONS.includes(id) && !kept.includes(id)) kept.push(id);
-  }
-  return kept;
-}
-
 /** Proportion of the smaller evidence set that the two conclusions share. */
 function evidenceOverlap(a: string[], b: string[]): number {
   const smaller = Math.min(a.length, b.length);
@@ -303,7 +281,6 @@ function parseConclusion(
     explanation,
     whyItMatters: cleanText(raw.whyItMatters, 400),
     evidenceIds,
-    dimensions: cleanDimensionList(raw.dimensions),
     lenses: cleanLensList(raw.lenses),
     tone: TONES.includes(raw.tone as ConclusionTone) ? (raw.tone as ConclusionTone) : "attention",
     confidence: CONFIDENCES.includes(raw.confidence as Confidence)
@@ -413,73 +390,14 @@ export function validateAuditOutput(data: unknown, knownEvidenceIds: Set<string>
   if (!isRecord(data)) {
     return { ok: false, error: "structured_output_schema_invalid", reason: "response_not_object" };
   }
-  if (!isRecord(data.dimensions)) {
-    return { ok: false, error: "structured_output_schema_invalid", reason: "dimensions_missing" };
-  }
-
   const dropped = new Set<string>();
   const notes: string[] = [];
-  const dimensions: DimensionAssessment[] = [];
 
-  for (const id of AUDIT_DIMENSIONS) {
-    const raw = (data.dimensions as Record<string, unknown>)[id];
-    if (!isRecord(raw)) {
-      return {
-        ok: false,
-        error: "structured_output_schema_invalid",
-        reason: `dimension_missing_${id}`,
-      };
-    }
-
-    const status = STATUSES.includes(raw.assessmentStatus as AssessmentStatus)
-      ? (raw.assessmentStatus as AssessmentStatus)
-      : "insufficient_evidence";
-
-    const confidence = CONFIDENCES.includes(raw.confidence as Confidence)
-      ? (raw.confidence as Confidence)
-      : "low";
-
-    const evidenceIds = filterEvidenceIds(raw.evidenceIds, knownEvidenceIds, dropped);
-    let score = normalizeScore(raw.score);
-    let finalStatus = status;
-
-    // Invariant 1: unknown means unscored. Enforced rather than trusted —
-    // a scored "insufficient evidence" dimension would silently drag the
-    // overall score toward a number nobody can justify.
-    if (finalStatus === "insufficient_evidence") {
-      score = null;
-    }
-
-    // Invariant 2: a claim of assessability with no surviving evidence is
-    // not assessable. This is what makes hallucinated citations harmless
-    // instead of load-bearing.
-    if (finalStatus !== "insufficient_evidence" && evidenceIds.length === 0) {
-      finalStatus = "insufficient_evidence";
-      score = null;
-      notes.push(
-        `${DIMENSION_LABELS[id as AuditDimensionId]} was reported as ${status} but cited no valid evidence, so it is treated as insufficient evidence.`,
-      );
-    }
-
-    // Invariant 3: a scoreable status with no score is only partial.
-    if (finalStatus === "assessable" && score === null) {
-      finalStatus = "partial";
-    }
-
-    dimensions.push({
-      id: id as AuditDimensionId,
-      label: DIMENSION_LABELS[id as AuditDimensionId],
-      assessmentStatus: finalStatus,
-      score,
-      confidence,
-      summary: cleanText(raw.summary) ?? "No summary was produced for this dimension.",
-      strengths: cleanStringList(raw.strengths, MAX_LIST_ITEMS),
-      gaps: cleanStringList(raw.gaps, MAX_LIST_ITEMS),
-      unknowns: cleanStringList(raw.unknowns, MAX_LIST_ITEMS),
-      evidenceIds,
-    });
-  }
-
+  // A v8 audit is its synthesis: the nine lenses, the overall conclusion and
+  // the ranked problems. There is no dimension layer to walk — the invariants
+  // that used to guard it (unknown stays unscored; a claim with no surviving
+  // evidence is not a claim) live on in `validateLenses`, which nulls a lens
+  // score that lacks cited evidence or contradicts its own health band.
   const synthesis = validateSynthesis(data, knownEvidenceIds, dropped, notes);
 
   // The customer-language boundary, applied ONLY to the synthesis (§11, §16).
@@ -547,7 +465,6 @@ export function validateAuditOutput(data: unknown, knownEvidenceIds: Set<string>
   return {
     ok: true,
     audit: {
-      dimensions,
       synthesis,
       keyFindings,
       limitations: cleanStringList(data.limitations, MAX_LIMITATIONS),

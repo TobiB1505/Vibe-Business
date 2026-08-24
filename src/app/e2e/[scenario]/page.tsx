@@ -342,27 +342,40 @@ export default async function E2eScenarioPage({
             {
               id: "code",
               label: "Your code",
-              detail: "Vibe has read what your repository builds.",
-              ready: fixture.view.sources.some((source) => source.label === "Your code" && source.used),
-              pending: "Vibe hasn't read your code yet.",
+              state: fixture.view.sources.some(
+                (source) => source.label === "Your code" && source.used,
+              )
+                ? "ready"
+                : "none",
+              detail: fixture.view.sources.some(
+                (source) => source.label === "Your code" && source.used,
+              )
+                ? "Vibe has read what your repository builds."
+                : "Vibe hasn't read your code yet.",
               href: "#product-evidence",
               action: "See what it read",
             },
             {
               id: "live",
               label: "Your public product",
-              detail: "Vibe has visited what a first-time visitor reaches.",
-              ready: fixture.view.sources.some((source) => source.label === "Your public product" && source.used),
-              pending: "Your public product has not been checked yet.",
+              state: fixture.view.sources.some(
+                (source) => source.label === "Your public product" && source.used,
+              )
+                ? "ready"
+                : "none",
+              detail: fixture.view.sources.some(
+                (source) => source.label === "Your public product" && source.used,
+              )
+                ? "Vibe has visited what a first-time visitor reaches."
+                : "Your public product has not been checked yet.",
               href: "#product-evidence",
               action: "See what it saw",
             },
             {
               id: "deep-scan",
               label: "Your signed-in product",
-              detail: "Vibe has seen what your product looks like after signing in.",
-              ready: false,
-              pending: "Your signed-in product has not been checked yet.",
+              detail: "Your signed-in product has not been checked yet.",
+              state: "none",
               href: "#product-evidence",
               action: "Deep Scan",
             },
@@ -370,8 +383,7 @@ export default async function E2eScenarioPage({
               id: "intent",
               label: "What you told Vibe",
               detail: "Your stated stage, monetization intent and primary goal.",
-              ready: true,
-              pending: "You haven't told Vibe anything about the business yet.",
+              state: "ready",
               href: "#founder-context",
               action: "View context",
             },

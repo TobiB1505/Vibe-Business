@@ -111,8 +111,8 @@ export function fakeOpportunity(overrides: Partial<BusinessOpportunity> = {}): B
     effort: "medium",
     confidence: "high",
     category: "positioning",
-    primaryDimension: "product",
-    secondaryDimensions: ["conversion"],
+    primaryLens: "offer",
+    secondaryLenses: ["conversion"],
     evidenceIds: ["profile.identity.description", "live.site.title"],
     executionType: "business_decision",
     executionReadiness: "needs_user_input",
@@ -129,7 +129,6 @@ export function fakeConclusion(overrides: Partial<BusinessConclusion> = {}): Bus
       "The site speaks to founders in general, and the product profile describes a broad audience.",
     whyItMatters: "Positioning, pricing and acquisition all depend on a first customer being chosen.",
     evidenceIds: ["profile.identity.description", "live.site.title"],
-    dimensions: ["product", "conversion"],
     lenses: ["audience", "offer"],
     tone: "critical",
     confidence: "high",
@@ -157,7 +156,7 @@ export function fakePlannedAudit(
 ): BusinessReadinessAudit {
   return fakeAudit({
     synthesis: {
-      version: "business-audit-synthesis-v6",
+      version: "business-audit-synthesis-v7",
       lenses: [fakeLens(), fakeLens({ lens: "offer", health: "unclear", materiality: "soon" })],
       overall: "A working product without a defined first customer.",
       strengths: [],

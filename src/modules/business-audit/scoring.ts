@@ -1,57 +1,69 @@
-import { AUDIT_DIMENSIONS, type DimensionAssessment, type OverallReadiness } from "./schema";
+import { BUSINESS_LENSES, type BusinessLensAssessment, type OverallReadiness } from "./schema";
 
 /**
- * Deterministic overall readiness (Sprint 4 §7).
+ * Deterministic overall readiness — [ADR 0050](../../../docs/decisions/0050-lenses-are-the-audit.md).
  *
- * The model never produces a headline number. It assesses dimensions; the
- * application computes the overall score. That split exists because a
- * single number is the most quoted and least verifiable part of an audit —
- * keeping it deterministic means it can be recomputed, explained, and
- * trusted to follow the same rule every time.
+ * The model never produces a headline number. It assesses lenses; the
+ * application computes the overall score. That split exists because a single
+ * number is the most quoted and least verifiable part of an audit — keeping it
+ * deterministic means it can be recomputed, explained, and trusted to follow
+ * the same rule every time. Both principles of the retired dimension rule
+ * (Sprint 4 §7) carry over unchanged: equal weighting, and unscored-is-never-
+ * zero (rule 44). What changed is the population they run over.
  *
- * Three rules define it:
+ * ## Materiality is not a lever on the score
  *
- *  1. **Equal weighting** across dimensions that carry a score. Weighting
- *     by importance would encode a product opinion nobody has validated
- *     yet.
- *  2. **Unscored dimensions are excluded, never counted as zero.** Treating
- *     "we could not assess retention" as 0/100 would systematically punish
- *     early-stage products for the limits of our own evidence gathering —
- *     the exact failure mode Sprint 4 §6 exists to prevent.
- *  3. **Below a minimum coverage the overall score is null.** An average of
- *     one or two dimensions is not a business readiness score, and printing
- *     one would imply a completeness the evidence does not have.
+ * A `not_material` lens leaves the eligibility denominator — a one-off product
+ * genuinely has nothing to retain, and demanding a retention score from it
+ * would make the threshold unreachable. But a not_material lens that *was*
+ * scored stays in the mean: if declaring a weak lens immaterial removed it
+ * from the average, the priority judgment would become a way to launder a bad
+ * number out of the headline — the same leak the health/materiality split
+ * (CORE-2a.3.1 §29) closed, pointed the other way.
+ *
+ * An absent lens counts as eligible. Silence is not a claim of immateriality,
+ * and neither is `materiality: "unknown"`.
  */
 
 /**
- * At least three of five dimensions must be scored before a headline number
- * is meaningful. Two scored dimensions can swing the average by 20+ points
- * on evidence that says nothing about the majority of the business.
+ * The coverage threshold: a majority of the lenses that can apply, never
+ * fewer than three.
+ *
+ * The floor is what stops the threshold collapsing with the denominator — a
+ * model that declares seven lenses immaterial leaves two eligible, and a
+ * headline number resting on two scores would imply a completeness the
+ * evidence does not have.
  */
-export const MINIMUM_SCORED_DIMENSIONS = 3;
+export function minimumScoredLenses(eligibleLenses: number): number {
+  return Math.max(3, Math.ceil(eligibleLenses / 2));
+}
 
-export function computeOverallReadiness(dimensions: DimensionAssessment[]): OverallReadiness {
-  const scored = dimensions.filter(
-    (dimension): dimension is DimensionAssessment & { score: number } => dimension.score !== null,
+export function computeOverallScore(lenses: BusinessLensAssessment[]): OverallReadiness {
+  const eligibleLenses =
+    BUSINESS_LENSES.length - lenses.filter((lens) => lens.materiality === "not_material").length;
+
+  const scored = lenses.filter(
+    (lens): lens is BusinessLensAssessment & { score: number } =>
+      typeof lens.score === "number",
   );
 
-  const totalDimensions = AUDIT_DIMENSIONS.length;
+  const threshold = minimumScoredLenses(eligibleLenses);
 
-  if (scored.length < MINIMUM_SCORED_DIMENSIONS) {
+  if (scored.length < threshold) {
     return {
       score: null,
-      assessedDimensions: scored.length,
-      totalDimensions,
-      insufficientCoverageReason: `Only ${scored.length} of ${totalDimensions} dimensions could be scored. At least ${MINIMUM_SCORED_DIMENSIONS} are needed for an overall figure.`,
+      scoredLenses: scored.length,
+      eligibleLenses,
+      insufficientCoverageReason: `Only ${scored.length} of ${eligibleLenses} applicable areas could be scored. At least ${threshold} are needed for an overall figure.`,
     };
   }
 
-  const total = scored.reduce((sum, dimension) => sum + dimension.score, 0);
+  const total = scored.reduce((sum, lens) => sum + lens.score, 0);
 
   return {
     score: Math.round(total / scored.length),
-    assessedDimensions: scored.length,
-    totalDimensions,
+    scoredLenses: scored.length,
+    eligibleLenses,
     insufficientCoverageReason: null,
   };
 }

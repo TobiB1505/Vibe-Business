@@ -39,7 +39,7 @@ Every link is **stated**, not inferred.
 - **Legacy Moves** (pre-v2, no key) fall back to bounded reconciliation in `source.ts`,
   which is a compatibility path and nothing more. It runs *only* when no key is present,
   and it is willing to fail: a match must rest on shared evidence rather than a shared
-  dimension, and a tie resolves to unresolved. "Highest score wins" is explicitly not the
+  lens, and a tie resolves to unresolved. "Highest score wins" is explicitly not the
   rule — a ranking is a decision only when the gap means something.
 - **Unresolved** is a real outcome. Planning is refused with
   `planner_source_unresolved`, and refused in *readiness* — before an operation row
@@ -132,7 +132,7 @@ Durable execution lives in `src/modules/operations/action-plans/`.
 The planner receives one Move, the conclusion under it, the lenses that conclusion
 spans, and only the evidence any of them cited — plus the product profile, always,
 because that is what stops the plan being a template. Everything else the audit read is
-excluded: the five scored dimensions, the other conclusions, the limitations, and every
+excluded: the other lens assessments, the other conclusions, the limitations, and every
 evidence line no part of the source judgment pointed at.
 
 The property is **focused and source-relevant**, not *universally smaller than every

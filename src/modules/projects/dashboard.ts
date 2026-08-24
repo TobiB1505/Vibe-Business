@@ -152,8 +152,6 @@ type AuditRow = {
   project_id: string;
   product_profile_id: string | null;
   overall_score: number | null;
-  assessed_dimensions: number | null;
-  total_dimensions: number | null;
   created_at: string;
   // The reproducibility set. Seven `not null` text columns, already on the
   // table since Sprint 4 — no migration was needed to chart the trend.
@@ -185,7 +183,7 @@ type ValidationRow = { prepared_change_id: string; status: string; created_at: s
  * needed no migration.
  */
 const AUDIT_COLUMNS =
-  "project_id, product_profile_id, overall_score, assessed_dimensions, total_dimensions, created_at, schema_version, audit_version, evidence_pack_version, prompt_version, rubric_version, provider, model";
+  "project_id, product_profile_id, overall_score, created_at, schema_version, audit_version, evidence_pack_version, prompt_version, rubric_version, provider, model";
 
 /**
  * Rows are fetched newest-first and reduced to the first per key. Postgres has

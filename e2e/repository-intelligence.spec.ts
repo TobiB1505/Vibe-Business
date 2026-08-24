@@ -148,9 +148,7 @@ test.describe("the two intelligence layers", () => {
   test("names what this screen is and is not", async ({ page }) => {
     await page.goto(CODE_ONLY);
 
-    await expect(
-      page.getByText("What Vibe learned from your code · Repository intelligence"),
-    ).toBeVisible();
+    await expect(page.getByText("What Vibe learned from your code")).toBeVisible();
     await expect(page.getByText("Only checking the live product can show whether it works")).toBeVisible();
   });
 

@@ -194,6 +194,16 @@ export async function parkLiveProductAction(projectId: string): Promise<void> {
   revalidatePath(onboardingHref(projectId));
 }
 
+/**
+ * Try again is the whole scan, not half of it.
+ *
+ * This used to re-run only the repository read. A founder whose live check
+ * failed and who pressed Try again got an understanding built without their
+ * site — reported as success, with nothing on screen saying the live half had
+ * been skipped. The stored production URL decides whether a live half exists,
+ * exactly as `runProductScanAction` does in the workspace, and a live failure
+ * fails loudly through the same stepped state as the first attempt.
+ */
 export async function retryProductScanAction(
   projectId: string,
   _previous: BeginUnderstandingState,
@@ -203,6 +213,23 @@ export async function retryProductScanAction(
   const supabase = await createClient();
   const repository = await inspectRepository(supabase, { projectId, userId: session.userId });
   if (!repository.ok) return { ok: false, step: "repository", error: repository.error };
+
+  const { data: project } = await supabase
+    .from("projects")
+    .select("production_url")
+    .eq("id", projectId)
+    .eq("user_id", session.userId)
+    .maybeSingle();
+
+  if (project?.production_url) {
+    const live = await inspectLiveProduct(supabase, { projectId, userId: session.userId });
+    if (!live.ok) {
+      await setLiveSiteStatus(supabase, { projectId, status: "scan_failed" });
+      revalidatePath(onboardingHref(projectId));
+      return { ok: false, step: "live", error: live.error };
+    }
+  }
+
   return startUnderstandingFromStoredSources(projectId);
 }
 

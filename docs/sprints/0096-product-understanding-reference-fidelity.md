@@ -1,4 +1,4 @@
-# UI-15 — Product Understanding Reference Fidelity
+# UI-16 — Product Understanding Reference Fidelity
 
 Status: Implemented, browser screenshot verification pending
 

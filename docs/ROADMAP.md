@@ -121,6 +121,9 @@ There is no rendering signal, so "we could not read this" is indistinguishable f
 **Business outcome measurement has no data source.**
 Three metrics are defined and the port is vendor-neutral, but no adapter exists; every project resolves to `waiting_for_source`. Draft PR #34 holds partial Search Console work from 15.08.
 
+**Per-lens score history is shown as a gap, not a trend.**
+Since [ADR 0050](decisions/0050-lenses-are-the-audit.md) every lens carries its own score, but lens scores live only inside each audit's JSONB result — no per-lens series exists, and the Business Brain's per-area "Score over time" and history tab honestly say so. Overall Business Health has a real comparable series; drawing the same line per lens means reading lens scores across a project's completed audits under the same contract rules `score-series.ts` already enforces for the headline number.
+
 **Snapshot history is complete, immutable, and never read.**
 All four snapshot tables retain every version; no code compares two. A re-scan that loses the pricing page produces a new audit with no note that anything disappeared.
 
