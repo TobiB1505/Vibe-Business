@@ -16,6 +16,7 @@ import {
   type CapabilityTone,
   type RepositoryCapability,
 } from "@/modules/repository-intelligence/human-view";
+import type { AuthenticatedProductIntelligenceSnapshot } from "@/modules/authenticated-product-intelligence/schema";
 import type { LiveProductIntelligenceSnapshot } from "@/modules/live-product-intelligence/schema";
 import type { RepositoryIntelligenceSnapshot } from "@/modules/repository-intelligence/schema";
 
@@ -138,14 +139,16 @@ export function IntelligenceSummary({
    * can be compared — this screen never renders live results itself.
    */
   liveSnapshot = null,
+  authenticatedSnapshot = null,
 }: {
   snapshot: RepositoryIntelligenceSnapshot;
   analyzedAt: string;
   projectId: string;
   liveSnapshot?: LiveProductIntelligenceSnapshot | null;
+  authenticatedSnapshot?: AuthenticatedProductIntelligenceSnapshot | null;
 }) {
   const view = buildRepositoryHumanView(snapshot);
-  const crossChecks = buildIntelligenceCrossChecks(snapshot, liveSnapshot);
+  const crossChecks = buildIntelligenceCrossChecks(snapshot, liveSnapshot, authenticatedSnapshot);
 
   return (
     <div className="flex flex-col gap-4">

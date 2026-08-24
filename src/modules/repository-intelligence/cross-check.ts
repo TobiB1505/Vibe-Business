@@ -2,6 +2,10 @@ import type {
   LiveProductIntelligenceSnapshot,
   ProductSurfaceId,
 } from "@/modules/live-product-intelligence/schema";
+import type {
+  AuthenticatedProductIntelligenceSnapshot,
+  AuthenticatedSurfaceId,
+} from "@/modules/authenticated-product-intelligence/schema";
 import type { RepositoryIntelligenceSnapshot } from "./schema";
 import type { CapabilityNextStep } from "./human-view";
 
@@ -20,9 +24,22 @@ import type { CapabilityNextStep } from "./human-view";
  *
  * ## Deliberately small
  *
- * Four comparisons, all deterministic, no model, no scoring, no new engine
+ * Six comparisons, all deterministic, no model, no scoring, no new engine
  * (§11: "Do not build a large new inference engine in this sprint"). Each is a
- * direct comparison of two facts both snapshots already recorded.
+ * direct comparison of two facts the snapshots already recorded.
+ *
+ * ## The third layer
+ *
+ * Four of the six compare code against the public site. Two compare the public
+ * site against the **signed-in product**, which is where the monetization
+ * question actually lives: a Deep Scan can see a billing surface that no
+ * visitor is ever offered, and a public pricing page for a product whose
+ * signed-in half has no way to pay. Neither is visible from code, because both
+ * layers involved are runtime.
+ *
+ * They are kept separate from the repository comparisons rather than folded in:
+ * a Deep Scan is optional, so its absence must produce silence and never an
+ * absence-shaped finding.
  *
  * ## When it says nothing
  *
@@ -53,9 +70,17 @@ function liveDetected(live: LiveProductIntelligenceSnapshot, id: ProductSurfaceI
   return live.productSurfaces.some((surface) => surface.id === id && surface.detected);
 }
 
+function authDetected(
+  authenticated: AuthenticatedProductIntelligenceSnapshot,
+  id: AuthenticatedSurfaceId,
+): boolean {
+  return authenticated.productSurfaces.some((surface) => surface.id === id && surface.detected);
+}
+
 export function buildIntelligenceCrossChecks(
   repository: RepositoryIntelligenceSnapshot,
   live: LiveProductIntelligenceSnapshot | null,
+  authenticated: AuthenticatedProductIntelligenceSnapshot | null = null,
 ): IntelligenceCrossCheck[] {
   if (!live) return [];
 
@@ -114,6 +139,59 @@ export function buildIntelligenceCrossChecks(
       detail:
         "Your live product has a pricing page and this repository does not. It may be built from a different project, which would mean Vibe cannot change it from here.",
       nextStep: null,
+    });
+  }
+
+  checks.push(...crossCheckSignedInProduct(live, authenticated, { livePricing, liveCheckout }));
+
+  return checks;
+}
+
+/**
+ * The public site against the signed-in product.
+ *
+ * Both layers are runtime, so neither of these is visible from code — which is
+ * why the four comparisons above cannot produce them however carefully they
+ * read the repository. A product can contain a complete billing implementation
+ * and still never offer it to a visitor, and the code alone reports that as
+ * healthy.
+ */
+function crossCheckSignedInProduct(
+  live: LiveProductIntelligenceSnapshot,
+  authenticated: AuthenticatedProductIntelligenceSnapshot | null,
+  publicSurfaces: { livePricing: boolean; liveCheckout: boolean },
+): IntelligenceCrossCheck[] {
+  // A Deep Scan is optional. Its absence is not evidence of anything, and a
+  // finding shaped like one would be fabricated — the same rule the live guard
+  // above applies to a check that saw nothing.
+  if (!authenticated) return [];
+
+  // And a Deep Scan that reached nothing cannot contradict anything either: a
+  // sign-in that failed reports every surface as undetected, which would turn
+  // one broken credential into a finding about the founder's product.
+  const reachedSomething = authenticated.productSurfaces.some((surface) => surface.detected);
+  if (!reachedSomething) return [];
+
+  const checks: IntelligenceCrossCheck[] = [];
+  const { livePricing, liveCheckout } = publicSurfaces;
+
+  if (authDetected(authenticated, "billing") && !livePricing && !liveCheckout) {
+    checks.push({
+      id: "billing-not-offered-publicly",
+      title: "Your product can be paid for, but nothing public says so.",
+      detail:
+        "Signed in, Vibe found a billing area. Visiting your live product as a visitor would, it found no pricing and no checkout — so someone who wants to pay has no way to discover that they can.",
+      nextStep: NEXT_MOVES,
+    });
+  }
+
+  if (livePricing && !authDetected(authenticated, "billing")) {
+    checks.push({
+      id: "pricing-without-billing",
+      title: "Visitors are shown pricing your signed-in product cannot act on.",
+      detail:
+        "Your live product has a pricing page. Signed in, Vibe found no billing area — so a visitor who decides to pay may arrive somewhere that cannot take the payment.",
+      nextStep: CHECK_LIVE,
     });
   }
 

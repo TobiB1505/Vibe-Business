@@ -287,9 +287,11 @@ export default async function ProjectOverviewPage({
                 snapshot={latestSnapshot.result}
                 analyzedAt={latestSnapshot.createdAt}
                 projectId={project.id}
-                // Passed only so the two layers can be compared where they
-                // disagree (UI-3.6 §11). Live results are rendered above.
+                // Passed only so the layers can be compared where they
+                // disagree (UI-3.6 §11). Both are rendered elsewhere on this
+                // page; here they exist to contradict each other.
                 liveSnapshot={latestLiveSnapshot?.result ?? null}
+                authenticatedSnapshot={latestDeepScanSnapshot?.result ?? null}
               />
             ) : (
               <div className="flex flex-col gap-1">
