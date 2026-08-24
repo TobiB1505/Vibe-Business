@@ -190,6 +190,22 @@ export const SENSITIVE_EVIDENCE_PREFIXES: readonly string[] = [
   "live.surface.login",
   "live.surface.signup",
   "live.access.protected_surface",
+  /*
+   * The same surfaces, cited as absent (`business-evidence.v4`).
+   *
+   * Listed rather than matched loosely, and that is the design working as
+   * intended. Polarity lives in its own namespace precisely so that
+   * `repo.surface_absent.payments` does *not* satisfy a `repo.surface.payments`
+   * prefix — which means every place where absence should also count has to say
+   * so out loud. It does count here: a step that exists because there is no
+   * checkout yet is a step that will build one.
+   */
+  "repo.surface_absent.payments",
+  "repo.surface_absent.checkout_billing",
+  "repo.surface_absent.authentication",
+  "live.surface_absent.checkout_billing",
+  "live.surface_absent.login",
+  "live.surface_absent.signup",
 ];
 
 /**

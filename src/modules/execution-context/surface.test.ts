@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { surfaceEvidenceId } from "@/modules/business-audit/evidence-ids";
 import { fakeLiveSnapshot } from "@/modules/business-audit/test-support";
 import {
   EXECUTION_SURFACE_SCOPES,
@@ -234,5 +235,42 @@ describe("resolving a requirement into repository evidence (PART C)", () => {
     const second = resolve().publicPages.map((route) => route.path);
 
     expect(first).toEqual(second);
+  });
+});
+
+/**
+ * A `business-evidence.v4` absence citation implies the same surface.
+ *
+ * "Add a pricing page" and "change the pricing page" are both work on the
+ * pricing surface, and the agent needs the same scope for either. Before this,
+ * `live.surface_absent.pricing` fell through to `NOTHING` — not an error, just
+ * an agent quietly no longer told which surface its work was about. The same
+ * reasoning `stripMissing` already applies to `live.seo.*`.
+ */
+describe("polarity does not change what a surface citation implies", () => {
+  it.each([
+    ["live", "pricing"],
+    ["live", "checkout_billing"],
+    ["repo", "payments"],
+    ["repo", "dashboard_app"],
+  ] as const)("%s.%s implies the same thing present or absent", (namespace, surface) => {
+    const present = implicationOf(surfaceEvidenceId(namespace, surface, true));
+    const absent = implicationOf(surfaceEvidenceId(namespace, surface, false));
+
+    expect(absent).toEqual(present);
+  });
+
+  it("is comparing two genuinely different ids", () => {
+    expect(surfaceEvidenceId("live", "pricing", true)).not.toBe(
+      surfaceEvidenceId("live", "pricing", false),
+    );
+  });
+
+  /**
+   * And the implication must be a real one, not two matching `NOTHING`s — which
+   * is what the assertions above would silently accept.
+   */
+  it("implies something at all for a known surface", () => {
+    expect(implicationOf(surfaceEvidenceId("live", "pricing", false)).surfaces.length).toBeGreaterThan(0);
   });
 });

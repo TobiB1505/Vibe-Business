@@ -1,3 +1,4 @@
+import { surfaceEvidenceId } from "./evidence-ids";
 import type { RepositoryIntelligenceSnapshot } from "@/modules/repository-intelligence/schema";
 import type { LiveProductIntelligenceSnapshot } from "@/modules/live-product-intelligence/schema";
 import type { BusinessContext } from "@/modules/projects/business-context";
@@ -25,6 +26,24 @@ import type { BusinessContext } from "@/modules/projects/business-context";
  */
 
 export const EVIDENCE_PACK_VERSION = "business-evidence.v1" as const;
+
+/**
+ * Which id scheme a builder mints surfaces under.
+ *
+ * `polarity_free` is what every pack through v3 emitted: one id per surface
+ * whether or not it was found, with the outcome only in the label. `polarised`
+ * is v4's, where absence gets its own namespace.
+ *
+ * A parameter rather than a version bump inside the builder, because both
+ * schemes have to remain mintable **at the same time**. The Opportunity Engine
+ * and the Action Planner rebuild a stored audit's pack in order to resolve the
+ * citations it recorded, and `opportunities/validate.ts` discards an
+ * opportunity whose evidence cannot be verified against that pack. Rebuild a v3
+ * audit under v4 ids and its citations stop resolving — so the rebuild has to
+ * be able to reproduce the scheme the audit was written under, for as long as
+ * any v3 audit exists.
+ */
+export type SurfaceIdScheme = "polarity_free" | "polarised";
 
 export type EvidenceCategory = "repository" | "live_product" | "business_context";
 
@@ -97,7 +116,10 @@ const GOAL_LABELS: Record<string, string> = {
   grow_revenue: "Grow revenue",
 };
 
-export function buildRepositoryEvidence(snapshot: RepositoryIntelligenceSnapshot): EvidenceItem[] {
+export function buildRepositoryEvidence(
+  snapshot: RepositoryIntelligenceSnapshot,
+  scheme: SurfaceIdScheme = "polarity_free",
+): EvidenceItem[] {
   const items: EvidenceItem[] = [];
 
   for (const framework of snapshot.frameworks) {
@@ -129,7 +151,9 @@ export function buildRepositoryEvidence(snapshot: RepositoryIntelligenceSnapshot
   for (const surface of snapshot.businessSurfaces) {
     items.push(
       item(
-        `repo.surface.${slug(surface.id)}`,
+        scheme === "polarised"
+          ? surfaceEvidenceId("repo", slug(surface.id), surface.detected)
+          : `repo.surface.${slug(surface.id)}`,
         "repository",
         surface.detected
           ? `Repository surface present: ${surface.name}`
@@ -185,7 +209,10 @@ export function buildRepositoryEvidence(snapshot: RepositoryIntelligenceSnapshot
   return items;
 }
 
-export function buildLiveEvidence(snapshot: LiveProductIntelligenceSnapshot): EvidenceItem[] {
+export function buildLiveEvidence(
+  snapshot: LiveProductIntelligenceSnapshot,
+  scheme: SurfaceIdScheme = "polarity_free",
+): EvidenceItem[] {
   const items: EvidenceItem[] = [];
 
   items.push(
@@ -211,7 +238,9 @@ export function buildLiveEvidence(snapshot: LiveProductIntelligenceSnapshot): Ev
   for (const surface of snapshot.productSurfaces) {
     items.push(
       item(
-        `live.surface.${slug(surface.id)}`,
+        scheme === "polarised"
+          ? surfaceEvidenceId("live", slug(surface.id), surface.detected)
+          : `live.surface.${slug(surface.id)}`,
         "live_product",
         surface.detected
           ? `Live surface present: ${surface.name} (${surface.confidence} confidence)`
