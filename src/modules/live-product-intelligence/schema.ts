@@ -181,6 +181,24 @@ export type PricingSignals = {
   hasFreeDeclaredTier: boolean;
   /** Distinct currencies declared. More than one is itself worth noticing. */
   declaredCurrencies: string[];
+  /**
+   * Prices read off the visible text, and never merged into the list above.
+   *
+   * Separate because they carry different weight. A declared offer is what the
+   * operator published; an observed one is a glyph and a number that sat next
+   * to each other, and could be a discount, a struck-through figure or an
+   * "from" amount. One list would launder the second into the first.
+   */
+  observedPricePoints: ObservedPricePoint[];
+};
+
+export type ObservedPricePoint = {
+  amount: number;
+  /** Exactly as written — a symbol or a code. Never mapped: `$` is not USD. */
+  currencyToken: string;
+  period: "day" | "week" | "month" | "year" | "one_time" | null;
+  /** The same-origin path it was read on. */
+  path: string;
 };
 
 export type DeclaredPricePoint = {

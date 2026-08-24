@@ -219,6 +219,7 @@ describe("what the site says it charges", () => {
       ],
       hasFreeDeclaredTier: false,
       declaredCurrencies: ["EUR"],
+      observedPricePoints: [],
     });
 
     expect(ids.some((id) => id.startsWith("live.pricing.declared."))).toBe(true);
@@ -233,6 +234,7 @@ describe("what the site says it charges", () => {
       ],
       hasFreeDeclaredTier: true,
       declaredCurrencies: ["EUR", "USD"],
+      observedPricePoints: [],
     });
 
     expect(ids).toContain("live.pricing.free_tier");
@@ -253,12 +255,14 @@ describe("what the site says it charges", () => {
       declaredPricePoints: [],
       hasFreeDeclaredTier: false,
       declaredCurrencies: [],
+      observedPricePoints: [],
     });
     const reached = withPricing({
       pricingPageReached: true,
       declaredPricePoints: [],
       hasFreeDeclaredTier: false,
       declaredCurrencies: [],
+      observedPricePoints: [],
     });
 
     expect(unreached).not.toContain("live.pricing.none_declared");
@@ -278,5 +282,46 @@ describe("what the site says it charges", () => {
     );
 
     expect(ids.some((id) => id.startsWith("live.pricing."))).toBe(false);
+  });
+});
+
+/**
+ * The observed half arrives labelled as weaker.
+ *
+ * Nothing stops a model treating a weak fact as a strong one except the words
+ * the fact arrives in, so the downgrade lives in the sentence itself.
+ */
+describe("an observed price says so", () => {
+  const ids = () =>
+    buildLiveEvidence({
+      ...fakeLiveSnapshot(),
+      pricing: {
+        pricingPageReached: true,
+        declaredPricePoints: [],
+        hasFreeDeclaredTier: false,
+        declaredCurrencies: [],
+        observedPricePoints: [
+          { amount: 29, currencyToken: "$", period: "month", path: "/pricing" },
+        ],
+      },
+    });
+
+  it("mints it under its own namespace", () => {
+    expect(ids().some((entry) => entry.id.startsWith("live.pricing.observed."))).toBe(true);
+    expect(ids().some((entry) => entry.id.startsWith("live.pricing.declared."))).toBe(false);
+  });
+
+  it("does not present it as a stated price", () => {
+    const entry = ids().find((candidate) => candidate.id.startsWith("live.pricing.observed."));
+
+    expect(entry?.label).toContain("not stated as a price");
+    // The token as written, never a currency code the page did not give.
+    expect(entry?.label).toContain("$29");
+    expect(entry?.label).not.toContain("USD");
+  });
+
+  it("ranks below a declared price so trimming drops it first", () => {
+    const observed = ids().find((entry) => entry.id.startsWith("live.pricing.observed."));
+    expect(observed?.priority).toBe(2);
   });
 });

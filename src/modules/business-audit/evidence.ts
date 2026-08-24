@@ -30,6 +30,9 @@ export const EVIDENCE_PACK_VERSION = "business-evidence.v1" as const;
 /** Price points cited individually. A price list, not a catalogue. */
 const MAX_DECLARED_PRICE_EVIDENCE = 8;
 
+/** Observed prices cited individually. Fewer than declared: they are weaker. */
+const MAX_OBSERVED_PRICE_EVIDENCE = 6;
+
 /**
  * Which id scheme a builder mints surfaces under.
  *
@@ -347,6 +350,29 @@ export function buildLiveEvidence(
           "live.pricing.multiple_currencies",
           "live_product",
           `Your site states prices in ${pricing.declaredCurrencies.join(", ")}`,
+          2,
+        ),
+      );
+    }
+
+    /*
+     * Observed prices say so in the sentence itself.
+     *
+     * The model is told "seen on the page" rather than "your price is", and
+     * gets the token as written rather than a currency code, because the page
+     * wrote a glyph and `$` is not USD. Downgrading the wording is the whole
+     * mechanism here: nothing stops a model treating a weaker fact as a strong
+     * one except the words the fact arrives in.
+     *
+     * Priority 2, below the declared ones at 3, so trimming drops these first.
+     */
+    for (const point of pricing.observedPricePoints.slice(0, MAX_OBSERVED_PRICE_EVIDENCE)) {
+      const period = point.period === null ? "" : ` per ${point.period.replace("_", " ")}`;
+      items.push(
+        item(
+          `live.pricing.observed.${slug(`${point.currencyToken}_${point.amount}`)}`,
+          "live_product",
+          `Seen on your page, not stated as a price — ${point.currencyToken}${point.amount}${period}`,
           2,
         ),
       );

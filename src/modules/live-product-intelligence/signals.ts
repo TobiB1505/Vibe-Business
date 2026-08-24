@@ -4,6 +4,7 @@ import { toFormSignal } from "./forms";
 import type { FetchedPage } from "./crawler";
 import type {
   DeclaredPricePoint,
+  ObservedPricePoint,
   PricingSignals,
   ConversionSignals,
   LiveEvidence,
@@ -232,8 +233,18 @@ export function buildPricingSignals(input: {
   pricingPageReached: boolean;
 }): PricingSignals {
   const declaredPricePoints: DeclaredPricePoint[] = [];
+  const observedPricePoints: ObservedPricePoint[] = [];
 
   for (const page of input.pages) {
+    for (const observed of page.html.observedPrices) {
+      observedPricePoints.push({
+        amount: observed.amount,
+        currencyToken: observed.currencyToken,
+        period: observed.period,
+        path: page.finalPath,
+      });
+    }
+
     for (const offer of page.html.offers) {
       declaredPricePoints.push({
         price: offer.price,
@@ -252,6 +263,7 @@ export function buildPricingSignals(input: {
     // any offer is not — see the type's own note.
     hasFreeDeclaredTier: declaredPricePoints.some((point) => point.price === 0),
     declaredCurrencies: [...new Set(declaredPricePoints.map((point) => point.currency))].sort(),
+    observedPricePoints,
   };
 }
 

@@ -386,6 +386,18 @@ function describeFamily(
       return curated(source, "A price your site states");
     }
 
+    /*
+     * The weaker sibling, and the label says so.
+     *
+     * "A number that looks like a price" is deliberately unflattering. It is
+     * what the observation actually is, and a founder deciding whether to
+     * believe the headline above it deserves to know which of the two sources
+     * they are looking at.
+     */
+    if (body.startsWith("pricing.observed.")) {
+      return curated(source, "A number on your page that looks like a price");
+    }
+
     if (body.startsWith("seo.")) {
       const id = body.slice("seo.".length);
       if (isSeoSignal(id)) return curated(source, SEO_LABELS[id]);

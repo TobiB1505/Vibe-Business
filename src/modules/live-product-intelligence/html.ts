@@ -1,3 +1,4 @@
+import { observePrices, type ObservedPrice } from "./pricing-text";
 /**
  * HTML extraction (Sprint 3 §12).
  *
@@ -101,6 +102,13 @@ export type ParsedHtml = {
   hasStructuredData: boolean;
   /** Prices the page declares in JSON-LD. Empty when it declares none. */
   offers: ParsedOffer[];
+  /**
+   * Prices read off the visible text — the weaker source, kept apart.
+   *
+   * See `pricing-text.ts` for why these carry a token rather than a currency
+   * code, and why they are never merged with `offers`.
+   */
+  observedPrices: ObservedPrice[];
   headings: ParsedHeading[];
   links: ParsedLink[];
   buttons: string[];
@@ -643,6 +651,7 @@ export function parseHtml(html: string): ParsedHtml {
     openGraph,
     structuredDataTypes,
     offers,
+    observedPrices: observePrices(content),
     hasStructuredData,
     headings,
     links,

@@ -3,6 +3,7 @@ import { analyzeLiveProduct } from "./analyzer";
 import { buildPricingSignals } from "./signals";
 import type { FetchedPage } from "./crawler";
 import type { ParsedOffer } from "./html";
+import type { ObservedPrice } from "./pricing-text";
 import { DEFAULT_CRAWL_BUDGETS } from "./budgets";
 import { LiveProductDomainError } from "./errors";
 import {
@@ -241,7 +242,11 @@ describe("analyzeLiveProduct — failures", () => {
  * what was on it.
  */
 describe("buildPricingSignals", () => {
-  const page = (finalPath: string, offers: ParsedOffer[]): FetchedPage =>
+  const page = (
+    finalPath: string,
+    offers: ParsedOffer[],
+    observedPrices: ObservedPrice[] = [],
+  ): FetchedPage =>
     ({
       requestedPath: finalPath,
       finalPath,
@@ -249,7 +254,10 @@ describe("buildPricingSignals", () => {
       bytes: 100,
       depth: 1,
       redirected: false,
-      html: { offers } as unknown as FetchedPage["html"],
+      // Both lists, always. `parseHtml` sets each on every page, so a fixture
+      // omitting one describes a page that cannot exist — and the builder
+      // reading it would throw rather than reveal anything about the code.
+      html: { offers, observedPrices } as unknown as FetchedPage["html"],
     }) as FetchedPage;
 
   it("records what each page declares, and where", () => {
@@ -322,5 +330,66 @@ describe("buildPricingSignals", () => {
     });
 
     expect(signals.hasFreeDeclaredTier).toBe(true);
+  });
+});
+
+/**
+ * The two sources stay apart.
+ *
+ * A declared offer is what the operator published; an observed one is a glyph
+ * and a number that sat next to each other. Merging them would launder the
+ * second into the first, and the whole value of the declared list is that a
+ * founder can trust it more.
+ */
+describe("buildPricingSignals — observed prices", () => {
+  const page = (
+    finalPath: string,
+    offers: ParsedOffer[],
+    observedPrices: ObservedPrice[] = [],
+  ): FetchedPage =>
+    ({
+      requestedPath: finalPath,
+      finalPath,
+      status: 200,
+      bytes: 100,
+      depth: 1,
+      redirected: false,
+      html: { offers, observedPrices } as unknown as FetchedPage["html"],
+    }) as FetchedPage;
+
+  it("keeps an observation out of the declared list", () => {
+    const signals = buildPricingSignals({
+      pages: [page("/pricing", [], [{ amount: 29, currencyToken: "$", period: "month" }])],
+      pricingPageReached: true,
+    });
+
+    expect(signals.declaredPricePoints).toEqual([]);
+    expect(signals.observedPricePoints).toEqual([
+      { amount: 29, currencyToken: "$", period: "month", path: "/pricing" },
+    ]);
+  });
+
+  /**
+   * An observed zero is not a stated free tier.
+   *
+   * `hasFreeDeclaredTier` is named for the declared list and must stay that
+   * way: a "0" somewhere on a page is not the site saying it has a free plan.
+   */
+  it("does not let an observed zero claim a free tier", () => {
+    const signals = buildPricingSignals({
+      pages: [page("/pricing", [], [{ amount: 0, currencyToken: "$", period: null }])],
+      pricingPageReached: true,
+    });
+
+    expect(signals.hasFreeDeclaredTier).toBe(false);
+  });
+
+  it("does not let an observation into the declared currency list", () => {
+    const signals = buildPricingSignals({
+      pages: [page("/pricing", [], [{ amount: 29, currencyToken: "USD", period: null }])],
+      pricingPageReached: true,
+    });
+
+    expect(signals.declaredCurrencies).toEqual([]);
   });
 });
