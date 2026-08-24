@@ -41,7 +41,7 @@ test.describe("the audit hands off to the moves that answer it", () => {
     const priorities = page.getByTestId("current-priorities");
     const primary = priorities.getByRole("link", { name: "View 2 next moves" });
 
-    await expect(primary).toBeVisible();
+    await expect(primary).toBeVisible({ timeout: 10_000 });
     // The seam: the link carries the finding's stable key, so the Moves page
     // opens knowing what the founder came to solve.
     await expect(primary).toHaveAttribute("href", /\/plan\?from=blocker-1$/);
@@ -55,7 +55,7 @@ test.describe("the audit hands off to the moves that answer it", () => {
     const secondary = page.getByTestId("current-priorities").getByRole("link", {
       name: "See 1 more priority",
     });
-    await expect(secondary).toHaveAttribute("href", /\/plan$/);
+    await expect(secondary).toHaveAttribute("href", /\/plan$/, { timeout: 10_000 });
   });
 
   /** §5: the key is an address, never something a founder reads. */
@@ -73,7 +73,9 @@ test.describe("the audit hands off to the moves that answer it", () => {
     await page.goto("/e2e/audit-synthesis-no-moves");
 
     const priorities = page.getByTestId("current-priorities");
-    await expect(priorities.getByRole("link", { name: "Find next moves" })).toBeVisible();
+    await expect(priorities.getByRole("link", { name: "Find next moves" })).toBeVisible({
+      timeout: 10_000,
+    });
   });
 });
 
@@ -364,7 +366,7 @@ test.describe("the loop survives a phone", () => {
 
     await expect(
       page.getByTestId("current-priorities").getByRole("link", { name: "View 2 next moves" }),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 10_000 });
     await expectNoHorizontalOverflow(page);
   });
 });

@@ -662,7 +662,7 @@ export function AuditIntelligence({
         className={cn(
           "grid min-w-0 gap-5 xl:items-start",
           node
-            ? "xl:grid-cols-[minmax(0,1.15fr)_minmax(25rem,0.85fr)] min-[1400px]:grid-cols-[minmax(29rem,1.12fr)_minmax(25rem,0.92fr)_minmax(12rem,0.48fr)]"
+            ? "xl:grid-cols-[minmax(0,1.15fr)_minmax(25rem,0.85fr)] min-[1400px]:!grid-cols-[minmax(29rem,1.12fr)_minmax(25rem,0.92fr)_minmax(12rem,0.48fr)]"
             : "xl:grid-cols-[minmax(0,1.62fr)_minmax(21rem,0.72fr)]",
         )}
         data-testid="audit-intelligence"
@@ -742,7 +742,7 @@ export function AuditIntelligence({
                 movesHref={movesHref}
                 hasMoves={hasMoves}
                 onExplore={select}
-                entranceDelay={hasInteracted || reducedMotion ? 0 : 0.92}
+                entranceDelay={hasInteracted || reducedMotion ? 0 : 0.16}
                 reducedMotion={reducedMotion}
               />
             )}
@@ -753,7 +753,7 @@ export function AuditIntelligence({
           {node && (
             <motion.div
               key={`scoring-${node.id}`}
-              className="xl:col-start-2 xl:row-start-2 min-[1400px]:col-start-3 min-[1400px]:row-start-1"
+              className="xl:col-start-2 xl:row-start-2 min-[1400px]:!col-start-3 min-[1400px]:!row-start-1"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
