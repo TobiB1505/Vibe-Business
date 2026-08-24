@@ -42,6 +42,18 @@ describe("project workspace sections", () => {
     }
   });
 
+  it("gives every project navigation destination an explicit icon", () => {
+    for (const section of PROJECT_SECTIONS) {
+      expect(section.icon.trim().length).toBeGreaterThan(0);
+    }
+  });
+
+  it("keeps project configuration distinct from account settings", () => {
+    expect(PROJECT_SECTIONS.find((section) => section.id === "settings")?.label).toBe(
+      "Project Settings",
+    );
+  });
+
   it("uses ids that are valid as URL fragments", () => {
     // Anchors end up in the address bar and in `href="#…"`. Anything needing
     // escaping would work in one browser and not the next.

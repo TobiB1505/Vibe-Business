@@ -55,6 +55,8 @@ Use the neutral native interface stack for product UI. Hierarchy comes from size
 
 Account pages use one persistent rail on desktop and a top strip below the large breakpoint. Main content is a single readable column with wide comparison surfaces. Index pages establish hierarchy in this order: route heading and primary action, context/summary, searchable dataset, then supporting trust or explanation.
 
+Project pages use one 256px desktop rail that owns the current product, repository connection, project navigation and account footer. The project document is the only independent vertical scroll surface; its content is capped at 1440px with 32–40px page padding. No persistent project header repeats the product name above the page. Routes lead with a quiet `My Products / Product` breadcrumb, then one large page title, description and local action in normal document flow.
+
 Dense comparison data uses a semantic table on desktop. Independent records transform into labeled stacked rows on narrow screens without dropping status, identity or actions. Page-level horizontal overflow is never acceptable.
 
 ## Elevation & Depth
@@ -92,4 +94,5 @@ Motion for React owns the Business Brain's entrance, presence, layout, hover and
 - Don't invent “active”, trend, pull-request or activity data for reference fidelity.
 - Don't duplicate shared surfaces, buttons, status pills or icon grammar in screen-local systems.
 - Don't let a table impose viewport height or overflow rules on the account shell.
+- Don't reintroduce a sticky project header or repeat repository/branch metadata above every project page.
 - Don't copy the Business Brain glow or choreography onto ordinary cards, forms or index pages.

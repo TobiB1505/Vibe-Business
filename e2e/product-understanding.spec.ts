@@ -52,6 +52,43 @@ async function forbidExternalCalls(page: Page): Promise<string[]> {
   return attempted;
 }
 
+test.describe("the project shell owns project context", () => {
+  test("keeps the project in the rail and lets the page header scroll normally", async ({
+    page,
+  }) => {
+    await forbidExternalCalls(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(READY);
+
+    await expect(page.getByTestId("project-switcher")).toContainText("Acme");
+    await expect(page.getByRole("link", { name: "All products", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "My Product", exact: true })).toBeVisible();
+    await expect(page.getByText("Here's how Vibe understands your product.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Check my product again" })).toBeVisible();
+
+    const main = page.locator("main");
+    await expect(main).toHaveCSS("overflow-y", "auto");
+    await expect(page.locator("header.sticky")).toHaveCount(0);
+  });
+
+  test("switches products and keeps account actions in the footer disclosure", async ({ page }) => {
+    await forbidExternalCalls(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(READY);
+
+    const switcher = page.getByTestId("project-switcher");
+    await switcher.locator("summary").click();
+    await expect(switcher.getByRole("link", { name: "Planner Agent" })).toBeVisible();
+    await expect(switcher.getByRole("link", { name: "View all products" })).toBeVisible();
+
+    const account = page.getByTestId("account-menu");
+    await account.locator("summary").click();
+    await expect(account.getByRole("link", { name: /account settings/i })).toBeVisible();
+    await expect(account.getByRole("link", { name: /billing/i })).toBeVisible();
+    await expect(account.getByRole("button", { name: /sign out/i })).toBeVisible();
+  });
+});
+
 test.describe("the conclusion comes first", () => {
   test("opens with what Vibe understood, above everything else", async ({ page }) => {
     await forbidExternalCalls(page);

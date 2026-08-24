@@ -134,7 +134,7 @@ export default async function MyProductPage({
     <WorkspaceSection
       id="my-product"
       title="My Product"
-      description="What Vibe understands about the product you built, and where that understanding came from."
+      description="Here's how Vibe understands your product."
       actions={
         // The start control lives in the header when a profile already exists,
         // so re-checking is available without scrolling past the answer.
@@ -195,11 +195,11 @@ export default async function MyProductPage({
           <Surface
             // The anchor repository findings link to when only a live check
             // could settle the question (UI-3.6 §39). `scroll-mt` clears the
-            // sticky workspace header, as `WorkspaceSection` does.
+            // small breathing room when a source link targets this panel.
             id={LIVE_PRODUCT_ANCHOR}
             level="section"
             padding="lg"
-            className="scroll-mt-40 flex flex-col gap-4 lg:scroll-mt-32"
+            className="scroll-mt-6 flex flex-col gap-4"
           >
             {liveSnapshot?.result ? (
               <LiveIntelligenceSummary
@@ -235,7 +235,7 @@ export default async function MyProductPage({
             id="repository-intelligence"
             level="section"
             padding="lg"
-            className="scroll-mt-40 flex flex-col gap-4 lg:scroll-mt-32"
+            className="scroll-mt-6 flex flex-col gap-4"
           >
             {repositorySnapshot?.result ? (
               <IntelligenceSummary

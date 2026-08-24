@@ -11,9 +11,9 @@ import { getProjectWithRepository } from "@/modules/projects/queries";
  *
  * ## What belongs here, and what must not
  *
- * Every workspace route renders the same frame: the sidebar, the header, the
- * breadcrumb. That frame needs the project's identity and its repository
- * connection — and nothing else.
+ * Every workspace route renders the same frame: the sidebar and the quiet
+ * account-to-product breadcrumb. That frame needs the project's identity and
+ * its stored repository connection — and nothing else.
  *
  * What deliberately does **not** live here: the audit, opportunities, prepared
  * changes, Deep Scan results, outcomes, impact or activity. A layout runs on
@@ -37,10 +37,10 @@ import { getProjectWithRepository } from "@/modules/projects/queries";
  * route each resolve the context independently, four per navigation, before
  * anything could paint.
  *
- * Exactly one place ever used the answer: the "Connected" pill in the project
- * header. Eight route files paid for it and threw it away. So the probe now
- * belongs to the thing that displays it, which streams it in after the page
- * has rendered, and this stays a database read.
+ * Exactly one place ever used the answer: the old sticky project header. That
+ * header no longer exists. Shared chrome now reports only the stored
+ * connection and consequential workflows revalidate live access themselves,
+ * so this context remains a database read.
  */
 
 export type ProjectWorkspaceContext = {
@@ -55,6 +55,43 @@ export type ProjectWorkspaceContext = {
     installationId: number;
   } | null;
 };
+
+export type ProjectSwitcherOption = {
+  id: string;
+  name: string;
+};
+
+/**
+ * A bounded set of sibling products for the project rail.
+ *
+ * The current project is already known to the layout and is inserted there,
+ * so this query asks only for alternatives. Four keeps the disclosure useful
+ * without turning a frame rendered on every project route into an account
+ * dashboard read. The permanent "View all products" destination remains the
+ * complete inventory and the recovery path when this optional read fails.
+ */
+export async function listProjectSwitcherOptions(
+  supabase: SupabaseClient,
+  params: { userId: string; currentProjectId: string },
+): Promise<ProjectSwitcherOption[]> {
+  try {
+    const { data, error } = await supabase
+      .from("projects")
+      .select("id, name")
+      .eq("user_id", params.userId)
+      .neq("id", params.currentProjectId)
+      .order("created_at", { ascending: false })
+      .limit(4);
+
+    // A switcher preview is never worth taking down the workspace. The current
+    // product and the complete products index both remain reachable.
+    if (error) return [];
+
+    return (data ?? []).map((project) => ({ id: project.id, name: project.name }));
+  } catch {
+    return [];
+  }
+}
 
 /**
  * Returns null when the project does not exist or does not belong to the

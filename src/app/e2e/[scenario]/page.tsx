@@ -48,6 +48,15 @@ import { ProductsIndex } from "@/app/app/(account)/products/products-index";
 import { RepositoriesIndex } from "@/app/app/(account)/repositories/repositories-index";
 import { AccountMenu } from "@/components/layout/account-menu";
 import { AccountShell, AccountSidebar } from "@/components/layout/account-shell";
+import {
+  PROJECT_SECTIONS,
+  ProjectBreadcrumb,
+  ProjectShell,
+  ProjectSidebar,
+  WorkspaceSection,
+  projectSectionHref,
+  type ProjectNavItem,
+} from "@/components/layout/project-shell";
 import { E2E_SCENARIOS, isE2eScenario } from "../scenarios";
 import { E2E_INTELLIGENCE_SCENARIOS, isE2eIntelligenceScenario } from "../intelligence-scenarios";
 import {
@@ -56,6 +65,7 @@ import {
 } from "../understanding-scenarios";
 import { UnderstandingPanel } from "@/app/app/projects/[projectId]/understanding-panel";
 import { UnderstandingConfirm } from "@/app/app/projects/[projectId]/understanding-confirm";
+import { UnderstandingProgress } from "@/app/app/projects/[projectId]/understanding-progress";
 import { AuditLivePrerequisite } from "@/app/app/onboarding/[projectId]/audit-live-prerequisite";
 import {
   OnboardingOperationFailure,
@@ -256,21 +266,79 @@ export default async function E2eScenarioPage({
   // renders, given a profile the real pipeline produced.
   if (isE2eUnderstandingScenario(scenario)) {
     const fixture = E2E_UNDERSTANDING_SCENARIOS[scenario]();
+    const currentHref = `/e2e/${scenario}`;
+    const navItems: ProjectNavItem[] = PROJECT_SECTIONS.map((section) => ({
+      id: section.id,
+      label: section.label,
+      icon: section.icon,
+      href:
+        section.id === "my-product"
+          ? currentHref
+          : projectSectionHref("project_e2e", section.id),
+      count: section.id === "action-plan" ? 3 : section.id === "agent" ? 13 : null,
+      countTone: section.id === "action-plan" ? "accent" : "neutral",
+    }));
+
     return (
-      <main className="mx-auto max-w-4xl p-8">
-        {label}
-        <UnderstandingPanel
-          view={fixture.view}
-          projectId="project_e2e"
-          confirmedAt={fixture.confirmedAt}
-          understoodAt="2026-08-15T12:00:00.000Z"
-          founderIntent={{
-            stage: "active_users",
-            monetizationModel: "subscription",
-            primaryGoal: "grow_revenue",
-          }}
-          founderContextHref="#founder-context"
-          sources={[
+      <ProjectShell
+        sidebar={
+          <ProjectSidebar
+            projectId="project_e2e"
+            projectName="Acme"
+            repositoryFullName="acme/acme"
+            connected
+            switcherItems={[
+              { id: "project_e2e", name: "Acme", href: currentHref },
+              {
+                id: "project_e2e_planner",
+                name: "Planner Agent",
+                href: "/app/projects/project_e2e_planner",
+              },
+            ]}
+            items={navItems}
+            footer={
+              <AccountMenu
+                identity={{
+                  displayName: "Tobi",
+                  initials: "TB",
+                  avatarUrl: null,
+                  fromGithub: true,
+                }}
+                subtitle="Founder"
+                placement="above"
+              />
+            }
+          />
+        }
+      >
+        <div className="sr-only">{label}</div>
+        <ProjectBreadcrumb projectName="Acme" />
+        <WorkspaceSection
+          id="my-product"
+          title="My Product"
+          description="Here's how Vibe understands your product."
+          actions={
+            <UnderstandingProgress
+              projectId="project_e2e"
+              hasProfile
+              activeOperation={null}
+              canStart
+              blockedReason={null}
+            />
+          }
+        >
+          <UnderstandingPanel
+            view={fixture.view}
+            projectId="project_e2e"
+            confirmedAt={fixture.confirmedAt}
+            understoodAt="2026-08-15T12:00:00.000Z"
+            founderIntent={{
+              stage: "active_users",
+              monetizationModel: "subscription",
+              primaryGoal: "grow_revenue",
+            }}
+            founderContextHref="#founder-context"
+            sources={[
             {
               id: "code",
               label: "Your code",
@@ -307,24 +375,25 @@ export default async function E2eScenarioPage({
               href: "#founder-context",
               action: "View context",
             },
-          ]}
-          actions={
-            <UnderstandingConfirm
-              projectId="project_e2e"
-              profileId="profile_e2e"
-              values={{
-                name: fixture.view.headline.productName ?? "",
-                shortDescription: "",
-                understanding: fixture.view.headline.understanding ?? "",
-                mainPurpose: "",
-                mainPromise: "",
-                primaryAudience: "",
-                problemSolved: "",
-              }}
-            />
-          }
-        />
-      </main>
+            ]}
+            actions={
+              <UnderstandingConfirm
+                projectId="project_e2e"
+                profileId="profile_e2e"
+                values={{
+                  name: fixture.view.headline.productName ?? "",
+                  shortDescription: "",
+                  understanding: fixture.view.headline.understanding ?? "",
+                  mainPurpose: "",
+                  mainPromise: "",
+                  primaryAudience: "",
+                  problemSolved: "",
+                }}
+              />
+            }
+          />
+        </WorkspaceSection>
+      </ProjectShell>
     );
   }
 

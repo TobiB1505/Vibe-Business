@@ -79,6 +79,7 @@ V0.1 foundational architecture decisions have been recorded:
 - [0047](0047-business-health-is-project-home.md) — Business Health is the canonical project Home (Accepted; six rail destinations, the existing `business-audit` recovery anchor now resolves at the project root, `/health` remains a guarded compatibility alias, and the Business Brain is the one bounded theatrical product surface)
 - [0048](0048-signature-business-brain.md) — Signature Business Brain view model and interaction (Accepted; bounded domain-to-view-model projection, truthful absent lens scores, comparable overall history, Motion-for-React interaction and reduced-motion parity)
 - [0049](0049-business-lens-diagnostic-scores.md) — Evidence-grounded business-lens diagnostic scores (Accepted; nullable 0–100 lens scores, validated health-band consistency, legacy audit compatibility, and no change to the authoritative overall score)
+- [0050](0050-project-shell-context-ownership.md) — Project shell context ownership and scroll model (Accepted; product identity and switching live in the fixed rail, route headers stay in document flow, project and account settings are separated, and the main project document owns desktop scrolling)
 
 Several architecture questions remain intentionally open — see [ARCHITECTURE.md §7](../../ARCHITECTURE.md#7-deferred--open-decisions).
 

@@ -20,7 +20,7 @@ const ACTIONS = [
   },
   {
     href: "/app/settings",
-    label: "Settings",
+    label: "Account settings",
     description: "Account and integrations",
     Icon: SettingsIcon,
   },
@@ -76,13 +76,25 @@ function AccountActions() {
 }
 
 /** Account controls at the foot of the account rail. */
-export function AccountMenu({ identity }: { identity: AccountIdentity }) {
+export function AccountMenu({
+  identity,
+  subtitle,
+  placement = "flow",
+}: {
+  identity: AccountIdentity;
+  /** Project rails name the user's role; account rails describe the identity source. */
+  subtitle?: string;
+  /** Project navigation keeps the disclosure above its stable footer control. */
+  placement?: "flow" | "above";
+}) {
   return (
     <details
       data-testid="account-menu"
       className={cn(
-        "group border-line-1 border-t pt-3",
-        "open:flex open:flex-col-reverse open:gap-3 lg:border-0 lg:pt-0",
+        "group",
+        placement === "flow" &&
+          "border-line-1 border-t pt-3 open:flex open:flex-col-reverse open:gap-3 lg:border-0 lg:pt-0",
+        placement === "above" && "relative",
       )}
     >
       {/* The identity card is the stable control. Opening it reveals the
@@ -110,7 +122,7 @@ export function AccountMenu({ identity }: { identity: AccountIdentity }) {
             {identity.displayName}
           </span>
           <span className="text-fg-meta text-xs">
-            {identity.fromGithub ? "GitHub account" : "Signed in"}
+            {subtitle ?? (identity.fromGithub ? "GitHub account" : "Signed in")}
           </span>
         </span>
         <ChevronDownIcon
@@ -119,7 +131,13 @@ export function AccountMenu({ identity }: { identity: AccountIdentity }) {
         />
       </summary>
 
-      <div className="border-line-2 bg-surface-2 rounded-panel border p-2 shadow-panel">
+      <div
+        className={cn(
+          "border-line-2 bg-app rounded-panel z-40 border p-2 shadow-card",
+          placement === "above" &&
+            "absolute right-0 bottom-[calc(100%+0.75rem)] left-0",
+        )}
+      >
         <AccountActions />
       </div>
     </details>

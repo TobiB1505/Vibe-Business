@@ -4,6 +4,10 @@ export type DashboardIconName =
   | "home"
   | "products"
   | "repositories"
+  | "business-health"
+  | "action-plan"
+  | "agent"
+  | "settings"
   | "experiments"
   | "team";
 
@@ -103,6 +107,36 @@ export function SettingsIcon(props: IconProps) {
   );
 }
 
+export function BusinessHealthIcon(props: IconProps) {
+  return (
+    <IconFrame {...props}>
+      <path d="M9.1 4.1A3.4 3.4 0 0 0 5.8 7.5v.7a3.6 3.6 0 0 0-1.8 6.7v.6A3.5 3.5 0 0 0 7.5 19H9V4.1Z" />
+      <path d="M14.9 4.1a3.4 3.4 0 0 1 3.3 3.4v.7a3.6 3.6 0 0 1 1.8 6.7v.6a3.5 3.5 0 0 1-3.5 3.5H15V4.1Z" />
+      <path d="M9 8H7.2M15 8h1.8M9 12H6.8M15 12h2.2M9 16H7.2M15 16h1.8M12 4v16" />
+    </IconFrame>
+  );
+}
+
+export function ActionPlanIcon(props: IconProps) {
+  return (
+    <IconFrame {...props}>
+      <path d="M4 6h10M4 12h16M4 18h12" />
+      <circle cx="17" cy="6" r="2" />
+      <circle cx="8" cy="12" r="2" />
+      <circle cx="19" cy="18" r="2" />
+    </IconFrame>
+  );
+}
+
+export function AgentIcon(props: IconProps) {
+  return (
+    <IconFrame {...props}>
+      <rect x="4" y="7" width="16" height="13" rx="3" />
+      <path d="M12 3v4M9 3h6M8.5 12h.01M15.5 12h.01M8.5 16h7" />
+    </IconFrame>
+  );
+}
+
 export function SignOutIcon(props: IconProps) {
   return (
     <IconFrame {...props}>
@@ -116,6 +150,30 @@ export function ChevronDownIcon(props: IconProps) {
   return (
     <IconFrame {...props}>
       <path d="m7 10 5 5 5-5" />
+    </IconFrame>
+  );
+}
+
+export function ChevronRightIcon(props: IconProps) {
+  return (
+    <IconFrame {...props}>
+      <path d="m10 7 5 5-5 5" />
+    </IconFrame>
+  );
+}
+
+export function ArrowLeftIcon(props: IconProps) {
+  return (
+    <IconFrame {...props}>
+      <path d="M20 12H4m6-6-6 6 6 6" />
+    </IconFrame>
+  );
+}
+
+export function CheckIcon(props: IconProps) {
+  return (
+    <IconFrame {...props}>
+      <path d="m5 12.5 4.2 4.2L19 7" />
     </IconFrame>
   );
 }
@@ -233,6 +291,10 @@ export function DashboardIcon({ name, ...props }: IconProps & { name: DashboardI
     home: HomeIcon,
     products: ProductsIcon,
     repositories: RepositoriesIcon,
+    "business-health": BusinessHealthIcon,
+    "action-plan": ActionPlanIcon,
+    agent: AgentIcon,
+    settings: SettingsIcon,
     experiments: ExperimentsIcon,
     team: TeamIcon,
   }[name];

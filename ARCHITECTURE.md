@@ -313,6 +313,7 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0047](docs/decisions/0047-business-health-is-project-home.md) | Business Health is the canonical project Home | Web surface |
 | [0048](docs/decisions/0048-signature-business-brain.md) | Signature Business Brain view model and interaction | Web surface, read models |
 | [0049](docs/decisions/0049-business-lens-diagnostic-scores.md) | Evidence-grounded business-lens diagnostic scores | Business audit, read models |
+| [0050](docs/decisions/0050-project-shell-context-ownership.md) | Project shell context ownership and scroll model | Web surface |
 
 ### Layers with no section above
 

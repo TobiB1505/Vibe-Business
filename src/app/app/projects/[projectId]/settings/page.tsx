@@ -53,7 +53,7 @@ export default async function ProjectSettingsPage({
   return (
     <WorkspaceSection
       id="settings"
-      title="Settings"
+      title="Project Settings"
       description="What Vibe is connected to, what you have told it, and how to disconnect."
     >
       <div className="flex flex-col gap-5">
