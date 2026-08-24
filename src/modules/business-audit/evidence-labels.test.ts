@@ -347,3 +347,34 @@ describe("a v4 citation may finally claim what a v3 one could not", () => {
     },
   );
 });
+
+/**
+ * The contradiction namespace, in both prefix tables.
+ *
+ * Three times this session an id family reached the screen with no curated
+ * label and rendered as the identifier with its punctuation removed. A fourth
+ * would be careless rather than unlucky, so the namespace is pinned in the
+ * label table *and* in the caption table — the pair that disagreed once before
+ * and produced "from what Vibe understood · Signal pricing surface".
+ */
+describe("a disagreement between layers reads as one", () => {
+  it("is curated, not derived prose", () => {
+    const described = describeEvidenceId("contradiction.pricing_not_reachable");
+
+    expect(described.certainty).toBe("curated");
+    expect(described.source).toBe("Two things Vibe compared");
+    expect(described.detail).not.toMatch(/_/);
+  });
+
+  it("names the comparison rather than either half", () => {
+    // Naming one layer would hide that the citation exists precisely because
+    // the two did not agree.
+    expect(describeEvidenceId("contradiction.billing_not_offered_publicly").detail).toBe(
+      "Billing not offered publicly — the two did not agree",
+    );
+  });
+
+  it("is known to the caption table too", () => {
+    expect(evidenceSource("contradiction.anything")).not.toBeNull();
+  });
+});

@@ -18,6 +18,7 @@ import {
   type SurfaceIdScheme,
 } from "./evidence";
 import { buildAuthenticatedEvidence, type EvidenceItemV2 } from "./evidence-v2";
+import { buildIntelligenceCrossChecks } from "@/modules/repository-intelligence/cross-check";
 
 /**
  * Evidence Pack **v3** — the Product Profile becomes required audit context
@@ -96,7 +97,9 @@ export type EvidenceCategoryV3 =
   | "founder_intent"
   | "repository"
   | "live_product"
-  | "authenticated_product";
+  | "authenticated_product"
+  /** A disagreement *between* two of the layers above (v4 and later). */
+  | "contradiction";
 
 export type EvidenceItemV3 = {
   id: string;
@@ -351,6 +354,30 @@ export function buildEvidencePackForVersion(
     : buildEvidencePackV3(input);
 }
 
+/**
+ * Disagreements between the layers, as evidence the model can cite (v4).
+ *
+ * `buildIntelligenceCrossChecks` has computed these since Sprint UI-3.6 and
+ * nothing but the project page ever read them, so the most valuable thing this
+ * product notices — *the code says one thing and the running product says
+ * another* — never reached a single model call.
+ *
+ * They are minted at **priority 3**, the highest, and deliberately so. A
+ * contradiction is not one more observation to weigh alongside the two facts
+ * that produced it; it is the thing those two facts are *for*. If trimming has
+ * to drop something, this is the last item that should go.
+ *
+ * The label is the cross-check's own founder-facing title, which is already
+ * written in business language and already avoids naming files or internals.
+ */
+function buildContradictionEvidence(input: BuildEvidencePackV3Input): EvidenceItemV3[] {
+  return buildIntelligenceCrossChecks(
+    input.repository,
+    input.liveProduct,
+    input.authenticatedProduct,
+  ).map((check) => item(`contradiction.${check.id.replace(/-/g, "_")}`, "contradiction", check.title, 3));
+}
+
 function buildEvidencePack(
   input: BuildEvidencePackV3Input,
   version: EvidencePackVersion,
@@ -364,10 +391,11 @@ function buildEvidencePack(
   // Their ids are what the audit's "why does Vibe think this?" disclosure
   // resolves against, and re-deriving them here would be a second place for
   // those ids to drift.
-  const scannerItems: Array<EvidenceItem | EvidenceItemV2> = [
+  const scannerItems: Array<EvidenceItem | EvidenceItemV2 | EvidenceItemV3> = [
     ...buildRepositoryEvidence(input.repository, scheme),
     ...buildLiveEvidence(input.liveProduct, scheme),
     ...(input.authenticatedProduct ? buildAuthenticatedEvidence(input.authenticatedProduct) : []),
+    ...(version === EVIDENCE_PACK_V4_VERSION ? buildContradictionEvidence(input) : []),
   ];
 
   const byId = new Map<string, EvidenceItemV3>();

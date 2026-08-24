@@ -81,6 +81,12 @@ export const EVIDENCE_SOURCE_LABELS: Record<string, string> = {
   intent: "Your answers",
   auth: "Your signed-in product",
   profile: "What Vibe understood",
+  /**
+   * Not one layer, but a disagreement between two of them. "Two things Vibe
+   * compared" rather than a source, because naming either half would hide that
+   * the citation exists precisely because they did not agree.
+   */
+  contradiction: "Two things Vibe compared",
 };
 
 /** Ids emitted exactly once, each naming one specific observation. */
@@ -316,6 +322,20 @@ function describeFamily(
     }
     if (body.startsWith("technical."))
       return curated(source, `${humanize(body.slice("technical.".length))}, in your stack`);
+  }
+
+  /*
+   * A disagreement between layers (v4).
+   *
+   * The tail is the cross-check's own id — `billing_not_offered_publicly` —
+   * and it is deliberately *not* humanised into prose here. These read as
+   * short statements rather than labels, so the sentence a founder should see
+   * is the cross-check's `title`, which the pack already carries. What this
+   * has to do is stay curated and stay readable, so an id nobody has taught it
+   * still says which comparison it came from rather than leaking underscores.
+   */
+  if (prefix === "contradiction") {
+    return curated(source, `${humanize(body)} — the two did not agree`);
   }
 
   if (prefix === "live") {

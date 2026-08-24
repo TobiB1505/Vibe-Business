@@ -124,6 +124,11 @@ export function evidenceSource(evidenceId: string): string | null {
       return "from your code";
     case "auth":
       return "from your signed-in product";
+    // A comparison, not a layer. Both tables have to know every prefix -- the
+    // caption saying "from what Vibe understood" over a raw id is exactly the
+    // split this pair was fixed for once already (UI-7 section 2).
+    case "contradiction":
+      return "from two things Vibe compared";
     case "intent":
     // The same thing under an older name: `evidence.ts` emits `business.*`
     // where `evidence-v3.ts` emits `intent.*`, and a stored audit can carry
