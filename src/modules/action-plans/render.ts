@@ -37,7 +37,11 @@ function renderMove(source: PlannerSource): string {
     `Why it was ranked first: ${opportunity.whyNow}`,
     "",
     `Area of the business: ${opportunity.category}`,
-    `Readiness dimensions touched: ${[opportunity.primaryDimension, ...opportunity.secondaryDimensions].join(", ")}`,
+    // Absent for a Move stored before the lens attribution existed (ADR 0050
+    // §5) — an advisory line, never reconstructed from the retired vocabulary.
+    ...(opportunity.primaryLens !== null
+      ? [`Business lenses touched: ${[opportunity.primaryLens, ...opportunity.secondaryLenses].join(", ")}`]
+      : []),
     `Confidence the audit had in this: ${opportunity.confidence}`,
   ];
 

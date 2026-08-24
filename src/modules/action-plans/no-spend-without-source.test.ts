@@ -66,8 +66,8 @@ const UNRESOLVABLE = [
     opportunity: fakeOpportunity({
       sourceConclusionKey: null,
       evidenceIds: ["repo.surface.payments"],
-      primaryDimension: "distribution",
-      secondaryDimensions: [],
+      primaryLens: "acquisition",
+      secondaryLenses: [],
     }),
     reason: "no_legacy_match",
   },

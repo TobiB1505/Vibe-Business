@@ -26,8 +26,8 @@ export function fakeSeoOpportunity(
     effort: "low",
     confidence: "high",
     category: "seo",
-    primaryDimension: "distribution",
-    secondaryDimensions: [],
+    primaryLens: "acquisition",
+    secondaryLenses: [],
     evidenceIds: [
       "live.seo.robots_txt_missing",
       "live.seo.sitemap_missing",

@@ -1,4 +1,4 @@
-import { AUDIT_DIMENSIONS, type AuditDimensionId, type Confidence } from "@/modules/business-audit/schema";
+import { BUSINESS_LENSES, type BusinessLens, type Confidence } from "@/modules/business-audit/schema";
 import {
   EXECUTION_READINESS,
   EXECUTION_TYPES,
@@ -28,7 +28,7 @@ import type { WireOpportunity } from "./wire-schema";
  *    whole set would waste a paid call: unknown evidence ids, duplicate
  *    opportunities, an over-long list, non-contiguous ranks.
  *  - **Rejected** — things where we cannot know what was meant: an entry with
- *    no valid dimension, no title, or no surviving evidence at all.
+ *    no valid lens, no title, or no surviving evidence at all.
  *
  * Every repair is recorded in `validationNotes`, so a reviewer can see what
  * the model actually returned rather than only what survived.
@@ -51,7 +51,7 @@ export type OpportunityValidateResult =
 
 const IMPACT_VALUES = ["high", "medium", "low"] as const;
 const MAX_EVIDENCE_IDS = 6;
-const MAX_SECONDARY_DIMENSIONS = 2;
+const MAX_SECONDARY_LENSES = 2;
 const MAX_DEPENDENCIES = 3;
 const MAX_TEXT_LENGTH = 600;
 
@@ -80,15 +80,15 @@ function stringList(value: unknown, cap: number): string[] {
 /**
  * A deterministic key for "this is the same piece of work" (§17).
  *
- * Category plus primary dimension, which is coarse on purpose. No embeddings,
+ * Category plus primary lens, which is coarse on purpose. No embeddings,
  * no similarity thresholds — a V0.1 duplicate is almost always the same
  * category attacked from two angles ("add pricing" / "create a pricing page"),
  * and a cheap exact key catches that without a model deciding what "similar"
  * means. Two genuinely different opportunities in one category is the cost,
  * and the higher-ranked one survives, which is the right one to keep.
  */
-function semanticKey(category: OpportunityCategory, dimension: AuditDimensionId): string {
-  return `${category}:${dimension}`;
+function semanticKey(category: OpportunityCategory, lens: BusinessLens): string {
+  return `${category}:${lens}`;
 }
 
 function slug(value: string): string {
@@ -118,7 +118,7 @@ function readCandidate(
   const effort = oneOf<OpportunityEffort>(entry.effort, IMPACT_VALUES);
   const confidence = oneOf<Confidence>(entry.confidence, IMPACT_VALUES);
   const category = oneOf<OpportunityCategory>(entry.category, OPPORTUNITY_CATEGORIES);
-  const primaryDimension = oneOf<AuditDimensionId>(entry.primaryDimension, AUDIT_DIMENSIONS);
+  const primaryLens = oneOf<BusinessLens>(entry.primaryLens, BUSINESS_LENSES);
   const executionType = oneOf<ExecutionType>(entry.executionType, EXECUTION_TYPES);
   const executionReadiness = oneOf<ExecutionReadiness>(entry.executionReadiness, EXECUTION_READINESS);
 
@@ -131,7 +131,7 @@ function readCandidate(
     effort === null ||
     confidence === null ||
     category === null ||
-    primaryDimension === null ||
+    primaryLens === null ||
     executionType === null ||
     executionReadiness === null
   ) {
@@ -155,9 +155,9 @@ function readCandidate(
     return null;
   }
 
-  const secondaryDimensions = stringList(entry.secondaryDimensions, MAX_SECONDARY_DIMENSIONS)
-    .filter((value): value is AuditDimensionId => (AUDIT_DIMENSIONS as readonly string[]).includes(value))
-    .filter((value) => value !== primaryDimension);
+  const secondaryLenses = stringList(entry.secondaryLenses, MAX_SECONDARY_LENSES)
+    .filter((value): value is BusinessLens => (BUSINESS_LENSES as readonly string[]).includes(value))
+    .filter((value) => value !== primaryLens);
 
   const rank = typeof entry.rank === "number" && Number.isFinite(entry.rank) ? entry.rank : Number.MAX_SAFE_INTEGER;
 
@@ -185,7 +185,7 @@ function readCandidate(
 
   return {
     rank,
-    key: semanticKey(category, primaryDimension),
+    key: semanticKey(category, primaryLens),
     opportunity: {
       sourceConclusionKey,
       title,
@@ -195,8 +195,8 @@ function readCandidate(
       effort,
       confidence,
       category,
-      primaryDimension,
-      secondaryDimensions,
+      primaryLens,
+      secondaryLenses,
       evidenceIds,
       executionType,
       executionReadiness,

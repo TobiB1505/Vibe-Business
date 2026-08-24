@@ -331,8 +331,8 @@ describe("priority is not execution suitability", () => {
         rank: 2,
         title: "Add discoverability foundations",
         category: "seo",
-        primaryDimension: "distribution",
-        secondaryDimensions: [],
+        primaryLens: "acquisition",
+        secondaryLenses: [],
         // The one thing Vibe can actually execute today.
         executionType: "code_change",
         executionReadiness: "ready",
@@ -509,8 +509,8 @@ describe("Move → Conclusion lineage", () => {
       fakeOpportunity({
         sourceConclusionKey: null,
         evidenceIds: ["live.site.title"],
-        primaryDimension: "product",
-        secondaryDimensions: [],
+        primaryLens: "offer",
+        secondaryLenses: [],
       }),
     );
 
@@ -524,8 +524,8 @@ describe("Move → Conclusion lineage", () => {
       fakeOpportunity({
         sourceConclusionKey: null,
         evidenceIds: ["repo.surface.payments"],
-        primaryDimension: "distribution",
-        secondaryDimensions: [],
+        primaryLens: "acquisition",
+        secondaryLenses: [],
       }),
     );
 

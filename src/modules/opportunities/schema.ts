@@ -1,4 +1,4 @@
-import type { AuditDimensionId, Confidence } from "@/modules/business-audit/schema";
+import type { BusinessLens, Confidence } from "@/modules/business-audit/schema";
 
 /**
  * The Opportunity domain model (Sprint 8 §3, §4).
@@ -16,7 +16,7 @@ import type { AuditDimensionId, Confidence } from "@/modules/business-audit/sche
  */
 
 /**
- * v2 records **which audit conclusion each Move came from** (CORE-2b FIX §1, §2).
+ * v2 recorded **which audit conclusion each Move came from** (CORE-2b FIX §1, §2).
  *
  * The engine has always known this — it reads the audit's conclusions and decides what
  * to do about them — and it always threw the answer away. The Action Planner then had to
@@ -24,17 +24,20 @@ import type { AuditDimensionId, Confidence } from "@/modules/business-audit/sche
  * a bad way to hold one: reconstruction can be ambiguous, and a strategic plan built on
  * a guessed root problem is exactly the failure this product exists not to have.
  *
- * So the relationship is now stated at creation time by the layer that knows it. The
- * version moves because a stored v1 set genuinely cannot answer the question a v2 set
- * can — and because `OPPORTUNITY_SET_SCHEMA_VERSION` feeds the reuse identity, so a v1
- * set is correctly no longer an acceptable answer to "what should this founder do next,
- * and what problem does it solve?".
+ * So the relationship is stated at creation time by the layer that knows it.
+ *
+ * v3 moves the attribution vocabulary from the five retired dimensions to the
+ * nine business lenses ([ADR 0050 §5]). A Move now names the lens it most
+ * belongs to — the same vocabulary the audit reasons in — so the chain
+ * audit → conclusion → Move speaks one language end to end. The versions move
+ * because they feed the reuse identity (rule 48): a dimension-attributed set
+ * is no longer an acceptable answer to "what should this founder do next?".
  */
-export const OPPORTUNITY_SCHEMA_VERSION = "business-opportunity.v2" as const;
-export const OPPORTUNITY_SET_SCHEMA_VERSION = "business-opportunity-set.v2" as const;
+export const OPPORTUNITY_SCHEMA_VERSION = "business-opportunity.v3" as const;
+export const OPPORTUNITY_SET_SCHEMA_VERSION = "business-opportunity-set.v3" as const;
 
 /** Bumped when prioritization behaviour changes materially (§22). */
-export const OPPORTUNITY_ENGINE_VERSION = "opportunity-engine-v2" as const;
+export const OPPORTUNITY_ENGINE_VERSION = "opportunity-engine-v3" as const;
 
 /**
  * Focus is the product (§1, §21).
@@ -83,10 +86,10 @@ export type ExecutionReadiness = (typeof EXECUTION_READINESS)[number];
 /**
  * A small vocabulary for grouping and duplicate detection (§17, §18).
  *
- * Separate from the five readiness dimensions on purpose: a dimension says
- * which part of the business is weak, a category says what kind of work this
- * is. They are not the same axis, and merging them would force "add analytics"
- * to pretend to be a retention problem.
+ * Separate from the business lenses on purpose: a lens says which part of the
+ * business is weak, a category says what kind of work this is. They are not
+ * the same axis, and merging them would force "add analytics" to pretend to
+ * be a retention problem.
  */
 export const OPPORTUNITY_CATEGORIES = [
   "positioning",
@@ -134,9 +137,15 @@ export type BusinessOpportunity = {
   /** Confidence that the problem exists and matters — not expected impact (§7). */
   confidence: Confidence;
   category: OpportunityCategory;
-  /** Exactly one of the five readiness dimensions (§8). */
-  primaryDimension: AuditDimensionId;
-  secondaryDimensions: AuditDimensionId[];
+  /**
+   * The business lens this Move most belongs to (§8, ADR 0050 §5).
+   *
+   * Null only on Moves stored before `business-opportunity.v3`, which were
+   * attributed to a retired dimension instead; their stored attribution is a
+   * record and is not translated. Validation always sets a lens on a new Move.
+   */
+  primaryLens: BusinessLens | null;
+  secondaryLenses: BusinessLens[];
   /** Evidence ids from the pack, validated to exist (§14). */
   evidenceIds: string[];
   executionType: ExecutionType;

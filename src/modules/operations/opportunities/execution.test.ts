@@ -201,9 +201,9 @@ const opportunityRows = () => db.rows("business_opportunities");
 beforeEach(() => {
   db = new FakeDatabase();
   provider = providerReturning([
-    fakeWireOpportunity({ rank: 1, category: "monetization", primaryDimension: "monetization" }),
-    fakeWireOpportunity({ rank: 2, category: "positioning", primaryDimension: "product" }),
-    fakeWireOpportunity({ rank: 3, category: "seo", primaryDimension: "distribution" }),
+    fakeWireOpportunity({ rank: 1, category: "monetization", primaryLens: "revenue_economics" }),
+    fakeWireOpportunity({ rank: 2, category: "positioning", primaryLens: "offer" }),
+    fakeWireOpportunity({ rank: 3, category: "seo", primaryLens: "acquisition" }),
   ]);
   seed();
 });
