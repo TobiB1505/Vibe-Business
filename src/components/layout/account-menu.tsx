@@ -3,6 +3,7 @@ import { Avatar } from "@/components/ui/avatar";
 import {
   ChevronDownIcon,
   CreditCardIcon,
+  SettingsIcon,
   SignOutIcon,
   UserIcon,
 } from "@/components/ui/dashboard-icons";
@@ -18,6 +19,12 @@ const ACTIONS = [
     Icon: UserIcon,
   },
   {
+    href: "/app/settings",
+    label: "Settings",
+    description: "Account and integrations",
+    Icon: SettingsIcon,
+  },
+  {
     href: "/app/billing",
     label: "Billing",
     description: "Credits and plan",
@@ -25,7 +32,7 @@ const ACTIONS = [
   },
 ] as const;
 
-function AccountActions({ compact = false }: { compact?: boolean }) {
+function AccountActions() {
   return (
     <div className="flex flex-col gap-1">
       {ACTIONS.map(({ href, label, description, Icon }) => (
@@ -40,7 +47,7 @@ function AccountActions({ compact = false }: { compact?: boolean }) {
           <Icon size={19} className="shrink-0" />
           <span className="flex min-w-0 flex-col">
             <span className="text-fg-body text-sm font-semibold">{label}</span>
-            {!compact && <span className="text-fg-meta text-xs">{description}</span>}
+            <span className="text-fg-meta hidden text-xs lg:block">{description}</span>
           </span>
         </Link>
       ))}
@@ -57,9 +64,9 @@ function AccountActions({ compact = false }: { compact?: boolean }) {
             <SignOutIcon size={19} className="shrink-0" />
             <span className="flex flex-col">
               <span>Sign out</span>
-              {!compact && (
-                <span className="text-fg-meta text-xs font-normal">Log out of Vibe Business</span>
-              )}
+              <span className="text-fg-meta hidden text-xs font-normal lg:block">
+                Log out of Vibe Business
+              </span>
             </span>
           </button>
         </form>
@@ -71,59 +78,50 @@ function AccountActions({ compact = false }: { compact?: boolean }) {
 /** Account controls at the foot of the account rail. */
 export function AccountMenu({ identity }: { identity: AccountIdentity }) {
   return (
-    <>
-      {/* The reference keeps the useful account destinations visible. On a
-          desktop rail there is enough space for that, and hiding them behind
-          a disclosure makes a frequent destination feel like a secret. */}
-      <div className="hidden flex-col gap-3 lg:flex">
-        <div className="border-line-2 bg-surface-2 rounded-panel border p-2 shadow-panel">
-          <AccountActions />
-        </div>
-
-        <div className="border-line-1 bg-surface-1 rounded-panel flex items-center gap-3 border px-3 py-3">
-          <Avatar
-            src={identity.avatarUrl}
-            initials={identity.initials}
-            label={identity.displayName}
-            size={38}
-          />
-          <span className="flex min-w-0 flex-1 flex-col">
-            <span
-              className="text-fg-body truncate text-sm font-semibold"
-              title={identity.displayName}
-            >
-              {identity.displayName}
-            </span>
-            <span className="text-fg-meta text-xs">
-              {identity.fromGithub ? "GitHub account" : "Signed in"}
-            </span>
-          </span>
-          <ChevronDownIcon size={16} className="text-fg-meta rotate-180" />
-        </div>
-      </div>
-
-      {/* Below `lg` the rail is a strip. A persistent action card would turn
-          that strip into half the screen, so the same destinations collapse
-          into the platform disclosure that was here before. */}
-      <details className="group border-line-1 border-t pt-3 lg:hidden">
-        <summary className="rounded-nav hover:bg-surface-2 flex cursor-pointer list-none items-center gap-3 px-2 py-2 transition-interactive">
-          <Avatar
-            src={identity.avatarUrl}
-            initials={identity.initials}
-            label={identity.displayName}
-          />
-          <span className="text-fg-body min-w-0 flex-1 truncate text-sm font-semibold">
+    <details
+      data-testid="account-menu"
+      className={cn(
+        "group border-line-1 border-t pt-3",
+        "open:flex open:flex-col-reverse open:gap-3 lg:border-0 lg:pt-0",
+      )}
+    >
+      {/* The identity card is the stable control. Opening it reveals the
+          account destinations above it, preserving the reference's layout
+          without permanently consuming half of the rail. Native details
+          keeps the disclosure keyboard-operable without client state. */}
+      <summary
+        className={cn(
+          "border-line-1 bg-surface-1 rounded-panel flex cursor-pointer list-none items-center gap-3 border",
+          "px-3 py-3 transition-interactive hover:bg-surface-2",
+          "[&::-webkit-details-marker]:hidden",
+        )}
+      >
+        <Avatar
+          src={identity.avatarUrl}
+          initials={identity.initials}
+          label={identity.displayName}
+          size={38}
+        />
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span
+            className="text-fg-body truncate text-sm font-semibold"
+            title={identity.displayName}
+          >
             {identity.displayName}
           </span>
-          <ChevronDownIcon
-            size={16}
-            className="text-fg-meta transition-transform group-open:rotate-180"
-          />
-        </summary>
-        <div className="pt-2">
-          <AccountActions compact />
-        </div>
-      </details>
-    </>
+          <span className="text-fg-meta text-xs">
+            {identity.fromGithub ? "GitHub account" : "Signed in"}
+          </span>
+        </span>
+        <ChevronDownIcon
+          size={16}
+          className="text-fg-meta shrink-0 transition-transform group-open:rotate-180"
+        />
+      </summary>
+
+      <div className="border-line-2 bg-surface-2 rounded-panel border p-2 shadow-panel">
+        <AccountActions />
+      </div>
+    </details>
   );
 }

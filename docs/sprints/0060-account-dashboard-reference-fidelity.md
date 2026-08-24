@@ -21,8 +21,11 @@ voice.
   request and produces no font-loading shift. JetBrains Mono remains self-hosted for actual
   technical output such as SHAs and branches; dashboard scores, statuses and timestamps use the UI
   face.
-- The account rail is wider, gains a coherent icon set, a stronger active state, visible desktop
-  account destinations and a separate identity block.
+- The account rail is wider, gains a coherent icon set and a stronger active state. Its identity
+  block is now the disclosure control for Profile, Settings, Billing and Sign out, so the rail is
+  compact until those destinations are needed.
+- Settings is a real account hub rather than a dead menu row. It routes to the existing profile,
+  GitHub installation and billing controls without inventing preferences or new persisted state.
 - Business Signal becomes one full-width hero: score ring, deterministic interpretation, named
   product, fixed-scale trend and audit dates in one visual object.
 - Next Move becomes the horizontal action band from the reference, with one icon, one explanation,

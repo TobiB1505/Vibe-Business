@@ -78,6 +78,20 @@ test.describe("the account dashboard stays calmer than the project workspace", (
     await expect(page.getByRole("button", { name: /last 7 days/i })).toHaveCount(0);
   });
 
+  test("reveals account actions from the profile control", async ({ page }) => {
+    await page.goto(THREE);
+
+    const menu = page.getByTestId("account-menu");
+    await expect(menu.getByRole("link", { name: /profile/i })).toBeHidden();
+
+    await menu.locator("summary").click();
+
+    await expect(menu.getByRole("link", { name: /profile/i })).toBeVisible();
+    await expect(menu.getByRole("link", { name: /settings/i })).toBeVisible();
+    await expect(menu.getByRole("link", { name: /billing/i })).toBeVisible();
+    await expect(menu.getByRole("button", { name: /sign out/i })).toBeVisible();
+  });
+
   /**
    * Both sections left in CORE-6 and neither may come back here. The attention
    * list said per-product what each card's single action already says; the
