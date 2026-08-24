@@ -64,7 +64,7 @@ export default async function ProjectSettingsPage({
           founder can say. Keeping them apart in the UI is what stops the two
           collapsing back into one "business context" blob.
         */}
-        <Surface level="section" padding="lg" className="flex flex-col gap-3">
+        <Surface id="founder-intent" level="section" padding="lg" className="scroll-mt-32 flex flex-col gap-3">
           <div className="flex flex-col gap-2">
             <h3 className="text-fg text-base font-semibold">What you told Vibe</h3>
             <p className="text-fg-muted max-w-[65ch] text-sm">

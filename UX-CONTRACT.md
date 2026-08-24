@@ -62,6 +62,8 @@
 | Search/filter/sort | Account index controls | local, no loader | same route and URL state | clear/reset | clear returns focus to search | this contract |
 | Open repository | repository link | browser navigation | GitHub in a new tab | browser-owned | browser-owned | stored `html_url` |
 | Open product | row action/product link | route navigation | owning product workspace | app route error | destination heading | ADR 0042 |
+| Refresh product understanding | header action | durable operation status with stable page content | same Product page | operation-owned retry state | refreshed product profile | Product Understanding contract |
+| Correct product understanding | `Let me fix it` | stable inline editor and busy save action | same Product page | inline persistent error | corrected profile summary | Product Understanding contract |
 
 ## Navigation and responsive behavior
 
@@ -72,6 +74,7 @@
 - The radial Business Brain becomes a horizontally browsable dimension rail plus the same detail panel on narrow screens. Labels, health, priority, selection and detail remain available; geometry is never the only interface.
 - Repository comparison uses a semantic table at desktop and labeled record rows on narrow screens. Identity, product, visibility, default branch, connected time and open action remain available.
 - Technical values truncate only where their full value is also available through the external repository link or the mobile full-name row.
+- The Product page keeps one-column reading order below `lg`; its Product DNA and source grids collapse without hiding confidence wording, founder intent, brand evidence or source availability.
 
 ## Async and resilience
 

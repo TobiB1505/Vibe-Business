@@ -5,6 +5,7 @@ import {
   type BrandColor,
   type BrandTypeface,
   type EvidenceSource,
+  type ProductCategory,
   type ProductProfile,
   type ProfileConfidence,
 } from "./schema";
@@ -86,6 +87,24 @@ export type UnderstandingHeadline = {
   understanding: string | null;
   /** Shown under the paragraph when the model never ran. */
   synthesisNote: string | null;
+  category: string | null;
+  categoryTone: ConfidenceTone;
+};
+
+const PRODUCT_CATEGORY_LABELS: Record<ProductCategory, string> = {
+  saas_application: "SaaS application",
+  web_app: "Web app",
+  ecommerce_store: "E-commerce store",
+  marketplace: "Marketplace",
+  content_site: "Content site",
+  documentation_site: "Documentation site",
+  booking_tool: "Booking tool",
+  internal_tool: "Internal tool",
+  portfolio_or_personal_site: "Portfolio or personal site",
+  landing_page: "Landing page",
+  developer_tool: "Developer tool",
+  mobile_app_companion: "Mobile app companion",
+  other: "Other product",
 };
 
 export function buildHeadline(profile: ProductProfile, synthesized: boolean): UnderstandingHeadline {
@@ -102,6 +121,10 @@ export function buildHeadline(profile: ProductProfile, synthesized: boolean): Un
     synthesisNote: synthesized
       ? null
       : "Vibe described your product from what it found in your code and on your site. The part that reads it back to you in a sentence didn't run this time.",
+    category: profile.identity.category.value
+      ? PRODUCT_CATEGORY_LABELS[profile.identity.category.value]
+      : null,
+    categoryTone: toneFor(profile.identity.category.confidence),
   };
 }
 
@@ -116,6 +139,29 @@ export type UnderstandingFact = {
   note: string;
   sources: EvidenceSource[];
 };
+
+export type ProductDnaFact = UnderstandingFact & {
+  id: "purpose" | "audience" | "promise" | "problem";
+};
+
+/** The four founder-readable truths that anchor the product profile. */
+export function buildProductDna(profile: ProductProfile): ProductDnaFact[] {
+  const rows = [
+    { id: "purpose" as const, label: "What it does", attributed: profile.identity.mainPurpose },
+    { id: "audience" as const, label: "Who it's for", attributed: profile.audience.primaryAudience },
+    { id: "promise" as const, label: "Main promise", attributed: profile.identity.mainPromise },
+    { id: "problem" as const, label: "Problem solved", attributed: profile.audience.problemSolved },
+  ];
+
+  return rows.map(({ id, label, attributed }) => ({
+    id,
+    label,
+    value: attributed.value ?? "Vibe could not establish this yet.",
+    tone: toneFor(attributed.confidence),
+    note: confidenceNote(attributed.confidence, attributed.sources),
+    sources: attributed.sources,
+  }));
+}
 
 /** "Who it's for" — omitted entirely when nothing survived (CORE-1 §31). */
 export function buildAudienceFacts(profile: ProductProfile): UnderstandingFact[] {
@@ -337,6 +383,7 @@ export function buildSourceLines(profile: ProductProfile): SourceLine[] {
 
 export type UnderstandingView = {
   headline: UnderstandingHeadline;
+  dna: ProductDnaFact[];
   audience: UnderstandingFact[];
   capabilities: CapabilityLine[];
   journey: JourneyLine[];
@@ -365,6 +412,7 @@ export function buildUnderstandingView(
 
   return {
     headline: buildHeadline(profile, synthesized),
+    dna: buildProductDna(profile),
     audience: buildAudienceFacts(profile),
     capabilities: buildCapabilityLines(profile),
     journey: buildJourneyLines(profile),

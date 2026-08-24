@@ -57,7 +57,7 @@ test.describe("the conclusion comes first", () => {
     await forbidExternalCalls(page);
     await page.goto(READY);
 
-    await expect(page.getByRole("heading", { name: "I understand what you built." })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Acme" })).toBeVisible();
     await expect(page.getByText("You've built a tool that helps small teams")).toBeVisible();
 
     // Reading order, measured rather than assumed: the paragraph sits above
@@ -65,7 +65,7 @@ test.describe("the conclusion comes first", () => {
     const headline = await page
       .getByText("You've built a tool that helps small teams")
       .boundingBox();
-    const capabilities = await page.getByText("What people can do").boundingBox();
+    const capabilities = await page.getByText("Product capabilities").boundingBox();
 
     expect(headline).not.toBeNull();
     expect(capabilities).not.toBeNull();
@@ -81,6 +81,24 @@ test.describe("the conclusion comes first", () => {
 
     await page.getByText("See what Vibe found").click();
     await expect(finding).toBeVisible();
+  });
+
+  test("organizes real product DNA, founder context, brand and learning sources", async ({
+    page,
+  }) => {
+    await forbidExternalCalls(page);
+    await page.goto(READY);
+
+    await expect(page.getByText("Product DNA", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "What it does" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Who it's for" })).toBeVisible();
+    await expect(page.getByText("Founder context", { exact: true })).toBeVisible();
+    await expect(page.getByText("Has active users")).toBeVisible();
+    await expect(page.getByText("Subscription", { exact: true })).toBeVisible();
+    await expect(page.getByText("Brand & visual identity", { exact: true })).toBeVisible();
+    await expect(page.getByText("Vibe learns from", { exact: true })).toBeVisible();
+    await expect(page.getByText(/\d+ supported capabilities/)).toBeVisible();
+    await expect(page.getByText("3/4 sources available")).toBeVisible();
   });
 
   test("never shows a count of files, routes or detections", async ({ page }) => {
@@ -132,7 +150,7 @@ test.describe("the logo reveal", () => {
 
     await expect(page.getByAltText("Acme logo")).toHaveCount(0);
     await expect(page.locator("img[src*='vibe-mark']").first()).toBeVisible();
-    await expect(page.getByRole("heading", { name: "I understand what you built." })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Acme" })).toBeVisible();
   });
 
   test("shows a neutral mark and says why when no logo can be shown", async ({ page }) => {
@@ -151,7 +169,7 @@ test.describe("did I get this right", () => {
     await forbidExternalCalls(page);
     await page.goto(READY);
 
-    await expect(page.getByRole("heading", { name: "Did I get this right?" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Is this correct?" })).toBeVisible();
 
     const yes = page.getByRole("button", { name: "Yes, that's my product" });
     const edit = page.getByRole("button", { name: "Let me fix it" });
@@ -183,7 +201,7 @@ test.describe("did I get this right", () => {
     await page.goto(CONFIRMED);
 
     await expect(page.getByRole("button", { name: "Yes, that's my product" })).toHaveCount(0);
-    await expect(page.getByText("You confirmed this")).toBeVisible();
+    await expect(page.getByText("You confirmed this product profile")).toBeVisible();
   });
 });
 
@@ -205,8 +223,8 @@ test.describe("partial failure stays useful", () => {
     await forbidExternalCalls(page);
     await page.goto(PARTIAL);
 
-    await expect(page.getByText("What people can do")).toBeVisible();
-    await expect(page.getByText("How the product appears to work")).toBeVisible();
+    await expect(page.getByText("Product capabilities")).toBeVisible();
+    await expect(page.getByText("Product journey")).toBeVisible();
   });
 });
 

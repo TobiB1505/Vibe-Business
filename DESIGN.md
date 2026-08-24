@@ -71,6 +71,8 @@ Primary buttons use mint once per action area; secondary controls use the shared
 
 Motion communicates interaction state only on ordinary product surfaces. Use the shared transition utility and respect reduced motion; never animate static dashboard furniture continuously. The narrowly-scoped Business Brain exception is defined below.
 
+The project Product page reads as one coherent product dossier, not a stack of scanner reports. Its opening identity card may combine the real product mark, evidence-backed description, category, capability count and source coverage, but never a fabricated screenshot or product metric. Product DNA, founder intent, discovered capabilities, journey, brand identity and source coverage follow in that order; raw technical evidence stays available behind disclosure.
+
 ## Signature Surface: Business Brain
 
 The project Home is the deliberate exception to the product's otherwise quiet presentation. Its Business Brain may use a contained mint aura, traced connections, spherical planet nodes and staged entry to make the nine business areas read as one system. This is a semantic visualization, not a new decorative language: planet colour represents health, planet size represents materiality, and a relationship line exists only where the audit grouped areas into the same conclusion. The centre remains the only aggregate score; a planet may show its own evidence-grounded diagnostic lens score, which never contributes to the centre and is `—` when unsupported.

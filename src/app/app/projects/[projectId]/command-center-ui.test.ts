@@ -192,7 +192,7 @@ describe("the sources block leads somewhere from every state", () => {
    * same one three bare fragments produced before this sprint.
    */
   it("gives every source row a link, not just the ready ones", () => {
-    const src = source("product-overview.tsx");
+    const src = source("understanding-panel.tsx");
 
     // The type requires it, and the component renders it unconditionally —
     // outside any `source.ready` branch.

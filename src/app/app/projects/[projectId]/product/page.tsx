@@ -15,9 +15,8 @@ import { InspectButton } from "../inspect-button";
 import { InspectLiveButton } from "../inspect-live-button";
 import { IntelligenceSummary, LIVE_PRODUCT_ANCHOR } from "../intelligence-summary";
 import { LiveIntelligenceSummary } from "../live-intelligence-summary";
-import { ProductOverview, type UnderstandingSource } from "../product-overview";
 import { UnderstandingConfirm } from "../understanding-confirm";
-import { UnderstandingPanel } from "../understanding-panel";
+import { UnderstandingPanel, type UnderstandingSource } from "../understanding-panel";
 import { UnderstandingProgress } from "../understanding-progress";
 
 /**
@@ -40,8 +39,8 @@ import { UnderstandingProgress } from "../understanding-progress";
  * ## Deep Scan
  *
  * A child route of this one and deliberately not in the navigation — it is a
- * source, not a destination. `ProductOverview` is therefore the only way to
- * reach it, which is why every row there carries a link.
+ * source, not a destination. The Product Understanding source cards are
+ * therefore the only way to reach it, which is why every card carries a link.
  *
  * ## What it loads
  *
@@ -123,10 +122,10 @@ export default async function MyProductPage({
     {
       id: "intent",
       label: "What you told Vibe",
-      detail: "Your own words about the business, which outrank anything derived.",
+      detail: "Your stated stage, monetization intent and primary goal.",
       ready: !isEmptyFounderIntent(founderIntent.intent),
       pending: "You haven't told Vibe anything about the business yet.",
-      href: projectSectionHref(project.id, "settings"),
+      href: `${projectSectionHref(project.id, "settings")}#founder-intent`,
       action: "Tell Vibe",
     },
   ];
@@ -156,6 +155,10 @@ export default async function MyProductPage({
             view={view}
             projectId={project.id}
             confirmedAt={latest.stored.confirmedAt}
+            understoodAt={latest.stored.completedAt ?? latest.stored.createdAt}
+            founderIntent={founderIntent.intent}
+            founderContextHref={`${projectSectionHref(project.id, "settings")}#founder-intent`}
+            sources={sources}
             actions={
               <UnderstandingConfirm
                 projectId={project.id}
@@ -187,8 +190,6 @@ export default async function MyProductPage({
             }
           />
         )}
-
-        <ProductOverview sources={sources} />
 
         {project.productionUrl && (
           <Surface

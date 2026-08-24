@@ -95,6 +95,22 @@ describe("the final screen", () => {
 
   it("names the product", () => {
     expect(view.headline.productName).toBe("Acme");
+    expect(view.headline.category).toBe("SaaS application");
+  });
+
+  it("builds Product DNA only from attributed profile fields", () => {
+    expect(view.dna.map((fact) => fact.label)).toEqual([
+      "What it does",
+      "Who it's for",
+      "Main promise",
+      "Problem solved",
+    ]);
+    expect(view.dna.find((fact) => fact.id === "purpose")?.value).toBe(
+      "Keep a team's schedule in one place.",
+    );
+    expect(view.dna.find((fact) => fact.id === "audience")?.note).toBe(
+      "Likely, based on several signals",
+    );
   });
 
   it("says what people can do, not what components exist", () => {
