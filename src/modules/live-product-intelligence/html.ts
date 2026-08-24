@@ -119,7 +119,43 @@ export type ParsedHtml = {
   applicationName: string | null;
   brandImages: ParsedBrandImage[];
   styleTokens: ParsedStyleToken[];
+  /**
+   * Visible text length in characters, after `<script>`, `<style>` and
+   * `<noscript>` bodies and every tag are removed.
+   *
+   * The measurement that makes "we could not read this page" a fact rather than
+   * an inference. A document whose body renders in the browser arrives here as
+   * a mount element and nothing else, and every count above it is zero — which
+   * a snapshot would otherwise state as the truth about the product.
+   */
+  visibleTextLength: number;
+  /**
+   * True when the body holds a mount element with no content inside it — the
+   * shape a client-rendered application serves before its own JavaScript runs.
+   */
+  hasEmptyMountElement: boolean;
+  /**
+   * True when a `<noscript>` block asks the reader to enable JavaScript. The
+   * page saying so about itself is the strongest available statement that what
+   * was fetched is not what a person sees.
+   */
+  requiresJavaScript: boolean;
 };
+
+/**
+ * Element ids and attributes a framework mounts into.
+ *
+ * A closed, conservative list. `#root` and `#app` are the Vite/CRA and Vue
+ * conventions; `#__next` and `#__nuxt` are framework-generated. A page that
+ * server-renders puts its markup *inside* these, so the emptiness of the
+ * element is what carries the signal — never its presence.
+ */
+const MOUNT_ELEMENT =
+  /<(?:div|main|section)\b[^>]{0,500}\b(?:id\s*=\s*["'](?:root|app|__next|__nuxt|__nuxt_app|svelte|application)["']|data-reactroot|ng-version)[^>]{0,500}>\s*<\/(?:div|main|section)>/i;
+
+/** A `<noscript>` that asks for JavaScript rather than merely offering a fallback. */
+const NOSCRIPT_DEMANDS_JAVASCRIPT =
+  /<noscript\b[^>]{0,1000}>([\s\S]{0,2000}?)<\/noscript>/gi;
 
 const ENTITIES: Record<string, string> = {
   amp: "&",
@@ -662,5 +698,39 @@ export function parseHtml(html: string): ParsedHtml {
     applicationName,
     brandImages,
     styleTokens,
+    visibleTextLength: visibleTextLength(content),
+    // Checked against `withoutComments` rather than `content`: the mount
+    // element survives both, but reading the pre-strip document keeps this
+    // independent of what text extraction happens to remove.
+    hasEmptyMountElement: MOUNT_ELEMENT.test(withoutComments),
+    requiresJavaScript: demandsJavaScript(withoutComments),
   };
+}
+
+/**
+ * How much text a reader would actually see.
+ *
+ * Tags are dropped rather than their contents, so alt text and attribute values
+ * do not inflate the count — a page whose only "text" is markup attributes has
+ * nothing a person reads.
+ */
+function visibleTextLength(content: string): number {
+  return content
+    .replace(/<[^>]{0,2000}>/g, " ")
+    .replace(/&[a-z#0-9]{1,10};/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim().length;
+}
+
+function demandsJavaScript(source: string): boolean {
+  NOSCRIPT_DEMANDS_JAVASCRIPT.lastIndex = 0;
+  let match: RegExpExecArray | null;
+  while ((match = NOSCRIPT_DEMANDS_JAVASCRIPT.exec(source)) !== null) {
+    // "Enable JavaScript to run this app" is a statement about the document;
+    // a `<noscript>` carrying a tracking pixel or a stylesheet is not.
+    if (/\bjavascript\b/i.test(match[1]) && /\benable|\bturn on|\brequire|\bneed/i.test(match[1])) {
+      return true;
+    }
+  }
+  return false;
 }

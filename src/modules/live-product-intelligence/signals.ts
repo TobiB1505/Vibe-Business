@@ -1,6 +1,7 @@
 import { ALL_SURFACES, classifyLinkTarget, classifyPage, surfaceName } from "./classifier";
 import { detectCtas, selectPrimaryCta, type CtaCandidate } from "./cta";
 import { toFormSignal } from "./forms";
+import { classifyRendering } from "./rendering";
 import type { FetchedPage } from "./crawler";
 import type {
   DeclaredPricePoint,
@@ -8,6 +9,7 @@ import type {
   PricingSignals,
   ConversionSignals,
   LiveEvidence,
+  LiveReadability,
   PageSummary,
   ProductSurfaceId,
   ProductSurfaceSignal,
@@ -379,6 +381,30 @@ export function buildPageSummaries(
       ctas: [...new Set(ctas.map((cta) => cta.label))].slice(0, 6),
       surfaces: perPageSurfaces.get(page.requestedPath) ?? [],
       bytes: page.bytes,
+      rendering: classifyRendering(page.html),
     };
   });
+}
+
+/** Paths listed as evidence for the client-rendered count. Enough to check, not a crawl log. */
+const MAX_CLIENT_RENDERED_PATHS = 10;
+
+/**
+ * How much of what the crawl reached could actually be read (Sprint 0082).
+ *
+ * Counted from the summaries rather than recomputed, so the site-level number
+ * and the per-page verdict can never disagree about the same page.
+ */
+export function buildReadability(pages: PageSummary[]): LiveReadability {
+  const clientRendered = pages.filter((page) => page.rendering === "client_rendered");
+
+  return {
+    readable: pages.filter((page) => (page.rendering ?? "readable") === "readable").length,
+    empty: pages.filter((page) => page.rendering === "empty").length,
+    clientRendered: clientRendered.length,
+    clientRenderedPaths: clientRendered
+      .map((page) => page.path)
+      .sort()
+      .slice(0, MAX_CLIENT_RENDERED_PATHS),
+  };
 }

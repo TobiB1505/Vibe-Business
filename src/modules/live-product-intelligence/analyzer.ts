@@ -13,6 +13,7 @@ import {
   buildConversionSignals,
   buildPricingSignals,
   buildPageSummaries,
+  buildReadability,
   buildProductSurfaces,
   buildSeoSignals,
   buildSiteMetadata,
@@ -82,6 +83,14 @@ export async function analyzeLiveProduct(
   }
 
   const stats = outcome.tracker.stats;
+  const pages = buildPageSummaries(outcome.pages, perPageSurfaces);
+  const readability = buildReadability(pages);
+
+  // A page that renders in the browser was reached and read successfully, and
+  // still yielded nothing. Every zero below it — no headings, no calls to
+  // action, no pricing — would otherwise be persisted as a fact about the
+  // product rather than as the limit of a reader that runs no browser.
+  if (readability.clientRendered > 0) outcome.tracker.note("client_rendered");
 
   return {
     schemaVersion: LIVE_PRODUCT_INTELLIGENCE_SCHEMA_VERSION,
@@ -103,7 +112,8 @@ export async function analyzeLiveProduct(
       redirectsFollowed: outcome.redirectsFollowed,
     },
     siteMetadata: buildSiteMetadata(homepage),
-    pages: buildPageSummaries(outcome.pages, perPageSurfaces),
+    pages,
+    readability,
     productSurfaces: surfaces,
     seoSignals: buildSeoSignals({
       homepage,

@@ -3,6 +3,7 @@ import {
   SIGNAL_CATEGORY_LABELS,
   type RepositoryIntelligenceSnapshot,
 } from "@/modules/repository-intelligence/schema";
+import { describeCompletenessReasons } from "@/modules/live-product-intelligence/budgets";
 import type { LiveProductIntelligenceSnapshot } from "@/modules/live-product-intelligence/schema";
 import type { BusinessContext } from "@/modules/projects/business-context";
 
@@ -458,13 +459,32 @@ export function buildLiveEvidence(
     );
   }
 
+  // Said before the completeness line, and at the highest priority, because it
+  // changes how every other live item must be read. Rule 44: an absence Vibe
+  // could not observe is not a finding about the product, and the model has no
+  // way to know the difference unless the pack says so.
+  const readability = snapshot.readability;
+  if (readability && readability.clientRendered > 0) {
+    items.push(
+      item(
+        "live.rendering.client_rendered",
+        "live_product",
+        `${readability.clientRendered} of ${readability.clientRendered + readability.readable + readability.empty} ` +
+          `page(s) build themselves in the browser, so Vibe fetched markup a visitor never sees ` +
+          `(${short(readability.clientRenderedPaths.join(", "), 200)}). ` +
+          `Anything reported as absent on those pages is unread, not missing — do not treat it as a finding.`,
+        1,
+      ),
+    );
+  }
+
   items.push(
     item(
       "live.analysis.completeness",
       "live_product",
       snapshot.completeness.status === "complete"
         ? "Live product analysis was complete"
-        : `Live product analysis was partial (${snapshot.completeness.reasons.join(", ")})`,
+        : `Live product analysis was partial (${describeCompletenessReasons(snapshot.completeness.reasons)})`,
       2,
     ),
   );

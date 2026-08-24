@@ -61,9 +61,48 @@ export type CrawlCompletenessReason =
   | "timeout"
   | "rate_limited"
   | "robots_disallowed"
-  | "fetch_failed";
+  | "fetch_failed"
+  /**
+   * The one member that is not about the crawl stopping short (Sprint 0082).
+   *
+   * Every reason above means Vibe did not reach everything. This one means it
+   * reached the page, fetched it successfully, and found a document that
+   * renders in the browser — so there was nothing to read. It shares this type
+   * because the consequence is identical and already respected everywhere:
+   * absence in this snapshot must not be read as a fact about the product.
+   * A second, parallel flag would have to be honoured by every consumer
+   * separately, and the first one to forget would state a zero as the truth.
+   */
+  | "client_rendered";
 
 export type CrawlCompleteness = "complete" | "partial";
+
+/**
+ * What each reason is called when a person or a model reads it.
+ *
+ * Published rather than kept private because two consumers interpolate the
+ * reason list into a sentence — the evidence pack a model reads and the human
+ * view a founder reads — and until Sprint 0082 both interpolated the raw enum.
+ * `page_budget_reached` is not a phrase, and `client_rendered` arriving as an
+ * enum member is exactly the failure this sprint exists to fix.
+ */
+export const CRAWL_COMPLETENESS_REASON_LABELS: Record<CrawlCompletenessReason, string> = {
+  page_budget_reached: "the page limit was reached",
+  byte_budget_reached: "the download limit was reached",
+  crawl_depth_reached: "the crawl depth limit was reached",
+  link_budget_reached: "a page had more links than could be followed",
+  sitemap_budget_reached: "the sitemap was larger than could be read",
+  timeout: "the check ran out of time",
+  rate_limited: "the site rate-limited the check",
+  robots_disallowed: "robots.txt disallowed part of the site",
+  fetch_failed: "a page could not be fetched",
+  client_rendered: "some pages build themselves in the browser, so Vibe could not read them",
+};
+
+/** Reads as a list of reasons, already in the words a person should see. */
+export function describeCompletenessReasons(reasons: readonly CrawlCompletenessReason[]): string {
+  return reasons.map((reason) => CRAWL_COMPLETENESS_REASON_LABELS[reason]).join("; ");
+}
 
 /**
  * Mutable budget state for one crawl. Holds every limit check in one

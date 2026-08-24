@@ -14,6 +14,7 @@ sitemap.ts      sitemap parsing as discovery *hints* only; indexes one level dee
 budgets.ts      central limits + the tracker every fetch has to ask
 crawler.ts      same-origin BFS under those budgets, priority-ordered frontier
 html.ts         bounded tag scanning; script/style removed before any text is read
+rendering.ts    whether a fetched page could be read at all, or renders in the browser
 classifier.ts   product surfaces from path + title + heading + form structure
 cta.ts          rule-table CTA classification (extensible, not English-only)
 forms.ts        structural form classification — types only, never names or values
@@ -40,6 +41,7 @@ Beside the pipeline:
 - **HTML is data, never instructions.** Nothing here executes, evaluates, or obeys page content (CLAUDE.md rule 25).
 - **Nothing raw is persisted.** No HTML, no body text, no cookies, no query strings — only derived facts and short evidence labels.
 - **Budgets are central** (`budgets.ts`). Adding a new fetch means asking the tracker, not writing a new limit.
+- **Unread is never reported as absent.** Vibe reads the page a server sends and runs no browser, by decision — [ADR 0010](../../../docs/decisions/0010-safe-outbound-http-inspection.md) and [CLAUDE.md](../../../CLAUDE.md) rule 38. `rendering.ts` names that limit where it bites: a page that builds itself in the browser degrades the snapshot to `partial`, and both the evidence pack and the human view say the absences are unread rather than missing (rule 44). A zero that came from an unreadable page must never reach a founder as a finding about their product.
 
 ## Testing
 

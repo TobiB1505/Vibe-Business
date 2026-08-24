@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { buildLiveProductHumanView } from "./human-view";
 import { analyzeLiveProduct } from "./analyzer";
 import { buildPricingSignals, buildSeoSignals } from "./signals";
 import type { FetchedPage } from "./crawler";
@@ -62,7 +63,7 @@ describe("analyzeLiveProduct — full SaaS site", () => {
     });
 
     expect(snapshot.schemaVersion).toBe("live-product-intelligence.v1");
-    expect(snapshot.source.analyzerVersion).toBe("live-product-analyzer-v2");
+    expect(snapshot.source.analyzerVersion).toBe("live-product-analyzer-v3");
     expect(snapshot.source.effectiveOrigin).toBe("https://acme.test");
 
     const detected = snapshot.productSurfaces.filter((surface) => surface.detected).map((surface) => surface.id);
@@ -461,5 +462,69 @@ describe("buildSeoSignals — coverage", () => {
     );
 
     expect(signal?.coverage).toEqual({ pagesWith: 2, pagesInspected: 2 });
+  });
+});
+
+/* ---------------------------------------------------------------------------
+ * Sprint 0082 — a product that builds itself in the browser
+ * ------------------------------------------------------------------------ */
+
+/**
+ * The whole site is a shell. Every page returns 200 and a few hundred bytes,
+ * every budget is respected, and nothing is readable — which before this sprint
+ * produced a `complete` snapshot asserting the product has no headings, no
+ * calls to action, no forms and no pricing.
+ */
+const CLIENT_RENDERED_SITE: Record<string, ReturnType<typeof htmlResponse>> = {
+  "https://spa.test/": htmlResponse(`<!doctype html><html lang="en"><head>
+<title>Acme</title><meta name="viewport" content="width=device-width">
+<script type="module" src="/assets/index.js"></script></head>
+<body><noscript>You need to enable JavaScript to run this app.</noscript>
+<div id="root"></div></body></html>`),
+};
+
+describe("analyzeLiveProduct — a client-rendered product", () => {
+  it("does not report an unread page as a product without calls to action", async () => {
+    const snapshot = await analyzeLiveProduct({
+      configuredUrl: "https://spa.test/",
+      dependencies: fakeDependencies(CLIENT_RENDERED_SITE),
+    });
+
+    // The zeroes are still there — they are what the markup said.
+    expect(snapshot.conversionSignals.ctas).toEqual([]);
+
+    // What changed is that the snapshot no longer presents them as the truth.
+    expect(snapshot.completeness.status).toBe("partial");
+    expect(snapshot.completeness.reasons).toContain("client_rendered");
+    expect(snapshot.readability).toEqual({
+      readable: 0,
+      empty: 0,
+      clientRendered: 1,
+      clientRenderedPaths: ["/"],
+    });
+    expect(snapshot.pages[0].rendering).toBe("client_rendered");
+  });
+
+  it("tells a founder it could not see the page, not that the page is empty", async () => {
+    const snapshot = await analyzeLiveProduct({
+      configuredUrl: "https://spa.test/",
+      dependencies: fakeDependencies(CLIENT_RENDERED_SITE),
+    });
+
+    const view = buildLiveProductHumanView(snapshot);
+    expect(view.incompleteReason).toContain("builds themselves in your visitor's browser");
+    expect(view.incompleteReason).toContain("Vibe could not see it");
+    expect(view.incompleteReason).not.toContain("client_rendered");
+  });
+
+  it("leaves a readable site complete", async () => {
+    const snapshot = await analyzeLiveProduct({
+      configuredUrl: "https://acme.test/",
+      dependencies: fakeDependencies(SAAS_SITE),
+    });
+
+    expect(snapshot.completeness.reasons).not.toContain("client_rendered");
+    expect(snapshot.readability?.clientRendered).toBe(0);
+    expect(snapshot.readability?.readable).toBeGreaterThan(0);
   });
 });
