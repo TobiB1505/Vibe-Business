@@ -5,7 +5,7 @@ import {
   type DetectionContext,
 } from "../context";
 import { pathExtension } from "../path-policy";
-import type { Detection, Evidence, PackageManagerId } from "../schema";
+import type { Detection, Evidence, PackageManagerId, ProjectScriptId, ProjectScripts } from "../schema";
 
 /**
  * Language and framework detection (Sprint 2 §12).
@@ -252,5 +252,75 @@ export function detectRuntime(context: DetectionContext): Detection[] {
     });
   }
 
+  for (const rule of NON_NODE_RUNTIMES) {
+    const path = context.findByBasename(rule.manifest).sort()[0];
+    if (!path) continue;
+    detections.push({
+      id: rule.id,
+      name: rule.name,
+      confidence: "high",
+      evidence: [evidence("config_file", path)],
+    });
+  }
+
   return detections;
+}
+
+/**
+ * Runtimes recognised by the manifest that declares them.
+ *
+ * Existence only, and no version: a version would mean parsing TOML, INI and
+ * Gradle, and `context.textManifests` deliberately holds lowercased text rather
+ * than parsed structures so that no such parser is needed (`context.ts`). Node
+ * is the exception above precisely because `package.json` *is* parsed, so
+ * `engines.node` is a fact rather than a substring.
+ *
+ * Bun is deliberately absent. `bun.lockb` proves which package manager resolved
+ * the tree — which `detectPackageManager` already reports — not that the
+ * application runs on Bun rather than Node.
+ */
+const NON_NODE_RUNTIMES: { id: string; name: string; manifest: RegExp }[] = [
+  { id: "python", name: "Python", manifest: /^(pyproject\.toml|requirements\.txt|Pipfile|manage\.py)$/i },
+  { id: "go", name: "Go", manifest: /^go\.mod$/i },
+  { id: "ruby", name: "Ruby", manifest: /^Gemfile$/i },
+  { id: "rust", name: "Rust", manifest: /^Cargo\.toml$/i },
+  { id: "php", name: "PHP", manifest: /^composer\.json$/i },
+  { id: "java", name: "Java / JVM", manifest: /^(pom\.xml|build\.gradle(\.kts)?)$/i },
+  { id: "dotnet", name: ".NET", manifest: /\.(csproj|fsproj|vbproj)$|^global\.json$/i },
+  { id: "deno", name: "Deno", manifest: /^deno\.(json|jsonc|lock)$/i },
+];
+
+/**
+ * The `package.json` script names worth reporting, in the order they are
+ * reported. A closed set — see `ProjectScripts` in the schema for why an
+ * arbitrary script name must not reach a founder or a model.
+ */
+const KNOWN_SCRIPTS: readonly ProjectScriptId[] = [
+  "test",
+  "test:e2e",
+  "e2e",
+  "typecheck",
+  "lint",
+  "build",
+  "start",
+];
+
+/**
+ * Which well-known scripts the root manifest declares.
+ *
+ * `source` carries the present/absent distinction that an empty list cannot: a
+ * null source means there was no manifest to read, while a non-null source with
+ * an empty list means the manifest was read and declares none of them. "This
+ * repository has no test script" is a fact worth showing before an agent run is
+ * paid for; "we could not tell" is not the same statement and must not render
+ * as one.
+ */
+export function detectProjectScripts(context: DetectionContext): ProjectScripts {
+  const root = context.packageJsons.find((entry) => entry.path === "package.json");
+  if (!root) return { declared: [], source: null };
+
+  return {
+    declared: KNOWN_SCRIPTS.filter((name) => root.parsed.scriptNames.includes(name)),
+    source: root.path,
+  };
 }

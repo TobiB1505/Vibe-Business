@@ -23,7 +23,27 @@ type SignalRule = {
   paths?: string[];
   /** Lowercase token searched for in non-Node dependency manifests. */
   manifestToken?: string;
+  /**
+   * Anchored regex matched against a whole repository path, for signals that
+   * live in a directory rather than under a fixed basename. `.github/workflows`
+   * holds arbitrarily named files, so no basename rule can see it.
+   *
+   * Every pattern here must be anchored at both ends and must not let `/` into
+   * a segment wildcard, for the same reason `path-policy.ts` matches segments
+   * rather than substrings.
+   */
+  pathPattern?: RegExp;
 };
+
+/**
+ * How many paths one `pathPattern` rule contributes as evidence.
+ *
+ * A repository with thirty workflow files should not put thirty rows into a
+ * snapshot that is stored, rendered and handed to a model. Three is enough to
+ * show a reader where to look; the signal is "GitHub Actions is used here", and
+ * that is fully carried by the first match.
+ */
+const MAX_PATH_EVIDENCE = 3;
 
 const SIGNAL_RULES: SignalRule[] = [
   // Deployment / hosting
@@ -65,6 +85,56 @@ const SIGNAL_RULES: SignalRule[] = [
   { id: "google_analytics", name: "Google Analytics", category: "analytics", dependencies: ["react-ga4", "@next/third-parties"] },
   { id: "vercel_analytics", name: "Vercel Analytics", category: "analytics", dependencies: ["@vercel/analytics"] },
 
+  // Test tooling — what execution needs to know before it spends money on a
+  // change nothing can verify (rule 78).
+  { id: "vitest", name: "Vitest", category: "testing", dependencies: ["vitest", "@vitest/coverage-v8"], configPattern: /^vitest\.config\./i },
+  { id: "jest", name: "Jest", category: "testing", dependencies: ["jest", "ts-jest", "@jest/globals", "babel-jest"], configPattern: /^jest\.config\./i },
+  { id: "playwright", name: "Playwright", category: "testing", dependencies: ["@playwright/test"], configPattern: /^playwright\.config\./i },
+  { id: "cypress", name: "Cypress", category: "testing", dependencies: ["cypress"], configPattern: /^cypress\.config\./i },
+  { id: "mocha", name: "Mocha", category: "testing", dependencies: ["mocha"], configPattern: /^\.mocharc\./i },
+  { id: "jasmine", name: "Jasmine", category: "testing", dependencies: ["jasmine", "jasmine-core"] },
+  { id: "ava", name: "AVA", category: "testing", dependencies: ["ava"] },
+  { id: "karma", name: "Karma", category: "testing", dependencies: ["karma"], configPattern: /^karma\.conf\./i },
+  { id: "testing_library", name: "Testing Library", category: "testing", dependencies: ["@testing-library/react", "@testing-library/dom", "@testing-library/vue", "@testing-library/svelte", "@testing-library/angular"] },
+  { id: "pytest", name: "pytest", category: "testing", manifestToken: "pytest" },
+  { id: "rspec", name: "RSpec", category: "testing", manifestToken: "rspec" },
+
+  // Continuous integration.
+  //
+  // Existence only, deliberately. Saying *which* workflows run on a push to the
+  // default branch — the fact rule 74 wants said before a merge click — needs
+  // the `on:` block, which needs a YAML parser this repository does not have and
+  // will not gain without its own decision. A count of workflow files is a fact;
+  // "this will deploy your site" would be a guess dressed as one.
+  { id: "github_actions", name: "GitHub Actions", category: "ci", pathPattern: /^\.github\/workflows\/[^/]+\.ya?ml$/i },
+  { id: "gitlab_ci", name: "GitLab CI", category: "ci", configPattern: /^\.gitlab-ci\.ya?ml$/i },
+  { id: "circleci", name: "CircleCI", category: "ci", pathPattern: /^\.circleci\/config\.ya?ml$/i },
+  { id: "jenkins", name: "Jenkins", category: "ci", configPattern: /^jenkinsfile$/i },
+  { id: "azure_pipelines", name: "Azure Pipelines", category: "ci", configPattern: /^azure-pipelines\.ya?ml$/i },
+  { id: "travis_ci", name: "Travis CI", category: "ci", configPattern: /^\.travis\.ya?ml$/i },
+  { id: "bitbucket_pipelines", name: "Bitbucket Pipelines", category: "ci", configPattern: /^bitbucket-pipelines\.ya?ml$/i },
+  { id: "drone_ci", name: "Drone CI", category: "ci", configPattern: /^\.drone\.ya?ml$/i },
+  { id: "woodpecker_ci", name: "Woodpecker CI", category: "ci", configPattern: /^\.woodpecker\.ya?ml$/i },
+
+  // E-mail sending
+  { id: "resend", name: "Resend", category: "email", dependencies: ["resend"] },
+  { id: "sendgrid", name: "SendGrid", category: "email", dependencies: ["@sendgrid/mail", "@sendgrid/client"], manifestToken: "sendgrid" },
+  { id: "nodemailer", name: "Nodemailer", category: "email", dependencies: ["nodemailer"] },
+  { id: "postmark", name: "Postmark", category: "email", dependencies: ["postmark"] },
+  { id: "mailgun", name: "Mailgun", category: "email", dependencies: ["mailgun.js", "mailgun-js"] },
+  { id: "amazon_ses", name: "Amazon SES", category: "email", dependencies: ["@aws-sdk/client-ses", "@aws-sdk/client-sesv2"] },
+  { id: "react_email", name: "React Email", category: "email", dependencies: ["react-email", "@react-email/components"] },
+
+  // Feature flagging
+  { id: "launchdarkly", name: "LaunchDarkly", category: "feature_flags", dependencies: ["launchdarkly-js-client-sdk", "launchdarkly-node-server-sdk", "@launchdarkly/node-server-sdk"] },
+  { id: "vercel_flags", name: "Vercel Flags", category: "feature_flags", dependencies: ["flags", "@vercel/flags"] },
+  { id: "flagsmith", name: "Flagsmith", category: "feature_flags", dependencies: ["flagsmith", "flagsmith-nodejs"] },
+  { id: "unleash", name: "Unleash", category: "feature_flags", dependencies: ["unleash-client", "@unleash/proxy-client-react"] },
+  { id: "statsig", name: "Statsig", category: "feature_flags", dependencies: ["statsig-js", "statsig-node"] },
+  { id: "split_io", name: "Split", category: "feature_flags", dependencies: ["@splitsoftware/splitio", "@splitsoftware/splitio-react"] },
+  { id: "configcat", name: "ConfigCat", category: "feature_flags", dependencies: ["configcat-js", "configcat-node"] },
+  { id: "growthbook", name: "GrowthBook", category: "feature_flags", dependencies: ["@growthbook/growthbook", "@growthbook/growthbook-react"] },
+
   // Monitoring
   { id: "sentry", name: "Sentry", category: "monitoring", dependencies: ["@sentry/nextjs", "@sentry/node", "@sentry/react", "@sentry/browser"], manifestToken: "sentry-sdk" },
 ];
@@ -98,6 +168,20 @@ export function detectIntegrationSignals(context: DetectionContext): Integration
     for (const path of rule.paths ?? []) {
       if (context.hasPath(path)) {
         items.push(evidence("config_file", path));
+        hasConfig = true;
+      }
+    }
+
+    if (rule.pathPattern) {
+      // Sorted so a repository with several matching files always produces the
+      // same evidence rows: a snapshot is stored, reused by hash, and compared
+      // across runs, so tree order must not decide what it says.
+      const matches = context.sourcePaths
+        .filter((path) => rule.pathPattern!.test(path))
+        .sort()
+        .slice(0, MAX_PATH_EVIDENCE);
+      for (const path of matches) {
+        items.push(evidence("file_path", path));
         hasConfig = true;
       }
     }

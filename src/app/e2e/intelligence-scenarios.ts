@@ -52,6 +52,7 @@ function repositorySnapshot(): RepositoryIntelligenceSnapshot {
       },
     ],
     packageManager: "pnpm",
+    scripts: { declared: ["test", "typecheck", "lint", "build"], source: "package.json" },
     runtime: [],
     integrationSignals: [
       {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { LiveProductIntelligenceSnapshot } from "@/modules/live-product-intelligence/schema";
+import type { RepositoryIntelligenceSnapshot } from "@/modules/repository-intelligence/schema";
 import {
   buildEvidencePack,
   buildLiveEvidence,
@@ -372,5 +373,42 @@ describe("seo coverage reaches the model", () => {
 
   it("mints nothing for a snapshot that predates coverage", () => {
     expect(withCoverage(true, undefined)).not.toContain("live.seo.coverage.title");
+  });
+});
+
+/* ---------------------------------------------------------------------------
+ * Sprint 0081 — the category reaches a founder as English
+ * ------------------------------------------------------------------------ */
+
+describe("integration signal labels", () => {
+  function packWith(signals: RepositoryIntelligenceSnapshot["integrationSignals"]) {
+    return buildEvidencePack({
+      ...input(),
+      repository: { ...fakeRepositorySnapshot(), integrationSignals: signals },
+    });
+  }
+
+  it("never puts a raw category member in front of a person", () => {
+    const pack = packWith([
+      { id: "vitest", name: "Vitest", category: "testing", confidence: "high", evidence: [] },
+      { id: "github_actions", name: "GitHub Actions", category: "ci", confidence: "medium", evidence: [] },
+      { id: "launchdarkly", name: "LaunchDarkly", category: "feature_flags", confidence: "high", evidence: [] },
+    ]);
+
+    const labels = pack.items.map((item) => item.label).join("\n");
+    expect(labels).not.toContain("feature_flags");
+    expect(labels).not.toContain("testing integration");
+    expect(labels).not.toContain("ci integration");
+    expect(labels).toContain("test tooling signal: Vitest");
+    expect(labels).toContain("continuous integration signal: GitHub Actions");
+    expect(labels).toContain("feature flagging signal: LaunchDarkly");
+  });
+
+  it("keeps the evidence id stable across the wording change", () => {
+    const pack = packWith([
+      { id: "vitest", name: "Vitest", category: "testing", confidence: "high", evidence: [] },
+    ]);
+
+    expect(pack.items.map((item) => item.id)).toContain("repo.integration.vitest");
   });
 });

@@ -11,10 +11,11 @@ Turns a connected GitHub repository into a versioned, evidence-carrying snapshot
 | `reader.ts` | The port the analyzer reads repositories through. No GitHub types. Implemented by `src/modules/github/repository-reader.ts`. |
 | `budgets.ts` | Central resource limits + the `BudgetTracker` that enforces them. |
 | `path-policy.ts` | The single gate for "may this path's content be fetched?" — sensitive, binary and generated classification. |
-| `candidates.ts` | High-value file *discovery* (free, from the tree) vs. *fetching* (dependency manifests only). |
+| `candidates.ts` | High-value file *discovery* (free, from the tree) vs. *fetching*. Two families are downloaded and no others: dependency manifests, because a dependency list cannot be inferred from a filename, and a short named list of stylesheets, because a design token cannot be either. |
 | `parsers/` | Manifest parsing, strictly as data. |
 | `context.ts` | Assembles the read-only input every detector works from. |
 | `detectors/` | Pure functions: `stack`, `integrations`, `routes`, `monorepo`, `business-surfaces`, `brand`. |
+| `scripts.test.ts` | The boundary that keeps `ProjectScripts` out of every module that builds a command. |
 | `analyzer.ts` | Orchestrates the pipeline and builds the snapshot. |
 | `schema.ts` | The versioned output contract + `ANALYZER_VERSION`. |
 | `human-view.ts` | Presentation only: a deterministic translation of a snapshot into business capabilities ([Sprint UI-3.6](../../../docs/sprints/0020-ui36-repository-intelligence-human-first.md)). Reads the snapshot, changes nothing. |
@@ -31,6 +32,11 @@ Turns a connected GitHub repository into a versioned, evidence-carrying snapshot
 - **Never fetch sensitive paths.** Existence may be observed; contents may not be read.
 - Detectors stay pure and GitHub-free, so they remain testable without network access.
 - Every claimed detection must carry evidence. If there is no evidence, there is no detection.
+- **A snapshot never sources a command.** `ProjectScripts` says which well-known scripts a
+  manifest declared, so a person can see before paying for an agent run that nothing will check
+  its result. Validation and agent execution build their commands by re-reading `package.json`
+  from the sandbox filesystem the command is about to run against, and must keep doing so —
+  `scripts.test.ts` fails if that ever changes.
 - **Repository evidence is never runtime truth.** The presentation layer may say a capability is
   *likely*; only the live product check or Deep Scan can say it works. `CapabilityStatus` has no
   `confirmed` member for that reason.
