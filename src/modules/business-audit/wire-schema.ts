@@ -142,9 +142,13 @@ const LENS_ITEM_SCHEMA = {
         "How this area of the business ACTUALLY LOOKS. Say weak when it is genuinely poor; unclear means the evidence does not settle it, not that the answer is uncomfortable. Never a statement about priority.",
     },
     score: {
-      anyOf: [{ type: "integer", minimum: 0, maximum: 100 }, { type: "null" }],
+      // No `minimum`/`maximum` on the integer branch: the structured-outputs
+      // subset this file targets does not support numeric bounds (see the
+      // header). `validate.ts` already clamps to 0-100 on the way into the
+      // domain, so the schema states the range in prose only.
+      anyOf: [{ type: "integer" }, { type: "null" }],
       description:
-        "Evidence-grounded diagnostic score for this lens. Use null when health is unclear or blocked, evidence is insufficient, or a precise score is not defensible. Never turn missing evidence into zero.",
+        "Evidence-grounded diagnostic score for this lens, 0-100. Use null when health is unclear or blocked, evidence is insufficient, or a precise score is not defensible. Never turn missing evidence into zero.",
     },
     materiality: {
       type: "string",
