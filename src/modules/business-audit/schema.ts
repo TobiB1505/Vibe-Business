@@ -18,34 +18,8 @@ export const BUSINESS_AUDIT_SCHEMA_VERSION = "business-readiness-audit.v2" as co
 export const BUSINESS_AUDIT_VERSION = "business-audit-v3" as const;
 
 /**
- * @deprecated The five legacy dimensions (ADR 0050). No audit written under
- * contract v8 carries them; they survive here only because the opportunity
- * engine still attributes moves to a dimension until its own lens switch
- * lands, and they leave with it. Do not add consumers.
- */
-export const AUDIT_DIMENSIONS = [
-  "product",
-  "monetization",
-  "distribution",
-  "conversion",
-  "retention",
-] as const;
-
-/** @deprecated See {@link AUDIT_DIMENSIONS}. */
-export type AuditDimensionId = (typeof AUDIT_DIMENSIONS)[number];
-
-/** @deprecated See {@link AUDIT_DIMENSIONS}. */
-export const DIMENSION_LABELS: Record<AuditDimensionId, string> = {
-  product: "Product",
-  monetization: "Monetization",
-  distribution: "Distribution",
-  conversion: "Conversion",
-  retention: "Retention",
-};
-
-/**
- * Kept for the Opportunity Engine, which grades its own conviction on the
- * same coarse scale the audit used. Not a dimension concept.
+ * Shared with the Opportunity Engine, which grades its own conviction on the
+ * same coarse scale the audit uses.
  */
 export type Confidence = "high" | "medium" | "low";
 
@@ -282,7 +256,7 @@ export type ConclusionTone = (typeof CONCLUSION_TONES)[number];
 /**
  * One business-level conclusion drawn from several pieces of evidence.
  *
- * This is the layer CORE-2a.1 exists to add. The dimensions below it answer
+ * This is the layer CORE-2a.1 exists to add. The lens assessments answer
  * *"how does this business area look?"*; a conclusion answers *"what do these
  * observations mean together?"* — which is the level a founder should read
  * first, and the level the previous audit never produced.
@@ -293,11 +267,6 @@ export type ConclusionTone = (typeof CONCLUSION_TONES)[number];
  * **one** business problem — *people still don't have a clear path to paying
  * you* — and listing them five times is enumeration wearing the costume
  * of thoroughness.
- *
- * `dimensions` is a list on purpose (§12). A buying path that is unclear spans
- * monetization, conversion and the customer journey, and forcing it into one
- * scored dimension would be an artificial taxonomy boundary. Dimension scores
- * stay separate and unchanged.
  */
 export type BusinessConclusion = {
   /**
@@ -328,11 +297,6 @@ export type BusinessConclusion = {
   /** At least one, validated against the pack. Never empty (§10). */
   evidenceIds: string[];
   /**
-   * @deprecated Legacy attribution (ADR 0050). Present on stored v6/v7
-   * conclusions; a v8 audit's conclusions carry `lenses` only. Read-only.
-   */
-  dimensions?: AuditDimensionId[];
-  /**
    * Which reasoning lenses this conclusion came from (CORE-2a.3 §40).
    *
    * Routinely more than one. "You have not turned usage into revenue" is
@@ -349,7 +313,7 @@ export type BusinessConclusion = {
  *
  * Bounded by the contract rather than by the UI: these are few because the
  * model chose the ones that matter, not because React hides the rest
- * (DoD 8). Everything not chosen remains in the dimension assessments and in
+ * (DoD 8). Everything not chosen remains in the lens assessments and in
  * the evidence pack, both untouched.
  */
 export type AuditSynthesis = {
