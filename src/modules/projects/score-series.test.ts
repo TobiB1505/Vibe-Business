@@ -80,6 +80,43 @@ describe("a series is only as long as the contract behind it", () => {
     expect(series.delta).toBeNull();
   });
 
+  /**
+   * The ADR 0050 boundary, pinned with the real constants. A v7 audit scored
+   * five dimensions; a v8 audit scores nine lenses. Four of the seven
+   * comparability columns changed in that release, and this test exists so
+   * that the resulting break is a recorded intention rather than a side
+   * effect nobody can name: joining a dimension-scored 43 to a lens-scored 45
+   * would present the contract change as business progress.
+   */
+  it("breaks the line at the lens-scored contract (ADR 0050), by the real versions", async () => {
+    const { BUSINESS_AUDIT_SCHEMA_VERSION, BUSINESS_AUDIT_VERSION } = await import(
+      "@/modules/business-audit/schema"
+    );
+    const { PROMPT_VERSION } = await import("@/modules/business-audit/prompt");
+    const { RUBRIC_VERSION } = await import("@/modules/business-audit/rubric");
+
+    const series = buildScoreSeries([
+      // The last dimension-scored generation, as production recorded it.
+      reading(43, "2026-08-20T00:00:00Z", {
+        schemaVersion: "business-readiness-audit.v1",
+        auditVersion: "business-audit-v2",
+        evidencePackVersion: "business-evidence.v4",
+        promptVersion: "business-audit-prompt-v4",
+        rubricVersion: "business-readiness-rubric-v10",
+      }),
+      reading(45, "2026-08-24T00:00:00Z", {
+        schemaVersion: BUSINESS_AUDIT_SCHEMA_VERSION,
+        auditVersion: BUSINESS_AUDIT_VERSION,
+        evidencePackVersion: "business-evidence.v4",
+        promptVersion: PROMPT_VERSION,
+        rubricVersion: RUBRIC_VERSION,
+      }),
+    ]);
+
+    expect(series.breakCount).toBe(1);
+    expect(series.delta).toBeNull();
+  });
+
   it("reconnects when a later audit returns to an earlier contract's versions", () => {
     // Not a hypothetical: a prompt can be rolled back. Comparability is a
     // property of the versions, not of position in the list.
