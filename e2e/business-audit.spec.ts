@@ -159,7 +159,7 @@ test.describe("signature Business Brain", () => {
     const animationDuration = await page.locator(".business-brain-node").first().evaluate(
       (element) => getComputedStyle(element).animationDuration,
     );
-    expect(animationDuration).toBe("0s");
+    expect(Number.parseFloat(animationDuration)).toBeLessThanOrEqual(0.001);
   });
 });
 
@@ -204,7 +204,7 @@ test.describe("truthful lifecycle", () => {
 
   test("waiting keeps the founder question ahead of unfinished analysis", async ({ page }) => {
     await page.goto("/e2e/audit-waiting");
-    await expect(page.getByText(/vibe needs you/i)).toBeVisible();
+    await expect(page.getByText("Vibe needs you", { exact: true })).toBeVisible();
     await expect(page.getByText(/preparing your business audit/i)).toHaveCount(0);
   });
 });

@@ -13,7 +13,7 @@ export default function Loading() {
   return (
     <WorkspaceSection
       id="settings"
-      title="Settings"
+      title="Project Settings"
       description="What Vibe is connected to, what you have told it, and how to disconnect."
     >
       <SkeletonSection />

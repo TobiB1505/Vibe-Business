@@ -314,6 +314,7 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0048](docs/decisions/0048-signature-business-brain.md) | Signature Business Brain view model and interaction | Web surface, read models |
 | [0049](docs/decisions/0049-business-lens-diagnostic-scores.md) | Evidence-grounded business-lens diagnostic scores | Business audit, read models |
 | [0050](docs/decisions/0050-lenses-are-the-audit.md) | Lenses are the audit's only framework; the overall score is the mean over scored lenses | §3.4 |
+| [0051](docs/decisions/0051-project-shell-context-ownership.md) | Project shell context ownership and scroll model | Web surface |
 
 ### Layers with no section above
 

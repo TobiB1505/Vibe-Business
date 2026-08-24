@@ -1,9 +1,14 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { VibeLockup } from "@/components/brand/vibe-mark";
-import { StatusDot, type StatusTone } from "@/components/ui/status-pill";
+import {
+  ArrowLeftIcon,
+  ChevronRightIcon,
+  type DashboardIconName,
+} from "@/components/ui/dashboard-icons";
 import { MonoLabel } from "@/components/ui/typography";
 import { ProjectNav } from "./project-nav";
+import { ProjectSwitcher, type ProjectSwitcherItem } from "./project-switcher";
 import { cn } from "@/lib/utils/cn";
 
 /**
@@ -46,19 +51,20 @@ import { cn } from "@/lib/utils/cn";
  *   settings     — production URL, founder intent, the repository connection
  */
 export const PROJECT_SECTIONS = [
-  { id: "home", label: "Home", segment: "" },
+  { id: "home", label: "Home", icon: "home", segment: "" },
   {
     // Second, immediately after Home, because every section below reasons
     // *from* this one: the audit, the plan and everything downstream all start
     // from what the product is (CORE-1 §33).
     id: "my-product",
     label: "My Product",
+    icon: "products",
     segment: "product",
   },
-  { id: "action-plan", label: "Action Plan", segment: "plan" },
-  { id: "agent", label: "Agent", segment: "agent" },
-  { id: "experiments", label: "Experiments", segment: "experiments" },
-  { id: "settings", label: "Settings", segment: "settings" },
+  { id: "action-plan", label: "Action Plan", icon: "action-plan", segment: "plan" },
+  { id: "agent", label: "Agent", icon: "agent", segment: "agent" },
+  { id: "experiments", label: "Experiments", icon: "experiments", segment: "experiments" },
+  { id: "settings", label: "Project Settings", icon: "settings", segment: "settings" },
 ] as const;
 
 /**
@@ -132,6 +138,7 @@ export function preparedChangeHref(preparedHref: string, preparedChangeId: strin
 export type ProjectNavItem = {
   id: ProjectSectionId;
   label: string;
+  icon: DashboardIconName;
   href: string;
   /**
    * A count beside the label — waiting moves, prepared changes. Only pass a
@@ -143,112 +150,107 @@ export type ProjectNavItem = {
 };
 
 export function ProjectSidebar({
+  projectId,
   projectName,
   repositoryFullName,
-  /** State of the project itself, mirrored by the text under the name. */
-  tone = "neutral",
+  connected,
+  switcherItems,
   items,
+  footer,
   // No `currentId`: the active section is derived from the URL inside
   // `ProjectNav`, so it cannot disagree with the address bar after a refresh,
   // a Back navigation, or a link opened in a new tab.
 }: {
+  projectId: string;
   projectName: string;
   repositoryFullName: string | null;
-  tone?: StatusTone;
+  connected: boolean;
+  switcherItems: ProjectSwitcherItem[];
   items: ProjectNavItem[];
+  footer: ReactNode;
 }) {
+  const current = {
+    id: projectId,
+    name: projectName,
+    href: `/app/projects/${projectId}`,
+  };
+
   return (
-    <nav
-      aria-label="Project sections"
+    <aside
       className={cn(
-        "border-line-1 bg-surface-1 flex shrink-0 flex-col gap-7 border-b p-4",
-        // Desktop: a full-height rail that stays put while the workspace
-        // scrolls. Below `lg` it becomes a horizontal strip at the top, which
-        // is why the list below switches from a column to a scrollable row —
-        // a 248px rail on a 375px screen would eat the content.
-        "lg:sticky lg:top-0 lg:h-dvh lg:w-62 lg:overflow-y-auto lg:border-r lg:border-b-0 lg:p-5",
+        "border-line-1 bg-surface-1 flex shrink-0 flex-col border-b px-4 py-5",
+        "lg:h-full lg:w-64 lg:overflow-y-auto lg:border-r lg:border-b-0 lg:px-5 lg:py-6",
       )}
     >
-      <div className="hidden px-1 lg:block">
+      <div className="px-1">
         <Link href="/app" className="rounded-nav" aria-label="Vibe Business — your projects">
           <VibeLockup />
         </Link>
       </div>
 
-      <div className="flex flex-col gap-2">
-        <MonoLabel className="px-1 tracking-[0.18em]">Project</MonoLabel>
-        <div className="rounded-nav bg-surface-4 border-line-4 flex items-center gap-3 border px-3 py-2.5">
-          <StatusDot tone={tone} className="size-2" />
-          <span className="flex min-w-0 flex-col">
-            <span className="text-fg truncate text-sm font-semibold">{projectName}</span>
-            {repositoryFullName && (
-              <span className="text-fg-muted truncate font-mono text-[0.65625rem]">
-                {repositoryFullName}
-              </span>
-            )}
-          </span>
+      <nav aria-label="Project sections" className="mt-8 flex min-w-0 flex-col">
+        <div className="flex flex-col gap-2">
+          <MonoLabel className="px-1 tracking-[0.18em]">Project</MonoLabel>
+          <ProjectSwitcher
+            current={current}
+            repositoryFullName={repositoryFullName}
+            connected={connected}
+            items={switcherItems}
+          />
         </div>
-      </div>
 
-      <ProjectNav items={items} />
+        <Link
+          href="/app/products"
+          className={cn(
+            "text-fg-secondary hover:bg-surface-2 hover:text-fg-body rounded-nav mt-3",
+            "flex items-center gap-2.5 px-3 py-2.5 text-sm transition-interactive",
+          )}
+        >
+          <ArrowLeftIcon size={17} className="shrink-0" />
+          All products
+        </Link>
 
+        <div className="border-line-1 my-4 border-t" />
+        <ProjectNav items={items.filter((item) => item.id !== "settings")} />
+
+        <div className="border-line-1 my-4 border-t" />
+        <ProjectNav items={items.filter((item) => item.id === "settings")} />
+      </nav>
+
+      <div className="mt-6 lg:mt-auto lg:pt-8">{footer}</div>
+    </aside>
+  );
+}
+
+/**
+ * Quiet account-to-project orientation. The page title belongs to the route
+ * below; this line never repeats repository, branch or connection metadata.
+ */
+export function ProjectBreadcrumb({ projectName }: { projectName: string }) {
+  return (
+    <nav aria-label="Breadcrumb">
+      <ol className="text-fg-muted flex min-w-0 items-center gap-2.5 text-sm">
+        <li>
+          <Link
+            href="/app/products"
+            className="text-fg-body hover:text-fg rounded-sm font-medium transition-interactive"
+          >
+            My Products
+          </Link>
+        </li>
+        <li aria-hidden>
+          <ChevronRightIcon size={14} className="text-fg-meta" />
+        </li>
+        <li aria-current="page" className="truncate">
+          {projectName}
+        </li>
+      </ol>
     </nav>
   );
 }
 
 /**
- * The bar above a project section: where you are, what the section is, and the
- * controls that belong to it.
- */
-export function ProjectHeader({
-  title,
-  projectName,
-  description,
-  meta,
-  actions,
-}: {
-  title: ReactNode;
-  /** Rendered as the breadcrumb parent, so the project is always named. */
-  projectName: string;
-  description?: ReactNode;
-  /**
-   * The repository line — owner, branch, connection state. Only facts the
-   * project actually has; an absent repository renders nothing here rather
-   * than a placeholder.
-   */
-  meta?: ReactNode;
-  actions?: ReactNode;
-}) {
-  return (
-    <header className="border-line-1 bg-app/80 sticky top-0 z-20 border-b backdrop-blur-xl">
-      <div className="flex flex-wrap items-end justify-between gap-4 px-5 py-5 sm:px-8">
-        <div className="flex min-w-0 flex-col gap-2">
-          <p className="text-fg-meta flex items-center gap-2 font-mono text-meta">
-            <Link href="/app" className="hover:text-fg-muted rounded-sm transition-interactive">
-              Projects
-            </Link>
-            <span aria-hidden className="text-fg-faint">
-              /
-            </span>
-            <span className="text-fg-muted truncate">{projectName}</span>
-          </p>
-          <h1 className="text-fg text-headline font-bold">{title}</h1>
-          {description && <p className="text-fg-muted max-w-[70ch] text-sm">{description}</p>}
-          {meta && <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pt-1">{meta}</div>}
-        </div>
-        {actions && <div className="flex shrink-0 flex-wrap items-center gap-3">{actions}</div>}
-      </div>
-    </header>
-  );
-}
-
-/**
  * One section of the workspace.
- *
- * The `id` is the anchor the sidebar links to. `scroll-mt` clears the sticky
- * header, so a jump lands on the heading rather than under it — without that,
- * anchor navigation looks broken in exactly the way that makes people stop
- * using it.
  *
  * A `<section>` with an `aria-labelledby` pointing at its own heading, so the
  * document outline matches the navigation a sighted user sees.
@@ -267,19 +269,14 @@ export function WorkspaceSection({
   children: ReactNode;
 }) {
   return (
-    // `scroll-mt` has to clear the sticky header, which is taller than it
-    // looks: breadcrumb, title and the repository meta row measure ~135px on a
-    // 375px screen, where a long project name can also wrap. Measured, then
-    // given headroom — too little and an anchor jump lands *behind* the header,
-    // which reads as a broken link rather than a tight margin.
-    <section id={id} aria-labelledby={`${id}-heading`} className="scroll-mt-40 lg:scroll-mt-32">
-      <div className="flex flex-col gap-5">
-        <div className="flex flex-wrap items-end justify-between gap-4">
+    <section id={id} aria-labelledby={`${id}-heading`} className="scroll-mt-6">
+      <div className="flex flex-col gap-7">
+        <div className="flex flex-wrap items-end justify-between gap-5">
           <div className="flex min-w-0 flex-col gap-2">
-            <h2 id={`${id}-heading`} className="text-fg text-title font-bold">
+            <h1 id={`${id}-heading`} className="text-fg text-headline sm:text-display font-bold">
               {title}
-            </h2>
-            {description && <p className="text-fg-muted max-w-[70ch] text-sm">{description}</p>}
+            </h1>
+            {description && <p className="text-fg-muted max-w-[70ch] text-[0.9375rem]">{description}</p>}
           </div>
           {actions && <div className="flex shrink-0 flex-wrap items-center gap-3">{actions}</div>}
         </div>
@@ -289,7 +286,7 @@ export function WorkspaceSection({
   );
 }
 
-/** Sidebar + content column. The header belongs to the content, not the frame. */
+/** Fixed desktop rail + one independently scrolling project document. */
 export function ProjectShell({
   sidebar,
   children,
@@ -298,9 +295,13 @@ export function ProjectShell({
   children: ReactNode;
 }) {
   return (
-    <div className="bg-app text-fg-body flex min-h-dvh flex-col lg:flex-row">
+    <div className="bg-app text-fg-body flex min-h-dvh flex-col lg:h-dvh lg:min-h-0 lg:flex-row lg:overflow-hidden">
       {sidebar}
-      <div className="flex min-w-0 flex-1 flex-col">{children}</div>
+      <main className="min-w-0 flex-1 lg:h-full lg:overflow-y-auto lg:[scrollbar-gutter:stable]">
+        <div className="mx-auto flex w-full max-w-[90rem] flex-col gap-7 px-5 py-7 sm:px-8 sm:py-9 xl:px-10 xl:py-10">
+          {children}
+        </div>
+      </main>
     </div>
   );
 }

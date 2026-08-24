@@ -69,13 +69,14 @@ describe("project workspace context", () => {
     }
   });
 
-  it("streams the one place that does ask, so the layout never waits on it", () => {
+  it("keeps live repository reachability out of the shared project shell", () => {
     const layout = readFileSync(join(ROUTE_DIR, "layout.tsx"), "utf8");
 
-    expect(layout).toContain("RepositoryAccessPill");
-    // Rendering it without a boundary would put the two round trips straight
-    // back into the layout's own render.
-    expect(layout).toContain("Suspense");
+    // Repository identity and the stored connection state live in the project
+    // switcher. A live GitHub probe belongs only to a consequential workflow,
+    // never to furniture rendered on every route.
+    expect(layout).not.toContain("RepositoryAccessPill");
+    expect(layout).not.toContain("Suspense");
     expect(layout).not.toContain("await checkInstallationStillAccessible");
   });
 });

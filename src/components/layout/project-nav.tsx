@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
+import { DashboardIcon } from "@/components/ui/dashboard-icons";
 import type { ProjectNavItem } from "./project-shell";
 import { cn } from "@/lib/utils/cn";
 
@@ -90,13 +91,18 @@ export function ProjectNav({ items }: { items: ProjectNavItem[] }) {
               href={item.href}
               aria-current={current ? "page" : undefined}
               className={cn(
-                "rounded-nav flex items-center gap-3 px-3 py-2.5 text-sm",
+                "rounded-nav flex items-center gap-3 px-3 py-3 text-sm",
                 "transition-[color,background-color,border-color] duration-150 ease-vibe",
                 current
-                  ? "bg-mint-tint border-mint-line text-mint border font-semibold"
+                  ? "bg-mint-tint border-mint-line text-fg border font-semibold shadow-[inset_2px_0_0_var(--color-mint)]"
                   : "text-fg-secondary hover:bg-surface-2 hover:text-fg-body",
               )}
             >
+              <DashboardIcon
+                name={item.icon}
+                size={19}
+                className={cn("shrink-0", current && "text-mint")}
+              />
               <span className="whitespace-nowrap">{item.label}</span>
               {typeof item.count === "number" && (
                 <span

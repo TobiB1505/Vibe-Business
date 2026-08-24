@@ -434,7 +434,7 @@ export function OpportunitiesPanel({
           label="Why this is blocked"
           action={
             <a
-              href={`${auditHref}${blockNotice.anchor}`}
+              href={auditHref}
               className="text-fg-prose hover:text-fg rounded-sm text-sm underline underline-offset-4 transition-interactive"
             >
               {blockNotice.actionLabel}

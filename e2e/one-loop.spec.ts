@@ -39,7 +39,7 @@ test.describe("the audit hands off to the moves that answer it", () => {
     await page.goto("/e2e/audit-synthesis");
 
     const priorities = page.getByTestId("current-priorities");
-    const primary = priorities.getByRole("link", { name: "See what Vibe would do" });
+    const primary = priorities.getByRole("link", { name: "View 2 next moves" });
 
     await expect(primary).toBeVisible();
     // The seam: the link carries the finding's stable key, so the Moves page
@@ -47,13 +47,15 @@ test.describe("the audit hands off to the moves that answer it", () => {
     await expect(primary).toHaveAttribute("href", /\/plan\?from=blocker-1$/);
   });
 
-  test("a secondary priority gets a quieter link of its own", async ({ page }) => {
+  test("secondary priorities stay reachable through the quieter remaining-priorities link", async ({
+    page,
+  }) => {
     await page.goto("/e2e/audit-synthesis");
 
     const secondary = page.getByTestId("current-priorities").getByRole("link", {
-      name: "See the move for this",
+      name: "See 1 more priority",
     });
-    await expect(secondary).toHaveAttribute("href", /\/plan\?from=blocker-2$/);
+    await expect(secondary).toHaveAttribute("href", /\/plan$/);
   });
 
   /** §5: the key is an address, never something a founder reads. */
@@ -71,7 +73,7 @@ test.describe("the audit hands off to the moves that answer it", () => {
     await page.goto("/e2e/audit-synthesis-no-moves");
 
     const priorities = page.getByTestId("current-priorities");
-    await expect(priorities.getByRole("link", { name: "Find my next moves" })).toBeVisible();
+    await expect(priorities.getByRole("link", { name: "Find next moves" })).toBeVisible();
   });
 });
 
@@ -361,7 +363,7 @@ test.describe("the loop survives a phone", () => {
     await page.goto("/e2e/audit-synthesis");
 
     await expect(
-      page.getByTestId("current-priorities").getByRole("link", { name: "See what Vibe would do" }),
+      page.getByTestId("current-priorities").getByRole("link", { name: "View 2 next moves" }),
     ).toBeVisible();
     await expectNoHorizontalOverflow(page);
   });

@@ -1,21 +1,22 @@
 import { notFound } from "next/navigation";
-import { Suspense, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import {
   PROJECT_SECTIONS,
-  ProjectHeader,
+  ProjectBreadcrumb,
   ProjectShell,
   ProjectSidebar,
   projectSectionHref,
   type ProjectNavItem,
 } from "@/components/layout/project-shell";
-import { StatusPill } from "@/components/ui/status-pill";
-import {
-  RepositoryAccessPill,
-  RepositoryAccessPillFallback,
-} from "./repository-access-pill";
+import { AccountMenu } from "@/components/layout/account-menu";
 import { createClient } from "@/lib/supabase/server";
 import { requireSession } from "@/modules/auth/session";
-import { getProjectWorkspaceContext } from "@/modules/projects/workspace-context";
+import { buildAccountIdentity } from "@/modules/auth/identity-view";
+import { getGithubIdentity } from "@/modules/github/identity";
+import {
+  getProjectWorkspaceContext,
+  listProjectSwitcherOptions,
+} from "@/modules/projects/workspace-context";
 import { getProjectWorkspaceCounts } from "@/modules/projects/workspace-counts";
 
 /**
@@ -24,8 +25,10 @@ import { getProjectWorkspaceCounts } from "@/modules/projects/workspace-counts";
  * ## What it loads, and why that list is short
  *
  * A layout runs on *every* route beneath it, so anything loaded here is paid
- * for by all six sections. It therefore loads only what the frame itself
- * renders: the project's identity and its repository connection.
+ * for by every project route. It therefore loads only what the frame itself
+ * renders: the project's identity and stored repository connection, two
+ * navigation counts, one account identity row and at most four sibling project
+ * names for the switcher.
  *
  * The audit, opportunities, prepared changes, Deep Scan, impact and activity
  * are each loaded by the one route that shows them. That separation is the
@@ -36,13 +39,13 @@ import { getProjectWorkspaceCounts } from "@/modules/projects/workspace-counts";
  *
  * UI-1's badges came free because the single page had already loaded both
  * lists. UI-2 removed them rather than putting an opportunity read and a
- * prepared read into this layout, where all seven routes would pay.
+ * prepared read into this layout, where every project route would pay.
  *
  * They are back (Sprint UI-2.5) as two `count`-only queries that transfer no
- * rows — see `workspace-counts.ts`, which is the entire budget this layout is
- * allowed to spend beyond the project context. A failure returns nulls and the
- * navigation renders without badges; a count is never worth a broken
- * workspace, and a zero is never shown in place of "could not count".
+ * rows — see `workspace-counts.ts`. The switcher read is independently capped
+ * at four alternatives, and the account identity is one unique row. Failures
+ * in the optional counts/switcher render less furniture rather than breaking
+ * the project; neither a badge nor a shortcut is worth a dead workspace.
  *
  * ## Ownership
  *
@@ -71,7 +74,15 @@ export default async function ProjectLayout({
   // used to discover which project ids exist.
   if (!project) notFound();
 
-  const counts = await getProjectWorkspaceCounts(supabase, project.id);
+  const [counts, github, siblingProjects] = await Promise.all([
+    getProjectWorkspaceCounts(supabase, project.id),
+    getGithubIdentity(supabase, session.userId),
+    listProjectSwitcherOptions(supabase, {
+      userId: session.userId,
+      currentProjectId: project.id,
+    }),
+  ]);
+  const identity = buildAccountIdentity({ email: session.email, github });
 
   /**
    * A badge only where the number carries information. Zero is hidden rather
@@ -84,6 +95,7 @@ export default async function ProjectLayout({
   const navItems: ProjectNavItem[] = PROJECT_SECTIONS.map((section) => ({
     id: section.id,
     label: section.label,
+    icon: section.icon,
     href: projectSectionHref(project.id, section.id),
     count:
       section.id === "action-plan"
@@ -100,48 +112,28 @@ export default async function ProjectLayout({
     <ProjectShell
       sidebar={
         <ProjectSidebar
+          projectId={project.id}
           projectName={project.name}
           repositoryFullName={project.repository?.fullName ?? null}
-          /*
-           * Whether a repository is connected — not whether GitHub is
-           * reachable this second. Live reachability is stated in words in
-           * the header, and saying it twice, once as colour alone, is what
-           * the status system is being pulled away from.
-           */
-          tone={project.repository ? "active" : "neutral"}
+          connected={project.repository !== null}
+          switcherItems={[
+            {
+              id: project.id,
+              name: project.name,
+              href: projectSectionHref(project.id, "home"),
+            },
+            ...siblingProjects.map((sibling) => ({
+              ...sibling,
+              href: projectSectionHref(sibling.id, "home"),
+            })),
+          ]}
           items={navItems}
+          footer={<AccountMenu identity={identity} subtitle="Founder" placement="above" />}
         />
       }
     >
-      <ProjectHeader
-        projectName={project.name}
-        title={project.name}
-        meta={
-          project.repository ? (
-            <>
-              <a
-                href={project.repository.htmlUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="text-fg-body hover:text-fg rounded-sm font-mono text-xs underline underline-offset-4 transition-interactive"
-              >
-                {project.repository.fullName}
-              </a>
-              <span className="text-fg-muted font-mono text-xs">
-                {project.repository.defaultBranch}
-              </span>
-              {/* Streamed, so asking GitHub never delays the workspace. */}
-              <Suspense fallback={<RepositoryAccessPillFallback />}>
-                <RepositoryAccessPill installationId={project.repository.installationId} />
-              </Suspense>
-            </>
-          ) : (
-            <StatusPill tone="neutral">No repository connected</StatusPill>
-          )
-        }
-      />
-
-      <div className="px-5 py-8 sm:px-8 sm:py-10">{children}</div>
+      <ProjectBreadcrumb projectName={project.name} />
+      {children}
     </ProjectShell>
   );
 }
