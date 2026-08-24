@@ -87,12 +87,12 @@ describe("evidence discipline (§14)", () => {
     const { opportunities, notes } = expectOk(
       validate([
         fakeWireOpportunity({
-          evidenceIds: ["intent.monetization_model", "repo.completely.invented"],
+          evidenceIds: ["intent.how_it_earns", "repo.completely.invented"],
         }),
       ]),
     );
 
-    expect(opportunities[0].evidenceIds).toEqual(["intent.monetization_model"]);
+    expect(opportunities[0].evidenceIds).toEqual(["intent.how_it_earns"]);
     expect(notes.join(" ")).toContain("did not exist");
   });
 

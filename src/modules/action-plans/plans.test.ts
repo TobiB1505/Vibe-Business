@@ -413,7 +413,7 @@ describe("Move → Conclusion lineage", () => {
   it("does not reconstruct when the Move already states its source", () => {
     const audit = fakePlannedAudit({
       synthesis: {
-        version: "business-audit-synthesis-v6",
+        version: "business-audit-synthesis-v7",
         lenses: [],
         overall: "…",
         strengths: [],
@@ -468,7 +468,7 @@ describe("Move → Conclusion lineage", () => {
   it("refuses an ambiguous legacy match rather than picking the top score", () => {
     const audit = fakePlannedAudit({
       synthesis: {
-        version: "business-audit-synthesis-v6",
+        version: "business-audit-synthesis-v7",
         lenses: [],
         overall: "…",
         strengths: [],
@@ -494,7 +494,7 @@ describe("Move → Conclusion lineage", () => {
   it("does not resolve on a shared dimension alone", () => {
     const audit = fakePlannedAudit({
       synthesis: {
-        version: "business-audit-synthesis-v6",
+        version: "business-audit-synthesis-v7",
         lenses: [],
         overall: "…",
         strengths: [],
@@ -572,7 +572,7 @@ describe("Move → Conclusion lineage", () => {
   it("binds to the audience blocker rather than an unrelated weak one", () => {
     const audit = fakePlannedAudit({
       synthesis: {
-        version: "business-audit-synthesis-v6",
+        version: "business-audit-synthesis-v7",
         lenses: [],
         overall: "…",
         strengths: [],

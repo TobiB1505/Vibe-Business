@@ -29,8 +29,6 @@ export type StoredAudit = {
   accessMode: AuditAccessMode;
   inputHash: string;
   overallScore: number | null;
-  assessedDimensions: number | null;
-  totalDimensions: number | null;
   failureCode: string | null;
   result: BusinessReadinessAudit | null;
   /**
@@ -87,8 +85,6 @@ type AuditRow = {
   access_mode: AuditAccessMode;
   input_hash: string;
   overall_score: number | null;
-  assessed_dimensions: number | null;
-  total_dimensions: number | null;
   failure_code: string | null;
   result: BusinessReadinessAudit | null;
   product_profile_id: string | null;
@@ -109,7 +105,7 @@ type AuditRow = {
 };
 
 const AUDIT_COLUMNS =
-  "id, project_id, status, access_mode, input_hash, overall_score, assessed_dimensions, total_dimensions, failure_code, result, product_profile_id, founder_intent_hash, repository_snapshot_id, live_snapshot_id, schema_version, audit_version, evidence_pack_version, prompt_version, rubric_version, product_profile_schema_version, product_profile_builder_version, provider, model, created_at, completed_at";
+  "id, project_id, status, access_mode, input_hash, overall_score, failure_code, result, product_profile_id, founder_intent_hash, repository_snapshot_id, live_snapshot_id, schema_version, audit_version, evidence_pack_version, prompt_version, rubric_version, product_profile_schema_version, product_profile_builder_version, provider, model, created_at, completed_at";
 
 function mapRow(row: AuditRow): StoredAudit {
   return {
@@ -119,8 +115,6 @@ function mapRow(row: AuditRow): StoredAudit {
     accessMode: row.access_mode,
     inputHash: row.input_hash,
     overallScore: row.overall_score,
-    assessedDimensions: row.assessed_dimensions,
-    totalDimensions: row.total_dimensions,
     failureCode: row.failure_code,
     result: row.result,
     productProfileId: row.product_profile_id,
@@ -448,8 +442,10 @@ export async function completeAuditRun(
       status: "completed",
       result: audit,
       overall_score: audit.overall.score,
-      assessed_dimensions: audit.overall.assessedDimensions,
-      total_dimensions: audit.overall.totalDimensions,
+      // Lens coverage (ADR 0050). The dimension columns stay untouched on old
+      // rows; a v8 audit writes only the lens pair.
+      assessed_lenses: audit.overall.scoredLenses,
+      eligible_lenses: audit.overall.eligibleLenses,
       completed_at: new Date().toISOString(),
     })
     .eq("id", auditId);

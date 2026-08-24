@@ -88,42 +88,20 @@
  * only honest value when the lens is unclear, founder-blocked or unsupported.
  */
 
-export const RUBRIC_VERSION = "business-readiness-rubric-v10" as const;
+export const RUBRIC_VERSION = "business-readiness-rubric-v11" as const;
 
 export const BUSINESS_READINESS_RUBRIC = `# Business Readiness Rubric (${RUBRIC_VERSION})
 
-This rubric has two halves, and they are not equal.
+**The business reasoning is the audit.** Nine lenses, the health, materiality
+and diagnostic score of each, the root problems they add up to, and the
+conclusions a founder reads. There is no other layer: what you write here is
+the whole record.
 
-**The business reasoning is the audit.** Nine lenses, the materiality of each,
-the root problems they add up to, and the conclusions a founder reads. That
-section is further down and it is the one that decides whether this audit is
-worth anything.
+Never build a conclusion out of a lens summary's missing-surface inventory. An
+undetected surface says what a scanner did not find; a conclusion says what
+that means for the business.
 
-**The five scored dimensions are the technical record.** They exist for scoring
-and for a reader who wants the detail, and they are written last, after your
-conclusions are already fixed. They are described first here only because they
-are the simpler contract to state.
-
-Never build a conclusion out of a dimension's gaps. A gap says what a scanner
-did not detect; a conclusion says what that means for the business.
-
-## The five scored dimensions
-
-## Assessment status — decide this FIRST
-
-- "assessable": there is direct evidence about this dimension from at least
-  two independent sources, or strong unambiguous evidence from one.
-- "partial": some relevant evidence exists, but important aspects are
-  unobservable.
-- "insufficient_evidence": nothing in the pack speaks to this dimension.
-
-A score is only permitted when status is "assessable" or "partial". When
-status is "insufficient_evidence" the score MUST be null.
-
-Never lower a score because information is missing. Missing information
-lowers the assessment status and the confidence — not the score.
-
-## Scoring scale (only when a score is permitted)
+## Lens scoring scale (only when the evidence permits a score)
 
 - 80-100: the capability is clearly present and coherent on the evidence.
 - 60-79: present and functional, with visible weaknesses.
@@ -136,52 +114,11 @@ The distinction in the last band is critical. "No pricing page was detected
 on the live site AND no payment integration exists in the repository AND the
 founder states monetization is only planned" is positive evidence of
 absence. "No analytics data available" is NOT evidence of absence — it is
-absence of evidence, and belongs in unknowns.
+absence of evidence: the lens is "unclear" and its score is null.
 
-## Dimensions
-
-### Product
-Is the product understandable, and does it actually exist as a working
-thing? Consider: whether a value proposition is identifiable from the
-homepage and the founder's description; whether functional product surfaces
-exist; how clearly the target customer is defined; whether there is a way
-for a visitor to access the product. A working authenticated app area is
-stronger evidence than a marketing page alone.
-
-### Monetization
-Is there a credible path from user to revenue? Consider: what the founder says
-about how the product will earn money; whether prices are shown anywhere on the
-live site; whether a way to buy or be billed exists; whether payment
-integration appears in the repository. Payment integration alone is not
-revenue — a Stripe dependency with no prices shown and nothing the founder
-intends to charge for is weak evidence, and should be described as such.
-
-### Distribution
-Can people discover this product? Consider: whether the site is
-technically discoverable (SEO foundations such as title, description,
-canonical, sitemap, robots); whether content or distribution infrastructure
-exists (blog, docs, changelog); whether the founder states an acquisition
-approach. Be honest that Vibe Business has NO traffic, ranking, referral, or
-channel data — distribution is frequently only partially assessable, and
-saying so is the correct answer.
-
-### Conversion
-Does the product guide a visitor toward the intended action? Consider:
-whether a primary call to action exists and is identifiable; whether a
-signup path exists; whether a path from pricing to signup exists; what
-conversion-relevant forms are present. Assess the *structure* of the
-conversion path. Vibe Business has NO conversion-rate data, so never claim a
-conversion rate is good or bad.
-
-### Retention
-Is there something to come back to? Consider: whether an authenticated
-product experience exists (a protected app area redirecting to login is
-direct evidence); whether onboarding exists; whether the product's nature
-implies recurring use; whether analytics or retention instrumentation is
-present. Vibe Business has NO usage, cohort, or churn data. For most
-early-stage products this dimension will be "partial" or
-"insufficient_evidence" — that is the honest answer, and a low score would
-be a false one.
+Never lower a score because information is missing. Missing information
+makes a lens "unclear" or "blocked_by_missing_context" — it never makes a
+low number.
 
 ## Evidence discipline
 
@@ -191,7 +128,7 @@ cannot cite evidence for a claim, do not make the claim.
 
 ## Business reasoning — nine lenses, before you conclude anything
 
-The dimensions above are what the scanners can see. They are not a way to think
+The evidence pack is what the scanners can see. It is not a way to think
 about a business. Before synthesizing, assess this product as a business
 through all nine lenses below.
 
@@ -259,8 +196,9 @@ that the answer is uncomfortable. A business with no way to take payments has
 
 Use a number only when cited evidence supports an assessment. A real zero means
 the evidence positively shows total absence; missing or inconclusive evidence
-is null. The score must agree with health. It does not contribute to the five
-dimension overall score, and it must never raise or lower materiality.
+is null. The score must agree with health. The overall score is computed by
+the application from these lens scores — never write one — and a lens score
+must never raise or lower materiality.
 
 **\`materiality\`** — when this area needs attention.
 \`now\`, \`soon\`, \`later\`, \`not_material\`, \`unknown\`.
@@ -416,8 +354,8 @@ The lenses are the working-out. Now step back and say what it MEANS.
 **Synthesize. Do not enumerate.** Do not return every valid observation as its
 own conclusion. Read all the evidence, find the patterns, and report only the
 conclusions a founder should act on. Leaving an observation out of the
-synthesis does not discard it — every dimension assessment and every evidence
-id is preserved and shown elsewhere.
+synthesis does not discard it — every lens assessment and every evidence id
+is preserved and shown elsewhere.
 
 ### Group related evidence into one conclusion
 
@@ -589,9 +527,9 @@ Then the headline and the explanation say that same thing to the founder. If you
 cannot state a root problem without listing absences, you are probably looking
 at a symptom — go back to the lenses and find what it is a symptom of.
 
-The scored dimensions come **after** all of this, and they are a technical
-record. Never build a conclusion out of a dimension's gaps: those describe what
-a scanner did not find, and a founder needs to know what that means.
+Never build a conclusion out of an inventory of undetected surfaces: those
+describe what a scanner did not find, and a founder needs to know what that
+means.
 
 Each conclusion records the lenses it came from. Most real blockers span
 several — that is expected, and a conclusion forced into one lens is usually a

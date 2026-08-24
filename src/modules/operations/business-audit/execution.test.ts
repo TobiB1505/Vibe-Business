@@ -299,10 +299,12 @@ describe("paid-call ambiguity (§11)", () => {
   });
 
   it("does not re-infer after a validation failure on a billed response", async () => {
+    // A non-object body fails v8 normalization — the simplest response that
+    // is billed by the provider yet unusable by the contract.
     const invalid = new FakeProvider({
       result: {
         ok: true,
-        data: { dimensions: "not an array" },
+        data: "not an object",
         usage: { inputTokens: 100, outputTokens: 50, thinkingTokens: 0 },
         model: "claude-sonnet-5",
         latencyMs: 10,
@@ -323,7 +325,7 @@ describe("paid-call ambiguity (§11)", () => {
     const invalid = new FakeProvider({
       result: {
         ok: true,
-        data: { dimensions: "not an array" },
+        data: "not an object",
         usage: { inputTokens: 100, outputTokens: 50, thinkingTokens: 0 },
         model: "claude-sonnet-5",
         latencyMs: 10,

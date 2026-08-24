@@ -44,11 +44,11 @@ const INTENT_HASH = "c".repeat(64);
  * provenance rather than on what it means to assert.
  */
 const AUDIT_VERSIONS = {
-  schemaVersion: "business-readiness-audit.v1",
-  auditVersion: "business-audit-v1",
-  evidencePackVersion: "business-evidence.v3",
-  promptVersion: "business-audit-prompt-v2",
-  rubricVersion: "business-readiness-rubric-v1",
+  schemaVersion: "business-readiness-audit.v2",
+  auditVersion: "business-audit-v3",
+  evidencePackVersion: "business-evidence.v4",
+  promptVersion: "business-audit-prompt-v5",
+  rubricVersion: "business-readiness-rubric-v11",
   profileSchemaVersion: "product-profile.v1",
   profileBuilderVersion: "profile-builder-v1",
   provider: "anthropic",
@@ -70,7 +70,9 @@ function identity() {
   return computeOpportunityInputHash({
     auditId: AUDIT,
     auditInputHash: AUDIT_HASH,
-    evidencePackVersion: "business-evidence.v2",
+    // Must match fakeAudit().evidencePackVersion — execution recomputes the
+    // identity from the loaded audit result.
+    evidencePackVersion: "business-evidence.v4",
     engineVersion: OPPORTUNITY_ENGINE_VERSION,
     promptVersion: OPPORTUNITY_PROMPT_VERSION,
     rubricVersion: OPPORTUNITY_RUBRIC_VERSION,
@@ -136,11 +138,11 @@ function seed(options: { inputIdentity?: string } = {}) {
     // The reproducibility set. Without it `evidence_pack_version` is undefined
     // and the provenance check silently takes its pre-CORE-2 fallback — so the
     // path this fixture exists to exercise would never run.
-    schema_version: "business-readiness-audit.v1",
-    audit_version: "business-audit-v1",
-    evidence_pack_version: "business-evidence.v3",
-    prompt_version: "business-audit-prompt-v2",
-    rubric_version: "business-readiness-rubric-v1",
+    schema_version: "business-readiness-audit.v2",
+    audit_version: "business-audit-v3",
+    evidence_pack_version: "business-evidence.v4",
+    prompt_version: "business-audit-prompt-v5",
+    rubric_version: "business-readiness-rubric-v11",
     product_profile_schema_version: "product-profile.v1",
     product_profile_builder_version: "profile-builder-v1",
     provider: "anthropic",
