@@ -275,6 +275,15 @@ const RETIRED_CLAIMS: readonly { path: string; claim: string; retiredBy: string 
     claim: "does not exist",
     retiredBy: "Sprint 0056 — src/modules/coding-agent/ is roughly fifty files.",
   },
+  {
+    path: "docs/ROADMAP.md",
+    claim: "**Repository state:**",
+    retiredBy:
+      "Sprint 0080 — a commit pin is an audit's header, and an audit is never edited after the " +
+      "reading it records. A register is rewritten every time an entry closes, so the pin was false " +
+      "by the next merge and stayed false through roughly ten sprints. Banning the label rather than " +
+      "the stale hash is deliberate: a refreshed pin is the same defect with a newer number.",
+  },
 ];
 
 describe("a retired claim does not come back", () => {

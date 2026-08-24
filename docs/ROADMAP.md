@@ -1,6 +1,6 @@
 # Roadmap
 
-**Date:** 2026-08-22 · **Repository state:** `main` @ `e0a35b3`, plus Sprint 0057 on its branch · **Derived from:** [the intelligence architecture review](audits/2026-08-21-intelligence-architecture-review/README.md) and [the economics architecture review](audits/2026-08-21-economics-architecture-review/README.md)
+**Derived from:** [the intelligence architecture review](audits/2026-08-21-intelligence-architecture-review/README.md) and [the economics architecture review](audits/2026-08-21-economics-architecture-review/README.md), both read on 2026-08-21 · **This file carries no freshness stamp of its own** — the section below says why.
 
 ## What may be in this file
 
@@ -10,6 +10,7 @@ This is a register of **known gaps**, not a plan and not a list of features.
 - **Entries are phrased as what is currently untrue or missing**, never as a feature to build. "Outcome verification cannot see agentic changes" is a gap. "Build an outcome dashboard" is an intention.
 - **Entries leave this file two ways**: done, or dropped with a stated reason. Never by silent deletion.
 - **No dates and no estimates.** The order is an argument about dependency, not a schedule.
+- **Currency lives in the entries, not in a header.** This file was derived from two audits and inherited their header format, which pins a date and a commit. That is right for an audit: it is a record of one reading at one revision, and it is never edited afterwards. A register is the opposite — an entry is rewritten every time a sprint narrows or closes it — so a whole-file stamp is false again by the next merge, and this one was, naming a revision that roughly ten landed sprints had moved past. It is gone rather than refreshed, because refreshing it only re-arms it. What each entry cites is what says how current it is, and [`documentation-currency.test.ts`](../src/lib/docs/documentation-currency.test.ts) fails when one of those citations stops resolving.
 
 The order below is dependency order. Correctness before foundation, foundation before breadth, breadth before fusion, fusion before the loop — because every later group consumes the earlier one.
 
