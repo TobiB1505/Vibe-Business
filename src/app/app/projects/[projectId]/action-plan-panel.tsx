@@ -474,7 +474,7 @@ export function ActionPlanPanel({
                   </a>
                 ) : (
                   <a
-                    href="#next-moves"
+                    href="#action-plan"
                     className="text-fg-prose hover:text-fg rounded-sm text-sm underline underline-offset-4 transition-interactive"
                   >
                     {blockNotice.actionLabel}

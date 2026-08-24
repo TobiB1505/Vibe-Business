@@ -60,7 +60,7 @@ const REVIEWED_SITES: readonly { file: string; why: string }[] = [
     why: "A Stripe webhook has no session at all — there is no cookie-scoped client to use.",
   },
   {
-    file: join("app", "app", "billing", "actions.ts"),
+    file: join("app", "app", "(account)", "billing", "actions.ts"),
     why: "Every billing table has a select policy and no write policy (§64); ownership is session-derived.",
   },
   {

@@ -3,6 +3,7 @@ import { BUSINESS_READINESS_AUDIT_CONFIG } from "@/modules/ai/operations";
 import { runBusinessReadinessAudit } from "./runner";
 import { PROMPT_VERSION } from "./prompt";
 import { RUBRIC_VERSION } from "./rubric";
+import { BUSINESS_AUDIT_SCHEMA_VERSION, BUSINESS_AUDIT_VERSION } from "./schema";
 import {
   FakeProvider,
   fakeAuthenticatedSnapshot,
@@ -34,8 +35,8 @@ describe("runBusinessReadinessAudit — happy path", () => {
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;
 
-    expect(outcome.audit.schemaVersion).toBe("business-readiness-audit.v1");
-    expect(outcome.audit.auditVersion).toBe("business-audit-v1");
+    expect(outcome.audit.schemaVersion).toBe(BUSINESS_AUDIT_SCHEMA_VERSION);
+    expect(outcome.audit.auditVersion).toBe(BUSINESS_AUDIT_VERSION);
     // The bump (ADR 0044). A fresh audit is written under the newest pack, so
     // its surface citations carry their own polarity. Stored v3 audits keep
     // recording v3 and are read under v3 rules — see `evidence-ids.ts`.
@@ -43,6 +44,7 @@ describe("runBusinessReadinessAudit — happy path", () => {
     expect(outcome.audit.promptVersion).toBe(PROMPT_VERSION);
     expect(outcome.audit.rubricVersion).toBe(RUBRIC_VERSION);
     expect(outcome.audit.provider).toBe("fake");
+    expect(outcome.audit.synthesis?.lenses.every((lens) => lens.score === 60)).toBe(true);
 
     // Exactly one billable call (Sprint 4 §16).
     expect(provider.requests).toHaveLength(1);

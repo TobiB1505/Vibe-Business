@@ -18,8 +18,8 @@
      Two backgrounds, not a grey scale. `ground` is the board behind the
      app frame; `app` is the frame itself. Everything above them is white
      at low alpha, which is what keeps depth readable without solid greys. */
-  --color-ground: #050505;
-  --color-app: #0a0908;
+  --color-ground: #030506;
+  --color-app: #070a0c;
 
   /* ── Accent ──────────────────────────────────────────────────────────
      Mint is Vibe: the primary action, the active state, the brand. It is
@@ -107,21 +107,18 @@
   --color-coral-line: rgb(255 122 92 / 0.26);
 
   /* ── Type ────────────────────────────────────────────────────────────
-     Space Grotesk for everything a person wrote. JetBrains Mono for
-     everything a machine produced: SHAs, branches, timestamps, scores,
-     counts, credits, state labels. The `--font-*` variables are bound to
-     the next/font loaders in `fonts.ts`, which self-hosts both families so
-     a build needs no network access.
+     Product UI uses the operating system's native interface family. On
+     Apple devices that is SF Pro, on Windows Segoe UI Variable. Inter is
+     preferred when a host already has it. This is intentionally quieter and
+     more neutral than the former Space Grotesk face: hierarchy should come
+     from size, weight and space rather than recognisable letter shapes.
 
-     Each typeface appears once per writing system, because every self-hosted
-     face declares a single `unicode-range` and is therefore its own family.
-     Listing only the first would quietly drop Polish, Czech, Turkish, Greek,
-     Cyrillic and Vietnamese text to a system font. Only the leading faces are
-     preloaded; the rest are fetched on first use, as they were before. */
+     JetBrains Mono remains self-hosted for genuinely technical output — SHAs,
+     branch names and code. Dashboard scores and status labels use the UI face;
+     a number is not automatically developer tooling. */
   --font-sans:
-    var(--font-space-grotesk), var(--font-space-grotesk-latin-ext),
-    var(--font-space-grotesk-vietnamese), ui-sans-serif, system-ui, -apple-system,
-    "Segoe UI", sans-serif;
+    Inter, "SF Pro Display", "SF Pro Text", -apple-system, BlinkMacSystemFont,
+    "Segoe UI Variable", "Segoe UI", ui-sans-serif, system-ui, Arial, sans-serif;
   --font-mono:
     var(--font-jetbrains-mono), var(--font-jetbrains-mono-latin-ext),
     var(--font-jetbrains-mono-cyrillic), var(--font-jetbrains-mono-cyrillic-ext),
@@ -167,14 +164,13 @@
   --text-ui: 0.8125rem;
 
   /* ── Shape ───────────────────────────────────────────────────────────
-     Radii scale with the element. Every interactive control is a full
-     pill — that is a rule, not a preference, so `rounded-full` on buttons
-     is intentional everywhere it appears. */
+     Radii scale with the element. Controls and navigation use a precise
+     ten-pixel corner; pills are reserved for statuses and compact filters. */
   --radius-nav: 10px;
   --radius-well: 14px;
   --radius-field: 12px;
-  --radius-panel: 18px;
-  --radius-card: 22px;
+  --radius-panel: 14px;
+  --radius-card: 16px;
 
   /* ── Elevation ───────────────────────────────────────────────────────
      The inset highlight belongs to the primary card only. */
@@ -195,6 +191,8 @@
 @layer base {
   html {
     color-scheme: dark;
+    scrollbar-color: var(--color-line-strong) var(--color-app);
+    scrollbar-width: thin;
   }
 
   body {
@@ -203,6 +201,36 @@
     color: var(--color-fg-body);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+  }
+
+  /*
+   * Product-owned scroll surfaces inherit one quiet baseline. Geometry may
+   * vary where a component explicitly needs stable gutter space, but a new
+   * table, rail or dialog must not fall back to unrelated browser colours.
+   */
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: var(--color-app);
+  }
+
+  *::-webkit-scrollbar-thumb {
+    border: 3px solid var(--color-app);
+    border-radius: 9999px;
+    background: var(--color-line-strong);
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--color-fg-faint);
+  }
+
+  @media (forced-colors: active) {
+    html {
+      scrollbar-color: auto;
+    }
   }
 
   /**
@@ -247,57 +275,162 @@
   background:
     radial-gradient(
       circle at 30% 34%,
-      color-mix(in srgb, var(--color-mint) 9%, transparent),
-      transparent 46%
+      color-mix(in srgb, var(--color-mint) 16%, transparent),
+      transparent 42%
     ),
     radial-gradient(
-      circle at 88% 92%,
-      color-mix(in srgb, var(--color-amber) 3%, transparent),
-      transparent 36%
+      circle at 72% 78%,
+      color-mix(in srgb, var(--color-coral) 5%, transparent),
+      transparent 34%
     );
 }
 
-/*
- * The map settles (UI-7 §5).
- *
- * Three animations used to run `infinite`: the node halos breathing, the
- * connections flowing, the radial sweep turning. None of them reports
- * anything — the same map, unmoving, says exactly as much — so after the first
- * few seconds they are motion for its own sake, next to a verdict a founder is
- * trying to read, on a laptop that keeps compositing them for as long as the
- * tab is open.
- *
- * The counts are chosen so all three stop at roughly the same moment, about
- * eighteen seconds in: the map arrives alive and then holds still. Each
- * keyframe set ends where it began, so settling needs no `forwards` and leaves
- * nothing mid-gesture.
- *
- * Users who asked for reduced motion were already protected by the block
- * above; this is for everyone else, who never got asked.
- */
-.audit-map-node-halo {
-  background: radial-gradient(
-    circle,
-    color-mix(in srgb, var(--color-mint) 15%, transparent),
-    transparent 68%
-  );
-  animation: audit-node-breathe 3.6s var(--ease-vibe) 5;
+/* UI-12 — the Business Brain is the one cinematic project surface. */
+.business-brain-stage {
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 48% 46%, rgb(0 229 160 / 0.07), transparent 43%),
+    radial-gradient(circle at 78% 80%, rgb(255 122 92 / 0.035), transparent 34%),
+    linear-gradient(145deg, rgb(8 15 16 / 0.98), rgb(3 6 7 / 0.99));
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.07) inset,
+    0 40px 100px -48px rgb(0 0 0 / 0.95),
+    0 0 120px -78px rgb(0 229 160 / 0.62);
 }
 
-.audit-map-connection-active {
-  animation: audit-line-flow 1.8s linear 10;
+.business-brain-grid {
+  background:
+    radial-gradient(circle at 18% 24%, rgb(0 229 160 / 0.05), transparent 1px),
+    radial-gradient(circle at 76% 18%, rgb(232 181 74 / 0.04), transparent 1px),
+    radial-gradient(circle at 62% 74%, rgb(0 229 160 / 0.035), transparent 1px);
+  background-size: 73px 83px, 109px 97px, 127px 119px;
+  mask-image: radial-gradient(circle at 48% 48%, black 38%, transparent 88%);
 }
 
-.audit-map-sweep {
-  background: conic-gradient(
-    from 0deg,
-    transparent 0deg,
-    color-mix(in srgb, var(--color-mint) 12%, transparent) 18deg,
-    transparent 46deg
-  );
-  -webkit-mask: radial-gradient(circle, transparent 58%, black 59%, black 61%, transparent 62%);
-  mask: radial-gradient(circle, transparent 58%, black 59%, black 61%, transparent 62%);
-  animation: audit-radial-sweep 5.5s linear 3;
+.business-brain-canvas::before {
+  position: absolute;
+  inset: 9%;
+  border-radius: 9999px;
+  background: radial-gradient(circle, rgb(0 229 160 / 0.07), transparent 68%);
+  content: "";
+  filter: blur(22px);
+  pointer-events: none;
+}
+
+.business-brain-planet {
+  position: relative;
+  border-color: rgb(var(--planet-rgb) / 0.46);
+  color: var(--planet-accent);
+  background:
+    radial-gradient(circle at 32% 23%, rgb(var(--planet-rgb) / 0.24), transparent 32%),
+    radial-gradient(circle at 66% 73%, rgb(var(--planet-rgb) / 0.09), transparent 48%),
+    linear-gradient(155deg, rgb(17 24 24 / 0.98), rgb(5 8 9 / 0.99) 72%);
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.025) inset,
+    0 1px 0 rgb(255 255 255 / 0.09) inset,
+    0 22px 38px -26px rgb(0 0 0 / 0.95),
+    0 0 34px -18px rgb(var(--planet-rgb) / 0.72);
+}
+
+.business-brain-planet::before {
+  position: absolute;
+  inset: 7%;
+  border-radius: inherit;
+  background:
+    radial-gradient(circle at 34% 22%, rgb(255 255 255 / 0.1), transparent 22%),
+    repeating-radial-gradient(circle at 38% 32%, transparent 0 7px, rgb(255 255 255 / 0.012) 8px 9px);
+  content: "";
+  opacity: 0.75;
+  pointer-events: none;
+}
+
+.business-brain-planet::after {
+  position: absolute;
+  inset: -9px;
+  border: 1px solid rgb(var(--planet-rgb) / 0);
+  border-radius: inherit;
+  content: "";
+  pointer-events: none;
+}
+
+.business-brain-planet[data-priority="now"]::after {
+  border-color: rgb(var(--planet-rgb) / 0.22);
+  box-shadow: 0 0 24px -12px rgb(var(--planet-rgb) / 0.8);
+}
+
+.business-brain-planet[data-selected="true"] {
+  border-color: rgb(var(--planet-rgb) / 0.9);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.12) inset,
+    0 0 0 1px rgb(var(--planet-rgb) / 0.16),
+    0 0 48px -12px rgb(var(--planet-rgb) / 0.92);
+}
+
+.business-brain-planet[data-related="true"]:not([data-selected="true"]) {
+  border-color: rgb(var(--planet-rgb) / 0.66);
+  box-shadow: 0 0 36px -14px rgb(var(--planet-rgb) / 0.72);
+}
+
+.business-brain-planet-icon {
+  position: relative;
+  z-index: 1;
+  color: var(--planet-accent);
+  filter: drop-shadow(0 0 7px rgb(var(--planet-rgb) / 0.55));
+}
+
+.business-brain-status-dot {
+  background: currentcolor;
+  box-shadow: 0 0 7px currentcolor;
+}
+
+.business-brain-core,
+.business-brain-mobile-core {
+  background:
+    radial-gradient(circle at 34% 20%, rgb(132 255 223 / 0.22), transparent 24%),
+    radial-gradient(circle at 50% 35%, rgb(0 229 160 / 0.17), transparent 55%),
+    radial-gradient(circle at 73% 78%, rgb(232 181 74 / 0.12), transparent 36%),
+    repeating-radial-gradient(circle at 42% 40%, transparent 0 12px, rgb(0 229 160 / 0.018) 13px 14px),
+    linear-gradient(160deg, rgb(10 30 25 / 0.99), rgb(3 8 8 / 0.99));
+  border: 1px solid rgb(0 229 160 / 0.42);
+  box-shadow:
+    0 0 0 11px rgb(0 229 160 / 0.028),
+    0 0 0 25px rgb(0 229 160 / 0.016),
+    0 0 74px -10px rgb(0 229 160 / 0.67),
+    24px 30px 56px -36px rgb(232 181 74 / 0.46),
+    0 1px 0 rgb(255 255 255 / 0.09) inset;
+}
+
+.business-brain-side-card {
+  border: 1px solid var(--color-line-2);
+  border-radius: 1.1rem;
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 0.038), rgb(255 255 255 / 0.014)),
+    var(--color-surface-1);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.055) inset,
+    0 26px 70px -46px rgb(0 0 0 / 0.95);
+}
+
+.business-brain-focus-panel,
+.business-brain-focus-rail {
+  border: 1px solid var(--color-line-2);
+  border-radius: 1.1rem;
+  background:
+    radial-gradient(circle at 14% 0%, rgb(255 122 92 / 0.035), transparent 28%),
+    linear-gradient(145deg, rgb(255 255 255 / 0.034), rgb(255 255 255 / 0.012)),
+    var(--color-surface-1);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.055) inset,
+    0 30px 78px -50px rgb(0 0 0 / 0.98);
+}
+
+.business-brain-insight-card {
+  border: 1px solid var(--color-line-1);
+  border-radius: 0.95rem;
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 0.026), rgb(255 255 255 / 0.009)),
+    rgb(255 255 255 / 0.012);
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.035) inset;
 }
 
 /*
@@ -321,28 +454,4 @@
   transition-property: color, background-color, border-color, box-shadow, transform;
   transition-timing-function: var(--ease-vibe);
   transition-duration: 150ms;
-}
-
-@keyframes audit-node-breathe {
-  0%,
-  100% {
-    transform: translate(-50%, -50%) scale(0.9);
-    opacity: 0.42;
-  }
-  50% {
-    transform: translate(-50%, -50%) scale(1.08);
-    opacity: 0.78;
-  }
-}
-
-@keyframes audit-line-flow {
-  to {
-    stroke-dashoffset: -28;
-  }
-}
-
-@keyframes audit-radial-sweep {
-  to {
-    transform: rotate(360deg);
-  }
 }

@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { ATTENTION_DISPLAY_LIMIT, buildAttentionItems } from "./attention";
+import {
+  PROJECT_SECTIONS,
+  PROJECT_SUBSECTIONS,
+} from "@/components/layout/project-shell";
+import {
+  ATTENTION_DISPLAY_LIMIT,
+  buildAttentionItems,
+  orderProjectsByAttention,
+} from "./attention";
 import type { DashboardProject } from "./dashboard";
 
 function project(overrides: Partial<DashboardProject> = {}): DashboardProject {
@@ -11,6 +19,9 @@ function project(overrides: Partial<DashboardProject> = {}): DashboardProject {
     score: 40,
     scoreState: "scored",
     nextMovesCount: 0,
+    topMove: null,
+    lastAnalysedAt: null,
+  scoreHistory: [],
     preparedCount: 0,
     failedValidationCount: 0,
     ...overrides,
@@ -134,7 +145,18 @@ describe("every item can be acted on", () => {
       project({ id: "p4", name: "d", repositoryFullName: null }),
     ]);
 
-    const allowed = new Set(["", "score", "moves", "prepared", "deep-scan", "impact", "activity"]);
+    /*
+     * Taken from the workspace's own table rather than written out here.
+     * `attention.ts` is a domain module and deliberately builds its hrefs
+     * itself rather than importing from `components/` — so this is the only
+     * thing standing between it and a segment rename, and a hand-copied list
+     * would have been renamed in exactly the same way it was written: not at
+     * all. CORE-5 renamed every one of these.
+     */
+    const allowed = new Set<string>([
+      ...PROJECT_SECTIONS.map((section) => section.segment),
+      ...PROJECT_SUBSECTIONS.map((section) => section.segment),
+    ]);
     for (const item of items) {
       const match = item.action.href.match(/^\/app\/projects\/([^/]+)(?:\/(.+))?$/);
       expect(match, `${item.kind} has a malformed href: ${item.action.href}`).not.toBeNull();
@@ -194,5 +216,52 @@ describe("copy makes no promises", () => {
     for (const forbidden of ["deploy", "publish", "ship", "live", "revenue", "guarantee", "will increase"]) {
       expect(copy.toLowerCase(), `copy contains "${forbidden}"`).not.toContain(forbidden);
     }
+  });
+});
+
+describe("the product grid inherits the attention ordering", () => {
+  /**
+   * The account dashboard has no attention list any more — the information was
+   * per-product and already in each card's action. This ordering is the one
+   * thing the list contributed that a card cannot, so it has to survive the
+   * removal rather than quietly go with it.
+   */
+  it("puts the most urgent product first", () => {
+    const ordered = orderProjectsByAttention([
+      project({ id: "settled", name: "settled", nextMovesCount: 0 }),
+      project({ id: "setup", name: "setup", repositoryFullName: null }),
+      project({ id: "blocked", name: "blocked", preparedCount: 1, failedValidationCount: 1 }),
+      project({ id: "ready", name: "ready", nextMovesCount: 2 }),
+    ]);
+
+    expect(ordered.map((entry) => entry.id)).toEqual(["blocked", "ready", "setup", "settled"]);
+  });
+
+  it("sorts a product with nothing pending last, not first", () => {
+    // Nothing pending is not a problem, and it is not what the screen is for.
+    const ordered = orderProjectsByAttention([
+      project({ id: "quiet", name: "aaa", nextMovesCount: 0 }),
+      project({ id: "busy", name: "zzz", nextMovesCount: 1 }),
+    ]);
+
+    expect(ordered[0]?.id).toBe("busy");
+  });
+
+  it("is stable within a tier, so a reload never reshuffles the grid", () => {
+    const input = [
+      project({ id: "b", name: "beta", nextMovesCount: 1 }),
+      project({ id: "a", name: "alpha", nextMovesCount: 1 }),
+    ];
+
+    expect(orderProjectsByAttention(input).map((entry) => entry.id)).toEqual(["a", "b"]);
+    expect(orderProjectsByAttention(input).map((entry) => entry.id)).toEqual(["a", "b"]);
+  });
+
+  it("returns every product it was given, and mutates nothing", () => {
+    const input = [project({ id: "a", name: "a" }), project({ id: "b", name: "b", nextMovesCount: 3 })];
+    const before = input.map((entry) => entry.id);
+
+    expect(orderProjectsByAttention(input)).toHaveLength(2);
+    expect(input.map((entry) => entry.id)).toEqual(before);
   });
 });

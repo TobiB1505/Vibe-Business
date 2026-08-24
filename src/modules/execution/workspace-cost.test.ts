@@ -53,7 +53,7 @@ function loopBodies(src: string): string[] {
 const FILES = [
   "src/modules/execution/workspace.ts",
   "src/modules/execution/service.ts",
-  "src/app/app/projects/[projectId]/moves/page.tsx",
+  "src/app/app/projects/[projectId]/plan/page.tsx",
 ];
 
 describe("prepared-change read cost", () => {

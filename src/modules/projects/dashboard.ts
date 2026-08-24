@@ -1,8 +1,8 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { AuditEventRecord } from "@/modules/audit-log/queries";
-import { mapAuditEventRow } from "@/modules/audit-log/queries";
+
+import type { AuditReading } from "./score-series";
 
 /**
  * The global dashboard read model (Sprint UI-3).
@@ -11,8 +11,13 @@ import { mapAuditEventRow } from "@/modules/audit-log/queries";
  *
  * `/app` used to answer "which projects do I have". The dashboard answers
  * "what needs my attention", and that needs a little more per project — a
- * score, how many moves are waiting, whether something is prepared, when
- * anything last happened.
+ * score and how that score has moved, the top move by name, how many are
+ * waiting, whether something is prepared, when the product was last analysed.
+ *
+ * It no longer reads the audit-event log. The activity strip that read it left
+ * the account dashboard in CORE-6 (an append-only feed with no action on the
+ * calmest screen in the product), and the query left with it rather than
+ * staying to feed nothing.
  *
  * ## Why it is one module rather than reused per-project reads
  *
@@ -39,16 +44,76 @@ import { mapAuditEventRow } from "@/modules/audit-log/queries";
 
 export type ProjectScoreState = "scored" | "not_audited" | "insufficient_coverage";
 
+/**
+ * The highest-ranked Move, reduced to what a card can show.
+ *
+ * Four columns, no document. `why_now`, the evidence ids, the category and the
+ * execution fields all stay on the Action Plan, where there is room to be
+ * accurate about them — this is the one sentence and the two words a founder
+ * needs to decide whether to click.
+ */
+export type DashboardMove = {
+  title: string;
+  /** The Move's own statement of what is wrong. One sentence, model-written. */
+  problem: string;
+  impact: "high" | "medium" | "low";
+  effort: "high" | "medium" | "low";
+};
+
+/**
+ * One completed audit, reduced to what a trend needs: the number, when it was
+ * produced, and the seven columns that decide whether it may be compared with
+ * the reading beside it.
+ *
+ * The versions are carried rather than resolved here on purpose. Deciding what
+ * "comparable" means is a rule with a history behind it, and it lives in
+ * `score-series.ts` where it is tested; this module's job is to read columns.
+ */
+export type { AuditReading } from "./score-series";
+
 export type DashboardProject = {
   id: string;
   name: string;
   repositoryFullName: string | null;
   defaultBranch: string | null;
+  /** Captured GitHub visibility. Optional so older fixtures remain honest. */
+  repositoryPrivate?: boolean | null;
+  /** Exact Product Profile used by the latest completed audit, when recorded. */
+  productProfileId?: string | null;
   /** Null unless a completed audit produced one. Never zero as a stand-in. */
   score: number | null;
   scoreState: ProjectScoreState;
   /** Opportunities in the latest completed set. Null when never generated. */
   nextMovesCount: number | null;
+  /**
+   * The rank-1 Move of the latest completed set, so a card can name the work
+   * rather than count it. Null when no set exists, and also when a set exists
+   * and is empty — `nextMovesCount` beside it distinguishes those two.
+   */
+  topMove: DashboardMove | null;
+  /**
+   * When the latest completed audit ran.
+   *
+   * Deliberately *not* a last-activity timestamp. See the note above on why
+   * `lastActivityAt` was refused: it cannot be read honestly here without an
+   * N+1. This is one exact fact — when Vibe last judged this product — and any
+   * label for it must say that rather than implying general activity.
+   */
+  lastAnalysedAt: string | null;
+  /**
+   * Every completed audit for this product, newest first.
+   *
+   * These rows were already fetched and already discarded: the query is
+   * unbounded and ordered newest-first, and `firstPerKey` kept one per project
+   * and threw the rest away. Keeping them costs no round trip and no extra
+   * row — only seven small text columns per row on a select that was already
+   * being made.
+   *
+   * It is deliberately the *readings*, not a chart. `buildScoreSeries` turns
+   * them into something drawable, and it is the only thing that decides where
+   * the line breaks.
+   */
+  scoreHistory: AuditReading[];
   /** Prepared changes still in `prepared` status. */
   preparedCount: number;
   /** Prepared changes whose latest validation failed. */
@@ -74,33 +139,53 @@ export type DashboardProject = {
 
 export type DashboardOverview = {
   projects: DashboardProject[];
-  /** Newest events across every project the caller owns. */
-  recentActivity: (AuditEventRecord & { projectId: string })[];
 };
 
 type ProjectRow = { id: string; name: string };
-type RepoRow = { project_id: string; full_name: string; default_branch: string };
+type RepoRow = {
+  project_id: string;
+  full_name: string;
+  default_branch: string;
+  private: boolean;
+};
 type AuditRow = {
   project_id: string;
+  product_profile_id: string | null;
   overall_score: number | null;
   assessed_dimensions: number | null;
   total_dimensions: number | null;
   created_at: string;
+  // The reproducibility set. Seven `not null` text columns, already on the
+  // table since Sprint 4 — no migration was needed to chart the trend.
+  schema_version: string;
+  audit_version: string;
+  evidence_pack_version: string;
+  prompt_version: string;
+  rubric_version: string;
+  provider: string;
+  model: string;
 };
 type SetRow = { id: string; project_id: string; created_at: string };
-type OpportunityRow = { opportunity_set_id: string };
+type OpportunityRow = {
+  opportunity_set_id: string;
+  rank: number;
+  title: string;
+  problem: string;
+  impact: DashboardMove["impact"];
+  effort: DashboardMove["effort"];
+};
 type PreparedRow = { id: string; project_id: string };
 type ValidationRow = { prepared_change_id: string; status: string; created_at: string };
-type EventRow = {
-  id: string;
-  project_id: string;
-  event_type: string;
-  created_at: string;
-  metadata: Record<string, unknown> | null;
-};
-
-/** How many events the dashboard's activity strip shows. */
-export const DASHBOARD_ACTIVITY_LIMIT = 8;
+/**
+ * One string rather than a concatenation: `supabase-js` reads the select list
+ * at the type level, and a `+` between two fragments erases the row type.
+ *
+ * The last seven are the reproducibility set. They ride along on a query that
+ * was already being made, which is the whole reason the Business Signal trend
+ * needed no migration.
+ */
+const AUDIT_COLUMNS =
+  "project_id, product_profile_id, overall_score, assessed_dimensions, total_dimensions, created_at, schema_version, audit_version, evidence_pack_version, prompt_version, rubric_version, provider, model";
 
 /**
  * Rows are fetched newest-first and reduced to the first per key. Postgres has
@@ -116,6 +201,21 @@ function firstPerKey<T>(rows: T[], key: (row: T) => string): Map<string, T> {
   return result;
 }
 
+/**
+ * The same rows, all of them, grouped rather than reduced. Input order is
+ * preserved inside each group, so a newest-first read stays newest-first.
+ */
+function groupPerKey<T>(rows: T[], key: (row: T) => string): Map<string, T[]> {
+  const result = new Map<string, T[]>();
+  for (const row of rows) {
+    const id = key(row);
+    const group = result.get(id);
+    if (group) group.push(row);
+    else result.set(id, [row]);
+  }
+  return result;
+}
+
 function countPerKey<T>(rows: T[], key: (row: T) => string): Map<string, number> {
   const result = new Map<string, number>();
   for (const row of rows) {
@@ -123,6 +223,29 @@ function countPerKey<T>(rows: T[], key: (row: T) => string): Map<string, number>
     result.set(id, (result.get(id) ?? 0) + 1);
   }
   return result;
+}
+
+/** Column names to field names. Nothing is dropped and nothing is derived. */
+function dashboardMove(row: OpportunityRow | undefined): DashboardMove | null {
+  if (!row) return null;
+  return { title: row.title, problem: row.problem, impact: row.impact, effort: row.effort };
+}
+
+/** Column names to field names. No rule lives here — see `score-series.ts`. */
+function auditReading(row: AuditRow): AuditReading {
+  return {
+    score: row.overall_score,
+    recordedAt: row.created_at,
+    contract: {
+      schemaVersion: row.schema_version,
+      auditVersion: row.audit_version,
+      evidencePackVersion: row.evidence_pack_version,
+      promptVersion: row.prompt_version,
+      rubricVersion: row.rubric_version,
+      provider: row.provider,
+      model: row.model,
+    },
+  };
 }
 
 export async function getDashboardOverview(
@@ -140,22 +263,22 @@ export async function getDashboardOverview(
   if (projectsError) throw projectsError;
 
   const projects = (projectRows ?? []) as ProjectRow[];
-  if (projects.length === 0) return { projects: [], recentActivity: [] };
+  if (projects.length === 0) return { projects: [] };
 
   const projectIds = projects.map((project) => project.id);
 
-  // Five `.in(...)` queries, run together, then two dependent ones below.
+  // Four `.in(...)` queries, run together, then two dependent ones below.
   // None of them scales with the number of projects — that is the design.
-  const [repos, audits, sets, prepared, events] = await Promise.all([
+  const [repos, audits, sets, prepared] = await Promise.all([
     supabase
       .from("repository_connections")
-      .select("project_id, full_name, default_branch")
+      .select("project_id, full_name, default_branch, private")
       .in("project_id", projectIds),
     supabase
       // `overall_score` is a column. The audit's JSONB document is never read
       // here: a dashboard does not need dimensions, evidence or findings.
       .from("business_readiness_audits")
-      .select("project_id, overall_score, assessed_dimensions, total_dimensions, created_at")
+      .select(AUDIT_COLUMNS)
       .in("project_id", projectIds)
       .eq("status", "completed")
       .order("created_at", { ascending: false }),
@@ -172,31 +295,19 @@ export async function getDashboardOverview(
       // The same filter the Prepared route lists by, so a count here and the
       // page behind it cannot disagree.
       .eq("status", "prepared"),
-    supabase
-      .from("audit_events")
-      .select("id, project_id, event_type, created_at, metadata")
-      .eq("user_id", userId)
-      .in("project_id", projectIds)
-      .order("created_at", { ascending: false })
-      .order("id", { ascending: false })
-      // Only the activity strip reads this, and it shows eight. The margin is
-      // for events that resolve to a project the caller no longer owns.
-      .limit(DASHBOARD_ACTIVITY_LIMIT * 3),
   ]);
 
-  for (const result of [repos, audits, sets, prepared, events]) {
+  for (const result of [repos, audits, sets, prepared]) {
     if (result.error) throw result.error;
   }
 
   const repoByProject = firstPerKey((repos.data ?? []) as RepoRow[], (row) => row.project_id);
-  const latestAuditByProject = firstPerKey(
-    (audits.data ?? []) as AuditRow[],
-    (row) => row.project_id,
-  );
+  const auditRows = (audits.data ?? []) as AuditRow[];
+  const latestAuditByProject = firstPerKey(auditRows, (row) => row.project_id);
+  const auditsByProject = groupPerKey(auditRows, (row) => row.project_id);
   const latestSetByProject = firstPerKey((sets.data ?? []) as SetRow[], (row) => row.project_id);
   const preparedRows = (prepared.data ?? []) as PreparedRow[];
   const preparedByProject = countPerKey(preparedRows, (row) => row.project_id);
-  const eventRows = (events.data ?? []) as EventRow[];
 
   // Two dependent queries, each still a single round trip for all projects.
   const setIds = [...latestSetByProject.values()].map((set) => set.id);
@@ -204,7 +315,15 @@ export async function getDashboardOverview(
 
   const [opportunities, validations] = await Promise.all([
     setIds.length > 0
-      ? supabase.from("business_opportunities").select("opportunity_set_id").in("opportunity_set_id", setIds)
+      ? supabase
+          .from("business_opportunities")
+          // The Move's own columns ride along on the query that was already
+          // counting these rows, so naming the top Move costs no round trip.
+          // Ordering by rank is what lets `firstPerKey` below return rank 1 by
+          // construction rather than by a second pass.
+          .select("opportunity_set_id, rank, title, problem, impact, effort")
+          .in("opportunity_set_id", setIds)
+          .order("rank", { ascending: true })
       : Promise.resolve({ data: [], error: null }),
     preparedIds.length > 0
       ? supabase
@@ -218,10 +337,10 @@ export async function getDashboardOverview(
   if (opportunities.error) throw opportunities.error;
   if (validations.error) throw validations.error;
 
-  const opportunityCountBySet = countPerKey(
-    (opportunities.data ?? []) as OpportunityRow[],
-    (row) => row.opportunity_set_id,
-  );
+  const opportunityRows = (opportunities.data ?? []) as OpportunityRow[];
+  const opportunityCountBySet = countPerKey(opportunityRows, (row) => row.opportunity_set_id);
+  // Ordered by rank above, so the first row for a set *is* rank 1.
+  const topMoveBySet = firstPerKey(opportunityRows, (row) => row.opportunity_set_id);
 
   // Only the *latest* run per change decides: an earlier failure followed by a
   // passing re-run is not a failure.
@@ -258,18 +377,18 @@ export async function getDashboardOverview(
       name: project.name,
       repositoryFullName: repo?.full_name ?? null,
       defaultBranch: repo?.default_branch ?? null,
+      repositoryPrivate: repo?.private ?? null,
+      productProfileId: audit?.product_profile_id ?? null,
       score: audit?.overall_score ?? null,
       scoreState,
+      topMove: (set && dashboardMove(topMoveBySet.get(set.id))) || null,
+      lastAnalysedAt: audit?.created_at ?? null,
+      scoreHistory: (auditsByProject.get(project.id) ?? []).map(auditReading),
       nextMovesCount: set ? (opportunityCountBySet.get(set.id) ?? 0) : null,
       preparedCount: preparedByProject.get(project.id) ?? 0,
       failedValidationCount: failedByProject.get(project.id) ?? 0,
     };
   });
 
-  const recentActivity = eventRows.slice(0, DASHBOARD_ACTIVITY_LIMIT).map((row) => ({
-    ...mapAuditEventRow(row),
-    projectId: row.project_id,
-  }));
-
-  return { projects: dashboardProjects, recentActivity };
+  return { projects: dashboardProjects };
 }

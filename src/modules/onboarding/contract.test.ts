@@ -12,7 +12,14 @@ const MIGRATION = readFileSync(
 );
 const ACTIONS = readFileSync(join(ONBOARDING_APP, "[projectId]/actions.ts"), "utf8");
 const PAGE = readFileSync(join(ONBOARDING_APP, "[projectId]/page.tsx"), "utf8");
-const APP_HOME = readFileSync(join(ROOT, "src/app/app/page.tsx"), "utf8");
+const APP_HOME = readFileSync(join(ROOT, "src/app/app/(account)/page.tsx"), "utf8");
+/*
+ * The dashboard's composition. CORE-6 split `/app` in two: the page owns the
+ * session, the reads and the redirects, and this owns everything that reaches
+ * the screen. The routing assertions below stay on the page; the *offer* to
+ * resume is rendered, so it is asserted here.
+ */
+const APP_HOME_VIEW = readFileSync(join(ROOT, "src/app/app/account-home.tsx"), "utf8");
 const ONBOARDING_SHELL = readFileSync(
   join(ONBOARDING_APP, "onboarding-shell.tsx"),
   "utf8",
@@ -83,7 +90,7 @@ describe("onboarding orchestrates canonical domains", () => {
   it("stops redirecting into onboarding once any project has finished setup", () => {
     expect(APP_HOME).toContain("!routing.hasCompleted");
     expect(APP_HOME).toContain("routing.hasCompleted ? routing.resumableProjectId : null");
-    expect(APP_HOME).toContain("Continue setup");
+    expect(APP_HOME_VIEW).toContain("Continue setup");
   });
 
   it("offers a way out of the shell exactly when leaving leads somewhere", () => {
@@ -128,6 +135,21 @@ describe("onboarding orchestrates canonical domains", () => {
     // The parked path is re-derived here, not trusted from the request.
     expect(completion).toContain("auditSurface(");
     expect(completion).toContain("if (!allowed) redirect(onboardingHref(projectId))");
+  });
+
+  /**
+   * Where a finished setup lands.
+   *
+   * It used to be the product workspace, which meant a founder had never seen
+   * the account dashboard after onboarding — and the workspace has no route to
+   * the level above it except the rail. Asserted rather than left to a code
+   * reading, because it is a product decision that a refactor could reverse
+   * without anything noticing.
+   */
+  it("finishes on the account dashboard, not inside the product", () => {
+    const completion = ACTIONS.slice(ACTIONS.indexOf("export async function completeOnboardingAction"));
+    expect(completion).toContain('redirect("/app")');
+    expect(completion).not.toContain("redirect(`/app/projects/${projectId}`)");
   });
 
   it("renders only real opportunity data and an honest no-move fallback", () => {

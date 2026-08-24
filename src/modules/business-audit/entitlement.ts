@@ -1,5 +1,5 @@
 import type { CreditUnits } from "@/modules/credits/units";
-import { MIN_SUPPORTED_AUDIT_CONTRACT_VERSION } from "./schema";
+import { SUPPORTED_AUDIT_CONTRACT_VERSIONS } from "./schema";
 
 /**
  * Free Business Audit entitlement (CORE-2 §16, §17).
@@ -134,16 +134,16 @@ export const AUDIT_START_LIMITS = {
 /**
  * Whether a stored audit is still an acceptable answer (CORE-2a.2 §25).
  *
- * A pure comparison, deliberately not "is it the newest version": an audit is
- * obsolete only when its contract is *below the supported minimum*, so raising
- * `AUDIT_CONTRACT_VERSION` alone does not invalidate anyone's result.
+ * A pure membership check, deliberately not "is it the newest version": an
+ * additive contract may raise `AUDIT_CONTRACT_VERSION` without invalidating a
+ * still-truthful older result.
  *
  * An audit with no recorded contract version is obsolete. That is not a
  * fallback — an audit that cannot say which contract it followed demonstrably
  * did not follow the current one.
  */
 export function isAuditContractCurrent(storedContractVersion: string | null | undefined): boolean {
-  return storedContractVersion === MIN_SUPPORTED_AUDIT_CONTRACT_VERSION;
+  return SUPPORTED_AUDIT_CONTRACT_VERSIONS.some((version) => version === storedContractVersion);
 }
 
 /** Everything the decision needs, gathered by the caller. */

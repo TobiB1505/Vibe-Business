@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { AuditEvidenceNotice } from "@/modules/business-audit/evidence-notice";
 
 /**
@@ -8,7 +9,20 @@ import type { AuditEvidenceNotice } from "@/modules/business-audit/evidence-noti
  * from its own panel, so the action here is a jump to that panel rather than a
  * second copy of a paid, irreversible action.
  */
-export function AuditEvidenceNotice({ notice }: { notice: AuditEvidenceNotice }) {
+export function AuditEvidenceNotice({
+  notice,
+  deepScanHref,
+}: {
+  notice: AuditEvidenceNotice;
+  /**
+   * Where the Deep Scan panel actually is.
+   *
+   * Was `href="#deep-scan"`, written when the workspace was one page. The UI-2
+   * route split moved Deep Scan onto its own URL and left the fragment behind,
+   * so the only action this notice offers has scrolled nowhere ever since.
+   */
+  deepScanHref: string;
+}) {
   if (notice.kind === "none") return null;
 
   if (notice.kind === "deep_scan_stale") {
@@ -32,12 +46,12 @@ export function AuditEvidenceNotice({ notice }: { notice: AuditEvidenceNotice })
         Your audit can still run, but a Deep Scan may provide additional product evidence.
       </p>
       {notice.canStartDeepScan && (
-        <a
-          href="#deep-scan"
+        <Link
+          href={deepScanHref}
           className="inline-block text-sm text-fg-prose underline underline-offset-2 hover:text-fg"
         >
           Run included Deep Scan
-        </a>
+        </Link>
       )}
     </div>
   );

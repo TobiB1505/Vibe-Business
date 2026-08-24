@@ -128,8 +128,8 @@ describe("run #7's shape: a task that applies to every public page (PART D)", ()
   });
 
   it("does not pull the signed-in area in merely because it exists (PART O)", () => {
-    expect(paths).not.toContain("src/app/app/page.tsx");
-    expect(paths).not.toContain("src/app/app/billing/page.tsx");
+    expect(paths).not.toContain("src/app/app/(account)/page.tsx");
+    expect(paths).not.toContain("src/app/app/(account)/billing/page.tsx");
   });
 
   it("states the surface as a fact, so the file list is not a sample of nothing", () => {

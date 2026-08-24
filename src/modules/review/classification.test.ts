@@ -27,7 +27,7 @@ function route(path: string, sourcePath: string) {
 /** A route table shaped like this repository's own. */
 const SURFACE: ResolvedExecutionSurface = {
   publicPages: [route("/", "src/app/page.tsx"), route("/privacy", "src/app/privacy/page.tsx")],
-  authenticatedPages: [route("/app", "src/app/app/page.tsx")],
+  authenticatedPages: [route("/app", "src/app/app/(account)/page.tsx")],
   authenticatedRoots: ["src/app/app"],
   corroboratedByLiveScan: true,
 };
@@ -113,7 +113,7 @@ describe("the route table is consulted before any structural rule", () => {
   });
 
   it("names an authenticated route as readily as a public one", () => {
-    const result = classifyReview(input({ changedPaths: ["src/app/app/page.tsx"] }));
+    const result = classifyReview(input({ changedPaths: ["src/app/app/(account)/page.tsx"] }));
 
     expect(result.classification).toBe("visual");
     expect(result.routes).toEqual(["/app"]);

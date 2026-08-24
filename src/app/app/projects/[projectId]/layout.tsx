@@ -24,7 +24,7 @@ import { getProjectWorkspaceCounts } from "@/modules/projects/workspace-counts";
  * ## What it loads, and why that list is short
  *
  * A layout runs on *every* route beneath it, so anything loaded here is paid
- * for by all seven sections. It therefore loads only what the frame itself
+ * for by all six sections. It therefore loads only what the frame itself
  * renders: the project's identity and its repository connection.
  *
  * The audit, opportunities, prepared changes, Deep Scan, impact and activity
@@ -86,14 +86,14 @@ export default async function ProjectLayout({
     label: section.label,
     href: projectSectionHref(project.id, section.id),
     count:
-      section.id === "next-moves"
+      section.id === "action-plan"
         ? countFor(counts.nextMoves)
-        : section.id === "prepared"
+        : section.id === "agent"
           ? countFor(counts.prepared)
           : null,
-    // Mint on Next moves: those are things Vibe is offering to act on.
-    // Prepared is a neutral queue count, not an invitation.
-    countTone: section.id === "next-moves" ? "accent" : "neutral",
+    // Mint on Action Plan: those are things Vibe is offering to act on.
+    // Agent is a neutral queue count, not an invitation.
+    countTone: section.id === "action-plan" ? "accent" : "neutral",
   }));
 
   return (

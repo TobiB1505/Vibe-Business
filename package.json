@@ -40,6 +40,7 @@
     "@vercel/analytics": "^2.0.1",
     "@vercel/sandbox": "^3.0.0",
     "@vercel/speed-insights": "^2.0.0",
+    "motion": "^13.1.1",
     "next": "16.3.0",
     "octokit": "5.0.5",
     "playwright-core": "1.62.1",

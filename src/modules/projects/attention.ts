@@ -102,7 +102,7 @@ function itemsForProject(project: DashboardProject): AttentionItem[] {
         "changes failed validation",
       )}`,
       detail: "Vibe built the change in an isolated environment and it did not pass.",
-      action: { label: "Review change", href: projectHref(project.id, "prepared") },
+      action: { label: "Review change", href: projectHref(project.id, "agent") },
     });
   }
 
@@ -119,7 +119,7 @@ function itemsForProject(project: DashboardProject): AttentionItem[] {
       projectName: project.name,
       title: `${waiting} prepared ${plural(waiting, "change is", "changes are")} waiting for you`,
       detail: "Nothing merges until you review and approve it.",
-      action: { label: "Review change", href: projectHref(project.id, "prepared") },
+      action: { label: "Review change", href: projectHref(project.id, "agent") },
     });
   }
 
@@ -137,7 +137,7 @@ function itemsForProject(project: DashboardProject): AttentionItem[] {
         "moves are",
       )} waiting`,
       detail: "Vibe ranked these from your latest business audit.",
-      action: { label: "Review moves", href: projectHref(project.id, "moves") },
+      action: { label: "Review moves", href: projectHref(project.id, "plan") },
     });
   }
 
@@ -164,7 +164,7 @@ function itemsForProject(project: DashboardProject): AttentionItem[] {
       projectName: project.name,
       title: "Never analysed",
       detail: "A business audit is what produces a score and the moves that follow from it.",
-      action: { label: "Run audit", href: projectHref(project.id, "score") },
+      action: { label: "Run audit", href: projectHref(project.id) },
     });
   }
 
@@ -181,4 +181,41 @@ export function buildAttentionItems(projects: DashboardProject[]): AttentionItem
       const name = a.projectName.localeCompare(b.projectName);
       return name !== 0 ? name : a.kind.localeCompare(b.kind);
     });
+}
+
+/**
+ * The products, most-urgent first (CORE-6).
+ *
+ * ## Why this lives here and not in the page
+ *
+ * Because it is the same judgement `buildAttentionItems` already makes, and
+ * making it twice is how two surfaces come to disagree about what is urgent.
+ * The account dashboard dropped its separate attention list — the information
+ * was per-product and already encoded in each card's action — and what the list
+ * uniquely contributed was this ordering. So the grid inherits it rather than
+ * losing it.
+ *
+ * A product with nothing pending sorts last, after every tier. That is the
+ * right place for it: it is not a problem, and it is not what the screen is
+ * for.
+ *
+ * Stable within a tier by name, so the same input always renders the same
+ * order and a reload never reshuffles the grid.
+ */
+export function orderProjectsByAttention(projects: DashboardProject[]): DashboardProject[] {
+  const rank = new Map<string, number>();
+
+  for (const item of buildAttentionItems(projects)) {
+    const current = rank.get(item.projectId);
+    const tier = TIER_ORDER[item.tier];
+    if (current === undefined || tier < current) rank.set(item.projectId, tier);
+  }
+
+  // One past the last tier, so "nothing pending" sorts after "setup".
+  const settled = Object.keys(TIER_ORDER).length;
+
+  return projects.slice().sort((a, b) => {
+    const byTier = (rank.get(a.id) ?? settled) - (rank.get(b.id) ?? settled);
+    return byTier !== 0 ? byTier : a.name.localeCompare(b.name);
+  });
 }

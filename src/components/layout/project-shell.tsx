@@ -9,68 +9,108 @@ import { cn } from "@/lib/utils/cn";
 /**
  * The project workspace shell.
  *
- * UI-0 built it, UI-1 wired it onto one anchored route, and UI-2 Part 2 gave
- * each section its own URL. The frame is the same in all three; what changed is
- * that the navigation now points at routes rather than at fragments.
+ * UI-0 built it, UI-1 wired it onto one anchored route, UI-2 Part 2 gave each
+ * section its own URL, and CORE-5 replaced what those sections are. The frame
+ * is the same in all four; what changed is the information architecture it
+ * carries.
  */
 
 /**
- * The seven sections of a project, in navigation order.
+ * The Command Center: six sections, in navigation order (UI-11).
  *
- * `segment` is the URL segment under `/app/projects/[projectId]`. Overview is
- * the index route and therefore has an empty segment — it is the project's own
- * URL, not a child of it.
+ * ## What changed, and why the shape did not
+ *
+ * The workspace used to name its sections after its own machinery — Overview,
+ * Business score, Next moves, Prepared, Deep Scan, Impact, Activity. Every one
+ * of those is a true description of what the route holds and none of them is
+ * how a founder thinks about their own business.
+ *
+ * Business Health now *is* Home. Diagnosis is the project's opening context,
+ * not a second destination beside a summary of the same diagnosis. The
+ * remaining sections continue the product's durable model (`PRODUCT.md` §11:
+ * Understand → Diagnose → Prioritize → Plan → Execute → Measure).
+ *
+ * `segment` is the URL segment under `/app/projects/[projectId]`. Home is the
+ * index route and therefore has an empty segment — it is the project's own URL,
+ * not a child of it.
  *
  * Each maps to the work it owns:
  *
- *   overview   — connection, intelligence summaries, business context
- *   score      — `business-audit-summary`
- *   moves      — `opportunities-panel`
- *   prepared   — `prepared-changes-section` (validation, preview, review,
- *                approval and merge all live inside a prepared change)
- *   deep-scan  — `deep-scan-panel`
- *   impact     — outcome + business measurement, via the project impact model
- *   activity   — the audit log
+ *   home         — the diagnosis, business map and what to do next
+ *   my-product   — the product profile, its sources and what it can do
+ *   action-plan  — `opportunities-panel` + `action-plan-panel`
+ *   agent        — `prepared-changes-section` (validation, preview, review,
+ *                  approval and merge all live inside a prepared change)
+ *   experiments  — what a merged change made measurable, via the project
+ *                  impact model
+ *   settings     — production URL, founder intent, the repository connection
  */
 export const PROJECT_SECTIONS = [
-  { id: "overview", label: "Overview", segment: "" },
+  { id: "home", label: "Home", segment: "" },
   {
-    // Second, immediately after Overview, because every section below reasons
-    // *from* this one: the audit, next moves and everything downstream all
-    // start from what the product is (CORE-1 §33).
-    id: "understanding",
-    label: "Product",
-    segment: "understanding",
+    // Second, immediately after Home, because every section below reasons
+    // *from* this one: the audit, the plan and everything downstream all start
+    // from what the product is (CORE-1 §33).
+    id: "my-product",
+    label: "My Product",
+    segment: "product",
   },
-  {
-    // The section keeps the id `business-audit` because the Opportunity engine
-    // publishes `BUSINESS_AUDIT_ANCHOR = "#business-audit"` and links a blocked
-    // set at it — that link is the only way out of that state. The route is
-    // `/score` (the product's word), and the anchor still resolves *on* that
-    // route, so the tested domain constant keeps working untouched.
-    // `project-sections.test.ts` fails if the two ever drift apart.
-    id: "business-audit",
-    label: "Business score",
-    segment: "score",
-  },
-  { id: "next-moves", label: "Next moves", segment: "moves" },
-  { id: "prepared", label: "Prepared", segment: "prepared" },
-  { id: "deep-scan", label: "Deep Scan", segment: "deep-scan" },
-  { id: "impact", label: "Impact", segment: "impact" },
-  { id: "activity", label: "Activity", segment: "activity" },
+  { id: "action-plan", label: "Action Plan", segment: "plan" },
+  { id: "agent", label: "Agent", segment: "agent" },
+  { id: "experiments", label: "Experiments", segment: "experiments" },
+  { id: "settings", label: "Settings", segment: "settings" },
+] as const;
+
+/**
+ * Reachable, anchored, and deliberately not in the rail (CORE-5).
+ *
+ * Two surfaces that are real routes and real sections but not destinations a
+ * founder navigates to as a step in the loop:
+ *
+ *   deep-scan — a *source* My Product learns from. Keeping it a route of its
+ *               own is also what keeps `maxDuration` off My Product: the
+ *               browser session it drives needs 120 seconds, and the
+ *               workspace-routes contract allows exactly one route to say so.
+ *   activity  — the history log. Home shows the most recent entries; the full
+ *               record lives under Settings, where a founder looks when they
+ *               want it rather than being handed it as a step.
+ *
+ * They are a separate table rather than a flag on the one above, so
+ * "the navigation" and "the routes" stay two different questions with two
+ * different answers. Nothing has to remember to filter.
+ */
+export const PROJECT_SUBSECTIONS = [
+  { id: "deep-scan", label: "Deep Scan", segment: "product/deep-scan" },
+  { id: "activity", label: "Activity", segment: "settings/activity" },
 ] as const;
 
 export type ProjectSectionId = (typeof PROJECT_SECTIONS)[number]["id"];
+export type ProjectSubsectionId = (typeof PROJECT_SUBSECTIONS)[number]["id"];
+
+/**
+ * Anything with a URL and an anchor in this workspace — the six in the rail,
+ * the two beneath them and the stable audit recovery anchor.
+ * `WorkspaceSection` takes this rather than `ProjectSectionId` so a child route
+ * keeps its heading, its `scroll-mt` and its `aria-labelledby` without being
+ * smuggled into the navigation.
+ */
+export type WorkspaceSectionId = ProjectSectionId | ProjectSubsectionId | "business-audit";
 
 /** The canonical URL of one workspace section. One place builds these. */
-export function projectSectionHref(projectId: string, sectionId: ProjectSectionId): string {
-  const section = PROJECT_SECTIONS.find((candidate) => candidate.id === sectionId);
+export function projectSectionHref(projectId: string, sectionId: WorkspaceSectionId): string {
   const base = `/app/projects/${projectId}`;
+  // Opportunity blocked states already publish this id as their only recovery
+  // path. It now lands on the canonical Home anchor rather than disappearing.
+  if (sectionId === "business-audit") return `${base}#business-audit`;
+
+  const section = [...PROJECT_SECTIONS, ...PROJECT_SUBSECTIONS].find(
+    (candidate) => candidate.id === sectionId,
+  );
   return section && section.segment ? `${base}/${section.segment}` : base;
 }
 
 /**
- * One prepared change, addressed within the Prepared page (UI-S2 §27).
+ * One prepared change, addressed within the Agent page (UI-S2 §27).
  *
  * A fragment rather than a route, because a prepared change is not a page — it
  * is one card in a list whose whole point is that every artifact stays
@@ -220,7 +260,7 @@ export function WorkspaceSection({
   actions,
   children,
 }: {
-  id: ProjectSectionId;
+  id: WorkspaceSectionId;
   title: string;
   description?: ReactNode;
   actions?: ReactNode;

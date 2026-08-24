@@ -17,6 +17,8 @@ import {
   BLOCKED_MESSAGES,
   CAPABILITY_LABELS,
   blockedAction,
+  blockedActionHref,
+  type BlockedActionDestinations,
   type OpportunityActionState,
 } from "@/modules/execution/view";
 import type { PreparedDiff } from "@/modules/execution/diff";
@@ -132,6 +134,7 @@ export function PrepareChangePanel({
   branchUrl,
   validationSummary,
   preparedHref,
+  blockedDestinations,
 }: {
   projectId: string;
   opportunityId: string;
@@ -143,6 +146,13 @@ export function PrepareChangePanel({
   validationSummary: ValidationSummary | null;
   /** Where the prepared change lives, so preparing leads somewhere (UI-S2 §26). */
   preparedHref: string;
+  /**
+   * Where each blocked state sends someone. Supplied by the route, because the
+   * workspace's segments are a UI fact and neither this panel nor the domain
+   * should hard-code them — which is how the previous two hard-coded fragments
+   * came to point at nothing.
+   */
+  blockedDestinations: BlockedActionDestinations;
 }) {
   const action = prepareChangeAction.bind(null, projectId, opportunityId);
   const [state, formAction, pending] = useActionState(action, initialState);
@@ -314,16 +324,24 @@ export function PrepareChangePanel({
 
   if (actionState.kind === "blocked") {
     const action = blockedAction(actionState.reason);
+    const blockedHref = blockedActionHref(action, blockedDestinations);
     return (
       <div className="space-y-2 border-t border-line-2 pt-3">
         <p className="text-sm text-fg-secondary">{BLOCKED_MESSAGES[actionState.reason]}</p>
-        {action.kind !== "none" && (
-          <a
-            href={action.kind === "enable_github_write" ? "#github-access" : "#business-audit"}
+        {/*
+          A route, resolved by the domain from the destinations this route
+          supplied. It used to be one of two bare fragments — `#github-access`,
+          which names no element anywhere in the app, and `#business-audit`,
+          which names a section on a different route — so the only way out of a
+          blocked state has scrolled nowhere since the workspace was split.
+        */}
+        {action.kind !== "none" && blockedHref && (
+          <Link
+            href={blockedHref}
             className="inline-block text-sm text-fg-prose underline underline-offset-2 hover:text-fg"
           >
             {BLOCKED_ACTION_LABELS[action.kind]}
-          </a>
+          </Link>
         )}
       </div>
     );

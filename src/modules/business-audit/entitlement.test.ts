@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { MIN_SUPPORTED_AUDIT_CONTRACT_VERSION } from "./schema";
+import {
+  AUDIT_CONTRACT_VERSION,
+  MIN_SUPPORTED_AUDIT_CONTRACT_VERSION,
+} from "./schema";
 import { creditsToUnits } from "@/modules/credits/units";
 import {
   AUDIT_START_LIMITS,
@@ -309,8 +312,9 @@ describe("system contract refresh", () => {
 });
 
 describe("isAuditContractCurrent", () => {
-  it("accepts exactly the supported minimum", () => {
+  it("accepts the supported additive contract range", () => {
     expect(isAuditContractCurrent(MIN_SUPPORTED_AUDIT_CONTRACT_VERSION)).toBe(true);
+    expect(isAuditContractCurrent(AUDIT_CONTRACT_VERSION)).toBe(true);
   });
 
   it.each([null, undefined, "", "business-audit-contract-v1"])(

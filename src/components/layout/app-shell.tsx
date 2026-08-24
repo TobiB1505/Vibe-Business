@@ -8,9 +8,20 @@ import { signOut } from "@/modules/auth/actions";
 /**
  * The signed-in application shell (UI-0).
  *
- * A sticky, blurred top bar over the app frame, then the content well. This is
- * the chrome for account-level screens — the project list, the connect flow —
- * as opposed to `ProjectShell`, which adds a project's own sidebar.
+ * A sticky, blurred top bar over the app frame, then the content well.
+ *
+ * ## What still uses it
+ *
+ * One screen: the `/app` 404. CORE-6 moved the account level onto
+ * `AccountShell`'s rail and the project level was already on `ProjectShell`,
+ * so this is no longer "the chrome for account-level screens" — it is the
+ * chrome for the one boundary that sits outside both.
+ *
+ * That boundary cannot move into the `(account)` route group: a `notFound()`
+ * raised by the project layout bubbles *past* that segment, so the file has to
+ * stay at `src/app/app/not-found.tsx`, where no rail layout wraps it. A bare
+ * page there would read as a different application, which is what this
+ * prevents.
  *
  * ## The Credit balance
  *

@@ -81,9 +81,14 @@
  * the "not". So the two examples are gone, replaced by a structural test the
  * model can apply to its own sentence — could this have been written before the
  * scan? — and positive examples only.
+ *
+ * v10 adds an evidence-grounded diagnostic score to each business lens. The
+ * score is an ordinal expression of the already-required health judgment, not
+ * a second overall score and never an input to materiality. Null remains the
+ * only honest value when the lens is unclear, founder-blocked or unsupported.
  */
 
-export const RUBRIC_VERSION = "business-readiness-rubric-v9" as const;
+export const RUBRIC_VERSION = "business-readiness-rubric-v10" as const;
 
 export const BUSINESS_READINESS_RUBRIC = `# Business Readiness Rubric (${RUBRIC_VERSION})
 
@@ -228,11 +233,11 @@ from the label.
 9. \`scalability\` — What happens to cost, margin and the founder's own time if
    this grows?
 
-### Assess each lens — two separate judgments
+### Assess each lens — health score and materiality stay separate
 
-For each lens give: its **health**, its **materiality**, a short internal
-summary, the evidence ids behind it, and — when it is blocked — what only the
-founder could tell you.
+For each lens give: its **health**, its evidence-grounded diagnostic **score**,
+its **materiality**, a short internal summary, the evidence ids behind it, and
+— when it is blocked — what only the founder could tell you.
 
 These two are independent, and keeping them apart is the single most important
 thing in this section.
@@ -244,6 +249,18 @@ Use \`weak\` when something is genuinely poor. Do not reach for \`unclear\`
 to soften it — \`unclear\` means the evidence does not settle the question, not
 that the answer is uncomfortable. A business with no way to take payments has
 \`weak\` revenue health, not unclear.
+
+**\`score\`** — a 0–100 diagnostic index for health, never for urgency:
+
+- \`strong\`: 70–100
+- \`adequate\`: 50–69
+- \`weak\`: 0–49
+- \`unclear\` or \`blocked_by_missing_context\`: null
+
+Use a number only when cited evidence supports an assessment. A real zero means
+the evidence positively shows total absence; missing or inconclusive evidence
+is null. The score must agree with health. It does not contribute to the five
+dimension overall score, and it must never raise or lower materiality.
 
 **\`materiality\`** — when this area needs attention.
 \`now\`, \`soon\`, \`later\`, \`not_material\`, \`unknown\`.

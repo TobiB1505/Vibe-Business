@@ -222,11 +222,26 @@ function validateLenses(value: unknown, known: Set<string>, dropped: Set<string>
     if (lens === null || !BUSINESS_LENSES.includes(lens) || seen.has(lens)) continue;
     seen.add(lens);
 
+    const health = LENS_HEALTH.includes(raw.health as LensHealth)
+      ? (raw.health as LensHealth)
+      : "unclear";
+    const evidenceIds = filterEvidenceIds(raw.evidenceIds, known, dropped);
+    const numericScore =
+      typeof raw.score === "number" && Number.isFinite(raw.score)
+        ? Math.max(0, Math.min(100, Math.round(raw.score)))
+        : null;
+    const scoreMatchesHealth =
+      numericScore !== null &&
+      ((health === "strong" && numericScore >= 70) ||
+        (health === "adequate" && numericScore >= 50 && numericScore <= 69) ||
+        (health === "weak" && numericScore <= 49));
+
     assessments.push({
       lens,
-      health: LENS_HEALTH.includes(raw.health as LensHealth)
-        ? (raw.health as LensHealth)
-        : "unclear",
+      health,
+      // A contradictory number is less trustworthy than an explicit absence.
+      // Old audits omit the field and therefore land here as null as well.
+      score: evidenceIds.length > 0 && scoreMatchesHealth ? numericScore : null,
       // `unknown`, not a middle value. A materiality we could not read is a
       // materiality we do not know, and defaulting it to something plausible
       // would let an unparsed lens silently compete for a top-three slot.
@@ -234,7 +249,7 @@ function validateLenses(value: unknown, known: Set<string>, dropped: Set<string>
         ? (raw.materiality as LensMateriality)
         : "unknown",
       summary: cleanText(raw.summary, 400) ?? "No reasoning was recorded for this lens.",
-      evidenceIds: filterEvidenceIds(raw.evidenceIds, known, dropped),
+      evidenceIds,
       missingContext: cleanStringList(raw.missingContext, MAX_LIST_ITEMS),
     });
   }
