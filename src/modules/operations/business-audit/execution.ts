@@ -13,7 +13,7 @@ import { recordAIUsage } from "@/modules/ai/usage";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import {
   EVIDENCE_PACK_V3_VERSION,
-  buildEvidencePackV3,
+  buildEvidencePackV4,
   trimEvidencePackV3,
   type BuildEvidencePackV3Input,
 } from "@/modules/business-audit/evidence-v3";
@@ -512,7 +512,9 @@ export async function countTokensStep(
   if (!sources.ok) return sources;
 
   const config = BUSINESS_READINESS_AUDIT_CONFIG;
-  const pack = buildEvidencePackV3(sources.sources);
+  // The newest pack, matching what `runBusinessReadinessAudit` will build --
+  // this counts the request that will actually be billed (ADR 0044).
+  const pack = buildEvidencePackV4(sources.sources);
   const counted = await deps.provider.countInputTokens(buildAuditRequest(pack, config));
   if (!counted.ok) return { ok: false, failureCode: counted.error };
 

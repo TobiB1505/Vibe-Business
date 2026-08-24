@@ -1,3 +1,4 @@
+import { EVIDENCE_PACK_V4_VERSION } from "./evidence-v3";
 import { AUTHENTICATED_SURFACE_LABELS } from "@/modules/authenticated-product-intelligence/schema";
 import type { AuthenticatedSurfaceId } from "@/modules/authenticated-product-intelligence/schema";
 import { PRODUCT_SURFACE_LABELS, SEO_LABELS } from "@/modules/live-product-intelligence/human-view";
@@ -235,7 +236,31 @@ function curated(source: string, detail: string): EvidenceIdDescription {
  * reader who sees "A sign of Stripe in your code" knows what they are looking
  * at, which is the whole job.
  */
-function describeFamily(prefix: string, body: string, source: string): EvidenceIdDescription | null {
+/**
+ * How much a *present-shaped* surface id is allowed to claim.
+ *
+ * Through v3 the same id was minted whether the surface was found or not, so
+ * the strongest honest sentence names the check — "Payments, checked in your
+ * code" (Sprint 0073, after the inverted label reached founders). From v4 the
+ * id is only minted when the surface *was* found, so it may finally say so.
+ *
+ * An unknown or absent version reads as the older, weaker claim. That
+ * asymmetry is deliberate: understating a v4 citation costs a little precision,
+ * while overstating a v3 one is the inversion 0073 existed to fix.
+ */
+function presentSuffix(packVersion: string | null, where: "code" | "live site"): string {
+  const preposition = where === "code" ? "in your code" : "on your live site";
+  return packVersion === EVIDENCE_PACK_V4_VERSION
+    ? `, ${preposition}`
+    : `, checked ${preposition}`;
+}
+
+function describeFamily(
+  prefix: string,
+  body: string,
+  source: string,
+  packVersion: string | null,
+): EvidenceIdDescription | null {
   if (prefix === "repo") {
     if (body.startsWith("surface.")) {
       const id = body.slice("surface.".length);
@@ -248,7 +273,22 @@ function describeFamily(prefix: string, body: string, source: string): EvidenceI
       // surface produced the id, and the founder was shown "Payments, in your
       // code" as a `curated` fact. Naming the check rather than its outcome is
       // the only honest sentence available from a polarity-free id.
-      if (isRepoSurface(id)) return curated(source, `${BUSINESS_SURFACE_LABELS[id]}, checked in your code`);
+      if (isRepoSurface(id))
+        return curated(source, `${BUSINESS_SURFACE_LABELS[id]}${presentSuffix(packVersion, "code")}`);
+    }
+
+    /*
+     * The absence half, which only a `business-evidence.v4` pack can mint.
+     *
+     * No version is needed to read it. `repo.surface_absent.<id>` has meant
+     * exactly one thing in every pack that has ever emitted it, which is the
+     * point of putting polarity in the namespace: the ambiguity that forced the
+     * hedge above cannot arise here.
+     */
+    if (body.startsWith("surface_absent.")) {
+      const id = body.slice("surface_absent.".length);
+      if (isRepoSurface(id))
+        return curated(source, `${BUSINESS_SURFACE_LABELS[id]} — not found in your code`);
     }
     if (body.startsWith("framework."))
       return curated(source, `Built with ${humanize(body.slice("framework.".length))}`);
@@ -284,7 +324,14 @@ function describeFamily(prefix: string, body: string, source: string): EvidenceI
       // Same polarity-free id as `repo.surface.*` above, same inversion, same
       // reason for naming the check instead of its outcome.
       if (isLiveSurface(id))
-        return curated(source, `${PRODUCT_SURFACE_LABELS[id]}, checked on your live site`);
+        return curated(source, `${PRODUCT_SURFACE_LABELS[id]}${presentSuffix(packVersion, "live site")}`);
+    }
+
+    /** The absence half. See the `repo.surface_absent.` note above. */
+    if (body.startsWith("surface_absent.")) {
+      const id = body.slice("surface_absent.".length);
+      if (isLiveSurface(id))
+        return curated(source, `${PRODUCT_SURFACE_LABELS[id]} — not found on your live site`);
     }
 
     /*
@@ -310,7 +357,15 @@ function describeFamily(prefix: string, body: string, source: string): EvidenceI
   return null;
 }
 
-export function describeEvidenceId(id: string): EvidenceIdDescription {
+export function describeEvidenceId(
+  id: string,
+  /**
+   * The pack version of the row this citation was stored on, when the caller
+   * knows it. Omitting it is safe and is the common case — it only costs the
+   * extra precision `presentSuffix` describes.
+   */
+  packVersion: string | null = null,
+): EvidenceIdDescription {
   const separator = id.indexOf(".");
   const prefix = separator === -1 ? "" : id.slice(0, separator);
   const rest = separator === -1 ? id : id.slice(separator + 1);
@@ -344,7 +399,7 @@ export function describeEvidenceId(id: string): EvidenceIdDescription {
       return curated(source, `Seen inside your product: ${humanize(body.slice("signal.".length))}`);
   }
 
-  const family = describeFamily(prefix, body, source);
+  const family = describeFamily(prefix, body, source, packVersion);
   if (family) {
     return observed
       ? family

@@ -1,7 +1,7 @@
 import type { AIProvider, AIUsage, ProviderErrorDiagnostic, StructuredRequest } from "@/modules/ai/provider";
 import type { OperationConfig } from "@/modules/ai/operations";
 import {
-  buildEvidencePackV3,
+  buildEvidencePackV4,
   evidenceIdSetV3,
   renderEvidencePackV3,
   trimEvidencePackV3,
@@ -135,7 +135,19 @@ export function buildAuditRequest(pack: EvidencePackV3, config: OperationConfig)
 export async function runBusinessReadinessAudit(input: RunAuditInput): Promise<AuditRunOutcome> {
   const { provider, config } = input;
 
-  let pack = buildEvidencePackV3(input);
+  /*
+   * A fresh audit is written under the newest pack (ADR 0044).
+   *
+   * This is the bump. From here a new audit's surface citations carry their own
+   * polarity, so the "Why?" disclosure can say "Payments, in your code" and
+   * mean it — the sentence Sprint 0073 had to delete because the v3 id was
+   * minted for a found surface and a missing one alike.
+   *
+   * Existing audits are untouched and stay readable: they record their own
+   * version, every consumer rebuilds their pack at it, and
+   * `describeEvidenceId` reads a v3 citation under v3 rules.
+   */
+  let pack = buildEvidencePackV4(input);
   let request = buildAuditRequest(pack, config);
 
   // Cost gate: count before spending (Sprint 4 §14). The provider's own
