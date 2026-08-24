@@ -134,8 +134,10 @@ test.describe("the conclusion comes first", () => {
     await expect(page.getByText("Subscription", { exact: true })).toBeVisible();
     await expect(page.getByText("Brand & visual identity", { exact: true })).toBeVisible();
     await expect(page.getByText("Vibe learns from", { exact: true })).toBeVisible();
-    await expect(page.getByText(/\d+ supported capabilities/)).toBeVisible();
-    await expect(page.getByText("3/4 sources available")).toBeVisible();
+    const capabilities = page.getByText("supported capabilities", { exact: true }).locator("..");
+    const sources = page.getByText("sources available", { exact: true }).locator("..");
+    await expect(capabilities).toContainText(/\d+/);
+    await expect(sources).toContainText("3/4");
   });
 
   test("never shows a count of files, routes or detections", async ({ page }) => {

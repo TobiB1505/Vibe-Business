@@ -9,7 +9,6 @@ import { MonoLabel, SectionHeader } from "@/components/ui/typography";
 import { Notice } from "@/components/ui/states";
 import { cn } from "@/lib/utils/cn";
 import { describeEvidenceId } from "@/modules/business-audit/evidence-labels";
-import { BUSINESS_AUDIT_ANCHOR } from "@/modules/opportunities/view";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { useOperationPoll } from "@/lib/client/use-operation-poll";
 import {
@@ -403,7 +402,7 @@ export function ActionPlanPanel({
 
   const blockHref =
     blockNotice?.target === "business_audit"
-      ? `${auditHref}${BUSINESS_AUDIT_ANCHOR}`
+      ? auditHref
       : blockNotice?.target === "product_understanding"
         ? understandingHref
         : null; // "next_moves" lives on this same page — no navigation needed.

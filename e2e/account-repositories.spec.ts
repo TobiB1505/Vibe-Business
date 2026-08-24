@@ -19,8 +19,8 @@ test.describe("Repositories", () => {
 
     await page.getByRole("searchbox", { name: "Search repositories" }).fill("develop");
     await expect(page).toHaveURL(/q=develop/);
-    await expect(page.getByText("Landing Pro")).toBeVisible();
-    await expect(page.getByText("Team Monitor")).toBeVisible();
+    await expect(page.getByRole("link", { name: "Landing Pro", exact: true })).toBeVisible();
+    await expect(page.getByRole("link", { name: "Team Monitor", exact: true })).toBeVisible();
 
     await page.getByRole("button", { name: "Clear repository search" }).click();
     await page.getByRole("combobox", { name: "Filter repository visibility" }).selectOption("public");
