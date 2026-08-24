@@ -325,3 +325,52 @@ describe("an observed price says so", () => {
     expect(observed?.priority).toBe(2);
   });
 });
+
+/**
+ * A signal the homepage has and other pages do not.
+ *
+ * Minted only when there is a genuine shortfall: a signal the homepage lacks
+ * is already reported by `live.seo.<id>_missing`, and one every page carries
+ * is not a finding at all.
+ */
+describe("seo coverage reaches the model", () => {
+  const withCoverage = (
+    present: boolean,
+    coverage: { pagesWith: number; pagesInspected: number } | undefined,
+  ) => {
+    const snapshot = fakeLiveSnapshot();
+    return buildLiveEvidence({
+      ...snapshot,
+      seoSignals: snapshot.seoSignals.map((signal) =>
+        signal.id === "title" ? { ...signal, present, coverage } : signal,
+      ),
+    }).map((entry) => entry.id);
+  };
+
+  it("names the shortfall", () => {
+    expect(withCoverage(true, { pagesWith: 1, pagesInspected: 4 })).toContain(
+      "live.seo.coverage.title",
+    );
+  });
+
+  it("says nothing when every page carries it", () => {
+    expect(withCoverage(true, { pagesWith: 4, pagesInspected: 4 })).not.toContain(
+      "live.seo.coverage.title",
+    );
+  });
+
+  /**
+   * A signal the homepage lacks is already `live.seo.title_missing`. Adding a
+   * coverage id there would report the same gap twice, in weaker words.
+   */
+  it("does not duplicate an outright absence", () => {
+    const ids = withCoverage(false, { pagesWith: 0, pagesInspected: 4 });
+
+    expect(ids).toContain("live.seo.title_missing");
+    expect(ids).not.toContain("live.seo.coverage.title");
+  });
+
+  it("mints nothing for a snapshot that predates coverage", () => {
+    expect(withCoverage(true, undefined)).not.toContain("live.seo.coverage.title");
+  });
+});

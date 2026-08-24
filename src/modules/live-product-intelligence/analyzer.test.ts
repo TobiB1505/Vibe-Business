@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { analyzeLiveProduct } from "./analyzer";
-import { buildPricingSignals } from "./signals";
+import { buildPricingSignals, buildSeoSignals } from "./signals";
 import type { FetchedPage } from "./crawler";
 import type { ParsedOffer } from "./html";
 import type { ObservedPrice } from "./pricing-text";
@@ -391,5 +391,75 @@ describe("buildPricingSignals — observed prices", () => {
     });
 
     expect(signals.declaredCurrencies).toEqual([]);
+  });
+});
+
+/**
+ * The half the homepage could not see.
+ *
+ * Eight of the ten SEO signals are document-level, and all eight were read from
+ * the homepage alone — so a site whose homepage has a description and whose
+ * four other pages do not was reported as entirely fine.
+ */
+describe("buildSeoSignals — coverage", () => {
+  const page = (finalPath: string, html: Partial<FetchedPage["html"]>): FetchedPage =>
+    ({
+      requestedPath: finalPath,
+      finalPath,
+      status: 200,
+      bytes: 100,
+      depth: finalPath === "/" ? 0 : 1,
+      redirected: false,
+      html: { openGraph: {}, ...html } as unknown as FetchedPage["html"],
+    }) as FetchedPage;
+
+  const seo = (pages: FetchedPage[]) =>
+    buildSeoSignals({ homepage: pages[0], pages, robotsTxtPresent: true, sitemapPresent: true });
+
+  const find = (pages: FetchedPage[], id: string) =>
+    seo(pages).find((signal) => signal.id === id);
+
+  it("counts how many inspected pages carry a signal", () => {
+    const signal = find(
+      [
+        page("/", { title: "Acme" }),
+        page("/pricing", { title: "Pricing" }),
+        page("/about", { title: null }),
+      ],
+      "title",
+    );
+
+    expect(signal?.coverage).toEqual({ pagesWith: 2, pagesInspected: 3 });
+  });
+
+  /**
+   * The property that keeps stored citations meaning what they meant.
+   *
+   * `live.seo.title` and `live.seo.title_missing` are minted straight off
+   * `present`, and those are stored in four durable places. Redefining it to
+   * mean "every page" would silently change what every one of them asserted.
+   */
+  it("leaves present meaning the homepage", () => {
+    const signal = find([page("/", { title: "Acme" }), page("/about", { title: null })], "title");
+
+    expect(signal?.present).toBe(true);
+    expect(signal?.coverage?.pagesWith).toBe(1);
+  });
+
+  /**
+   * robots.txt and sitemap.xml are properties of the site, not of a page. A
+   * per-page count there would be a category error dressed as a number.
+   */
+  it.each(["robots_txt", "sitemap"])("does not put a page count on %s", (id) => {
+    expect(find([page("/", { title: "Acme" })], id)?.coverage).toBeUndefined();
+  });
+
+  it("reports full coverage when every page carries it", () => {
+    const signal = find(
+      [page("/", { hasViewportMeta: true }), page("/pricing", { hasViewportMeta: true })],
+      "viewport",
+    );
+
+    expect(signal?.coverage).toEqual({ pagesWith: 2, pagesInspected: 2 });
   });
 });

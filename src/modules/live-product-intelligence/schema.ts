@@ -132,8 +132,33 @@ export type SeoSignalId =
 export type SeoSignal = {
   id: SeoSignalId;
   name: string;
+  /**
+   * Whether the **homepage** carries it.
+   *
+   * Deliberately unchanged. `buildLiveEvidence` mints `live.seo.<id>` and
+   * `live.seo.<id>_missing` straight off this boolean, and those citations are
+   * stored in four durable places — so redefining `present` to mean "every
+   * page" would quietly change what every already-stored citation asserted.
+   * The wider fact goes in `coverage` instead, where it is additive.
+   */
   present: boolean;
   evidence: LiveEvidence[];
+  /**
+   * How many inspected pages carry it (document-level signals only).
+   *
+   * Optional, so a snapshot taken before this existed still parses and rebuilds
+   * to the same evidence ids. Absent on `robots_txt` and `sitemap`, where it
+   * would be meaningless: those are properties of the site, not of a page.
+   *
+   * This is the half the homepage could not see. A site whose homepage has a
+   * description and whose four other pages do not was reported as fine.
+   */
+  coverage?: SeoSignalCoverage;
+};
+
+export type SeoSignalCoverage = {
+  pagesWith: number;
+  pagesInspected: number;
 };
 
 export type ConversionSignals = {

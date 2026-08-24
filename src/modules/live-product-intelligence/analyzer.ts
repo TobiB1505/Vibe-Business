@@ -107,6 +107,7 @@ export async function analyzeLiveProduct(
     productSurfaces: surfaces,
     seoSignals: buildSeoSignals({
       homepage,
+      pages: outcome.pages,
       robotsTxtPresent: outcome.robots.exists,
       sitemapPresent: outcome.sitemapPresent,
     }),

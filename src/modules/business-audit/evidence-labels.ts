@@ -398,6 +398,19 @@ function describeFamily(
       return curated(source, "A number on your page that looks like a price");
     }
 
+    /*
+     * A signal the homepage has and other pages do not.
+     *
+     * Its own namespace level rather than a fifth absence suffix — see the
+     * minting site. The label names the shortfall rather than the signal,
+     * because "A page title" over a coverage finding would read as though the
+     * title were the problem.
+     */
+    if (body.startsWith("seo.coverage.")) {
+      const id = body.slice("seo.coverage.".length);
+      if (isSeoSignal(id)) return curated(source, `${SEO_LABELS[id]} — missing on some of your pages`);
+    }
+
     if (body.startsWith("seo.")) {
       const id = body.slice("seo.".length);
       if (isSeoSignal(id)) return curated(source, SEO_LABELS[id]);

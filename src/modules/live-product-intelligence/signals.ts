@@ -12,6 +12,7 @@ import type {
   ProductSurfaceId,
   ProductSurfaceSignal,
   SeoSignal,
+  SeoSignalCoverage,
   SeoSignalId,
   SiteMetadata,
 } from "./schema";
@@ -75,19 +76,59 @@ export function buildSiteMetadata(homepage: FetchedPage | undefined): SiteMetada
   };
 }
 
+/**
+ * Whether one page carries one document-level signal.
+ *
+ * The single definition of "has it", used for the homepage's `present` and for
+ * every other page's coverage count. Two definitions would be two ways for the
+ * same signal to be true, which is how a headline and its own detail end up
+ * disagreeing on screen.
+ */
+const HAS_SIGNAL: Partial<Record<SeoSignalId, (page: FetchedPage) => boolean>> = {
+  title: (page) => Boolean(page.html.title),
+  meta_description: (page) => Boolean(page.html.metaDescription),
+  canonical: (page) => Boolean(page.html.canonical),
+  language: (page) => Boolean(page.html.language),
+  viewport: (page) => page.html.hasViewportMeta,
+  open_graph: (page) => Object.keys(page.html.openGraph).length > 0,
+  structured_data: (page) => page.html.hasStructuredData,
+  robots_meta: (page) => Boolean(page.html.robotsMeta),
+};
+
 export function buildSeoSignals(input: {
   homepage: FetchedPage | undefined;
+  /** Every page the crawl read, homepage included. Coverage is counted here. */
+  pages: FetchedPage[];
   robotsTxtPresent: boolean;
   sitemapPresent: boolean;
 }): SeoSignal[] {
-  const { homepage, robotsTxtPresent, sitemapPresent } = input;
+  const { homepage, pages, robotsTxtPresent, sitemapPresent } = input;
   const path = homepage?.finalPath ?? "/";
+
+  /*
+   * Coverage answers the question the homepage could not.
+   *
+   * `present` stays what it was — the homepage — because the evidence ids
+   * minted from it are already stored in four durable places. This is the
+   * additive half: a site whose homepage has a description and whose four
+   * other pages do not was reported as entirely fine.
+   *
+   * Omitted for `robots_txt` and `sitemap`, which are properties of the site
+   * rather than of a page, so a per-page count would be a category error
+   * dressed as a number.
+   */
+  const coverageOf = (id: SeoSignalId): SeoSignalCoverage | undefined => {
+    const has = HAS_SIGNAL[id];
+    if (!has || pages.length === 0) return undefined;
+    return { pagesWith: pages.filter((page) => has(page)).length, pagesInspected: pages.length };
+  };
 
   const signal = (id: SeoSignalId, present: boolean, evidence: LiveEvidence[] = []): SeoSignal => ({
     id,
     name: SEO_SIGNAL_NAMES[id],
     present,
     evidence,
+    ...(coverageOf(id) ? { coverage: coverageOf(id) } : {}),
   });
 
   const pageEvidence = (detail?: string): LiveEvidence[] =>

@@ -391,6 +391,32 @@ export function buildLiveEvidence(
   }
 
   for (const signal of snapshot.seoSignals) {
+    /*
+     * The half the homepage could not see (Sprint 0079).
+     *
+     * `present` is the homepage's answer and stays that way — the ids minted
+     * from it are stored in four durable places. This is the additive fact: a
+     * site whose homepage has a description and whose four other pages do not
+     * was reported as entirely fine.
+     *
+     * `live.seo.coverage.<id>` rather than a `_partial` suffix, deliberately.
+     * Four absence dialects already exist and Sprint 0073 named that as too
+     * many; a fifth would be the same mistake with a new word. A namespace
+     * level also stays clear of `live-premise.ts`, which selects the ids it
+     * revalidates by `endsWith("_missing")`.
+     */
+    const coverage = signal.coverage;
+    if (coverage && signal.present && coverage.pagesWith < coverage.pagesInspected) {
+      items.push(
+        item(
+          `live.seo.coverage.${slug(signal.id)}`,
+          "live_product",
+          `${signal.name}: on your homepage, missing on ${coverage.pagesInspected - coverage.pagesWith} of ${coverage.pagesInspected} pages Vibe read`,
+          2,
+        ),
+      );
+    }
+
     items.push(
       item(
         `live.seo.${slug(signal.id)}${signal.present ? "" : "_missing"}`,
