@@ -1,6 +1,6 @@
 # Sprint 0079 — what a site says it charges
 
-Status: **The declared half shipped. The observed half is named and not built.** No migration, no pack version bump.
+Status: **Both halves shipped, kept apart. No migration, no pack version bump.**
 
 ## The entry, verified
 
@@ -45,9 +45,23 @@ Both guards are proven red: removing the reached-check, or reading the field unc
 
 The pack builder is deterministic given its inputs. A snapshot gaining a field changes the pack because the *input* changed, not the builder — and the audit identity already hashes the snapshot **id**, so a new snapshot invalidates reuse correctly while an old one rebuilds byte-identically. The field is optional for exactly that reason: the Opportunity Engine and the Action Planner rebuild a stored audit's pack from its snapshots, and a builder reading it unconditionally would mint ids the audit never cited.
 
+## The observed half, and why it is a separate list
+
+Most sites publish no `Offer` at all, so the declared path alone is honest and almost always silent. `pricing-text.ts` reads the visible text as well — and the two never merge.
+
+**There is no currency code on an observation.** `$` is not USD; it is also CAD, AUD, NZD, HKD and more, and a page writing `$29` has not said which. Mapping the glyph to a code would invent the half of the fact the page withheld — the same mistake `repo.surface.payments` made about presence, one namespace over. The token is recorded **as written**.
+
+**The evidence says which source it came from.** *"Seen on your page, not stated as a price"*, at priority 2 below the declared ones at 3, so trimming drops these first. Nothing stops a model treating a weak fact as a strong one except the words the fact arrives in.
+
+**Three separations are pinned as tests**: an observation never joins `declaredPricePoints`, an observed zero cannot claim a free tier, and an observed token never enters the declared currency list. Merging them turns exactly those red.
+
+**The parser refuses more than it accepts.** Plain integers, a two-digit decimal after either separator, and three-digit grouping by either separator. One digit after a separator — `29,9` — is ambiguous across locales and is dropped rather than guessed at.
+
+A test caught the parser silently normalising `"29..99"` into `29.99`: a price invented out of a typo, which is the one outcome this module exists to avoid. And tags are replaced with a space rather than removed, so `<td>10</td><td>29</td>` cannot fuse into a price that was never on the page.
+
 ## What this does not do
 
-**No text-observed prices.** This is the significant limitation, and it bounds the feature's reach: **most sites publish no `Offer` at all**, so for many founders this will find nothing. That is honest silence rather than a wrong number, but it is silence. The observed half — a currency token and an amount near a heading, recorded at lower confidence and never merged into the declared list — is the natural next commit.
+**No plan name on an observed price.** Attaching one would need DOM proximity, and a regex guessing which heading a number belongs to would produce confident nonsense — "Enterprise: $9". The observation records what it can stand behind: an amount, a token, a period and a path.
 
 **The homepage-only half of the entry is untouched.** SEO signals and the brand block still read the homepage alone. Named here, still open.
 
