@@ -13,7 +13,7 @@
  * "prioritize" will otherwise sort by whatever number it was shown.
  */
 
-export const OPPORTUNITY_RUBRIC_VERSION = "opportunity-rubric-v2" as const;
+export const OPPORTUNITY_RUBRIC_VERSION = "opportunity-rubric-v3" as const;
 
 export const OPPORTUNITY_RUBRIC = `# Prioritization Rubric (${OPPORTUNITY_RUBRIC_VERSION})
 
@@ -41,12 +41,12 @@ Specifically forbidden:
   specifically supports it for this product;
 - anything requiring knowledge you do not have — traffic, conversion rates,
   competitors, market size, funding, team;
-- restating a dimension score as an opportunity ("improve retention" is a
+- restating a lens score as an opportunity ("improve retention" is a
   score, not a piece of work).
 
 ## Ordering — sequencing beats severity
 
-Do NOT order by which dimension scored lowest.
+Do NOT order by which lens scored lowest.
 
 Order by what should genuinely happen first. Consider:
 
@@ -58,7 +58,7 @@ Order by what should genuinely happen first. Consider:
    Start from that. An opportunity addressing a \`now\` area normally outranks
    one addressing a \`later\` area, **even when the later area scored worse** —
    a prototype with no privacy policy and no decided revenue model has a worse
-   readiness score and a more urgent revenue question. A low dimension score is
+   readiness score and a more urgent revenue question. A low lens score is
    severity; materiality is timing, and this list is about timing.
 
    You may still deviate where the evidence justifies it. Say so in the
@@ -100,7 +100,7 @@ These are three separate judgements. Do not collapse them.
 
 Absence of evidence is not a licence to invent a fix.
 
-If a dimension could not be assessed, the honest opportunity is usually to
+If an area could not be assessed, the honest opportunity is usually to
 **make it measurable**, not to build a feature for a problem nobody has
 confirmed exists. "No retention data is available" supports instrumenting
 retention. It does not support building a loyalty programme.

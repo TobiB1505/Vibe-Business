@@ -59,7 +59,6 @@ function conclusion(
     explanation: "What it means.",
     whyItMatters: null,
     evidenceIds,
-    dimensions: ["product"],
     lenses,
     tone: "critical",
     confidence: "high",

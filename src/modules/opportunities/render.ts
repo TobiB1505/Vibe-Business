@@ -1,9 +1,23 @@
-import type { AuditDimensionId, BusinessReadinessAudit } from "@/modules/business-audit/schema";
-import { DIMENSION_LABELS } from "@/modules/business-audit/schema";
+import type { BusinessReadinessAudit } from "@/modules/business-audit/schema";
+
+/**
+ * The five retired dimension ids, exactly as stored v6/v7 audits spell them
+ * (ADR 0050 §5). Local on purpose: the audit schema no longer exports the
+ * vocabulary, and this file reads it only out of stored records.
+ */
+type LegacyDimensionId = "product" | "monetization" | "distribution" | "conversion" | "retention";
+
+const LEGACY_DIMENSION_LABELS: Record<LegacyDimensionId, string> = {
+  product: "Product",
+  monetization: "Monetization",
+  distribution: "Distribution",
+  conversion: "Conversion",
+  retention: "Retention",
+};
 
 /** The per-dimension shape stored v6/v7 audits carry in their JSONB (ADR 0050). */
 type LegacyDimension = {
-  id: AuditDimensionId;
+  id: LegacyDimensionId;
   score: number | null;
   assessmentStatus: string;
   confidence: string;
@@ -125,7 +139,7 @@ function renderAudit(audit: BusinessReadinessAudit): string {
   for (const dimension of legacyDimensions) {
     const score = dimension.score === null ? "not scored" : `${dimension.score}/100`;
     lines.push(
-      `### ${DIMENSION_LABELS[dimension.id]} — ${score}, ${dimension.assessmentStatus}, ${dimension.confidence} confidence`,
+      `### ${LEGACY_DIMENSION_LABELS[dimension.id] ?? dimension.id} — ${score}, ${dimension.assessmentStatus}, ${dimension.confidence} confidence`,
     );
     lines.push(dimension.summary);
     if (dimension.strengths.length > 0) lines.push(`Strengths: ${dimension.strengths.join("; ")}`);

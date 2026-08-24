@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AUDIT_DIMENSIONS, BUSINESS_LENSES } from "./schema";
+import { BUSINESS_LENSES } from "./schema";
 import { validateAuditOutput } from "./validate";
 import { buildModelOutput } from "./test-support";
 import { normalizeAnthropicAuditOutput } from "./wire-schema";
@@ -149,19 +149,5 @@ describe("a model scoring from evidence that was never observable", () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.audit.synthesis?.lenses[0]!.score).toBe(30);
-  });
-});
-
-describe("the deprecated dimension vocabulary", () => {
-  it("still exports the five ids for the opportunity engine, and nothing else", () => {
-    // Removed entirely in the follow-up change (ADR 0050 §5). This pins that
-    // the deprecation did not silently grow.
-    expect([...AUDIT_DIMENSIONS]).toEqual([
-      "product",
-      "monetization",
-      "distribution",
-      "conversion",
-      "retention",
-    ]);
   });
 });

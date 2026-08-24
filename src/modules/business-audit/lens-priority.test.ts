@@ -63,7 +63,6 @@ function blocker(
     explanation,
     whyItMatters: "It holds the business back.",
     evidenceIds: ["live.site.title"],
-    dimensions: ["product"],
     lenses,
     tone: "critical",
     confidence: "high",

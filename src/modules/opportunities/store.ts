@@ -2,7 +2,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { AuditDimensionId, Confidence } from "@/modules/business-audit/schema";
+import type { BusinessLens, Confidence } from "@/modules/business-audit/schema";
 import type {
   BusinessOpportunity,
   ExecutionReadiness,
@@ -79,8 +79,9 @@ type OpportunityRow = {
   effort: OpportunityEffort;
   confidence: Confidence;
   category: OpportunityCategory;
-  primary_dimension: AuditDimensionId;
-  secondary_dimensions: AuditDimensionId[] | null;
+  /** Null on rows stored before business-opportunity.v3 (dimension-attributed). */
+  primary_lens: BusinessLens | null;
+  secondary_lenses: BusinessLens[] | null;
   evidence_ids: string[] | null;
   execution_type: ExecutionType;
   execution_readiness: ExecutionReadiness;
@@ -91,7 +92,7 @@ const SET_COLUMNS =
   "id, project_id, business_audit_id, input_hash, status, opportunity_count, validation_notes, failure_code, engine_version, prompt_version, rubric_version, evidence_pack_version, provider, model, created_at, completed_at";
 
 const OPPORTUNITY_COLUMNS =
-  "id, opportunity_set_id, rank, source_conclusion_key, title, problem, why_now, impact, effort, confidence, category, primary_dimension, secondary_dimensions, evidence_ids, execution_type, execution_readiness, dependencies";
+  "id, opportunity_set_id, rank, source_conclusion_key, title, problem, why_now, impact, effort, confidence, category, primary_lens, secondary_lenses, evidence_ids, execution_type, execution_readiness, dependencies";
 
 function mapSet(row: SetRow, opportunities: BusinessOpportunity[] = []): StoredOpportunitySet {
   return {
@@ -127,8 +128,8 @@ function mapOpportunity(row: OpportunityRow): BusinessOpportunity {
     effort: row.effort,
     confidence: row.confidence,
     category: row.category,
-    primaryDimension: row.primary_dimension,
-    secondaryDimensions: row.secondary_dimensions ?? [],
+    primaryLens: row.primary_lens,
+    secondaryLenses: row.secondary_lenses ?? [],
     evidenceIds: row.evidence_ids ?? [],
     executionType: row.execution_type,
     executionReadiness: row.execution_readiness,
@@ -347,8 +348,10 @@ export async function completeOpportunitySetRun(
       effort: opportunity.effort,
       confidence: opportunity.confidence,
       category: opportunity.category,
-      primary_dimension: opportunity.primaryDimension,
-      secondary_dimensions: opportunity.secondaryDimensions,
+      // The retired dimension columns are left to their defaults: null and
+      // '[]'. They carry attribution only on rows written before v3.
+      primary_lens: opportunity.primaryLens,
+      secondary_lenses: opportunity.secondaryLenses,
       evidence_ids: opportunity.evidenceIds,
       execution_type: opportunity.executionType,
       execution_readiness: opportunity.executionReadiness,

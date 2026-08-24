@@ -56,9 +56,9 @@ function inputFor(provider: FakeProvider, options: { withDeepScan?: boolean } = 
 describe("the happy path", () => {
   it("produces a fully versioned set from exactly one provider call", async () => {
     const provider = providerReturning([
-      fakeWireOpportunity({ rank: 1, category: "monetization", primaryDimension: "monetization" }),
-      fakeWireOpportunity({ rank: 2, category: "positioning", primaryDimension: "product" }),
-      fakeWireOpportunity({ rank: 3, category: "analytics", primaryDimension: "retention" }),
+      fakeWireOpportunity({ rank: 1, category: "monetization", primaryLens: "revenue_economics" }),
+      fakeWireOpportunity({ rank: 2, category: "positioning", primaryLens: "offer" }),
+      fakeWireOpportunity({ rank: 3, category: "analytics", primaryLens: "retention" }),
     ]);
 
     const outcome = await runOpportunityGeneration(inputFor(provider));
@@ -66,9 +66,9 @@ describe("the happy path", () => {
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;
 
-    expect(outcome.set.schemaVersion).toBe("business-opportunity-set.v2");
-    expect(outcome.set.engineVersion).toBe("opportunity-engine-v2");
-    expect(outcome.set.promptVersion).toBe("opportunity-prompt-v2");
+    expect(outcome.set.schemaVersion).toBe("business-opportunity-set.v3");
+    expect(outcome.set.engineVersion).toBe("opportunity-engine-v3");
+    expect(outcome.set.promptVersion).toBe("opportunity-prompt-v3");
     expect(outcome.set.rubricVersion).toBe(OPPORTUNITY_RUBRIC_VERSION);
     expect(outcome.set.auditId).toBe("audit_1");
     expect(outcome.set.opportunities).toHaveLength(3);
@@ -88,11 +88,11 @@ describe("the happy path", () => {
 
   it("never exceeds the maximum even when the model overruns", async () => {
     const categories = ["monetization", "positioning", "analytics", "seo", "onboarding", "trust", "acquisition"] as const;
-    const dimensions = ["monetization", "product", "retention", "distribution", "conversion", "product", "distribution"] as const;
+    const lenses = ["revenue_economics", "offer", "retention", "acquisition", "conversion", "offer", "acquisition"] as const;
 
     const provider = providerReturning(
       categories.map((category, index) =>
-        fakeWireOpportunity({ rank: index + 1, category, primaryDimension: dimensions[index] }),
+        fakeWireOpportunity({ rank: index + 1, category, primaryLens: lenses[index] }),
       ),
     );
 
@@ -226,7 +226,7 @@ describe("cost discipline (§26)", () => {
 });
 
 describe("prioritization fixtures (§39)", () => {
-  it("keeps a measurement opportunity for a dimension with missing evidence", async () => {
+  it("keeps a measurement opportunity for a lens with missing evidence", async () => {
     // The honest response to "no retention data" is to make it measurable —
     // not to invent a feature for a problem nobody has confirmed (§16).
     const provider = providerReturning([
@@ -234,7 +234,7 @@ describe("prioritization fixtures (§39)", () => {
         rank: 1,
         title: "Instrument retention measurement",
         category: "analytics",
-        primaryDimension: "retention",
+        primaryLens: "retention",
         executionType: "code_change",
         executionReadiness: "ready",
         evidenceIds: ["repo.analysis.completeness", "live.crawl.pages_inspected"],
@@ -246,20 +246,20 @@ describe("prioritization fixtures (§39)", () => {
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;
     expect(outcome.set.opportunities[0].executionType).toBe("code_change");
-    expect(outcome.set.opportunities[0].primaryDimension).toBe("retention");
+    expect(outcome.set.opportunities[0].primaryLens).toBe("retention");
   });
 
-  it("does not let the lowest-scoring dimension dictate rank 1", async () => {
+  it("does not let the lowest-scoring lens dictate rank 1", async () => {
     // Monetization scores 10 in the fixture audit. A prerequisite ordering
     // that puts product clarity first must survive the pipeline untouched —
     // nothing in the application re-sorts by score (§11).
     const provider = providerReturning([
-      fakeWireOpportunity({ rank: 1, title: "Clarify what your product is", category: "positioning", primaryDimension: "product" }),
+      fakeWireOpportunity({ rank: 1, title: "Clarify what your product is", category: "positioning", primaryLens: "offer" }),
       fakeWireOpportunity({
         rank: 2,
         title: "Define a monetization path",
         category: "monetization",
-        primaryDimension: "monetization",
+        primaryLens: "revenue_economics",
         dependencies: ["Opportunity 1"],
       }),
     ]);
@@ -268,7 +268,7 @@ describe("prioritization fixtures (§39)", () => {
 
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;
-    expect(outcome.set.opportunities[0].primaryDimension).toBe("product");
+    expect(outcome.set.opportunities[0].primaryLens).toBe("offer");
     expect(outcome.set.opportunities[1].dependencies).toContain("Opportunity 1");
   });
 

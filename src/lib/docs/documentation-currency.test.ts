@@ -298,6 +298,13 @@ const RETIRED_CLAIMS: readonly { path: string; claim: string; retiredBy: string 
       "(declare each item shape once) survives; the dimension block does not.",
   },
   {
+    path: "src/modules/action-plans/README.md",
+    claim: "the five scored dimensions",
+    retiredBy:
+      "ADR 0050 §5 — the planner's evidence selection excludes the audit's *other lens " +
+      "assessments*; there is no dimension layer left to exclude.",
+  },
+  {
     path: "docs/ROADMAP.md",
     claim: "**Repository state:**",
     retiredBy:
