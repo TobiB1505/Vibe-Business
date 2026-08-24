@@ -27,7 +27,7 @@ import {
   getActionPlanById,
 } from "@/modules/action-plans/store";
 import {
-  buildEvidencePackV3,
+  buildEvidencePackForVersion,
   type BuildEvidencePackV3Input,
   type EvidencePackV3,
 } from "@/modules/business-audit/evidence-v3";
@@ -216,7 +216,8 @@ async function loadSources(
   return {
     ok: true,
     source: source.source,
-    pack: buildEvidencePackV3(sources),
+    // The audit's own version, so its citations resolve. See `evidence-v3.ts`.
+    pack: buildEvidencePackForVersion(sources, audit.evidencePackVersion),
     repository: repositorySnapshot.result,
     auditId: audit.id,
     opportunitySetId: opportunitySet.id,
