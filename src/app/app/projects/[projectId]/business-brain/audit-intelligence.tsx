@@ -724,7 +724,12 @@ export function AuditIntelligence({
           </footer>
         </motion.section>
 
-        <aside className="grid min-w-0" aria-live="polite" aria-label={node ? `${node.label} details` : "What matters now"}>
+        <aside
+          className="grid min-w-0"
+          aria-live="polite"
+          aria-label={node ? `${node.label} details` : "What matters now"}
+          data-testid={node ? undefined : "current-priorities"}
+        >
           <AnimatePresence mode="sync" initial>
             {node ? (
               <SelectedPanel
