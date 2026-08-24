@@ -25,6 +25,13 @@ the accidental upper-left void while preserving materiality as the sizing rule.
 Motion for React owns focus entry, tab presence and grid transition; reduced
 motion keeps the same content with short opacity changes only.
 
+The refinement pass replaces typographic placeholder marks with larger,
+purpose-drawn SVG symbols across planets, insight cards and scoring context.
+Overview and selected detail now overlap in one reserved grid area during a
+synchronized crossfade, removing the visible black frame between states. The
+three-column focus composition also begins at the real 1440px desktop viewport,
+keeping the scoring rail beside the detail surface instead of dropping it below.
+
 ## Verification boundary
 
 The repository security policy prevented starting the local Next.js server

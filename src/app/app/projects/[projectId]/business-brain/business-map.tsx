@@ -204,7 +204,7 @@ function NodeButton({
           nodeSize(node),
         )}
       >
-        <BusinessLensIcon lens={node.id} className="business-brain-planet-icon size-5" />
+        <BusinessLensIcon lens={node.id} className="business-brain-planet-icon size-6" />
         <span className="text-fg mt-1.5 max-w-[6.5rem] text-[0.72rem] leading-[1.1] font-semibold tracking-[-0.018em]">{node.label}</span>
         <span className="text-fg mt-1 text-[1.35rem] leading-none font-semibold tracking-[-0.04em] tabular-nums">{node.score ?? "—"}</span>
         <span className={cn("mt-1.5 flex items-center gap-1.5 text-[0.65rem] font-medium", statusTone(node))}>
@@ -242,7 +242,7 @@ function MobileBrain({ view, selected, onSelect }: {
                 data-selected={selected === node.id ? "true" : "false"}
                 className="business-brain-planet flex size-36 cursor-pointer flex-col items-center justify-center rounded-full border text-center outline-none focus-visible:ring-2 focus-visible:ring-mint"
               >
-                <BusinessLensIcon lens={node.id} className="business-brain-planet-icon size-5" />
+                <BusinessLensIcon lens={node.id} className="business-brain-planet-icon size-6" />
                 <span className="text-fg mt-2 max-w-28 text-xs font-semibold leading-tight">{node.label}</span>
                 <span className="text-fg mt-1 text-xl font-semibold tabular-nums">{node.score ?? "—"}</span>
                 <span className={cn("mt-1 text-[0.65rem]", statusTone(node))}>{node.healthLabel}</span>

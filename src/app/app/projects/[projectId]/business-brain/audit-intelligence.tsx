@@ -15,13 +15,80 @@ import type {
 } from "@/modules/projects/business-brain-view";
 import { BusinessLensIcon, BusinessMap } from "./business-map";
 
-const PANEL_TRANSITION = { type: "spring" as const, stiffness: 220, damping: 26 };
+const PANEL_TRANSITION = {
+  type: "spring" as const,
+  stiffness: 300,
+  damping: 30,
+  mass: 0.72,
+};
+const PANEL_OPACITY_TRANSITION = { duration: 0.16, ease: "easeOut" as const };
 const DETAIL_TABS = ["overview", "evidence", "signals", "history"] as const;
 type DetailTab = (typeof DETAIL_TABS)[number];
 
 function ArrowIcon({ direction = "right" }: { direction?: "right" | "up" | "down" }) {
   const glyph = direction === "up" ? "↑" : direction === "down" ? "↓" : "→";
   return <span aria-hidden="true">{glyph}</span>;
+}
+
+function BrainIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+    >
+      <path d="M9.5 4.5A3.5 3.5 0 0 0 6 8v1a3 3 0 0 0-1 5.8V16a3.5 3.5 0 0 0 4.5 3.3V4.5ZM14.5 4.5A3.5 3.5 0 0 1 18 8v1a3 3 0 0 1 1 5.8V16a3.5 3.5 0 0 1-4.5 3.3V4.5ZM9.5 9H7.7M14.5 9h1.8M9.5 14H7M14.5 14H17" />
+    </svg>
+  );
+}
+
+function DetailInsightIcon({ kind }: { kind: "found" | "matter" | "connected" | "move" }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={cn(
+        "flex size-12 shrink-0 items-center justify-center rounded-full border",
+        kind === "found" || kind === "move"
+          ? "border-coral/25 bg-coral/[0.08] text-coral"
+          : kind === "matter"
+            ? "border-amber/25 bg-amber/[0.08] text-amber"
+            : "border-mint/25 bg-mint/[0.08] text-mint",
+      )}
+    >
+      {kind === "found" && (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" className="size-6">
+          <circle cx="10.5" cy="10.5" r="5.5" />
+          <path d="m15 15 4.5 4.5" />
+          <path d="M8.5 10.5h4" />
+        </svg>
+      )}
+      {kind === "matter" && (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="size-6">
+          <path d="M9 18h6M10 21h4" />
+          <path d="M8.2 14.4A6.2 6.2 0 1 1 15.8 14.4C14.7 15.2 14.2 16 14 17h-4c-.2-1-.7-1.8-1.8-2.6Z" />
+          <path d="M12 2V1M4.9 4.9l-.8-.8M19.1 4.9l.8-.8" />
+        </svg>
+      )}
+      {kind === "connected" && (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="size-6">
+          <circle cx="6" cy="12" r="2.5" />
+          <circle cx="18" cy="6" r="2.5" />
+          <circle cx="18" cy="18" r="2.5" />
+          <path d="m8.3 10.8 7.4-3.6M8.3 13.2l7.4 3.6" />
+        </svg>
+      )}
+      {kind === "move" && (
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" className="size-6">
+          <path d="M5 21V4M5 5h10l-1.8 3L15 11H5" />
+        </svg>
+      )}
+    </span>
+  );
 }
 
 function actionHref(
@@ -161,9 +228,7 @@ function ScoringContext({ view }: { view: BusinessBrainView }) {
   return (
     <section className="business-brain-side-card flex gap-4 p-5">
       <span aria-hidden="true" className="border-mint/20 bg-mint/5 text-mint flex size-11 shrink-0 items-center justify-center rounded-full border">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" className="size-6">
-          <path d="M9.5 4.5A3.5 3.5 0 0 0 6 8v1a3 3 0 0 0-1 5.8V16a3.5 3.5 0 0 0 4.5 3.3V4.5ZM14.5 4.5A3.5 3.5 0 0 1 18 8v1a3 3 0 0 1 1 5.8V16a3.5 3.5 0 0 1-4.5 3.3V4.5ZM9.5 9H7.7M14.5 9h1.8M9.5 14H7M14.5 14H17" />
-        </svg>
+        <BrainIcon className="size-6" />
       </span>
       <div className="flex min-w-0 flex-col gap-2">
         <h3 className="text-fg text-sm font-semibold">How we score your business</h3>
@@ -184,21 +249,30 @@ function DefaultPanel({
   hasMoves,
   onExplore,
   entranceDelay,
+  reducedMotion,
 }: {
   view: BusinessBrainView;
   movesHref: string;
   hasMoves: boolean;
   onExplore: (lens: BusinessLens) => void;
   entranceDelay: number;
+  reducedMotion: boolean;
 }) {
   return (
     <motion.div
       key="default"
-      className="flex flex-col gap-4"
-      initial={{ opacity: 0, x: 18 }}
+      layout
+      className="col-start-1 row-start-1 flex min-w-0 flex-col gap-4"
+      initial={reducedMotion ? { opacity: 0, x: 0 } : { opacity: 0, x: 10 }}
       animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: -12 }}
-      transition={{ ...PANEL_TRANSITION, delay: entranceDelay }}
+      exit={reducedMotion ? { opacity: 0, x: 0 } : { opacity: 0, x: -7 }}
+      transition={{
+        opacity: reducedMotion
+          ? { duration: 0.08 }
+          : { ...PANEL_OPACITY_TRANSITION, delay: entranceDelay },
+        x: reducedMotion ? { duration: 0.08 } : { ...PANEL_TRANSITION, delay: entranceDelay },
+        layout: reducedMotion ? { duration: 0.08 } : PANEL_TRANSITION,
+      }}
     >
       <section className="business-brain-side-card flex flex-col gap-4 p-4 sm:p-5">
         <h2 className="text-fg text-base font-semibold tracking-[-0.02em]">What matters now</h2>
@@ -290,31 +364,24 @@ function SelectedPanel({
     tabRefs.current[next]?.focus();
   }
 
-  const insightIcon = (kind: "found" | "matter" | "connected" | "move") => (
-    <span
-      aria-hidden="true"
-      className={cn(
-        "flex size-10 shrink-0 items-center justify-center rounded-full border",
-        kind === "found" || kind === "move"
-          ? "border-coral/20 bg-coral/[0.07] text-coral"
-          : kind === "matter"
-            ? "border-amber/20 bg-amber/[0.07] text-amber"
-            : "border-mint/20 bg-mint/[0.07] text-mint",
-      )}
-    >
-      {kind === "found" ? "⌕" : kind === "matter" ? "✦" : kind === "connected" ? "⌘" : "⚑"}
-    </span>
-  );
-
   return (
     <motion.section
       key={node.id}
       layout
-      className="business-brain-focus-panel flex min-h-[40rem] min-w-0 flex-col overflow-hidden"
-      initial={{ opacity: 0, x: 22, scale: 0.985 }}
+      className="business-brain-focus-panel col-start-1 row-start-1 flex min-h-[40rem] min-w-0 flex-col overflow-hidden"
+      initial={
+        reducedMotion ? { opacity: 0, x: 0, scale: 1 } : { opacity: 0, x: 12, scale: 0.992 }
+      }
       animate={{ opacity: 1, x: 0, scale: 1 }}
-      exit={{ opacity: 0, x: -14, scale: 0.99 }}
-      transition={PANEL_TRANSITION}
+      exit={
+        reducedMotion ? { opacity: 0, x: 0, scale: 1 } : { opacity: 0, x: -8, scale: 0.996 }
+      }
+      transition={{
+        opacity: reducedMotion ? { duration: 0.08 } : PANEL_OPACITY_TRANSITION,
+        x: reducedMotion ? { duration: 0.08 } : PANEL_TRANSITION,
+        scale: reducedMotion ? { duration: 0.08 } : PANEL_TRANSITION,
+        layout: reducedMotion ? { duration: 0.08 } : PANEL_TRANSITION,
+      }}
       data-testid="selected-lens-detail"
     >
       <div className="flex items-start justify-between gap-4 px-5 pt-5 sm:px-6 sm:pt-6">
@@ -379,7 +446,7 @@ function SelectedPanel({
           {activeTab === "overview" && (
             <>
               <div className="business-brain-insight-card flex gap-3 p-4">
-                {insightIcon("found")}
+                <DetailInsightIcon kind="found" />
                 <div className="min-w-0">
                   <h3 className="text-fg text-sm font-semibold">What we found</h3>
                   <p className="text-fg-secondary mt-1.5 text-sm leading-relaxed">
@@ -389,7 +456,7 @@ function SelectedPanel({
               </div>
 
               <div className="business-brain-insight-card flex gap-3 p-4">
-                {insightIcon("matter")}
+                <DetailInsightIcon kind="matter" />
                 <div className="min-w-0">
                   <h3 className="text-fg text-sm font-semibold">Why it matters</h3>
                   <p className="text-fg-secondary mt-1.5 text-sm leading-relaxed">
@@ -399,7 +466,7 @@ function SelectedPanel({
               </div>
 
               <div className="business-brain-insight-card flex gap-3 p-4">
-                {insightIcon("connected")}
+                <DetailInsightIcon kind="connected" />
                 <div className="min-w-0 flex-1">
                   <h3 className="text-fg text-sm font-semibold">Connected areas</h3>
                   <p className="text-fg-muted mt-1 text-xs">Areas joined by the same audit conclusion.</p>
@@ -424,7 +491,7 @@ function SelectedPanel({
 
               <div className={cn("relative mt-1 overflow-hidden rounded-2xl border p-4", node.health === "weak" ? "border-coral/60 bg-[radial-gradient(circle_at_100%_0%,rgb(255_122_92/0.12),transparent_44%),rgb(255_122_92/0.035)]" : "border-mint/40 bg-mint/[0.035]")}>
                 <div className="flex items-start gap-3">
-                  {insightIcon("move")}
+                  <DetailInsightIcon kind="move" />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <h3 className="text-fg text-sm font-semibold">What to do next</h3>
@@ -531,7 +598,9 @@ function SelectedScoringRail({ node }: { node: BusinessBrainNode }) {
     <motion.aside className="flex min-w-0 flex-col gap-4" aria-label={`How ${node.label} was scored`} initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} transition={{ ...PANEL_TRANSITION, delay: 0.06 }}>
       <section className="business-brain-focus-rail p-5">
         <div className="flex items-center gap-3">
-          <span aria-hidden="true" className="border-mint/20 bg-mint/[0.06] text-mint flex size-10 items-center justify-center rounded-full border">⌘</span>
+          <span aria-hidden="true" className="border-mint/25 bg-mint/[0.07] text-mint flex size-12 shrink-0 items-center justify-center rounded-full border">
+            <BrainIcon className="size-6" />
+          </span>
           <h2 className="text-fg text-sm font-semibold">How we scored this</h2>
         </div>
         <dl className="border-line-1 mt-5 flex flex-col divide-y divide-line-1 border-y">
@@ -589,16 +658,20 @@ export function AuditIntelligence({
   return (
     <LayoutGroup>
       <motion.div
+        layout
         className={cn(
           "grid min-w-0 gap-5 xl:items-start",
           node
-            ? "xl:grid-cols-[minmax(0,1.15fr)_minmax(25rem,0.85fr)] min-[1760px]:grid-cols-[minmax(32rem,1.12fr)_minmax(27rem,0.9fr)_minmax(13rem,0.42fr)]"
+            ? "xl:grid-cols-[minmax(0,1.15fr)_minmax(25rem,0.85fr)] min-[1440px]:grid-cols-[minmax(29rem,1.12fr)_minmax(25rem,0.92fr)_minmax(12rem,0.48fr)]"
             : "xl:grid-cols-[minmax(0,1.62fr)_minmax(21rem,0.72fr)]",
         )}
         data-testid="audit-intelligence"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
-        transition={{ duration: reducedMotion ? 0.08 : 0.2 }}
+        transition={{
+          opacity: { duration: reducedMotion ? 0.08 : 0.2 },
+          layout: reducedMotion ? { duration: 0.08 } : PANEL_TRANSITION,
+        }}
       >
         <motion.section
           layout
@@ -651,8 +724,8 @@ export function AuditIntelligence({
           </footer>
         </motion.section>
 
-        <aside aria-live="polite" aria-label={node ? `${node.label} details` : "What matters now"}>
-          <AnimatePresence mode="wait" initial>
+        <aside className="grid min-w-0" aria-live="polite" aria-label={node ? `${node.label} details` : "What matters now"}>
+          <AnimatePresence mode="sync" initial>
             {node ? (
               <SelectedPanel
                 key={node.id}
@@ -670,6 +743,7 @@ export function AuditIntelligence({
                 hasMoves={hasMoves}
                 onExplore={select}
                 entranceDelay={hasInteracted || reducedMotion ? 0 : 0.92}
+                reducedMotion={reducedMotion}
               />
             )}
           </AnimatePresence>
@@ -679,7 +753,7 @@ export function AuditIntelligence({
           {node && (
             <motion.div
               key={`scoring-${node.id}`}
-              className="xl:col-start-2 xl:row-start-2 min-[1760px]:col-start-3 min-[1760px]:row-start-1"
+              className="xl:col-start-2 xl:row-start-2 min-[1440px]:col-start-3 min-[1440px]:row-start-1"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}

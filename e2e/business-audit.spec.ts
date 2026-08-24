@@ -89,7 +89,13 @@ test.describe("signature Business Brain", () => {
 
     const mapBox = await page.getByTestId("audit-map-panel").boundingBox();
     const detailBox = await detail.boundingBox();
+    const scoring = page.getByRole("complementary", {
+      name: /how revenue & economics was scored/i,
+    });
+    const scoringBox = await scoring.boundingBox();
     expect(detailBox!.x).toBeGreaterThan(mapBox!.x + mapBox!.width);
+    expect(scoringBox!.x).toBeGreaterThan(detailBox!.x + detailBox!.width);
+    expect(Math.abs(scoringBox!.y - detailBox!.y)).toBeLessThan(12);
     await expect(detail.getByText(/connected areas/i)).toBeVisible();
     await expect(detail.getByRole("tab")).toHaveCount(4);
     await expect(page.getByRole("heading", { name: /how we scored this/i })).toBeVisible();
