@@ -4,7 +4,7 @@ import { Surface } from "@/components/ui/surface";
 import { MonoLabel } from "@/components/ui/typography";
 
 /**
- * Connected understanding — what Vibe learns from (CORE-5).
+ * Connected understanding — what Vibe learns from (CORE-5, Stage D).
  *
  * ## Why this block exists
  *
@@ -26,29 +26,60 @@ import { MonoLabel } from "@/components/ui/typography";
  * now lives in Settings. A row that reported "Not run yet" and offered no way
  * to run it would be the dead end this codebase keeps finding and closing.
  *
+ * ## Four states, not a boolean (Stage D)
+ *
+ * A client-rendered site was genuinely visited and largely unread — that is
+ * neither "ready" nor "not yet", and flattening it into either would have the
+ * row disagree with the summary below it. Likewise a scan that failed is a
+ * fact worth stating, not the same silence as never having run.
+ *
  * ## Absence is not a deficiency
  *
  * "Not run yet" is a statement about Vibe, never about the product (CORE-1
- * §17, §42). Nothing here is coral, nothing is a warning, and no row implies
- * the founder has failed to do something.
+ * §17, §42). A `failed` row reports what happened to Vibe's read — the one
+ * state that may warrant amber — and no row implies the founder has failed to
+ * do something.
  */
+
+export type SourceState =
+  /** Read, and the read is the whole picture. */
+  | "ready"
+  /** Read, and honestly not the whole picture — the note says why. */
+  | "partial"
+  /** The last attempt did not produce a result, and none exists from before. */
+  | "failed"
+  /** Never read. A fact about Vibe, not a demand. */
+  | "none";
 
 export type UnderstandingSource = {
   id: string;
   /** What it is, in the founder's words. Never a module name. */
   label: string;
-  /** One line on what Vibe gets from it. */
+  state: SourceState;
+  /** One line on where this source stands, chosen by the page per state. */
   detail: string;
-  ready: boolean;
-  /** What to say when it is not ready. A fact about Vibe, not a demand. */
-  pending: string;
+  /**
+   * A longer honest caveat under the row — e.g. why a visit was only partial,
+   * in the same words the full summary uses. Rare, and never decorative.
+   */
+  note?: string | null;
   /** Where to go to change that. Every row has one. */
   href: string;
   action: string;
 };
 
+const STATE_GLYPHS: Record<SourceState, { glyph: string; className: string }> = {
+  ready: { glyph: STATUS_GLYPHS.confirmed, className: statusToneText("success") },
+  partial: { glyph: STATUS_GLYPHS.unknown, className: statusToneText("waiting") },
+  failed: { glyph: STATUS_GLYPHS.refused, className: statusToneText("problem") },
+  none: { glyph: STATUS_GLYPHS.pending, className: "text-fg-faint" },
+};
+
 export function ProductOverview({ sources }: { sources: UnderstandingSource[] }) {
-  const readyCount = sources.filter((source) => source.ready).length;
+  // A partially read source is still a source Vibe is working from.
+  const readyCount = sources.filter(
+    (source) => source.state === "ready" || source.state === "partial",
+  ).length;
 
   return (
     <Surface level="panel" padding="lg" className="flex flex-col gap-5">
@@ -68,32 +99,34 @@ export function ProductOverview({ sources }: { sources: UnderstandingSource[] })
         {sources.map((source) => (
           <li
             key={source.id}
-            className="border-line-1 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1.5 border-b pb-3 last:border-b-0 last:pb-0"
+            className="border-line-1 flex flex-col gap-1.5 border-b pb-3 last:border-b-0 last:pb-0"
           >
-            <span className="flex min-w-0 flex-col gap-0.5">
-              <span className="flex items-baseline gap-2">
-                {/*
-                  Decorative: the words beside it carry the same state, so
-                  nothing here depends on a glyph or a colour being seen.
-                */}
-                <span
-                  aria-hidden
-                  className={source.ready ? statusToneText("success") : "text-fg-faint"}
-                >
-                  {source.ready ? STATUS_GLYPHS.confirmed : STATUS_GLYPHS.pending}
+            <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1.5">
+              <span className="flex min-w-0 flex-col gap-0.5">
+                <span className="flex items-baseline gap-2">
+                  {/*
+                    Decorative: the words beside it carry the same state, so
+                    nothing here depends on a glyph or a colour being seen.
+                  */}
+                  <span aria-hidden className={STATE_GLYPHS[source.state].className}>
+                    {STATE_GLYPHS[source.state].glyph}
+                  </span>
+                  <span className="text-fg-body text-sm font-medium">{source.label}</span>
                 </span>
-                <span className="text-fg-body text-sm font-medium">{source.label}</span>
+                <span className="text-fg-muted text-ui">{source.detail}</span>
               </span>
-              <span className="text-fg-muted text-ui">
-                {source.ready ? source.detail : source.pending}
-              </span>
-            </span>
-            <Link
-              href={source.href}
-              className="text-fg-muted hover:text-fg-body shrink-0 rounded-sm text-xs underline underline-offset-4 transition-interactive"
-            >
-              {source.action}
-            </Link>
+              <Link
+                href={source.href}
+                className="text-fg-muted hover:text-fg-body shrink-0 rounded-sm text-xs underline underline-offset-4 transition-interactive"
+              >
+                {source.action}
+              </Link>
+            </div>
+            {source.note && (
+              <p className="text-fg-muted max-w-[70ch] pl-6 text-xs leading-relaxed">
+                {source.note}
+              </p>
+            )}
           </li>
         ))}
       </ul>
