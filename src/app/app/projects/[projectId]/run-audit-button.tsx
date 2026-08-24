@@ -108,6 +108,29 @@ export function RunAuditButton({
     },
     // Stops on its own answer: the server render cannot know the run ended.
     continueAfter: (next) => operationPollPhase(next) === "working",
+    /*
+     * Refresh the route on the transition, never on the tick (UI-4 §5) — the
+     * same rule onboarding's OperationWatcher applies, and the one this button
+     * was missing. Everything this poll can discover is *rendered by the
+     * server*: the preparing→analyzing switch, the founder question a
+     * `needs_user` pause exists to show, and the finished audit itself. The
+     * first lens-scored dogfood run paused on its question and the screen
+     * stayed on "Preparing" until a manual reload, because the poller observed
+     * the transition, stopped — and told nobody.
+     *
+     * The comparison is against the values of the current render (`watching`
+     * is fresh here: the hook re-reads this closure through a ref every
+     * render), so after each refresh it judges the freshly rendered screen
+     * rather than a stale one.
+     */
+    onReading: (next) => {
+      const moved =
+        operationPollPhase(next) !== "working" ||
+        next.stage !== watching?.stage ||
+        next.stalled !== (watching?.stalled ?? false);
+
+      if (moved) router.refresh();
+    },
   });
 
   const operation = freshestOperation(polled ?? activeOperation, startedOperation);

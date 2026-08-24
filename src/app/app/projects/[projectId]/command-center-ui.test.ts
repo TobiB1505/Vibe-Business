@@ -150,6 +150,33 @@ describe("home tells the truth about what it does not know", () => {
   });
 });
 
+describe("the audit lifecycle reaches the founder without a reload", () => {
+  /**
+   * The first lens-scored dogfood run found this: the audit paused on its
+   * founder question (`needs_user`, confirmed in the database) and the screen
+   * stayed on "Preparing" until the page was manually reloaded. The question,
+   * the preparing→analyzing switch and the finished audit are all rendered by
+   * the server — so the poller that observes those transitions must refresh
+   * the route, exactly as onboarding's OperationWatcher does ("refreshes when
+   * the stage moves, not only when the run ends"). A poller that stops
+   * silently strands the founder on a state the server has already left.
+   */
+  it("refreshes the route when the polled operation moves", () => {
+    const src = source("run-audit-button.tsx");
+    expect(src).toContain("onReading:");
+    // The transition rule, not the tick: refresh only when the poll names
+    // something other than what the server rendered.
+    expect(src).toMatch(/onReading[\s\S]{0,400}router\.refresh\(\)/);
+  });
+
+  it("shows a working control the moment the button is pressed", () => {
+    // aria-busy alone is invisible. The pressed button must be visibly busy.
+    const button = readFileSync(join(process.cwd(), "src/components/ui/button.tsx"), "utf8");
+    expect(button).toContain("busy");
+    expect(button).toMatch(/animate-spin/);
+  });
+});
+
 describe("one Product Scan, in the founder's words", () => {
   /**
    * The two per-module controls ("Inspect repository" / "Inspect live
