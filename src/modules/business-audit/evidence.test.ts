@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
+import type { LiveProductIntelligenceSnapshot } from "@/modules/live-product-intelligence/schema";
 import {
   buildEvidencePack,
+  buildLiveEvidence,
   evidenceIdSet,
   EVIDENCE_PACK_VERSION,
   renderEvidencePack,
@@ -196,5 +198,85 @@ describe("trimEvidencePack", () => {
     const trimmed = trimEvidencePack(buildEvidencePack(input()), 2);
     const ids = trimmed.items.map((entry) => entry.id);
     expect(ids).toEqual([...ids].sort());
+  });
+});
+
+/**
+ * Pricing reaches the model (Sprint 0079).
+ *
+ * The pack could say a pricing *page* existed and nothing about what was on
+ * it, for a product whose audit scores monetization as one of five dimensions.
+ */
+describe("what the site says it charges", () => {
+  const withPricing = (pricing: LiveProductIntelligenceSnapshot["pricing"]) =>
+    buildLiveEvidence({ ...fakeLiveSnapshot(), pricing }).map((entry) => entry.id);
+
+  it("cites each declared price", () => {
+    const ids = withPricing({
+      pricingPageReached: true,
+      declaredPricePoints: [
+        { price: 29, currency: "EUR", period: "month", planName: "Pro", path: "/pricing" },
+      ],
+      hasFreeDeclaredTier: false,
+      declaredCurrencies: ["EUR"],
+    });
+
+    expect(ids.some((id) => id.startsWith("live.pricing.declared."))).toBe(true);
+  });
+
+  it("states a free tier and more than one currency as their own facts", () => {
+    const ids = withPricing({
+      pricingPageReached: true,
+      declaredPricePoints: [
+        { price: 0, currency: "EUR", period: null, planName: "Free", path: "/pricing" },
+        { price: 32, currency: "USD", period: "month", planName: "Pro", path: "/pricing" },
+      ],
+      hasFreeDeclaredTier: true,
+      declaredCurrencies: ["EUR", "USD"],
+    });
+
+    expect(ids).toContain("live.pricing.free_tier");
+    expect(ids).toContain("live.pricing.multiple_currencies");
+  });
+
+  /**
+   * The guard that matters most.
+   *
+   * "No declared price" is only a finding once the pricing page was actually
+   * read. Minting it otherwise hands a model Vibe's own coverage gap as though
+   * it were a fact about the founder's business — the failure the audit's
+   * `insufficient_evidence` rule exists to prevent.
+   */
+  it("does not report an absence it did not observe", () => {
+    const unreached = withPricing({
+      pricingPageReached: false,
+      declaredPricePoints: [],
+      hasFreeDeclaredTier: false,
+      declaredCurrencies: [],
+    });
+    const reached = withPricing({
+      pricingPageReached: true,
+      declaredPricePoints: [],
+      hasFreeDeclaredTier: false,
+      declaredCurrencies: [],
+    });
+
+    expect(unreached).not.toContain("live.pricing.none_declared");
+    expect(reached).toContain("live.pricing.none_declared");
+  });
+
+  /**
+   * A snapshot taken before pricing existed must mint nothing.
+   *
+   * The Opportunity Engine and the Action Planner rebuild a stored audit's
+   * pack from its snapshots. A builder that read this unconditionally would
+   * mint ids for an old snapshot the audit never cited.
+   */
+  it("mints nothing for a snapshot that predates pricing", () => {
+    const ids = buildLiveEvidence({ ...fakeLiveSnapshot(), pricing: undefined }).map(
+      (entry) => entry.id,
+    );
+
+    expect(ids.some((id) => id.startsWith("live.pricing."))).toBe(false);
   });
 });

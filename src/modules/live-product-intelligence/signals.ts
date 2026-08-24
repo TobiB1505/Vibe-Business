@@ -3,6 +3,8 @@ import { detectCtas, selectPrimaryCta, type CtaCandidate } from "./cta";
 import { toFormSignal } from "./forms";
 import type { FetchedPage } from "./crawler";
 import type {
+  DeclaredPricePoint,
+  PricingSignals,
   ConversionSignals,
   LiveEvidence,
   PageSummary,
@@ -204,6 +206,53 @@ export function buildProductSurfaces(input: {
   });
 
   return { surfaces, perPageSurfaces };
+}
+
+/**
+ * What the site says it charges.
+ *
+ * Read from **every** page the crawl reached, not only the pricing surface.
+ * Plenty of products declare their `Offer` on the homepage, and a founder
+ * asking "does my site say what this costs" is not asking "does /pricing say
+ * it". The path each offer was found on is recorded so the answer stays
+ * checkable.
+ *
+ * `pricingPageReached` is carried alongside because everything else is close
+ * to meaningless without it: no declared prices on a site whose pricing page
+ * was never fetched says nothing at all, while the same emptiness on a site
+ * whose pricing page *was* read is a real finding.
+ *
+ * Deliberately not merged with a text-scraped price. A declared offer is the
+ * operator's own statement; a number lifted from rendered text could be a
+ * discount, a struck-through figure or an "from" amount, and putting them in
+ * one list would launder the second into the first.
+ */
+export function buildPricingSignals(input: {
+  pages: FetchedPage[];
+  pricingPageReached: boolean;
+}): PricingSignals {
+  const declaredPricePoints: DeclaredPricePoint[] = [];
+
+  for (const page of input.pages) {
+    for (const offer of page.html.offers) {
+      declaredPricePoints.push({
+        price: offer.price,
+        currency: offer.currency,
+        period: offer.period,
+        planName: offer.name,
+        path: page.finalPath,
+      });
+    }
+  }
+
+  return {
+    pricingPageReached: input.pricingPageReached,
+    declaredPricePoints,
+    // Zero is a price, and a declared zero is a stated free tier. Absence of
+    // any offer is not — see the type's own note.
+    hasFreeDeclaredTier: declaredPricePoints.some((point) => point.price === 0),
+    declaredCurrencies: [...new Set(declaredPricePoints.map((point) => point.currency))].sort(),
+  };
 }
 
 export function buildConversionSignals(input: {

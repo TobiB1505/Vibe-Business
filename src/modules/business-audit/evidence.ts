@@ -27,6 +27,9 @@ import type { BusinessContext } from "@/modules/projects/business-context";
 
 export const EVIDENCE_PACK_VERSION = "business-evidence.v1" as const;
 
+/** Price points cited individually. A price list, not a catalogue. */
+const MAX_DECLARED_PRICE_EVIDENCE = 8;
+
 /**
  * Which id scheme a builder mints surfaces under.
  *
@@ -302,6 +305,63 @@ export function buildLiveEvidence(
         2,
       ),
     );
+  }
+
+  /*
+   * What the site says it charges (Sprint 0079).
+   *
+   * Monetization is one of the five dimensions the audit scores, and until
+   * now the pack could tell a model that a pricing *page* existed and nothing
+   * whatsoever about what was on it. A declared `Offer` is the operator's own
+   * machine-readable statement, so it is worth stating plainly.
+   *
+   * Absence is minted only when the pricing surface was actually reached.
+   * "No declared price on a site whose pricing page we never fetched" is not
+   * a finding, and a model handed it as one would reason from Vibe's own
+   * coverage gap as though it were the founder's business.
+   */
+  const pricing = snapshot.pricing;
+  if (pricing) {
+    for (const point of pricing.declaredPricePoints.slice(0, MAX_DECLARED_PRICE_EVIDENCE)) {
+      const period = point.period === null ? "" : ` per ${point.period.replace("_", " ")}`;
+      const plan = point.planName === null ? "" : `${point.planName}: `;
+      items.push(
+        item(
+          `live.pricing.declared.${slug(`${point.planName ?? "plan"}_${point.currency}_${point.price}`)}`,
+          "live_product",
+          `Price stated on your site — ${plan}${point.price} ${point.currency}${period}`,
+          3,
+        ),
+      );
+    }
+
+    if (pricing.hasFreeDeclaredTier) {
+      items.push(
+        item("live.pricing.free_tier", "live_product", "Your site states a free tier", 2),
+      );
+    }
+
+    if (pricing.declaredCurrencies.length > 1) {
+      items.push(
+        item(
+          "live.pricing.multiple_currencies",
+          "live_product",
+          `Your site states prices in ${pricing.declaredCurrencies.join(", ")}`,
+          2,
+        ),
+      );
+    }
+
+    if (pricing.pricingPageReached && pricing.declaredPricePoints.length === 0) {
+      items.push(
+        item(
+          "live.pricing.none_declared",
+          "live_product",
+          "Your pricing page was read and states no machine-readable price",
+          2,
+        ),
+      );
+    }
   }
 
   for (const signal of snapshot.seoSignals) {

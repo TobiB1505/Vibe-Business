@@ -126,6 +126,11 @@ const LITERAL_DETAILS: Record<string, string> = {
    * itself said "Signal pricing surface".
    */
   "profile.completeness": "How much Vibe could work out about your product",
+  // Monetization facts the site states about itself. Literal rather than a
+  // family, because each is one specific sentence and there are exactly three.
+  "live.pricing.free_tier": "Your site states a free tier",
+  "live.pricing.multiple_currencies": "Your site states prices in more than one currency",
+  "live.pricing.none_declared": "Your pricing page states no machine-readable price",
   "profile.identity.name": "What your product is called",
   "profile.identity.category": "What kind of product this is",
   "profile.identity.description": "What your product does",
@@ -368,6 +373,19 @@ function describeFamily(
      * `Seo canonical — not observed`: the id with its punctuation removed,
      * capitalised, presented as prose. "Seo" is not a word.
      */
+    /*
+     * What the site says it charges.
+     *
+     * The tail carries a plan name, a currency and an amount, and humanising
+     * it would produce "Pro usd 29" — an identifier wearing a capital letter.
+     * The pack's own label is the readable sentence ("Price stated on your
+     * site — Pro: 29 USD per month"), so this names the kind of fact and
+     * leaves the number to the pack.
+     */
+    if (body.startsWith("pricing.declared.")) {
+      return curated(source, "A price your site states");
+    }
+
     if (body.startsWith("seo.")) {
       const id = body.slice("seo.".length);
       if (isSeoSignal(id)) return curated(source, SEO_LABELS[id]);

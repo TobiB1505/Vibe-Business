@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { analyzeLiveProduct } from "./analyzer";
+import { buildPricingSignals } from "./signals";
+import type { FetchedPage } from "./crawler";
+import type { ParsedOffer } from "./html";
 import { DEFAULT_CRAWL_BUDGETS } from "./budgets";
 import { LiveProductDomainError } from "./errors";
 import {
@@ -227,5 +230,97 @@ describe("analyzeLiveProduct — failures", () => {
     ).rejects.toMatchObject({ code: "unsafe_destination" });
 
     expect(dependencies.transport.requests).toHaveLength(0);
+  });
+});
+
+/**
+ * What the site says it charges.
+ *
+ * Monetization is one of the five dimensions the audit scores, and the
+ * snapshot could previously say a pricing *page* existed and nothing about
+ * what was on it.
+ */
+describe("buildPricingSignals", () => {
+  const page = (finalPath: string, offers: ParsedOffer[]): FetchedPage =>
+    ({
+      requestedPath: finalPath,
+      finalPath,
+      status: 200,
+      bytes: 100,
+      depth: 1,
+      redirected: false,
+      html: { offers } as unknown as FetchedPage["html"],
+    }) as FetchedPage;
+
+  it("records what each page declares, and where", () => {
+    const signals = buildPricingSignals({
+      pages: [
+        page("/", [{ price: 0, currency: "EUR", period: null, name: "Free" }]),
+        page("/pricing", [{ price: 29, currency: "EUR", period: "month", name: "Pro" }]),
+      ],
+      pricingPageReached: true,
+    });
+
+    expect(signals.declaredPricePoints).toEqual([
+      { price: 0, currency: "EUR", period: null, planName: "Free", path: "/" },
+      { price: 29, currency: "EUR", period: "month", planName: "Pro", path: "/pricing" },
+    ]);
+    expect(signals.hasFreeDeclaredTier).toBe(true);
+    expect(signals.declaredCurrencies).toEqual(["EUR"]);
+  });
+
+  /**
+   * Read from every page, not only the pricing surface. Plenty of products
+   * declare their Offer on the homepage, and a founder asking "does my site
+   * say what this costs" is not asking "does /pricing say it".
+   */
+  it("finds an offer declared away from the pricing page", () => {
+    const signals = buildPricingSignals({
+      pages: [page("/", [{ price: 19, currency: "USD", period: "month", name: null }])],
+      pricingPageReached: false,
+    });
+
+    expect(signals.declaredPricePoints).toHaveLength(1);
+    expect(signals.declaredPricePoints[0]?.path).toBe("/");
+  });
+
+  it("notices more than one currency", () => {
+    const signals = buildPricingSignals({
+      pages: [
+        page("/pricing", [
+          { price: 29, currency: "EUR", period: "month", name: "Pro" },
+          { price: 32, currency: "USD", period: "month", name: "Pro" },
+        ]),
+      ],
+      pricingPageReached: true,
+    });
+
+    expect(signals.declaredCurrencies).toEqual(["EUR", "USD"]);
+  });
+
+  /**
+   * The distinction the whole type exists to keep.
+   *
+   * No declared price is not a free product, and it is not even a finding
+   * unless the pricing page was actually read — otherwise it reports Vibe's
+   * own coverage gap as a fact about the founder's business.
+   */
+  it("does not mistake silence for a free product", () => {
+    const signals = buildPricingSignals({ pages: [page("/", [])], pricingPageReached: false });
+
+    expect(signals.declaredPricePoints).toEqual([]);
+    expect(signals.hasFreeDeclaredTier).toBe(false);
+    expect(signals.pricingPageReached).toBe(false);
+  });
+
+  it("treats a declared zero as a stated free tier", () => {
+    // Zero *is* a price when the site publishes it. That is different from
+    // publishing nothing, which the case above covers.
+    const signals = buildPricingSignals({
+      pages: [page("/pricing", [{ price: 0, currency: "USD", period: "month", name: "Starter" }])],
+      pricingPageReached: true,
+    });
+
+    expect(signals.hasFreeDeclaredTier).toBe(true);
   });
 });

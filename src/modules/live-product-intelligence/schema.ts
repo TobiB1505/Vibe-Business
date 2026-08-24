@@ -149,6 +149,49 @@ export type ConversionSignals = {
   conversionPathLinks: string[];
 };
 
+/**
+ * What a product charges, as far as the site says so out loud.
+ *
+ * Two sources, kept apart because they carry different weight. A **declared**
+ * price is a schema.org `Offer` the operator published — a statement about
+ * their own business. Anything read out of rendered text would be an
+ * observation that could as easily be a discount, a struck-through figure or
+ * an "from" amount, and mixing the two would launder the second into the
+ * first.
+ *
+ * Absence is a real answer and the common one: most sites publish no `Offer`
+ * at all. `declaredPricePoints: []` means "the site did not say", never "this
+ * product is free" — the distinction the audit's own `insufficient_evidence`
+ * rule exists to keep.
+ *
+ * Derived facts only (Rule 37). Amounts, currency codes, periods and short
+ * plan labels; never page source, never body text.
+ */
+export type PricingSignals = {
+  /** Whether a pricing surface was reached at all. Nothing below means much without it. */
+  pricingPageReached: boolean;
+  /** Prices the site declares in JSON-LD, in the order found. May be empty. */
+  declaredPricePoints: DeclaredPricePoint[];
+  /**
+   * Whether any declared offer costs nothing.
+   *
+   * Recorded rather than derived at read time, because "there is a free tier"
+   * is a business fact a founder reasons about directly.
+   */
+  hasFreeDeclaredTier: boolean;
+  /** Distinct currencies declared. More than one is itself worth noticing. */
+  declaredCurrencies: string[];
+};
+
+export type DeclaredPricePoint = {
+  price: number;
+  currency: string;
+  period: "day" | "week" | "month" | "year" | "one_time" | null;
+  planName: string | null;
+  /** The same-origin path the offer was declared on. */
+  path: string;
+};
+
 export type SiteMetadata = {
   title: string | null;
   description: string | null;
@@ -250,6 +293,15 @@ export type LiveProductIntelligenceSnapshot = {
   productSurfaces: ProductSurfaceSignal[];
   seoSignals: SeoSignal[];
   conversionSignals: ConversionSignals;
+  /**
+   * Optional so a snapshot taken before this existed still parses.
+   *
+   * That matters beyond tolerance: the Opportunity Engine and the Action
+   * Planner rebuild a stored audit's evidence pack from its snapshots, and a
+   * builder that read this unconditionally would mint ids for an old snapshot
+   * that the audit never cited. Absent means absent.
+   */
+  pricing?: PricingSignals;
   brandSignals: LiveBrandSignals;
   metrics: LiveAnalysisMetrics;
   completeness: LiveCompleteness;
