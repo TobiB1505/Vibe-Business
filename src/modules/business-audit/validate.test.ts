@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { AUDIT_DIMENSIONS } from "./schema";
 import { validateAuditOutput } from "./validate";
 import { buildModelOutput } from "./test-support";
 import { normalizeAnthropicAuditOutput } from "./wire-schema";
@@ -252,5 +253,80 @@ describe("validateAuditOutput — range and shape enforcement", () => {
     expect(result.ok && result.audit.dimensions.find((d) => d.id === "product")?.summary).toContain(
       "No summary",
     );
+  });
+});
+
+/* ---------------------------------------------------------------------------
+ * Sprint 0083 — the enforcement is the absent id, not a fourth invariant
+ * ------------------------------------------------------------------------ */
+
+describe("a model scoring from evidence that was never observable", () => {
+  /**
+   * The question this sprint had to answer before adding a rule.
+   *
+   * Sprint 0083 stops the pack minting `live.surface_absent.pricing` for a site
+   * Vibe could not read. The proposal on the table was a fourth invariant here:
+   * force `insufficient_evidence` when every surviving citation is
+   * unobservable. This test exists to check whether that rule is needed, or
+   * whether invariant 2 already does the work now that the id is gone.
+   *
+   * It does. `filterEvidenceIds` drops an id the pack never minted, the
+   * dimension is left with no surviving citation, and invariant 2 forces the
+   * status. That makes the enforcement an **absent capability** rather than a
+   * denied one — CLAUDE.md rule 76's shape — and it is why no fourth invariant
+   * was added. The rule that does not exist cannot be got wrong.
+   */
+  const KNOWN_AFTER_SUPPRESSION = new Set([
+    "live.rendering.client_rendered",
+    "live.unobservable.surfaces",
+    "live.unobservable.conversion",
+  ]);
+
+  function outputCiting(evidenceIds: string[]): unknown {
+    const dimension = (ids: string[]) => ({
+      score: 30,
+      assessmentStatus: "assessable",
+      confidence: "high",
+      rationale: "The live product has no pricing surface.",
+      evidenceIds: ids,
+    });
+
+    return {
+      dimensions: Object.fromEntries(
+        AUDIT_DIMENSIONS.map((id) => [id, dimension(id === "monetization" ? evidenceIds : [])]),
+      ),
+      synthesis: { headline: "x", strengths: [], risks: [], nextMoves: [] },
+    };
+  }
+
+  it("refuses to score a dimension whose only citation no longer exists", () => {
+    const result = validateAuditOutput(
+      outputCiting(["live.surface_absent.pricing"]),
+      KNOWN_AFTER_SUPPRESSION,
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const monetization = result.audit.dimensions.find((entry) => entry.id === "monetization");
+    expect(monetization?.assessmentStatus).toBe("insufficient_evidence");
+    expect(monetization?.score).toBeNull();
+  });
+
+  it("would have scored it while the id still existed — the id is what changed", () => {
+    // The counterfactual, so this file records why suppression is the fix
+    // rather than a preference. Same output, same invariants; the only
+    // difference is whether the pack minted the absence.
+    const result = validateAuditOutput(
+      outputCiting(["live.surface_absent.pricing"]),
+      new Set([...KNOWN_AFTER_SUPPRESSION, "live.surface_absent.pricing"]),
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    const monetization = result.audit.dimensions.find((entry) => entry.id === "monetization");
+    expect(monetization?.assessmentStatus).toBe("assessable");
+    expect(monetization?.score).toBe(30);
   });
 });
