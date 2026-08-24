@@ -52,12 +52,49 @@ async function forbidExternalCalls(page: Page): Promise<string[]> {
   return attempted;
 }
 
+test.describe("the project shell owns project context", () => {
+  test("keeps the project in the rail and lets the page header scroll normally", async ({
+    page,
+  }) => {
+    await forbidExternalCalls(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(READY);
+
+    await expect(page.getByTestId("project-switcher")).toContainText("Acme");
+    await expect(page.getByRole("link", { name: "All products", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "My Product", exact: true })).toBeVisible();
+    await expect(page.getByText("Here's how Vibe understands your product.")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Check my product again" })).toBeVisible();
+
+    const main = page.locator("main");
+    await expect(main).toHaveCSS("overflow-y", "auto");
+    await expect(page.locator("header.sticky")).toHaveCount(0);
+  });
+
+  test("switches products and keeps account actions in the footer disclosure", async ({ page }) => {
+    await forbidExternalCalls(page);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto(READY);
+
+    const switcher = page.getByTestId("project-switcher");
+    await switcher.locator("summary").click();
+    await expect(switcher.getByRole("link", { name: "Planner Agent" })).toBeVisible();
+    await expect(switcher.getByRole("link", { name: "View all products" })).toBeVisible();
+
+    const account = page.getByTestId("account-menu");
+    await account.locator("summary").click();
+    await expect(account.getByRole("link", { name: /account settings/i })).toBeVisible();
+    await expect(account.getByRole("link", { name: /billing/i })).toBeVisible();
+    await expect(account.getByRole("button", { name: /sign out/i })).toBeVisible();
+  });
+});
+
 test.describe("the conclusion comes first", () => {
   test("opens with what Vibe understood, above everything else", async ({ page }) => {
     await forbidExternalCalls(page);
     await page.goto(READY);
 
-    await expect(page.getByRole("heading", { name: "I understand what you built." })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Acme" })).toBeVisible();
     await expect(page.getByText("You've built a tool that helps small teams")).toBeVisible();
 
     // Reading order, measured rather than assumed: the paragraph sits above
@@ -65,7 +102,7 @@ test.describe("the conclusion comes first", () => {
     const headline = await page
       .getByText("You've built a tool that helps small teams")
       .boundingBox();
-    const capabilities = await page.getByText("What people can do").boundingBox();
+    const capabilities = await page.getByText("Product capabilities").boundingBox();
 
     expect(headline).not.toBeNull();
     expect(capabilities).not.toBeNull();
@@ -81,6 +118,26 @@ test.describe("the conclusion comes first", () => {
 
     await page.getByText("See what Vibe found").click();
     await expect(finding).toBeVisible();
+  });
+
+  test("organizes real product DNA, founder context, brand and learning sources", async ({
+    page,
+  }) => {
+    await forbidExternalCalls(page);
+    await page.goto(READY);
+
+    await expect(page.getByText("Product DNA", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "What it does" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Who it's for" })).toBeVisible();
+    await expect(page.getByText("Founder context", { exact: true })).toBeVisible();
+    await expect(page.getByText("Has active users")).toBeVisible();
+    await expect(page.getByText("Subscription", { exact: true })).toBeVisible();
+    await expect(page.getByText("Brand & visual identity", { exact: true })).toBeVisible();
+    await expect(page.getByText("Vibe learns from", { exact: true })).toBeVisible();
+    const capabilities = page.getByText("supported capabilities", { exact: true }).locator("..");
+    const sources = page.getByText("sources available", { exact: true }).locator("..");
+    await expect(capabilities).toContainText(/\d+/);
+    await expect(sources).toContainText("3/4");
   });
 
   test("never shows a count of files, routes or detections", async ({ page }) => {
@@ -132,7 +189,7 @@ test.describe("the logo reveal", () => {
 
     await expect(page.getByAltText("Acme logo")).toHaveCount(0);
     await expect(page.locator("img[src*='vibe-mark']").first()).toBeVisible();
-    await expect(page.getByRole("heading", { name: "I understand what you built." })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Acme" })).toBeVisible();
   });
 
   test("shows a neutral mark and says why when no logo can be shown", async ({ page }) => {
@@ -151,7 +208,7 @@ test.describe("did I get this right", () => {
     await forbidExternalCalls(page);
     await page.goto(READY);
 
-    await expect(page.getByRole("heading", { name: "Did I get this right?" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Is this correct?" })).toBeVisible();
 
     const yes = page.getByRole("button", { name: "Yes, that's my product" });
     const edit = page.getByRole("button", { name: "Let me fix it" });
@@ -183,7 +240,7 @@ test.describe("did I get this right", () => {
     await page.goto(CONFIRMED);
 
     await expect(page.getByRole("button", { name: "Yes, that's my product" })).toHaveCount(0);
-    await expect(page.getByText("You confirmed this")).toBeVisible();
+    await expect(page.getByText("You confirmed this product profile")).toBeVisible();
   });
 });
 
@@ -205,8 +262,8 @@ test.describe("partial failure stays useful", () => {
     await forbidExternalCalls(page);
     await page.goto(PARTIAL);
 
-    await expect(page.getByText("What people can do")).toBeVisible();
-    await expect(page.getByText("How the product appears to work")).toBeVisible();
+    await expect(page.getByText("Product capabilities")).toBeVisible();
+    await expect(page.getByText("Product journey")).toBeVisible();
   });
 });
 

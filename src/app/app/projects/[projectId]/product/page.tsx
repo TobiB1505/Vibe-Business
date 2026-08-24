@@ -20,10 +20,9 @@ import {
 } from "@/modules/repository-intelligence/store";
 import { IntelligenceSummary, LIVE_PRODUCT_ANCHOR } from "../intelligence-summary";
 import { LiveIntelligenceSummary } from "../live-intelligence-summary";
-import { ProductOverview, type UnderstandingSource } from "../product-overview";
 import { ProductScanButton } from "../product-scan-button";
 import { UnderstandingConfirm } from "../understanding-confirm";
-import { UnderstandingPanel } from "../understanding-panel";
+import { UnderstandingPanel, type UnderstandingSource } from "../understanding-panel";
 import { UnderstandingProgress } from "../understanding-progress";
 
 /**
@@ -47,8 +46,8 @@ import { UnderstandingProgress } from "../understanding-progress";
  *
  * A child route of this one and deliberately not in the navigation — it is a
  * source, not a destination, and it stays a separate, metered control.
- * `ProductOverview` is therefore the only way to reach it, which is why every
- * row there carries a link.
+ * The Product Understanding source cards are therefore the only way to reach
+ * it, which is why every card carries a link.
  *
  * ## What it loads
  *
@@ -198,7 +197,7 @@ export default async function MyProductPage({
       detail: isEmptyFounderIntent(founderIntent.intent)
         ? "You haven't told Vibe anything about the business yet."
         : "Your own words about the business, which outrank anything derived.",
-      href: projectSectionHref(project.id, "settings"),
+      href: `${projectSectionHref(project.id, "settings")}#founder-intent`,
       action: "Tell Vibe",
     },
   ];
@@ -207,7 +206,7 @@ export default async function MyProductPage({
     <WorkspaceSection
       id="my-product"
       title="My Product"
-      description="What Vibe understands about the product you built, and where that understanding came from."
+      description="Here's how Vibe understands your product."
       actions={
         // The start control lives in the header when a profile already exists,
         // so re-checking is available without scrolling past the answer.
@@ -228,6 +227,10 @@ export default async function MyProductPage({
             view={view}
             projectId={project.id}
             confirmedAt={latest.stored.confirmedAt}
+            understoodAt={latest.stored.completedAt ?? latest.stored.createdAt}
+            founderIntent={founderIntent.intent}
+            founderContextHref={`${projectSectionHref(project.id, "settings")}#founder-intent`}
+            sources={sources}
             actions={
               <UnderstandingConfirm
                 projectId={project.id}
@@ -260,17 +263,15 @@ export default async function MyProductPage({
           />
         )}
 
-        <ProductOverview sources={sources} />
-
         {project.repository && (
           <Surface
             // The one scan control, targeted by every source row whose state
-            // it can change. `scroll-mt` clears the sticky workspace header,
-            // as `WorkspaceSection` does.
+            // it can change. The route header is not sticky, so a small target
+            // margin is enough to preserve breathing room.
             id={SCAN_ANCHOR}
             level="section"
             padding="lg"
-            className="scroll-mt-40 flex flex-col gap-4 lg:scroll-mt-32"
+            className="scroll-mt-6 flex flex-col gap-4"
           >
             <div className="flex flex-col gap-1">
               <MonoLabel>Product Scan</MonoLabel>
@@ -301,7 +302,7 @@ export default async function MyProductPage({
             id={LIVE_PRODUCT_ANCHOR}
             level="section"
             padding="lg"
-            className="scroll-mt-40 flex flex-col gap-4 lg:scroll-mt-32"
+            className="scroll-mt-6 flex flex-col gap-4"
           >
             <LiveIntelligenceSummary
               snapshot={liveSnapshot.result}
@@ -316,7 +317,7 @@ export default async function MyProductPage({
             id="repository-intelligence"
             level="section"
             padding="lg"
-            className="scroll-mt-40 flex flex-col gap-4 lg:scroll-mt-32"
+            className="scroll-mt-6 flex flex-col gap-4"
           >
             <IntelligenceSummary
               snapshot={repositorySnapshot.result}

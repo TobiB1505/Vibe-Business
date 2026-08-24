@@ -149,7 +149,7 @@ test.describe("completed is the only state with verdicts (§37)", () => {
       .getByRole("button", { name: /revenue & economics/i });
 
     await expect(revenue).toContainText(/weak/i);
-    await expect(revenue).toContainText(/soon/i);
+    await expect(revenue).toHaveAttribute("data-priority", "soon");
   });
 
   /** And carries none of the in-progress language with it. */

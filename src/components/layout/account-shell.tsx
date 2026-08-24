@@ -30,11 +30,11 @@ import { cn } from "@/lib/utils/cn";
  *
  * ## Why it looks like `ProjectShell`
  *
- * Same sticky behaviour and the same collapse to a scrollable strip below
- * `lg`. The account rail is slightly wider because its account disclosure can
- * carry the full destination labels from the supplied dashboard reference. Entering a
- * product should still read as one object changing context, not as arriving in
- * a different application.
+ * The same brand, navigation rhythm and account disclosure as `ProjectShell`.
+ * The account surface keeps its established document-scroll behavior while the
+ * project surface owns an independent workspace scroller; entering a product
+ * should still read as one object changing context, not as arriving in a
+ * different application.
  *
  * ## No top bar
  *

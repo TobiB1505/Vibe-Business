@@ -199,7 +199,9 @@ describe("one Product Scan, in the founder's words", () => {
   });
 
   it("tells a founder when a source was read, partially read, or failed", () => {
-    const src = source("product-overview.tsx");
+    // The reference-fidelity dossier owns these source cards now; their
+    // contract still carries the unified scan's four honest states.
+    const src = source("understanding-panel.tsx");
     // Three honest states, not a boolean: a client-rendered site was visited
     // and partly unread, which is neither "ready" nor "not yet".
     expect(src).toContain('"partial"');
@@ -237,7 +239,7 @@ describe("the sources block leads somewhere from every state", () => {
    * same one three bare fragments produced before this sprint.
    */
   it("gives every source row a link, not just the ready ones", () => {
-    const src = source("product-overview.tsx");
+    const src = source("understanding-panel.tsx");
 
     // The type requires it, and the component renders it unconditionally —
     // outside any `source.ready` branch.

@@ -62,16 +62,23 @@
 | Search/filter/sort | Account index controls | local, no loader | same route and URL state | clear/reset | clear returns focus to search | this contract |
 | Open repository | repository link | browser navigation | GitHub in a new tab | browser-owned | browser-owned | stored `html_url` |
 | Open product | row action/product link | route navigation | owning product workspace | app route error | destination heading | ADR 0042 |
+| Refresh product understanding | header action | durable operation status with stable page content | same Product page | operation-owned retry state | refreshed product profile | Product Understanding contract |
+| Correct product understanding | `Let me fix it` | stable inline editor and busy save action | same Product page | inline persistent error | corrected profile summary | Product Understanding contract |
+| Switch product | project switcher option | route navigation | selected product Home | current product + `View all products` remain available | destination page heading | ADR 0050 |
 
 ## Navigation and responsive behavior
 
 - Every route has a truthful metadata title.
 - Account sidebar becomes the established top strip below `lg`; project and account rails never nest.
+- On desktop, the project rail owns product identity, the bounded product switcher, project navigation and the account disclosure for the full viewport height. The project document scrolls independently; there is no sticky content header.
+- Project routes render `My Products / {product}` followed by one route-owned H1, description and action. Repository, branch and connection metadata do not repeat above every page.
+- `Project Settings` is a project destination. Profile, Account settings, Billing and Sign out live only in the account disclosure at the rail footer.
 - Project Home is the canonical Business Health surface at `/app/projects/:projectId`; `/health` is a compatibility alias and is never a second rail item.
 - `#business-audit` remains the stable recovery anchor and resolves on canonical project Home.
 - The radial Business Brain becomes a horizontally browsable dimension rail plus the same detail panel on narrow screens. Labels, health, priority, selection and detail remain available; geometry is never the only interface.
 - Repository comparison uses a semantic table at desktop and labeled record rows on narrow screens. Identity, product, visibility, default branch, connected time and open action remain available.
 - Technical values truncate only where their full value is also available through the external repository link or the mobile full-name row.
+- The Product page keeps one-column reading order below `lg`; its Product DNA and source grids collapse without hiding confidence wording, founder intent, brand evidence or source availability.
 
 ## Async and resilience
 
