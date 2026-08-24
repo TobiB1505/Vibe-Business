@@ -76,7 +76,7 @@ export function LiveIntelligenceSummary({
         {/* Named as its own intelligence layer, so "what the code says" and
             "what a visitor can see" read as complementary rather than as two
             unrelated scanners (UI-3.6 §10). */}
-        <MonoLabel>What Vibe sees when it visits your product · Live product check</MonoLabel>
+        <MonoLabel>What Vibe sees when it visits your product</MonoLabel>
         <h3 className="text-fg text-title font-bold">{view.headline}</h3>
         <p className="text-fg-muted max-w-[70ch] text-sm">{view.subhead}</p>
       </div>

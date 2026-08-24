@@ -6,22 +6,28 @@ import { getLatestSuccessfulAuthenticatedSnapshot } from "@/modules/authenticate
 import { getActiveProductUnderstandingOperation } from "@/modules/operations/service";
 import { getLatestProfile } from "@/modules/product-understanding/store";
 import { buildUnderstandingView } from "@/modules/product-understanding/view";
-import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intelligence/store";
+import { describeIncompleteness } from "@/modules/live-product-intelligence/human-view";
+import {
+  getLatestLiveSnapshotAttempt,
+  getLatestSuccessfulLiveSnapshot,
+} from "@/modules/live-product-intelligence/store";
 import { isEmptyFounderIntent } from "@/modules/projects/founder-intent";
 import { getFounderIntent } from "@/modules/projects/founder-intent-store";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
-import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
-import { InspectButton } from "../inspect-button";
-import { InspectLiveButton } from "../inspect-live-button";
+import {
+  getLatestSnapshotAttempt,
+  getLatestSuccessfulSnapshot,
+} from "@/modules/repository-intelligence/store";
 import { IntelligenceSummary, LIVE_PRODUCT_ANCHOR } from "../intelligence-summary";
 import { LiveIntelligenceSummary } from "../live-intelligence-summary";
 import { ProductOverview, type UnderstandingSource } from "../product-overview";
+import { ProductScanButton } from "../product-scan-button";
 import { UnderstandingConfirm } from "../understanding-confirm";
 import { UnderstandingPanel } from "../understanding-panel";
 import { UnderstandingProgress } from "../understanding-progress";
 
 /**
- * My Product — "what Vibe knows" (CORE-1 §26, §33; CORE-5).
+ * My Product — "what Vibe knows" (CORE-1 §26, §33; CORE-5; Stage D).
  *
  * ## What it holds, and why it grew
  *
@@ -29,25 +35,27 @@ import { UnderstandingProgress } from "../understanding-progress";
  * a person can do with it, how it appears to work, and the brand it presents.
  *
  * CORE-5 added the other half, which used to be on Overview: **where that
- * understanding came from**, and the controls that produce it. Splitting the
- * conclusion from its sources across two screens meant a founder reading a
- * thin profile had no way to see that Vibe had only ever read the code, and no
- * way to fix it from where they were standing.
+ * understanding came from**, and the controls that produce it. Stage D merged
+ * those controls into one: a founder scans their product, and Vibe reads the
+ * code and visits the site. Which halves ran, and how completely, is the
+ * source rows' job to say — honestly, in three states rather than a boolean.
  *
  * Order is answer-first: the profile, then what Vibe learned it from, then the
- * raw intelligence surfaces themselves.
+ * one scan control, then the raw findings themselves.
  *
  * ## Deep Scan
  *
  * A child route of this one and deliberately not in the navigation — it is a
- * source, not a destination. `ProductOverview` is therefore the only way to
- * reach it, which is why every row there carries a link.
+ * source, not a destination, and it stays a separate, metered control.
+ * `ProductOverview` is therefore the only way to reach it, which is why every
+ * row there carries a link.
  *
  * ## What it loads
  *
- * The profile, whether a run is in flight, the three snapshot existence checks
- * and the founder intent flag. All cheap. Nothing about the audit, the
- * opportunities or prepared changes reaches this route.
+ * The profile, whether a run is in flight, the snapshot reads (successful for
+ * display, latest-attempt for honest failure rows) and the founder intent
+ * flag. All cheap. Nothing about the audit, the opportunities or prepared
+ * changes reaches this route.
  */
 export default async function MyProductPage({
   params,
@@ -59,15 +67,25 @@ export default async function MyProductPage({
   // not gate the routes beneath it.
   const { supabase, project } = await requireProjectAccess(projectId);
 
-  const [latest, activeOperation, repositorySnapshot, liveSnapshot, deepScanSnapshot, founderIntent] =
-    await Promise.all([
-      getLatestProfile(supabase, projectId),
-      getActiveProductUnderstandingOperation(supabase, projectId),
-      getLatestSuccessfulSnapshot(supabase, projectId),
-      getLatestSuccessfulLiveSnapshot(supabase, projectId),
-      getLatestSuccessfulAuthenticatedSnapshot(supabase, projectId),
-      getFounderIntent(supabase, projectId),
-    ]);
+  const [
+    latest,
+    activeOperation,
+    repositorySnapshot,
+    repositoryAttempt,
+    liveSnapshot,
+    liveAttempt,
+    deepScanSnapshot,
+    founderIntent,
+  ] = await Promise.all([
+    getLatestProfile(supabase, projectId),
+    getActiveProductUnderstandingOperation(supabase, projectId),
+    getLatestSuccessfulSnapshot(supabase, projectId),
+    getLatestSnapshotAttempt(supabase, projectId),
+    getLatestSuccessfulLiveSnapshot(supabase, projectId),
+    getLatestLiveSnapshotAttempt(supabase, projectId),
+    getLatestSuccessfulAuthenticatedSnapshot(supabase, projectId),
+    getFounderIntent(supabase, projectId),
+  ]);
 
   // Either source is enough. A product with no public site yet is exactly the
   // kind this flow exists to describe (CORE-1 §43).
@@ -76,46 +94,99 @@ export default async function MyProductPage({
   const blockedReason = hasEvidence
     ? null
     : project.repository
-      ? "Vibe needs to read your code or visit your product first. Both are below."
+      ? "Vibe needs to read your code or visit your product first. Run the scan below."
       : "Connect a repository first, and Vibe can start getting to know your product.";
 
   const view = latest ? buildUnderstandingView(latest.profile, latest.stored.synthesized) : null;
 
+  const SCAN_ANCHOR = "product-scan";
+
   /**
-   * The four sources, in the founder's words (CORE-1 §34, §45).
-   *
-   * `ready` is derived from a snapshot that exists or does not — nothing here
-   * is inferred, and "not yet" is never dressed up as a problem.
+   * The code half, in three honest states. A failed attempt only outranks
+   * silence when no earlier successful read exists — data a founder can still
+   * see is not erased by a later failure.
    */
+  const codeSource: UnderstandingSource = repositorySnapshot?.result
+    ? {
+        id: "code",
+        label: "Your code",
+        state: "ready",
+        detail: "Vibe has read what your repository builds.",
+        href: "#repository-intelligence",
+        action: "See what it read",
+      }
+    : repositoryAttempt?.status === "failed"
+      ? {
+          id: "code",
+          label: "Your code",
+          state: "failed",
+          detail: "Vibe couldn't read your code last time.",
+          href: `#${SCAN_ANCHOR}`,
+          action: "Scan again",
+        }
+      : {
+          id: "code",
+          label: "Your code",
+          state: "none",
+          detail: project.repository
+            ? "Vibe hasn't read your code yet."
+            : "No repository is connected yet.",
+          href: project.repository ? `#${SCAN_ANCHOR}` : projectSectionHref(project.id, "settings"),
+          action: project.repository ? "Scan my product" : "Connect a repository",
+        };
+
+  /**
+   * The live half. `partial` is the state Sprint 0082 exists for: the site was
+   * visited and could not be fully read — usually because pages build
+   * themselves in the browser — and the note carries the same sentence the
+   * full summary shows, from the one function that knows why.
+   */
+  const liveIncomplete = liveSnapshot?.result ? describeIncompleteness(liveSnapshot.result) : null;
+  const liveSource: UnderstandingSource = liveSnapshot?.result
+    ? {
+        id: "live",
+        label: "Your public product",
+        state: liveIncomplete === null ? "ready" : "partial",
+        detail:
+          liveIncomplete === null
+            ? "Vibe has visited what a first-time visitor reaches."
+            : "Vibe visited your product, but couldn't read all of it.",
+        note: liveIncomplete,
+        href: `#${LIVE_PRODUCT_ANCHOR}`,
+        action: "See what it saw",
+      }
+    : liveAttempt?.status === "failed"
+      ? {
+          id: "live",
+          label: "Your public product",
+          state: "failed",
+          detail: "Vibe couldn't reach your product last time.",
+          href: `#${SCAN_ANCHOR}`,
+          action: "Scan again",
+        }
+      : {
+          id: "live",
+          label: "Your public product",
+          state: "none",
+          detail: project.productionUrl
+            ? "Vibe hasn't visited your product yet."
+            : "No production website is set yet.",
+          href: project.productionUrl
+            ? `#${SCAN_ANCHOR}`
+            : projectSectionHref(project.id, "settings"),
+          action: project.productionUrl ? "Scan my product" : "Add your website",
+        };
+
   const sources: UnderstandingSource[] = [
-    {
-      id: "code",
-      label: "Your code",
-      detail: "Vibe has read what your repository builds.",
-      ready: Boolean(repositorySnapshot?.result),
-      pending: project.repository
-        ? "Vibe hasn't read your code yet."
-        : "No repository is connected yet.",
-      href: project.repository ? "#repository-intelligence" : projectSectionHref(project.id, "settings"),
-      action: project.repository ? "See what it read" : "Connect a repository",
-    },
-    {
-      id: "live",
-      label: "Your public product",
-      detail: "Vibe has visited what a first-time visitor reaches.",
-      ready: Boolean(liveSnapshot?.result),
-      pending: project.productionUrl
-        ? "Vibe hasn't visited your product yet."
-        : "No production website is set yet.",
-      href: project.productionUrl ? `#${LIVE_PRODUCT_ANCHOR}` : projectSectionHref(project.id, "settings"),
-      action: project.productionUrl ? "See what it saw" : "Add your website",
-    },
+    codeSource,
+    liveSource,
     {
       id: "deep-scan",
       label: "Your signed-in product",
-      detail: "Vibe has seen what your product looks like after signing in.",
-      ready: Boolean(deepScanSnapshot?.result),
-      pending: "Vibe hasn't seen past your sign-in yet.",
+      state: deepScanSnapshot?.result ? "ready" : "none",
+      detail: deepScanSnapshot?.result
+        ? "Vibe has seen what your product looks like after signing in."
+        : "Vibe hasn't seen past your sign-in yet.",
       // The only route to a page that is deliberately not in the navigation.
       href: projectSectionHref(project.id, "deep-scan"),
       action: "Deep Scan",
@@ -123,9 +194,10 @@ export default async function MyProductPage({
     {
       id: "intent",
       label: "What you told Vibe",
-      detail: "Your own words about the business, which outrank anything derived.",
-      ready: !isEmptyFounderIntent(founderIntent.intent),
-      pending: "You haven't told Vibe anything about the business yet.",
+      state: isEmptyFounderIntent(founderIntent.intent) ? "none" : "ready",
+      detail: isEmptyFounderIntent(founderIntent.intent)
+        ? "You haven't told Vibe anything about the business yet."
+        : "Your own words about the business, which outrank anything derived.",
       href: projectSectionHref(project.id, "settings"),
       action: "Tell Vibe",
     },
@@ -190,79 +262,70 @@ export default async function MyProductPage({
 
         <ProductOverview sources={sources} />
 
-        {project.productionUrl && (
+        {project.repository && (
           <Surface
-            // The anchor repository findings link to when only a live check
-            // could settle the question (UI-3.6 §39). `scroll-mt` clears the
-            // sticky workspace header, as `WorkspaceSection` does.
-            id={LIVE_PRODUCT_ANCHOR}
+            // The one scan control, targeted by every source row whose state
+            // it can change. `scroll-mt` clears the sticky workspace header,
+            // as `WorkspaceSection` does.
+            id={SCAN_ANCHOR}
             level="section"
             padding="lg"
             className="scroll-mt-40 flex flex-col gap-4 lg:scroll-mt-32"
           >
-            {liveSnapshot?.result ? (
-              <LiveIntelligenceSummary
-                snapshot={liveSnapshot.result}
-                analyzedAt={liveSnapshot.completedAt ?? liveSnapshot.createdAt}
-              />
-            ) : (
-              <div className="flex flex-col gap-1">
-                <MonoLabel>What Vibe sees when it visits your product · Live product check</MonoLabel>
-                <h3 className="text-fg text-base font-semibold">
-                  Vibe hasn&apos;t visited your product yet.
-                </h3>
-                <p className="text-fg-muted max-w-[70ch] text-sm">
-                  A live check shows what a visitor can actually reach — which is the only way to
-                  confirm what your code suggests.
-                </p>
-              </div>
-            )}
+            <div className="flex flex-col gap-1">
+              <MonoLabel>Product Scan</MonoLabel>
+              <h3 className="text-fg text-base font-semibold">
+                One scan, everything Vibe can reach.
+              </h3>
+              <p className="text-fg-muted max-w-[70ch] text-sm">
+                Vibe reads your code
+                {project.productionUrl
+                  ? " and visits your public website, in one pass. It's free, and it's"
+                  : ". It's free, and it's"}{" "}
+                how everything else here stays grounded in your real product.
+              </p>
+            </div>
             <div>
-              <InspectLiveButton
+              <ProductScanButton
                 projectId={project.id}
-                hasSnapshot={Boolean(liveSnapshot?.result)}
+                hasSnapshot={Boolean(repositorySnapshot?.result) || Boolean(liveSnapshot?.result)}
               />
             </div>
           </Surface>
         )}
 
-        {project.repository && (
+        {liveSnapshot?.result && (
           <Surface
-            // Targeted by the "Your code" row above, which is how a founder
-            // gets from "Vibe hasn't read your code" to the control that
-            // changes that.
+            // The anchor repository findings link to when only a live check
+            // could settle the question (UI-3.6 §39).
+            id={LIVE_PRODUCT_ANCHOR}
+            level="section"
+            padding="lg"
+            className="scroll-mt-40 flex flex-col gap-4 lg:scroll-mt-32"
+          >
+            <LiveIntelligenceSummary
+              snapshot={liveSnapshot.result}
+              analyzedAt={liveSnapshot.completedAt ?? liveSnapshot.createdAt}
+            />
+          </Surface>
+        )}
+
+        {repositorySnapshot?.result && (
+          <Surface
+            // Targeted by the "Your code" row above.
             id="repository-intelligence"
             level="section"
             padding="lg"
             className="scroll-mt-40 flex flex-col gap-4 lg:scroll-mt-32"
           >
-            {repositorySnapshot?.result ? (
-              <IntelligenceSummary
-                snapshot={repositorySnapshot.result}
-                analyzedAt={repositorySnapshot.createdAt}
-                projectId={project.id}
-                // Passed only so the two layers can be compared where they
-                // disagree (UI-3.6 §11). Live results are rendered above.
-                liveSnapshot={liveSnapshot?.result ?? null}
-              />
-            ) : (
-              <div className="flex flex-col gap-1">
-                <MonoLabel>What Vibe learned from your code · Repository intelligence</MonoLabel>
-                <h3 className="text-fg text-base font-semibold">
-                  Vibe hasn&apos;t read your code yet.
-                </h3>
-                <p className="text-fg-muted max-w-[70ch] text-sm">
-                  Reading it is how Vibe works out what your product already does, and what it is
-                  missing.
-                </p>
-              </div>
-            )}
-            <div>
-              <InspectButton
-                projectId={project.id}
-                hasSnapshot={Boolean(repositorySnapshot?.result)}
-              />
-            </div>
+            <IntelligenceSummary
+              snapshot={repositorySnapshot.result}
+              analyzedAt={repositorySnapshot.createdAt}
+              projectId={project.id}
+              // Passed only so the two layers can be compared where they
+              // disagree (UI-3.6 §11). Live results are rendered above.
+              liveSnapshot={liveSnapshot?.result ?? null}
+            />
           </Surface>
         )}
       </div>

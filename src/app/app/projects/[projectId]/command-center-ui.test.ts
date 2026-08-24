@@ -150,6 +150,58 @@ describe("home tells the truth about what it does not know", () => {
   });
 });
 
+describe("one Product Scan, in the founder's words", () => {
+  /**
+   * The two per-module controls ("Inspect repository" / "Inspect live
+   * product") merge into one customer-facing scan. The words "repository
+   * intelligence" and "live product check" are Vibe's names for its own
+   * subsystems, and they leave every customer string with the merge — module
+   * names, file paths and event names are unaffected.
+   */
+  it("offers one scan control for both sources, not one per module", () => {
+    const page = source("product/page.tsx");
+    expect(page).toContain("ProductScanButton");
+    expect(page).not.toContain("InspectButton");
+    expect(page).not.toContain("InspectLiveButton");
+  });
+
+  it("runs the live source from the same scan when a site is set", () => {
+    const action = source("product-scan-action.ts");
+    expect(action).toContain("inspectRepository(");
+    expect(action).toContain("inspectLiveProduct(");
+  });
+
+  it("tells a founder when a source was read, partially read, or failed", () => {
+    const src = source("product-overview.tsx");
+    // Three honest states, not a boolean: a client-rendered site was visited
+    // and partly unread, which is neither "ready" nor "not yet".
+    expect(src).toContain('"partial"');
+    expect(src).toContain('"failed"');
+  });
+
+  it("derives the partial wording from the one function that knows why", () => {
+    // Not re-written per surface: describeIncompleteness is the sentence the
+    // live summary already shows, and the source row must agree with it.
+    expect(source("product/page.tsx")).toContain("describeIncompleteness");
+  });
+
+  it("never shows a founder the modules' own names", () => {
+    for (const file of [
+      "product/page.tsx",
+      "product-scan-button.tsx",
+      "intelligence-summary.tsx",
+      "live-intelligence-summary.tsx",
+      "health/content.tsx",
+    ]) {
+      const copy = renderedCopy(file);
+      expect(copy, file).not.toContain("Repository intelligence");
+      expect(copy, file).not.toContain("repository intelligence");
+      expect(copy, file).not.toContain("Live product check");
+      expect(copy, file).not.toContain("live product intelligence");
+    }
+  });
+});
+
 describe("the sources block leads somewhere from every state", () => {
   /**
    * Deep Scan and Settings are reachable from this block and, for Deep Scan,
