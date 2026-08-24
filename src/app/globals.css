@@ -191,6 +191,8 @@
 @layer base {
   html {
     color-scheme: dark;
+    scrollbar-color: var(--color-line-strong) var(--color-app);
+    scrollbar-width: thin;
   }
 
   body {
@@ -199,6 +201,36 @@
     color: var(--color-fg-body);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
+  }
+
+  /*
+   * Product-owned scroll surfaces inherit one quiet baseline. Geometry may
+   * vary where a component explicitly needs stable gutter space, but a new
+   * table, rail or dialog must not fall back to unrelated browser colours.
+   */
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  *::-webkit-scrollbar-track {
+    background: var(--color-app);
+  }
+
+  *::-webkit-scrollbar-thumb {
+    border: 3px solid var(--color-app);
+    border-radius: 9999px;
+    background: var(--color-line-strong);
+  }
+
+  *::-webkit-scrollbar-thumb:hover {
+    background: var(--color-fg-faint);
+  }
+
+  @media (forced-colors: active) {
+    html {
+      scrollbar-color: auto;
+    }
   }
 
   /**

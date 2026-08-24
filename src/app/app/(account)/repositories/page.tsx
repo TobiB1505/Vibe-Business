@@ -1,13 +1,8 @@
-import Link from "next/link";
-import { buttonClasses } from "@/components/ui/button";
-import { EmptyState } from "@/components/ui/states";
-import { StatusPill } from "@/components/ui/status-pill";
-import { Surface } from "@/components/ui/surface";
-import { SectionHeader } from "@/components/ui/typography";
-import { formatTimestamp } from "@/lib/utils/format-datetime";
 import { createClient } from "@/lib/supabase/server";
 import { requireSession } from "@/modules/auth/session";
+import { getGithubIdentity } from "@/modules/github/identity";
 import { listConnectedRepositories } from "@/modules/projects/account-repositories";
+import { RepositoriesIndex } from "./repositories-index";
 
 export const metadata = { title: "Repositories" };
 
@@ -41,74 +36,10 @@ export default async function RepositoriesPage() {
   const session = await requireSession("/app/repositories");
   const supabase = await createClient();
 
-  const repositories = await listConnectedRepositories(supabase, session.userId);
+  const [repositories, github] = await Promise.all([
+    listConnectedRepositories(supabase, session.userId),
+    getGithubIdentity(supabase, session.userId),
+  ]);
 
-  return (
-    <div className="flex flex-col gap-8">
-      <SectionHeader
-        level={1}
-        title="Repositories"
-        description="The code behind each product, as Vibe connected it."
-        actions={
-          <Link
-            href="/app/connect/github"
-            className={buttonClasses({ variant: "secondary", size: "sm" })}
-          >
-            Connect a repository
-          </Link>
-        }
-      />
-
-      {repositories.length === 0 ? (
-        <EmptyState
-          title="No repositories connected"
-          description="Connecting a repository is how Vibe reads a product, scores the business around it, and prepares a change."
-          action={
-            <Link href="/app/connect/github" className={buttonClasses({ size: "sm" })}>
-              Connect GitHub
-            </Link>
-          }
-        />
-      ) : (
-        <ul className="flex flex-col gap-3">
-          {repositories.map((repository) => (
-            <li key={repository.projectId}>
-              <Surface
-                level="panel"
-                padding="md"
-                className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3"
-              >
-                <div className="flex min-w-0 flex-col gap-1">
-                  <div className="flex flex-wrap items-center gap-2.5">
-                    {/* Mono: a repository name is machine output, not prose. */}
-                    <a
-                      href={repository.htmlUrl}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      className="text-fg-body hover:text-mint truncate font-mono text-ui transition-interactive"
-                    >
-                      {repository.fullName}
-                    </a>
-                    {repository.private && <StatusPill tone="neutral">Private</StatusPill>}
-                  </div>
-                  <p className="text-fg-meta text-meta">
-                    Default branch{" "}
-                    <span className="font-mono">{repository.defaultBranch}</span> · connected{" "}
-                    {formatTimestamp(repository.connectedAt)}
-                  </p>
-                </div>
-
-                <Link
-                  href={`/app/projects/${repository.projectId}`}
-                  className={buttonClasses({ variant: "secondary", size: "sm" })}
-                >
-                  {repository.projectName}
-                </Link>
-              </Surface>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
+  return <RepositoriesIndex repositories={repositories} githubLogin={github?.githubLogin ?? null} />;
 }

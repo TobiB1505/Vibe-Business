@@ -33,6 +33,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 export type ConnectedRepository = {
   projectId: string;
   projectName: string;
+  owner: string;
+  name: string;
   /** `owner/name`, as captured when the repository was connected. */
   fullName: string;
   defaultBranch: string;
@@ -44,6 +46,8 @@ export type ConnectedRepository = {
 type ProjectRow = { id: string; name: string };
 type ConnectionRow = {
   project_id: string;
+  owner: string;
+  name: string;
   full_name: string;
   default_branch: string;
   private: boolean;
@@ -69,7 +73,7 @@ export async function listConnectedRepositories(
 
   const { data: connectionRows, error: connectionsError } = await supabase
     .from("repository_connections")
-    .select("project_id, full_name, default_branch, private, html_url, created_at")
+    .select("project_id, owner, name, full_name, default_branch, private, html_url, created_at")
     .in(
       "project_id",
       projects.map((project) => project.id),
@@ -83,6 +87,8 @@ export async function listConnectedRepositories(
   return ((connectionRows ?? []) as ConnectionRow[]).map((row) => ({
     projectId: row.project_id,
     projectName: nameByProject.get(row.project_id) ?? "Unknown product",
+    owner: row.owner,
+    name: row.name,
     fullName: row.full_name,
     defaultBranch: row.default_branch,
     private: row.private,

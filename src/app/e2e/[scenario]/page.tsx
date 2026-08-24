@@ -38,11 +38,14 @@ import { E2E_NEEDS_USER_SCENARIOS, isE2eNeedsUserScenario } from "../needs-user-
 import {
   E2E_ACCOUNT_SCENARIOS,
   E2E_PRODUCTS_SCENARIOS,
+  E2E_REPOSITORIES_SCENARIOS,
   isE2eAccountScenario,
   isE2eProductsScenario,
+  isE2eRepositoriesScenario,
 } from "../account-scenarios";
 import { AccountHome } from "@/app/app/account-home";
 import { ProductsIndex } from "@/app/app/(account)/products/products-index";
+import { RepositoriesIndex } from "@/app/app/(account)/repositories/repositories-index";
 import { AccountMenu } from "@/components/layout/account-menu";
 import { AccountShell, AccountSidebar } from "@/components/layout/account-shell";
 import { E2E_SCENARIOS, isE2eScenario } from "../scenarios";
@@ -430,6 +433,34 @@ export default async function E2eScenarioPage({
       >
         <div className="sr-only">{label}</div>
         <ProductsIndex products={E2E_PRODUCTS_SCENARIOS[scenario]()} />
+      </AccountShell>
+    );
+  }
+
+  if (isE2eRepositoriesScenario(scenario)) {
+    return (
+      <AccountShell
+        sidebar={
+          <AccountSidebar
+            credits="2,480"
+            footer={
+              <AccountMenu
+                identity={{
+                  displayName: "Tobi",
+                  initials: "TB",
+                  avatarUrl: null,
+                  fromGithub: true,
+                }}
+              />
+            }
+          />
+        }
+      >
+        <div className="sr-only">{label}</div>
+        <RepositoriesIndex
+          repositories={E2E_REPOSITORIES_SCENARIOS[scenario]()}
+          githubLogin={scenario === "account-repositories-empty" ? null : "TobiB1505"}
+        />
       </AccountShell>
     );
   }

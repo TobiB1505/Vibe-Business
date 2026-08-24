@@ -1,0 +1,22 @@
+{
+  "profile": "product-admin",
+  "sourceRoots": ["src/app/app/(account)/repositories"],
+  "locale": "en",
+  "canonicalMap": "UX-CONTRACT.md",
+  "requiredCapabilities": ["Select/Listbox", "Scrollbar"],
+  "ownership": {
+    "Select/Listbox": "native",
+    "Scrollbar": "global"
+  },
+  "requiredCommands": ["unit", "e2e", "accessibility", "premium"],
+  "commands": {
+    "unit": "pnpm test",
+    "e2e": "pnpm exec playwright test e2e/account-repositories.spec.ts",
+    "accessibility": "pnpm exec playwright test e2e/account-repositories.spec.ts",
+    "premium": "python3 <skill-dir>/scripts/audit_project.py . --mode strict --no-write"
+  },
+  "evidence": {
+    "failurePaths": "e2e/app-error.spec.ts",
+    "repositoryStates": "e2e/account-repositories.spec.ts"
+  }
+}

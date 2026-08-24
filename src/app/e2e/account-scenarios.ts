@@ -1,5 +1,6 @@
 import type { AuditReading, DashboardProject } from "@/modules/projects/dashboard";
 import type { ProductOverviewItem } from "@/modules/projects/product-summary";
+import type { ConnectedRepository } from "@/modules/projects/account-repositories";
 
 /**
  * Browser fixtures for the account dashboard (CORE-6).
@@ -182,4 +183,36 @@ export type E2eProductsScenario = keyof typeof E2E_PRODUCTS_SCENARIOS;
 
 export function isE2eProductsScenario(value: string): value is E2eProductsScenario {
   return value in E2E_PRODUCTS_SCENARIOS;
+}
+
+const REPOSITORY_NAMES = [
+  ["Vibe Business", "vibe-business", false, "main"],
+  ["SaaS Analyzer", "saas-analyzer", true, "main"],
+  ["Landing Pro", "landing-pro", true, "develop"],
+  ["Idea Capture", "idea-capture", false, "main"],
+  ["Team Monitor", "team-monitor", true, "develop"],
+  ["Invoice Studio", "invoice-studio", true, "main"],
+  ["Launch Notes", "launch-notes", false, "release"],
+] as const;
+
+export const E2E_REPOSITORIES_SCENARIOS = {
+  "account-repositories": (): ConnectedRepository[] =>
+    REPOSITORY_NAMES.map(([projectName, name, privateRepository, defaultBranch], index) => ({
+      projectId: `repository_project_${index}`,
+      projectName,
+      owner: "TobiB1505",
+      name,
+      fullName: `TobiB1505/${name}`,
+      defaultBranch,
+      private: privateRepository,
+      htmlUrl: `https://github.com/TobiB1505/${name}`,
+      connectedAt: `2026-08-${String(24 - index).padStart(2, "0")}T10:00:00Z`,
+    })),
+  "account-repositories-empty": (): ConnectedRepository[] => [],
+} as const;
+
+export type E2eRepositoriesScenario = keyof typeof E2E_REPOSITORIES_SCENARIOS;
+
+export function isE2eRepositoriesScenario(value: string): value is E2eRepositoriesScenario {
+  return value in E2E_REPOSITORIES_SCENARIOS;
 }
