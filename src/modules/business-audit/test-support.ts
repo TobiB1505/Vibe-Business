@@ -189,6 +189,7 @@ export function fakeRepositorySnapshot(
     languages: [{ id: "typescript", name: "TypeScript", confidence: "high", evidence: [] }],
     frameworks: [{ id: "nextjs", name: "Next.js", confidence: "high", evidence: [] }],
     packageManager: "pnpm",
+    scripts: { declared: ["test", "typecheck", "lint", "build"], source: "package.json" },
     runtime: [],
     brand: { assets: [], colors: [], typefaces: [], tokenSources: [] },
     integrationSignals: [

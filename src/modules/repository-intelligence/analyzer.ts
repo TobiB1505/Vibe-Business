@@ -7,7 +7,13 @@ import { detectBusinessSurfaces } from "./detectors/business-surfaces";
 import { detectIntegrationSignals } from "./detectors/integrations";
 import { detectMonorepo } from "./detectors/monorepo";
 import { detectRoutes } from "./detectors/routes";
-import { detectFrameworks, detectLanguages, detectPackageManager, detectRuntime } from "./detectors/stack";
+import {
+  detectFrameworks,
+  detectLanguages,
+  detectPackageManager,
+  detectProjectScripts,
+  detectRuntime,
+} from "./detectors/stack";
 import {
   ANALYZER_VERSION,
   REPOSITORY_INTELLIGENCE_SCHEMA_VERSION,
@@ -135,6 +141,7 @@ export async function analyzeRepository(
     languages: detectLanguages(context),
     frameworks,
     packageManager: detectPackageManager(context),
+    scripts: detectProjectScripts(context),
     runtime: detectRuntime(context),
     integrationSignals,
     routes,

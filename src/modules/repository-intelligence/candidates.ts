@@ -12,8 +12,10 @@ import type { TreeEntry } from "./reader";
  *    `next.config.ts` being present is the whole signal; its contents add
  *    nothing.
  *  - **Fetching**: which files must actually be downloaded and parsed?
- *    Only dependency manifests, because a dependency list cannot be
- *    inferred from a filename.
+ *    Two families, and no others: dependency manifests, because a
+ *    dependency list cannot be inferred from a filename, and the short
+ *    named list of stylesheets below, because a design token cannot be
+ *    either (CORE-1 §12).
  *
  * Keeping these apart is what makes analysis cheap: a typical repository
  * needs one or two content fetches rather than dozens, while detection

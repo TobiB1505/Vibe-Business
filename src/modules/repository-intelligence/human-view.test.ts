@@ -434,3 +434,79 @@ describe("it is deterministic", () => {
     expect(buildRepositoryHumanView(snapshot())).toEqual(buildRepositoryHumanView(snapshot()));
   });
 });
+
+/* ---------------------------------------------------------------------------
+ * Sprint 0081 — catching mistakes before customers do
+ * ------------------------------------------------------------------------ */
+
+describe("the catching-mistakes capability", () => {
+  it("reads as good when tooling and a test command are both there", () => {
+    const view = buildRepositoryHumanView(
+      snapshot({
+        integrationSignals: [signal("vitest", "testing")],
+        scripts: { declared: ["test", "build"], source: "package.json" },
+      }),
+    );
+
+    const found = capability(view, "catching-mistakes");
+    expect(found.status).toBe("likely");
+    expect(found.tone).toBe("good");
+    expect(found.found).toContain("A test command in package.json");
+  });
+
+  it("does not claim a passing suite — only that the tooling is declared", () => {
+    const view = buildRepositoryHumanView(
+      snapshot({ integrationSignals: [signal("vitest", "testing")] }),
+    );
+
+    const found = capability(view, "catching-mistakes");
+    expect(`${found.title} ${found.basis}`).not.toMatch(/pass|passing|green|covered/i);
+  });
+
+  it("says CI alone is not a test suite", () => {
+    const view = buildRepositoryHumanView(
+      snapshot({
+        integrationSignals: [signal("github_actions", "ci", ".github/workflows/ci.yml")],
+        scripts: { declared: [], source: "package.json" },
+      }),
+    );
+
+    const found = capability(view, "catching-mistakes");
+    expect(found.status).toBe("unclear");
+    expect(found.missing).toContain("a test suite");
+    expect(found.missing).not.toContain("continuous integration");
+  });
+
+  it("warns plainly when a repository has neither", () => {
+    const view = buildRepositoryHumanView(
+      snapshot({ scripts: { declared: ["build"], source: "package.json" } }),
+    );
+
+    const found = capability(view, "catching-mistakes");
+    expect(found.status).toBe("not_found");
+    expect(found.tone).toBe("attention");
+    expect(found.whyItMatters).toContain("nothing in the repository that can tell you");
+  });
+
+  it("does not claim a missing test script for a repository with no manifest", () => {
+    // A Python project has not declined to declare a `test` script; it has
+    // nowhere to declare one. Reported as tooling absent, never as a
+    // manifest that omitted something.
+    const view = buildRepositoryHumanView(
+      snapshot({ scripts: { declared: [], source: null } }),
+    );
+
+    expect(capability(view, "catching-mistakes").found).toEqual([]);
+  });
+
+  it("renders a stored snapshot that predates the scripts field", () => {
+    // `repository_intelligence_snapshots.result` holds whatever analyzer wrote
+    // it, and the project page renders the newest successful row whatever
+    // version that was. A v3 row reaching this function must not throw.
+    const stored = snapshot({ integrationSignals: [signal("vitest", "testing")] });
+    delete (stored as { scripts?: unknown }).scripts;
+
+    expect(() => buildRepositoryHumanView(stored)).not.toThrow();
+    expect(capability(buildRepositoryHumanView(stored), "catching-mistakes").status).toBe("partial");
+  });
+});

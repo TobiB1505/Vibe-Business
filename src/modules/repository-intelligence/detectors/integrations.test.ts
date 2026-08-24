@@ -126,3 +126,107 @@ describe("detectIntegrationSignals", () => {
     }
   });
 });
+
+/* ---------------------------------------------------------------------------
+ * Sprint 0081 — the four categories the analyzer could not see
+ * ------------------------------------------------------------------------ */
+
+describe("test tooling", () => {
+  it("detects Vitest from its dependency and its config together", () => {
+    const context = contextFrom([
+      { path: "package.json", content: packageJson({ devDependencies: { vitest: "4" } }) },
+      { path: "vitest.config.mts" },
+    ]);
+
+    const vitest = detectIntegrationSignals(context).find((signal) => signal.id === "vitest");
+    expect(vitest?.category).toBe("testing");
+    expect(vitest?.confidence).toBe("high");
+  });
+
+  it("detects pytest from a Python manifest, where no package.json exists", () => {
+    const context = contextFrom([
+      { path: "pyproject.toml", content: "[tool.pytest.ini_options]\ntestpaths = ['tests']\n" },
+    ]);
+
+    expect(ids(detectIntegrationSignals(context))).toContain("pytest");
+  });
+
+  it("says nothing about testing for a repository that has none", () => {
+    const context = contextFrom([
+      { path: "package.json", content: packageJson({ dependencies: { next: "16" } }) },
+    ]);
+
+    const testing = detectIntegrationSignals(context).filter((signal) => signal.category === "testing");
+    expect(testing).toEqual([]);
+  });
+});
+
+describe("continuous integration", () => {
+  it("detects GitHub Actions from a directory no basename rule could match", () => {
+    const context = contextFrom([
+      { path: ".github/workflows/ci.yml" },
+      { path: ".github/workflows/release.yaml" },
+    ]);
+
+    const actions = detectIntegrationSignals(context).find((signal) => signal.id === "github_actions");
+    expect(actions?.category).toBe("ci");
+    expect(actions?.evidence.map((entry) => entry.path)).toEqual([
+      ".github/workflows/ci.yml",
+      ".github/workflows/release.yaml",
+    ]);
+  });
+
+  it("caps and sorts workflow evidence, so tree order cannot change a snapshot", () => {
+    const paths = ["d.yml", "b.yml", "e.yml", "a.yml", "c.yml"].map((name) => ({
+      path: `.github/workflows/${name}`,
+    }));
+
+    const actions = detectIntegrationSignals(contextFrom(paths)).find(
+      (signal) => signal.id === "github_actions",
+    );
+    expect(actions?.evidence.map((entry) => entry.path)).toEqual([
+      ".github/workflows/a.yml",
+      ".github/workflows/b.yml",
+      ".github/workflows/c.yml",
+    ]);
+  });
+
+  it("does not mistake a workflow-shaped path outside the workflows directory", () => {
+    const context = contextFrom([
+      { path: "docs/.github/workflows/example.yml" },
+      { path: ".github/ISSUE_TEMPLATE/bug.yml" },
+    ]);
+
+    expect(ids(detectIntegrationSignals(context))).not.toContain("github_actions");
+  });
+
+  it("detects the single-file providers from their basenames", () => {
+    const context = contextFrom([
+      { path: ".gitlab-ci.yml" },
+      { path: "Jenkinsfile" },
+      { path: ".circleci/config.yml" },
+    ]);
+
+    const found = ids(detectIntegrationSignals(context));
+    expect(found).toContain("gitlab_ci");
+    expect(found).toContain("jenkins");
+    expect(found).toContain("circleci");
+  });
+});
+
+describe("e-mail sending and feature flagging", () => {
+  it("detects Resend and LaunchDarkly from their dependencies", () => {
+    const context = contextFrom([
+      {
+        path: "package.json",
+        content: packageJson({
+          dependencies: { resend: "4", "launchdarkly-node-server-sdk": "9" },
+        }),
+      },
+    ]);
+
+    const signals = detectIntegrationSignals(context);
+    expect(signals.find((signal) => signal.id === "resend")?.category).toBe("email");
+    expect(signals.find((signal) => signal.id === "launchdarkly")?.category).toBe("feature_flags");
+  });
+});

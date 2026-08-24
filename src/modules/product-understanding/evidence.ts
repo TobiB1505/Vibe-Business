@@ -1,6 +1,9 @@
 import type { AuthenticatedProductIntelligenceSnapshot } from "@/modules/authenticated-product-intelligence/schema";
 import type { LiveProductIntelligenceSnapshot } from "@/modules/live-product-intelligence/schema";
-import type { RepositoryIntelligenceSnapshot } from "@/modules/repository-intelligence/schema";
+import {
+  SIGNAL_CATEGORY_LABELS,
+  type RepositoryIntelligenceSnapshot,
+} from "@/modules/repository-intelligence/schema";
 import type { EvidenceSource } from "./schema";
 
 /**
@@ -223,11 +226,17 @@ export function buildRepositoryEvidence(
   }
 
   for (const signal of snapshot.integrationSignals) {
+    // What the sentence may claim depends on what was actually seen. A declared
+    // dependency and a file sitting in `.github/workflows/` are different facts,
+    // and calling the second one "a dependency" would be a small lie told to a
+    // model in the one place built to keep it honest.
+    const fromDependency = signal.evidence.some((entry) => entry.kind === "manifest_dependency");
     items.push(
       item(
         evidenceId.repoIntegration(signal.id),
         "repository",
-        `A ${signal.category} integration signal for ${signal.name} is present in the code (a dependency, not proof the feature works)`,
+        `A ${SIGNAL_CATEGORY_LABELS[signal.category]} signal for ${signal.name} is present in the code ` +
+          `(${fromDependency ? "a dependency" : "a file in the repository"}, not proof the feature works)`,
         2,
       ),
     );

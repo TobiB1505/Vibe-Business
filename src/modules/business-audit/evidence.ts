@@ -1,5 +1,8 @@
 import { surfaceEvidenceId } from "./evidence-ids";
-import type { RepositoryIntelligenceSnapshot } from "@/modules/repository-intelligence/schema";
+import {
+  SIGNAL_CATEGORY_LABELS,
+  type RepositoryIntelligenceSnapshot,
+} from "@/modules/repository-intelligence/schema";
 import type { LiveProductIntelligenceSnapshot } from "@/modules/live-product-intelligence/schema";
 import type { BusinessContext } from "@/modules/projects/business-context";
 
@@ -145,7 +148,11 @@ export function buildRepositoryEvidence(
       item(
         `repo.integration.${slug(signal.id)}`,
         "repository",
-        `${signal.category} integration signal: ${signal.name} (${signal.confidence} confidence)`,
+        // The category is looked up, never interpolated raw. The members read
+        // as English by luck rather than design — `feature_flags` carries an
+        // underscore and `ci` is an abbreviation — and this string reaches a
+        // founder's screen.
+        `${SIGNAL_CATEGORY_LABELS[signal.category]} signal: ${signal.name} (${signal.confidence} confidence)`,
         1,
       ),
     );

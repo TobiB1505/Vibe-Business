@@ -23,7 +23,7 @@ export const REPOSITORY_INTELLIGENCE_SCHEMA_VERSION = "repository_intelligence.v
  * always says which analyzer produced it and reuse can be invalidated.
  * Deliberately independent of the app/package version (Sprint 2 §30).
  */
-export const ANALYZER_VERSION = "repo-intelligence-v3" as const;
+export const ANALYZER_VERSION = "repo-intelligence-v4" as const;
 
 /** Deliberately coarse — see Sprint 2 §18, no fake precision. */
 export type Confidence = "high" | "medium" | "low";
@@ -55,7 +55,34 @@ export type SignalCategory =
   | "auth"
   | "payments"
   | "analytics"
-  | "monitoring";
+  | "monitoring"
+  | "testing"
+  | "ci"
+  | "email"
+  | "feature_flags";
+
+/**
+ * What each category is called when a person reads it.
+ *
+ * Published for the same reason `BUSINESS_SURFACE_LABELS` is: the two evidence
+ * builders interpolate the category into a founder-facing sentence, and until
+ * Sprint 0081 they interpolated the raw member. "payments integration signal"
+ * happened to read correctly; "testing integration signal" and "ci integration
+ * signal" do not, and `feature_flags` would have reached a founder with its
+ * underscore intact.
+ */
+export const SIGNAL_CATEGORY_LABELS: Record<SignalCategory, string> = {
+  deployment: "deployment",
+  database: "database",
+  auth: "authentication",
+  payments: "payments",
+  analytics: "analytics",
+  monitoring: "monitoring",
+  testing: "test tooling",
+  ci: "continuous integration",
+  email: "e-mail sending",
+  feature_flags: "feature flagging",
+};
 
 /**
  * An integration *signal*, not a claim that the service is live or
@@ -159,6 +186,42 @@ export type ProjectStructure = {
 };
 
 export type PackageManagerId = "pnpm" | "npm" | "yarn" | "bun" | "unknown";
+
+/**
+ * Well-known `package.json` script names, as a closed set.
+ *
+ * A closed set because an arbitrary script name is unbounded untrusted text
+ * from a customer repository, and this field is rendered to a founder and
+ * handed to a model. Names only — a script *body* is never parsed, stored or
+ * shown (`parsers/package-json.ts`), because a command line is an injection
+ * surface and no detection needs it.
+ */
+export type ProjectScriptId = "test" | "test:e2e" | "e2e" | "typecheck" | "lint" | "build" | "start";
+
+/**
+ * Which of those scripts the repository root declares.
+ *
+ * ## This is orientation, never a command source
+ *
+ * It exists so a person — or the Opportunity model — can see *before* paying
+ * for an agent run that a repository has no `test` script, which is to say
+ * that nothing will verify the change the run produces (rule 78).
+ *
+ * It must never become the input to a command Vibe runs. Validation and agent
+ * execution re-read `package.json` from the sandbox filesystem the command is
+ * about to execute against (`validation/orchestrator.ts`,
+ * `operations/agent-execution/execution.ts`), and that is correct: a plan built
+ * from a snapshot is a belief about a filesystem, while a plan built from the
+ * filesystem is a fact about it. Rule 52 forbids carrying the raw manifest
+ * across a durable step boundary in any case. `scripts.test.ts` asserts that no
+ * command-building module reads this field, so the two sources cannot drift
+ * into disagreeing about what a repository can do.
+ */
+export type ProjectScripts = {
+  declared: ProjectScriptId[];
+  /** The manifest the names were read from, for evidence. Null when none. */
+  source: string | null;
+};
 
 export type RepositoryFacts = {
   fullName: string;
@@ -272,6 +335,7 @@ export type RepositoryIntelligenceSnapshot = {
   languages: Detection[];
   frameworks: Detection[];
   packageManager: PackageManagerId;
+  scripts: ProjectScripts;
   runtime: Detection[];
   integrationSignals: IntegrationSignal[];
   routes: RouteIntelligence;

@@ -8,6 +8,7 @@ import {
   trimUnderstandingPack,
   understandingEvidenceIds,
 } from "./evidence";
+import type { RepositoryIntelligenceSnapshot } from "@/modules/repository-intelligence/schema";
 import { fakeLiveSnapshot, fakeRepositorySnapshot } from "./test-support";
 
 const bothSources = () => ({
@@ -214,5 +215,50 @@ describe("trimming", () => {
   it("returns the same pack when nothing would be dropped", () => {
     const pack = trimUnderstandingPack(buildUnderstandingPack(bothSources()), 1);
     expect(trimUnderstandingPack(pack, 1)).toBe(pack);
+  });
+});
+
+/* ---------------------------------------------------------------------------
+ * Sprint 0081 — the sentence matches the evidence that produced it
+ * ------------------------------------------------------------------------ */
+
+describe("integration signal sentences", () => {
+  function labelFor(signal: RepositoryIntelligenceSnapshot["integrationSignals"][number]): string {
+    const items = buildRepositoryEvidence({
+      ...fakeRepositorySnapshot(),
+      integrationSignals: [signal],
+    });
+    const found = items.find((item) => item.id.includes(signal.id));
+    if (!found) throw new Error(`no evidence item for ${signal.id}`);
+    return found.label;
+  }
+
+  it("calls a dependency a dependency", () => {
+    const label = labelFor({
+      id: "stripe",
+      name: "Stripe",
+      category: "payments",
+      confidence: "high",
+      evidence: [{ kind: "manifest_dependency", path: "package.json", detail: "stripe" }],
+    });
+
+    expect(label).toContain("A payments signal for Stripe");
+    expect(label).toContain("(a dependency, not proof the feature works)");
+  });
+
+  it("does not call a workflow file a dependency", () => {
+    // The one place built to keep a model honest is the worst place to tell it
+    // a small lie about where a fact came from.
+    const label = labelFor({
+      id: "github_actions",
+      name: "GitHub Actions",
+      category: "ci",
+      confidence: "medium",
+      evidence: [{ kind: "file_path", path: ".github/workflows/ci.yml" }],
+    });
+
+    expect(label).toContain("A continuous integration signal for GitHub Actions");
+    expect(label).toContain("(a file in the repository, not proof the feature works)");
+    expect(label).not.toContain("a dependency");
   });
 });
