@@ -21,10 +21,12 @@ import type { CrawlCompleteness, CrawlCompletenessReason } from "./budgets";
  * to reason about, never as instructions to follow (CLAUDE.md rule 25).
  */
 
+import type { PageRendering } from "./rendering";
+
 export const LIVE_PRODUCT_INTELLIGENCE_SCHEMA_VERSION = "live-product-intelligence.v1" as const;
 
 /** Bumped whenever detection rules change materially, invalidating reuse. */
-export const LIVE_PRODUCT_ANALYZER_VERSION = "live-product-analyzer-v2" as const;
+export const LIVE_PRODUCT_ANALYZER_VERSION = "live-product-analyzer-v3" as const;
 
 /** Deliberately coarse — no fake numeric precision (Sprint 3 §14). */
 export type Confidence = "high" | "medium" | "low";
@@ -114,6 +116,15 @@ export type PageSummary = {
   ctas: string[];
   surfaces: ProductSurfaceId[];
   bytes: number;
+  /**
+   * Whether this page could be read at all (Sprint 0082).
+   *
+   * Optional so a stored snapshot taken before this existed still parses. Read
+   * it as `"readable"` when absent — that is what every consumer assumed for
+   * every page before this field, and inventing a warning for old snapshots
+   * would be a claim no analyzer ever made.
+   */
+  rendering?: PageRendering;
 };
 
 export type SeoSignalId =
@@ -320,6 +331,33 @@ export type LiveCompleteness = {
   reasons: CrawlCompletenessReason[];
 };
 
+/**
+ * How much of the site Vibe could actually read (Sprint 0082).
+ *
+ * Separate from `completeness`, which answers a different question. Completeness
+ * says how much of the site was *reached*; this says how much of what was
+ * reached could be *understood*. A crawl can hit every page under every budget
+ * and still come back with nothing, and before this existed that outcome was
+ * indistinguishable in the snapshot from a product that genuinely has no
+ * headings, no calls to action and no pricing.
+ *
+ * Optional, so a snapshot stored before this existed still parses.
+ */
+export type LiveReadability = {
+  /** Pages whose markup carried content a reader would use. */
+  readable: number;
+  /** Pages that were read correctly and are genuinely almost empty. */
+  empty: number;
+  /**
+   * Pages that render in the browser, so what Vibe fetched is not what a
+   * person sees. Vibe runs no browser by decision — [ADR 0010](../../../docs/decisions/0010-safe-outbound-http-inspection.md)
+   * and rule 38 — so this is a limit reported, never one worked around.
+   */
+  clientRendered: number;
+  /** Paths of the client-rendered pages, capped, as evidence for the count. */
+  clientRenderedPaths: string[];
+};
+
 /** A non-fatal observation worth surfacing, e.g. a page that failed to load. */
 export type LiveWarning = {
   code: string;
@@ -333,6 +371,7 @@ export type LiveProductIntelligenceSnapshot = {
   crawl: CrawlSummary;
   siteMetadata: SiteMetadata;
   pages: PageSummary[];
+  readability?: LiveReadability;
   productSurfaces: ProductSurfaceSignal[];
   seoSignals: SeoSignal[];
   conversionSignals: ConversionSignals;

@@ -1,3 +1,4 @@
+import { describeCompletenessReasons } from "./budgets";
 import type {
   LiveProductIntelligenceSnapshot,
   ProductSurfaceId,
@@ -238,9 +239,36 @@ export function buildLiveProductHumanView(
         value: surface.detected,
       })),
     ],
-    incompleteReason:
-      snapshot.completeness.status === "complete"
-        ? null
-        : `This check did not finish completely (${snapshot.completeness.reasons.join(", ")}), so some of the results above may be incomplete.`,
+    incompleteReason: describeIncompleteness(snapshot),
   };
+}
+
+/**
+ * Why the results above may not be the whole picture.
+ *
+ * The client-rendered case gets its own sentence rather than joining the list,
+ * because "some of the results may be incomplete" is far too mild for it: on a
+ * page that builds itself in the browser, almost everything above is *unread*
+ * rather than absent, and a founder told only that the check "did not finish
+ * completely" would reasonably conclude their product has no calls to action.
+ */
+function describeIncompleteness(snapshot: LiveProductIntelligenceSnapshot): string | null {
+  if (snapshot.completeness.status === "complete") return null;
+
+  const clientRendered = snapshot.readability?.clientRendered ?? 0;
+  const others = snapshot.completeness.reasons.filter((reason) => reason !== "client_rendered");
+
+  if (clientRendered === 0) {
+    return `This check did not finish completely (${describeCompletenessReasons(snapshot.completeness.reasons)}), so some of the results above may be incomplete.`;
+  }
+
+  const pages = clientRendered === 1 ? "One page" : `${clientRendered} pages`;
+  const verb = clientRendered === 1 ? "builds" : "build";
+  const tail = others.length > 0 ? ` This check also stopped short: ${describeCompletenessReasons(others)}.` : "";
+
+  return (
+    `${pages} on your site ${verb} themselves in your visitor's browser. Vibe reads the page a server sends ` +
+    `and does not run a browser, so for ${clientRendered === 1 ? "that page" : "those pages"} it saw an empty shell. ` +
+    `Treat anything reported as missing above as "Vibe could not see it", not as "your product does not have it".${tail}`
+  );
 }

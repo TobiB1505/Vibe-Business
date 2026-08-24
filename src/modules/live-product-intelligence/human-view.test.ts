@@ -128,7 +128,10 @@ describe("it never flatters", () => {
     );
 
     expect(partial.incompleteReason).toContain("did not finish");
-    expect(partial.incompleteReason).toContain("page_budget_reached");
+    expect(partial.incompleteReason).toContain("the page limit was reached");
+    // The reason is named in words, not as the enum member it is stored as.
+    // Until Sprint 0082 this assertion required the opposite.
+    expect(partial.incompleteReason).not.toContain("page_budget_reached");
   });
 });
 

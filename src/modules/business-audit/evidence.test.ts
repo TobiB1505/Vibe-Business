@@ -412,3 +412,57 @@ describe("integration signal labels", () => {
     expect(pack.items.map((item) => item.id)).toContain("repo.integration.vitest");
   });
 });
+
+/* ---------------------------------------------------------------------------
+ * Sprint 0082 — the model is told the difference between unread and absent
+ * ------------------------------------------------------------------------ */
+
+describe("a client-rendered site in the evidence pack", () => {
+  function packFor(readability: LiveProductIntelligenceSnapshot["readability"]) {
+    return buildEvidencePack({
+      ...input(),
+      liveProduct: {
+        ...fakeLiveSnapshot(),
+        readability,
+        completeness: { status: "partial", reasons: ["client_rendered"] },
+      },
+    });
+  }
+
+  it("says the absences are unread, and says it at the top priority", () => {
+    const pack = packFor({
+      readable: 1,
+      empty: 0,
+      clientRendered: 2,
+      clientRenderedPaths: ["/app", "/pricing"],
+    });
+
+    const rendering = pack.items.find((entry) => entry.id === "live.rendering.client_rendered");
+    expect(rendering).toBeDefined();
+    expect(rendering?.label).toContain("2 of 3 page(s)");
+    expect(rendering?.label).toContain("/app, /pricing");
+    expect(rendering?.label).toContain("unread, not missing");
+  });
+
+  it("never puts the raw reason member in front of a model", () => {
+    const labels = packFor({ readable: 0, empty: 0, clientRendered: 1, clientRenderedPaths: ["/"] })
+      .items.map((entry) => entry.label)
+      .join("\n");
+
+    expect(labels).toContain("some pages build themselves in the browser");
+    expect(labels).not.toContain("client_rendered)");
+  });
+
+  it("mints nothing for a site that read fine", () => {
+    const pack = buildEvidencePack(input());
+    expect(pack.items.map((entry) => entry.id)).not.toContain("live.rendering.client_rendered");
+  });
+
+  it("mints nothing for a snapshot stored before readability existed", () => {
+    // `live_product_intelligence_snapshots.result` holds whatever analyzer
+    // wrote it. A v2 row has no readability at all, and inventing a warning
+    // for it would be a claim no analyzer ever made.
+    const pack = packFor(undefined);
+    expect(pack.items.map((entry) => entry.id)).not.toContain("live.rendering.client_rendered");
+  });
+});
