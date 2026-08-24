@@ -46,10 +46,14 @@ ambient behavior. After entry, at most a slow centre breath and one low-opacity
 signal path may continue; both pause when the document is hidden. Reduced motion
 removes those effects and all large transforms. CSS owns static atmosphere only.
 
-The default panel shows one real top priority. Selecting a node changes that
-same panel into founder-facing detail with real related areas, diagnosis,
-missing context, evidence and an Action Plan link. It does not navigate, open a
-modal or append a second report below the map.
+The default panel shows one real top priority. Selecting a node changes the
+workspace into founder-facing detail with real related areas, diagnosis,
+missing context, evidence and an Action Plan link. Wide screens split that
+focus state into the retained map, a structured detail surface and a narrow
+scoring-context rail; narrower screens stack the scoring context beneath the
+detail. The focus state does not navigate, open a modal or append a second
+report below the map. Per-lens history remains an explicit absent state until a
+comparable bounded read model exists.
 
 On mobile, the desktop geometry is replaced by an aggregate core and a
 horizontally browsable list of the same nine semantic controls. Detail follows

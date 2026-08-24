@@ -21,7 +21,7 @@ const NODE_POSITIONS: Record<BusinessLens, { x: number; y: number }> = {
   business_readiness: { x: 370, y: 604 },
   retention: { x: 186, y: 548 },
   measurement: { x: 108, y: 395 },
-  scalability: { x: 158, y: 208 },
+  scalability: { x: 174, y: 198 },
 };
 
 const STARS = [
@@ -53,6 +53,9 @@ function planetStyle(node: BusinessBrainNode): PlanetStyle {
 function nodeSize(node: BusinessBrainNode): string {
   if (node.priority === "now") return "size-[8.85rem]";
   if (node.priority === "soon") return "size-[8rem]";
+  if (node.health === "unclear" || node.health === "blocked_by_missing_context") {
+    return "size-[7.75rem]";
+  }
   return "size-[7.35rem]";
 }
 
@@ -283,14 +286,14 @@ export function BusinessMap({
   const activeNode = active ? view.nodes.find((node) => node.id === active) ?? null : null;
   const activeAccent = activeNode ? planetStyle(activeNode)["--planet-accent"] : "var(--color-mint)";
   const selectedAt = selected ? NODE_POSITIONS[selected] : null;
-  const focusOffset = selectedAt ? { x: (CORE.x - selectedAt.x) * 0.05, y: (CORE.y - selectedAt.y) * 0.04 } : { x: 0, y: 0 };
+  const focusOffset = selectedAt ? { x: (CORE.x - selectedAt.x) * 0.085, y: (CORE.y - selectedAt.y) * 0.065 } : { x: 0, y: 0 };
 
   return (
     <div className="min-w-0">
       <motion.div
         className="business-brain-canvas relative mx-auto hidden aspect-[780/690] w-full max-w-[58rem] md:block"
         data-testid="business-map-radial"
-        animate={reducedMotion ? { opacity: 1 } : { x: focusOffset.x, y: focusOffset.y, scale: selected ? 1.012 : 1 }}
+        animate={reducedMotion ? { opacity: 1 } : { x: focusOffset.x, y: focusOffset.y, scale: selected ? 1.025 : 1 }}
         transition={{ type: "spring", stiffness: 150, damping: 24 }}
       >
         <svg viewBox={`0 0 ${VIEWBOX.width} ${VIEWBOX.height}`} className="pointer-events-none absolute inset-0 size-full overflow-visible" aria-hidden="true">

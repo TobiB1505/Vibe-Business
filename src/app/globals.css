@@ -411,6 +411,28 @@
     0 26px 70px -46px rgb(0 0 0 / 0.95);
 }
 
+.business-brain-focus-panel,
+.business-brain-focus-rail {
+  border: 1px solid var(--color-line-2);
+  border-radius: 1.1rem;
+  background:
+    radial-gradient(circle at 14% 0%, rgb(255 122 92 / 0.035), transparent 28%),
+    linear-gradient(145deg, rgb(255 255 255 / 0.034), rgb(255 255 255 / 0.012)),
+    var(--color-surface-1);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.055) inset,
+    0 30px 78px -50px rgb(0 0 0 / 0.98);
+}
+
+.business-brain-insight-card {
+  border: 1px solid var(--color-line-1);
+  border-radius: 0.95rem;
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 0.026), rgb(255 255 255 / 0.009)),
+    rgb(255 255 255 / 0.012);
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.035) inset;
+}
+
 /*
  * The focus-safe transition (UI-6 §9).
  *

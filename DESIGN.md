@@ -77,6 +77,8 @@ The project Home is the deliberate exception to the product's otherwise quiet pr
 
 The entrance choreography settles within roughly 1.5 seconds. After that, only a very slow core breath and one bounded low-opacity signal path may remain active; document visibility pauses both. Hover and selection may wake only real related paths and must dim unrelated nodes without removing their labels. `prefers-reduced-motion` removes staged transforms, signal movement and pulsing without hiding content. Coral is reserved for a real critical gap and amber for incomplete or waiting states, even inside this signature surface.
 
+Selection changes the Business Brain into a focused workspace rather than opening a drawer or appending a report. The map remains visible, a structured dimension explanation takes the primary detail column, and a narrow scoring rail separates current evidence coverage from unsupported history. At narrower widths those regions stack without shrinking the map into an unreadable canvas. Tabs may organize real evidence, signals and history, but every unsupported dimension-level reading must render an explicit absent state instead of borrowing the overall Business Health history.
+
 Motion for React owns the Business Brain's entrance, presence, layout, hover and selected-state transitions. CSS is limited to static atmosphere, surfaces and the global reduced-motion backstop. This exception must not be copied into settings, billing, tables or ordinary dashboard cards.
 
 ## Do's and Don'ts

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { type KeyboardEvent, useId, useRef, useState } from "react";
 import { AnimatePresence, LayoutGroup, motion, useReducedMotion } from "motion/react";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
 import { cn } from "@/lib/utils/cn";
@@ -16,6 +16,8 @@ import type {
 import { BusinessLensIcon, BusinessMap } from "./business-map";
 
 const PANEL_TRANSITION = { type: "spring" as const, stiffness: 220, damping: 26 };
+const DETAIL_TABS = ["overview", "evidence", "signals", "history"] as const;
+type DetailTab = (typeof DETAIL_TABS)[number];
 
 function ArrowIcon({ direction = "right" }: { direction?: "right" | "up" | "down" }) {
   const glyph = direction === "up" ? "↑" : direction === "down" ? "↓" : "→";
@@ -245,6 +247,10 @@ function SelectedPanel({
   onClose: () => void;
   onSelect: (lens: BusinessLens) => void;
 }) {
+  const reducedMotion = Boolean(useReducedMotion());
+  const [activeTab, setActiveTab] = useState<DetailTab>("overview");
+  const tabRefs = useRef<Partial<Record<DetailTab, HTMLButtonElement | null>>>({});
+  const tabId = useId().replace(/:/g, "");
   const relationships = view.relationships.filter(
     (relationship) => relationship.from === node.id || relationship.to === node.id,
   );
@@ -252,168 +258,311 @@ function SelectedPanel({
   for (const item of node.problem?.evidence ?? []) {
     if (!evidence.some((existing) => existing.id === item.id)) evidence.push(item);
   }
-  const sourceCount = new Set(evidence.map((item) => item.source)).size;
+  const sourceSignals = Array.from(
+    evidence.reduce((counts, item) => {
+      counts.set(item.source, (counts.get(item.source) ?? 0) + 1);
+      return counts;
+    }, new Map<string, number>()),
+  );
+  const stateLabel =
+    node.health === "weak"
+      ? "Needs attention"
+      : node.health === "strong"
+        ? "Strong"
+        : node.health === "adequate"
+          ? "Adequate"
+          : "Not assessed";
+
+  function onTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, current: DetailTab) {
+    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
+    event.preventDefault();
+    const currentIndex = DETAIL_TABS.indexOf(current);
+    const next =
+      event.key === "Home"
+        ? DETAIL_TABS[0]
+        : event.key === "End"
+          ? DETAIL_TABS.at(-1)!
+          : DETAIL_TABS[
+              (currentIndex + (event.key === "ArrowRight" ? 1 : -1) + DETAIL_TABS.length) %
+                DETAIL_TABS.length
+            ];
+    setActiveTab(next);
+    tabRefs.current[next]?.focus();
+  }
+
+  const insightIcon = (kind: "found" | "matter" | "connected" | "move") => (
+    <span
+      aria-hidden="true"
+      className={cn(
+        "flex size-10 shrink-0 items-center justify-center rounded-full border",
+        kind === "found" || kind === "move"
+          ? "border-coral/20 bg-coral/[0.07] text-coral"
+          : kind === "matter"
+            ? "border-amber/20 bg-amber/[0.07] text-amber"
+            : "border-mint/20 bg-mint/[0.07] text-mint",
+      )}
+    >
+      {kind === "found" ? "⌕" : kind === "matter" ? "✦" : kind === "connected" ? "⌘" : "⚑"}
+    </span>
+  );
 
   return (
     <motion.section
       key={node.id}
       layout
-      className="business-brain-side-card flex min-h-[34rem] flex-col p-5 sm:p-6"
+      className="business-brain-focus-panel flex min-h-[40rem] min-w-0 flex-col overflow-hidden"
       initial={{ opacity: 0, x: 22, scale: 0.985 }}
       animate={{ opacity: 1, x: 0, scale: 1 }}
       exit={{ opacity: 0, x: -14, scale: 0.99 }}
       transition={PANEL_TRANSITION}
       data-testid="selected-lens-detail"
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex flex-col gap-2">
-          <span className="text-mint text-xs font-semibold">Selected business area</span>
-          <h2 className="text-fg text-2xl leading-tight font-semibold tracking-[-0.035em]">
-            {node.label}
-          </h2>
+      <div className="flex items-start justify-between gap-4 px-5 pt-5 sm:px-6 sm:pt-6">
+        <div className="min-w-0">
+          <span className={cn("text-[0.7rem] font-semibold tracking-[0.12em] uppercase", node.health === "weak" ? "text-coral" : "text-mint")}>
+            Selected dimension
+          </span>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <h2 className="text-fg text-2xl leading-tight font-semibold tracking-[-0.035em]">
+              {node.label}
+            </h2>
+            <span className={cn("rounded-full border px-3 py-1 text-xs font-medium", node.health === "weak" ? "border-coral/25 bg-coral/[0.08] text-coral" : node.health === "strong" ? "border-mint/25 bg-mint/[0.08] text-mint" : "border-amber/25 bg-amber/[0.08] text-amber")}>
+              {stateLabel}
+            </span>
+          </div>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close selected business area"
-          className="border-line-2 text-fg-muted hover:border-line-strong hover:text-fg flex size-9 items-center justify-center rounded-full border text-lg transition-interactive"
-        >
+        <button type="button" onClick={onClose} aria-label="Back to Business Health overview" className="border-line-2 text-fg-muted hover:border-line-strong hover:text-fg flex size-10 shrink-0 cursor-pointer items-center justify-center rounded-full border text-lg transition-interactive focus-visible:ring-2 focus-visible:ring-mint">
           ×
         </button>
       </div>
 
-      <div className="mt-4 flex flex-wrap gap-2">
-        <span className={cn("rounded-full px-3 py-1.5 text-xs font-medium", node.health === "weak" ? "bg-coral/10 text-coral" : node.health === "strong" ? "bg-mint/10 text-mint" : "bg-amber/10 text-amber")}>
-          {node.healthLabel}
-        </span>
-        <span className="bg-surface-4 text-fg-secondary rounded-full px-3 py-1.5 text-xs">
-          {node.priorityLabel}
-        </span>
-        <span className="bg-surface-4 text-fg-muted rounded-full px-3 py-1.5 text-xs">
-          {node.score === null ? "Not scored" : `${node.score} / 100`}
-        </span>
+      <div role="tablist" aria-label={`${node.label} details`} className="border-line-1 mt-5 flex gap-1 overflow-x-auto border-b px-4 sm:px-5">
+        {DETAIL_TABS.map((tab) => {
+          const selected = activeTab === tab;
+          const label = tab === "evidence" ? `Evidence (${evidence.length})` : `${tab[0].toUpperCase()}${tab.slice(1)}`;
+          return (
+            <button
+              key={tab}
+              ref={(element) => { tabRefs.current[tab] = element; }}
+              type="button"
+              role="tab"
+              id={`${tabId}-${tab}-tab`}
+              aria-controls={`${tabId}-${tab}-panel`}
+              aria-selected={selected}
+              tabIndex={selected ? 0 : -1}
+              onClick={() => setActiveTab(tab)}
+              onKeyDown={(event) => onTabKeyDown(event, tab)}
+              className={cn(
+                "relative min-h-11 shrink-0 cursor-pointer px-3 text-sm transition-interactive focus-visible:ring-2 focus-visible:ring-mint",
+                selected ? (node.health === "weak" ? "text-coral" : "text-mint") : "text-fg-muted hover:text-fg",
+              )}
+            >
+              {label}
+              {selected && <motion.span layoutId={`${tabId}-active-tab`} className={cn("absolute inset-x-2 -bottom-px h-0.5", node.health === "weak" ? "bg-coral" : "bg-mint")} />}
+            </button>
+          );
+        })}
       </div>
 
-      {node.summary && (
-        <p className="text-fg-prose mt-6 text-[0.96rem] leading-relaxed">{node.summary}</p>
-      )}
-
-      {node.problem && (
+      <AnimatePresence mode="wait" initial={false}>
         <motion.div
-          className="border-line-1 mt-6 flex flex-col gap-3 border-t pt-6"
-          initial={{ opacity: 0, y: 10 }}
+          key={activeTab}
+          role="tabpanel"
+          id={`${tabId}-${activeTab}-panel`}
+          aria-labelledby={`${tabId}-${activeTab}-tab`}
+          className="flex flex-1 flex-col gap-4 p-4 sm:p-5"
+          initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.28, delay: 0.08 }}
+          exit={reducedMotion ? { opacity: 0 } : { opacity: 0, y: -5 }}
+          transition={{ duration: reducedMotion ? 0.08 : 0.2 }}
         >
-          <span className="text-fg-muted text-xs font-medium">What matters here</span>
-          <h3 className="text-fg text-lg leading-snug font-semibold tracking-[-0.02em]">
-            {node.problem.headline}
-          </h3>
-          <p className="text-fg-muted text-sm leading-relaxed">{node.problem.explanation}</p>
-          {node.problem.whyItMatters && (
-            <div className="border-line-1 mt-1 border-l-2 pl-3">
-              <p className="text-fg-secondary text-sm leading-relaxed">{node.problem.whyItMatters}</p>
-            </div>
+          {activeTab === "overview" && (
+            <>
+              <div className="business-brain-insight-card flex gap-3 p-4">
+                {insightIcon("found")}
+                <div className="min-w-0">
+                  <h3 className="text-fg text-sm font-semibold">What we found</h3>
+                  <p className="text-fg-secondary mt-1.5 text-sm leading-relaxed">
+                    {node.problem?.explanation ?? node.summary ?? "The available evidence did not support a concise diagnosis for this area."}
+                  </p>
+                </div>
+              </div>
+
+              <div className="business-brain-insight-card flex gap-3 p-4">
+                {insightIcon("matter")}
+                <div className="min-w-0">
+                  <h3 className="text-fg text-sm font-semibold">Why it matters</h3>
+                  <p className="text-fg-secondary mt-1.5 text-sm leading-relaxed">
+                    {node.problem?.whyItMatters ?? "This audit did not record a separate impact explanation for this area."}
+                  </p>
+                </div>
+              </div>
+
+              <div className="business-brain-insight-card flex gap-3 p-4">
+                {insightIcon("connected")}
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-fg text-sm font-semibold">Connected areas</h3>
+                  <p className="text-fg-muted mt-1 text-xs">Areas joined by the same audit conclusion.</p>
+                  {relationships.length > 0 ? (
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {relationships.map((relationship) => {
+                        const otherId = relationship.from === node.id ? relationship.to : relationship.from;
+                        const other = view.nodes.find((candidate) => candidate.id === otherId);
+                        if (!other) return null;
+                        return (
+                          <button type="button" key={relationship.id} onClick={() => onSelect(other.id)} aria-label={`Explore connected area ${other.label}`} className="border-mint/20 bg-mint/[0.045] text-fg-secondary hover:border-mint/50 hover:text-mint min-h-9 cursor-pointer rounded-full border px-3 text-xs transition-interactive focus-visible:ring-2 focus-visible:ring-mint">
+                            {other.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-fg-muted mt-3 text-sm">No evidence-grounded relationship was recorded for this area.</p>
+                  )}
+                </div>
+              </div>
+
+              <div className={cn("relative mt-1 overflow-hidden rounded-2xl border p-4", node.health === "weak" ? "border-coral/60 bg-[radial-gradient(circle_at_100%_0%,rgb(255_122_92/0.12),transparent_44%),rgb(255_122_92/0.035)]" : "border-mint/40 bg-mint/[0.035]")}>
+                <div className="flex items-start gap-3">
+                  {insightIcon("move")}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h3 className="text-fg text-sm font-semibold">What to do next</h3>
+                      {node.problem && <span className="text-coral text-[0.65rem] font-semibold tracking-[0.08em] uppercase">#{node.problem.rank} priority</span>}
+                    </div>
+                    <p className="text-fg mt-2 text-lg font-semibold tracking-[-0.02em]">
+                      {node.problem?.move?.title ?? node.problem?.headline ?? "No next move is linked yet"}
+                    </p>
+                    {node.problem?.move && (
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                        <span className="text-fg-secondary">{IMPACT_LABELS[node.problem.move.impact]}</span>
+                        <span aria-hidden="true" className="text-fg-disabled">•</span>
+                        <span className="text-amber">{EFFORT_LABELS[node.problem.move.effort]}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                <Link href={node.problem && node.problem.moveCount > 0 ? movesContextHref(movesHref, node.problem.key) : movesHref} className={cn("mt-4 flex min-h-11 items-center justify-center gap-3 rounded-xl px-4 text-sm font-semibold transition-interactive focus-visible:ring-2 focus-visible:ring-mint", node.health === "weak" ? "bg-coral text-[#170805] hover:bg-[#ff8e73]" : "bg-mint text-mint-ink hover:bg-mint-hover")}>
+                  {node.problem ? actionLabel(node.problem.moveCount, hasMoves) : "View action plan"}
+                  <ArrowIcon />
+                </Link>
+              </div>
+
+              {node.missingContext.length > 0 && (
+                <details className="group border-line-1 border-t pt-4">
+                  <summary className="text-fg-secondary hover:text-fg flex min-h-10 cursor-pointer list-none items-center justify-between gap-3 rounded-sm text-sm focus-visible:ring-2 focus-visible:ring-mint">
+                    <span>Learn more about this dimension</span>
+                    <span aria-hidden="true" className="transition-transform group-open:rotate-180">⌄</span>
+                  </summary>
+                  <div className="border-amber/20 bg-amber/[0.035] mt-3 rounded-xl border p-4">
+                    <h3 className="text-amber text-xs font-medium">Only you can answer</h3>
+                    <ul className="text-fg-muted mt-2 flex list-disc flex-col gap-1.5 pl-4 text-sm">
+                      {node.missingContext.map((item) => <li key={item}>{item}</li>)}
+                    </ul>
+                  </div>
+                </details>
+              )}
+            </>
+          )}
+
+          {activeTab === "evidence" && (
+            evidence.length > 0 ? (
+              <ul className="flex flex-col gap-3">
+                {evidence.map((item, index) => (
+                  <motion.li key={item.id} className="business-brain-insight-card flex gap-3 p-4" initial={reducedMotion ? { opacity: 0 } : { opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: reducedMotion ? 0 : index * 0.035 }}>
+                    <span className="border-line-2 bg-surface-4 text-fg-meta flex size-8 shrink-0 items-center justify-center rounded-lg text-xs tabular-nums">{index + 1}</span>
+                    <div className="min-w-0">
+                      <p className="text-fg-secondary text-sm leading-relaxed">{item.detail}</p>
+                      <p className="text-fg-meta mt-1 text-xs">{item.source}</p>
+                    </div>
+                  </motion.li>
+                ))}
+              </ul>
+            ) : (
+              <HonestTabEmpty title="No assessable evidence" body="Vibe did not record evidence that can support a scored conclusion for this area." />
+            )
+          )}
+
+          {activeTab === "signals" && (
+            sourceSignals.length > 0 ? (
+              <div className="flex flex-col gap-3">
+                <p className="text-fg-muted text-sm leading-relaxed">Signals are grouped by their recorded source. Counts describe evidence coverage, not business performance.</p>
+                {sourceSignals.map(([source, count]) => (
+                  <div key={source} className="business-brain-insight-card flex items-center justify-between gap-4 p-4">
+                    <span className="text-fg-secondary text-sm">{source}</span>
+                    <span className="text-mint text-sm font-semibold tabular-nums">{count}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <HonestTabEmpty title="No signals available" body="This area has no evidence-grounded signals in the current audit." />
+            )
+          )}
+
+          {activeTab === "history" && (
+            <HonestTabEmpty title="No comparable dimension history yet" body="Vibe currently stores comparable history for overall Business Health, not for each individual business dimension. A future scan must use the same lens-scoring contract before a trend can be shown here." />
           )}
         </motion.div>
-      )}
-
-      {relationships.length > 0 && (
-        <motion.div
-          className="mt-6 flex flex-col gap-3"
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.25, delay: 0.14 }}
-        >
-          <h3 className="text-fg-muted text-xs font-medium">Connected areas</h3>
-          <div className="flex flex-wrap gap-2">
-            {relationships.map((relationship) => {
-              const otherId = relationship.from === node.id ? relationship.to : relationship.from;
-              const other = view.nodes.find((candidate) => candidate.id === otherId);
-              if (!other) return null;
-              return (
-                <button
-                  type="button"
-                  key={relationship.id}
-                  onClick={() => onSelect(other.id)}
-                  title={relationship.reason}
-                  className="border-mint/20 bg-mint/[0.045] text-mint hover:border-mint/50 rounded-full border px-3 py-1.5 text-xs transition-interactive"
-                >
-                  {other.label}
-                </button>
-              );
-            })}
-          </div>
-          <p className="text-fg-meta text-xs">These areas were judged together in the same audit conclusion.</p>
-        </motion.div>
-      )}
-
-      {node.problem?.move && (
-        <motion.div
-          className="border-mint/20 bg-mint/[0.04] mt-6 rounded-xl border p-4"
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.25, delay: 0.18 }}
-        >
-          <h3 className="text-fg-muted text-xs font-medium">What Vibe recommends</h3>
-          <p className="text-fg mt-2 text-sm font-semibold">{node.problem.move.title}</p>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <span className="bg-mint/10 text-mint rounded-full px-2.5 py-1 text-[0.7rem] font-medium">
-              {IMPACT_LABELS[node.problem.move.impact]}
-            </span>
-            <span className="bg-amber/10 text-amber rounded-full px-2.5 py-1 text-[0.7rem] font-medium">
-              {EFFORT_LABELS[node.problem.move.effort]}
-            </span>
-          </div>
-        </motion.div>
-      )}
-
-      {node.missingContext.length > 0 && (
-        <div className="border-amber/20 bg-amber/[0.04] mt-6 rounded-xl border p-4">
-          <h3 className="text-amber text-xs font-medium">Only you can answer</h3>
-          <ul className="text-fg-muted mt-2 flex list-disc flex-col gap-1.5 pl-4 text-sm">
-            {node.missingContext.map((item) => <li key={item}>{item}</li>)}
-          </ul>
-        </div>
-      )}
-
-      {evidence.length > 0 && (
-        <details className="group border-line-1 mt-6 border-t pt-5">
-          <summary className="text-fg-secondary hover:text-fg flex cursor-pointer list-none items-center justify-between gap-3 text-sm">
-            <span>Evidence &amp; reasoning</span>
-            <span className="text-fg-meta text-xs">{evidence.length} signals · {sourceCount} {sourceCount === 1 ? "source" : "sources"}</span>
-          </summary>
-          <ul className="mt-4 flex flex-col gap-3">
-            {evidence.map((item) => (
-              <li key={item.id} className="flex flex-col gap-0.5">
-                <span className="text-fg-secondary text-sm">{item.detail}</span>
-                <span className="text-fg-meta text-xs">{item.source}</span>
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
-
-      <div className="mt-auto pt-7">
-        {node.problem ? (
-          <Link
-            href={node.problem.moveCount > 0 ? movesContextHref(movesHref, node.problem.key) : movesHref}
-            className="bg-mint text-mint-ink hover:bg-mint-hover flex min-h-11 items-center justify-between rounded-xl px-4 text-sm font-semibold transition-interactive"
-          >
-            {actionLabel(node.problem.moveCount, hasMoves)}
-            <ArrowIcon />
-          </Link>
-        ) : (
-          <Link
-            href={movesHref}
-            className="border-line-strong text-fg hover:border-mint/45 flex min-h-11 items-center justify-between rounded-xl border px-4 text-sm font-semibold transition-interactive"
-          >
-            View action plan
-            <ArrowIcon />
-          </Link>
-        )}
-      </div>
+      </AnimatePresence>
     </motion.section>
+  );
+}
+
+function HonestTabEmpty({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="business-brain-insight-card flex min-h-48 flex-col items-center justify-center p-6 text-center">
+      <span aria-hidden="true" className="border-line-2 bg-surface-4 text-fg-muted flex size-11 items-center justify-center rounded-full border">—</span>
+      <h3 className="text-fg mt-4 text-base font-semibold">{title}</h3>
+      <p className="text-fg-muted mt-2 max-w-[42ch] text-sm leading-relaxed">{body}</p>
+    </div>
+  );
+}
+
+function SelectedScoringRail({ node }: { node: BusinessBrainNode }) {
+  const evidence = [...node.evidence];
+  for (const item of node.problem?.evidence ?? []) {
+    if (!evidence.some((existing) => existing.id === item.id)) evidence.push(item);
+  }
+  const sourceCount = new Set(evidence.map((item) => item.source)).size;
+  const score = node.score;
+  const scoreColor = node.health === "weak" ? "var(--color-coral)" : node.health === "adequate" ? "var(--color-amber)" : "var(--color-mint)";
+
+  return (
+    <motion.aside className="flex min-w-0 flex-col gap-4" aria-label={`How ${node.label} was scored`} initial={{ opacity: 0, x: 16 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 10 }} transition={{ ...PANEL_TRANSITION, delay: 0.06 }}>
+      <section className="business-brain-focus-rail p-5">
+        <div className="flex items-center gap-3">
+          <span aria-hidden="true" className="border-mint/20 bg-mint/[0.06] text-mint flex size-10 items-center justify-center rounded-full border">⌘</span>
+          <h2 className="text-fg text-sm font-semibold">How we scored this</h2>
+        </div>
+        <dl className="border-line-1 mt-5 flex flex-col divide-y divide-line-1 border-y">
+          <div className="flex items-center justify-between py-3 text-sm"><dt className="text-fg-secondary">Signals</dt><dd className="text-fg font-semibold tabular-nums">{evidence.length}</dd></div>
+          <div className="flex items-center justify-between py-3 text-sm"><dt className="text-fg-secondary">Sources</dt><dd className="text-fg font-semibold tabular-nums">{sourceCount}</dd></div>
+          <div className="flex items-center justify-between py-3 text-sm"><dt className="text-fg-secondary">Score</dt><dd className="font-semibold tabular-nums" style={{ color: scoreColor }}>{score ?? "—"}</dd></div>
+        </dl>
+
+        <div className="mt-5">
+          <h3 className="text-fg-secondary text-sm font-medium">Current lens score</h3>
+          <div className="mt-4 flex items-center gap-4">
+            <div className="relative flex size-20 shrink-0 items-center justify-center rounded-full" style={{ background: score === null ? "var(--color-surface-4)" : `conic-gradient(${scoreColor} ${score}%, rgb(255 255 255 / 0.07) ${score}% 100%)` }}>
+              <div className="bg-app flex size-[4.1rem] items-center justify-center rounded-full">
+                <span className="text-fg text-xl font-semibold tabular-nums">{score ?? "—"}</span>
+              </div>
+            </div>
+            <p className="text-fg-muted text-xs leading-relaxed">This reading comes from the current audit only. It is separate from the overall Business Health score.</p>
+          </div>
+        </div>
+
+        <div className="border-line-1 mt-5 border-t pt-5">
+          <h3 className="text-fg-secondary text-sm font-medium">Score over time</h3>
+          <p className="text-fg-muted mt-2 text-xs leading-relaxed">No comparable dimension history yet.</p>
+        </div>
+      </section>
+
+      <section className="business-brain-focus-rail p-5">
+        <h2 className="text-fg text-sm font-semibold">About our scoring</h2>
+        <p className="text-fg-muted mt-3 text-xs leading-relaxed">Vibe scores each business lens only when the audit has enough evidence. Missing or inconclusive evidence remains unscored and never becomes zero.</p>
+      </section>
+    </motion.aside>
   );
 }
 
@@ -440,7 +589,12 @@ export function AuditIntelligence({
   return (
     <LayoutGroup>
       <motion.div
-        className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1.62fr)_minmax(21rem,0.72fr)] xl:items-start"
+        className={cn(
+          "grid min-w-0 gap-5 xl:items-start",
+          node
+            ? "xl:grid-cols-[minmax(0,1.15fr)_minmax(25rem,0.85fr)] min-[1760px]:grid-cols-[minmax(32rem,1.12fr)_minmax(27rem,0.9fr)_minmax(13rem,0.42fr)]"
+            : "xl:grid-cols-[minmax(0,1.62fr)_minmax(21rem,0.72fr)]",
+        )}
         data-testid="audit-intelligence"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
@@ -453,14 +607,27 @@ export function AuditIntelligence({
         >
           <span aria-hidden="true" className="business-brain-grid pointer-events-none absolute inset-0" />
           <header className="relative z-10 flex flex-wrap items-start justify-between gap-4">
-            <div className="flex flex-col gap-1.5">
-              <h2 className="text-fg text-xl font-semibold tracking-[-0.03em]">Your Business Brain</h2>
-              <p className="text-fg-muted text-sm">Select any area to explore how the pieces connect.</p>
-            </div>
-            <div className="text-fg-meta flex flex-col items-end gap-1 text-xs">
-              <span>{view.nodes.length} business areas</span>
-              {view.lastScanAt && <span>Last scan {formatTimestamp(view.lastScanAt) ?? view.lastScanAt}</span>}
-            </div>
+            {node ? (
+              <div className="flex flex-col gap-2">
+                <h2 className="sr-only">Your Business Brain — {node.label}</h2>
+                <button type="button" onClick={() => setSelected(null)} className="border-line-2 bg-surface-2 text-fg-secondary hover:border-mint/35 hover:text-fg flex min-h-10 w-fit cursor-pointer items-center gap-2 rounded-xl border px-3.5 text-sm font-medium transition-interactive focus-visible:ring-2 focus-visible:ring-mint">
+                  <span aria-hidden="true">←</span>
+                  Back to overview
+                </button>
+                <p className="text-fg-muted text-xs">Exploring {node.label} and its evidence-grounded connections.</p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-1.5">
+                <h2 className="text-fg text-xl font-semibold tracking-[-0.03em]">Your Business Brain</h2>
+                <p className="text-fg-muted text-sm">Select any area to explore how the pieces connect.</p>
+              </div>
+            )}
+            {!node && (
+              <div className="text-fg-meta flex flex-col items-end gap-1 text-xs">
+                <span>{view.nodes.length} business areas</span>
+                {view.lastScanAt && <span>Last scan {formatTimestamp(view.lastScanAt) ?? view.lastScanAt}</span>}
+              </div>
+            )}
           </header>
 
           <div className="relative z-10 mt-3">
@@ -488,6 +655,7 @@ export function AuditIntelligence({
           <AnimatePresence mode="wait" initial>
             {node ? (
               <SelectedPanel
+                key={node.id}
                 node={node}
                 view={view}
                 movesHref={movesHref}
@@ -506,6 +674,21 @@ export function AuditIntelligence({
             )}
           </AnimatePresence>
         </aside>
+
+        <AnimatePresence initial={false}>
+          {node && (
+            <motion.div
+              key={`scoring-${node.id}`}
+              className="xl:col-start-2 xl:row-start-2 min-[1760px]:col-start-3 min-[1760px]:row-start-1"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: reducedMotion ? 0.08 : 0.2 }}
+            >
+              <SelectedScoringRail node={node} />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </motion.div>
     </LayoutGroup>
   );

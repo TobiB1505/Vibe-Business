@@ -91,7 +91,25 @@ test.describe("signature Business Brain", () => {
     const detailBox = await detail.boundingBox();
     expect(detailBox!.x).toBeGreaterThan(mapBox!.x + mapBox!.width);
     await expect(detail.getByText(/connected areas/i)).toBeVisible();
+    await expect(detail.getByRole("tab")).toHaveCount(4);
+    await expect(page.getByRole("heading", { name: /how we scored this/i })).toBeVisible();
     await expect(page.getByTestId("business-map-radial")).toBeVisible();
+  });
+
+  test("keeps unsupported per-dimension history honest in the selected focus view", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto(SYNTHESIS);
+    await lens(page, /revenue & economics/i).click();
+
+    const detail = page.getByTestId("selected-lens-detail");
+    await detail.getByRole("tab", { name: /^history$/i }).click();
+    await expect(detail.getByRole("heading", { name: /no comparable dimension history yet/i })).toBeVisible();
+    await expect(detail).not.toContainText(/score improved|score declined|\+\d+ points/i);
+
+    await page.getByRole("button", { name: /back to overview/i }).click();
+    await expect(page.getByRole("heading", { name: /what matters now/i })).toBeVisible();
   });
 
   test("supports keyboard selection and a visible focus ring", async ({ page }) => {
