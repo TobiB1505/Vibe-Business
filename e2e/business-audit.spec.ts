@@ -102,7 +102,7 @@ test.describe("signature Business Brain", () => {
     await expect(page.getByTestId("business-map-radial")).toBeVisible();
   });
 
-  test("keeps unsupported per-dimension history honest in the selected focus view", async ({
+  test("keeps unsupported per-lens history honest in the selected focus view", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
@@ -111,7 +111,9 @@ test.describe("signature Business Brain", () => {
 
     const detail = page.getByTestId("selected-lens-detail");
     await detail.getByRole("tab", { name: /^history$/i }).click();
-    await expect(detail.getByRole("heading", { name: /no comparable dimension history yet/i })).toBeVisible();
+    await expect(
+      detail.getByRole("heading", { name: /no comparable history for this area yet/i }),
+    ).toBeVisible();
     await expect(detail).not.toContainText(/score improved|score declined|\+\d+ points/i);
 
     await page.getByRole("button", { name: /back to overview/i }).click();
