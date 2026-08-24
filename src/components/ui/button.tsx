@@ -127,12 +127,18 @@ export type ButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
    * says "this control is working" on the element the user is already on, it
    * needs no region to exist beforehand, and it cannot double-announce the way
    * a polite region next to changing text does.
+   *
+   * It also draws a spinner. The first lens-scored dogfood run showed that a
+   * swapped label alone does not read as "working" — the founder pressed the
+   * audit button and saw nothing happen. The spinner is `aria-hidden` (the
+   * label and `aria-busy` already say it) and `motion-safe` only: under
+   * reduced motion it stands still as a static mark rather than moving.
    */
   busy?: boolean;
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { className, variant = "primary", size = "md", busy, ...props },
+  { className, variant = "primary", size = "md", busy, children, ...props },
   ref,
 ) {
   return (
@@ -141,6 +147,14 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
       aria-busy={busy || undefined}
       className={cn(buttonClasses({ variant, size }), className)}
       {...props}
-    />
+    >
+      {busy && (
+        <span
+          aria-hidden="true"
+          className="size-3.5 shrink-0 rounded-full border-[1.5px] border-current border-t-transparent motion-safe:animate-spin"
+        />
+      )}
+      {children}
+    </button>
   );
 });
