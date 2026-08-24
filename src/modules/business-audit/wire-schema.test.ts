@@ -64,6 +64,20 @@ describe("ANTHROPIC_AUDIT_OUTPUT_SCHEMA", () => {
     expect(metrics.optionalPropertyCount).toBe(0);
   });
 
+  /**
+   * The header names this file's own rule: "no numeric or string-length
+   * constraints are used (unsupported)". `score` briefly carried
+   * `minimum`/`maximum` on its integer branch anyway — a schema the provider
+   * rejects outright, so every audit failed at the free token count, before
+   * inference was ever attempted (`token_count_failed`, 2026-08-24). The range
+   * is already enforced in `validate.ts`; the wire schema must never re-add it.
+   */
+  it("declares no numeric bound the structured-outputs subset does not support", () => {
+    const serialized = JSON.stringify(ANTHROPIC_AUDIT_OUTPUT_SCHEMA);
+    expect(serialized).not.toContain('"minimum"');
+    expect(serialized).not.toContain('"maximum"');
+  });
+
   it("still gives the model no field for an overall score", () => {
     const serialized = JSON.stringify(ANTHROPIC_AUDIT_OUTPUT_SCHEMA);
     expect(serialized).not.toContain("overallScore");
