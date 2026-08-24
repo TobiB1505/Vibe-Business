@@ -31,8 +31,8 @@ import { cn } from "@/lib/utils/cn";
  * ## Why it looks like `ProjectShell`
  *
  * Same sticky behaviour and the same collapse to a scrollable strip below
- * `lg`. The account rail is slightly wider because it also carries the visible
- * account destinations from the supplied dashboard reference. Entering a
+ * `lg`. The account rail is slightly wider because its account disclosure can
+ * carry the full destination labels from the supplied dashboard reference. Entering a
  * product should still read as one object changing context, not as arriving in
  * a different application.
  *

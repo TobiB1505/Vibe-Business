@@ -156,6 +156,78 @@ export function InfoIcon(props: IconProps) {
   );
 }
 
+export function SearchIcon(props: IconProps) {
+  return (
+    <IconFrame {...props}>
+      <circle cx="10.8" cy="10.8" r="6.8" />
+      <path d="m16 16 4.5 4.5" />
+    </IconFrame>
+  );
+}
+
+export function FilterIcon(props: IconProps) {
+  return (
+    <IconFrame {...props}>
+      <path d="M3.5 5h17l-6.4 7.2v5.6l-4.2 2.1v-7.7z" />
+    </IconFrame>
+  );
+}
+
+export function TrendIcon(props: IconProps) {
+  return (
+    <IconFrame {...props}>
+      <path d="m4 16 5-5 3 3 7-7" />
+      <path d="M15 7h4v4" />
+    </IconFrame>
+  );
+}
+
+export function AlertIcon(props: IconProps) {
+  return (
+    <IconFrame {...props}>
+      <path d="M10.1 4.4 2.8 18a2 2 0 0 0 1.8 3h14.8a2 2 0 0 0 1.8-3L13.9 4.4a2.2 2.2 0 0 0-3.8 0Z" />
+      <path d="M12 9v5M12 17.5h.01" />
+    </IconFrame>
+  );
+}
+
+export function GlobeIcon(props: IconProps) {
+  return (
+    <IconFrame {...props}>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M3 12h18M12 3c2.3 2.5 3.5 5.5 3.5 9S14.3 18.5 12 21M12 3C9.7 5.5 8.5 8.5 8.5 12s1.2 6.5 3.5 9" />
+    </IconFrame>
+  );
+}
+
+export function CodeIcon(props: IconProps) {
+  return (
+    <IconFrame {...props}>
+      <path d="m8.5 8-4 4 4 4M15.5 8l4 4-4 4M13.5 5l-3 14" />
+    </IconFrame>
+  );
+}
+
+export function LockIcon(props: IconProps) {
+  return (
+    <IconFrame {...props}>
+      <rect x="5" y="10" width="14" height="11" rx="2.5" />
+      <path d="M8 10V7a4 4 0 0 1 8 0v3" />
+    </IconFrame>
+  );
+}
+
+export function BranchIcon(props: IconProps) {
+  return (
+    <IconFrame {...props}>
+      <circle cx="7" cy="5" r="2" />
+      <circle cx="17" cy="7" r="2" />
+      <circle cx="7" cy="19" r="2" />
+      <path d="M7 7v10M9 11h3a5 5 0 0 0 5-2" />
+    </IconFrame>
+  );
+}
+
 export function DashboardIcon({ name, ...props }: IconProps & { name: DashboardIconName }) {
   const Icon = {
     home: HomeIcon,

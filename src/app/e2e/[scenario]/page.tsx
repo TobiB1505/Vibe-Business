@@ -35,8 +35,14 @@ import {
   isE2eAuditCreditScenario,
 } from "../audit-credit-scenarios";
 import { E2E_NEEDS_USER_SCENARIOS, isE2eNeedsUserScenario } from "../needs-user-scenarios";
-import { E2E_ACCOUNT_SCENARIOS, isE2eAccountScenario } from "../account-scenarios";
+import {
+  E2E_ACCOUNT_SCENARIOS,
+  E2E_PRODUCTS_SCENARIOS,
+  isE2eAccountScenario,
+  isE2eProductsScenario,
+} from "../account-scenarios";
 import { AccountHome } from "@/app/app/account-home";
+import { ProductsIndex } from "@/app/app/(account)/products/products-index";
 import { AccountMenu } from "@/components/layout/account-menu";
 import { AccountShell, AccountSidebar } from "@/components/layout/account-shell";
 import { E2E_SCENARIOS, isE2eScenario } from "../scenarios";
@@ -399,6 +405,31 @@ export default async function E2eScenarioPage({
       >
         <div className="sr-only">{label}</div>
         <AccountHome projects={E2E_ACCOUNT_SCENARIOS[scenario]()} />
+      </AccountShell>
+    );
+  }
+
+  if (isE2eProductsScenario(scenario)) {
+    return (
+      <AccountShell
+        sidebar={
+          <AccountSidebar
+            credits="2,480"
+            footer={
+              <AccountMenu
+                identity={{
+                  displayName: "Tobi",
+                  initials: "TB",
+                  avatarUrl: null,
+                  fromGithub: true,
+                }}
+              />
+            }
+          />
+        }
+      >
+        <div className="sr-only">{label}</div>
+        <ProductsIndex products={E2E_PRODUCTS_SCENARIOS[scenario]()} />
       </AccountShell>
     );
   }

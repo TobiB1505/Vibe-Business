@@ -10,6 +10,14 @@ move, richer product cards and a visible connect surface. The decisions in this 
 mutually exclusive account/project rails, one named product rather than an account average, the
 same score-comparability rule, no fake date filter and no additional dashboard read.
 
+**Products-index amendment:** [UI-9](../sprints/0061-my-products-reference-fidelity.md) makes
+`/app/products` a detailed comparison surface rather than a second rendering of Home's compact
+cards. Home still parses no Product Profile document. The dedicated index may read only the exact
+profile ids attached to its latest audits, plus corrections and founder intent in batched
+account-wide queries; the dashboard cost contract guards that boundary. Repository metadata may
+appear there because the route is explicitly an inventory, while Home remains editorial and calm.
+The prohibition on an account-wide average and inferred “Active” state is unchanged.
+
 ## Context
 
 [ADR 0041](0041-command-center-information-architecture.md) rebuilt the *project*
@@ -105,10 +113,12 @@ either averaging incomparable readings or defining a new metric with its own
 rubric, and the second is a product decision with a sprint behind it, not a
 component.
 
-**Not decided here.** The product's real logo and its own name on the cards.
-Both live in `product_profiles.result`, the dashboard may not parse documents,
-and reading them properly means denormalised columns written at insert time plus
-a backfill. V1 ships an initials tile; `ProductLogo` is already built and waiting.
+**Not decided here.** The product's real logo on Home's compact cards. It lives
+in `product_profiles.result`, Home may not parse documents, and reading it there
+properly means a denormalised column written at insert time plus a backfill. The
+detailed Products index now reads exact audit-linked profiles for text context,
+but still uses an initials tile rather than treating that bounded read as licence
+to widen Home's cost boundary; `ProductLogo` is already built and waiting.
 
 **Deliberately unresolved.** The hero repeats the attention-first product in the
 grid below it. At one product that is visible redundancy. The alternative —

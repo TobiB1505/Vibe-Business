@@ -1,4 +1,5 @@
 import type { AuditReading, DashboardProject } from "@/modules/projects/dashboard";
+import type { ProductOverviewItem } from "@/modules/projects/product-summary";
 
 /**
  * Browser fixtures for the account dashboard (CORE-6).
@@ -131,4 +132,54 @@ export type E2eAccountScenario = keyof typeof E2E_ACCOUNT_SCENARIOS;
 
 export function isE2eAccountScenario(value: string): value is E2eAccountScenario {
   return value in E2E_ACCOUNT_SCENARIOS;
+}
+
+const PRODUCT_CONTEXT = [
+  {
+    shortDescription: "A calm command center for turning product evidence into business action.",
+    mainPurpose: "Turns product evidence into a ranked growth plan.",
+    primaryAudience: "Independent founders and small product teams",
+    founderGoal: "Grow revenue",
+    category: "SaaS application",
+  },
+  {
+    shortDescription: "A focused workspace for validating and shipping the next business move.",
+    mainPurpose: "Finds the most important business gap and prepares the work around it.",
+    primaryAudience: "Founders with a product already in market",
+    founderGoal: "Start monetizing",
+    category: "Web app",
+  },
+  {
+    shortDescription: null,
+    mainPurpose: null,
+    primaryAudience: null,
+    founderGoal: null,
+    category: null,
+  },
+] as const;
+
+export const E2E_PRODUCTS_SCENARIOS = {
+  "account-products": (): ProductOverviewItem[] =>
+    THREE_PRODUCTS.map((item, index) => ({
+      ...item,
+      repositoryPrivate: index !== 0,
+      productProfileId: index === 2 ? null : `profile_${index}`,
+      ...PRODUCT_CONTEXT[index],
+      ...(index === 2
+        ? {
+            score: null,
+            scoreState: "not_audited" as const,
+            lastAnalysedAt: null,
+            scoreHistory: [],
+            nextMovesCount: null,
+            topMove: null,
+          }
+        : {}),
+    })),
+} as const;
+
+export type E2eProductsScenario = keyof typeof E2E_PRODUCTS_SCENARIOS;
+
+export function isE2eProductsScenario(value: string): value is E2eProductsScenario {
+  return value in E2E_PRODUCTS_SCENARIOS;
 }
