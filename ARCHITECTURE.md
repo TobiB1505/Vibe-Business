@@ -67,7 +67,7 @@ Each stage below is described as a logical layer/responsibility inside the modul
 
 ### 3.2 Repository Analysis Layer
 
-**[Confirmed principle]** Produces structured, reusable findings about a repository (stack, structure, notable signals relevant to the audit dimensions in [PRODUCT.md §10](PRODUCT.md#10-business-readiness-concept)) without sending the entire repository to an LLM. See [Cost Principles](PRODUCT.md#13-cost-principles).
+**[Confirmed principle]** Produces structured, reusable findings about a repository (stack, structure, notable signals relevant to the audit lenses in [PRODUCT.md §10](PRODUCT.md#10-business-readiness-concept)) without sending the entire repository to an LLM. See [Cost Principles](PRODUCT.md#13-cost-principles).
 
 **[Confirmed — Sprint 2]** The first layer of analysis is **fully deterministic and contains no AI**: a versioned Repository Intelligence Snapshot built from the Git tree and two small families of downloaded files — dependency manifests, and a named list of stylesheets read for design tokens — with evidence attached to every detection. Implemented in `src/modules/repository-intelligence/`; see [docs/sprints/0002-repository-intelligence.md](docs/sprints/0002-repository-intelligence.md). AI consumes this structured output later rather than reading repositories itself.
 
@@ -93,7 +93,7 @@ Each stage below is described as a logical layer/responsibility inside the modul
 
 ### 3.4 Business Audit Layer
 
-**[Confirmed principle]** Consumes output from the Repository and Live Product Analysis layers and produces a Business Readiness Audit structured around the dimensions in [PRODUCT.md §10](PRODUCT.md#10-business-readiness-concept) (Product, Monetization, Distribution, Conversion, Retention).
+**[Confirmed principle]** Consumes output from the Repository and Live Product Analysis layers and produces a Business Readiness Audit structured around the nine business lenses in [PRODUCT.md §10](PRODUCT.md#10-business-readiness-concept) ([ADR 0050](docs/decisions/0050-lenses-are-the-audit.md)). Audits recorded before ADR 0050 were structured around five dimensions and remain readable under their own contract.
 
 **[Confirmed — Sprint 4]** The audit is **diagnostic**. It describes the current state and does not emit actions, recommendations, or Opportunities; converting diagnosed gaps into prioritized Opportunities belongs to the Opportunity Engine ([§3.5](#35-opportunity-engine)). Implemented in `src/modules/business-audit/`; see [docs/sprints/0004-business-readiness-audit.md](docs/sprints/0004-business-readiness-audit.md).
 
@@ -101,9 +101,9 @@ Each stage below is described as a logical layer/responsibility inside the modul
 
 **[Confirmed — ADR 0011, trust boundary]** All three evidence sources are **untrusted data, never instructions**. Instructions to a model come only from prompts we author; third-party content is passed in a fenced, untrusted-labelled user message. The model is given **no tools, no web access, and no data access**, which is what bounds the consequences of prompt injection. Model reasoning is never requested, stored, or displayed. See [0011-ai-inference-and-evidence-trust-boundary.md](docs/decisions/0011-ai-inference-and-evidence-trust-boundary.md).
 
-**[Confirmed — Sprint 4, unknown ≠ bad]** A dimension the evidence cannot support returns `insufficient_evidence` with a **null** score. Unscored dimensions are excluded from the overall figure and never counted as zero, and the overall score itself is computed **deterministically by the application**, never produced by the model. Below a minimum coverage threshold the overall score is null rather than misleadingly precise.
+**[Confirmed — Sprint 4, unknown ≠ bad; carried into ADR 0050]** A lens the evidence cannot support scores **null**. Unscored lenses are excluded from the overall figure and never counted as zero, and the overall score itself is computed **deterministically by the application**, never produced by the model. Below a minimum coverage threshold over the lenses that apply, the overall score is null rather than misleadingly precise.
 
-**[Confirmed principle]** The data model must not hard-code only the V0.1 dimensions in a way that blocks adding more dimensions later. The audit payload is a versioned JSONB document (`business-readiness-audit.v1`) carrying its prompt, rubric, model, and evidence-pack versions, so results stay reproducible and comparable across changes.
+**[Confirmed principle]** The data model must not hard-code one scoring generation in a way that blocks the next. The audit payload is a versioned JSONB document (`business-readiness-audit.v2`) carrying its prompt, rubric, model, and evidence-pack versions, so results stay reproducible and comparable across changes — which is what let the five-dimension generation retire without invalidating a single stored audit.
 
 ### 3.5 Opportunity Engine
 
@@ -313,6 +313,7 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0047](docs/decisions/0047-business-health-is-project-home.md) | Business Health is the canonical project Home | Web surface |
 | [0048](docs/decisions/0048-signature-business-brain.md) | Signature Business Brain view model and interaction | Web surface, read models |
 | [0049](docs/decisions/0049-business-lens-diagnostic-scores.md) | Evidence-grounded business-lens diagnostic scores | Business audit, read models |
+| [0050](docs/decisions/0050-lenses-are-the-audit.md) | Lenses are the audit's only framework; the overall score is the mean over scored lenses | §3.4 |
 
 ### Layers with no section above
 
