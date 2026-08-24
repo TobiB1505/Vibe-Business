@@ -31,6 +31,14 @@ This is recorded here because it was found by scoping the work rather than by do
 
 **A `contradiction.*` namespace needs a curated label family and a source prefix.** `evidence-labels.ts` and `map-view.ts` are two tables covering the same prefixes, and an id whose family neither knows falls through to derived prose — `"Contradiction pricing not reachable"`. Sprint 0073 and [Sprint 0075](../sprints/0075-the-gate-nobody-read.md) each shipped a fix for exactly that failure; a third would be careless rather than unlucky.
 
+> **[2026-08-24] Implemented in [Sprint 0078](../sprints/0078-evidence-pack-v4.md). The decision above stands; two things it said were incomplete.**
+>
+> **"`risk.ts` moves with the ids" named one reader. There are four.** `execution-context/surface.ts` slices the same namespace into a map lookup and would have returned `NOTHING` — not an error, just an agent quietly no longer told which surface its work is about. `validation/depth.ts` and `economy/execution-class.ts` match bare prefixes with `startsWith` and were accidentally safe. And `execution-contract/live-premise.ts` selects ids with `startsWith("live.")` && `endsWith("_missing")`, which does not break at all: a `_missing` variant of `live.surface.*` would have silently re-widened the gate Sprint 0072 deliberately narrowed to defect ids, and paid runs would have started being refused on exactly the ambiguous evidence 0072 excluded.
+>
+> That last one is why the implementation puts polarity in a **namespace** (`repo.surface_absent.<id>`) rather than in the `_missing` suffix this ADR implicitly assumed. It adds no fifth entry to an absence vocabulary Sprint 0073 already called too many, and it leaves every existing prefix matcher seeing only present surfaces — so absence has to be added to each one deliberately.
+>
+> **No version threading was needed.** The sprint expected to thread the pack version from the plan through the resolver, dependencies and the context compiler, because a step does not carry its own `evidence_pack_version`. It turned out not to be necessary: `risk.ts`, `surface.ts` and `depth.ts` do not care about polarity — a step citing "there is no checkout" is a step that will build one, and that is exactly as prohibited as modifying an existing one. The version matters only where polarity itself changes the answer: the screen, and the pack rebuild.
+
 ## Consequences
 
 Contradictions stay out of every model call until v4 ships. They remain visible to the founder on the project page, which is where they were already.
