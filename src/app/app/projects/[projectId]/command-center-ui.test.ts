@@ -126,40 +126,6 @@ describe("experiments report observations, never causes", () => {
   });
 });
 
-describe("a score is never drawn as a zero it does not have", () => {
-  /**
-   * CLAUDE.md rule 44, at the one place in this sprint where a number becomes
-   * a bar width. `scoreDisplay` is the only thing allowed to make that
-   * conversion, because it is the only thing that knows `null` renders as an
-   * empty track and the word "n/a" rather than as 0%.
-   *
-   * Asserted structurally rather than by copy: a component that read
-   * `dimension.score` directly would compile, render, and be wrong only for
-   * the projects whose evidence was thin — which is the population least
-   * likely to be looking.
-   */
-  it("routes every dimension reading through scoreDisplay", () => {
-    const src = source("business-health.tsx");
-
-    expect(src).toContain("scoreDisplay(dimension.score)");
-    // No second path: nothing else may touch the raw number.
-    const rawReads = [...src.matchAll(/dimension\.score/g)];
-    expect(rawReads).toHaveLength(1);
-  });
-
-  it("never prints a scale beside a value that is not a number", () => {
-    const copy = renderedCopy("business-health.tsx");
-    // The suffix is attached inside `!display.unscored`, so "n/a / 100" is
-    // unreachable. This pins that the guard exists rather than trusting it.
-    expect(copy).toContain("!display.unscored &&");
-  });
-
-  it("says why a reading is absent rather than leaving a blank", () => {
-    const copy = renderedCopy("business-health.tsx");
-    expect(copy).toMatch(/didn&apos;t find enough to judge this one/);
-  });
-});
-
 describe("home tells the truth about what it does not know", () => {
   /**
    * Home's four answers are decided in `buildHomeView` and asserted in

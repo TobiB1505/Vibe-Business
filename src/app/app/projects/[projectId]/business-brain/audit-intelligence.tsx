@@ -236,7 +236,7 @@ function ScoringContext({ view }: { view: BusinessBrainView }) {
           Vibe evaluates evidence from your codebase, website, product signals and your own inputs. Missing or inconclusive evidence stays unscored.
         </p>
         <p className="text-fg-meta text-xs">
-          {view.overall.assessedDimensions} of {view.overall.totalDimensions} scored areas · {view.signalCount} signals · {view.sourceCount} {view.sourceCount === 1 ? "source" : "sources"}
+          {view.overall.scoredLenses} of {view.overall.eligibleLenses} scored areas · {view.signalCount} signals · {view.sourceCount} {view.sourceCount === 1 ? "source" : "sources"}
         </p>
       </div>
     </section>
@@ -567,7 +567,7 @@ function SelectedPanel({
           )}
 
           {activeTab === "history" && (
-            <HonestTabEmpty title="No comparable dimension history yet" body="Vibe currently stores comparable history for overall Business Health, not for each individual business dimension. A future scan must use the same lens-scoring contract before a trend can be shown here." />
+            <HonestTabEmpty title="No comparable history for this area yet" body="Vibe currently tracks comparable history for overall Business Health, not for each business area on its own. A future scan under the same scoring contract is needed before a trend can be shown here." />
           )}
         </motion.div>
       </AnimatePresence>
@@ -623,7 +623,7 @@ function SelectedScoringRail({ node }: { node: BusinessBrainNode }) {
 
         <div className="border-line-1 mt-5 border-t pt-5">
           <h3 className="text-fg-secondary text-sm font-medium">Score over time</h3>
-          <p className="text-fg-muted mt-2 text-xs leading-relaxed">No comparable dimension history yet.</p>
+          <p className="text-fg-muted mt-2 text-xs leading-relaxed">No comparable history for this area yet.</p>
         </div>
       </section>
 

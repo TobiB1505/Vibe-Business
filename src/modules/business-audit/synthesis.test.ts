@@ -53,7 +53,7 @@ function conclusion(overrides: Record<string, unknown> = {}) {
  */
 function synthesize(conclusions: Record<string, unknown>[], overall = "One sentence.") {
   const normalized = normalizeAnthropicAuditOutput(
-    buildModelOutput({}, { conclusions, overallConclusion: overall }),
+    buildModelOutput({ conclusions, overallConclusion: overall }),
   );
   if (!normalized.ok) throw new Error(`fixture failed normalization: ${normalized.reason}`);
 
@@ -89,21 +89,21 @@ describe("grouping related evidence (§8, §35)", () => {
     expect(audit.synthesis?.blockers[0]!.evidenceIds).toHaveLength(5);
   });
 
-  it("lets one conclusion span several dimensions (§12)", () => {
+  it("lets one conclusion span several lenses (§12)", () => {
     const audit = synthesize([
-      conclusion({ dimensions: ["monetization", "conversion", "product"] }),
+      conclusion({ lenses: ["revenue_economics", "conversion", "offer"] }),
     ]);
 
-    expect(audit.synthesis?.blockers[0]!.dimensions).toEqual([
-      "monetization",
+    expect(audit.synthesis?.blockers[0]!.lenses).toEqual([
+      "revenue_economics",
       "conversion",
-      "product",
+      "offer",
     ]);
   });
 
-  it("ignores a dimension key that is not one of the five", () => {
-    const audit = synthesize([conclusion({ dimensions: ["monetization", "growth_hacking"] })]);
-    expect(audit.synthesis?.blockers[0]!.dimensions).toEqual(["monetization"]);
+  it("ignores a lens key outside the closed vocabulary", () => {
+    const audit = synthesize([conclusion({ lenses: ["revenue_economics", "growth_hacking"] })]);
+    expect(audit.synthesis?.blockers[0]!.lenses).toEqual(["revenue_economics"]);
   });
 });
 
@@ -285,7 +285,7 @@ describe("the synthesis document", () => {
     // thought about the business and could not conclude — so they have to be
     // absent too for the synthesis to be genuinely empty.
     const normalized = normalizeAnthropicAuditOutput(
-      buildModelOutput({}, { conclusions: [], overallConclusion: "", lenses: [] }),
+      buildModelOutput({ conclusions: [], overallConclusion: "", lenses: [] }),
     );
     if (!normalized.ok) throw new Error("fixture failed normalization");
 
@@ -299,15 +299,8 @@ describe("the synthesis document", () => {
    * assessments keep every finding they had, which is what the technical
    * breakdown renders and what the Opportunity Engine reads.
    */
-  it("leaves the dimension assessments untouched", () => {
+  it("carries no dimension layer — a v8 audit is its synthesis (ADR 0050)", () => {
     const audit = synthesize([conclusion()]);
-
-    expect(audit.dimensions).toHaveLength(5);
-    for (const dimension of audit.dimensions) {
-      expect(dimension).toHaveProperty("strengths");
-      expect(dimension).toHaveProperty("gaps");
-      expect(dimension).toHaveProperty("unknowns");
-    }
-    expect(audit.dimensions.find((d) => d.id === "product")?.strengths).toEqual(["Something works"]);
+    expect("dimensions" in audit).toBe(false);
   });
 });

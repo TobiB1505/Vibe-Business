@@ -88,8 +88,8 @@ export type BusinessBrainView = {
     state: ScoreTone;
     stateLabel: string;
     summary: string | null;
-    assessedDimensions: number;
-    totalDimensions: number;
+    scoredLenses: number;
+    eligibleLenses: number;
   };
   nodes: BusinessBrainNode[];
   relationships: BusinessBrainRelationship[];
@@ -235,8 +235,8 @@ export function buildBusinessBrainView(params: {
       state,
       stateLabel: SCORE_STATE_LABELS[state],
       summary: synthesis.overall || null,
-      assessedDimensions: params.audit.overall.assessedDimensions,
-      totalDimensions: params.audit.overall.totalDimensions,
+      scoredLenses: params.audit.overall.scoredLenses,
+      eligibleLenses: params.audit.overall.eligibleLenses,
     },
     nodes,
     relationships: map.connections.map((relationship) => ({

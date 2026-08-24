@@ -1,5 +1,18 @@
-import type { BusinessReadinessAudit } from "@/modules/business-audit/schema";
+import type { AuditDimensionId, BusinessReadinessAudit } from "@/modules/business-audit/schema";
 import { DIMENSION_LABELS } from "@/modules/business-audit/schema";
+
+/** The per-dimension shape stored v6/v7 audits carry in their JSONB (ADR 0050). */
+type LegacyDimension = {
+  id: AuditDimensionId;
+  score: number | null;
+  assessmentStatus: string;
+  confidence: string;
+  summary: string;
+  strengths: string[];
+  gaps: string[];
+  unknowns: string[];
+  evidenceIds: string[];
+};
 import { identifiedConclusions } from "@/modules/business-audit/conclusions";
 import { renderEvidencePackV3, type EvidencePackV3 } from "@/modules/business-audit/evidence-v3";
 
@@ -47,8 +60,8 @@ function renderAudit(audit: BusinessReadinessAudit): string {
 
   const overall =
     audit.overall.score === null
-      ? `not scored (${audit.overall.assessedDimensions}/${audit.overall.totalDimensions} dimensions assessable)`
-      : `${audit.overall.score}/100 (${audit.overall.assessedDimensions}/${audit.overall.totalDimensions} dimensions assessed)`;
+      ? `not scored (${audit.overall.scoredLenses}/${audit.overall.eligibleLenses} applicable areas scored)`
+      : `${audit.overall.score}/100 (${audit.overall.scoredLenses}/${audit.overall.eligibleLenses} applicable areas scored)`;
 
   if (audit.synthesis) {
     lines.push("## What the audit concluded about this business");
@@ -67,7 +80,6 @@ function renderAudit(audit: BusinessReadinessAudit): string {
       lines.push(
         `- {${key}} [${conclusion.tone}] ${conclusion.headline} — ${conclusion.explanation}` +
           ` (lenses: ${conclusion.lenses.join(", ") || "unspecified"})` +
-          ` (dimensions: ${conclusion.dimensions.join(", ") || "unspecified"})` +
           ` [${conclusion.evidenceIds.join(", ")}]`,
       );
     }
@@ -106,8 +118,11 @@ function renderAudit(audit: BusinessReadinessAudit): string {
   lines.push(`Overall business readiness: ${overall}`);
   lines.push("");
 
-  lines.push("## Technical breakdown");
-  for (const dimension of audit.dimensions) {
+  // The per-dimension technical record exists only on stored v6/v7 audits
+  // (ADR 0050); a v8 audit's whole record is the lens map above.
+  const legacyDimensions = (audit as { dimensions?: LegacyDimension[] }).dimensions ?? [];
+  if (legacyDimensions.length > 0) lines.push("## Technical breakdown");
+  for (const dimension of legacyDimensions) {
     const score = dimension.score === null ? "not scored" : `${dimension.score}/100`;
     lines.push(
       `### ${DIMENSION_LABELS[dimension.id]} — ${score}, ${dimension.assessmentStatus}, ${dimension.confidence} confidence`,

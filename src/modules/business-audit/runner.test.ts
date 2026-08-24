@@ -67,10 +67,10 @@ describe("runBusinessReadinessAudit — happy path", () => {
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;
 
-    // Default fixture: 78, 35, 61 scored; distribution and retention null.
-    expect(outcome.audit.overall.score).toBe(58);
-    expect(outcome.audit.overall.assessedDimensions).toBe(3);
-    expect(outcome.audit.overall.totalDimensions).toBe(5);
+    // Default fixture: all nine lenses scored 60, all material.
+    expect(outcome.audit.overall.score).toBe(60);
+    expect(outcome.audit.overall.scoredLenses).toBe(9);
+    expect(outcome.audit.overall.eligibleLenses).toBe(9);
 
     // The model has no field to supply one. Asserted against the numeric field
     // names rather than the word "overall": CORE-2a.1 added `overallConclusion`,
@@ -255,8 +255,8 @@ describe("runBusinessReadinessAudit — provider failures", () => {
     const provider = new FakeProvider({
       result: {
         ok: true,
-        // Wire form: one dimension entry, four missing.
-        data: { dimensions: [{ dimension: "product" }] },
+        // A response that is not an object at all.
+        data: "not an object",
         usage: { inputTokens: 2_500, outputTokens: 100, thinkingTokens: 0 },
         model: "claude-sonnet-5",
         latencyMs: 800,
@@ -325,34 +325,20 @@ describe("runBusinessReadinessAudit — output failure attribution", () => {
     },
   );
 
-  it.each([
-    ["a non-object response", "not an object at all", "response_not_object"],
-    ["a response with no dimensions", { keyFindings: [] }, "dimensions_not_array"],
-    ["a response with an empty dimensions array", { dimensions: [] }, "dimension_missing_product"],
-    [
-      "a response naming an unknown dimension",
-      { dimensions: [{ dimension: "growth" }] },
-      "dimension_unknown",
-    ],
-    [
-      "a response repeating a dimension",
-      { dimensions: [{ dimension: "product" }, { dimension: "product" }] },
-      "dimension_duplicate",
-    ],
-  ])("names the failed validation rule for %s", async (_label, data, reason) => {
-    const provider = new FakeProvider({ result: { ok: true, data, ...generation() } });
+  it("names the failed normalization rule for a non-object response", async () => {
+    const provider = new FakeProvider({ result: { ok: true, data: "not an object at all", ...generation() } });
 
     const outcome = await runBusinessReadinessAudit(inputFor(provider));
 
     expect(outcome.ok === false && outcome.error).toBe("structured_output_schema_invalid");
-    expect(outcome.ok === false && outcome.diagnostic?.validationReason).toBe(reason);
+    expect(outcome.ok === false && outcome.diagnostic?.validationReason).toBe("response_not_object");
   });
 
   it("carries no model content in the diagnostic", async () => {
     const provider = new FakeProvider({
       result: {
         ok: true,
-        data: { dimensions: [{ dimension: "product", summary: "MODEL_AUTHORED_SENTENCE" }] },
+        data: buildModelOutput({ overallConclusion: "There is no pricing surface." }),
         ...generation(),
       },
     });
@@ -361,9 +347,9 @@ describe("runBusinessReadinessAudit — output failure attribution", () => {
 
     expect(outcome.ok).toBe(false);
     if (outcome.ok) return;
-    // The reason names a schema field, never what the model wrote.
-    expect(JSON.stringify(outcome.diagnostic)).not.toContain("MODEL_AUTHORED_SENTENCE");
-    expect(outcome.diagnostic?.validationReason).toBe("dimension_missing_monetization");
+    // The reason names our own closed vocabulary, never what the model wrote.
+    expect(JSON.stringify(outcome.diagnostic)).not.toContain("There is no pricing surface.");
+    expect(outcome.diagnostic?.validationReason).toBe("customer_language_violation");
   });
 
   it("persists the domain contract, never the provider transport shape", async () => {
@@ -373,26 +359,10 @@ describe("runBusinessReadinessAudit — output failure attribution", () => {
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;
 
-    // The domain contract is unchanged by the transport reduction.
-    expect(outcome.audit.schemaVersion).toBe("business-readiness-audit.v1");
-    expect(outcome.audit.dimensions.map((dimension) => dimension.id)).toEqual([
-      "product",
-      "monetization",
-      "distribution",
-      "conversion",
-      "retention",
-    ]);
-
-    // `dimension` is the wire form's routing key. Its absence is what proves
-    // the provider-shaped payload stopped at normalization rather than being
-    // carried into the persisted audit.
-    const serialized = JSON.stringify(outcome.audit);
-    expect(serialized).not.toContain('"dimension"');
-    for (const dimension of outcome.audit.dimensions) {
-      expect(dimension).not.toHaveProperty("dimension");
-      // The domain identity fields are set by us, not taken from the payload.
-      expect(dimension.label).toBeTruthy();
-    }
+    // The domain contract carries the nine lenses and no dimension layer.
+    expect(outcome.audit.schemaVersion).toBe("business-readiness-audit.v2");
+    expect(outcome.audit.synthesis?.lenses).toHaveLength(9);
+    expect("dimensions" in outcome.audit).toBe(false);
   });
 
   it("still completes a valid audit", async () => {
@@ -401,8 +371,8 @@ describe("runBusinessReadinessAudit — output failure attribution", () => {
 
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;
-    expect(outcome.audit.dimensions).toHaveLength(5);
-    expect(outcome.audit.overall.score).toBe(58);
+    expect(outcome.audit.synthesis?.lenses).toHaveLength(9);
+    expect(outcome.audit.overall.score).toBe(60);
   });
 });
 
@@ -412,11 +382,19 @@ describe("runBusinessReadinessAudit — evidence integrity end to end", () => {
       result: {
         ok: true,
         data: buildModelOutput({
-          conversion: {
-            assessmentStatus: "assessable",
-            score: 80,
-            evidenceIds: ["live.conversion.primary_cta", "repo.completely.invented"],
-          },
+          lenses: ((lensOverrides: Record<string, Record<string, unknown>> = {}) =>
+      ["offer","audience","revenue_economics","acquisition","conversion","retention","measurement","business_readiness","scalability"].map((lens) => ({
+        lens,
+        health: "adequate",
+        score: 60,
+        materiality: "soon",
+        summary: `Internal reasoning for ${lens}.`,
+        evidenceIds: ["live.site.title"],
+        missingContext: [],
+        ...(lensOverrides[lens] ?? {}),
+      })))({
+            conversion: { evidenceIds: ["live.conversion.primary_cta", "repo.completely.invented"] },
+          }),
         }),
         usage: { inputTokens: 2_500, outputTokens: 800, thinkingTokens: 200 },
         model: "claude-sonnet-5",
@@ -429,7 +407,7 @@ describe("runBusinessReadinessAudit — evidence integrity end to end", () => {
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;
 
-    const conversion = outcome.audit.dimensions.find((dimension) => dimension.id === "conversion");
+    const conversion = outcome.audit.synthesis?.lenses.find((lens) => lens.lens === "conversion");
     expect(conversion?.evidenceIds).toEqual(["live.conversion.primary_cta"]);
     expect(outcome.audit.validationNotes.join(" ")).toContain("did not exist");
   });
@@ -485,11 +463,19 @@ describe("runBusinessReadinessAudit — Deep Scan evidence (Sprint 6)", () => {
       result: {
         ok: true,
         data: buildModelOutput({
-          retention: {
-            assessmentStatus: "partial",
-            score: 55,
-            evidenceIds: ["auth.surface.dashboard", "auth.surface.invented_surface"],
-          },
+          lenses: ((lensOverrides: Record<string, Record<string, unknown>> = {}) =>
+      ["offer","audience","revenue_economics","acquisition","conversion","retention","measurement","business_readiness","scalability"].map((lens) => ({
+        lens,
+        health: "adequate",
+        score: 60,
+        materiality: "soon",
+        summary: `Internal reasoning for ${lens}.`,
+        evidenceIds: ["live.site.title"],
+        missingContext: [],
+        ...(lensOverrides[lens] ?? {}),
+      })))({
+            retention: { evidenceIds: ["auth.surface.dashboard", "auth.surface.invented_surface"] },
+          }),
         }),
         usage: { inputTokens: 2_500, outputTokens: 800, thinkingTokens: 200 },
         model: "claude-sonnet-5",
@@ -502,7 +488,7 @@ describe("runBusinessReadinessAudit — Deep Scan evidence (Sprint 6)", () => {
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;
 
-    const retention = outcome.audit.dimensions.find((dimension) => dimension.id === "retention");
+    const retention = outcome.audit.synthesis?.lenses.find((lens) => lens.lens === "retention");
     expect(retention?.evidenceIds).toEqual(["auth.surface.dashboard"]);
   });
 
@@ -524,13 +510,10 @@ describe("runBusinessReadinessAudit — Deep Scan evidence (Sprint 6)", () => {
     expect(outcome.ok).toBe(true);
     if (!outcome.ok) return;
 
-    // Unassessable dimensions stay null and are excluded from the average —
-    // never counted as a zero (Sprint 4 §7, Sprint 6 §10).
-    const unassessed = outcome.audit.dimensions.filter(
-      (dimension) => dimension.assessmentStatus === "insufficient_evidence",
-    );
-    expect(unassessed.length).toBeGreaterThan(0);
-    expect(unassessed.every((dimension) => dimension.score === null)).toBe(true);
-    expect(outcome.audit.overall.score).toBeGreaterThan(0);
+    // An absent Deep Scan lowers nothing: the fixture's lenses all score from
+    // public evidence, and the overall mean is over scored lenses only —
+    // an unassessable lens stays null and never enters it (rule 44, ADR 0050).
+    expect(outcome.audit.overall.score).toBe(60);
+    expect(outcome.audit.overall.scoredLenses).toBe(9);
   });
 });

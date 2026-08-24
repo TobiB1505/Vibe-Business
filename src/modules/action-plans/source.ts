@@ -111,7 +111,10 @@ function affinity(conclusion: BusinessConclusion, opportunity: BusinessOpportuni
   const evidenceOverlap = conclusion.evidenceIds.filter((id) => cited.has(id)).length;
 
   const dimensions = new Set([opportunity.primaryDimension, ...opportunity.secondaryDimensions]);
-  const dimensionOverlap = conclusion.dimensions.filter((id) => dimensions.has(id)).length;
+  // A v8 conclusion carries no dimensions; affinity then rests on evidence
+  // overlap, which is already the dominant term. The full lens switch is the
+  // opportunity engine's own change (ADR 0050 §5).
+  const dimensionOverlap = (conclusion.dimensions ?? []).filter((id) => dimensions.has(id)).length;
 
   return evidenceOverlap * 10 + dimensionOverlap;
 }

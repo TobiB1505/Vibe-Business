@@ -65,8 +65,6 @@ function audit(
     accessMode: "credits",
     inputHash: hashFor(sources, evidencePackVersion),
     overallScore: 40,
-    assessedDimensions: 5,
-    totalDimensions: 5,
     failureCode: null,
     result: null,
     productProfileId: sources.productProfileId,

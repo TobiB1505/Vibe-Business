@@ -75,7 +75,7 @@ const UNRESOLVABLE = [
     name: "a legacy Move matching two conclusions equally",
     audit: fakePlannedAudit({
       synthesis: {
-        version: "business-audit-synthesis-v6",
+        version: "business-audit-synthesis-v7",
         lenses: [],
         overall: "…",
         strengths: [],

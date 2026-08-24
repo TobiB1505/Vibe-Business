@@ -7,7 +7,7 @@ import type {
 } from "@/modules/authenticated-product-intelligence/schema";
 import type { BusinessContext } from "@/modules/projects/business-context";
 import type { FounderIntent } from "@/modules/projects/founder-intent";
-import { AUDIT_DIMENSIONS, BUSINESS_LENSES } from "./schema";
+import { BUSINESS_LENSES } from "./schema";
 
 /**
  * Fixtures and a fake provider (Sprint 4 §35, §36).
@@ -49,13 +49,13 @@ export class FakeProvider implements AIProvider {
 
 /**
  * A well-formed model response citing evidence ids that exist in the default
- * pack, in the **provider wire form**: `dimensions` is an array whose entries
- * each name their own `dimension` (see `wire-schema.ts`). Fixtures speak the
- * transport format because that is what the provider actually returns; the
- * runner normalizes it before any domain rule runs.
+ * pack, in the **provider wire form** (see `wire-schema.ts`). Since ADR 0050
+ * the response is the nine lens assessments, the conclusions and the
+ * limitations — there is no dimension block. Fixtures speak the transport
+ * format because that is what the provider actually returns; the runner
+ * normalizes it before any domain rule runs.
  */
 export function buildModelOutput(
-  overrides: Partial<Record<(typeof AUDIT_DIMENSIONS)[number], Record<string, unknown>>> = {},
   extras: {
     lenses?: unknown;
     overallConclusion?: unknown;
@@ -63,34 +63,7 @@ export function buildModelOutput(
     limitations?: unknown;
   } = {},
 ): Record<string, unknown> {
-  const base = (score: number | null, status: string, evidenceIds: string[]) => ({
-    assessmentStatus: status,
-    score,
-    confidence: "medium",
-    summary: "A plain summary of the current state.",
-    strengths: ["Something works"],
-    gaps: ["Something is missing"],
-    unknowns: ["Something is unobservable"],
-    evidenceIds,
-  });
-
-  const dimensions: Record<string, unknown> = {
-    product: base(78, "assessable", ["profile.identity.description", "live.site.title"]),
-    monetization: base(35, "partial", ["profile.signal.pricing_surface", "intent.monetization_model"]),
-    distribution: base(null, "insufficient_evidence", []),
-    conversion: base(61, "assessable", ["live.conversion.primary_cta"]),
-    retention: base(null, "insufficient_evidence", []),
-  };
-
-  for (const [dimension, override] of Object.entries(overrides)) {
-    dimensions[dimension] = { ...(dimensions[dimension] as Record<string, unknown>), ...override };
-  }
-
   return {
-    dimensions: AUDIT_DIMENSIONS.map((dimension) => ({
-      dimension,
-      ...(dimensions[dimension] as Record<string, unknown>),
-    })),
     // Every lens assessed exactly once, which is what the contract asks for.
     lenses:
       extras.lenses ??
@@ -116,7 +89,6 @@ export function buildModelOutput(
         whyItMatters: null,
         tone: "positive",
         confidence: "high",
-        dimensions: ["product", "conversion"],
         lenses: ["offer", "conversion"],
         evidenceIds: ["profile.identity.description", "live.site.title"],
       },
@@ -128,7 +100,6 @@ export function buildModelOutput(
           "Someone can like what you built and still leave because they don't know what it costs.",
         tone: "critical",
         confidence: "high",
-        dimensions: ["monetization", "conversion"],
         lenses: ["revenue_economics", "conversion"],
         evidenceIds: ["profile.signal.pricing_surface", "intent.monetization_model"],
       },

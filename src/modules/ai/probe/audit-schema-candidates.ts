@@ -1,5 +1,18 @@
 import { ANTHROPIC_AUDIT_OUTPUT_SCHEMA } from "@/modules/business-audit/wire-schema";
-import { AUDIT_DIMENSIONS } from "@/modules/business-audit/schema";
+
+/**
+ * Historical probe input. The five dimension ids left the audit contract with
+ * ADR 0050; they are frozen here as literals because the baseline and the
+ * reduction candidates below are records of what was *sent to the provider*,
+ * and must keep measuring the same grammar forever.
+ */
+const HISTORICAL_DIMENSIONS = [
+  "product",
+  "monetization",
+  "distribution",
+  "conversion",
+  "retention",
+] as const;
 
 /**
  * Candidate output schemas for the grammar compile probe. **Dev-only** —
@@ -75,9 +88,9 @@ export const BASELINE_AUDIT_OUTPUT_SCHEMA: Record<string, unknown> = {
     dimensions: {
       type: "object",
       properties: Object.fromEntries(
-        AUDIT_DIMENSIONS.map((dimension) => [dimension, BASELINE_DIMENSION_SCHEMA]),
+        HISTORICAL_DIMENSIONS.map((dimension) => [dimension, BASELINE_DIMENSION_SCHEMA]),
       ),
-      required: [...AUDIT_DIMENSIONS],
+      required: [...HISTORICAL_DIMENSIONS],
       additionalProperties: false,
     },
     keyFindings: KEY_FINDINGS_SCHEMA,
@@ -98,7 +111,7 @@ export const BASELINE_AUDIT_OUTPUT_SCHEMA: Record<string, unknown> = {
 const CANDIDATE_B_ITEM = {
   type: "object",
   properties: {
-    dimension: { type: "string", enum: [...AUDIT_DIMENSIONS] },
+    dimension: { type: "string", enum: [...HISTORICAL_DIMENSIONS] },
     assessmentStatus: { type: "string", enum: ["assessable", "partial", "insufficient_evidence"] },
     score: {
       anyOf: [{ type: "integer" }, { type: "null" }],
@@ -196,7 +209,7 @@ export const SCHEMA_CANDIDATES: SchemaCandidate[] = [
   },
   {
     name: "A",
-    description: "Dimension array, item shape declared once (current production wire schema)",
+    description: "Lens array, item shape declared once (current production wire schema)",
     schema: ANTHROPIC_AUDIT_OUTPUT_SCHEMA,
   },
   {

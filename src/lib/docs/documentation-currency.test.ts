@@ -276,6 +276,28 @@ const RETIRED_CLAIMS: readonly { path: string; claim: string; retiredBy: string 
     retiredBy: "Sprint 0056 — src/modules/coding-agent/ is roughly fifty files.",
   },
   {
+    path: "PRODUCT.md",
+    claim: "which remain the scored technical record",
+    retiredBy:
+      "ADR 0050 — the five dimensions left the audit contract. The nine lenses carry the " +
+      "scores, and the overall figure is the mean over scored lenses.",
+  },
+  {
+    path: "ARCHITECTURE.md",
+    claim: "(Product, Monetization, Distribution, Conversion, Retention)",
+    retiredBy:
+      "ADR 0050 — the audit is structured around the nine business lenses. The five names " +
+      "survive only in records and in stored v6/v7 audits, which stay readable under their " +
+      "own contract.",
+  },
+  {
+    path: "src/modules/business-audit/README.md",
+    claim: "once per\ndimension key",
+    retiredBy:
+      "ADR 0050 — the wire schema carries lenses, not dimensions. The grammar lesson " +
+      "(declare each item shape once) survives; the dimension block does not.",
+  },
+  {
     path: "docs/ROADMAP.md",
     claim: "**Repository state:**",
     retiredBy:

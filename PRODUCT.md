@@ -212,19 +212,23 @@ Guiding principle: **Prepare autonomously. Execute consequential actions with ap
 
 ## 10. Business Readiness Concept
 
-The Business Readiness Audit evaluates a product across dimensions relevant to turning it into a business. Dimensions:
+The Business Readiness Audit reasons through nine business lenses ([ADR 0050](docs/decisions/0050-lenses-are-the-audit.md)). Each lens carries a health reading, a separate judgement about whether it matters *now* (materiality), and a diagnostic score:
 
-| Dimension | Question it answers |
+| Lens | Question it answers |
 |---|---|
-| Product | Is the product technically and communicatively understandable? |
-| Monetization | Do pricing, payment flow, upgrade path, and clear commercial offers exist? |
-| Distribution | Are there recognizable ways for users to find the product? |
-| Conversion | Does the product meaningfully guide visitors toward the desired action? |
-| Retention | Are there mechanisms that bring users back or keep them engaged? |
+| Offer | Why should anyone want this? Value, promise, differentiation. |
+| Audience | Who cares enough about this problem to act or pay? |
+| Revenue & Economics | How does the value created become sustainable revenue — including cost to serve? |
+| Acquisition | How do the right people discover it? |
+| Conversion | How does someone move from interest to value, and to paying? |
+| Retention | Why would anyone come back, keep using it, or keep paying? |
+| Measurement | Can the founder tell what users do and what is actually working? |
+| Business Readiness | What still prevents this operating credibly as a real business? |
+| Scalability | What happens to costs, margin and operations if this grows? |
 
-All five are scored, and the data model did stay open: the audit now also reasons through nine business lenses, each carrying a health reading and a separate judgement about whether it matters *now* — added without changing the five dimensions, which remain the scored technical record.
+The overall Business Health score is computed deterministically by the application as the unweighted mean over lenses with a score, and only when enough of the lenses that apply to the product could be scored. A lens the evidence cannot support scores `null`, is excluded from the mean, and is never counted as zero — and when coverage is too thin, the overall figure itself is `null` with a stated reason, never a fabricated number.
 
-A dimension the evidence cannot support returns `insufficient_evidence` with a null score, is excluded from the overall figure, and is never counted as zero.
+Audits produced before ADR 0050 were scored over five fixed dimensions (Product, Monetization, Distribution, Conversion, Retention). Those stored audits remain valid and renderable under their own recorded contract; the score trend refuses to draw a line across the contract change.
 
 ---
 

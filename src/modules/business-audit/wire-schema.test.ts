@@ -1,38 +1,37 @@
 import { describe, expect, it } from "vitest";
 
-import { AUDIT_DIMENSIONS } from "./schema";
+import { BUSINESS_LENSES } from "./schema";
 import { ANTHROPIC_AUDIT_OUTPUT_SCHEMA, normalizeAnthropicAuditOutput } from "./wire-schema";
 import { validateAuditOutput } from "./validate";
 import { measureSchema } from "@/modules/ai/probe/schema-metrics";
 
-/** A complete, well-formed wire response. */
-function wireDimension(dimension: string, overrides: Record<string, unknown> = {}) {
+/** A complete, well-formed wire response (contract v8: lenses only). */
+function wireLens(lens: string, overrides: Record<string, unknown> = {}) {
   return {
-    dimension,
-    assessmentStatus: "assessable",
+    lens,
+    health: "adequate",
     score: 60,
-    confidence: "medium",
-    summary: `Summary for ${dimension}.`,
-    strengths: ["a strength"],
-    gaps: ["a gap"],
-    unknowns: [],
+    materiality: "soon",
+    summary: `Internal reasoning for ${lens}.`,
     evidenceIds: ["repo:1"],
+    missingContext: [],
     ...overrides,
   };
 }
 
 function wireResponse(overrides: Record<string, unknown> = {}) {
   return {
-    dimensions: AUDIT_DIMENSIONS.map((dimension) => wireDimension(dimension)),
+    lenses: BUSINESS_LENSES.map((lens) => wireLens(lens)),
     overallConclusion: "One sentence about the business.",
     conclusions: [
       {
+        rootProblem: "The business has not decided how usage becomes price.",
         headline: "People can start using it.",
         explanation: "Signup and login are reachable.",
         whyItMatters: "",
         tone: "positive",
         confidence: "high",
-        dimensions: ["product"],
+        lenses: ["offer"],
         evidenceIds: ["repo:1"],
       },
     ],
@@ -42,23 +41,21 @@ function wireResponse(overrides: Record<string, unknown> = {}) {
 }
 
 describe("ANTHROPIC_AUDIT_OUTPUT_SCHEMA", () => {
-  it("declares the dimension assessment shape exactly once", () => {
+  it("declares each item shape exactly once", () => {
     const metrics = measureSchema(ANTHROPIC_AUDIT_OUTPUT_SCHEMA);
-    // Root, the single dimension item, and the key-finding item.
     /*
-     * Four shapes: the dimension item, the lens item, the conclusion item, and
-     * the root. CORE-2a.3 added the third of those.
+     * Three shapes: the lens item, the conclusion item, and the root. The
+     * dimension item left with the dimension layer (ADR 0050).
      *
      * The number that matters is not this one — it is that each is declared
      * ONCE. The Sprint 4 failure was five copies of a single shape, one per
      * dimension key, and the guard below on `unionCount` is the other half of
      * the same lesson. Grow this deliberately, not by accident.
      */
-    expect(metrics.objectCount).toBe(4);
-    // One per dimension key would be 5. The two unions are the dimension score
-    // and the lens diagnostic score, each integer-or-null and each declared
+    expect(metrics.objectCount).toBe(3);
+    // The one union is the lens diagnostic score, integer-or-null, declared
     // once. `whyItMatters` deliberately remains a required string on the wire.
-    expect(metrics.unionCount).toBe(2);
+    expect(metrics.unionCount).toBe(1);
   });
 
   it("keeps the structured-outputs subset: every object closed, every property required", () => {
@@ -74,204 +71,125 @@ describe("ANTHROPIC_AUDIT_OUTPUT_SCHEMA", () => {
 
     // CORE-2a.1 added `overallConclusion`, which is a *sentence*. The invariant
     // this test protects is that the model never produces the headline number
-    // (Sprint 4 §7), so it is asserted against the field's type rather than
-    // against the substring "overall".
+    // (Sprint 4 §7, carried into ADR 0050's lens rule), so it is asserted
+    // against the field's type rather than against the substring "overall".
     const properties = (ANTHROPIC_AUDIT_OUTPUT_SCHEMA as { properties: Record<string, { type?: string }> })
       .properties;
     expect(properties.overallConclusion.type).toBe("string");
     expect(Object.keys(properties)).not.toContain("score");
   });
 
-  it("enumerates the dimension ids from the domain, not a duplicate list", () => {
-    const dimensions = ANTHROPIC_AUDIT_OUTPUT_SCHEMA.properties as Record<string, never>;
-    const item = (dimensions.dimensions as { items: { properties: Record<string, { enum?: string[] }> } })
+  it("enumerates the lens ids from the domain, not a duplicate list", () => {
+    const properties = ANTHROPIC_AUDIT_OUTPUT_SCHEMA.properties as Record<string, never>;
+    const item = (properties.lenses as { items: { properties: Record<string, { enum?: string[] }> } })
       .items;
-    expect(item.properties.dimension!.enum).toEqual([...AUDIT_DIMENSIONS]);
+    expect(item.properties.lens!.enum).toEqual([...BUSINESS_LENSES]);
+  });
+
+  it("carries no dimension block anywhere in the compiled schema", () => {
+    // The scanner-language inventory the conclusions used to paraphrase
+    // (CORE-2a.3.2) cannot recur if it does not exist in the response at all.
+    expect(JSON.stringify(ANTHROPIC_AUDIT_OUTPUT_SCHEMA)).not.toContain('"dimensions"');
   });
 });
 
 describe("normalizeAnthropicAuditOutput", () => {
-  it("converts the array form into the dimension-keyed domain shape", () => {
+  it("passes the transport object through in the domain shape", () => {
     const result = normalizeAnthropicAuditOutput(wireResponse());
     expect(result.ok).toBe(true);
 
     const data = (result as { ok: true; data: Record<string, unknown> }).data;
-    const dimensions = data.dimensions as Record<string, Record<string, unknown>>;
-    expect(Object.keys(dimensions).sort()).toEqual([...AUDIT_DIMENSIONS].sort());
-    expect(dimensions.product!.summary).toBe("Summary for product.");
-    // The routing key is not part of the assessment; the validator sets id/label.
-    expect(dimensions.product).not.toHaveProperty("dimension");
-    // CORE-2a.1: `keyFindings` was replaced by the synthesis pair.
+    expect(Array.isArray(data.lenses)).toBe(true);
     expect(data.conclusions).toHaveLength(1);
     expect(data.overallConclusion).toBe("One sentence about the business.");
     expect(data.limitations).toEqual(["One limitation."]);
+    expect(data).not.toHaveProperty("dimensions");
   });
 
-  it("requires exactly five dimensions — a missing one is rejected by name", () => {
-    const response = wireResponse({
-      dimensions: AUDIT_DIMENSIONS.filter((d) => d !== "retention").map((d) => wireDimension(d)),
-    });
-    expect(normalizeAnthropicAuditOutput(response)).toEqual({
-      ok: false,
-      reason: "dimension_missing_retention",
-    });
-  });
-
-  it("rejects a duplicated dimension rather than letting one silently win", () => {
-    const response = wireResponse({
-      dimensions: [...AUDIT_DIMENSIONS.map((d) => wireDimension(d)), wireDimension("product")],
-    });
-    expect(normalizeAnthropicAuditOutput(response)).toEqual({
-      ok: false,
-      reason: "dimension_duplicate",
-    });
-  });
-
-  it("rejects an unknown dimension", () => {
-    const response = wireResponse({
-      dimensions: [...AUDIT_DIMENSIONS.map((d) => wireDimension(d)), wireDimension("growth")],
-    });
-    expect(normalizeAnthropicAuditOutput(response)).toEqual({
-      ok: false,
-      reason: "dimension_unknown",
-    });
-  });
-
-  it("rejects malformed envelopes with bounded reasons", () => {
-    expect(normalizeAnthropicAuditOutput(null)).toEqual({ ok: false, reason: "response_not_object" });
-    expect(normalizeAnthropicAuditOutput([])).toEqual({ ok: false, reason: "response_not_object" });
-    expect(normalizeAnthropicAuditOutput({ dimensions: {} })).toEqual({
-      ok: false,
-      reason: "dimensions_not_array",
-    });
-    expect(normalizeAnthropicAuditOutput({ dimensions: ["product"] })).toEqual({
-      ok: false,
-      reason: "dimension_entry_not_object",
-    });
-  });
-
-  it("carries no model content in a rejection reason", () => {
-    const response = wireResponse({
-      dimensions: [wireDimension("growth", { summary: "MODEL PROSE HERE" })],
-    });
-    const result = normalizeAnthropicAuditOutput(response);
-    expect(JSON.stringify(result)).not.toContain("MODEL PROSE HERE");
+  it("rejects a non-object envelope with a bounded reason", () => {
+    for (const bad of [null, "text", 42, ["array"]]) {
+      const result = normalizeAnthropicAuditOutput(bad);
+      expect(result.ok).toBe(false);
+      expect((result as { ok: false; reason: string }).reason).toBe("response_not_object");
+    }
   });
 });
 
 describe("wire → domain, end to end", () => {
   const knownEvidence = new Set(["repo:1", "web:2"]);
 
-  it("normalizes then validates into five domain assessments", () => {
-    const normalized = normalizeAnthropicAuditOutput(wireResponse());
+  function validated(response: Record<string, unknown>) {
+    const normalized = normalizeAnthropicAuditOutput(response);
     expect(normalized.ok).toBe(true);
-
-    const validated = validateAuditOutput(
+    return validateAuditOutput(
       (normalized as { ok: true; data: Record<string, unknown> }).data,
       knownEvidence,
     );
-    expect(validated.ok).toBe(true);
+  }
 
-    const audit = (validated as { ok: true; audit: { dimensions: { id: string; label: string }[] } }).audit;
-    expect(audit.dimensions.map((d) => d.id)).toEqual([...AUDIT_DIMENSIONS]);
-    // id and label come from the domain, never from the wire payload.
-    expect(audit.dimensions[0]!.label).toBe("Product");
+  it("normalizes then validates into nine lens assessments", () => {
+    const result = validated(wireResponse());
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    expect(result.audit.synthesis?.lenses.map((lens) => lens.lens)).toEqual([...BUSINESS_LENSES]);
   });
 
-  it("preserves a null score through the transport", () => {
-    const normalized = normalizeAnthropicAuditOutput(
+  it("preserves a null lens score through the transport", () => {
+    const result = validated(
       wireResponse({
-        dimensions: AUDIT_DIMENSIONS.map((d) =>
-          d === "retention"
-            ? wireDimension(d, { assessmentStatus: "insufficient_evidence", score: null })
-            : wireDimension(d),
+        lenses: BUSINESS_LENSES.map((lens) =>
+          lens === "retention"
+            ? wireLens(lens, { health: "unclear", score: null, evidenceIds: [] })
+            : wireLens(lens),
         ),
       }),
     );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
 
-    const validated = validateAuditOutput(
-      (normalized as { ok: true; data: Record<string, unknown> }).data,
-      knownEvidence,
-    );
-    const audit = (validated as {
-      ok: true;
-      audit: { dimensions: { id: string; score: number | null; assessmentStatus: string }[] };
-    }).audit;
-
-    const retention = audit.dimensions.find((d) => d.id === "retention")!;
-    expect(retention.score).toBeNull();
-    expect(retention.assessmentStatus).toBe("insufficient_evidence");
-  });
-
-  it("forces a null score when the model scores an insufficient_evidence dimension", () => {
-    const normalized = normalizeAnthropicAuditOutput(
-      wireResponse({
-        dimensions: AUDIT_DIMENSIONS.map((d) =>
-          d === "monetization"
-            ? wireDimension(d, { assessmentStatus: "insufficient_evidence", score: 70 })
-            : wireDimension(d),
-        ),
-      }),
-    );
-
-    const validated = validateAuditOutput(
-      (normalized as { ok: true; data: Record<string, unknown> }).data,
-      knownEvidence,
-    );
-    const audit = (validated as {
-      ok: true;
-      audit: { dimensions: { id: string; score: number | null }[] };
-    }).audit;
-
-    expect(audit.dimensions.find((d) => d.id === "monetization")!.score).toBeNull();
+    const retention = result.audit.synthesis?.lenses.find((lens) => lens.lens === "retention");
+    expect(retention?.score).toBeNull();
+    expect(retention?.health).toBe("unclear");
   });
 
   it("still validates evidence ids after normalization", () => {
-    const normalized = normalizeAnthropicAuditOutput(
+    const result = validated(
       wireResponse({
-        dimensions: AUDIT_DIMENSIONS.map((d) =>
-          wireDimension(d, { evidenceIds: ["repo:1", "hallucinated:99"] }),
+        lenses: BUSINESS_LENSES.map((lens) =>
+          wireLens(lens, { evidenceIds: ["repo:1", "hallucinated:99"] }),
         ),
       }),
     );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
 
-    const validated = validateAuditOutput(
-      (normalized as { ok: true; data: Record<string, unknown> }).data,
-      knownEvidence,
-    );
-    const audit = (validated as {
-      ok: true;
-      audit: { dimensions: { evidenceIds: string[] }[]; notes: string[] };
-    }).audit;
-
-    expect(audit.dimensions[0]!.evidenceIds).toEqual(["repo:1"]);
-    expect(audit.notes.join(" ")).toContain("did not exist in the evidence pack");
+    expect(result.audit.synthesis?.lenses[0]!.evidenceIds).toEqual(["repo:1"]);
+    expect(result.audit.notes.join(" ")).toContain("did not exist in the evidence pack");
   });
 });
 
 /**
- * Generation order (CORE-2a.3.2).
+ * Generation order (CORE-2a.3.2, completed by ADR 0050).
  *
  * The v4 dogfood wrote the Monetization dimension's four gaps and then wrote
- * the customer-facing explanation as those same four facts, in the same order,
- * "monetization model" included. The dimensions were declared first, so the
- * scanner inventory was the freshest thing in the model's own context at the
- * moment it had to name a business problem.
+ * the customer-facing explanation as those same four facts, in the same order.
+ * The fix was ordering — reasoning before prose — and ADR 0050 finished it by
+ * removing the scanner-language block from the response entirely.
  *
- * These assertions exist because that ordering is now load-bearing and looks
- * arbitrary. Anyone tidying this schema alphabetically would silently
- * reintroduce the defect, and no other test would notice.
+ * These assertions exist because the ordering is load-bearing and looks
+ * arbitrary. Anyone tidying this schema alphabetically would silently weaken
+ * the property, and no other test would notice.
  */
-describe("judgment is generated before the scanner record", () => {
+describe("judgment is generated before the founder-facing prose", () => {
   const properties = ANTHROPIC_AUDIT_OUTPUT_SCHEMA.properties as Record<string, unknown>;
   const required = ANTHROPIC_AUDIT_OUTPUT_SCHEMA.required as string[];
 
-  it("declares lenses first and dimensions after the conclusions", () => {
+  it("declares the lens reasoning first", () => {
     expect(Object.keys(properties)).toEqual([
       "lenses",
       "overallConclusion",
       "conclusions",
-      "dimensions",
       "limitations",
     ]);
   });
@@ -288,12 +206,5 @@ describe("judgment is generated before the scanner record", () => {
     expect(keys.indexOf("rootProblem")).toBe(0);
     expect(keys.indexOf("rootProblem")).toBeLessThan(keys.indexOf("headline"));
     expect(keys.indexOf("headline")).toBeLessThan(keys.indexOf("explanation"));
-  });
-
-  /** The five dimensions still exist in full — this sprint reorders, not deletes. */
-  it("still requires every scored dimension", () => {
-    const dimensions = properties.dimensions as { items: Record<string, unknown> };
-    expect(dimensions.items).toBeDefined();
-    expect(required).toContain("dimensions");
   });
 });
