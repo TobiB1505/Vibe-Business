@@ -528,3 +528,53 @@ describe("analyzeLiveProduct — a client-rendered product", () => {
     expect(snapshot.readability?.readable).toBeGreaterThan(0);
   });
 });
+
+/* ---------------------------------------------------------------------------
+ * Sprint 0083 — the SEO coverage denominator
+ * ------------------------------------------------------------------------ */
+
+/** Two readable pages and two shells, all reachable from the homepage. */
+const PARTLY_RENDERED_SITE: Record<string, ReturnType<typeof htmlResponse>> = {
+  "https://mixed.test/": htmlResponse(`<html lang="en"><head><title>Mixed — Ship faster</title>
+<meta name="description" content="Mixed helps teams ship."></head>
+<body><nav><a href="/about">About</a><a href="/app">App</a><a href="/dashboard">Dashboard</a></nav>
+<h1>Ship faster</h1><p>Mixed gives your team one place to plan, build and release software without
+the four tools you are paying for today. Start free and invite your team in under a minute.</p>
+<a href="/signup">Start free</a></body></html>`),
+  "https://mixed.test/about": htmlResponse(`<html lang="en"><head><title>About Mixed</title></head>
+<body><h1>About</h1><p>Mixed was started in 2024 by two engineers who were tired of stitching four
+tools together every time they wanted to ship something small and safe to production.</p></body></html>`),
+  "https://mixed.test/app": htmlResponse(
+    `<html><head><title>App</title></head><body><div id="root"></div></body></html>`,
+  ),
+  "https://mixed.test/dashboard": htmlResponse(
+    `<html><head><title>Dashboard</title></head><body><div id="app"></div></body></html>`,
+  ),
+};
+
+describe("SEO coverage on a partly client-rendered site", () => {
+  it("counts only the pages it could actually read", async () => {
+    const snapshot = await analyzeLiveProduct({
+      configuredUrl: "https://mixed.test/",
+      dependencies: fakeDependencies(PARTLY_RENDERED_SITE),
+    });
+
+    expect(snapshot.readability).toMatchObject({ readable: 2, clientRendered: 2 });
+
+    const description = snapshot.seoSignals.find((signal) => signal.id === "meta_description");
+    // Two shells contribute a guaranteed miss to a document-level signal
+    // because there is no document. Counting them would report the homepage's
+    // description as missing on three of four pages "Vibe read".
+    expect(description?.coverage).toEqual({ pagesWith: 1, pagesInspected: 2 });
+  });
+
+  it("still degrades the snapshot, since two pages went unread", async () => {
+    const snapshot = await analyzeLiveProduct({
+      configuredUrl: "https://mixed.test/",
+      dependencies: fakeDependencies(PARTLY_RENDERED_SITE),
+    });
+
+    expect(snapshot.completeness.reasons).toContain("client_rendered");
+    expect(snapshot.readability?.clientRenderedPaths).toEqual(["/app", "/dashboard"]);
+  });
+});

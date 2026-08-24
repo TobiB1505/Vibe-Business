@@ -119,10 +119,24 @@ export function buildSeoSignals(input: {
    * rather than of a page, so a per-page count would be a category error
    * dressed as a number.
    */
+  /*
+   * Counted over readable pages only (Sprint 0083).
+   *
+   * A page that builds itself in the browser contributes a guaranteed miss to
+   * every document-level signal, because there is no document to look at. Left
+   * in the denominator it turns "Vibe could not read three of your pages" into
+   * "your description is missing on three of five pages Vibe read" — a sentence
+   * that is wrong twice: Vibe read two, and it knows nothing about the three.
+   */
+  const readablePages = pages.filter((page) => classifyRendering(page.html) !== "client_rendered");
+
   const coverageOf = (id: SeoSignalId): SeoSignalCoverage | undefined => {
     const has = HAS_SIGNAL[id];
-    if (!has || pages.length === 0) return undefined;
-    return { pagesWith: pages.filter((page) => has(page)).length, pagesInspected: pages.length };
+    if (!has || readablePages.length === 0) return undefined;
+    return {
+      pagesWith: readablePages.filter((page) => has(page)).length,
+      pagesInspected: readablePages.length,
+    };
   };
 
   const signal = (id: SeoSignalId, present: boolean, evidence: LiveEvidence[] = []): SeoSignal => ({

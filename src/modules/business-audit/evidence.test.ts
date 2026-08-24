@@ -466,3 +466,122 @@ describe("a client-rendered site in the evidence pack", () => {
     expect(pack.items.map((entry) => entry.id)).not.toContain("live.rendering.client_rendered");
   });
 });
+
+/* ---------------------------------------------------------------------------
+ * Sprint 0083 — an absence Vibe could not observe is never minted
+ * ------------------------------------------------------------------------ */
+
+describe("unobservable absences", () => {
+  /** Every page a shell — the site-wide case. */
+  function allShells(): LiveProductIntelligenceSnapshot {
+    const base = fakeLiveSnapshot();
+    return {
+      ...base,
+      pages: base.pages.map((page) => ({ ...page, rendering: "client_rendered" as const })),
+      productSurfaces: base.productSurfaces.map((surface) => ({ ...surface, detected: false })),
+      seoSignals: base.seoSignals.map((signal) => ({ ...signal, present: false })),
+      conversionSignals: {
+        ...base.conversionSignals,
+        primaryCta: null,
+        signupCtaPresent: false,
+        pricingCtaPresent: false,
+        contactCtaPresent: false,
+      },
+      readability: {
+        readable: 0,
+        empty: 0,
+        clientRendered: base.pages.length,
+        clientRenderedPaths: base.pages.map((page) => page.path).slice(0, 10),
+      },
+      completeness: { status: "partial", reasons: ["client_rendered"] },
+    };
+  }
+
+  it("mints no live absence claim when nothing could be read", () => {
+    const ids = buildLiveEvidence(allShells(), "polarised").map((entry) => entry.id);
+
+    expect(ids.filter((id) => id.startsWith("live.surface_absent."))).toEqual([]);
+    expect(ids.filter((id) => id.endsWith("_missing"))).toEqual([]);
+    expect(ids).not.toContain("live.conversion.signup_cta");
+    expect(ids).not.toContain("live.conversion.pricing_cta");
+  });
+
+  it("says what it could not check, rather than saying nothing", () => {
+    const labels = buildLiveEvidence(allShells()).map((entry) => entry.label).join("\n");
+
+    expect(labels).toContain("could not be checked at all");
+    expect(labels).toContain("Vibe's limit, not a finding");
+  });
+
+  it("keeps every absence for a site that read fine", () => {
+    const ids = buildLiveEvidence(fakeLiveSnapshot(), "polarised").map((entry) => entry.id);
+
+    expect(ids).toContain("live.conversion.signup_cta");
+    expect(ids.filter((id) => id.startsWith("live.unobservable."))).toEqual([]);
+  });
+
+  it("keeps a presence found on a readable page, whatever the rest of the site did", () => {
+    const base = fakeLiveSnapshot();
+    const mixed: LiveProductIntelligenceSnapshot = {
+      ...base,
+      pages: base.pages.map((page, index) =>
+        index === 0 ? page : { ...page, rendering: "client_rendered" as const },
+      ),
+    };
+
+    const ids = buildLiveEvidence(mixed, "polarised").map((entry) => entry.id);
+    expect(ids).toContain("live.conversion.signup_cta");
+    expect(ids.filter((id) => id.startsWith("live.unobservable."))).toEqual([]);
+  });
+
+  it("suppresses only SEO when the homepage alone is a shell", () => {
+    const base = fakeLiveSnapshot();
+    const shellHomepage: LiveProductIntelligenceSnapshot = {
+      ...base,
+      pages: base.pages.map((page, index) =>
+        index === 0 ? { ...page, rendering: "client_rendered" as const } : page,
+      ),
+      seoSignals: base.seoSignals.map((signal) => ({ ...signal, present: false })),
+    };
+
+    const ids = buildLiveEvidence(shellHomepage).map((entry) => entry.id);
+    // SEO is read from the homepage alone, so it goes.
+    expect(ids.filter((id) => id.endsWith("_missing"))).toEqual([]);
+    expect(ids).toContain("live.unobservable.seo");
+    // Surfaces and CTAs are collected across the crawl, so they stay.
+    expect(ids).not.toContain("live.unobservable.surfaces");
+  });
+
+  it("leaves a snapshot stored before the verdict existed fully observable", () => {
+    // Suppressing evidence an audit was already reasoning from would be a
+    // silent change to what an older stored audit is understood to have seen.
+    const base = fakeLiveSnapshot();
+    const v2: LiveProductIntelligenceSnapshot = {
+      ...base,
+      pages: base.pages.map((page) => {
+        const copy = { ...page };
+        delete copy.rendering;
+        return copy;
+      }),
+      seoSignals: base.seoSignals.map((signal) => ({ ...signal, present: false })),
+    };
+
+    const ids = buildLiveEvidence(v2).map((entry) => entry.id);
+    expect(ids.filter((id) => id.endsWith("_missing")).length).toBeGreaterThan(0);
+    expect(ids.filter((id) => id.startsWith("live.unobservable."))).toEqual([]);
+  });
+
+  it("does not collide with the surface namespace or the premise selector", () => {
+    // `live.surface.` is SURFACE_NAMESPACES.live.present, and `live-premise.ts`
+    // selects the ids it revalidates by endsWith("_missing"). A new family must
+    // land in neither, or it becomes a surface citation or a paid revalidation.
+    const ids = buildLiveEvidence(allShells()).map((entry) => entry.id);
+    const unobservable = ids.filter((id) => id.startsWith("live.unobservable."));
+
+    expect(unobservable.length).toBeGreaterThan(0);
+    for (const id of unobservable) {
+      expect(id.startsWith("live.surface.")).toBe(false);
+      expect(id.endsWith("_missing")).toBe(false);
+    }
+  });
+});

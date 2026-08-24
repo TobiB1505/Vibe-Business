@@ -223,11 +223,62 @@ export function buildRepositoryEvidence(
   return items;
 }
 
+/**
+ * What Vibe was actually able to observe about a live site (Sprint 0083).
+ *
+ * ## Why the pack, and not the snapshot, is where this belongs
+ *
+ * The snapshot is right as it stands: it records what the markup said, and for a
+ * page that builds itself in the browser the markup said nothing. It is the pack
+ * that turns a zero into a *claim* — "No signup/trial call to action was
+ * detected" — and a claim is only as good as the observation behind it.
+ *
+ * Sprint 0082 gave the pack a sentence saying those absences were unread rather
+ * than missing. That was not enough, and the reason is worth stating: the
+ * sentence sat at priority 1 *beside* a dozen confident absence claims at the
+ * same priority. It competed with them instead of governing them, and rule 44 is
+ * explicit that this must be enforced in code rather than in a prompt.
+ *
+ * ## The rule
+ *
+ * An absence derived from a page Vibe could not read is not minted at all. This
+ * generalizes what Sprint 0079 already did for declared pricing — *absence is
+ * minted only when the pricing surface was actually reached* — from one signal
+ * family to the three others that had the same problem.
+ *
+ * Presence is deliberately unaffected. A call to action found on a readable page
+ * is a fact no matter what the rest of the site did.
+ */
+type LiveObservability = {
+  /** The homepage could be read. SEO and site metadata are derived from it alone. */
+  homepage: boolean;
+  /** At least one page could be read. Surfaces and CTAs are collected across the crawl. */
+  site: boolean;
+};
+
+function observabilityOf(snapshot: LiveProductIntelligenceSnapshot): LiveObservability {
+  // A snapshot stored before Sprint 0082 carries no verdict at all. It reads as
+  // fully observable, which is exactly what every consumer assumed of it before
+  // the field existed — inventing a suppression for an old snapshot would
+  // silently remove evidence an audit had already been reasoning from.
+  const pages = snapshot.pages;
+  if (pages.length === 0 || pages.every((page) => page.rendering === undefined)) {
+    return { homepage: true, site: true };
+  }
+
+  const homepage = pages.find((page) => page.path === "/") ?? pages[0];
+  return {
+    homepage: homepage.rendering !== "client_rendered",
+    site: pages.some((page) => (page.rendering ?? "readable") !== "client_rendered"),
+  };
+}
+
 export function buildLiveEvidence(
   snapshot: LiveProductIntelligenceSnapshot,
   scheme: SurfaceIdScheme = "polarity_free",
 ): EvidenceItem[] {
   const items: EvidenceItem[] = [];
+  const observable = observabilityOf(snapshot);
 
   items.push(
     item("live.site.origin", "live_product", `Live site origin: ${snapshot.source.effectiveOrigin}`, 2),
@@ -250,6 +301,8 @@ export function buildLiveEvidence(
   }
 
   for (const surface of snapshot.productSurfaces) {
+    // A surface Vibe never saw is not a surface the product lacks.
+    if (!surface.detected && !observable.site) continue;
     items.push(
       item(
         scheme === "polarised"
@@ -264,48 +317,72 @@ export function buildLiveEvidence(
     );
   }
 
+  if (!observable.site) {
+    items.push(
+      item(
+        "live.unobservable.surfaces",
+        "live_product",
+        "Every page Vibe fetched builds itself in the browser, so which surfaces the live product " +
+          "has could not be checked at all. Nothing about them is known either way.",
+        1,
+      ),
+    );
+  }
+
   const { conversionSignals } = snapshot;
-  items.push(
-    item(
-      "live.conversion.primary_cta",
-      "live_product",
-      conversionSignals.primaryCta
-        ? `Primary call to action on the live site: "${short(conversionSignals.primaryCta.label, 60)}" (${conversionSignals.primaryCta.category})`
-        : "No primary call to action was detected on the live site",
-      1,
-    ),
+
+  /**
+   * A call to action is collected across every page the crawl read, so the
+   * question is whether *any* page was readable. Presence is minted either way:
+   * a CTA found on a readable page is a fact whatever the rest of the site did.
+   */
+  const cta = (id: string, present: boolean, whenPresent: string, whenAbsent: string, priority: 1 | 2) => {
+    if (!present && !observable.site) return;
+    items.push(item(id, "live_product", present ? whenPresent : whenAbsent, priority));
+  };
+
+  cta(
+    "live.conversion.primary_cta",
+    conversionSignals.primaryCta !== null,
+    conversionSignals.primaryCta
+      ? `Primary call to action on the live site: "${short(conversionSignals.primaryCta.label, 60)}" (${conversionSignals.primaryCta.category})`
+      : "",
+    "No primary call to action was detected on the live site",
+    1,
+  );
+  cta(
+    "live.conversion.signup_cta",
+    conversionSignals.signupCtaPresent,
+    "A signup/trial call to action is present",
+    "No signup/trial call to action was detected",
+    1,
+  );
+  cta(
+    "live.conversion.pricing_cta",
+    conversionSignals.pricingCtaPresent,
+    "A purchase/subscribe call to action is present",
+    "No purchase/subscribe call to action was detected",
+    1,
+  );
+  cta(
+    "live.conversion.contact_cta",
+    conversionSignals.contactCtaPresent,
+    "A contact/demo call to action is present",
+    "No contact/demo call to action was detected",
+    2,
   );
 
-  items.push(
-    item(
-      "live.conversion.signup_cta",
-      "live_product",
-      conversionSignals.signupCtaPresent
-        ? "A signup/trial call to action is present"
-        : "No signup/trial call to action was detected",
-      1,
-    ),
-  );
-  items.push(
-    item(
-      "live.conversion.pricing_cta",
-      "live_product",
-      conversionSignals.pricingCtaPresent
-        ? "A purchase/subscribe call to action is present"
-        : "No purchase/subscribe call to action was detected",
-      1,
-    ),
-  );
-  items.push(
-    item(
-      "live.conversion.contact_cta",
-      "live_product",
-      conversionSignals.contactCtaPresent
-        ? "A contact/demo call to action is present"
-        : "No contact/demo call to action was detected",
-      2,
-    ),
-  );
+  if (!observable.site) {
+    items.push(
+      item(
+        "live.unobservable.conversion",
+        "live_product",
+        "No page Vibe fetched could be read, so whether the live product has calls to action, " +
+          "signup or checkout could not be checked. Their absence here is Vibe's limit, not a finding.",
+        1,
+      ),
+    );
+  }
 
   for (const form of conversionSignals.forms) {
     items.push(
@@ -425,12 +502,30 @@ export function buildLiveEvidence(
       );
     }
 
+    // Eight of the ten signals are document-level and read from the homepage
+    // alone, so a homepage that renders in the browser makes every one of them
+    // unobservable. "SEO foundation absent: Title" on a page whose title Vibe
+    // never saw is the exact sentence rule 44 forbids.
+    if (!signal.present && !observable.homepage) continue;
+
     items.push(
       item(
         `live.seo.${slug(signal.id)}${signal.present ? "" : "_missing"}`,
         "live_product",
         signal.present ? `SEO foundation present: ${signal.name}` : `SEO foundation absent: ${signal.name}`,
         signal.present ? 3 : 2,
+      ),
+    );
+  }
+
+  if (!observable.homepage) {
+    items.push(
+      item(
+        "live.unobservable.seo",
+        "live_product",
+        "Your homepage builds itself in the browser, so none of the SEO foundations could be " +
+          "checked. What a search engine sees may differ from what Vibe fetched.",
+        1,
       ),
     );
   }
