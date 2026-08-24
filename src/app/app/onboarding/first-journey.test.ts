@@ -82,6 +82,25 @@ describe("a founder with no live product is not trapped", () => {
     expect(park).not.toContain("completeProjectOnboarding");
   });
 
+  /**
+   * Regression: Try again silently dropping half the scan.
+   *
+   * The retry used to re-run only the repository read. A founder whose live
+   * check failed and who pressed Try again got an understanding built without
+   * their site — reported as success — and nothing on screen said the live
+   * half had been skipped. A retry of the Product Scan is the whole scan.
+   */
+  it("retries the live source as well as the repository", () => {
+    const retry = ACTIONS.slice(
+      ACTIONS.indexOf("export async function retryProductScanAction"),
+      ACTIONS.indexOf("export type ConfirmAndAuditState"),
+    );
+    expect(retry).toContain("inspectRepository(");
+    expect(retry).toContain("inspectLiveProduct(");
+    // The live half still fails loudly, exactly as the first attempt does.
+    expect(retry).toContain('status: "scan_failed"');
+  });
+
   it("never invents, guesses or substitutes an address", () => {
     for (const [name, source] of [
       ["page", PAGE],
