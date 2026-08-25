@@ -1,5 +1,6 @@
 import type { OperationView } from "@/modules/operations/view";
 import type { ProductScanEvent } from "@/modules/product-scan/schema";
+import type { ProductScanPresentation } from "@/modules/product-scan/presentation";
 
 const BASE_OPERATION: OperationView = {
   operationId: "00000000-0000-0000-0000-000000000052",
@@ -12,6 +13,20 @@ const BASE_OPERATION: OperationView = {
   shouldPoll: false,
   retryAllowed: false,
   stalled: false,
+};
+
+const BASE_PRESENTATION: ProductScanPresentation = {
+  name: "Vibe Business",
+  description: "AI business guidance grounded in a connected product.",
+  productType: "Web application",
+  audience: "AI builders and founders",
+  businessModel: "Subscription signals",
+  profileStatus: "Ready to review",
+  techStack: "Next.js",
+  logo: { url: "/brand/vibe-mark.svg", alt: "Vibe Business mark" },
+  typeface: "Inter",
+  colors: ["#00E5A0"],
+  capabilities: ["Authentication", "Business guidance", "Product scans"],
 };
 
 function event(
@@ -35,22 +50,34 @@ function event(
   };
 }
 
+const COMPLETE_EVENTS = [
+  event(1, { type: "scan_started", source: "system", title: "Product Scan started" }),
+  event(2, { type: "source_ready", title: "Repository structure mapped" }),
+  event(3, { findingKey: "framework.nextjs", title: "Next.js application detected" }),
+  event(4, { findingKey: "integration.auth", title: "authentication signal found" }),
+  event(5, { findingKey: "brand.asset.logo", title: "Product logo detected" }),
+  event(6, { findingKey: "brand.typeface.primary", title: "Inter typography detected" }),
+  event(7, { findingKey: "brand.color.primary", title: "Primary color detected" }),
+  event(8, { source: "live_product", phase: "public_product", type: "source_ready", title: "Public product mapped" }),
+  event(9, { source: "live_product", phase: "public_product", findingKey: "surface.pricing", title: "Pricing reached" }),
+  event(10, { source: "product_profile", phase: "understanding", type: "profile_ready", title: "Product picture assembled" }),
+  event(11, { source: "system", phase: "finished", type: "scan_completed", title: "Product Scan complete" }),
+] as const;
+
 export const E2E_PRODUCT_SCAN_SCENARIOS = {
   product_scan_complete: {
     operation: BASE_OPERATION,
-    events: [
-      event(1, { type: "scan_started", source: "system", title: "Product Scan started" }),
-      event(2, { type: "source_ready", title: "Repository structure mapped" }),
-      event(3, { findingKey: "framework.nextjs", title: "Next.js application detected" }),
-      event(4, { findingKey: "integration.auth", title: "authentication signal found" }),
-      event(5, { source: "live_product", phase: "public_product", type: "source_ready", title: "Public product mapped" }),
-      event(6, { source: "live_product", phase: "public_product", findingKey: "surface.pricing", title: "Pricing reached" }),
-      event(7, { source: "product_profile", phase: "understanding", type: "profile_ready", title: "Product picture assembled" }),
-      event(8, { source: "system", phase: "finished", type: "scan_completed", title: "Product Scan complete" }),
-    ],
+    presentation: BASE_PRESENTATION,
+    events: COMPLETE_EVENTS,
+  },
+  product_scan_reveal: {
+    operation: BASE_OPERATION,
+    presentation: BASE_PRESENTATION,
+    events: COMPLETE_EVENTS,
   },
   product_scan_partial: {
     operation: BASE_OPERATION,
+    presentation: BASE_PRESENTATION,
     events: [
       event(1, { type: "scan_started", source: "system", title: "Product Scan started" }),
       event(2, { type: "source_ready", title: "Repository structure mapped" }),

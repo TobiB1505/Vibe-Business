@@ -8,6 +8,7 @@ import {
   getLatestProductScanOperation,
 } from "@/modules/operations/service";
 import { getProductScanEvents } from "@/modules/product-scan/store";
+import { buildProductScanPresentation } from "@/modules/product-scan/presentation";
 import { getLatestProfile } from "@/modules/product-understanding/store";
 import { buildUnderstandingView } from "@/modules/product-understanding/view";
 import { describeIncompleteness } from "@/modules/live-product-intelligence/human-view";
@@ -103,6 +104,10 @@ export default async function MyProductPage({
     : "Connect a repository first, and Vibe can start getting to know your product.";
 
   const view = latest ? buildUnderstandingView(latest.profile, latest.stored.synthesized) : null;
+  const scanPresentation =
+    latest && displayedScan?.resultId === latest.stored.id
+      ? buildProductScanPresentation(latest.profile, latest.stored.synthesized, project.name)
+      : null;
 
   const SCAN_ANCHOR = "product-scan";
 
@@ -215,22 +220,19 @@ export default async function MyProductPage({
       description="Here's how Vibe understands your product."
     >
       <div className="flex flex-col gap-5">
-        <Surface
-          id={SCAN_ANCHOR}
-          level="section"
-          padding="lg"
-          className="scroll-mt-6"
-        >
+        <div id={SCAN_ANCHOR} className="scroll-mt-6">
           <ProductScanExperience
             projectId={project.id}
             variant="workspace"
             initialOperation={displayedScan}
             initialEvents={scanEvents}
+            initialPresentation={scanPresentation}
+            productName={project.name}
             hasProfile={Boolean(view)}
             canStart={Boolean(project.repository)}
             blockedReason={blockedReason}
           />
-        </Surface>
+        </div>
 
         {view && latest ? (
           <UnderstandingPanel

@@ -89,9 +89,11 @@ Motion for React owns the Business Brain's entrance, presence, layout, hover and
 
 Product Scan is the second narrow signature surface, and its visual metaphor is discovery rather than health. A contained mint scanner core connects to six stable product facets while a chronological feed shows individual grounded findings. Connections activate only when a corresponding durable scan event exists. The graph must never emit random particles, cycle fake messages or suggest a percentage the backend cannot measure.
 
+The reference composition is the implementation target: a centered understanding headline, a fixed scanner stage with six compact facet cards, a right-hand discovery summary, then equal-height activity and discovery panels above one quiet status footer. Desktop geometry is reserved before the first event. A new logo, typeface, color or capability animates inside its existing slot; it must never increase the scanner, feed or page height as it arrives. The My Product route must not wrap the scanner in another elevated card.
+
 The onboarding variant may use the full available Understand-phase width; the My Product variant embeds the same component above the dossier. On narrow screens the constellation becomes a linear evidence rail while preserving the feed, source labels and event order. This is a named responsive variant, not a second component.
 
-Motion for React owns event arrival, layout convergence and the active core breath. One new stored event may create one bounded outward impulse. Existing events do not replay on mount, document visibility pauses continuous motion, and `prefers-reduced-motion` makes every state change immediate. Mint means active or grounded; amber marks a source that was unavailable without turning missing evidence into a bad result.
+Motion for React owns event arrival, connector activation and the active orbital movement. One new stored event may create one bounded outward impulse and a short in-slot card emphasis; it may not animate layout geometry. Existing events do not replay on mount, document visibility pauses continuous motion, and `prefers-reduced-motion` makes every state change immediate. Mint means active or grounded; amber marks a source that was unavailable without turning missing evidence into a bad result.
 
 ## Do's and Don'ts
 

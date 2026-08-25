@@ -27,4 +27,26 @@ describe("Product Scan findings", () => {
     expect(events[0].title).toBe("Public pricing reached");
     expect(events[0].detail).toContain("does not infer a business model");
   });
+
+  it("emits logo, typography and color as individual grounded discoveries", () => {
+    const events = repositoryFindingEvents({
+      frameworks: [],
+      integrationSignals: [],
+      businessSurfaces: [],
+      brand: {
+        assets: [{ role: "logo", path: "public/logo.svg", servedPath: "/logo.svg", confidence: "high", evidence: [] }],
+        colors: [{ role: "primary", value: "#00e5a0", token: "--brand", confidence: "high", evidence: [] }],
+        typefaces: [{ role: "display", family: "Space Grotesk", confidence: "high", evidence: [] }],
+        tokenSources: [],
+      },
+    } as never, "00000000-0000-0000-0000-000000000003");
+
+    expect(events.map((event) => event.findingKey)).toEqual([
+      "brand.asset.logo",
+      "brand.typeface.display",
+      "brand.color.primary",
+    ]);
+    expect(events[1].title).toBe("Space Grotesk typography detected");
+    expect(events[2].detail).toContain("#00E5A0");
+  });
 });

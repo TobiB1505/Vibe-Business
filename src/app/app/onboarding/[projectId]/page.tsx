@@ -28,6 +28,7 @@ import {
 } from "@/modules/onboarding/store";
 import { buildUnderstandingView } from "@/modules/product-understanding/view";
 import { getProductScanEvents } from "@/modules/product-scan/store";
+import { buildProductScanPresentation } from "@/modules/product-scan/presentation";
 import { AuditAnalyzing, AuditPreparing, AuditWaitingHeader } from "../../projects/[projectId]/audit-lifecycle";
 import { NeedsUserPanel } from "../../projects/[projectId]/needs-user-panel";
 import { OnboardingShell } from "../onboarding-shell";
@@ -149,6 +150,15 @@ export default async function ProjectOnboardingPage({
         onboarding.productProfile.stored.synthesized,
       )
     : null;
+  const scanPresentation =
+    onboarding.productProfile &&
+    onboarding.understandingOperation?.resultId === onboarding.productProfile.stored.id
+      ? buildProductScanPresentation(
+          onboarding.productProfile.profile,
+          onboarding.productProfile.stored.synthesized,
+          onboarding.projectName,
+        )
+      : null;
 
   return (
     <OnboardingShell
@@ -207,6 +217,8 @@ export default async function ProjectOnboardingPage({
                 variant="onboarding"
                 initialOperation={onboarding.understandingOperation}
                 initialEvents={scanEvents}
+                initialPresentation={scanPresentation}
+                productName={onboarding.projectName}
               />
               {onboarding.understandingOperation.stalled && (
                 <OnboardingStalled

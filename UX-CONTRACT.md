@@ -44,7 +44,7 @@
 | Search | committed URL query + explicit clear | shared interactive transition | global mint ring | n/a | retain dataset frame | no-results is distinct from failure |
 | Table/list | comfortable density | row surface cue | controls receive visible focus | n/a | stable frame | persistent scoped state |
 | Business Brain | staged but complete | real related paths and nodes gain emphasis | node uses the global mint ring | n/a | server lifecycle remains authoritative | existing notices and recovery |
-| Product Scan | stored discoveries at first paint | grounded nodes and events gain emphasis | launcher uses shared button focus | unavailable without connected repository | stable launcher geometry + durable event feed | persistent partial/failure state + retry |
+| Product Scan | stored discoveries at first paint in reserved scanner/feed slots | grounded nodes and events gain emphasis without changing outer geometry | launcher uses shared button focus | unavailable without connected repository | stable launcher and scanner geometry + durable event feed | persistent partial/failure state + retry |
 
 ## Dataset navigation
 
@@ -80,7 +80,7 @@
 - Repository comparison uses a semantic table at desktop and labeled record rows on narrow screens. Identity, product, visibility, default branch, connected time and open action remain available.
 - Technical values truncate only where their full value is also available through the external repository link or the mobile full-name row.
 - The Product page keeps one-column reading order below `lg`; its Product DNA and source grids collapse without hiding confidence wording, founder intent, brand evidence or source availability.
-- Product Scan uses one shared component. Its constellation becomes a linear facet rail below `md`; discoveries remain ordered and fully readable.
+- Product Scan uses one shared component in onboarding and My Product. Its desktop scanner, summary, activity and 3×2 discovery regions reserve their geometry before findings arrive. Below `md`, the constellation becomes a linear facet rail; discoveries remain ordered and fully readable.
 
 ## Async and resilience
 
@@ -97,7 +97,8 @@
 - Reduced-motion mode removes reveal delays, signal movement, pulse and map repositioning while preserving every node, relationship meaning, score and action at first paint.
 - Motion never implies live activity, a recalculation or a score change.
 - Product Scan motion is event-driven through Motion for React. A newly observed stored event may produce one bounded core impulse and one feed entrance; events present at first paint do not replay or announce as new.
-- Product Scan's slow core breath runs only while the operation is active and the document is visible. Reduced motion removes the breath, impulse and transforms while preserving every status and finding.
+- Product Scan's slow orbital movement runs only while the operation is active and the document is visible. Reduced motion removes the orbit, impulse and transforms while preserving every status and finding.
+- Product Scan events for a logo, typeface, color and other grounded facets populate existing slots. Arrival may animate opacity, a short transform or a connector, but never parent size or document flow.
 
 ## Verification
 

@@ -286,6 +286,36 @@ export function BranchIcon(props: IconProps) {
   );
 }
 
+export function LayersIcon(props: IconProps) {
+  return (
+    <IconFrame {...props}>
+      <path d="m12 3 9 5-9 5-9-5 9-5Z" />
+      <path d="m3 12 9 5 9-5M3 16l9 5 9-5" />
+    </IconFrame>
+  );
+}
+
+export function PaletteIcon(props: IconProps) {
+  return (
+    <IconFrame {...props}>
+      <path d="M12 3a9 9 0 1 0 0 18h1.3a2 2 0 0 0 1.5-3.3 2 2 0 0 1 1.5-3.3H18A3 3 0 0 0 21 11.3 9 9 0 0 0 12 3Z" />
+      <circle cx="7.5" cy="10" r=".8" />
+      <circle cx="10" cy="6.8" r=".8" />
+      <circle cx="14" cy="6.8" r=".8" />
+      <circle cx="16.8" cy="10" r=".8" />
+    </IconFrame>
+  );
+}
+
+export function SparklesIcon(props: IconProps) {
+  return (
+    <IconFrame {...props}>
+      <path d="M12 3c.6 3.5 2.5 5.4 6 6-3.5.6-5.4 2.5-6 6-.6-3.5-2.5-5.4-6-6 3.5-.6 5.4-2.5 6-6Z" />
+      <path d="M18.5 15.5c.25 1.6 1.1 2.45 2.5 2.75-1.4.3-2.25 1.15-2.5 2.75-.25-1.6-1.1-2.45-2.5-2.75 1.4-.3 2.25-1.15 2.5-2.75Z" />
+    </IconFrame>
+  );
+}
+
 export function DashboardIcon({ name, ...props }: IconProps & { name: DashboardIconName }) {
   const Icon = {
     home: HomeIcon,

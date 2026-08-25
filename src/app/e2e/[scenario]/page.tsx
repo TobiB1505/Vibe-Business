@@ -71,6 +71,7 @@ import {
   E2E_PRODUCT_SCAN_SCENARIOS,
   isE2eProductScanScenario,
 } from "../product-scan-scenarios";
+import { ProductScanRevealFixture } from "../product-scan-reveal-fixture";
 import { AuditLivePrerequisite } from "@/app/app/onboarding/[projectId]/audit-live-prerequisite";
 import {
   OnboardingOperationFailure,
@@ -154,14 +155,24 @@ export default async function E2eScenarioPage({
     return (
       <main className="mx-auto max-w-7xl p-8 max-sm:p-4">
         {label}
-        <ProductScanExperience
-          projectId="project_e2e"
-          variant="workspace"
-          initialOperation={fixture.operation}
-          initialEvents={[...fixture.events]}
-          hasProfile
-          canStart
-        />
+        {scenario === "product_scan_reveal" ? (
+          <ProductScanRevealFixture
+            operation={fixture.operation}
+            events={fixture.events}
+            presentation={fixture.presentation}
+          />
+        ) : (
+          <ProductScanExperience
+            projectId="project_e2e"
+            variant="workspace"
+            initialOperation={fixture.operation}
+            initialEvents={[...fixture.events]}
+            initialPresentation={fixture.presentation}
+            productName={fixture.presentation.name}
+            hasProfile
+            canStart
+          />
+        )}
       </main>
     );
   }

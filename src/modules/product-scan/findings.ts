@@ -17,6 +17,19 @@ const LIVE_SURFACE_LABELS: Record<ProductSurfaceId, string> = {
   terms: "Terms",
 };
 
+const BRAND_ASSET_LABELS = {
+  logo: "Product logo",
+  logo_alternate: "Alternate logo",
+  favicon: "Browser icon",
+  app_icon: "App icon",
+  open_graph_image: "Share image",
+  web_manifest: "App manifest",
+} as const;
+
+function safeTypefaceLabel(value: string): string {
+  return value.replace(/[\u0000-\u001f\u007f]/g, " ").replace(/\s+/g, " ").trim().slice(0, 56);
+}
+
 /**
  * Compiles only deterministic, derived facts into Vibe-authored copy. These
  * functions never copy repository contents, page bodies or model text.
@@ -40,7 +53,50 @@ export function repositoryFindingEvents(
     });
   }
 
-  for (const signal of snapshot.integrationSignals.slice(0, 3)) {
+  const asset = snapshot.brand.assets.find((item) => item.role === "logo") ?? snapshot.brand.assets[0];
+  if (asset) {
+    events.push({
+      eventKey: `repo.brand.asset.${asset.role}`,
+      type: "finding",
+      phase: "code",
+      source: "repository",
+      findingKey: `brand.asset.${asset.role}`,
+      title: `${BRAND_ASSET_LABELS[asset.role]} detected`,
+      detail: "Vibe found a declared brand asset without copying or storing the image itself.",
+      referenceId,
+    });
+  }
+
+  const typeface = snapshot.brand.typefaces[0];
+  const typefaceLabel = typeface ? safeTypefaceLabel(typeface.family) : "";
+  if (typeface && typefaceLabel) {
+    events.push({
+      eventKey: `repo.brand.typeface.${typeface.role}`,
+      type: "finding",
+      phase: "code",
+      source: "repository",
+      findingKey: `brand.typeface.${typeface.role}`,
+      title: `${typefaceLabel} typography detected`,
+      detail: `A ${typeface.role} type family is declared in the product's design system.`,
+      referenceId,
+    });
+  }
+
+  const color = snapshot.brand.colors[0];
+  if (color) {
+    events.push({
+      eventKey: `repo.brand.color.${color.role}`,
+      type: "finding",
+      phase: "code",
+      source: "repository",
+      findingKey: `brand.color.${color.role}`,
+      title: `${color.role[0].toUpperCase()}${color.role.slice(1)} color detected`,
+      detail: `${color.value.toUpperCase()} is declared as a product color token.`,
+      referenceId,
+    });
+  }
+
+  for (const signal of snapshot.integrationSignals.slice(0, 2)) {
     events.push({
       eventKey: `repo.integration.${signal.category}`,
       type: "finding",
@@ -53,7 +109,7 @@ export function repositoryFindingEvents(
     });
   }
 
-  for (const surface of snapshot.businessSurfaces.filter((item) => item.detected).slice(0, 3)) {
+  for (const surface of snapshot.businessSurfaces.filter((item) => item.detected).slice(0, 2)) {
     events.push({
       eventKey: `repo.surface.${surface.id}`,
       type: "finding",
@@ -66,19 +122,6 @@ export function repositoryFindingEvents(
     });
   }
 
-  if (snapshot.brand.assets.length + snapshot.brand.colors.length + snapshot.brand.typefaces.length > 0) {
-    events.push({
-      eventKey: "repo.brand.signals",
-      type: "finding",
-      phase: "code",
-      source: "repository",
-      findingKey: "brand.repository_signals",
-      title: "Brand identity signals found",
-      detail: "Vibe found declared assets, colors or type choices in the product code.",
-      referenceId,
-    });
-  }
-
   return events.slice(0, 8);
 }
 
@@ -87,7 +130,50 @@ export function liveProductFindingEvents(
   referenceId: string,
 ): AppendProductScanEvent[] {
   const events: AppendProductScanEvent[] = [];
-  for (const surface of snapshot.productSurfaces.filter((item) => item.detected).slice(0, 4)) {
+  const brand = snapshot.brandSignals ?? { siteName: null, assets: [], colors: [], typefaces: [] };
+  const asset = brand.assets.find((item) => item.role === "logo") ?? brand.assets[0];
+  if (asset) {
+    events.push({
+      eventKey: `live.brand.asset.${asset.role}`,
+      type: "finding",
+      phase: "public_product",
+      source: "live_product",
+      findingKey: `brand.asset.${asset.role}`,
+      title: `${BRAND_ASSET_LABELS[asset.role]} observed`,
+      detail: "The public product presents this brand asset to visitors.",
+      referenceId,
+    });
+  }
+
+  const liveTypeface = safeTypefaceLabel(brand.typefaces[0] ?? "");
+  if (liveTypeface) {
+    events.push({
+      eventKey: "live.brand.typeface.primary",
+      type: "finding",
+      phase: "public_product",
+      source: "live_product",
+      findingKey: "brand.typeface.primary",
+      title: `${liveTypeface} typography observed`,
+      detail: "The public product declares this type family for visitors.",
+      referenceId,
+    });
+  }
+
+  const liveColor = brand.colors[0];
+  if (liveColor) {
+    events.push({
+      eventKey: "live.brand.color.primary",
+      type: "finding",
+      phase: "public_product",
+      source: "live_product",
+      findingKey: "brand.color.primary",
+      title: "Brand color observed",
+      detail: `${liveColor.value.toUpperCase()} is declared by the public product.`,
+      referenceId,
+    });
+  }
+
+  for (const surface of snapshot.productSurfaces.filter((item) => item.detected).slice(0, 2)) {
     events.push({
       eventKey: `live.surface.${surface.id}`,
       type: "finding",
