@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { ProductLogo } from "@/components/brand/product-logo";
 import { VibeMark } from "@/components/brand/vibe-mark";
-import { buttonClasses } from "@/components/ui/button";
 import { Disclosure, TechnicalDetails } from "@/components/ui/disclosure";
 import { Surface } from "@/components/ui/surface";
 import { projectSectionHref } from "@/components/layout/project-shell";
@@ -298,8 +297,6 @@ export function UnderstandingPanel({
         <div className="flex min-w-0 items-start gap-4"><span className="border-mint/25 bg-mint/[0.07] text-mint flex size-12 shrink-0 items-center justify-center rounded-full border"><ProductGlyph kind="scan" className="size-6" /></span><div><h3 className="text-fg text-base font-semibold">{confirmedAt === null ? "Is this correct?" : "You confirmed this product profile"}</h3><p className="text-fg-muted mt-1 max-w-xl text-sm leading-6">{confirmedAt === null ? "Your corrections become the strongest source in this product profile and survive future scans." : "Vibe will preserve your corrections when it refreshes the evidence behind this profile."}</p></div></div>
         {confirmedAt === null ? <div className="shrink-0">{actions}</div> : <span className="border-mint/20 bg-mint/[0.06] text-mint shrink-0 rounded-full border px-3 py-1.5 text-xs">Confirmed {formatTimestamp(confirmedAt)}</span>}
       </Surface>
-
-      <div className="flex justify-end"><Link href={projectSectionHref(projectId, "business-audit")} className={buttonClasses({ variant: "secondary" })}>Open Business Health</Link></div>
     </div>
   );
 }

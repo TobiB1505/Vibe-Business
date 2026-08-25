@@ -66,6 +66,12 @@ import {
 import { UnderstandingPanel } from "@/app/app/projects/[projectId]/understanding-panel";
 import { UnderstandingConfirm } from "@/app/app/projects/[projectId]/understanding-confirm";
 import { UnderstandingProgress } from "@/app/app/projects/[projectId]/understanding-progress";
+import { ProductScanExperience } from "@/components/product-scan/product-scan-experience";
+import {
+  E2E_PRODUCT_SCAN_SCENARIOS,
+  isE2eProductScanScenario,
+} from "../product-scan-scenarios";
+import { ProductScanRevealFixture } from "../product-scan-reveal-fixture";
 import { AuditLivePrerequisite } from "@/app/app/onboarding/[projectId]/audit-live-prerequisite";
 import {
   OnboardingOperationFailure,
@@ -143,6 +149,33 @@ export default async function E2eScenarioPage({
       {scenario}
     </p>
   );
+
+  if (isE2eProductScanScenario(scenario)) {
+    const fixture = E2E_PRODUCT_SCAN_SCENARIOS[scenario];
+    return (
+      <main className="mx-auto max-w-7xl p-8 max-sm:p-4">
+        {label}
+        {scenario === "product_scan_reveal" ? (
+          <ProductScanRevealFixture
+            operation={fixture.operation}
+            events={fixture.events}
+            presentation={fixture.presentation}
+          />
+        ) : (
+          <ProductScanExperience
+            projectId="project_e2e"
+            variant="workspace"
+            initialOperation={fixture.operation}
+            initialEvents={[...fixture.events]}
+            initialPresentation={fixture.presentation}
+            productName={fixture.presentation.name}
+            hasProfile
+            canStart
+          />
+        )}
+      </main>
+    );
+  }
 
   // Repository intelligence (UI-3.6): the same component the overview route
   // renders, given the same snapshot shape a real analysis produces.

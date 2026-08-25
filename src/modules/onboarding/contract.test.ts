@@ -32,6 +32,10 @@ const REPOSITORY_ACTION = readFileSync(
   join(ROOT, "src/app/app/connect/github/repositories/actions.ts"),
   "utf8",
 );
+const PRODUCT_SCAN_EXECUTION = readFileSync(
+  join(ROOT, "src/modules/operations/product-scan/execution.ts"),
+  "utf8",
+);
 
 function sourceFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -101,15 +105,15 @@ describe("onboarding orchestrates canonical domains", () => {
 
   it("reuses source, Product Profile, Audit and Opportunity services", () => {
     for (const contract of [
-      "inspectRepository(",
-      "inspectLiveProduct(",
-      "startProductUnderstandingOperation(",
+      "startProductScanOperation(",
       "confirmProfile(",
       "startBusinessAuditOperation(",
       "startOpportunityOperation(",
     ]) {
       expect(ACTIONS).toContain(contract);
     }
+    expect(PRODUCT_SCAN_EXECUTION).toContain("inspectRepository(");
+    expect(PRODUCT_SCAN_EXECUTION).toContain("inspectLiveProduct(");
     expect(ACTIONS).not.toContain("generateStructured(");
     expect(ACTIONS).not.toContain("onboarding_product_description");
     expect(ACTIONS).not.toContain("onboarding_business_context");

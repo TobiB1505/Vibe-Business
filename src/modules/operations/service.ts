@@ -18,6 +18,7 @@ import { resolveOpportunityIdentity } from "@/modules/opportunities/service";
 import { resolveActionPlanIdentity } from "@/modules/action-plans/service";
 import { findReusableActionPlan } from "@/modules/action-plans/store";
 import { findReusableProfile } from "@/modules/product-understanding/store";
+import { computeProductScanIdentity } from "@/modules/product-scan/identity";
 import { loadUnderstandingSources } from "./product-understanding/execution";
 import { findReusableOpportunitySet } from "@/modules/opportunities/store";
 import { getLatestSuccessfulAuthenticatedSnapshot } from "@/modules/authenticated-product-intelligence/store";
@@ -719,6 +720,105 @@ export async function getActiveProductUnderstandingOperation(
   const operation = await findActiveOperation(supabase, {
     projectId,
     operationType: "product_understanding",
+  });
+  return operation ? view(operation) : null;
+}
+
+/**
+ * Starts one explicit Product Scan: refresh sources, compile discoveries and
+ * assemble a new Product Profile inside one durable operation (ADR 0052).
+ */
+export async function startProductScanOperation(
+  supabase: SupabaseClient,
+  executor: OperationExecutor,
+  params: { projectId: string; userId: string },
+): Promise<StartOperationOutcome> {
+  const { data: project } = await supabase
+    .from("projects")
+    .select("id")
+    .eq("id", params.projectId)
+    .eq("user_id", params.userId)
+    .maybeSingle();
+  if (!project) return { kind: "failed", error: "project_not_found" };
+
+  const inputIdentity = computeProductScanIdentity(params.projectId);
+  const active = await findActiveOperationByIdentity(supabase, {
+    projectId: params.projectId,
+    operationType: "product_scan",
+    inputIdentity,
+  });
+  if (active) return { kind: "active", operation: view(active) };
+
+  const created = await createOperationRun(supabase, {
+    projectId: params.projectId,
+    userId: params.userId,
+    operationType: "product_scan",
+    inputIdentity,
+  });
+  if (!created.ok) {
+    if (created.error === "already_active") {
+      const raced = await findActiveOperationByIdentity(supabase, {
+        projectId: params.projectId,
+        operationType: "product_scan",
+        inputIdentity,
+      });
+      if (raced) return { kind: "active", operation: view(raced) };
+    }
+    return { kind: "failed", error: "understanding_failed" };
+  }
+
+  const started = await executor.start({
+    operationId: created.operation.id,
+    operationType: "product_scan",
+  });
+  if (!started.ok) {
+    await failOperationRun(supabase, {
+      operationId: created.operation.id,
+      failureCode: "execution_start_failed",
+    });
+    return { kind: "failed", error: "execution_start_failed" };
+  }
+
+  await attachExecutionRun(supabase, {
+    operationId: created.operation.id,
+    workflowRunId: started.runId,
+    executionProvider: executor.name,
+  });
+  await recordAuditEvent(supabase, {
+    userId: params.userId,
+    eventType: "operation.started",
+    metadata: {
+      projectId: params.projectId,
+      operationId: created.operation.id,
+      operationType: "product_scan",
+      executionProvider: executor.name,
+    },
+  });
+
+  return { kind: "started", operation: view(created.operation) };
+}
+
+/** New Product Scans win; an older Product Understanding run remains readable. */
+export async function getActiveProductScanOperation(
+  supabase: SupabaseClient,
+  projectId: string,
+): Promise<OperationView | null> {
+  const scan = await findActiveOperation(supabase, {
+    projectId,
+    operationType: "product_scan",
+  });
+  if (scan) return view(scan);
+  return getActiveProductUnderstandingOperation(supabase, projectId);
+}
+
+/** The latest new-style Product Scan, including completed and failed runs. */
+export async function getLatestProductScanOperation(
+  supabase: SupabaseClient,
+  projectId: string,
+): Promise<OperationView | null> {
+  const operation = await findLatestOperation(supabase, {
+    projectId,
+    operationType: "product_scan",
   });
   return operation ? view(operation) : null;
 }

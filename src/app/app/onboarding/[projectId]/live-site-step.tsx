@@ -52,7 +52,7 @@ export function LiveSiteStep({
         </Notice>
       )}
 
-      <form action={action} className="flex flex-col gap-5">
+      <form action={action} className="flex flex-col gap-5" noValidate>
         <label className="border-line-3 has-checked:border-mint/60 bg-surface-2 flex cursor-pointer gap-3 rounded-xl border p-4">
           <input
             type="radio"

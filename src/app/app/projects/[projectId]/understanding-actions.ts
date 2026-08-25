@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import { requireSession } from "@/modules/auth/session";
 import type { OperationFailureCode } from "@/modules/operations/failures";
-import { startProductUnderstandingOperation } from "@/modules/operations/service";
+import { startProductScanOperation } from "@/modules/operations/service";
 import { VercelWorkflowExecutor } from "@/modules/operations/vercel/executor";
 import type { OperationView } from "@/modules/operations/view";
 import {
@@ -44,14 +44,14 @@ export async function startUnderstandingAction(
   const session = await requireSession();
   const supabase = await createClient();
 
-  // A re-run costs money, so it is only ever requested by an explicit form
-  // value — never defaulted on (CORE-1 §21).
-  const force = formData.get("force") === "true";
+  // The form value remains for compatibility with the existing control, but
+  // every Product Scan is an explicit click and therefore a deliberate fresh
+  // reading. Duplicate clicks converge on the active operation in the service.
+  void formData.get("force");
 
-  const outcome = await startProductUnderstandingOperation(supabase, new VercelWorkflowExecutor(), {
+  const outcome = await startProductScanOperation(supabase, new VercelWorkflowExecutor(), {
     projectId,
     userId: session.userId,
-    force,
   });
 
   if (outcome.kind === "failed") return { ok: false, error: outcome.error };

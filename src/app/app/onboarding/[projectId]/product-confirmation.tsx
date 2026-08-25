@@ -100,7 +100,7 @@ export function ProductConfirmation({
 
   return (
     <Surface level="section" padding="lg" className="w-full">
-      <form action={correctionAction} className="flex flex-col gap-5">
+      <form action={correctionAction} className="flex flex-col gap-5" noValidate>
         <div className="flex flex-col gap-1">
           <h3 className="text-fg text-lg font-semibold">Fix the meaning, not the evidence.</h3>
           <p className="text-fg-muted text-sm">
@@ -116,7 +116,7 @@ export function ProductConfirmation({
                 rows={3}
                 maxLength={MAX_CORRECTION_LENGTH}
                 defaultValue={values[field.name]}
-                className={inputClassName}
+                className={`${inputClassName} resize-none`}
               />
             ) : (
               <Input

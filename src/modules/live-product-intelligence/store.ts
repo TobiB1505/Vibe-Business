@@ -105,6 +105,22 @@ export async function getLatestSuccessfulLiveSnapshot(
   return data ? mapRow(data as SnapshotRow) : null;
 }
 
+/** One exact successful reading, scoped to the operation's persisted project. */
+export async function getLiveSnapshotById(
+  supabase: SupabaseClient,
+  params: { snapshotId: string; projectId: string },
+): Promise<StoredLiveSnapshot | null> {
+  const { data, error } = await supabase
+    .from("live_product_intelligence_snapshots")
+    .select(SNAPSHOT_COLUMNS)
+    .eq("id", params.snapshotId)
+    .eq("project_id", params.projectId)
+    .eq("status", "completed")
+    .maybeSingle();
+  if (error) throw error;
+  return data ? mapRow(data as SnapshotRow) : null;
+}
+
 /**
  * Freshness window for snapshot reuse (Sprint 3 §27).
  *

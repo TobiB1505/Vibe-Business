@@ -61,7 +61,7 @@ export function OnboardingAuditReveal({
         </section>
       )}
 
-      <form action={reveal}>
+      <form action={reveal} noValidate>
         <Button type="submit">Show me where to start</Button>
       </form>
     </div>

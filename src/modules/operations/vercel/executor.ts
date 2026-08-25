@@ -12,6 +12,7 @@ import { changeMergeWorkflow } from "../change-merge/workflow";
 import { changeOutcomeVerificationWorkflow } from "../change-outcome-verification/workflow";
 import { businessMeasurementWorkflow } from "../business-measurement/workflow";
 import { productUnderstandingWorkflow } from "../product-understanding/workflow";
+import { productScanWorkflow } from "../product-scan/workflow";
 import { actionPlanningWorkflow } from "../action-plans/workflow";
 import { agentExecutionWorkflow } from "../agent-execution/workflow";
 import type { OperationExecutor, StartOperationInput, StartOperationResult } from "../executor";
@@ -51,6 +52,7 @@ const WORKFLOWS: Record<OperationType, (operationId: string) => Promise<void>> =
   change_outcome_verification: changeOutcomeVerificationWorkflow,
   business_measurement: businessMeasurementWorkflow,
   product_understanding: productUnderstandingWorkflow,
+  product_scan: productScanWorkflow,
   action_planning: actionPlanningWorkflow,
   agent_execution: agentExecutionWorkflow,
 };
