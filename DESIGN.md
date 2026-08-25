@@ -73,7 +73,7 @@ Primary buttons use mint once per action area; secondary controls use the shared
 
 Motion communicates interaction state only on ordinary product surfaces. Use the shared transition utility and respect reduced motion; never animate static dashboard furniture continuously. The narrowly-scoped Business Brain and Product Scan exceptions are defined below.
 
-The project Product page reads as one coherent product dossier, not a stack of scanner reports. Its opening identity card may combine the real product mark, evidence-backed description, category, capability count and source coverage, but never a fabricated screenshot or product metric. Product DNA, founder intent, discovered capabilities, journey, brand identity and source coverage follow in that order; raw technical evidence stays available behind disclosure.
+The project Product page reads as one coherent product dossier, not a stack of scanner reports. Its opening identity card may combine the real product mark, evidence-backed description, category, capability count and source coverage, but never a fabricated screenshot or product metric. Product DNA, founder intent, discovered capabilities, journey, brand identity and source coverage follow in that order; raw technical evidence stays available behind disclosure. The profile confirmation is the terminal surface: legacy scan summaries, coach prompts and cross-navigation actions must not continue below it.
 
 ## Signature Surface: Business Brain
 
@@ -92,6 +92,8 @@ Product Scan is the second narrow signature surface, and its visual metaphor is 
 The reference composition is the implementation target: a centered understanding headline, a fixed scanner stage with six compact facet cards, a right-hand discovery summary, then equal-height activity and discovery panels above one quiet status footer. Desktop geometry is reserved before the first event. A new logo, typeface, color or capability animates inside its existing slot; it must never increase the scanner, feed or page height as it arrives. The My Product route must not wrap the scanner in another elevated card.
 
 The onboarding variant may use the full available Understand-phase width; the My Product variant embeds the same component above the dossier. On narrow screens the constellation becomes a linear evidence rail while preserving the feed, source labels and event order. This is a named responsive variant, not a second component.
+
+On My Product, an active scan stays fully expanded. A completed scan automatically folds into a compact, stable summary so the dossier is not pushed far below the fold; opening that summary restores the complete evidence view and the re-scan action. The onboarding variant stays expanded because discovery is the active step there. Failure states also stay expanded so recovery is never hidden.
 
 Motion for React owns event arrival, connector activation and the active orbital movement. One new stored event may create one bounded outward impulse and a short in-slot card emphasis; it may not animate layout geometry. Existing events do not replay on mount, document visibility pauses continuous motion, and `prefers-reduced-motion` makes every state change immediate. Mint means active or grounded; amber marks a source that was unavailable without turning missing evidence into a bad result.
 

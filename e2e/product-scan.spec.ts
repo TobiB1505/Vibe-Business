@@ -4,6 +4,10 @@ test.describe("Product Scan", () => {
   test("shows grounded individual discoveries and one re-scan action", async ({ page }) => {
     await page.goto("/e2e/product_scan_complete");
 
+    await expect(page.getByRole("heading", { name: "Your product picture is ready" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Understanding your product" })).toHaveCount(0);
+    await page.getByRole("button", { name: "Open scan & rescan" }).click();
+
     await expect(page.getByRole("heading", { name: "Understanding your product" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "What we're discovering" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Live activity" })).toBeVisible();
@@ -13,10 +17,16 @@ test.describe("Product Scan", () => {
     await expect(page.getByText("Product picture assembled")).toBeVisible();
     await expect(page.getByRole("button", { name: "Scan my product again" })).toBeVisible();
     await expect(page.getByText("No invented percentage")).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Collapse scan" }).click();
+    await expect(page.getByRole("heading", { name: "Your product picture is ready" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Open scan & rescan" })).toHaveAttribute("aria-expanded", "false");
   });
 
   test("keeps a partial source visible without treating it as a failed product", async ({ page }) => {
     await page.goto("/e2e/product_scan_partial");
+
+    await page.getByRole("button", { name: "Open scan & rescan" }).click();
 
     await expect(page.getByText("Public product could not be fully read").first()).toBeVisible();
     await expect(page.getByText("Product picture assembled")).toBeVisible();
@@ -26,6 +36,8 @@ test.describe("Product Scan", () => {
   test("becomes a readable evidence rail on a narrow screen", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
     await page.goto("/e2e/product_scan_complete");
+
+    await page.getByRole("button", { name: "Open scan & rescan" }).click();
 
     await expect(page.getByTestId("product-scan-graph").getByText("Product type", { exact: true })).toBeVisible();
     await expect(page.getByText("Brand / identity", { exact: true }).first()).toBeVisible();
@@ -37,6 +49,7 @@ test.describe("Product Scan", () => {
     const context = await browser.newContext({ reducedMotion: "reduce" });
     const page = await context.newPage();
     await page.goto("/e2e/product_scan_complete");
+    await page.getByRole("button", { name: "Open scan & rescan" }).click();
     await expect(page.getByText("Next.js", { exact: true })).toBeVisible();
     await expect(page.getByText("Brand / identity", { exact: true }).first()).toBeVisible();
     await expect(page.getByTestId("product-logo").first()).toBeVisible({ timeout: 7_000 });

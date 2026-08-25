@@ -15,6 +15,7 @@ import { VibeMark } from "@/components/brand/vibe-mark";
 import { Button } from "@/components/ui/button";
 import {
   CheckIcon,
+  ChevronDownIcon,
   CreditCardIcon,
   GlobeIcon,
   LayersIcon,
@@ -959,12 +960,18 @@ export function ProductScanExperience({
   }, [pulseEventId, reduceMotion]);
 
   const active = isActive(operation) || startPending;
+  const [expandedOperationId, setExpandedOperationId] = useState<string | null>(
+    null,
+  );
   const motionEnabled = active && documentVisible && !reduceMotion;
   const failure = operationError(operation);
   const revealedEvents = useMemo(
     () => events.filter((event) => event.sequence <= revealedSequence),
     [events, revealedSequence],
   );
+  const scanFinished =
+    operation?.status === "completed" &&
+    revealedEvents.some((event) => event.type === "scan_completed");
   const revealedPresentation = revealedEvents.some(
     (event) => event.type === "profile_ready",
   )
@@ -979,8 +986,17 @@ export function ProductScanExperience({
     ? OPERATION_FAILURE_MESSAGES[startFailure]
     : failure;
 
+  const detailsExpanded =
+    variant !== "workspace" ||
+    active ||
+    !scanFinished ||
+    expandedOperationId === operation?.operationId;
+  const savedDiscoveryCount = discoveryCount(events);
+
   return (
-    <section
+    <motion.section
+      layout={!reduceMotion}
+      transition={{ layout: { duration: 0.42, ease: [0.22, 1, 0.36, 1] } }}
       aria-labelledby="product-scan-title"
       className="relative overflow-hidden rounded-[1.2rem] border border-line-2 bg-surface-1 p-4 shadow-xl sm:p-5"
     >
@@ -988,87 +1004,148 @@ export function ProductScanExperience({
         {announcement}
       </p>
 
-      <header className="relative flex min-h-[8.25rem] flex-col items-center justify-center px-3 text-center">
-        <MonoLabel className={active ? "text-mint" : undefined}>
-          {active ? "Product scan · live" : operation?.status === "completed" ? "Product scan · complete" : "Product scan"}
-        </MonoLabel>
-        <h2 id="product-scan-title" className="mt-2 text-balance text-3xl font-semibold tracking-[-0.035em] text-fg sm:text-4xl">
-          Understanding <span className="text-mint">your product</span>
-        </h2>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-fg-muted sm:text-base">
-          Vibe is learning what you built, how it works, and what kind of business it could become.
-        </p>
-
-        {variant === "workspace" && !active ? (
-          blockedReason ? (
-            <p className="absolute right-0 top-0 max-w-xs text-right text-xs text-fg-muted max-lg:relative max-lg:mt-4 max-lg:text-center">
-              {blockedReason}
-            </p>
-          ) : (
-            <form action={startDispatch} noValidate className="absolute right-0 top-0 max-lg:relative max-lg:mt-4">
-              <input type="hidden" name="force" value="true" />
-              <Button type="submit" disabled={startPending || !canStart} busy={startPending}>
-                {startPending
-                  ? "Starting Product Scan…"
-                  : hasProfile
-                    ? "Scan my product again"
-                    : "Scan my product"}
+      <div id="product-scan-details">
+        <AnimatePresence initial={false} mode="wait">
+          {!detailsExpanded ? (
+            <motion.div
+              key="scan-collapsed"
+              className="flex min-h-[5.5rem] items-center gap-4 px-1 max-sm:flex-wrap"
+              initial={reduceMotion ? false : { opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={reduceMotion ? undefined : { opacity: 0, y: -6 }}
+              transition={{ duration: reduceMotion ? 0 : 0.24 }}
+            >
+              <span className="grid size-11 shrink-0 place-items-center rounded-full border border-mint/25 bg-mint/[0.07] text-mint">
+                <CheckIcon size={19} strokeWidth={2.4} />
+              </span>
+              <div className="min-w-0 flex-1">
+                <MonoLabel className="text-mint">Product scan · complete</MonoLabel>
+                <h2 id="product-scan-title" className="mt-1 text-lg font-semibold tracking-[-0.02em] text-fg">
+                  Your product picture is ready
+                </h2>
+                <p className="mt-1 text-xs text-fg-muted">
+                  {savedDiscoveryCount} individual discoveries saved for {productName}.
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="secondary"
+                aria-expanded="false"
+                aria-controls="product-scan-details"
+                onClick={() => setExpandedOperationId(operation?.operationId ?? null)}
+                className="shrink-0 max-sm:ml-[3.75rem]"
+              >
+                Open scan &amp; rescan
+                <ChevronDownIcon size={15} />
               </Button>
-            </form>
-          )
-        ) : null}
-      </header>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="scan-expanded"
+              initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={reduceMotion ? undefined : { opacity: 0, y: 6 }}
+              transition={{ duration: reduceMotion ? 0 : 0.28 }}
+            >
+              <header className="relative flex min-h-[8.25rem] flex-col items-center justify-center px-3 text-center">
+                <MonoLabel className={active ? "text-mint" : undefined}>
+                  {active ? "Product scan · live" : operation?.status === "completed" ? "Product scan · complete" : "Product scan"}
+                </MonoLabel>
+                <h2 id="product-scan-title" className="mt-2 text-balance text-3xl font-semibold tracking-[-0.035em] text-fg sm:text-4xl">
+                  Understanding <span className="text-mint">your product</span>
+                </h2>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-fg-muted sm:text-base">
+                  Vibe is learning what you built, how it works, and what kind of business it could become.
+                </p>
 
-      {displayFailure ? (
-        <div role="alert" className="mb-4 rounded-xl border border-coral-line bg-coral-tint-soft px-4 py-3 text-sm text-coral">
-          {displayFailure}
-        </div>
-      ) : null}
+                {variant === "workspace" && !active ? (
+                  <div className="absolute right-0 top-0 flex items-center gap-2 max-lg:relative max-lg:mt-4 max-lg:flex-wrap max-lg:justify-center">
+                    {scanFinished ? (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        aria-expanded="true"
+                        aria-controls="product-scan-details"
+                        onClick={() => setExpandedOperationId(null)}
+                      >
+                        Collapse scan
+                        <ChevronDownIcon size={15} className="rotate-180" />
+                      </Button>
+                    ) : null}
+                    {blockedReason ? (
+                      <p className="max-w-xs text-right text-xs text-fg-muted max-lg:text-center">
+                        {blockedReason}
+                      </p>
+                    ) : (
+                      <form action={startDispatch} noValidate>
+                        <input type="hidden" name="force" value="true" />
+                        <Button type="submit" disabled={startPending || !canStart} busy={startPending}>
+                          {startPending
+                            ? "Starting Product Scan…"
+                            : hasProfile
+                              ? "Scan my product again"
+                              : "Scan my product"}
+                        </Button>
+                      </form>
+                    )}
+                  </div>
+                ) : null}
+              </header>
 
-      <div className="grid grid-cols-[minmax(0,1fr)_21rem] gap-4 max-lg:grid-cols-1">
-        <DiscoveryGraph
-          facets={facets}
-          presentation={revealedPresentation}
-          pulseEvent={pulseEvent}
-          motionEnabled={motionEnabled}
-        />
-        <DiscoveringPanel
-          facets={facets}
-          presentation={revealedPresentation}
-          productName={productName}
-          active={active}
-          motionEnabled={motionEnabled}
-        />
+              {displayFailure ? (
+                <div role="alert" className="mb-4 rounded-xl border border-coral-line bg-coral-tint-soft px-4 py-3 text-sm text-coral">
+                  {displayFailure}
+                </div>
+              ) : null}
+
+              <div className="grid grid-cols-[minmax(0,1fr)_21rem] gap-4 max-lg:grid-cols-1">
+                <DiscoveryGraph
+                  facets={facets}
+                  presentation={revealedPresentation}
+                  pulseEvent={pulseEvent}
+                  motionEnabled={motionEnabled}
+                />
+                <DiscoveringPanel
+                  facets={facets}
+                  presentation={revealedPresentation}
+                  productName={productName}
+                  active={active}
+                  motionEnabled={motionEnabled}
+                />
+              </div>
+
+              <div className="mt-4 grid grid-cols-[0.92fr_1.08fr] gap-4 max-lg:grid-cols-1">
+                <LiveActivity
+                  events={revealedEvents}
+                  active={active}
+                  pulseEventId={pulseEventId}
+                />
+                <DiscoveriesGrid
+                  facets={facets}
+                  events={revealedEvents}
+                  presentation={revealedPresentation}
+                  pulseEvent={pulseEvent}
+                />
+              </div>
+
+              <ScanFooter
+                operation={operation}
+                eventCount={discoveryCount(revealedEvents)}
+                motionEnabled={motionEnabled}
+              />
+
+              {variant === "onboarding" && !active && operation?.status === "failed" && operation.retryAllowed ? (
+                <form action={startDispatch} noValidate className="mt-4 flex justify-center">
+                  <input type="hidden" name="force" value="true" />
+                  <Button type="submit" variant="primary" disabled={startPending}>
+                    Try product scan again
+                  </Button>
+                </form>
+              ) : null}
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
-
-      <div className="mt-4 grid grid-cols-[0.92fr_1.08fr] gap-4 max-lg:grid-cols-1">
-        <LiveActivity
-          events={revealedEvents}
-          active={active}
-          pulseEventId={pulseEventId}
-        />
-        <DiscoveriesGrid
-          facets={facets}
-          events={revealedEvents}
-          presentation={revealedPresentation}
-          pulseEvent={pulseEvent}
-        />
-      </div>
-
-      <ScanFooter
-        operation={operation}
-        eventCount={discoveryCount(revealedEvents)}
-        motionEnabled={motionEnabled}
-      />
-
-      {variant === "onboarding" && !active && operation?.status === "failed" && operation.retryAllowed ? (
-        <form action={startDispatch} noValidate className="mt-4 flex justify-center">
-          <input type="hidden" name="force" value="true" />
-          <Button type="submit" variant="primary" disabled={startPending}>
-            Try product scan again
-          </Button>
-        </form>
-      ) : null}
-    </section>
+    </motion.section>
   );
 }

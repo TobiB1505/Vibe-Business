@@ -80,7 +80,9 @@
 - Repository comparison uses a semantic table at desktop and labeled record rows on narrow screens. Identity, product, visibility, default branch, connected time and open action remain available.
 - Technical values truncate only where their full value is also available through the external repository link or the mobile full-name row.
 - The Product page keeps one-column reading order below `lg`; its Product DNA and source grids collapse without hiding confidence wording, founder intent, brand evidence or source availability.
+- The Product page ends at the profile confirmation. It does not repeat raw code/live summaries or append a Business Health action below that decision boundary.
 - Product Scan uses one shared component in onboarding and My Product. Its desktop scanner, summary, activity and 3×2 discovery regions reserve their geometry before findings arrive. Below `md`, the constellation becomes a linear facet rail; discoveries remain ordered and fully readable.
+- On My Product, Product Scan remains expanded while working, folds automatically after the stored completion event, and can be opened again to review discoveries or start a re-scan. Onboarding and failure states remain expanded. The toggle exposes its expanded state and controlled region to assistive technology.
 
 ## Async and resilience
 

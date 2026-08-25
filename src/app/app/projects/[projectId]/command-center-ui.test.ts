@@ -217,6 +217,19 @@ describe("one Product Scan, in the founder's words", () => {
     expect(source("product/page.tsx")).toContain("describeIncompleteness");
   });
 
+  it("ends the Product page at the profile confirmation instead of repeating legacy findings", () => {
+    const page = source("product/page.tsx");
+    const panel = source("understanding-panel.tsx");
+
+    expect(page).not.toContain("<IntelligenceSummary");
+    expect(page).not.toContain("<LiveIntelligenceSummary");
+    expect(page).not.toContain('id="repository-intelligence"');
+    expect(panel).not.toContain("Open Business Health");
+    expect(panel.lastIndexOf("confirmedAt === null")).toBeGreaterThan(
+      panel.lastIndexOf("Vibe learns from"),
+    );
+  });
+
   it("never shows a founder the modules' own names", () => {
     const files = [
       ["product/page.tsx", renderedCopy("product/page.tsx")],

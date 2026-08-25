@@ -1,7 +1,6 @@
 import { WorkspaceSection, projectSectionHref } from "@/components/layout/project-shell";
 import { ProductScanExperience } from "@/components/product-scan/product-scan-experience";
 import { EmptyState } from "@/components/ui/states";
-import { Surface } from "@/components/ui/surface";
 import { getLatestSuccessfulAuthenticatedSnapshot } from "@/modules/authenticated-product-intelligence/store";
 import {
   getActiveProductScanOperation,
@@ -23,8 +22,6 @@ import {
   getLatestSnapshotAttempt,
   getLatestSuccessfulSnapshot,
 } from "@/modules/repository-intelligence/store";
-import { IntelligenceSummary, LIVE_PRODUCT_ANCHOR } from "../intelligence-summary";
-import { LiveIntelligenceSummary } from "../live-intelligence-summary";
 import { UnderstandingConfirm } from "../understanding-confirm";
 import { UnderstandingPanel, type UnderstandingSource } from "../understanding-panel";
 
@@ -42,8 +39,9 @@ import { UnderstandingPanel, type UnderstandingSource } from "../understanding-p
  * code and visits the site. Which halves ran, and how completely, is the
  * source rows' job to say — honestly, in three states rather than a boolean.
  *
- * Order is answer-first: the profile, then what Vibe learned it from, then the
- * one scan control, then the raw findings themselves.
+ * The Product Scan now owns the live discovery story. The durable profile and
+ * its confirmation follow it; the legacy raw code/live summaries deliberately
+ * do not continue below the confirmation boundary.
  *
  * ## Deep Scan
  *
@@ -54,10 +52,10 @@ import { UnderstandingPanel, type UnderstandingSource } from "../understanding-p
  *
  * ## What it loads
  *
- * The profile, whether a run is in flight, the snapshot reads (successful for
- * display, latest-attempt for honest failure rows) and the founder intent
- * flag. All cheap. Nothing about the audit, the opportunities or prepared
- * changes reaches this route.
+ * The profile, whether a run is in flight, and the small snapshot reads needed
+ * to report source availability honestly. Raw snapshot summaries are no
+ * longer rendered here. Nothing about the audit, the opportunities or
+ * prepared changes reaches this route.
  */
 export default async function MyProductPage({
   params,
@@ -122,8 +120,8 @@ export default async function MyProductPage({
         label: "Your code",
         state: "ready",
         detail: "Vibe has read what your repository builds.",
-        href: "#repository-intelligence",
-        action: "See what it read",
+        href: `#${SCAN_ANCHOR}`,
+        action: "View Product Scan",
       }
     : repositoryAttempt?.status === "failed"
       ? {
@@ -162,8 +160,8 @@ export default async function MyProductPage({
             ? "Vibe has visited what a first-time visitor reaches."
             : "Vibe visited your product, but couldn't read all of it.",
         note: liveIncomplete,
-        href: `#${LIVE_PRODUCT_ANCHOR}`,
-        action: "See what it saw",
+        href: `#${SCAN_ANCHOR}`,
+        action: "View Product Scan",
       }
     : liveAttempt?.status === "failed"
       ? {
@@ -266,40 +264,6 @@ export default async function MyProductPage({
           />
         )}
 
-        {liveSnapshot?.result && (
-          <Surface
-            // The anchor repository findings link to when only a live check
-            // could settle the question (UI-3.6 §39).
-            id={LIVE_PRODUCT_ANCHOR}
-            level="section"
-            padding="lg"
-            className="scroll-mt-6 flex flex-col gap-4"
-          >
-            <LiveIntelligenceSummary
-              snapshot={liveSnapshot.result}
-              analyzedAt={liveSnapshot.completedAt ?? liveSnapshot.createdAt}
-            />
-          </Surface>
-        )}
-
-        {repositorySnapshot?.result && (
-          <Surface
-            // Targeted by the "Your code" row above.
-            id="repository-intelligence"
-            level="section"
-            padding="lg"
-            className="scroll-mt-6 flex flex-col gap-4"
-          >
-            <IntelligenceSummary
-              snapshot={repositorySnapshot.result}
-              analyzedAt={repositorySnapshot.createdAt}
-              projectId={project.id}
-              // Passed only so the two layers can be compared where they
-              // disagree (UI-3.6 §11). Live results are rendered above.
-              liveSnapshot={liveSnapshot?.result ?? null}
-            />
-          </Surface>
-        )}
       </div>
     </WorkspaceSection>
   );
