@@ -5,7 +5,7 @@ import { recordAuditEvent } from "@/modules/audit-log/events";
 import { getLatestSuccessfulAudit, getPausedAudit } from "@/modules/business-audit/store";
 import {
   getActiveBusinessAuditOperation,
-  getActiveProductUnderstandingOperation,
+  getActiveProductScanOperation,
 } from "@/modules/operations/service";
 import { getLatestOpportunities } from "@/modules/opportunities/service";
 import { getLatestProfile } from "@/modules/product-understanding/store";
@@ -38,7 +38,7 @@ export type ProjectOnboarding = StoredOnboarding & {
   audit: Awaited<ReturnType<typeof getLatestSuccessfulAudit>>;
   pausedAudit: Awaited<ReturnType<typeof getPausedAudit>>;
   auditOperation: Awaited<ReturnType<typeof getActiveBusinessAuditOperation>>;
-  understandingOperation: Awaited<ReturnType<typeof getActiveProductUnderstandingOperation>>;
+  understandingOperation: Awaited<ReturnType<typeof getActiveProductScanOperation>>;
   opportunities: Awaited<ReturnType<typeof getLatestOpportunities>>;
 };
 
@@ -262,7 +262,7 @@ export async function getProjectOnboarding(
       getLatestSuccessfulAudit(supabase, params.projectId),
       getPausedAudit(supabase, params.projectId),
       getActiveBusinessAuditOperation(supabase, params.projectId),
-      getActiveProductUnderstandingOperation(supabase, params.projectId),
+      getActiveProductScanOperation(supabase, params.projectId),
       getLatestOpportunities(supabase, params.projectId),
     ]);
   if (rowError) throw rowError;

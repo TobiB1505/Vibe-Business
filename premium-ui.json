@@ -2,7 +2,10 @@
   "profile": "product-admin",
   "sourceRoots": [
     "src/app/app/(account)/repositories",
-    "src/app/app/projects/[projectId]/business-brain"
+    "src/app/app/projects/[projectId]/business-brain",
+    "src/app/app/projects/[projectId]/product",
+    "src/app/app/onboarding/[projectId]",
+    "src/components/product-scan"
   ],
   "locale": "en",
   "canonicalMap": "UX-CONTRACT.md",
@@ -22,6 +25,7 @@
     "failurePaths": "e2e/app-error.spec.ts",
     "repositoryStates": "e2e/account-repositories.spec.ts",
     "businessHealthStates": "e2e/business-audit.spec.ts",
-    "businessAuditRecovery": "e2e/action-plan-ui.spec.ts"
+    "businessAuditRecovery": "e2e/action-plan-ui.spec.ts",
+    "productScanStates": "e2e/product-scan.spec.ts"
   }
 }

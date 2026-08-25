@@ -40,6 +40,8 @@ const ACTIONS = read("src/app/app/onboarding/[projectId]/actions.ts");
 const PREREQUISITE = read("src/app/app/onboarding/[projectId]/audit-live-prerequisite.tsx");
 const WATCHER = read("src/app/app/onboarding/[projectId]/operation-watcher.tsx");
 const STATUS = read("src/app/app/onboarding/[projectId]/understanding-status.tsx");
+const PRODUCT_SCAN_WORKFLOW = read("src/modules/operations/product-scan/workflow.ts");
+const PRODUCT_SCAN_EXECUTION = read("src/modules/operations/product-scan/execution.ts");
 const FAILURE_STATES = read("src/app/app/onboarding/[projectId]/operation-states.tsx");
 const LOGO = read("src/components/brand/product-logo.tsx");
 const ACCOUNTS = read("src/app/app/connect/github/accounts/page.tsx");
@@ -95,10 +97,14 @@ describe("a founder with no live product is not trapped", () => {
       ACTIONS.indexOf("export async function retryProductScanAction"),
       ACTIONS.indexOf("export type ConfirmAndAuditState"),
     );
-    expect(retry).toContain("inspectRepository(");
-    expect(retry).toContain("inspectLiveProduct(");
-    // The live half still fails loudly, exactly as the first attempt does.
-    expect(retry).toContain('status: "scan_failed"');
+    expect(retry).toContain("startDurableProductScan(projectId)");
+    expect(PRODUCT_SCAN_WORKFLOW).toContain("scanRepository(operationId)");
+    expect(PRODUCT_SCAN_WORKFLOW).toContain("scanLiveProduct(operationId)");
+    expect(PRODUCT_SCAN_EXECUTION).toContain("inspectRepository(");
+    expect(PRODUCT_SCAN_EXECUTION).toContain("inspectLiveProduct(");
+    // Both source attempts now belong to the durable run rather than to the
+    // browser request that happened to start it.
+    expect(retry).not.toContain("inspectRepository(");
   });
 
   it("never invents, guesses or substitutes an address", () => {
@@ -161,7 +167,7 @@ describe("a failed operation is reported, not hidden", () => {
   /** Regression 2: the failed audit silently resets to the start control. */
   it("reads the last attempt rather than only the live one", () => {
     expect(PAGE).toContain("getLastFailedOperation");
-    expect(PAGE).toContain('operationType: "product_understanding"');
+    expect(PAGE).toContain('operationType: "product_scan"');
     expect(PAGE).toContain('operationType: "business_audit"');
   });
 

@@ -75,6 +75,11 @@ export const OPERATION_TYPES = [
    */
   "product_understanding",
   /**
+   * Refreshing the connected sources and assembling Product Understanding as
+   * one durable, customer-visible discovery run (ADR 0052).
+   */
+  "product_scan",
+  /**
    * Turning one Move into an ordered, concrete plan (CORE-2b §45).
    *
    * Durable for the ordinary reason — a token count, one paid call and a

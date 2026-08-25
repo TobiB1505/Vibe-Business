@@ -187,15 +187,18 @@ describe("one Product Scan, in the founder's words", () => {
    */
   it("offers one scan control for both sources, not one per module", () => {
     const page = source("product/page.tsx");
-    expect(page).toContain("ProductScanButton");
+    expect(page).toContain("ProductScanExperience");
     expect(page).not.toContain("InspectButton");
     expect(page).not.toContain("InspectLiveButton");
   });
 
   it("runs the live source from the same scan when a site is set", () => {
-    const action = source("product-scan-action.ts");
-    expect(action).toContain("inspectRepository(");
-    expect(action).toContain("inspectLiveProduct(");
+    const execution = readFileSync(
+      join(process.cwd(), "src/modules/operations/product-scan/execution.ts"),
+      "utf8",
+    );
+    expect(execution).toContain("inspectRepository(");
+    expect(execution).toContain("inspectLiveProduct(");
   });
 
   it("tells a founder when a source was read, partially read, or failed", () => {
@@ -215,14 +218,20 @@ describe("one Product Scan, in the founder's words", () => {
   });
 
   it("never shows a founder the modules' own names", () => {
-    for (const file of [
-      "product/page.tsx",
-      "product-scan-button.tsx",
-      "intelligence-summary.tsx",
-      "live-intelligence-summary.tsx",
-      "health/content.tsx",
-    ]) {
-      const copy = renderedCopy(file);
+    const files = [
+      ["product/page.tsx", renderedCopy("product/page.tsx")],
+      [
+        "product-scan-experience.tsx",
+        readFileSync(
+          join(process.cwd(), "src/components/product-scan/product-scan-experience.tsx"),
+          "utf8",
+        ).replace(/\/\*[\s\S]*?\*\//g, " "),
+      ],
+      ["intelligence-summary.tsx", renderedCopy("intelligence-summary.tsx")],
+      ["live-intelligence-summary.tsx", renderedCopy("live-intelligence-summary.tsx")],
+      ["health/content.tsx", renderedCopy("health/content.tsx")],
+    ] as const;
+    for (const [file, copy] of files) {
       expect(copy, file).not.toContain("Repository intelligence");
       expect(copy, file).not.toContain("repository intelligence");
       expect(copy, file).not.toContain("Live product check");

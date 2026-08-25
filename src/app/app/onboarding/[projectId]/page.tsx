@@ -6,6 +6,7 @@ import { buttonClasses } from "@/components/ui/button";
 import { Notice } from "@/components/ui/states";
 import { Surface } from "@/components/ui/surface";
 import { MonoLabel } from "@/components/ui/typography";
+import { ProductScanExperience } from "@/components/product-scan/product-scan-experience";
 import { createClient } from "@/lib/supabase/server";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import { requireSession } from "@/modules/auth/session";
@@ -26,6 +27,7 @@ import {
   hasCompletedAnyOnboarding,
 } from "@/modules/onboarding/store";
 import { buildUnderstandingView } from "@/modules/product-understanding/view";
+import { getProductScanEvents } from "@/modules/product-scan/store";
 import { AuditAnalyzing, AuditPreparing, AuditWaitingHeader } from "../../projects/[projectId]/audit-lifecycle";
 import { NeedsUserPanel } from "../../projects/[projectId]/needs-user-panel";
 import { OnboardingShell } from "../onboarding-shell";
@@ -37,7 +39,6 @@ import { OperationWatcher } from "./operation-watcher";
 import { OnboardingOperationFailure, OnboardingStalled } from "./operation-states";
 import { ProductConfirmation } from "./product-confirmation";
 import { RetryProductScan, StartAudit } from "./phase-actions";
-import { UnderstandingStatus } from "./understanding-status";
 
 export default async function ProjectOnboardingPage({
   params,
@@ -50,6 +51,13 @@ export default async function ProjectOnboardingPage({
   const onboarding = await getProjectOnboarding(supabase, { projectId, userId: session.userId });
   if (!onboarding) notFound();
   if (onboarding.state === "complete") redirect(`/app/projects/${projectId}`);
+
+  const scanEvents = onboarding.understandingOperation
+    ? await getProductScanEvents(supabase, {
+        projectId,
+        operationId: onboarding.understandingOperation.operationId,
+      })
+    : [];
 
   const auditReadiness =
     onboarding.productProfile?.stored.confirmedAt && !onboarding.audit?.result
@@ -98,7 +106,7 @@ export default async function ProjectOnboardingPage({
     onboarding.state === "product_scanning" && !onboarding.understandingOperation
       ? await getLastFailedOperation(supabase, {
           projectId,
-          operationType: "product_understanding",
+          operationType: "product_scan",
         })
       : null;
   const auditFailure =
@@ -192,21 +200,13 @@ export default async function ProjectOnboardingPage({
 
       {onboarding.state === "product_scanning" && (
         <section className="flex flex-col gap-6">
-          <header className="flex flex-col gap-3">
-            <MonoLabel>Understand</MonoLabel>
-            <h1 className="text-fg text-[2.25rem] leading-tight font-semibold tracking-[-0.04em] sm:text-[3rem]">
-              Vibe is getting to know your product.
-            </h1>
-            <p className="text-fg-muted max-w-[58ch]">
-              It is reading what you built, who it appears to be for, and how people use it. You can leave and come back.
-            </p>
-          </header>
           {onboarding.understandingOperation ? (
             <>
-              <OperationWatcher projectId={projectId} operation={onboarding.understandingOperation} />
-              <UnderstandingStatus
-                operation={onboarding.understandingOperation}
-                liveSiteStatus={onboarding.liveSiteStatus}
+              <ProductScanExperience
+                projectId={projectId}
+                variant="onboarding"
+                initialOperation={onboarding.understandingOperation}
+                initialEvents={scanEvents}
               />
               {onboarding.understandingOperation.stalled && (
                 <OnboardingStalled
@@ -411,7 +411,7 @@ export default async function ProjectOnboardingPage({
                 "Go to dashboard" sent people looking for a screen they had not
                 been taken to (UI-S1 §16).
               */}
-              <form action={completeOnboardingAction.bind(null, projectId)}>
+              <form action={completeOnboardingAction.bind(null, projectId)} noValidate>
                 <button type="submit" className={buttonClasses()}>
                   Go to your workspace
                 </button>

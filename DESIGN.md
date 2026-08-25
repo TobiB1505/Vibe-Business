@@ -71,7 +71,7 @@ Controls and navigation use precise 10px corners. Panels use 14px, major cards 1
 
 Primary buttons use mint once per action area; secondary controls use the shared bordered surface. Focus is always the global mint `:focus-visible` ring. Search owns an explicit clear action. Short filter and sort menus use native selects only where platform popup geometry is accepted. Tables keep headers, range feedback and pagination stable.
 
-Motion communicates interaction state only on ordinary product surfaces. Use the shared transition utility and respect reduced motion; never animate static dashboard furniture continuously. The narrowly-scoped Business Brain exception is defined below.
+Motion communicates interaction state only on ordinary product surfaces. Use the shared transition utility and respect reduced motion; never animate static dashboard furniture continuously. The narrowly-scoped Business Brain and Product Scan exceptions are defined below.
 
 The project Product page reads as one coherent product dossier, not a stack of scanner reports. Its opening identity card may combine the real product mark, evidence-backed description, category, capability count and source coverage, but never a fabricated screenshot or product metric. Product DNA, founder intent, discovered capabilities, journey, brand identity and source coverage follow in that order; raw technical evidence stays available behind disclosure.
 
@@ -85,14 +85,24 @@ Selection changes the Business Brain into a focused workspace rather than openin
 
 Motion for React owns the Business Brain's entrance, presence, layout, hover and selected-state transitions. CSS is limited to static atmosphere, surfaces and the global reduced-motion backstop. This exception must not be copied into settings, billing, tables or ordinary dashboard cards.
 
+## Signature Surface: Product Scan
+
+Product Scan is the second narrow signature surface, and its visual metaphor is discovery rather than health. A contained mint scanner core connects to six stable product facets while a chronological feed shows individual grounded findings. Connections activate only when a corresponding durable scan event exists. The graph must never emit random particles, cycle fake messages or suggest a percentage the backend cannot measure.
+
+The onboarding variant may use the full available Understand-phase width; the My Product variant embeds the same component above the dossier. On narrow screens the constellation becomes a linear evidence rail while preserving the feed, source labels and event order. This is a named responsive variant, not a second component.
+
+Motion for React owns event arrival, layout convergence and the active core breath. One new stored event may create one bounded outward impulse. Existing events do not replay on mount, document visibility pauses continuous motion, and `prefers-reduced-motion` makes every state change immediate. Mint means active or grounded; amber marks a source that was unavailable without turning missing evidence into a bad result.
+
 ## Do's and Don'ts
 
 - Do keep account metrics honest and derived from stored domain data.
 - Do preserve full repository and branch identity through responsive transformations.
 - Do use one visual accent and a quiet foreground hierarchy.
 - Do reserve cinematic motion and luminous depth for the Business Brain on project Home.
+- Do let Product Scan motion follow stored discoveries and nothing else.
 - Don't invent “active”, trend, pull-request or activity data for reference fidelity.
 - Don't duplicate shared surfaces, buttons, status pills or icon grammar in screen-local systems.
 - Don't let a table impose viewport height or overflow rules on the account shell.
 - Don't reintroduce a sticky project header or repeat repository/branch metadata above every project page.
 - Don't copy the Business Brain glow or choreography onto ordinary cards, forms or index pages.
+- Don't reuse Product Scan's scanner core outside onboarding and My Product.

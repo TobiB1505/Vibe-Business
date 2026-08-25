@@ -6,7 +6,11 @@ import type { AIProvider } from "@/modules/ai/provider";
 import { recordAIUsage } from "@/modules/ai/usage";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import { getLatestSuccessfulAuthenticatedSnapshot } from "@/modules/authenticated-product-intelligence/store";
-import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intelligence/store";
+import {
+  getLatestSuccessfulLiveSnapshot,
+  getLiveSnapshotById,
+} from "@/modules/live-product-intelligence/store";
+import { getProductScanSourceReferences } from "@/modules/product-scan/store";
 import {
   UNDERSTANDING_EVIDENCE_VERSION,
   buildUnderstandingPack,
@@ -29,7 +33,10 @@ import {
   failProfileRun,
   getProfileById,
 } from "@/modules/product-understanding/store";
-import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
+import {
+  getLatestSuccessfulSnapshot,
+  getSnapshotById,
+} from "@/modules/repository-intelligence/store";
 import type { OperationFailureCode } from "../failures";
 import {
   claimResultForOperation,
@@ -118,12 +125,21 @@ type UnderstandingIdentity = {
 export async function loadUnderstandingSources(
   supabase: SupabaseClient,
   projectId: string,
+  selection?: { repositorySnapshotId: string | null; liveSnapshotId: string | null },
 ): Promise<
   StepOutcome<{ sources: BuildUnderstandingPackInput; identity: UnderstandingIdentity }>
 > {
   const [repositorySnapshot, liveSnapshot, authenticatedSnapshot] = await Promise.all([
-    getLatestSuccessfulSnapshot(supabase, projectId),
-    getLatestSuccessfulLiveSnapshot(supabase, projectId),
+    selection
+      ? selection.repositorySnapshotId
+        ? getSnapshotById(supabase, { projectId, snapshotId: selection.repositorySnapshotId })
+        : null
+      : getLatestSuccessfulSnapshot(supabase, projectId),
+    selection
+      ? selection.liveSnapshotId
+        ? getLiveSnapshotById(supabase, { projectId, snapshotId: selection.liveSnapshotId })
+        : null
+      : getLatestSuccessfulLiveSnapshot(supabase, projectId),
     getLatestSuccessfulAuthenticatedSnapshot(supabase, projectId),
   ]);
 
@@ -178,10 +194,21 @@ async function resolveInputs(
 ): Promise<
   StepOutcome<{ sources: BuildUnderstandingPackInput; identity: UnderstandingIdentity }>
 > {
-  const loaded = await loadUnderstandingSources(supabase, operation.projectId);
+  const selection =
+    operation.operationType === "product_scan"
+      ? await getProductScanSourceReferences(supabase, {
+          operationId: operation.id,
+          projectId: operation.projectId,
+          userId: operation.userId,
+        })
+      : undefined;
+  const loaded = await loadUnderstandingSources(supabase, operation.projectId, selection);
   if (!loaded.ok) return loaded;
 
-  if (loaded.identity.inputHash !== operation.inputIdentity) {
+  // A Product Scan creates its identity before it refreshes its sources. Its
+  // claimed profile must therefore bind to the post-scan snapshot identity,
+  // while historical Product Understanding runs keep their exact-input guard.
+  if (operation.operationType !== "product_scan" && loaded.identity.inputHash !== operation.inputIdentity) {
     return { ok: false, failureCode: "inputs_changed" };
   }
 
@@ -199,6 +226,7 @@ async function resolveInputs(
 export async function readCodeStep(
   deps: ExecutionDeps,
   operationId: string,
+  options: { setStage?: boolean } = {},
 ): Promise<StepOutcome<{ profileId: string }>> {
   const loaded = await loadOperation(deps.supabase, operationId);
   if (!loaded.ok) return loaded;
@@ -207,7 +235,9 @@ export async function readCodeStep(
   // A replay after the claim already happened: reuse it, never claim twice.
   if (operation.resultId) return { ok: true, profileId: operation.resultId };
 
-  await setOperationStage(deps.supabase, { operationId, stage: "reading_code", markRunning: true });
+  if (options.setStage !== false) {
+    await setOperationStage(deps.supabase, { operationId, stage: "reading_code", markRunning: true });
+  }
 
   const resolved = await resolveInputs(deps.supabase, operation);
   if (!resolved.ok) return resolved;
@@ -264,7 +294,7 @@ export async function readPublicProductStep(
 
   await setOperationStage(deps.supabase, { operationId, stage: "reading_public_product" });
 
-  const sources = await loadUnderstandingSources(deps.supabase, loaded.operation.projectId);
+  const sources = await resolveInputs(deps.supabase, loaded.operation);
   if (!sources.ok) return sources;
 
   const config = PRODUCT_UNDERSTANDING_CONFIG;

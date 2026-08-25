@@ -87,7 +87,7 @@ export function AuditLivePrerequisite({
   }, [router, state]);
 
   const addressForm = (
-    <form action={action} className="flex flex-col gap-4">
+    <form action={action} className="flex flex-col gap-4" noValidate>
       <input type="hidden" name="liveSiteChoice" value="provided" />
       <Field
         id="auditProductionUrl"
@@ -140,7 +140,7 @@ export function AuditLivePrerequisite({
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <form action={completeOnboardingAction.bind(null, projectId)}>
+          <form action={completeOnboardingAction.bind(null, projectId)} noValidate>
             <SubmitButton pendingLabel="Opening your workspace…">
               Continue to your workspace
             </SubmitButton>
@@ -175,7 +175,7 @@ export function AuditLivePrerequisite({
         {addressForm}
         <div className="border-line-2 border-t pt-4">
           <p className="text-fg-muted mb-3 text-sm">Not live yet?</p>
-          <form action={parkLiveProductAction.bind(null, projectId)}>
+          <form action={parkLiveProductAction.bind(null, projectId)} noValidate>
             <SubmitButton variant="secondary" pendingLabel="Saving…">
               I don&apos;t have a live product yet
             </SubmitButton>

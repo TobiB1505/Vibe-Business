@@ -44,6 +44,7 @@
 | Search | committed URL query + explicit clear | shared interactive transition | global mint ring | n/a | retain dataset frame | no-results is distinct from failure |
 | Table/list | comfortable density | row surface cue | controls receive visible focus | n/a | stable frame | persistent scoped state |
 | Business Brain | staged but complete | real related paths and nodes gain emphasis | node uses the global mint ring | n/a | server lifecycle remains authoritative | existing notices and recovery |
+| Product Scan | stored discoveries at first paint | grounded nodes and events gain emphasis | launcher uses shared button focus | unavailable without connected repository | stable launcher geometry + durable event feed | persistent partial/failure state + retry |
 
 ## Dataset navigation
 
@@ -62,7 +63,7 @@
 | Search/filter/sort | Account index controls | local, no loader | same route and URL state | clear/reset | clear returns focus to search | this contract |
 | Open repository | repository link | browser navigation | GitHub in a new tab | browser-owned | browser-owned | stored `html_url` |
 | Open product | row action/product link | route navigation | owning product workspace | app route error | destination heading | ADR 0042 |
-| Refresh product understanding | header action | durable operation status with stable page content | same Product page | operation-owned retry state | refreshed product profile | Product Understanding contract |
+| Run Product Scan | onboarding live-site confirmation or My Product launcher | one durable operation; individual stored findings; no percentage | product reveal in onboarding / refreshed My Product dossier | source failures remain visible; retry only when operation policy allows | refreshed Product Profile heading | ADR 0052 |
 | Correct product understanding | `Let me fix it` | stable inline editor and busy save action | same Product page | inline persistent error | corrected profile summary | Product Understanding contract |
 | Switch product | project switcher option | route navigation | selected product Home | current product + `View all products` remain available | destination page heading | ADR 0050 |
 
@@ -79,12 +80,14 @@
 - Repository comparison uses a semantic table at desktop and labeled record rows on narrow screens. Identity, product, visibility, default branch, connected time and open action remain available.
 - Technical values truncate only where their full value is also available through the external repository link or the mobile full-name row.
 - The Product page keeps one-column reading order below `lg`; its Product DNA and source grids collapse without hiding confidence wording, founder intent, brand evidence or source availability.
+- Product Scan uses one shared component. Its constellation becomes a linear facet rail below `md`; discoveries remain ordered and fully readable.
 
 ## Async and resilience
 
 - Index reads are server-owned. Failures reach the account route error boundary; the UI does not imply an empty dataset.
 - Search and sorting are local over the loaded account inventory, so no stale request or spinner exists.
 - GitHub live status is not fetched on the index. Stored connection metadata is labeled honestly and revalidation stays at the consequential workflow that needs it.
+- Product Scan polls canonical Supabase operation state and at most 24 ordered events every 2.5 seconds. It refreshes server content only on a terminal transition. A public-product failure degrades to partial when another source remains usable; it never removes a successful source reading.
 
 ## Motion and sensory behavior
 
@@ -93,10 +96,12 @@
 - Hover and keyboard focus emphasize only real related paths and nodes. Selection uses one continuous layout/presence transition and replaces the default right panel with the selected area rather than appending a report below the map.
 - Reduced-motion mode removes reveal delays, signal movement, pulse and map repositioning while preserving every node, relationship meaning, score and action at first paint.
 - Motion never implies live activity, a recalculation or a score change.
+- Product Scan motion is event-driven through Motion for React. A newly observed stored event may produce one bounded core impulse and one feed entrance; events present at first paint do not replay or announce as new.
+- Product Scan's slow core breath runs only while the operation is active and the document is visible. Reduced motion removes the breath, impulse and transforms while preserving every status and finding.
 
 ## Verification
 
 - Static: lint, typecheck, unit tests, strict premium audit.
 - Browser: repository success, empty, no-results, search clear, filter, sort, pagination, URL restoration and 1440/1024/768/375 widths; Business Health reading order, map interaction, canonical recovery link, responsive transformation and reduced motion.
 - Canonical sibling: `/app/products` and the account shell.
-- Repository evidence: `e2e/account-repositories.spec.ts`, `e2e/business-audit.spec.ts`, `e2e/action-plan-ui.spec.ts`.
+- Repository evidence: `e2e/account-repositories.spec.ts`, `e2e/business-audit.spec.ts`, `e2e/action-plan-ui.spec.ts`, `e2e/product-scan.spec.ts`.

@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import { requireSession } from "@/modules/auth/session";
 import { getAuditReadiness } from "@/modules/business-audit/service";
-import { inspectLiveProduct, type InspectLiveFailureCode } from "@/modules/live-product-intelligence/service";
+import type { InspectLiveFailureCode } from "@/modules/live-product-intelligence/service";
 import { auditSurface, canCompleteOnboarding } from "@/modules/onboarding/audit-surface";
 import {
   completeProjectOnboarding,
@@ -18,7 +18,7 @@ import type { OperationFailureCode } from "@/modules/operations/failures";
 import {
   startBusinessAuditOperation,
   startOpportunityOperation,
-  startProductUnderstandingOperation,
+  startProductScanOperation,
 } from "@/modules/operations/service";
 import { VercelWorkflowExecutor } from "@/modules/operations/vercel/executor";
 import { EDITABLE_FIELDS } from "@/modules/product-understanding/schema";
@@ -29,7 +29,7 @@ import {
   saveCorrections,
 } from "@/modules/product-understanding/store";
 import { setProductionUrl, type SetProductionUrlFailure } from "@/modules/projects/production-url";
-import { inspectRepository, type InspectFailureCode } from "@/modules/repository-intelligence/service";
+import type { InspectFailureCode } from "@/modules/repository-intelligence/service";
 
 const onboardingHref = (projectId: string) => `/app/onboarding/${projectId}`;
 
@@ -48,13 +48,13 @@ export type BeginUnderstandingState =
   | { ok: false; step: "understanding"; error: OperationFailureCode }
   | null;
 
-async function startUnderstandingFromStoredSources(
+async function startDurableProductScan(
   projectId: string,
 ): Promise<BeginUnderstandingState> {
   const session = await requireSession();
   const supabase = await createClient();
 
-  const outcome = await startProductUnderstandingOperation(
+  const outcome = await startProductScanOperation(
     supabase,
     new VercelWorkflowExecutor(),
     { projectId, userId: session.userId },
@@ -66,8 +66,8 @@ async function startUnderstandingFromStoredSources(
   await recordAuditEvent(supabase, {
     userId: session.userId,
     projectId,
-    eventType: "onboarding.product_understanding_started",
-    metadata: { projectId, reused: outcome.kind === "reused" },
+    eventType: "onboarding.product_scan_started",
+    metadata: { projectId, alreadyRunning: outcome.kind === "active" },
   });
   revalidatePath(onboardingHref(projectId));
   return { ok: true, alreadyRunning: outcome.kind === "active" };
@@ -111,33 +111,7 @@ export async function beginUnderstandingAction(
     });
   }
 
-  await recordAuditEvent(supabase, {
-    userId: session.userId,
-    projectId,
-    eventType: "onboarding.product_scan_started",
-    metadata: { projectId, sourceProvider: "github", includesLiveSite: choice === "provided" },
-  });
-
-  const repository = await inspectRepository(supabase, { projectId, userId: session.userId });
-  if (!repository.ok) return { ok: false, step: "repository", error: repository.error };
-
-  if (choice === "provided") {
-    const live = await inspectLiveProduct(supabase, { projectId, userId: session.userId });
-    if (!live.ok) {
-      await setLiveSiteStatus(supabase, { projectId, status: "scan_failed" });
-      revalidatePath(onboardingHref(projectId));
-      return { ok: false, step: "live", error: live.error };
-    }
-  }
-
-  await recordAuditEvent(supabase, {
-    userId: session.userId,
-    projectId,
-    eventType: "onboarding.product_scan_completed",
-    metadata: { projectId, sourceProvider: "github", includesLiveSite: choice === "provided" },
-  });
-
-  return startUnderstandingFromStoredSources(projectId);
+  return startDurableProductScan(projectId);
 }
 
 export async function continueWithoutLiveSiteAction(
@@ -154,7 +128,7 @@ export async function continueWithoutLiveSiteAction(
     eventType: "onboarding.live_site_skipped",
     metadata: { projectId, reason: "scan_unavailable" },
   });
-  return startUnderstandingFromStoredSources(projectId);
+  return startDurableProductScan(projectId);
 }
 
 /**
@@ -197,40 +171,17 @@ export async function parkLiveProductAction(projectId: string): Promise<void> {
 /**
  * Try again is the whole scan, not half of it.
  *
- * This used to re-run only the repository read. A founder whose live check
- * failed and who pressed Try again got an understanding built without their
- * site — reported as success, with nothing on screen saying the live half had
- * been skipped. The stored production URL decides whether a live half exists,
- * exactly as `runProductScanAction` does in the workspace, and a live failure
- * fails loudly through the same stepped state as the first attempt.
+ * This used to re-run only the repository read in the browser request. Retry
+ * now starts the same durable Product Scan used by My Product; its workflow
+ * attempts both connected sources and records an unavailable live source as a
+ * visible partial result rather than silently omitting it.
  */
 export async function retryProductScanAction(
   projectId: string,
   _previous: BeginUnderstandingState,
   _formData: FormData,
 ): Promise<BeginUnderstandingState> {
-  const session = await requireSession();
-  const supabase = await createClient();
-  const repository = await inspectRepository(supabase, { projectId, userId: session.userId });
-  if (!repository.ok) return { ok: false, step: "repository", error: repository.error };
-
-  const { data: project } = await supabase
-    .from("projects")
-    .select("production_url")
-    .eq("id", projectId)
-    .eq("user_id", session.userId)
-    .maybeSingle();
-
-  if (project?.production_url) {
-    const live = await inspectLiveProduct(supabase, { projectId, userId: session.userId });
-    if (!live.ok) {
-      await setLiveSiteStatus(supabase, { projectId, status: "scan_failed" });
-      revalidatePath(onboardingHref(projectId));
-      return { ok: false, step: "live", error: live.error };
-    }
-  }
-
-  return startUnderstandingFromStoredSources(projectId);
+  return startDurableProductScan(projectId);
 }
 
 export type ConfirmAndAuditState =

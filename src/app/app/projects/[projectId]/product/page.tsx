@@ -1,9 +1,13 @@
 import { WorkspaceSection, projectSectionHref } from "@/components/layout/project-shell";
+import { ProductScanExperience } from "@/components/product-scan/product-scan-experience";
 import { EmptyState } from "@/components/ui/states";
 import { Surface } from "@/components/ui/surface";
-import { MonoLabel } from "@/components/ui/typography";
 import { getLatestSuccessfulAuthenticatedSnapshot } from "@/modules/authenticated-product-intelligence/store";
-import { getActiveProductUnderstandingOperation } from "@/modules/operations/service";
+import {
+  getActiveProductScanOperation,
+  getLatestProductScanOperation,
+} from "@/modules/operations/service";
+import { getProductScanEvents } from "@/modules/product-scan/store";
 import { getLatestProfile } from "@/modules/product-understanding/store";
 import { buildUnderstandingView } from "@/modules/product-understanding/view";
 import { describeIncompleteness } from "@/modules/live-product-intelligence/human-view";
@@ -20,10 +24,8 @@ import {
 } from "@/modules/repository-intelligence/store";
 import { IntelligenceSummary, LIVE_PRODUCT_ANCHOR } from "../intelligence-summary";
 import { LiveIntelligenceSummary } from "../live-intelligence-summary";
-import { ProductScanButton } from "../product-scan-button";
 import { UnderstandingConfirm } from "../understanding-confirm";
 import { UnderstandingPanel, type UnderstandingSource } from "../understanding-panel";
-import { UnderstandingProgress } from "../understanding-progress";
 
 /**
  * My Product — "what Vibe knows" (CORE-1 §26, §33; CORE-5; Stage D).
@@ -69,6 +71,7 @@ export default async function MyProductPage({
   const [
     latest,
     activeOperation,
+    latestScanOperation,
     repositorySnapshot,
     repositoryAttempt,
     liveSnapshot,
@@ -77,7 +80,8 @@ export default async function MyProductPage({
     founderIntent,
   ] = await Promise.all([
     getLatestProfile(supabase, projectId),
-    getActiveProductUnderstandingOperation(supabase, projectId),
+    getActiveProductScanOperation(supabase, projectId),
+    getLatestProductScanOperation(supabase, projectId),
     getLatestSuccessfulSnapshot(supabase, projectId),
     getLatestSnapshotAttempt(supabase, projectId),
     getLatestSuccessfulLiveSnapshot(supabase, projectId),
@@ -86,15 +90,17 @@ export default async function MyProductPage({
     getFounderIntent(supabase, projectId),
   ]);
 
-  // Either source is enough. A product with no public site yet is exactly the
-  // kind this flow exists to describe (CORE-1 §43).
-  const hasEvidence = Boolean(repositorySnapshot?.result) || Boolean(liveSnapshot?.result);
+  const displayedScan = activeOperation ?? latestScanOperation;
+  const scanEvents = displayedScan
+    ? await getProductScanEvents(supabase, {
+        projectId,
+        operationId: displayedScan.operationId,
+      })
+    : [];
 
-  const blockedReason = hasEvidence
+  const blockedReason = project.repository
     ? null
-    : project.repository
-      ? "Vibe needs to read your code or visit your product first. Run the scan below."
-      : "Connect a repository first, and Vibe can start getting to know your product.";
+    : "Connect a repository first, and Vibe can start getting to know your product.";
 
   const view = latest ? buildUnderstandingView(latest.profile, latest.stored.synthesized) : null;
 
@@ -207,21 +213,25 @@ export default async function MyProductPage({
       id="my-product"
       title="My Product"
       description="Here's how Vibe understands your product."
-      actions={
-        // The start control lives in the header when a profile already exists,
-        // so re-checking is available without scrolling past the answer.
-        view ? (
-          <UnderstandingProgress
-            projectId={project.id}
-            hasProfile
-            activeOperation={activeOperation}
-            canStart={hasEvidence}
-            blockedReason={blockedReason}
-          />
-        ) : null
-      }
     >
       <div className="flex flex-col gap-5">
+        <Surface
+          id={SCAN_ANCHOR}
+          level="section"
+          padding="lg"
+          className="scroll-mt-6"
+        >
+          <ProductScanExperience
+            projectId={project.id}
+            variant="workspace"
+            initialOperation={displayedScan}
+            initialEvents={scanEvents}
+            hasProfile={Boolean(view)}
+            canStart={Boolean(project.repository)}
+            blockedReason={blockedReason}
+          />
+        </Surface>
+
         {view && latest ? (
           <UnderstandingPanel
             view={view}
@@ -250,49 +260,8 @@ export default async function MyProductPage({
         ) : (
           <EmptyState
             title="Vibe hasn't got to know your product yet."
-            description="Vibe reads your code and looks at your public product, then tells you — in one paragraph — what it thinks you built. You get to say whether it's right."
-            action={
-              <UnderstandingProgress
-                projectId={project.id}
-                hasProfile={false}
-                activeOperation={activeOperation}
-                canStart={hasEvidence}
-                blockedReason={blockedReason}
-              />
-            }
+            description="Start the Product Scan above. Vibe will read the connected sources, save each grounded discovery, and assemble a Product Profile for you to review."
           />
-        )}
-
-        {project.repository && (
-          <Surface
-            // The one scan control, targeted by every source row whose state
-            // it can change. The route header is not sticky, so a small target
-            // margin is enough to preserve breathing room.
-            id={SCAN_ANCHOR}
-            level="section"
-            padding="lg"
-            className="scroll-mt-6 flex flex-col gap-4"
-          >
-            <div className="flex flex-col gap-1">
-              <MonoLabel>Product Scan</MonoLabel>
-              <h3 className="text-fg text-base font-semibold">
-                One scan, everything Vibe can reach.
-              </h3>
-              <p className="text-fg-muted max-w-[70ch] text-sm">
-                Vibe reads your code
-                {project.productionUrl
-                  ? " and visits your public website, in one pass. It's free, and it's"
-                  : ". It's free, and it's"}{" "}
-                how everything else here stays grounded in your real product.
-              </p>
-            </div>
-            <div>
-              <ProductScanButton
-                projectId={project.id}
-                hasSnapshot={Boolean(repositorySnapshot?.result) || Boolean(liveSnapshot?.result)}
-              />
-            </div>
-          </Surface>
         )}
 
         {liveSnapshot?.result && (
