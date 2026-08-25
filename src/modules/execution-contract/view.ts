@@ -67,6 +67,7 @@ export const EXECUTION_REASON_LABELS: Record<ExecutionResolutionReason, string> 
   deterministic_capability_matched: "Vibe already knows how to make this exact change.",
   agentic_v1_eligible: "This is the kind of change Vibe could build for you.",
   founder_decision_required: "Only you can settle this, and the work after it depends on the answer.",
+  founder_input_required: "Only you can provide this information, and the work after it depends on the answer.",
   founder_action_required: "This is real-world work that has to be done by a person.",
   external_party_required: "This is waiting on someone outside your business.",
   dependency_unsatisfied: "An earlier step has to finish first.",

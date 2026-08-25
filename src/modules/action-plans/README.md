@@ -72,6 +72,21 @@ Only server capability reconciliation establishes `vibe_executes_now`. Ask
 `isExecutableByVibe(step)` — it requires both the support value *and* a real capability,
 and the database enforces the same pairing.
 
+## Founder-owned information and completion
+
+`founder_decision` and `founder_input` steps carry a validated dynamic
+`FounderInputRequirement`. The planner may propose the question, recommendation
+and alternatives from its bounded evidence; the application owns response
+validation and every state transition. The content is deliberately not backed
+by a pricing or business-question catalogue.
+
+The durable project truth lives in `src/modules/founder-input/`, not in the plan
+JSON. One active resolution for `(project, kind, subjectKey)` is authoritative
+completion evidence for every matching founder-owned step. A downstream step is
+unblocked only when that evidence exists. Agent work, founder actions and
+external dependencies do not inherit this authority and remain incomplete
+until their own evidence integrations exist.
+
 ## The one architectural rule
 
 **A model may describe a business action. Only the server may say whether Vibe
@@ -126,6 +141,8 @@ loses those values in normalization. Adding such a field is meant to be hard.
 | `dogfood.probe.ts` | The real-product harness. Dev-only, writes nothing |
 
 Durable execution lives in `src/modules/operations/action-plans/`.
+Founder request/resolution state lives in `src/modules/founder-input/`; its
+service-role response transition lives in `src/modules/operations/founder-input/`.
 
 ## Context policy
 
@@ -148,6 +165,8 @@ usage, latency and provider cost are all recorded, and the dogfood report prints
 
 ## What this module does not do
 
-No code generation, no repository authoring, no execution, no sandbox run, no
-preview, no apply, no merge, no deployment, no billing, no credits, no UI. ADR
-0014 and ADR 0015 are untouched.
+No code generation, no repository authoring, no sandbox run, no preview, no
+apply, no merge, no deployment, no billing, and no credits. The Action Plan UI
+may collect a founder response, but execution still crosses the existing
+resolver, preflight, approval and operation boundaries. ADR 0014 and ADR 0015
+are untouched.

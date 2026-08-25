@@ -125,6 +125,21 @@ describe("the revenue plan", () => {
         changeKind: "decision",
         dependsOn: [2],
         evidenceIds: [],
+        founderInputRequirement: {
+          kind: "decision",
+          subjectKey: "revenue.charging_model",
+          question: "Which charging model should the product use?",
+          whyNeeded: "The free and paid boundary depends on a confirmed charging direction.",
+          responseType: "single_select",
+          recommendation: {
+            id: "simple-model",
+            label: "Use the simplest supported model",
+            value: "Use the simplest charging model supported by the current evidence.",
+            explanation: "This keeps the first paid path bounded.",
+          },
+          alternatives: [],
+          allowCustom: true,
+        },
       }),
       fakeWirePlanStep({
         order: 4,
@@ -135,6 +150,16 @@ describe("the revenue plan", () => {
         changeKind: "decision",
         dependsOn: [3],
         evidenceIds: [],
+        founderInputRequirement: {
+          kind: "decision",
+          subjectKey: "revenue.free_paid_boundary",
+          question: "Where should the initial boundary between free and paid sit?",
+          whyNeeded: "Checkout work needs one confirmed boundary to implement.",
+          responseType: "text",
+          recommendation: null,
+          alternatives: [],
+          allowCustom: true,
+        },
       }),
       fakeWirePlanStep({
         order: 5,

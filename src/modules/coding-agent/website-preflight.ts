@@ -25,6 +25,8 @@ import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/s
 import { resolveAgentEconomics, type AgentEconomicPolicy } from "./authorization";
 import { CORE4_DOGFOOD_DISCOVERY } from "./budget";
 import { runAgentPreflight, type AgentPreflight } from "./preflight";
+import { completedStepsFromFounderResolutions } from "@/modules/founder-input/completion";
+import { listActiveFounderResolutions } from "@/modules/founder-input/store";
 
 /**
  * The step preflight the internal dogfood website surface calls
@@ -215,16 +217,18 @@ export async function resolveDogfoodPlanRoutes(
   const plan = await getLatestCompletedActionPlan(supabase, params.projectId);
   if (!plan) return { available: false, reason: "no_action_plan" };
 
-  // Both may legitimately be absent, and the resolver says so per step with its
-  // own reasons — `repository_not_connected` and `repository_snapshot_missing`
-  // are real answers a founder can act on. What it must not do is invent them.
-  const [connection, snapshot] = await Promise.all([
+  // All three may legitimately be absent, and the resolver says so per step
+  // with its own reasons. What it must not do is invent repository state or
+  // treat a founder-owned prerequisite as completed without its resolution.
+  const [connection, snapshot, founderResolutions] = await Promise.all([
     loadOwnedRepositoryConnection(supabase, {
       projectId: params.projectId,
       userId: params.userId,
     }),
     getLatestSuccessfulSnapshot(supabase, params.projectId),
+    listActiveFounderResolutions(supabase, params.projectId),
   ]);
+  const completedSteps = completedStepsFromFounderResolutions(plan.steps, founderResolutions);
 
   const repository: RepositoryContext = {
     connection: connection
@@ -245,10 +249,7 @@ export async function resolveDogfoodPlanRoutes(
     available: true,
     plan,
     resolutions: resolvePlanExecution({
-      // Nothing in the product completes a step yet (Core-3 `sequence.ts`), and
-      // since the semantics fix nothing needs to: Vibe's own preparation is
-      // absorbed into the run that follows it rather than waited on.
-      plan: { steps: plan.steps, completedSteps: new Set<number>(), isCurrent: true },
+      plan: { steps: plan.steps, completedSteps, isCurrent: true },
       repository,
       agenticBudgetAuthorized: economics !== null,
     }),
@@ -488,6 +489,9 @@ export async function resolveExecutableStep(
   const { step, planSteps, lineage } = params;
   const plan = lineage;
 
+  const founderResolutions = await listActiveFounderResolutions(supabase, params.projectId);
+  const completedSteps = completedStepsFromFounderResolutions(planSteps, founderResolutions);
+
   const connection = await loadOwnedRepositoryConnection(supabase, {
     projectId: params.projectId,
     userId: params.userId,
@@ -540,8 +544,7 @@ export async function resolveExecutableStep(
     step,
     plan: {
       steps: planSteps,
-      // Nothing in the product completes a step yet (Core-3 §sequence.ts).
-      completedSteps: new Set<number>(),
+      completedSteps,
       isCurrent: true,
     },
     repository,
@@ -605,7 +608,21 @@ export async function resolveExecutableStep(
       frameworks: snapshot.result.frameworks.map((framework) => framework.id),
       packageManager: snapshot.result.packageManager ?? "unknown",
     },
-    approvedDecisions: [],
+    approvedDecisions: founderResolutions
+      .map((founderResolution) => {
+        const sourceStep = planSteps.find(
+          (candidate) =>
+            candidate.founderInputRequirement?.kind === founderResolution.kind &&
+            candidate.founderInputRequirement.subjectKey === founderResolution.subjectKey,
+        );
+        if (!sourceStep) return null;
+        return {
+          key: `${founderResolution.kind}:${founderResolution.subjectKey}`,
+          stepOrder: sourceStep.order,
+          decision: founderResolution.resolvedStatement,
+        };
+      })
+      .filter((entry): entry is { key: string; stepOrder: number; decision: string } => entry !== null),
     validation,
     budget,
     credit: { quoteId: null, maxAuthorizedCredits: budget?.maxCredits ?? null },

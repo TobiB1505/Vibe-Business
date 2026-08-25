@@ -219,6 +219,7 @@ export const EXECUTION_RESOLUTION_REASONS = [
   "agentic_v1_eligible",
   /** The Planner marked this a founder decision, and it is unmade (§28). */
   "founder_decision_required",
+  "founder_input_required",
   /** Real-world work only a person can do. */
   "founder_action_required",
   /** Waiting on a third party or an external system. */

@@ -89,6 +89,14 @@ export function classifyStep(
         requiresApproval: approval,
       };
 
+    case "founder_input":
+      return {
+        executionSupport: "founder_provides_input",
+        capability: null,
+        capabilityVersion: null,
+        requiresApproval: approval,
+      };
+
     case "founder_action":
       return {
         executionSupport: "founder_acts",

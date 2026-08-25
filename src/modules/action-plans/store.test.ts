@@ -75,7 +75,7 @@ function builtPlan(wire: Parameters<typeof fakeWirePlan>[0] = {}): ActionPlan {
 
   return {
     schemaVersion: ACTION_PLAN_SCHEMA_VERSION,
-    stepSchemaVersion: "business-action-plan-step.v1",
+    stepSchemaVersion: "business-action-plan-step.v2",
     contractVersion: ACTION_PLANNER_CONTRACT_VERSION,
     plannerVersion: ACTION_PLANNER_VERSION,
     promptVersion: IDENTITY.promptVersion,
@@ -122,7 +122,7 @@ describe("computeActionPlanInputHash", () => {
   /** §41 — a contract bump means a stored plan is no longer this contract's answer. */
   it("changes when the planner contract changes", () => {
     expect(
-      computeActionPlanInputHash({ ...IDENTITY, contractVersion: "action-planner-contract-v2" }),
+      computeActionPlanInputHash({ ...IDENTITY, contractVersion: "action-planner-contract-v1" }),
     ).not.toBe(computeActionPlanInputHash(IDENTITY));
   });
 });
@@ -197,6 +197,13 @@ describe("completing a run", () => {
     expect(stored?.validationFindings).toEqual(["plan_inflation"]);
     expect(stored?.steps.map((step) => step.order)).toEqual([1, 2, 3, 4]);
     expect(stored?.steps[1].executionSupport).toBe("founder_decides");
+    expect(db.rows("project_founder_input_requests")).toHaveLength(1);
+    expect(db.rows("project_founder_input_requests")[0]).toMatchObject({
+      action_plan_id: created.planId,
+      action_plan_step_key: plan.steps[1].id,
+      subject_key: "audience.first_customer_segment",
+      status: "open",
+    });
   });
 
   /**

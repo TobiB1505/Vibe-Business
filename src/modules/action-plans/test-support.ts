@@ -32,6 +32,7 @@ export function fakeWirePlanStep(overrides: Partial<WirePlanStep> = {}): WirePla
       "Two or three candidate segments exist, each with the product strengths that support it and what it would cost to pursue.",
     dependsOn: [],
     evidenceIds: ["profile.identity.description"],
+    founderInputRequirement: null,
     ...overrides,
   };
 }
@@ -64,6 +65,21 @@ export function fakeWirePlan(overrides: Partial<WirePlan> = {}): WirePlan {
           "One segment is explicitly chosen and recorded as the current intended audience.",
         dependsOn: [1],
         evidenceIds: [],
+        founderInputRequirement: {
+          kind: "decision",
+          subjectKey: "audience.first_customer_segment",
+          question: "Which customer segment should the business pursue first?",
+          whyNeeded: "The positioning and acquisition steps depend on one confirmed audience.",
+          responseType: "single_select",
+          recommendation: {
+            id: "indie-founders",
+            label: "Independent founders",
+            value: "Prioritize independent founders as the first customer segment.",
+            explanation: "The current product and evidence most directly support this segment.",
+          },
+          alternatives: [],
+          allowCustom: true,
+        },
       }),
       fakeWirePlanStep({
         order: 3,

@@ -857,6 +857,42 @@ export class FakeDatabase {
       }
     }
 
+    if (table === "project_founder_input_requests") {
+      const samePlanStep = others.some(
+        (row) =>
+          row.action_plan_id === candidate.action_plan_id &&
+          row.action_plan_step_key === candidate.action_plan_step_key,
+      );
+      if (samePlanStep) {
+        return { code: POSTGRES_UNIQUE_VIOLATION, message: "one request per plan step" };
+      }
+      if (candidate.status === "open") {
+        const sameOpenSubject = others.some(
+          (row) =>
+            row.project_id === candidate.project_id &&
+            row.input_kind === candidate.input_kind &&
+            row.subject_key === candidate.subject_key &&
+            row.status === "open",
+        );
+        if (sameOpenSubject) {
+          return { code: POSTGRES_UNIQUE_VIOLATION, message: "one open founder input subject" };
+        }
+      }
+    }
+
+    if (table === "project_founder_resolutions" && candidate.superseded_at == null) {
+      const sameActiveSubject = others.some(
+        (row) =>
+          row.project_id === candidate.project_id &&
+          row.input_kind === candidate.input_kind &&
+          row.subject_key === candidate.subject_key &&
+          row.superseded_at == null,
+      );
+      if (sameActiveSubject) {
+        return { code: POSTGRES_UNIQUE_VIOLATION, message: "one active founder resolution" };
+      }
+    }
+
     /*
      * prepared_changes_opportunity_required_for_generators (§29).
      *

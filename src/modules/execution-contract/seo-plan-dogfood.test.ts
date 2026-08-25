@@ -60,6 +60,7 @@ const REAL_STEPS: ActionPlanStep[] = [
     executionSupport: "vibe_prepares",
     capability: null,
     requiresApproval: false,
+    founderInputRequirement: null,
   },
   {
     id: "2-product_change-add-canonical-urls-to-public-pages",
@@ -78,6 +79,7 @@ const REAL_STEPS: ActionPlanStep[] = [
     executionSupport: "not_yet_supported",
     capability: null,
     requiresApproval: true,
+    founderInputRequirement: null,
   },
   {
     id: "3-product_change-add-open-graph-tags-and-structured-data-to-publi",
@@ -96,6 +98,7 @@ const REAL_STEPS: ActionPlanStep[] = [
     executionSupport: "not_yet_supported",
     capability: null,
     requiresApproval: true,
+    founderInputRequirement: null,
   },
   {
     id: "4-product_change-add-robots-meta-directives-to-public-and-signed-",
@@ -114,6 +117,7 @@ const REAL_STEPS: ActionPlanStep[] = [
     executionSupport: "not_yet_supported",
     capability: null,
     requiresApproval: true,
+    founderInputRequirement: null,
   },
   {
     id: "5-measurement-verify-the-new-signals-render-correctly-on-the-l",
@@ -132,6 +136,7 @@ const REAL_STEPS: ActionPlanStep[] = [
     executionSupport: "vibe_prepares",
     capability: null,
     requiresApproval: false,
+    founderInputRequirement: null,
   },
   {
     id: "6-external_setup-request-re-crawl-of-the-updated-pages",
@@ -150,6 +155,7 @@ const REAL_STEPS: ActionPlanStep[] = [
     executionSupport: "founder_acts",
     capability: null,
     requiresApproval: true,
+    founderInputRequirement: null,
   },
 ];
 

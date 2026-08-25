@@ -202,6 +202,27 @@ test.describe("ready plan — hero", () => {
 });
 
 test.describe("ready plan — Start Here", () => {
+  test("renders the recommendation-first founder decision with alternatives and custom input", async ({
+    page,
+  }) => {
+    await page.goto("/e2e/action_plan_ready");
+
+    await expect(
+      page.getByRole("heading", {
+        name: "Which customer segment should the business pursue first?",
+      }),
+    ).toBeVisible();
+    await expect(page.getByText("Vibe recommends")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Use Vibe's recommendation" }),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Small product teams" })).toBeVisible();
+
+    await page.getByRole("button", { name: "Something else" }).click();
+    await expect(page.getByLabel("Your answer")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Use this answer" })).toBeVisible();
+  });
+
   /**
    * The load-bearing assertion in this whole suite. The fixture's order 1
    * ("Draft the search-facing copy") depends on order 2 ("Decide which

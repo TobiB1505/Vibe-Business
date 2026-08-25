@@ -51,6 +51,7 @@ const REAL_STEPS: ActionPlanStep[] = [
     executionSupport: "vibe_prepares",
     capability: null,
     requiresApproval: false,
+    founderInputRequirement: null,
   },
   {
     id: "2-decide-how-staff-and-managers-will-sign-in",
@@ -66,6 +67,7 @@ const REAL_STEPS: ActionPlanStep[] = [
     executionSupport: "founder_decides",
     capability: null,
     requiresApproval: false,
+    founderInputRequirement: null,
   },
   {
     id: "3-build-a-working-login-connected-to-the-actual-calendar-and-request-tool",
@@ -87,6 +89,7 @@ const REAL_STEPS: ActionPlanStep[] = [
     executionSupport: "not_yet_supported",
     capability: null,
     requiresApproval: true,
+    founderInputRequirement: null,
   },
   {
     id: "4-put-a-visible-way-in-on-the-homepage",
@@ -103,6 +106,7 @@ const REAL_STEPS: ActionPlanStep[] = [
     executionSupport: "not_yet_supported",
     capability: null,
     requiresApproval: true,
+    founderInputRequirement: null,
   },
   {
     id: "5-confirm-a-staff-member-can-get-from-the-homepage-into-the-calendar",
@@ -119,6 +123,7 @@ const REAL_STEPS: ActionPlanStep[] = [
     executionSupport: "founder_acts",
     capability: null,
     requiresApproval: false,
+    founderInputRequirement: null,
   },
 ];
 

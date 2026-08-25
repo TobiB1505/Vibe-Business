@@ -223,6 +223,16 @@ function classifyIntrinsic(input: ResolveExecutionInput): Classification {
         unmet,
       };
 
+    case "founder_input":
+      return {
+        mode: "needs_user_input",
+        reason: "founder_input_required",
+        executionClass: null,
+        capability: null,
+        capabilityVersion: null,
+        unmet,
+      };
+
     case "founder_action":
       return {
         mode: "manual",

@@ -36,6 +36,7 @@ function step(overrides: Partial<ActionPlanStep> & { order: number }): ActionPla
     capability: null,
     requiresApproval: false,
     ...overrides,
+    founderInputRequirement: overrides.founderInputRequirement ?? null,
   };
 }
 

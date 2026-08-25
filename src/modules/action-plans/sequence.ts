@@ -20,7 +20,7 @@ import type { ActionPlanStep, PlanProgress } from "./schema";
  * not "Vibe can do it"; the bar is "nothing unfinished stands in front of it".
  */
 
-/** Steps already finished. Empty in CORE-2b — nothing completes a step yet. */
+/** Steps whose type-specific authoritative completion evidence exists. */
 export type CompletedSteps = ReadonlySet<number>;
 
 const NO_COMPLETIONS: CompletedSteps = new Set<number>();
@@ -173,6 +173,7 @@ export function planProgress(
 
   switch (next.executionSupport) {
     case "founder_decides":
+    case "founder_provides_input":
     case "founder_acts":
       return "needs_founder";
     case "external_dependency":
