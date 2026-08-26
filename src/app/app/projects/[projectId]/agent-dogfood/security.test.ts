@@ -96,11 +96,18 @@ describe("the client cannot supply its own authority (§7, §8)", () => {
     expect(source).toContain("startAgentExecution(supabase,");
   });
 
-  it("scopes the interrupt answer action to project and user, and validates the answer shape server-side", () => {
+  it("scopes runtime founder-input resolution to project and user, then performs fresh admission", () => {
     const source = read("[stepKey]/actions.ts");
-    expect(source).toContain("answerExecutionInterrupt(supabase, {");
+    expect(source).toContain("getFounderInputRequest(supabase, requestId)");
+    expect(source).toContain("request.projectId !== projectId");
+    expect(source).toContain('request.origin !== "execution_blocker"');
+    expect(source).toContain("resolveFounderInput({");
     expect(source).toContain("projectId,");
     expect(source).toContain("userId: session.userId,");
+    expect(source).toContain("previewDogfoodStep(supabase, {");
+    expect(source).toContain("persistAgentExecutionSpec({");
+    expect(source).toContain("startAgentExecution(supabase,");
+    expect(source).not.toContain("requeueAnsweredOperation");
   });
 });
 

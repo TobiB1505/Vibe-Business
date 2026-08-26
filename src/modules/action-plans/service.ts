@@ -30,6 +30,14 @@ import {
   getLatestCompletedActionPlan,
   type StoredActionPlan,
 } from "./store";
+import { completedStepsFromEvidence } from "./completion";
+import { listAgentStepCompletionEvidence } from "./completion-store";
+import { listFounderActionCompletionEvidence } from "./founder-action-store";
+import {
+  listActiveFounderResolutions,
+  listFounderInputRequestsForPlan,
+} from "@/modules/founder-input/store";
+import type { FounderInputRequest } from "@/modules/founder-input/schema";
 
 /**
  * Action Plan readiness, staleness and read models (CORE-2b §42, §59).
@@ -324,6 +332,10 @@ export type ActionPlanView = {
   firstActionableStep: ActionPlanStep | null;
   /** Where the plan stands, derived from its steps (§40). */
   progress: PlanProgress;
+  /** Serializable projection of type-specific completion evidence. */
+  completedStepOrders: number[];
+  /** The request for the current actionable founder-owned step, if one is open. */
+  founderInputRequest: FounderInputRequest | null;
 };
 
 export async function getLatestActionPlan(
@@ -333,12 +345,34 @@ export async function getLatestActionPlan(
   const plan = await getLatestCompletedActionPlan(supabase, projectId);
   if (!plan) return null;
 
-  const [audit, opportunities, profile, founderIntent] = await Promise.all([
-    getLatestSuccessfulAudit(supabase, projectId),
-    getLatestOpportunities(supabase, projectId),
-    getLatestProfile(supabase, projectId),
-    getFounderIntent(supabase, projectId),
-  ]);
+  const [
+    audit,
+    opportunities,
+    profile,
+    founderIntent,
+    resolutions,
+    requests,
+    agentEvidence,
+    founderActionEvidence,
+  ] =
+    await Promise.all([
+      getLatestSuccessfulAudit(supabase, projectId),
+      getLatestOpportunities(supabase, projectId),
+      getLatestProfile(supabase, projectId),
+      getFounderIntent(supabase, projectId),
+      listActiveFounderResolutions(supabase, projectId),
+      listFounderInputRequestsForPlan(supabase, plan.id),
+      listAgentStepCompletionEvidence(supabase, { projectId, actionPlanId: plan.id }),
+      listFounderActionCompletionEvidence(supabase, { projectId, actionPlanId: plan.id }),
+    ]);
+
+  const completed = completedStepsFromEvidence(
+    plan.steps,
+    resolutions,
+    agentEvidence,
+    founderActionEvidence,
+  );
+  const actionable = firstActionableStep(plan.steps, completed);
 
   return {
     plan,
@@ -349,8 +383,16 @@ export async function getLatestActionPlan(
       latestFounderIntentHash: founderIntent.intentHash,
       currentContractVersion: ACTION_PLANNER_CONTRACT_VERSION,
     }),
-    firstActionableStep: firstActionableStep(plan.steps),
-    progress: planProgress(plan.steps),
+    firstActionableStep: actionable,
+    progress: planProgress(plan.steps, completed),
+    completedStepOrders: [...completed],
+    founderInputRequest:
+      actionable === null
+        ? null
+        : (requests.find(
+            (request) =>
+              request.actionPlanStepKey === actionable.id && request.status === "open",
+          ) ?? null),
   };
 }
 
@@ -374,6 +416,7 @@ export type OnboardingFirstMoveView = {
   plan: StoredActionPlan | null;
   firstActionableStep: ActionPlanStep | null;
   progress: PlanProgress | null;
+  completedStepOrders: number[];
 };
 
 export async function getOnboardingFirstMove(
@@ -381,11 +424,26 @@ export async function getOnboardingFirstMove(
   projectId: string,
 ): Promise<OnboardingFirstMoveView> {
   const plan = await getLatestCompletedActionPlan(supabase, projectId);
-  if (!plan) return { plan: null, firstActionableStep: null, progress: null };
+  if (!plan) {
+    return { plan: null, firstActionableStep: null, progress: null, completedStepOrders: [] };
+  }
+
+  const [resolutions, agentEvidence, founderActionEvidence] = await Promise.all([
+    listActiveFounderResolutions(supabase, projectId),
+    listAgentStepCompletionEvidence(supabase, { projectId, actionPlanId: plan.id }),
+    listFounderActionCompletionEvidence(supabase, { projectId, actionPlanId: plan.id }),
+  ]);
+  const completed = completedStepsFromEvidence(
+    plan.steps,
+    resolutions,
+    agentEvidence,
+    founderActionEvidence,
+  );
 
   return {
     plan,
-    firstActionableStep: firstActionableStep(plan.steps),
-    progress: planProgress(plan.steps),
+    firstActionableStep: firstActionableStep(plan.steps, completed),
+    progress: planProgress(plan.steps, completed),
+    completedStepOrders: [...completed],
   };
 }

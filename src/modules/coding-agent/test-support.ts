@@ -242,6 +242,7 @@ export type FakeProviderOptions = {
   /** Tool calls the fake agent makes, in order. */
   calls?: readonly ScriptedToolCall[];
   outcome?: CodingAgentResult["outcome"];
+  runtimeFounderInput?: CodingAgentResult["runtimeFounderInput"];
   usage?: readonly AgentModelUsage[];
   /** Throw instead of returning, to exercise the caller's error path. */
   throws?: Error;
@@ -308,6 +309,7 @@ export function fakeCodingAgentProvider(
 
       return {
         outcome: options.outcome ?? "completed",
+        runtimeFounderInput: options.runtimeFounderInput ?? null,
         assistantMessages: turns,
         sdkLoopIterations: turns,
         // This fake hosts no shell, so it makes no verification decisions.
@@ -428,6 +430,7 @@ export function fakeDetachedAgentProvider(
     async collect() {
       return {
         outcome: threw ? ("provider_error" as const) : (options.outcome ?? "completed"),
+        runtimeFounderInput: options.runtimeFounderInput ?? null,
         assistantMessages: turns,
         sdkLoopIterations: threw ? null : turns,
         verificationCommands: options.verificationCommands ?? null,

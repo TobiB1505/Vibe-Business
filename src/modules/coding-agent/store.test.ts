@@ -1,15 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { FakeDatabase, fakeSupabase } from "@/modules/operations/test-support";
-import { markAgentRunStarted, updateAgentRunCreditReservation } from "./store";
+import { markAgentRunStarted } from "./store";
 
 /**
- * `markAgentRunStarted`'s CAS, and the pointer a resume re-acquire updates
- * (ADR 0042 §P2).
- *
- * Both are exercised end-to-end through `startAgentStep` in
- * `operations/agent-execution/execution.test.ts`; this file isolates the two
- * primitives themselves — the CAS guard's exact boundary, and the fact that a
- * lost race still leaves exactly one winner.
+ * `markAgentRunStarted` is the paid-call CAS. It accepts only a fresh queued
+ * attempt; founder-input resolution must create a new run rather than revive
+ * the historical one.
  */
 
 let db: FakeDatabase;
@@ -42,21 +38,15 @@ describe("markAgentRunStarted", () => {
     expect(row.started_at).not.toBeNull();
   });
 
-  /**
-   * The widened half of the guard (ADR 0042 §P2): a resumed run re-enters
-   * from `needs_user_input`, not `queued`, and must both win the CAS and get
-   * a fresh `started_at` — the original timestamp could already be past
-   * `expireStaleAgentExecution`'s deadline by the time a customer answers.
-   */
-  it("wins from needs_user_input and re-stamps started_at", async () => {
+  it("refuses to revive a run that is waiting for founder input", async () => {
     const run = seedRun("needs_user_input", { started_at: "2020-01-01T00:00:00.000Z" });
 
     const claimed = await markAgentRunStarted(fakeSupabase(db), String(run.id));
 
-    expect(claimed).toBe(true);
+    expect(claimed).toBe(false);
     const row = db.rows("agent_execution_runs")[0];
-    expect(row.status).toBe("running");
-    expect(row.started_at).not.toBe("2020-01-01T00:00:00.000Z");
+    expect(row.status).toBe("needs_user_input");
+    expect(row.started_at).toBe("2020-01-01T00:00:00.000Z");
   });
 
   it.each(["running", "succeeded", "failed", "cancelled"])(
@@ -72,7 +62,7 @@ describe("markAgentRunStarted", () => {
   );
 
   it("lets only one of two concurrent callers win", async () => {
-    const run = seedRun("needs_user_input");
+    const run = seedRun("queued");
     const supabase = fakeSupabase(db);
 
     const [first, second] = await Promise.all([
@@ -82,15 +72,5 @@ describe("markAgentRunStarted", () => {
 
     expect([first, second].filter(Boolean)).toHaveLength(1);
     expect(db.rows("agent_execution_runs")[0].status).toBe("running");
-  });
-});
-
-describe("updateAgentRunCreditReservation", () => {
-  it("points the run at a freshly re-acquired reservation", async () => {
-    const run = seedRun("running", { credit_reservation_id: "reservation-released" });
-
-    await updateAgentRunCreditReservation(fakeSupabase(db), String(run.id), "reservation-fresh");
-
-    expect(db.rows("agent_execution_runs")[0].credit_reservation_id).toBe("reservation-fresh");
   });
 });

@@ -185,6 +185,7 @@ describe("what comes back", () => {
     expect(result.outcome).toBe("completed");
     expect(result.assistantMessages).toBe(3);
     expect(result.sessionId).toBe("session-1");
+    expect(result.runtimeFounderInput).toBeNull();
     expect(result.usage).toEqual([
       {
         model: "claude-sonnet-5",
@@ -195,6 +196,25 @@ describe("what comes back", () => {
         reportedCostUsd: null,
       },
     ]);
+  });
+
+  it("returns a sandbox-discovered founder-input blocker as an aborted run", async () => {
+    const runtimeFounderInput = {
+      kind: "input",
+      question: "Which verified domain should this change use?",
+      options: [],
+    };
+    const { result } = await run({
+      files: {
+        [`${RUNTIME_DIR}/result.json`]: runtimeResult({
+          subtype: "founder_input_required",
+          runtimeFounderInput,
+        }),
+      },
+    });
+
+    expect(result.outcome).toBe("aborted");
+    expect(result.runtimeFounderInput).toEqual(runtimeFounderInput);
   });
 
   it.each([

@@ -202,6 +202,27 @@ test.describe("ready plan — hero", () => {
 });
 
 test.describe("ready plan — Start Here", () => {
+  test("renders the recommendation-first founder decision with alternatives and custom input", async ({
+    page,
+  }) => {
+    await page.goto("/e2e/action_plan_ready");
+
+    await expect(
+      page.getByRole("heading", {
+        name: "Which customer segment should the business pursue first?",
+      }),
+    ).toBeVisible();
+    await expect(page.getByText("Vibe recommends")).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Use Vibe's recommendation" }),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Small product teams" })).toBeVisible();
+
+    await page.getByRole("button", { name: "Something else" }).click();
+    await expect(page.getByLabel("Your answer")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Use this answer" })).toBeVisible();
+  });
+
   /**
    * The load-bearing assertion in this whole suite. The fixture's order 1
    * ("Draft the search-facing copy") depends on order 2 ("Decide which
@@ -236,6 +257,25 @@ test.describe("ready plan — Start Here", () => {
     // detail that belongs only behind its own Details toggle.
     const purposeSentence = "Every later step depends on knowing who this is for";
     await expect(page.getByText(purposeSentence, { exact: false })).not.toBeVisible();
+  });
+});
+
+test.describe("ready plan — founder action attestation", () => {
+  test("asks for an explicit criterion-bound confirmation instead of a checkbox", async ({
+    page,
+  }) => {
+    await page.goto("/e2e/action_plan_founder_action");
+
+    await expect(page.getByText("Your action").first()).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Submit the sitemap to Search Console" }).first(),
+    ).toBeVisible();
+    await expect(page.getByText("Confirm when true")).toBeVisible();
+    await expect(
+      page.getByText("The sitemap shows as submitted in Search Console").first(),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Confirm this is complete" })).toBeVisible();
+    await expect(page.getByRole("checkbox")).toHaveCount(0);
   });
 });
 

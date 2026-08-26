@@ -1,5 +1,70 @@
 import { MAX_PLAN_STEPS, STEP_ACTORS, STEP_CHANGE_KINDS } from "./schema";
 
+const FOUNDER_INPUT_OPTION_SCHEMA = {
+  type: "object",
+  properties: {
+    id: { type: "string", description: "Stable lowercase semantic option id." },
+    label: { type: "string", description: "Short founder-facing option label." },
+    value: {
+      type: "string",
+      description: "Complete durable statement that downstream work can consume if selected.",
+    },
+    explanation: {
+      anyOf: [{ type: "string" }, { type: "null" }],
+      description: "One concise trade-off explanation, or null.",
+    },
+  },
+  required: ["id", "label", "value", "explanation"],
+  additionalProperties: false,
+};
+
+const FOUNDER_INPUT_REQUIREMENT_SCHEMA = {
+  anyOf: [
+    { type: "null" },
+    {
+      type: "object",
+      properties: {
+        kind: { type: "string", enum: ["decision", "input"] },
+        subjectKey: {
+          type: "string",
+          description:
+            "Stable lowercase semantic identity for the information, such as launch.access_model. Not display copy.",
+        },
+        question: { type: "string", description: "The one concise question the founder answers." },
+        whyNeeded: {
+          type: "string",
+          description: "Why later work cannot safely continue without this answer.",
+        },
+        responseType: { type: "string", enum: ["confirm", "single_select", "text"] },
+        recommendation: {
+          anyOf: [{ type: "null" }, FOUNDER_INPUT_OPTION_SCHEMA],
+          description: "Vibe's evidence-grounded recommendation when one can be made, otherwise null.",
+        },
+        alternatives: {
+          type: "array",
+          items: FOUNDER_INPUT_OPTION_SCHEMA,
+          description: "At most five genuine alternatives. Empty when none can be supported.",
+        },
+        allowCustom: {
+          type: "boolean",
+          description: "Whether the founder may provide a custom non-secret answer.",
+        },
+      },
+      required: [
+        "kind",
+        "subjectKey",
+        "question",
+        "whyNeeded",
+        "responseType",
+        "recommendation",
+        "alternatives",
+        "allowCustom",
+      ],
+      additionalProperties: false,
+    },
+  ],
+};
+
 /**
  * The Anthropic **transport** representation of an Action Plan, and the
  * normalizer back into domain shape (CORE-2b §12, §15, §85).
@@ -61,7 +126,7 @@ const STEP_ITEM_SCHEMA = {
       type: "string",
       enum: [...STEP_ACTORS],
       description:
-        "Who has to act. Use founder_decision for a strategic choice Vibe must not make; founder_action for real-world work only a person can do; external_party when something outside the product must happen first.",
+        "Who has to act. Use founder_decision for a strategic choice, founder_input for a non-secret factual value only the founder knows, founder_action for real-world work, and external_party for outside dependencies.",
     },
     changeKind: {
       type: "string",
@@ -86,6 +151,11 @@ const STEP_ITEM_SCHEMA = {
       description:
         "Evidence ids from the pack this step materially relies on. Never invent one. At most 4. Empty is correct for a purely strategic decision.",
     },
+    founderInputRequirement: {
+      ...FOUNDER_INPUT_REQUIREMENT_SCHEMA,
+      description:
+        "Required for founder_decision and founder_input; null for every other actor. Dynamic business content, never a static question id.",
+    },
   },
   required: [
     "order",
@@ -97,6 +167,7 @@ const STEP_ITEM_SCHEMA = {
     "completionCriteria",
     "dependsOn",
     "evidenceIds",
+    "founderInputRequirement",
   ],
   additionalProperties: false,
 };
@@ -156,6 +227,7 @@ export type WirePlanStep = {
   completionCriteria: unknown;
   dependsOn: unknown;
   evidenceIds: unknown;
+  founderInputRequirement: unknown;
 };
 
 export type WirePlan = {
@@ -207,6 +279,7 @@ export function normalizeAnthropicActionPlanOutput(data: unknown): NormalizePlan
       completionCriteria: step.completionCriteria,
       dependsOn: step.dependsOn,
       evidenceIds: step.evidenceIds,
+      founderInputRequirement: step.founderInputRequirement,
     });
   }
 

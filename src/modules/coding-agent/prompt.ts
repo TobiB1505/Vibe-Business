@@ -331,10 +331,14 @@ function systemPrompt(
     "",
     "# When to ask",
     "",
-    `Use ${AGENT_DECISION_TOOL} only when the customer would expect to make the decision — a`,
+    "Use AskUserQuestion only when the customer would expect to provide the missing input — a",
     "business choice, several genuinely different product outcomes, or work materially larger",
     "than the step describes. Do not ask which file to edit, which helper to reuse, or which",
     "convention to follow: the repository answers those, and asking wastes the customer's time.",
+    "Use the header Decision for a founder-owned choice and Input for a founder-owned factual value.",
+    "Ask one concise question. Offer two to four honest options when useful; custom input remains available.",
+    "Never ask for a password, credential, API key, access token, private key, or secret. Those belong in",
+    "the product's secure configuration boundary, not in a founder-input response.",
   ].join("\n");
 }
 

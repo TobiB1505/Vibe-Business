@@ -61,7 +61,7 @@ import type { ExecutionValidationRequirement } from "./validation-requirements";
 
 /** One approved founder decision, as structured context (§28). */
 export type ApprovedBusinessDecision = {
-  /** Stable key — for a plan-step decision, the step's own key. */
+  /** Stable semantic key — `decision:<subject>` or `input:<subject>`. */
   key: string;
   /** The plan step that recorded it, when it came from one. */
   stepOrder: number | null;

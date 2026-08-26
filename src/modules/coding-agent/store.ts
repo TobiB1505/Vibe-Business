@@ -442,17 +442,11 @@ export async function findActiveAgentRunByIdentity(
 /**
  * Marks a run as having entered the paid loop.
  *
- * Scoped to `queued` or `needs_user_input`, so it reports whether *this* call
- * performed the transition. That is the hinge of §37: a step that re-enters
- * and finds the run already `running` knows the provider may already have
- * been billed, and refuses to run a second agent rather than resolving the
- * ambiguity in favour of doing more work.
- *
- * `needs_user_input` is a valid source because a resumed run re-enters here
- * too (ADR 0042 §P2): `started_at` is re-stamped on every win, not only the
- * first, because `expireStaleAgentExecution` computes its deadline from it —
- * an un-restamped run could have a customer's answer, submitted days later,
- * declared stale on the very next status read.
+ * Scoped to `queued`, so it reports whether *this* call performed the
+ * transition. A run that stopped for founder input is an immutable historical
+ * attempt: resolving the canonical request creates a fresh spec and a fresh
+ * queued run. This guard therefore also makes accidental same-run resume
+ * impossible at the paid-call boundary.
  */
 export async function markAgentRunStarted(
   supabase: SupabaseClient,
@@ -462,36 +456,11 @@ export async function markAgentRunStarted(
     .from("agent_execution_runs")
     .update({ status: "running", started_at: new Date().toISOString() })
     .eq("id", runId)
-    .in("status", ["queued", "needs_user_input"])
+    .eq("status", "queued")
     .select("id");
 
   if (error) throw error;
   return (data ?? []).length > 0;
-}
-
-/**
- * Points the run at a freshly re-acquired reservation after a resume (ADR
- * 0042 §P2).
- *
- * Unscoped by status: the caller only reaches this after already winning
- * `markAgentRunStarted`'s CAS, so ownership of the row is already settled;
- * this write just records which reservation that ownership now spends
- * against. Must land before any terminal transition — `completeAgentRun` /
- * `failAgentRun` finalize whatever `credit_reservation_id` currently names,
- * and a stale pointer would settle or release the wrong (already-released)
- * reservation.
- */
-export async function updateAgentRunCreditReservation(
-  supabase: SupabaseClient,
-  runId: string,
-  reservationId: string,
-): Promise<void> {
-  const { error } = await supabase
-    .from("agent_execution_runs")
-    .update({ credit_reservation_id: reservationId })
-    .eq("id", runId);
-
-  if (error) throw error;
 }
 
 /**
@@ -945,33 +914,29 @@ export async function raiseExecutionInterrupt(
     agentExecutionRunId: string;
     interrupt: RaisedInterrupt;
   },
-): Promise<StoredExecutionInterrupt | null> {
-  const { data, error } = await supabase
-    .from("execution_interrupts")
-    .insert({
-      project_id: params.projectId,
-      user_id: params.userId,
-      execution_spec_id: params.executionSpecId,
-      agent_execution_run_id: params.agentExecutionRunId,
-      interrupt_type: params.interrupt.type,
-      question: params.interrupt.question,
-      response_schema: params.interrupt.responseSchema,
-      status: "open",
-    })
-    .select(INTERRUPT_COLUMNS)
-    .single();
+): Promise<StoredExecutionInterrupt> {
+  const requirement = params.interrupt.founderInputRequirement;
+  const { error } = await supabase.rpc("raise_execution_founder_input_request", {
+    p_agent_execution_run_id: params.agentExecutionRunId,
+    p_interrupt_type: params.interrupt.type,
+    p_question: params.interrupt.question,
+    p_response_schema: params.interrupt.responseSchema,
+    p_input_kind: requirement.kind,
+    p_subject_key: requirement.subjectKey,
+    p_why_needed: requirement.whyNeeded,
+    p_response_type: requirement.responseType,
+    p_recommendation: requirement.recommendation,
+    p_alternatives: requirement.alternatives,
+    p_allow_custom: requirement.allowCustom,
+  });
+  if (error) throw error;
 
-  if (error) {
-    if (error.code === POSTGRES_UNIQUE_VIOLATION) {
-      return findOpenInterruptForRun(supabase, {
-        projectId: params.projectId,
-        agentExecutionRunId: params.agentExecutionRunId,
-      });
-    }
-    throw error;
-  }
-
-  return mapInterrupt(data as unknown as InterruptRow);
+  const persisted = await findOpenInterruptForRun(supabase, {
+    projectId: params.projectId,
+    agentExecutionRunId: params.agentExecutionRunId,
+  });
+  if (!persisted) throw new Error("execution founder-input request was not persisted");
+  return persisted;
 }
 
 export async function findOpenInterruptForRun(
@@ -1009,7 +974,8 @@ export type AnswerInterruptResult =
  *
  * **Status** is the `eq("status", "open")` on the update. A double submission
  * updates nothing the second time and reports `alreadyAnswered`, so an answer
- * cannot be overwritten and a paused run cannot be resumed twice.
+ * cannot be overwritten. Runtime founder input uses the canonical resolution
+ * path instead; it never resumes this run.
  */
 export async function answerExecutionInterrupt(
   supabase: SupabaseClient,

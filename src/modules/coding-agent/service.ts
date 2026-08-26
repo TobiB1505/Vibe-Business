@@ -19,7 +19,6 @@ import {
   failOperationRun,
   findActiveOperationByIdentity,
   getOperationRunById,
-  requeueAnsweredOperation,
   type StoredOperationRun,
 } from "@/modules/operations/store";
 import { buildOperationView, type OperationView } from "@/modules/operations/view";
@@ -367,78 +366,6 @@ export async function startAgentExecution(
     operation: view(operation),
     agentExecutionRunId: claim.run.id,
   };
-}
-
-/**
- * Restarts a paused agent execution after its question is answered (ADR 0042
- * §P2).
- *
- * Not a new run. The workflow instance that paused already terminated —
- * `agentExecutionWorkflow` cleans up and returns on an interrupt, it does not
- * suspend — so restoring ownership means starting a fresh instance for the
- * same operation, exactly as `resumeAnsweredAuditOperation` already does for
- * `business_audit`. Every step above `startAgentStep` is replay-safe by
- * identity (`provisionAgentWorkspaceStep` reconnects the existing sandbox by
- * its deterministic name), so nothing expensive repeats.
- *
- * Deliberately does not touch billing. `startAgentStep` re-acquires a hold
- * when the pause released one, right before real work — and real spend —
- * resumes; this function only restores the operation to `queued` and starts
- * the instance that will reach that point.
- *
- * Idempotent through `requeueAnsweredOperation`, which matches on
- * `needs_user`: a double submission finds the operation already re-queued,
- * changes nothing, and starts no second workflow.
- */
-export async function resumeAnsweredAgentExecution(
-  supabase: SupabaseClient,
-  executor: OperationExecutor,
-  params: { projectId: string; userId: string; agentExecutionRunId: string },
-): Promise<{ ok: boolean }> {
-  const { data: project } = await supabase
-    .from("projects")
-    .select("id")
-    .eq("id", params.projectId)
-    .eq("user_id", params.userId)
-    .maybeSingle();
-
-  if (!project) return { ok: false };
-
-  const { data: runRow, error } = await supabase
-    .from("agent_execution_runs")
-    .select("operation_run_id")
-    .eq("id", params.agentExecutionRunId)
-    .eq("project_id", params.projectId)
-    .maybeSingle();
-
-  if (error) throw error;
-  if (!runRow) return { ok: false };
-
-  const operationId = (runRow as { operation_run_id: string }).operation_run_id;
-
-  const requeued = await requeueAnsweredOperation(supabase, operationId);
-  if (!requeued.requeued) return { ok: true };
-
-  const started = await executor.start({
-    operationId,
-    operationType: "agent_execution",
-  });
-
-  if (!started.ok) {
-    await failOperationRun(supabase, {
-      operationId,
-      failureCode: "execution_start_failed",
-    });
-    return { ok: false };
-  }
-
-  await attachExecutionRun(supabase, {
-    operationId,
-    workflowRunId: started.runId,
-    executionProvider: executor.name,
-  });
-
-  return { ok: true };
 }
 
 /** Status for a page that may have been left and returned to (§21). */

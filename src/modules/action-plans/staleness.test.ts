@@ -98,7 +98,7 @@ describe("planStaleness", () => {
     expect(
       planStaleness(storedPlan(), {
         ...CURRENT,
-        currentContractVersion: "action-planner-contract-v2",
+        currentContractVersion: "action-planner-contract-v1",
       }),
     ).toEqual(["planner_contract_superseded"]);
   });

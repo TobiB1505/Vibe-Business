@@ -10,12 +10,20 @@ import { SkeletonBlock, SkeletonText } from "@/components/ui/skeleton";
  */
 export default function Loading() {
   return (
-    <>
-      <div role="status" aria-label="Loading your billing details" className="flex flex-col gap-6">
-        <SkeletonBlock className="h-9 w-1/2 max-w-[24rem] rounded-full" />
-        <SkeletonText lines={2} className="max-w-[62ch]" />
-        <SkeletonBlock className="h-48 w-full" />
+    <div role="status" aria-label="Loading your billing details" className="flex flex-col gap-6">
+      <div className="flex flex-col gap-3">
+        <SkeletonBlock className="h-9 w-44 rounded-full" />
+        <SkeletonText lines={1} className="max-w-[28rem]" />
       </div>
-    </>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <SkeletonBlock className="h-72 w-full" />
+        <SkeletonBlock className="h-72 w-full" />
+        <SkeletonBlock className="h-72 w-full" />
+      </div>
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(20rem,0.7fr)]">
+        <SkeletonBlock className="h-80 w-full" />
+        <SkeletonBlock className="h-80 w-full" />
+      </div>
+    </div>
   );
 }

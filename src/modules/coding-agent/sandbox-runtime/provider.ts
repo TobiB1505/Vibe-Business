@@ -185,6 +185,8 @@ function outcomeFor(subtype: string): AgentProviderOutcome {
       return "max_turns";
     case "error_max_budget_usd":
       return "max_cost";
+    case "founder_input_required":
+      return "aborted";
     default:
       return "provider_error";
   }
@@ -540,6 +542,7 @@ export function createSandboxCodingAgentProvider(
          */
         return {
           outcome: "provider_error",
+          runtimeFounderInput: null,
           assistantMessages: progress.assistantMessages,
           sdkLoopIterations: null,
           usage: [],
@@ -562,6 +565,7 @@ export function createSandboxCodingAgentProvider(
 
       return {
         outcome: outcomeFor(result.subtype),
+        runtimeFounderInput: result.runtimeFounderInput,
         /*
          * Both counts, each in its own unit.
          *

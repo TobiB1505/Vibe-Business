@@ -33,6 +33,7 @@ Vibe (trusted)                          Agent sandbox (untrusted)
 ExecutionSpec, policy, Credits          Claude Agent SDK + native binary
 GitHub App credential                   the customer's repository at baseSha
 Supabase service role, Stripe           Read / Write / Edit / Glob / Grep / Bash
+                                        bounded AskUserQuestion interrupt
 ANTHROPIC_API_KEY  ◀── injected here    ANTHROPIC_BASE_URL ─▶ Vibe Agent Gateway
 branch write, validation, approval      a short-lived, execution-scoped token
 ```
@@ -42,6 +43,8 @@ Inside its workspace the agent may read, write and edit files and run local buil
 This **amends ADR 0027 §2**. The four SDK defaults that ADR named remain overridden and remain load-bearing — `settingSources: []`, `persistSession: false`, an explicit environment, and an explicit tool set — with one addition the move makes necessary: `CLAUDE_CODE_DISABLE_AUTO_MEMORY=1`, because auto memory loads *regardless* of `settingSources`, and the harness now runs inside the customer's own tree, which is exactly where a `CLAUDE.md` lives (rule 25).
 
 The tool set is named explicitly rather than taken from the Claude Code preset, which would add `WebFetch` and `WebSearch`. Rule 41 stands unchanged: removing the capability is what bounds prompt injection, not asking the model nicely.
+
+`AskUserQuestion` is the sole non-workspace tool in that explicit set. It cannot converse with a person from inside the VM. The harness intercepts its first bounded question, records a typed founder-input blocker, ends the attempt, and lets ADR 0053's durable resolution flow decide what happens next. It grants no network, MCP, credential, or execution authority.
 
 ### 2. Sampling is brokered by a Vibe-operated Agent Gateway; the sandbox never holds a provider key
 

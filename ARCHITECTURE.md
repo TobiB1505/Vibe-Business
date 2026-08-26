@@ -316,6 +316,9 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0050](docs/decisions/0050-lenses-are-the-audit.md) | Lenses are the audit's only framework; the overall score is the mean over scored lenses | §3.4 |
 | [0051](docs/decisions/0051-project-shell-context-ownership.md) | Project shell context ownership and scroll model | Web surface |
 | [0052](docs/decisions/0052-durable-product-scan-discovery-feed.md) | Durable Product Scan and bounded discovery feed | Operations, onboarding, Product page |
+| [0053](docs/decisions/0053-founder-input-resolution.md) | Founder-owned input resolution and Action Plan completion evidence | Action plans, project context, execution contract |
+| [0054](docs/decisions/0054-agent-action-plan-completion-evidence.md) | Agent Action Plan completion comes from verified execution evidence | Action plans, agent execution, validation |
+| [0055](docs/decisions/0055-founder-action-attestation-evidence.md) | Founder actions complete from explicit immutable attestation | Action plans, founder authority, completion evidence |
 
 ### Layers with no section above
 
@@ -325,7 +328,8 @@ These exist, are governed by the ADRs named, and are described in depth by their
 - **Product Understanding** — `src/modules/product-understanding/` · answers "what is this product?" between the scanners and the audit. Deterministic derivation plus one cheap model call; a person's correction outranks everything and survives every re-scan.
 - **Product Scan** — `src/modules/product-scan/` and `src/modules/operations/product-scan/` · one durable refresh of repository, public-product and Product Understanding sources. Its append-only discovery feed is bounded to 24 Vibe-authored derived events and contains no raw source or model output (ADR 0052).
 - **Deep Scan** — `src/modules/authenticated-product-intelligence/` · ADR 0012. A temporary browser the founder signs into themselves; strictly read-only, no persisted session, no screenshots, one included scan per project.
-- **Action Plans** — `src/modules/action-plans/` · ADR 0028. Turns a selected opportunity into steps. The model names the actor and the kind of change; the server alone decides what Vibe may execute.
+- **Action Plans** — `src/modules/action-plans/` · ADRs 0028, 0054, 0055. Turns a selected opportunity into steps. The model names the actor and the kind of change; the server alone decides what Vibe may execute. Completion is projected from the authority appropriate to each integrated step type: resolved founder context, explicit founder-action attestation, or verified canonical Agent execution evidence.
+- **Founder Input Resolution** — `src/modules/founder-input/` · ADR 0053. Turns a bounded dynamic request into versioned, reusable project context and projects authoritative completion for founder-owned Action Plan steps.
 - **Execution Contract / Context** — `src/modules/execution-contract/`, `src/modules/execution-context/` · ADRs 0026, 0031, 0034. The immutable spec and compiled policy an execution runs under, and the bounded brief it starts from.
 - **Coding Agent** — `src/modules/coding-agent/` · ADRs 0027, 0029, 0032, 0033. The agent harness, its sandbox placement, its gateway, and how a run's result is verified against Vibe's own observation.
 - **Merge** — `src/modules/merge/` · ADR 0019.

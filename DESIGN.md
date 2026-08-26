@@ -73,6 +73,8 @@ Primary buttons use mint once per action area; secondary controls use the shared
 
 Motion communicates interaction state only on ordinary product surfaces. Use the shared transition utility and respect reduced motion; never animate static dashboard furniture continuously. The narrowly-scoped Business Brain and Product Scan exceptions are defined below.
 
+Billing follows a compact financial-dashboard composition: plan, spendable Credits and the Credit model form one equal-height overview row; real Credit prices and top-up packs come next; recent activity and plan choices complete the page. Stripe remains the visible payment boundary for renewal, invoices and cancellation. Reference-only finance data such as payment-card suffixes, invoice rows, period charts or per-product usage must not appear until the billing read model can supply it truthfully. The balance expiry ring may visualize only the actual next-expiring share of currently spendable Credits, with an explicit text label; it is never a fabricated usage meter.
+
 The project Product page reads as one coherent product dossier, not a stack of scanner reports. Its opening identity card may combine the real product mark, evidence-backed description, category, capability count and source coverage, but never a fabricated screenshot or product metric. Product DNA, founder intent, discovered capabilities, journey, brand identity and source coverage follow in that order; raw technical evidence stays available behind disclosure. The profile confirmation is the terminal surface: legacy scan summaries, coach prompts and cross-navigation actions must not continue below it.
 
 ## Signature Surface: Business Brain

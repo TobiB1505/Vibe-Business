@@ -399,6 +399,7 @@ export function createClaudeCodingAgentProvider(): CodingAgentProvider {
 
       return {
         outcome,
+        runtimeFounderInput: null,
         assistantMessages,
         sdkLoopIterations,
         /*

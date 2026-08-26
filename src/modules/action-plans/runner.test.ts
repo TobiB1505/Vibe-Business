@@ -64,9 +64,9 @@ describe("runActionPlanning", () => {
 
     // One billable call. Not planner → summarizer → classifier (§45).
     expect(provider.requests).toHaveLength(1);
-    expect(outcome.plan.contractVersion).toBe("action-planner-contract-v1");
-    expect(outcome.plan.promptVersion).toBe("action-planner-prompt-v1");
-    expect(outcome.plan.rubricVersion).toBe("action-planner-rubric-v1");
+    expect(outcome.plan.contractVersion).toBe("action-planner-contract-v2");
+    expect(outcome.plan.promptVersion).toBe("action-planner-prompt-v2");
+    expect(outcome.plan.rubricVersion).toBe("action-planner-rubric-v2");
     expect(outcome.plan.model).toBe("claude-sonnet-5");
     expect(outcome.plan.steps).toHaveLength(4);
   });

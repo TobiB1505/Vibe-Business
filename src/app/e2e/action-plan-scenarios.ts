@@ -48,6 +48,7 @@ function planStep(overrides: Partial<ActionPlanStep>): ActionPlanStep {
     capability: null,
     requiresApproval: false,
     ...overrides,
+    founderInputRequirement: overrides.founderInputRequirement ?? null,
   };
 }
 
@@ -88,6 +89,28 @@ const STEPS: ActionPlanStep[] = [
     changeKind: "decision",
     completionCriteria: "You have named one segment.",
     executionSupport: "founder_decides",
+    founderInputRequirement: {
+      kind: "decision",
+      subjectKey: "audience.first_customer_segment",
+      question: "Which customer segment should the business pursue first?",
+      whyNeeded: "The search-facing copy depends on one confirmed audience.",
+      responseType: "single_select",
+      recommendation: {
+        id: "independent-founders",
+        label: "Independent founders",
+        value: "Prioritize independent founders as the first customer segment.",
+        explanation: "The current product evidence supports this segment most directly.",
+      },
+      alternatives: [
+        {
+          id: "small-product-teams",
+          label: "Small product teams",
+          value: "Prioritize small product teams as the first customer segment.",
+          explanation: null,
+        },
+      ],
+      allowCustom: true,
+    },
   }),
   planStep({
     id: "step-seo-foundations",
@@ -193,12 +216,32 @@ function plan(overrides: Partial<StoredActionPlan> = {}): StoredActionPlan {
  */
 function planView(overrides: Partial<ActionPlanView> = {}): ActionPlanView {
   const storedPlan = overrides.plan ?? plan();
+  const actionable = firstActionableStep(storedPlan.steps);
   return {
     plan: storedPlan,
     staleness: [],
-    firstActionableStep: firstActionableStep(storedPlan.steps),
+    firstActionableStep: actionable,
     progress: planProgress(storedPlan.steps),
     ...overrides,
+    completedStepOrders: overrides.completedStepOrders ?? [],
+    founderInputRequest:
+      "founderInputRequest" in overrides
+        ? (overrides.founderInputRequest ?? null)
+        : actionable?.founderInputRequirement
+          ? {
+              id: "request_e2e",
+              projectId: storedPlan.projectId,
+              actionPlanId: storedPlan.id,
+              actionPlanStepKey: actionable.id,
+              executionInterruptId: null,
+              origin: "planner",
+              ...actionable.founderInputRequirement,
+              contextHash: storedPlan.inputHash,
+              status: "open",
+              createdAt: "2026-08-14T18:00:42.000Z",
+              resolvedAt: null,
+            }
+          : null,
   };
 }
 
@@ -307,6 +350,24 @@ export const E2E_ACTION_PLAN_SCENARIOS = {
     planView: planView(),
     activeOperation: null,
   }),
+
+  /** Prior authoritative evidence has advanced the plan to manual founder work. */
+  action_plan_founder_action: (): ActionPlanFixture => {
+    const completed = new Set([1, 2, 3]);
+    return {
+      opportunityId: "move_e2e",
+      moveTitle: MOVE_TITLE,
+      defaultMoveTitle: MOVE_TITLE,
+      readiness: readiness(),
+      planView: planView({
+        firstActionableStep: firstActionableStep(STEPS, completed),
+        progress: planProgress(STEPS, completed),
+        completedStepOrders: [...completed],
+        founderInputRequest: null,
+      }),
+      activeOperation: null,
+    };
+  },
 
   /** The same plan, but the audit has since moved. */
   action_plan_stale: (): ActionPlanFixture => ({

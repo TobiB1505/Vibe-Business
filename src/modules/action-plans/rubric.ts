@@ -12,7 +12,7 @@ import { MAX_PLAN_STEPS } from "./schema";
  * plans while a prompt tidy-up does not.
  */
 
-export const ACTION_PLANNER_RUBRIC_VERSION = "action-planner-rubric-v1" as const;
+export const ACTION_PLANNER_RUBRIC_VERSION = "action-planner-rubric-v2" as const;
 
 export const ACTION_PLANNER_RUBRIC = `## What a plan is
 
@@ -98,6 +98,10 @@ in front of a person, and getting it wrong is worse than a weak plan.
   Which customer to serve first. Whether to remove a free tier. Which direction
   the business model takes. Vibe must never make these, and must never quietly
   fold one inside a step that sounds operational.
+- \`founder_input\` — a non-secret fact or value only the founder can supply.
+  An existing external id, a preferred domain, or a name they have already
+  chosen. Never ask for a password, token, API key, credential, payment detail,
+  or any value that belongs in secure configuration.
 - \`founder_action\` — real-world work only a person can do. Interviewing five
   customers. Making a call. Signing something. Different from a decision, and
   the product treats them differently.
@@ -112,18 +116,36 @@ This is the most important rule in this rubric.
 
 If the analysis can be done from what is already known — deriving plausible
 options from the product, comparing them against the current stage, summarising
-the trade-offs, preparing a recommendation — then **Vibe does that first**, as
-its own step, and the founder's step is to choose.
+the trade-offs, preparing a recommendation — then **Vibe does that before it
+asks** and puts the result directly in the founder step's
+\`founderInputRequirement\`.
 
 - Bad: "Decide who your first customer is."
 - Bad: "What customer segments are you considering?"
-- Good: step 1 (vibe, analysis) — derive two or three plausible first-customer
-  segments from the product and the audit evidence, with the trade-offs;
-  step 2 (founder_decision) — choose which one the business will pursue first.
+- Good: one \`founder_decision\` step whose request recommends the strongest
+  evidence-grounded segment, offers supported alternatives, and allows a custom
+  answer. Its completion criterion says the resulting decision is recorded.
 
-A founder-decision step that arrives with nothing prepared is an incomplete
-plan. Ask people for the thing only they have — judgment, intent, appetite for
-risk — never for work you could have done for them.
+A founder-owned step must carry one dynamic request:
+
+- \`kind\` is \`decision\` for strategic judgment and \`input\` for a factual value;
+- \`subjectKey\` is a stable semantic key, not display copy and not a static
+  catalogue id;
+- \`question\` asks exactly one thing and \`whyNeeded\` says which later work
+  depends on it;
+- \`responseType\` is only \`confirm\`, \`single_select\`, or \`text\`;
+- \`recommendation\` contains Vibe's strongest supported answer when the evidence
+  supports one, otherwise null;
+- \`alternatives\` contains only genuine supported alternatives, never filler;
+- \`allowCustom\` is true whenever the founder could reasonably choose or provide
+  something Vibe did not anticipate.
+
+Every option's \`value\` is a complete durable statement downstream work can
+consume if selected. Do not output a separate analysis step merely to prepare
+this request. Ask people only for the thing only they have — judgment, intent,
+or a factual value — never for analysis Vibe can already do.
+
+For every other actor, \`founderInputRequirement\` is null.
 
 ## Importance is not the same as automatability
 

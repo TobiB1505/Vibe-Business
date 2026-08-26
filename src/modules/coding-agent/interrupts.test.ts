@@ -17,7 +17,8 @@ import {
  *
  * > Agent requests a material unsupported business decision → ExecutionInterrupt
  * > persisted → run pauses → no further mutation/tool calls → answer can be
- * > supplied through trusted path → resumed execution receives the approved answer.
+ * > supplied through the trusted founder-input path → a fresh execution spec
+ * > and attempt receive the approved answer.
  *
  * The persistence half lives in `store.ts` and is exercised against the
  * database; what is provable in a unit test is the runtime half, which is the

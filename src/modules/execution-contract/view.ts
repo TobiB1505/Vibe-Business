@@ -67,6 +67,7 @@ export const EXECUTION_REASON_LABELS: Record<ExecutionResolutionReason, string> 
   deterministic_capability_matched: "Vibe already knows how to make this exact change.",
   agentic_v1_eligible: "This is the kind of change Vibe could build for you.",
   founder_decision_required: "Only you can settle this, and the work after it depends on the answer.",
+  founder_input_required: "Only you can provide this information, and the work after it depends on the answer.",
   founder_action_required: "This is real-world work that has to be done by a person.",
   external_party_required: "This is waiting on someone outside your business.",
   dependency_unsatisfied: "An earlier step has to finish first.",
@@ -122,6 +123,7 @@ export const EXECUTION_STOP_LABELS: Record<ExecutionStopReason, string> = {
  */
 export const EXECUTION_INTERRUPT_QUESTIONS: Record<ExecutionInterruptType, string> = {
   business_decision_required: "This needs a business decision Vibe shouldn't make for you.",
+  founder_input_required: "Vibe needs information only you can provide before it can continue.",
   materially_different_outcomes: "There are a few genuinely different ways this could turn out.",
   permission_semantics_unknown: "Vibe needs to know who should be able to do this.",
   external_paid_service_required: "This would mean signing up for a paid service.",

@@ -11,28 +11,24 @@ import {
  * ## What an interrupt is
  *
  * A future agent run stopping to ask the customer one bounded, structured
- * question — and holding, rather than guessing. It is the execution-layer
- * equivalent of the audit's existing `needs_user` pause (CORE-2a.4), which
- * stops a durable operation, keeps its claims, and re-enters when an answer
- * arrives.
+ * question — and stopping, rather than guessing. It is the execution-layer
+ * equivalent of the audit's existing `needs_user` boundary: the old immutable
+ * attempt records why it stopped, while a resolved founder input can inform a
+ * fresh admission and a new execution attempt.
  *
  * ## What it is not
  *
  * It is not a chat. There is no message thread, no follow-up, no free-form
  * exchange between a customer and a model. §34 and Rule 43 forbid persisting
  * hidden reasoning, and a conversation is exactly where reasoning would end up.
- * So the question is authored by Vibe from a closed situation vocabulary
- * (`view.ts`), the answer arrives as structured data, and the *next resolution*
- * consumes it as approved business context (§28) rather than as prose somebody
- * has to reinterpret.
+ * So the situation type is closed, the runtime question is bounded and
+ * normalized into the Founder Input domain, and the answer arrives as
+ * structured data. The next resolution consumes the resulting durable project
+ * context rather than an in-memory answer or a transcript.
  *
- * ## Nothing writes one yet
- *
- * No agent exists, so no interrupt is raised, and there is deliberately no
- * table. This file is the contract Core-4 implements against — the types, the
- * answer validation and the trigger policy — persisted only when there is a
- * writer, per CLAUDE.md rule 15 and ADR 0007's "do not add speculative event
- * types ahead of a real caller".
+ * The operational interrupt and canonical Founder Input Request are created in
+ * one database transition. They remain separate records because one explains
+ * an execution attempt and the other owns reusable project context.
  */
 
 /**
@@ -45,6 +41,7 @@ import {
  */
 export const MUST_INTERRUPT_SITUATIONS: readonly ExecutionInterruptType[] = [
   "business_decision_required",
+  "founder_input_required",
   "materially_different_outcomes",
   "permission_semantics_unknown",
   "external_paid_service_required",
@@ -71,6 +68,7 @@ export function isValidInterruptAnswer(
   schema: ExecutionInterruptResponseSchema,
   answer: ExecutionInterruptAnswer,
 ): boolean {
+  if (answer.kind === "founder_input_resolution") return false;
   if (schema.kind !== answer.kind) return false;
 
   switch (schema.kind) {
@@ -116,6 +114,7 @@ export function interruptToApprovedDecision(
   interrupt: ExecutionInterrupt,
 ): { key: string; stepOrder: number | null; decision: string } | null {
   if (interrupt.status !== "answered" || interrupt.answer === null) return null;
+  if (interrupt.answer.kind === "founder_input_resolution") return null;
   if (!isValidInterruptAnswer(interrupt.responseSchema, interrupt.answer)) return null;
 
   const answer = interrupt.answer;
