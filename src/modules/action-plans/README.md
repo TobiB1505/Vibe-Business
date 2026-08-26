@@ -83,9 +83,14 @@ by a pricing or business-question catalogue.
 The durable project truth lives in `src/modules/founder-input/`, not in the plan
 JSON. One active resolution for `(project, kind, subjectKey)` is authoritative
 completion evidence for every matching founder-owned step. A downstream step is
-unblocked only when that evidence exists. Agent work, founder actions and
-external dependencies do not inherit this authority and remain incomplete
-until their own evidence integrations exist.
+unblocked only when that evidence exists.
+
+Agent work has a separate authority. It completes only when an immutable spec
+binds a planner-owned run to the step, the run succeeded with a Prepared Change,
+Vibe recorded `change_verified`, and independent validation passed with the
+changed files verified. The projection is assembled in `completion-store.ts`;
+there is no mutable completion flag. Founder actions and external dependencies
+remain incomplete until their own evidence integrations exist.
 
 ## The one architectural rule
 

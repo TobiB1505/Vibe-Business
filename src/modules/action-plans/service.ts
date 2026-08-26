@@ -30,7 +30,8 @@ import {
   getLatestCompletedActionPlan,
   type StoredActionPlan,
 } from "./store";
-import { completedStepsFromFounderResolutions } from "@/modules/founder-input/completion";
+import { completedStepsFromEvidence } from "./completion";
+import { listAgentStepCompletionEvidence } from "./completion-store";
 import {
   listActiveFounderResolutions,
   listFounderInputRequestsForPlan,
@@ -343,16 +344,18 @@ export async function getLatestActionPlan(
   const plan = await getLatestCompletedActionPlan(supabase, projectId);
   if (!plan) return null;
 
-  const [audit, opportunities, profile, founderIntent, resolutions, requests] = await Promise.all([
-    getLatestSuccessfulAudit(supabase, projectId),
-    getLatestOpportunities(supabase, projectId),
-    getLatestProfile(supabase, projectId),
-    getFounderIntent(supabase, projectId),
-    listActiveFounderResolutions(supabase, projectId),
-    listFounderInputRequestsForPlan(supabase, plan.id),
-  ]);
+  const [audit, opportunities, profile, founderIntent, resolutions, requests, agentEvidence] =
+    await Promise.all([
+      getLatestSuccessfulAudit(supabase, projectId),
+      getLatestOpportunities(supabase, projectId),
+      getLatestProfile(supabase, projectId),
+      getFounderIntent(supabase, projectId),
+      listActiveFounderResolutions(supabase, projectId),
+      listFounderInputRequestsForPlan(supabase, plan.id),
+      listAgentStepCompletionEvidence(supabase, { projectId, actionPlanId: plan.id }),
+    ]);
 
-  const completed = completedStepsFromFounderResolutions(plan.steps, resolutions);
+  const completed = completedStepsFromEvidence(plan.steps, resolutions, agentEvidence);
   const actionable = firstActionableStep(plan.steps, completed);
 
   return {
@@ -409,8 +412,11 @@ export async function getOnboardingFirstMove(
     return { plan: null, firstActionableStep: null, progress: null, completedStepOrders: [] };
   }
 
-  const resolutions = await listActiveFounderResolutions(supabase, projectId);
-  const completed = completedStepsFromFounderResolutions(plan.steps, resolutions);
+  const [resolutions, agentEvidence] = await Promise.all([
+    listActiveFounderResolutions(supabase, projectId),
+    listAgentStepCompletionEvidence(supabase, { projectId, actionPlanId: plan.id }),
+  ]);
+  const completed = completedStepsFromEvidence(plan.steps, resolutions, agentEvidence);
 
   return {
     plan,
