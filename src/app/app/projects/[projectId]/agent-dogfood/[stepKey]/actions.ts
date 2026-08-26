@@ -12,7 +12,6 @@ import { getProjectWithRepository } from "@/modules/projects/queries";
 import { requireSession } from "@/modules/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import {
-  answerExecutionInterrupt,
   findOpenInterruptForRun,
   listAgentActivity,
   type StoredAgentActivity,
@@ -20,14 +19,15 @@ import {
 } from "@/modules/coding-agent/store";
 import {
   getAgentExecutionStatus,
-  resumeAnsweredAgentExecution,
   startAgentExecution,
 } from "@/modules/coding-agent/service";
 import type { AgentStartRefusal } from "@/modules/coding-agent/service";
 import { previewDogfoodStep } from "@/modules/coding-agent/website-preflight";
 import { persistAgentExecutionSpec } from "@/modules/operations/agent-execution/server-writes";
 import { VercelWorkflowExecutor } from "@/modules/operations/vercel/executor";
-import type { ExecutionInterruptAnswer } from "@/modules/execution-contract/schema";
+import type { FounderInputRequest, FounderInputResponse } from "@/modules/founder-input/schema";
+import { getFounderInputRequest, getFounderInputRequestForInterrupt } from "@/modules/founder-input/store";
+import { resolveFounderInput } from "@/modules/operations/founder-input/server-writes";
 import {
   buildAgentExecutionLiveModel,
   type AgentExecutionLiveModel,
@@ -128,6 +128,7 @@ export type DogfoodRunStatus = {
   live: AgentExecutionLiveModel;
   activity: StoredAgentActivity[];
   openInterrupt: StoredExecutionInterrupt | null;
+  founderInputRequest: FounderInputRequest | null;
   /**
    * Which review this change deserves (Sprint 0048).
    *
@@ -184,6 +185,7 @@ export async function getDogfoodRunStatusAction(
       live: await buildAgentExecutionLiveModel(supabase, { operation, projectId, run: null }),
       activity: [],
       openInterrupt: null,
+      founderInputRequest: null,
       // No agent run yet, so no prepared change and nothing to recommend.
       recommendedReview: null,
     };
@@ -227,52 +229,133 @@ export async function getDogfoodRunStatusAction(
       })
     : null;
 
-  return { live, activity, openInterrupt, recommendedReview };
+  const founderInputRequest = openInterrupt
+    ? await getFounderInputRequestForInterrupt(supabase, {
+        projectId,
+        executionInterruptId: openInterrupt.id,
+      })
+    : null;
+
+  return { live, activity, openInterrupt, founderInputRequest, recommendedReview };
 }
 
-export type AnswerInterruptState =
+export type ResolveRuntimeFounderInputState =
   | { ok: true }
-  | { ok: false; error: "not_found" | "invalid_answer" | "not_open" }
+  | { ok: false; message: string }
   | null;
 
-/**
- * Answers a raised question (§24, §49).
- *
- * `answerExecutionInterrupt` re-scopes ownership by project *and* user and
- * validates the answer against the stored schema — the browser cannot answer
- * a question it cannot see, and it cannot supply an answer shape the run never
- * offered.
- *
- * `resumeAnsweredAgentExecution` runs after every success, including a replay
- * of an already-answered interrupt (ADR 0042 §P2): it is what starts the
- * fresh workflow instance a resume needs, and calling it defensively closes
- * the narrow window between an answer landing and a resume that never
- * followed it — a crash there today would otherwise leave the run paused
- * forever. Both steps are independently idempotent, so a retried submission
- * neither re-answers nor starts a second instance.
- */
-export async function answerDogfoodInterruptAction(
+/** Resolves a runtime blocker, then performs a wholly fresh admission. */
+export async function resolveDogfoodFounderInputAction(
   projectId: string,
-  interruptId: string,
-  answer: ExecutionInterruptAnswer,
-): Promise<AnswerInterruptState> {
+  requestId: string,
+  contextHash: string,
+  _previous: ResolveRuntimeFounderInputState,
+  formData: FormData,
+): Promise<ResolveRuntimeFounderInputState> {
   const session = await requireSession();
   const supabase = await createClient();
+  const request = await getFounderInputRequest(supabase, requestId);
+  if (
+    !request ||
+    request.projectId !== projectId ||
+    request.origin !== "execution_blocker" ||
+    request.contextHash !== contextHash ||
+    !request.executionInterruptId
+  ) {
+    return { ok: false, message: "This question is no longer available." };
+  }
 
-  const result = await answerExecutionInterrupt(supabase, {
+  const { data: interrupt } = await supabase
+    .from("execution_interrupts")
+    .select("execution_spec_id, founder_input_request_id")
+    .eq("id", request.executionInterruptId)
+    .eq("project_id", projectId)
+    .maybeSingle();
+  if (!interrupt || interrupt.founder_input_request_id !== request.id) {
+    return { ok: false, message: "This question is no longer available." };
+  }
+
+  const { data: oldSpec } = await supabase
+    .from("execution_specs")
+    .select("step_key")
+    .eq("id", interrupt.execution_spec_id)
+    .eq("project_id", projectId)
+    .maybeSingle();
+  if (!oldSpec) return { ok: false, message: "The original execution could not be found." };
+
+  const choice = formData.get("choice");
+  let response: FounderInputResponse;
+  if (choice === "recommendation") {
+    response = { source: "recommendation" };
+  } else if (typeof choice === "string" && choice.startsWith("option:")) {
+    response = { source: "option", selectedOptionId: choice.slice("option:".length) };
+  } else if (choice === "custom") {
+    const rawAnswer = formData.get("customAnswer");
+    response = { source: "custom", rawAnswer: typeof rawAnswer === "string" ? rawAnswer : "" };
+  } else {
+    return { ok: false, message: "Choose an answer or provide your own." };
+  }
+
+  const resolved = await resolveFounderInput({
     projectId,
     userId: session.userId,
-    interruptId,
-    answer,
+    requestId,
+    expectedContextHash: contextHash,
+    response,
   });
+  if (!resolved.ok) {
+    return {
+      ok: false,
+      message:
+        resolved.error === "secret_rejected"
+          ? "Do not paste passwords, API keys, tokens, or credentials here."
+          : resolved.error === "execution_not_settled"
+            ? "Vibe is still closing the previous attempt. Wait a moment, then try again."
+          : "Your answer could not be saved. Please try again.",
+    };
+  }
 
-  if (!result.ok) return { ok: false, error: result.reason };
-
-  await resumeAnsweredAgentExecution(supabase, new VercelWorkflowExecutor(), {
+  // Fresh admission is deliberately after the resolution transaction closed
+  // the old attempt. It re-reads current HEAD, plan state, permissions and
+  // active founder resolutions; no field from the old spec is reused.
+  const preview = await previewDogfoodStep(supabase, {
     projectId,
     userId: session.userId,
-    agentExecutionRunId: result.interrupt.agentExecutionRunId,
+    stepKey: oldSpec.step_key,
   });
+  if (!preview.eligible) {
+    return {
+      ok: false,
+      message: "Your answer was saved, but this step is no longer executable. Return to Action Plan to review its current state.",
+    };
+  }
 
-  return { ok: true };
+  const persisted = await persistAgentExecutionSpec({
+    spec: preview.spec,
+    userId: session.userId,
+    repositoryConnectionId: preview.repositoryConnectionId,
+  });
+  if (!persisted.ok) {
+    return {
+      ok: false,
+      message: "Your answer was saved, but the new execution could not be prepared. Start the step again from Action Plan.",
+    };
+  }
+
+  const outcome = await startAgentExecution(supabase, new VercelWorkflowExecutor(), {
+    projectId,
+    userId: session.userId,
+    executionSpecId: persisted.executionSpecId,
+  });
+  if (outcome.kind === "failed") {
+    return {
+      ok: false,
+      message: "Your answer was saved, but the new execution could not start. Start the step again from Action Plan.",
+    };
+  }
+  if (outcome.kind === "reused") redirect(`/app/projects/${projectId}/agent`);
+
+  redirect(
+    `/app/projects/${projectId}/agent-dogfood/${encodeURIComponent(oldSpec.step_key)}?run=${outcome.operation.operationId}`,
+  );
 }

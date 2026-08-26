@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { FounderInputCard } from "@/components/founder-input/founder-input-card";
 import { Button, TextAction } from "@/components/ui/button";
 import { StatusPill, type StatusTone } from "@/components/ui/status-pill";
 import { Surface } from "@/components/ui/surface";
@@ -17,7 +18,6 @@ import {
   OPERATION_STAGE_LABELS, type OperationView,
 } from "@/modules/operations/view";
 import type { ActionPlanStep, ExecutionSupport, PlanProgress } from "@/modules/action-plans/schema";
-import type { FounderInputRequest } from "@/modules/founder-input/schema";
 import type { ActionPlanReadiness, ActionPlanView } from "@/modules/action-plans/service";
 import {
   PLAN_PROGRESS_LABELS,
@@ -36,7 +36,6 @@ import { CreditPrice } from "@/components/ui/credit-price";
 import { startPlanAction, type StartPlanActionState } from "./plan-action";
 import {
   resolveFounderInputAction,
-  type FounderInputActionState,
 } from "./founder-input-action";
 
 /**
@@ -153,141 +152,6 @@ function StartHere({ step }: { step: ActionPlanStep }) {
       </div>
       <h5 className="text-fg text-lg leading-snug font-semibold">{step.title}</h5>
       <p className="text-fg-prose text-sm leading-relaxed">{step.description}</p>
-    </Surface>
-  );
-}
-
-function FounderInputCard({
-  projectId,
-  request,
-}: {
-  projectId: string;
-  request: FounderInputRequest;
-}) {
-  const [customOpen, setCustomOpen] = useState(
-    request.responseType === "text" && request.recommendation === null,
-  );
-  const action = resolveFounderInputAction.bind(
-    null,
-    projectId,
-    request.id,
-    request.contextHash,
-  );
-  const [state, formAction, pending] = useActionState<
-    FounderInputActionState,
-    FormData
-  >(action, null);
-
-  return (
-    <Surface level="card" padding="lg" tone="mint" className="flex flex-col gap-5">
-      <div className="flex flex-col gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <StatusPill tone="active" dot>
-            Start here
-          </StatusPill>
-          <StatusPill tone="waiting">
-            Needs your {request.kind === "decision" ? "decision" : "input"}
-          </StatusPill>
-        </div>
-        <h5 className="text-fg text-xl leading-snug font-semibold">{request.question}</h5>
-        <p className="text-fg-prose max-w-2xl text-sm leading-relaxed">{request.whyNeeded}</p>
-      </div>
-
-      <form action={formAction} className="flex flex-col gap-3">
-        {request.recommendation && (
-          <div className="border-mint-line bg-mint-tint/40 flex flex-col gap-3 rounded-xl border p-4">
-            <MonoLabel className="tracking-[0.14em]">Vibe recommends</MonoLabel>
-            <div className="flex flex-col gap-1">
-              <p className="text-fg font-semibold">{request.recommendation.label}</p>
-              {request.recommendation.explanation && (
-                <p className="text-fg-secondary text-sm leading-relaxed">
-                  {request.recommendation.explanation}
-                </p>
-              )}
-            </div>
-            <Button
-              type="submit"
-              name="choice"
-              value="recommendation"
-              disabled={pending}
-              busy={pending}
-              className="self-start"
-            >
-              Use Vibe&apos;s recommendation
-            </Button>
-          </div>
-        )}
-
-        {request.alternatives.length > 0 && (
-          <div className="flex flex-col gap-2">
-            <p className="text-fg-secondary text-sm font-medium">Other options</p>
-            <div className="grid gap-2 sm:grid-cols-2">
-              {request.alternatives.map((option) => (
-                <button
-                  key={option.id}
-                  type="submit"
-                  name="choice"
-                  value={`option:${option.id}`}
-                  disabled={pending}
-                  className="border-line-3 bg-surface-2 hover:border-mint-line focus-visible:ring-mint flex flex-col gap-1 rounded-xl border p-3 text-left transition-interactive focus-visible:ring-2 focus-visible:outline-none disabled:opacity-50"
-                >
-                  <span className="text-fg text-sm font-medium">{option.label}</span>
-                  {option.explanation && (
-                    <span className="text-fg-muted text-xs leading-relaxed">
-                      {option.explanation}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {request.allowCustom && !customOpen && (
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={() => setCustomOpen(true)}
-            className="self-start"
-          >
-            Something else
-          </Button>
-        )}
-
-        {customOpen && (
-          <div className="flex flex-col gap-2">
-            <label htmlFor={`founder-input-${request.id}`} className="text-fg-secondary text-sm font-medium">
-              Your answer
-            </label>
-            <textarea
-              id={`founder-input-${request.id}`}
-              name="customAnswer"
-              maxLength={1200}
-              rows={4}
-              disabled={pending}
-              className="border-line-3 bg-surface-1 text-fg placeholder:text-fg-meta focus:border-mint-line focus:ring-mint min-h-28 rounded-xl border px-3 py-2 text-sm leading-relaxed outline-none focus:ring-1"
-              placeholder="Write the direction or information Vibe should use. Do not include credentials or API keys."
-            />
-            <Button
-              type="submit"
-              name="choice"
-              value="custom"
-              disabled={pending}
-              busy={pending}
-              className="self-start"
-            >
-              Use this answer
-            </Button>
-          </div>
-        )}
-
-        {state && !state.ok && (
-          <p role="alert" aria-live="polite" className="text-amber text-sm">
-            {state.message}
-          </p>
-        )}
-      </form>
     </Surface>
   );
 }
@@ -411,7 +275,12 @@ function ReadyPlan({ projectId, planView }: { projectId: string; planView: Actio
         <PlanHero goal={plan.goal} whyNow={plan.whyNow} steps={orderedSteps} />
 
         {staleness.length === 0 && firstActionableStep && founderInputRequest ? (
-          <FounderInputCard projectId={projectId} request={founderInputRequest} />
+          <FounderInputCard
+            projectId={projectId}
+            request={founderInputRequest}
+            context="action_plan"
+            resolveAction={resolveFounderInputAction}
+          />
         ) : firstActionableStep ? (
           <StartHere step={firstActionableStep} />
         ) : (

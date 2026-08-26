@@ -35,6 +35,7 @@ describe("a well-formed result", () => {
     expect(parseAgentRuntimeResult(result())).toEqual({
       version: AGENT_RUNTIME_VERSION,
       subtype: "success",
+      runtimeFounderInput: null,
       assistantMessages: 4,
       sdkLoopIterations: 9,
       sessionId: "session-1",
@@ -109,6 +110,29 @@ describe("fields are coerced, never trusted", () => {
     const parsed = parseAgentRuntimeResult(result({ subtype: "s".repeat(500) }));
 
     expect(parsed?.subtype.length).toBe(64);
+  });
+
+  it("accepts only a bounded structured founder-input request", () => {
+    const parsed = parseAgentRuntimeResult(
+      result({
+        runtimeFounderInput: {
+          kind: "decision",
+          question: "Which launch audience should this change target?",
+          options: ["Existing customers", "Invite-only beta"],
+        },
+      }),
+    );
+    expect(parsed?.runtimeFounderInput).toEqual({
+      kind: "decision",
+      question: "Which launch audience should this change target?",
+      options: ["Existing customers", "Invite-only beta"],
+    });
+
+    expect(
+      parseAgentRuntimeResult(
+        result({ runtimeFounderInput: { kind: "secret", question: "Token?", options: [] } }),
+      )?.runtimeFounderInput,
+    ).toBeNull();
   });
 });
 

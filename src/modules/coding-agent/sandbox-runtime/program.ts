@@ -416,6 +416,7 @@ const decide = (toolName, input) => {
 const result = {
   version: request.version,
   subtype: "no_result",
+  runtimeFounderInput: null,
   /*
    * Two counters, because they count two different things.
    *
@@ -617,14 +618,42 @@ try {
        * tools exist at all*. Two questions, two answers, and the second one
        * must not depend on a hook being registered.
        */
-      canUseTool: async (name) =>
-        allowed.has(name)
+      canUseTool: async (name, input) => {
+        if (name === "AskUserQuestion" && allowed.has(name)) {
+          const questions = input && Array.isArray(input.questions) ? input.questions : [];
+          const first = questions[0] && typeof questions[0] === "object" ? questions[0] : null;
+          const question = first && typeof first.question === "string" ? first.question : "";
+          const header = first && typeof first.header === "string" ? first.header.toLowerCase() : "";
+          const options = first && Array.isArray(first.options)
+            ? first.options
+                .map((option) => option && typeof option.label === "string" ? option.label : "")
+                .filter(Boolean)
+            : [];
+
+          if (question.trim().length >= 3) {
+            result.runtimeFounderInput = {
+              kind: header === "input" ? "input" : "decision",
+              question: question,
+              options: options,
+            };
+            result.subtype = "founder_input_required";
+            emit({ t: "phase", phase: "needs_user_input" });
+            return {
+              behavior: "deny",
+              message: "Vibe recorded this founder-owned question and stopped this attempt.",
+              interrupt: true,
+            };
+          }
+        }
+
+        return allowed.has(name)
           ? { behavior: "allow" }
           : {
               behavior: "deny",
               message: "That tool is not available to this execution.",
               interrupt: false,
-            },
+            };
+      },
       cwd: request.cwd,
       persistSession: false,
       includePartialMessages: false,
@@ -667,7 +696,7 @@ try {
     }
 
     if (message.type === "result") {
-      result.subtype = message.subtype;
+      if (result.runtimeFounderInput === null) result.subtype = message.subtype;
       // The harness's own count, kept beside the message count rather than
       // written over it. Null when the SDK did not report one.
       result.sdkLoopIterations = typeof message.num_turns === "number" ? message.num_turns : null;
@@ -687,7 +716,7 @@ try {
    * carrying them out of a VM and into Vibe's durable records. What is kept is
    * enough to tell "the gateway refused us" from "the binary is missing".
    */
-  result.subtype = "error_runtime";
+  if (result.runtimeFounderInput === null) result.subtype = "error_runtime";
   const name = error && error.name ? String(error.name) : "Error";
   const message = error && error.message ? String(error.message) : "";
   result.error = (name + ": " + message).replace(/\\s+/g, " ").trim().slice(0, 400);

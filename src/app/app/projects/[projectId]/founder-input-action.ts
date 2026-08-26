@@ -19,6 +19,7 @@ const ERROR_COPY = {
   stale_request: "Vibe's understanding changed. Reload before answering this question.",
   invalid_response: "Choose one of the available answers or provide a custom answer.",
   secret_rejected: "Do not paste passwords, API keys, tokens, or other credentials here.",
+  execution_not_settled: "Vibe is still closing the previous attempt. Wait a moment, then try again.",
   resolution_failed: "Your answer could not be saved. Please try again.",
 } as const;
 

@@ -292,6 +292,53 @@ describe("previewDogfoodStep — the real chain", () => {
       },
     ]);
   });
+
+  it("puts a runtime resolution into a fresh immutable spec even when no plan step owns it", async () => {
+    seedOwnedRepository();
+    seedSuccessfulSnapshot();
+    seedCompletedPlan([AGENTIC_STEP]);
+
+    const before = await previewDogfoodStep(fakeSupabase(db), {
+      projectId: PROJECT,
+      userId: USER,
+      stepKey: "1-ship-it",
+      env: ALLOWLIST,
+    });
+    expect(before.eligible).toBe(true);
+    if (!before.eligible) return;
+
+    db.seed("project_founder_resolutions", {
+      id: "resolution-runtime-1",
+      project_id: PROJECT,
+      request_id: "request-runtime-1",
+      input_kind: "decision",
+      subject_key: "runtime.1-ship-it.0123456789abcdef01234567",
+      response_source: "custom",
+      selected_option_id: null,
+      raw_answer: "Invite existing customers first.",
+      resolved_statement: "Invite existing customers first.",
+      context_hash: before.spec.identity,
+      supersedes_resolution_id: null,
+      superseded_at: null,
+      created_at: "2026-08-25T00:00:00.000Z",
+    });
+
+    const after = await previewDogfoodStep(fakeSupabase(db), {
+      projectId: PROJECT,
+      userId: USER,
+      stepKey: "1-ship-it",
+      env: ALLOWLIST,
+    });
+    expect(after.eligible).toBe(true);
+    if (!after.eligible) return;
+
+    expect(after.spec.businessContext.approvedDecisions).toContainEqual({
+      key: "decision:runtime.1-ship-it.0123456789abcdef01234567",
+      stepOrder: null,
+      decision: "Invite existing customers first.",
+    });
+    expect(after.spec.identity).not.toBe(before.spec.identity);
+  });
 });
 
 describe("previewDogfoodStep — cross-project and cross-user isolation (§25, §53)", () => {

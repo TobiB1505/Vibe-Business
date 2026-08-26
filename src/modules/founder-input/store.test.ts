@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { FakeDatabase, fakeSupabase } from "@/modules/operations/test-support";
 import { fakePlanStep } from "@/modules/execution-contract/test-support";
+import { raiseExecutionInterrupt } from "@/modules/coding-agent/store";
 import { createPlannerFounderInputRequests } from "./store";
 
 const requirement = {
@@ -74,5 +75,58 @@ describe("createPlannerFounderInputRequests", () => {
       subject_key: "monetization.pricing_model",
       status: "open",
     });
+  });
+});
+
+describe("runtime founder-input request materialization", () => {
+  it("converges two blocked attempts on one canonical open request", async () => {
+    const db = new FakeDatabase();
+    const supabase = fakeSupabase(db);
+    for (const suffix of ["a", "b"]) {
+      db.seed("execution_specs", {
+        id: `spec-${suffix}`,
+        project_id: "project-1",
+        spec_identity: `${suffix}`.repeat(64),
+      });
+      db.seed("agent_execution_runs", {
+        id: `run-${suffix}`,
+        project_id: "project-1",
+        user_id: "user-1",
+        execution_spec_id: `spec-${suffix}`,
+        status: "running",
+      });
+    }
+
+    const interrupt = {
+      type: "business_decision_required" as const,
+      question: requirement.question,
+      responseSchema: {
+        kind: "single_choice" as const,
+        options: [{ id: "subscription", label: "Subscription" }],
+      },
+      whyBlocked: "business_decision_required" as const,
+      founderInputRequirement: requirement,
+    };
+
+    await raiseExecutionInterrupt(supabase, {
+      projectId: "project-1",
+      userId: "user-1",
+      executionSpecId: "spec-a",
+      agentExecutionRunId: "run-a",
+      interrupt,
+    });
+    await raiseExecutionInterrupt(supabase, {
+      projectId: "project-1",
+      userId: "user-1",
+      executionSpecId: "spec-b",
+      agentExecutionRunId: "run-b",
+      interrupt,
+    });
+
+    expect(db.rows("project_founder_input_requests")).toHaveLength(1);
+    expect(db.rows("execution_interrupts")).toHaveLength(2);
+    expect(new Set(db.rows("execution_interrupts").map((row) => row.founder_input_request_id)).size).toBe(
+      1,
+    );
   });
 });

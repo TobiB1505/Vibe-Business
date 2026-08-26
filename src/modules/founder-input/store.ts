@@ -213,6 +213,31 @@ export async function getFounderInputRequest(
   return data ? mapRequest(data as RequestRow) : null;
 }
 
+export async function getFounderInputRequestForInterrupt(
+  supabase: SupabaseClient,
+  params: { projectId: string; executionInterruptId: string },
+): Promise<FounderInputRequest | null> {
+  const { data: interrupt, error: interruptError } = await supabase
+    .from("execution_interrupts")
+    .select("founder_input_request_id")
+    .eq("id", params.executionInterruptId)
+    .eq("project_id", params.projectId)
+    .maybeSingle();
+  if (interruptError) throw interruptError;
+  const requestId = (interrupt as { founder_input_request_id?: string | null } | null)
+    ?.founder_input_request_id;
+  if (!requestId) return null;
+
+  const { data, error } = await supabase
+    .from("project_founder_input_requests")
+    .select(REQUEST_COLUMNS)
+    .eq("project_id", params.projectId)
+    .eq("id", requestId)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? mapRequest(data as RequestRow) : null;
+}
+
 export async function callResolveFounderInputRequest(
   supabase: SupabaseClient,
   params: {

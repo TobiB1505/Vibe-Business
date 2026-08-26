@@ -1,11 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import { FounderInputCard } from "@/components/founder-input/founder-input-card";
 import { Notice } from "@/components/ui/states";
-import { Surface } from "@/components/ui/surface";
-import { MonoLabel } from "@/components/ui/typography";
 import {
   REVIEW_CLASSIFICATION_LABELS,
   REVIEW_CLASSIFICATION_NOTES,
@@ -14,13 +11,15 @@ import {
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { useOperationPoll } from "@/lib/client/use-operation-poll";
 import { operationPollPhase } from "@/modules/operations/view";
-import { EXECUTION_INTERRUPT_QUESTIONS } from "@/modules/execution-contract/view";
 import { AgentExecutionLiveView } from "@/modules/coding-agent/ui/agent-execution-live-view";
 // From `./poll`, not `./live-view`: this is a client component, and
 // `live-view.ts` is server-only (Sprint 0053).
 import { validationStillSettling } from "@/modules/coding-agent/observability/poll";
-import type { ExecutionInterruptAnswer } from "@/modules/execution-contract/schema";
-import { answerDogfoodInterruptAction, getDogfoodRunStatusAction, type DogfoodRunStatus } from "./actions";
+import {
+  getDogfoodRunStatusAction,
+  resolveDogfoodFounderInputAction,
+  type DogfoodRunStatus,
+} from "./actions";
 
 /** Matches the existing Action Plan panel's own cadence (§16, §20). */
 const POLL_INTERVAL_MS = 3_000;
@@ -77,7 +76,7 @@ export function StatusView({
   });
 
   const status = polled ?? initial;
-  const { live, openInterrupt } = status;
+  const { live, openInterrupt, founderInputRequest } = status;
   const operation = live.operation;
 
   return (
@@ -111,7 +110,21 @@ export function StatusView({
         <RecommendedReview classification={status.recommendedReview} />
       )}
 
-      {openInterrupt && <InterruptPanel projectId={projectId} interrupt={openInterrupt} />}
+      {founderInputRequest?.status === "open" && (
+        <FounderInputCard
+          projectId={projectId}
+          request={founderInputRequest}
+          context="runtime_execution"
+          resolveAction={resolveDogfoodFounderInputAction}
+        />
+      )}
+
+      {openInterrupt && !founderInputRequest && (
+        <Notice tone="waiting" label="answer required">
+          This older execution stopped for founder input, but it predates the current resolution
+          contract. Start a fresh attempt instead of reusing its immutable execution context.
+        </Notice>
+      )}
     </div>
   );
 }
@@ -158,117 +171,4 @@ function RecommendedReview({
 
 function fileWord(count: number): string {
   return count === 1 ? "file" : "files";
-}
-
-function InterruptPanel({
-  projectId,
-  interrupt,
-}: {
-  projectId: string;
-  interrupt: NonNullable<DogfoodRunStatus["openInterrupt"]>;
-}) {
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function submit(answer: ExecutionInterruptAnswer) {
-    setPending(true);
-    setError(null);
-    const result = await answerDogfoodInterruptAction(projectId, interrupt.id, answer);
-    setPending(false);
-    if (!result?.ok) setError("That answer couldn't be recorded — try again.");
-  }
-
-  return (
-    <Surface level="section" tone="amber" padding="md" className="flex flex-col gap-3">
-      <MonoLabel>vibe needs one decision</MonoLabel>
-      <p className="text-fg-prose text-sm">{EXECUTION_INTERRUPT_QUESTIONS[interrupt.type]}</p>
-      <p className="text-fg text-sm font-semibold">{interrupt.question}</p>
-
-      {interrupt.responseSchema.kind === "single_choice" && (
-        <div className="flex flex-wrap gap-2">
-          {interrupt.responseSchema.options.map((option) => (
-            <Button
-              key={option.id}
-              type="button"
-              variant="secondary"
-              size="sm"
-              disabled={pending}
-              onClick={() => submit({ kind: "single_choice", optionId: option.id })}
-            >
-              {option.label}
-            </Button>
-          ))}
-        </div>
-      )}
-
-      {interrupt.responseSchema.kind === "confirmation" && (
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            variant="primary"
-            size="sm"
-            disabled={pending}
-            onClick={() => submit({ kind: "confirmation", confirmed: true })}
-          >
-            Yes
-          </Button>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            disabled={pending}
-            onClick={() => submit({ kind: "confirmation", confirmed: false })}
-          >
-            No
-          </Button>
-        </div>
-      )}
-
-      {interrupt.responseSchema.kind === "text" && (
-        <TextAnswerForm pending={pending} maxLength={interrupt.responseSchema.maxLength} onSubmit={submit} />
-      )}
-
-      {error && (
-        <Notice tone="problem" label="couldn't save">
-          {error}
-        </Notice>
-      )}
-    </Surface>
-  );
-}
-
-function TextAnswerForm({
-  pending,
-  maxLength,
-  onSubmit,
-}: {
-  pending: boolean;
-  maxLength: number;
-  onSubmit: (answer: ExecutionInterruptAnswer) => void;
-}) {
-  const [value, setValue] = useState("");
-
-  return (
-    <form
-      className="flex flex-col gap-2"
-      onSubmit={(event) => {
-        event.preventDefault();
-        if (value.trim().length === 0) return;
-        onSubmit({ kind: "text", value });
-      }}
-    >
-      <textarea
-        value={value}
-        onChange={(event) => setValue(event.target.value.slice(0, maxLength))}
-        maxLength={maxLength}
-        rows={3}
-        className="bg-surface-2 border-line-3 text-fg-body rounded-panel border p-3 text-sm"
-      />
-      <div>
-        <Button type="submit" variant="primary" size="sm" disabled={pending || value.trim().length === 0}>
-          Answer
-        </Button>
-      </div>
-    </form>
-  );
 }

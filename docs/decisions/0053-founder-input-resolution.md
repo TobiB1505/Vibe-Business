@@ -30,9 +30,11 @@ Action Plan completion is projected from authoritative evidence rather than a mu
 
 Resolved requirements become `ExecutionSpec.businessContext.approvedDecisions` only after the normal execution resolver confirms the target step is otherwise admissible. A changed resolution therefore changes the execution context hash and spec identity.
 
-Planner-known requirements are implemented first. Runtime execution blockers will later create the same request/resolution records with `origin = execution_blocker`.
+Runtime execution blockers create the same request/resolution records with `origin = execution_blocker`. The sandbox harness exposes one explicitly named local `AskUserQuestion` tool in addition to its file and shell tools. Vibe intercepts that tool before any terminal interaction, accepts only one bounded question with optional choices, and carries the structured blocker out of the sandbox. It never carries model reasoning, a transcript, credentials, or an account of the agent's work.
 
-The existing Agent lifecycle already has a real operational restart: the workflow instance terminates on an interrupt, the operation enters `needs_user`, Credits are released with recorded usage, and an answered interrupt can requeue the same run into a fresh workflow instance. That lifecycle must be reused rather than replaced. It is not, by itself, enough for this domain: today the answered interrupt is not incorporated into a newly resolved immutable `ExecutionSpec.businessContext`. Runtime convergence therefore requires an explicit re-admission/spec-replacement boundary before the requeued workflow starts. Until that boundary exists, this ADR does not authorize copying an answer into an in-memory prompt, mutating an existing spec, or claiming that the resumed execution consumed the durable decision.
+The existing Agent workflow instance terminates on an interrupt, the operation enters `needs_user`, and Credits are released with recorded usage. This is a stop boundary, not resumability. While the founder is deciding, the immutable operation and run remain paused only as operational history. Resolving the request atomically records the durable resolution, answers every interrupt linked to that canonical request, and terminalizes the old operations and runs as `cancelled`. The transition refuses to resolve while any linked Credit reservation remains active.
+
+Only after that transaction commits may the application perform a fresh admission. It re-reads current repository HEAD, permissions, plan state, and active founder resolutions, builds a new immutable `ExecutionSpec`, and starts a new operation and agent run. The old spec, run, workflow instance, and reservation are never requeued or reused. If fresh admission fails, the accepted resolution remains durable and the founder can start the now-informed step again from the Action Plan.
 
 Secrets and credentials are outside this domain. Custom answers pass the existing secret-material guard, and credential-like values must use a dedicated secure configuration mechanism rather than a Founder Input record.
 
@@ -44,4 +46,4 @@ Secrets and credentials are outside this domain. Custom answers pass the existin
 - The planner schema grows, but no additional inference call is introduced.
 - Legacy plans without structured requirements remain readable but cannot gain decision completion retroactively; they must be replanned under the new contract.
 - Founder-action attestation and agent/execution completion evidence remain separate follow-up work because their authorities differ.
-- Runtime blockers reuse this domain when integrated. The existing stop/requeue lifecycle remains authoritative, but requeue must wait for a fresh immutable execution context that contains the accepted resolution.
+- Runtime blockers reuse this domain and terminate the blocked attempt. A resolved blocker can proceed only through a fresh immutable spec and a new admitted execution attempt.

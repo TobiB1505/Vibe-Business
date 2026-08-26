@@ -20,6 +20,7 @@ export type ResolveFounderInputResult =
         | "stale_request"
         | "invalid_response"
         | "secret_rejected"
+        | "execution_not_settled"
         | "resolution_failed";
     };
 
@@ -83,6 +84,9 @@ export async function resolveFounderInput(params: {
     }
     if (message.includes("stale_founder_input_request")) {
       return { ok: false, error: "stale_request" };
+    }
+    if (message.includes("runtime_founder_input_reservation_still_active")) {
+      return { ok: false, error: "execution_not_settled" };
     }
     if (message.includes("founder_input_") || message.includes("founder input")) {
       return { ok: false, error: "invalid_response" };

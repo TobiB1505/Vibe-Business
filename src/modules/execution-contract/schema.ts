@@ -375,6 +375,8 @@ export type ExecutionStopReason = (typeof EXECUTION_STOP_REASONS)[number];
 export const EXECUTION_INTERRUPT_TYPES = [
   /** A business decision is genuinely ambiguous and Vibe must not pick (§22). */
   "business_decision_required",
+  /** A factual founder-owned value cannot be inferred from project evidence. */
+  "founder_input_required",
   /** Several materially different product outcomes are all defensible. */
   "materially_different_outcomes",
   /** Required role or permission semantics are unknown. */
@@ -436,7 +438,9 @@ export type ExecutionInterrupt = {
 export type ExecutionInterruptAnswer =
   | { kind: "single_choice"; optionId: string }
   | { kind: "confirmation"; confirmed: boolean }
-  | { kind: "text"; value: string };
+  | { kind: "text"; value: string }
+  /** Canonical runtime answers live in Founder Input Resolution. */
+  | { kind: "founder_input_resolution"; resolutionId: string };
 
 /* ---------------------------------------------------------------------------
  * Activity events (§33, §34)

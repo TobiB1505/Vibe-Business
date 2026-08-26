@@ -147,8 +147,22 @@ export type AgentModelUsage = {
   reportedCostUsd: number | null;
 };
 
+/**
+ * One founder-owned ambiguity observed by a detached runtime.
+ *
+ * This is structured request content, not the agent's account of its work and
+ * never reasoning. It is independently bounded and normalized before it can
+ * become durable product state.
+ */
+export type RuntimeFounderInputDraft = {
+  kind: "decision" | "input";
+  question: string;
+  options: readonly string[];
+};
+
 export type CodingAgentResult = {
   outcome: AgentProviderOutcome;
+  runtimeFounderInput: RuntimeFounderInputDraft | null;
   /**
    * Model responses the run produced. Observed, never self-reported.
    *

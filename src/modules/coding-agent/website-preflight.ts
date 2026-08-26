@@ -615,14 +615,13 @@ export async function resolveExecutableStep(
             candidate.founderInputRequirement?.kind === founderResolution.kind &&
             candidate.founderInputRequirement.subjectKey === founderResolution.subjectKey,
         );
-        if (!sourceStep) return null;
         return {
           key: `${founderResolution.kind}:${founderResolution.subjectKey}`,
-          stepOrder: sourceStep.order,
+          stepOrder: sourceStep?.order ?? null,
           decision: founderResolution.resolvedStatement,
         };
       })
-      .filter((entry): entry is { key: string; stepOrder: number; decision: string } => entry !== null),
+      .sort((left, right) => left.key.localeCompare(right.key)),
     validation,
     budget,
     credit: { quoteId: null, maxAuthorizedCredits: budget?.maxCredits ?? null },

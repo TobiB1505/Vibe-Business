@@ -34,7 +34,7 @@ import type { SandboxCompletionPolicy } from "@/modules/execution-context/comple
  * program left in a reused sandbox would otherwise answer a request it never
  * understood — and the reply would look perfectly well-formed.
  */
-export const AGENT_RUNTIME_VERSION = "vibe-agent-runtime-v3" as const;
+export const AGENT_RUNTIME_VERSION = "vibe-agent-runtime-v4" as const;
 
 /**
  * The SDK version installed in the sandbox, pinned rather than floating.
@@ -66,6 +66,7 @@ export const AGENT_RUNTIME_TOOLS: readonly string[] = [
   "Glob",
   "Grep",
   "Bash",
+  "AskUserQuestion",
 ];
 
 /** What Vibe writes into the sandbox before starting the program. */
@@ -117,6 +118,11 @@ export type AgentRuntimeRequest = {
 export type AgentRuntimeResult = {
   version: string;
   subtype: string;
+  runtimeFounderInput: {
+    kind: "decision" | "input";
+    question: string;
+    options: string[];
+  } | null;
   /**
    * Model responses. One per `assistant` message in the SDK's stream.
    *
@@ -175,6 +181,22 @@ function nonNegativeInt(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 ? Math.trunc(value) : 0;
 }
 
+function runtimeFounderInput(value: unknown): AgentRuntimeResult["runtimeFounderInput"] {
+  if (typeof value !== "object" || value === null) return null;
+  const candidate = value as Record<string, unknown>;
+  if (candidate.kind !== "decision" && candidate.kind !== "input") return null;
+  if (typeof candidate.question !== "string") return null;
+  const question = candidate.question.replace(/\s+/g, " ").trim().slice(0, 400);
+  if (question.length < 3) return null;
+  const options = Array.isArray(candidate.options)
+    ? candidate.options
+        .slice(0, 4)
+        .map((option) => (typeof option === "string" ? option.replace(/\s+/g, " ").trim().slice(0, 120) : ""))
+        .filter((option) => option.length > 0)
+    : [];
+  return { kind: candidate.kind, question, options: [...new Set(options)] };
+}
+
 /**
  * Parses what came back out of the sandbox.
  *
@@ -202,6 +224,7 @@ export function parseAgentRuntimeResult(payload: string | null): AgentRuntimeRes
   return {
     version: AGENT_RUNTIME_VERSION,
     subtype: typeof raw.subtype === "string" ? raw.subtype.slice(0, 64) : "unknown",
+    runtimeFounderInput: runtimeFounderInput(raw.runtimeFounderInput),
     assistantMessages: nonNegativeInt(raw.assistantMessages),
     sdkLoopIterations:
       typeof raw.sdkLoopIterations === "number" && Number.isFinite(raw.sdkLoopIterations)

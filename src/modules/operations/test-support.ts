@@ -1310,6 +1310,79 @@ function fakeRepairLotAllocation(db: FakeDatabase, grantId: unknown): QueryError
 }
 
 const FAKE_RPC_HANDLERS: Record<string, (db: FakeDatabase, params: Record<string, unknown>) => QueryError> = {
+  raise_execution_founder_input_request: (db, params) => {
+    const run = db
+      .rows("agent_execution_runs")
+      .find((row) => row.id === params.p_agent_execution_run_id);
+    if (!run || !["queued", "running", "needs_user_input"].includes(String(run.status))) {
+      return { message: "agent_execution_run_not_open" };
+    }
+
+    const spec = db
+      .rows("execution_specs")
+      .find((row) => row.id === run.execution_spec_id && row.project_id === run.project_id);
+    if (!spec) return { message: "runtime_founder_input_spec_missing" };
+
+    let interrupt = db
+      .rows("execution_interrupts")
+      .find(
+        (row) =>
+          row.agent_execution_run_id === run.id &&
+          row.status === "open",
+      );
+    if (!interrupt) {
+      interrupt = db.seed("execution_interrupts", {
+        project_id: run.project_id,
+        user_id: run.user_id,
+        execution_spec_id: run.execution_spec_id,
+        agent_execution_run_id: run.id,
+        interrupt_type: params.p_interrupt_type,
+        question: params.p_question,
+        response_schema: params.p_response_schema,
+        founder_input_request_id: null,
+        status: "open",
+        answer: null,
+        answered_at: null,
+        created_at: new Date().toISOString(),
+      });
+    }
+
+    if (interrupt.founder_input_request_id == null) {
+      let request = db
+        .rows("project_founder_input_requests")
+        .find(
+          (row) =>
+            row.project_id === run.project_id &&
+            row.input_kind === params.p_input_kind &&
+            row.subject_key === params.p_subject_key &&
+            row.status === "open",
+        );
+      if (!request) {
+        request = db.seed("project_founder_input_requests", {
+          project_id: run.project_id,
+          action_plan_id: null,
+          action_plan_step_key: null,
+          execution_interrupt_id: interrupt.id,
+          origin: "execution_blocker",
+          input_kind: params.p_input_kind,
+          subject_key: params.p_subject_key,
+          question: params.p_question,
+          why_needed: params.p_why_needed,
+          response_type: params.p_response_type,
+          recommendation: params.p_recommendation,
+          alternatives: params.p_alternatives,
+          allow_custom: params.p_allow_custom,
+          context_hash: spec.spec_identity,
+          status: "open",
+          resolved_at: null,
+          created_at: new Date().toISOString(),
+        });
+      }
+      interrupt.founder_input_request_id = request.id;
+    }
+
+    return null;
+  },
   materialize_ledger_entry: (db, params) => fakeMaterializeLedgerEntry(db, params.p_entry_id),
   materialize_reservation_hold: (db, params) => fakeMaterializeReservationHold(db, params.p_reservation_id),
   materialize_allocation_capacity: (db, params) =>

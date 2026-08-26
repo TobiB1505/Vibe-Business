@@ -16,6 +16,7 @@ import { isAgenticWritablePath } from "@/modules/execution/paths";
 import { describeCommand, type SandboxCommand } from "@/modules/validation/commands";
 import { sanitizeCommandOutput } from "@/modules/validation/logs";
 import type { AgentToolOutcome } from "./provider";
+import { runtimeFounderInputRequirement } from "@/modules/founder-input/runtime";
 import {
   AGENT_DECISION_TOOL,
   capabilityForTool,
@@ -112,6 +113,7 @@ export type RaisedInterrupt = {
   question: string;
   responseSchema: ExecutionInterruptResponseSchema;
   whyBlocked: ExecutionInterruptType;
+  founderInputRequirement: import("@/modules/founder-input/schema").FounderInputRequirement;
 };
 
 /** What the agent left behind, as observed by the gateway. */
@@ -796,6 +798,16 @@ export class ExecutionToolGateway {
     const type = situation as ExecutionInterruptType;
     const options = readOptions(input.options);
 
+    const founderInputRequirement = runtimeFounderInputRequirement({
+      stepKey: this.spec.stepKey,
+      draft: {
+        kind: "decision",
+        question: EXECUTION_INTERRUPT_QUESTIONS[type],
+        options: options.map((option) => option.label),
+      },
+    });
+    if (!founderInputRequirement) return this.deny(tool, "malformed_arguments");
+
     this.raisedInterrupt = {
       type,
       question: EXECUTION_INTERRUPT_QUESTIONS[type],
@@ -804,6 +816,7 @@ export class ExecutionToolGateway {
           ? { kind: "single_choice", options }
           : { kind: "text", maxLength: INTERRUPT_TEXT_MAX_LENGTH },
       whyBlocked: type,
+      founderInputRequirement,
     };
 
     this.allowedCalls += 1;
