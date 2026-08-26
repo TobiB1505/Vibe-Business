@@ -2,7 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { FounderInputCard } from "@/components/founder-input/founder-input-card";
-import { Button } from "@/components/ui/button";
+import { Button, TextAction } from "@/components/ui/button";
 import { CloseIcon, DocumentIcon, CheckIcon } from "@/components/ui/dashboard-icons";
 import { CreditPrice } from "@/components/ui/credit-price";
 import { Disclosure } from "@/components/ui/disclosure";
@@ -21,7 +21,7 @@ import {
   OPERATION_STAGE_LABELS,
   type OperationView,
 } from "@/modules/operations/view";
-import type { ActionPlanStep } from "@/modules/action-plans/schema";
+import type { ActionPlanStep, ExecutionSupport } from "@/modules/action-plans/schema";
 import type { ActionPlanReadiness, ActionPlanView } from "@/modules/action-plans/service";
 import {
   PLAN_PROGRESS_LABELS,
@@ -34,7 +34,10 @@ import {
   planExpectedChange,
   planFounderDemands,
   planMetaSummary,
+  stepDependencyTitles,
   stepDisplayState,
+  stepSequenceStatus,
+  type StepDisplayState,
 } from "@/modules/action-plans/view";
 import { PlanProgressSteps } from "./plan-progress-steps";
 import { resolveFounderInputAction } from "../founder-input-action";
@@ -67,6 +70,18 @@ import { startPlanAction, type StartPlanActionState } from "../plan-action";
  *    Selecting a Move never starts one.
  */
 
+
+const RESPONSIBILITY_TONE: Record<ExecutionSupport, StatusTone> = {
+  vibe_executes_now: "success",
+  // Deliberately not mint: mint is Vibe's action colour, and this value must
+  // never read as an offer to act.
+  vibe_prepares: "neutral",
+  founder_decides: "waiting",
+  founder_provides_input: "waiting",
+  founder_acts: "waiting",
+  external_dependency: "waiting",
+  not_yet_supported: "neutral",
+};
 
 /** The panel's own anchor, so a card's question CTA can point into it. */
 export const PLANNED_WORK_ANCHOR = "planned-work";
@@ -128,18 +143,75 @@ function PanelFrame({
   );
 }
 
-/** One numbered row of the plan, in the order the planner produced. */
+/**
+ * A "read more" toggle over text that is never mutated or sliced.
+ *
+ * The full string is always in the DOM — CSS `line-clamp` hides overflow
+ * visually without removing it, so a screen reader already gets the whole
+ * thing regardless of the toggle's state.
+ */
+function ExpandableText({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <p className={cn("text-fg-prose text-sm leading-relaxed", !expanded && "line-clamp-2")}>
+        {text}
+      </p>
+      <TextAction
+        type="button"
+        onClick={() => setExpanded((value) => !value)}
+        aria-expanded={expanded}
+        className="self-start text-xs"
+      >
+        {expanded ? "Show less" : "More context"}
+      </TextAction>
+    </div>
+  );
+}
+
+/** The step Vibe would start with — whatever `firstActionableStep` computed. */
+function StartHere({ step }: { step: ActionPlanStep }) {
+  return (
+    <Surface level="card" padding="md" tone="mint" className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <StatusPill tone="active" dot>
+          Start here
+        </StatusPill>
+        <StatusPill tone={RESPONSIBILITY_TONE[step.executionSupport]}>
+          {RESPONSIBILITY_HEADLINES[step.executionSupport]}
+        </StatusPill>
+      </div>
+      <h4 className="text-fg text-base leading-snug font-semibold">{step.title}</h4>
+      <p className="text-fg-prose text-sm leading-relaxed">{step.description}</p>
+    </Surface>
+  );
+}
+
+/**
+ * One numbered step of the plan.
+ *
+ * Scan first, expand second: the title, the one-sentence description and whose
+ * work it is are visible without asking; the purpose, the completion criterion
+ * and the prerequisites are one click away and never truncated. The sequence
+ * label is text as well as colour — "Waiting for step 4: …", never a tinted dot.
+ */
 function PlanStepRow({
   step,
+  allSteps,
+  display,
   index,
-  current,
   done,
 }: {
   step: ActionPlanStep;
+  allSteps: ActionPlanStep[];
+  display: StepDisplayState;
   index: number;
-  current: boolean;
   done: boolean;
 }) {
+  const sequence = stepSequenceStatus(step, allSteps, display);
+  const dependencyTitles = stepDependencyTitles(step, allSteps);
+  const isCurrent = display === "start_here";
   const sublabel = RESPONSIBILITY_SUBLABELS[step.executionSupport];
 
   return (
@@ -148,26 +220,59 @@ function PlanStepRow({
         aria-hidden
         className={cn(
           "mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full border font-mono text-meta tabular-nums",
-          current
+          isCurrent
             ? "border-mint-line bg-mint-tint text-mint"
             : done
-              ? "border-mint-line text-mint bg-transparent"
+              ? "border-mint-line text-mint"
               : "border-line-3 bg-surface-2 text-fg-meta",
         )}
       >
         {done ? <CheckIcon size={12} /> : String(index + 1).padStart(2, "0")}
       </span>
-      <div className="flex min-w-0 flex-col gap-1">
-        <p className="text-fg text-sm font-semibold">
-          {step.title}
-          {current && <span className="sr-only"> — start here</span>}
-          {done && <span className="sr-only"> — done</span>}
-        </p>
+
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <span className="text-fg-secondary text-meta font-medium">
+            {RESPONSIBILITY_HEADLINES[step.executionSupport]}
+          </span>
+          <span
+            className={cn(
+              "font-mono text-meta tracking-[0.1em] uppercase",
+              sequence.state === "waiting" ? "text-amber" : "text-fg-meta",
+            )}
+          >
+            {sequence.label}
+          </span>
+        </div>
+
+        {sublabel && <p className="text-fg-muted text-xs">{sublabel}</p>}
+
+        <h4 className="text-fg text-sm leading-snug font-semibold">{step.title}</h4>
         <p className="text-fg-muted text-xs leading-relaxed">{step.description}</p>
-        <p className="text-fg-meta text-meta">
-          {RESPONSIBILITY_HEADLINES[step.executionSupport]}
-          {sublabel ? ` · ${sublabel}` : ""}
-        </p>
+
+        <Disclosure label="Details" className="pt-0.5">
+          <div className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1">
+              <MonoLabel className="tracking-[0.14em]">Why this step exists</MonoLabel>
+              <p className="text-fg-secondary text-sm leading-relaxed">{step.purpose}</p>
+            </div>
+            <div className="flex flex-col gap-1">
+              <MonoLabel className="tracking-[0.14em]">Done when</MonoLabel>
+              <p className="text-fg-secondary text-sm leading-relaxed">{step.completionCriteria}</p>
+            </div>
+            {dependencyTitles.length > 0 && (
+              <div className="flex flex-col gap-1">
+                <MonoLabel className="tracking-[0.14em]">Depends on</MonoLabel>
+                <p className="text-fg-secondary text-sm leading-relaxed">
+                  {dependencyTitles.join(", ")}
+                </p>
+              </div>
+            )}
+            {step.requiresApproval && (
+              <p className="text-fg-muted text-xs">Approval required before Vibe acts on this.</p>
+            )}
+          </div>
+        </Disclosure>
       </div>
     </li>
   );
@@ -191,9 +296,17 @@ function PlanBody({
 
   return (
     <>
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-2">
         <p className="text-fg-muted text-ui">What Vibe plans to do</p>
-        {plan.goal && <p className="text-fg-body text-sm leading-relaxed">{plan.goal}</p>}
+        {plan.goal && (
+          <h3 className="text-fg text-base leading-snug font-semibold">{plan.goal}</h3>
+        )}
+        {plan.whyNow && (
+          <div className="flex flex-col gap-1">
+            <MonoLabel className="tracking-[0.14em]">Why now</MonoLabel>
+            <ExpandableText text={plan.whyNow} />
+          </div>
+        )}
         <p className="text-fg-meta font-mono text-meta">{planMetaSummary(steps)}</p>
       </div>
 
@@ -209,19 +322,22 @@ function PlanBody({
       ) : firstActionableStep?.actor === "founder_action" &&
         firstActionableStep.executionSupport === "founder_acts" ? (
         <FounderActionCard projectId={projectId} actionPlanId={plan.id} step={firstActionableStep} />
-      ) : firstActionableStep === null ? (
+      ) : firstActionableStep ? (
+        <StartHere step={firstActionableStep} />
+      ) : (
         <Notice tone={progress === "finished" ? "info" : "waiting"} label="Where this plan stands">
           {PLAN_PROGRESS_LABELS[progress]}
         </Notice>
-      ) : null}
+      )}
 
-      <ol className="flex flex-col gap-4" data-testid="planned-steps">
+      <ol className="flex flex-col gap-5" data-testid="planned-steps">
         {steps.map((step, index) => (
           <PlanStepRow
             key={step.id}
             step={step}
+            allSteps={steps}
             index={index}
-            current={stepDisplayState(step, firstActionableStep?.order ?? null, completed) === "start_here"}
+            display={stepDisplayState(step, firstActionableStep?.order ?? null, completed)}
             done={completed.has(step.order)}
           />
         ))}
@@ -281,26 +397,23 @@ function PlanBody({
         )}
       </div>
 
+      {plan.expectedOutcome && (
+        <div className="border-line-2 flex flex-col gap-2 border-t pt-4">
+          <MonoLabel className="tracking-[0.14em]">If this plan works</MonoLabel>
+          <p className="text-fg-body text-sm leading-relaxed">{plan.expectedOutcome}</p>
+        </div>
+      )}
+
+      {/* The counts are the plan's own cited evidence, not the size of a pack
+          Vibe happened to build. The label keeps the words the browser suite
+          pins, because what it protects is that reasoning is disclosed rather
+          than pushed at the founder. */}
       <Disclosure
-        label={`Evidence & reasoning · ${evidence.signals} ${
+        label={`Why Vibe planned this · ${evidence.signals} ${
           evidence.signals === 1 ? "signal" : "signals"
         } · ${evidence.sources} ${evidence.sources === 1 ? "source" : "sources"}`}
       >
         <div className="flex flex-col gap-4">
-          {plan.whyNow && (
-            <div className="flex flex-col gap-1.5">
-              <MonoLabel className="tracking-[0.14em]">Why now</MonoLabel>
-              <p className="text-fg-secondary text-sm leading-relaxed">{plan.whyNow}</p>
-            </div>
-          )}
-
-          {plan.expectedOutcome && (
-            <div className="flex flex-col gap-1.5">
-              <MonoLabel className="tracking-[0.14em]">If this plan works</MonoLabel>
-              <p className="text-fg-secondary text-sm leading-relaxed">{plan.expectedOutcome}</p>
-            </div>
-          )}
-
           {plan.addressesRootProblem && (
             <div className="flex flex-col gap-1.5">
               <MonoLabel className="tracking-[0.14em]">The problem this addresses</MonoLabel>
@@ -423,7 +536,6 @@ export function PlanDetailPanel({
   activeOperation,
   auditHref,
   understandingHref,
-  movesHref,
 }: {
   projectId: string;
   /** The Move this panel is about — rank 1 by default, or a founder's choice. */
@@ -437,7 +549,6 @@ export function PlanDetailPanel({
   activeOperation: OperationView | null;
   auditHref: string;
   understandingHref: string;
-  movesHref: string;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const action = startPlanAction.bind(null, projectId, opportunityId);
@@ -479,7 +590,9 @@ export function PlanDetailPanel({
       ? auditHref
       : blockNotice?.target === "product_understanding"
         ? understandingHref
-        : movesHref;
+        : // "next_moves" is the list beside this panel — an anchor on this very
+          // page, not a navigation away from it.
+          "#action-plan";
 
   // ADR 0028's honesty requirement: Vibe never plans a Move other than rank 1
   // on its own, so whenever the resolved Move is not rank 1 a founder chose it,

@@ -319,7 +319,6 @@ export function ActionPlanWorkspace({
               activeOperation={planOperation}
               auditHref={auditHref}
               understandingHref={understandingHref}
-              movesHref={movesHref}
             />
           ) : movesBlockNotice !== null && !movesRunning ? (
             /* A blocked plan offers exactly one way forward. A column of

@@ -749,7 +749,6 @@ export default async function E2eScenarioPage({
           activeOperation={fixture.activeOperation}
           auditHref="/app/projects/project_e2e#business-audit"
           understandingHref="/app/projects/project_e2e/product"
-          movesHref="/app/projects/project_e2e/plan"
         />
       </main>
     );

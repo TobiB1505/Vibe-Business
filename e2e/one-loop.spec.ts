@@ -137,7 +137,14 @@ test.describe("the default moves list", () => {
     await expect(page.getByTestId("moves-context")).toHaveCount(0);
     await expect(page.getByTestId("move-card")).toHaveCount(4);
     await expect(page.getByTestId("move-card").first()).toHaveAttribute("data-rank", "1");
-    await expect(page.getByText("Best next move")).toHaveCount(1);
+    /*
+     * ACTION PLAN UI-2: the "Best next move" label became the Now/Next/Later
+     * rail. Same claim, said once per band instead of once for rank 1 — and
+     * still text, so the ordering does not live in geometry alone.
+     */
+    await expect(page.getByText("Now", { exact: true })).toHaveCount(1);
+    await expect(page.getByText("Next", { exact: true })).toHaveCount(1);
+    await expect(page.getByText("Later", { exact: true })).toHaveCount(2);
   });
 
   test("says which finding each move answers", async ({ page }) => {
@@ -163,11 +170,26 @@ test.describe("the default moves list", () => {
     const count = await cards.count();
     expect(count).toBeGreaterThan(1);
 
+    /*
+     * ACTION PLAN UI-2: the panel is now beside the list, so choosing a Move is
+     * selection rather than a jump to a section below, and the card's own title
+     * is what selects it. The card the panel is already about does not link to
+     * itself; every other one does, carrying the same parameter as before.
+     */
     for (let index = 0; index < count; index++) {
-      const link = cards.nth(index).getByRole("link", { name: "Plan this Move" });
+      const card = cards.nth(index);
+      const selected = await card.getAttribute("data-selected");
+      const title = card.getByRole("heading").first();
+
+      if (selected === "true") {
+        await expect(title.getByRole("link")).toHaveCount(0);
+        continue;
+      }
+
+      const link = title.getByRole("link");
       await expect(link).toBeVisible();
       const href = await link.getAttribute("href");
-      expect(href).toMatch(/\/app\/projects\/project_e2e\/plan\?plan=.+#plan-this-move$/);
+      expect(href).toMatch(/\/app\/projects\/project_e2e\/plan\?plan=.+$/);
     }
   });
 });
@@ -181,10 +203,17 @@ test.describe("a move card says one thing at a time", () => {
     await expect(card).toContainText("Needs your input");
     await expect(card).toContainText("High impact");
 
-    // Effort and confidence are still on the card and no longer *visible* on
-    // it — demoted behind the disclosure rather than deleted (§17).
-    await expect(card.getByText("Medium effort")).not.toBeVisible();
+    /*
+     * Confidence is still on the card and no longer *visible* on it — demoted
+     * behind the disclosure rather than deleted (§17).
+     *
+     * Effort moved the other way in ACTION PLAN UI-2, deliberately: it now
+     * occupies the slot the reference design fills with a duration. The domain
+     * has no duration and forbids inventing one, so the honest substitution is
+     * the coarse label the domain does have — stated once, under the action.
+     */
     await expect(card.getByText("High confidence")).not.toBeVisible();
+    await expect(card.getByText("Medium effort")).toBeVisible();
 
     // The business dimension chip is gone entirely: it competed with the audit
     // lineage for the same job, and the lineage answers it better (§14).
@@ -192,22 +221,21 @@ test.describe("a move card says one thing at a time", () => {
   });
 
   /** §17: demoted, not deleted. */
-  test("keeps effort and confidence under Why now?", async ({ page }) => {
+  test("keeps confidence under the card's disclosure", async ({ page }) => {
     await page.goto(RANKED);
     const card = page.getByTestId("move-card").first();
 
-    await card.getByText("Why now?").click();
-    await expect(card).toContainText("Medium effort");
-    await expect(card).toContainText("High confidence");
+    await card.getByText("Why this matters").click();
+    await expect(card.getByText("High confidence")).toBeVisible();
   });
 
-  test("Why now? is operable by keyboard alone", async ({ page }) => {
+  test("the card's disclosure is operable by keyboard alone", async ({ page }) => {
     await page.goto(RANKED);
-    const summary = page.getByTestId("move-card").first().getByText("Why now?");
+    const summary = page.getByTestId("move-card").first().getByText("Why this matters");
 
     await summary.focus();
     await page.keyboard.press("Enter");
-    await expect(page.getByTestId("move-card").first()).toContainText("Medium effort");
+    await expect(page.getByTestId("move-card").first().getByText("High confidence")).toBeVisible();
   });
 
   /** §18: an ordering constraint must not be discovered by pressing a button. */
@@ -225,11 +253,11 @@ test.describe("readiness decides what is offered", () => {
   test("offers preparation only where an executor exists", async ({ page }) => {
     await page.goto(RANKED);
 
-    const prepare = page.getByRole("button", { name: "Let Vibe prepare this" });
+    const prepare = page.getByRole("button", { name: "Start with Vibe" });
     await expect(prepare).toHaveCount(1);
 
     const card = page.getByTestId("move-card").filter({ hasText: "Add a pricing surface" });
-    await expect(card.getByRole("button", { name: "Let Vibe prepare this" })).toBeVisible();
+    await expect(card.getByRole("button", { name: "Start with Vibe" })).toBeVisible();
   });
 
   test("gives a needs-your-input move no execution button", async ({ page }) => {
@@ -239,7 +267,7 @@ test.describe("readiness decides what is offered", () => {
       .getByTestId("move-card")
       .filter({ has: page.getByRole("heading", { name: "Decide how customers pay" }) });
     await expect(card).toContainText("Needs your input");
-    await expect(card.getByRole("button", { name: "Let Vibe prepare this" })).toHaveCount(0);
+    await expect(card.getByRole("button", { name: "Start with Vibe" })).toHaveCount(0);
   });
 
   /** The praise-worthy behaviour this sprint had to preserve. */
@@ -248,8 +276,8 @@ test.describe("readiness decides what is offered", () => {
 
     const card = page.getByTestId("move-card").filter({ hasText: "Talk to ten people" });
     await expect(card).toContainText("Not automated yet");
-    await expect(card.getByRole("button", { name: "Let Vibe prepare this" })).toHaveCount(0);
-    await expect(card.getByRole("button", { name: /Let Vibe/ })).toHaveCount(0);
+    await expect(card.getByRole("button", { name: "Start with Vibe" })).toHaveCount(0);
+    await expect(card.getByRole("button", { name: /Start with Vibe|Let Vibe/ })).toHaveCount(0);
   });
 });
 
@@ -308,7 +336,9 @@ test.describe("the empty states each have a next step", () => {
 
     await expect(page.getByText("New business evidence is available")).toBeVisible();
     await expect(page.getByTestId("move-card")).toHaveCount(4);
-    await expect(page.getByRole("button", { name: "Refresh my next moves" })).toBeEnabled();
+    // ACTION PLAN UI-2 renamed the refresh: it re-reads the business, not the
+    // list. Same action, same price disclosure, same explicit `force`.
+    await expect(page.getByRole("button", { name: "Re-scan business" })).toBeEnabled();
   });
 });
 
