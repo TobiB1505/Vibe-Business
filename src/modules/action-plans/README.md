@@ -89,8 +89,14 @@ Agent work has a separate authority. It completes only when an immutable spec
 binds a planner-owned run to the step, the run succeeded with a Prepared Change,
 Vibe recorded `change_verified`, and independent validation passed with the
 changed files verified. The projection is assembled in `completion-store.ts`;
-there is no mutable completion flag. Founder actions and external dependencies
-remain incomplete until their own evidence integrations exist.
+there is no mutable completion flag.
+
+`founder_action` uses a separate authority: the owning founder explicitly
+confirms that the exact immutable step's completion criterion is true. The
+append-only evidence is stored in `action_plan_founder_attestations` and read
+through `founder-action-store.ts`. It can complete only `founder_action` /
+`founder_acts` work. External dependencies remain incomplete until their own
+authority exists.
 
 ## The one architectural rule
 

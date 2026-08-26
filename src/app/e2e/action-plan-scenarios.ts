@@ -225,22 +225,23 @@ function planView(overrides: Partial<ActionPlanView> = {}): ActionPlanView {
     ...overrides,
     completedStepOrders: overrides.completedStepOrders ?? [],
     founderInputRequest:
-      overrides.founderInputRequest ??
-      (actionable?.founderInputRequirement
-        ? {
-            id: "request_e2e",
-            projectId: storedPlan.projectId,
-            actionPlanId: storedPlan.id,
-            actionPlanStepKey: actionable.id,
-            executionInterruptId: null,
-            origin: "planner",
-            ...actionable.founderInputRequirement,
-            contextHash: storedPlan.inputHash,
-            status: "open",
-            createdAt: "2026-08-14T18:00:42.000Z",
-            resolvedAt: null,
-          }
-        : null),
+      "founderInputRequest" in overrides
+        ? (overrides.founderInputRequest ?? null)
+        : actionable?.founderInputRequirement
+          ? {
+              id: "request_e2e",
+              projectId: storedPlan.projectId,
+              actionPlanId: storedPlan.id,
+              actionPlanStepKey: actionable.id,
+              executionInterruptId: null,
+              origin: "planner",
+              ...actionable.founderInputRequirement,
+              contextHash: storedPlan.inputHash,
+              status: "open",
+              createdAt: "2026-08-14T18:00:42.000Z",
+              resolvedAt: null,
+            }
+          : null,
   };
 }
 
@@ -349,6 +350,24 @@ export const E2E_ACTION_PLAN_SCENARIOS = {
     planView: planView(),
     activeOperation: null,
   }),
+
+  /** Prior authoritative evidence has advanced the plan to manual founder work. */
+  action_plan_founder_action: (): ActionPlanFixture => {
+    const completed = new Set([1, 2, 3]);
+    return {
+      opportunityId: "move_e2e",
+      moveTitle: MOVE_TITLE,
+      defaultMoveTitle: MOVE_TITLE,
+      readiness: readiness(),
+      planView: planView({
+        firstActionableStep: firstActionableStep(STEPS, completed),
+        progress: planProgress(STEPS, completed),
+        completedStepOrders: [...completed],
+        founderInputRequest: null,
+      }),
+      activeOperation: null,
+    };
+  },
 
   /** The same plan, but the audit has since moved. */
   action_plan_stale: (): ActionPlanFixture => ({

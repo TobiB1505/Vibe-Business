@@ -37,6 +37,10 @@ import { startPlanAction, type StartPlanActionState } from "./plan-action";
 import {
   resolveFounderInputAction,
 } from "./founder-input-action";
+import {
+  attestFounderActionStepAction,
+  type FounderActionAttestationState,
+} from "./founder-action-attestation";
 
 /**
  * The Action Plan section (ACTION PLANNER UI-1, density pass UI-1.1).
@@ -152,6 +156,68 @@ function StartHere({ step }: { step: ActionPlanStep }) {
       </div>
       <h5 className="text-fg text-lg leading-snug font-semibold">{step.title}</h5>
       <p className="text-fg-prose text-sm leading-relaxed">{step.description}</p>
+    </Surface>
+  );
+}
+
+function FounderActionCard({
+  projectId,
+  actionPlanId,
+  step,
+}: {
+  projectId: string;
+  actionPlanId: string;
+  step: ActionPlanStep;
+}) {
+  const action = attestFounderActionStepAction.bind(
+    null,
+    projectId,
+    actionPlanId,
+    step.id,
+  );
+  const [state, formAction, pending] = useActionState<FounderActionAttestationState, FormData>(
+    action,
+    null,
+  );
+
+  return (
+    <Surface level="card" padding="md" tone="amber" className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <StatusPill tone="waiting" dot>
+          Your action
+        </StatusPill>
+        <span className="text-fg-muted text-xs">Step {step.order}</span>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <h5 className="text-fg text-lg leading-snug font-semibold">{step.title}</h5>
+        <p className="text-fg-prose text-sm leading-relaxed">{step.description}</p>
+      </div>
+
+      <div className="border-amber-line bg-amber-tint/35 rounded-well border px-4 py-3">
+        <MonoLabel className="text-amber tracking-[0.12em]">Confirm when true</MonoLabel>
+        <p className="text-fg-body mt-1.5 text-sm leading-relaxed">{step.completionCriteria}</p>
+      </div>
+
+      <form action={formAction} noValidate className="flex flex-col items-start gap-2.5">
+        <Button
+          type="submit"
+          disabled={pending || state?.ok === true}
+          busy={pending}
+          className="min-w-52"
+        >
+          {pending ? "Saving confirmation…" : state?.ok ? "Completion confirmed" : "Confirm this is complete"}
+        </Button>
+        <p className="text-fg-muted text-xs">
+          This records your confirmation against this exact plan step.
+        </p>
+      </form>
+
+      {state && !state.ok && (
+        <p role="alert" className="text-coral text-sm">
+          {state.message}
+        </p>
+      )}
     </Surface>
   );
 }
@@ -280,6 +346,14 @@ function ReadyPlan({ projectId, planView }: { projectId: string; planView: Actio
             request={founderInputRequest}
             context="action_plan"
             resolveAction={resolveFounderInputAction}
+          />
+        ) : staleness.length === 0 &&
+          firstActionableStep?.actor === "founder_action" &&
+          firstActionableStep.executionSupport === "founder_acts" ? (
+          <FounderActionCard
+            projectId={projectId}
+            actionPlanId={plan.id}
+            step={firstActionableStep}
           />
         ) : firstActionableStep ? (
           <StartHere step={firstActionableStep} />

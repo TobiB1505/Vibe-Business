@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { fakePlanStep } from "@/modules/execution-contract/test-support";
-import { completedStepsFromEvidence, type AgentStepCompletionEvidence } from "./completion";
+import {
+  completedStepsFromEvidence,
+  type AgentStepCompletionEvidence,
+  type FounderActionCompletionEvidence,
+} from "./completion";
 
 function agentEvidence(overrides: Partial<AgentStepCompletionEvidence> = {}): AgentStepCompletionEvidence {
   return {
@@ -10,6 +14,20 @@ function agentEvidence(overrides: Partial<AgentStepCompletionEvidence> = {}): Ag
     validationRunId: "validation-1",
     stepKey: "2-build",
     stepOrder: 2,
+    ...overrides,
+  };
+}
+
+function founderActionEvidence(
+  overrides: Partial<FounderActionCompletionEvidence> = {},
+): FounderActionCompletionEvidence {
+  return {
+    attestationId: "attestation-1",
+    attestedByUserId: "user-1",
+    attestedAt: "2026-08-26T15:00:00.000Z",
+    attestationVersion: "founder-action-attestation.v1",
+    stepKey: "3-connect-stripe",
+    stepOrder: 3,
     ...overrides,
   };
 }
@@ -94,6 +112,63 @@ describe("Action Plan completion authorities", () => {
 
     for (const step of [founder, unsupported, external]) {
       expect([...completedStepsFromEvidence([step], [], [agentEvidence()])]).toEqual([]);
+    }
+  });
+
+  it("completes a founder_action only from an attestation bound to its key and order", () => {
+    const step = fakePlanStep({
+      id: "3-connect-stripe",
+      order: 3,
+      actor: "founder_action",
+      changeKind: "external_setup",
+      executionSupport: "founder_acts",
+      capability: null,
+    });
+
+    expect(
+      [...completedStepsFromEvidence([step], [], [], [founderActionEvidence()])],
+    ).toEqual([3]);
+    expect(
+      [
+        ...completedStepsFromEvidence(
+          [step],
+          [],
+          [],
+          [founderActionEvidence({ stepKey: "3-other" })],
+        ),
+      ],
+    ).toEqual([]);
+    expect(
+      [
+        ...completedStepsFromEvidence(
+          [step],
+          [],
+          [],
+          [founderActionEvidence({ stepOrder: 2 })],
+        ),
+      ],
+    ).toEqual([]);
+  });
+
+  it("never lets a founder attestation complete Agent or external-party work", () => {
+    const agent = fakePlanStep({
+      id: "3-connect-stripe",
+      order: 3,
+      executionSupport: "vibe_executes_now",
+      capability: "nextjs_seo_foundations_v2",
+    });
+    const external = fakePlanStep({
+      id: "3-connect-stripe",
+      order: 3,
+      actor: "external_party",
+      executionSupport: "external_dependency",
+      capability: null,
+    });
+
+    for (const step of [agent, external]) {
+      expect(
+        [...completedStepsFromEvidence([step], [], [], [founderActionEvidence()])],
+      ).toEqual([]);
     }
   });
 });

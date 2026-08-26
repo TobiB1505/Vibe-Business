@@ -71,6 +71,7 @@
 | Start paid plan | `Choose {plan}` | stable busy action; pessimistic redirect | Stripe Checkout, then Billing return | persistent action error; cancelled return confirms no charge | Checkout/browser owned | ADR 0025 |
 | Manage or cancel subscription | `Manage or cancel plan` | stable busy action | Stripe customer portal | persistent action error | portal/browser owned | ADR 0025 |
 | Claim Welcome Credits | `Add my 100 Welcome Credits` | stable busy action | same Billing page with canonical balance | persistent action error | submitted action remains contextual | ADR 0024 |
+| Confirm founder action | `Confirm this is complete` on the current founder-owned action | stable busy action; duplicate submission blocked | same Action Plan with evidence-derived next step | persistent inline error; criterion remains visible | submitted action remains contextual | ADR 0055 |
 
 ## Navigation and responsive behavior
 

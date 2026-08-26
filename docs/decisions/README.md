@@ -84,6 +84,7 @@ V0.1 foundational architecture decisions have been recorded:
 - [0052](0052-durable-product-scan-discovery-feed.md) — Durable Product Scan and bounded discovery feed (Accepted; repository reading, public-product inspection and Product Understanding are one durable operation, with a 24-event append-only feed and one shared Motion surface in onboarding and My Product)
 - [0053](0053-founder-input-resolution.md) — Founder-owned input resolution and Action Plan completion evidence (Accepted; dynamic planner-generated requests resolve into versioned project context, complete founder-owned steps from evidence, and feed immutable execution specs without inventing pause/resume)
 - [0054](0054-agent-action-plan-completion-evidence.md) — Agent Action Plan completion comes from verified execution evidence (Accepted; immutable step binding, successful planner run, Vibe candidate verification and independent validation jointly complete Agent work without a mutable completion flag)
+- [0055](0055-founder-action-attestation-evidence.md) — Founder actions complete from explicit immutable attestation (Accepted; an owned founder_action step completes only from criterion-bound, audit-ready founder testimony, never a universal checkbox)
 
 Several architecture questions remain intentionally open — see [ARCHITECTURE.md §7](../../ARCHITECTURE.md#7-deferred--open-decisions).
 

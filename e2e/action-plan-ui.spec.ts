@@ -260,6 +260,25 @@ test.describe("ready plan — Start Here", () => {
   });
 });
 
+test.describe("ready plan — founder action attestation", () => {
+  test("asks for an explicit criterion-bound confirmation instead of a checkbox", async ({
+    page,
+  }) => {
+    await page.goto("/e2e/action_plan_founder_action");
+
+    await expect(page.getByText("Your action").first()).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Submit the sitemap to Search Console" }).first(),
+    ).toBeVisible();
+    await expect(page.getByText("Confirm when true")).toBeVisible();
+    await expect(
+      page.getByText("The sitemap shows as submitted in Search Console").first(),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: "Confirm this is complete" })).toBeVisible();
+    await expect(page.getByRole("checkbox")).toHaveCount(0);
+  });
+});
+
 test.describe("ready plan — timeline", () => {
   test("shows every step title by default, with secondary detail collapsed", async ({ page }) => {
     await page.goto("/e2e/action_plan_ready");

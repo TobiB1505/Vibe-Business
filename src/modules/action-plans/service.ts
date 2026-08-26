@@ -32,6 +32,7 @@ import {
 } from "./store";
 import { completedStepsFromEvidence } from "./completion";
 import { listAgentStepCompletionEvidence } from "./completion-store";
+import { listFounderActionCompletionEvidence } from "./founder-action-store";
 import {
   listActiveFounderResolutions,
   listFounderInputRequestsForPlan,
@@ -344,7 +345,16 @@ export async function getLatestActionPlan(
   const plan = await getLatestCompletedActionPlan(supabase, projectId);
   if (!plan) return null;
 
-  const [audit, opportunities, profile, founderIntent, resolutions, requests, agentEvidence] =
+  const [
+    audit,
+    opportunities,
+    profile,
+    founderIntent,
+    resolutions,
+    requests,
+    agentEvidence,
+    founderActionEvidence,
+  ] =
     await Promise.all([
       getLatestSuccessfulAudit(supabase, projectId),
       getLatestOpportunities(supabase, projectId),
@@ -353,9 +363,15 @@ export async function getLatestActionPlan(
       listActiveFounderResolutions(supabase, projectId),
       listFounderInputRequestsForPlan(supabase, plan.id),
       listAgentStepCompletionEvidence(supabase, { projectId, actionPlanId: plan.id }),
+      listFounderActionCompletionEvidence(supabase, { projectId, actionPlanId: plan.id }),
     ]);
 
-  const completed = completedStepsFromEvidence(plan.steps, resolutions, agentEvidence);
+  const completed = completedStepsFromEvidence(
+    plan.steps,
+    resolutions,
+    agentEvidence,
+    founderActionEvidence,
+  );
   const actionable = firstActionableStep(plan.steps, completed);
 
   return {
@@ -412,11 +428,17 @@ export async function getOnboardingFirstMove(
     return { plan: null, firstActionableStep: null, progress: null, completedStepOrders: [] };
   }
 
-  const [resolutions, agentEvidence] = await Promise.all([
+  const [resolutions, agentEvidence, founderActionEvidence] = await Promise.all([
     listActiveFounderResolutions(supabase, projectId),
     listAgentStepCompletionEvidence(supabase, { projectId, actionPlanId: plan.id }),
+    listFounderActionCompletionEvidence(supabase, { projectId, actionPlanId: plan.id }),
   ]);
-  const completed = completedStepsFromEvidence(plan.steps, resolutions, agentEvidence);
+  const completed = completedStepsFromEvidence(
+    plan.steps,
+    resolutions,
+    agentEvidence,
+    founderActionEvidence,
+  );
 
   return {
     plan,
