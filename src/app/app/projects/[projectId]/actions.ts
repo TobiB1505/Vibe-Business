@@ -64,20 +64,22 @@ export async function disconnectProjectAction(
 
   if (!result.ok) {
     if (result.error === "not_found") {
-      // Deliberately no audit event. `recordAuditEvent` resolves `projectId`
-      // out of `metadata` into the real `project_id` column, and that column's
-      // foreign key — plus the table's own insert policy — require the project
-      // to exist and to belong to the caller. Neither holds here, so the write
-      // could only ever fail and log noise.
+      // Deliberately no audit event, for two reasons that point the same way.
+      //
+      // Mechanically it cannot be written: `recordAuditEvent` resolves
+      // `projectId` out of `metadata` into the real `project_id` column, and
+      // that column's foreign key — plus the table's own insert policy —
+      // require the project to exist and to belong to the caller.
+      //
+      // And it should not be: `not_found` deliberately does not distinguish
+      // "no such project" from "not yours", so anything written or reported
+      // per-outcome here would be an ownership oracle. One code, one silence.
       return { ok: false, error: "project_not_found" };
     }
 
-    // The database refused a delete on a project this account owns. The raw
-    // message is operationally valuable (it names the constraint or trigger)
-    // and is kept server-side only — it is never returned, and never written
-    // to the audit log.
-    console.error(`[projects] disconnect failed for ${projectId}:`, result.message);
-
+    // The database refused a delete on a project this account owns. The store
+    // has already dropped the raw message, so there is nothing schema-shaped
+    // to leak here; the bounded fact that it failed is what gets recorded.
     await recordAuditEvent(supabase, {
       userId: session.userId,
       eventType: "project.deletion_failed",

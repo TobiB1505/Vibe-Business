@@ -56,8 +56,11 @@ export function DisconnectButton({ projectId }: { projectId: string }) {
         <ConfirmPanel
           title="Disconnect this project?"
           tone="caution"
-          confirmLabel={pending ? "Disconnecting…" : "Disconnect project"}
+          confirmLabel="Disconnect project"
           confirmType="submit"
+          // Disables both buttons and shows the busy state, so a second click
+          // cannot submit a second delete while the first is in flight.
+          pending={pending}
           onCancel={() => setConfirming(false)}
         >
           <>

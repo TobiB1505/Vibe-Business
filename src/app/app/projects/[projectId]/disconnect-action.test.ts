@@ -41,9 +41,15 @@ const { disconnectProjectAction } = await import("./actions");
 const SERVER_USER = "user_from_session";
 const PROJECT = "project_1";
 
-/** The exact database text a refused cascade produces today (VB-001). */
-const RAW_DB_MESSAGE =
-  'execution_specs rows are immutable. Re-resolve the step and insert a new spec instead.';
+/**
+ * A deliberately hostile database message: schema names, a constraint, and a
+ * token-shaped word. The store no longer returns one at all, so this is fed in
+ * past the type to prove the action would still not surface it if a future
+ * change reintroduced the field.
+ */
+const HOSTILE_DB_MESSAGE =
+  'update or delete on table "projects" violates foreign key constraint ' +
+  '"execution_specs_project_id_fkey" — secret';
 
 /**
  * React calls the bound action with `(prevState, formData)`. The action
@@ -118,13 +124,7 @@ describe("failure: not_found", () => {
 });
 
 describe("failure: internal database failure", () => {
-  beforeEach(() =>
-    disconnectProjectMock.mockResolvedValue({
-      ok: false,
-      error: "unknown",
-      message: RAW_DB_MESSAGE,
-    }),
-  );
+  beforeEach(() => disconnectProjectMock.mockResolvedValue({ ok: false, error: "unknown" }));
 
   it("does not redirect", async () => {
     await expect(invoke()).resolves.toBeDefined();
@@ -135,14 +135,9 @@ describe("failure: internal database failure", () => {
     await expect(invoke()).resolves.toEqual({ ok: false, error: "deletion_failed" });
   });
 
-  it("never lets the raw database message reach the caller", async () => {
-    const state = await invoke();
-    const serialized = JSON.stringify(state);
-    expect(serialized).not.toContain(RAW_DB_MESSAGE);
-    expect(serialized).not.toContain("execution_specs");
-    expect(serialized).not.toContain("immutable");
+  it("returns nothing but the closed code", async () => {
     // No SQLSTATE, table, constraint or trigger name of any shape.
-    expect(serialized).toBe('{"ok":false,"error":"deletion_failed"}');
+    expect(JSON.stringify(await invoke())).toBe('{"ok":false,"error":"deletion_failed"}');
   });
 
   it("records a failure audit event carrying only bounded identifiers", async () => {
@@ -152,19 +147,54 @@ describe("failure: internal database failure", () => {
       eventType: "project.deletion_failed",
       metadata: { projectId: PROJECT, reason: "deletion_failed" },
     });
+  });
 
+  it("logs no raw error to compensate for narrowing the store result", async () => {
+    await invoke();
+    expect(console.error).not.toHaveBeenCalled();
+  });
+});
+
+describe("failure: a hostile message reintroduced into the store result", () => {
+  beforeEach(() =>
+    // Past the type on purpose. The store's union has no `message` arm any
+    // more; this pins that the action's own mapping — not merely the store's
+    // shape — is what keeps schema text away from the browser.
+    disconnectProjectMock.mockResolvedValue({
+      ok: false,
+      error: "unknown",
+      message: HOSTILE_DB_MESSAGE,
+    }),
+  );
+
+  it("surfaces none of it", async () => {
+    const serialized = JSON.stringify(await invoke());
+
+    expect(serialized).toBe('{"ok":false,"error":"deletion_failed"}');
+    for (const fragment of [
+      HOSTILE_DB_MESSAGE,
+      "execution_specs",
+      "foreign key",
+      "constraint",
+      "projects",
+      "secret",
+    ]) {
+      expect(serialized).not.toContain(fragment);
+    }
+  });
+
+  it("keeps it out of the audit metadata too", async () => {
+    await invoke();
     const [, params] = recordAuditEventMock.mock.calls[0] as [
       unknown,
       { metadata: Record<string, unknown> },
     ];
-    expect(JSON.stringify(params.metadata)).not.toContain(RAW_DB_MESSAGE);
+    expect(JSON.stringify(params.metadata)).not.toContain("secret");
+    expect(JSON.stringify(params.metadata)).not.toContain("constraint");
   });
 
-  it("keeps the diagnostic server-side", async () => {
-    await invoke();
-    expect(console.error).toHaveBeenCalledWith(
-      expect.stringContaining(PROJECT),
-      RAW_DB_MESSAGE,
-    );
+  it("still does not redirect", async () => {
+    await expect(invoke()).resolves.toBeDefined();
+    expect(redirectMock).not.toHaveBeenCalled();
   });
 });

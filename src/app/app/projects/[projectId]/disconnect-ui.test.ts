@@ -53,6 +53,26 @@ describe("the failure is shown rather than swallowed", () => {
   });
 });
 
+describe("a second click cannot submit a second delete", () => {
+  it("hands the pending flag to the confirmation panel", () => {
+    // `ConfirmPanel` disables both buttons and shows the busy state while
+    // pending, so the destructive submit is guarded rather than merely relabelled.
+    expect(src).toContain("pending={pending}");
+  });
+
+  it("takes the pending flag from the action state, not from local state", () => {
+    expect(src).toMatch(/const \[state, formAction, pending\] = useActionState\(/);
+  });
+
+  it("leaves the control usable again once the failure comes back", () => {
+    // The panel stays mounted on failure — the component returns the confirming
+    // branch whenever `confirming` is true, and nothing clears it on error — so
+    // `pending` returning to false re-enables the button without a remount.
+    expect(src).toContain("if (confirming) {");
+    expect(src).not.toMatch(/setConfirming\(false\)[^)]*state/);
+  });
+});
+
 describe("nothing database-shaped can reach the screen", () => {
   it("renders only from the fixed copy table, never from the state's payload", () => {
     // The failure state carries a code and nothing else, and the component

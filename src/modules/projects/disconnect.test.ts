@@ -35,6 +35,21 @@ describe("disconnectProject", () => {
 
     const result = await disconnectProject(client, { projectId: "project-1", userId: "user-1" });
 
-    expect(result).toEqual({ ok: false, error: "unknown", message: "connection reset" });
+    expect(result).toEqual({ ok: false, error: "unknown" });
+  });
+
+  it("never lets the database message leave the module (VB-003)", async () => {
+    // A PostgREST message names the table, constraint or trigger that refused.
+    // The caller is a Server Action, so anything returned here is one careless
+    // render away from a founder reading the schema.
+    const hostile =
+      'update or delete on table "projects" violates foreign key constraint ' +
+      '"execution_specs_project_id_fkey" — secret';
+    const { client } = fakeSupabase({ data: null, error: { message: hostile } });
+
+    const result = await disconnectProject(client, { projectId: "project-1", userId: "user-1" });
+
+    expect(JSON.stringify(result)).toBe('{"ok":false,"error":"unknown"}');
+    expect(JSON.stringify(result)).not.toContain("secret");
   });
 });
