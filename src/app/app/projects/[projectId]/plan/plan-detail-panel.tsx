@@ -29,7 +29,6 @@ import {
   RESPONSIBILITY_HEADLINES,
   RESPONSIBILITY_SUBLABELS,
   buildActionPlanBlockNotice,
-  planDependencyTitles,
   planEvidenceSummary,
   planExpectedChange,
   planFounderDemands,
@@ -235,9 +234,13 @@ function PlanStepRow({
           <span className="text-fg-secondary text-meta font-medium">
             {RESPONSIBILITY_HEADLINES[step.executionSupport]}
           </span>
+          {/* Sentence case, not the product's usual uppercase meta run: this
+              label is a sentence naming another step by its title, and set in
+              caps it shouts a whole line of the panel. Text first either way —
+              a waiting step says so in words as well as in amber. */}
           <span
             className={cn(
-              "font-mono text-meta tracking-[0.1em] uppercase",
+              "text-meta",
               sequence.state === "waiting" ? "text-amber" : "text-fg-meta",
             )}
           >
@@ -289,7 +292,6 @@ function PlanBody({
   const steps = [...plan.steps].sort((a, b) => a.order - b.order);
   const completed = new Set(completedStepOrders);
   const surfaces = planExpectedChange(steps);
-  const dependencies = planDependencyTitles(steps);
   const demands = planFounderDemands(steps, completedStepOrders);
   const evidence = planEvidenceSummary(steps);
   const evidenceIds = [...new Set(steps.flatMap((step) => step.evidenceIds))];
@@ -365,19 +367,17 @@ function PlanBody({
         </div>
       )}
 
-      {dependencies.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <MonoLabel className="tracking-[0.14em]">Depends on</MonoLabel>
-          <ul className="flex flex-col gap-1.5">
-            {dependencies.map((title) => (
-              <li key={title} className="text-fg-secondary flex items-start gap-2 text-ui">
-                <CheckIcon size={14} className="text-mint mt-0.5 shrink-0" />
-                {title}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {/*
+        No plan-level "Depends on".
+
+        Every prerequisite a plan has is another of its own steps, and each step
+        row already states its own — "Waiting for step 4: Submit the sitemap".
+        Listing them again under the timeline restates the timeline. The
+        reference design's version of this section named an external dependency
+        ("Existing Stripe integration"), which is a fact the domain does not
+        model; inventing one to fill the slot is exactly what the rest of this
+        screen refuses to do.
+      */}
 
       <div className="flex flex-col gap-2">
         <MonoLabel className="tracking-[0.14em]">Needs from you</MonoLabel>

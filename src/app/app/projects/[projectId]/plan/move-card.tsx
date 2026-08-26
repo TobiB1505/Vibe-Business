@@ -8,7 +8,7 @@ import {
   UserIcon,
 } from "@/components/ui/dashboard-icons";
 import { buttonClasses } from "@/components/ui/button";
-import { CategoryChip, StatusPill, type StatusTone } from "@/components/ui/status-pill";
+import { RatingChip, StatusPill, type StatusTone } from "@/components/ui/status-pill";
 import { Surface } from "@/components/ui/surface";
 import { Disclosure } from "@/components/ui/disclosure";
 import { MonoLabel } from "@/components/ui/typography";
@@ -186,15 +186,65 @@ export function MoveCard({
   const ResponsibilityIcon = RESPONSIBILITY_ICONS[responsibility.icon];
   const selectHref = planMoveHref(movesHref, opportunity.id);
 
+  /*
+   * One control per card, and only where it is real.
+   *
+   * `PrepareChangePanel` is the sole owner of what a Move with an executor
+   * offers. Its `preparable` state is a single button, so it belongs beside the
+   * responsibility line; every other state is prose about a change that already
+   * exists and belongs under it. Its two silent states — a Move waiting on the
+   * founder, and one Vibe cannot do at all — render nothing, and a card that
+   * would otherwise carry no action at all offers selection instead.
+   */
+  const executionPanel = execution ? (
+    <PrepareChangePanel
+      projectId={projectId}
+      opportunityId={opportunity.id}
+      actionState={execution}
+      branchUrl={branchUrl}
+      validationSummary={validationSummary}
+      preparedHref={preparedHref}
+      blockedDestinations={blockedDestinations}
+    />
+  ) : null;
+
+  const silentExecution =
+    execution === null ||
+    execution.kind === "needs_user_input" ||
+    execution.kind === "not_automated";
+
+  const selectionLink = selected ? null : (
+    <Link href={selectHref} className={buttonClasses({ variant: "secondary", size: "sm" })}>
+      Plan this move
+    </Link>
+  );
+
+  const compactAction = questionCta ? (
+    <Link
+      href={selected ? planPanelHref : `${selectHref}${planPanelHref}`}
+      className={buttonClasses({ variant: "secondary", size: "sm" })}
+    >
+      {questionCta}
+    </Link>
+  ) : silentExecution ? (
+    selectionLink
+  ) : execution?.kind === "preparable" ? (
+    executionPanel
+  ) : null;
+
+  const richAction =
+    !questionCta && !silentExecution && execution?.kind !== "preparable" ? executionPanel : null;
+
   return (
     <Surface
       as="article"
       level="panel"
       padding="lg"
-      className={cn(
-        "flex flex-col gap-4 transition-interactive",
-        selected && "border-mint-line bg-mint-tint-soft",
-      )}
+      /* The surface's own tone, not a border override: `cn` is a join, so two
+         border-colour utilities in one class list are decided by stylesheet
+         order rather than by which was written last. */
+      tone={selected ? "mint" : "neutral"}
+      className="flex flex-col gap-4 transition-interactive"
       data-testid="move-card"
       data-rank={opportunity.rank}
       data-selected={selected}
@@ -248,7 +298,7 @@ export function MoveCard({
             signal worth reading at a glance, and effort is stated once — in
             the slot below the action, where the reference design puts a
             duration the domain does not have. */}
-        <CategoryChip>{IMPACT_LABELS[opportunity.impact]}</CategoryChip>
+        <RatingChip>{IMPACT_LABELS[opportunity.impact]}</RatingChip>
       </div>
 
       <Disclosure label="Why this matters">
@@ -307,40 +357,17 @@ export function MoveCard({
         </div>
 
         <div className="flex w-full flex-col gap-1.5 sm:w-auto sm:items-end">
-          {questionCta ? (
-            <Link
-              href={selected ? planPanelHref : `${selectHref}${planPanelHref}`}
-              className={buttonClasses({ variant: "secondary", size: "sm" })}
-            >
-              {questionCta}
-            </Link>
-          ) : execution ? (
-            /* The execution affordance renders only where Vibe genuinely has
-               an executor. A "ready" badge alone never produces a button. */
-            <PrepareChangePanel
-              projectId={projectId}
-              opportunityId={opportunity.id}
-              actionState={execution}
-              branchUrl={branchUrl}
-              validationSummary={validationSummary}
-              preparedHref={preparedHref}
-              blockedDestinations={blockedDestinations}
-            />
-          ) : selected ? null : (
-            /* Selection only. What a plan costs is disclosed beside the button
-               that spends it, in the panel — never on three cards at once. */
-            <Link
-              href={selectHref}
-              className={buttonClasses({ variant: "secondary", size: "sm" })}
-            >
-              Plan this move
-            </Link>
-          )}
+          {compactAction}
           {/* The reference design's duration slot. Effort is what the domain
               actually knows. */}
           <span className="text-fg-meta text-meta">{EFFORT_LABELS[opportunity.effort]}</span>
         </div>
       </div>
+
+      {/* Everything a prepared, running, failed or blocked change has to say.
+          Full width and below the row, because it is prose and a status, not a
+          control that belongs in a right-hand column. */}
+      {richAction}
     </Surface>
   );
 }

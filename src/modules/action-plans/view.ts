@@ -279,24 +279,6 @@ export function planExpectedChange(steps: ActionPlanStep[]): PlanSurface[] {
 }
 
 /**
- * "Depends on" — the plan's internal ordering, in its own step titles.
- *
- * Only prerequisites that are steps of this plan. `stepDependencyTitles`
- * already resolves an order into a title and drops an order that names no step,
- * so a repaired or truncated `dependsOn` degrades to a shorter list rather than
- * to "step 4" with nothing behind it.
- */
-export function planDependencyTitles(steps: ActionPlanStep[]): string[] {
-  const seen: string[] = [];
-  for (const step of steps) {
-    for (const title of stepDependencyTitles(step, steps)) {
-      if (!seen.includes(title)) seen.push(title);
-    }
-  }
-  return seen;
-}
-
-/**
  * "Needs from you" — the steps this plan cannot finish without the founder.
  *
  * Read from `executionSupport`, which is server-derived and not representable

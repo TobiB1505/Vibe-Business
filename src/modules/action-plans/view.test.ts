@@ -6,7 +6,6 @@ import {
   RESPONSIBILITY_SUBLABELS,
   buildActionPlanBlockNotice,
   founderQuestionCta,
-  planDependencyTitles,
   planEvidenceSummary,
   planExpectedChange,
   planFounderDemands,
@@ -320,25 +319,6 @@ describe("planExpectedChange", () => {
         step({ order: 1, changeKind: "product_change", evidenceIds: ["something.unknown"] }),
       ]),
     ).toEqual([]);
-  });
-});
-
-describe("planDependencyTitles", () => {
-  it("resolves prerequisite orders into this plan's own titles", () => {
-    const steps = [
-      step({ id: "a", order: 1, title: "Decide the pricing model" }),
-      step({ id: "b", order: 2, title: "Build the pricing page", dependsOn: [1] }),
-      step({ id: "c", order: 3, title: "Link it from the header", dependsOn: [1, 2] }),
-    ];
-
-    expect(planDependencyTitles(steps)).toEqual([
-      "Decide the pricing model",
-      "Build the pricing page",
-    ]);
-  });
-
-  it("drops a prerequisite that names no step in this plan", () => {
-    expect(planDependencyTitles([step({ order: 1, dependsOn: [9] })])).toEqual([]);
   });
 });
 
