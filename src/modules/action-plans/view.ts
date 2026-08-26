@@ -1,3 +1,9 @@
+import { evidenceSources } from "@/modules/business-audit/map-view";
+import { deriveExecutionSurfaceRequirement } from "@/modules/execution-context/surface";
+import {
+  BUSINESS_SURFACE_LABELS,
+  type BusinessSurfaceId,
+} from "@/modules/repository-intelligence/schema";
 import type { ActionPlanBlockReason } from "./service";
 import type {
   ActionPlanStep,
@@ -224,4 +230,131 @@ export function planMetaSummary(steps: ActionPlanStep[]): string {
     parts.push(`${decisionCount} ${decisionCount === 1 ? "founder decision" : "founder decisions"}`);
   }
   return parts.join(" · ");
+}
+
+/* ---------------------------------------------------------------------------
+ * What the plan's own panel says beside the steps (ACTION PLAN UI-2)
+ * ------------------------------------------------------------------------ */
+
+/**
+ * "Expected change" — which parts of the product this plan lands on.
+ *
+ * Derived the one way this codebase allows a scope to be derived: from the
+ * step's `evidenceIds`, through `deriveExecutionSurfaceRequirement`. Those ids
+ * are minted by Vibe's own detectors from a closed vocabulary and validated at
+ * planning time to exist in the pack, so nothing a model wrote in prose — and
+ * nothing in a customer's repository or website — can reach this list
+ * (rule 57, `docs/sprints/0044-execution-surface-generalization.md`).
+ *
+ * Two consequences worth stating, because both look like bugs and are not:
+ *
+ *  - A plan made only of decisions, research or measurement returns **nothing**.
+ *    `deriveExecutionSurfaceRequirement` answers `EMPTY_SURFACE_REQUIREMENT` for
+ *    a non-mutating step, and the panel renders no section rather than guessing
+ *    a surface for work that changes no surface.
+ *  - There is no file count anywhere in this file. How many files a change
+ *    touches is knowable only after the change exists (`changedFilesVerified`),
+ *    and a range printed before it would be a number the product cannot stand
+ *    behind.
+ */
+export type PlanSurface = { id: BusinessSurfaceId; label: string };
+
+export function planExpectedChange(steps: ActionPlanStep[]): PlanSurface[] {
+  const named: BusinessSurfaceId[] = [];
+
+  // `deriveExecutionSurfaceRequirement` already answers in vocabulary order, so
+  // taking each step's answer in step order and dropping repeats keeps the list
+  // stable for one plan without a second ordering rule here.
+  for (const step of [...steps].sort((a, b) => a.order - b.order)) {
+    const requirement = deriveExecutionSurfaceRequirement({
+      changeKind: step.changeKind,
+      evidenceIds: step.evidenceIds,
+    });
+    for (const surface of requirement.surfaces) {
+      if (!named.includes(surface)) named.push(surface);
+    }
+  }
+
+  return named.map((id) => ({ id, label: BUSINESS_SURFACE_LABELS[id] }));
+}
+
+/**
+ * "Depends on" — the plan's internal ordering, in its own step titles.
+ *
+ * Only prerequisites that are steps of this plan. `stepDependencyTitles`
+ * already resolves an order into a title and drops an order that names no step,
+ * so a repaired or truncated `dependsOn` degrades to a shorter list rather than
+ * to "step 4" with nothing behind it.
+ */
+export function planDependencyTitles(steps: ActionPlanStep[]): string[] {
+  const seen: string[] = [];
+  for (const step of steps) {
+    for (const title of stepDependencyTitles(step, steps)) {
+      if (!seen.includes(title)) seen.push(title);
+    }
+  }
+  return seen;
+}
+
+/**
+ * "Needs from you" — the steps this plan cannot finish without the founder.
+ *
+ * Read from `executionSupport`, which is server-derived and not representable
+ * as model output (`schema.ts` §10, §46), and filtered by the completion the
+ * plan view already projected — a decision already resolved is no longer
+ * something the plan needs. An empty list is the panel's "Nothing right now",
+ * and it is empty because nothing is outstanding, never because nothing was
+ * checked.
+ */
+export function planFounderDemands(
+  steps: ActionPlanStep[],
+  completedStepOrders: readonly number[],
+): string[] {
+  const completed = new Set(completedStepOrders);
+
+  return steps
+    .filter((step) => !completed.has(step.order) && isFounderResponsibility(step.executionSupport))
+    .map((step) => step.title);
+}
+
+const FOUNDER_RESPONSIBILITIES: readonly ExecutionSupport[] = [
+  "founder_decides",
+  "founder_provides_input",
+  "founder_acts",
+];
+
+function isFounderResponsibility(support: ExecutionSupport): boolean {
+  return FOUNDER_RESPONSIBILITIES.includes(support);
+}
+
+/**
+ * The founder-question call to action, and the count in it.
+ *
+ * The count is the number of requests the store says are open for this plan —
+ * never the number of steps that *could* ask something, and never a guess. Zero
+ * open requests returns null, so a card cannot offer to answer questions that
+ * do not exist.
+ */
+export function founderQuestionCta(openRequestCount: number): string | null {
+  if (openRequestCount <= 0) return null;
+  return openRequestCount === 1 ? "Answer question" : `Answer ${openRequestCount} questions`;
+}
+
+/**
+ * "12 signals · 4 sources" — what this plan actually rests on.
+ *
+ * Counted from the ids the plan's steps cite, exactly as `countSignals` counts
+ * for the audit, and never from the size of the evidence pack: a number taken
+ * from the pack would grow when Vibe looked at more and say nothing about
+ * whether the plan used any of it. Every id here survived planning-time
+ * validation against the pack (rule 45), so each one is resolvable copy rather
+ * than an unverifiable citation.
+ */
+export type PlanEvidenceSummary = { signals: number; sources: number };
+
+export function planEvidenceSummary(steps: ActionPlanStep[]): PlanEvidenceSummary {
+  const cited = new Set<string>();
+  for (const step of steps) for (const id of step.evidenceIds) cited.add(id);
+
+  return { signals: cited.size, sources: evidenceSources([...cited]).length };
 }
