@@ -382,6 +382,12 @@ export async function deleteAgentRun(
  * that has ever had one execution spec is permanently rooted in this
  * database, by design, and so is the user that created it.
  *
+ * [2026-08-26] VB-001 M1 narrowed that trigger: a delete is now permitted when
+ * the row's project is already gone *and* the lifecycle marker is set, which
+ * only `erase_project_lifecycle()` arranges. Nothing here changes — this suite
+ * holds no such marker, so every sentence above still describes what it gets —
+ * but "permanently rooted" is now "rooted outside lifecycle context".
+ *
  * This is not a gap to work around. The disposable database itself is the
  * cleanup — `supabase stop --no-backup` deletes the whole stack's volumes at
  * the end of the job — exactly the same reasoning ADR 0040 already gives for

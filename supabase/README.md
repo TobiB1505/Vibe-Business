@@ -23,11 +23,18 @@ Sprint 0 introduced no business tables ([ARCHITECTURE.md §7](../ARCHITECTURE.md
 **The normal way to deploy a migration is the linked Supabase CLI**, not the Supabase Dashboard's SQL Editor. See [docs/sprints/0002a-supabase-cli-workflow.md](../docs/sprints/0002a-supabase-cli-workflow.md) for the full write-up, safety rules, and manual project-linking setup. Short version:
 
 ```bash
+pnpm db:test     # prove the schema's authority against a throwaway local cluster
 pnpm db:status   # inspect local vs. remote migration history first — always
 pnpm db:push     # deploy any genuinely pending migrations
 pnpm db:status   # confirm local/remote agree
 pnpm db:lint     # lint the linked remote schema
 ```
+
+`pnpm db:test` runs `supabase/tests/*.migration.ts`. It provisions its own
+PostgreSQL cluster with `initdb`, applies every migration to it, and destroys it
+afterwards — so it needs PostgreSQL server binaries on the path, and there is no
+connection string that could point it at a deployed project. It proves what
+`db:lint` cannot: privileges, trigger context, and how a role behaves.
 
 Manual SQL Editor copy/paste is an **emergency/exceptional fallback only** — for example if the CLI genuinely cannot reach the project. It must never be the routine path, because it silently diverges the Dashboard's applied-migrations record from what's in this repository (exactly what happened with the Sprint 1/2 migrations before this workflow existed).
 
