@@ -131,6 +131,17 @@ describe("create_project_with_repository is one transaction", () => {
     expect(db.sql(`select count(*) from public.projects where user_id = '${attacker.userId}';`)).toBe("0");
   });
 
+  it("5. needs no DELETE privilege on projects", () => {
+    const holders = db.sql(`
+      select coalesce(string_agg(grantee, ',' order by grantee), '<none>')
+      from information_schema.role_table_grants
+      where table_schema = 'public' and table_name = 'projects'
+        and privilege_type = 'DELETE'
+        and grantee in ('anon', 'authenticated', 'service_role', 'PUBLIC');
+    `);
+    expect(holders).toBe("<none>");
+  });
+
   it("6. leaks no rows when the same failing call is retried", () => {
     const taken = makeProject("taken-retry");
     const repoId = db.sql(

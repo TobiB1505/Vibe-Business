@@ -138,67 +138,105 @@ describe("the marker is never the authority", () => {
 });
 
 /**
- * The gap M1 does not close, pinned so it cannot be forgotten or closed
- * silently. This is a characterisation test: it asserts what the schema
- * *currently does*, and it is meant to be deleted — the day `DELETE` on
- * `public.projects` is withdrawn from `authenticated`, this test fails and the
- * one below it in the comment takes its place.
+ * VB-001 M1a's invariant — the one that makes M1 deployable.
  *
- * Until then, M1 is not deployable. `authenticated` still holds `DELETE` on
- * `projects` because `projects/connect.ts` and `projects/disconnect.ts` need
- * it, and holding it plus a forged marker is enough to destroy a project's
- * execution specs — bypassing the lifecycle orchestration entirely.
+ * > **No Data API role can start a project cascade.**
  *
- * The replacement, once the callers are migrated:
+ * This block replaces a characterisation test that asserted the opposite. M1
+ * shipped with `authenticated` still holding `DELETE ON public.projects`,
+ * because `connect.ts` and `disconnect.ts` both rode on it, and an owner who
+ * forged the lifecycle marker could therefore destroy their own execution
+ * history outside the lifecycle routine — measured, under RLS, as that user.
  *
- *     it("refuses authenticated deleting their own project, marker or not")
+ * Migration B revoked the privilege once both callers moved onto narrow
+ * functions. What is left is what ADR 0056 always claimed the marker was:
+ * context, carrying no authority, because there is no longer a delete to
+ * attach it to.
  */
-describe("DEPLOYMENT BLOCKER — authenticated project DELETE is still open", () => {
+describe("no Data API role can start a project cascade", () => {
   /** Acts as PostgREST does: the role plus that user's JWT subject. */
   function asOwner(userId: string): string {
     return `select set_config('request.jwt.claim.sub', '${userId}', true);
             set local role authenticated;`;
   }
 
-  it("lets an authenticated owner forge the marker and cascade away their specs", () => {
-    const { userId, projectId } = makeProject("gap");
-    db.sql(`
-      begin;
-        ${asOwner(userId)}
-        select set_config('${MARKER}', 'on', true);
-        delete from public.projects where id = '${projectId}';
-      commit;
-    `);
-
-    // Measured, not theorised. This is the reason the migration carries a
-    // do-not-deploy banner.
-    expect(db.sql(`select count(*) from public.projects where id = '${projectId}';`)).toBe("0");
-    expect(
-      db.sql(`select count(*) from public.execution_specs where project_id = '${projectId}';`),
-    ).toBe("0");
-  });
-
-  it("still refuses that same owner without the marker", () => {
-    const { userId, projectId } = makeProject("gap-nomarker");
+  it("A. refuses an authenticated owner deleting their own project", () => {
+    const { userId, projectId } = makeProject("auth-direct");
     const error = db.sqlExpectingError(`
       begin;
         ${asOwner(userId)}
         delete from public.projects where id = '${projectId}';
       commit;
     `);
-    expect(error).toContain("execution_specs rows are immutable");
+    expect(error).toContain("permission denied for table projects");
+    expect(db.sql(`select count(*) from public.projects where id = '${projectId}';`)).toBe("1");
   });
 
-  it("names the grant that has to go, so the closure is one measurable change", () => {
+  it("B. refuses that same owner holding a forged lifecycle marker", () => {
+    const { userId, projectId } = makeProject("auth-forged");
+    const error = db.sqlExpectingError(`
+      begin;
+        ${asOwner(userId)}
+        select set_config('${MARKER}', 'on', true);
+        delete from public.projects where id = '${projectId}';
+      commit;
+    `);
+    expect(error).toContain("permission denied for table projects");
+    expect(
+      db.sql(`select count(*) from public.execution_specs where project_id = '${projectId}';`),
+    ).toBe("1");
+  });
+
+  it("C. refuses service_role deleting a project", () => {
+    const { projectId } = makeProject("sr-direct");
+    const error = db.sqlExpectingError(`
+      begin;
+        set local role service_role;
+        delete from public.projects where id = '${projectId}';
+      commit;
+    `);
+    expect(error).toContain("permission denied for table projects");
+  });
+
+  it("D. refuses service_role holding a forged lifecycle marker", () => {
+    const { projectId } = makeProject("sr-forged");
+    const error = db.sqlExpectingError(`
+      begin;
+        set local role service_role;
+        select set_config('${MARKER}', 'on', true);
+        delete from public.projects where id = '${projectId}';
+      commit;
+    `);
+    expect(error).toContain("permission denied for table projects");
+    expect(db.sql(`select count(*) from public.projects where id = '${projectId}';`)).toBe("1");
+  });
+
+  it("refuses anon, which RLS blocked but the platform grant did not", () => {
+    const { projectId } = makeProject("anon-direct");
+    const error = db.sqlExpectingError(`
+      begin;
+        set local role anon;
+        select set_config('${MARKER}', 'on', true);
+        delete from public.projects where id = '${projectId}';
+      commit;
+    `);
+    expect(error).toContain("permission denied for table projects");
+  });
+
+  /**
+   * The catalog assertion the invariant reduces to. It is what a future
+   * blanket `GRANT ... ON ALL TABLES IN SCHEMA public` would break — silently,
+   * everywhere else — and it fails here instead.
+   */
+  it("grants DELETE on projects to no Data API role", () => {
     const holders = db.sql(`
       select coalesce(string_agg(grantee, ',' order by grantee), '<none>')
       from information_schema.role_table_grants
       where table_schema = 'public' and table_name = 'projects'
-        and privilege_type = 'DELETE' and grantee in ('anon', 'authenticated', 'service_role');
+        and privilege_type = 'DELETE'
+        and grantee in ('anon', 'authenticated', 'service_role', 'PUBLIC');
     `);
-    // `anon` holds it from the platform default and is blocked by RLS; both
-    // still go when the closure lands.
-    expect(holders).toBe("anon,authenticated");
+    expect(holders).toBe("<none>");
   });
 });
 
@@ -295,14 +333,27 @@ describe("J. privilege catalog", () => {
     expect(holders).toBe("<none>");
   });
 
-  it("withdraws DELETE on projects from service_role and keeps it for authenticated", () => {
-    const holders = db.sql(`
-      select coalesce(string_agg(grantee, ',' order by grantee), '<none>')
-      from information_schema.role_table_grants
-      where table_schema = 'public' and table_name = 'projects'
-        and privilege_type = 'DELETE' and grantee in ('authenticated', 'service_role');
+  it("pins the two functions that may remove a project, and their reach", () => {
+    const grants = db.sql(`
+      select string_agg(g, ',' order by g) from (
+        select p.proname || ':' || r.rolname || '=' ||
+          has_function_privilege(r.rolname, p.oid, 'EXECUTE')::text as g
+        from pg_proc p
+        join pg_namespace n on n.oid = p.pronamespace and n.nspname = 'public'
+        cross join (values ('anon'), ('authenticated'), ('service_role')) as r(rolname)
+        where p.proname in ('disconnect_project', 'erase_project_lifecycle')
+      ) s;
     `);
-    expect(holders).toBe("authenticated");
+    expect(grants).toBe(
+      [
+        "disconnect_project:anon=false",
+        "disconnect_project:authenticated=true",
+        "disconnect_project:service_role=false",
+        "erase_project_lifecycle:anon=false",
+        "erase_project_lifecycle:authenticated=false",
+        "erase_project_lifecycle:service_role=true",
+      ].join(","),
+    );
   });
 
   it("pins the lifecycle function's security properties", () => {
@@ -357,19 +408,6 @@ describe("J. privilege catalog", () => {
       where p.proname = 'disconnect_project';
     `);
     expect(shape).toBe("uuid");
-  });
-
-  it("pins search_path on every SECURITY DEFINER function in public", () => {
-    const unpinned = db.sql(`
-      select coalesce(string_agg(p.proname, ',' order by p.proname), '<none>')
-      from pg_proc p
-      join pg_namespace n on n.oid = p.pronamespace and n.nspname = 'public'
-      where p.prosecdef
-        and not exists (
-          select 1 from unnest(coalesce(p.proconfig, '{}')) c where c like 'search_path=%'
-        );
-    `);
-    expect(unpinned).toBe("<none>");
   });
 
   it("pins search_path on every SECURITY DEFINER function in public", () => {

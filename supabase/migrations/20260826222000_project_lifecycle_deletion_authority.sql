@@ -1,18 +1,17 @@
 -- VB-001 M1 — Project Lifecycle Deletion Authority (ADR 0056 §5, §11).
 --
 -- ┌──────────────────────────────────────────────────────────────────────┐
--- │ DO NOT DEPLOY THIS MIGRATION ON ITS OWN.                             │
+-- │ SEQUENCING: this migration sorts last on purpose.                    │
 -- │                                                                      │
 -- │ It is safe only once `DELETE` on `public.projects` is closed for     │
--- │ `authenticated` too. Until then it hands an authenticated caller a   │
+-- │ every Data API role. Until then it hands an authenticated caller a   │
 -- │ way to destroy their own project's execution specs by forging the    │
--- │ lifecycle marker — measured, not theorised. See the [2026-08-26]     │
--- │ correction in ADR 0056 §5, and the characterisation test named       │
--- │ `DEPLOYMENT BLOCKER` in `supabase/tests/`.                           │
+-- │ lifecycle marker — measured, not theorised. That closure is          │
+-- │ `20260826221000_close_project_delete_entry_authority.sql`, which     │
+-- │ sorts before this file so a single push can never apply this one     │
+-- │ first.                                                               │
 -- │                                                                      │
--- │ The closure needs `connect.ts` and `disconnect.ts` off the `DELETE`  │
--- │ privilege first, so this migration ships *after* that application    │
--- │ change, not before it.                                               │
+-- │ Full order: Migration A → Application Deploy A → Migration B → this. │
 -- └──────────────────────────────────────────────────────────────────────┘
 --
 -- Project deletion is structurally impossible today. `DELETE FROM projects`

@@ -1,0 +1,53 @@
+-- VB-001 M1a, Migration B — close the project deletion entry authority.
+--
+-- ┌──────────────────────────────────────────────────────────────────────┐
+-- │ SEQUENCING: deploy Application Deploy A before pushing this.         │
+-- │                                                                      │
+-- │ This revoke is safe only once no application code issues a direct    │
+-- │ project delete. Against the *previous* application build it is not   │
+-- │ dangerous, but it is not clean either: `disconnect.ts` would fail    │
+-- │ every disconnect, and `connect.ts`'s compensating delete would fail  │
+-- │ after a duplicate-repository insert and leave an orphan project the  │
+-- │ user then cannot remove.                                             │
+-- │                                                                      │
+-- │ Order: Migration A → Application Deploy A → this + M1.               │
+-- │ This migration and M1 may be pushed together; M1 sorts after it, so  │
+-- │ there is no instant where M1's marker path exists with the privilege │
+-- │ still open.                                                          │
+-- └──────────────────────────────────────────────────────────────────────┘
+--
+--
+-- ## The invariant
+--
+-- > **No Data API role can start a project cascade.**
+--
+-- A referential-integrity cascade runs with the referencing table's owner
+-- authority — `current_user` inside the cascaded `execution_specs` trigger is
+-- `postgres` even when the caller is `service_role`. So revoking `DELETE` on
+-- `execution_specs` (M1) guards *direct* deletion of a spec and nothing else,
+-- and the privilege that actually gates the cascade is `DELETE` on the root
+-- table. This is the correction M1 measured into ADR 0056 §5.
+--
+-- With this revoke, M1's lifecycle marker becomes what the ADR always claimed
+-- it was: context, carrying no authority. Forging it grants nothing, because
+-- there is no longer a delete to attach it to.
+--
+-- After this, exactly two things can remove a project row, both narrow, both
+-- verifying ownership in their own body:
+--
+--   * `public.disconnect_project(uuid, uuid)`      — temporary, no marker, so
+--                                                    execution history still
+--                                                    refuses the cascade.
+--   * `public.erase_project_lifecycle(uuid, uuid)` — M1, service-role only,
+--                                                    sets the marker itself.
+--
+-- `anon` is named even though RLS already refuses it — `delete own projects`
+-- checks `user_id = auth.uid()` and `auth.uid()` is null for `anon`, so the
+-- grant has never been usable. It is a leftover of the platform default that
+-- `20260823210000_data_api_explicit_grants.sql` restated rather than narrowed,
+-- and leaving it would mean the invariant above reads "no role except one that
+-- happens to be blocked elsewhere".
+revoke delete on table public.projects from public;
+revoke delete on table public.projects from anon;
+revoke delete on table public.projects from authenticated;
+revoke delete on table public.projects from service_role;
