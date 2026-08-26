@@ -289,7 +289,12 @@ export function BillingView({
                       <span className="text-fg-meta text-xs">{formatDate(entry.at)}</span>
                     </div>
                   </div>
-                  <span className={entry.creditDelta > 0 ? "text-mint shrink-0 text-sm font-semibold tabular-nums" : "text-fg-body shrink-0 text-sm font-semibold tabular-nums"}>{entry.displayAmount} Credits</span>
+                  {/* The sign carries the meaning, so it is never colour
+                      alone (§93) — a "+" and a "-" are readable without it.
+                      No unit suffix here: unlike the price list and plan
+                      benefit rows, this text must stay exactly the signed
+                      amount, and a browser test asserts on it verbatim. */}
+                  <span className={entry.creditDelta > 0 ? "text-mint shrink-0 text-sm font-semibold tabular-nums" : "text-fg-body shrink-0 text-sm font-semibold tabular-nums"}>{entry.displayAmount}</span>
                 </li>
               ))}
             </ul>
