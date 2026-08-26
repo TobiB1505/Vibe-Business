@@ -14,6 +14,13 @@ export type AuditEventType =
   | "repository.selected"
   | "project.created"
   | "project.disconnected"
+  // A disconnect that did not happen. Emitted only when the project still
+  // exists and is owned by the caller — a `project_not_found` outcome cannot
+  // be recorded against a project id, because both the `project_id` foreign
+  // key and this table's own insert policy require the project to exist and
+  // be the caller's. Carries the closed failure reason, never a database
+  // message (VB-003).
+  | "project.deletion_failed"
   | "github.access.failed"
   | "repository.intelligence.started"
   | "repository.intelligence.completed"

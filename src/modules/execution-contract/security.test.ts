@@ -62,23 +62,36 @@ function migration(suffix: string): string {
 const MIGRATION = migration("_execution_specs.sql");
 
 /**
- * The newest definition of the immutability guard.
+ * Every migration body in order, with comments stripped first — and that is not
+ * cosmetic: the follow-up migration *explains* why `security definer` was
+ * wrong, so a naive scan would find the phrase in the prose that removed it.
+ */
+function migrationBodies(): string[] {
+  return readdirSync(MIGRATIONS_DIR)
+    .sort()
+    .map((name) => readFileSync(join(MIGRATIONS_DIR, name), "utf8"))
+    .map((sql) => sql.replace(/--[^\n]*/g, ""));
+}
+
+/**
+ * The newest definition of the immutability guard — the `create or replace`
+ * block itself, not the file it happens to live in.
  *
  * Read across the whole history rather than from one file, because a `create
  * or replace` in a later migration is the definition that is live — reading
  * only the original would assert against a function Postgres no longer has.
+ * Read as a block rather than as a file because a migration may define more
+ * than one function, and a neighbour's `security definer` is not this guard's.
  */
 function guardDefinition(): string {
-  const definitions = readdirSync(MIGRATIONS_DIR)
-    .sort()
-    .map((name) => readFileSync(join(MIGRATIONS_DIR, name), "utf8"))
-    // Comments stripped first, and that is not cosmetic: the follow-up
-    // migration *explains* why `security definer` was wrong, so a naive scan
-    // would find the phrase in the prose that removed it.
-    .map((sql) => sql.replace(/--[^\n]*/g, ""))
-    .filter((sql) => sql.includes("function public.reject_execution_spec_mutation()"));
+  const blocks = migrationBodies().flatMap(
+    (sql) =>
+      sql.match(
+        /create or replace function public\.reject_execution_spec_mutation\(\)[\s\S]*?\$\$;/g,
+      ) ?? [],
+  );
 
-  return definitions[definitions.length - 1];
+  return blocks[blocks.length - 1];
 }
 
 describe("§54 — the Planner cannot grant execution authority", () => {
@@ -131,7 +144,11 @@ describe("§54 — a client cannot forge what a spec says", () => {
     const definition = guardDefinition();
     expect(definition).toContain("security invoker");
     expect(definition).not.toContain("security definer");
-    expect(definition).toContain("revoke execute on function");
+    expect(
+      migrationBodies().some((sql) =>
+        sql.includes("revoke execute on function public.reject_execution_spec_mutation()"),
+      ),
+    ).toBe(true);
   });
 
   it("constrains the mode column to executable modes only", () => {

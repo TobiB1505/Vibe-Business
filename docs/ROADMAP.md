@@ -136,6 +136,9 @@ Every lookup in `coding-agent/store.ts` is keyed by `operationRunId` or by `(pro
 **The unit that is charged and the unit that is sold are different things.**
 An agent run settles at the reserved fixed price when the prepared change exists; validation runs afterwards, unreserved and uncapped. A validation failure after a successful preparation still charges.
 
+**The remote database carries a function no migration declares.**
+`public.rls_auto_enable()` and the `ensure_rls` event trigger that fires it exist on the deployed project and in no file under [supabase/migrations/](../supabase/migrations/) — so [`pnpm db:test`](../supabase/README.md), which builds its database from those files alone, runs against a schema the production one does not match. It is Supabase's platform "auto-enable RLS on new tables" feature rather than anything this repository wrote (owner `postgres`, no extension dependency, `SET search_path TO 'pg_catalog'`), and it is currently redundant: every one of the 53 public tables already enables RLS in its own migration. It is also the sole subject of two of the five findings `get_advisors` returns, because `EXECUTE` is granted to `anon` and `authenticated` on a `SECURITY DEFINER` function — the same shape [migration 20260818131334](../supabase/migrations/20260818131334_execution_spec_guard_security_invoker.sql) revoked for `reject_execution_spec_mutation()`, and pointless for the same reason: an event trigger fires through the event system, never through a grant. Rule 34 says the remote converges to the files; nothing yet decides whether this one is adopted into a migration or turned off.
+
 **No operator can correct a charge.**
 `refundCharge` is implemented, tested through its decision function, constrained by a database CHECK — and has zero callers. So does the adjustment kind. There is no admin surface of any kind.
 

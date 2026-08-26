@@ -65,7 +65,6 @@ export async function selectRepository(
   }
 
   const result = await createProjectWithRepository(supabase, {
-    userId: session.userId,
     installationRowId: installationRow.id,
     repository,
   });
