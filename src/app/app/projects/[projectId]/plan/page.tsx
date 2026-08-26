@@ -31,12 +31,12 @@ import {
 import { SANDBOX_POLICY_VERSION } from "@/modules/validation/schema";
 import { getLatestValidation } from "@/modules/validation/service";
 import { buildValidationSummary } from "@/modules/validation/view";
-import { ActionPlanPanel } from "../action-plan-panel";
-import { OpportunitiesPanel } from "../opportunities-panel";
 import type { ValidationSummary } from "../validation-panel";
+import { ActionPlanWorkspace } from "./action-plan-workspace";
+import { MovesRefreshBar } from "./moves-refresh-bar";
 
 /**
- * Next moves (Sprint UI-2 Part 2).
+ * The Action Plan (Sprint UI-2 Part 2; rebuilt as a workspace in ACTION PLAN UI-2).
  *
  * ## The execution state this route does need
  *
@@ -50,6 +50,14 @@ import type { ValidationSummary } from "../validation-panel";
  * workspace — no preview, no review images, no approval, no merge preflight,
  * no outcome, no impact. Those belong to `/agent`, and this route reaching
  * for them is how the coupling would grow back.
+ *
+ * ## Why the reads did not change when the layout did
+ *
+ * The list and the plan now sit side by side rather than stacked, and which
+ * Move the plan is about is still `?plan=<id>` — the same parameter, resolved
+ * the same way, with the same refusal to substitute silently. A layout change
+ * that needed a new read would have been a product change wearing a layout
+ * change's clothes.
  */
 export default async function ProjectMovesPage({
   params,
@@ -215,93 +223,60 @@ export default async function ProjectMovesPage({
   return (
     <WorkspaceSection
       id="action-plan"
-      /*
-       * One title now, where it used to swap between "Next moves" and
-       * "Opportunities" depending on whether a set existed. The section is a
-       * place, and a place does not rename itself according to how full it is —
-       * the state belongs in the panel, which already says it.
-       */
       title="Action Plan"
-      /*
-       * Was: "The order is the engine's, and it is shown as produced." True,
-       * and written about the implementation rather than to the founder
-       * (UI-S2 §29, §30). What they need to know is that this is a short list
-       * in priority order, which is what it now says.
-       */
-      description="The few things worth doing next, in the order Vibe would do them."
+      description="Your prioritized plan to strengthen your business."
+      actions={
+        <MovesRefreshBar
+          projectId={project.id}
+          /* When this set finished, not when the row was created: a queued
+             set that has not produced anything must not date the plan. */
+          generatedAt={opportunities?.set.completedAt ?? null}
+          hasOpportunities={(opportunities?.set.opportunities.length ?? 0) > 0}
+          blocked={opportunityReadiness.blockedReason !== null}
+        />
+      }
     >
-      <OpportunitiesPanel
+      <ActionPlanWorkspace
         projectId={project.id}
         opportunities={opportunities?.set.opportunities ?? []}
         executionStates={executionStates}
         branchUrls={branchUrls}
         validationSummaries={validationSummaries}
         stale={opportunities?.stale ?? false}
-        activeOperation={activeOpportunityOperation}
-        blockedReason={opportunityReadiness.blockedReason}
+        movesOperation={activeOpportunityOperation}
+        movesBlockedReason={opportunityReadiness.blockedReason}
         lineage={lineage}
         movesContext={movesContext}
         movesHref={projectSectionHref(project.id, "action-plan")}
         preparedHref={projectSectionHref(project.id, "agent")}
-        // Where a blocked set sends the user. The domain still owns the anchor
-        // (`BUSINESS_AUDIT_ANCHOR`); the route it now lives on is a UI fact, so
-        // it is supplied here rather than hard-coded in the domain.
-        auditHref={projectSectionHref(project.id, "business-audit")}
-        /*
-          Where a blocked Move's one way forward leads. Built here, from the
-          same helper every other cross-link uses, so the destinations cannot
-          drift from the routes that exist — which is exactly what the two
-          hard-coded fragments they replace had done.
-        */
+        // Where each blocked state's one way forward leads. Built by the route
+        // from `projectSectionHref`, never hard-coded in a panel — the panel
+        // does not know what the workspace's segments are called.
         blockedDestinations={{
           product: projectSectionHref(project.id, "my-product"),
           audit: projectSectionHref(project.id, "business-audit"),
           moves: projectSectionHref(project.id, "action-plan"),
           repository: projectSectionHref(project.id, "settings"),
         }}
-        // Which Move the section below is currently about, so every other
-        // card can offer "Plan this Move" and the selected one does not
-        // redundantly link to itself (§83).
-        plannedOpportunityId={plannedMove?.id ?? null}
+        selectedOpportunityId={plannedMove?.id ?? null}
+        moveTitle={plannedMove?.title ?? null}
+        defaultMoveTitle={defaultMove?.title ?? null}
+        planReadiness={actionPlanReadiness}
+        planView={resolvedActionPlanView}
+        // Project-wide, not scoped to `plannedMove` — `action_planning`
+        // operations are keyed by input identity (which does include the
+        // Move), so two concurrent runs for two different Moves are possible
+        // in principle. This read model predates per-Move selection and does
+        // not yet disambiguate that case; it would show whichever run it finds
+        // even if it is for a different Move than currently selected. Rare
+        // enough (two plan clicks on different Moves within the same run) that
+        // it is called out here rather than fixed now.
+        planOperation={activeActionPlanOperation}
+        auditHref={projectSectionHref(project.id, "business-audit")}
+        understandingHref={projectSectionHref(project.id, "my-product")}
+        productHref={projectSectionHref(project.id, "my-product")}
+        experimentsHref={projectSectionHref(project.id, "experiments")}
       />
-
-      {/*
-       * The Action Plan section, on the same page rather than a section of
-       * its own — there is only ever one *current* plan for the project
-       * (`supersedeOtherPlans` retires any other completed one regardless of
-       * which Move it was for), so a separate nav item would name a place
-       * with nothing else to distinguish it.
-       *
-       * Which Move this is *for* defaults to rank 1 and stays that way for
-       * every visit that never carries `?plan=` — a founder's explicit
-       * "Plan this Move" link on a card above can point it at a different one
-       * instead (§83; PRODUCT.md §6 step 7). Vibe itself never makes that
-       * substitution — `readiness.isDefaultMove` tells the panel to disclose
-       * it whenever a human did.
-       */}
-      <div className="border-line-2 flex flex-col gap-5 border-t pt-8" id="plan-this-move">
-        <h3 className="text-fg text-title font-bold">Plan this move</h3>
-        <ActionPlanPanel
-          projectId={project.id}
-          opportunityId={plannedMove?.id ?? null}
-          moveTitle={plannedMove?.title ?? null}
-          defaultMoveTitle={defaultMove?.title ?? null}
-          readiness={actionPlanReadiness}
-          planView={resolvedActionPlanView}
-          // Project-wide, not scoped to `plannedMove` — `action_planning`
-          // operations are keyed by input identity (which does include the
-          // Move), so two concurrent runs for two different Moves are
-          // possible in principle. This read model predates per-Move
-          // selection and does not yet disambiguate that case; it would show
-          // whichever run it finds even if it is for a different Move than
-          // currently selected. Rare enough (two plan clicks on different
-          // Moves within the same run) that it is called out here rather than
-          // fixed now.
-          activeOperation={activeActionPlanOperation}
-          auditHref={projectSectionHref(project.id, "business-audit")}
-          understandingHref={projectSectionHref(project.id, "my-product")}
-        />
-      </div>
     </WorkspaceSection>
   );
 }

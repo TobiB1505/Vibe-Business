@@ -25,7 +25,7 @@ const LINEAGE = read("src/modules/opportunities/lineage.ts");
 const SERVICE = read("src/modules/opportunities/service.ts");
 const MOVES_PAGE = read("src/app/app/projects/[projectId]/plan/page.tsx");
 const SCORE_PAGE = read("src/app/app/projects/[projectId]/health/content.tsx");
-const PANEL = read("src/app/app/projects/[projectId]/opportunities-panel.tsx");
+const PANEL = read("src/app/app/projects/[projectId]/plan/move-card.tsx");
 const PRIORITIES = read(
   "src/app/app/projects/[projectId]/business-brain/audit-intelligence.tsx",
 );
@@ -129,8 +129,12 @@ describe("context filters, it never reranks", () => {
   });
 
   it("renders the rank the domain gave, never a positional one", () => {
-    expect(PANEL).toContain("#{opportunity.rank}");
+    // The card pads it for the two-digit reference design; the value is still
+    // the persisted rank, and the attribute the browser suite asserts on is
+    // unchanged. What must never appear is a number derived from list order.
+    expect(PANEL).toContain("String(opportunity.rank).padStart(2");
     expect(PANEL).toContain('data-rank={opportunity.rank}');
+    expect(copyOf(PANEL)).not.toMatch(/rank\s*[:=]\s*index/);
   });
 
   /** §31: the requested key is validated before it means anything. */
@@ -144,15 +148,22 @@ describe("context filters, it never reranks", () => {
 describe("the card says one thing at a time", () => {
   /** Regression 5: the chip soup returns. */
   it("shows readiness and impact in the chip row, and nothing else", () => {
-    const chips = PANEL.slice(
-      PANEL.indexOf("Two, not five"),
-      PANEL.indexOf("{opportunity.problem}"),
-    );
-    expect(chips).toContain("EXECUTION_READINESS_LABELS");
+    const chips = PANEL.slice(PANEL.indexOf("Two, not five"), PANEL.indexOf("<Disclosure"));
     expect(chips).toContain("IMPACT_LABELS");
     expect(chips).not.toContain("EFFORT_LABELS");
     expect(chips).not.toContain("CONFIDENCE_LABELS");
     expect(chips).not.toContain("DIMENSION_LABELS");
+  });
+
+  /**
+   * The readiness headline is a domain reading, not a string the card picks.
+   *
+   * `moveHeadline` owns which of two true things leads, so a component can
+   * never quietly start captioning a Move from `executionReadiness` itself.
+   */
+  it("takes its leading status from the domain, never from the enum", () => {
+    expect(PANEL).toContain("moveHeadline(opportunity)");
+    expect(copyOf(PANEL)).not.toContain("EXECUTION_READINESS_LABELS");
   });
 
   /** §14: the domain keeps the dimension; the card stops drawing it. */
@@ -160,11 +171,30 @@ describe("the card says one thing at a time", () => {
     expect(PANEL).not.toContain("DIMENSION_LABELS");
   });
 
-  /** §17: demoted, not deleted. */
-  it("keeps effort and confidence under the disclosure", () => {
-    const details = PANEL.slice(PANEL.indexOf("Why now?"), PANEL.indexOf("Why Vibe thinks this"));
-    expect(details).toContain("EFFORT_LABELS");
+  /** §17: demoted, not deleted. Confidence stays behind the disclosure. */
+  it("keeps confidence under the disclosure", () => {
+    const details = PANEL.slice(
+      PANEL.indexOf("<Disclosure"),
+      PANEL.indexOf("Why Vibe thinks this"),
+    );
     expect(details).toContain("CONFIDENCE_LABELS");
+  });
+
+  /**
+   * ACTION PLAN UI-2: effort is stated once, in the slot the reference design
+   * fills with a duration.
+   *
+   * The domain has no duration and forbids one (`opportunities/schema.ts` §6),
+   * so this asserts the substitution held: effort where a time would be, and
+   * no time anywhere.
+   */
+  it("puts effort where a duration would be, and prints no duration", () => {
+    const action = PANEL.slice(PANEL.indexOf("border-t pt-4"));
+    expect(action).toContain("EFFORT_LABELS[opportunity.effort]");
+    expect(copyOf(PANEL)).not.toMatch(/~\s*\d/);
+    // A duration is a number and a unit. Matching the unit alone would catch
+    // a Tailwind `min-w-0`, which is a class name, not a claim about time.
+    expect(copyOf(PANEL)).not.toMatch(/\d\s*(hours?|minutes?|mins?|hrs?|days?|weeks?)\b/i);
   });
 });
 

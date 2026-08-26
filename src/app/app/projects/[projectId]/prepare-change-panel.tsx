@@ -215,7 +215,7 @@ export function PrepareChangePanel({
    */
   if (operationPollPhase(operation) === "stalled") {
     return (
-      <div className="space-y-3 border-t border-line-2 pt-3">
+      <div className="flex flex-col gap-3">
         <p className="text-sm text-fg-prose">This is taking much longer than expected.</p>
         <p className="text-sm text-fg-muted">
           Vibe has not written anything to your repository. You can start again.
@@ -231,7 +231,7 @@ export function PrepareChangePanel({
 
   if (running && operation) {
     return (
-      <div className="space-y-1 border-t border-line-2 pt-3">
+      <div className="flex flex-col gap-1">
         <p className="text-sm text-fg-prose">{OPERATION_STAGE_LABELS[operation.stage]}…</p>
         <p className="text-sm text-fg-muted">
           You can leave this page. Vibe will continue preparing the change.
@@ -242,7 +242,7 @@ export function PrepareChangePanel({
 
   if (preparedChangeId !== null) {
     return (
-      <div className="space-y-3 border-t border-line-2 pt-3">
+      <div className="flex flex-col gap-3">
         <p className="text-sm text-fg-prose">Change prepared</p>
         {/* Stated plainly, because Vibe has not executed the customer's code
             and must not imply otherwise (§11, §27). */}
@@ -303,7 +303,7 @@ export function PrepareChangePanel({
 
   if (actionState.kind === "failed") {
     return (
-      <div className="space-y-2 border-t border-line-2 pt-3">
+      <div className="flex flex-col gap-2">
         <p className="text-sm text-amber">
           Vibe couldn&apos;t prepare this change.{" "}
           {actionState.operation.failureCode
@@ -326,7 +326,7 @@ export function PrepareChangePanel({
     const action = blockedAction(actionState.reason);
     const blockedHref = blockedActionHref(action, blockedDestinations);
     return (
-      <div className="space-y-2 border-t border-line-2 pt-3">
+      <div className="flex flex-col gap-2">
         <p className="text-sm text-fg-secondary">{BLOCKED_MESSAGES[actionState.reason]}</p>
         {/*
           A route, resolved by the domain from the destinations this route
@@ -349,7 +349,7 @@ export function PrepareChangePanel({
 
   if (actionState.kind === "preparable") {
     return (
-      <div className="space-y-2 border-t border-line-2 pt-3">
+      <div className="flex flex-col gap-2">
         {confirming ? (
           <ConfirmDialog
             capabilityLabel={CAPABILITY_LABELS[actionState.capability]}
@@ -359,7 +359,7 @@ export function PrepareChangePanel({
           />
         ) : (
           <Button type="button" onClick={() => setConfirming(true)}>
-            Let Vibe prepare this
+            Start with Vibe
           </Button>
         )}
 
