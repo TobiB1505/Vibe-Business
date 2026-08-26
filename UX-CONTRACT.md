@@ -18,7 +18,7 @@
 | Business Brain interaction and view model | `docs/decisions/0048-signature-business-brain.md` | ADR | 2026-08-24 |
 | GitHub permissions and repository connection | `docs/decisions/0003-github-app-integration.md`, `docs/decisions/0009-github-installation-ownership-verification.md` | ADR | 2026-08-24 |
 | Safe approved merge behavior | `docs/decisions/0018-human-approval-authority.md`, `docs/decisions/0019-safe-approved-change-merge.md` | ADR | 2026-08-24 |
-| Billing | `PRODUCT.md#12-credit-model` | Product contract | 2026-08-24 |
+| Billing | `PRODUCT.md#12-credit-model`, `docs/decisions/0024-billing-credit-ledger.md`, `docs/decisions/0025-billing-stripe-boundary.md` | Product contract + ADR | 2026-08-25 |
 
 ## Visual contract
 
@@ -45,6 +45,7 @@
 | Table/list | comfortable density | row surface cue | controls receive visible focus | n/a | stable frame | persistent scoped state |
 | Business Brain | staged but complete | real related paths and nodes gain emphasis | node uses the global mint ring | n/a | server lifecycle remains authoritative | existing notices and recovery |
 | Product Scan | stored discoveries at first paint in reserved scanner/feed slots | grounded nodes and events gain emphasis without changing outer geometry | launcher uses shared button focus | unavailable without connected repository | stable launcher and scanner geometry + durable event feed | persistent partial/failure state + retry |
+| Billing purchase / portal | real form posting an approved SKU or no client fields for portal | shared interactive transition | global mint ring | visibly unavailable with deployment explanation | stable label + `aria-busy`; duplicate submit blocked | persistent scoped notice with recovery copy |
 
 ## Dataset navigation
 
@@ -66,6 +67,10 @@
 | Run Product Scan | onboarding live-site confirmation or My Product launcher | one durable operation; individual stored findings; no percentage | product reveal in onboarding / refreshed My Product dossier | source failures remain visible; retry only when operation policy allows | refreshed Product Profile heading | ADR 0052 |
 | Correct product understanding | `Let me fix it` | stable inline editor and busy save action | same Product page | inline persistent error | corrected profile summary | Product Understanding contract |
 | Switch product | project switcher option | route navigation | selected product Home | current product + `View all products` remain available | destination page heading | ADR 0050 |
+| Buy Credit pack | `Buy` beside an approved pack | stable busy action; pessimistic redirect | Stripe Checkout, then Billing return | persistent action error; cancelled return confirms no charge | Checkout/browser owned | ADR 0025 |
+| Start paid plan | `Choose {plan}` | stable busy action; pessimistic redirect | Stripe Checkout, then Billing return | persistent action error; cancelled return confirms no charge | Checkout/browser owned | ADR 0025 |
+| Manage or cancel subscription | `Manage or cancel plan` | stable busy action | Stripe customer portal | persistent action error | portal/browser owned | ADR 0025 |
+| Claim Welcome Credits | `Add my 100 Welcome Credits` | stable busy action | same Billing page with canonical balance | persistent action error | submitted action remains contextual | ADR 0024 |
 
 ## Navigation and responsive behavior
 
@@ -83,6 +88,7 @@
 - The Product page ends at the profile confirmation. It does not repeat raw code/live summaries or append a Business Health action below that decision boundary.
 - Product Scan uses one shared component in onboarding and My Product. Its desktop scanner, summary, activity and 3×2 discovery regions reserve their geometry before findings arrive. Below `md`, the constellation becomes a linear facet rail; discoveries remain ordered and fully readable.
 - On My Product, Product Scan remains expanded while working, folds automatically after the stored completion event, and can be opened again to review discoveries or start a re-scan. Onboarding and failure states remain expanded. The toggle exposes its expanded state and controlled region to assistive technology.
+- Billing uses three equal overview panels at desktop, then asymmetric content/support grids. Below `lg`, every region returns to document order without hiding plan status, expiry, purchase actions or signed Credit movement. No Billing panel owns a viewport height or nested scroll area.
 
 ## Async and resilience
 
@@ -90,6 +96,7 @@
 - Search and sorting are local over the loaded account inventory, so no stale request or spinner exists.
 - GitHub live status is not fetched on the index. Stored connection metadata is labeled honestly and revalidation stays at the consequential workflow that needs it.
 - Product Scan polls canonical Supabase operation state and at most 24 ordered events every 2.5 seconds. It refreshes server content only on a terminal transition. A public-product failure degrades to partial when another source remains usable; it never removes a successful source reading.
+- Billing reads remain server-owned and never move money or Credits. Checkout and portal mutations are pessimistic, block duplicate submission and report persistent local errors. A Checkout return says only that payment confirmation is pending; Credits appear only after the signed Stripe webhook updates canonical state.
 
 ## Motion and sensory behavior
 
@@ -107,4 +114,4 @@
 - Static: lint, typecheck, unit tests, strict premium audit.
 - Browser: repository success, empty, no-results, search clear, filter, sort, pagination, URL restoration and 1440/1024/768/375 widths; Business Health reading order, map interaction, canonical recovery link, responsive transformation and reduced motion.
 - Canonical sibling: `/app/products` and the account shell.
-- Repository evidence: `e2e/account-repositories.spec.ts`, `e2e/business-audit.spec.ts`, `e2e/action-plan-ui.spec.ts`, `e2e/product-scan.spec.ts`.
+- Repository evidence: `e2e/account-repositories.spec.ts`, `e2e/business-audit.spec.ts`, `e2e/action-plan-ui.spec.ts`, `e2e/product-scan.spec.ts`, `e2e/billing.spec.ts`.

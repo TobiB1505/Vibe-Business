@@ -58,7 +58,7 @@ const FORBIDDEN_VOCABULARY = [
 
 async function open(page: Page, scenario: string): Promise<void> {
   await page.goto(`/e2e/${scenario}`);
-  await expect(page.getByRole("heading", { name: "Credits", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Billing", exact: true })).toBeVisible();
 }
 
 test.describe("the balance", () => {
@@ -66,8 +66,8 @@ test.describe("the balance", () => {
     await open(page, "billing-free");
 
     // One number and the word "Credits", in one element — the whole of §50.
-    await expect(page.getByTestId("credit-balance")).toHaveText("2,480Credits");
-    await expect(page.getByText("Available", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("credit-balance")).toHaveText(/2,480\s+Credits/);
+    await expect(page.getByText("Available Credits", { exact: true })).toBeVisible();
   });
 
   test("says when the next Credits expire, in plain language", async ({ page }) => {
@@ -84,7 +84,7 @@ test.describe("the balance", () => {
 
   test("shows a zero balance as 0 rather than as an error or an empty space", async ({ page }) => {
     await open(page, "billing-empty");
-    await expect(page.getByTestId("credit-balance")).toHaveText("0Credits");
+    await expect(page.getByTestId("credit-balance")).toHaveText(/0\s+Credits/);
   });
 });
 
@@ -92,21 +92,25 @@ test.describe("the plan", () => {
   test("names the Free plan and what it includes", async ({ page }) => {
     await open(page, "billing-free");
 
-    await expect(page.getByRole("heading", { name: "You're on Free" })).toBeVisible();
-    await expect(page.getByText(/first Business Audit and first Deep Scan/)).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Free", exact: true })).toBeVisible();
+    await expect(page.getByText("First Business Audit included", { exact: true })).toBeVisible();
+    await expect(page.getByText("First Deep Scan for each product", { exact: true })).toBeVisible();
   });
 
   test("names a paid plan and when it renews", async ({ page }) => {
     await open(page, "billing-builder");
 
-    await expect(page.getByRole("heading", { name: "You're on Builder" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Builder", exact: true })).toBeVisible();
     await expect(page.getByText(/Renews on/)).toBeVisible();
+    await expect(page.getByRole("button", { name: "Manage or cancel plan" })).toBeVisible();
   });
 
   test("marks the current plan instead of offering to buy it again", async ({ page }) => {
     await open(page, "billing-builder");
 
-    await expect(page.getByText("Your current plan")).toBeVisible();
+    await expect(
+      page.getByRole("region", { name: "Plans" }).getByText("Current plan", { exact: true }),
+    ).toBeVisible();
     await expect(page.getByRole("button", { name: "Choose Builder" })).toHaveCount(0);
     // The other plan is still offered.
     await expect(page.getByRole("button", { name: "Choose Pro" })).toBeVisible();
@@ -117,8 +121,8 @@ test.describe("the plan", () => {
 
     await expect(page.getByText("€19 / month")).toBeVisible();
     await expect(page.getByText("€49 / month")).toBeVisible();
-    await expect(page.getByText("1000 Credits each month")).toBeVisible();
-    await expect(page.getByText("3000 Credits each month")).toBeVisible();
+    await expect(page.getByText("1,000 Credits each month")).toBeVisible();
+    await expect(page.getByText("3,000 Credits each month")).toBeVisible();
   });
 });
 
@@ -231,7 +235,7 @@ test.describe("the Checkout return never mints Credits (§25)", () => {
 
   test("shows the balance unchanged beside the pending notice", async ({ page }) => {
     await open(page, "billing-checkout-complete");
-    await expect(page.getByTestId("credit-balance")).toHaveText("100Credits");
+    await expect(page.getByTestId("credit-balance")).toHaveText(/100\s+Credits/);
   });
 });
 
@@ -277,6 +281,12 @@ test.describe("no internal vocabulary reaches the customer (§52, §94)", () => 
     expect(visible).not.toContain("2480000");
     // No currency symbol beside a Credit figure other than the catalog prices.
     expect(visible).not.toContain("$");
+  });
+
+  test("does not copy reference-only card, invoice or product-usage data", async ({ page }) => {
+    await open(page, "billing-free");
+
+    await expect(page.getByText(/Visa|4242|Billing history|Usage by product/i)).toHaveCount(0);
   });
 });
 
