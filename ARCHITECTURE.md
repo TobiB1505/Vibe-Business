@@ -243,16 +243,18 @@ This is the register of genuinely **undecided** questions, and nothing else. Wor
 2. **Analytics provider for the customer's product** — the metric-source port is vendor-neutral by design ([ADR 0021](docs/decisions/0021-business-outcome-measurement.md)) and no adapter is written, so every project resolves to `waiting_for_source`. Vibe's own product analytics is separate and already answered (`@vercel/analytics`), as is Vibe's own ad attribution ([ADR 0041](docs/decisions/0041-marketing-attribution-pixel.md)).
 3. **Previewing a repository whose validated artifact cannot be started** by a single detected dev/start command ([§3.9](#39-preview-layer)).
 4. **Production hosting migration as a possible future product feature** — not scoped, not committed to.
+5. **Retention period for tombstoned financial and anonymized audit records** — [ADR 0056](docs/decisions/0056-lifecycle-erasure-and-retention.md) decides *what* survives an erasure and makes the period expressible, and deliberately decides no duration and no jurisdiction. No implementation may invent one.
+6. **Whether retained audit history gets an operator read path** — once the owner column is null the surviving rows match no RLS policy, so they are readable by nobody ([ADR 0056](docs/decisions/0056-lifecycle-erasure-and-retention.md) §Deferred). Retention without a reader is storage, not evidence; no admin surface exists to change that.
 
 **Resolved since this list was written:**
 
-5. ~~Untrusted Repository Execution Provider~~ → [ADR 0015](docs/decisions/0015-untrusted-repository-execution-provider.md): Vercel Sandbox.
-6. ~~Preview integration for non-Vercel-compatible repositories~~ → obsolete as framed. [ADR 0016](docs/decisions/0016-temporary-preview-isolation.md) replaced deployment-based previews with a restored validation artifact, so Vercel compatibility stopped being the constraint.
-7. ~~`AIProvider` interface signature~~ → generic structured generation (`countInputTokens`, `generateStructured`), [§3.6](#36-ai-execution-layer).
-8. ~~Final database schema~~ → [supabase/migrations/](supabase/migrations/) is the schema, and is authoritative ([§6](#6-domain-model)).
-9. ~~Error monitoring / observability provider~~ → [ADR 0022](docs/decisions/0022-sentry-observability.md): Sentry.
-10. ~~Long-term storage for large build artifacts~~ → decided by *not* storing them long-term: a validated artifact is a provider snapshot with an explicit expiry, deleted when the preview ends ([ADR 0016](docs/decisions/0016-temporary-preview-isolation.md)); review screenshots live in a private bucket read only through signed URLs ([ADR 0017](docs/decisions/0017-visual-review-artifacts.md)).
-11. ~~Background job / queue technology~~ → [ADR 0013](docs/decisions/0013-durable-operation-execution.md): durable operations on Vercel Workflows.
+7. ~~Untrusted Repository Execution Provider~~ → [ADR 0015](docs/decisions/0015-untrusted-repository-execution-provider.md): Vercel Sandbox.
+8. ~~Preview integration for non-Vercel-compatible repositories~~ → obsolete as framed. [ADR 0016](docs/decisions/0016-temporary-preview-isolation.md) replaced deployment-based previews with a restored validation artifact, so Vercel compatibility stopped being the constraint.
+9. ~~`AIProvider` interface signature~~ → generic structured generation (`countInputTokens`, `generateStructured`), [§3.6](#36-ai-execution-layer).
+10. ~~Final database schema~~ → [supabase/migrations/](supabase/migrations/) is the schema, and is authoritative ([§6](#6-domain-model)).
+11. ~~Error monitoring / observability provider~~ → [ADR 0022](docs/decisions/0022-sentry-observability.md): Sentry.
+12. ~~Long-term storage for large build artifacts~~ → decided by *not* storing them long-term: a validated artifact is a provider snapshot with an explicit expiry, deleted when the preview ends ([ADR 0016](docs/decisions/0016-temporary-preview-isolation.md)); review screenshots live in a private bucket read only through signed URLs ([ADR 0017](docs/decisions/0017-visual-review-artifacts.md)).
+13. ~~Background job / queue technology~~ → [ADR 0013](docs/decisions/0013-durable-operation-execution.md): durable operations on Vercel Workflows.
 
 An open decision is resolved by writing an ADR, not by an implementation that quietly assumes an answer ([CLAUDE.md](CLAUDE.md) rules 13, 20).
 
@@ -319,6 +321,7 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0053](docs/decisions/0053-founder-input-resolution.md) | Founder-owned input resolution and Action Plan completion evidence | Action plans, project context, execution contract |
 | [0054](docs/decisions/0054-agent-action-plan-completion-evidence.md) | Agent Action Plan completion comes from verified execution evidence | Action plans, agent execution, validation |
 | [0055](docs/decisions/0055-founder-action-attestation-evidence.md) | Founder actions complete from explicit immutable attestation | Action plans, founder authority, completion evidence |
+| [0056](docs/decisions/0056-lifecycle-erasure-and-retention.md) | Lifecycle, erasure and retention: what a deletion destroys, what outlives the person, and under whose authority (Accepted, unimplemented) | Projects, account, §3.11, §3.12, storage |
 
 ### Layers with no section above
 
