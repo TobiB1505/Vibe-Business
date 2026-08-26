@@ -49,6 +49,7 @@ const LABELS: Record<AuditEventType, string> = {
   "repository.selected": "Repository selected",
   "project.created": "Project created",
   "project.disconnected": "Project disconnected",
+  "project.deletion_failed": "Project could not be disconnected",
   "project.production_url.updated": "Production URL updated",
   // Historical: nothing emits this since CORE-2, but stored rows still do.
   "business_context.updated": "Business context updated",
