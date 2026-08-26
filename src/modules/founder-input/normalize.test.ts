@@ -44,3 +44,37 @@ describe("normalizeFounderInputRequirement", () => {
     ).toBeNull();
   });
 });
+
+describe("an unanswerable request is discarded (VB regression)", () => {
+  /** A `text` question is answerable only through the custom path. */
+  it("refuses text without a custom path", () => {
+    expect(
+      normalizeFounderInputRequirement({
+        kind: "input",
+        subjectKey: "analytics.property-id",
+        question: "Which analytics property should Vibe use?",
+        whyNeeded: "The step writes the id into the site configuration.",
+        responseType: "text",
+        recommendation: null,
+        alternatives: [],
+        allowCustom: false,
+      }),
+    ).toBeNull();
+  });
+
+  it("accepts text once the custom path is open", () => {
+    expect(
+      normalizeFounderInputRequirement({
+        kind: "input",
+        subjectKey: "analytics.property-id",
+        question: "Which analytics property should Vibe use?",
+        whyNeeded: "The step writes the id into the site configuration.",
+        responseType: "text",
+        recommendation: null,
+        alternatives: [],
+        allowCustom: true,
+      }),
+    ).not.toBeNull();
+  });
+});
+

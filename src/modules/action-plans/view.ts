@@ -150,6 +150,35 @@ export type StepSequenceStatus = {
 };
 
 /**
+ * What a completed step is allowed to say it is (ADR 0054, rule 66).
+ *
+ * The three completion authorities do not mean the same thing, and only two of
+ * them mean "finished":
+ *
+ *  * a `founder_decision` / `founder_input` step completes on a durable
+ *    resolution — the founder answered, and that is the whole of the work;
+ *  * a `founder_action` step completes on the founder's own attestation;
+ *  * a **`vibe` step completes on validation evidence alone** — the agent
+ *    produced a Prepared Change, Vibe verified the observed candidate, and
+ *    independent validation passed.
+ *
+ * That third one is not done. The change sits on an isolated `vibe/*` branch;
+ * nobody has approved it and nothing has been merged. ADR 0054 says so in as
+ * many words — *"It does not mean approved, merged, deployed, live, safe"* —
+ * and rule 66 turns it into a prohibition: a validation pass must **never** be
+ * rendered as safe, reviewed, mergeable or production ready.
+ *
+ * "Done" is exactly that rendering, so an agent step says what is true instead:
+ * the work happened and it is the founder's turn. The visual weight stays
+ * `done` — the step really has left the queue — but the sentence does not
+ * promise a merge that has not happened.
+ */
+function stepCompletedStatus(step: ActionPlanStep): StepSequenceStatus {
+  if (step.actor === "vibe") return { label: "Ready to review", state: "done" };
+  return { label: "Done", state: "done" };
+}
+
+/**
  * The scannable answer to "can this happen right now?" (§16, §17).
  *
  * A blocked step says exactly what it is waiting for — by title, never by a
@@ -163,7 +192,7 @@ export function stepSequenceStatus(
   allSteps: ActionPlanStep[],
   display: StepDisplayState,
 ): StepSequenceStatus {
-  if (display === "done") return { label: "Done", state: "done" };
+  if (display === "done") return stepCompletedStatus(step);
   if (display !== "waiting_on_steps") return { label: "Ready now", state: "ready" };
 
   const byOrder = new Map(allSteps.map((entry) => [entry.order, entry]));

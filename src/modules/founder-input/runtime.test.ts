@@ -89,3 +89,60 @@ describe("runtimeFounderInputRequirement", () => {
     ).toBeNull();
   });
 });
+
+describe("the subject key stays inside its bound (VB regression)", () => {
+  /** `${order}-${changeKind}-${slug(title)}`, with the title slug capped at 48. */
+  function stepKeyFor(order: number, changeKind: string, title: string): string {
+    const slug = title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "")
+      .slice(0, 48);
+    return `${order}-${changeKind}-${slug}`;
+  }
+
+  const SUBJECT_KEY_MAX = 96;
+
+  it("keeps an ordinary product_change step answerable", () => {
+    // This exact title produced a 98-character key, which failed validation and
+    // made the run report missing_required_context — it failed instead of
+    // asking the founder, on the commonest change kind, after they had paid.
+    const stepKey = stepKeyFor(3, "product_change", "Add a clear pricing section to the marketing homepage");
+    const requirement = runtimeFounderInputRequirement({
+      stepKey,
+      draft: { kind: "decision", question: "Which plan should the page lead with?", options: ["Starter", "Pro"] },
+    });
+
+    expect(requirement).not.toBeNull();
+    expect(requirement!.subjectKey.length).toBeLessThanOrEqual(SUBJECT_KEY_MAX);
+  });
+
+  it("holds for the longest step key the planner can emit", () => {
+    const stepKey = stepKeyFor(9, "configuration_change", "x".repeat(80));
+    const requirement = runtimeFounderInputRequirement({
+      stepKey,
+      draft: { kind: "input", question: "Which account identifier should Vibe use?", options: [] },
+    });
+
+    expect(requirement).not.toBeNull();
+    expect(requirement!.subjectKey.length).toBeLessThanOrEqual(SUBJECT_KEY_MAX);
+  });
+
+  it("still separates two steps that share a truncated prefix", () => {
+    // Truncation is only safe because the digest keys the full step key.
+    const shared = "y".repeat(80);
+    const a = runtimeFounderInputRequirement({
+      stepKey: stepKeyFor(1, "product_change", shared),
+      draft: { kind: "decision", question: "Same question, different step?", options: [] },
+    });
+    const b = runtimeFounderInputRequirement({
+      stepKey: stepKeyFor(2, "product_change", shared),
+      draft: { kind: "decision", question: "Same question, different step?", options: [] },
+    });
+
+    expect(a).not.toBeNull();
+    expect(b).not.toBeNull();
+    expect(a!.subjectKey).not.toBe(b!.subjectKey);
+  });
+});
+

@@ -79,6 +79,19 @@ export function normalizeFounderInputRequirement(value: unknown): FounderInputRe
   ) {
     return null;
   }
+  // A `text` question is answerable only through the custom path, so one with
+  // `allowCustom: false` cannot be answered at all. It used to pass: the card
+  // opens the textarea for `text` with no recommendation, the founder types,
+  // and `resolveFounderInputResponse` refuses every submission — on a step that
+  // is by construction the plan's first actionable one, so the whole plan stops
+  // with no route forward.
+  //
+  // The prompt does ask the planner for `allowCustom: true` here. That is not
+  // where this belongs: rule 45 requires model output to be validated
+  // independently of what the prompt asked for.
+  if (candidate.responseType === "text" && candidate.allowCustom !== true) {
+    return null;
+  }
 
   const ids = [recommendation, ...alternatives]
     .filter((entry): entry is FounderInputOption => entry !== null)

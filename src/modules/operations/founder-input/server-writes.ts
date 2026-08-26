@@ -32,6 +32,30 @@ export type ResolveFounderInputResult =
  * then validates the selected path against the stored request and performs the
  * supersession/insert/close transition atomically.
  */
+/**
+ * The text of a PL/pgSQL `raise exception`, however supabase-js hands it over.
+ *
+ * `error instanceof Error` was the obvious way to write this and it is wrong:
+ * on its default path (no `throwOnError`) postgrest-js returns the parsed body
+ * — a **plain object** — and only constructs a real `PostgrestError` when
+ * throwing is enabled (`PostgrestBuilder.ts:548` versus `:506`/`:536`). The
+ * store re-throws that object as-is, so the `instanceof` arm never matched,
+ * `String(error)` produced `"[object Object]"`, and every classification below
+ * fell through to `resolution_failed`.
+ *
+ * What that cost: `runtime_founder_input_reservation_still_active` — the guard
+ * that stops a resolution committing against an unreleased Credit hold — told
+ * the founder "try again", when waiting is the only thing that works.
+ *
+ * Reading the property directly covers both shapes, and the string arm keeps
+ * a genuinely thrown non-object readable.
+ */
+function postgresErrorMessage(error: unknown): string {
+  if (typeof error === "string") return error;
+  const message = (error as { message?: unknown } | null | undefined)?.message;
+  return typeof message === "string" ? message : "";
+}
+
 export async function resolveFounderInput(params: {
   projectId: string;
   userId: string;
@@ -75,7 +99,7 @@ export async function resolveFounderInput(params: {
     });
     return { ok: true, resolutionId };
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = postgresErrorMessage(error);
     if (message.includes("founder_input_request_not_found")) {
       return { ok: false, error: "request_not_found" };
     }

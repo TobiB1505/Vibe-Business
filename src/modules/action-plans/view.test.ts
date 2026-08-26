@@ -190,6 +190,27 @@ describe("stepSequenceStatus", () => {
     expect(stepSequenceStatus(second, [first, second], "also_ready").label).toBe("Ready now");
   });
 
+  it("does not call a validated agent change Done (ADR 0054, rule 66)", () => {
+    // A `vibe` step completes on validation evidence alone: the change sits on
+    // an isolated branch, unapproved and unmerged. ADR 0054 says the evidence
+    // "does not mean approved, merged, deployed, live, safe", and rule 66
+    // forbids rendering it as any of those. "Done" was exactly that rendering.
+    const agentStep = step({ order: 1, actor: "vibe" });
+    const status = stepSequenceStatus(agentStep, [agentStep], "done");
+
+    expect(status.label).not.toBe("Done");
+    expect(status.label).toBe("Ready to review");
+    expect(status.state).toBe("done");
+  });
+
+  it.each(["founder_decision", "founder_input", "founder_action"] as const)(
+    "still reads Done for a completed %s step, where it is true",
+    (actor) => {
+      const founderStep = step({ order: 1, actor });
+      expect(stepSequenceStatus(founderStep, [founderStep], "done").label).toBe("Done");
+    },
+  );
+
   it("names the single prerequisite by title, not just its order", () => {
     const decision = step({ order: 1, title: "Choose a segment" });
     const dependent = step({ order: 2, dependsOn: [1] });
@@ -208,12 +229,16 @@ describe("stepSequenceStatus", () => {
     expect(status.label).toBe("Waiting for 2 earlier steps");
   });
 
-  it("reads Done for a completed step regardless of its dependencies", () => {
-    const finished = step({ order: 1, dependsOn: [] });
-    expect(stepSequenceStatus(finished, [finished], "done")).toEqual({
-      label: "Done",
-      state: "done",
-    });
+  it("lands in the done state regardless of its dependencies", () => {
+    // The default factory builds a `vibe` step, whose completed label is
+    // deliberately not "Done" — see the ADR 0054 case above. What this pins is
+    // that a completed step stops advertising its prerequisites either way.
+    const finished = step({ order: 1, dependsOn: [2] });
+    const earlier = step({ order: 2 });
+    const status = stepSequenceStatus(finished, [earlier, finished], "done");
+
+    expect(status.state).toBe("done");
+    expect(status.label).not.toMatch(/^Waiting/);
   });
 });
 
