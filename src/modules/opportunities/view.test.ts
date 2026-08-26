@@ -139,7 +139,7 @@ describe("moveLensLabel", () => {
       moveLensLabel(
         move({ primaryLens: "acquisition", secondaryLenses: ["measurement", "conversion"] }),
       ),
-    ).toBe("Acquisition & Measurement");
+    ).toBe("Acquisition · Measurement");
   });
 
   it("is absent rather than a placeholder on a legacy Move", () => {

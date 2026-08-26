@@ -129,7 +129,10 @@ export function moveLensLabel(opportunity: BusinessOpportunity): string | null {
 
   const primary = LENS_LABELS[opportunity.primaryLens];
   const secondary = opportunity.secondaryLenses[0];
-  return secondary ? `${primary} & ${LENS_LABELS[secondary]}` : primary;
+  // A middot rather than "and": three of the nine labels already contain an
+  // ampersand, and "Revenue & Economics & Conversion" reads as one long name
+  // for something that is two areas.
+  return secondary ? `${primary} · ${LENS_LABELS[secondary]}` : primary;
 }
 
 /**

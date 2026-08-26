@@ -163,6 +163,29 @@ export function CategoryChip({ children, className }: { children: ReactNode; cla
 }
 
 /**
+ * A coarse rating — "High impact", "Medium effort".
+ *
+ * Not a `CategoryChip`, which names a taxonomy and is lowercase for that
+ * reason, and not a `StatusPill`, which reports a state and takes a status
+ * colour. A rating is a reading of one axis: it keeps sentence case because it
+ * is a phrase rather than a term, and it stays neutral because "low" is not a
+ * problem and "high" is not a success.
+ */
+export function RatingChip({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <span
+      className={cn(
+        "bg-surface-hover border-line-4 text-fg-prose inline-flex items-center rounded-full border px-2.5 py-1",
+        "text-[0.65625rem] font-medium",
+        className,
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+/**
  * The small glowing dot used in list rows and the sidebar to carry a project's
  * state. It is decorative on its own — every use must sit next to text that
  * says the same thing, which is why it takes no label of its own and is hidden
