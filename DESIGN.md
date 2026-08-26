@@ -77,6 +77,21 @@ Billing follows a compact financial-dashboard composition: plan, spendable Credi
 
 The project Product page reads as one coherent product dossier, not a stack of scanner reports. Its opening identity card may combine the real product mark, evidence-backed description, category, capability count and source coverage, but never a fabricated screenshot or product metric. Product DNA, founder intent, discovered capabilities, journey, brand identity and source coverage follow in that order; raw technical evidence stays available behind disclosure. The profile confirmation is the terminal surface: legacy scan summaries, coach prompts and cross-navigation actions must not continue below it.
 
+The Action Plan is a decision beside its explanation, not a report. The Move list
+and its Now/Next/Later rail own the reading column; the summary counts and the
+planned-work panel own a narrower side column that stays with the list as it
+scrolls. Both columns reserve their geometry before any Move exists, so the page
+does not rearrange itself around the founder when a run lands. Selection is the
+only relationship between the two halves and it lives in the URL.
+
+Nothing on this surface may state a duration, a percentage or a step counter. A
+Move's effort is the coarse label the domain records, the parts of the product a
+plan touches are derived from stored evidence, and a run's progress is the named
+stages its executor actually wrote. Where the reference composition asked for a
+figure the domain cannot produce, the honest reading takes the slot or the slot
+goes. This is an ordinary product surface: no aura, no traced connections, no
+staged entry — the Business Brain's choreography stops at its own page.
+
 ## Signature Surface: Business Brain
 
 The project Home is the deliberate exception to the product's otherwise quiet presentation. Its Business Brain may use a contained mint aura, traced connections, spherical planet nodes and staged entry to make the nine business areas read as one system. This is a semantic visualization, not a new decorative language: planet colour represents health, planet size represents materiality, and a relationship line exists only where the audit grouped areas into the same conclusion. The centre remains the only aggregate score; a planet may show its own evidence-grounded diagnostic lens score, which never contributes to the centre and is `—` when unsupported.

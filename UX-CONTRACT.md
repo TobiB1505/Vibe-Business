@@ -45,6 +45,7 @@
 | Table/list | comfortable density | row surface cue | controls receive visible focus | n/a | stable frame | persistent scoped state |
 | Business Brain | staged but complete | real related paths and nodes gain emphasis | node uses the global mint ring | n/a | server lifecycle remains authoritative | existing notices and recovery |
 | Product Scan | stored discoveries at first paint in reserved scanner/feed slots | grounded nodes and events gain emphasis without changing outer geometry | launcher uses shared button focus | unavailable without connected repository | stable launcher and scanner geometry + durable event feed | persistent partial/failure state + retry |
+| Action Plan workspace | list left, planned work right; rank 1 selected | card surface cue; title link | global mint ring | absent rather than disabled where no executor exists | named operation stages, no percentage | persistent scoped notice with one way forward |
 | Billing purchase / portal | real form posting an approved SKU or no client fields for portal | shared interactive transition | global mint ring | visibly unavailable with deployment explanation | stable label + `aria-busy`; duplicate submit blocked | persistent scoped notice with recovery copy |
 
 ## Dataset navigation
@@ -72,13 +73,17 @@
 | Manage or cancel subscription | `Manage or cancel plan` | stable busy action | Stripe customer portal | persistent action error | portal/browser owned | ADR 0025 |
 | Claim Welcome Credits | `Add my 100 Welcome Credits` | stable busy action | same Billing page with canonical balance | persistent action error | submitted action remains contextual | ADR 0024 |
 | Confirm founder action | `Confirm this is complete` on the current founder-owned action | stable busy action; duplicate submission blocked | same Action Plan with evidence-derived next step | persistent inline error; criterion remains visible | submitted action remains contextual | ADR 0055 |
+| Select a Move | Move title or `Plan this move` on a card | none — navigation only, never a run | same Action Plan with `?plan=` and the panel about that Move | route error boundary | selected card heading | ADR 0028 |
+| Plan this Move | `Plan this move` in the planned-work panel | stable busy action; price stated beside it | same Action Plan with the plan, or named progress rows | persistent inline failure; the offer stays | submitted action remains contextual | ADR 0013, Rule 60 |
+| Re-scan business | `Re-scan business` beside the last-updated line | stable busy action; price stated beside it; route refresh on start | same Action Plan with the run's real stages | persistent inline failure | submitted action remains contextual | Rule 60 |
+| Start with Vibe | `Start with Vibe` on a Move with an executor | confirmation dialog first, then stable busy action | prepared change on `/agent` | persistent inline failure with retry only where honest | submitted action remains contextual | ADR 0014 |
 
 ## Navigation and responsive behavior
 
 - Every route has a truthful metadata title.
 - Account sidebar becomes the established top strip below `lg`; project and account rails never nest.
 - On desktop, the project rail owns product identity, the bounded product switcher, project navigation and the account disclosure for the full viewport height. The project document scrolls independently; there is no sticky content header.
-- Project routes render `My Products / {product}` followed by one route-owned H1, description and action. Repository, branch and connection metadata do not repeat above every page.
+- Project routes render `My Products / {product}` — plus the route's own name on every section but Home — followed by one route-owned H1, description and action. Repository, branch and connection metadata do not repeat above every page.
 - `Project Settings` is a project destination. Profile, Account settings, Billing and Sign out live only in the account disclosure at the rail footer.
 - Project Home is the canonical Business Health surface at `/app/projects/:projectId`; `/health` is a compatibility alias and is never a second rail item.
 - `#business-audit` remains the stable recovery anchor and resolves on canonical project Home.
@@ -89,6 +94,9 @@
 - The Product page ends at the profile confirmation. It does not repeat raw code/live summaries or append a Business Health action below that decision boundary.
 - Product Scan uses one shared component in onboarding and My Product. Its desktop scanner, summary, activity and 3×2 discovery regions reserve their geometry before findings arrive. Below `md`, the constellation becomes a linear facet rail; discoveries remain ordered and fully readable.
 - On My Product, Product Scan remains expanded while working, folds automatically after the stored completion event, and can be opened again to review discoveries or start a re-scan. Onboarding and failure states remain expanded. The toggle exposes its expanded state and controlled region to assistive technology.
+- Project routes that are not the project index add their own name as a third breadcrumb step, resolved from the URL against `PROJECT_SECTIONS`. Home adds none.
+- The Action Plan is one decision beside its explanation: the Move list and its Now/Next/Later rail on the left, the summary counts and the planned-work panel on the right, at `xl` and above. Below `xl` the panel returns to document order under the list; below `sm` the rail becomes a band label above each card. The band, the rank and every status are text as well as geometry.
+- Which Move the planned-work panel is about is `?plan=`, so Back and Forward restore the selection. Selecting a Move never starts a paid run.
 - Billing uses three equal overview panels at desktop, then asymmetric content/support grids. Below `lg`, every region returns to document order without hiding plan status, expiry, purchase actions or signed Credit movement. No Billing panel owns a viewport height or nested scroll area.
 
 ## Async and resilience
@@ -97,6 +105,7 @@
 - Search and sorting are local over the loaded account inventory, so no stale request or spinner exists.
 - GitHub live status is not fetched on the index. Stored connection metadata is labeled honestly and revalidation stays at the consequential workflow that needs it.
 - Product Scan polls canonical Supabase operation state and at most 24 ordered events every 2.5 seconds. It refreshes server content only on a terminal transition. A public-product failure degrades to partial when another source remains usable; it never removes a successful source reading.
+- The Action Plan polls canonical operation state every 2.5–3 seconds for the moves run and the planning run, and names the stages each executor actually records. A stage outside the known sequence claims no position rather than guessing one; nothing renders a percentage or a step counter.
 - Billing reads remain server-owned and never move money or Credits. Checkout and portal mutations are pessimistic, block duplicate submission and report persistent local errors. A Checkout return says only that payment confirmation is pending; Credits appear only after the signed Stripe webhook updates canonical state.
 
 ## Motion and sensory behavior
@@ -115,4 +124,4 @@
 - Static: lint, typecheck, unit tests, strict premium audit.
 - Browser: repository success, empty, no-results, search clear, filter, sort, pagination, URL restoration and 1440/1024/768/375 widths; Business Health reading order, map interaction, canonical recovery link, responsive transformation and reduced motion.
 - Canonical sibling: `/app/products` and the account shell.
-- Repository evidence: `e2e/account-repositories.spec.ts`, `e2e/business-audit.spec.ts`, `e2e/action-plan-ui.spec.ts`, `e2e/product-scan.spec.ts`, `e2e/billing.spec.ts`.
+- Repository evidence: `e2e/account-repositories.spec.ts`, `e2e/business-audit.spec.ts`, `e2e/action-plan-ui.spec.ts`, `e2e/one-loop.spec.ts`, `e2e/product-scan.spec.ts`, `e2e/billing.spec.ts`.
