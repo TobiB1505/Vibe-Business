@@ -148,6 +148,18 @@ The carve-out deliberately does **not** re-open casual deletion. `DELETE FROM pr
 
 **One ordering constraint inside the function, and it is the exception that proves F1.** `execution_interrupts.execution_spec_id` references `execution_specs` with `ON DELETE RESTRICT`. F1 says such an edge cannot block the `projects` cascade — and that remains true — but the lifecycle function deletes `execution_specs` **directly**, which is the other case entirely: a direct delete of a referenced parent while its children are still present *is* refused, exactly as §1 describes for Disconnect. The function must therefore delete `execution_interrupts` for the project before it deletes the specs, or defer the specs to the `projects` cascade it has just unlocked. This is asserted by a fixture carrying an interrupt row, not left to reading order — the Wave 0 fixture predates the interrupt table and did not cover it.
 
+> **[2026-08-26] Implemented as M1 in `20260826213000_project_lifecycle_deletion_authority.sql`. Three sentences above were wrong when written, and building M1 measured them.**
+>
+> **1. The cascade never checks the caller's privilege on `execution_specs`, so revoking it is not the authority.** A referential-integrity action runs with the *referencing table's owner* authority: measured, `current_user` inside the cascaded trigger is `postgres` even when the caller is `service_role`. Part 2 above therefore protects **direct** deletion only. It is worth keeping for exactly that, and it is not what makes the cascade safe.
+>
+> **2. The actual entry authority is `DELETE` on `public.projects`.** That is the privilege a caller needs to start the cascade that reaches the specs, and it is the one that has to be closed. M1 withdrew it from `service_role` — the one role that bypasses RLS and could otherwise reach any tenant — and left it with `authenticated`, because `projects/connect.ts` and `projects/disconnect.ts` still depend on it. That leaves a real gap, stated plainly: an `authenticated` caller who forges the marker can delete **their own** project and cascade its specs. Measured end to end under RLS as the owning user: `DELETE 1`, `remaining specs=0`. **M1 must not be deployed until that privilege is closed.**
+>
+> **3. "`DELETE FROM projects` remains blocked afterwards [proven]" no longer holds, and the sentence that follows it is the one that mattered.** The Wave 0 proof was of the *direct-spec* design; under the root-delete design M1 actually ships, a marker-holding caller with `DELETE` on `projects` is not blocked. What replaced it is a second condition that no caller can supply: **a spec may be deleted only when its project row is already gone.** Inside the cascade it is (`parent_gone = t`); in a direct delete it is not (`f`). That binds `postgres` itself, which no privilege revoke can do, and it is why direct spec deletion is now unreachable for *every* role rather than merely ungranted.
+>
+> **The direct-delete ordering constraint in the paragraph above is therefore moot, and for a bigger reason than it gives.** M1 does not delete `execution_specs` directly at all — it deletes the root project row and lets the proven cascade do the rest. Direct deletion was measured and refused, and by the edge this ADR does *not* name: `agent_execution_runs.execution_spec_id` is a second `ON DELETE RESTRICT` reference to `execution_specs`, and it is the one that fires first.
+>
+> **What stands unchanged:** the trigger is kept rather than removed; `UPDATE` is refused unconditionally in every role and context; the marker is a forgeable context marker and never a permission; the function verifies ownership internally; and no intra-project `RESTRICT` foreign key is converted. The correction is to *which* privilege carries the authority, not to the principle that a privilege — never the marker — must carry it.
+
 ### 6. The billing graph is retained whole or not at all
 
 **`DELETE` is never a legal verb for class E.** The billing graph — account, ledger, reservations, quotes, grants, allocations — is retained in its entirety or it is not touched. There is no third option, and no future job may introduce one.
@@ -345,7 +357,7 @@ Once `user_id` is NULL the surviving audit rows match no RLS policy (`user_id = 
 
 **Dropping or weakening the `execution_specs` immutability trigger.** Narrowing it to allow all `DELETE` from any caller would make F2 disappear in one line and discard the guarantee the trigger exists to make — that an approved instruction package cannot be mutated after the fact. It would pass every test trivially and prove nothing.
 
-**A GUC flag as the authorization.** `SET LOCAL vibe.lifecycle_erasure = 'on'` as the permission was the original sketch. **[proven] forgeable by any role.** The flag survives as a context marker; the `DELETE` privilege is the authority.
+**A GUC flag as the authorization.** `SET LOCAL vibe.lifecycle_erasure = 'on'` as the permission was the original sketch. **[proven] forgeable by any role.** The flag survives as a context marker; the `DELETE` privilege is the authority. *(Which `DELETE` privilege — see the [2026-08-26] correction in §5: it is `public.projects`, not `public.execution_specs`.)*
 
 **Converting the intra-project `RESTRICT` foreign keys.** The audit's own recommendation, and **[proven]** wrong: F1 showed they never block the `projects` cascade. Converting them to `NO ACTION` or to `CASCADE` would be churn against a non-cause and would remove real out-of-band integrity guards in exchange for nothing.
 

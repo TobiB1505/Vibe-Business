@@ -1,5 +1,20 @@
 -- VB-001 M1 — Project Lifecycle Deletion Authority (ADR 0056 §5, §11).
 --
+-- ┌──────────────────────────────────────────────────────────────────────┐
+-- │ DO NOT DEPLOY THIS MIGRATION ON ITS OWN.                             │
+-- │                                                                      │
+-- │ It is safe only once `DELETE` on `public.projects` is closed for     │
+-- │ `authenticated` too. Until then it hands an authenticated caller a   │
+-- │ way to destroy their own project's execution specs by forging the    │
+-- │ lifecycle marker — measured, not theorised. See the [2026-08-26]     │
+-- │ correction in ADR 0056 §5, and the characterisation test named       │
+-- │ `DEPLOYMENT BLOCKER` in `supabase/tests/`.                           │
+-- │                                                                      │
+-- │ The closure needs `connect.ts` and `disconnect.ts` off the `DELETE`  │
+-- │ privilege first, so this migration ships *after* that application    │
+-- │ change, not before it.                                               │
+-- └──────────────────────────────────────────────────────────────────────┘
+--
 -- Project deletion is structurally impossible today. `DELETE FROM projects`
 -- cascades into `execution_specs`, and `execution_specs_immutable` is a
 -- `before update or delete ... for each row` trigger that raises

@@ -137,6 +137,71 @@ describe("the marker is never the authority", () => {
   });
 });
 
+/**
+ * The gap M1 does not close, pinned so it cannot be forgotten or closed
+ * silently. This is a characterisation test: it asserts what the schema
+ * *currently does*, and it is meant to be deleted — the day `DELETE` on
+ * `public.projects` is withdrawn from `authenticated`, this test fails and the
+ * one below it in the comment takes its place.
+ *
+ * Until then, M1 is not deployable. `authenticated` still holds `DELETE` on
+ * `projects` because `projects/connect.ts` and `projects/disconnect.ts` need
+ * it, and holding it plus a forged marker is enough to destroy a project's
+ * execution specs — bypassing the lifecycle orchestration entirely.
+ *
+ * The replacement, once the callers are migrated:
+ *
+ *     it("refuses authenticated deleting their own project, marker or not")
+ */
+describe("DEPLOYMENT BLOCKER — authenticated project DELETE is still open", () => {
+  /** Acts as PostgREST does: the role plus that user's JWT subject. */
+  function asOwner(userId: string): string {
+    return `select set_config('request.jwt.claim.sub', '${userId}', true);
+            set local role authenticated;`;
+  }
+
+  it("lets an authenticated owner forge the marker and cascade away their specs", () => {
+    const { userId, projectId } = makeProject("gap");
+    db.sql(`
+      begin;
+        ${asOwner(userId)}
+        select set_config('${MARKER}', 'on', true);
+        delete from public.projects where id = '${projectId}';
+      commit;
+    `);
+
+    // Measured, not theorised. This is the reason the migration carries a
+    // do-not-deploy banner.
+    expect(db.sql(`select count(*) from public.projects where id = '${projectId}';`)).toBe("0");
+    expect(
+      db.sql(`select count(*) from public.execution_specs where project_id = '${projectId}';`),
+    ).toBe("0");
+  });
+
+  it("still refuses that same owner without the marker", () => {
+    const { userId, projectId } = makeProject("gap-nomarker");
+    const error = db.sqlExpectingError(`
+      begin;
+        ${asOwner(userId)}
+        delete from public.projects where id = '${projectId}';
+      commit;
+    `);
+    expect(error).toContain("execution_specs rows are immutable");
+  });
+
+  it("names the grant that has to go, so the closure is one measurable change", () => {
+    const holders = db.sql(`
+      select coalesce(string_agg(grantee, ',' order by grantee), '<none>')
+      from information_schema.role_table_grants
+      where table_schema = 'public' and table_name = 'projects'
+        and privilege_type = 'DELETE' and grantee in ('anon', 'authenticated', 'service_role');
+    `);
+    // `anon` holds it from the platform default and is blocked by RLS; both
+    // still go when the closure lands.
+    expect(holders).toBe("anon,authenticated");
+  });
+});
+
 describe("erase_project_lifecycle", () => {
   it("E. deletes the owned project and its whole subtree", () => {
     const { userId, projectId } = makeProject("erase");
