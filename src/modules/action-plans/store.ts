@@ -6,6 +6,8 @@ import type { BusinessLens } from "@/modules/business-audit/schema";
 import type { ConclusionLineage } from "./source";
 import type { ExecutionCapability } from "@/modules/execution/schema";
 import type { PlanValidationFinding } from "./validate";
+import type { FounderInputRequirement } from "@/modules/founder-input/schema";
+import { createPlannerFounderInputRequests } from "@/modules/founder-input/store";
 import type {
   ActionPlan,
   ActionPlanStatus,
@@ -135,6 +137,7 @@ type StepRow = {
   completion_criteria: string;
   depends_on: number[] | null;
   evidence_ids: string[] | null;
+  founder_input_requirement: FounderInputRequirement | null;
   execution_support: ExecutionSupport;
   capability: ExecutionCapability | null;
   requires_approval: boolean;
@@ -144,7 +147,7 @@ const PLAN_COLUMNS =
   "id, project_id, business_audit_id, opportunity_set_id, opportunity_id, input_hash, status, goal, why_now, expected_outcome, addresses_root_problem, assumptions, root_problem, source_conclusion_key, source_conclusion_lineage, lenses, step_count, validation_notes, validation_findings, failure_code, contract_version, planner_version, prompt_version, rubric_version, evidence_pack_version, provider, model, product_profile_id, founder_intent_hash, created_at, completed_at";
 
 const STEP_COLUMNS =
-  "id, action_plan_id, step_key, step_order, title, description, purpose, actor, change_kind, completion_criteria, depends_on, evidence_ids, execution_support, capability, requires_approval";
+  "id, action_plan_id, step_key, step_order, title, description, purpose, actor, change_kind, completion_criteria, depends_on, evidence_ids, founder_input_requirement, execution_support, capability, requires_approval";
 
 function mapPlan(row: PlanRow, steps: StoredActionPlanStep[] = []): StoredActionPlan {
   return {
@@ -195,6 +198,7 @@ function mapStep(row: StepRow): StoredActionPlanStep {
     completionCriteria: row.completion_criteria,
     dependsOn: row.depends_on ?? [],
     evidenceIds: row.evidence_ids ?? [],
+    founderInputRequirement: row.founder_input_requirement,
     executionSupport: row.execution_support,
     capability: row.capability,
     requiresApproval: row.requires_approval,
@@ -439,6 +443,14 @@ export async function completeActionPlanRun(
   plan: ActionPlan,
   findings: PlanValidationFinding[],
 ): Promise<void> {
+  const { data: planIdentity, error: identityError } = await supabase
+    .from("action_plans")
+    .select("project_id, input_hash")
+    .eq("id", planId)
+    .single();
+  if (identityError) throw identityError;
+  const pendingPlan = planIdentity as { project_id: string; input_hash: string };
+
   const { error: insertError } = await supabase.from("action_plan_steps").insert(
     plan.steps.map((step) => ({
       action_plan_id: planId,
@@ -452,6 +464,7 @@ export async function completeActionPlanRun(
       completion_criteria: step.completionCriteria,
       depends_on: step.dependsOn,
       evidence_ids: step.evidenceIds,
+      founder_input_requirement: step.founderInputRequirement,
       execution_support: step.executionSupport,
       capability: step.capability,
       requires_approval: step.requiresApproval,
@@ -460,7 +473,17 @@ export async function completeActionPlanRun(
 
   if (insertError) throw insertError;
 
-  const { data, error } = await supabase
+  // Materialize every founder-owned dependency before the plan becomes
+  // visible as completed. A failed request write may leave an invisible
+  // planning plan, but it can never publish an unanswerable completed plan.
+  await createPlannerFounderInputRequests(supabase, {
+    projectId: pendingPlan.project_id,
+    planId,
+    contextHash: pendingPlan.input_hash,
+    steps: plan.steps,
+  });
+
+  const { error } = await supabase
     .from("action_plans")
     .update({
       status: "completed",
@@ -475,13 +498,13 @@ export async function completeActionPlanRun(
       completed_at: new Date().toISOString(),
     })
     .eq("id", planId)
-    .select("project_id")
+    .select("id")
     .single();
 
   if (error) throw error;
 
   await supersedeOtherPlans(supabase, {
-    projectId: (data as { project_id: string }).project_id,
+    projectId: pendingPlan.project_id,
     keepPlanId: planId,
   });
 }

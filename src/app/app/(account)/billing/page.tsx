@@ -20,7 +20,7 @@ import { BillingView } from "./billing-view";
  * anything on this screen is a Server Action POST.
  */
 
-export const metadata: Metadata = { title: "Credits and billing" };
+export const metadata: Metadata = { title: "Billing" };
 
 export default async function BillingPage({
   searchParams,

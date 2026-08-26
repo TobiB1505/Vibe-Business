@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { FounderInputCard } from "@/components/founder-input/founder-input-card";
 import { Button, TextAction } from "@/components/ui/button";
 import { StatusPill, type StatusTone } from "@/components/ui/status-pill";
 import { Surface } from "@/components/ui/surface";
@@ -33,6 +34,13 @@ import {
 import { getOperationStatusAction } from "./run-audit-action";
 import { CreditPrice } from "@/components/ui/credit-price";
 import { startPlanAction, type StartPlanActionState } from "./plan-action";
+import {
+  resolveFounderInputAction,
+} from "./founder-input-action";
+import {
+  attestFounderActionStepAction,
+  type FounderActionAttestationState,
+} from "./founder-action-attestation";
 
 /**
  * The Action Plan section (ACTION PLANNER UI-1, density pass UI-1.1).
@@ -73,6 +81,7 @@ const RESPONSIBILITY_TONE: Record<ExecutionSupport, StatusTone> = {
   // never read as an offer to act.
   vibe_prepares: "neutral",
   founder_decides: "waiting",
+  founder_provides_input: "waiting",
   founder_acts: "waiting",
   external_dependency: "waiting",
   not_yet_supported: "neutral",
@@ -147,6 +156,68 @@ function StartHere({ step }: { step: ActionPlanStep }) {
       </div>
       <h5 className="text-fg text-lg leading-snug font-semibold">{step.title}</h5>
       <p className="text-fg-prose text-sm leading-relaxed">{step.description}</p>
+    </Surface>
+  );
+}
+
+function FounderActionCard({
+  projectId,
+  actionPlanId,
+  step,
+}: {
+  projectId: string;
+  actionPlanId: string;
+  step: ActionPlanStep;
+}) {
+  const action = attestFounderActionStepAction.bind(
+    null,
+    projectId,
+    actionPlanId,
+    step.id,
+  );
+  const [state, formAction, pending] = useActionState<FounderActionAttestationState, FormData>(
+    action,
+    null,
+  );
+
+  return (
+    <Surface level="card" padding="md" tone="amber" className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <StatusPill tone="waiting" dot>
+          Your action
+        </StatusPill>
+        <span className="text-fg-muted text-xs">Step {step.order}</span>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <h5 className="text-fg text-lg leading-snug font-semibold">{step.title}</h5>
+        <p className="text-fg-prose text-sm leading-relaxed">{step.description}</p>
+      </div>
+
+      <div className="border-amber-line bg-amber-tint/35 rounded-well border px-4 py-3">
+        <MonoLabel className="text-amber tracking-[0.12em]">Confirm when true</MonoLabel>
+        <p className="text-fg-body mt-1.5 text-sm leading-relaxed">{step.completionCriteria}</p>
+      </div>
+
+      <form action={formAction} noValidate className="flex flex-col items-start gap-2.5">
+        <Button
+          type="submit"
+          disabled={pending || state?.ok === true}
+          busy={pending}
+          className="min-w-52"
+        >
+          {pending ? "Saving confirmation…" : state?.ok ? "Completion confirmed" : "Confirm this is complete"}
+        </Button>
+        <p className="text-fg-muted text-xs">
+          This records your confirmation against this exact plan step.
+        </p>
+      </form>
+
+      {state && !state.ok && (
+        <p role="alert" className="text-coral text-sm">
+          {state.message}
+        </p>
+      )}
     </Surface>
   );
 }
@@ -243,10 +314,18 @@ function TimelineStep({
   );
 }
 
-function ReadyPlan({ planView }: { planView: ActionPlanView }) {
-  const { plan, staleness, firstActionableStep, progress } = planView;
+function ReadyPlan({ projectId, planView }: { projectId: string; planView: ActionPlanView }) {
+  const {
+    plan,
+    staleness,
+    firstActionableStep,
+    progress,
+    completedStepOrders,
+    founderInputRequest,
+  } = planView;
   const orderedSteps = [...plan.steps].sort((a, b) => a.order - b.order);
   const firstActionableOrder = firstActionableStep?.order ?? null;
+  const completed = new Set(completedStepOrders);
 
   const evidenceIds = [...new Set(orderedSteps.flatMap((step) => step.evidenceIds))];
 
@@ -261,7 +340,22 @@ function ReadyPlan({ planView }: { planView: ActionPlanView }) {
       <Surface level="section" padding="lg" className="flex flex-col gap-7">
         <PlanHero goal={plan.goal} whyNow={plan.whyNow} steps={orderedSteps} />
 
-        {firstActionableStep ? (
+        {staleness.length === 0 && firstActionableStep && founderInputRequest ? (
+          <FounderInputCard
+            projectId={projectId}
+            request={founderInputRequest}
+            context="action_plan"
+            resolveAction={resolveFounderInputAction}
+          />
+        ) : staleness.length === 0 &&
+          firstActionableStep?.actor === "founder_action" &&
+          firstActionableStep.executionSupport === "founder_acts" ? (
+          <FounderActionCard
+            projectId={projectId}
+            actionPlanId={plan.id}
+            step={firstActionableStep}
+          />
+        ) : firstActionableStep ? (
           <StartHere step={firstActionableStep} />
         ) : (
           <PlanStatusNotice progress={progress} />
@@ -273,7 +367,7 @@ function ReadyPlan({ planView }: { planView: ActionPlanView }) {
               key={step.id}
               step={step}
               allSteps={orderedSteps}
-              display={stepDisplayState(step, firstActionableOrder)}
+              display={stepDisplayState(step, firstActionableOrder, completed)}
               isLast={index === orderedSteps.length - 1}
             />
           ))}
@@ -428,7 +522,7 @@ export function ActionPlanPanel({
           founder never sees a blank panel while Vibe re-plans. */}
       {planView && (
         <>
-          <ReadyPlan planView={planView} />
+          <ReadyPlan projectId={projectId} planView={planView} />
           <form action={formAction} className="flex items-center gap-3">
             <input type="hidden" name="force" value="true" />
             <Button

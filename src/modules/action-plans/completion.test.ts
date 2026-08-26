@@ -1,0 +1,174 @@
+import { describe, expect, it } from "vitest";
+import { fakePlanStep } from "@/modules/execution-contract/test-support";
+import {
+  completedStepsFromEvidence,
+  type AgentStepCompletionEvidence,
+  type FounderActionCompletionEvidence,
+} from "./completion";
+
+function agentEvidence(overrides: Partial<AgentStepCompletionEvidence> = {}): AgentStepCompletionEvidence {
+  return {
+    executionSpecId: "spec-1",
+    agentExecutionRunId: "run-1",
+    preparedChangeId: "change-1",
+    validationRunId: "validation-1",
+    stepKey: "2-build",
+    stepOrder: 2,
+    ...overrides,
+  };
+}
+
+function founderActionEvidence(
+  overrides: Partial<FounderActionCompletionEvidence> = {},
+): FounderActionCompletionEvidence {
+  return {
+    attestationId: "attestation-1",
+    attestedByUserId: "user-1",
+    attestedAt: "2026-08-26T15:00:00.000Z",
+    attestationVersion: "founder-action-attestation.v1",
+    stepKey: "3-connect-stripe",
+    stepOrder: 3,
+    ...overrides,
+  };
+}
+
+describe("Action Plan completion authorities", () => {
+  it("combines founder resolution and verified Agent evidence", () => {
+    const founderStep = fakePlanStep({
+      id: "1-model",
+      order: 1,
+      actor: "founder_decision",
+      changeKind: "decision",
+      executionSupport: "founder_decides",
+      capability: null,
+      founderInputRequirement: {
+        kind: "decision",
+        subjectKey: "revenue.model",
+        question: "Which model should the business use?",
+        whyNeeded: "The implementation needs one confirmed model.",
+        responseType: "text",
+        recommendation: null,
+        alternatives: [],
+        allowCustom: true,
+      },
+    });
+    const agentStep = fakePlanStep({
+      id: "2-build",
+      order: 2,
+      dependsOn: [1],
+      executionSupport: "vibe_executes_now",
+      capability: "nextjs_seo_foundations_v2",
+    });
+
+    const completed = completedStepsFromEvidence(
+      [founderStep, agentStep],
+      [
+        {
+          id: "resolution-1",
+          kind: "decision",
+          subjectKey: "revenue.model",
+          resolvedStatement: "Use subscriptions.",
+          supersededAt: null,
+        },
+      ],
+      [agentEvidence()],
+    );
+
+    expect([...completed]).toEqual([1, 2]);
+  });
+
+  it("requires the evidence to match both the immutable step key and order", () => {
+    const step = fakePlanStep({
+      id: "2-build",
+      order: 2,
+      executionSupport: "vibe_executes_now",
+      capability: "nextjs_seo_foundations_v2",
+    });
+
+    expect([...completedStepsFromEvidence([step], [], [agentEvidence({ stepOrder: 1 })])]).toEqual(
+      [],
+    );
+    expect(
+      [...completedStepsFromEvidence([step], [], [agentEvidence({ stepKey: "2-other" })])],
+    ).toEqual([]);
+  });
+
+  it("never lets Agent evidence complete founder, unsupported, or external work", () => {
+    const founder = fakePlanStep({
+      id: "2-build",
+      order: 2,
+      actor: "founder_action",
+      executionSupport: "founder_acts",
+      capability: null,
+    });
+    const unsupported = fakePlanStep({ id: "2-build", order: 2 });
+    const external = fakePlanStep({
+      id: "2-build",
+      order: 2,
+      actor: "external_party",
+      executionSupport: "external_dependency",
+      capability: null,
+    });
+
+    for (const step of [founder, unsupported, external]) {
+      expect([...completedStepsFromEvidence([step], [], [agentEvidence()])]).toEqual([]);
+    }
+  });
+
+  it("completes a founder_action only from an attestation bound to its key and order", () => {
+    const step = fakePlanStep({
+      id: "3-connect-stripe",
+      order: 3,
+      actor: "founder_action",
+      changeKind: "external_setup",
+      executionSupport: "founder_acts",
+      capability: null,
+    });
+
+    expect(
+      [...completedStepsFromEvidence([step], [], [], [founderActionEvidence()])],
+    ).toEqual([3]);
+    expect(
+      [
+        ...completedStepsFromEvidence(
+          [step],
+          [],
+          [],
+          [founderActionEvidence({ stepKey: "3-other" })],
+        ),
+      ],
+    ).toEqual([]);
+    expect(
+      [
+        ...completedStepsFromEvidence(
+          [step],
+          [],
+          [],
+          [founderActionEvidence({ stepOrder: 2 })],
+        ),
+      ],
+    ).toEqual([]);
+  });
+
+  it("never lets a founder attestation complete Agent or external-party work", () => {
+    const agent = fakePlanStep({
+      id: "3-connect-stripe",
+      order: 3,
+      executionSupport: "vibe_executes_now",
+      capability: "nextjs_seo_foundations_v2",
+    });
+    const external = fakePlanStep({
+      id: "3-connect-stripe",
+      order: 3,
+      actor: "external_party",
+      executionSupport: "external_dependency",
+      capability: null,
+    });
+
+    for (const step of [agent, external]) {
+      expect(
+        [...completedStepsFromEvidence([step], [], [], [founderActionEvidence()])],
+      ).toEqual([]);
+    }
+  });
+});

@@ -1,5 +1,6 @@
 import type { BusinessLens } from "@/modules/business-audit/schema";
 import type { ExecutionCapability } from "@/modules/execution/schema";
+import type { FounderInputRequirement } from "@/modules/founder-input/schema";
 
 /**
  * The Action Plan domain model (CORE-2b §15).
@@ -35,8 +36,8 @@ import type { ExecutionCapability } from "@/modules/execution/schema";
  * answers, and a product that flattened them would have to lie about three.
  */
 
-export const ACTION_PLAN_SCHEMA_VERSION = "business-action-plan.v1" as const;
-export const ACTION_PLAN_STEP_SCHEMA_VERSION = "business-action-plan-step.v1" as const;
+export const ACTION_PLAN_SCHEMA_VERSION = "business-action-plan.v2" as const;
+export const ACTION_PLAN_STEP_SCHEMA_VERSION = "business-action-plan-step.v2" as const;
 
 /**
  * The **planner contract** version (§41).
@@ -46,7 +47,7 @@ export const ACTION_PLAN_STEP_SCHEMA_VERSION = "business-action-plan-step.v1" as
  * plan *means*. Bumped when a stored plan stops being an acceptable answer to
  * "how would Vibe approach this Move today?".
  */
-export const ACTION_PLANNER_CONTRACT_VERSION = "action-planner-contract-v1" as const;
+export const ACTION_PLANNER_CONTRACT_VERSION = "action-planner-contract-v2" as const;
 
 /**
  * Bumped when planning behaviour changes materially.
@@ -66,7 +67,7 @@ export const ACTION_PLANNER_CONTRACT_VERSION = "action-planner-contract-v1" as c
  * approach this Move?", which is the bar `ACTION_PLANNER_CONTRACT_VERSION`
  * exists to guard.
  */
-export const ACTION_PLANNER_VERSION = "action-planner-v2" as const;
+export const ACTION_PLANNER_VERSION = "action-planner-v3" as const;
 
 /**
  * Plan size (§29, §30).
@@ -101,6 +102,8 @@ export const STEP_ACTORS = [
   "vibe",
   /** A strategic choice Vibe must not make on the founder's behalf (§22). */
   "founder_decision",
+  /** A factual, non-secret value only the founder can provide (ADR 0053). */
+  "founder_input",
   /** Real-world work only a person can do: calls, interviews, filings (§26). */
   "founder_action",
   /** Blocked on a third party or an external system (§27). Never "Vibe failed". */
@@ -124,6 +127,8 @@ export type StepActor = (typeof STEP_ACTORS)[number];
 export const STEP_CHANGE_KINDS = [
   /** A choice gets made and becomes the basis for later work. */
   "decision",
+  /** A non-secret founder-owned fact becomes available to later work. */
+  "input",
   /** Options, comparison, or a recommendation are produced. No external change. */
   "analysis",
   /** The product itself ends up different — copy, code, configuration. */
@@ -192,6 +197,8 @@ export const EXECUTION_SUPPORT = [
   "vibe_prepares",
   /** Only the founder can settle this (§22). */
   "founder_decides",
+  /** Only the founder can supply this non-secret factual value. */
+  "founder_provides_input",
   /** Manual work by the founder (§26). */
   "founder_acts",
   /** Waiting on someone or something outside (§27). */
@@ -299,6 +306,12 @@ export type ActionPlanStep = {
   dependsOn: number[];
   /** Evidence ids from the pack, validated to exist (§35). May be empty (§35). */
   evidenceIds: string[];
+  /**
+   * The deterministic interaction contract for founder-owned information.
+   * Required for new `founder_decision` / `founder_input` steps, null for all
+   * other work and for legacy persisted plans.
+   */
+  founderInputRequirement: FounderInputRequirement | null;
   /**
    * Server-derived. Never model output — see the file header.
    */
@@ -452,6 +465,7 @@ export type PlanStalenessReason = (typeof PLAN_STALENESS_REASONS)[number];
 export const ACTOR_LABELS: Record<StepActor, string> = {
   vibe: "Vibe",
   founder_decision: "Your decision",
+  founder_input: "Your input",
   founder_action: "You do this",
   external_party: "Someone else",
 };
@@ -466,6 +480,7 @@ export const EXECUTION_SUPPORT_LABELS: Record<ExecutionSupport, string> = {
   vibe_executes_now: "Vibe can do this",
   vibe_prepares: "Vibe works this out",
   founder_decides: "Needs your decision",
+  founder_provides_input: "Needs your input",
   founder_acts: "Needs you",
   external_dependency: "Waiting on someone else",
   not_yet_supported: "Not automated yet",

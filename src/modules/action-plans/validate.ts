@@ -12,6 +12,7 @@ import {
   type StepChangeKind,
 } from "./schema";
 import type { WirePlan, WirePlanStep } from "./wire-schema";
+import { normalizeFounderInputRequirement } from "@/modules/founder-input/normalize";
 
 /**
  * Domain validation of a billed plan (CORE-2b §63–§67).
@@ -70,6 +71,8 @@ export const PLAN_VALIDATION_FINDINGS = [
   "dependency_cycle_broken",
   /** A strategic decision was assigned to Vibe and was reassigned (§22, §63). */
   "founder_decision_reassigned",
+  /** A founder-owned step did not carry a usable dynamic request contract. */
+  "founder_input_requirement_invalid",
   /** A completion criterion restated its own title (§20, §65). */
   "vague_completion_criteria",
   /** Most of the plan is vague — it reads as a checklist, not a path (§32, §81). */
@@ -340,6 +343,24 @@ function readStep(
     findings.add("founder_decision_reassigned");
   }
 
+  const founderInputRequirement = normalizeFounderInputRequirement(entry.founderInputRequirement);
+  const expectedRequirementKind =
+    resolvedActor === "founder_decision"
+      ? "decision"
+      : resolvedActor === "founder_input"
+        ? "input"
+        : null;
+
+  if (
+    expectedRequirementKind !== null &&
+    founderInputRequirement?.kind !== expectedRequirementKind
+  ) {
+    notes.push(`"${title}" was removed because its founder request was missing or invalid.`);
+    findings.add("founder_input_requirement_invalid");
+    findings.add("step_discarded");
+    return null;
+  }
+
   if (isVagueCriterion(title, completionCriteria)) {
     notes.push(`"${title}" does not say what would be different once it is done.`);
     findings.add("vague_completion_criteria");
@@ -361,6 +382,8 @@ function readStep(
       completionCriteria,
       dependsOn: integerList(entry.dependsOn, MAX_DEPENDENCIES),
       evidenceIds,
+      founderInputRequirement:
+        expectedRequirementKind === null ? null : founderInputRequirement,
     },
   };
 }

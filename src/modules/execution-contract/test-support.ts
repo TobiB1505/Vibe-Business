@@ -37,6 +37,7 @@ export function fakePlanStep(overrides: Partial<ActionPlanStep> = {}): ActionPla
     completionCriteria: "A visitor can complete the flow end to end.",
     dependsOn: [],
     evidenceIds: ["live.surface.dashboard_app"],
+    founderInputRequirement: null,
     // Planner-derived and deliberately ignored by the resolver. The defaults
     // are the *wrong* answer on purpose, so a test that passes cannot be
     // passing because the resolver read them (§6, §41).

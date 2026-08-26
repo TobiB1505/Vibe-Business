@@ -1,10 +1,20 @@
+import Link from "next/link";
+import { buttonClasses } from "@/components/ui/button";
+import {
+  ArrowRightIcon,
+  CheckIcon,
+  InfoIcon,
+  LockIcon,
+  PlusIcon,
+  SparklesIcon,
+} from "@/components/ui/dashboard-icons";
 import { Notice } from "@/components/ui/states";
 import { Surface } from "@/components/ui/surface";
 import { MonoLabel, SectionHeader } from "@/components/ui/typography";
-import { listCreditPacks, listPaidPlans } from "@/modules/billing/catalog";
-import type { BillingOverview } from "@/modules/billing/overview";
+import { getPlan, listCreditPacks, listPaidPlans } from "@/modules/billing/catalog";
+import type { BillingOverview, CreditActivityEntry } from "@/modules/billing/overview";
 import { RETAIL_OPERATION_KINDS, resolveRetailPrice } from "@/modules/credits/retail";
-import { formatCreditUnits } from "@/modules/credits/units";
+import { formatCreditsForDisplay } from "@/modules/credits/units";
 import {
   BuyCreditPackForm,
   ClaimWelcomeCreditsForm,
@@ -12,31 +22,7 @@ import {
   StartPlanForm,
 } from "./purchase-forms";
 
-/**
- * The billing screen's body (BILLING CORE-2 §49–§53, §93, §94).
- *
- * Presentational and prop-driven, exactly like `AuditOverview` and
- * `OpportunitiesPanel`. The page assembles the overview from Supabase and hands
- * it here; the browser suite hands it fixtures. Both render the same component,
- * so the suite cannot pass on a screen the product does not actually show.
- *
- * ## The five questions, in the order a founder asks them
- *
- * ```
- * How many Credits do I have?      the balance, first and largest
- * What plan am I on?               and what that gives them
- * How can I get more?              the packs
- * What does everything cost?       the price list
- * What did I recently spend on?    a short history, last
- * ```
- *
- * Nothing else. No lots, no allocations, no reservations, no provider cost, no
- * tokens, no nanodollars (§50, §52), and no raw enums (§53) — the shape of
- * `BillingOverview` is what keeps them off the screen rather than a rule about
- * not rendering them.
- */
-
-/** Checkout return states. Neither adds a Credit — only a webhook does (§25). */
+/** Checkout return states. A redirect never grants Credits; the webhook does. */
 export const CHECKOUT_NOTICES: Record<
   string,
   { tone: "waiting" | "info"; label: string; body: string }
@@ -44,10 +30,6 @@ export const CHECKOUT_NOTICES: Record<
   complete: {
     tone: "waiting",
     label: "Payment received",
-    // Deliberately does not say "Credits added". At this moment Vibe genuinely
-    // does not know — the browser came back from a redirect, and the money is
-    // confirmed by a signed Stripe event that may not have arrived yet (§25,
-    // §95). Claiming otherwise would be the one lie this page could tell.
     body: "Your payment is being confirmed. Your Credits will appear here within a moment.",
   },
   cancelled: {
@@ -57,7 +39,6 @@ export const CHECKOUT_NOTICES: Record<
   },
 };
 
-/** Customer names for the priced operations. Never the internal keys (§94). */
 const OPERATION_NAMES: Record<string, string> = {
   business_audit: "Business Audit",
   opportunity_generation: "Next moves",
@@ -66,35 +47,58 @@ const OPERATION_NAMES: Record<string, string> = {
 };
 
 function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+  return new Date(iso).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 function formatPrice(cents: number): string {
   return `€${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)}`;
 }
 
+function expiryShare(overview: BillingOverview): number {
+  if (!overview.nextExpiry || overview.availableCredits <= 0) return 0;
+  return Math.min(100, Math.round((overview.nextExpiry.credits / overview.availableCredits) * 100));
+}
+
+function planTiming(overview: BillingOverview): string {
+  if (overview.plan.key === "free") return "No renewal date";
+  if (!overview.plan.renewsAt) return "Active subscription";
+  return overview.plan.endingAtPeriodEnd
+    ? `Ends on ${formatDate(overview.plan.renewsAt)}`
+    : `Renews on ${formatDate(overview.plan.renewsAt)}`;
+}
+
+function activityIcon(entry: CreditActivityEntry) {
+  if (entry.creditDelta > 0) return <PlusIcon size={17} />;
+  return <SparklesIcon size={17} />;
+}
+
+/**
+ * The reference composition, constrained to real billing data. This does not
+ * fabricate a usage chart, product split, card suffix, invoices or an email:
+ * none of those fields exist in `BillingOverview` yet.
+ */
 export function BillingView({
   overview,
   stripeReady,
   checkoutState,
 }: {
   overview: BillingOverview;
-  /** False when this deployment has no Stripe configuration at all. */
   stripeReady: boolean;
   checkoutState?: string;
 }) {
   const notice = checkoutState ? CHECKOUT_NOTICES[checkoutState] : undefined;
   const packs = listCreditPacks();
   const plans = listPaidPlans();
+  const currentPlan = getPlan(overview.plan.key);
+  const expiryPercent = expiryShare(overview);
 
   return (
-    <div className="flex flex-col gap-10">
-      <SectionHeader
-        level={1}
-        label="Billing"
-        title="Credits"
-        description="Credits pay for the work Vibe does for you. Product understanding is always free."
-      />
+    <div className="flex flex-col gap-5 sm:gap-6">
+      <SectionHeader level={1} title="Billing" description="Manage your plan, Credits and billing." />
 
       {notice && (
         <Notice tone={notice.tone} label={notice.label}>
@@ -102,155 +106,221 @@ export function BillingView({
         </Notice>
       )}
 
-      {/* 1 — How many Credits do I have? (§50) */}
-      <Surface level="card" padding="lg" className="flex flex-col gap-4">
-        <MonoLabel>Available</MonoLabel>
-        <p className="text-fg text-display font-bold tabular-nums" data-testid="credit-balance">
-          {overview.displayAvailable}
-          <span className="text-fg-meta text-title ml-3 font-normal">Credits</span>
-        </p>
-
-        {overview.nextExpiry && (
-          <p className="text-fg-meta text-sm">
-            {overview.nextExpiry.displayCredits} expire on {formatDate(overview.nextExpiry.expiresAt)}
-          </p>
-        )}
-
-        {!overview.welcomeGranted && (
-          <div className="border-line-2 flex flex-col gap-3 border-t pt-4">
-            <p className="text-fg-prose text-sm">
-              Your account is eligible for 100 Welcome Credits. They&rsquo;re valid for 30 days.
-            </p>
-            <ClaimWelcomeCreditsForm />
+      <section aria-label="Billing overview" className="grid gap-4 lg:grid-cols-3">
+        <Surface level="panel" padding="md" className="flex min-h-72 flex-col">
+          <div className="flex items-start justify-between gap-4">
+            <MonoLabel className="text-mint">Current plan</MonoLabel>
+            <span aria-hidden="true" className="bg-mint-tint text-mint flex size-10 items-center justify-center rounded-full">
+              <SparklesIcon size={20} />
+            </span>
           </div>
-        )}
-      </Surface>
 
-      {/* 2 — What plan am I on? (§51) */}
-      <section className="flex flex-col gap-4">
-        <SectionHeader label="Plan" title={`You're on ${overview.plan.name}`} />
+          <h2 className="text-fg mt-4 text-[1.65rem] leading-none font-bold">{overview.plan.name}</h2>
+          <p className="text-fg mt-2 flex items-baseline gap-1.5">
+            <span className="text-title font-semibold">{formatPrice(currentPlan.priceCents)}</span>
+            {currentPlan.priceCents > 0 && <span className="text-fg-muted text-sm">/ month</span>}
+          </p>
+          <p className={overview.plan.endingAtPeriodEnd ? "text-amber mt-2 text-sm" : "text-fg-muted mt-2 text-sm"}>
+            {planTiming(overview)}
+          </p>
 
-        <Surface level="panel" padding="md" className="flex flex-col gap-3">
-          {overview.plan.key === "free" ? (
-            <p className="text-fg-prose text-sm">
-              No monthly Credits. Your first Business Audit and first Deep Scan for each project are
-              included.
-            </p>
-          ) : (
-            <p className="text-fg-prose text-sm">
-              {overview.plan.endingAtPeriodEnd
-                ? `Your plan ends${overview.plan.renewsAt ? ` on ${formatDate(overview.plan.renewsAt)}` : ""}. Credits you've already been given stay until they expire, and any Credits you bought stay.`
-                : overview.plan.renewsAt
-                  ? `Renews on ${formatDate(overview.plan.renewsAt)}.`
-                  : "Active."}
-            </p>
-          )}
-          {stripeReady && overview.plan.key !== "free" && <ManageBillingForm />}
+          <ul className="mt-5 flex flex-col gap-2.5 text-sm">
+            {overview.plan.key === "free" ? (
+              <>
+                <PlanBenefit>First Business Audit included</PlanBenefit>
+                <PlanBenefit>First Deep Scan for each product</PlanBenefit>
+                <PlanBenefit>No monthly charge</PlanBenefit>
+              </>
+            ) : (
+              <>
+                <PlanBenefit>{formatCreditsForDisplay(currentPlan.monthlyCreditUnits)} monthly Credits</PlanBenefit>
+                <PlanBenefit>One-off top-ups stay available</PlanBenefit>
+                <PlanBenefit>Renewal managed securely by Stripe</PlanBenefit>
+              </>
+            )}
+          </ul>
+
+          <div className="mt-auto pt-5">
+            {overview.plan.key !== "free" && stripeReady ? (
+              <ManageBillingForm />
+            ) : overview.plan.key === "free" ? (
+              <Link href="#plans" className={buttonClasses({ variant: "secondary", size: "sm" })}>
+                View plans
+                <ArrowRightIcon size={15} />
+              </Link>
+            ) : (
+              <button type="button" disabled className={`${buttonClasses({ variant: "secondary", size: "sm" })} w-full`}>
+                Management unavailable
+              </button>
+            )}
+          </div>
         </Surface>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          {plans.map((plan) => (
-            <Surface key={plan.key} level="panel" padding="md">
-              <StartPlanForm
-                planKey={plan.key}
-                planName={plan.name}
-                price={`${formatPrice(plan.priceCents)} / month`}
-                credits={formatCreditUnits(plan.monthlyCreditUnits)}
-                disabled={!stripeReady}
-                current={overview.plan.key === plan.key}
-              />
-            </Surface>
-          ))}
-        </div>
+        <Surface level="panel" padding="md" className="flex min-h-72 flex-col">
+          <MonoLabel className="text-mint">Available Credits</MonoLabel>
+          <div className="mt-6 flex items-center justify-between gap-5">
+            <div className="min-w-0">
+              <p className="text-fg text-[2.65rem] leading-none font-bold tracking-[-0.04em] tabular-nums" data-testid="credit-balance">
+                {overview.displayAvailable}
+                <span className="sr-only"> Credits</span>
+              </p>
+              <p className="text-fg-muted mt-2 text-sm">Credits available</p>
+            </div>
+
+            <div
+              className="relative flex size-28 shrink-0 items-center justify-center rounded-full p-3"
+              style={{ background: `conic-gradient(var(--color-mint) 0 ${expiryPercent}%, var(--color-line-track) ${expiryPercent}% 100%)` }}
+              aria-label={overview.nextExpiry ? `${expiryPercent}% of your available Credits expire next` : "No Credits currently have an expiry date"}
+            >
+              <div className="bg-app flex size-full flex-col items-center justify-center rounded-full">
+                <span className="text-fg text-title font-bold tabular-nums">{overview.nextExpiry ? `${expiryPercent}%` : "—"}</span>
+                <span className="text-fg-meta max-w-16 text-center text-[0.625rem] leading-tight">{overview.nextExpiry ? "next to expire" : "no expiry"}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-5 min-h-10">
+            {overview.nextExpiry ? (
+              <p className="text-fg-prose text-sm">
+                <span className="text-fg font-semibold tabular-nums">{overview.nextExpiry.displayCredits}</span>{" "}
+                expire on {formatDate(overview.nextExpiry.expiresAt)}
+              </p>
+            ) : (
+              <p className="text-fg-muted text-sm">No Credits currently have an expiry date.</p>
+            )}
+          </div>
+
+          <a href="#credit-packs" className={`${buttonClasses({ variant: "primary", size: "sm" })} mt-auto w-full`}>
+            Buy Credits
+            <PlusIcon size={16} />
+          </a>
+        </Surface>
+
+        <Surface level="panel" padding="md" className="flex min-h-72 flex-col">
+          <div className="text-mint flex size-9 items-center justify-center"><SparklesIcon size={26} /></div>
+          <h2 className="text-fg mt-4 text-title font-bold">How Credits work</h2>
+          <p className="text-fg-prose mt-3 max-w-[34ch] text-sm leading-6">
+            Credits power Vibe&rsquo;s business intelligence and Agent work. Each task uses a fixed amount, shown before you start it.
+          </p>
+          <a href="#credit-prices" className="text-mint mt-auto inline-flex items-center gap-2 self-start rounded-sm pt-5 text-sm font-semibold underline-offset-4 hover:underline">
+            See Credit prices
+            <ArrowRightIcon size={15} />
+          </a>
+        </Surface>
       </section>
 
-      {/* 3 — How can I get more? (§52) */}
-      <section className="flex flex-col gap-4">
-        <SectionHeader
-          label="Top up"
-          title="Get more Credits"
-          description="One-off purchases. These don't reset each month."
-        />
+      {!overview.welcomeGranted && (
+        <Surface level="section" tone="mint" padding="md" className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+          <div>
+            <MonoLabel className="text-mint">Welcome Credits</MonoLabel>
+            <p className="text-fg mt-2 font-semibold">Your account is eligible for 100 Welcome Credits.</p>
+            <p className="text-fg-muted mt-1 text-sm">They are valid for 30 days.</p>
+          </div>
+          <ClaimWelcomeCreditsForm />
+        </Surface>
+      )}
 
-        <div className="grid gap-4 sm:grid-cols-3">
-          {packs.map((pack) => (
-            <Surface key={pack.key} level="panel" padding="md">
-              <BuyCreditPackForm
-                packKey={pack.key}
-                credits={pack.credits.toLocaleString("en-GB")}
-                price={formatPrice(pack.priceCents)}
-                disabled={!stripeReady}
-              />
-            </Surface>
-          ))}
-        </div>
-
-        {!stripeReady && (
-          <Notice tone="info" label="Not available yet">
-            Payments aren&rsquo;t set up on this deployment yet, so Credits can&rsquo;t be purchased.
-          </Notice>
-        )}
-      </section>
-
-      {/* 4 — What does everything cost? (§55) */}
-      <section className="flex flex-col gap-4">
-        <SectionHeader label="Prices" title="What things cost" />
-
-        <Surface level="panel" padding="none">
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(20rem,0.7fr)]">
+        <Surface as="section" aria-labelledby="credit-prices-heading" id="credit-prices" level="panel" padding="none" className="scroll-mt-6 overflow-hidden">
+          <div className="border-line-2 flex items-center justify-between gap-4 border-b px-5 py-5 sm:px-6">
+            <div>
+              <MonoLabel id="credit-prices-heading" as="h2" className="text-mint">Credit prices</MonoLabel>
+              <p className="text-fg mt-2 font-semibold">Know the cost before you start</p>
+            </div>
+            <span className="text-fg-meta hidden items-center gap-1.5 text-xs sm:inline-flex"><InfoIcon size={14} /> Fixed prices</span>
+          </div>
           <ul className="divide-line-2 divide-y">
             {RETAIL_OPERATION_KINDS.map((operation) => {
               const resolved = resolveRetailPrice(operation);
               if (!resolved) return null;
-
               return (
-                <li key={operation} className="flex items-center justify-between gap-4 px-5 py-4">
-                  <span className="text-fg-body text-sm">{OPERATION_NAMES[operation]}</span>
-                  <span className="text-fg text-sm font-semibold tabular-nums">
-                    {resolved.price.kind === "free"
-                      ? "Free"
-                      : `${formatCreditUnits(resolved.price.creditUnits)} Credits`}
+                <li key={operation} className="flex items-center justify-between gap-4 px-5 py-4 sm:px-6">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span aria-hidden="true" className="bg-mint-tint text-mint flex size-9 shrink-0 items-center justify-center rounded-nav"><SparklesIcon size={16} /></span>
+                    <span className="text-fg-body text-sm">{OPERATION_NAMES[operation]}</span>
+                  </div>
+                  <span className="text-fg shrink-0 text-sm font-semibold tabular-nums">
+                    {resolved.price.kind === "free" ? "Free" : `${formatCreditsForDisplay(resolved.price.creditUnits)} Credits`}
                   </span>
                 </li>
               );
             })}
           </ul>
         </Surface>
-      </section>
 
-      {/* 5 — What did I recently spend Credits on? (§53) */}
-      <section className="flex flex-col gap-4">
-        <SectionHeader label="History" title="Recent activity" />
+        <Surface as="section" aria-labelledby="credit-packs-heading" id="credit-packs" level="panel" padding="none" className="scroll-mt-6 overflow-hidden">
+          <div className="border-line-2 border-b px-5 py-5 sm:px-6">
+            <MonoLabel id="credit-packs-heading" as="h2" className="text-mint">Top up Credits</MonoLabel>
+            <p className="text-fg mt-2 font-semibold">One-off purchases</p>
+          </div>
+          <div className="divide-line-2 divide-y">
+            {packs.map((pack) => (
+              <BuyCreditPackForm key={pack.key} packKey={pack.key} credits={pack.credits.toLocaleString("en-GB")} price={formatPrice(pack.priceCents)} disabled={!stripeReady} />
+            ))}
+          </div>
+        </Surface>
+      </div>
 
-        {overview.recentActivity.length === 0 ? (
-          <Surface level="panel" padding="md">
-            <p className="text-fg-meta text-sm">Nothing yet.</p>
-          </Surface>
-        ) : (
-          <Surface level="panel" padding="none">
+      {!stripeReady && (
+        <Notice tone="info" label="Not available yet">
+          Payments aren&rsquo;t set up on this deployment yet, so Credits can&rsquo;t be purchased.
+        </Notice>
+      )}
+
+      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(20rem,0.7fr)]">
+        <Surface as="section" aria-labelledby="recent-activity-heading" level="panel" padding="none" className="overflow-hidden">
+          <div className="border-line-2 flex items-center justify-between gap-4 border-b px-5 py-5 sm:px-6">
+            <div>
+              <MonoLabel id="recent-activity-heading" as="h2" className="text-mint">Recent usage</MonoLabel>
+              <p className="text-fg mt-2 font-semibold">Latest Credit activity</p>
+            </div>
+            <span className="text-fg-meta text-xs">Newest first</span>
+          </div>
+          {overview.recentActivity.length === 0 ? (
+            <p className="text-fg-muted px-5 py-8 text-sm sm:px-6">Nothing yet.</p>
+          ) : (
             <ul className="divide-line-2 divide-y">
               {overview.recentActivity.map((entry) => (
-                <li key={entry.id} className="flex items-center justify-between gap-4 px-5 py-4">
-                  <div className="flex min-w-0 flex-col gap-1">
-                    <span className="text-fg-body truncate text-sm">{entry.label}</span>
-                    <span className="text-fg-meta text-ui">{formatDate(entry.at)}</span>
+                <li key={entry.id} className="flex items-center justify-between gap-4 px-5 py-4 sm:px-6">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span aria-hidden="true" className="bg-mint-tint text-mint flex size-9 shrink-0 items-center justify-center rounded-nav">{activityIcon(entry)}</span>
+                    <div className="flex min-w-0 flex-col gap-1">
+                      <span className="text-fg-body truncate text-sm font-medium">{entry.label}</span>
+                      <span className="text-fg-meta text-xs">{formatDate(entry.at)}</span>
+                    </div>
                   </div>
-                  <span
-                    className={
-                      entry.creditDelta > 0
-                        ? "text-mint text-sm font-semibold tabular-nums"
-                        : "text-fg-body text-sm font-semibold tabular-nums"
-                    }
-                  >
-                    {/* The sign carries the meaning, so it is never colour
-                        alone (§93) — a "+" and a "-" are readable without it. */}
-                    {entry.displayAmount}
-                  </span>
+                  <span className={entry.creditDelta > 0 ? "text-mint shrink-0 text-sm font-semibold tabular-nums" : "text-fg-body shrink-0 text-sm font-semibold tabular-nums"}>{entry.displayAmount} Credits</span>
                 </li>
               ))}
             </ul>
-          </Surface>
-        )}
-      </section>
+          )}
+        </Surface>
+
+        <Surface as="section" aria-labelledby="plans-heading" id="plans" level="panel" padding="none" className="scroll-mt-6 overflow-hidden">
+          <div className="border-line-2 border-b px-5 py-5 sm:px-6">
+            <MonoLabel id="plans-heading" as="h2" className="text-mint">Plans</MonoLabel>
+            <p className="text-fg mt-2 font-semibold">Monthly Credits</p>
+          </div>
+          <div className="divide-line-2 divide-y">
+            {plans.map((plan) => (
+              <StartPlanForm key={plan.key} planKey={plan.key} planName={plan.name} price={`${formatPrice(plan.priceCents)} / month`} credits={formatCreditsForDisplay(plan.monthlyCreditUnits)} disabled={!stripeReady} current={overview.plan.key === plan.key} />
+            ))}
+          </div>
+        </Surface>
+      </div>
+
+      <footer className="text-fg-meta flex items-center justify-center gap-2 px-4 pb-2 text-center text-xs">
+        <LockIcon size={14} /> Payments are securely processed by Stripe. Vibe never stores your card details.
+      </footer>
     </div>
+  );
+}
+
+function PlanBenefit({ children }: { children: React.ReactNode }) {
+  return (
+    <li className="text-fg-prose flex items-start gap-2.5">
+      <CheckIcon className="text-mint mt-0.5 shrink-0" size={15} />
+      <span>{children}</span>
+    </li>
   );
 }

@@ -255,5 +255,6 @@ export function benchmarkStep(
     executionSupport: classification.executionSupport,
     capability: classification.capability,
     requiresApproval: classification.requiresApproval,
+    founderInputRequirement: null,
   };
 }

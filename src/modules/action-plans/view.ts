@@ -124,6 +124,7 @@ export const RESPONSIBILITY_HEADLINES: Record<ExecutionSupport, string> = {
   vibe_executes_now: "Vibe can do this",
   vibe_prepares: "Vibe can prepare this",
   founder_decides: "Needs your decision",
+  founder_provides_input: "Needs your input",
   founder_acts: "You'll need to do this",
   external_dependency: "Depends on something else",
   not_yet_supported: "Vibe's work",

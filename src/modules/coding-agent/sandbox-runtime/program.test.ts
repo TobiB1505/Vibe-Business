@@ -147,6 +147,16 @@ describe("the options that are not the SDK's defaults", () => {
     expect(AGENT_RUNTIME_PROGRAM).toContain("allowed.has(name)");
     expect(AGENT_RUNTIME_PROGRAM).toContain('behavior: "deny"');
   });
+
+  it("captures one AskUserQuestion as a typed blocker instead of waiting for a terminal", () => {
+    expect(AGENT_RUNTIME_PROGRAM).toContain('name === "AskUserQuestion"');
+    expect(AGENT_RUNTIME_PROGRAM).toContain("result.runtimeFounderInput");
+    expect(AGENT_RUNTIME_PROGRAM).toContain('result.subtype = "founder_input_required"');
+    expect(AGENT_RUNTIME_PROGRAM).toContain("interrupt: true");
+    expect(AGENT_RUNTIME_PROGRAM).toContain(
+      "if (result.runtimeFounderInput === null) result.subtype = message.subtype",
+    );
+  });
 });
 
 describe("what it reports", () => {
@@ -181,7 +191,7 @@ describe("the tool set", () => {
 
   it("includes the file and shell tools the sandbox exists to make safe", () => {
     expect([...AGENT_RUNTIME_TOOLS].sort()).toEqual(
-      ["Bash", "Edit", "Glob", "Grep", "Read", "Write"].sort(),
+      ["AskUserQuestion", "Bash", "Edit", "Glob", "Grep", "Read", "Write"].sort(),
     );
   });
 });

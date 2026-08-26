@@ -63,6 +63,10 @@ import { toSandboxCompletionPolicy } from "@/modules/execution-context/completio
 import { assertPolicyConsistency } from "@/modules/execution-context/policy";
 import { summarizeContextUsage } from "@/modules/execution-context/usage";
 import type { DetachedCodingAgentProvider } from "@/modules/coding-agent/provider";
+import {
+  executionSpecAlreadyResolvedFounderInput,
+  runtimeFounderInputRequirement,
+} from "@/modules/founder-input/runtime";
 import { createSandboxWorkspace } from "@/modules/coding-agent/sandbox-workspace";
 import type { AgentCheckName, AgentFailureCode } from "@/modules/coding-agent/schema";
 import {
@@ -77,12 +81,10 @@ import {
   recordAgentToolEvents,
   recordAgentMessageProgress,
   markAgentRunStarted,
-  updateAgentRunCreditReservation,
   type StoredAgentExecutionRun,
 } from "@/modules/coding-agent/store";
 import { recordAgentSandboxUsage } from "@/modules/coding-agent/usage";
 import {
-  authorizeOperationCredits,
   releaseOperationCredits,
   settleOperationCredits,
 } from "@/modules/credits/operation-billing";
@@ -114,7 +116,6 @@ import {
   type SandboxProvider,
 } from "@/modules/validation/sandbox-port";
 import { SANDBOX_ENVIRONMENT } from "@/modules/validation/orchestrator";
-import { operationHasCreditHold } from "../billing";
 import type { OperationFailureCode } from "../failures";
 import {
   completeOperationRun,
@@ -794,52 +795,7 @@ export async function startAgentStep(
   const claimed = await markAgentRunStarted(deps.supabase, context.run.id);
   if (!claimed) return { ok: false, failureCode: "inference_interrupted" };
 
-  /*
-   * Re-acquires a hold a pause released (ADR 0042 §P2).
-   *
-   * `context.run.creditReservationId` is the historical pointer left by
-   * `claimAgentExecutionRun` — non-null exactly when this run was billable at
-   * claim time, and never cleared by a release. On a fresh, never-paused run
-   * that pointer's reservation is still active, so `operationHasCreditHold`
-   * is true and this is a no-op — the same code path covers first entry and
-   * resume without branching on which one this is.
-   *
-   * The idempotency key is scoped to the operation's current pause cycle, not
-   * the bare operation id, mirroring `runInferenceStep`'s identical re-acquire
-   * for business_audit: reusing `operation:<id>` would find the first (now
-   * released) reservation and replay it rather than take a fresh one. A
-   * retried entry for the same cycle lands on the same reservation; a later
-   * pause/resume cycle takes a distinct one.
-   *
-   * Must land before any terminal transition: `completeAgentRun` /
-   * `failAgentRun` finalize whatever `credit_reservation_id` currently names,
-   * so the pointer is updated here, immediately once a fresh reservation
-   * exists, rather than left to a later step.
-   *
-   * Tracked in a local rather than re-read off `context.run` below: `context`
-   * was loaded once at the top of this call and never refreshed, so a second
-   * interrupt raised later in this same invocation must consult this variable
-   * — not the stale snapshot — or its own release would name the reservation
-   * this step just replaced rather than the one it is actually holding.
-   */
-  let creditReservationId = context.run.creditReservationId;
-  if (creditReservationId && !(await operationHasCreditHold(deps.supabase, operationId))) {
-    const reacquired = await authorizeOperationCredits(deps.supabase, {
-      projectId: context.run.projectId,
-      operation: "agent_execution_dogfood",
-      idempotencyKey: `operation:${operationId}:resume:${context.operation.pauseCycle}`,
-      operationRunId: operationId,
-    });
-
-    if (!reacquired.ok) {
-      return { ok: false, failureCode: "insufficient_credits" };
-    }
-
-    creditReservationId = reacquired.billable ? reacquired.reservationId : null;
-    if (creditReservationId) {
-      await updateAgentRunCreditReservation(deps.supabase, context.run.id, creditReservationId);
-    }
-  }
+  const creditReservationId = context.run.creditReservationId;
 
   await setOperationStage(deps.supabase, { operationId, stage: "running_agent" });
 
@@ -1161,6 +1117,15 @@ export async function startAgentStep(
 
   const interrupt = gateway.interrupt;
   if (interrupt) {
+    if (
+      executionSpecAlreadyResolvedFounderInput(
+        context.spec.spec.businessContext.approvedDecisions,
+        interrupt.founderInputRequirement,
+      )
+    ) {
+      return { ok: false, failureCode: "inference_interrupted" };
+    }
+
     await raiseExecutionInterrupt(deps.supabase, {
       projectId: context.run.projectId,
       userId: context.run.userId,
@@ -1181,11 +1146,9 @@ export async function startAgentStep(
      * `expireStaleAgentExecution`'s own "whoever wins the swap owns
      * finalization" rule.
      *
-     * `creditReservationId`, not `context.run.creditReservationId`: a resume
-     * can raise a second interrupt within this same invocation, after the
-     * re-acquire above has already replaced the reservation this run holds.
-     * Releasing the stale snapshot would name the reservation this step just
-     * moved away from rather than the one actually funding it.
+     * The reservation belongs to this immutable attempt. It is released here
+     * and never replaced on the same run; a later attempt goes through fresh
+     * admission and receives its own reservation.
      */
     if (paused && creditReservationId) {
       await releaseOperationCredits(deps.supabase, {
@@ -1414,6 +1377,75 @@ export async function collectAgentStep(
     durationMs: result.durationMs,
     providerSessionId: result.sessionId,
   });
+
+  if (result.runtimeFounderInput) {
+    const interruptType =
+      result.runtimeFounderInput.kind === "decision"
+        ? "business_decision_required"
+        : "founder_input_required";
+    const founderInputRequirement = runtimeFounderInputRequirement({
+      stepKey: context.spec.spec.stepKey,
+      draft: result.runtimeFounderInput,
+    });
+    if (!founderInputRequirement) {
+      return { ok: false, failureCode: "missing_required_context" };
+    }
+    if (
+      executionSpecAlreadyResolvedFounderInput(
+        context.spec.spec.businessContext.approvedDecisions,
+        founderInputRequirement,
+      )
+    ) {
+      return { ok: false, failureCode: "inference_interrupted" };
+    }
+
+    const responseSchema =
+      founderInputRequirement.alternatives.length >= 2
+        ? {
+            kind: "single_choice" as const,
+            options: founderInputRequirement.alternatives.map((option) => ({
+              id: option.id,
+              label: option.label,
+            })),
+          }
+        : { kind: "text" as const, maxLength: 1200 };
+
+    await raiseExecutionInterrupt(deps.supabase, {
+      projectId: run.projectId,
+      userId: run.userId,
+      executionSpecId: run.executionSpecId,
+      agentExecutionRunId: run.id,
+      interrupt: {
+        type: interruptType,
+        question: founderInputRequirement.question,
+        responseSchema,
+        whyBlocked: interruptType,
+        founderInputRequirement,
+      },
+    });
+    const paused = await pauseAgentRunForUser(deps.supabase, run.id);
+    await pauseOperationForUser(deps.supabase, operationId);
+    if (paused && run.creditReservationId) {
+      await releaseOperationCredits(deps.supabase, {
+        reservationId: run.creditReservationId,
+        reason: "abandoned_with_usage",
+      });
+    }
+
+    await recordAuditEvent(deps.supabase, {
+      userId: run.userId,
+      projectId: run.projectId,
+      eventType: "agent_execution.needs_user_input",
+      metadata: {
+        projectId: run.projectId,
+        operationId,
+        agentExecutionRunId: run.id,
+        interruptType,
+      },
+    });
+
+    return { ok: true, paused: true, observedPathCount: 0, changedPaths: null };
+  }
 
   /*
    * Provider usage is NOT recorded here.
@@ -2378,9 +2410,10 @@ export async function finishAgentExecutionStep(
   if (!run) return;
 
   if (outcome.kind === "paused") {
-    // Holding, not finished. The reservation stays held: the work may still be
-    // completed once the customer answers, and releasing now would mean the
-    // resumed run had no authorized budget.
+    // The interrupt boundary owns release of this attempt's reservation.
+    // Finalization deliberately does nothing here: it must neither charge nor
+    // invent a resume. Resolution later cancels this run, and a fresh attempt
+    // goes through admission with its own hold.
     return;
   }
 

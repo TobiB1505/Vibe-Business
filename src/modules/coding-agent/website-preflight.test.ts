@@ -232,6 +232,113 @@ describe("previewDogfoodStep — the real chain", () => {
     if (!first.eligible || !second.eligible) return;
     expect(second.spec.identity).toBe(first.spec.identity);
   });
+
+  it("uses a resolved founder decision as dependency evidence and execution context", async () => {
+    seedOwnedRepository();
+    seedSuccessfulSnapshot();
+    seedCompletedPlan([
+      {
+        ...AGENTIC_STEP,
+        step_key: "1-choose-model",
+        step_order: 1,
+        actor: "founder_decision",
+        change_kind: "decision",
+        execution_support: "founder_decides",
+        requires_approval: false,
+        founder_input_requirement: {
+          kind: "decision",
+          subjectKey: "monetization.pricing_model",
+          question: "Which pricing model should the product use?",
+          whyNeeded: "The pricing implementation needs one confirmed model.",
+          responseType: "single_select",
+          recommendation: null,
+          alternatives: [],
+          allowCustom: true,
+        },
+      },
+      { ...AGENTIC_STEP, step_key: "2-build", step_order: 2, depends_on: [1] },
+    ]);
+    db.seed("project_founder_resolutions", {
+      id: "resolution-1",
+      project_id: PROJECT,
+      request_id: "request-1",
+      input_kind: "decision",
+      subject_key: "monetization.pricing_model",
+      response_source: "option",
+      selected_option_id: "freemium",
+      raw_answer: null,
+      resolved_statement: "Use a freemium pricing model.",
+      context_hash: "a".repeat(64),
+      supersedes_resolution_id: null,
+      superseded_at: null,
+      created_at: "2026-08-25T00:00:00.000Z",
+    });
+
+    const preview = await previewDogfoodStep(fakeSupabase(db), {
+      projectId: PROJECT,
+      userId: USER,
+      stepKey: "2-build",
+      env: ALLOWLIST,
+    });
+
+    expect(preview.eligible).toBe(true);
+    if (!preview.eligible) return;
+    expect(preview.resolution.mode).toBe("agentic");
+    expect(preview.spec.businessContext.approvedDecisions).toEqual([
+      {
+        key: "decision:monetization.pricing_model",
+        stepOrder: 1,
+        decision: "Use a freemium pricing model.",
+      },
+    ]);
+  });
+
+  it("puts a runtime resolution into a fresh immutable spec even when no plan step owns it", async () => {
+    seedOwnedRepository();
+    seedSuccessfulSnapshot();
+    seedCompletedPlan([AGENTIC_STEP]);
+
+    const before = await previewDogfoodStep(fakeSupabase(db), {
+      projectId: PROJECT,
+      userId: USER,
+      stepKey: "1-ship-it",
+      env: ALLOWLIST,
+    });
+    expect(before.eligible).toBe(true);
+    if (!before.eligible) return;
+
+    db.seed("project_founder_resolutions", {
+      id: "resolution-runtime-1",
+      project_id: PROJECT,
+      request_id: "request-runtime-1",
+      input_kind: "decision",
+      subject_key: "runtime.1-ship-it.0123456789abcdef01234567",
+      response_source: "custom",
+      selected_option_id: null,
+      raw_answer: "Invite existing customers first.",
+      resolved_statement: "Invite existing customers first.",
+      context_hash: before.spec.identity,
+      supersedes_resolution_id: null,
+      superseded_at: null,
+      created_at: "2026-08-25T00:00:00.000Z",
+    });
+
+    const after = await previewDogfoodStep(fakeSupabase(db), {
+      projectId: PROJECT,
+      userId: USER,
+      stepKey: "1-ship-it",
+      env: ALLOWLIST,
+    });
+    expect(after.eligible).toBe(true);
+    if (!after.eligible) return;
+
+    expect(after.spec.businessContext.approvedDecisions).toContainEqual({
+      key: "decision:runtime.1-ship-it.0123456789abcdef01234567",
+      stepOrder: null,
+      decision: "Invite existing customers first.",
+    });
+    expect(after.spec.identity).not.toBe(before.spec.identity);
+  });
 });
 
 describe("previewDogfoodStep — cross-project and cross-user isolation (§25, §53)", () => {
@@ -445,6 +552,59 @@ describe("resolveDogfoodPlanRoutes — the list routes against real repository s
     // The regression, stated directly.
     expect(implementation.mode).toBe("agentic");
     expect(implementation.absorbedPreparation).toEqual([1]);
+  });
+
+  it("offers dependent execution after the founder-owned requirement is resolved", async () => {
+    seedOwnedRepository();
+    seedSuccessfulSnapshot();
+    seedCompletedPlan([
+      {
+        ...AGENTIC_STEP,
+        step_key: "1-choose-model",
+        step_order: 1,
+        actor: "founder_decision",
+        change_kind: "decision",
+        execution_support: "founder_decides",
+        requires_approval: false,
+        founder_input_requirement: {
+          kind: "decision",
+          subjectKey: "monetization.pricing_model",
+          question: "Which pricing model should the product use?",
+          whyNeeded: "The pricing implementation needs one confirmed model.",
+          responseType: "single_select",
+          recommendation: null,
+          alternatives: [],
+          allowCustom: true,
+        },
+      },
+      { ...IMPLEMENTATION, depends_on: [1] },
+    ]);
+    db.seed("project_founder_resolutions", {
+      id: "resolution-route-1",
+      project_id: PROJECT,
+      request_id: "request-route-1",
+      input_kind: "decision",
+      subject_key: "monetization.pricing_model",
+      response_source: "option",
+      selected_option_id: "freemium",
+      raw_answer: null,
+      resolved_statement: "Use a freemium pricing model.",
+      context_hash: "a".repeat(64),
+      supersedes_resolution_id: null,
+      superseded_at: null,
+      created_at: "2026-08-25T00:00:00.000Z",
+    });
+
+    const routes = await resolveDogfoodPlanRoutes(fakeSupabase(db), {
+      projectId: PROJECT,
+      userId: USER,
+      env: ALLOWLIST,
+    });
+
+    expect(routes.available).toBe(true);
+    if (!routes.available) return;
+    expect(routes.resolutions[1].mode).toBe("agentic");
+    expect(routes.resolutions[1].blockedBy).toEqual([]);
   });
 
   /**

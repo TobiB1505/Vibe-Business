@@ -46,6 +46,7 @@ function step(overrides: Partial<ActionPlanStep> = {}): ActionPlanStep {
     capability: null,
     requiresApproval: false,
     ...overrides,
+    founderInputRequirement: overrides.founderInputRequirement ?? null,
   };
 }
 
