@@ -65,6 +65,10 @@ describe("founder input persistence contract", () => {
     expect(sql()).toContain("runtime_founder_input_reservation_still_active");
     expect(sql()).toContain("set status = 'cancelled', completed_at = now()");
     expect(sql()).toContain("'kind', 'founder_input_resolution'");
+    expect(sql()).toContain("update public.execution_interrupts as i");
+    expect(sql()).toContain(
+      "where i.id = v_interrupt_id and i.founder_input_request_id is null",
+    );
   });
 
   it("keeps runtime request creation service-role only", () => {
