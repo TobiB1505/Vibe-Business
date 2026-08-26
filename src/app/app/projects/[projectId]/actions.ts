@@ -60,7 +60,7 @@ export async function disconnectProjectAction(
   const session = await requireSession();
   const supabase = await createClient();
 
-  const result = await disconnectProject(supabase, { projectId, userId: session.userId });
+  const result = await disconnectProject(supabase, { projectId });
 
   if (!result.ok) {
     if (result.error === "not_found") {

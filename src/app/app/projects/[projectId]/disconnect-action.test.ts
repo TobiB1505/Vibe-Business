@@ -86,12 +86,32 @@ describe("success", () => {
     });
   });
 
-  it("takes the owner from the session, never from the caller", async () => {
+  /**
+   * The owner used to travel down as an argument, and this pinned that it came
+   * from `requireSession()` rather than the caller. VB-001 M1a moved the check
+   * one layer further down: `disconnect_project()` reads `auth.uid()`, so
+   * there is no owner argument at all — a `SECURITY DEFINER` function reachable
+   * at `/rest/v1/rpc/` would treat one as a claim, not a check.
+   *
+   * What is left to assert is stronger: the action still refuses an
+   * unauthenticated caller, and passes nothing an attacker could aim.
+   */
+  it("names no owner, because there is no owner argument to get wrong", async () => {
     await expect(invoke()).rejects.toThrow(RedirectSignal);
-    expect(disconnectProjectMock).toHaveBeenCalledWith(expect.anything(), {
-      projectId: PROJECT,
-      userId: SERVER_USER,
-    });
+
+    expect(requireSessionMock).toHaveBeenCalled();
+    expect(disconnectProjectMock).toHaveBeenCalledWith(expect.anything(), { projectId: PROJECT });
+
+    const [, params] = disconnectProjectMock.mock.calls[0] as [unknown, Record<string, unknown>];
+    expect(Object.keys(params)).toEqual(["projectId"]);
+  });
+
+  it("still attributes the audit event to the session user", async () => {
+    await expect(invoke()).rejects.toThrow(RedirectSignal);
+    expect(recordAuditEventMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ userId: SERVER_USER }),
+    );
   });
 });
 
