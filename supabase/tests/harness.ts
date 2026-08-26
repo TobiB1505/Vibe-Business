@@ -58,6 +58,12 @@ function asServerUser(bin: string, command: string): string {
 export type Cluster = {
   /** Runs SQL and returns unaligned, tuples-only rows. Throws on error. */
   sql: (statements: string) => string;
+  /**
+   * The last non-empty output line — the answer of a multi-statement script
+   * whose earlier statements (`begin`, `set local role`, `set_config`) each
+   * print something psql includes and nobody is asserting on.
+   */
+  sqlLast: (statements: string) => string;
   /** Runs SQL expecting failure; returns the error text. Throws if it succeeds. */
   sqlExpectingError: (statements: string) => string;
   stop: () => void;
@@ -172,8 +178,17 @@ export function startCluster(repoRoot: string): Cluster {
     if (!result.ok) throw new Error(`Migration ${file} failed:\n${result.err}`);
   }
 
+  const sqlLast = (statements: string): string => {
+    const lines = sql(statements)
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0 && line !== "COMMIT" && line !== "BEGIN" && line !== "SET");
+    return lines[lines.length - 1] ?? "";
+  };
+
   return {
     sql,
+    sqlLast,
     sqlExpectingError,
     stop: () => {
       try {

@@ -1,0 +1,287 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { startCluster, type Cluster } from "./harness";
+
+/**
+ * VB-001 M1a — the two narrow functions that replaced `DELETE ON projects`.
+ *
+ * Both are asserted through the role PostgREST would use, because that is the
+ * whole subject: the point of this slice is not what the functions compute but
+ * what privilege a browser-scoped caller needs to reach them.
+ */
+
+const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const MARKER = "vibe.lifecycle_erasure";
+
+let db: Cluster;
+
+/** Repository ids are globally unique in the schema, so fixtures must not collide. */
+let nextRepositoryId = 700_000;
+function freshRepositoryId(): number {
+  nextRepositoryId += 1;
+  return nextRepositoryId;
+}
+
+function makeProject(label: string): { userId: string; projectId: string } {
+  const [userId, projectId] = db
+    .sql(`select user_id, project_id from public.build_lifecycle_fixture('${label}');`)
+    .split("|");
+  return { userId, projectId };
+}
+
+/** A user and an installation, with no project — the connect flow's start. */
+function makeInstallation(label: string): { userId: string; installationId: string } {
+  const [userId, installationId] = db
+    .sql(
+      `with u as (insert into auth.users (email) values ('${label}@fixture.test') returning id),
+            i as (
+              insert into public.github_installations
+                (user_id, installation_id, github_account_id, github_account_login,
+                 account_type, repository_selection)
+              select u.id, (random()*1000000000)::bigint, (random()*1000000000)::bigint,
+                     'octo-${label}', 'User', 'all'
+              from u returning user_id, id
+            )
+       select i.user_id, i.id from i;`,
+    )
+    .split("|");
+  return { userId, installationId };
+}
+
+/** Acts as PostgREST does: the role plus that user's JWT subject. */
+function asUser(userId: string): string {
+  return `select set_config('request.jwt.claim.sub', '${userId}', true);
+          set local role authenticated;`;
+}
+
+function connectCall(installationId: string, repoId: string, name: string): string {
+  return `select project_id, coalesce(failure, '-') from public.create_project_with_repository(
+    '${name}', '${installationId}'::uuid, ${repoId}::bigint,
+    'octo', '${name}', 'octo/${name}', 'main', false, 'https://github.com/octo/${name}');`;
+}
+
+beforeAll(() => {
+  db = startCluster(REPO_ROOT);
+  db.sql(readFileSync(join(REPO_ROOT, "supabase", "tests", "fixture.sql"), "utf8"));
+}, 300_000);
+
+afterAll(() => db?.stop());
+
+describe("create_project_with_repository is one transaction", () => {
+  it("1. creates the project and its connection", () => {
+    const { userId, installationId } = makeInstallation("happy");
+    const [projectId, failure] = db
+      .sqlLast(`begin; ${asUser(userId)} ${connectCall(installationId, `${freshRepositoryId()}`, "happy")} commit;`)
+      .split("|");
+
+    expect(failure).toBe("-");
+    expect(db.sql(`select count(*) from public.projects where id = '${projectId}';`)).toBe("1");
+    expect(
+      db.sql(`select full_name from public.repository_connections where project_id = '${projectId}';`),
+    ).toBe("octo/happy");
+  });
+
+  it("2. classifies an already-connected repository", () => {
+    const taken = makeProject("taken");
+    const repoId = db.sql(
+      `select github_repository_id from public.repository_connections
+        where project_id = '${taken.projectId}';`,
+    );
+    const { userId, installationId } = makeInstallation("dupe");
+
+    const [projectId, failure] = db
+      .sqlLast(`begin; ${asUser(userId)} ${connectCall(installationId, repoId, "dupe")} commit;`)
+      .split("|");
+
+    expect(failure).toBe("duplicate_repository");
+    expect(projectId).toBe("");
+  });
+
+  it("3. leaves zero orphan projects when the connection insert fails", () => {
+    const taken = makeProject("taken-orphan");
+    const repoId = db.sql(
+      `select github_repository_id from public.repository_connections
+        where project_id = '${taken.projectId}';`,
+    );
+    const { userId, installationId } = makeInstallation("orphan");
+
+    db.sql(`begin; ${asUser(userId)} ${connectCall(installationId, repoId, "orphan")} commit;`);
+
+    // The failure path is a rollback, not a compensating delete. Nothing to
+    // clean up means nothing that can fail to be cleaned up.
+    expect(db.sql(`select count(*) from public.projects where user_id = '${userId}';`)).toBe("0");
+  });
+
+  it("4. cannot create a project for another user", () => {
+    const victim = makeInstallation("victim");
+    const attacker = makeInstallation("attacker");
+
+    // The attacker names the victim's installation. There is no argument in
+    // which to name the victim as owner — the row takes `auth.uid()`.
+    const error = db.sqlExpectingError(
+      `begin; ${asUser(attacker.userId)} ${connectCall(victim.installationId, `${freshRepositoryId()}`, "steal")} commit;`,
+    );
+
+    // The repository_connections insert policy requires the caller to own the
+    // installation too, so the whole transaction is refused.
+    expect(error).toContain("row-level security policy");
+    expect(db.sql(`select count(*) from public.projects where user_id = '${victim.userId}';`)).toBe("0");
+    expect(db.sql(`select count(*) from public.projects where user_id = '${attacker.userId}';`)).toBe("0");
+  });
+
+  it("6. leaks no rows when the same failing call is retried", () => {
+    const taken = makeProject("taken-retry");
+    const repoId = db.sql(
+      `select github_repository_id from public.repository_connections
+        where project_id = '${taken.projectId}';`,
+    );
+    const { userId, installationId } = makeInstallation("retry");
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      db.sql(`begin; ${asUser(userId)} ${connectCall(installationId, repoId, "retry")} commit;`);
+    }
+
+    expect(db.sql(`select count(*) from public.projects where user_id = '${userId}';`)).toBe("0");
+  });
+
+  it("7. keeps a repository connectable to exactly one project", () => {
+    const { userId, installationId } = makeInstallation("unique");
+    const shared = `${freshRepositoryId()}`;
+    db.sql(`begin; ${asUser(userId)} ${connectCall(installationId, shared, "first")} commit;`);
+    const second = db.sqlLast(
+      `begin; ${asUser(userId)} ${connectCall(installationId, shared, "second")} commit;`,
+    );
+
+    expect(second.split("|")[1]).toBe("duplicate_repository");
+    expect(db.sql(`select count(*) from public.projects where user_id = '${userId}';`)).toBe("1");
+  });
+});
+
+describe("disconnect_project is today's semantics without today's privilege", () => {
+  /** `actAs` is whose JWT the call carries — the only owner the function reads. */
+  function disconnect(actAs: string, projectId: string | null): string {
+    const id = projectId === null ? "null" : `'${projectId}'::uuid`;
+    return db.sqlLast(`
+      begin;
+        ${asUser(actAs)}
+        select public.disconnect_project(${id});
+      commit;
+    `);
+  }
+
+  /** A project with no execution spec — what disconnect can still remove. */
+  function makeSpeclessProject(label: string): { userId: string; projectId: string } {
+    const { userId, installationId } = makeInstallation(label);
+    const [projectId] = db
+      .sqlLast(
+        `begin; ${asUser(userId)} ${connectCall(installationId, `${freshRepositoryId()}`, label)} commit;`,
+      )
+      .split("|");
+    return { userId, projectId };
+  }
+
+  it("1. removes an owned project that has no execution spec", () => {
+    const { userId, projectId } = makeSpeclessProject("specless");
+
+    expect(disconnect(userId, projectId)).toBe("disconnected");
+    expect(db.sql(`select count(*) from public.projects where id = '${projectId}';`)).toBe("0");
+  });
+
+  it("2. is refused for a project holding an execution spec", () => {
+    const { userId, projectId } = makeProject("with-spec");
+
+    expect(disconnect(userId, projectId)).toBe("blocked_by_execution_history");
+    expect(db.sql(`select count(*) from public.projects where id = '${projectId}';`)).toBe("1");
+    expect(
+      db.sql(`select count(*) from public.execution_specs where project_id = '${projectId}';`),
+    ).toBe("1");
+  });
+
+  it("3. mutates nothing when another user names the project", () => {
+    const victim = makeSpeclessProject("dc-victim");
+    const attacker = makeInstallation("dc-attacker");
+
+    // The attacker's own id in the ownership argument, acting as themselves.
+    expect(disconnect(attacker.userId, victim.projectId)).toBe("not_found");
+    expect(db.sql(`select count(*) from public.projects where id = '${victim.projectId}';`)).toBe("1");
+  });
+
+  /**
+   * The case that made the owner argument untenable. An earlier revision took
+   * `(p_project_id, p_user_id)` and deleted on the pair — which reads as an
+   * ownership check and is not one, because `SECURITY DEFINER` bypasses RLS
+   * and the function is reachable at `/rest/v1/rpc/` with arguments the caller
+   * chooses. A caller who knew both uuids deleted somebody else's project.
+   * There is now no argument in which to name another owner.
+   */
+  it("3b. cannot be aimed at another user's project by any argument", () => {
+    const victim = makeSpeclessProject("dc-forged");
+    const attacker = makeInstallation("dc-forger");
+
+    expect(disconnect(attacker.userId, victim.projectId)).toBe("not_found");
+    expect(db.sql(`select count(*) from public.projects where id = '${victim.projectId}';`)).toBe("1");
+
+    // And the two-argument form it replaced does not exist to fall back to.
+    const gone = db.sqlExpectingError(
+      `select public.disconnect_project('${victim.projectId}'::uuid, '${victim.userId}'::uuid);`,
+    );
+    expect(gone).toContain("does not exist");
+  });
+
+  it("4. reports not_found deterministically for an unknown project", () => {
+    const { userId } = makeInstallation("dc-unknown");
+
+    expect(disconnect(userId, "00000000-0000-0000-0000-000000000000")).toBe("not_found");
+    expect(disconnect(userId, null)).toBe("not_found");
+  });
+
+  it("5. leaves no lifecycle marker set", () => {
+    const { userId, projectId } = makeSpeclessProject("dc-marker");
+
+    const after = db.sqlLast(`
+      begin;
+        ${asUser(userId)}
+        select public.disconnect_project('${projectId}'::uuid);
+        select coalesce(nullif(current_setting('${MARKER}', true), ''), '<unset>');
+      commit;
+    `);
+    expect(after).toBe("<unset>");
+  });
+
+  /**
+   * The hole this function had until the marker was *cleared* rather than
+   * merely not set. `set_config(…, true)` is transaction-local and a
+   * `SECURITY DEFINER` function runs inside the caller's transaction, so a
+   * marker forged before the call was visible to the cascade the function
+   * triggered — and the specs went. Clearing it is what closes that.
+   */
+  it("6. cannot be used to bypass ExecutionSpec immutability with a forged marker", () => {
+    const { userId, projectId } = makeProject("dc-bypass");
+
+    const result = db.sqlLast(`
+      begin;
+        ${asUser(userId)}
+        select set_config('${MARKER}', 'on', true);
+        select public.disconnect_project('${projectId}'::uuid);
+      commit;
+    `);
+
+    expect(result).toBe("blocked_by_execution_history");
+    expect(db.sql(`select count(*) from public.projects where id = '${projectId}';`)).toBe("1");
+    expect(
+      db.sql(`select count(*) from public.execution_specs where project_id = '${projectId}';`),
+    ).toBe("1");
+  });
+
+  it("7. is reachable by authenticated, and reaches no other role", () => {
+    const grants = db.sql(`
+      select string_agg(r.rolname || '=' ||
+               has_function_privilege(r.rolname, 'public.disconnect_project(uuid)', 'EXECUTE')::text,
+               ',' order by r.rolname)
+      from pg_roles r where r.rolname in ('anon', 'authenticated', 'service_role');
+    `);
+    expect(grants).toBe("anon=false,authenticated=true,service_role=false");
+  });
+});

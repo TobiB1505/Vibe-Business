@@ -321,7 +321,7 @@ describe("J. privilege catalog", () => {
    * platform image, so the rule is asserted here instead — where it fails on a
    * regression rather than on the day somebody remembers to run the advisor.
    */
-  it("exposes no SECURITY DEFINER function in public to anon or authenticated", () => {
+  it("exposes no unreviewed SECURITY DEFINER function in public to anon or authenticated", () => {
     const reachable = db.sql(`
       select coalesce(string_agg(distinct p.proname, ',' order by p.proname), '<none>')
       from pg_proc p
@@ -330,7 +330,46 @@ describe("J. privilege catalog", () => {
       where p.prosecdef
         and has_function_privilege(r.role, p.oid, 'EXECUTE');
     `);
-    expect(reachable).toBe("<none>");
+
+    // One reviewed exception, and the review is this comment.
+    //
+    // `disconnect_project` must be `SECURITY DEFINER` — after Migration B the
+    // caller holds no `DELETE ON public.projects` — and must be reachable by
+    // `authenticated`, because a founder clicking Disconnect is the only
+    // caller. What makes it safe is that it takes no owner argument: the row
+    // it deletes is chosen by `auth.uid()` and `p_project_id`, so its reach is
+    // exactly the `delete own projects` RLS policy it replaces, and there is
+    // no argument in which another user could be named. It is temporary; M5
+    // removes it (ADR 0056 §1).
+    //
+    // Anything else appearing here is a privilege-escalation surface nobody
+    // argued for. Adding a name to this list is the argument.
+    expect(reachable).toBe("disconnect_project");
+  });
+
+  it("keeps that exception honest: disconnect_project takes no owner argument", () => {
+    const shape = db.sql(`
+      select coalesce(string_agg(format_type(t.oid, null), ',' order by o.ord), '<none>')
+      from pg_proc p
+      join pg_namespace n on n.oid = p.pronamespace and n.nspname = 'public'
+      cross join lateral unnest(p.proargtypes) with ordinality as o(oid, ord)
+      join pg_type t on t.oid = o.oid
+      where p.proname = 'disconnect_project';
+    `);
+    expect(shape).toBe("uuid");
+  });
+
+  it("pins search_path on every SECURITY DEFINER function in public", () => {
+    const unpinned = db.sql(`
+      select coalesce(string_agg(p.proname, ',' order by p.proname), '<none>')
+      from pg_proc p
+      join pg_namespace n on n.oid = p.pronamespace and n.nspname = 'public'
+      where p.prosecdef
+        and not exists (
+          select 1 from unnest(coalesce(p.proconfig, '{}')) c where c like 'search_path=%'
+        );
+    `);
+    expect(unpinned).toBe("<none>");
   });
 
   it("pins search_path on every SECURITY DEFINER function in public", () => {
