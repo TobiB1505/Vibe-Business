@@ -3,6 +3,39 @@ import type { RuntimeFounderInputDraft } from "@/modules/coding-agent/provider";
 import { normalizeFounderInputRequirement } from "./normalize";
 import type { FounderInputRequirement } from "./schema";
 
+/**
+ * The readable half of a runtime subject key, bounded so the whole key fits.
+ *
+ * `isFounderInputSubjectKey` caps a subject key at 96 characters. The rest of
+ * the key is fixed: `"runtime."` (8) + `"."` (1) + a 24-character digest, so
+ * the step segment has 63 to spend. A step key is
+ * `${order}-${changeKind}-${slug(title)}` with the title slug capped at 48,
+ * and `product_change` alone is 15 — an ordinary title such as "Add a clear
+ * pricing section to the marketing homepage" already produces a 65-character
+ * step key and a 98-character subject key.
+ *
+ * That over-length key failed validation, so `normalizeFounderInputRequirement`
+ * returned null and the run reported `missing_required_context` — it failed
+ * instead of asking the founder the question, which is the one thing this whole
+ * path exists to do, on the commonest change kind, after the founder had paid
+ * for the attempt.
+ *
+ * Truncation is safe because the digest, not this segment, carries identity:
+ * it already hashes the full step key, so two different steps cannot collide
+ * on a shared prefix. A step key that sanitizes to nothing yields the empty
+ * segment rather than a leading separator, and the digest still keys it.
+ */
+const RUNTIME_STEP_SEGMENT_MAX = 63;
+
+function runtimeStepSegment(stepKey: string): string {
+  return stepKey
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, RUNTIME_STEP_SEGMENT_MAX)
+    .replace(/-$/, "");
+}
+
 export function executionSpecAlreadyResolvedFounderInput(
   approvedDecisions: readonly { key: string }[],
   requirement: Pick<FounderInputRequirement, "kind" | "subjectKey">,
@@ -37,7 +70,7 @@ export function runtimeFounderInputRequirement(params: {
 
   return normalizeFounderInputRequirement({
     kind: params.draft.kind,
-    subjectKey: `runtime.${params.stepKey.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}.${subjectDigest}`,
+    subjectKey: `runtime.${runtimeStepSegment(params.stepKey)}.${subjectDigest}`,
     question,
     whyNeeded:
       params.draft.kind === "decision"
