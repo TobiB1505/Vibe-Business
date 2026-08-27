@@ -32,6 +32,10 @@ The audit named `business_readiness_audits.*_snapshot_id`, `product_profiles.*_s
 `repository_connections.github_installation_id → github_installations ON DELETE RESTRICT` sits one hop below `auth.users` on one side and two hops below it on the other. When `auth.users` is deleted, the installation is reached first and its constraint is checked while the connection — still two hops away — has not been processed. `DELETE FROM auth.users` fails for a user with **no execution specs, no audits and no snapshots**: an installation, a project and a connection are enough. Every user who has ever connected a repository is currently undeletable, independent of F2.
 Converting that edge to plain `NO ACTION` **does not fix it [proven]** — plain `NO ACTION` is still checked at end of statement. `ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED` **does** fix it, and an out-of-band `DELETE FROM github_installations` that would orphan a live connection is **still refused at `COMMIT` [proven]**. Only the check point moves; the integrity guarantee is unchanged.
 
+> **[2026-08-27] Implemented as M2′ in `20260827050000_deferrable_installation_reference.sql`.** One constraint, and both halves of the claim above are now asserted rather than remembered: F3's minimum fixture — an identity, an installation, a project, a connection, and no execution spec at all — erases in a single statement, and an out-of-band `delete from github_installations` against a live connection is still refused, at `COMMIT` rather than at the statement. The relocation of the failure is the whole cost of M2′ and is stated in the test, so a passing `DELETE` is never mistaken for a weakened guard.
+>
+> **It also had to be removed from M1's RESTRICT-inventory guard, and that is not a loosening.** `lifecycle-authority.migration.ts` pins the exact set of `RESTRICT` edges so a later change cannot quietly convert one — F1's consequence. This edge leaves that list because it was never what F1 covers: F1 is about *intra-project* edges that the cascade clears on its own, and this one is the account-level depth mismatch F3 found precisely because it is not intra-project.
+
 **F4 — A custom GUC is forgeable and must never be the authorization. [proven]**
 The proposed carve-out mechanism was `SET LOCAL vibe.lifecycle_erasure = 'on'`. Any role can set a prefixed custom GUC: `set local role authenticated; set local vibe.lifecycle_erasure='on'` succeeds. A flag alone is not a permission.
 The working split, proven end to end: **the `DELETE` privilege is the authority; the flag is only a lifecycle-context marker.** With `DELETE` revoked from `anon`, `authenticated` and `service_role`, a caller that forges the flag and issues a raw `DELETE` receives `permission denied for table execution_specs`, while the `SECURITY DEFINER` lifecycle function — which sets the flag itself — succeeds. `UPDATE` remains refused inside lifecycle context, cross-tenant invocation mutates nothing, the flag is unset after commit, and a second invocation returns deterministically rather than throwing.
@@ -130,6 +134,16 @@ Erasure runs as one durable operation in eleven ordered steps. The order is not 
 
 **The GitHub App installation is not uninstalled on GitHub's side.** Vibe has never had that behaviour, and adding an outbound mutation to an erasure path is exactly the kind of external effect that must not appear silently. The erasure copy states it; the code does not do it.
 
+> **[2026-08-27] Implemented as one durable operation in `src/modules/operations/account-erasure/`.** Six workflow steps carrying the eleven, and the grouping is the retry boundary: the Stripe call and the identity deletion each stand alone at `maxRetries = 0`, and everything between them converges to the same state however many times it runs. **No user-facing control exists**, and none is authorized by this ADR or by ADR 0057.
+>
+> **It needed ADR 0057 first, for four reasons this section did not know.** `operation_runs.project_id` was `NOT NULL` and every RLS policy routed through it, so an account-level operation was invisible to its own owner; `user_id` cascaded, so step 11 deleted the record of the operation performing it; the single-active index keyed on `project_id`, so under NULLS DISTINCT it admitted unlimited concurrent erasures of one account; and `completed` demanded a `result_id` an erasure has no artifact to point at. Step 1's "every start path is closed" is now a trigger on `operation_runs`, which closes paths that do not exist yet.
+>
+> **One half of step 3 is not implemented, and approximating it would have been worse.** `billing_stripe_events` carries `stripe_event_id`, `event_type`, `livemode` and a status — and no owner column at all. A claim cannot be attributed to an account, so the only expressible gate is "no Stripe event is being processed anywhere, for anybody", which blocks one user's erasure on another user's payment and cannot pass under load. What that check was protecting against is covered precisely where it can be: step 2 stops new events being generated, and an event landing after step 8 refuses as `owner_erased` rather than minting an ownerless wallet (§9, M3′). An event landing before step 8 grants to an account that is still live, which is correct. The reservation half of step 3 — per account, precise — is implemented and blocking.
+>
+> **[2026-08-27, later the same day] The control exists.** `/app/settings` now carries it, and the copy obligations this section states are asserted in a real browser rather than only in the source: the confirmation says the GitHub App is not uninstalled, that the remaining paid period is not refunded (§9), that the billing history is kept without the person's name (§6), and that it cannot be undone — all of them above the confirm button, because a disclosure a person scrolls past after deciding is not a disclosure. A running erasure shows no button at all, and a failed one says why and that nothing was erased rather than quietly redrawing an inviting control. What is still absent is a dogfood: nothing here has been run against a real account.
+>
+> **And the ordering claim in step 6 was right for the wrong reason.** It says the installations are unreferenced by then "which is precisely what F3's RESTRICT was objecting to". True — but measured, F3's RESTRICT is also what refuses a premature step 11, ahead of the `execution_specs` trigger the step order implies. Both stand in the way; M2′ removed the first and the second remains.
+
 ### 5. ExecutionSpec authority model
 
 The `execution_specs` immutability trigger stays. It is the guarantee that an approved instruction package cannot be edited after the fact, and F2 is a reason to make one narrow hole in it — not a reason to remove it.
@@ -149,6 +163,12 @@ The carve-out deliberately does **not** re-open casual deletion. `DELETE FROM pr
 **One ordering constraint inside the function, and it is the exception that proves F1.** `execution_interrupts.execution_spec_id` references `execution_specs` with `ON DELETE RESTRICT`. F1 says such an edge cannot block the `projects` cascade — and that remains true — but the lifecycle function deletes `execution_specs` **directly**, which is the other case entirely: a direct delete of a referenced parent while its children are still present *is* refused, exactly as §1 describes for Disconnect. The function must therefore delete `execution_interrupts` for the project before it deletes the specs, or defer the specs to the `projects` cascade it has just unlocked. This is asserted by a fixture carrying an interrupt row, not left to reading order — the Wave 0 fixture predates the interrupt table and did not cover it.
 
 > **[2026-08-26] Implemented as M1 in `20260826213000_project_lifecycle_deletion_authority.sql`. Three sentences above were wrong when written, and building M1 measured them.**
+>
+> **[2026-08-27] That filename no longer resolves, and the bracket is left standing rather than edited.** M1 shipped as
+> `20260826213000_…`, and `db9d0f2` renumbered it to `20260826222000_project_lifecycle_deletion_authority.sql` so it would
+> deploy *after* Migration B (`20260826221000_close_project_delete_entry_authority.sql`) — which the bracket's own point 2
+> demanded: "M1 must not be deployed until that privilege is closed." The sentence was true when written and the rename is
+> what made it false, so it is corrected here rather than in place. The content is unchanged; only the timestamp moved.
 >
 > **1. The cascade never checks the caller's privilege on `execution_specs`, so revoking it is not the authority.** A referential-integrity action runs with the *referencing table's owner* authority: measured, `current_user` inside the cascaded trigger is `postgres` even when the caller is `service_role`. Part 2 above therefore protects **direct** deletion only. It is worth keeping for exactly that, and it is not what makes the cascade safe.
 >
@@ -180,6 +200,16 @@ That is a defect in its own right, and it is not primarily a privacy one. The cr
 
 This is tracked as launch backlog item VB-040 and is worth landing independently of erasure — it closes the rule-7 defect the moment a project is deletable at all.
 
+> **[2026-08-27] Implemented as M2 in `20260827030000_metering_survives_lifecycle.sql`.** Nine columns, exactly as described. Three measurements taken on the way, none of which the paragraph above knew:
+>
+> **1. No hidden second cascade path.** `operation_run_id`, `validation_run_id`, `preview_session_id` and `review_artifact_id` are plain columns with no foreign key, so nulling the two owner columns genuinely detaches the row rather than leaving it reachable by another `CASCADE`. Had any of them been a foreign key to a project-scoped table, M2 as written would have been cosmetic.
+>
+> **2. Idempotent projection survives detachment.** `billing_usage_events_source_sku_idx` is `(source_kind, source_id, sku)` — no owner column — so a detached row's usage-event identity is unchanged and a repeat reconciliation still recognises it. No unique index on any of the five involves an owner column at all, which is what makes nulling one incapable of violating a uniqueness invariant.
+>
+> **3. One read had to change, and it is a read this ADR did not list.** `credits/reconciliation.ts` sweeps all four canonical ledgers and projects them into `billing_usage_events`. Left alone it would have projected detached rows into *new* financial records owned by a deleted project or an erased identity — minting exactly the unattributable rows §6 objects to. It now excludes them in SQL and reports `rowsSkippedDetached`, so the repair pass says what it did not touch. The M3′ read-audit requirement in §11 is stated for the billing columns; the metering columns needed one too.
+>
+> **And one ordering fact, measured rather than reasoned.** Deleting `auth.users` while the account still owns a project is refused — which is what makes §4's step 4 a physical prerequisite for step 11 rather than a tidy sequence. The blocker that actually fires is F3's `repository_connections.github_installation_id` RESTRICT, not the `execution_specs` immutability trigger the step order implies. Both stand in the way; M2′ removes the first and the second remains.
+
 ### 8. Audit anonymization
 
 `audit_events` is the only table already architected to outlive its owner, and it is the one place where nulling a foreign key achieves the least. The row survives with `user_id` NULL and the payload keeps its contents **[proven]**.
@@ -197,6 +227,16 @@ Two constraints on the mechanism, both discovered rather than assumed:
 
 One framing note that keeps this proportionate: the reader-side allowlist in `audit-log/view.ts` means none of these fields can reach a screen today. This is a **data-at-rest retention** problem, not a UI leak.
 
+> **[2026-08-27] Implemented as M3 in `20260827060000_audit_metadata_scrub.sql`.** Two functions: a pure, immutable `scrub_audit_metadata(jsonb)` with no privileges and no table access, and a `security definer` driver granted to `service_role` only. Splitting them is what lets the transform be asserted directly, which §8 demands of an operation nobody can re-run.
+>
+> **The transform recurses, and the paragraph above is why it had to.** None of `changedPaths[].path`, `largestChanges[].path` or `violations[].path` is a top-level metadata key — all three sit inside richer evidence objects whose shapes differ per event and will change again. A transform walking a fixed set of top-level keys would have been correct the day it was written and quietly wrong afterwards. The rules are therefore applied to every object at every depth, and the payload's shape stops mattering.
+>
+> **The prerequisite was met, not exempted.** `merge/store.ts` now filters `change_merge.not_eligible` on the real `project_id` column; `prepared_change_id` stays in the payload because the scrub does not touch it — it identifies an artifact, not a person. The merge service states `projectId` explicitly rather than letting `resolveProjectId` infer it, and a test pins the column's presence, since an unpopulated column would silently return this to logging one entry per page render.
+>
+> **"Every event category, not a sample" is enforced against the source rather than a hand-written list.** Twenty-nine categories, derived from the repository's own `recordAuditEvent` call sites, each asserted with the §8-sensitive keys it actually writes. Between them they exercise all seventeen withheld keys.
+>
+> **And the denylist got the guard it needs.** §8's design is right — the retained set is open-ended, and an allowlist would destroy evidence every time somebody added a benign field — but it retains a *new* sensitive key by default, silently. `scrub-vocabulary.test.ts` reads the 175-key vocabulary out of the call sites and the two withholding lists out of the migration, and fails unless every key is deleted, nulled, pseudonymized, or listed as retained with a reason. It cannot tell a wrong classification from a right one; it prevents the case that actually happens, which is a key nobody thought about.
+
 ### 9. Stripe external-effect ordering
 
 **The Stripe subscription is cancelled before any local state is touched, and a failure to cancel stops the erasure.**
@@ -210,6 +250,14 @@ Cancellation is an external, non-transactional effect. It gets its own typed out
 The Stripe mapping rows are **tombstoned, not deleted, and their Stripe identifiers are kept** (decision P-3). Retaining financial evidence that cannot be reconciled against the processor would be retention without value — the same defect §7 identifies on the metering side. `stripe_customer_id` is what makes a later dispute or refund for a past charge attributable. The tradeoff is real and is not hidden: a resolvable pointer into Stripe survives erasure, which is precisely why the retention *period* (§Deferred, P-2) governs how long it exists, and why deleting the customer record at Stripe is a separate act this ADR does not cover.
 
 A related defect is fixed as part of this work rather than left: `credits/service.ts` writes `userId: (await accountOwner(...)) ?? ""` in three places. An empty string is not a UUID, so the insert fails, and `recordAuditEvent` only logs to the console. A settlement landing after the owner is gone silently loses its financial audit record. §10's finalize-before-erasure rule prevents the situation; the `?? ""` is fixed anyway.
+
+> **[2026-08-27] Implemented as M3′ in `20260827040000_billing_owner_tombstone.sql`, with §6.** Three columns, and the `?? ""` removed as promised — `RecordAuditEventParams.userId` is now `string | null`, which is what `audit_events.user_id` (the schema's one `SET NULL` edge into `auth.users`) has always permitted.
+>
+> **The read audit §11 asks for was run by the compiler, not by grep, and it found one site.** Widening `CreditAccount.userId`, `StripeCustomerLink.userId` and `SubscriptionSnapshot.userId` to `string | null` produced exactly one type error across the repository: `resolveOwner` in `billing/webhook-service.ts`. That is a stronger audit than an enumeration of `.eq("user_id", …)` filters, which are all safe under a nullable column and are not where the risk was.
+>
+> **And the one site is worse than a type error.** `resolveOwner` returns `{ ok: true, userId }` from the mapping row. Against a tombstoned mapping it would have returned `ok: true` with a null owner, and `grantCreditLot(null)` would have opened a *second*, ownerless wallet and granted purchased Credits into it — money with no owner who could spend or dispute it, recorded as a normal successful grant. A tombstoned mapping now resolves to a typed `owner_erased` refusal, and specifically **not** to the `claimedUserId` fallback, which exists for the window before a mapping is written and would otherwise resurrect an erased identity out of Stripe's own copy of its id. §9's cancel-first rule makes this rare; webhooks are asynchronous, so it does not make it impossible.
+>
+> **What was confirmed rather than changed:** `billing_credit_accounts_user_idx` and `billing_stripe_customers_user_mode_idx` are plain `nulls distinct` btrees, so the second erasure in the product's life does not collide with the first — asserted, because a `nulls not distinct` index here is the kind of defect that would first appear in production. The `stripe_customer_id` and `stripe_subscription_id` unique indexes survive untouched, which is what keeps P-3's retention meaningful.
 
 ### 10. Active-work safety rules
 

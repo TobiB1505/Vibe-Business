@@ -35,6 +35,17 @@ export type AuditEventType =
   // be the caller's. Carries the closed failure reason, never a database
   // message (VB-003).
   | "project.deletion_failed"
+  /**
+   * The three moments of an account erasure (ADR 0056 §4).
+   *
+   * `account.erased` is deliberately recorded with **no owner**: it is written
+   * after step 11, when there is nobody left to attribute it to. That is the
+   * honest record and exactly what retention should keep — an erasure happened,
+   * at this time, and nothing identifying survives to say whose.
+   */
+  | "account.erasure_started"
+  | "account.erased"
+  | "account.erasure_failed"
   | "github.access.failed"
   | "repository.intelligence.started"
   | "repository.intelligence.completed"
@@ -341,7 +352,21 @@ export type AuditEventType =
  */
 
 export type RecordAuditEventParams = {
-  userId: string;
+  /**
+   * The account this event belongs to, or null when it belongs to none.
+   *
+   * Null is not a fallback for "we could not work it out" — it is the state of
+   * a tombstoned billing account, whose owner column erasure sets to null while
+   * the account itself survives (ADR 0056 §6). A settlement or refund landing
+   * on such an account is still worth recording, and `audit_events.user_id` is
+   * `on delete set null` precisely so the row can outlive its owner.
+   *
+   * Everything else passes an owner. The type is widened rather than the
+   * caller coercing, because the coercion this replaced — `?? ""` — produced a
+   * value that is not a UUID, failed the insert, and lost the financial audit
+   * record silently, since a failed audit write only logs (ADR 0056 §9).
+   */
+  userId: string | null;
   eventType: AuditEventType;
   /**
    * The project this event is about, when it is about one.

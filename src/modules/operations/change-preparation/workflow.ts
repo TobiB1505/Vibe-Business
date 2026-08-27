@@ -4,7 +4,7 @@ import { resolveAppRoot } from "@/modules/execution/app-root";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import { getProjectWithRepository } from "@/modules/projects/queries";
 import type { OperationFailureCode } from "../failures";
-import type { StoredOperationRun } from "../store";
+import type { ProjectOperationRun } from "../store";
 import {
   completePreparationStep,
   failPreparationStep,
@@ -34,7 +34,7 @@ import {
  * installation, not the origin. A step is handed an operation id and rebuilds
  * the world from server state (§8).
  */
-async function resolveTarget(operation: StoredOperationRun): Promise<PreparationTarget | null> {
+async function resolveTarget(operation: ProjectOperationRun): Promise<PreparationTarget | null> {
   const supabase = createServiceClient();
 
   // The same query the project page uses. Hand-rolling a second one is how

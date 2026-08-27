@@ -486,7 +486,7 @@ async function announceSettlement(
   chargedCredits: CreditUnits,
 ): Promise<void> {
   await recordAuditEvent(supabase, {
-    userId: (await accountOwner(supabase, reservation.creditAccountId)) ?? "",
+    userId: await accountOwner(supabase, reservation.creditAccountId),
     projectId: reservation.projectId,
     eventType: "credit_charge.settled",
     metadata: {
@@ -661,6 +661,16 @@ export async function settleReservation(
   };
 }
 
+/**
+ * The account's owner, or null.
+ *
+ * Null now carries two distinguishable-in-principle meanings that this
+ * function deliberately flattens: the account could not be read, and the
+ * account is tombstoned because the identity was erased (ADR 0056 §6). Both
+ * produce an audit event with a null `user_id`, which is the honest record in
+ * either case — better than the `?? ""` this replaced, which wrote a value
+ * that is not a UUID, failed the insert, and lost the event silently.
+ */
 async function accountOwner(supabase: SupabaseClient, creditAccountId: string): Promise<string | null> {
   const { data, error } = await supabase
     .from("billing_credit_accounts")
@@ -669,7 +679,7 @@ async function accountOwner(supabase: SupabaseClient, creditAccountId: string): 
     .maybeSingle();
 
   if (error) return null;
-  return data ? (data as { user_id: string }).user_id : null;
+  return data ? (data as { user_id: string | null }).user_id : null;
 }
 
 /* ---------------------------------------------------------------------------
@@ -714,7 +724,7 @@ export async function releaseReservation(
 
   if (closed) {
     await recordAuditEvent(supabase, {
-      userId: (await accountOwner(supabase, reservation.creditAccountId)) ?? "",
+      userId: await accountOwner(supabase, reservation.creditAccountId),
       projectId: reservation.projectId,
       eventType: "credit_reservation.released",
       // `releaseReason`, not `reason`: the activity feed allowlists `reason`
@@ -813,7 +823,7 @@ export async function refundCharge(
 
   if (!alreadyPosted) {
     await recordAuditEvent(supabase, {
-      userId: (await accountOwner(supabase, charge.credit_account_id)) ?? "",
+      userId: await accountOwner(supabase, charge.credit_account_id),
       projectId: charge.project_id,
       eventType: "credit_refund.posted",
       metadata: { ledgerEntryId: entry.id, refundsLedgerEntryId: charge.id, credits: params.credits },

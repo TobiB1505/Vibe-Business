@@ -1,4 +1,4 @@
-# UI-19 — Agent Workspace (Plan)
+# UI-19 — Agent Workspace
 
 Status: Implemented through the stage rail and core; browser-verified. Stage bodies for Preview and Review still sit below the panel rather than inside the stage narrative.
 

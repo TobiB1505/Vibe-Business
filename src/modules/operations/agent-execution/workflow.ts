@@ -11,7 +11,7 @@ import { getProjectWithRepository } from "@/modules/projects/queries";
 import { createVercelSandboxProvider } from "@/modules/validation/vercel/provider";
 import type { AgentCheckName } from "@/modules/coding-agent/schema";
 import type { OperationFailureCode } from "../failures";
-import type { StoredOperationRun } from "../store";
+import type { ProjectOperationRun } from "../store";
 import { VercelWorkflowExecutor } from "../vercel/executor";
 import {
   cleanupAgentWorkspaceStep,
@@ -91,7 +91,7 @@ import {
  * structural fact rather than a validation rule (§53).
  */
 async function resolveTarget(
-  operation: StoredOperationRun,
+  operation: ProjectOperationRun,
   options: { withCloneCredential: boolean },
 ): Promise<AgentRepositoryTarget | null> {
   const supabase = createServiceClient();

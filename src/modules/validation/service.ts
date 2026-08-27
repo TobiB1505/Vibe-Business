@@ -6,7 +6,7 @@ import type { OperationExecutor } from "@/modules/operations/executor";
 import {
   createOperationRun,
   findActiveOperationByIdentity,
-  getOperationRunById,
+  getProjectOperationRunById,
   type StoredOperationRun,
 } from "@/modules/operations/store";
 import { buildOperationView, type OperationView } from "@/modules/operations/view";
@@ -209,7 +209,7 @@ export async function startChangeValidation(
     return { kind: "failed", error: "execution_start_failed" };
   }
 
-  const refreshed = await getOperationRunById(supabase, created.operation.id);
+  const refreshed = await getProjectOperationRunById(supabase, created.operation.id);
   return { kind: "started", operation: view(refreshed ?? created.operation) };
 }
 
@@ -227,7 +227,7 @@ export async function getValidationStatus(
 
   if (!project) return null;
 
-  const operation = await getOperationRunById(supabase, params.operationId);
+  const operation = await getProjectOperationRunById(supabase, params.operationId);
   if (!operation || operation.projectId !== params.projectId) return null;
 
   return view(operation);

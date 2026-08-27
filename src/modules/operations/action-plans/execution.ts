@@ -46,10 +46,10 @@ import {
   claimResultForOperation,
   completeOperationRun,
   failOperationRun,
-  getOperationRunById,
+  getProjectOperationRunById,
   markInferenceStarted,
   setOperationStage,
-  type StoredOperationRun,
+  type ProjectOperationRun,
 } from "../store";
 
 /**
@@ -86,8 +86,8 @@ type PlanSources = {
 async function loadOperation(
   supabase: SupabaseClient,
   operationId: string,
-): Promise<StepOutcome<{ operation: StoredOperationRun }>> {
-  const operation = await getOperationRunById(supabase, operationId);
+): Promise<StepOutcome<{ operation: ProjectOperationRun }>> {
+  const operation = await getProjectOperationRunById(supabase, operationId);
   if (!operation) return { ok: false, failureCode: "operation_not_found" };
 
   const { data: project } = await supabase
@@ -113,7 +113,7 @@ async function loadOperation(
  */
 async function loadSources(
   supabase: SupabaseClient,
-  operation: StoredOperationRun,
+  operation: ProjectOperationRun,
 ): Promise<StepOutcome<PlanSources>> {
   const audit = await getLatestSuccessfulAudit(supabase, operation.projectId);
   if (!audit?.result) return { ok: false, failureCode: "audit_missing" };
@@ -439,7 +439,7 @@ export async function completeActionPlanOperationStep(
    */
   await settleOperationBilling(deps.supabase, { operationRunId: operationId });
 
-  const operation = await getOperationRunById(deps.supabase, operationId);
+  const operation = await getProjectOperationRunById(deps.supabase, operationId);
   if (!operation) return;
 
   await recordAuditEvent(deps.supabase, {
@@ -476,7 +476,7 @@ export async function failActionPlanOperationStep(
     providerUsageOccurred: true,
   });
 
-  const operation = await getOperationRunById(deps.supabase, operationId);
+  const operation = await getProjectOperationRunById(deps.supabase, operationId);
   if (!operation) return;
 
   await recordAuditEvent(deps.supabase, {

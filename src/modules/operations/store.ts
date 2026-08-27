@@ -18,8 +18,10 @@ import type { OperationStage, OperationStatus, OperationType } from "./schema";
 
 export type StoredOperationRun = {
   id: string;
-  projectId: string;
-  userId: string;
+  /** Null for an account-level operation, never for a project one (ADR 0057 §1). */
+  projectId: string | null;
+  /** Null once this operation's owner has been erased (ADR 0057 §2). */
+  userId: string | null;
   operationType: OperationType;
   status: OperationStatus;
   stage: OperationStage;
@@ -42,8 +44,8 @@ export type StoredOperationRun = {
 
 type OperationRow = {
   id: string;
-  project_id: string;
-  user_id: string;
+  project_id: string | null;
+  user_id: string | null;
   operation_type: OperationType;
   status: OperationStatus;
   stage: OperationStage;
@@ -191,6 +193,40 @@ export async function getOperationRunById(
   return data ? mapRow(data as OperationRow) : null;
 }
 
+/**
+ * An operation that is about a project, carrying both owner columns.
+ *
+ * ADR 0057 made `projectId` and `userId` nullable so that an account-level
+ * operation can exist at all, and so an erasure's own row can outlive the
+ * identity it erases. Fifteen of the sixteen operation types are unaffected:
+ * they always have both, and every executor is written on that basis.
+ *
+ * Saying so once, here, is the alternative to ninety-eight non-null assertions
+ * scattered through the executors — and it is a better one, because an
+ * assertion states a belief while this states a *check*. An operation that
+ * somehow reached a project executor without a project stops there instead of
+ * failing later on a null nobody expected.
+ */
+export type ProjectOperationRun = StoredOperationRun & { projectId: string; userId: string };
+
+/**
+ * Loads an operation and refuses it unless it is project-scoped.
+ *
+ * The project executors use this rather than {@link getOperationRunById}; the
+ * account level uses the untyped one. Null means either "no such operation" or
+ * "that operation is not about a project" — deliberately the same answer to a
+ * caller that can do nothing useful with the distinction.
+ */
+export async function getProjectOperationRunById(
+  supabase: SupabaseClient,
+  operationId: string,
+): Promise<ProjectOperationRun | null> {
+  const operation = await getOperationRunById(supabase, operationId);
+  if (!operation || operation.projectId === null || operation.userId === null) return null;
+
+  return operation as ProjectOperationRun;
+}
+
 export type CreateOperationResult =
   | { ok: true; operation: StoredOperationRun }
   | { ok: false; error: "already_active" }
@@ -209,7 +245,8 @@ const POSTGRES_UNIQUE_VIOLATION = "23505";
 export async function createOperationRun(
   supabase: SupabaseClient,
   params: {
-    projectId: string;
+    /** Null for an account-level operation — the subject, not a missing value. */
+    projectId: string | null;
     userId: string;
     operationType: OperationType;
     inputIdentity: string;
@@ -418,7 +455,20 @@ export async function markInferenceStarted(
  */
 export async function completeOperationRun(
   supabase: SupabaseClient,
-  params: { operationId: string; resultId: string },
+  params: {
+    operationId: string;
+    /**
+     * The row this operation produced, or null when it produced none.
+     *
+     * Null is legal for `account_erasure` alone, and the database says so
+     * rather than this comment: the `operation_runs_completed_has_result`
+     * check names that one type (ADR 0057 §4). An erasure's product is
+     * absence, and inventing a row so a constraint is satisfied would be a lie
+     * told to a `CHECK`. Passing null from any other operation type is
+     * rejected by PostgreSQL, not by trust.
+     */
+    resultId: string | null;
+  },
 ): Promise<boolean> {
   const { data, error } = await supabase
     .from("operation_runs")

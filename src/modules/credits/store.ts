@@ -49,7 +49,8 @@ const POSTGRES_CHECK_VIOLATION = "23514";
 
 export type CreditAccount = {
   id: string;
-  userId: string;
+  /** Null once the identity is erased — the account is tombstoned (ADR 0056 §6). */
+  userId: string | null;
   status: "active" | "suspended" | "closed";
   postedCredits: CreditUnits;
   reservedCredits: CreditUnits;
@@ -57,7 +58,7 @@ export type CreditAccount = {
 
 type AccountRow = {
   id: string;
-  user_id: string;
+  user_id: string | null;
   status: CreditAccount["status"];
   posted_credits: number;
   reserved_credits: number;

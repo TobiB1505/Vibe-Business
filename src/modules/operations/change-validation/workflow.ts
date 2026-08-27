@@ -4,7 +4,7 @@ import { createGithubRepositoryReader } from "@/modules/github/repository-reader
 import { getProjectWithRepository } from "@/modules/projects/queries";
 import { createVercelSandboxProvider } from "@/modules/validation/vercel/provider";
 import type { OperationFailureCode } from "../failures";
-import type { StoredOperationRun } from "../store";
+import type { ProjectOperationRun } from "../store";
 import {
   cleanupSandboxStep,
   completeValidationStep,
@@ -77,7 +77,7 @@ import {
  * a structural fact rather than a validation rule (§27).
  */
 async function resolveTarget(
-  operation: StoredOperationRun,
+  operation: ProjectOperationRun,
   options: { withCloneCredential: boolean },
 ): Promise<ValidationRepositoryTarget | null> {
   const supabase = createServiceClient();

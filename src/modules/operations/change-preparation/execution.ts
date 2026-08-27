@@ -26,9 +26,9 @@ import {
   claimResultForOperation,
   completeOperationRun,
   failOperationRun,
-  getOperationRunById,
+  getProjectOperationRunById,
   setOperationStage,
-  type StoredOperationRun,
+  type ProjectOperationRun,
 } from "../store";
 
 /**
@@ -53,7 +53,7 @@ export type PreparationDeps = {
   /** Service-role client: workflow steps have no user session (ADR 0013). */
   supabase: SupabaseClient;
   /** Built per step from the operation's own project — never from input. */
-  resolveTarget: (operation: StoredOperationRun) => Promise<PreparationTarget | null>;
+  resolveTarget: (operation: ProjectOperationRun) => Promise<PreparationTarget | null>;
 };
 
 export type PreparationTarget = {
@@ -70,8 +70,8 @@ export type StepOutcome<T> = ({ ok: true } & T) | { ok: false; failureCode: Oper
 async function loadOperation(
   supabase: SupabaseClient,
   operationId: string,
-): Promise<StepOutcome<{ operation: StoredOperationRun }>> {
-  const operation = await getOperationRunById(supabase, operationId);
+): Promise<StepOutcome<{ operation: ProjectOperationRun }>> {
+  const operation = await getProjectOperationRunById(supabase, operationId);
   if (!operation) return { ok: false, failureCode: "operation_not_found" };
 
   const { data: project } = await supabase
@@ -377,7 +377,7 @@ export async function completePreparationStep(
   });
   if (!transitioned) return;
 
-  const operation = await getOperationRunById(deps.supabase, operationId);
+  const operation = await getProjectOperationRunById(deps.supabase, operationId);
   if (!operation) return;
 
   await recordAuditEvent(deps.supabase, {
@@ -403,7 +403,7 @@ export async function failPreparationStep(
   const transitioned = await failOperationRun(deps.supabase, { operationId, failureCode });
   if (!transitioned) return;
 
-  const operation = await getOperationRunById(deps.supabase, operationId);
+  const operation = await getProjectOperationRunById(deps.supabase, operationId);
   if (!operation) return;
 
   await recordAuditEvent(deps.supabase, {

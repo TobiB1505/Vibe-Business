@@ -15,7 +15,7 @@ import {
   markMergeWriteAttempted,
   recordMergePreflight,
 } from "@/modules/merge/store";
-import { completeOperationRun, failOperationRun, getOperationRunById, setOperationStage } from "../store";
+import { completeOperationRun, failOperationRun, getProjectOperationRunById, setOperationStage } from "../store";
 
 /**
  * Durable steps for a safe merge (Sprint 11C §18, §19, §20, §21, §22).
@@ -87,7 +87,7 @@ type MergeContext = {
  * the project itself (CLAUDE.md rule 53).
  */
 async function loadContext(deps: MergeDeps, operationId: string): Promise<MergeContext | null> {
-  const operation = await getOperationRunById(deps.supabase, operationId);
+  const operation = await getProjectOperationRunById(deps.supabase, operationId);
   if (!operation) return null;
 
   const merge = await findMergeByOperation(deps.supabase, operationId);
@@ -469,7 +469,7 @@ export async function abortMergeStep(
   operationId: string,
   failure: { failureCode: MergeFailureCode; observedHead?: string | null },
 ): Promise<void> {
-  const operation = await getOperationRunById(deps.supabase, operationId);
+  const operation = await getProjectOperationRunById(deps.supabase, operationId);
   const merge = await findMergeByOperation(deps.supabase, operationId);
 
   if (merge && operation && merge.projectId === operation.projectId) {
