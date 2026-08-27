@@ -6,6 +6,7 @@ import {
   agentCoreCaption,
   agentCoreState,
   agentStageSteps,
+  stageHasBody,
   type AgentStage,
   type AgentStageState,
 } from "./agent-stages";
@@ -412,9 +413,14 @@ describe("a run waiting on the founder", () => {
     expect(caption).not.toMatch(/almost|soon|minute|hour|%/i);
   });
 
-  it("keeps the stage's own wording and says what it is waiting for", () => {
+  it("keeps the stage's own name and leaves the tense to the state word", () => {
     const build = paused().find((step) => step.stage === "build")!;
-    expect(build.label).toMatch(/making the change/i);
+    /*
+     * A stable noun, not a tensed sentence. Five tensed labels across a rail is
+     * what produced "Product understo…" on the live screen; the status word
+     * beneath carries what is happening.
+     */
+    expect(build.label).toBe("Build");
     // No detail of its own: the rail's state word already says it, and one
     // line saying "Waiting for you · Waiting for your answer" is the
     // redundancy this product keeps taking back out.
@@ -485,5 +491,58 @@ describe("validation has two sources and the change's wins", () => {
     });
 
     expect(stateOf(steps, "validate")).toBe("failed");
+  });
+});
+
+describe("a stage with a verdict still has something to show", () => {
+  const settled = (stage: ChangeStage) =>
+    agentStageSteps({
+      timeline: timeline({
+        preparing: "done",
+        working: "done",
+        reviewing_change: "done",
+        preparing_branch: "done",
+        validating: "done",
+        finished: "done",
+      }),
+      runStatus: "completed",
+      changeProgress: progress(stage),
+    });
+
+  /**
+   * The first live build drew the merge stage only while a change was waiting
+   * on a decision. A founder whose merge had stalled — the moment they most
+   * need to see why — was shown nothing at all.
+   */
+  it("draws the review stage for a stalled merge", () => {
+    const steps = settled("stalled");
+    expect(stateOf(steps, "review")).toBe("failed");
+    expect(stageHasBody(steps, "review")).toBe(true);
+  });
+
+  it("keeps drawing it once the change is in", () => {
+    expect(stageHasBody(settled("merged"), "review")).toBe(true);
+    expect(stageHasBody(settled("observed"), "review")).toBe(true);
+  });
+
+  it("keeps the comparison visible after the change moves past it", () => {
+    expect(stageHasBody(settled("awaiting_approval"), "preview")).toBe(true);
+  });
+
+  /** Only the two states with nothing to say stay empty. */
+  it("draws nothing for a stage that is pending or was never reached", () => {
+    const early = agentStageSteps({
+      timeline: timeline({ preparing: "done", working: "active" }),
+      runStatus: "running",
+      changeProgress: null,
+    });
+    expect(stageHasBody(early, "review")).toBe(false);
+
+    const stopped = agentStageSteps({
+      timeline: timeline({ preparing: "done", working: "failed" }),
+      runStatus: "failed",
+      changeProgress: null,
+    });
+    expect(stageHasBody(stopped, "preview")).toBe(false);
   });
 });

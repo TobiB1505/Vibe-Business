@@ -72,32 +72,22 @@ export type AgentStageStep = {
   detail: string | null;
 };
 
-const LABELS: Record<AgentStage, Record<"pending" | "active" | "done", string>> = {
-  understand: {
-    pending: "Understand your product",
-    active: "Understanding your product",
-    done: "Product understood",
-  },
-  build: {
-    pending: "Make the change",
-    active: "Making the change",
-    done: "Change made",
-  },
-  validate: {
-    pending: "Check that it works",
-    active: "Checking that it works",
-    done: "Checks passed",
-  },
-  preview: {
-    pending: "Prepare a preview",
-    active: "Preparing your preview",
-    done: "Preview ready",
-  },
-  review: {
-    pending: "Your review",
-    active: "Ready for your review",
-    done: "Merged",
-  },
+/**
+ * One word per stage, from the imported tracker.
+ *
+ * Not tensed. The first build had "Product understood" / "Making the change" /
+ * "Check that it works", which reads well in prose and fails in a rail: five
+ * cells across, the long ones ran into their neighbours, and truncating them
+ * produced "Product understo…". A stable noun never overflows, and the status
+ * word underneath carries the tense — which is the design's own answer and the
+ * better one.
+ */
+const LABELS: Record<AgentStage, string> = {
+  understand: "Understand",
+  build: "Build",
+  validate: "Validate",
+  preview: "Preview",
+  review: "Review",
 };
 
 /** Which execution phases feed each of the first three stages. */
@@ -293,18 +283,14 @@ export function agentStageSteps(input: AgentWorkspaceInput): AgentStageStep[] {
 
   return AGENT_STAGES.map((stage) => ({
     stage,
-    label: labelFor(stage, states[stage]),
+    label: labelFor(stage),
     state: states[stage],
     detail: detailFor(stage, states[stage], input),
   }));
 }
 
-function labelFor(stage: AgentStage, state: AgentStageState): string {
-  if (state === "done") return LABELS[stage].done;
-  // A paused stage keeps its active wording. The work really is at this stage;
-  // it is simply waiting on an answer, which the state word says.
-  if (state === "active" || state === "paused") return LABELS[stage].active;
-  return LABELS[stage].pending;
+function labelFor(stage: AgentStage): string {
+  return LABELS[stage];
 }
 
 /**
@@ -410,4 +396,20 @@ export function agentCoreCaption(steps: readonly AgentStageStep[]): string {
   // Something happened and nothing is running: the rail says which stage that
   // was, and this line does not guess at a reason it cannot see.
   return "Vibe has stopped here. The stage above says where.";
+}
+
+
+/**
+ * Whether a stage's own body is worth drawing.
+ *
+ * Wider than "is it active", and the first live build was not: the merge stage
+ * appeared only while a change was waiting on a decision, so a founder whose
+ * merge had stalled — the one moment they most need to see why — was shown
+ * nothing, and neither was one looking back at a change already in. A stage
+ * with a verdict has as much to say as one in progress; only `pending` and
+ * `skipped` have nothing.
+ */
+export function stageHasBody(steps: readonly AgentStageStep[], stage: AgentStage): boolean {
+  const state = steps.find((step) => step.stage === stage)?.state ?? "pending";
+  return state === "active" || state === "paused" || state === "done" || state === "failed";
 }

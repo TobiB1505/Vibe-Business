@@ -172,6 +172,15 @@ export type ProjectNavItem = {
   count?: number | null;
   /** Mint when the count is something Vibe is offering to act on. */
   countTone?: "accent" | "neutral";
+  /**
+   * A live state word instead of a count, with a pulsing dot beside it.
+   *
+   * For the Agent, whose interesting fact is what it is doing rather than how
+   * many artifacts it has produced — "13" was the number of prepared changes,
+   * which is not what a founder glancing at the rail wants to know. Replaces
+   * the count when both are set.
+   */
+  status?: string | null;
 };
 
 export function ProjectSidebar({

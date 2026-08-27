@@ -19,10 +19,14 @@ import { buildAgentContext } from "@/modules/projects/command-center";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import { readAgentWorkspace } from "@/modules/coding-agent/agent-workspace";
-import { agentCoreCaption } from "@/modules/coding-agent/observability/agent-stages";
+import {
+  agentCoreCaption,
+  stageHasBody,
+} from "@/modules/coding-agent/observability/agent-stages";
 import { AgentPanel } from "../agent-panel";
 import type { PreparedChangeWorkspaceItem } from "@/modules/execution/workspace";
 import { preparedChangeAnchorId } from "@/components/layout/project-shell";
+import { AgentTrustPanel } from "./agent-header";
 import { ChangeGates } from "./change-gates";
 import { AgentTaskPanel } from "./agent-task-panel";
 import { Surface } from "@/components/ui/surface";
@@ -199,7 +203,12 @@ export default async function ProjectAgentPage({
     <WorkspaceSection
       id="agent"
       title="Agent"
-      description="Each change moves through validation, preview, review and your approval before anything can be merged."
+      description={
+        workspace.timeline === null
+          ? "Vibe can work on your product and prepare changes for your review."
+          : "Vibe is working on your task and preparing changes for your review."
+      }
+      actions={<AgentTrustPanel />}
     >
       <div className="flex flex-col gap-5">
         {/*
@@ -313,7 +322,7 @@ export default async function ProjectAgentPage({
           />
         )}
 
-        {workspace.stage === "preview" && change !== null && (
+        {stageHasBody(workspace.stages, "preview") && change !== null && (
           <Surface level="section" padding="lg">
             <AgentPreviewStage
               images={change.reviewImages}
@@ -333,7 +342,7 @@ export default async function ProjectAgentPage({
           </Surface>
         )}
 
-        {workspace.stage === "review" && change !== null && (
+        {stageHasBody(workspace.stages, "review") && change !== null && (
           <Surface level="section" padding="lg">
             <AgentMergeStage
               summary={workspace.mergeSummary}

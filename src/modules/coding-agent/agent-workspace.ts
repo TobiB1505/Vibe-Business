@@ -355,3 +355,40 @@ function buildVerdict(change: PreparedChangeWorkspaceItem | null): MergeSummary[
   if (status === "failed") return "failed";
   return "not_run";
 }
+
+/**
+ * One word for the navigation rail (UI-19, `AgentRail.dc.html`).
+ *
+ * The rail used to carry a count of prepared changes — "13" — which is a real
+ * number and the wrong one: a founder glancing at the sidebar wants to know
+ * what the agent is *doing*, not how many artifacts it has accumulated. The
+ * design says so plainly by putting a state word and a pulsing dot there.
+ *
+ * One row, the same cost as the counts it sits beside. `null` when the project
+ * has never run the agent — an absent state, not a claim of readiness, because
+ * whether Vibe is ready is a question `buildAgentContext` answers with evidence
+ * and this read has none.
+ */
+export async function readAgentRailStatus(
+  supabase: SupabaseClient,
+  projectId: string,
+): Promise<string | null> {
+  const stored = await findLatestOperation(supabase, {
+    projectId,
+    operationType: "agent_execution",
+  });
+  if (stored === null) return null;
+
+  switch (stored.status) {
+    case "queued":
+    case "running":
+      return "Running";
+    case "needs_user":
+      return "Waiting";
+    case "failed":
+    case "cancelled":
+      return "Stopped";
+    default:
+      return "Ready";
+  }
+}

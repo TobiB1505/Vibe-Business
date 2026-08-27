@@ -18,6 +18,7 @@ import {
   listProjectSwitcherOptions,
 } from "@/modules/projects/workspace-context";
 import { getProjectWorkspaceCounts } from "@/modules/projects/workspace-counts";
+import { readAgentRailStatus } from "@/modules/coding-agent/agent-workspace";
 
 /**
  * The workspace frame, shared by every section route (Sprint UI-2 Part 2).
@@ -74,13 +75,14 @@ export default async function ProjectLayout({
   // used to discover which project ids exist.
   if (!project) notFound();
 
-  const [counts, github, siblingProjects] = await Promise.all([
+  const [counts, github, siblingProjects, agentStatus] = await Promise.all([
     getProjectWorkspaceCounts(supabase, project.id),
     getGithubIdentity(supabase, session.userId),
     listProjectSwitcherOptions(supabase, {
       userId: session.userId,
       currentProjectId: project.id,
     }),
+    readAgentRailStatus(supabase, project.id),
   ]);
   const identity = buildAccountIdentity({ email: session.email, github });
 
@@ -97,12 +99,13 @@ export default async function ProjectLayout({
     label: section.label,
     icon: section.icon,
     href: projectSectionHref(project.id, section.id),
-    count:
-      section.id === "action-plan"
-        ? countFor(counts.nextMoves)
-        : section.id === "agent"
-          ? countFor(counts.prepared)
-          : null,
+    count: section.id === "action-plan" ? countFor(counts.nextMoves) : null,
+    /*
+     * The Agent says what it is doing rather than how many changes it has
+     * produced. The count is still true and still reachable — it is on the
+     * page itself — but it is not what a glance at the rail is asking.
+     */
+    status: section.id === "agent" ? agentStatus : null,
     // Mint on Action Plan: those are things Vibe is offering to act on.
     // Agent is a neutral queue count, not an invitation.
     countTone: section.id === "action-plan" ? "accent" : "neutral",
