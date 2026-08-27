@@ -1,7 +1,14 @@
 import { describe, expect, it } from "vitest";
 import type { ChangeProgress, ChangeStage } from "@/modules/execution/change-progress";
 import type { TimelineStep } from "./timeline";
-import { AGENT_STAGES, agentStageSteps, type AgentStage, type AgentStageState } from "./agent-stages";
+import {
+  AGENT_STAGES,
+  agentCoreCaption,
+  agentCoreState,
+  agentStageSteps,
+  type AgentStage,
+  type AgentStageState,
+} from "./agent-stages";
 
 /**
  * The five-stage projection (UI-19).
@@ -267,6 +274,92 @@ describe("only measured numbers appear", () => {
 
     for (const step of steps) {
       expect(step.detail ?? "").not.toMatch(/~|–|--|\bestimat|\bexpected\b|%/i);
+    }
+  });
+});
+
+describe("the core state follows the stages", () => {
+  const steps = (states: AgentStageState[]) =>
+    AGENT_STAGES.map((stage, index) => ({
+      stage,
+      label: stage,
+      state: states[index]!,
+      detail: null,
+    }));
+
+  it("is idle only when nothing at all has happened", () => {
+    expect(agentCoreState(steps(["pending", "pending", "pending", "pending", "pending"]))).toBe(
+      "idle",
+    );
+  });
+
+  it("works while any stage is active", () => {
+    expect(agentCoreState(steps(["done", "active", "pending", "pending", "pending"]))).toBe(
+      "working",
+    );
+  });
+
+  /**
+   * The one worth naming. A core that kept breathing over a failed run is the
+   * animated version of a status line narrating work nobody is doing.
+   */
+  it("settles rather than working when a run failed", () => {
+    expect(agentCoreState(steps(["done", "failed", "skipped", "skipped", "skipped"]))).toBe(
+      "settled",
+    );
+  });
+
+  it("settles when everything is behind the change", () => {
+    expect(agentCoreState(steps(["done", "done", "done", "done", "done"]))).toBe("settled");
+  });
+});
+
+describe("the caption never promises what nobody measured", () => {
+  const from = (input: Parameters<typeof agentStageSteps>[0]) => agentCoreCaption(agentStageSteps(input));
+
+  it("names the stage that is running", () => {
+    expect(
+      from({
+        timeline: timeline({ preparing: "done", working: "active" }),
+        runStatus: "running",
+        changeProgress: null,
+      }),
+    ).toMatch(/making the change/i);
+  });
+
+  it("says nothing was applied when a run stopped", () => {
+    expect(
+      from({
+        timeline: timeline({ preparing: "done", working: "failed" }),
+        runStatus: "failed",
+        changeProgress: null,
+      }),
+    ).toMatch(/nothing was applied/i);
+  });
+
+  it("offers to start when nothing has ever run", () => {
+    expect(from({ timeline: null, runStatus: null, changeProgress: null })).toMatch(/ready to work/i);
+  });
+
+  /** The whole point: no duration, no fraction, no "almost". */
+  it("never estimates", () => {
+    const inputs: Parameters<typeof agentStageSteps>[0][] = [
+      { timeline: null, runStatus: null, changeProgress: null },
+      { timeline: timeline({ preparing: "active" }), runStatus: "running", changeProgress: null },
+      {
+        timeline: timeline({ preparing: "done", working: "done", validating: "done" }),
+        runStatus: "completed",
+        changeProgress: progress("awaiting_approval"),
+      },
+      {
+        timeline: timeline({ preparing: "done", working: "failed" }),
+        runStatus: "failed",
+        changeProgress: null,
+      },
+    ];
+
+    for (const input of inputs) {
+      expect(from(input)).not.toMatch(/almost|soon|minute|hour|%|nearly|shortly/i);
     }
   });
 });

@@ -7,8 +7,12 @@ import { getLatestProfile } from "@/modules/product-understanding/store";
 import { buildAgentContext } from "@/modules/projects/command-center";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
+import { readAgentWorkspace } from "@/modules/coding-agent/agent-workspace";
+import { agentCoreCaption } from "@/modules/coding-agent/observability/agent-stages";
+import { AgentExecutionLiveView } from "@/modules/coding-agent/ui/agent-execution-live-view";
 import { AgentPanel } from "../agent-panel";
 import { PreparedChangesSection, type PreparedChangeCard } from "../prepared-changes-section";
+import { AgentWorkspacePanel } from "./agent-workspace-panel";
 
 /**
  * Agent (Sprint UI-2 Part 2 as Prepared; reframed by CORE-5).
@@ -81,6 +85,19 @@ export default async function ProjectAgentPage({
     ? `/app/projects/${project.id}/agent-dogfood`
     : null;
 
+  /*
+   * The five-stage view of the latest run, and the change it produced.
+   *
+   * Reuses the prepared changes this route already read rather than paying for
+   * the workspace twice — that read is the expensive one here, and it is the
+   * cost UI-2 Part 1 split apart in the first place.
+   */
+  const workspace = await readAgentWorkspace(supabase, {
+    projectId: project.id,
+    userId,
+    changes,
+  });
+
   return (
     <WorkspaceSection
       id="agent"
@@ -88,13 +105,41 @@ export default async function ProjectAgentPage({
       description="Each change moves through validation, preview, review and your approval before anything can be merged."
     >
       <div className="flex flex-col gap-5">
-        <AgentPanel
-          context={context}
-          preparedCount={changes.length}
-          planHref={projectSectionHref(project.id, "action-plan")}
-          productHref={projectSectionHref(project.id, "my-product")}
-          executionHref={executionHref}
-        />
+        {workspace.live !== null ? (
+          <AgentWorkspacePanel
+            stages={workspace.stages}
+            core={workspace.core}
+            caption={agentCoreCaption(workspace.stages)}
+          >
+            {/*
+              The live view was written to be mounted here: it takes a model,
+              reads nothing and knows about no route. `developerDetails` is off
+              because token counts and cache ratios are for the person debugging
+              a run, not for the founder watching their product get fixed.
+            */}
+            <AgentExecutionLiveView model={workspace.live} developerDetails={false} />
+          </AgentWorkspacePanel>
+        ) : (
+          /*
+            Nothing has ever run. The readiness card is the honest thing to show
+            — it describes what Vibe knows and points at where work is chosen,
+            and it starts nothing, because preparing a change is a priced action
+            that belongs beside the Move it is for.
+          */
+          <AgentWorkspacePanel
+            stages={workspace.stages}
+            core={workspace.core}
+            caption={agentCoreCaption(workspace.stages)}
+          >
+            <AgentPanel
+              context={context}
+              preparedCount={changes.length}
+              planHref={projectSectionHref(project.id, "action-plan")}
+              productHref={projectSectionHref(project.id, "my-product")}
+              executionHref={executionHref}
+            />
+          </AgentWorkspacePanel>
+        )}
 
         {changes.length > 0 ? (
           <PreparedChangesSection projectId={project.id} changes={changes} />

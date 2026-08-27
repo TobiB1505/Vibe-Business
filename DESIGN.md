@@ -71,7 +71,7 @@ Controls and navigation use precise 10px corners. Panels use 14px, major cards 1
 
 Primary buttons use mint once per action area; secondary controls use the shared bordered surface. Focus is always the global mint `:focus-visible` ring. Search owns an explicit clear action. Short filter and sort menus use native selects only where platform popup geometry is accepted. Tables keep headers, range feedback and pagination stable.
 
-Motion communicates interaction state only on ordinary product surfaces. Use the shared transition utility and respect reduced motion; never animate static dashboard furniture continuously. The narrowly-scoped Business Brain and Product Scan exceptions are defined below.
+Motion communicates interaction state only on ordinary product surfaces. Use the shared transition utility and respect reduced motion; never animate static dashboard furniture continuously. The narrowly-scoped Business Brain, Product Scan and Agent exceptions are defined below, and they are the only three.
 
 Billing follows a compact financial-dashboard composition: plan, spendable Credits and the Credit model form one equal-height overview row; real Credit prices and top-up packs come next; recent activity and plan choices complete the page. Stripe remains the visible payment boundary for renewal, invoices and cancellation. Reference-only finance data such as payment-card suffixes, invoice rows, period charts or per-product usage must not appear until the billing read model can supply it truthfully. The balance expiry ring may visualize only the actual next-expiring share of currently spendable Credits, with an explicit text label; it is never a fabricated usage meter.
 
@@ -129,6 +129,18 @@ The onboarding variant may use the full available Understand-phase width; the My
 On My Product, an active scan stays fully expanded. A completed scan automatically folds into a compact, stable summary so the dossier is not pushed far below the fold; opening that summary restores the complete evidence view and the re-scan action. The onboarding variant stays expanded because discovery is the active step there. Failure states also stay expanded so recovery is never hidden.
 
 Motion for React owns event arrival, connector activation and the active orbital movement. One new stored event may create one bounded outward impulse and a short in-slot card emphasis; it may not animate layout geometry. Existing events do not replay on mount, document visibility pauses continuous motion, and `prefers-reduced-motion` makes every state change immediate. Mint means active or grounded; amber marks a source that was unavailable without turning missing evidence into a bad result.
+
+## Signature Surface: Agent
+
+Agent is the third and last narrow signature surface, and its metaphor is neither health nor discovery but **work in progress**. It is the one screen where a founder is watching software change their product and can see none of it happening, and the surface exists to make that wait legible rather than decorative.
+
+Five stages — Understand, Build, Validate, Preview, Review — are rendered from `agentStageSteps`, which projects over the execution timeline and the prepared change's own gates and re-decides neither. The rail is a completion indicator, unlike the Action Plan's Move stepper, so a tick means the work is done. Two things it must never draw: a connector that fills part way, which is a percentage in disguise, and a pending stage that looks like a skipped one — those mean "keep waiting" and "this is never coming" and must differ in mark, in label and in words.
+
+The core has exactly three states: idle, working and settled. A failed run is settled and still; a core that kept breathing over a failure would be the animated form of a status line narrating work nobody is doing. The orbit's speed is constant by rule — accelerating it with apparent progress would be a progress bar with extra steps, because no measured fraction exists behind it.
+
+Motion for React owns the entrance, the core's breath and the single orbiting signal. The entrance choreography settles within roughly 1.5 seconds; after it, exactly two elements may still move and only while working. Document visibility pauses both. `prefers-reduced-motion` renders the settled state immediately and moves nothing, without hiding content. Panel geometry is reserved before the first event, so a completing stage never moves text somebody is reading. No overshoot easing anywhere on the rail — it carries information. Mint means Vibe is acting or the work is behind you; coral is reserved for a run that genuinely stopped.
+
+Estimated durations, expected file ranges and any other unmeasured number are out of bounds on this surface, as they are everywhere else in the product. Counts shown are counts Vibe recorded: files read from the harness's own tool stream, files changed from the verified candidate.
 
 ## Do's and Don'ts
 

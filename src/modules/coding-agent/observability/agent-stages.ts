@@ -282,3 +282,58 @@ function detailFor(
   }
   return null;
 }
+
+/**
+ * What the core is doing, derived from the stages rather than passed in.
+ *
+ * Three states and no fourth. A failed run is `settled` — still, not idle and
+ * emphatically not working: a core that kept breathing over a failure would be
+ * the animated equivalent of a status line that narrates work nobody is doing.
+ * Which of the two settled meanings applies is carried by the caption and by
+ * the rail, in words.
+ */
+export type AgentCoreState = "idle" | "working" | "settled";
+
+export function agentCoreState(steps: readonly AgentStageStep[]): AgentCoreState {
+  if (steps.some((step) => step.state === "active")) return "working";
+  const untouched = steps.every((step) => step.state === "pending");
+  return untouched ? "idle" : "settled";
+}
+
+/**
+ * The line under the core.
+ *
+ * One table, and the only place these words live — the change-progress
+ * vocabulary already learned that two places describing one state differently
+ * is how a product starts disagreeing with itself.
+ *
+ * Every sentence here is about what *has* happened or what is happening now.
+ * None promises a duration, and none says a stage is nearly done: the run has
+ * no measured fraction, so "almost there" would be invention with a friendly
+ * face.
+ */
+const CORE_CAPTIONS: Record<AgentStage, string> = {
+  understand: "Vibe is reading your product to work out what the change needs.",
+  build: "Vibe is making the change in an isolated copy of your code.",
+  validate: "Vibe is checking the change before showing it to you.",
+  preview: "Vibe is preparing what you need in order to decide.",
+  review: "Everything is ready. Nothing is applied until you say so.",
+};
+
+export function agentCoreCaption(steps: readonly AgentStageStep[]): string {
+  const active = steps.find((step) => step.state === "active");
+  if (active) return CORE_CAPTIONS[active.stage];
+
+  if (steps.some((step) => step.state === "failed")) {
+    return "This run stopped. Nothing was applied to your code.";
+  }
+  if (steps.every((step) => step.state === "pending")) {
+    return "Vibe understands your product, your code and your goals, and is ready to work.";
+  }
+  const review = steps.find((step) => step.stage === "review");
+  if (review?.state === "done") return "Your change is in. Vibe is watching what it does.";
+
+  // Something happened and nothing is running: the rail says which stage that
+  // was, and this line does not guess at a reason it cannot see.
+  return "Vibe has stopped here. The stage above says where.";
+}

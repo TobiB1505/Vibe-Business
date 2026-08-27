@@ -4,6 +4,7 @@ import { motion, useReducedMotion } from "motion/react";
 import { VibeMark } from "@/components/brand/vibe-mark";
 import { useDocumentVisible } from "@/lib/client/use-document-visible";
 import { cn } from "@/lib/utils/cn";
+import type { AgentCoreState } from "@/modules/coding-agent/observability/agent-stages";
 
 /**
  * The Agent's core (UI-19).
@@ -36,8 +37,6 @@ import { cn } from "@/lib/utils/cn";
  * tab is hidden. `prefers-reduced-motion` renders the final state immediately
  * and moves nothing, without removing anything a reader needs.
  */
-
-export type AgentCoreState = "idle" | "working" | "settled";
 
 const ENTRANCE = { duration: 0.6, ease: [0.2, 0.7, 0.2, 1] as const };
 
