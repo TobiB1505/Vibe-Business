@@ -40,6 +40,7 @@ import { OperationWatcher } from "./operation-watcher";
 import { OnboardingOperationFailure, OnboardingStalled } from "./operation-states";
 import { ProductConfirmation } from "./product-confirmation";
 import { RetryProductScan, StartAudit } from "./phase-actions";
+import { isUuid } from "@/lib/validation/uuid";
 
 export default async function ProjectOnboardingPage({
   params,
@@ -47,6 +48,11 @@ export default async function ProjectOnboardingPage({
   params: Promise<{ projectId: string }>;
 }) {
   const { projectId } = await params;
+  // VB-028, as in `requireProjectAccess`: a malformed id is not-found, not a
+  // 500. This route resolves its own context rather than going through that
+  // guard, so it needs the check too.
+  if (!isUuid(projectId)) notFound();
+
   const session = await requireSession();
   const supabase = await createClient();
   const onboarding = await getProjectOnboarding(supabase, { projectId, userId: session.userId });

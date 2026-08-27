@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { requireSession } from "@/modules/auth/session";
 import { getProjectWithRepository } from "@/modules/projects/queries";
+import { isUuid } from "@/lib/validation/uuid";
 
 /**
  * The shared project context (Sprint UI-2 Part 2).
@@ -148,6 +149,12 @@ export async function requireProjectAccess(projectId: string): Promise<{
   userId: string;
   project: ProjectWorkspaceContext;
 }> {
+  // VB-028. A malformed id reaches PostgREST as `.eq("id", "x")`, which answers
+  // 22P02 and throws — a 500 for something anyone can produce by typing. From
+  // outside, an id that cannot exist and one that does not exist are the same
+  // answer, so it takes the same one.
+  if (!isUuid(projectId)) notFound();
+
   const session = await requireSession();
   const supabase = await createClient();
 
