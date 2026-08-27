@@ -126,6 +126,37 @@ const FILE_EVENTS: StoredExecutionEvent[] = ([
   metadata: { path: path! },
 }));
 
+import type {
+  PreviewChange,
+  PreviewImages,
+} from "@/app/app/projects/[projectId]/agent/agent-preview-stage";
+
+const PREVIEW_CHANGES: PreviewChange[] = [
+  {
+    title: "Added pricing section",
+    detail: "New pricing page with 3 plans and clear value messaging",
+    kind: "added",
+  },
+  {
+    title: "Connected existing checkout",
+    detail: "Integrated with your current Stripe checkout flow",
+    kind: "connected",
+  },
+  {
+    title: "Added upgrade CTA",
+    detail: "New CTA in navbar and hero for better conversions",
+    kind: "improved",
+  },
+];
+
+/*
+ * No image URLs in a fixture. Real captures are short-lived signed URLs minted
+ * per request, and a fixture pointing at a file would prove the frame renders
+ * something rather than that it renders a capture. The absent state is the one
+ * this suite can assert honestly.
+ */
+const PREVIEW_IMAGES: PreviewImages | null = null;
+
 type Fixture = {
   steps: AgentStageStep[];
   core: AgentCoreState;
@@ -134,6 +165,8 @@ type Fixture = {
   activity: TimelineStep[];
   task: AgentTask | null;
   checks: ValidationCheck[];
+  previewChanges: PreviewChange[];
+  previewImages: PreviewImages | null;
   fileEvents: StoredExecutionEvent[];
 };
 
@@ -146,6 +179,8 @@ function build(input: Parameters<typeof agentStageSteps>[0]): Fixture {
     activity: [...(input.timeline ?? [])],
     task: input.timeline === null ? null : TASK,
     checks: CHECKS,
+    previewChanges: PREVIEW_CHANGES,
+    previewImages: PREVIEW_IMAGES,
     fileEvents: FILE_EVENTS,
   };
 }
@@ -192,6 +227,23 @@ export const E2E_AGENT_STAGE_SCENARIOS = {
       runStatus: "running",
       changeProgress: null,
       filesInspected: 12,
+    }),
+
+  /** Stage 4: before and after, at the same size. */
+  "agent-stages-preview": () =>
+    build({
+      timeline: timeline({
+        preparing: "done",
+        working: "done",
+        reviewing_change: "done",
+        preparing_branch: "done",
+        validating: "done",
+        finished: "done",
+      }),
+      runStatus: "completed",
+      changeProgress: progress("review_required"),
+      filesInspected: 12,
+      filesChanged: 8,
     }),
 
   /** A change that reached review without a preview ever existing. */
