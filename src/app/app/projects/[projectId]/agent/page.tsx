@@ -179,7 +179,11 @@ export default async function ProjectAgentPage({
         />
 
         {changes.length > 0 ? (
-          <PreparedChangesSection projectId={project.id} changes={changes} />
+          <PreparedChangesSection
+            projectId={project.id}
+            changes={changes}
+            planHref={projectSectionHref(project.id, "action-plan")}
+          />
         ) : (
           <EmptyState
             title="Nothing prepared yet"

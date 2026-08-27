@@ -93,7 +93,31 @@ describe("the card shows one answer to why, not two", () => {
   const section = source("prepared-changes-section.tsx");
 
   it("renders the origin only when no written rationale exists", () => {
-    expect(section).toContain("{!change.rationale && <ChangeOrigin origin={change.origin} />}");
+    expect(section).toContain("{!change.rationale && (");
+    expect(section).toContain("<ChangeOrigin");
+  });
+
+  /**
+   * The way back is not a second answer to "why" (UI-S3 §4).
+   *
+   * A change with a written rationale renders no origin block, which left it
+   * the one kind that named its Move nowhere. It now gets a one-line link —
+   * and the guard is that this stays a link: the two are mutually exclusive on
+   * `change.rationale`, so a card can never carry both accounts at once.
+   */
+  it("offers the Move as a link where the rationale replaced the origin", () => {
+    expect(section).toContain("{change.rationale && change.origin && change.opportunityId && (");
+    expect(section).toContain("<MoveBacklink");
+    expect(section).toContain("planMoveHref(planHref, change.opportunityId)");
+  });
+
+  it("links to the Move rather than restating it", () => {
+    const backlink = source("change-origin.tsx");
+    const component = backlink.slice(backlink.indexOf("export function MoveBacklink"));
+    // The title and a link. No problem, no whyNow, no second paragraph.
+    expect(component).toContain("{title}");
+    expect(component).not.toContain("problem");
+    expect(component).not.toContain("whyNow");
   });
 
   it("keeps it in the meaning slot, above the git identity", () => {

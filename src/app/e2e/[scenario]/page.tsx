@@ -801,7 +801,11 @@ export default async function E2eScenarioPage({
   return (
     <main className="mx-auto max-w-4xl p-8">
       {label}
-      <PreparedChangesSection projectId="project_e2e" changes={[change]} />
+      <PreparedChangesSection
+        projectId="project_e2e"
+        changes={[change]}
+        planHref="/app/projects/project_e2e/plan"
+      />
     </main>
   );
 }

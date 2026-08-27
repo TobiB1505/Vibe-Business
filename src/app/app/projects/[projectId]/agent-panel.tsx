@@ -89,7 +89,14 @@ const FOCUS_DETAIL: Record<OpportunityActionState["kind"], string> = {
   preparable:
     "Vibe can write this change. Starting it happens on the Action Plan, where you see what it costs before anything runs.",
   already_prepared: "Vibe has written a change for this move. It is waiting below for your review.",
-  preparing: "Vibe is writing a change for this move right now.",
+  /*
+   * Deliberately not "Vibe is writing this now". This surface narrates no work
+   * in flight — `command-center-ui.test.ts` enforces that, and the reason
+   * holds here too: this card does not poll, so a present-tense sentence would
+   * keep claiming activity long after the run ended. The Action Plan follows
+   * the run, and this points at it.
+   */
+  preparing: "A change for this move has been started. Your Action Plan follows it while it runs.",
   failed: "Vibe's last attempt at this move did not finish. The Action Plan says what happened.",
   blocked: "Something has to change before Vibe can act on this move. The Action Plan says what.",
   needs_user_input: "This move needs a decision from you before any code can be written for it.",

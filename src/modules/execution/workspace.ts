@@ -331,6 +331,20 @@ async function buildPreparedChangeCard(
      * a branch name, which is the whole thing UI-5 set out to stop.
      */
     origin: changeOriginFrom(opportunity),
+    /*
+     * The Move this change answers, as an address rather than as prose
+     * (UI-S3 §4).
+     *
+     * `origin` is what a person reads; this is what a link needs. It is the
+     * stored `prepared_changes.opportunity_id` and nothing else — the row was
+     * already read above to build the origin, so this costs no query and
+     * invents no relationship.
+     *
+     * Null both when the change predates the column and when its Move can no
+     * longer be read, which is exactly when `origin` is null too: a card never
+     * offers a link to a Move it cannot name.
+     */
+    opportunityId: opportunity ? prepared.opportunityId : null,
     businessImpact,
   };
 }
