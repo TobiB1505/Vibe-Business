@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 
 import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -280,7 +281,24 @@ async function loadSteps(
 }
 
 /** The plan a project page shows: the newest completed one, with its steps. */
-export async function getLatestCompletedActionPlan(
+/**
+ * Deduplicated per request (VB-022).
+ *
+ * The Business Health render asks fourteen questions at once and several of the
+ * services answering them re-read the same documents underneath — the audit
+ * three times, the repository snapshot four. Each is a JSONB document, so the
+ * cost is bytes off the wire and parse time, repeated.
+ *
+ * `cache()` is per-render, keyed on the arguments — which works here only
+ * because every caller in a render shares the one `supabase` instance
+ * `requireProjectAccess` returned. A caller that made its own client would miss
+ * the cache rather than get a stale answer, which is the right way round.
+ *
+ * Outside a render it does not memoize at all — measured, not assumed — so
+ * durable execution keeps reading fresh state. That is what makes this safe to
+ * put on a store shared with the workflow steps.
+ */
+async function getLatestCompletedActionPlanUncached(
   supabase: SupabaseClient,
   projectId: string,
 ): Promise<StoredActionPlan | null> {
@@ -299,6 +317,8 @@ export async function getLatestCompletedActionPlan(
   const row = data as PlanRow;
   return mapPlan(row, await loadSteps(supabase, row.id));
 }
+
+export const getLatestCompletedActionPlan = cache(getLatestCompletedActionPlanUncached);
 
 /** Finds an existing successful plan for identical inputs (§53, §86). */
 export async function findReusableActionPlan(
