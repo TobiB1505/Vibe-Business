@@ -251,11 +251,59 @@ export function resolveRequestedOpportunity(
   return opportunities.find((entry) => entry.id === requestedOpportunityId) ?? null;
 }
 
-/** The query parameter a "Plan this Move" link carries. Internal, stable. */
+/**
+ * The Move detail region's stable anchor.
+ *
+ * Owned here rather than by the panel that renders it, because `planMoveHref`
+ * above builds a URL ending in it: one module produces the fragment and the
+ * link that targets it, so the two cannot drift apart again.
+ */
+export const PLANNED_WORK_ANCHOR = "planned-work";
+
+/**
+ * Which Move a surface is about, carried in a URL (UI-S3 §1).
+ *
+ * ## One parameter, two surfaces
+ *
+ * The Action Plan has named its selected Move this way since ACTION PLAN UI-2.
+ * The Agent now reads the same parameter, because a founder who picked a Move
+ * and then opened the Agent is still working on that Move — and a second name
+ * for the same fact is how the two screens would come to disagree about which
+ * one they mean.
+ *
+ * ## What it is, and what it is not
+ *
+ * It is an **address**: untrusted text that names a Move a surface should open
+ * on. Every reader sanitizes it and then resolves it against that project's own
+ * stored Moves, so a stale id, a foreign id and a malformed id all degrade to
+ * the ordinary unfocused page.
+ *
+ * It is **never authority**. Nothing in this contract permits work, spends
+ * Credits or writes anything. Preparing a change stays where it is: beside the
+ * Move, behind a confirmation, with its price stated (Rule 60).
+ */
 export const PLAN_OPPORTUNITY_PARAM = "plan";
 
+/**
+ * The Action Plan, opened on one Move.
+ *
+ * The fragment is `PLANNED_WORK_ANCHOR` — the id the Move detail panel actually
+ * renders. It used to be `plan-this-move`, which was rendered by nothing: this
+ * function had no callers, so the dead fragment was never followed by anyone.
+ */
 export function planMoveHref(movesHref: string, opportunityId: string): string {
-  return `${movesHref}?${PLAN_OPPORTUNITY_PARAM}=${encodeURIComponent(opportunityId)}#plan-this-move`;
+  return `${movesHref}?${PLAN_OPPORTUNITY_PARAM}=${encodeURIComponent(opportunityId)}#${PLANNED_WORK_ANCHOR}`;
+}
+
+/**
+ * The Agent, opened on one Move.
+ *
+ * No fragment. The Agent's focus block is the first thing on the page, and a
+ * change already prepared for this Move is addressed by its own exact id
+ * through `preparedChangeHref` rather than by this one.
+ */
+export function agentMoveHref(agentHref: string, opportunityId: string): string {
+  return `${agentHref}?${PLAN_OPPORTUNITY_PARAM}=${encodeURIComponent(opportunityId)}`;
 }
 
 /**
