@@ -283,6 +283,14 @@ export type StoredAuditReading = {
  * The Business Brain never opens historical audit documents merely to draw a
  * trend, and the comparability rule remains owned by `score-series.ts`.
  */
+/**
+ * How much score history one project's trend may read (VB-025).
+ *
+ * Not a page size — there is no paging here, and adding one would be a product
+ * change. It is a ceiling on a read that would otherwise grow forever.
+ */
+const AUDIT_READING_LIMIT = 60;
+
 export async function getProjectAuditReadings(
   supabase: SupabaseClient,
   projectId: string,
@@ -294,7 +302,13 @@ export async function getProjectAuditReadings(
     )
     .eq("project_id", projectId)
     .eq("status", "completed")
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    // VB-025. Unbounded, this grows with every audit a project ever ran and is
+    // read on every Health render. The cap is safe here because the order is
+    // already newest-first and the consumer is a score trend: sixty readings
+    // is more history than any chart shows, and the ones dropped are the
+    // oldest.
+    .limit(AUDIT_READING_LIMIT);
 
   if (error) throw error;
 
