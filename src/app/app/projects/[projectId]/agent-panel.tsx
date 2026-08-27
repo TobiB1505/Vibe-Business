@@ -1,7 +1,11 @@
 import Link from "next/link";
+import { preparedChangeHref } from "@/components/layout/project-shell";
 import { STATUS_GLYPHS, StatusDot, statusToneText, type StatusTone } from "@/components/ui/status-pill";
 import { VibeCard } from "@/components/ui/surface";
 import { MonoLabel } from "@/components/ui/typography";
+import { planMoveHref } from "@/modules/action-plans/source";
+import type { OpportunityActionState } from "@/modules/execution/view";
+import type { AgentFocus } from "@/modules/projects/agent-focus";
 import type { AgentContext, AgentReadiness } from "@/modules/projects/command-center";
 import { cn } from "@/lib/utils/cn";
 
@@ -35,6 +39,18 @@ import { cn } from "@/lib/utils/cn";
  * Preparing a change is a priced, confirmed action that lives on the Action
  * Plan beside the Move it belongs to. This card describes readiness and points
  * at where work is chosen; it starts nothing.
+ *
+ * ## The Move a founder arrived with (UI-S3 §3)
+ *
+ * Everything above is project-level and stays that way. What was missing is
+ * the sentence a founder came for: they picked a Move on the Action Plan, they
+ * opened the Agent, and the Agent had never heard of it.
+ *
+ * The block below names that Move and says what Vibe can do about it — using
+ * the state the Action Plan is already rendering, so the two screens cannot
+ * describe the same Move differently. It ends in a link back, and that link is
+ * the only thing it offers: the rule above is not relaxed by a focus, and this
+ * block carries no form, no price and no control that spends anything.
  */
 
 const READINESS_TONE: Record<AgentReadiness, StatusTone> = {
@@ -61,17 +77,100 @@ const READINESS_DETAIL: Record<AgentReadiness, string> = {
     "Your engineer has nothing to work from yet. It reads your product and your business before it writes anything, and none of that has happened.",
 };
 
+/**
+ * What Vibe can do about the Move in focus, in a founder's words.
+ *
+ * Keyed on `OpportunityActionState["kind"]` so a new execution state is a
+ * compile error here rather than a silently missing sentence. Each is a
+ * statement about Vibe's own position, and none of them is an invitation to
+ * act from this card.
+ */
+const FOCUS_DETAIL: Record<OpportunityActionState["kind"], string> = {
+  preparable:
+    "Vibe can write this change. Starting it happens on the Action Plan, where you see what it costs before anything runs.",
+  already_prepared: "Vibe has written a change for this move. It is waiting below for your review.",
+  preparing: "Vibe is writing a change for this move right now.",
+  failed: "Vibe's last attempt at this move did not finish. The Action Plan says what happened.",
+  blocked: "Something has to change before Vibe can act on this move. The Action Plan says what.",
+  needs_user_input: "This move needs a decision from you before any code can be written for it.",
+  not_automated: "This is not a change Vibe can make for you. It is yours to do.",
+};
+
+function FocusBlock({
+  focus,
+  planHref,
+  agentHref,
+}: {
+  focus: AgentFocus;
+  planHref: string;
+  agentHref: string;
+}) {
+  // Nothing was asked for, or what was asked for is not this project's work.
+  // Both render nothing: a superseded Move is not an error, and substituting a
+  // different one would put a claim on screen nobody made.
+  if (focus.kind === "none" || focus.kind === "unresolved") return null;
+
+  const detail =
+    focus.kind === "unavailable"
+      ? // A statement about Vibe's context, never about the Move. The unfinished
+        // rows below this block are what explain it.
+        "Vibe has not read your code yet, so it cannot say what it would do about this move."
+      : FOCUS_DETAIL[focus.action.kind];
+
+  const preparedChangeId =
+    focus.kind === "focused" && focus.action.kind === "already_prepared"
+      ? focus.action.preparedChangeId
+      : null;
+
+  return (
+    <div className="border-line-2 flex flex-col gap-2 border-t pt-5" data-testid="agent-focus">
+      <MonoLabel>Working on</MonoLabel>
+      <p className="text-fg text-base leading-snug font-semibold">
+        {/* The engine's persisted rank, not a position in a list. */}
+        <span className="text-fg-meta font-mono text-meta">
+          {String(focus.move.rank).padStart(2, "0")}
+        </span>{" "}
+        {focus.move.title}
+      </p>
+      <p className="text-fg-prose max-w-[62ch] text-sm leading-relaxed">{detail}</p>
+      <p className="text-fg-muted text-sm">
+        {preparedChangeId ? (
+          <Link
+            href={preparedChangeHref(agentHref, preparedChangeId)}
+            className="text-fg-body hover:text-fg rounded-sm underline underline-offset-4 transition-interactive"
+          >
+            Review the prepared change
+          </Link>
+        ) : (
+          <Link
+            href={planMoveHref(planHref, focus.move.id)}
+            className="text-fg-body hover:text-fg rounded-sm underline underline-offset-4 transition-interactive"
+          >
+            Open this move in your Action Plan
+          </Link>
+        )}
+      </p>
+    </div>
+  );
+}
+
 export function AgentPanel({
   context,
+  /** The Move this visit is about, when the URL named one Vibe could resolve. */
+  focus = { kind: "none" },
   preparedCount,
   planHref,
+  /** This page's own URL, so a prepared change can be addressed by its anchor. */
+  agentHref = "",
   productHref,
   /** The internal execution surface, when this project is allowed to reach it. */
   executionHref,
 }: {
   context: AgentContext;
+  focus?: AgentFocus;
   preparedCount: number;
   planHref: string;
+  agentHref?: string;
   productHref: string;
   executionHref: string | null;
 }) {
@@ -93,6 +192,8 @@ export function AgentPanel({
           {READINESS_DETAIL[context.readiness]}
         </p>
       </div>
+
+      <FocusBlock focus={focus} planHref={planHref} agentHref={agentHref} />
 
       <ul className="flex flex-col gap-3">
         {context.rows.map((row) => (
