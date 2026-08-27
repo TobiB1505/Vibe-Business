@@ -651,6 +651,11 @@ export function PlanDetailPanel({
           "#action-plan";
 
   const showsPriorityDeviation = readiness.opportunityId !== null && !readiness.isDefaultMove;
+  /**
+   * Staleness does not decide *whether* replanning is offered — a plan that
+   * exists can always be replanned — only whether the offer is folded away.
+   */
+  const planIsStale = (planView?.staleness.length ?? 0) > 0;
   const detailState = running
     ? "planning"
     : planView?.founderInputRequest
@@ -813,8 +818,16 @@ export function PlanDetailPanel({
         </div>
       ) : null}
 
-      {planView && !running && !planView.founderInputRequest ? (
-        <Disclosure label="Plan options">
+      {planView && !running ? (
+        // Deliberately not gated on an open founder question. Replanning is how
+        // a founder leaves a plan whose question they cannot or will not
+        // answer, so the moment a question is open is the moment the way out
+        // matters most — and the panel rewrite withheld it exactly there.
+        //
+        // Open by default when the plan is stale: folded away, the escape is
+        // present in the DOM and absent from the screen, which is the failure
+        // the staleness notice above is supposed to prevent.
+        <Disclosure label="Plan options" defaultOpen={planIsStale}>
           <form action={formAction} className="flex flex-wrap items-center gap-3">
             <input type="hidden" name="force" value="true" />
             <Button type="submit" variant="secondary" size="sm" disabled={pending} busy={pending}>
