@@ -102,9 +102,43 @@ Nothing here needed to change:
 | `VIBE_AGENT_GATEWAY_SECRET` | as needed for local dogfooding | as needed | required alongside the origin above |
 | `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` | required | required | required |
 | `STRIPE_BILLING_RETURN_URL` | unset (falls back to `getAppUrl()` + `/app/billing`) | unset | set explicitly, or leave unset to fall back to `NEXT_PUBLIC_APP_URL` + `/app/billing` |
+| `PAID_OPERATIONS_DISABLED` | unset | unset | **unset** — set to exactly `1` only to stop paid work during an incident (VB-032) |
 
-`VERCEL_URL` and `VERCEL_ENV` are injected automatically by Vercel on every
-build — never set them yourself.
+`VERCEL_URL`, `VERCEL_ENV` and `VERCEL_GIT_COMMIT_SHA` are injected
+automatically by Vercel on every build — never set them yourself. The last is
+what `/api/health` reports as `commit`.
+
+### The paid-operations kill switch
+
+`PAID_OPERATIONS_DISABLED=1` makes `createOperationRun` refuse every start that
+spends a provider — inference, sandbox minutes, remote browser time, a branch
+write — with a typed `paid_operations_disabled` reason and a message that says
+nothing was started and nothing was charged.
+
+It exists so stopping the spend is a dashboard toggle rather than a deploy. What
+it deliberately does **not** do:
+
+- **It does not cancel work already running.** An operation already paid for is
+  money better spent than wasted.
+- **It does not block a preview teardown.** Teardown *ends* a cost; refusing it
+  during a spend incident would leave previews running and burning exactly the
+  money the switch was thrown to save.
+- **It does not block account erasure**, which is a person exercising a right.
+- **It does not affect reads.** Every screen, audit and Move stays readable.
+
+It applies to Vibe's own `system` starts as well as customer ones — a follow-on
+operation the machinery creates for itself spends the same money.
+
+Only the exact string `1` enables it. `PAID_OPERATIONS_DISABLED=false` is
+**off**, deliberately: an operational lever read from a loose truthiness check
+is one that a stray value turns on, and an incident is the worst possible time
+to discover it.
+
+### Liveness
+
+`GET /api/health` returns `{ status, commit, environment }` and nothing else. It
+is unauthenticated, excluded from the session proxy, and touches no database —
+see the route's own docblock for why a DB ping is deliberately absent.
 
 ### Secrets Preview must not carry (VB-011)
 
