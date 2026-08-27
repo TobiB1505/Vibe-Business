@@ -174,6 +174,25 @@ function reviewState(stage: ChangeStage): AgentStageState {
   }
 }
 
+/**
+ * Change stages that can only have been reached with validation behind them.
+ *
+ * Taken from `ChangeStage`'s own ordering rather than restated: everything from
+ * `reviewing` onward requires a passing validation, which is why
+ * `validation_failed` stops the gates dead.
+ */
+const VALIDATED: readonly ChangeStage[] = [
+  "reviewing",
+  "review_required",
+  "review_unavailable",
+  "awaiting_approval",
+  "ready_to_merge",
+  "merging",
+  "stalled",
+  "merged",
+  "observed",
+];
+
 export type AgentWorkspaceInput = {
   /** The run's own timeline, or null when no run has ever started. */
   timeline: readonly TimelineStep[] | null;
@@ -214,7 +233,7 @@ export function agentStageSteps(input: AgentWorkspaceInput): AgentStageStep[] {
    * a run that died in Build shows Validate as pending forever, which reads as
    * "still to come" for work that will never happen.
    */
-  const resolved = runFailed
+  const resolved: AgentStageState[] = runFailed
     ? machine.map((state) => (state === "pending" || state === "active" ? "skipped" : state))
     : runStatus === "needs_user"
       ? /*
@@ -226,6 +245,27 @@ export function agentStageSteps(input: AgentWorkspaceInput): AgentStageStep[] {
          */
         machine.map((state) => (state === "active" ? "paused" : state))
       : machine;
+
+  /*
+   * Validation has two sources and the change's is the stronger one.
+   *
+   * The run's own `validating` phase only fires when the harness validated
+   * in-run. Validation of the *prepared change* is a separate operation, and a
+   * change can pass every safety check without that phase ever existing. The
+   * first live screen showed exactly that: "Check that it works — never
+   * reached" beside a change whose checks had all passed, with stage four
+   * already in progress. A stepper that says a stage was never reached while
+   * the stage after it is running is not reporting, it is contradicting itself.
+   */
+  const changeValidated = changeProgress !== null && VALIDATED.includes(changeProgress.stage);
+  const changeValidating = changeProgress?.stage === "validating";
+  const changeValidationFailed = changeProgress?.stage === "validation_failed";
+
+  if (changeValidationFailed) resolved[2] = "failed";
+  else if (changeValidated && resolved[2] !== "failed") resolved[2] = "done";
+  else if (changeValidating && resolved[2] !== "failed" && resolved[2] !== "done") {
+    resolved[2] = "active";
+  }
 
   const gatesUnreachable = runFailed || resolved.some((state) => state === "failed");
 

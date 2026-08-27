@@ -146,16 +146,17 @@ export function AgentStageRail({ steps }: { steps: AgentStageStep[] }) {
                 <span className="flex min-w-0 flex-col gap-0.5">
                   <span
                     className={cn(
-                      "truncate text-[0.9375rem]",
+                      /* Wrapping, not truncating. "Product understo…" tells a
+                         founder less than two short lines do, and the rail has
+                         the height for them. */
+                      "text-[0.9375rem] leading-snug",
                       step.state === "active" ? "text-fg font-bold" : "font-semibold",
                       step.state === "pending" ? "text-fg-secondary" : "text-fg",
                     )}
                   >
                     {step.label}
                   </span>
-                  <span
-                    className={cn("truncate text-[0.8125rem]", STATUS_TONE[step.state])}
-                  >
+                  <span className={cn("text-[0.8125rem]", STATUS_TONE[step.state])}>
                     {STATE_WORDS[step.state]}
                     {step.detail !== null && (
                       <span className="text-fg-meta"> · {step.detail}</span>

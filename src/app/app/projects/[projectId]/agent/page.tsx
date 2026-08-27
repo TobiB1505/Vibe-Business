@@ -22,6 +22,7 @@ import { readAgentWorkspace } from "@/modules/coding-agent/agent-workspace";
 import { agentCoreCaption } from "@/modules/coding-agent/observability/agent-stages";
 import { AgentPanel } from "../agent-panel";
 import type { PreparedChangeWorkspaceItem } from "@/modules/execution/workspace";
+import { preparedChangeAnchorId } from "@/components/layout/project-shell";
 import { ChangeGates } from "./change-gates";
 import { AgentTaskPanel } from "./agent-task-panel";
 import { Surface } from "@/components/ui/surface";
@@ -307,7 +308,7 @@ export default async function ProjectAgentPage({
               images={change.reviewImages}
               changes={workspace.previewChanges}
               filesChanged={change.filePaths.length}
-              reviewHref={projectSectionHref(project.id, "agent")}
+              reviewHref={`#${preparedChangeAnchorId(change.id)}`}
               filesHref={change.compareUrl ?? undefined}
             />
           </Surface>
@@ -323,7 +324,7 @@ export default async function ProjectAgentPage({
               baseBranch={change.baseBranch}
               commitSha={change.commitSha}
               compareUrl={change.compareUrl}
-              reviewHref={projectSectionHref(project.id, "agent")}
+              reviewHref={`#${preparedChangeAnchorId(change.id)}`}
               canMerge={change.progress.approved}
             />
           </Surface>

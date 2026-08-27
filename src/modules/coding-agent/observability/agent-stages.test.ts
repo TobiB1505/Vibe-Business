@@ -421,3 +421,69 @@ describe("a run waiting on the founder", () => {
     expect(build.detail).toBeNull();
   });
 });
+
+/**
+ * The contradiction the first live screen showed (UI-19).
+ *
+ * "Check that it works — never reached" sat beside a change whose safety checks
+ * had all passed, with stage four already in progress. A stepper that says a
+ * stage was never reached while the stage after it is running is not reporting;
+ * it is contradicting itself.
+ *
+ * The cause: the run's own `validating` phase fires only when the harness
+ * validated in-run, and validation of the *prepared change* is a separate
+ * operation. The change's verdict is the stronger source.
+ */
+describe("validation has two sources and the change's wins", () => {
+  const runWithoutInRunValidation = () =>
+    timeline({ preparing: "done", working: "done", finished: "done" });
+
+  it("never says a stage was skipped while a later one is running", () => {
+    const steps = agentStageSteps({
+      timeline: runWithoutInRunValidation(),
+      runStatus: "completed",
+      changeProgress: progress("review_required"),
+    });
+
+    expect(stateOf(steps, "validate")).toBe("done");
+    expect(stateOf(steps, "preview")).toBe("active");
+
+    // The invariant, stated directly: nothing behind an active stage is skipped.
+    const order = AGENT_STAGES.map((stage) => stateOf(steps, stage));
+    const active = order.indexOf("active");
+    expect(order.slice(0, active)).not.toContain("skipped");
+  });
+
+  it("shows validation running while the change is being checked", () => {
+    const steps = agentStageSteps({
+      timeline: runWithoutInRunValidation(),
+      runStatus: "completed",
+      changeProgress: progress("validating"),
+    });
+
+    expect(stateOf(steps, "validate")).toBe("active");
+    expect(stateOf(steps, "preview")).toBe("pending");
+  });
+
+  it("fails the stage when the change's checks failed", () => {
+    const steps = agentStageSteps({
+      timeline: runWithoutInRunValidation(),
+      runStatus: "completed",
+      changeProgress: progress("validation_failed"),
+    });
+
+    expect(stateOf(steps, "validate")).toBe("failed");
+    expect(stateOf(steps, "preview")).toBe("skipped");
+  });
+
+  /** A failed in-run check is not overwritten by a later passing verdict. */
+  it("keeps a failed run phase failed", () => {
+    const steps = agentStageSteps({
+      timeline: timeline({ preparing: "done", working: "done", reviewing_change: "failed" }),
+      runStatus: "failed",
+      changeProgress: progress("review_required"),
+    });
+
+    expect(stateOf(steps, "validate")).toBe("failed");
+  });
+});
