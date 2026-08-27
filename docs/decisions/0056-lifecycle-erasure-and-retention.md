@@ -180,6 +180,16 @@ That is a defect in its own right, and it is not primarily a privacy one. The cr
 
 This is tracked as launch backlog item VB-040 and is worth landing independently of erasure — it closes the rule-7 defect the moment a project is deletable at all.
 
+> **[2026-08-27] Implemented as M2 in `20260827030000_metering_survives_lifecycle.sql`.** Nine columns, exactly as described. Three measurements taken on the way, none of which the paragraph above knew:
+>
+> **1. No hidden second cascade path.** `operation_run_id`, `validation_run_id`, `preview_session_id` and `review_artifact_id` are plain columns with no foreign key, so nulling the two owner columns genuinely detaches the row rather than leaving it reachable by another `CASCADE`. Had any of them been a foreign key to a project-scoped table, M2 as written would have been cosmetic.
+>
+> **2. Idempotent projection survives detachment.** `billing_usage_events_source_sku_idx` is `(source_kind, source_id, sku)` — no owner column — so a detached row's usage-event identity is unchanged and a repeat reconciliation still recognises it. No unique index on any of the five involves an owner column at all, which is what makes nulling one incapable of violating a uniqueness invariant.
+>
+> **3. One read had to change, and it is a read this ADR did not list.** `credits/reconciliation.ts` sweeps all four canonical ledgers and projects them into `billing_usage_events`. Left alone it would have projected detached rows into *new* financial records owned by a deleted project or an erased identity — minting exactly the unattributable rows §6 objects to. It now excludes them in SQL and reports `rowsSkippedDetached`, so the repair pass says what it did not touch. The M3′ read-audit requirement in §11 is stated for the billing columns; the metering columns needed one too.
+>
+> **And one ordering fact, measured rather than reasoned.** Deleting `auth.users` while the account still owns a project is refused — which is what makes §4's step 4 a physical prerequisite for step 11 rather than a tidy sequence. The blocker that actually fires is F3's `repository_connections.github_installation_id` RESTRICT, not the `execution_specs` immutability trigger the step order implies. Both stand in the way; M2′ removes the first and the second remains.
+
 ### 8. Audit anonymization
 
 `audit_events` is the only table already architected to outlive its owner, and it is the one place where nulling a foreign key achieves the least. The row survives with `user_id` NULL and the payload keeps its contents **[proven]**.

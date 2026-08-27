@@ -57,6 +57,13 @@ export type ReconciliationScope = {
 export type SourceReconciliation = {
   sourceKind: BillableUsage["sourceKind"];
   rowsRead: number;
+  /**
+   * Rows excluded because a lifecycle event detached their owner (ADR 0056 §7).
+   *
+   * Counted rather than silently dropped: this is a billing repair pass, and a
+   * skip it does not report is a skip nobody can audit.
+   */
+  rowsSkippedDetached: number;
   eventsProjected: number;
   eventsInserted: number;
   eventsAlreadyPresent: number;
@@ -77,6 +84,52 @@ export type ReconciliationReport = {
 };
 
 const DEFAULT_LIMIT = 500;
+
+/** The columns each row type declares non-null, and therefore must carry. */
+const OWNER_COLUMNS = ["project_id", "user_id"] as const;
+/** Deep Scan carries no `user_id`; its owner is resolved through the project. */
+const PROJECT_ONLY = ["project_id"] as const;
+
+/**
+ * Metering outlives its owner (ADR 0056 §7), so a source row may carry a null
+ * `project_id` or `user_id`. Such a row is never reconciled.
+ *
+ * The reason is not tidiness. `BillableUsage` declares `projectId` and `userId`
+ * as non-null because a usage event is a financial record and a financial
+ * record with no owner is unattributable. Projecting a detached row would mint
+ * exactly that: a billing event belonging to a project that was deleted or an
+ * identity that was erased. The row itself is retained on purpose — it still
+ * answers "what did this cost" — but it has stopped being something to bill.
+ *
+ * The filter is applied in SQL rather than after the read so the pass spends
+ * its row budget on rows it can actually act on.
+ */
+function excludeDetached<Q extends { not: (column: string, operator: string, value: null) => Q }>(
+  query: Q,
+  columns: readonly string[],
+): Q {
+  return columns.reduce((next, column) => next.not(column, "is", null), query);
+}
+
+/**
+ * How many rows this source is holding that {@link excludeDetached} removed.
+ *
+ * A separate `head` count rather than a client-side partition, because the
+ * budgeted read must not be spent on rows it is going to discard.
+ */
+async function countDetached(
+  supabase: SupabaseClient,
+  table: string,
+  columns: readonly string[],
+  scope: ReconciliationScope,
+): Promise<number> {
+  let query = supabase.from(table).select("id", { count: "exact", head: true });
+  if (scope.projectId) query = query.eq("project_id", scope.projectId);
+
+  const { count, error } = await query.or(columns.map((column) => `${column}.is.null`).join(","));
+  if (error) throw error;
+  return count ?? 0;
+}
 
 /**
  * Rates a projected set and returns the per-event rows to persist.
@@ -116,7 +169,7 @@ async function reconcileAiUsage(
 
   if (scope.projectId) query = query.eq("project_id", scope.projectId);
 
-  const { data, error } = await query;
+  const { data, error } = await excludeDetached(query, OWNER_COLUMNS);
   if (error) throw error;
 
   const rows = (data ?? []) as AiUsageRow[];
@@ -145,6 +198,7 @@ async function reconcileAiUsage(
   return {
     sourceKind: "ai_usage_event",
     rowsRead: rows.length,
+    rowsSkippedDetached: await countDetached(supabase, "ai_usage_events", OWNER_COLUMNS, scope),
     eventsProjected: projected.length,
     eventsInserted: inserted,
     eventsAlreadyPresent: alreadyPresent,
@@ -167,7 +221,7 @@ async function reconcileSandboxUsage(
 
   if (scope.projectId) query = query.eq("project_id", scope.projectId);
 
-  const { data, error } = await query;
+  const { data, error } = await excludeDetached(query, OWNER_COLUMNS);
   if (error) throw error;
 
   const rows = (data ?? []) as SandboxUsageRow[];
@@ -180,6 +234,7 @@ async function reconcileSandboxUsage(
   return {
     sourceKind: "sandbox_usage_event",
     rowsRead: rows.length,
+    rowsSkippedDetached: await countDetached(supabase, "sandbox_usage_events", OWNER_COLUMNS, scope),
     eventsProjected: projected.length,
     eventsInserted: inserted,
     eventsAlreadyPresent: alreadyPresent,
@@ -200,7 +255,7 @@ async function reconcileReviewBrowserUsage(
 
   if (scope.projectId) query = query.eq("project_id", scope.projectId);
 
-  const { data, error } = await query;
+  const { data, error } = await excludeDetached(query, OWNER_COLUMNS);
   if (error) throw error;
 
   const rows = (data ?? []) as ReviewBrowserUsageRow[];
@@ -213,6 +268,7 @@ async function reconcileReviewBrowserUsage(
   return {
     sourceKind: "review_browser_usage",
     rowsRead: rows.length,
+    rowsSkippedDetached: await countDetached(supabase, "review_browser_usage", OWNER_COLUMNS, scope),
     eventsProjected: projected.length,
     eventsInserted: inserted,
     eventsAlreadyPresent: alreadyPresent,
@@ -238,7 +294,7 @@ async function reconcileDeepScanUsage(
 
   if (scope.projectId) query = query.eq("project_id", scope.projectId);
 
-  const { data, error } = await query;
+  const { data, error } = await excludeDetached(query, PROJECT_ONLY);
   if (error) throw error;
 
   const rows = (data ?? []) as DeepScanUsageRow[];
@@ -263,6 +319,7 @@ async function reconcileDeepScanUsage(
   return {
     sourceKind: "deep_scan_provider_usage",
     rowsRead: rows.length,
+    rowsSkippedDetached: await countDetached(supabase, "deep_scan_provider_usage", PROJECT_ONLY, scope),
     eventsProjected: projected.length,
     eventsInserted: inserted,
     eventsAlreadyPresent: alreadyPresent,
