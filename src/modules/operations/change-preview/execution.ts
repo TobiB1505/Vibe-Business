@@ -35,9 +35,9 @@ import type { OperationFailureCode } from "../failures";
 import {
   completeOperationRun,
   failOperationRun,
-  getOperationRunById,
+  getProjectOperationRunById,
   setOperationStage,
-  type StoredOperationRun,
+  type ProjectOperationRun,
 } from "../store";
 
 /**
@@ -96,8 +96,8 @@ export type PreviewStepOutcome = { ok: true } | { ok: false; failureCode: Previe
 async function loadOperation(
   supabase: SupabaseClient,
   operationId: string,
-): Promise<{ ok: true; operation: StoredOperationRun } | { ok: false }> {
-  const operation = await getOperationRunById(supabase, operationId);
+): Promise<{ ok: true; operation: ProjectOperationRun } | { ok: false }> {
+  const operation = await getProjectOperationRunById(supabase, operationId);
   if (!operation) return { ok: false };
 
   const { data: project } = await supabase
@@ -128,7 +128,7 @@ async function resolveContext(
   deps: PreviewDeps,
   operationId: string,
 ): Promise<
-  | { ok: true; operation: StoredOperationRun; session: PreviewSession; target: PreviewTarget }
+  | { ok: true; operation: ProjectOperationRun; session: PreviewSession; target: PreviewTarget }
   | { ok: false; failureCode: PreviewFailureCode }
 > {
   const loaded = await loadOperation(deps.supabase, operationId);
@@ -478,7 +478,7 @@ export async function failPreviewStep(
   });
   if (!transitioned) return;
 
-  const operation = await getOperationRunById(deps.supabase, operationId);
+  const operation = await getProjectOperationRunById(deps.supabase, operationId);
   if (!operation) return;
 
   await recordAuditEvent(deps.supabase, {
@@ -502,7 +502,7 @@ export async function completePreviewStep(
   });
   if (!transitioned) return;
 
-  const operation = await getOperationRunById(deps.supabase, operationId);
+  const operation = await getProjectOperationRunById(deps.supabase, operationId);
   if (!operation) return;
 
   await recordAuditEvent(deps.supabase, {

@@ -9,7 +9,7 @@ import type { OperationExecutor } from "@/modules/operations/executor";
 import {
   createOperationRun,
   findActiveOperationByIdentity,
-  getOperationRunById,
+  getProjectOperationRunById,
   type StoredOperationRun,
 } from "@/modules/operations/store";
 import { buildOperationView, type OperationView } from "@/modules/operations/view";
@@ -291,7 +291,7 @@ export async function startChangeReview(
   });
   if (!started.ok) return { kind: "failed", error: "execution_start_failed" };
 
-  const refreshed = await getOperationRunById(supabase, created.operation.id);
+  const refreshed = await getProjectOperationRunById(supabase, created.operation.id);
   return {
     kind: "capturing",
     operation: view(refreshed ?? created.operation),

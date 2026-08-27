@@ -43,9 +43,9 @@ import {
   claimResultForOperation,
   completeOperationRun,
   failOperationRun,
-  getOperationRunById,
+  getProjectOperationRunById,
   setOperationStage,
-  type StoredOperationRun,
+  type ProjectOperationRun,
 } from "../store";
 
 /**
@@ -102,7 +102,7 @@ export type ValidationDeps = {
    * the source is on disk and a credential would be pure additional exposure.
    */
   resolveTarget: (
-    operation: StoredOperationRun,
+    operation: ProjectOperationRun,
     options: { withCloneCredential: boolean },
   ) => Promise<ValidationRepositoryTarget | null>;
 };
@@ -160,8 +160,8 @@ export type CleanupRecord = {
 async function loadOperation(
   supabase: SupabaseClient,
   operationId: string,
-): Promise<StepOutcome<{ operation: StoredOperationRun }>> {
-  const operation = await getOperationRunById(supabase, operationId);
+): Promise<StepOutcome<{ operation: ProjectOperationRun }>> {
+  const operation = await getProjectOperationRunById(supabase, operationId);
   if (!operation) return { ok: false, failureCode: "operation_not_found" };
 
   const { data: project } = await supabase
@@ -191,7 +191,7 @@ async function resolveRunContext(
   options: { withCloneCredential: boolean },
 ): Promise<
   StepOutcome<{
-    operation: StoredOperationRun;
+    operation: ProjectOperationRun;
     run: StoredValidationRun;
     target: ValidationTarget;
     manifest: SourceManifestPort;
@@ -851,7 +851,7 @@ export async function completeValidationStep(
   });
   if (!transitioned) return;
 
-  const operation = await getOperationRunById(deps.supabase, operationId);
+  const operation = await getProjectOperationRunById(deps.supabase, operationId);
   if (!operation) return;
 
   await recordAuditEvent(deps.supabase, {
@@ -870,7 +870,7 @@ export async function failValidationStep(
   // convention. Close the row so the UI is not left waiting.
   const run = await findValidationRunByOperation(deps.supabase, operationId);
   if (run && (run.status === "running" || run.status === "queued")) {
-    const operation = await getOperationRunById(deps.supabase, operationId);
+    const operation = await getProjectOperationRunById(deps.supabase, operationId);
     if (operation) {
       await completeValidationRun(deps.supabase, {
         validationRunId: run.id,
@@ -891,7 +891,7 @@ export async function failValidationStep(
   const transitioned = await failOperationRun(deps.supabase, { operationId, failureCode });
   if (!transitioned) return;
 
-  const operation = await getOperationRunById(deps.supabase, operationId);
+  const operation = await getProjectOperationRunById(deps.supabase, operationId);
   if (!operation) return;
 
   await recordAuditEvent(deps.supabase, {

@@ -7,14 +7,14 @@ import { liveProductFindingEvents, repositoryFindingEvents } from "@/modules/pro
 import { getProfileById } from "@/modules/product-understanding/store";
 import { inspectRepository } from "@/modules/repository-intelligence/service";
 import type { OperationFailureCode } from "../failures";
-import { getOperationRunById, setOperationStage, type StoredOperationRun } from "../store";
+import { getProjectOperationRunById, setOperationStage, type ProjectOperationRun } from "../store";
 import { completeOperationStep, failOperationStep, type ExecutionDeps, type StepOutcome } from "../product-understanding/execution";
 
 async function loadProductScan(
   supabase: SupabaseClient,
   operationId: string,
-): Promise<StepOutcome<{ operation: StoredOperationRun }>> {
-  const operation = await getOperationRunById(supabase, operationId);
+): Promise<StepOutcome<{ operation: ProjectOperationRun }>> {
+  const operation = await getProjectOperationRunById(supabase, operationId);
   if (!operation || operation.operationType !== "product_scan") {
     return { ok: false, failureCode: "operation_not_found" };
   }
@@ -31,7 +31,7 @@ async function loadProductScan(
 
 async function append(
   deps: ExecutionDeps,
-  operation: StoredOperationRun,
+  operation: ProjectOperationRun,
   event: Parameters<typeof appendProductScanEvent>[1]["event"],
 ) {
   await appendProductScanEvent(deps.supabase, {
