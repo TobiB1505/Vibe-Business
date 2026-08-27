@@ -63,10 +63,20 @@ export async function readAgentRunGatewayState(
   /*
    * Spend, summed from the ledger this run has written so far.
    *
-   * Only `succeeded` rows count toward the ceiling: a call that failed before
-   * the provider billed anything consumed no budget, and counting it would let
-   * a flaky network exhaust a customer's authorization without producing a
-   * single token of work.
+   * Counted from the tokens, not from the status (VB-016). This filtered on
+   * `status === 'succeeded'`, and the reasoning was half right: a call that
+   * failed before the provider billed anything really did consume no budget,
+   * and counting it would let a flaky network exhaust a customer's
+   * authorization without producing a single token of work.
+   *
+   * What it missed is the stream that fails *after* the provider has billed.
+   * Anthropic charges for what it emitted, so that row is `failed` and carries
+   * real `output_tokens` — and those tokens were excluded from the ceiling
+   * entirely. A loop whose calls all die late therefore spent real money
+   * against a budget that never noticed.
+   *
+   * Summing the tokens gets both cases right without needing to know which
+   * happened: a failure that billed nothing contributes zero on its own.
    */
   const { data: usage } = await supabase
     .from("ai_usage_events")
@@ -74,14 +84,13 @@ export async function readAgentRunGatewayState(
     .eq("job_id", params.runId);
 
   const rows = (usage ?? []) as { output_tokens: number | null; status: string }[];
-  const billed = rows.filter((entry) => entry.status === "succeeded");
 
   return {
     status: row.status,
     projectId: row.project_id,
     userId: row.user_id,
     executionSpecId: row.execution_spec_id,
-    spentOutputTokens: billed.reduce((total, entry) => total + (entry.output_tokens ?? 0), 0),
+    spentOutputTokens: rows.reduce((total, entry) => total + (entry.output_tokens ?? 0), 0),
     // Every forwarded request writes a row, succeeded or failed, so the request
     // ceiling counts attempts rather than successes. A loop that fails every
     // call is still a loop, and it still costs latency and provider quota.
