@@ -118,10 +118,12 @@
 - Product Scan motion is event-driven through Motion for React. A newly observed stored event may produce one bounded core impulse and one feed entrance; events present at first paint do not replay or announce as new.
 - Product Scan's slow orbital movement runs only while the operation is active and the document is visible. Reduced motion removes the orbit, impulse and transforms while preserving every status and finding.
 - Product Scan events for a logo, typeface, color and other grounded facets populate existing slots. Arrival may animate opacity, a short transform or a connector, but never parent size or document flow.
+- Action Plan Move rows may enter once in their persisted order, and URL-backed Move selection crossfades only the reserved planned-work region. Neither motion changes order, rank, readiness or layout geometry.
+- The Action Plan generation core orbits and pulses only while the canonical opportunity operation is working and the document is visible. Named durable stages remain the only progress claim; reduced motion makes the same state static.
 
 ## Verification
 
 - Static: lint, typecheck, unit tests, strict premium audit.
-- Browser: repository success, empty, no-results, search clear, filter, sort, pagination, URL restoration and 1440/1024/768/375 widths; Business Health reading order, map interaction, canonical recovery link, responsive transformation and reduced motion.
+- Browser: repository success, empty, no-results, search clear, filter, sort, pagination, URL restoration and 1440/1024/768/375 widths; Business Health reading order, map interaction, canonical recovery link, responsive transformation and reduced motion; Action Plan selected, founder-input, generating and reduced-motion states at 1440/1280/tablet/375.
 - Canonical sibling: `/app/products` and the account shell.
 - Repository evidence: `e2e/account-repositories.spec.ts`, `e2e/business-audit.spec.ts`, `e2e/action-plan-ui.spec.ts`, `e2e/one-loop.spec.ts`, `e2e/product-scan.spec.ts`, `e2e/billing.spec.ts`.

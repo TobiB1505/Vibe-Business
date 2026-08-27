@@ -4,6 +4,8 @@ import Link from "next/link";
 import {
   AlertIcon,
   BoltIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
   TargetIcon,
   UserIcon,
 } from "@/components/ui/dashboard-icons";
@@ -244,18 +246,46 @@ export function MoveCard({
          border-colour utilities in one class list are decided by stylesheet
          order rather than by which was written last. */
       tone={selected ? "mint" : "neutral"}
-      className="flex flex-col gap-4 transition-interactive"
+      className={cn(
+        "action-plan-move flex flex-col gap-4 overflow-hidden transition-interactive",
+        selected && "action-plan-move-selected",
+      )}
       data-testid="move-card"
       data-rank={opportunity.rank}
       data-selected={selected}
     >
       <div className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center gap-3">
-          {/* The engine's own ordering. Shown, never recomputed on the client. */}
-          <span className="text-fg-meta font-mono text-ui tabular-nums">
-            {String(opportunity.rank).padStart(2, "0")}
-          </span>
-          <StatusPill tone={HEADLINE_TONE[headline.kind]}>{headline.label}</StatusPill>
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-3">
+            {/* The engine's own ordering. Shown, never recomputed on the client. */}
+            <span
+              className={cn(
+                "font-mono text-base tabular-nums",
+                selected ? "text-mint" : headline.kind === "needs_input" ? "text-amber" : "text-fg-meta",
+              )}
+            >
+              {String(opportunity.rank).padStart(2, "0")}
+            </span>
+            <StatusPill tone={HEADLINE_TONE[headline.kind]}>{headline.label}</StatusPill>
+          </div>
+
+          {selected ? (
+            <a
+              href={planPanelHref}
+              aria-label={`View planned work for ${opportunity.title}`}
+              className="text-fg-secondary hover:text-mint rounded-nav flex size-8 shrink-0 items-center justify-center transition-interactive"
+            >
+              <ChevronDownIcon size={17} />
+            </a>
+          ) : (
+            <Link
+              href={selectHref}
+              aria-label={`Select ${opportunity.title}`}
+              className="text-fg-meta hover:text-mint rounded-nav flex size-8 shrink-0 items-center justify-center transition-interactive"
+            >
+              <ChevronRightIcon size={17} />
+            </Link>
+          )}
         </div>
 
         {/* Selecting a Move is what the panel beside the list is about, so the
@@ -294,50 +324,17 @@ export function MoveCard({
             {lens}
           </span>
         )}
-        {/* Two, not five. Readiness leads above; impact is the one other
-            signal worth reading at a glance, and effort is stated once — in
-            the slot below the action, where the reference design puts a
-            duration the domain does not have. */}
+        {/* Readiness leads above. Impact and effort are the two coarse values
+            the domain can stand behind; neither is turned into a duration. */}
         <RatingChip>{IMPACT_LABELS[opportunity.impact]}</RatingChip>
+        <RatingChip>{EFFORT_LABELS[opportunity.effort]}</RatingChip>
       </div>
 
-      <Disclosure label="Why this matters">
-        <div className="flex flex-col gap-4">
-          <p className="text-fg-prose text-sm leading-relaxed">{opportunity.whyNow}</p>
-
-          {/* The seam between a finding and the Move that answers it. The key
-              that resolved it is never shown. */}
-          {lineageHeadline && (
-            <p className="text-fg-muted text-xs leading-relaxed" data-testid="move-lineage">
-              <span className="text-fg-meta">From your audit: </span>
-              <span className="text-fg-secondary">{lineageHeadline}</span>
-            </p>
-          )}
-
-          <dl className="flex flex-wrap gap-x-6 gap-y-1 text-xs">
-            <div className="flex gap-2">
-              <dt className="text-fg-meta">Confidence</dt>
-              <dd className="text-fg-secondary">{CONFIDENCE_LABELS[opportunity.confidence]}</dd>
-            </div>
-          </dl>
-
-          {opportunity.evidenceIds.length > 0 && (
-            <div className="flex flex-col gap-1.5">
-              <MonoLabel className="tracking-[0.14em]">Why Vibe thinks this</MonoLabel>
-              <ul className="flex flex-col gap-1">
-                {opportunity.evidenceIds.map((id) => {
-                  const { source, detail } = describeEvidenceId(id);
-                  return (
-                    <li key={id} className="text-fg-muted text-xs leading-relaxed" title={id}>
-                      <span className="text-fg-secondary font-mono">{source}:</span> {detail}
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          )}
-        </div>
-      </Disclosure>
+      {!selected && lineageHeadline && (
+        <p className="sr-only" data-testid="move-lineage">
+          From your audit: {lineageHeadline}
+        </p>
+      )}
 
       <div className="border-line-2 flex flex-wrap items-end justify-between gap-4 border-t pt-4">
         <div className="flex min-w-0 flex-1 items-start gap-3">
@@ -358,11 +355,49 @@ export function MoveCard({
 
         <div className="flex w-full flex-col gap-1.5 sm:w-auto sm:items-end">
           {compactAction}
-          {/* The reference design's duration slot. Effort is what the domain
-              actually knows. */}
-          <span className="text-fg-meta text-meta">{EFFORT_LABELS[opportunity.effort]}</span>
         </div>
       </div>
+
+      {/* Keep the deeper Move evidence available without making every row a
+          report. Selecting a Move reveals this disclosure and its planned
+          work together; the rest of the list stays scan-first. */}
+      {selected && (
+        <Disclosure label="Why this matters" className="border-line-2 border-t pt-3">
+          <div className="flex flex-col gap-4">
+            <p className="text-fg-prose text-sm leading-relaxed">{opportunity.whyNow}</p>
+
+            {lineageHeadline && (
+              <p className="text-fg-muted text-xs leading-relaxed" data-testid="move-lineage">
+                <span className="text-fg-meta">From your audit: </span>
+                <span className="text-fg-secondary">{lineageHeadline}</span>
+              </p>
+            )}
+
+            <dl className="flex flex-wrap gap-x-6 gap-y-1 text-xs">
+              <div className="flex gap-2">
+                <dt className="text-fg-meta">Confidence</dt>
+                <dd className="text-fg-secondary">{CONFIDENCE_LABELS[opportunity.confidence]}</dd>
+              </div>
+            </dl>
+
+            {opportunity.evidenceIds.length > 0 && (
+              <div className="flex flex-col gap-1.5">
+                <MonoLabel className="tracking-[0.14em]">Why Vibe thinks this</MonoLabel>
+                <ul className="flex flex-col gap-1">
+                  {opportunity.evidenceIds.map((id) => {
+                    const { source, detail } = describeEvidenceId(id);
+                    return (
+                      <li key={id} className="text-fg-muted text-xs leading-relaxed" title={id}>
+                        <span className="text-fg-secondary font-mono">{source}:</span> {detail}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            )}
+          </div>
+        </Disclosure>
+      )}
 
       {/* Everything a prepared, running, failed or blocked change has to say.
           Full width and below the row, because it is prose and a status, not a

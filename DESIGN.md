@@ -89,8 +89,16 @@ Move's effort is the coarse label the domain records, the parts of the product a
 plan touches are derived from stored evidence, and a run's progress is the named
 stages its executor actually wrote. Where the reference composition asked for a
 figure the domain cannot produce, the honest reading takes the slot or the slot
-goes. This is an ordinary product surface: no aura, no traced connections, no
-staged entry — the Business Brain's choreography stops at its own page.
+goes.
+
+The Action Plan may use bounded orchestration because order and selection are
+part of its meaning: Move rows settle into the persisted sequence once, and a
+URL-backed selection crossfades the planned-work panel without moving either
+column. The forming-plan state may use a contained orbital core only while a
+real operation is active and the document is visible. It never advances copy,
+numbers or stage state on a timer. Reduced motion removes the row offsets,
+crossfade transforms, orbit and pulse while leaving the same ordered list and
+named stages present at first paint. Static cards do not breathe, scan or glow.
 
 ## Signature Surface: Business Brain
 

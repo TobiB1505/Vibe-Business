@@ -1,11 +1,111 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowRightIcon, ChevronRightIcon, LockIcon, SparklesIcon } from "@/components/ui/dashboard-icons";
+import { motion, useReducedMotion } from "motion/react";
+import {
+  ArrowRightIcon,
+  BusinessHealthIcon,
+  ChevronRightIcon,
+  DocumentIcon,
+  LockIcon,
+  SparklesIcon,
+  TargetIcon,
+} from "@/components/ui/dashboard-icons";
 import { Surface } from "@/components/ui/surface";
 import { cn } from "@/lib/utils/cn";
 import { operationProgressSteps, type OperationView } from "@/modules/operations/view";
 import { PlanProgressSteps } from "./plan-progress-steps";
+
+function useDocumentVisible() {
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    const update = () => setVisible(document.visibilityState === "visible");
+    update();
+    document.addEventListener("visibilitychange", update);
+    return () => document.removeEventListener("visibilitychange", update);
+  }, []);
+
+  return visible;
+}
+
+function PlanningCore({ active }: { active: boolean }) {
+  const reduceMotion = useReducedMotion();
+  const visible = useDocumentVisible();
+  const motionEnabled = active && visible && !reduceMotion;
+
+  return (
+    <div className="relative flex size-52 items-center justify-center" aria-hidden>
+      <motion.span
+        className="absolute inset-7 rounded-full bg-mint-tint blur-2xl"
+        animate={
+          motionEnabled
+            ? { opacity: [0.28, 0.72, 0.28], scale: [0.9, 1.08, 0.9] }
+            : { opacity: 0.36, scale: 1 }
+        }
+        transition={
+          motionEnabled
+            ? { duration: 2.8, repeat: Infinity, ease: "easeInOut" }
+            : { duration: 0 }
+        }
+      />
+      <motion.svg
+        viewBox="0 0 208 208"
+        className="absolute inset-0 size-full"
+        animate={motionEnabled ? { rotate: 360 } : { rotate: 0 }}
+        transition={motionEnabled ? { duration: 24, repeat: Infinity, ease: "linear" } : { duration: 0 }}
+      >
+        <circle
+          cx="104"
+          cy="104"
+          r="87"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1"
+          strokeDasharray="1 11"
+          className="text-mint opacity-45"
+        />
+        <circle
+          cx="104"
+          cy="104"
+          r="70"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1"
+          strokeDasharray="2 8"
+          className="text-mint opacity-25"
+        />
+      </motion.svg>
+      <motion.span
+        className="border-mint-line bg-surface-3 text-mint relative flex size-24 items-center justify-center rounded-panel border shadow-card"
+        animate={motionEnabled ? { y: [0, -3, 0] } : { y: 0 }}
+        transition={
+          motionEnabled
+            ? { duration: 2.4, repeat: Infinity, ease: "easeInOut" }
+            : { duration: 0 }
+        }
+      >
+        <DocumentIcon size={42} />
+        <motion.span
+          className="bg-app border-mint-line absolute -right-2 -bottom-2 flex size-9 items-center justify-center rounded-full border"
+          animate={
+            motionEnabled
+              ? { scale: [1, 1.12, 1], rotate: [0, 8, 0] }
+              : { scale: 1, rotate: 0 }
+          }
+          transition={
+            motionEnabled
+              ? { duration: 1.8, repeat: Infinity, ease: "easeInOut" }
+              : { duration: 0 }
+          }
+        >
+          <SparklesIcon size={18} />
+        </motion.span>
+      </motion.span>
+    </div>
+  );
+}
 
 /**
  * The Action Plan before it has any Moves (ACTION PLAN UI-2).
@@ -36,29 +136,59 @@ export function PlanGenerating({
     <>
       <Surface
         level="panel"
-        padding="lg"
-        className="flex flex-col items-center gap-5 py-12 text-center"
+        padding="none"
+        className="action-plan-generation-stage flex flex-col items-center justify-center overflow-hidden px-6 py-12 text-center sm:px-10"
         data-testid="plan-generating"
       >
-        <span
-          aria-hidden
-          className="border-mint-line bg-mint-tint-soft text-mint flex size-20 items-center justify-center rounded-full border border-dashed"
-        >
-          <SparklesIcon size={30} />
-        </span>
-        <div className="flex max-w-[46ch] flex-col gap-2">
-          <h2 className="text-fg text-title font-bold">
+        <PlanningCore active={running} />
+        <div className="relative z-10 mt-4 flex max-w-xl flex-col gap-3">
+          <h2 className="text-fg text-headline font-bold">
             {running ? "Generating your Action Plan" : "No moves yet"}
           </h2>
-          <p className="text-fg-muted text-sm leading-relaxed">
+          <p className="text-fg-prose text-lead leading-relaxed">
             {running
-              ? "Vibe is reading your business health and working out the few highest-impact things to do next."
+              ? "Vibe is analyzing your product, business health, and current context to build a prioritized set of high-impact moves."
               : "Vibe can work out the highest-impact things to do next from your business audit."}
           </p>
         </div>
-        {children}
+        <div className="relative z-10 mt-7">{children}</div>
+
         {running && (
-          <p className="text-fg-meta text-xs">You can leave this page. Vibe will continue.</p>
+          <div className="relative z-10 mt-10 grid w-full max-w-2xl gap-4 text-left sm:grid-cols-3">
+            {[
+              {
+                icon: BusinessHealthIcon,
+                label: "Reading your business health",
+              },
+              {
+                icon: TargetIcon,
+                label: "Finding high-impact opportunities",
+              },
+              {
+                icon: SparklesIcon,
+                label: "Ordering work by impact and dependencies",
+              },
+            ].map((item) => {
+              const Icon = item.icon;
+              return (
+                <div
+                  key={item.label}
+                  className="text-fg-secondary flex items-center gap-3 text-xs leading-relaxed"
+                >
+                  <span className="border-mint-line bg-mint-tint-soft text-mint flex size-9 shrink-0 items-center justify-center rounded-full border">
+                    <Icon size={17} />
+                  </span>
+                  <span>{item.label}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {running && (
+          <p className="text-fg-meta relative z-10 mt-8 text-xs">
+            You can leave this page. Vibe will continue.
+          </p>
         )}
       </Surface>
 
@@ -94,7 +224,10 @@ export function PlanGeneratingAside({
       {running && (
         <Surface level="panel" padding="lg" className="flex flex-col gap-4">
           <h2 className="text-fg text-title font-bold">What&apos;s happening</h2>
-          <PlanProgressSteps steps={operationProgressSteps("opportunity_generation", operation)} />
+          <PlanProgressSteps
+            steps={operationProgressSteps("opportunity_generation", operation)}
+            variant="timeline"
+          />
         </Surface>
       )}
 

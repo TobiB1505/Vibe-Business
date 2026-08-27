@@ -4,6 +4,34 @@ Status: Implemented, browser verification green, not dogfooded
 
 Date: 2026-08-26
 
+## Visual fidelity addendum — 2026-08-27
+
+The first production pass kept the right architecture but flattened the visual
+relationship the reference depended on. The rail was quiet, every Move looked
+like the same dashboard card, the side panel read as a long report, and the
+empty/generating state had almost no presence.
+
+The presentation layer now follows the supplied Action Plan references more
+closely without changing a read model or action:
+
+- the persisted Now/Next/Later order has a stronger continuous rail and a
+  visibly dominant selected Move;
+- desktop uses a calmer, denser decision/workspace split, with summary dividers
+  and a dedicated planned-work surface;
+- founder input is the current plan focus, using one real open-request count,
+  accessible radio choices and a single Continue action;
+- the full plan and evidence remain available through disclosure rather than
+  competing with the current question;
+- the generating state reserves the final geometry and uses a contained orbital
+  core plus the operation's real named stages;
+- Move entrance, URL-backed panel selection and live-generation motion use
+  Motion for React, stop when the document is hidden where continuous motion is
+  involved, and become immediate/static under reduced motion.
+
+The honesty substitutions below remain unchanged: no invented duration, file
+count, percentage, step counter, export action or executor. No schema, planner,
+ranking, completion authority, polling cadence or paid-operation boundary moved.
+
 ## Outcome
 
 The Action Plan route stacked two panels: every Move, then one plan underneath.

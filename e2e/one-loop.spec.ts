@@ -342,6 +342,34 @@ test.describe("the empty states each have a next step", () => {
   });
 });
 
+test.describe("the plan forms before the first move exists", () => {
+  test("reserves the full workspace and reports real named stages", async ({ page }) => {
+    await page.goto("/e2e/moves_generating");
+
+    await expect(page.getByTestId("plan-generating")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Generating your Action Plan" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "What's happening" })).toBeVisible();
+    await expect(page.getByText("Finding your highest-impact opportunities")).toBeVisible();
+    await expect(page.getByTestId("plan-summary")).toContainText("—");
+
+    const body = await page.locator("body").innerText();
+    expect(body).not.toMatch(/\d+%/);
+    expect(body).not.toMatch(/step \d+ of \d+/i);
+  });
+
+  test.describe("with reduced motion", () => {
+    test("keeps the same information without looping animation", async ({ page }) => {
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.goto("/e2e/moves_generating");
+
+      await expect(page.getByRole("heading", { name: "Generating your Action Plan" })).toBeVisible();
+      await expect
+        .poll(() => page.evaluate(() => document.getAnimations().filter((animation) => animation.playState === "running").length))
+        .toBe(0);
+    });
+  });
+});
+
 test.describe("no implementation language reaches the founder", () => {
   for (const [name, path] of [
     ["ranked", RANKED],

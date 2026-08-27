@@ -285,6 +285,57 @@
     );
 }
 
+/* ACTION PLAN UI-2.1 — one ordered workspace, with depth reserved for the
+   selected Move and for live plan generation. Motion remains component-owned
+   so it can stop with the durable operation and with reduced-motion. */
+.action-plan-move {
+  background:
+    linear-gradient(145deg, rgb(255 255 255 / 0.018), transparent 52%),
+    var(--color-surface-3);
+}
+
+.action-plan-move-selected {
+  background:
+    radial-gradient(circle at 82% 18%, rgb(0 229 160 / 0.08), transparent 34%),
+    linear-gradient(145deg, rgb(0 229 160 / 0.055), rgb(255 255 255 / 0.018) 58%),
+    var(--color-app);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.06) inset,
+    0 28px 64px -46px rgb(0 229 160 / 0.42);
+}
+
+.action-plan-detail-panel {
+  background:
+    radial-gradient(circle at 92% 4%, rgb(0 229 160 / 0.045), transparent 28%),
+    var(--color-surface-3);
+  box-shadow: 0 26px 64px -48px rgb(0 0 0 / 0.9);
+}
+
+.action-plan-generation-stage {
+  isolation: isolate;
+  min-height: 34rem;
+  background:
+    radial-gradient(circle at 50% 38%, rgb(0 229 160 / 0.09), transparent 30%),
+    radial-gradient(circle at 50% 48%, rgb(0 229 160 / 0.035), transparent 56%),
+    linear-gradient(150deg, rgb(255 255 255 / 0.025), transparent 58%),
+    var(--color-surface-2);
+  box-shadow:
+    0 1px 0 rgb(255 255 255 / 0.055) inset,
+    0 38px 90px -56px rgb(0 0 0 / 0.95);
+}
+
+.action-plan-generation-stage::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-image: radial-gradient(circle, rgb(0 229 160 / 0.12) 0.7px, transparent 0.8px);
+  background-size: 24px 24px;
+  content: "";
+  mask-image: radial-gradient(circle at 50% 40%, black, transparent 66%);
+  opacity: 0.18;
+  pointer-events: none;
+}
+
 /* UI-12 — the Business Brain is the one cinematic project surface. */
 .business-brain-stage {
   isolation: isolate;

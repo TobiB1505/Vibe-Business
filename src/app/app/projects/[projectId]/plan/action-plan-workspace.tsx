@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { InfoIcon } from "@/components/ui/dashboard-icons";
 import { Notice } from "@/components/ui/states";
 import { Surface } from "@/components/ui/surface";
@@ -9,7 +10,7 @@ import { useOperationPoll } from "@/lib/client/use-operation-poll";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { operationPollPhase, type OperationView } from "@/modules/operations/view";
 import { buildOpportunityBlockNotice } from "@/modules/opportunities/view";
-import { moveSummaryCounts } from "@/modules/opportunities/view";
+import { moveLensLabel, moveSummaryCounts } from "@/modules/opportunities/view";
 import type { BusinessOpportunity } from "@/modules/opportunities/schema";
 import {
   partitionByContext,
@@ -101,6 +102,7 @@ export function ActionPlanWorkspace({
   productHref: string;
   experimentsHref: string;
 }) {
+  const reduceMotion = useReducedMotion();
   const { latest: polledMoves } = useOperationPoll<OperationView>({
     key: movesOperation?.operationId ?? null,
     enabled: operationPollPhase(movesOperation) === "working",
@@ -121,6 +123,8 @@ export function ActionPlanWorkspace({
     (movesOperationView.status === "queued" || movesOperationView.status === "running");
 
   const hasOpportunities = opportunities.length > 0;
+  const selectedOpportunity =
+    opportunities.find((opportunity) => opportunity.id === selectedOpportunityId) ?? null;
   const movesBlockNotice = buildOpportunityBlockNotice(movesBlockedReason);
 
   // Elevation, never reranking. Both groups keep the engine's order and every
@@ -205,7 +209,7 @@ export function ActionPlanWorkspace({
         </Surface>
       )}
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.55fr)_minmax(23rem,0.75fr)] xl:items-start">
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.65fr)_minmax(24rem,1fr)] xl:items-start 2xl:gap-7">
         <div className="flex min-w-0 flex-col gap-4">
           <div className="border-line-2 bg-surface-1 rounded-panel flex flex-wrap items-center gap-3 border px-4 py-3">
             <InfoIcon size={15} className="text-fg-meta shrink-0" />
@@ -305,34 +309,56 @@ export function ActionPlanWorkspace({
           )}
         </div>
 
-        <div className="flex min-w-0 flex-col gap-4 xl:sticky xl:top-6">
+        <div className="flex min-w-0 flex-col gap-3.5 xl:sticky xl:top-6">
           <PlanSummary counts={hasOpportunities ? moveSummaryCounts(opportunities) : null} />
 
-          {hasOpportunities ? (
-            <PlanDetailPanel
-              projectId={projectId}
-              opportunityId={selectedOpportunityId}
-              moveTitle={moveTitle}
-              defaultMoveTitle={defaultMoveTitle}
-              readiness={planReadiness}
-              planView={planView}
-              activeOperation={planOperation}
-              auditHref={auditHref}
-              understandingHref={understandingHref}
-            />
-          ) : movesBlockNotice !== null && !movesRunning ? (
-            /* A blocked plan offers exactly one way forward. A column of
-               alternatives beside it would compete with the single thing that
-               unblocks the page. */
-            null
-          ) : (
-            <PlanGeneratingAside
-              running={movesRunning}
-              operation={movesOperationView}
-              waitLinks={waitLinks}
-              healthHref={auditHref}
-            />
-          )}
+          <AnimatePresence mode="wait" initial={false}>
+            {hasOpportunities ? (
+              <motion.div
+                key={selectedOpportunityId ?? "no-selection"}
+                initial={reduceMotion ? false : { opacity: 0, x: 12 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={reduceMotion ? undefined : { opacity: 0, x: -8 }}
+                transition={
+                  reduceMotion
+                    ? { duration: 0 }
+                    : { duration: 0.24, ease: [0.2, 0.7, 0.2, 1] }
+                }
+              >
+                <PlanDetailPanel
+                  projectId={projectId}
+                  opportunityId={selectedOpportunityId}
+                  moveTitle={moveTitle}
+                  moveRank={selectedOpportunity?.rank ?? null}
+                  moveLens={selectedOpportunity ? moveLensLabel(selectedOpportunity) : null}
+                  defaultMoveTitle={defaultMoveTitle}
+                  readiness={planReadiness}
+                  planView={planView}
+                  activeOperation={planOperation}
+                  auditHref={auditHref}
+                  understandingHref={understandingHref}
+                />
+              </motion.div>
+            ) : movesBlockNotice !== null && !movesRunning ? null : (
+              <motion.div
+                key="generating"
+                initial={reduceMotion ? false : { opacity: 0, x: 12 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={
+                  reduceMotion
+                    ? { duration: 0 }
+                    : { duration: 0.3, ease: [0.2, 0.7, 0.2, 1] }
+                }
+              >
+                <PlanGeneratingAside
+                  running={movesRunning}
+                  operation={movesOperationView}
+                  waitLinks={waitLinks}
+                  healthHref={auditHref}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
     </div>

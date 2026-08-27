@@ -23,14 +23,21 @@ export function PlanSummary({ counts }: { counts: MoveSummaryCounts | null }) {
   ];
 
   return (
-    <Surface level="panel" padding="md" data-testid="plan-summary">
-      <dl className="grid grid-cols-3 gap-4">
-        {figures.map((figure) => (
-          <div key={figure.label} className="flex min-w-0 flex-col gap-1">
+    <Surface level="panel" padding="md" className="overflow-hidden" data-testid="plan-summary">
+      <dl className="grid grid-cols-3">
+        {figures.map((figure, index) => (
+          <div
+            key={figure.label}
+            className={
+              index === 0
+                ? "flex min-w-0 flex-col gap-1 pr-4"
+                : "border-line-2 flex min-w-0 flex-col gap-1 border-l px-4"
+            }
+          >
             <dd className="text-fg text-headline leading-none font-bold tabular-nums">
               {figure.value ?? "—"}
             </dd>
-            <dt className="text-fg-body text-ui font-medium">{figure.label}</dt>
+            <dt className="text-fg-body text-xs font-semibold sm:text-ui">{figure.label}</dt>
             <p className="text-fg-meta text-meta leading-snug">{figure.detail}</p>
           </div>
         ))}

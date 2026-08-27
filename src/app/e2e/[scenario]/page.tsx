@@ -244,7 +244,7 @@ export default async function E2eScenarioPage({
           branchUrls={{}}
           validationSummaries={{}}
           stale={fixture.stale}
-          movesOperation={null}
+          movesOperation={fixture.movesOperation}
           movesBlockedReason={fixture.blockedReason}
           lineage={fixture.lineage}
           movesContext={fixture.movesContext}
@@ -743,6 +743,8 @@ export default async function E2eScenarioPage({
           projectId="project_e2e"
           opportunityId={fixture.opportunityId}
           moveTitle={fixture.moveTitle}
+          moveRank={fixture.opportunityId ? 1 : null}
+          moveLens={fixture.opportunityId ? "Acquisition" : null}
           defaultMoveTitle={fixture.defaultMoveTitle}
           readiness={fixture.readiness}
           planView={fixture.planView}

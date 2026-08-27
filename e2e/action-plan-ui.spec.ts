@@ -90,6 +90,11 @@ async function expandEverything(page: Page) {
   });
 }
 
+async function openFullPlannedWork(page: Page) {
+  const disclosure = page.getByText("See the full planned work", { exact: false });
+  if (await disclosure.isVisible()) await disclosure.click();
+}
+
 test.describe("no plan yet", () => {
   test("offers to plan the current move, naming it", async ({ page }) => {
     await page.goto("/e2e/action_plan_ready_to_start");
@@ -156,20 +161,14 @@ test.describe("planning", () => {
   });
 });
 
-test.describe("ready plan — hero", () => {
-  test("shows the goal, a progressive why-now, and the restrained meta line", async ({ page }) => {
+test.describe("ready plan — founder input focus", () => {
+  test("makes the current founder question the panel's first answer", async ({ page }) => {
     await page.goto("/e2e/action_plan_ready");
 
-    await expect(
-      page.getByRole("heading", {
-        name: "Make the product discoverable to people already searching for what it does.",
-      }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Vibe needs your input" })).toBeVisible();
+    await expect(page.getByText("1 open question")).toBeVisible();
 
-    // 6 steps in the fixture, 1 of them a founder decision.
-    await expect(page.getByText("6 steps · 1 founder decision")).toBeVisible();
-
-    await expect(page.getByRole("button", { name: "More context" }).first()).toBeVisible();
+    await expect(page.getByText("See the full planned work · 6 steps · 1 founder decision")).toBeVisible();
   });
 
   /**
@@ -179,6 +178,7 @@ test.describe("ready plan — hero", () => {
    */
   test("keeps the full why-now text intact through the expand toggle", async ({ page }) => {
     await page.goto("/e2e/action_plan_ready");
+    await openFullPlannedWork(page);
 
     const fullSentence =
       "qualified visitors who are actively searching cannot find the product at all";
@@ -212,15 +212,13 @@ test.describe("ready plan — Start Here", () => {
         name: "Which customer segment should the business pursue first?",
       }),
     ).toBeVisible();
-    await expect(page.getByText("Vibe recommends")).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Use Vibe's recommendation" }),
-    ).toBeVisible();
-    await expect(page.getByRole("button", { name: "Small product teams" })).toBeVisible();
+    await expect(page.getByText("Suggested by Vibe")).toBeVisible();
+    await expect(page.getByRole("radio", { name: /Independent founders/ })).toBeChecked();
+    await expect(page.getByRole("radio", { name: /Small product teams/ })).toBeVisible();
 
-    await page.getByRole("button", { name: "Something else" }).click();
+    await page.getByRole("radio", { name: /Something else/ }).check();
     await expect(page.getByLabel("Your answer")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Use this answer" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Continue" })).toBeVisible();
   });
 
   /**
@@ -233,6 +231,7 @@ test.describe("ready plan — Start Here", () => {
    */
   test("names the server-derived first actionable step, not steps[0]", async ({ page }) => {
     await page.goto("/e2e/action_plan_ready");
+    await openFullPlannedWork(page);
 
     const startHere = page.getByText("Start here").first();
     await expect(startHere).toBeVisible();
@@ -252,6 +251,7 @@ test.describe("ready plan — Start Here", () => {
    */
   test("does not duplicate the full step detail outside its own Details", async ({ page }) => {
     await page.goto("/e2e/action_plan_ready");
+    await openFullPlannedWork(page);
 
     // "Decide which segment" is Start Here. Its purpose sentence is real
     // detail that belongs only behind its own Details toggle.
@@ -282,6 +282,7 @@ test.describe("ready plan — founder action attestation", () => {
 test.describe("ready plan — timeline", () => {
   test("shows every step title by default, with secondary detail collapsed", async ({ page }) => {
     await page.goto("/e2e/action_plan_ready");
+    await openFullPlannedWork(page);
 
     const titles = [
       "Draft the search-facing copy for that segment",
@@ -307,6 +308,7 @@ test.describe("ready plan — timeline", () => {
     page,
   }) => {
     await page.goto("/e2e/action_plan_ready");
+    await openFullPlannedWork(page);
 
     // "Submit the sitemap to Search Console" — has a real dependency and no
     // approval, so this also proves empty sections (Approval) stay absent.
@@ -339,6 +341,7 @@ test.describe("ready plan — timeline", () => {
     page,
   }) => {
     await page.goto("/e2e/action_plan_ready");
+    await openFullPlannedWork(page);
 
     await expect(
       page.getByText("Waiting for step 4: Submit the sitemap to Search Console"),
@@ -349,6 +352,7 @@ test.describe("ready plan — timeline", () => {
     page,
   }) => {
     await page.goto("/e2e/action_plan_ready");
+    await openFullPlannedWork(page);
 
     // "Decide which segment" (Start Here, a founder decision) and "Build a
     // dedicated pricing page" (also_ready, no dependencies) — the fixture's
@@ -360,6 +364,7 @@ test.describe("ready plan — timeline", () => {
     page,
   }) => {
     await page.goto("/e2e/action_plan_ready");
+    await openFullPlannedWork(page);
 
     await expect(page.getByText("Vibe can prepare this").first()).toBeVisible();
     await expect(page.getByText("Vibe can do this").first()).toBeVisible();
@@ -370,6 +375,7 @@ test.describe("ready plan — timeline", () => {
 
   test("keeps an unsupported step in the plan, distinct from failure", async ({ page }) => {
     await page.goto("/e2e/action_plan_ready");
+    await openFullPlannedWork(page);
 
     await expect(page.getByText("Build a dedicated pricing page")).toBeVisible();
     await expect(page.getByText("Vibe's work").first()).toBeVisible();
@@ -457,11 +463,7 @@ test.describe("stale", () => {
     await page.goto("/e2e/action_plan_stale");
 
     await expect(page.getByText("This plan may be out of date")).toBeVisible();
-    await expect(
-      page.getByRole("heading", {
-        name: "Make the product discoverable to people already searching for what it does.",
-      }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Vibe needs your input" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Replan this move" })).toBeVisible();
   });
 });
