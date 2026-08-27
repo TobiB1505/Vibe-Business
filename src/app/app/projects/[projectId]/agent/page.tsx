@@ -23,7 +23,12 @@ import { agentCoreCaption } from "@/modules/coding-agent/observability/agent-sta
 import { AgentPanel } from "../agent-panel";
 import { PreparedChangesSection, type PreparedChangeCard } from "../prepared-changes-section";
 import { AgentTaskPanel } from "./agent-task-panel";
+import { Surface } from "@/components/ui/surface";
 import { AgentActivity } from "./agent-activity";
+import { AgentValidationChecks } from "./agent-validation-checks";
+import { AgentFileActivity } from "./agent-file-activity";
+import { AgentMergeStage } from "./agent-merge-stage";
+import { AgentPreviewStage } from "./agent-preview-stage";
 import { AgentWorkspacePanel } from "./agent-workspace-panel";
 
 /**
@@ -192,19 +197,30 @@ export default async function ProjectAgentPage({
             core={workspace.core}
             caption={agentCoreCaption(workspace.stages)}
             aside={
-              <AgentActivity
-                steps={workspace.timeline}
-                live={workspace.core === "working" || workspace.core === "waiting"}
-              />
+              /*
+                By the validating stage the interesting question has changed
+                from "what is happening" to "what did it touch", so the rail
+                switches from the phase list to the record of files.
+              */
+              workspace.stage === "validate" ? (
+                <AgentFileActivity events={workspace.fileEvents} />
+              ) : (
+                <AgentActivity
+                  steps={workspace.timeline}
+                  live={workspace.core === "working" || workspace.core === "waiting"}
+                />
+              )
             }
           >
-            {/*
-              The Move, in its own stored words. Absent when the run cannot be
-              followed back to one — a screen naming the wrong task would be
-              worse than one naming none.
-            */}
-            {workspace.task !== null && (
-              <AgentTaskPanel task={workspace.task} compact />
+            {workspace.stage === "validate" ? (
+              <AgentValidationChecks checks={workspace.checks} />
+            ) : (
+              /*
+                The Move, in its own stored words. Absent when the run cannot be
+                followed back to one — a screen naming the wrong task would be
+                worse than one naming none.
+              */
+              workspace.task !== null && <AgentTaskPanel task={workspace.task} compact />
             )}
           </AgentWorkspacePanel>
         ) : (
@@ -229,6 +245,34 @@ export default async function ProjectAgentPage({
               executionHref={executionHref}
             />
           </AgentWorkspacePanel>
+        )}
+
+        {workspace.stage === "preview" && workspace.change !== null && (
+          <Surface level="section" padding="lg">
+            <AgentPreviewStage
+              images={workspace.change.reviewImages}
+              changes={workspace.previewChanges}
+              filesChanged={workspace.change.filePaths.length}
+              reviewHref={projectSectionHref(project.id, "agent")}
+              filesHref={workspace.change.compareUrl ?? undefined}
+            />
+          </Surface>
+        )}
+
+        {workspace.stage === "review" && workspace.change !== null && (
+          <Surface level="section" padding="lg">
+            <AgentMergeStage
+              summary={workspace.mergeSummary}
+              files={workspace.change.filePaths.map((path) => ({ path }))}
+              allChecksPassed={workspace.change.validation?.status === "passed"}
+              branchName={workspace.change.branchName}
+              baseBranch={workspace.change.baseBranch}
+              commitSha={workspace.change.commitSha}
+              compareUrl={workspace.change.compareUrl}
+              reviewHref={projectSectionHref(project.id, "agent")}
+              canMerge={workspace.change.progress.approved}
+            />
+          </Surface>
         )}
 
         {changes.length > 0 ? (

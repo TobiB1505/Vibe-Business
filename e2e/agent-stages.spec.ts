@@ -21,6 +21,9 @@ const BUILDING = "/e2e/agent-stages-building";
 const PAUSED = "/e2e/agent-stages-paused";
 const STOPPED = "/e2e/agent-stages-stopped";
 const NO_PREVIEW = "/e2e/agent-stages-no-preview";
+const VALIDATING = "/e2e/agent-stages-validating";
+const PREVIEW = "/e2e/agent-stages-preview";
+const MERGE = "/e2e/agent-stages-merge";
 
 const stage = (page: Page, name: string) =>
   page.getByTestId("agent-stage-rail").locator(`[data-stage="${name}"]`);
@@ -159,5 +162,106 @@ test.describe("375px", () => {
 
     await expect(page.getByTestId("agent-stage-rail").locator("[data-stage]")).toHaveCount(5);
     await expect(stage(page, "review")).toContainText(/pending/i);
+  });
+});
+
+
+test.describe("stage three shows the checks, not a promise", () => {
+  test("names only checks the sandbox runs", async ({ page }) => {
+    await page.goto(VALIDATING);
+
+    const checks = page.getByTestId("agent-validation-checks");
+    await expect(checks.locator("[data-check]")).toHaveCount(4);
+
+    /*
+     * The reference drew "Linting" and "Security scan". Neither step exists in
+     * `planValidationSteps`, and a tick beside a check nobody ran is the one
+     * thing a safety screen must never show.
+     */
+    await expect(checks).not.toContainText(/linting/i);
+    await expect(checks).not.toContainText(/security scan/i);
+  });
+
+  test("switches the rail from intent to record", async ({ page }) => {
+    await page.goto(VALIDATING);
+
+    // Paths, not phases: by this stage the question is what was touched.
+    await expect(page.getByTestId("agent-file-activity")).toContainText("src/app/pricing/page.tsx");
+    await expect(page.getByTestId("agent-activity")).toHaveCount(0);
+  });
+});
+
+test.describe("stage four compares", () => {
+  test("shows both frames at the same size", async ({ page }) => {
+    await page.setViewportSize({ width: 1560, height: 1000 });
+    await page.goto(PREVIEW);
+
+    const frames = page.getByTestId("agent-preview").locator("figure");
+    await expect(frames).toHaveCount(2);
+
+    const before = await frames.nth(0).boundingBox();
+    const after = await frames.nth(1).boundingBox();
+    expect(Math.abs(before!.width - after!.width)).toBeLessThanOrEqual(2);
+    expect(Math.abs(before!.height - after!.height)).toBeLessThanOrEqual(2);
+  });
+
+  /**
+   * A capture that is still running, failed, or past its retention deadline
+   * produces no signed URL. The frame has to say so rather than break.
+   */
+  test("says so when there is no capture, instead of a broken image", async ({ page }) => {
+    await page.goto(PREVIEW);
+
+    await expect(page.getByTestId("agent-preview")).toContainText(/no capture available/i);
+    await expect(page.getByTestId("agent-preview").locator("img")).toHaveCount(0);
+  });
+
+  test("shows the verified file count and no invented line totals", async ({ page }) => {
+    await page.goto(PREVIEW);
+
+    const preview = page.getByTestId("agent-preview");
+    await expect(preview).toContainText(/files changed/i);
+    // No diff statistic is stored, so neither row may appear.
+    await expect(preview).not.toContainText(/lines added/i);
+    await expect(preview).not.toContainText(/lines removed/i);
+  });
+});
+
+test.describe("stage five tells the truth about merging", () => {
+  test("does not promise a deployment", async ({ page }) => {
+    await page.goto(MERGE);
+
+    const merge = page.getByTestId("agent-merge");
+    await expect(merge).not.toContainText(/merge & deploy/i);
+    await expect(merge).not.toContainText(/deployed automatically/i);
+  });
+
+  /**
+   * And does not claim the opposite either. Moving a default branch can start
+   * the customer's own pipeline, and they are entitled to know before the click.
+   */
+  test("says merging can start the repository's own pipeline", async ({ page }) => {
+    await page.goto(MERGE);
+
+    const merge = page.getByTestId("agent-merge");
+    await expect(merge).toContainText(/vibe does not deploy anything/i);
+    await expect(merge).toContainText(/merging will start it/i);
+  });
+
+  /** A passing validation is not a safety verdict (rule 66). */
+  test("does not call a passing check safe to merge", async ({ page }) => {
+    await page.goto(MERGE);
+
+    const merge = page.getByTestId("agent-merge");
+    await expect(merge).toContainText(/all checks passed/i);
+    await expect(merge).not.toContainText(/safe to merge/i);
+  });
+
+  test("lists every changed file with its own path", async ({ page }) => {
+    await page.goto(MERGE);
+
+    const files = page.getByTestId("agent-merge").locator("li");
+    await expect(files).toHaveCount(8);
+    await expect(page.getByTestId("agent-merge")).toContainText("src/lib/stripe/checkout.ts");
   });
 });

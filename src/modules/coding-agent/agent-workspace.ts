@@ -7,10 +7,15 @@ import type { PreparedChangeWorkspaceItem } from "@/modules/execution/workspace"
 import { getLatestOpportunities } from "@/modules/opportunities/service";
 import type { AgentTask } from "@/app/app/projects/[projectId]/agent/agent-task-panel";
 import { findLatestOperation } from "@/modules/operations/store";
+import type { ValidationCheck } from "@/app/app/projects/[projectId]/agent/agent-validation-checks";
+import type { PreviewChange } from "@/app/app/projects/[projectId]/agent/agent-preview-stage";
+import type { MergeSummary } from "@/app/app/projects/[projectId]/agent/agent-merge-stage";
+import type { StoredExecutionEvent } from "./observability/events";
 import {
   agentCoreState,
   agentStageSteps,
   type AgentCoreState,
+  type AgentStage,
   type AgentStageStep,
 } from "./observability/agent-stages";
 import { readAgentRunForLiveView } from "./observability/run-view";
@@ -58,6 +63,15 @@ export type AgentWorkspaceView = {
    * worse than one naming none.
    */
   task: AgentTask | null;
+  /** Which of the five the run is sitting on, so the route picks one body. */
+  stage: AgentStage | null;
+  /** Events that touched a file, for the validating stage's record. */
+  fileEvents: StoredExecutionEvent[];
+  /** The sandbox's own steps, as rows. Empty when nothing has been validated. */
+  checks: ValidationCheck[];
+  /** Named changes for the preview rail. Empty when nothing describes them. */
+  previewChanges: PreviewChange[];
+  mergeSummary: MergeSummary;
 };
 
 export async function readAgentWorkspace(
@@ -83,7 +97,18 @@ export async function readAgentWorkspace(
 
   const idle = () => {
     const stages = agentStageSteps({ timeline: null, runStatus: null, changeProgress: null });
-    return { stages, core: agentCoreState(stages), timeline: null, change: null, task: null };
+    return {
+      stages,
+      core: agentCoreState(stages),
+      timeline: null,
+      change: null,
+      task: null,
+      stage: null,
+      fileEvents: [],
+      checks: [],
+      previewChanges: [],
+      mergeSummary: { filesChanged: 0 },
+    };
   };
 
   if (stored === null) return idle();
@@ -153,7 +178,36 @@ export async function readAgentWorkspace(
     filesChanged,
   });
 
-  return { stages, core: agentCoreState(stages), timeline, change, task };
+  /*
+   * The stage a body is drawn for. `active` rather than "the furthest done",
+   * because a paused or failed run must not be shown the body of a stage it
+   * never reached.
+   */
+  const stage = stages.find((step) => step.state === "active")?.stage ?? null;
+
+  /* Only events that actually named a file belong in the validating record. */
+  const fileEvents = events.filter(
+    (event) => typeof event.metadata.path === "string" || typeof event.metadata.file === "string",
+  );
+
+  return {
+    stages,
+    core: agentCoreState(stages),
+    timeline,
+    change,
+    task,
+    stage,
+    fileEvents,
+    checks: validationChecks(change),
+    // Nothing stored describes a change in prose, so the preview rail carries
+    // no invented summaries. The frames and the file list carry the answer.
+    previewChanges: [],
+    mergeSummary: {
+      filesChanged: change?.filePaths.length ?? 0,
+      tests: testVerdict(change),
+      build: buildVerdict(change),
+    },
+  };
 }
 
 
@@ -205,4 +259,55 @@ async function resolveTask(
     lens: move.primaryLens,
     steps,
   };
+}
+
+
+/**
+ * The sandbox's steps, as rows the screen can draw.
+ *
+ * `install`, `typecheck`, `test`, `build` are the steps the validator plans and
+ * runs. The reference composition also drew "Linting" and "Security scan";
+ * neither exists, and a tick beside a check nobody ran is the one thing a
+ * safety screen must never show.
+ */
+const CHECK_ROWS: { step: string; name: string; detail: string }[] = [
+  { step: "install", name: "Dependencies", detail: "Installing packages" },
+  { step: "typecheck", name: "Type safety", detail: "Checking types" },
+  { step: "test", name: "Tests", detail: "Running unit and integration tests" },
+  { step: "build", name: "Production build", detail: "Building for production" },
+];
+
+function validationChecks(change: PreparedChangeWorkspaceItem | null): ValidationCheck[] {
+  const status = change?.validation?.status ?? null;
+  if (status === null) return [];
+
+  /*
+   * The card carries the run's overall status rather than its per-step results,
+   * so every row reports that one verdict. A row claiming a step-level outcome
+   * the card cannot see would be worse than a row that is honestly coarse.
+   */
+  const state: ValidationCheck["state"] =
+    status === "passed" ? "passed" : status === "failed" ? "failed" : "running";
+
+  return CHECK_ROWS.map((row) => ({ name: row.name, detail: row.detail, state }));
+}
+
+/**
+ * The card carries the validation run's overall status, not per-step results,
+ * so tests and build report the same verdict in their own vocabulary. Claiming
+ * a step-level outcome nothing can see would be worse than being honestly
+ * coarse.
+ */
+function testVerdict(change: PreparedChangeWorkspaceItem | null): MergeSummary["tests"] {
+  const status = change?.validation?.status ?? null;
+  if (status === "passed") return "passing";
+  if (status === "failed") return "failing";
+  return "not_run";
+}
+
+function buildVerdict(change: PreparedChangeWorkspaceItem | null): MergeSummary["build"] {
+  const status = change?.validation?.status ?? null;
+  if (status === "passed") return "successful";
+  if (status === "failed") return "failed";
+  return "not_run";
 }
