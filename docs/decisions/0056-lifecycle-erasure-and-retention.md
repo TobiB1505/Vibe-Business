@@ -164,6 +164,12 @@ The carve-out deliberately does **not** re-open casual deletion. `DELETE FROM pr
 
 > **[2026-08-26] Implemented as M1 in `20260826213000_project_lifecycle_deletion_authority.sql`. Three sentences above were wrong when written, and building M1 measured them.**
 >
+> **[2026-08-27] That filename no longer resolves, and the bracket is left standing rather than edited.** M1 shipped as
+> `20260826213000_…`, and `db9d0f2` renumbered it to `20260826222000_project_lifecycle_deletion_authority.sql` so it would
+> deploy *after* Migration B (`20260826221000_close_project_delete_entry_authority.sql`) — which the bracket's own point 2
+> demanded: "M1 must not be deployed until that privilege is closed." The sentence was true when written and the rename is
+> what made it false, so it is corrected here rather than in place. The content is unchanged; only the timestamp moved.
+>
 > **1. The cascade never checks the caller's privilege on `execution_specs`, so revoking it is not the authority.** A referential-integrity action runs with the *referencing table's owner* authority: measured, `current_user` inside the cascaded trigger is `postgres` even when the caller is `service_role`. Part 2 above therefore protects **direct** deletion only. It is worth keeping for exactly that, and it is not what makes the cascade safe.
 >
 > **2. The actual entry authority is `DELETE` on `public.projects`.** That is the privilege a caller needs to start the cascade that reaches the specs, and it is the one that has to be closed. M1 withdrew it from `service_role` — the one role that bypasses RLS and could otherwise reach any tenant — and left it with `authenticated`, because `projects/connect.ts` and `projects/disconnect.ts` still depend on it. That leaves a real gap, stated plainly: an `authenticated` caller who forges the marker can delete **their own** project and cascade its specs. Measured end to end under RLS as the owning user: `DELETE 1`, `remaining specs=0`. **M1 must not be deployed until that privilege is closed.**
