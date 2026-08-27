@@ -44,6 +44,45 @@ export function computeErasureIdentity(userId: string): string {
   return createHash("sha256").update(`account_erasure:v1:${userId}`).digest("hex");
 }
 
+export type ErasureRecord = {
+  id: string;
+  status: string;
+  failureCode: string | null;
+};
+
+/**
+ * The most recent erasure this account attempted, whatever became of it.
+ *
+ * "Is one running" is not the only question a settings screen has to answer. A
+ * *failed* erasure stops being active the moment it fails, so a screen that
+ * only asked the first question would respond to a failure by quietly redrawing
+ * the button — indistinguishable, to the person looking at it, from never
+ * having pressed it. That is the defect `findLatestOperation` was added for on
+ * the project side, and it applies here for the same reason.
+ *
+ * Reads on the caller's own client, so RLS answers it: an account-level row is
+ * visible to its owner and to nobody else (ADR 0057 §1).
+ */
+export async function findLatestErasure(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<ErasureRecord | null> {
+  const { data, error } = await supabase
+    .from("operation_runs")
+    .select("id, status, failure_code")
+    .eq("user_id", userId)
+    .eq("operation_type", "account_erasure")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) return null;
+
+  const row = data as { id: string; status: string; failure_code: string | null };
+  return { id: row.id, status: row.status, failureCode: row.failure_code };
+}
+
 export async function startAccountErasure(
   supabase: SupabaseClient,
   executor: OperationExecutor,
