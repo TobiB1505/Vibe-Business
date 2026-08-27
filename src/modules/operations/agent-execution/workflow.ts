@@ -257,11 +257,11 @@ extractChange.maxRetries = 0;
 
 async function writeBranch(
   operationId: string,
-  files: readonly { path: string; content: string; contentHash: string; bytes: number }[],
+  observedPaths: readonly string[] | null,
   candidateDigest: string,
 ) {
   "use step";
-  return writeAgentBranchStep(deps(), operationId, files, candidateDigest);
+  return writeAgentBranchStep(deps(), operationId, observedPaths, candidateDigest);
 }
 // A consequential external write. Recovery is `prepareChangeOnBranch`'s own
 // branch inspection, not a retry that could create a second branch.
@@ -352,9 +352,11 @@ export async function agentExecutionWorkflow(operationId: string) {
         if (!extracted.ok) {
           failureCode = extracted.failureCode;
         } else {
+          // Paths and a hash, never bytes (VB-017). The write step rebuilds
+          // the files from the sandbox and refuses unless they hash to this.
           const written = await writeBranch(
             operationId,
-            extracted.files,
+            extracted.observedPaths,
             extracted.candidateDigest,
           );
           if (!written.ok) failureCode = written.failureCode;
