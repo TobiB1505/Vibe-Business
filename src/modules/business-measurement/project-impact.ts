@@ -79,10 +79,15 @@ export async function getProjectImpact(
 
   const prepared = await listPreparedChangesForProject(supabase, projectId);
 
-  const entries: ProjectImpactEntry[] = [];
-  let unmergedCount = 0;
-
-  for (const change of prepared) {
+  // VB-024. This walked the prepared changes one at a time, and each step can
+  // reach GitHub through `getMergeCard` — so a project with ten changes paid
+  // ten sequential round trips before the page could render.
+  //
+  // Bounded rather than a plain `Promise.all(prepared.map(...))`: the merge
+  // card is a GitHub call, and firing one per prepared change at once is how a
+  // busy project trips a secondary rate limit. Six is well above the render
+  // times that matter and well below anything GitHub objects to.
+  const settled = await mapWithConcurrency(prepared, 6, async (change) => {
     const merge = mergeTarget
       ? await getMergeCard(supabase, createGithubMergePort(mergeTarget), {
           projectId,
@@ -99,10 +104,7 @@ export async function getProjectImpact(
     // Only a merged change can have an outcome. Reading outcome and impact for
     // an unmerged one would spend six database reads to be told "unavailable" —
     // which is precisely the waste this read model exists to stop.
-    if (merge.state !== "merged") {
-      unmergedCount += 1;
-      continue;
-    }
+    if (merge.state !== "merged") return null;
 
     const [outcome, businessImpact] = await Promise.all([
       getOutcomeCard(supabase, { projectId, preparedChangeId: change.id }),
@@ -112,7 +114,7 @@ export async function getProjectImpact(
       }),
     ]);
 
-    entries.push({
+    return {
       preparedChangeId: change.id,
       branchName: change.branchName,
       commitSha: change.commitSha,
@@ -120,8 +122,41 @@ export async function getProjectImpact(
       mergedAt: merge.mergedAt ?? null,
       outcome,
       businessImpact,
-    });
-  }
+    } satisfies ProjectImpactEntry;
+  });
+
+  // Order follows `prepared`, not completion order: the list is what the
+  // founder reads, and a card moving because a GitHub call was slow would be a
+  // different defect than the one being fixed.
+  const entries = settled.filter((entry): entry is ProjectImpactEntry => entry !== null);
+  const unmergedCount = settled.length - entries.length;
 
   return { entries, unmergedCount };
+}
+
+/**
+ * `Promise.all` with a ceiling on how many run at once.
+ *
+ * Results come back in input order regardless of completion order, which is
+ * what lets the caller treat this as a drop-in for a sequential loop.
+ */
+async function mapWithConcurrency<In, Out>(
+  items: readonly In[],
+  limit: number,
+  run: (item: In) => Promise<Out>,
+): Promise<Out[]> {
+  const results = new Array<Out>(items.length);
+  let next = 0;
+
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    for (;;) {
+      const index = next;
+      next += 1;
+      if (index >= items.length) return;
+      results[index] = await run(items[index]);
+    }
+  });
+
+  await Promise.all(workers);
+  return results;
 }
