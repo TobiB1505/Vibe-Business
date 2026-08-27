@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { InfoIcon } from "@/components/ui/dashboard-icons";
@@ -9,15 +10,10 @@ import { MonoLabel } from "@/components/ui/typography";
 import { useOperationPoll } from "@/lib/client/use-operation-poll";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { operationPollPhase, type OperationView } from "@/modules/operations/view";
-import { buildOpportunityBlockNotice } from "@/modules/opportunities/view";
-import { moveLensLabel, moveSummaryCounts } from "@/modules/opportunities/view";
+import { buildOpportunityBlockNotice, moveLensLabel } from "@/modules/opportunities/view";
 import type { BusinessOpportunity } from "@/modules/opportunities/schema";
-import {
-  partitionByContext,
-  type MoveLineageMap,
-  type MovesContext,
-} from "@/modules/opportunities/lineage";
-import { founderQuestionCta } from "@/modules/action-plans/view";
+import type { MoveLineageMap, MovesContext } from "@/modules/opportunities/lineage";
+import { PLAN_OPPORTUNITY_PARAM } from "@/modules/action-plans/source";
 import type { ActionPlanReadiness, ActionPlanView } from "@/modules/action-plans/service";
 import type {
   BlockedActionDestinations,
@@ -26,31 +22,22 @@ import type {
 import { getOperationStatusAction } from "../run-audit-action";
 import type { ValidationSummary } from "../validation-panel";
 import { MoveCard } from "./move-card";
-import { MoveList } from "./move-list";
-import { PlanDetailPanel, PLANNED_WORK_ANCHOR } from "./plan-detail-panel";
-import { PlanGenerating, PlanGeneratingAside } from "./plan-generating";
-import { PlanSummary } from "./plan-summary";
-
-/**
- * The Action Plan workspace (ACTION PLAN UI-2).
- *
- * One decision on the left, its explanation on the right. The two used to be
- * stacked — every Move, then one plan underneath — so the relationship between
- * them was expressed only by document order, and a founder had to scroll past
- * the list to find out what Vibe would actually do about the Move at the top of
- * it.
- *
- * Which Move the right side is about is `?plan=<id>` (ADR 0028). Selecting a
- * Move is navigation and nothing more: it never starts a run, because planning
- * is a paid call and a paid call needs a person to press a button that says
- * what it costs (Rule 60).
- *
- * Both operations are polled here rather than in the panels, so the whole
- * screen agrees about what is running.
- */
+import { MoveStepper } from "./move-stepper";
+import { PlanDetailPanel } from "./plan-detail-panel";
+import { PlanGenerating } from "./plan-generating";
 
 const POLL_INTERVAL_MS = 3_000;
+const SWIPE_DISTANCE = 72;
+const SWIPE_VELOCITY = 520;
 
+/**
+ * One Move at a time: priority, decision, explanation, action.
+ *
+ * The URL still records the selected Move so a refresh and Back/Forward keep
+ * context, but selection uses the native History API and local state. It does
+ * not navigate, reload, or start a paid planning run. The server remains the
+ * authority for every readiness and execution state rendered after selection.
+ */
 export function ActionPlanWorkspace({
   projectId,
   opportunities,
@@ -66,22 +53,19 @@ export function ActionPlanWorkspace({
   preparedHref,
   blockedDestinations,
   selectedOpportunityId,
-  moveTitle,
   defaultMoveTitle,
-  planReadiness,
+  planReadinessByOpportunity,
   planView,
   planOperation,
+  planOperationOpportunityId,
   auditHref,
   understandingHref,
-  productHref,
-  experimentsHref,
 }: {
   projectId: string;
   opportunities: BusinessOpportunity[];
   executionStates: Record<string, OpportunityActionState>;
   branchUrls: Record<string, string>;
   validationSummaries: Record<string, ValidationSummary>;
-  /** A newer audit exists than the one these were prioritized from. */
   stale: boolean;
   movesOperation: OperationView | null;
   movesBlockedReason: "audit_missing" | "audit_stale" | null;
@@ -90,19 +74,26 @@ export function ActionPlanWorkspace({
   movesHref: string;
   preparedHref: string;
   blockedDestinations: BlockedActionDestinations;
-  /** Which Move the panel is about — rank 1 by default, or a founder's choice. */
   selectedOpportunityId: string | null;
-  moveTitle: string | null;
   defaultMoveTitle: string | null;
-  planReadiness: ActionPlanReadiness;
+  /** Existing readiness semantics, resolved once per persisted Move. */
+  planReadinessByOpportunity: Record<string, ActionPlanReadiness>;
+  /** The project-wide latest plan. It is shown only for its own Move. */
   planView: ActionPlanView | null;
   planOperation: OperationView | null;
+  /** Conservative association for the operation loaded with this render. */
+  planOperationOpportunityId: string | null;
   auditHref: string;
   understandingHref: string;
-  productHref: string;
-  experimentsHref: string;
 }) {
   const reduceMotion = useReducedMotion();
+  const initialId =
+    opportunities.find((opportunity) => opportunity.id === selectedOpportunityId)?.id ??
+    opportunities[0]?.id ??
+    null;
+  const [activeOpportunityId, setActiveOpportunityId] = useState<string | null>(initialId);
+  const [direction, setDirection] = useState(1);
+
   const { latest: polledMoves } = useOperationPoll<OperationView>({
     key: movesOperation?.operationId ?? null,
     enabled: operationPollPhase(movesOperation) === "working",
@@ -121,70 +112,45 @@ export function ActionPlanWorkspace({
   const movesRunning =
     movesOperationView !== null &&
     (movesOperationView.status === "queued" || movesOperationView.status === "running");
-
   const hasOpportunities = opportunities.length > 0;
-  const selectedOpportunity =
-    opportunities.find((opportunity) => opportunity.id === selectedOpportunityId) ?? null;
+  const resolvedIndex = opportunities.findIndex(
+    (opportunity) => opportunity.id === activeOpportunityId,
+  );
+  const activeIndex = resolvedIndex >= 0 ? resolvedIndex : 0;
+  const activeOpportunity = opportunities[activeIndex] ?? null;
   const movesBlockNotice = buildOpportunityBlockNotice(movesBlockedReason);
 
-  // Elevation, never reranking. Both groups keep the engine's order and every
-  // card keeps its persisted number.
-  const { addressing, others } = partitionByContext(opportunities, movesContext);
+  function selectMove(index: number, history: "push" | "none" = "push") {
+    const next = opportunities[index];
+    if (!next || next.id === activeOpportunity?.id) return;
 
-  /*
-   * The founder-question CTA belongs to exactly one card: the Move the current
-   * plan is for. There is only ever one current plan project-wide, so a card
-   * for any other Move has no open questions to offer — and offering to answer
-   * questions that do not exist is the kind of dead affordance this workspace
-   * exists to remove.
-   */
-  const questionCta =
-    planView && planView.plan.opportunityId
-      ? founderQuestionCta(planView.openFounderInputCount)
-      : null;
-  const questionMoveId = planView?.plan.opportunityId ?? null;
+    setDirection(index > activeIndex ? 1 : -1);
+    setActiveOpportunityId(next.id);
 
-  const renderCard = (opportunity: BusinessOpportunity, inContext: boolean) => (
-    <MoveCard
-      projectId={projectId}
-      opportunity={opportunity}
-      execution={executionStates[opportunity.id] ?? null}
-      branchUrl={branchUrls[opportunity.id] ?? null}
-      validationSummary={validationSummaries[opportunity.id] ?? null}
-      lineageHeadline={inContext ? null : (lineage[opportunity.id]?.headline ?? null)}
-      preparedHref={preparedHref}
-      blockedDestinations={blockedDestinations}
-      movesHref={movesHref}
-      selected={opportunity.id === selectedOpportunityId}
-      questionCta={opportunity.id === questionMoveId ? questionCta : null}
-      planPanelHref={`#${PLANNED_WORK_ANCHOR}`}
-    />
-  );
+    if (history === "push") {
+      const url = new URL(window.location.href);
+      url.searchParams.set(PLAN_OPPORTUNITY_PARAM, next.id);
+      window.history.pushState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    }
+  }
 
-  const waitLinks = [
-    {
-      href: auditHref,
-      title: "Keep your Business Health up to date",
-      detail: "Fresher evidence leads to better moves.",
-    },
-    {
-      href: productHref,
-      title: "Add context if something is missing",
-      detail: "Help Vibe understand what your product is for.",
-    },
-    {
-      href: experimentsHref,
-      title: "Review what changed before",
-      detail: "See what a merged change made measurable.",
-    },
-  ];
+  useEffect(() => {
+    const restoreSelection = () => {
+      const requested = new URL(window.location.href).searchParams.get(PLAN_OPPORTUNITY_PARAM);
+      const index = opportunities.findIndex((opportunity) => opportunity.id === requested);
+      const next = opportunities[index];
+      if (!next || next.id === activeOpportunityId) return;
+      setDirection(index > activeIndex ? 1 : -1);
+      setActiveOpportunityId(next.id);
+    };
+
+    window.addEventListener("popstate", restoreSelection);
+    return () => window.removeEventListener("popstate", restoreSelection);
+  }, [activeIndex, activeOpportunityId, opportunities]);
 
   return (
-    <div className="flex flex-col gap-6">
-      {/* Arrived from one audit finding. Orientation, not a second audit
-          surface: the finding in the audit's own words, how many Moves answer
-          it, and a way back to the whole list. */}
-      {movesContext && (
+    <div className="mx-auto flex w-full max-w-6xl flex-col gap-5">
+      {movesContext ? (
         <Surface
           level="section"
           padding="md"
@@ -196,85 +162,135 @@ export function ActionPlanWorkspace({
           <div className="flex flex-wrap items-baseline justify-between gap-3">
             <p className="text-fg-muted text-xs">
               {movesContext.moveIds.length === 1
-                ? "1 way Vibe can help"
-                : `${movesContext.moveIds.length} ways Vibe can help`}
+                ? "1 move addresses this"
+                : `${movesContext.moveIds.length} moves address this`}
             </p>
             <Link
               href={movesHref}
               className="text-fg-muted hover:text-fg-body rounded-sm text-xs underline underline-offset-4"
             >
-              See all next moves
+              See the full priority order
             </Link>
           </div>
         </Surface>
-      )}
+      ) : null}
 
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.65fr)_minmax(24rem,1fr)] xl:items-start 2xl:gap-7">
-        <div className="flex min-w-0 flex-col gap-4">
-          <div className="border-line-2 bg-surface-1 rounded-panel flex flex-wrap items-center gap-3 border px-4 py-3">
+      {hasOpportunities && activeOpportunity ? (
+        <>
+          <div className="border-line-2 bg-surface-1 rounded-panel flex items-center gap-3 border px-4 py-3">
             <InfoIcon size={15} className="text-fg-meta shrink-0" />
             <p className="text-fg-muted text-xs leading-relaxed">
-              {hasOpportunities
-                ? "These moves are ordered by impact and by what has to happen first."
-                : "Vibe orders your moves by impact and by what has to happen first."}
+              Moves are ordered by impact and by what has to happen first. Choose a step or swipe
+              the active Move to explore the plan.
             </p>
           </div>
 
-          {hasOpportunities ? (
-            movesContext ? (
-              <>
-                <MoveList opportunities={addressing}>
-                  {(opportunity) => renderCard(opportunity, true)}
-                </MoveList>
-                {/* The rest of the ranked list stays reachable when the page
-                    was entered from a finding — filtered away would be a
-                    smaller product, not a clearer one. */}
-                {others.length > 0 && (
-                  <div className="flex flex-col gap-3 pt-2">
-                    <MonoLabel as="h3" className="text-fg-secondary">
-                      Your other moves
-                    </MonoLabel>
-                    <MoveList opportunities={others}>
-                      {(opportunity) => renderCard(opportunity, false)}
-                    </MoveList>
-                  </div>
-                )}
-              </>
-            ) : (
-              <MoveList opportunities={others}>
-                {(opportunity) => renderCard(opportunity, false)}
-              </MoveList>
-            )
-          ) : (
-            <PlanGenerating running={movesRunning}>
-              {!movesRunning && movesBlockNotice !== null && (
-                <Notice
-                  tone="waiting"
-                  label="Why this is blocked"
-                  className="text-left"
-                  action={
-                    <a
-                      href={auditHref}
-                      className="text-fg-prose hover:text-fg rounded-sm text-sm underline underline-offset-4 transition-interactive"
-                    >
-                      {movesBlockNotice.actionLabel}
-                    </a>
+          <MoveStepper
+            opportunities={opportunities}
+            activeIndex={activeIndex}
+            onSelect={selectMove}
+          />
+
+          <motion.div layout={!reduceMotion} className="min-w-0">
+            <AnimatePresence mode="wait" initial={false} custom={direction}>
+              <motion.div
+                key={activeOpportunity.id}
+                id="active-move-panel"
+                role="tabpanel"
+                aria-labelledby={`move-step-${activeIndex}`}
+                custom={direction}
+                initial={reduceMotion ? false : { opacity: 0, x: direction * 48 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={reduceMotion ? undefined : { opacity: 0, x: direction * -40 }}
+                transition={
+                  reduceMotion
+                    ? { duration: 0 }
+                    : { duration: 0.4, ease: [0.22, 0.72, 0.18, 1] }
+                }
+                drag={!reduceMotion && opportunities.length > 1 ? "x" : false}
+                dragConstraints={{ left: 0, right: 0 }}
+                dragElastic={0.14}
+                dragDirectionLock
+                onDragEnd={(_, info) => {
+                  if (
+                    (info.offset.x <= -SWIPE_DISTANCE || info.velocity.x <= -SWIPE_VELOCITY) &&
+                    activeIndex < opportunities.length - 1
+                  ) {
+                    selectMove(activeIndex + 1);
+                  } else if (
+                    (info.offset.x >= SWIPE_DISTANCE || info.velocity.x >= SWIPE_VELOCITY) &&
+                    activeIndex > 0
+                  ) {
+                    selectMove(activeIndex - 1);
                   }
-                >
-                  {OPERATION_FAILURE_MESSAGES[movesBlockNotice.reason]}
-                </Notice>
-              )}
-            </PlanGenerating>
-          )}
+                }}
+                className="touch-pan-y"
+                data-testid="active-move"
+              >
+                <MoveCard
+                  opportunity={activeOpportunity}
+                  execution={executionStates[activeOpportunity.id] ?? null}
+                />
+              </motion.div>
+            </AnimatePresence>
+          </motion.div>
 
-          {stale && hasOpportunities && (
+          <motion.div layout={!reduceMotion}>
+            <AnimatePresence mode="wait" initial={false} custom={direction}>
+              <motion.div
+                key={`detail-${activeOpportunity.id}`}
+                initial={reduceMotion ? false : { opacity: 0, y: 12, x: direction * 12 }}
+                animate={{ opacity: 1, y: 0, x: 0 }}
+                exit={reduceMotion ? undefined : { opacity: 0, y: -6, x: direction * -8 }}
+                transition={
+                  reduceMotion
+                    ? { duration: 0 }
+                    : { duration: 0.36, ease: [0.22, 0.72, 0.18, 1] }
+                }
+              >
+                {planReadinessByOpportunity[activeOpportunity.id] ? (
+                  <PlanDetailPanel
+                    projectId={projectId}
+                    opportunityId={activeOpportunity.id}
+                    moveTitle={activeOpportunity.title}
+                    moveRank={activeOpportunity.rank}
+                    moveLens={moveLensLabel(activeOpportunity)}
+                    moveProblem={activeOpportunity.problem}
+                    moveWhyNow={activeOpportunity.whyNow}
+                    lineageHeadline={lineage[activeOpportunity.id]?.headline ?? null}
+                    defaultMoveTitle={defaultMoveTitle}
+                    readiness={planReadinessByOpportunity[activeOpportunity.id]}
+                    planView={
+                      planView?.plan.opportunityId === activeOpportunity.id ? planView : null
+                    }
+                    activeOperation={
+                      planOperationOpportunityId === activeOpportunity.id ? planOperation : null
+                    }
+                    execution={executionStates[activeOpportunity.id] ?? null}
+                    branchUrl={branchUrls[activeOpportunity.id] ?? null}
+                    validationSummary={validationSummaries[activeOpportunity.id] ?? null}
+                    preparedHref={preparedHref}
+                    blockedDestinations={blockedDestinations}
+                    auditHref={auditHref}
+                    understandingHref={understandingHref}
+                  />
+                ) : (
+                  <Notice tone="waiting" label="Move details unavailable">
+                    Refresh the Action Plan before acting on this Move.
+                  </Notice>
+                )}
+              </motion.div>
+            </AnimatePresence>
+          </motion.div>
+
+          {stale ? (
             <Notice tone="waiting" label="New business evidence is available">
-              These were prioritized from an earlier audit, and still say what they addressed then.
-              Refreshing spends another AI call and may change the order.
+              These Moves were prioritized from an earlier audit. Re-scanning may change their
+              order and spends another AI call.
             </Notice>
-          )}
+          ) : null}
 
-          {hasOpportunities && movesBlockNotice !== null && !movesRunning && (
+          {movesBlockNotice !== null && !movesRunning ? (
             <Notice
               tone="waiting"
               label="Why a refresh is blocked"
@@ -289,78 +305,44 @@ export function ActionPlanWorkspace({
             >
               {OPERATION_FAILURE_MESSAGES[movesBlockNotice.reason]}
             </Notice>
-          )}
+          ) : null}
 
-          {movesOperationView?.status === "failed" && movesOperationView.failureCode && (
-            <p className="text-amber text-sm">
-              Vibe couldn&apos;t work out your next moves.{" "}
-              {OPERATION_FAILURE_MESSAGES[movesOperationView.failureCode]}
+          <div className="border-line-2 bg-surface-1 rounded-panel flex items-center gap-3 border px-4 py-3">
+            <InfoIcon size={15} className="text-fg-meta shrink-0" />
+            <p className="text-fg-muted text-xs leading-relaxed">
+              Priorities can change as your business evolves. Re-scanning re-orders this plan
+              against current evidence.
             </p>
-          )}
+          </div>
+        </>
+      ) : (
+        <PlanGenerating running={movesRunning}>
+          {!movesRunning && movesBlockNotice !== null ? (
+            <Notice
+              tone="waiting"
+              label="Why this is blocked"
+              className="text-left"
+              action={
+                <a
+                  href={auditHref}
+                  className="text-fg-prose hover:text-fg rounded-sm text-sm underline underline-offset-4 transition-interactive"
+                >
+                  {movesBlockNotice.actionLabel}
+                </a>
+              }
+            >
+              {OPERATION_FAILURE_MESSAGES[movesBlockNotice.reason]}
+            </Notice>
+          ) : null}
+        </PlanGenerating>
+      )}
 
-          {hasOpportunities && (
-            <div className="border-line-2 bg-surface-1 rounded-panel flex flex-wrap items-center gap-3 border px-4 py-3">
-              <InfoIcon size={15} className="text-fg-meta shrink-0" />
-              <p className="text-fg-muted text-xs leading-relaxed">
-                Priorities change as your business does. Re-scanning re-orders this plan against
-                your current evidence.
-              </p>
-            </div>
-          )}
-        </div>
-
-        <div className="flex min-w-0 flex-col gap-3.5 xl:sticky xl:top-6">
-          <PlanSummary counts={hasOpportunities ? moveSummaryCounts(opportunities) : null} />
-
-          <AnimatePresence mode="wait" initial={false}>
-            {hasOpportunities ? (
-              <motion.div
-                key={selectedOpportunityId ?? "no-selection"}
-                initial={reduceMotion ? false : { opacity: 0, x: 12 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={reduceMotion ? undefined : { opacity: 0, x: -8 }}
-                transition={
-                  reduceMotion
-                    ? { duration: 0 }
-                    : { duration: 0.24, ease: [0.2, 0.7, 0.2, 1] }
-                }
-              >
-                <PlanDetailPanel
-                  projectId={projectId}
-                  opportunityId={selectedOpportunityId}
-                  moveTitle={moveTitle}
-                  moveRank={selectedOpportunity?.rank ?? null}
-                  moveLens={selectedOpportunity ? moveLensLabel(selectedOpportunity) : null}
-                  defaultMoveTitle={defaultMoveTitle}
-                  readiness={planReadiness}
-                  planView={planView}
-                  activeOperation={planOperation}
-                  auditHref={auditHref}
-                  understandingHref={understandingHref}
-                />
-              </motion.div>
-            ) : movesBlockNotice !== null && !movesRunning ? null : (
-              <motion.div
-                key="generating"
-                initial={reduceMotion ? false : { opacity: 0, x: 12 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={
-                  reduceMotion
-                    ? { duration: 0 }
-                    : { duration: 0.3, ease: [0.2, 0.7, 0.2, 1] }
-                }
-              >
-                <PlanGeneratingAside
-                  running={movesRunning}
-                  operation={movesOperationView}
-                  waitLinks={waitLinks}
-                  healthHref={auditHref}
-                />
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
-      </div>
+      {movesOperationView?.status === "failed" && movesOperationView.failureCode ? (
+        <p className="text-amber text-sm">
+          Vibe couldn&apos;t work out your next Moves.{" "}
+          {OPERATION_FAILURE_MESSAGES[movesOperationView.failureCode]}
+        </p>
+      ) : null}
     </div>
   );
 }

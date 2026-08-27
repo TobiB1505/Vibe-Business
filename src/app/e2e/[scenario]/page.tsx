@@ -81,6 +81,7 @@ import { RetryProductScan } from "@/app/app/onboarding/[projectId]/phase-actions
 import { UnderstandingStatus } from "@/app/app/onboarding/[projectId]/understanding-status";
 import { ActionPlanWorkspace } from "@/app/app/projects/[projectId]/plan/action-plan-workspace";
 import { MovesRefreshBar } from "@/app/app/projects/[projectId]/plan/moves-refresh-bar";
+import type { ActionPlanReadiness } from "@/modules/action-plans/service";
 import { ProductLogo } from "@/components/brand/product-logo";
 import { BillingView } from "@/app/app/(account)/billing/billing-view";
 import { E2E_BILLING_SCENARIOS, isE2eBillingScenario } from "../billing-scenarios";
@@ -226,6 +227,21 @@ export default async function E2eScenarioPage({
   if (isE2eMovesScenario(scenario)) {
     const fixture = E2E_MOVES_SCENARIOS[scenario]();
     const blocked = fixture.blockedReason !== null;
+    const planReadinessByOpportunity: Record<string, ActionPlanReadiness> = Object.fromEntries(
+      fixture.opportunities.map<[string, ActionPlanReadiness]>((opportunity, index) => [
+        opportunity.id,
+        {
+          ready: !blocked,
+          blockedReason: blocked ? "audit_missing" : null,
+          auditId: null,
+          opportunityId: opportunity.id,
+          isDefaultMove: index === 0,
+          conclusionKey: null,
+          conclusionLineage: null,
+          unresolvedSourceReason: null,
+        },
+      ]),
+    );
     return (
       <main className="mx-auto max-w-[90rem] p-8">
         {label}
@@ -257,24 +273,13 @@ export default async function E2eScenarioPage({
             repository: "/app/projects/project_e2e/settings",
           }}
           selectedOpportunityId={fixture.opportunities[0]?.id ?? null}
-          moveTitle={fixture.opportunities[0]?.title ?? null}
           defaultMoveTitle={fixture.opportunities[0]?.title ?? null}
-          planReadiness={{
-            ready: !blocked,
-            blockedReason: blocked ? "audit_missing" : null,
-            auditId: null,
-            opportunityId: fixture.opportunities[0]?.id ?? null,
-            isDefaultMove: true,
-            conclusionKey: null,
-            conclusionLineage: null,
-            unresolvedSourceReason: null,
-          }}
+          planReadinessByOpportunity={planReadinessByOpportunity}
           planView={null}
           planOperation={null}
+          planOperationOpportunityId={null}
           auditHref="/app/projects/project_e2e#business-audit"
           understandingHref="/app/projects/project_e2e/product"
-          productHref="/app/projects/project_e2e/product"
-          experimentsHref="/app/projects/project_e2e/experiments"
         />
       </main>
     );
@@ -730,7 +735,7 @@ export default async function E2eScenarioPage({
 
   /*
    * The planned-work panel (ACTION PLANNER UI-1; ACTION PLAN UI-2): the same
-   * component the Action Plan route renders in its side column, given the
+   * component the Action Plan route renders below the active Move, given the
    * exact read-model shape `getActionPlanReadiness` / `getLatestActionPlan` /
    * `getActiveActionPlanOperation` produce. No AI call backs any of it.
    */

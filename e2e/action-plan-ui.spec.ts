@@ -406,7 +406,7 @@ test.describe("ready plan — reasoning disclosure", () => {
 
     // The label now carries the counted evidence behind the plan, so it is
     // matched by prefix rather than exactly.
-    const disclosure = page.getByText("Why Vibe planned this", { exact: false });
+    const disclosure = page.getByText("Evidence & details", { exact: false });
     await expect(disclosure).toBeVisible();
 
     /*

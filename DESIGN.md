@@ -77,12 +77,12 @@ Billing follows a compact financial-dashboard composition: plan, spendable Credi
 
 The project Product page reads as one coherent product dossier, not a stack of scanner reports. Its opening identity card may combine the real product mark, evidence-backed description, category, capability count and source coverage, but never a fabricated screenshot or product metric. Product DNA, founder intent, discovered capabilities, journey, brand identity and source coverage follow in that order; raw technical evidence stays available behind disclosure. The profile confirmation is the terminal surface: legacy scan summaries, coach prompts and cross-navigation actions must not continue below it.
 
-The Action Plan is a decision beside its explanation, not a report. The Move list
-and its Now/Next/Later rail own the reading column; the summary counts and the
-planned-work panel own a narrower side column that stays with the list as it
-scrolls. Both columns reserve their geometry before any Move exists, so the page
-does not rearrange itself around the founder when a run lands. Selection is the
-only relationship between the two halves and it lives in the URL.
+The Action Plan guides one decision at a time, not a project-management board.
+A horizontal Now/Next/Later priority track leads to one active Move card and one
+stable detail region below it. Other Moves remain available through the track,
+but never compete as full cards or permanent side panels. Selection is local and
+immediate; the URL records it only so refresh and browser history preserve the
+founder's place, never to turn a step change into route navigation.
 
 Nothing on this surface may state a duration, a percentage or a step counter. A
 Move's effort is the coarse label the domain records, the parts of the product a
@@ -91,14 +91,15 @@ stages its executor actually wrote. Where the reference composition asked for a
 figure the domain cannot produce, the honest reading takes the slot or the slot
 goes.
 
-The Action Plan may use bounded orchestration because order and selection are
-part of its meaning: Move rows settle into the persisted sequence once, and a
-URL-backed selection crossfades the planned-work panel without moving either
-column. The forming-plan state may use a contained orbital core only while a
-real operation is active and the document is visible. It never advances copy,
-numbers or stage state on a timer. Reduced motion removes the row offsets,
-crossfade transforms, orbit and pulse while leaving the same ordered list and
-named stages present at first paint. Static cards do not breathe, scan or glow.
+The Action Plan may use bounded orchestration because priority and focus are part
+of its meaning: the active Move slides horizontally for step, arrow and swipe
+selection while the detail region fades by a shorter distance and adapts its
+height. The motion lasts roughly 350–450ms, never changes rank or state, and has
+button and keyboard equivalents. The forming-plan state may use a contained
+orbital core only while a real operation is active and the document is visible.
+It never advances copy, numbers or stage state on a timer. Reduced motion removes
+slides, transforms, orbit and pulse while leaving the same priority, Move and
+named stages present immediately. Static cards do not breathe, scan or glow.
 
 ## Signature Surface: Business Brain
 

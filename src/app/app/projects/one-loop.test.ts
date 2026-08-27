@@ -26,6 +26,9 @@ const SERVICE = read("src/modules/opportunities/service.ts");
 const MOVES_PAGE = read("src/app/app/projects/[projectId]/plan/page.tsx");
 const SCORE_PAGE = read("src/app/app/projects/[projectId]/health/content.tsx");
 const PANEL = read("src/app/app/projects/[projectId]/plan/move-card.tsx");
+const STEPPER = read("src/app/app/projects/[projectId]/plan/move-stepper.tsx");
+const WORKSPACE = read("src/app/app/projects/[projectId]/plan/action-plan-workspace.tsx");
+const PLAN_DETAIL = read("src/app/app/projects/[projectId]/plan/plan-detail-panel.tsx");
 const PRIORITIES = read(
   "src/app/app/projects/[projectId]/business-brain/audit-intelligence.tsx",
 );
@@ -129,11 +132,11 @@ describe("context filters, it never reranks", () => {
   });
 
   it("renders the rank the domain gave, never a positional one", () => {
-    // The card pads it for the two-digit reference design; the value is still
-    // the persisted rank, and the attribute the browser suite asserts on is
-    // unchanged. What must never appear is a number derived from list order.
+    // The active card and the priority step both use the persisted rank.
     expect(PANEL).toContain("String(opportunity.rank).padStart(2");
     expect(PANEL).toContain('data-rank={opportunity.rank}');
+    expect(STEPPER).toContain("opportunity.rank");
+    expect(STEPPER).toContain('data-rank={opportunity.rank}');
     expect(copyOf(PANEL)).not.toMatch(/rank\s*[:=]\s*index/);
   });
 
@@ -146,13 +149,13 @@ describe("context filters, it never reranks", () => {
 });
 
 describe("the card says one thing at a time", () => {
-  /** Regression 5: the chip soup returns. */
-  it("shows readiness and impact in the chip row, and nothing else", () => {
-    const chips = PANEL.slice(PANEL.indexOf("Two, not five"), PANEL.indexOf("<Disclosure"));
+  it("shows impact and effort without turning evidence into card furniture", () => {
+    const chips = PANEL.slice(PANEL.indexOf('className="flex flex-wrap items-center gap-2"'));
     expect(chips).toContain("IMPACT_LABELS");
-    expect(chips).not.toContain("EFFORT_LABELS");
+    expect(chips).toContain("EFFORT_LABELS");
     expect(chips).not.toContain("CONFIDENCE_LABELS");
     expect(chips).not.toContain("DIMENSION_LABELS");
+    expect(PANEL).not.toContain("describeEvidenceId");
   });
 
   /**
@@ -166,35 +169,45 @@ describe("the card says one thing at a time", () => {
     expect(copyOf(PANEL)).not.toContain("EXECUTION_READINESS_LABELS");
   });
 
-  /** §14: the domain keeps the dimension; the card stops drawing it. */
+  /** The domain keeps its internal category; the card uses the attributed Lens. */
   it("no longer imports the dimension labels at all", () => {
     expect(PANEL).not.toContain("DIMENSION_LABELS");
+    expect(PANEL).toContain("moveLensLabel(opportunity)");
   });
 
-  /** §17: demoted, not deleted. Confidence stays behind the disclosure. */
-  it("keeps confidence under the disclosure", () => {
-    const details = PANEL.slice(
-      PANEL.indexOf("<Disclosure"),
-      PANEL.indexOf("Why Vibe thinks this"),
-    );
-    expect(details).toContain("CONFIDENCE_LABELS");
-  });
-
-  /**
-   * ACTION PLAN UI-2: effort is stated once, in the slot the reference design
-   * fills with a duration.
-   *
-   * The domain has no duration and forbids one (`opportunities/schema.ts` §6),
-   * so this asserts the substitution held: effort where a time would be, and
-   * no time anywhere.
-   */
-  it("puts effort where a duration would be, and prints no duration", () => {
-    const action = PANEL.slice(PANEL.indexOf("border-t pt-4"));
-    expect(action).toContain("EFFORT_LABELS[opportunity.effort]");
+  it("prints no invented duration", () => {
+    expect(PANEL).toContain("EFFORT_LABELS[opportunity.effort]");
     expect(copyOf(PANEL)).not.toMatch(/~\s*\d/);
-    // A duration is a number and a unit. Matching the unit alone would catch
-    // a Tailwind `min-w-0`, which is a class name, not a claim about time.
     expect(copyOf(PANEL)).not.toMatch(/\d\s*(hours?|minutes?|mins?|hrs?|days?|weeks?)\b/i);
+  });
+});
+
+describe("the stepper owns selection without owning business state", () => {
+  it("renders one active Move and changes it through local history", () => {
+    expect(WORKSPACE.match(/<MoveCard/g)).toHaveLength(1);
+    expect(WORKSPACE).toContain("window.history.pushState");
+    expect(WORKSPACE).toContain("setActiveOpportunityId");
+    expect(WORKSPACE).not.toContain("router.push");
+  });
+
+  it("offers button and keyboard equivalents for swipe", () => {
+    expect(STEPPER).toContain('role="tablist"');
+    expect(STEPPER).toContain('event.key === "ArrowRight"');
+    expect(STEPPER).toContain('aria-label="Previous move"');
+    expect(STEPPER).toContain('aria-label="Next move"');
+    expect(WORKSPACE).toContain('drag={!reduceMotion');
+  });
+
+  it("loads existing readiness per Move rather than deriving it in the browser", () => {
+    expect(MOVES_PAGE).toContain("planReadinessByOpportunity");
+    expect(MOVES_PAGE).toContain("getActionPlanReadiness(supabase, projectId, opportunity.id)");
+    expect(WORKSPACE).not.toContain("executionReadiness === \"ready\"");
+  });
+
+  it("keeps the one primary Move action in the detail region", () => {
+    expect(PANEL).not.toContain("PrepareChangePanel");
+    expect(PLAN_DETAIL).toContain("PrepareChangePanel");
+    expect(PLAN_DETAIL).toContain("executionOwnsPrimary");
   });
 });
 

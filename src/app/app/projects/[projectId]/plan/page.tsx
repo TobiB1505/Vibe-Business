@@ -51,13 +51,12 @@ import { MovesRefreshBar } from "./moves-refresh-bar";
  * no outcome, no impact. Those belong to `/agent`, and this route reaching
  * for them is how the coupling would grow back.
  *
- * ## Why the reads did not change when the layout did
+ * ## Why selection has readiness for every Move
  *
- * The list and the plan now sit side by side rather than stacked, and which
- * Move the plan is about is still `?plan=<id>` — the same parameter, resolved
- * the same way, with the same refusal to substitute silently. A layout change
- * that needed a new read would have been a product change wearing a layout
- * change's clothes.
+ * The horizontal stepper changes focus without a route render. The route
+ * therefore resolves the existing readiness contract once per persisted Move
+ * in parallel; the browser never derives or invents a readiness state. The
+ * `?plan=<id>` parameter still restores an explicit choice after refresh.
  */
 export default async function ProjectMovesPage({
   params,
@@ -82,7 +81,6 @@ export default async function ProjectMovesPage({
     opportunityReadiness,
     activeOpportunityOperation,
     executionSummaries,
-    actionPlanReadiness,
     actionPlanView,
     activeActionPlanOperation,
   ] = await Promise.all([
@@ -90,7 +88,6 @@ export default async function ProjectMovesPage({
     getOpportunityReadiness(supabase, projectId),
     getActiveOpportunityOperation(supabase, projectId),
     getOpportunityExecutionSummaries(supabase, projectId),
-    getActionPlanReadiness(supabase, projectId, requestedOpportunityId),
     getLatestActionPlan(supabase, projectId),
     getActiveActionPlanOperation(supabase, projectId),
   ]);
@@ -111,16 +108,22 @@ export default async function ProjectMovesPage({
     ? defaultPlannedOpportunity(opportunities.set.opportunities)
     : null;
 
-  // The single latest completed plan is project-wide, not per-Move
-  // (`supersedeOtherPlans` marks every other one superseded regardless of
-  // which Move it was for). If it is for a different Move than the one
-  // currently selected, showing it here would read as "here is your plan for
-  // X" while displaying Y's — so it renders only when it actually answers the
-  // current selection; otherwise the CTA below offers to plan this one.
-  const resolvedActionPlanView =
-    actionPlanView && plannedMove && actionPlanView.plan.opportunityId === plannedMove.id
-      ? actionPlanView
-      : null;
+  /*
+   * The stepper switches Moves without a route render, so each persisted Move
+   * receives the same existing readiness answer up front. These calls run in
+   * parallel and do not change readiness semantics; they only prevent the
+   * browser from guessing when the founder moves from step 1 to step 2.
+   */
+  const planReadinessByOpportunity = Object.fromEntries(
+    opportunities
+      ? await Promise.all(
+          opportunities.set.opportunities.map(async (opportunity) => [
+            opportunity.id,
+            await getActionPlanReadiness(supabase, projectId, opportunity.id),
+          ] as const),
+        )
+      : [],
+  );
 
   /*
    * Which audit finding each Move answers, and which one the founder arrived
@@ -259,10 +262,9 @@ export default async function ProjectMovesPage({
           repository: projectSectionHref(project.id, "settings"),
         }}
         selectedOpportunityId={plannedMove?.id ?? null}
-        moveTitle={plannedMove?.title ?? null}
         defaultMoveTitle={defaultMove?.title ?? null}
-        planReadiness={actionPlanReadiness}
-        planView={resolvedActionPlanView}
+        planReadinessByOpportunity={planReadinessByOpportunity}
+        planView={actionPlanView}
         // Project-wide, not scoped to `plannedMove` — `action_planning`
         // operations are keyed by input identity (which does include the
         // Move), so two concurrent runs for two different Moves are possible
@@ -272,10 +274,9 @@ export default async function ProjectMovesPage({
         // enough (two plan clicks on different Moves within the same run) that
         // it is called out here rather than fixed now.
         planOperation={activeActionPlanOperation}
+        planOperationOpportunityId={plannedMove?.id ?? null}
         auditHref={projectSectionHref(project.id, "business-audit")}
         understandingHref={projectSectionHref(project.id, "my-product")}
-        productHref={projectSectionHref(project.id, "my-product")}
-        experimentsHref={projectSectionHref(project.id, "experiments")}
       />
     </WorkspaceSection>
   );

@@ -1,21 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
 import { motion, useReducedMotion } from "motion/react";
 import {
-  ArrowRightIcon,
   BusinessHealthIcon,
-  ChevronRightIcon,
   DocumentIcon,
   LockIcon,
   SparklesIcon,
   TargetIcon,
 } from "@/components/ui/dashboard-icons";
 import { Surface } from "@/components/ui/surface";
-import { cn } from "@/lib/utils/cn";
-import { operationProgressSteps, type OperationView } from "@/modules/operations/view";
-import { PlanProgressSteps } from "./plan-progress-steps";
 
 function useDocumentVisible() {
   const [visible, setVisible] = useState(true);
@@ -114,9 +108,9 @@ function PlanningCore({ active }: { active: boolean }) {
  * situation — there is nothing here yet — and the difference between them is a
  * sentence, not a layout: either a run is working, or nothing has started.
  *
- * The geometry is reserved either way. The list column and the side column
- * exist before the first Move does, so the page does not rearrange itself
- * around the founder when the run lands.
+ * The geometry is reserved either way. The forming stage occupies the same
+ * centered reading width as the later stepper and active Move, so the page
+ * does not rearrange itself around the founder when the run lands.
  *
  * What it must not do, and what the reference design does: claim a duration.
  * "This usually takes 1–2 minutes" is a promise about a paid inference call
@@ -198,70 +192,6 @@ export function PlanGenerating({
           Your data is private. Vibe uses it only to work out what to recommend for this product.
         </p>
       </div>
-    </>
-  );
-}
-
-/**
- * The side column while there is nothing to select.
- *
- * "What's happening" names the run's real stages (`operationProgressSteps`);
- * "While you wait" links only to places that already exist in this workspace.
- */
-export function PlanGeneratingAside({
-  running,
-  operation,
-  waitLinks,
-  healthHref,
-}: {
-  running: boolean;
-  operation: OperationView | null;
-  waitLinks: { href: string; title: string; detail: string }[];
-  healthHref: string;
-}) {
-  return (
-    <>
-      {running && (
-        <Surface level="panel" padding="lg" className="flex flex-col gap-4">
-          <h2 className="text-fg text-title font-bold">What&apos;s happening</h2>
-          <PlanProgressSteps
-            steps={operationProgressSteps("opportunity_generation", operation)}
-            variant="timeline"
-          />
-        </Surface>
-      )}
-
-      <Surface level="panel" padding="lg" className="flex flex-col gap-4">
-        <h2 className="text-fg text-title font-bold">
-          {running ? "While you wait" : "Where your moves come from"}
-        </h2>
-        <ul className="flex flex-col gap-1">
-          {waitLinks.map((link) => (
-            <li key={link.href}>
-              <Link
-                href={link.href}
-                className={cn(
-                  "hover:bg-surface-hover rounded-nav -mx-2 flex items-start gap-3 px-2 py-2.5",
-                  "transition-interactive",
-                )}
-              >
-                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="text-fg-body text-sm font-medium">{link.title}</span>
-                  <span className="text-fg-muted text-xs leading-relaxed">{link.detail}</span>
-                </div>
-                <ChevronRightIcon size={16} className="text-fg-meta mt-0.5 shrink-0" />
-              </Link>
-            </li>
-          ))}
-        </ul>
-        <Link
-          href={healthHref}
-          className="text-mint hover:text-mint-hover inline-flex items-center gap-2 self-start rounded-sm text-sm font-medium transition-interactive"
-        >
-          Go to Business Health
-          <ArrowRightIcon size={15} />
-        </Link>
-      </Surface>
     </>
   );
 }

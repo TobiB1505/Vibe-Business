@@ -1,7 +1,10 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { motion, useReducedMotion } from "motion/react";
 import { Button, TextAction } from "@/components/ui/button";
+import { CheckIcon } from "@/components/ui/dashboard-icons";
+import { Disclosure } from "@/components/ui/disclosure";
 import { StatusPill } from "@/components/ui/status-pill";
 import { Surface } from "@/components/ui/surface";
 import { MonoLabel } from "@/components/ui/typography";
@@ -26,6 +29,7 @@ export function FounderInputCard({
   resolveAction,
   presentation = "card",
   openRequestCount = 1,
+  onResolved,
 }: {
   projectId: string;
   request: FounderInputRequest;
@@ -34,7 +38,10 @@ export function FounderInputCard({
   presentation?: "card" | "workspace";
   /** Real open requests on this plan. Used only to orient the current question. */
   openRequestCount?: number;
+  /** Refreshes or advances the owning workspace after a confirmed answer. */
+  onResolved?: () => void;
 }) {
+  const reduceMotion = useReducedMotion();
   const initialChoice = request.recommendation
     ? "recommendation"
     : request.responseType === "text"
@@ -74,6 +81,46 @@ export function FounderInputCard({
         recommended: false,
       })),
     ];
+    const resolvedAnswer =
+      selectedChoice === "recommendation"
+        ? request.recommendation?.label ?? "Vibe's recommendation"
+        : selectedChoice === "custom"
+          ? "Your own answer"
+          : options.find((option) => option.value === selectedChoice)?.label ?? "Your answer";
+
+    if (state?.ok) {
+      return (
+        <motion.div
+          initial={reduceMotion ? false : { opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={
+            reduceMotion ? { duration: 0 } : { duration: 0.38, ease: [0.22, 0.72, 0.18, 1] }
+          }
+          className="border-mint-line bg-mint-tint-soft flex flex-col gap-5 rounded-panel border p-5"
+          role="status"
+        >
+          <div className="flex items-start gap-3">
+            <span className="border-mint-line bg-mint-tint text-mint flex size-9 shrink-0 items-center justify-center rounded-full border">
+              <CheckIcon size={16} />
+            </span>
+            <div className="flex min-w-0 flex-col gap-1">
+              <h3 className="text-fg text-lg font-semibold">Got it</h3>
+              <p className="text-fg-body text-sm">{resolvedAnswer}</p>
+              <p className="text-fg-muted text-xs leading-relaxed">
+                {openRequestCount > 1
+                  ? "Your answer is saved. Vibe has another question for this Move."
+                  : "Your answer is saved. Vibe can continue planning this Move."}
+              </p>
+            </div>
+          </div>
+          {onResolved ? (
+            <Button type="button" onClick={onResolved} className="self-start">
+              {openRequestCount > 1 ? "Next question" : "Continue planning"}
+            </Button>
+          ) : null}
+        </motion.div>
+      );
+    }
 
     return (
       <div className="flex flex-col gap-5">
@@ -84,14 +131,13 @@ export function FounderInputCard({
             </p>
             <span className="text-fg-meta text-meta">Your answer becomes project context</span>
           </div>
-          <div className="bg-line-track h-1 overflow-hidden rounded-full" aria-hidden>
-            <div className="bg-mint h-full w-full rounded-full opacity-70" />
-          </div>
         </div>
 
         <div className="flex flex-col gap-2">
           <h3 className="text-fg text-xl leading-snug font-semibold">{request.question}</h3>
-          <p className="text-fg-prose text-sm leading-relaxed">{request.whyNeeded}</p>
+          <p className="text-fg-prose text-sm leading-relaxed">
+            Choose the direction that fits your business right now.
+          </p>
         </div>
 
         <form action={formAction} noValidate aria-busy={pending} className="flex flex-col gap-3">
@@ -222,7 +268,9 @@ export function FounderInputCard({
           )}
 
           <div className="border-line-2 mt-2 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
-            <p className="text-fg-muted text-xs">Why is Vibe asking? {request.whyNeeded}</p>
+            <Disclosure label="Why is Vibe asking?" className="max-w-xl">
+              <p className="text-fg-muted text-xs leading-relaxed">{request.whyNeeded}</p>
+            </Disclosure>
             <Button type="submit" disabled={pending || selectedChoice === null} busy={pending}>
               {pending ? "Saving…" : "Continue"}
             </Button>

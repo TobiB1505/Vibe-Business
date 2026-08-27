@@ -45,7 +45,7 @@
 | Table/list | comfortable density | row surface cue | controls receive visible focus | n/a | stable frame | persistent scoped state |
 | Business Brain | staged but complete | real related paths and nodes gain emphasis | node uses the global mint ring | n/a | server lifecycle remains authoritative | existing notices and recovery |
 | Product Scan | stored discoveries at first paint in reserved scanner/feed slots | grounded nodes and events gain emphasis without changing outer geometry | launcher uses shared button focus | unavailable without connected repository | stable launcher and scanner geometry + durable event feed | persistent partial/failure state + retry |
-| Action Plan workspace | list left, planned work right; rank 1 selected | card surface cue; title link | global mint ring | absent rather than disabled where no executor exists | named operation stages, no percentage | persistent scoped notice with one way forward |
+| Action Plan workspace | horizontal priority stepper, one active Move, details below; rank 1 selected | mint step and active card surface; arrows, tabs and swipe | global mint ring; arrow-key tab behavior | absent rather than disabled where no executor exists | named operation stages, no percentage | persistent scoped notice with one way forward |
 | Billing purchase / portal | real form posting an approved SKU or no client fields for portal | shared interactive transition | global mint ring | visibly unavailable with deployment explanation | stable label + `aria-busy`; duplicate submit blocked | persistent scoped notice with recovery copy |
 
 ## Dataset navigation
@@ -73,7 +73,7 @@
 | Manage or cancel subscription | `Manage or cancel plan` | stable busy action | Stripe customer portal | persistent action error | portal/browser owned | ADR 0025 |
 | Claim Welcome Credits | `Add my 100 Welcome Credits` | stable busy action | same Billing page with canonical balance | persistent action error | submitted action remains contextual | ADR 0024 |
 | Confirm founder action | `Confirm this is complete` on the current founder-owned action | stable busy action; duplicate submission blocked | same Action Plan with evidence-derived next step | persistent inline error; criterion remains visible | submitted action remains contextual | ADR 0055 |
-| Select a Move | Move title or `Plan this move` on a card | none — navigation only, never a run | same Action Plan with `?plan=` and the panel about that Move | route error boundary | selected card heading | ADR 0028 |
+| Select a Move | priority step, previous/next control, arrow key or horizontal swipe | local transition only, never a run | same Action Plan with one new active Move and its detail; History API records `?plan=` without route navigation | current Move remains selected | active step and Move heading | ADR 0028 |
 | Plan this Move | `Plan this move` in the planned-work panel | stable busy action; price stated beside it | same Action Plan with the plan, or named progress rows | persistent inline failure; the offer stays | submitted action remains contextual | ADR 0013, Rule 60 |
 | Re-scan business | `Re-scan business` beside the last-updated line | stable busy action; price stated beside it; route refresh on start | same Action Plan with the run's real stages | persistent inline failure | submitted action remains contextual | Rule 60 |
 | Start with Vibe | `Start with Vibe` on a Move with an executor | confirmation dialog first, then stable busy action | prepared change on `/agent` | persistent inline failure with retry only where honest | submitted action remains contextual | ADR 0014 |
@@ -95,8 +95,8 @@
 - Product Scan uses one shared component in onboarding and My Product. Its desktop scanner, summary, activity and 3×2 discovery regions reserve their geometry before findings arrive. Below `md`, the constellation becomes a linear facet rail; discoveries remain ordered and fully readable.
 - On My Product, Product Scan remains expanded while working, folds automatically after the stored completion event, and can be opened again to review discoveries or start a re-scan. Onboarding and failure states remain expanded. The toggle exposes its expanded state and controlled region to assistive technology.
 - Project routes that are not the project index add their own name as a third breadcrumb step, resolved from the URL against `PROJECT_SECTIONS`. Home adds none.
-- The Action Plan is one decision beside its explanation: the Move list and its Now/Next/Later rail on the left, the summary counts and the planned-work panel on the right, at `xl` and above. Below `xl` the panel returns to document order under the list; below `sm` the rail becomes a band label above each card. The band, the rank and every status are text as well as geometry.
-- Which Move the planned-work panel is about is `?plan=`, so Back and Forward restore the selection. Selecting a Move never starts a paid run.
+- The Action Plan is one guided decision: a horizontally scrollable Now/Next/Later stepper, one active Move card, then that Move's detail. Desktop, tablet and mobile keep this order; no breakpoint introduces a right sidebar or simultaneous full Move stack. The band, rank and status are text as well as geometry.
+- Which Move is active is recorded in `?plan=` through the native History API, so refresh and Back/Forward restore selection without a route navigation. Selecting or swiping to a Move never starts a paid run.
 - Billing uses three equal overview panels at desktop, then asymmetric content/support grids. Below `lg`, every region returns to document order without hiding plan status, expiry, purchase actions or signed Credit movement. No Billing panel owns a viewport height or nested scroll area.
 
 ## Async and resilience
@@ -118,7 +118,7 @@
 - Product Scan motion is event-driven through Motion for React. A newly observed stored event may produce one bounded core impulse and one feed entrance; events present at first paint do not replay or announce as new.
 - Product Scan's slow orbital movement runs only while the operation is active and the document is visible. Reduced motion removes the orbit, impulse and transforms while preserving every status and finding.
 - Product Scan events for a logo, typeface, color and other grounded facets populate existing slots. Arrival may animate opacity, a short transform or a connector, but never parent size or document flow.
-- Action Plan Move rows may enter once in their persisted order, and URL-backed Move selection crossfades only the reserved planned-work region. Neither motion changes order, rank, readiness or layout geometry.
+- Action Plan selection slides the single active Move horizontally over 350–450ms and fades/translates the stable detail region by 8–16px. Step buttons and arrow keys are equivalent to swipe; reduced motion changes content immediately. No motion changes order, rank, readiness or domain state.
 - The Action Plan generation core orbits and pulses only while the canonical opportunity operation is working and the document is visible. Named durable stages remain the only progress claim; reduced motion makes the same state static.
 
 ## Verification

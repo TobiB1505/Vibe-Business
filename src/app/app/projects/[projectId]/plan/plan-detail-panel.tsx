@@ -1,13 +1,15 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { FounderInputCard } from "@/components/founder-input/founder-input-card";
 import { Button, TextAction } from "@/components/ui/button";
-import { CloseIcon, DocumentIcon, CheckIcon } from "@/components/ui/dashboard-icons";
+import { DocumentIcon, CheckIcon } from "@/components/ui/dashboard-icons";
 import { CreditPrice } from "@/components/ui/credit-price";
 import { Disclosure } from "@/components/ui/disclosure";
 import { Notice } from "@/components/ui/states";
-import { StatusPill, type StatusTone } from "@/components/ui/status-pill";
+import { StatusPill } from "@/components/ui/status-pill";
 import { Surface } from "@/components/ui/surface";
 import { MonoLabel } from "@/components/ui/typography";
 import { cn } from "@/lib/utils/cn";
@@ -23,6 +25,10 @@ import {
 } from "@/modules/operations/view";
 import type { ActionPlanStep } from "@/modules/action-plans/schema";
 import type { ActionPlanReadiness, ActionPlanView } from "@/modules/action-plans/service";
+import type {
+  BlockedActionDestinations,
+  OpportunityActionState,
+} from "@/modules/execution/view";
 import {
   PLAN_PROGRESS_LABELS,
   PLAN_STALENESS_LABELS,
@@ -46,13 +52,14 @@ import {
 } from "../founder-action-attestation";
 import { getOperationStatusAction } from "../run-audit-action";
 import { startPlanAction, type StartPlanActionState } from "../plan-action";
+import { PrepareChangePanel } from "../prepare-change-panel";
+import type { ValidationSummary } from "../validation-panel";
 
 /**
  * Planned work: what Vibe would do about the selected Move (ACTION PLAN UI-2).
  *
- * This is the Action Plan panel, moved beside the list it belongs to rather
- * than stacked under it. Everything it must never do is unchanged from the
- * panel it replaces:
+ * This is the Action Plan detail directly below the one active Move. Everything
+ * it must never do is unchanged from the panel it replaces:
  *
  *  - **Promise execution.** No "Apply", "Execute" or "Prepare" control exists
  *    here. `vibe_prepares` means the work is Vibe's responsibility, not that a
@@ -69,65 +76,10 @@ import { startPlanAction, type StartPlanActionState } from "../plan-action";
  *    Selecting a Move never starts one.
  */
 
-/** The panel's own anchor, so a card's question CTA can point into it. */
+/** Stable anchor for deep links from older Action Plan URLs. */
 export const PLANNED_WORK_ANCHOR = "planned-work";
 
 const POLL_INTERVAL_MS = 3_000;
-
-function PanelFrame({
-  state,
-  children,
-  onClose,
-  collapsed,
-  onOpen,
-}: {
-  state: { label: string; tone: StatusTone } | null;
-  children: React.ReactNode;
-  onClose: () => void;
-  collapsed: boolean;
-  onOpen: () => void;
-}) {
-  if (collapsed) {
-    return (
-      <Surface level="panel" padding="md" id={PLANNED_WORK_ANCHOR}>
-        <button
-          type="button"
-          onClick={onOpen}
-          className="text-fg-body hover:text-fg flex w-full items-center gap-2 text-sm transition-interactive"
-        >
-          <DocumentIcon size={16} className="text-fg-meta shrink-0" />
-          Show planned work
-        </button>
-      </Surface>
-    );
-  }
-
-  return (
-    <Surface
-      level="panel"
-      padding="md"
-      id={PLANNED_WORK_ANCHOR}
-      className="action-plan-detail-panel flex flex-col gap-5 overflow-hidden"
-      data-testid="planned-work"
-    >
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex min-w-0 flex-wrap items-center gap-2.5">
-          <h2 className="text-fg text-title font-bold">Planned work</h2>
-          {state && <StatusPill tone={state.tone}>{state.label}</StatusPill>}
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Hide planned work"
-          className="text-fg-meta hover:text-fg-body hover:bg-surface-hover rounded-nav flex size-8 shrink-0 items-center justify-center transition-interactive"
-        >
-          <CloseIcon size={16} />
-        </button>
-      </div>
-      {children}
-    </Surface>
-  );
-}
 
 /**
  * A "read more" toggle over text that is never mutated or sliced.
@@ -270,13 +222,16 @@ function PlanBody({
   moveTitle,
   moveRank,
   moveLens,
+  onFounderResolved,
 }: {
   projectId: string;
   planView: ActionPlanView;
   moveTitle: string | null;
   moveRank: number | null;
   moveLens: string | null;
+  onFounderResolved: () => void;
 }) {
+  const reduceMotion = useReducedMotion();
   const { plan, firstActionableStep, completedStepOrders, founderInputRequest, progress } = planView;
   const steps = [...plan.steps].sort((a, b) => a.order - b.order);
   const completed = new Set(completedStepOrders);
@@ -319,14 +274,29 @@ function PlanBody({
               {moveTitle ? `“${moveTitle}”` : "this move"}.
             </p>
           </div>
-          <FounderInputCard
-            projectId={projectId}
-            request={founderInputRequest}
-            context="action_plan"
-            presentation="workspace"
-            openRequestCount={planView.openFounderInputCount}
-            resolveAction={resolveFounderInputAction}
-          />
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={founderInputRequest.id}
+              initial={reduceMotion ? false : { opacity: 0, x: 14 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={reduceMotion ? undefined : { opacity: 0, x: -10 }}
+              transition={
+                reduceMotion
+                  ? { duration: 0 }
+                  : { duration: 0.36, ease: [0.22, 0.72, 0.18, 1] }
+              }
+            >
+              <FounderInputCard
+                projectId={projectId}
+                request={founderInputRequest}
+                context="action_plan"
+                presentation="workspace"
+                openRequestCount={planView.openFounderInputCount}
+                resolveAction={resolveFounderInputAction}
+                onResolved={onFounderResolved}
+              />
+            </motion.div>
+          </AnimatePresence>
           <Disclosure label={`See the full planned work · ${planMetaSummary(steps)}`}>
             <div className="flex flex-col gap-4">
               {plan.goal && (
@@ -343,11 +313,6 @@ function PlanBody({
             <p className="text-fg-muted text-ui">What Vibe plans to do</p>
             {plan.goal && (
               <h3 className="text-fg text-base leading-snug font-semibold">{plan.goal}</h3>
-            )}
-            {plan.whyNow && (
-              <Disclosure label="Why this move now">
-                <ExpandableText text={plan.whyNow} />
-              </Disclosure>
             )}
             <p className="text-fg-meta font-mono text-meta">{planMetaSummary(steps)}</p>
           </div>
@@ -436,7 +401,7 @@ function PlanBody({
           pins, because what it protects is that reasoning is disclosed rather
           than pushed at the founder. */}
       <Disclosure
-        label={`Why Vibe planned this · ${evidence.signals} ${
+        label={`Evidence & details · ${evidence.signals} ${
           evidence.signals === 1 ? "signal" : "signals"
         } · ${evidence.sources} ${evidence.sources === 1 ? "source" : "sources"}`}
       >
@@ -559,35 +524,57 @@ export function PlanDetailPanel({
   moveTitle,
   moveRank,
   moveLens,
+  moveProblem = null,
+  moveWhyNow = null,
+  lineageHeadline = null,
   defaultMoveTitle,
   readiness,
   planView,
   activeOperation,
+  execution = null,
+  branchUrl = null,
+  validationSummary = null,
+  preparedHref = "/app",
+  blockedDestinations = {
+    product: "/app",
+    audit: "/app",
+    moves: "/app",
+    repository: "/app",
+  },
   auditHref,
   understandingHref,
 }: {
   projectId: string;
-  /** The Move this panel is about — rank 1 by default, or a founder's choice. */
   opportunityId: string | null;
-  /** That Move's title, for the offer's copy only. */
   moveTitle: string | null;
-  /** Persisted rank and attributed Lens, used only as orientation copy. */
   moveRank: number | null;
   moveLens: string | null;
-  /** The engine's own rank-1 title, for the priority-deviation disclosure. */
+  moveProblem?: string | null;
+  moveWhyNow?: string | null;
+  lineageHeadline?: string | null;
   defaultMoveTitle: string | null;
   readiness: ActionPlanReadiness;
   planView: ActionPlanView | null;
   activeOperation: OperationView | null;
+  execution?: OpportunityActionState | null;
+  branchUrl?: string | null;
+  validationSummary?: ValidationSummary | null;
+  preparedHref?: string;
+  blockedDestinations?: BlockedActionDestinations;
   auditHref: string;
   understandingHref: string;
 }) {
-  const [collapsed, setCollapsed] = useState(false);
+  const router = useRouter();
+  const reduceMotion = useReducedMotion();
   const action = startPlanAction.bind(null, projectId, opportunityId);
   const [actionState, formAction, pending] = useActionState<StartPlanActionState, FormData>(
     action,
     null,
   );
+
+  useEffect(() => {
+    if (actionState?.ok && actionState.kind === "reused") router.refresh();
+  }, [actionState, router]);
 
   const startedOperation =
     actionState?.ok && actionState.kind === "running" ? actionState.operation : null;
@@ -611,6 +598,9 @@ export function PlanDetailPanel({
     },
     // Stops on its own answer: the server render cannot know the run ended.
     continueAfter: (next) => operationPollPhase(next) === "working",
+    onReading: (next) => {
+      if (operationPollPhase(next) !== "working") router.refresh();
+    },
   });
 
   const operation = freshestOperation(polled ?? activeOperation, startedOperation);
@@ -626,26 +616,46 @@ export function PlanDetailPanel({
           // page, not a navigation away from it.
           "#action-plan";
 
-  // ADR 0028's honesty requirement: Vibe never plans a Move other than rank 1
-  // on its own, so whenever the resolved Move is not rank 1 a founder chose it,
-  // and that choice is disclosed rather than left implicit in a title.
   const showsPriorityDeviation = readiness.opportunityId !== null && !readiness.isDefaultMove;
-
-  const state: { label: string; tone: StatusTone } | null = running
-    ? { label: "Generating", tone: "active" }
-    : planView
-      ? planView.founderInputRequest
-        ? { label: "Needs your input", tone: "waiting" }
-        : { label: "Ready for Vibe", tone: "success" }
-      : null;
+  const detailState = running
+    ? "planning"
+    : planView?.founderInputRequest
+      ? "question"
+      : planView
+        ? "planned"
+        : blockNotice
+          ? "blocked"
+          : "offer";
+  const whyThisMove = planView?.plan.whyNow ?? moveWhyNow ?? moveProblem;
+  const executionOwnsPrimary =
+    execution !== null &&
+    execution.kind !== "needs_user_input" &&
+    execution.kind !== "not_automated";
+  const executionOpportunityId = opportunityId ?? planView?.plan.opportunityId ?? null;
+  const status =
+    detailState === "planning"
+      ? { label: "Planning", tone: "active" as const }
+      : detailState === "question"
+        ? { label: "Needs your input", tone: "waiting" as const }
+        : detailState === "planned"
+          ? { label: "Plan ready", tone: "success" as const }
+          : null;
 
   return (
-    <PanelFrame
-      state={state}
-      collapsed={collapsed}
-      onClose={() => setCollapsed(true)}
-      onOpen={() => setCollapsed(false)}
+    <Surface
+      level="panel"
+      padding="lg"
+      id={PLANNED_WORK_ANCHOR}
+      className="action-plan-detail-panel flex flex-col gap-6 overflow-hidden sm:p-7"
+      data-testid="planned-work"
     >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <MonoLabel className="text-fg-secondary tracking-[0.14em]">Move details</MonoLabel>
+          {status ? <StatusPill tone={status.tone}>{status.label}</StatusPill> : null}
+        </div>
+      </div>
+
       {showsPriorityDeviation && (
         <Notice tone="waiting" label="Planned out of priority order">
           {defaultMoveTitle
@@ -660,80 +670,126 @@ export function PlanDetailPanel({
         </Notice>
       )}
 
-      {/* Kept visible during a replan rather than hidden behind the progress
-          rows below it, so a founder never sees an empty panel while Vibe
-          re-plans. */}
-      {planView && (
-        <PlanBody
-          projectId={projectId}
-          planView={planView}
-          moveTitle={moveTitle}
-          moveRank={moveRank}
-          moveLens={moveLens}
-        />
-      )}
+      {whyThisMove ? (
+        <section className="border-line-2 flex flex-col gap-2 border-b pb-6" aria-labelledby="why-this-move">
+          <h3 id="why-this-move" className="text-fg text-base font-semibold">Why this move</h3>
+          <ExpandableText text={whyThisMove} />
+          {lineageHeadline ? (
+            <p className="text-fg-muted text-xs leading-relaxed" data-testid="move-lineage">
+              <span className="text-fg-meta">From your audit: </span>{lineageHeadline}
+            </p>
+          ) : null}
+        </section>
+      ) : null}
 
-      {running && operation && (
-        <div className="flex flex-col gap-3" role="status">
-          <p className="text-fg-body text-sm">
-            {operation.stalled ? "Still working…" : `${OPERATION_STAGE_LABELS[operation.stage]}…`}
-          </p>
-          <PlanProgressSteps
-            steps={operationProgressSteps("action_planning", operation)}
-            variant="timeline"
-          />
-          <p className="text-fg-muted text-xs leading-relaxed">
-            {operation.stalled
-              ? "This is taking much longer than expected. You can start again if it never finishes."
-              : "You can leave this page. Vibe will continue."}
-          </p>
-        </div>
-      )}
-
-      {!running && !planView && blockNotice !== null && (
-        <Notice
-          tone="waiting"
-          label="Why this is blocked"
-          action={
-            <a
-              href={blockHref}
-              className="text-fg-prose hover:text-fg rounded-sm text-sm underline underline-offset-4 transition-interactive"
-            >
-              {blockNotice.actionLabel}
-            </a>
+      <AnimatePresence mode="wait" initial={false}>
+        <motion.div
+          key={detailState}
+          initial={reduceMotion ? false : { opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={reduceMotion ? undefined : { opacity: 0, y: -8 }}
+          transition={
+            reduceMotion ? { duration: 0 } : { duration: 0.38, ease: [0.22, 0.72, 0.18, 1] }
           }
+          className="flex flex-col gap-5"
         >
-          {OPERATION_FAILURE_MESSAGES[blockNotice.reason]}
-        </Notice>
-      )}
+          {running && operation ? (
+            <div className="flex flex-col gap-4" role="status">
+              <div className="flex flex-col gap-1.5">
+                <h3 className="text-fg text-xl font-semibold">Generating planned work</h3>
+                <p className="text-fg-prose text-sm leading-relaxed">
+                  {operation.stalled
+                    ? "This is taking much longer than expected."
+                    : `${OPERATION_STAGE_LABELS[operation.stage]}…`}
+                </p>
+              </div>
+              <PlanProgressSteps steps={operationProgressSteps("action_planning", operation)} />
+              <p className="text-fg-muted text-xs leading-relaxed">
+                {operation.stalled
+                  ? "You can start again if this attempt never finishes."
+                  : "You can leave this page. Vibe will continue."}
+              </p>
+            </div>
+          ) : planView ? (
+            <PlanBody
+              projectId={projectId}
+              planView={planView}
+              moveTitle={moveTitle}
+              moveRank={moveRank}
+              moveLens={moveLens}
+              onFounderResolved={() => router.refresh()}
+            />
+          ) : blockNotice !== null ? (
+            <Notice
+              tone="waiting"
+              label="Why this is blocked"
+              action={
+                <a
+                  href={blockHref}
+                  className="text-fg-prose hover:text-fg rounded-sm text-sm underline underline-offset-4 transition-interactive"
+                >
+                  {blockNotice.actionLabel}
+                </a>
+              }
+            >
+              {OPERATION_FAILURE_MESSAGES[blockNotice.reason]}
+            </Notice>
+          ) : executionOwnsPrimary ? (
+            <div className="flex flex-col gap-1.5">
+              <h3 className="text-fg text-xl font-semibold">Ready for the next step</h3>
+              <p className="text-fg-prose text-sm leading-relaxed">
+                Vibe has enough grounded context to act on this Move. Review the action below
+                before anything is prepared.
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-1.5">
+                <h3 className="text-fg text-xl font-semibold">Plan the work</h3>
+                <p className="text-fg-prose text-sm leading-relaxed">
+                  {moveTitle
+                    ? `Vibe can work out how to do “${moveTitle}” — what changes, who owns each part, and where to start.`
+                    : "Vibe can work out what changes, who owns each part, and where to start."}
+                </p>
+              </div>
+              <form action={formAction} className="flex flex-wrap items-center gap-3">
+                <input type="hidden" name="force" value="false" />
+                <Button type="submit" disabled={pending} busy={pending}>
+                  {pending ? "Starting…" : "Plan this move"}
+                </Button>
+                <CreditPrice operation="action_plan" />
+              </form>
+            </div>
+          )}
+        </motion.div>
+      </AnimatePresence>
 
-      {!running && !planView && blockNotice === null && (
-        <div className="flex flex-col gap-4">
-          <p className="text-fg-prose text-sm leading-relaxed">
-            {moveTitle
-              ? `Vibe can work out exactly how to do "${moveTitle}" — what changes, who does each part, and where to start.`
-              : "Vibe can work out exactly how to do your top next move — what changes, who does each part, and where to start."}
-          </p>
+      {!running && !planView?.founderInputRequest && executionOwnsPrimary && execution && executionOpportunityId ? (
+        <div className="border-line-2 flex flex-col gap-3 border-t pt-5">
+          <MonoLabel className="tracking-[0.14em]">Start</MonoLabel>
+          <PrepareChangePanel
+            projectId={projectId}
+            opportunityId={executionOpportunityId}
+            actionState={execution}
+            branchUrl={branchUrl}
+            validationSummary={validationSummary}
+            preparedHref={preparedHref}
+            blockedDestinations={blockedDestinations}
+          />
+        </div>
+      ) : null}
+
+      {planView && !running && !planView.founderInputRequest ? (
+        <Disclosure label="Plan options">
           <form action={formAction} className="flex flex-wrap items-center gap-3">
-            <input type="hidden" name="force" value="false" />
-            <Button type="submit" disabled={pending} busy={pending}>
-              {pending ? "Starting…" : "Plan this move"}
+            <input type="hidden" name="force" value="true" />
+            <Button type="submit" variant="secondary" size="sm" disabled={pending} busy={pending}>
+              {pending ? "Starting…" : "Replan this move"}
             </Button>
-            {/* The cost, before the click. Reading a finished plan is free. */}
             <CreditPrice operation="action_plan" />
           </form>
-        </div>
-      )}
-
-      {planView && !running && (
-        <form action={formAction} className="flex flex-wrap items-center gap-3">
-          <input type="hidden" name="force" value="true" />
-          <Button type="submit" variant="secondary" size="sm" disabled={pending} busy={pending}>
-            {pending ? "Starting…" : "Replan this move"}
-          </Button>
-          <CreditPrice operation="action_plan" />
-        </form>
-      )}
+        </Disclosure>
+      ) : null}
 
       {operation?.status === "failed" && operation.failureCode && (
         <p className="text-amber text-sm">
@@ -751,6 +807,6 @@ export function PlanDetailPanel({
           Nothing has changed since the last plan, so the existing one is shown.
         </p>
       )}
-    </PanelFrame>
+    </Surface>
   );
 }
