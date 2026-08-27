@@ -1,4 +1,5 @@
 import { after, NextResponse, type NextRequest } from "next/server";
+import { alertOperator } from "@/lib/observability/alert";
 
 import {
   authorizeGatewayRequest,
@@ -89,8 +90,25 @@ function refuse(refusal: AgentGatewayRefusal, status: number, context: Record<st
   // Server-side, the precise reason. The caller gets none of it: a refusal that
   // named the failing binding would be a probing oracle for a caller that can
   // retry, and this caller is driven by a model reading somebody's repository.
-  console.warn("[agent-gateway] refused", { refusal, ...context });
+  //
+  // VB-012 — reported at warning rather than error, and not awaited. One
+  // refusal is ordinary (a revoked token, an expired run); a *burst* is the
+  // signal, and that is a frequency an alert rule reads off the issue's own
+  // count. Awaiting it would also let a slow reporter hold open the path whose
+  // whole job is to say no quickly.
+  void alertOperator("[agent-gateway] refused", { refusal, ...scalarsOf(context) }, "warning");
   return NextResponse.json(gatewayRefusalBody(), { status });
+}
+
+/** Keeps the alert context to ids and enums — nothing here may carry a token. */
+function scalarsOf(context: Record<string, unknown>): Record<string, string | number | boolean> {
+  const out: Record<string, string | number | boolean> = {};
+  for (const [key, value] of Object.entries(context)) {
+    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+      out[key] = value;
+    }
+  }
+  return out;
 }
 
 function bearerFrom(request: NextRequest): string | null {

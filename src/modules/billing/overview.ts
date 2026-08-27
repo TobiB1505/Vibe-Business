@@ -12,6 +12,7 @@ import { reconcileAndRepairBalance } from "@/modules/credits/service";
 import { findOrphanedHolds } from "@/modules/credits/orphaned-holds";
 import { listOperationRunsByIds } from "@/modules/operations/store";
 import { recordAuditEvent } from "@/modules/audit-log/events";
+import { alertOperator } from "@/lib/observability/alert";
 import { findCreditAccountByUser, listActiveReservations, listLedgerEntries } from "@/modules/credits/store";
 import { formatCreditsForDisplay, type CreditUnits, ZERO_CREDITS } from "@/modules/credits/units";
 import { welcomeGrantIdempotencyKey, type PlanKey } from "./catalog";
@@ -323,7 +324,7 @@ async function reportOrphanedHolds(
 
     if (orphaned.length === 0) return;
 
-    console.error("[billing] credit holds are outliving their operations", {
+    await alertOperator("[billing] credit holds are outliving their operations", {
       creditAccountId: params.account.id,
       orphanedCount: orphaned.length,
     });

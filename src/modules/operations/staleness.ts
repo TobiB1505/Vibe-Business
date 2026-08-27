@@ -1,4 +1,5 @@
 import "server-only";
+import { alertOperator } from "@/lib/observability/alert";
 
 import { createServiceClient } from "@/lib/supabase/service";
 import {
@@ -180,7 +181,9 @@ export async function expireStaleOperation(params: {
 
   if ((params.now ?? Date.now)() < startedAt + deadlineMs) return { expired: false };
 
-  console.error("[operations] expiring an operation nothing is carrying", {
+  // VB-012 — a swept operation means a workflow died, which is worth knowing
+  // about before the pattern becomes a customer's report.
+  await alertOperator("[operations] expiring an operation nothing is carrying", {
     operationId: params.operationId,
     operationType: operation.operationType,
     startedAt: operation.startedAt,

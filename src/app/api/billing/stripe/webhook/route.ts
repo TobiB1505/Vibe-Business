@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { alertOperator } from "@/lib/observability/alert";
 import type Stripe from "stripe";
 import { hasStripeConfiguration } from "@/lib/env/stripe";
 import { createServiceClient } from "@/lib/supabase/service";
@@ -132,7 +133,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // Observable, but never in a way that echoes payment data. The event id is
     // safe and is the only thing needed to find the event in Stripe's own
     // dashboard, where the details belong (§68).
-    console.error("[billing] stripe webhook processing failed", {
+    // VB-012 — a webhook that keeps failing is money that was taken and never
+    // became Credits, and Stripe gives up retrying eventually.
+    await alertOperator("[billing] stripe webhook processing failed", {
       stripeEventId: event.id,
       eventType: event.type,
       error: error instanceof Error ? error.name : "unknown",
