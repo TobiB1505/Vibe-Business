@@ -3,6 +3,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { recordAuthAttempt, throttleMessage } from "@/modules/auth/throttle";
 import {
   authFailureMessage,
   classifyAuthError,
@@ -66,11 +67,37 @@ export async function signInWithPassword(
   }
 
   const supabase = await createClient();
+
+  // VB-010, and the order is the whole point: a throttled account is refused
+  // *before* the password reaches the auth provider. Recording the outcome
+  // afterwards and reporting it would leave every attempt still being made,
+  // which bounds nothing.
+  const gate = await recordAuthAttempt(supabase, {
+    identifier: credentials.email,
+    succeeded: null,
+  });
+  if (!gate.allowed) {
+    return { ok: false, error: throttleMessage(gate.retryAfterSeconds) };
+  }
+
   const { error } = await supabase.auth.signInWithPassword(credentials);
+
+  // A success clears the window; a failure spends one of its allowance.
+  const throttle = await recordAuthAttempt(supabase, {
+    identifier: credentials.email,
+    succeeded: !error,
+  });
 
   if (error) {
     logAuthFailure("signin", error);
-    return { ok: false, error: messageForAuthError(error, "sign_in") };
+    return {
+      ok: false,
+      // Once the account is throttled, whether this password was also wrong is
+      // not information worth handing back.
+      error: throttle.allowed
+        ? messageForAuthError(error, "sign_in")
+        : throttleMessage(throttle.retryAfterSeconds),
+    };
   }
 
   redirect(destination);
