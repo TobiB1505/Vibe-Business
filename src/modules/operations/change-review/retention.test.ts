@@ -188,7 +188,6 @@ describe("the step around it", () => {
    * step, and must certainly not turn it into a failed one.
    */
   it("never throws, whatever the sweep does", async () => {
-    const db = new FakeDatabase();
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
     const { sweepExpiredScreenshotsStep } = await import("./execution");
 
