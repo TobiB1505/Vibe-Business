@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import type { AuditReading } from "./score-series";
 
+import { liveConnections } from "./repository-connection";
 /**
  * The global dashboard read model (Sprint UI-3).
  *
@@ -268,9 +269,7 @@ export async function getDashboardOverview(
   // Four `.in(...)` queries, run together, then two dependent ones below.
   // None of them scales with the number of projects — that is the design.
   const [repos, audits, sets, prepared] = await Promise.all([
-    supabase
-      .from("repository_connections")
-      .select("project_id, full_name, default_branch, private")
+    liveConnections(supabase, "project_id, full_name, default_branch, private")
       .in("project_id", projectIds),
     supabase
       // `overall_score` is a column. The audit's JSONB document is never read
@@ -299,7 +298,10 @@ export async function getDashboardOverview(
     if (result.error) throw result.error;
   }
 
-  const repoByProject = firstPerKey((repos.data ?? []) as RepoRow[], (row) => row.project_id);
+  // The connection boundary widens the select string, so the row shape is
+  // stated here rather than inferred — see `repository-connection.ts`.
+  const repoRows = (repos.data ?? []) as unknown as RepoRow[];
+  const repoByProject = firstPerKey(repoRows, (row) => row.project_id);
   const auditRows = (audits.data ?? []) as AuditRow[];
   const latestAuditByProject = firstPerKey(auditRows, (row) => row.project_id);
   const auditsByProject = groupPerKey(auditRows, (row) => row.project_id);

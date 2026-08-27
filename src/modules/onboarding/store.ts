@@ -10,6 +10,7 @@ import {
 import { getLatestOpportunities } from "@/modules/opportunities/service";
 import { getLatestProfile } from "@/modules/product-understanding/store";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
+import { liveConnections } from "@/modules/projects/repository-connection";
 import {
   deriveOnboardingState,
   type LiveSiteStatus,
@@ -249,12 +250,10 @@ export async function getProjectOnboarding(
   if (projectError) throw projectError;
   if (!project) return null;
 
-  const [{ data: row, error: rowError }, { data: repository, error: repositoryError }, profile, snapshot, audit, pausedAudit, auditOperation, understandingOperation, opportunities] =
+  const [{ data: row, error: rowError }, { data: repositoryRow, error: repositoryError }, profile, snapshot, audit, pausedAudit, auditOperation, understandingOperation, opportunities] =
     await Promise.all([
       supabase.from("project_onboarding").select(COLUMNS).eq("project_id", params.projectId).maybeSingle(),
-      supabase
-        .from("repository_connections")
-        .select("full_name, default_branch, html_url")
+      liveConnections(supabase, "full_name, default_branch, html_url")
         .eq("project_id", params.projectId)
         .maybeSingle(),
       getLatestProfile(supabase, params.projectId),
@@ -267,6 +266,14 @@ export async function getProjectOnboarding(
     ]);
   if (rowError) throw rowError;
   if (repositoryError) throw repositoryError;
+
+  // The connection boundary widens the select string, so the row shape is
+  // stated here rather than inferred — see `projects/repository-connection.ts`.
+  const repository = repositoryRow as {
+    full_name: string;
+    default_branch: string;
+    html_url: string;
+  } | null;
 
   let stored: StoredOnboarding;
   if (row) {

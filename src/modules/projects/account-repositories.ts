@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { liveConnections } from "./repository-connection";
 /**
  * Every repository this account has connected (CORE-6).
  *
@@ -71,9 +72,7 @@ export async function listConnectedRepositories(
   const projects = (projectRows ?? []) as ProjectRow[];
   if (projects.length === 0) return [];
 
-  const { data: connectionRows, error: connectionsError } = await supabase
-    .from("repository_connections")
-    .select("project_id, owner, name, full_name, default_branch, private, html_url, created_at")
+  const { data: connectionRows, error: connectionsError } = await liveConnections(supabase, "project_id, owner, name, full_name, default_branch, private, html_url, created_at")
     .in(
       "project_id",
       projects.map((project) => project.id),
@@ -84,7 +83,7 @@ export async function listConnectedRepositories(
 
   const nameByProject = new Map(projects.map((project) => [project.id, project.name]));
 
-  return ((connectionRows ?? []) as ConnectionRow[]).map((row) => ({
+  return ((connectionRows ?? []) as unknown as ConnectionRow[]).map((row) => ({
     projectId: row.project_id,
     projectName: nameByProject.get(row.project_id) ?? "Unknown product",
     owner: row.owner,

@@ -30,6 +30,7 @@ import {
 } from "./store";
 import { buildMergeCard, type MergeCard } from "./view";
 
+import { liveConnections } from "@/modules/projects/repository-connection";
 /**
  * Requesting and observing a merge (Sprint 11C §14, §16, §17, §18).
  *
@@ -76,12 +77,18 @@ export async function resolveMergeTarget(
   supabase: SupabaseClient,
   projectId: string,
 ): Promise<MergeTarget | null> {
-  const { data: connection } = await supabase
-    .from("repository_connections")
-    .select("id, owner, name, github_installation_id")
+  const { data } = await liveConnections(supabase, "id, owner, name, github_installation_id")
     .eq("project_id", projectId)
     .maybeSingle();
 
+  // The boundary widens the select string, so the row shape is stated here
+  // rather than inferred — see `projects/repository-connection.ts`.
+  const connection = data as {
+    id: string;
+    owner: string;
+    name: string;
+    github_installation_id: string;
+  } | null;
   if (!connection) return null;
 
   const { data: installation } = await supabase
