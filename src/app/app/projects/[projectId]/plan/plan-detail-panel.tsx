@@ -651,6 +651,14 @@ export function PlanDetailPanel({
           "#action-plan";
 
   const showsPriorityDeviation = readiness.opportunityId !== null && !readiness.isDefaultMove;
+  /**
+   * A stale plan is the one state where replanning is the *answer*, not an
+   * option, so it is the one state where an open founder question must not
+   * withhold it. Vibe has told the founder the plan may be out of date; hiding
+   * the only way to refresh it behind a question the stale plan itself asked
+   * leaves them with a notice and no exit.
+   */
+  const planIsStale = (planView?.staleness.length ?? 0) > 0;
   const detailState = running
     ? "planning"
     : planView?.founderInputRequest
@@ -813,8 +821,11 @@ export function PlanDetailPanel({
         </div>
       ) : null}
 
-      {planView && !running && !planView.founderInputRequest ? (
-        <Disclosure label="Plan options">
+      {planView && !running && (!planView.founderInputRequest || planIsStale) ? (
+        // Open by default when the plan is stale: folded away, the escape is
+        // present in the DOM and absent from the screen, which is the failure
+        // the staleness notice above is supposed to prevent.
+        <Disclosure label="Plan options" defaultOpen={planIsStale}>
           <form action={formAction} className="flex flex-wrap items-center gap-3">
             <input type="hidden" name="force" value="true" />
             <Button type="submit" variant="secondary" size="sm" disabled={pending} busy={pending}>
