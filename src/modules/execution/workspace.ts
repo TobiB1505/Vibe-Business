@@ -24,6 +24,7 @@ import { SANDBOX_POLICY_VERSION } from "@/modules/validation/schema";
 import { getLatestValidation } from "@/modules/validation/service";
 import { createVercelSandboxProvider } from "@/modules/validation/vercel/provider";
 import { buildValidationSummary } from "@/modules/validation/view";
+import { mapWithConcurrency, PER_CHANGE_CONCURRENCY } from "@/lib/async/concurrency";
 
 /**
  * The prepared-change workspace read model (Sprint UI-2 Phase B).
@@ -381,15 +382,17 @@ export async function getPreparedChangeWorkspace(
    * — but both are scoped to their own prepared change and both are "at most
    * once per reason", so cards cannot race each other into either of them.
    */
-  return await Promise.all(
-    prepared.map((change) =>
-      buildPreparedChangeCard(supabase, {
-        projectId: params.projectId,
-        userId: params.userId,
-        repositoryFullName: params.repositoryFullName,
-        mergeTarget,
-        prepared: change,
-      }),
-    ),
+  // VB-023. This was parallel already, and unbounded — every prepared change's
+  // card at once, each of which can reach GitHub through `mergeTarget`. A
+  // project with thirty of them turned one render into thirty simultaneous
+  // calls. Bounded, order preserved.
+  return await mapWithConcurrency(prepared, PER_CHANGE_CONCURRENCY, (change) =>
+    buildPreparedChangeCard(supabase, {
+      projectId: params.projectId,
+      userId: params.userId,
+      repositoryFullName: params.repositoryFullName,
+      mergeTarget,
+      prepared: change,
+    }),
   );
 }

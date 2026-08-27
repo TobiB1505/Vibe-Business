@@ -11,6 +11,7 @@ import { mergeFailureMessage } from "@/modules/merge/messages";
 import { buildMergeCard } from "@/modules/merge/view";
 import { getOutcomeCard } from "@/modules/outcome-verification/service";
 import type { OutcomeCard } from "@/modules/outcome-verification/view";
+import { mapWithConcurrency, PER_CHANGE_CONCURRENCY } from "@/lib/async/concurrency";
 
 /**
  * Project-level impact (Sprint UI-2 Phase C).
@@ -85,9 +86,9 @@ export async function getProjectImpact(
   //
   // Bounded rather than a plain `Promise.all(prepared.map(...))`: the merge
   // card is a GitHub call, and firing one per prepared change at once is how a
-  // busy project trips a secondary rate limit. Six is well above the render
-  // times that matter and well below anything GitHub objects to.
-  const settled = await mapWithConcurrency(prepared, 6, async (change) => {
+  // busy project trips a secondary rate limit. The ceiling is shared with the
+  // agent workspace, which fans out the same way.
+  const settled = await mapWithConcurrency(prepared, PER_CHANGE_CONCURRENCY, async (change) => {
     const merge = mergeTarget
       ? await getMergeCard(supabase, createGithubMergePort(mergeTarget), {
           projectId,
@@ -134,29 +135,3 @@ export async function getProjectImpact(
   return { entries, unmergedCount };
 }
 
-/**
- * `Promise.all` with a ceiling on how many run at once.
- *
- * Results come back in input order regardless of completion order, which is
- * what lets the caller treat this as a drop-in for a sequential loop.
- */
-async function mapWithConcurrency<In, Out>(
-  items: readonly In[],
-  limit: number,
-  run: (item: In) => Promise<Out>,
-): Promise<Out[]> {
-  const results = new Array<Out>(items.length);
-  let next = 0;
-
-  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
-    for (;;) {
-      const index = next;
-      next += 1;
-      if (index >= items.length) return;
-      results[index] = await run(items[index]);
-    }
-  });
-
-  await Promise.all(workers);
-  return results;
-}
