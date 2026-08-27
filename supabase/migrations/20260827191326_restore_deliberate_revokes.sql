@@ -1,0 +1,32 @@
+-- Corrective, and a record of a mistake worth not repeating.
+--
+-- The first form of `20260827190821` derived the grant set from the policies
+-- and re-issued it — "authenticated gets exactly the commands a policy exists
+-- for". That rule is wrong, and it handed back two privileges earlier
+-- migrations had deliberately withdrawn:
+--
+--   * `projects.DELETE` — removed by `20260826221000` so that no Data API role
+--     can start a project cascade (VB-001). Exactly two things may remove a
+--     project row, and both establish ownership in their own body.
+--   * `repository_connections.UPDATE/DELETE` — removed by `20260827000000` so a
+--     connection is detached through `detach_repository` rather than edited in
+--     place.
+--
+-- **A policy and a privilege are independent decisions, and a policy is not
+-- evidence that the privilege is wanted.** Both tables carry the policy and
+-- deliberately not the grant, so no derivation could ever produce them
+-- correctly. `20260827190821` is now purely subtractive for that reason: it can
+-- remove an unbacked privilege, and it can never re-open a door another
+-- migration closed.
+--
+-- `lifecycle-authority.migration.ts` and `project-write-paths.migration.ts`
+-- caught this before it reached a pull request. They assert the invariant
+-- rather than the migration that established it, which is why a later migration
+-- undoing it failed them.
+--
+-- On a fresh database these statements are a no-op: nothing granted the
+-- privileges back. They are stated anyway so the file history and the deployed
+-- database describe the same sequence.
+
+revoke delete on table public.projects from public, anon, authenticated, service_role;
+revoke update, delete on table public.repository_connections from public, anon, authenticated;

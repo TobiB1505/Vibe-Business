@@ -177,3 +177,78 @@ describe("execution evidence", () => {
     expect(db.sql(`select rolbypassrls from pg_roles where rolname = 'service_role';`)).toBe("t");
   });
 });
+
+/**
+ * VB-015 — the surplus Data API privileges are gone.
+ *
+ * The sharp edge is `TRUNCATE`: row-level security does not govern it, so a
+ * role holding it empties a table regardless of every policy on it. No policy
+ * anywhere closed that, which is why it needed a grant change rather than a
+ * policy change.
+ */
+describe("Data API privileges", () => {
+  it("grants anon nothing on any public table", () => {
+    const held = db.sql(`
+      select coalesce(string_agg(distinct table_name, ', '), '')
+      from information_schema.role_table_grants
+      where table_schema = 'public' and grantee = 'anon';
+    `);
+
+    expect(held).toBe("");
+  });
+
+  it("leaves nobody holding TRUNCATE, which RLS cannot govern", () => {
+    const held = db.sql(`
+      select coalesce(string_agg(distinct grantee || ':' || table_name, ', '), '')
+      from information_schema.role_table_grants
+      where table_schema = 'public'
+        and grantee in ('anon', 'authenticated')
+        and privilege_type in ('TRUNCATE', 'REFERENCES', 'TRIGGER');
+    `);
+
+    expect(held).toBe("");
+  });
+
+  /**
+   * The rule the migration derives, checked from the other direction: a
+   * privilege `authenticated` holds must have a policy behind it, or it is
+   * surplus again.
+   */
+  it("gives authenticated no privilege without a policy behind it", () => {
+    const surplus = db.sql(`
+      select coalesce(string_agg(g.table_name || ':' || g.privilege_type, ', '), '')
+      from information_schema.role_table_grants g
+      where g.table_schema = 'public' and g.grantee = 'authenticated'
+        and not exists (
+          select 1 from pg_policies p
+          where p.schemaname = 'public' and p.tablename = g.table_name
+            and (p.cmd = 'ALL' or upper(p.cmd) = g.privilege_type)
+        );
+    `);
+
+    expect(surplus).toBe("");
+  });
+
+  it("keeps VB-018's column restriction rather than re-granting the table", () => {
+    // The derived rule sees an UPDATE policy on this table and would re-grant
+    // it wholesale; the migration restates the column form afterwards.
+    expect(
+      db.sql(`
+        select coalesce(string_agg(column_name, ',' order by column_name), '')
+        from information_schema.column_privileges
+        where table_schema = 'public' and table_name = 'business_readiness_audits'
+          and grantee = 'authenticated' and privilege_type = 'UPDATE';
+      `),
+    ).toBe("pending_question,status");
+  });
+
+  it("pins set_updated_at's search_path", () => {
+    expect(
+      db.sql(`
+        select coalesce(array_to_string(p.proconfig, ','), '')
+        from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+        where n.nspname = 'public' and p.proname = 'set_updated_at';
+      `),
+    ).toContain("search_path=");
+  });
+});
