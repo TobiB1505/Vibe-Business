@@ -220,6 +220,7 @@ export async function startChangeReview(
     operationType: "change_review",
     inputIdentity: resolved.value.identity,
     subjectId: params.preparedChangeId,
+    initiatedBy: "customer",
   });
 
   if (!created.ok) {

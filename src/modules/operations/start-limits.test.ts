@@ -94,3 +94,46 @@ describe("what the numbers say about intent", () => {
     );
   });
 });
+
+describe("who the limit applies to", () => {
+  /**
+   * VB-008's placement in `createOperationRun` covers every start path, which
+   * is its strength and was also its cost: the billing concurrency gate drives
+   * one project sixty times on purpose, and a per-project window refuses that.
+   *
+   * The resolution is the threat model rather than a looser ceiling. The limit
+   * exists to stop a *customer* looping; Vibe's own machinery is already
+   * bounded by the operation it belongs to. So `initiatedBy` is required at
+   * every call site — a caller that forgets cannot silently become exempt,
+   * because there is no default to forget into.
+   *
+   * This is asserted against the source rather than behaviourally because the
+   * guarantee is that no *customer* site says `system`. A behavioural test
+   * would prove one call is exempt; this proves none of the fifteen drifted.
+   */
+  it("marks no customer-facing start path as system", async () => {
+    const { readFileSync, readdirSync, statSync } = await import("node:fs");
+    const { join } = await import("node:path");
+
+    const offenders: string[] = [];
+    const walk = (dir: string) => {
+      for (const entry of readdirSync(dir)) {
+        const full = join(dir, entry);
+        if (statSync(full).isDirectory()) walk(full);
+        else if (full.endsWith(".ts") && !full.includes(".test.")) {
+          const source = readFileSync(full, "utf8");
+          if (source.includes('initiatedBy: "system"')) offenders.push(full);
+        }
+      }
+    };
+    walk("src/modules");
+
+    // Exactly one file may say it, and naming it here is the point: a second
+    // one appearing is a customer path quietly exempting itself, which is the
+    // failure this guard exists for. `.concurrency.ts` is not matched by the
+    // `.test.` filter above, so the harness is listed rather than hidden.
+    expect(offenders).toEqual([
+      "src/modules/credits/concurrency/agent-start-failure.concurrency.ts",
+    ]);
+  });
+});

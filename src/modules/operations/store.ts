@@ -255,6 +255,20 @@ export async function createOperationRun(
     inputIdentity: string;
     /** The domain object this operation acts on, when it has one. */
     subjectId?: string;
+    /**
+     * Who is asking, and therefore whether the start windows apply (VB-008).
+     *
+     * `customer` is anything a person's own client can reach. `system` is
+     * Vibe's own machinery — durable execution creating a follow-on operation,
+     * and the concurrency harness driving a primitive on purpose.
+     *
+     * The distinction is the threat model, not a convenience: the limit exists
+     * to stop a customer looping, and Vibe's own steps are already bounded by
+     * the operation they belong to. Required rather than defaulted, because
+     * "is this customer-initiated" is not a thing to get by omission — the
+     * same reason `requestedBy` is required on the opportunity path.
+     */
+    initiatedBy: "customer" | "system";
   },
 ): Promise<CreateOperationResult> {
   // VB-008. Enforced here rather than in each of the ten start paths because
@@ -266,7 +280,7 @@ export async function createOperationRun(
   // would not be for an entitlement — the bound is "not in a loop", and being
   // one over it once is not the failure being prevented. The exactly-once
   // guarantees live in the unique indexes, which are not raceable.
-  if (!(await withinStartWindows(supabase, params))) {
+  if (params.initiatedBy === "customer" && !(await withinStartWindows(supabase, params))) {
     return { ok: false, error: "start_limit_reached" };
   }
 

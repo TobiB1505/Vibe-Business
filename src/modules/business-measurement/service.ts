@@ -289,6 +289,7 @@ export async function startBusinessMeasurement(
     userId: params.userId,
     operationType: "business_measurement",
     inputIdentity: identity,
+    initiatedBy: "customer",
   });
   if (!created.ok) {
     if (created.error === "already_active") {

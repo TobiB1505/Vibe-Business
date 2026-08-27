@@ -201,6 +201,7 @@ export async function startChangePreparation(
     operationType: "change_preparation",
     inputIdentity: context.identity,
     subjectId: context.opportunityId,
+    initiatedBy: "customer",
   });
 
   if (!created.ok) {

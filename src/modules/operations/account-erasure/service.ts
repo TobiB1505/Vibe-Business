@@ -100,6 +100,7 @@ export async function startAccountErasure(
     userId: params.userId,
     operationType: "account_erasure",
     inputIdentity,
+    initiatedBy: "customer",
   });
 
   if (!created.ok) {

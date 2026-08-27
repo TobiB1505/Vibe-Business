@@ -330,6 +330,7 @@ export async function startMerge(
     userId: params.userId,
     operationType: "change_merge",
     inputIdentity: mergeIdentity,
+    initiatedBy: "customer",
   });
 
   if (!created.ok) {
