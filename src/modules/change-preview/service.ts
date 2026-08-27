@@ -197,6 +197,7 @@ export async function startChangePreview(
     operationType: "change_preview",
     inputIdentity: identity,
     subjectId: artifact.validationRunId,
+    initiatedBy: "customer",
   });
 
   if (!created.ok) {
@@ -521,6 +522,7 @@ async function requestTeardown(
     operationType: "preview_teardown",
     inputIdentity: computeTeardownIdentity(session.id),
     subjectId: session.id,
+    initiatedBy: "customer",
   });
 
   if (!created.ok) {

@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 import { withWorkflow } from "workflow/next";
+import { securityHeaders } from "./src/lib/security/headers";
 
 const nextConfig: NextConfig = {
   /**
@@ -25,6 +26,25 @@ const nextConfig: NextConfig = {
    * docs/sprints/0005-authenticated-live-product-intelligence.md.
    */
   serverExternalPackages: ["playwright-core"],
+
+  /**
+   * `X-Powered-By: Next.js` names the framework and its major version to every
+   * caller, which is free reconnaissance and buys nothing (VB-005).
+   */
+  poweredByHeader: false,
+
+  /**
+   * VB-005 / ADR 0059. Vibe served no security headers at all. The set and the
+   * reasoning behind each directive live in `src/lib/security/headers.ts`; this
+   * only applies them to every route.
+   *
+   * Built here rather than in `proxy.ts` so they reach every response including
+   * the ones the proxy does not match — static assets, and any route excluded
+   * from the matcher.
+   */
+  async headers() {
+    return [{ source: "/:path*", headers: securityHeaders() }];
+  },
 };
 
 /**

@@ -309,9 +309,15 @@ export async function startBusinessAuditOperation(
     userId: params.userId,
     operationType: "business_audit",
     inputIdentity: identity.inputHash,
+    initiatedBy: "customer",
   });
 
   if (!created.ok) {
+    // VB-008 — the work never began, so reporting a failure of the work
+    // would be wrong. Retryable, and the message says waiting is the fix.
+    if (created.error === "start_limit_reached") {
+      return { kind: "failed", error: "start_limit_reached" };
+    }
     if (created.error === "already_active") {
       // Lost the race by milliseconds — the other click's operation is the
       // right answer, not an error. This is the double-click path, and the
@@ -532,9 +538,15 @@ export async function startOpportunityOperation(
     userId: params.userId,
     operationType: "opportunity_generation",
     inputIdentity: identity.inputHash,
+    initiatedBy: "customer",
   });
 
   if (!created.ok) {
+    // VB-008 — the work never began, so reporting a failure of the work
+    // would be wrong. Retryable, and the message says waiting is the fix.
+    if (created.error === "start_limit_reached") {
+      return { kind: "failed", error: "start_limit_reached" };
+    }
     if (created.error === "already_active") {
       const existing = await findActiveOperationByIdentity(supabase, {
         projectId: params.projectId,
@@ -662,9 +674,15 @@ export async function startProductUnderstandingOperation(
     userId: params.userId,
     operationType: "product_understanding",
     inputIdentity: inputHash,
+    initiatedBy: "customer",
   });
 
   if (!created.ok) {
+    // VB-008 — the work never began, so reporting a failure of the work
+    // would be wrong. Retryable, and the message says waiting is the fix.
+    if (created.error === "start_limit_reached") {
+      return { kind: "failed", error: "start_limit_reached" };
+    }
     if (created.error === "already_active") {
       // Lost the race by milliseconds — the other click's operation is the
       // right answer, not an error.
@@ -754,8 +772,14 @@ export async function startProductScanOperation(
     userId: params.userId,
     operationType: "product_scan",
     inputIdentity,
+    initiatedBy: "customer",
   });
   if (!created.ok) {
+    // VB-008 — the work never began, so reporting a failure of the work
+    // would be wrong. Retryable, and the message says waiting is the fix.
+    if (created.error === "start_limit_reached") {
+      return { kind: "failed", error: "start_limit_reached" };
+    }
     if (created.error === "already_active") {
       const raced = await findActiveOperationByIdentity(supabase, {
         projectId: params.projectId,
@@ -931,9 +955,15 @@ export async function startActionPlanOperation(
     // the exact Move the operation was created for, not "whatever rank 1 is
     // by the time the step runs" (§83, mirrors `change_preparation`).
     subjectId: identity.opportunityId,
+    initiatedBy: "customer",
   });
 
   if (!created.ok) {
+    // VB-008 — the work never began, so reporting a failure of the work
+    // would be wrong. Retryable, and the message says waiting is the fix.
+    if (created.error === "start_limit_reached") {
+      return { kind: "failed", error: "start_limit_reached" };
+    }
     if (created.error === "already_active") {
       // Lost the race by milliseconds — the other click's operation is the
       // right answer, not an error.

@@ -183,6 +183,7 @@ export async function startChangeValidation(
     operationType: "change_validation",
     inputIdentity: resolved.identity,
     subjectId: params.preparedChangeId,
+    initiatedBy: "customer",
   });
 
   if (!created.ok) {

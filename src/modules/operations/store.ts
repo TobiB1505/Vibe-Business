@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { OperationStage, OperationStatus, OperationType } from "./schema";
+import { ACCOUNT_WINDOW_MS, PROJECT_WINDOW_MS, startAllowed } from "./start-limits";
 
 /**
  * Persistence for durable operations (Sprint 7 §6, §15).
@@ -230,6 +231,8 @@ export async function getProjectOperationRunById(
 export type CreateOperationResult =
   | { ok: true; operation: StoredOperationRun }
   | { ok: false; error: "already_active" }
+  /** VB-008 — this operation has been started too often in the recent window. */
+  | { ok: false; error: "start_limit_reached" }
   | { ok: false; error: "unknown"; message: string };
 
 const POSTGRES_UNIQUE_VIOLATION = "23505";
@@ -252,8 +255,35 @@ export async function createOperationRun(
     inputIdentity: string;
     /** The domain object this operation acts on, when it has one. */
     subjectId?: string;
+    /**
+     * Who is asking, and therefore whether the start windows apply (VB-008).
+     *
+     * `customer` is anything a person's own client can reach. `system` is
+     * Vibe's own machinery — durable execution creating a follow-on operation,
+     * and the concurrency harness driving a primitive on purpose.
+     *
+     * The distinction is the threat model, not a convenience: the limit exists
+     * to stop a customer looping, and Vibe's own steps are already bounded by
+     * the operation they belong to. Required rather than defaulted, because
+     * "is this customer-initiated" is not a thing to get by omission — the
+     * same reason `requestedBy` is required on the opportunity path.
+     */
+    initiatedBy: "customer" | "system";
   },
 ): Promise<CreateOperationResult> {
+  // VB-008. Enforced here rather than in each of the ten start paths because
+  // this is the single insertion funnel (ADR 0057 §5 established that), so a
+  // limit placed here also covers the start path nobody has written yet.
+  //
+  // A read-then-insert, and knowingly so: two simultaneous starts can both see
+  // room and both take it. That is acceptable for a rate limit in a way it
+  // would not be for an entitlement — the bound is "not in a loop", and being
+  // one over it once is not the failure being prevented. The exactly-once
+  // guarantees live in the unique indexes, which are not raceable.
+  if (params.initiatedBy === "customer" && !(await withinStartWindows(supabase, params))) {
+    return { ok: false, error: "start_limit_reached" };
+  }
+
   const { data, error } = await supabase
     .from("operation_runs")
     .insert({
@@ -504,4 +534,52 @@ export async function failOperationRun(
 
   if (error) throw error;
   return (data ?? []).length > 0;
+}
+
+/**
+ * Whether both start windows still have room for this operation (VB-008).
+ *
+ * Counts every row regardless of outcome, matching `countRecentAuditStarts`'
+ * reasoning: a run that failed because a provider was down still counts,
+ * because a limit an attacker can reset by making the provider fail is not a
+ * limit.
+ *
+ * A counting failure allows the start. This is a backstop underneath the
+ * Credit reservation path, and taking the product down because a `count` query
+ * failed would be a worse outcome than one unbounded loop.
+ */
+async function withinStartWindows(
+  supabase: SupabaseClient,
+  params: { projectId: string | null; userId: string; operationType: OperationType },
+): Promise<boolean> {
+  const now = Date.now();
+
+  try {
+    const account = await supabase
+      .from("operation_runs")
+      .select("id", { count: "exact", head: true })
+      .eq("user_id", params.userId)
+      .eq("operation_type", params.operationType)
+      .gte("created_at", new Date(now - ACCOUNT_WINDOW_MS).toISOString());
+    if (account.error) return true;
+
+    let projectCount = 0;
+    if (params.projectId !== null) {
+      const project = await supabase
+        .from("operation_runs")
+        .select("id", { count: "exact", head: true })
+        .eq("project_id", params.projectId)
+        .eq("operation_type", params.operationType)
+        .gte("created_at", new Date(now - PROJECT_WINDOW_MS).toISOString());
+      if (project.error) return true;
+      projectCount = project.count ?? 0;
+    }
+
+    return startAllowed(params.operationType, {
+      project: projectCount,
+      account: account.count ?? 0,
+    });
+  } catch {
+    return true;
+  }
 }

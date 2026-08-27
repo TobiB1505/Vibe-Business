@@ -39,6 +39,8 @@ export const OPERATION_FAILURE_MESSAGES: Record<OperationFailureCode, string> = 
   product_profile_stale:
     "Your code or site changed since Vibe last looked. Refresh what Vibe knows, then audit.",
   already_running: "This is already running for the project. Give it a moment.",
+  start_limit_reached:
+    "This has been started too many times recently. Give it an hour and try again.",
   // The evidence moved under the operation's feet — a Deep Scan finished, or
   // the context was edited. Starting again picks up the new evidence.
   inputs_changed: "Your evidence changed while this was starting. Run it again to use the latest.",

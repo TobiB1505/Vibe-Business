@@ -296,10 +296,69 @@ export async function claimStripeEvent(
       .eq("stripe_event_id", params.stripeEventId)
       .maybeSingle();
 
-    return { claimed: false, existingStatus: (data as { status: string } | null)?.status ?? "processing" };
+    const existingStatus = (data as { status: string } | null)?.status ?? "processing";
+    if (existingStatus !== "processing") return { claimed: false, existingStatus };
+
+    // VB-013. A claim stuck at `processing` is what a crash between the insert
+    // and either completion or release leaves behind — and it is worse than it
+    // looks. Every later Stripe retry loses the unique index, reads
+    // `processing`, and is answered `duplicate`, which is a 2xx. Stripe stops
+    // retrying. The customer paid and the grant never posted, and nothing is
+    // red anywhere.
+    return (await reclaimStaleStripeEvent(supabase, params.stripeEventId))
+      ? { claimed: true }
+      : { claimed: false, existingStatus };
   }
 
   throw error;
+}
+
+/**
+ * How long a claim may sit at `processing` before another delivery may take it.
+ *
+ * Bounded from both sides, and the lower bound is the dangerous one: re-claiming
+ * an event whose original handler is **still running** processes it twice, which
+ * is the double-grant this table exists to prevent. So the window has to exceed
+ * the longest a handler can possibly take — a Vercel function is killed long
+ * before this — rather than merely the longest one usually takes.
+ *
+ * The upper bound is Stripe's retry schedule: it retries a failed delivery for
+ * about three days, so a window measured in minutes leaves many retries to
+ * carry the re-claim. Fifteen sits far from both edges.
+ */
+const STALE_CLAIM_MINUTES = 15;
+
+/**
+ * Takes a claim that has been abandoned, or reports that it has not.
+ *
+ * A compare-and-swap for the same reason the original claim is an insert: two
+ * retries arriving together must not both decide the claim is stale. The
+ * predicate is part of the `UPDATE`, so PostgreSQL picks the winner and the
+ * loser is told by an empty result rather than by a read it could have raced.
+ *
+ * The row is re-stamped rather than deleted and re-inserted. Deleting would
+ * discard `received_at` — when the event first arrived — which is the one fact
+ * that makes a stuck claim diagnosable afterwards. `updated_at` moves because
+ * the table's `set_updated_at` trigger fires on any update, so a re-claimed
+ * event starts its own fresh window.
+ */
+async function reclaimStaleStripeEvent(
+  supabase: SupabaseClient,
+  stripeEventId: string,
+): Promise<boolean> {
+  const staleBefore = new Date(Date.now() - STALE_CLAIM_MINUTES * 60_000).toISOString();
+
+  const { data, error } = await supabase
+    .from("billing_stripe_events")
+    .update({ status: "processing" })
+    .eq("stripe_event_id", stripeEventId)
+    .eq("status", "processing")
+    .lt("updated_at", staleBefore)
+    .select("id")
+    .maybeSingle();
+
+  if (error) throw error;
+  return data !== null;
 }
 
 /** Records how an event finished. Never stores a payload, an error body or a signature. */

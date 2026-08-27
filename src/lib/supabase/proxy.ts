@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { getPublicEnv } from "@/lib/env/env";
+import { AUTH_COOKIE_OPTIONS } from "@/lib/supabase/cookie-options";
 import { loginPathWithNext, sanitizeNextPath } from "@/modules/auth/redirects";
 
 /**
@@ -69,6 +70,7 @@ export async function updateSession(request: NextRequest) {
     env.NEXT_PUBLIC_SUPABASE_URL,
     env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
     {
+      cookieOptions: AUTH_COOKIE_OPTIONS,
       cookies: {
         getAll() {
           return request.cookies.getAll();

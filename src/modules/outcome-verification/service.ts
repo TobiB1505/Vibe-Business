@@ -149,6 +149,7 @@ export async function startOutcomeVerification(
     userId: params.userId,
     operationType: "change_outcome_verification",
     inputIdentity: eligibility.verificationIdentity,
+    initiatedBy: "customer",
   });
 
   if (!created.ok) {
