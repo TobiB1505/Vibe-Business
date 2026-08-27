@@ -134,6 +134,14 @@ Erasure runs as one durable operation in eleven ordered steps. The order is not 
 
 **The GitHub App installation is not uninstalled on GitHub's side.** Vibe has never had that behaviour, and adding an outbound mutation to an erasure path is exactly the kind of external effect that must not appear silently. The erasure copy states it; the code does not do it.
 
+> **[2026-08-27] Implemented as one durable operation in `src/modules/operations/account-erasure/`.** Six workflow steps carrying the eleven, and the grouping is the retry boundary: the Stripe call and the identity deletion each stand alone at `maxRetries = 0`, and everything between them converges to the same state however many times it runs. **No user-facing control exists**, and none is authorized by this ADR or by ADR 0057.
+>
+> **It needed ADR 0057 first, for four reasons this section did not know.** `operation_runs.project_id` was `NOT NULL` and every RLS policy routed through it, so an account-level operation was invisible to its own owner; `user_id` cascaded, so step 11 deleted the record of the operation performing it; the single-active index keyed on `project_id`, so under NULLS DISTINCT it admitted unlimited concurrent erasures of one account; and `completed` demanded a `result_id` an erasure has no artifact to point at. Step 1's "every start path is closed" is now a trigger on `operation_runs`, which closes paths that do not exist yet.
+>
+> **One half of step 3 is not implemented, and approximating it would have been worse.** `billing_stripe_events` carries `stripe_event_id`, `event_type`, `livemode` and a status — and no owner column at all. A claim cannot be attributed to an account, so the only expressible gate is "no Stripe event is being processed anywhere, for anybody", which blocks one user's erasure on another user's payment and cannot pass under load. What that check was protecting against is covered precisely where it can be: step 2 stops new events being generated, and an event landing after step 8 refuses as `owner_erased` rather than minting an ownerless wallet (§9, M3′). An event landing before step 8 grants to an account that is still live, which is correct. The reservation half of step 3 — per account, precise — is implemented and blocking.
+>
+> **And the ordering claim in step 6 was right for the wrong reason.** It says the installations are unreferenced by then "which is precisely what F3's RESTRICT was objecting to". True — but measured, F3's RESTRICT is also what refuses a premature step 11, ahead of the `execution_specs` trigger the step order implies. Both stand in the way; M2′ removed the first and the second remains.
+
 ### 5. ExecutionSpec authority model
 
 The `execution_specs` immutability trigger stays. It is the guarantee that an approved instruction package cannot be edited after the fact, and F2 is a reason to make one narrow hole in it — not a reason to remove it.

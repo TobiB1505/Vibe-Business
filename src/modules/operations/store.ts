@@ -245,7 +245,8 @@ const POSTGRES_UNIQUE_VIOLATION = "23505";
 export async function createOperationRun(
   supabase: SupabaseClient,
   params: {
-    projectId: string;
+    /** Null for an account-level operation — the subject, not a missing value. */
+    projectId: string | null;
     userId: string;
     operationType: OperationType;
     inputIdentity: string;
@@ -454,7 +455,20 @@ export async function markInferenceStarted(
  */
 export async function completeOperationRun(
   supabase: SupabaseClient,
-  params: { operationId: string; resultId: string },
+  params: {
+    operationId: string;
+    /**
+     * The row this operation produced, or null when it produced none.
+     *
+     * Null is legal for `account_erasure` alone, and the database says so
+     * rather than this comment: the `operation_runs_completed_has_result`
+     * check names that one type (ADR 0057 §4). An erasure's product is
+     * absence, and inventing a row so a constraint is satisfied would be a lie
+     * told to a `CHECK`. Passing null from any other operation type is
+     * rejected by PostgreSQL, not by trust.
+     */
+    resultId: string | null;
+  },
 ): Promise<boolean> {
   const { data, error } = await supabase
     .from("operation_runs")

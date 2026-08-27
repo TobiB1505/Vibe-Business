@@ -35,6 +35,17 @@ export type AuditEventType =
   // be the caller's. Carries the closed failure reason, never a database
   // message (VB-003).
   | "project.deletion_failed"
+  /**
+   * The three moments of an account erasure (ADR 0056 §4).
+   *
+   * `account.erased` is deliberately recorded with **no owner**: it is written
+   * after step 11, when there is nobody left to attribute it to. That is the
+   * honest record and exactly what retention should keep — an erasure happened,
+   * at this time, and nothing identifying survives to say whose.
+   */
+  | "account.erasure_started"
+  | "account.erased"
+  | "account.erasure_failed"
   | "github.access.failed"
   | "repository.intelligence.started"
   | "repository.intelligence.completed"

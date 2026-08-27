@@ -321,7 +321,7 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0053](docs/decisions/0053-founder-input-resolution.md) | Founder-owned input resolution and Action Plan completion evidence | Action plans, project context, execution contract |
 | [0054](docs/decisions/0054-agent-action-plan-completion-evidence.md) | Agent Action Plan completion comes from verified execution evidence | Action plans, agent execution, validation |
 | [0055](docs/decisions/0055-founder-action-attestation-evidence.md) | Founder actions complete from explicit immutable attestation | Action plans, founder authority, completion evidence |
-| [0056](docs/decisions/0056-lifecycle-erasure-and-retention.md) | Lifecycle, erasure and retention: what a deletion destroys, what outlives the person, and under whose authority (Accepted; all six migration families implemented, account erasure itself not yet built) | Projects, account, §3.11, §3.12, storage |
+| [0056](docs/decisions/0056-lifecycle-erasure-and-retention.md) | Lifecycle, erasure and retention: what a deletion destroys, what outlives the person, and under whose authority (Accepted; all six migration families and the eleven-step erasure operation implemented, no user-facing control) | Projects, account, §3.11, §3.12, storage |
 | [0057](docs/decisions/0057-account-level-durable-operations.md) | Account-level durable operations, and how an erasure outlives itself (Accepted, extends 0013) | Operations, `operation_runs`, RLS |
 
 ### Layers with no section above

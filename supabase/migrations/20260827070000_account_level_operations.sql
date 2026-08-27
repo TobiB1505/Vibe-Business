@@ -132,16 +132,22 @@ create unique index operation_runs_single_active_account_idx
 -- constraint is satisfied would be a lie told to a CHECK. The exemption names
 -- the single type rather than relaxing the rule for the other fourteen.
 
+-- Written as `in (…)` rather than `= any (array[…])` deliberately. PostgreSQL
+-- normalizes them to the same thing, but `operations/migration-test-support.ts`
+-- reads this list out of the migration text to assert that `OPERATION_TYPES`
+-- and the database agree, and it anchors on the `in` form every other enum in
+-- this schema uses. The other spelling parses fine and silently falls out of
+-- that assertion, which is worse than a build error.
 alter table public.operation_runs
   drop constraint operation_runs_operation_type_check,
   add constraint operation_runs_operation_type_check check (
-    operation_type = any (array[
+    operation_type in (
       'business_audit', 'opportunity_generation', 'change_preparation',
       'change_validation', 'change_preview', 'preview_teardown', 'change_review',
       'change_merge', 'change_outcome_verification', 'business_measurement',
       'product_understanding', 'product_scan', 'action_planning', 'agent_execution',
       'account_erasure'
-    ])
+    )
   );
 
 alter table public.operation_runs

@@ -149,14 +149,39 @@ export class FakeDatabase {
     const others = this.rows(table).filter((row) => row.id !== excludeId);
 
     if (table === "operation_runs" && ACTIVE_OPERATION_STATUSES.includes(String(candidate.status))) {
-      const clash = others.some(
+      const active = others.filter(
         (row) =>
-          row.project_id === candidate.project_id &&
           row.operation_type === candidate.operation_type &&
           row.input_identity === candidate.input_identity &&
           ACTIVE_OPERATION_STATUSES.includes(String(row.status)),
       );
-      if (clash) return { code: POSTGRES_UNIQUE_VIOLATION, message: "one active operation per identity" };
+
+      // Two indexes, and the split matters. `operation_runs_single_active_idx`
+      // keys on `project_id`, and PostgreSQL's default NULLS DISTINCT means it
+      // does **not** constrain account-level rows at all — which is the defect
+      // ADR 0057 G3 measured. Modelling it as though `null === null` collided
+      // would give a false pass on a guarantee the database provides through a
+      // different index entirely.
+      const projectScoped =
+        candidate.project_id !== null &&
+        candidate.project_id !== undefined &&
+        active.some((row) => row.project_id === candidate.project_id);
+      if (projectScoped) {
+        return { code: POSTGRES_UNIQUE_VIOLATION, message: "one active operation per identity" };
+      }
+
+      // `operation_runs_single_active_account_idx` (ADR 0057 §3), which is what
+      // actually stops a second erasure of the same account.
+      const accountScoped =
+        (candidate.project_id === null || candidate.project_id === undefined) &&
+        active.some(
+          (row) =>
+            (row.project_id === null || row.project_id === undefined) &&
+            row.user_id === candidate.user_id,
+        );
+      if (accountScoped) {
+        return { code: POSTGRES_UNIQUE_VIOLATION, message: "one active operation per account" };
+      }
     }
 
     // validation_runs_single_active_idx (Sprint 10A §21, narrowed after the
@@ -1310,6 +1335,34 @@ function fakeRepairLotAllocation(db: FakeDatabase, grantId: unknown): QueryError
 }
 
 const FAKE_RPC_HANDLERS: Record<string, (db: FakeDatabase, params: Record<string, unknown>) => QueryError> = {
+  /**
+   * ADR 0056 §8's scrub, modelled only as far as the orchestrator is
+   * responsible for it.
+   *
+   * The JSONB transform itself is deliberately **not** reproduced here. It is a
+   * recursive, irreversible rewrite whose correctness is proven against real
+   * PostgreSQL in `supabase/tests/audit-scrub.migration.ts`, against a fixture
+   * covering every event category — and a second implementation of it in a test
+   * helper would drift from the first exactly when it mattered.
+   *
+   * What this models is what an orchestrator test can meaningfully assert: the
+   * routine ran, for this identity's rows and nobody else's, and the payload no
+   * longer carries the two keys that must go together with the column (§8).
+   */
+  erase_account_audit_metadata: (db, params) => {
+    if (!params.p_user_id) return { message: "erase_account_audit_metadata requires a user id" };
+
+    for (const row of db.rows("audit_events")) {
+      if (row.user_id !== params.p_user_id) continue;
+      row.project_id = null;
+      const metadata = { ...((row.metadata as Record<string, unknown> | undefined) ?? {}) };
+      delete metadata.projectId;
+      delete metadata.project_id;
+      row.metadata = metadata;
+    }
+
+    return null;
+  },
   raise_execution_founder_input_request: (db, params) => {
     const run = db
       .rows("agent_execution_runs")
