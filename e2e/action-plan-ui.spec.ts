@@ -480,6 +480,22 @@ test.describe("ready plan — regressions", () => {
     }
   });
 
+  test("still offers a replan while a founder question is open", async ({ page }) => {
+    // The panel rewrite gated "Plan options" on there being no open founder
+    // question. That withheld the replan at the one moment it matters most:
+    // when the plan is asking something the founder cannot or will not answer,
+    // replanning is how they leave it. Collapsed behind a summary is the
+    // density decision and is fine; absent from the page is a dead end.
+    await page.goto("/e2e/action_plan_ready");
+
+    await expect(page.getByRole("heading", { name: "Vibe needs your input" })).toBeVisible();
+
+    const planOptions = page.locator("details").filter({ hasText: "Plan options" });
+    await expect(planOptions).toHaveCount(1);
+    await planOptions.locator("summary").click();
+    await expect(page.getByRole("button", { name: "Replan this move" })).toBeVisible();
+  });
+
   test("never leaks a raw enum value or an internal id into the page text", async ({ page }) => {
     await page.goto("/e2e/action_plan_ready");
     await expandEverything(page);
