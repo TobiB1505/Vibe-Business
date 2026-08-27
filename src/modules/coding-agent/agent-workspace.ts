@@ -1,7 +1,11 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getLatestActionPlan } from "@/modules/action-plans/service";
+import { getExecutionSpecById } from "@/modules/execution-contract/store";
 import type { PreparedChangeWorkspaceItem } from "@/modules/execution/workspace";
+import { getLatestOpportunities } from "@/modules/opportunities/service";
+import type { AgentTask } from "@/app/app/projects/[projectId]/agent/agent-task-panel";
 import { findLatestOperation } from "@/modules/operations/store";
 import {
   agentCoreState,
@@ -37,6 +41,12 @@ export type AgentWorkspaceView = {
   live: AgentExecutionLiveModel | null;
   /** The change this run produced, once it has produced one. */
   change: PreparedChangeWorkspaceItem | null;
+  /**
+   * The Move this run is working on, when it can be resolved from stored
+   * records. Null rather than a placeholder — a screen naming the wrong task is
+   * worse than one naming none.
+   */
+  task: AgentTask | null;
 };
 
 export async function readAgentWorkspace(
@@ -62,7 +72,7 @@ export async function readAgentWorkspace(
 
   const idle = () => {
     const stages = agentStageSteps({ timeline: null, runStatus: null, changeProgress: null });
-    return { stages, core: agentCoreState(stages), live: null, change: null };
+    return { stages, core: agentCoreState(stages), live: null, change: null, task: null };
   };
 
   if (stored === null) return idle();
@@ -103,6 +113,16 @@ export async function readAgentWorkspace(
     ? (changes.find((candidate) => candidate.id === operation.resultId) ?? null)
     : null;
 
+  /*
+   * The Move this run is working on.
+   *
+   * Followed from the run's own execution spec rather than guessed from the
+   * newest Move: a spec names the opportunity it was authorized against, and a
+   * screen naming the wrong task is worse than one naming none. Every lookup
+   * below returns null rather than a fallback for the same reason.
+   */
+  const task = await resolveTask(supabase, { projectId, runView });
+
   const stages = agentStageSteps({
     timeline: live.timeline,
     runStatus: operation.status,
@@ -114,5 +134,56 @@ export async function readAgentWorkspace(
     filesChanged: live.files.filter((file) => file.kind === "candidate").length,
   });
 
-  return { stages, core: agentCoreState(stages), live, change };
+  return { stages, core: agentCoreState(stages), live, change, task };
+}
+
+
+/** Impact and effort are already closed enums; this only narrows their type. */
+const CHIP = ["high", "medium", "low"] as const;
+type Chip = (typeof CHIP)[number];
+const chip = (value: string): Chip => (CHIP.includes(value as Chip) ? (value as Chip) : "medium");
+
+async function resolveTask(
+  supabase: SupabaseClient,
+  params: {
+    projectId: string;
+    runView: Awaited<ReturnType<typeof readAgentRunForLiveView>>;
+  },
+): Promise<AgentTask | null> {
+  const specId = params.runView?.executionSpecId;
+  if (!specId) return null;
+
+  const spec = await getExecutionSpecById(supabase, { projectId: params.projectId, specId });
+  if (!spec) return null;
+
+  const opportunities = await getLatestOpportunities(supabase, params.projectId);
+  const move = opportunities?.set.opportunities.find((entry) => entry.id === spec.opportunityId);
+  /*
+   * The Move is gone from the current set — regenerated, most likely. The run
+   * is still real and the rail still describes it; only the task's own words
+   * are unavailable, and inventing them from the newest Move would put a
+   * different problem's headline over this run.
+   */
+  if (!move) return null;
+
+  const plan = await getLatestActionPlan(supabase, params.projectId);
+  /*
+   * Only this run's own plan. `getLatestActionPlan` answers "the newest", which
+   * is a different question: a plan regenerated after the run started would
+   * list steps this run was never given.
+   */
+  const steps =
+    plan && plan.plan.id === spec.actionPlanId
+      ? plan.plan.steps.map((step) => step.title)
+      : [];
+
+  return {
+    title: move.title,
+    problem: move.problem,
+    whyNow: move.whyNow || null,
+    impact: chip(move.impact),
+    effort: chip(move.effort),
+    lens: move.primaryLens,
+    steps,
+  };
 }

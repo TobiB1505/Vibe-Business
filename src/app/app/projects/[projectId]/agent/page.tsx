@@ -12,6 +12,7 @@ import { agentCoreCaption } from "@/modules/coding-agent/observability/agent-sta
 import { AgentExecutionLiveView } from "@/modules/coding-agent/ui/agent-execution-live-view";
 import { AgentPanel } from "../agent-panel";
 import { PreparedChangesSection, type PreparedChangeCard } from "../prepared-changes-section";
+import { AgentTaskPanel } from "./agent-task-panel";
 import { AgentWorkspacePanel } from "./agent-workspace-panel";
 
 /**
@@ -111,13 +112,23 @@ export default async function ProjectAgentPage({
             core={workspace.core}
             caption={agentCoreCaption(workspace.stages)}
           >
-            {/*
-              The live view was written to be mounted here: it takes a model,
-              reads nothing and knows about no route. `developerDetails` is off
-              because token counts and cache ratios are for the person debugging
-              a run, not for the founder watching their product get fixed.
-            */}
-            <AgentExecutionLiveView model={workspace.live} developerDetails={false} />
+            <div className="flex flex-col gap-7">
+              {/*
+                The Move, in its own stored words. Absent when the run cannot be
+                followed back to one — a screen naming the wrong task would be
+                worse than one naming none.
+              */}
+              {workspace.task !== null && <AgentTaskPanel task={workspace.task} />}
+
+              {/*
+                The live view was written to be mounted here: it takes a model,
+                reads nothing and knows about no route. `developerDetails` is
+                off because token counts and cache ratios are for the person
+                debugging a run, not for the founder watching their product get
+                fixed.
+              */}
+              <AgentExecutionLiveView model={workspace.live} developerDetails={false} />
+            </div>
           </AgentWorkspacePanel>
         ) : (
           /*

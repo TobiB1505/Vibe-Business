@@ -210,6 +210,29 @@ export async function findExecutionSpecByIdentity(
 }
 
 /**
+ * One spec by its id.
+ *
+ * Ownership is the query, not a later check: a spec is only ever returned to
+ * the project it belongs to. Added for the Agent workspace, which needs to say
+ * *which Move* a run is working on and can only do that by following the run
+ * back to the spec that authorized it.
+ */
+export async function getExecutionSpecById(
+  supabase: SupabaseClient,
+  params: { projectId: string; specId: string },
+): Promise<StoredExecutionSpec | null> {
+  const { data, error } = await supabase
+    .from("execution_specs")
+    .select(SPEC_COLUMNS)
+    .eq("id", params.specId)
+    .eq("project_id", params.projectId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? mapSpec(data as SpecRow) : null;
+}
+
+/**
  * Every spec produced for one plan, newest first.
  *
  * History rather than "the current one", because there is no current one: a

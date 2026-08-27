@@ -34,11 +34,14 @@ export function AgentWorkspacePanel({
   stages,
   core,
   caption,
+  headline,
   children,
 }: {
   stages: AgentStageStep[];
   core: AgentCoreState;
   caption: string;
+  /** The bolder line above the caption, when the caller has one. */
+  headline?: string;
   /** The current stage's own body, rendered by the route. */
   children?: React.ReactNode;
 }) {
@@ -71,7 +74,7 @@ export function AgentWorkspacePanel({
         >
           <div className="order-2 min-w-0 lg:order-1">{children}</div>
           <div className="order-1 flex justify-center lg:order-2 lg:justify-end">
-            <AgentCore state={core} caption={caption} />
+            <AgentCore state={core} caption={caption} headline={headline} />
           </div>
         </motion.div>
       </div>

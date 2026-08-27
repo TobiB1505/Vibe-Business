@@ -28,6 +28,14 @@ import type { FreshnessState } from "@/modules/execution-context/brief";
 
 export type AgentRunLiveContext = {
   run: LiveRunRow;
+  /**
+   * The spec that authorized this run.
+   *
+   * Carried so a caller can follow the run back to the Move it is working on —
+   * the Agent workspace names the task, and without this it could only name
+   * the branch.
+   */
+  executionSpecId: string;
   limits: { maxWallClockMs: number; maxTurns: number; maxProviderSpendUsd: number } | null;
   gatewayRequestCeiling: number | null;
   validation: ValidationState;
@@ -175,6 +183,7 @@ export async function readAgentRunForLiveView(
 
   return {
     run,
+    executionSpecId: row.execution_spec_id,
     limits: limits
       ? {
           maxWallClockMs: limits.maxWallClockMs,
