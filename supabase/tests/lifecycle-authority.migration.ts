@@ -333,7 +333,7 @@ describe("J. privilege catalog", () => {
     expect(holders).toBe("<none>");
   });
 
-  it("pins the two functions that may remove a project, and their reach", () => {
+  it("pins the two lifecycle functions and their reach", () => {
     const grants = db.sql(`
       select string_agg(g, ',' order by g) from (
         select p.proname || ':' || r.rolname || '=' ||
@@ -341,14 +341,14 @@ describe("J. privilege catalog", () => {
         from pg_proc p
         join pg_namespace n on n.oid = p.pronamespace and n.nspname = 'public'
         cross join (values ('anon'), ('authenticated'), ('service_role')) as r(rolname)
-        where p.proname in ('disconnect_project', 'erase_project_lifecycle')
+        where p.proname in ('detach_repository', 'erase_project_lifecycle')
       ) s;
     `);
     expect(grants).toBe(
       [
-        "disconnect_project:anon=false",
-        "disconnect_project:authenticated=true",
-        "disconnect_project:service_role=false",
+        "detach_repository:anon=false",
+        "detach_repository:authenticated=false",
+        "detach_repository:service_role=true",
         "erase_project_lifecycle:anon=false",
         "erase_project_lifecycle:authenticated=false",
         "erase_project_lifecycle:service_role=true",
@@ -382,32 +382,19 @@ describe("J. privilege catalog", () => {
         and has_function_privilege(r.role, p.oid, 'EXECUTE');
     `);
 
-    // One reviewed exception, and the review is this comment.
+    // No exceptions, and that is the end state M5 restored.
     //
-    // `disconnect_project` must be `SECURITY DEFINER` — after Migration B the
-    // caller holds no `DELETE ON public.projects` — and must be reachable by
-    // `authenticated`, because a founder clicking Disconnect is the only
-    // caller. What makes it safe is that it takes no owner argument: the row
-    // it deletes is chosen by `auth.uid()` and `p_project_id`, so its reach is
-    // exactly the `delete own projects` RLS policy it replaces, and there is
-    // no argument in which another user could be named. It is temporary; M5
-    // removes it (ADR 0056 §1).
+    // `disconnect_project` used to sit here: it had to be `SECURITY DEFINER`
+    // (its caller holds no `DELETE ON public.projects`) and had to be reachable
+    // by `authenticated`, because a founder clicking Disconnect was its only
+    // caller. It was safe — it took no owner argument, so its reach was exactly
+    // the `delete own projects` RLS policy it replaced — but it was still an
+    // exception, and `20260827020000` dropped the function once Disconnect
+    // stopped being destructive.
     //
-    // Anything else appearing here is a privilege-escalation surface nobody
-    // argued for. Adding a name to this list is the argument.
-    expect(reachable).toBe("disconnect_project");
-  });
-
-  it("keeps that exception honest: disconnect_project takes no owner argument", () => {
-    const shape = db.sql(`
-      select coalesce(string_agg(format_type(t.oid, null), ',' order by o.ord), '<none>')
-      from pg_proc p
-      join pg_namespace n on n.oid = p.pronamespace and n.nspname = 'public'
-      cross join lateral unnest(p.proargtypes) with ordinality as o(oid, ord)
-      join pg_type t on t.oid = o.oid
-      where p.proname = 'disconnect_project';
-    `);
-    expect(shape).toBe("uuid");
+    // Anything appearing here now is a privilege-escalation surface nobody
+    // argued for.
+    expect(reachable).toBe("<none>");
   });
 
   it("pins search_path on every SECURITY DEFINER function in public", () => {

@@ -1,0 +1,32 @@
+-- VB-001 M5 follow-up — remove the staging function.
+--
+-- `disconnect_project()` was always temporary and said so. It existed for one
+-- reason: `authenticated` had to stop holding `DELETE ON public.projects`
+-- before M1 could ship, and M5 — the product slice that makes Disconnect
+-- non-destructive — could not be rushed to meet that deadline. So the
+-- destructive behaviour stayed exactly as it was and only the privilege moved.
+--
+-- M5 has landed. Disconnect now detaches through `detach_repository()`, Delete
+-- Project destroys through `erase_project_lifecycle()`, and the TypeScript
+-- caller of this function is deleted. Nothing in `src/` references it.
+--
+--
+-- ## Why this is a separate migration
+--
+-- Dropping a function the running build still calls is the skew M1a's rollout
+-- exists to avoid. This one waits until the build that stopped calling it is
+-- live, which is why it is not part of the M5 migrations it belongs to.
+--
+--
+-- ## What removing it buys, beyond tidiness
+--
+-- It was the **only** `SECURITY DEFINER` function in `public` reachable by
+-- `authenticated`, and therefore the single reviewed exception in the
+-- advisor-rule assertion that `lifecycle-authority.migration.ts` carries. It
+-- was safe — it took no owner argument, so its reach was exactly the
+-- `delete own projects` RLS policy it replaced — but a rule with no exceptions
+-- is a stronger rule than one with a well-argued exception, and this restores
+-- that.
+--
+-- The grants go with the function; nothing needs revoking separately.
+drop function if exists public.disconnect_project(uuid);
