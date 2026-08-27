@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { calculateProviderCost, UnpricedModelError } from "./pricing";
 import type { AIOperation, AIUsage } from "./provider";
+import { observeAccountSpend } from "@/modules/credits/spend-watch";
 
 /**
  * Internal AI usage ledger (Sprint 4 §25).
@@ -114,5 +115,14 @@ export async function recordAIUsage(
       status: params.status,
       message: error.message,
     });
+    return;
+  }
+
+  // VB-033 — the moment spend happens is the moment to notice a lot of it.
+  // Off the latency-critical path (the work is already done), never throws, and
+  // refuses nothing: what a customer may spend is a product decision, not this
+  // function's. See `credits/spend-watch.ts`.
+  if (providerCostUsd !== null) {
+    await observeAccountSpend(supabase, { userId: params.userId });
   }
 }

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { createServiceClient } from "@/lib/supabase/service";
 
 /**
  * Per-account sign-in throttling (VB-010).
@@ -16,18 +16,21 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * the caller is `anon`, which holds no privilege on any table — this design
  * works with that rather than around it.
  *
- * ## The function is publicly reachable, so it trusts its arguments as little
- * as possible
+ * ## The function is not publicly reachable, and that is the whole boundary
  *
- * `anon` can call it, which means anyone holding the publishable key can —
- * and that key is published. A success therefore clears the window belonging
- * to the **caller's own session**, derived from the JWT inside the function;
- * the identifier argument is not consulted on that path. That is what stops
- * an attacker resetting a victim's counter between password guesses.
+ * It used to be granted to `anon`, on the reasoning that sign-in precedes a
+ * session so the caller *is* `anon`. Correct about the caller, wrong about the
+ * consequence: `anon` is anyone holding the publishable key, and that key is
+ * published. Eight POSTs with a hash of somebody's address held them out of
+ * sign-in for fifteen minutes at a time — the control used as a weapon.
  *
- * It does not stop an attacker *spending* a known account's allowance, which
- * would need the counter to be unwritable by the public. See VB-053 and the
- * migration's docblock.
+ * `execute` is now revoked from both Data API roles and this module obtains a
+ * **service-role client** for the one call, which is why it takes no client
+ * from its caller and hands none back. The authority is who may call, not what
+ * the caller can prove about its arguments — see
+ * [ADR 0060](../../../docs/decisions/0060-sign-in-throttle-authority.md) and
+ * `src/lib/supabase/service-boundary.test.ts`, where the reviewed site is
+ * recorded.
  *
  * ## It fails open, on purpose
  *
@@ -61,25 +64,25 @@ const ALLOWED: ThrottleDecision = { allowed: true, retryAfterSeconds: 0 };
  * against a bound of eight, and worth far less than letting every attempt
  * reach the auth provider.
  *
- * `succeeded: true` must be called on the client that just signed in, not on a
- * fresh one: the function reads the identity out of that client's new access
- * token. Passing the identifier is not enough and is not meant to be.
+ * The identifier argument is trustworthy because the only caller is this
+ * module. That is a property of the grant, not of the string.
  */
-export async function recordAuthAttempt(
-  supabase: SupabaseClient,
-  params: {
-    identifier: string;
-    /** `null` reports the current state and records nothing — the pre-check. */
-    succeeded: boolean | null;
-  },
-): Promise<ThrottleDecision> {
+export async function recordAuthAttempt(params: {
+  identifier: string;
+  /** `null` reports the current state and records nothing — the pre-check. */
+  succeeded: boolean | null;
+}): Promise<ThrottleDecision> {
   // Every failure path returns ALLOWED, including a thrown one. "Fails open"
   // has to mean *any* failure, not just the ones the client reports as an
   // error object — an exception here would otherwise take sign-in down, which
   // is the outcome this design says it will not cause.
   let data: unknown;
   try {
-    const result = await supabase.rpc("record_auth_attempt", {
+    // Created here and handed to nobody. Its entire use is the one call below:
+    // it reads no table, writes no table, and does not leave this function.
+    // An absent service-role key throws and is caught, which is the fail-open
+    // path rather than a special case.
+    const result = await createServiceClient().rpc("record_auth_attempt", {
       p_identifier_hash: identifierHash(params.identifier),
       p_succeeded: params.succeeded,
     });
