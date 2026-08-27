@@ -188,10 +188,13 @@ test.describe("ready plan — founder input focus", () => {
 
     const fullSentence =
       "qualified visitors who are actively searching cannot find the product at all";
-    await expect(page.getByText(fullSentence, { exact: false })).toBeAttached();
+    // `.first()`: the move's why-now sentence is rendered in more than one place
+    // on this screen. Which copy is asserted does not matter — the claim is that
+    // the *full* sentence is in the DOM before anything is expanded.
+    await expect(page.getByText(fullSentence, { exact: false }).first()).toBeAttached();
 
     await page.getByRole("button", { name: "More context" }).first().click();
-    await expect(page.getByText(fullSentence, { exact: false })).toBeVisible();
+    await expect(page.getByText(fullSentence, { exact: false }).first()).toBeVisible();
     await expect(page.getByRole("button", { name: "Show less" }).first()).toBeVisible();
   });
 
@@ -222,7 +225,15 @@ test.describe("ready plan — Start Here", () => {
     await expect(page.getByRole("radio", { name: /Independent founders/ })).toBeChecked();
     await expect(page.getByRole("radio", { name: /Small product teams/ })).toBeVisible();
 
-    await page.getByRole("radio", { name: /Something else/ }).check();
+    // The input is `sr-only` inside its own `<label>`, which is the accessible
+    // custom-radio pattern: a person clicks the label, never the input. `.check()`
+    // drives the input itself and is blocked by the label covering it, so this
+    // clicks what a user clicks and then asserts the input actually became checked.
+    const somethingElse = page.getByRole("radio", { name: /Something else/ });
+    await somethingElse.scrollIntoViewIfNeeded();
+    await page.locator("label").filter({ has: somethingElse }).click();
+    await expect(somethingElse).toBeChecked();
+
     await expect(page.getByLabel("Your answer")).toBeVisible();
     await expect(page.getByRole("button", { name: "Continue" })).toBeVisible();
   });
@@ -239,12 +250,20 @@ test.describe("ready plan — Start Here", () => {
     await page.goto("/e2e/action_plan_ready");
     await openFullPlannedWork(page);
 
-    const startHere = page.getByText("Start here").first();
-    await expect(startHere).toBeVisible();
+    // Asserted on the row rather than as two independent text matches. The title
+    // also appears in collapsed body copy elsewhere on the screen, so a bare
+    // `getByText(...).first()` can resolve to a hidden paragraph — and, worse,
+    // "Start here" being visible *somewhere* would pass even if it sat on the
+    // wrong step, which is the exact defect this assertion exists to catch.
+    const actionable = plannedStep(page, "Decide which segment to target first");
+    await expect(actionable.locator("summary")).toContainText("Start here");
 
-    await expect(
-      page.getByText("Decide which segment to target first", { exact: true }).first(),
-    ).toBeVisible();
+    for (const waiting of [
+      "Draft the search-facing copy for that segment",
+      "Submit the sitemap to Search Console",
+    ]) {
+      await expect(plannedStep(page, waiting).locator("summary")).not.toContainText("Start here");
+    }
   });
 
   /**
@@ -296,8 +315,12 @@ test.describe("ready plan — compact checklist", () => {
       "Wait for Google to index the new pages",
       "Build a dedicated pricing page",
     ];
+    // Scoped to each row's own summary. Two of these titles also appear in
+    // collapsed body copy elsewhere, where `getByText(...).first()` resolves to
+    // a hidden paragraph — and a title that renders only there would satisfy a
+    // loose match while being invisible in the checklist this test is about.
     for (const title of titles) {
-      await expect(page.getByText(title, { exact: true }).first()).toBeVisible();
+      await expect(plannedStep(page, title).locator("summary")).toBeVisible();
     }
 
     await expect(page.getByTestId("planned-steps").locator("details[open]")).toHaveCount(0);
@@ -405,6 +428,7 @@ test.describe("ready plan — compact checklist", () => {
     page,
   }) => {
     await page.goto("/e2e/action_plan_ready");
+    await openFullPlannedWork(page);
 
     // The SEO step is the one fixture step that requires approval.
     const row = plannedStep(page, "Publish the missing robots.txt and sitemap");
