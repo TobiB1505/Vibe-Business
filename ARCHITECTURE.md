@@ -323,7 +323,8 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0055](docs/decisions/0055-founder-action-attestation-evidence.md) | Founder actions complete from explicit immutable attestation | Action plans, founder authority, completion evidence |
 | [0056](docs/decisions/0056-lifecycle-erasure-and-retention.md) | Lifecycle, erasure and retention: what a deletion destroys, what outlives the person, and under whose authority (Accepted; all six migration families, the eleven-step erasure operation and the account settings control implemented) | Projects, account, §3.11, §3.12, storage |
 | [0057](docs/decisions/0057-account-level-durable-operations.md) | Account-level durable operations, and how an erasure outlives itself (Accepted, extends 0013) | Operations, `operation_runs`, RLS |
-| [0058](docs/decisions/0058-security-response-headers.md) | Security response headers, and a CSP that starts by watching rather than enforcing (Accepted; six headers live, CSP report-only — it protects nothing until enforced) | HTTP responses, `next.config.ts`, CSP |
+| [0058](docs/decisions/0058-move-focus-url-contract.md) | Move focus is a shared URL contract, never authority: one parameter names which Move a surface is about, resolved against stored Moves and never permitting work (Accepted; Action Plan, Agent and both next-move cards implemented) | Action Plan, Agent, project shell |
+| [0059](docs/decisions/0059-security-response-headers.md) | Security response headers, and a CSP that starts by watching rather than enforcing (Accepted; six headers live, CSP report-only — it protects nothing until enforced) | HTTP responses, `next.config.ts`, CSP |
 
 ### Layers with no section above
 

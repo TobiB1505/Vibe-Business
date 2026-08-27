@@ -399,3 +399,95 @@ test.describe("the loop survives a phone", () => {
     await expectNoHorizontalOverflow(page);
   });
 });
+
+/**
+ * The last leg: Move → Agent → back (UI-S3).
+ *
+ * The seam these cover is the one a founder used to fall through. They picked
+ * a Move, opened the Agent, and the Agent had never heard of it — so every
+ * assertion here is about whether the Move a person chose is still the Move
+ * the next screen is talking about.
+ */
+test.describe("the agent knows which Move the founder arrived with", () => {
+  const FOCUS_TITLE = "Fix missing technical SEO foundations";
+
+  test("names the Move and points back at it in the Action Plan", async ({ page }) => {
+    await page.goto("/e2e/agent-focus-preparable");
+
+    const focus = page.getByTestId("agent-focus");
+    await expect(focus).toContainText(FOCUS_TITLE);
+    // The engine's persisted rank, not this Move's position in a list of one.
+    await expect(focus).toContainText("03");
+
+    const back = focus.getByRole("link", { name: "Open this move in your Action Plan" });
+    await expect(back).toHaveAttribute(
+      "href",
+      "/app/projects/project_e2e/plan?plan=3-seo-fix-missing-technical-seo-foundations#planned-work",
+    );
+  });
+
+  test("offers no way to spend anything from the agent card", async ({ page }) => {
+    await page.goto("/e2e/agent-focus-preparable");
+
+    // Starting the work is priced and confirmed beside the Move. This card
+    // recognises and points back; it must never become a second checkout.
+    await expect(page.locator("form")).toHaveCount(0);
+    await expect(page.getByRole("button")).toHaveCount(0);
+    await expect(page.getByTestId("agent-focus")).not.toContainText("Credit");
+  });
+
+  test("leads to the exact prepared change once one exists", async ({ page }) => {
+    await page.goto("/e2e/agent-focus-prepared");
+
+    const focus = page.getByTestId("agent-focus");
+    await expect(focus).toContainText(FOCUS_TITLE);
+    await expect(focus.getByRole("link", { name: "Review the prepared change" })).toHaveAttribute(
+      "href",
+      "/app/projects/project_e2e/agent#prepared-change-prepared_e2e",
+    );
+  });
+
+  /** The regression the whole seam exists to prevent. */
+  test("names no Move at all when the one asked for is not this project's", async ({ page }) => {
+    await page.goto("/e2e/agent-focus-unresolved");
+
+    await expect(page.getByTestId("agent-focus")).toHaveCount(0);
+    // And it must not have quietly substituted the one Move it does have.
+    await expect(page.getByText(FOCUS_TITLE)).toHaveCount(0);
+    // The rest of the card is untouched: this is the ordinary Agent page.
+    await expect(page.getByRole("heading", { name: "Ready" })).toBeVisible();
+  });
+
+  test("a prepared change links back to the Move it answers", async ({ page }) => {
+    await page.goto("/e2e/change_agentic_review_required");
+
+    const card = page.getByTestId("prepared-change");
+    const back = card.getByRole("link", { name: "Give the landing page a proper social preview" });
+    await expect(back).toHaveAttribute(
+      "href",
+      /\/plan\?plan=[^"]+#planned-work$/,
+    );
+  });
+
+  test("a deterministic change keeps its rationale and still links to its Move", async ({
+    page,
+  }) => {
+    await page.goto("/e2e/merge_ready");
+
+    const card = page.getByTestId("prepared-change");
+    // One account of why, not two: the written rationale, plus a link.
+    await expect(card).toContainText("Answers your move");
+    await expect(card.getByRole("link", { name: "Fix missing technical SEO foundations" })).toHaveAttribute(
+      "href",
+      "/app/projects/project_e2e/plan?plan=3-seo-fix-missing-technical-seo-foundations#planned-work",
+    );
+  });
+
+  test("the focused agent card does not scroll sideways at 390px", async ({ page }) => {
+    await page.setViewportSize(PHONE);
+    await page.goto("/e2e/agent-focus-preparable");
+
+    await expect(page.getByTestId("agent-focus")).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+  });
+});

@@ -1,4 +1,4 @@
-# ADR 0058 — Security response headers, and a CSP that starts by watching
+# ADR 0059 — Security response headers, and a CSP that starts by watching
 
 **Status:** Accepted · **Date:** 2026-08-27 · **Drives:** VB-005
 

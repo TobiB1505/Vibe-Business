@@ -1,4 +1,5 @@
 import { preparedChangeAnchorId } from "@/components/layout/project-shell";
+import { planMoveHref } from "@/modules/action-plans/source";
 import type { ApprovalCard } from "@/modules/approvals/view";
 import type { BusinessRationale } from "@/modules/execution/business-rationale";
 import type { ChangeOrigin as ChangeOriginData } from "@/modules/execution/change-origin";
@@ -10,7 +11,7 @@ import type { PreviewCard } from "@/modules/change-preview/view";
 import type { ReviewCard } from "@/modules/review/view";
 import type { ReviewImages } from "@/modules/review/service";
 import { ApprovalPanel } from "./approval-panel";
-import { ChangeOrigin } from "./change-origin";
+import { ChangeOrigin, MoveBacklink } from "./change-origin";
 import { ChangeRationale } from "./change-rationale";
 import { MergePanel } from "./merge-panel";
 import { OutcomePanel } from "./outcome-panel";
@@ -129,14 +130,30 @@ export type PreparedChangeCard = {
    * without it the card opens with a status line and then a branch name.
    */
   origin: ChangeOriginData | null;
+  /**
+   * The Move's id, so the card can link back to it (UI-S3 §4).
+   *
+   * Separate from `origin` because they answer different questions: `origin` is
+   * the text a person reads, this is the address a link needs. Both are null
+   * together — a card never offers a link to a Move it cannot name.
+   */
+  opportunityId: string | null;
 };
 
 export function PreparedChangesSection({
   projectId,
   changes,
+  /**
+   * The Action Plan's URL, supplied by the route. Built from
+   * `projectSectionHref` there rather than hard-coded here, for the same reason
+   * every other destination in this workspace is: a panel does not know what
+   * the workspace's segments are called.
+   */
+  planHref,
 }: {
   projectId: string;
   changes: PreparedChangeCard[];
+  planHref: string;
 }) {
   if (changes.length === 0) return null;
 
@@ -192,7 +209,30 @@ export function PreparedChangesSection({
             {/* Only when there is no written rationale — otherwise two answers
                 to the same question would stack, and the written one is
                 stronger. In practice: every agent-produced change. */}
-            {!change.rationale && <ChangeOrigin origin={change.origin} />}
+            {!change.rationale && (
+              <ChangeOrigin
+                origin={change.origin}
+                moveHref={
+                  change.opportunityId ? planMoveHref(planHref, change.opportunityId) : null
+                }
+              />
+            )}
+
+            {/*
+              * The way back, for a change whose rationale suppressed the origin
+              * block above (UI-S3 §4).
+              *
+              * One line, and navigation rather than a second account of why the
+              * change exists — which is the thing the origin/rationale split
+              * exists to keep apart. Without it, a deterministic change is the
+              * one kind that names its Move nowhere and links to it nowhere.
+              */}
+            {change.rationale && change.origin && change.opportunityId && (
+              <MoveBacklink
+                title={change.origin.title}
+                href={planMoveHref(planHref, change.opportunityId)}
+              />
+            )}
 
             {/*
               * How it was built (UI-5; folded by CORE-5).

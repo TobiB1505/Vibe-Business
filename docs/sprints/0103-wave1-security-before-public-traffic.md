@@ -38,7 +38,7 @@ Four findings, and they compound, so they are best read as one.
 
 **VB-007**: `pnpm audit --prod` reported 6 vulnerabilities, 2 high. The launch gate requires zero.
 
-**VB-005** ([ADR 0058](../decisions/0058-security-response-headers.md)): no security headers at all.
+**VB-005** ([ADR 0059](../decisions/0059-security-response-headers.md)): no security headers at all.
 
 ## What the work found that the findings did not say
 

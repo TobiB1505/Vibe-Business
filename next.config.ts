@@ -34,7 +34,7 @@ const nextConfig: NextConfig = {
   poweredByHeader: false,
 
   /**
-   * VB-005 / ADR 0058. Vibe served no security headers at all. The set and the
+   * VB-005 / ADR 0059. Vibe served no security headers at all. The set and the
    * reasoning behind each directive live in `src/lib/security/headers.ts`; this
    * only applies them to every route.
    *

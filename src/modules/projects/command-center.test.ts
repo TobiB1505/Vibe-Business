@@ -216,6 +216,9 @@ describe("the next move Home recommends", () => {
 
     expect(view.nextMove).toEqual({
       kind: "move",
+      // The Move's own id, so Home's "Review this move" reviews that one and
+      // not whatever is rank 1 by the time it is clicked (UI-S3 §6).
+      id: move.id,
       title: move.title,
       problem: move.problem,
       impact: "high",

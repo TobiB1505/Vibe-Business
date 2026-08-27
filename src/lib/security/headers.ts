@@ -1,5 +1,5 @@
 /**
- * Response security headers (VB-005, ADR 0058).
+ * Response security headers (VB-005, ADR 0059).
  *
  * Vibe served none of these. Every header below is additive — nothing here
  * changes what the application does, only what a browser is willing to do with
