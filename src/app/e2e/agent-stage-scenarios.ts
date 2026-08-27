@@ -100,6 +100,32 @@ const TASK: AgentTask = {
   ],
 };
 
+import type { ValidationCheck } from "@/app/app/projects/[projectId]/agent/agent-validation-checks";
+import type { StoredExecutionEvent } from "@/modules/coding-agent/observability/events";
+
+/** The four checks the sandbox actually runs, mid-flight. */
+const CHECKS: ValidationCheck[] = [
+  { name: "Dependencies", detail: "Installing packages", state: "passed" },
+  { name: "Type safety", detail: "Checking TypeScript types", state: "passed" },
+  { name: "Tests", detail: "Running unit and integration tests", state: "passed" },
+  { name: "Production build", detail: "Building for production", state: "running" },
+];
+
+const FILE_EVENTS: StoredExecutionEvent[] = ([
+  ["Updated pricing page structure", "src/app/pricing/page.tsx"],
+  ["Added pricing components", "src/components/pricing/PricingPlans.tsx"],
+  ["Connected checkout flow", "src/lib/checkout.ts"],
+  ["Updated environment config", ".env.example"],
+] as const).map(([summary, path], index) => ({
+  sequence: index + 1,
+  type: "file_written",
+  phase: "working",
+  audience: "customer",
+  occurredAt: new Date(Date.UTC(2026, 7, 27, 10, 44 + index)).toISOString(),
+  summary: summary!,
+  metadata: { path: path! },
+}));
+
 type Fixture = {
   steps: AgentStageStep[];
   core: AgentCoreState;
@@ -107,6 +133,8 @@ type Fixture = {
   /** The run's own phase rows, for the live-activity panel. */
   activity: TimelineStep[];
   task: AgentTask | null;
+  checks: ValidationCheck[];
+  fileEvents: StoredExecutionEvent[];
 };
 
 function build(input: Parameters<typeof agentStageSteps>[0]): Fixture {
@@ -117,6 +145,8 @@ function build(input: Parameters<typeof agentStageSteps>[0]): Fixture {
     caption: agentCoreCaption(steps),
     activity: [...(input.timeline ?? [])],
     task: input.timeline === null ? null : TASK,
+    checks: CHECKS,
+    fileEvents: FILE_EVENTS,
   };
 }
 
@@ -147,6 +177,21 @@ export const E2E_AGENT_STAGE_SCENARIOS = {
       timeline: timeline({ preparing: "done", working: "failed" }),
       runStatus: "failed",
       changeProgress: null,
+    }),
+
+  /** Stage 3: the checks are the centre of the screen. */
+  "agent-stages-validating": () =>
+    build({
+      timeline: timeline({
+        preparing: "done",
+        working: "done",
+        reviewing_change: "done",
+        preparing_branch: "done",
+        validating: "active",
+      }),
+      runStatus: "running",
+      changeProgress: null,
+      filesInspected: 12,
     }),
 
   /** A change that reached review without a preview ever existing. */

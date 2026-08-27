@@ -41,6 +41,8 @@ import {
 import { AgentWorkspacePanel } from "@/app/app/projects/[projectId]/agent/agent-workspace-panel";
 import { AgentActivity } from "@/app/app/projects/[projectId]/agent/agent-activity";
 import { AgentTaskPanel } from "@/app/app/projects/[projectId]/agent/agent-task-panel";
+import { AgentValidationChecks } from "@/app/app/projects/[projectId]/agent/agent-validation-checks";
+import { AgentFileActivity } from "@/app/app/projects/[projectId]/agent/agent-file-activity";
 import { AgentAssuranceBar } from "@/app/app/projects/[projectId]/agent/agent-assurance-bar";
 import { E2E_NEEDS_USER_SCENARIOS, isE2eNeedsUserScenario } from "../needs-user-scenarios";
 import {
@@ -560,7 +562,12 @@ export default async function E2eScenarioPage({
    * a live view full of fixture events would only make that harder to see.
    */
   if (isE2eAgentStageScenario(scenario)) {
-    const { steps, core, caption, activity, task } = E2E_AGENT_STAGE_SCENARIOS[scenario]();
+    const { steps, core, caption, activity, task, checks, fileEvents } =
+      E2E_AGENT_STAGE_SCENARIOS[scenario]();
+    /* Stage 3 swaps the phase list for the record of what was touched. */
+    const validating = steps.some(
+      (step) => step.stage === "validate" && step.state === "active",
+    );
     return (
       <main className="mx-auto flex max-w-[90rem] flex-col gap-6 p-8">
         {label}
@@ -569,12 +576,18 @@ export default async function E2eScenarioPage({
           core={core}
           caption={caption}
           aside={
-            activity.length > 0 ? (
+            validating ? (
+              <AgentFileActivity events={fileEvents} />
+            ) : activity.length > 0 ? (
               <AgentActivity steps={activity} live={core === "working"} />
             ) : undefined
           }
         >
-          {task !== null && <AgentTaskPanel task={task} compact={activity.length > 0} />}
+          {validating ? (
+            <AgentValidationChecks checks={checks} />
+          ) : (
+            task !== null && <AgentTaskPanel task={task} compact={activity.length > 0} />
+          )}
         </AgentWorkspacePanel>
         <AgentAssuranceBar />
       </main>

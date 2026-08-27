@@ -1,0 +1,139 @@
+"use client";
+
+import { motion, useReducedMotion } from "motion/react";
+import { useDocumentVisible } from "@/lib/client/use-document-visible";
+import { MonoLabel } from "@/components/ui/typography";
+import type { StoredExecutionEvent } from "@/modules/coding-agent/observability/events";
+
+/**
+ * Vibe activity, as a record (UI-19, artboard 2c).
+ *
+ * ## Why this differs from the stage-two list
+ *
+ * Stage two shows *intent* — the six phases, one of them lit. By stage three
+ * the interesting question has changed from "what is happening" to "what did
+ * it touch", so the rail switches to the event log itself: what Vibe did, when
+ * it did it, and the path it did it to.
+ *
+ * ## Every line is Vibe's own sentence
+ *
+ * `summary` is composed by Vibe from a closed vocabulary and never by a model,
+ * and the path comes from the event's metadata. Nothing here is generated for
+ * the screen, and an event without a path renders without a chip rather than
+ * with an invented one.
+ */
+
+const FILE_ICON = (
+  <>
+    <path d="M6 3h7.5L19 8.5V21H6V3Z" />
+    <path d="M13.5 3v5.5H19" />
+  </>
+);
+
+/** Paths live in metadata under the key the writers already use. */
+function pathOf(event: StoredExecutionEvent): string | null {
+  const value = event.metadata.path ?? event.metadata.file ?? null;
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function clockOf(occurredAt: string): string | null {
+  const at = new Date(occurredAt);
+  if (Number.isNaN(at.getTime())) return null;
+  return at.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+}
+
+export function AgentFileActivity({
+  events,
+  /** How many to show. The rest stay behind the count line. */
+  limit = 5,
+}: {
+  events: readonly StoredExecutionEvent[];
+  limit?: number;
+}) {
+  const reduceMotion = useReducedMotion();
+  const visible = useDocumentVisible();
+  const animate = !reduceMotion && visible;
+
+  const shown = events.slice(-limit).reverse();
+  const remaining = Math.max(0, events.length - shown.length);
+
+  return (
+    <section
+      className="rounded-panel border-line-3 bg-surface-3 flex flex-col gap-4 border p-5"
+      data-testid="agent-file-activity"
+    >
+      <div className="flex items-center justify-between gap-2.5">
+        <MonoLabel as="h3" className="text-mint">
+          Vibe activity
+        </MonoLabel>
+        <span
+          aria-hidden="true"
+          className="bg-mint shadow-dot-mint size-[7px] rounded-full"
+          style={
+            animate
+              ? { animation: "vibe-soft-pulse var(--duration-pulse) var(--ease-vibe) infinite" }
+              : undefined
+          }
+        />
+      </div>
+
+      <ul className="flex flex-col gap-4">
+        {shown.map((event, index) => {
+          const path = pathOf(event);
+          const clock = clockOf(event.occurredAt);
+
+          return (
+            <motion.li
+              key={event.sequence}
+              className="flex gap-3.5"
+              initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{
+                duration: 0.4,
+                ease: [0.2, 0.7, 0.2, 1],
+                delay: reduceMotion ? 0 : index * 0.08,
+              }}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                width="18"
+                height="18"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="text-fg-secondary mt-0.5 flex-none"
+                aria-hidden="true"
+              >
+                {FILE_ICON}
+              </svg>
+
+              <span className="flex min-w-0 flex-1 flex-col gap-1.5">
+                <span className="flex items-baseline justify-between gap-3">
+                  <span className="text-fg-body text-sm font-medium">{event.summary}</span>
+                  {clock !== null && (
+                    <span className="text-fg-meta flex-none font-mono text-[0.6875rem]">
+                      {clock}
+                    </span>
+                  )}
+                </span>
+                {path !== null && (
+                  <span className="border-line-2 bg-well text-fg-prose self-start rounded-full border px-2.5 py-0.5 font-mono text-[0.6875rem]">
+                    {path}
+                  </span>
+                )}
+              </span>
+            </motion.li>
+          );
+        })}
+      </ul>
+
+      {remaining > 0 && (
+        <p className="text-fg-muted border-line-2 border-t pt-3.5 text-[0.8125rem]">
+          + {remaining} more {remaining === 1 ? "change" : "changes"}
+        </p>
+      )}
+    </section>
+  );
+}
