@@ -72,24 +72,17 @@ export async function signInWithPassword(
   // *before* the password reaches the auth provider. Recording the outcome
   // afterwards and reporting it would leave every attempt still being made,
   // which bounds nothing.
-  const gate = await recordAuthAttempt(supabase, {
-    identifier: credentials.email,
-    succeeded: null,
-  });
+  const gate = await recordAuthAttempt({ identifier: credentials.email, succeeded: null });
   if (!gate.allowed) {
     return { ok: false, error: throttleMessage(gate.retryAfterSeconds) };
   }
 
   const { error } = await supabase.auth.signInWithPassword(credentials);
 
-  // A success clears the window; a failure spends one of its allowance. It has
-  // to be *this* client: `signInWithPassword` has just put the session on it,
-  // and the function reads whose success this is out of that token rather than
-  // out of the argument. A fresh client here would clear nothing.
-  const throttle = await recordAuthAttempt(supabase, {
-    identifier: credentials.email,
-    succeeded: !error,
-  });
+  // A success clears the window; a failure spends one of its allowance. The
+  // throttle brings its own privileged client (ADR 0060) — the cookie-scoped
+  // one above cannot reach the function at all any more.
+  const throttle = await recordAuthAttempt({ identifier: credentials.email, succeeded: !error });
 
   if (error) {
     logAuthFailure("signin", error);

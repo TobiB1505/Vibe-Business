@@ -325,6 +325,7 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0057](docs/decisions/0057-account-level-durable-operations.md) | Account-level durable operations, and how an erasure outlives itself (Accepted, extends 0013) | Operations, `operation_runs`, RLS |
 | [0058](docs/decisions/0058-move-focus-url-contract.md) | Move focus is a shared URL contract, never authority: one parameter names which Move a surface is about, resolved against stored Moves and never permitting work (Accepted; Action Plan, Agent and both next-move cards implemented) | Action Plan, Agent, project shell |
 | [0059](docs/decisions/0059-security-response-headers.md) | Security response headers, and a CSP that starts by watching rather than enforcing (Accepted; six headers live, CSP report-only — it protects nothing until enforced) | HTTP responses, `next.config.ts`, CSP |
+| [0060](docs/decisions/0060-sign-in-throttle-authority.md) | The sign-in throttle's authority is who may call it (Accepted; `record_auth_attempt` unreachable through the Data API, one reviewed service-role site) | Sign-in, `auth_attempt_windows`, rule 53 |
 
 ### Layers with no section above
 

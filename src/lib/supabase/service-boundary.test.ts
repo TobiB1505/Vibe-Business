@@ -67,6 +67,14 @@ const REVIEWED_SITES: readonly { file: string; why: string }[] = [
     file: join("app", "app", "connect", "github", "repositories", "actions.ts"),
     why: "The welcome Credit grant writes a billing table; the user id comes from the session, never the client.",
   },
+  {
+    file: join("modules", "auth", "throttle.ts"),
+    why:
+      "VB-053 / ADR 0060. record_auth_attempt is no longer callable by anon, because anon is " +
+      "anyone holding the publishable key and eight forged failures held a known address out of " +
+      "sign-in. The client's entire use is that one RPC — it reads no table, writes no table, and " +
+      "auth_attempt_windows has no tenant column for ownership to be re-established on.",
+  },
 ];
 
 function sourceFiles(dir: string): string[] {
