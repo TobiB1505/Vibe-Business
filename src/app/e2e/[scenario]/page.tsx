@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import { ActionPlanPanel } from "@/app/app/projects/[projectId]/action-plan-panel";
+import { PlanDetailPanel } from "@/app/app/projects/[projectId]/plan/plan-detail-panel";
 import {
   PreparedChangesSection,
   type PreparedChangeCard,
@@ -79,7 +79,9 @@ import {
 } from "@/app/app/onboarding/[projectId]/operation-states";
 import { RetryProductScan } from "@/app/app/onboarding/[projectId]/phase-actions";
 import { UnderstandingStatus } from "@/app/app/onboarding/[projectId]/understanding-status";
-import { OpportunitiesPanel } from "@/app/app/projects/[projectId]/opportunities-panel";
+import { ActionPlanWorkspace } from "@/app/app/projects/[projectId]/plan/action-plan-workspace";
+import { MovesRefreshBar } from "@/app/app/projects/[projectId]/plan/moves-refresh-bar";
+import type { ActionPlanReadiness } from "@/modules/action-plans/service";
 import { ProductLogo } from "@/components/brand/product-logo";
 import { BillingView } from "@/app/app/(account)/billing/billing-view";
 import { E2E_BILLING_SCENARIOS, isE2eBillingScenario } from "../billing-scenarios";
@@ -213,34 +215,71 @@ export default async function E2eScenarioPage({
     );
   }
 
-  // The Moves surface (UI-S2 §41, §42): the same panel the moves route renders,
-  // given lineage the real resolver produced from a real audit shape.
+  /*
+   * The Moves half of the Action Plan workspace (UI-S2 §41, §42; ACTION PLAN
+   * UI-2). The same component the route renders, given lineage the real
+   * resolver produced from a real audit shape.
+   *
+   * The plan half is deliberately at its offer state here: these scenarios are
+   * about the list, and a fixture plan would put a second story on the screen.
+   * The plan's own states have their own scenarios below.
+   */
   if (isE2eMovesScenario(scenario)) {
     const fixture = E2E_MOVES_SCENARIOS[scenario]();
+    const blocked = fixture.blockedReason !== null;
+    const planReadinessByOpportunity: Record<string, ActionPlanReadiness> = Object.fromEntries(
+      fixture.opportunities.map<[string, ActionPlanReadiness]>((opportunity, index) => [
+        opportunity.id,
+        {
+          ready: !blocked,
+          blockedReason: blocked ? "audit_missing" : null,
+          auditId: null,
+          opportunityId: opportunity.id,
+          isDefaultMove: index === 0,
+          conclusionKey: null,
+          conclusionLineage: null,
+          unresolvedSourceReason: null,
+        },
+      ]),
+    );
     return (
-      <main className="mx-auto max-w-4xl p-8">
+      <main className="mx-auto max-w-[90rem] p-8">
         {label}
-        <OpportunitiesPanel
+        <div className="mb-6 flex justify-end">
+          <MovesRefreshBar
+            projectId="project_e2e"
+            generatedAt={null}
+            hasOpportunities={fixture.opportunities.length > 0}
+            blocked={blocked}
+          />
+        </div>
+        <ActionPlanWorkspace
           projectId="project_e2e"
           opportunities={fixture.opportunities}
           executionStates={fixture.executionStates}
           branchUrls={{}}
           validationSummaries={{}}
           stale={fixture.stale}
-          activeOperation={null}
-          blockedReason={fixture.blockedReason}
-          auditHref="/app/projects/project_e2e#business-audit"
+          movesOperation={fixture.movesOperation}
+          movesBlockedReason={fixture.blockedReason}
+          lineage={fixture.lineage}
+          movesContext={fixture.movesContext}
+          movesHref="/app/projects/project_e2e/plan"
+          preparedHref="/app/projects/project_e2e/agent"
           blockedDestinations={{
             product: "/app/projects/project_e2e/product",
             audit: "/app/projects/project_e2e#business-audit",
             moves: "/app/projects/project_e2e/plan",
             repository: "/app/projects/project_e2e/settings",
           }}
-          lineage={fixture.lineage}
-          movesContext={fixture.movesContext}
-          movesHref="/app/projects/project_e2e/plan"
-          preparedHref="/app/projects/project_e2e/agent"
-          plannedOpportunityId={null}
+          selectedOpportunityId={fixture.opportunities[0]?.id ?? null}
+          defaultMoveTitle={fixture.opportunities[0]?.title ?? null}
+          planReadinessByOpportunity={planReadinessByOpportunity}
+          planView={null}
+          planOperation={null}
+          planOperationOpportunityId={null}
+          auditHref="/app/projects/project_e2e#business-audit"
+          understandingHref="/app/projects/project_e2e/product"
         />
       </main>
     );
@@ -694,19 +733,23 @@ export default async function E2eScenarioPage({
     );
   }
 
-  // The Action Plan panel (ACTION PLANNER UI-1): the same component the
-  // /moves route renders, given the exact read-model shape
-  // `getActionPlanReadiness` / `getLatestActionPlan` /
-  // `getActiveActionPlanOperation` produce. No AI call backs any of it.
+  /*
+   * The planned-work panel (ACTION PLANNER UI-1; ACTION PLAN UI-2): the same
+   * component the Action Plan route renders below the active Move, given the
+   * exact read-model shape `getActionPlanReadiness` / `getLatestActionPlan` /
+   * `getActiveActionPlanOperation` produce. No AI call backs any of it.
+   */
   if (isE2eActionPlanScenario(scenario)) {
     const fixture = E2E_ACTION_PLAN_SCENARIOS[scenario]();
     return (
-      <main className="mx-auto max-w-4xl p-8">
+      <main className="mx-auto max-w-2xl p-8">
         {label}
-        <ActionPlanPanel
+        <PlanDetailPanel
           projectId="project_e2e"
           opportunityId={fixture.opportunityId}
           moveTitle={fixture.moveTitle}
+          moveRank={fixture.opportunityId ? 1 : null}
+          moveLens={fixture.opportunityId ? "Acquisition" : null}
           defaultMoveTitle={fixture.defaultMoveTitle}
           readiness={fixture.readiness}
           planView={fixture.planView}

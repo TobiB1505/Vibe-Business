@@ -116,6 +116,31 @@ export function projectSectionHref(projectId: string, sectionId: WorkspaceSectio
 }
 
 /**
+ * What the current URL's project section is called, for the breadcrumb trail.
+ *
+ * Home returns null: the project's own index is already named by the product
+ * name beside it, and "Acme / Home" says the same thing twice. Subsections
+ * resolve too, so `/product/deep-scan` names Deep Scan rather than falling back
+ * to the product it belongs to.
+ *
+ * Matched longest-segment-first, because `product` is a prefix of
+ * `product/deep-scan` and the more specific answer is the true one.
+ */
+export function projectSectionLabel(projectId: string, pathname: string): string | null {
+  const base = `/app/projects/${projectId}`;
+  if (!pathname.startsWith(base)) return null;
+
+  const rest = pathname.slice(base.length).replace(/^\/+|\/+$/g, "");
+  if (rest === "") return null;
+
+  const candidates = [...PROJECT_SECTIONS, ...PROJECT_SUBSECTIONS]
+    .filter((section) => section.segment !== "")
+    .sort((a, b) => b.segment.length - a.segment.length);
+
+  return candidates.find((section) => rest === section.segment)?.label ?? null;
+}
+
+/**
  * One prepared change, addressed within the Agent page (UI-S2 §27).
  *
  * A fragment rather than a route, because a prepared change is not a page — it
@@ -225,8 +250,25 @@ export function ProjectSidebar({
 /**
  * Quiet account-to-project orientation. The page title belongs to the route
  * below; this line never repeats repository, branch or connection metadata.
+ *
+ * `section` adds the current route as a third step. It is optional because most
+ * project routes are answered by the rail's own active item, and a crumb that
+ * repeats the highlighted rail entry is furniture. A route passes it where the
+ * page is a place a founder navigates *within* — the Action Plan, whose
+ * selection lives in the URL — so the trail says where a back button goes.
  */
-export function ProjectBreadcrumb({ projectName }: { projectName: string }) {
+export function ProjectBreadcrumb({
+  projectName,
+  section,
+}: {
+  projectName: string;
+  /**
+   * The current route's own name, when the route is not the project index.
+   * Resolved from the URL by `ProjectBreadcrumbTrail` rather than passed by
+   * each page, so the trail cannot disagree with the address bar.
+   */
+  section?: string;
+}) {
   return (
     <nav aria-label="Breadcrumb">
       <ol className="text-fg-muted flex min-w-0 items-center gap-2.5 text-sm">
@@ -241,9 +283,19 @@ export function ProjectBreadcrumb({ projectName }: { projectName: string }) {
         <li aria-hidden>
           <ChevronRightIcon size={14} className="text-fg-meta" />
         </li>
-        <li aria-current="page" className="truncate">
+        <li aria-current={section ? undefined : "page"} className="truncate">
           {projectName}
         </li>
+        {section && (
+          <>
+            <li aria-hidden>
+              <ChevronRightIcon size={14} className="text-fg-meta" />
+            </li>
+            <li aria-current="page" className="text-fg-body truncate">
+              {section}
+            </li>
+          </>
+        )}
       </ol>
     </nav>
   );

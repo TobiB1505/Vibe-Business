@@ -1,12 +1,15 @@
 import { describe, expect, it } from "vitest";
+import type { OperationStage } from "./schema";
 import {
   buildOperationView,
   freshestOperation,
   OPERATION_STAGE_LABELS,
   OPERATION_STALL_THRESHOLD_MS,
   operationPollPhase,
+  operationProgressSteps,
   shouldRefreshForState,
   type BuildOperationViewInput,
+  type OperationView,
 } from "./view";
 
 /**
@@ -215,5 +218,95 @@ describe("refresh on transition", () => {
   it("does not refresh on an answer it did not get", () => {
     expect(shouldRefreshForState(null, "starting")).toBe(false);
     expect(shouldRefreshForState(undefined, "starting")).toBe(false);
+  });
+});
+
+/**
+ * Named progress (ACTION PLAN UI-2).
+ *
+ * The panel that renders this is the one place a founder watches a paid call
+ * happen, so the invariant is narrow and strict: a row may claim to be finished
+ * only when the operation's own durable stage says it passed.
+ */
+describe("operationProgressSteps", () => {
+  const running = (stage: OperationStage): OperationView => ({
+    operationId: "operation_1",
+    status: "running",
+    stage,
+    startedAt: "2026-08-20T10:00:00.000Z",
+    completedAt: null,
+    failureCode: null,
+    resultId: null,
+    shouldPoll: true,
+    retryAllowed: false,
+    stalled: false,
+  });
+
+  it("names four rows for each sequence, from the shared stage copy", () => {
+    for (const sequence of ["opportunity_generation", "action_planning"] as const) {
+      const steps = operationProgressSteps(sequence, null);
+
+      expect(steps).toHaveLength(4);
+      expect(steps.map((step) => step.label)).toEqual(
+        expect.arrayContaining([OPERATION_STAGE_LABELS.preparing]),
+      );
+    }
+  });
+
+  it("marks only stages the run has genuinely passed", () => {
+    const steps = operationProgressSteps("action_planning", running("planning"));
+
+    expect(steps.map((step) => step.state)).toEqual(["done", "current", "pending", "pending"]);
+    expect(steps[1].label).toBe(OPERATION_STAGE_LABELS.planning);
+  });
+
+  it("treats preparing and counting tokens as one wait", () => {
+    expect(
+      operationProgressSteps("opportunity_generation", running("preparing")).map(
+        (step) => step.state,
+      ),
+    ).toEqual(["current", "pending", "pending", "pending"]);
+    expect(
+      operationProgressSteps("opportunity_generation", running("counting_tokens")).map(
+        (step) => step.state,
+      ),
+    ).toEqual(["current", "pending", "pending", "pending"]);
+  });
+
+  it("names each sequence's own paid stage", () => {
+    expect(operationProgressSteps("opportunity_generation", null)[1].label).toBe(
+      OPERATION_STAGE_LABELS.prioritizing,
+    );
+    expect(operationProgressSteps("action_planning", null)[1].label).toBe(
+      OPERATION_STAGE_LABELS.planning,
+    );
+  });
+
+  it("reports a finished run as finished throughout", () => {
+    const completed: OperationView = {
+      ...running("persisting"),
+      status: "completed",
+      completedAt: "2026-08-20T10:01:00.000Z",
+      shouldPoll: false,
+    };
+
+    expect(operationProgressSteps("action_planning", completed).every((s) => s.state === "done")).toBe(
+      true,
+    );
+  });
+
+  it("claims no position for a stage outside the sequence", () => {
+    const paused = operationProgressSteps("action_planning", running("asking_founder"));
+
+    expect(paused.every((step) => step.state === "pending")).toBe(true);
+  });
+
+  it("never emits a percentage or a step counter", () => {
+    for (const sequence of ["opportunity_generation", "action_planning"] as const) {
+      for (const step of operationProgressSteps(sequence, running("preparing"))) {
+        expect(step.label).not.toMatch(/%/);
+        expect(step.label).not.toMatch(/\d+\s*(of|\/)\s*\d+/i);
+      }
+    }
   });
 });

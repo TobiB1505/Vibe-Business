@@ -237,3 +237,73 @@ export const OPERATION_STAGE_LABELS: Record<OperationStage, string> = {
   verifying_change: "Checking the change is inside its limits",
   completed: "Completed",
 };
+
+/* ---------------------------------------------------------------------------
+ * Named progress, for the two operations a founder waits on (ACTION PLAN UI-2)
+ * ------------------------------------------------------------------------ */
+
+/**
+ * The stage sequence each of these operations actually walks.
+ *
+ * Not a guess at a pipeline: `operations/opportunities/execution.ts` and
+ * `operations/action-plans/execution.ts` call `setOperationStage` in exactly
+ * this order, and `stage` is durable state written before the work it names. So
+ * a stage the operation has moved past is genuinely finished, which is the only
+ * reason a tick beside it is honest.
+ *
+ * Grouped into four display rows because two of the stages are one moment to a
+ * person: preparing evidence and counting its tokens are the same wait, and so
+ * are validating and saving. The label of a group is the label of the stage it
+ * opens — `OPERATION_STAGE_LABELS` stays the single copy of that copy.
+ *
+ * What this deliberately is not: a percentage, a "step 3 of 4", or an estimate
+ * of how long any row takes. A four-row list where the third row is ~50 seconds
+ * of inference has no honest fraction (§18), and the rows say what is happening
+ * rather than how far along it is.
+ */
+export type ProgressSequenceId = "opportunity_generation" | "action_planning";
+
+const PROGRESS_SEQUENCES: Record<ProgressSequenceId, readonly (readonly OperationStage[])[]> = {
+  opportunity_generation: [
+    ["preparing", "counting_tokens"],
+    ["prioritizing"],
+    ["validating"],
+    ["persisting"],
+  ],
+  action_planning: [["preparing", "counting_tokens"], ["planning"], ["validating"], ["persisting"]],
+};
+
+export type OperationProgressState = "done" | "current" | "pending";
+
+export type OperationProgressStep = {
+  label: string;
+  state: OperationProgressState;
+};
+
+/**
+ * Where a run has got to, as named rows.
+ *
+ * A completed run reports every row done; anything else is positional against
+ * the stage the operation last recorded. An unrecognised stage — a run paused
+ * for the founder, say — leaves every row pending rather than inventing a
+ * position, because "we do not know where this is" and "it is at the start"
+ * are different answers and only one of them is true.
+ */
+export function operationProgressSteps(
+  sequence: ProgressSequenceId,
+  operation: OperationView | null,
+): OperationProgressStep[] {
+  const groups = PROGRESS_SEQUENCES[sequence];
+  const labels = groups.map((group) => OPERATION_STAGE_LABELS[group[0]]);
+
+  if (operation === null) return labels.map((label) => ({ label, state: "pending" }));
+  if (operation.status === "completed") return labels.map((label) => ({ label, state: "done" }));
+
+  const current = groups.findIndex((group) => group.includes(operation.stage));
+  if (current === -1) return labels.map((label) => ({ label, state: "pending" }));
+
+  return labels.map((label, index) => ({
+    label,
+    state: index < current ? "done" : index === current ? "current" : "pending",
+  }));
+}

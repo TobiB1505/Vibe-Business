@@ -77,6 +77,37 @@ Billing follows a compact financial-dashboard composition: plan, spendable Credi
 
 The project Product page reads as one coherent product dossier, not a stack of scanner reports. Its opening identity card may combine the real product mark, evidence-backed description, category, capability count and source coverage, but never a fabricated screenshot or product metric. Product DNA, founder intent, discovered capabilities, journey, brand identity and source coverage follow in that order; raw technical evidence stays available behind disclosure. The profile confirmation is the terminal surface: legacy scan summaries, coach prompts and cross-navigation actions must not continue below it.
 
+The Action Plan guides one decision at a time, not a project-management board.
+A horizontal Now/Next/Later priority track leads to one active Move card and one
+stable detail region below it. Other Moves remain available through the track,
+but never compete as full cards or permanent side panels. Selection is local and
+immediate; the URL records it only so refresh and browser history preserve the
+founder's place, never to turn a step change into route navigation.
+
+Inside the active Move, planned work reads as a compact to-do checklist. Every
+row is closed by default and keeps only its title, order/completion mark and a
+short readiness state visible. Opening one row reveals ownership, description,
+exact dependencies, completion criteria and approval context. The completion
+mark reflects durable state; it is never an editable checkbox or a shortcut
+around the existing founder-confirmation action.
+
+Nothing on this surface may state a duration, a percentage or a step counter. A
+Move's effort is the coarse label the domain records, the parts of the product a
+plan touches are derived from stored evidence, and a run's progress is the named
+stages its executor actually wrote. Where the reference composition asked for a
+figure the domain cannot produce, the honest reading takes the slot or the slot
+goes.
+
+The Action Plan may use bounded orchestration because priority and focus are part
+of its meaning: the active Move slides horizontally for step, arrow and swipe
+selection while the detail region fades by a shorter distance and adapts its
+height. The motion lasts roughly 350–450ms, never changes rank or state, and has
+button and keyboard equivalents. The forming-plan state may use a contained
+orbital core only while a real operation is active and the document is visible.
+It never advances copy, numbers or stage state on a timer. Reduced motion removes
+slides, transforms, orbit and pulse while leaving the same priority, Move and
+named stages present immediately. Static cards do not breathe, scan or glow.
+
 ## Signature Surface: Business Brain
 
 The project Home is the deliberate exception to the product's otherwise quiet presentation. Its Business Brain may use a contained mint aura, traced connections, spherical planet nodes and staged entry to make the nine business areas read as one system. This is a semantic visualization, not a new decorative language: planet colour represents health, planet size represents materiality, and a relationship line exists only where the audit grouped areas into the same conclusion. The centre remains the only aggregate score; a planet may show its own evidence-grounded diagnostic lens score, which never contributes to the centre and is `—` when unsupported.

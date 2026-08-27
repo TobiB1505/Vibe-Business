@@ -85,38 +85,33 @@ test.describe("moves entered from one finding", () => {
     await expect(context).toBeVisible();
     await expect(context).toContainText("From your audit");
     await expect(context).toContainText(PAYMENT);
-    await expect(context).toContainText("2 ways Vibe can help");
+    await expect(context).toContainText("2 moves address this");
   });
 
-  test("elevates only the moves that address it", async ({ page }) => {
+  test("keeps the finding as context without replacing priority order", async ({ page }) => {
     await page.goto(FROM_CONCLUSION);
 
-    // Everything above "Your other moves" is the contextual group.
-    const heading = page.getByRole("heading", { name: "Your other moves" });
-    await expect(heading).toBeVisible();
-
-    const first = page.getByTestId("move-card").first();
-    await expect(first).toContainText("Decide how customers pay");
+    await expect(page.getByTestId("move-step")).toHaveCount(4);
+    await expect(page.getByTestId("move-card")).toHaveCount(1);
+    await expect(page.getByTestId("move-card")).toContainText("Decide how customers pay");
   });
 
-  /** §44: elevation is not reranking. The numbers are the engine's. */
+  /** The stepper visualizes persisted rank and never renumbers context. */
   test("keeps every move's persisted rank", async ({ page }) => {
     await page.goto(FROM_CONCLUSION);
 
-    const cards = page.getByTestId("move-card");
-    // Contextual group first: ranks 1 and 2. Then the rest: 3 and 4. No card is
-    // renumbered by having been elevated.
-    await expect(cards.nth(0)).toHaveAttribute("data-rank", "1");
-    await expect(cards.nth(1)).toHaveAttribute("data-rank", "2");
-    await expect(cards.nth(2)).toHaveAttribute("data-rank", "3");
-    await expect(cards.nth(3)).toHaveAttribute("data-rank", "4");
+    const steps = page.getByTestId("move-step");
+    await expect(steps.nth(0)).toHaveAttribute("data-rank", "1");
+    await expect(steps.nth(1)).toHaveAttribute("data-rank", "2");
+    await expect(steps.nth(2)).toHaveAttribute("data-rank", "3");
+    await expect(steps.nth(3)).toHaveAttribute("data-rank", "4");
   });
 
   test("keeps the whole list reachable", async ({ page }) => {
     await page.goto(FROM_CONCLUSION);
 
-    await expect(page.getByTestId("move-card")).toHaveCount(4);
-    await expect(page.getByRole("link", { name: "See all next moves" })).toBeVisible();
+    await expect(page.getByTestId("move-step")).toHaveCount(4);
+    await expect(page.getByRole("link", { name: "See the full priority order" })).toBeVisible();
   });
 
   /** §31: a malformed key is not an error page, it is the ordinary page. */
@@ -124,139 +119,125 @@ test.describe("moves entered from one finding", () => {
     await page.goto(BAD_CONTEXT);
 
     await expect(page.getByTestId("moves-context")).toHaveCount(0);
-    await expect(page.getByRole("heading", { name: "Your other moves" })).toHaveCount(0);
-    await expect(page.getByTestId("move-card")).toHaveCount(4);
-    await expect(page.getByTestId("move-card").first()).toHaveAttribute("data-rank", "1");
+    await expect(page.getByTestId("move-step")).toHaveCount(4);
+    await expect(page.getByTestId("move-card")).toHaveCount(1);
+    await expect(page.getByTestId("move-card")).toHaveAttribute("data-rank", "1");
   });
 });
 
-test.describe("the default moves list", () => {
-  test("shows the whole ranked list with no context required", async ({ page }) => {
+test.describe("the single-Move priority navigator", () => {
+  test("shows the full order but only one active Move", async ({ page }) => {
     await page.goto(RANKED);
 
     await expect(page.getByTestId("moves-context")).toHaveCount(0);
-    await expect(page.getByTestId("move-card")).toHaveCount(4);
-    await expect(page.getByTestId("move-card").first()).toHaveAttribute("data-rank", "1");
-    await expect(page.getByText("Best next move")).toHaveCount(1);
+    await expect(page.getByTestId("move-step")).toHaveCount(4);
+    await expect(page.getByTestId("move-card")).toHaveCount(1);
+    await expect(page.getByTestId("move-card")).toHaveAttribute("data-rank", "1");
+    await expect(page.getByText("Now", { exact: true })).toHaveCount(1);
+    await expect(page.getByText("Next", { exact: true })).toHaveCount(1);
+    await expect(page.getByText("Later", { exact: true })).toHaveCount(2);
   });
 
-  test("says which finding each move answers", async ({ page }) => {
+  test("switches Move and details without route navigation", async ({ page }) => {
     await page.goto(RANKED);
 
-    const lineage = page.getByTestId("move-lineage");
-    await expect(lineage.first()).toContainText("From your audit");
-    await expect(lineage.first()).toContainText(PAYMENT);
-    // Three of the four cite a conclusion; the legacy one claims no source
-    // rather than being given a plausible-looking one.
-    await expect(lineage).toHaveCount(3);
+    const navigationCount = await page.evaluate(
+      () => performance.getEntriesByType("navigation").length,
+    );
+    await page.getByRole("tab", { name: /Add a pricing surface people can reach/ }).click();
+
+    await expect(page.getByTestId("move-card")).toHaveCount(1);
+    await expect(page.getByRole("heading", { name: "Add a pricing surface people can reach" })).toBeVisible();
+    await expect(page).toHaveURL(/\?plan=move-pricing-page$/);
+    await expect(page.getByText("A decision nobody can see", { exact: false })).toBeVisible();
+    expect(await page.evaluate(() => performance.getEntriesByType("navigation").length)).toBe(
+      navigationCount,
+    );
   });
 
-  /**
-   * §83 extension: every card, not only rank 1, can be the one a founder
-   * plans — proven by a real, clickable link rather than by the domain
-   * function it is built from.
-   */
-  test("every card offers to plan that specific Move", async ({ page }) => {
+  test("supports arrow-key selection and browser history", async ({ page }) => {
     await page.goto(RANKED);
 
-    const cards = page.getByTestId("move-card");
-    const count = await cards.count();
-    expect(count).toBeGreaterThan(1);
+    const first = page.getByRole("tab", { name: /Decide how customers pay/ });
+    await first.focus();
+    await page.keyboard.press("ArrowRight");
+    await expect(page.getByRole("heading", { name: "Add a pricing surface people can reach" })).toBeVisible();
+    await page.getByRole("tab", { name: /Say who the product is for/ }).click();
+    await page.goBack();
+    await expect(page.getByRole("heading", { name: "Add a pricing surface people can reach" })).toBeVisible();
+  });
 
-    for (let index = 0; index < count; index++) {
-      const link = cards.nth(index).getByRole("link", { name: "Plan this Move" });
-      await expect(link).toBeVisible();
-      const href = await link.getAttribute("href");
-      expect(href).toMatch(/\/app\/projects\/project_e2e\/plan\?plan=.+#plan-this-move$/);
-    }
+  test("changes selection immediately when reduced motion is requested", async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.goto(RANKED);
+    await page.getByRole("tab", { name: /Add a pricing surface people can reach/ }).click();
+
+    await expect(
+      page.getByRole("heading", { name: "Add a pricing surface people can reach" }),
+    ).toBeVisible();
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () =>
+            document
+              .getAnimations()
+              .filter((animation) => animation.playState === "running").length,
+        ),
+      )
+      .toBe(0);
   });
 });
 
 test.describe("a move card says one thing at a time", () => {
-  /** §13: the chip soup, gone. Readiness and impact only. */
   test("shows readiness and impact, and not the rest", async ({ page }) => {
     await page.goto(RANKED);
-    const card = page.getByTestId("move-card").first();
+    const card = page.getByTestId("move-card");
 
     await expect(card).toContainText("Needs your input");
     await expect(card).toContainText("High impact");
-
-    // Effort and confidence are still on the card and no longer *visible* on
-    // it — demoted behind the disclosure rather than deleted (§17).
-    await expect(card.getByText("Medium effort")).not.toBeVisible();
     await expect(card.getByText("High confidence")).not.toBeVisible();
-
-    // The business dimension chip is gone entirely: it competed with the audit
-    // lineage for the same job, and the lineage answers it better (§14).
-    await expect(card).not.toContainText("Monetization");
+    await expect(card.getByText("Medium effort")).toBeVisible();
   });
 
-  /** §17: demoted, not deleted. */
-  test("keeps effort and confidence under Why now?", async ({ page }) => {
-    await page.goto(RANKED);
-    const card = page.getByTestId("move-card").first();
-
-    await card.getByText("Why now?").click();
-    await expect(card).toContainText("Medium effort");
-    await expect(card).toContainText("High confidence");
-  });
-
-  test("Why now? is operable by keyboard alone", async ({ page }) => {
-    await page.goto(RANKED);
-    const summary = page.getByTestId("move-card").first().getByText("Why now?");
-
-    await summary.focus();
-    await page.keyboard.press("Enter");
-    await expect(page.getByTestId("move-card").first()).toContainText("Medium effort");
-  });
-
-  /** §18: an ordering constraint must not be discovered by pressing a button. */
   test("states a dependency before anything is pressed", async ({ page }) => {
     await page.goto(RANKED);
+    await page.getByRole("tab", { name: /Add a pricing surface people can reach/ }).click();
 
-    const dependency = page.getByTestId("move-dependencies").first();
+    const dependency = page.getByTestId("move-dependencies");
     await expect(dependency).toBeVisible();
     await expect(dependency).toContainText("Do this after: Decide how customers pay");
   });
 });
 
 test.describe("readiness decides what is offered", () => {
-  /** §15, §16, §35: exactly one card may offer a write, and it is the ready one. */
-  test("offers preparation only where an executor exists", async ({ page }) => {
+  test("offers one primary action only for the active executable Move", async ({ page }) => {
     await page.goto(RANKED);
-
-    const prepare = page.getByRole("button", { name: "Let Vibe prepare this" });
-    await expect(prepare).toHaveCount(1);
-
-    const card = page.getByTestId("move-card").filter({ hasText: "Add a pricing surface" });
-    await expect(card.getByRole("button", { name: "Let Vibe prepare this" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Start with Vibe" })).toHaveCount(0);
+    await page.getByRole("tab", { name: /Add a pricing surface people can reach/ }).click();
+    await expect(page.getByRole("button", { name: "Start with Vibe" })).toHaveCount(1);
+    await expect(page.getByTestId("move-card").getByRole("button")).toHaveCount(0);
   });
 
   test("gives a needs-your-input move no execution button", async ({ page }) => {
     await page.goto(RANKED);
-
-    const card = page
-      .getByTestId("move-card")
-      .filter({ has: page.getByRole("heading", { name: "Decide how customers pay" }) });
+    const card = page.getByTestId("move-card");
     await expect(card).toContainText("Needs your input");
-    await expect(card.getByRole("button", { name: "Let Vibe prepare this" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Start with Vibe" })).toHaveCount(0);
   });
 
-  /** The praise-worthy behaviour this sprint had to preserve. */
   test("never offers to do work Vibe cannot do", async ({ page }) => {
     await page.goto(RANKED);
-
-    const card = page.getByTestId("move-card").filter({ hasText: "Talk to ten people" });
+    await page.getByRole("tab", { name: /Talk to ten people/ }).click();
+    const card = page.getByTestId("move-card");
     await expect(card).toContainText("Not automated yet");
-    await expect(card.getByRole("button", { name: "Let Vibe prepare this" })).toHaveCount(0);
-    await expect(card.getByRole("button", { name: /Let Vibe/ })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /Start with Vibe|Let Vibe/ })).toHaveCount(0);
   });
 });
 
 test.describe("preparing leads to the prepared change", () => {
-  /** §26, §46: the exact change, by id — never "the newest one". */
   test("links onward to the change that was prepared", async ({ page }) => {
     await page.goto(RANKED);
+    await page.getByRole("tab", { name: /Say who the product is for/ }).click();
 
     const link = page.getByTestId("review-prepared-change");
     await expect(link).toBeVisible();
@@ -269,9 +250,10 @@ test.describe("preparing leads to the prepared change", () => {
 
   test("still says what a prepared change is not", async ({ page }) => {
     await page.goto(RANKED);
-
-    const card = page.getByTestId("move-card").filter({ hasText: "Say who the product is for" });
-    await expect(card).toContainText("Not merged · Not deployed · Not runtime-tested");
+    await page.getByRole("tab", { name: /Say who the product is for/ }).click();
+    await expect(page.getByTestId("planned-work")).toContainText(
+      "Not merged · Not deployed · Not runtime-tested",
+    );
   });
 
   test("the prepared card is addressable by that exact fragment", async ({ page }) => {
@@ -307,8 +289,36 @@ test.describe("the empty states each have a next step", () => {
     await page.goto("/e2e/moves_stale");
 
     await expect(page.getByText("New business evidence is available")).toBeVisible();
-    await expect(page.getByTestId("move-card")).toHaveCount(4);
-    await expect(page.getByRole("button", { name: "Refresh my next moves" })).toBeEnabled();
+    await expect(page.getByTestId("move-step")).toHaveCount(4);
+    await expect(page.getByTestId("move-card")).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "Re-scan business" })).toBeEnabled();
+  });
+});
+
+test.describe("the plan forms before the first move exists", () => {
+  test("reserves the full workspace and reports real named stages", async ({ page }) => {
+    await page.goto("/e2e/moves_generating");
+
+    await expect(page.getByTestId("plan-generating")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Generating your Action Plan" })).toBeVisible();
+    await expect(page.getByText("Finding high-impact opportunities")).toBeVisible();
+    await expect(page.getByTestId("move-stepper")).toHaveCount(0);
+
+    const body = await page.locator("body").innerText();
+    expect(body).not.toMatch(/\d+%/);
+    expect(body).not.toMatch(/step \d+ of \d+/i);
+  });
+
+  test.describe("with reduced motion", () => {
+    test("keeps the same information without looping animation", async ({ page }) => {
+      await page.emulateMedia({ reducedMotion: "reduce" });
+      await page.goto("/e2e/moves_generating");
+
+      await expect(page.getByRole("heading", { name: "Generating your Action Plan" })).toBeVisible();
+      await expect
+        .poll(() => page.evaluate(() => document.getAnimations().filter((animation) => animation.playState === "running").length))
+        .toBe(0);
+    });
   });
 });
 
@@ -355,6 +365,27 @@ test.describe("the loop survives a phone", () => {
     await page.goto(FROM_CONCLUSION);
 
     await expect(page.getByTestId("moves-context")).toContainText(PAYMENT);
+    await expectNoHorizontalOverflow(page);
+  });
+
+  test("swipes between Moves while keeping details below", async ({ page }) => {
+    await page.setViewportSize(PHONE);
+    await page.goto(RANKED);
+
+    const active = page.getByTestId("active-move");
+    const box = await active.boundingBox();
+    expect(box).not.toBeNull();
+    if (!box) return;
+
+    await page.mouse.move(box.x + box.width * 0.75, box.y + box.height * 0.45);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width * 0.25, box.y + box.height * 0.45, { steps: 8 });
+    await page.mouse.up();
+
+    await expect(
+      page.getByRole("heading", { name: "Add a pricing surface people can reach" }),
+    ).toBeVisible();
+    await expect(page.getByText("A decision nobody can see", { exact: false })).toBeVisible();
     await expectNoHorizontalOverflow(page);
   });
 

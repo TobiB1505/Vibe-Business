@@ -336,6 +336,15 @@ export type ActionPlanView = {
   completedStepOrders: number[];
   /** The request for the current actionable founder-owned step, if one is open. */
   founderInputRequest: FounderInputRequest | null;
+  /**
+   * How many of this plan's founder questions are still open (ACTION PLAN UI-2).
+   *
+   * `founderInputRequest` above is the one question the *current* step is
+   * waiting on; this is how many the plan has outstanding in total, which is
+   * what a Move card needs to say "Answer 2 questions" without guessing. Taken
+   * from the same list that resolved the request above — no extra read.
+   */
+  openFounderInputCount: number;
 };
 
 export async function getLatestActionPlan(
@@ -386,6 +395,7 @@ export async function getLatestActionPlan(
     firstActionableStep: actionable,
     progress: planProgress(plan.steps, completed),
     completedStepOrders: [...completed],
+    openFounderInputCount: requests.filter((request) => request.status === "open").length,
     founderInputRequest:
       actionable === null
         ? null

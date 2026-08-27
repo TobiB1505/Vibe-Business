@@ -1,8 +1,8 @@
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
+import { ProjectBreadcrumbTrail } from "@/components/layout/project-breadcrumb-trail";
 import {
   PROJECT_SECTIONS,
-  ProjectBreadcrumb,
   ProjectShell,
   ProjectSidebar,
   projectSectionHref,
@@ -132,7 +132,7 @@ export default async function ProjectLayout({
         />
       }
     >
-      <ProjectBreadcrumb projectName={project.name} />
+      <ProjectBreadcrumbTrail projectId={project.id} projectName={project.name} />
       {children}
     </ProjectShell>
   );

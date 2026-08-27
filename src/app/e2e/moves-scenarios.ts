@@ -7,6 +7,7 @@ import {
   type MovesContext,
 } from "@/modules/opportunities/lineage";
 import type { BusinessOpportunity } from "@/modules/opportunities/schema";
+import type { OperationView } from "@/modules/operations/view";
 
 /**
  * The Audit → Moves → Prepared handoff in a real browser (UI-S2 §41, §42).
@@ -142,6 +143,7 @@ type MovesFixture = {
   executionStates: Record<string, OpportunityActionState>;
   stale: boolean;
   blockedReason: "audit_missing" | "audit_stale" | null;
+  movesOperation: OperationView | null;
 };
 
 function base(overrides: Partial<MovesFixture> = {}): MovesFixture {
@@ -153,6 +155,7 @@ function base(overrides: Partial<MovesFixture> = {}): MovesFixture {
     executionStates: EXECUTION_STATES,
     stale: false,
     blockedReason: null,
+    movesOperation: null,
     ...overrides,
   };
 }
@@ -197,6 +200,26 @@ export const E2E_MOVES_SCENARIOS = {
 
   /** Generation has never run: the section's own primary action (§19A). */
   moves_none: () => base({ opportunities: [], lineage: {}, executionStates: {} }),
+
+  /** A real durable generation stage, used to verify the forming-plan workspace. */
+  moves_generating: () =>
+    base({
+      opportunities: [],
+      lineage: {},
+      executionStates: {},
+      movesOperation: {
+        operationId: "moves_operation_e2e",
+        status: "running",
+        stage: "prioritizing",
+        startedAt: "2026-08-27T00:00:00.000Z",
+        completedAt: null,
+        failureCode: null,
+        resultId: null,
+        shouldPoll: true,
+        retryAllowed: false,
+        stalled: false,
+      },
+    }),
 
   /** No audit to prioritize from — a block with a way out, not a dead end (§19F). */
   moves_blocked: () =>

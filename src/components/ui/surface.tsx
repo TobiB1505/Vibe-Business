@@ -29,17 +29,36 @@ export type SurfaceLevel = "section" | "panel" | "card";
  */
 export type SurfaceTone = "neutral" | "mint" | "amber" | "coral";
 
-const LEVEL_CLASSES: Record<SurfaceLevel, string> = {
-  section: "rounded-panel bg-surface-2 border border-line-2",
-  panel: "rounded-panel bg-surface-3 border border-line-3",
-  card: "rounded-card bg-surface-4 border border-line-4 shadow-card backdrop-blur-xl",
+/**
+ * Shape and elevation belong to the level whatever the tone is.
+ */
+const LEVEL_SHAPE: Record<SurfaceLevel, string> = {
+  section: "rounded-panel",
+  panel: "rounded-panel",
+  card: "rounded-card shadow-card backdrop-blur-xl",
 };
 
+/** The untinted fill and border of each level. */
+const LEVEL_SURFACE: Record<SurfaceLevel, string> = {
+  section: "bg-surface-2 border border-line-2",
+  panel: "bg-surface-3 border border-line-3",
+  card: "bg-surface-4 border border-line-4",
+};
+
+/**
+ * A tone *replaces* the level's fill rather than being listed beside it.
+ *
+ * `cn` is a join, not a merge, so a tone appended after the level's own
+ * `bg-surface-3` produced two background utilities in one class list and the
+ * stylesheet's order decided — which meant every tinted panel in the product
+ * kept its neutral fill and showed the tone in its border alone. The tint was
+ * written, generated, shipped, and invisible.
+ */
 const TONE_CLASSES: Record<SurfaceTone, string> = {
   neutral: "",
-  mint: "bg-mint-tint-soft border-mint-line",
-  amber: "bg-amber-tint-soft border-amber-line",
-  coral: "bg-coral-tint-soft border-coral-line",
+  mint: "bg-mint-tint-soft border border-mint-line",
+  amber: "bg-amber-tint-soft border border-amber-line",
+  coral: "bg-coral-tint-soft border border-coral-line",
 };
 
 const PADDING_CLASSES = {
@@ -72,8 +91,8 @@ export function Surface({
   return (
     <Component
       className={cn(
-        LEVEL_CLASSES[level],
-        TONE_CLASSES[tone],
+        LEVEL_SHAPE[level],
+        tone === "neutral" ? LEVEL_SURFACE[level] : TONE_CLASSES[tone],
         PADDING_CLASSES[padding],
         glass && "backdrop-blur-xl",
         className,

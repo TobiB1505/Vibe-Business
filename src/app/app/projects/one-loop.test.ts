@@ -25,7 +25,10 @@ const LINEAGE = read("src/modules/opportunities/lineage.ts");
 const SERVICE = read("src/modules/opportunities/service.ts");
 const MOVES_PAGE = read("src/app/app/projects/[projectId]/plan/page.tsx");
 const SCORE_PAGE = read("src/app/app/projects/[projectId]/health/content.tsx");
-const PANEL = read("src/app/app/projects/[projectId]/opportunities-panel.tsx");
+const PANEL = read("src/app/app/projects/[projectId]/plan/move-card.tsx");
+const STEPPER = read("src/app/app/projects/[projectId]/plan/move-stepper.tsx");
+const WORKSPACE = read("src/app/app/projects/[projectId]/plan/action-plan-workspace.tsx");
+const PLAN_DETAIL = read("src/app/app/projects/[projectId]/plan/plan-detail-panel.tsx");
 const PRIORITIES = read(
   "src/app/app/projects/[projectId]/business-brain/audit-intelligence.tsx",
 );
@@ -129,8 +132,12 @@ describe("context filters, it never reranks", () => {
   });
 
   it("renders the rank the domain gave, never a positional one", () => {
-    expect(PANEL).toContain("#{opportunity.rank}");
+    // The active card and the priority step both use the persisted rank.
+    expect(PANEL).toContain("String(opportunity.rank).padStart(2");
     expect(PANEL).toContain('data-rank={opportunity.rank}');
+    expect(STEPPER).toContain("opportunity.rank");
+    expect(STEPPER).toContain('data-rank={opportunity.rank}');
+    expect(copyOf(PANEL)).not.toMatch(/rank\s*[:=]\s*index/);
   });
 
   /** §31: the requested key is validated before it means anything. */
@@ -142,29 +149,78 @@ describe("context filters, it never reranks", () => {
 });
 
 describe("the card says one thing at a time", () => {
-  /** Regression 5: the chip soup returns. */
-  it("shows readiness and impact in the chip row, and nothing else", () => {
-    const chips = PANEL.slice(
-      PANEL.indexOf("Two, not five"),
-      PANEL.indexOf("{opportunity.problem}"),
-    );
-    expect(chips).toContain("EXECUTION_READINESS_LABELS");
+  it("shows impact and effort without turning evidence into card furniture", () => {
+    const chips = PANEL.slice(PANEL.indexOf('className="flex flex-wrap items-center gap-2"'));
     expect(chips).toContain("IMPACT_LABELS");
-    expect(chips).not.toContain("EFFORT_LABELS");
+    expect(chips).toContain("EFFORT_LABELS");
     expect(chips).not.toContain("CONFIDENCE_LABELS");
     expect(chips).not.toContain("DIMENSION_LABELS");
+    expect(PANEL).not.toContain("describeEvidenceId");
   });
 
-  /** §14: the domain keeps the dimension; the card stops drawing it. */
+  /**
+   * The readiness headline is a domain reading, not a string the card picks.
+   *
+   * `moveHeadline` owns which of two true things leads, so a component can
+   * never quietly start captioning a Move from `executionReadiness` itself.
+   */
+  it("takes its leading status from the domain, never from the enum", () => {
+    expect(PANEL).toContain("moveHeadline(opportunity)");
+    expect(copyOf(PANEL)).not.toContain("EXECUTION_READINESS_LABELS");
+  });
+
+  /** The domain keeps its internal category; the card uses the attributed Lens. */
   it("no longer imports the dimension labels at all", () => {
     expect(PANEL).not.toContain("DIMENSION_LABELS");
+    expect(PANEL).toContain("moveLensLabel(opportunity)");
   });
 
-  /** §17: demoted, not deleted. */
-  it("keeps effort and confidence under the disclosure", () => {
-    const details = PANEL.slice(PANEL.indexOf("Why now?"), PANEL.indexOf("Why Vibe thinks this"));
-    expect(details).toContain("EFFORT_LABELS");
-    expect(details).toContain("CONFIDENCE_LABELS");
+  it("prints no invented duration", () => {
+    expect(PANEL).toContain("EFFORT_LABELS[opportunity.effort]");
+    expect(copyOf(PANEL)).not.toMatch(/~\s*\d/);
+    expect(copyOf(PANEL)).not.toMatch(/\d\s*(hours?|minutes?|mins?|hrs?|days?|weeks?)\b/i);
+  });
+});
+
+describe("the stepper owns selection without owning business state", () => {
+  it("renders one active Move and changes it through local history", () => {
+    expect(WORKSPACE.match(/<MoveCard/g)).toHaveLength(1);
+    expect(WORKSPACE).toContain("window.history.pushState");
+    expect(WORKSPACE).toContain("setActiveOpportunityId");
+    expect(WORKSPACE).not.toContain("router.push");
+  });
+
+  it("offers button and keyboard equivalents for swipe", () => {
+    expect(STEPPER).toContain('role="tablist"');
+    expect(STEPPER).toContain('event.key === "ArrowRight"');
+    expect(STEPPER).toContain('aria-label="Previous move"');
+    expect(STEPPER).toContain('aria-label="Next move"');
+    expect(WORKSPACE).toContain('drag={!reduceMotion');
+  });
+
+  it("loads existing readiness per Move rather than deriving it in the browser", () => {
+    expect(MOVES_PAGE).toContain("planReadinessByOpportunity");
+    expect(MOVES_PAGE).toContain("getActionPlanReadiness(supabase, projectId, opportunity.id)");
+    expect(WORKSPACE).not.toContain("executionReadiness === \"ready\"");
+  });
+
+  it("keeps the one primary Move action in the detail region", () => {
+    expect(PANEL).not.toContain("PrepareChangePanel");
+    expect(PLAN_DETAIL).toContain("PrepareChangePanel");
+    expect(PLAN_DETAIL).toContain("executionOwnsPrimary");
+  });
+});
+
+describe("planned work is a compact read-only checklist", () => {
+  it("starts each task behind a native disclosure", () => {
+    expect(PLAN_DETAIL).toContain('<details className="group/step">');
+    expect(PLAN_DETAIL).toContain('data-testid="plan-step"');
+    expect(PLAN_DETAIL).toContain('aria-label="Planned work checklist"');
+  });
+
+  it("does not turn durable completion into a local checkbox", () => {
+    expect(copyOf(PLAN_DETAIL)).not.toContain('type="checkbox"');
+    expect(PLAN_DETAIL).toContain("attestFounderActionStepAction");
   });
 });
 

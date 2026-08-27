@@ -316,6 +316,63 @@ export function SparklesIcon(props: IconProps) {
   );
 }
 
+/* ---------------------------------------------------------------------------
+ * The Action Plan workspace's own glyphs (ACTION PLAN UI-2)
+ *
+ * Every one is decorative: each sits beside a label that already carries the
+ * same meaning, so nothing on that screen depends on a symbol any more than it
+ * depends on a colour.
+ * ------------------------------------------------------------------------ */
+
+export function RefreshIcon(props: IconProps) {
+  return (
+    <IconFrame {...props}>
+      <path d="M20 11.5A8 8 0 0 0 6.3 6.3L3.5 9" />
+      <path d="M4 12.5a8 8 0 0 0 13.7 5.2l2.8-2.7" />
+      <path d="M3.5 4.5V9H8" />
+      <path d="M20.5 19.5V15H16" />
+    </IconFrame>
+  );
+}
+
+export function CloseIcon(props: IconProps) {
+  return (
+    <IconFrame {...props}>
+      <path d="m6 6 12 12" />
+      <path d="m18 6-12 12" />
+    </IconFrame>
+  );
+}
+
+export function BoltIcon(props: IconProps) {
+  return (
+    <IconFrame {...props}>
+      <path d="M13.2 2.5 4.8 13.2h6L10 21.5l8.4-10.7h-6l.8-8.3Z" />
+    </IconFrame>
+  );
+}
+
+export function DocumentIcon(props: IconProps) {
+  return (
+    <IconFrame {...props}>
+      <path d="M6 3h7.5L19 8.5V21H6V3Z" />
+      <path d="M13.5 3v5.5H19" />
+      <path d="M9 13h6" />
+      <path d="M9 16.5h4" />
+    </IconFrame>
+  );
+}
+
+export function TargetIcon(props: IconProps) {
+  return (
+    <IconFrame {...props}>
+      <circle cx="12" cy="12" r="8.5" />
+      <circle cx="12" cy="12" r="4.5" />
+      <circle cx="12" cy="12" r=".9" />
+    </IconFrame>
+  );
+}
+
 export function DashboardIcon({ name, ...props }: IconProps & { name: DashboardIconName }) {
   const Icon = {
     home: HomeIcon,

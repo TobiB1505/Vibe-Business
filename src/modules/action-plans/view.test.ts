@@ -5,6 +5,10 @@ import {
   RESPONSIBILITY_HEADLINES,
   RESPONSIBILITY_SUBLABELS,
   buildActionPlanBlockNotice,
+  founderQuestionCta,
+  planEvidenceSummary,
+  planExpectedChange,
+  planFounderDemands,
   planMetaSummary,
   stepDependencyTitles,
   stepDisplayState,
@@ -261,5 +265,119 @@ describe("planMetaSummary", () => {
       step({ order: 3 }),
     ];
     expect(planMetaSummary(twoDecisions)).toBe("3 steps · 2 founder decisions");
+  });
+});
+
+/**
+ * What the plan's panel says beside its steps (ACTION PLAN UI-2).
+ *
+ * One rule under all of it: the panel may restate the plan, never extend it.
+ * So the tests that matter most here are the negative ones — a plan that
+ * changes nothing claims no surface, a plan that needs nothing lists no demand,
+ * and no function in this group ever produces a count of files or a duration.
+ */
+
+describe("planExpectedChange", () => {
+  it("names the surfaces the cited evidence implies", () => {
+    const surfaces = planExpectedChange([
+      step({
+        order: 1,
+        changeKind: "product_change",
+        evidenceIds: ["live.surface.pricing", "live.surface_absent.checkout_billing"],
+      }),
+    ]);
+
+    expect(surfaces.map((surface) => surface.id)).toEqual(["pricing_page", "checkout_billing"]);
+    expect(surfaces.map((surface) => surface.label)).toEqual([
+      "Pricing page",
+      "Checkout / billing",
+    ]);
+  });
+
+  it("claims nothing for a plan that changes nothing", () => {
+    expect(
+      planExpectedChange([
+        step({ order: 1, changeKind: "decision", evidenceIds: ["live.surface.pricing"] }),
+        step({ order: 2, changeKind: "measurement", evidenceIds: ["live.surface.pricing"] }),
+      ]),
+    ).toEqual([]);
+  });
+
+  it("names a surface once however many steps cite it, in step order", () => {
+    const surfaces = planExpectedChange([
+      step({ order: 2, changeKind: "product_change", evidenceIds: ["live.surface.contact"] }),
+      step({ order: 1, changeKind: "product_change", evidenceIds: ["live.surface.pricing"] }),
+      step({ order: 3, changeKind: "product_change", evidenceIds: ["live.surface.pricing"] }),
+    ]);
+
+    expect(surfaces.map((surface) => surface.id)).toEqual(["pricing_page", "contact"]);
+  });
+
+  it("ignores an id no rule recognises rather than guessing a surface", () => {
+    expect(
+      planExpectedChange([
+        step({ order: 1, changeKind: "product_change", evidenceIds: ["something.unknown"] }),
+      ]),
+    ).toEqual([]);
+  });
+});
+
+describe("planFounderDemands", () => {
+  const steps = [
+    step({ id: "a", order: 1, executionSupport: "founder_decides", title: "Pick a price" }),
+    step({ id: "b", order: 2, executionSupport: "vibe_prepares", title: "Build the page" }),
+    step({ id: "c", order: 3, executionSupport: "founder_acts", title: "Tell your list" }),
+  ];
+
+  it("lists only what the founder still owes", () => {
+    expect(planFounderDemands(steps, [])).toEqual(["Pick a price", "Tell your list"]);
+  });
+
+  it("stops asking for a step the plan has already recorded as complete", () => {
+    expect(planFounderDemands(steps, [1])).toEqual(["Tell your list"]);
+  });
+
+  it("is empty when nothing is outstanding", () => {
+    expect(planFounderDemands(steps, [1, 3])).toEqual([]);
+  });
+
+  it("never counts Vibe's own work as something the founder owes", () => {
+    for (const support of EXECUTION_SUPPORT) {
+      const demands = planFounderDemands([step({ order: 1, executionSupport: support })], []);
+      const isFounders = support.startsWith("founder_");
+
+      expect(demands.length).toBe(isFounders ? 1 : 0);
+    }
+  });
+});
+
+describe("founderQuestionCta", () => {
+  it("offers nothing when no request is open", () => {
+    expect(founderQuestionCta(0)).toBeNull();
+    expect(founderQuestionCta(-1)).toBeNull();
+  });
+
+  it("counts the open requests, in singular and plural", () => {
+    expect(founderQuestionCta(1)).toBe("Answer question");
+    expect(founderQuestionCta(2)).toBe("Answer 2 questions");
+  });
+});
+
+describe("planEvidenceSummary", () => {
+  it("counts the ids the plan cites, not the pack it came from", () => {
+    const summary = planEvidenceSummary([
+      step({ id: "a", order: 1, evidenceIds: ["live.surface.pricing", "repo.surface.payments"] }),
+      step({ id: "b", order: 2, evidenceIds: ["live.surface.pricing"] }),
+    ]);
+
+    expect(summary.signals).toBe(2);
+    expect(summary.sources).toBeGreaterThan(0);
+  });
+
+  it("reports an uncited plan as zero rather than as a failure", () => {
+    expect(planEvidenceSummary([step({ order: 1, evidenceIds: [] })])).toEqual({
+      signals: 0,
+      sources: 0,
+    });
   });
 });

@@ -1,4 +1,5 @@
 import type { ActionPlanStep } from "@/modules/action-plans/schema";
+import type { FounderInputRequest } from "@/modules/founder-input/schema";
 import type { ActionPlanReadiness, ActionPlanView } from "@/modules/action-plans/service";
 import { firstActionableStep, planProgress } from "@/modules/action-plans/sequence";
 import type { StoredActionPlan } from "@/modules/action-plans/store";
@@ -217,6 +218,25 @@ function plan(overrides: Partial<StoredActionPlan> = {}): StoredActionPlan {
 function planView(overrides: Partial<ActionPlanView> = {}): ActionPlanView {
   const storedPlan = overrides.plan ?? plan();
   const actionable = firstActionableStep(storedPlan.steps);
+  const founderInputRequest =
+    "founderInputRequest" in overrides
+      ? (overrides.founderInputRequest ?? null)
+      : actionable?.founderInputRequirement
+        ? ({
+            id: "request_e2e",
+            projectId: storedPlan.projectId,
+            actionPlanId: storedPlan.id,
+            actionPlanStepKey: actionable.id,
+            executionInterruptId: null,
+            origin: "planner",
+            ...actionable.founderInputRequirement,
+            contextHash: storedPlan.inputHash,
+            status: "open",
+            createdAt: "2026-08-14T18:00:42.000Z",
+            resolvedAt: null,
+          } satisfies FounderInputRequest)
+        : null;
+
   return {
     plan: storedPlan,
     staleness: [],
@@ -224,24 +244,11 @@ function planView(overrides: Partial<ActionPlanView> = {}): ActionPlanView {
     progress: planProgress(storedPlan.steps),
     ...overrides,
     completedStepOrders: overrides.completedStepOrders ?? [],
-    founderInputRequest:
-      "founderInputRequest" in overrides
-        ? (overrides.founderInputRequest ?? null)
-        : actionable?.founderInputRequirement
-          ? {
-              id: "request_e2e",
-              projectId: storedPlan.projectId,
-              actionPlanId: storedPlan.id,
-              actionPlanStepKey: actionable.id,
-              executionInterruptId: null,
-              origin: "planner",
-              ...actionable.founderInputRequirement,
-              contextHash: storedPlan.inputHash,
-              status: "open",
-              createdAt: "2026-08-14T18:00:42.000Z",
-              resolvedAt: null,
-            }
-          : null,
+    founderInputRequest,
+    // Derived from the request the fixture just built, so a scenario can never
+    // claim open questions it does not carry.
+    openFounderInputCount:
+      overrides.openFounderInputCount ?? (founderInputRequest?.status === "open" ? 1 : 0),
   };
 }
 
