@@ -204,6 +204,11 @@ export async function startChangePreparation(
   });
 
   if (!created.ok) {
+    // VB-008 — the work never began, so reporting a failure of the work
+    // would be wrong. Retryable, and the message says waiting is the fix.
+    if (created.error === "start_limit_reached") {
+      return { kind: "failed", error: "start_limit_reached" };
+    }
     if (created.error === "already_active") {
       // Lost the race by milliseconds — the other click's operation is the
       // right answer, not an error (§14).
