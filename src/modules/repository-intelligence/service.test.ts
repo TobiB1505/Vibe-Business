@@ -75,6 +75,8 @@ function chain(data: unknown) {
   const result = {
     select: () => result,
     eq: () => result,
+    // The connection boundary filters detached rows out (VB-001 M5).
+    is: () => result,
     maybeSingle: async () => ({ data: data ?? null, error: null }),
   };
   return result;

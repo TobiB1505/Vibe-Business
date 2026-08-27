@@ -18,6 +18,7 @@ import { EVIDENCE_PACK_V3_VERSION } from "./evidence-v3";
 import { PROMPT_VERSION } from "./prompt";
 import { RUBRIC_VERSION } from "./rubric";
 import { BUSINESS_AUDIT_SCHEMA_VERSION, BUSINESS_AUDIT_VERSION } from "./schema";
+import { liveConnections } from "@/modules/projects/repository-connection";
 import {
   authorizeAudit,
   toAuditAccessStatus,
@@ -191,9 +192,7 @@ export async function getConnectedRepositoryId(
   supabase: SupabaseClient,
   projectId: string,
 ): Promise<number | null> {
-  const { data, error } = await supabase
-    .from("repository_connections")
-    .select("github_repository_id")
+  const { data, error } = await liveConnections(supabase, "github_repository_id")
     .eq("project_id", projectId)
     .maybeSingle();
 

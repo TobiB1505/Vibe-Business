@@ -6,6 +6,7 @@ import { resolveExecutionBudget } from "./budget";
 import { resolvePlanExecution } from "./resolver";
 import { renderExecutionResolutionReport } from "./report";
 
+import { liveConnections } from "@/modules/projects/repository-connection";
 /**
  * The EXECUTION CORE-3 dogfood harness (§38, §39).
  *
@@ -70,9 +71,7 @@ describe("execution resolver — real product dogfood", () => {
 
     expect(plan, "the project has no completed Action Plan to resolve").toBeTruthy();
 
-    const { data: connection } = await supabase
-      .from("repository_connections")
-      .select("id, full_name, default_branch")
+    const { data: connection } = await liveConnections(supabase, "id, full_name, default_branch")
       .eq("project_id", projectId)
       .maybeSingle();
 
@@ -90,9 +89,9 @@ describe("execution resolver — real product dogfood", () => {
       repository: {
         connection: connection
           ? {
-              id: (connection as { id: string }).id,
-              fullName: (connection as { full_name: string }).full_name,
-              defaultBranch: (connection as { default_branch: string }).default_branch,
+              id: (connection as unknown as { id: string }).id,
+              fullName: (connection as unknown as { full_name: string }).full_name,
+              defaultBranch: (connection as unknown as { default_branch: string }).default_branch,
             }
           : null,
         snapshot: snapshot?.result ?? null,

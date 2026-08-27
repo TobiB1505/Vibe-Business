@@ -28,6 +28,7 @@ import { runAgentPreflight, type AgentPreflight } from "./preflight";
 import { completedStepsFromFounderResolutions } from "@/modules/founder-input/completion";
 import { listActiveFounderResolutions } from "@/modules/founder-input/store";
 
+import { liveConnections } from "@/modules/projects/repository-connection";
 /**
  * The step preflight the internal dogfood website surface calls
  * (EXECUTION CORE-4 website gate, §7, §8, §9, §14).
@@ -132,15 +133,13 @@ async function loadOwnedRepositoryConnection(
   supabase: SupabaseClient,
   params: { projectId: string; userId: string },
 ): Promise<{ id: string; owner: string; name: string; fullName: string; defaultBranch: string; installationId: number } | null> {
-  const { data: connection } = await supabase
-    .from("repository_connections")
-    .select("id, owner, name, full_name, default_branch, github_installation_id")
+  const { data: connection } = await liveConnections(supabase, "id, owner, name, full_name, default_branch, github_installation_id")
     .eq("project_id", params.projectId)
     .maybeSingle();
 
   if (!connection) return null;
 
-  const row = connection as {
+  const row = connection as unknown as {
     id: string;
     owner: string;
     name: string;

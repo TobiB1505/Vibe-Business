@@ -347,3 +347,112 @@ describe("the active-work gate's schema contract", () => {
     expect(Number(accepted)).toBeGreaterThan(0);
   });
 });
+
+/**
+ * VB-001 M5 — a connection can be detached, and detached rows stop constraining
+ * (ADR 0056 §1).
+ */
+describe("repository connection detachment", () => {
+  function connect(userId: string, installationId: string, repoId: string, name: string): string {
+    return db
+      .sqlLast(`begin; ${asUser(userId)} ${connectCall(installationId, repoId, name)} commit;`)
+      .split("|")[0];
+  }
+
+  it("starts every connection live", () => {
+    const { userId, installationId } = makeInstallation("m5-live");
+    const projectId = connect(userId, installationId, `${freshRepositoryId()}`, "m5-live");
+
+    expect(
+      db.sql(`select count(*) from public.repository_connections
+                where project_id = '${projectId}' and detached_at is null;`),
+    ).toBe("1");
+  });
+
+  /**
+   * The whole point. Before M5 both constraints were global, so a detached row
+   * held its repository hostage: the founder could never reconnect it, to this
+   * project or any other.
+   */
+  it("frees the repository for reconnection once the row is detached", () => {
+    const { userId, installationId } = makeInstallation("m5-reconnect");
+    const repoId = `${freshRepositoryId()}`;
+    const first = connect(userId, installationId, repoId, "m5-first");
+
+    // Connecting the same repository again is refused while the row is live.
+    expect(
+      db
+        .sqlLast(`begin; ${asUser(userId)} ${connectCall(installationId, repoId, "m5-second")} commit;`)
+        .split("|")[1],
+    ).toBe("duplicate_repository");
+
+    db.sql(`update public.repository_connections set detached_at = now() where project_id = '${first}';`);
+
+    // And accepted once it is not.
+    const second = db
+      .sqlLast(`begin; ${asUser(userId)} ${connectCall(installationId, repoId, "m5-second")} commit;`)
+      .split("|");
+    // `connectCall` coalesces a null failure to '-', so '-' is success.
+    expect(second[1]).toBe("-");
+    expect(second[0]).not.toBe("");
+  });
+
+  it("lets one project hold a live connection beside its detached history", () => {
+    const { userId, installationId } = makeInstallation("m5-history");
+    const projectId = connect(userId, installationId, `${freshRepositoryId()}`, "m5-history");
+
+    db.sql(`update public.repository_connections set detached_at = now() where project_id = '${projectId}';`);
+    db.sql(`
+      insert into public.repository_connections
+        (project_id, github_installation_id, github_repository_id, owner, name, full_name,
+         default_branch, private, html_url)
+      select '${projectId}', github_installation_id, ${freshRepositoryId()}, owner, 'again',
+             'octo/again', 'main', false, 'https://github.com/octo/again'
+      from public.repository_connections where project_id = '${projectId}' limit 1;
+    `);
+
+    expect(db.sql(`select count(*) from public.repository_connections where project_id = '${projectId}';`)).toBe("2");
+    expect(
+      db.sql(`select count(*) from public.repository_connections
+                where project_id = '${projectId}' and detached_at is null;`),
+    ).toBe("1");
+  });
+
+  it("still refuses a second live connection for the same project", () => {
+    const { userId, installationId } = makeInstallation("m5-two-live");
+    const projectId = connect(userId, installationId, `${freshRepositoryId()}`, "m5-two-live");
+
+    const error = db.sqlExpectingError(`
+      insert into public.repository_connections
+        (project_id, github_installation_id, github_repository_id, owner, name, full_name,
+         default_branch, private, html_url)
+      values ('${projectId}', '${installationId}'::uuid, ${freshRepositoryId()}, 'octo', 'x',
+              'octo/x', 'main', false, 'https://github.com/octo/x');
+    `);
+    expect(error).toContain("repository_connections_live_project_key");
+  });
+
+  it("still refuses the same repository being live in two projects", () => {
+    const { userId, installationId } = makeInstallation("m5-two-repos");
+    const repoId = `${freshRepositoryId()}`;
+    connect(userId, installationId, repoId, "m5-owner");
+
+    expect(
+      db
+        .sqlLast(`begin; ${asUser(userId)} ${connectCall(installationId, repoId, "m5-thief")} commit;`)
+        .split("|")[1],
+    ).toBe("duplicate_repository");
+  });
+
+  /** The three RESTRICT references are why the row is retained at all. */
+  it("keeps the references that make deletion of the row impossible", () => {
+    const edges = db.sql(`
+      select string_agg(c.relname, ',' order by c.relname)
+      from pg_constraint t
+      join pg_class c on c.oid = t.conrelid
+      join pg_class r on r.oid = t.confrelid
+      where t.contype = 'f' and t.confdeltype = 'r' and r.relname = 'repository_connections';
+    `);
+    expect(edges).toBe("change_merges,execution_specs,repository_intelligence_snapshots");
+  });
+});

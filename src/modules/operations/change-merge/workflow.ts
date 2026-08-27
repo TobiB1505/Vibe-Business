@@ -1,6 +1,7 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { createGithubMergePort } from "@/modules/merge/github/adapter";
 import type { ChangeMerge, MergeFailureCode } from "@/modules/merge/schema";
+import { liveConnections } from "@/modules/projects/repository-connection";
 import {
   abortMergeStep,
   authorizeMergeStep,
@@ -55,9 +56,10 @@ function deps(): MergeDeps {
     resolvePort: async (merge: ChangeMerge) => {
       const supabase = createServiceClient();
 
-      const { data: connection } = await supabase
-        .from("repository_connections")
-        .select("id, owner, name, github_installation_id, project_id")
+      const { data } = await liveConnections(
+        supabase,
+        "id, owner, name, github_installation_id, project_id",
+      )
         .eq("id", merge.repositoryConnectionId)
         // Ownership asserted in the query: the service-role client bypasses
         // RLS, so the merge row's own project is what scopes this read
@@ -65,6 +67,25 @@ function deps(): MergeDeps {
         .eq("project_id", merge.projectId)
         .maybeSingle();
 
+      /**
+       * **Live**, not merely the row this merge bound to (VB-001 M5).
+       *
+       * A merge writes to the customer's default branch, and a detached
+       * connection is a repository the founder told Vibe to let go — so a
+       * detached row must not resolve into a port that can push. The detach
+       * gate makes this unreachable in practice by refusing to detach while a
+       * merge is in flight; reading `live` here is what makes it fail closed
+       * if that gate is ever bypassed, rather than writing anyway.
+       *
+       * The boundary widens the select string, so the shape is stated here.
+       */
+      const connection = data as {
+        id: string;
+        owner: string;
+        name: string;
+        github_installation_id: string;
+        project_id: string;
+      } | null;
       if (!connection) return null;
 
       const { data: installation } = await supabase

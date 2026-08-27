@@ -20,19 +20,36 @@ function repo(id: number, fullName: string): RepositorySummary {
 }
 
 describe("listConnectedRepositoryIds", () => {
+  /**
+   * The fake models the boundary's shape, including the liveness predicate, so
+   * a test can assert that a detached repository is not counted as connected
+   * (VB-001 M5) — the mistake that would grey a repository out forever.
+   */
+  function connectionsReturning(data: unknown) {
+    const is = vi.fn().mockResolvedValue({ data, error: null });
+    const select = vi.fn(() => ({ is }));
+    return { client: { from: vi.fn(() => ({ select })) } as unknown as SupabaseClient, is };
+  }
+
   it("returns the connected GitHub repository ids", async () => {
-    const select = vi.fn().mockResolvedValue({
-      data: [{ github_repository_id: 1 }, { github_repository_id: 2 }],
-      error: null,
-    });
-    const client = { from: vi.fn(() => ({ select })) } as unknown as SupabaseClient;
+    const { client } = connectionsReturning([
+      { github_repository_id: 1 },
+      { github_repository_id: 2 },
+    ]);
 
     expect(await listConnectedRepositoryIds(client)).toEqual([1, 2]);
   });
 
+  it("asks only for live connections, so a detached repository is pickable again", async () => {
+    const { client, is } = connectionsReturning([]);
+
+    await listConnectedRepositoryIds(client);
+
+    expect(is).toHaveBeenCalledWith("detached_at", null);
+  });
+
   it("returns an empty list when nothing is connected", async () => {
-    const select = vi.fn().mockResolvedValue({ data: null, error: null });
-    const client = { from: vi.fn(() => ({ select })) } as unknown as SupabaseClient;
+    const { client } = connectionsReturning(null);
 
     expect(await listConnectedRepositoryIds(client)).toEqual([]);
   });

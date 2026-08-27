@@ -6,6 +6,7 @@ import { GithubDomainError } from "@/modules/github/errors";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import { analyzeRepository } from "./analyzer";
 import { ANALYZER_VERSION, REPOSITORY_INTELLIGENCE_SCHEMA_VERSION } from "./schema";
+import { liveConnections } from "@/modules/projects/repository-connection";
 import {
   completeAnalysisRun,
   createAnalysisRun,
@@ -65,12 +66,16 @@ async function loadOwnedRepository(
 
   if (!project) return null;
 
-  const { data: connection } = await supabase
-    .from("repository_connections")
-    .select("id, project_id, owner, name, full_name, private, github_installation_id")
+  const { data } = await liveConnections(
+    supabase,
+    "id, project_id, owner, name, full_name, private, github_installation_id",
+  )
     .eq("project_id", projectId)
     .maybeSingle();
 
+  // The boundary widens the select string, so the row shape is stated here
+  // rather than inferred — see `projects/repository-connection.ts`.
+  const connection = data as ProjectRepositoryRow | null;
   if (!connection) return null;
 
   const { data: installation } = await supabase
@@ -82,7 +87,7 @@ async function loadOwnedRepository(
 
   if (!installation) return null;
 
-  return { connection: connection as ProjectRepositoryRow, installationId: installation.installation_id };
+  return { connection, installationId: installation.installation_id };
 }
 
 function toFailureCode(error: unknown): InspectFailureCode {

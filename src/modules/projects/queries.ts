@@ -3,6 +3,19 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { RepositorySummary } from "@/modules/github/types";
 
+import { liveConnections } from "./repository-connection";
+
+/** The projection `getProjectDetail` asks the connection boundary for. */
+type LiveConnectionRow = {
+  github_repository_id: number;
+  owner: string;
+  name: string;
+  full_name: string;
+  default_branch: string;
+  private: boolean;
+  html_url: string;
+  github_installation_id: string;
+};
 export type ProjectDetail = {
   id: string;
   name: string;
@@ -29,12 +42,10 @@ export async function getProjectWithRepository(
    */
   const [
     { data: project, error: projectError },
-    { data: repoConnection, error: repoError },
+    { data: repoConnectionRow, error: repoError },
   ] = await Promise.all([
     supabase.from("projects").select("id, name, user_id, production_url").eq("id", projectId).maybeSingle(),
-    supabase
-      .from("repository_connections")
-      .select("github_repository_id, owner, name, full_name, default_branch, private, html_url, github_installation_id")
+    liveConnections(supabase, "github_repository_id, owner, name, full_name, default_branch, private, html_url, github_installation_id")
       .eq("project_id", projectId)
       .maybeSingle(),
   ]);
@@ -43,6 +54,10 @@ export async function getProjectWithRepository(
   if (!project) return null;
 
   if (repoError) throw repoError;
+
+  // The boundary widens the select string, so the row shape is stated here
+  // rather than inferred — see `repository-connection.ts`.
+  const repoConnection = repoConnectionRow as LiveConnectionRow | null;
 
   let repository: ProjectDetail["repository"] = null;
   if (repoConnection) {
