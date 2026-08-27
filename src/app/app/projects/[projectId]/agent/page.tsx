@@ -9,10 +9,10 @@ import { requireProjectAccess } from "@/modules/projects/workspace-context";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import { readAgentWorkspace } from "@/modules/coding-agent/agent-workspace";
 import { agentCoreCaption } from "@/modules/coding-agent/observability/agent-stages";
-import { AgentExecutionLiveView } from "@/modules/coding-agent/ui/agent-execution-live-view";
 import { AgentPanel } from "../agent-panel";
 import { PreparedChangesSection, type PreparedChangeCard } from "../prepared-changes-section";
 import { AgentTaskPanel } from "./agent-task-panel";
+import { AgentActivity } from "./agent-activity";
 import { AgentWorkspacePanel } from "./agent-workspace-panel";
 
 /**
@@ -106,29 +106,26 @@ export default async function ProjectAgentPage({
       description="Each change moves through validation, preview, review and your approval before anything can be merged."
     >
       <div className="flex flex-col gap-5">
-        {workspace.live !== null ? (
+        {workspace.timeline !== null ? (
           <AgentWorkspacePanel
             stages={workspace.stages}
             core={workspace.core}
             caption={agentCoreCaption(workspace.stages)}
+            aside={
+              <AgentActivity
+                steps={workspace.timeline}
+                live={workspace.core === "working" || workspace.core === "waiting"}
+              />
+            }
           >
-            <div className="flex flex-col gap-7">
-              {/*
-                The Move, in its own stored words. Absent when the run cannot be
-                followed back to one — a screen naming the wrong task would be
-                worse than one naming none.
-              */}
-              {workspace.task !== null && <AgentTaskPanel task={workspace.task} />}
-
-              {/*
-                The live view was written to be mounted here: it takes a model,
-                reads nothing and knows about no route. `developerDetails` is
-                off because token counts and cache ratios are for the person
-                debugging a run, not for the founder watching their product get
-                fixed.
-              */}
-              <AgentExecutionLiveView model={workspace.live} developerDetails={false} />
-            </div>
+            {/*
+              The Move, in its own stored words. Absent when the run cannot be
+              followed back to one — a screen naming the wrong task would be
+              worse than one naming none.
+            */}
+            {workspace.task !== null && (
+              <AgentTaskPanel task={workspace.task} compact />
+            )}
           </AgentWorkspacePanel>
         ) : (
           /*

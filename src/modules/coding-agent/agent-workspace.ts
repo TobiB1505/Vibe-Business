@@ -13,8 +13,9 @@ import {
   type AgentCoreState,
   type AgentStageStep,
 } from "./observability/agent-stages";
-import { buildAgentExecutionLiveModel, type AgentExecutionLiveModel } from "./observability/live-view";
 import { readAgentRunForLiveView } from "./observability/run-view";
+import { listExecutionEvents } from "./observability/store";
+import { buildExecutionTimeline, type TimelineStep } from "./observability/timeline";
 import { getAgentExecutionStatus } from "./service";
 
 /**
@@ -37,8 +38,18 @@ import { getAgentExecutionStatus } from "./service";
 export type AgentWorkspaceView = {
   stages: AgentStageStep[];
   core: AgentCoreState;
-  /** Null until a run exists. Drives the stage bodies for Understand → Validate. */
-  live: AgentExecutionLiveModel | null;
+  /**
+   * The run's six phases, or null until a run exists.
+   *
+   * Built here from the event log rather than by `buildAgentExecutionLiveModel`,
+   * and that is not a preference. The live model also reads execution
+   * economics out of `ai_usage_events` — Vibe's internal cost ledger, which the
+   * customer role deliberately cannot select. Mounting the dogfood model on a
+   * customer page made the whole route throw `42501 permission denied`, and the
+   * fix is emphatically not a grant: what a run cost Vibe to produce is not a
+   * founder's to read, and the page never displayed it anyway.
+   */
+  timeline: TimelineStep[] | null;
   /** The change this run produced, once it has produced one. */
   change: PreparedChangeWorkspaceItem | null;
   /**
@@ -72,7 +83,7 @@ export async function readAgentWorkspace(
 
   const idle = () => {
     const stages = agentStageSteps({ timeline: null, runStatus: null, changeProgress: null });
-    return { stages, core: agentCoreState(stages), live: null, change: null, task: null };
+    return { stages, core: agentCoreState(stages), timeline: null, change: null, task: null };
   };
 
   if (stored === null) return idle();
@@ -91,16 +102,27 @@ export async function readAgentWorkspace(
   if (operation === null) return idle();
 
   const runId = operation.agentExecutionRunId;
+  if (runId === null) return idle();
 
-  const runView = runId ? await readAgentRunForLiveView(supabase, { runId, projectId }) : null;
+  const [runView, events] = await Promise.all([
+    readAgentRunForLiveView(supabase, { runId, projectId }),
+    listExecutionEvents(supabase, { runId, projectId }),
+  ]);
 
-  const live = await buildAgentExecutionLiveModel(supabase, {
-    operation,
-    projectId,
-    run: runView?.run ?? null,
-    limits: runView?.limits ?? null,
-    gatewayRequestCeiling: runView?.gatewayRequestCeiling ?? null,
-    validation: runView?.validation ?? "not_started",
+  /*
+   * Vibe's own counts, from Vibe's own record. `file_read` is what the harness
+   * reported reading; the verified count is what Vibe confirmed it changed —
+   * never the number of files the runtime touched, which is a different and
+   * larger number, and run b33635a1 is why anybody knows that.
+   */
+  const filesInspected = events.filter((event) => event.type === "file_read").length;
+  const filesChanged = runView?.run.changedFileCount ?? null;
+
+  const timeline = buildExecutionTimeline({
+    events,
+    status: operation.status,
+    candidateFileCount: filesChanged,
+    filesInspected,
   });
 
   /*
@@ -124,17 +146,14 @@ export async function readAgentWorkspace(
   const task = await resolveTask(supabase, { projectId, runView });
 
   const stages = agentStageSteps({
-    timeline: live.timeline,
+    timeline,
     runStatus: operation.status,
     changeProgress: change?.progress ?? null,
-    // Files the harness actually read, from its own tool stream.
-    filesInspected: live.metrics.filesRead,
-    // Vibe's verified candidate count — never the number of files the runtime
-    // touched, which is a different and larger number.
-    filesChanged: live.files.filter((file) => file.kind === "candidate").length,
+    filesInspected,
+    filesChanged,
   });
 
-  return { stages, core: agentCoreState(stages), live, change, task };
+  return { stages, core: agentCoreState(stages), timeline, change, task };
 }
 
 
