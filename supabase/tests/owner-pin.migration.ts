@@ -125,3 +125,55 @@ describe("what it now refuses", () => {
     );
   });
 });
+
+/**
+ * VB-018 — execution evidence is not writable from a browser.
+ *
+ * The pin above stops an owner *reassigning* a row. This stops them rewriting
+ * what Vibe concluded about it, which is the more valuable forgery: a customer
+ * who can set their own validation to `passed` has defeated the gate the
+ * approval and merge machinery downstream trusts.
+ *
+ * No fixture row is needed, and deliberately so. The guarantee is a privilege,
+ * and PostgreSQL checks privileges while planning the statement — so
+ * `UPDATE … WHERE false` is refused for a missing grant and succeeds (touching
+ * nothing) for a present one. That makes each assertion about the grant itself
+ * rather than about whatever a fixture happened to contain.
+ */
+describe("execution evidence", () => {
+  const CLOSED = ["validation_runs", "prepared_changes"] as const;
+
+  for (const table of CLOSED) {
+    it(`refuses any client UPDATE of ${table}`, () => {
+      const error = db.sqlExpectingError(
+        asUser(owner, `update public.${table} set status = 'passed' where false;`),
+      );
+      expect(error).toMatch(/permission denied/i);
+    });
+  }
+
+  it("leaves the audit's founder-answer columns writable", () => {
+    // The one legitimate client write on this table, and the reason it is
+    // column-restricted rather than closed: `submitFounderAnswerAction` runs on
+    // the authenticated client and sets exactly these two.
+    db.sql(
+      asUser(
+        owner,
+        `update public.business_readiness_audits set status = 'analyzing', pending_question = null where false;`,
+      ),
+    );
+  });
+
+  it("refuses the same client rewriting the audit's conclusion", () => {
+    const error = db.sqlExpectingError(
+      asUser(owner, `update public.business_readiness_audits set result = '{}'::jsonb where false;`),
+    );
+    expect(error).toMatch(/permission denied/i);
+  });
+
+  it("leaves durable execution untouched, because service_role bypasses RLS", () => {
+    // Not a formality: if this had been done with a policy alone, revoking the
+    // grant would have caught the service role too and stopped every audit.
+    expect(db.sql(`select rolbypassrls from pg_roles where rolname = 'service_role';`)).toBe("t");
+  });
+});
