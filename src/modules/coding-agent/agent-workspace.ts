@@ -11,6 +11,7 @@ import type { ValidationCheck } from "@/app/app/projects/[projectId]/agent/agent
 import type { PreviewChange } from "@/app/app/projects/[projectId]/agent/agent-preview-stage";
 import type { MergeSummary } from "@/app/app/projects/[projectId]/agent/agent-merge-stage";
 import type { StoredExecutionEvent } from "./observability/events";
+import type { StoredExecutionInterrupt } from "./store";
 import {
   agentCoreState,
   agentStageSteps,
@@ -20,6 +21,7 @@ import {
 } from "./observability/agent-stages";
 import { readAgentRunForLiveView } from "./observability/run-view";
 import { listExecutionEvents } from "./observability/store";
+import { findOpenInterruptForRun } from "./store";
 import { buildExecutionTimeline, type TimelineStep } from "./observability/timeline";
 import { getAgentExecutionStatus } from "./service";
 
@@ -72,6 +74,14 @@ export type AgentWorkspaceView = {
   /** Named changes for the preview rail. Empty when nothing describes them. */
   previewChanges: PreviewChange[];
   mergeSummary: MergeSummary;
+  /**
+   * The question the run stopped on, when one is open.
+   *
+   * Read only for a paused run: a closed interrupt is history, and a screen
+   * showing an answered question as if it were still waiting would be the same
+   * class of lie as a stage that keeps ticking after a run has stopped.
+   */
+  interrupt: StoredExecutionInterrupt | null;
 };
 
 export async function readAgentWorkspace(
@@ -108,6 +118,7 @@ export async function readAgentWorkspace(
       checks: [],
       previewChanges: [],
       mergeSummary: { filesChanged: 0 },
+      interrupt: null,
     };
   };
 
@@ -129,9 +140,17 @@ export async function readAgentWorkspace(
   const runId = operation.agentExecutionRunId;
   if (runId === null) return idle();
 
-  const [runView, events] = await Promise.all([
+  const [runView, events, interrupt] = await Promise.all([
     readAgentRunForLiveView(supabase, { runId, projectId }),
     listExecutionEvents(supabase, { runId, projectId }),
+    /*
+     * Only asked for a run that actually stopped. A closed interrupt is
+     * history, and one read per page load for a question that cannot be open
+     * is a cost with no answer behind it.
+     */
+    operation.status === "needs_user"
+      ? findOpenInterruptForRun(supabase, { projectId, agentExecutionRunId: runId })
+      : Promise.resolve(null),
   ]);
 
   /*
@@ -207,6 +226,7 @@ export async function readAgentWorkspace(
       tests: testVerdict(change),
       build: buildVerdict(change),
     },
+    interrupt,
   };
 }
 

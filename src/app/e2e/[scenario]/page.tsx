@@ -45,6 +45,7 @@ import { AgentValidationChecks } from "@/app/app/projects/[projectId]/agent/agen
 import { AgentFileActivity } from "@/app/app/projects/[projectId]/agent/agent-file-activity";
 import { AgentPreviewStage } from "@/app/app/projects/[projectId]/agent/agent-preview-stage";
 import { AgentMergeStage } from "@/app/app/projects/[projectId]/agent/agent-merge-stage";
+import { AgentReadyFacts } from "@/app/app/projects/[projectId]/agent/agent-start-cta";
 import { AgentAssuranceBar } from "@/app/app/projects/[projectId]/agent/agent-assurance-bar";
 import { E2E_NEEDS_USER_SCENARIOS, isE2eNeedsUserScenario } from "../needs-user-scenarios";
 import {
@@ -628,6 +629,12 @@ export default async function E2eScenarioPage({
             task !== null && <AgentTaskPanel task={task} compact={activity.length > 0} />
           )}
         </AgentWorkspacePanel>
+        {task === null && (
+          <AgentReadyFacts
+            repository="TobiB1505/Vibe-Business"
+            liveUrl="https://vibebusiness.de"
+          />
+        )}
         <AgentAssuranceBar />
       </main>
     );

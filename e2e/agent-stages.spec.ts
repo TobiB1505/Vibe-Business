@@ -265,3 +265,24 @@ test.describe("stage five tells the truth about merging", () => {
     await expect(page.getByTestId("agent-merge")).toContainText("src/lib/stripe/checkout.ts");
   });
 });
+
+
+test.describe("the ready state promises nothing it cannot measure", () => {
+  /**
+   * The reference draws "Estimated time ~1-2 hours" and "Expected changes 8-15
+   * files". No estimator exists, and how many files a run touches is unknown
+   * until it has touched them — the same reason this product refuses progress
+   * percentages.
+   */
+  test("shows what is true before a run instead of an estimate", async ({ page }) => {
+    await page.goto(IDLE);
+
+    const facts = page.getByTestId("agent-ready-facts");
+    await expect(facts).toContainText(/isolated environment/i);
+    await expect(facts).toContainText(/working from your code/i);
+
+    await expect(facts).not.toContainText(/estimated time/i);
+    await expect(facts).not.toContainText(/expected changes/i);
+    expect(await facts.innerText()).not.toMatch(/~\s*\d|\d+\s*[–-]\s*\d+/);
+  });
+});

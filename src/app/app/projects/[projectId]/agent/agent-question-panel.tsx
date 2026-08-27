@@ -3,7 +3,7 @@
 import { motion, useReducedMotion } from "motion/react";
 import { useDocumentVisible } from "@/lib/client/use-document-visible";
 import { MonoLabel } from "@/components/ui/typography";
-import type { ExecutionInterrupt } from "@/modules/execution-contract/schema";
+import type { StoredExecutionInterrupt } from "@/modules/coding-agent/store";
 
 /**
  * Vibe has a question (UI-19, artboard 2f).
@@ -30,7 +30,7 @@ export function AgentQuestionPanel({
   waitingSince,
   children,
 }: {
-  interrupt: ExecutionInterrupt;
+  interrupt: StoredExecutionInterrupt;
   /** Rendered beside the label when the caller can say how long. */
   waitingSince?: string;
   /** The answer control, owned by the route that can submit it. */

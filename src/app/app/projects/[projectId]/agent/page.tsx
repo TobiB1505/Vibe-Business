@@ -26,6 +26,8 @@ import { AgentTaskPanel } from "./agent-task-panel";
 import { Surface } from "@/components/ui/surface";
 import { AgentActivity } from "./agent-activity";
 import { AgentValidationChecks } from "./agent-validation-checks";
+import { AgentReadyFacts } from "./agent-start-cta";
+import { AgentQuestionPanel } from "./agent-question-panel";
 import { AgentFileActivity } from "./agent-file-activity";
 import { AgentMergeStage } from "./agent-merge-stage";
 import { AgentPreviewStage } from "./agent-preview-stage";
@@ -191,6 +193,23 @@ export default async function ProjectAgentPage({
       description="Each change moves through validation, preview, review and your approval before anything can be merged."
     >
       <div className="flex flex-col gap-5">
+        {/*
+          A run that stopped to ask something makes the question the only
+          primary object on the screen, above the stages. It is the one state
+          where the founder is the blocker.
+        */}
+        {workspace.interrupt !== null && (
+          /*
+            Rendered without an answer control, deliberately.
+            No component in this product can answer an execution interrupt yet
+            — `answerInterrupt` exists in the store and nothing in the UI calls
+            it. Drawing an input that cannot submit would be worse than showing
+            the question and saying where the answer goes, so the panel carries
+            the question and the slot stays empty until the action exists.
+          */
+          <AgentQuestionPanel interrupt={workspace.interrupt} />
+        )}
+
         {workspace.timeline !== null ? (
           <AgentWorkspacePanel
             stages={workspace.stages}
@@ -245,6 +264,20 @@ export default async function ProjectAgentPage({
               executionHref={executionHref}
             />
           </AgentWorkspacePanel>
+        )}
+
+        {workspace.timeline === null && (
+          /*
+            The reference draws an estimated duration and an expected file
+            range here. Neither has anything behind it — no estimator exists,
+            and how many files a run touches is unknown until it has touched
+            them. What is true before a run starts is where it happens and what
+            it is working from, so the strip says that instead.
+          */
+          <AgentReadyFacts
+            repository={project.repository?.fullName ?? null}
+            liveUrl={project.productionUrl ?? null}
+          />
         )}
 
         {workspace.stage === "preview" && workspace.change !== null && (
