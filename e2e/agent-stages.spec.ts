@@ -286,3 +286,68 @@ test.describe("the ready state promises nothing it cannot measure", () => {
     expect(await facts.innerText()).not.toMatch(/~\s*\d|\d+\s*[–-]\s*\d+/);
   });
 });
+
+
+test.describe("the rail opens what it can open", () => {
+  /**
+   * The design's stepper is a map of the run, and a founder looking at stage
+   * four wants to be able to look back at stage three. Every stage carrying a
+   * verdict is a link; the ones with nothing behind them are not, because a
+   * stepper whose steps all look clickable and half of which do nothing is
+   * worse than one that never invites the click.
+   */
+  test("links only the stages that have something to show", async ({ page }) => {
+    await page.setViewportSize({ width: 1560, height: 1000 });
+    await page.goto(PREVIEW);
+
+    const rail = page.getByTestId("agent-stage-rail");
+    for (const stage of ["understand", "build", "validate", "preview"]) {
+      await expect(rail.locator(`[data-stage="${stage}"] a`)).toHaveCount(1);
+    }
+
+    // Nothing has happened at Review yet, so it is text rather than a link.
+    await expect(rail.locator('[data-stage="review"] a')).toHaveCount(0);
+  });
+
+  test("says which stage is open, to a screen reader as well", async ({ page }) => {
+    await page.goto(PREVIEW);
+
+    const rail = page.getByTestId("agent-stage-rail");
+    await expect(rail.locator('[data-stage="preview"] [aria-current="step"]')).toHaveCount(1);
+  });
+});
+
+test.describe("the rail stays one line per stage", () => {
+  /**
+   * The measured counts moved out. Appending "· 11 files inspected" to a
+   * status word gave five cells different heights and wrapped them at the
+   * widths this rail actually gets; the numbers live in the activity list.
+   */
+  test("shows the status word alone, with no measured detail", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto(PREVIEW);
+
+    /*
+     * Visible text only. The measured count stays in each cell's screen-reader
+     * announcement — a founder who cannot see the activity list should still be
+     * told what was inspected — so `innerText` would find it and prove nothing
+     * about the rail's own lines.
+     */
+    const rail = page.getByTestId("agent-stage-rail");
+    const visible = await rail
+      .locator("[data-stage] span:not(.sr-only)")
+      .evaluateAll((nodes) =>
+        nodes
+          .filter((node) => !node.closest(".sr-only"))
+          .map((node) => node.textContent ?? "")
+          .join(" "),
+      );
+    expect(visible).not.toMatch(/files inspected|files changed/i);
+
+    // And every cell is the same height, which is what "clean" means here.
+    const heights = await rail
+      .locator("[data-stage]")
+      .evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().height));
+    expect(Math.max(...heights) - Math.min(...heights)).toBeLessThanOrEqual(1);
+  });
+});

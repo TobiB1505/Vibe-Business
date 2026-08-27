@@ -41,8 +41,9 @@ export type AgentTask = {
   problem: string;
   /** Why it deserves attention now. Absent on a Move that did not say. */
   whyNow: string | null;
-  impact: keyof typeof IMPACT_LABELS;
-  effort: keyof typeof EFFORT_LABELS;
+  /** Absent when the task came from a stored origin, which carries no rating. */
+  impact: keyof typeof IMPACT_LABELS | null;
+  effort: keyof typeof EFFORT_LABELS | null;
   lens: BusinessLens | null;
   /** Step titles from the stored Action Plan. Empty when there is no plan. */
   steps: string[];
@@ -84,12 +85,18 @@ export function AgentTaskPanel({ task, compact = false }: { task: AgentTask; com
             {LENS_LABELS[task.lens]}
           </span>
         )}
-        <span className="rounded-full border-mint-line bg-mint-tint text-mint border px-3 py-1 text-xs font-semibold">
-          {IMPACT_LABELS[task.impact]}
-        </span>
-        <span className="rounded-full border-amber-line bg-amber-tint text-amber border px-3 py-1 text-xs font-semibold">
-          {EFFORT_LABELS[task.effort]}
-        </span>
+        {/* Ratings are the Move's own. A task recovered from a stored origin
+            has none, and guessing "medium" would be an assessment nobody made. */}
+        {task.impact !== null && (
+          <span className="rounded-full border-mint-line bg-mint-tint text-mint border px-3 py-1 text-xs font-semibold">
+            {IMPACT_LABELS[task.impact]}
+          </span>
+        )}
+        {task.effort !== null && (
+          <span className="rounded-full border-amber-line bg-amber-tint text-amber border px-3 py-1 text-xs font-semibold">
+            {EFFORT_LABELS[task.effort]}
+          </span>
+        )}
       </div>
 
       <p className="text-fg-prose max-w-[46ch] text-base leading-relaxed text-pretty">

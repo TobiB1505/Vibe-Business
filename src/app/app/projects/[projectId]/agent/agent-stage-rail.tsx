@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { motion, useReducedMotion } from "motion/react";
 import { useDocumentVisible } from "@/lib/client/use-document-visible";
 import { cn } from "@/lib/utils/cn";
@@ -94,7 +95,53 @@ function markFor(state: AgentStageState, position: number): { glyph: string; sr:
 
 const BEHIND: readonly AgentStageState[] = ["done", "skipped", "not_applicable"];
 
-export function AgentStageRail({ steps }: { steps: AgentStageStep[] }) {
+/**
+ * One cell, as a link when the stage has a body and as plain text otherwise.
+ *
+ * A stepper whose steps all look clickable and half of which do nothing is
+ * worse than one that never invites the click. Pending and never-reached
+ * stages have nothing to open, so they are not offered.
+ */
+function Cell({
+  href,
+  selected,
+  children,
+}: {
+  href: string | null;
+  selected: boolean;
+  children: React.ReactNode;
+}) {
+  const shared = cn(
+    "flex min-w-0 items-center gap-3.5 rounded-nav px-2 py-1.5 -mx-2",
+    href !== null && "transition-interactive hover:bg-surface-2",
+    selected && "bg-surface-2",
+  );
+
+  if (href === null) return <div className={shared}>{children}</div>;
+
+  return (
+    <Link href={href} aria-current={selected ? "step" : undefined} className={shared}>
+      {children}
+    </Link>
+  );
+}
+
+export function AgentStageRail({
+  steps,
+  hrefs,
+  selected,
+}: {
+  steps: AgentStageStep[];
+  /**
+   * Where each stage leads, keyed by stage. Absent or null for a stage with
+   * nothing to show — a link into an empty panel is worse than no link.
+   *
+   * A map rather than a function: this is a client component, and a server
+   * component cannot hand it one.
+   */
+  hrefs?: Partial<Record<string, string | null>>;
+  selected?: string | null;
+}) {
   const reduceMotion = useReducedMotion();
   const visible = useDocumentVisible();
   const animate = !reduceMotion && visible;
@@ -122,13 +169,7 @@ export function AgentStageRail({ steps }: { steps: AgentStageStep[] }) {
               data-stage={step.stage}
               data-state={step.state}
             >
-              {/*
-                `min-w-0` rather than `flex-none`. With a fixed cell and
-                `whitespace-nowrap` labels, a long stage name ran straight into
-                the next stage's on the live screen — five cells, no give, and
-                nowhere for the text to stop.
-              */}
-              <div className="flex min-w-0 items-center gap-3.5">
+              <Cell href={hrefs?.[step.stage] ?? null} selected={selected === step.stage}>
                 <span
                   className={cn(
                     "flex size-9 flex-none items-center justify-center rounded-full border-[1.5px] font-mono text-sm",
@@ -156,14 +197,18 @@ export function AgentStageRail({ steps }: { steps: AgentStageStep[] }) {
                   >
                     {step.label}
                   </span>
+                  {/*
+                    The status word alone. Appending a measured detail here —
+                    "· 11 files inspected" — made five cells of different
+                    heights that wrapped at the widths this rail actually gets.
+                    The numbers are in the activity list, at the width they
+                    were written for.
+                  */}
                   <span className={cn("text-[0.8125rem]", STATUS_TONE[step.state])}>
                     {STATE_WORDS[step.state]}
-                    {step.detail !== null && (
-                      <span className="text-fg-meta"> · {step.detail}</span>
-                    )}
                   </span>
                 </span>
-              </div>
+              </Cell>
 
               {!last && (
                 <div

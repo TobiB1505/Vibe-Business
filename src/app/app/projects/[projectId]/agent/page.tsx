@@ -93,7 +93,7 @@ export default async function ProjectAgentPage({
   searchParams,
 }: {
   params: Promise<{ projectId: string }>;
-  searchParams: Promise<{ [PLAN_OPPORTUNITY_PARAM]?: string }>;
+  searchParams: Promise<{ [PLAN_OPPORTUNITY_PARAM]?: string; stage?: string }>;
 }) {
   const { projectId } = await params;
   const { supabase, userId, project } = await requireProjectAccess(projectId);
@@ -195,6 +195,32 @@ export default async function ProjectAgentPage({
   });
 
   const planHref: string = projectSectionHref(project.id, "action-plan");
+
+  /*
+   * Which stage's body to show.
+   *
+   * The run's own position by default, and whatever the founder clicked in the
+   * rail when they clicked one. A URL parameter rather than client state: it is
+   * shareable, survives a reload, and keeps every body server-rendered — the
+   * panels below them do real reads and a client toggle would have meant
+   * fetching all five stages' worth on every load.
+   *
+   * Sanitized against the rail's own steps, so a hand-edited URL selects
+   * nothing rather than something invented.
+   */
+  const requestedStage = resolvedSearchParams.stage;
+  const openable = workspace.stages.filter((step) => stageHasBody(workspace.stages, step.stage));
+  const shown =
+    openable.find((step) => step.stage === requestedStage)?.stage ?? workspace.stage;
+
+  const stageHrefs = Object.fromEntries(
+    workspace.stages.map((step) => [
+      step.stage,
+      stageHasBody(workspace.stages, step.stage)
+        ? `${projectSectionHref(project.id, "agent")}?stage=${step.stage}`
+        : null,
+    ]),
+  );
   /* One binding, so the gate panels below read as one change rather than as
      seven reaches into the workspace view. */
   const change = workspace.change;
@@ -246,13 +272,15 @@ export default async function ProjectAgentPage({
             stages={workspace.stages}
             core={workspace.core}
             caption={agentCoreCaption(workspace.stages)}
+            stageHrefs={stageHrefs}
+            shown={shown}
             aside={
               /*
                 By the validating stage the interesting question has changed
                 from "what is happening" to "what did it touch", so the rail
                 switches from the phase list to the record of files.
               */
-              workspace.stage === "validate" ? (
+              shown === "validate" ? (
                 <AgentFileActivity events={workspace.fileEvents} />
               ) : (
                 <AgentActivity
@@ -262,7 +290,7 @@ export default async function ProjectAgentPage({
               )
             }
           >
-            {workspace.stage === "validate" ? (
+            {shown === "validate" ? (
               <div className="flex min-w-0 flex-col gap-5">
                 <AgentValidationChecks checks={workspace.checks} />
                 {/* The one control this stage owns: run the checks again. */}
@@ -295,6 +323,8 @@ export default async function ProjectAgentPage({
             stages={workspace.stages}
             core={workspace.core}
             caption={agentCoreCaption(workspace.stages)}
+            stageHrefs={stageHrefs}
+            shown={shown}
           >
             <AgentPanel
               context={context}
@@ -322,7 +352,7 @@ export default async function ProjectAgentPage({
           />
         )}
 
-        {stageHasBody(workspace.stages, "preview") && change !== null && (
+        {shown === "preview" && change !== null && (
           <Surface level="section" padding="lg">
             <AgentPreviewStage
               images={change.reviewImages}
@@ -342,7 +372,7 @@ export default async function ProjectAgentPage({
           </Surface>
         )}
 
-        {stageHasBody(workspace.stages, "review") && change !== null && (
+        {shown === "review" && change !== null && (
           <Surface level="section" padding="lg">
             <AgentMergeStage
               summary={workspace.mergeSummary}
@@ -367,9 +397,9 @@ export default async function ProjectAgentPage({
         )}
 
         {change !== null &&
-          workspace.stage !== "validate" &&
-          workspace.stage !== "preview" &&
-          workspace.stage !== "review" && (
+          shown !== "validate" &&
+          shown !== "preview" &&
+          shown !== "review" && (
             /*
               A change whose stage owns no body of its own — a run still
               working, or one already merged. It keeps its record and the
@@ -380,7 +410,7 @@ export default async function ProjectAgentPage({
                 projectId={project.id}
                 change={change}
                 planHref={planHref}
-                stage={workspace.stage}
+                stage={shown}
               />
             </Surface>
           )}

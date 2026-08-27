@@ -37,6 +37,8 @@ export function AgentWorkspacePanel({
   caption,
   headline,
   aside,
+  stageHrefs,
+  shown,
   children,
 }: {
   stages: AgentStageStep[];
@@ -48,6 +50,10 @@ export function AgentWorkspacePanel({
   children?: React.ReactNode;
   /** The third column — live activity while a run is going. */
   aside?: React.ReactNode;
+  /** Where each stage leads, keyed by stage. */
+  stageHrefs?: Partial<Record<string, string | null>>;
+  /** The stage whose body is open. */
+  shown?: string | null;
 }) {
   const reduceMotion = useReducedMotion();
 
@@ -63,7 +69,7 @@ export function AgentWorkspacePanel({
           </span>
         </div>
 
-        <AgentStageRail steps={stages} />
+        <AgentStageRail steps={stages} hrefs={stageHrefs} selected={shown} />
 
         {/*
           One column on a phone, and the core second there: on a narrow screen

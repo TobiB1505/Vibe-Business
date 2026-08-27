@@ -37,6 +37,7 @@ import {
   isE2eAgentStageScenario,
 } from "../agent-stage-scenarios";
 import { AgentWorkspacePanel } from "@/app/app/projects/[projectId]/agent/agent-workspace-panel";
+import { stageHasBody } from "@/modules/coding-agent/observability/agent-stages";
 import { AgentActivity } from "@/app/app/projects/[projectId]/agent/agent-activity";
 import { AgentTaskPanel } from "@/app/app/projects/[projectId]/agent/agent-task-panel";
 import { AgentValidationChecks } from "@/app/app/projects/[projectId]/agent/agent-validation-checks";
@@ -613,6 +614,15 @@ export default async function E2eScenarioPage({
           stages={steps}
           core={core}
           caption={caption}
+          /* The same links the route builds, so the harness exercises the
+             rail's own behaviour rather than a version of it. */
+          stageHrefs={Object.fromEntries(
+            steps.map((step) => [
+              step.stage,
+              stageHasBody(steps, step.stage) ? `/e2e/${scenario}?stage=${step.stage}` : null,
+            ]),
+          )}
+          shown={steps.find((step) => step.state === "active")?.stage ?? null}
           aside={
             validating ? (
               <AgentFileActivity events={fileEvents} />

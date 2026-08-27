@@ -199,7 +199,28 @@ export async function readAgentWorkspace(
    * screen naming the wrong task is worse than one naming none. Every lookup
    * below returns null rather than a fallback for the same reason.
    */
-  const task = await resolveTask(supabase, { projectId, runView });
+  let task = await resolveTask(supabase, { projectId, runView });
+
+  /*
+   * The change's own stored origin, when the Move it came from is no longer in
+   * the current set — regenerated, most likely.
+   *
+   * It carries the same three fields the panel wants and it was captured with
+   * the change, so it says what the run was actually working on rather than
+   * what the newest Move happens to be. Without it the column beside the orb
+   * was simply empty on screen, which reads as broken rather than as absent.
+   */
+  if (task === null && change?.origin) {
+    task = {
+      title: change.origin.title,
+      problem: change.origin.problem,
+      whyNow: change.origin.whyNow || null,
+      impact: null,
+      effort: null,
+      lens: null,
+      steps: [],
+    };
+  }
 
   const stages = agentStageSteps({
     timeline,

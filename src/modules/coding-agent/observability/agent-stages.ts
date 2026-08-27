@@ -87,7 +87,9 @@ const LABELS: Record<AgentStage, string> = {
   build: "Build",
   validate: "Validate",
   preview: "Preview",
-  review: "Review",
+  // The design names the last stage for both halves of what it holds: the
+  // founder decides, and only then does anything move.
+  review: "Review & merge",
 };
 
 /** Which execution phases feed each of the first three stages. */
