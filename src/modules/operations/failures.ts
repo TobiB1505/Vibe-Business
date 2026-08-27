@@ -39,6 +39,15 @@ export type OperationExecutionFailure =
    */
   | "start_limit_reached"
   /**
+   * An operator has paused paid work (VB-032).
+   *
+   * Nothing about this operation is wrong and nothing was charged. Deliberately
+   * **not** retryable: waiting does not fix it, a person flipping a flag does,
+   * and offering a retry button would be the product inviting a click it knows
+   * will fail.
+   */
+  | "paid_operations_disabled"
+  /**
    * A paid call was started and its outcome was never recorded.
    *
    * The provider may have billed it. This code exists so that ambiguity ends

@@ -210,6 +210,10 @@ export async function startChangePreparation(
     if (created.error === "start_limit_reached") {
       return { kind: "failed", error: "start_limit_reached" };
     }
+    // VB-032 — same shape, opposite remedy: waiting does not fix this one.
+    if (created.error === "paid_operations_disabled") {
+      return { kind: "failed", error: "paid_operations_disabled" };
+    }
     if (created.error === "already_active") {
       // Lost the race by milliseconds — the other click's operation is the
       // right answer, not an error (§14).

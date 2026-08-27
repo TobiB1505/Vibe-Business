@@ -41,6 +41,10 @@ export const OPERATION_FAILURE_MESSAGES: Record<OperationFailureCode, string> = 
   already_running: "This is already running for the project. Give it a moment.",
   start_limit_reached:
     "This has been started too many times recently. Give it an hour and try again.",
+  // Says Vibe paused it, not that the customer did something wrong, and does
+  // not promise a time — nobody here knows when the switch goes back.
+  paid_operations_disabled:
+    "Vibe has paused this kind of work for the moment. Nothing was started and nothing was charged. Everything you have already run is still here.",
   // The evidence moved under the operation's feet — a Deep Scan finished, or
   // the context was edited. Starting again picks up the new evidence.
   inputs_changed: "Your evidence changed while this was starting. Run it again to use the latest.",
