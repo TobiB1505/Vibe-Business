@@ -18,7 +18,7 @@ import {
   createOperationRun,
   failOperationRun,
   findActiveOperationByIdentity,
-  getOperationRunById,
+  getProjectOperationRunById,
   type StoredOperationRun,
 } from "@/modules/operations/store";
 import { buildOperationView, type OperationView } from "@/modules/operations/view";
@@ -173,7 +173,7 @@ export async function startAgentExecution(
   }
 
   if (existing) {
-    const operation = await getOperationRunById(supabase, existing.operationRunId);
+    const operation = await getProjectOperationRunById(supabase, existing.operationRunId);
     if (operation) return { kind: "running", operation: view(operation) };
   }
 
@@ -397,7 +397,7 @@ export async function getAgentExecutionStatus(
    */
   await expireStaleAgentExecution({ operationRunId: params.operationId });
 
-  const operation = await getOperationRunById(supabase, params.operationId);
+  const operation = await getProjectOperationRunById(supabase, params.operationId);
   if (!operation || operation.projectId !== params.projectId) return null;
 
   const { data } = await supabase

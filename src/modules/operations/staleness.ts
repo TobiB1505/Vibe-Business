@@ -7,7 +7,7 @@ import {
   OPPORTUNITY_GENERATION_CONFIG,
 } from "@/modules/ai/operations";
 import { releaseOperationBilling } from "./billing";
-import { failOperationRun, getOperationRunById } from "./store";
+import { failOperationRun, getProjectOperationRunById } from "./store";
 import type { OperationType } from "./schema";
 
 /**
@@ -79,7 +79,7 @@ export async function expireStaleOperation(params: {
 }): Promise<{ expired: boolean }> {
   const supabase = createServiceClient();
 
-  const operation = await getOperationRunById(supabase, params.operationId);
+  const operation = await getProjectOperationRunById(supabase, params.operationId);
   if (!operation || operation.status !== "running" || !operation.startedAt) {
     return { expired: false };
   }

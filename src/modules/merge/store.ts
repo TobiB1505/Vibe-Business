@@ -218,9 +218,21 @@ export async function getLatestMergeForPreparedChange(
  * against the last reason means one event per *transition* — the first time a
  * change becomes unmergeable, and again only if the reason changes.
  *
- * The JSONB filter is unindexed and that is deliberate for now: it runs only
- * for a change that is approved *and* currently blocked, which is a handful of
- * rows per project. If that stops being true it wants an index, not a rewrite.
+ * ## Why the project comes from the column and not the payload
+ *
+ * ADR 0056 §8 names this query as a hard prerequisite for the erasure scrub.
+ * The scrub strips `project_id` from `audit_events.metadata`, and a filter that
+ * matched on the stripped key would silently stop matching — turning one event
+ * per *transition* back into one event per page render, which is exactly what
+ * the deduplication exists to prevent. `project_id` is a real column on
+ * `audit_events` and `recordAuditEvent` has always populated it, so the filter
+ * moves there. `prepared_change_id` stays in the payload because the scrub does
+ * not touch it: it identifies an artifact, not a person.
+ *
+ * The remaining JSONB filter is unindexed and that is deliberate for now: it
+ * runs only for a change that is approved *and* currently blocked, which is a
+ * handful of rows per project. If that stops being true it wants an index, not
+ * a rewrite.
  */
 export async function findLastNotEligibleReason(
   supabase: SupabaseClient,
@@ -230,7 +242,7 @@ export async function findLastNotEligibleReason(
     .from("audit_events")
     .select("metadata")
     .eq("event_type", "change_merge.not_eligible")
-    .eq("metadata->>project_id", params.projectId)
+    .eq("project_id", params.projectId)
     .eq("metadata->>prepared_change_id", params.preparedChangeId)
     .order("created_at", { ascending: false })
     .limit(1)

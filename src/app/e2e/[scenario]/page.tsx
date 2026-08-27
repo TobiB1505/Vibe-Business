@@ -44,6 +44,8 @@ import {
   isE2eRepositoriesScenario,
 } from "../account-scenarios";
 import { AccountHome } from "@/app/app/account-home";
+import { DeleteAccountSection } from "@/app/app/(account)/settings/delete-account";
+import { E2E_ERASURE_SCENARIOS, isE2eErasureScenario } from "../erasure-scenarios";
 import { ProductsIndex } from "@/app/app/(account)/products/products-index";
 import { RepositoriesIndex } from "@/app/app/(account)/repositories/repositories-index";
 import { AccountMenu } from "@/components/layout/account-menu";
@@ -606,6 +608,37 @@ export default async function E2eScenarioPage({
       >
         <div className="sr-only">{label}</div>
         <AccountHome projects={E2E_ACCOUNT_SCENARIOS[scenario]()} />
+      </AccountShell>
+    );
+  }
+
+  /**
+   * The account erasure control, rendered through the same component
+   * `/app/settings` renders. Composing a lookalike here would test a screen
+   * that exists nowhere, and this is the one control whose copy is a decision
+   * rather than a description (ADR 0056 §4, §9).
+   */
+  if (isE2eErasureScenario(scenario)) {
+    return (
+      <AccountShell
+        sidebar={
+          <AccountSidebar
+            credits="2,480"
+            footer={
+              <AccountMenu
+                identity={{
+                  displayName: "Tobi",
+                  initials: "TB",
+                  avatarUrl: null,
+                  fromGithub: true,
+                }}
+              />
+            }
+          />
+        }
+      >
+        <div className="sr-only">{label}</div>
+        <DeleteAccountSection state={E2E_ERASURE_SCENARIOS[scenario]()} />
       </AccountShell>
     );
   }

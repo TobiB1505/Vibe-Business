@@ -422,6 +422,12 @@ describe("an approved change that cannot be merged is recorded once", () => {
       observed_default_head_sha: MERGE_THIRD_SHA,
       approved_commit_sha: MERGE_TARGET_SHA,
     });
+
+    // The real column, not only the payload copy. ADR 0056 §8's erasure scrub
+    // strips `project_id` from the metadata, and the deduplicating read below
+    // filters on this column — if it were ever unpopulated, the dedup would
+    // match nothing and this would go back to logging one entry per render.
+    expect(notEligibleEvents()[0].project_id).toBe(MERGE_FIXTURES.project);
   });
 
   it("does not write one entry per render", async () => {

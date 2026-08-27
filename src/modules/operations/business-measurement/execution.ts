@@ -24,7 +24,7 @@ import {
   markMeasuring,
 } from "@/modules/business-measurement/store";
 import { windowHasClosed } from "@/modules/business-measurement/windows";
-import { completeOperationRun, failOperationRun, getOperationRunById, setOperationStage } from "../store";
+import { completeOperationRun, failOperationRun, getProjectOperationRunById, setOperationStage } from "../store";
 
 /**
  * Durable steps for business measurement (Sprint 12B §30, §33, §38).
@@ -97,7 +97,7 @@ async function loadContext(
   deps: MeasurementDeps,
   operationId: string,
 ): Promise<MeasurementContext | null> {
-  const operation = await getOperationRunById(deps.supabase, operationId);
+  const operation = await getProjectOperationRunById(deps.supabase, operationId);
   if (!operation) return null;
 
   const measurement = await findMeasurementByOperation(deps.supabase, operationId);
@@ -349,7 +349,7 @@ export async function abortMeasurementStep(
   operationId: string,
   failure: { failureCode: MeasurementFailureCode; retryable: boolean; nextObservationAt?: string | null },
 ): Promise<void> {
-  const operation = await getOperationRunById(deps.supabase, operationId);
+  const operation = await getProjectOperationRunById(deps.supabase, operationId);
   const measurement = await findMeasurementByOperation(deps.supabase, operationId);
 
   if (measurement && operation && measurement.projectId === operation.projectId) {

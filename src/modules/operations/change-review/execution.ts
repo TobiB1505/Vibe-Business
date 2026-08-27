@@ -18,7 +18,7 @@ import {
   recordReviewBrowserUsage,
 } from "@/modules/review/store";
 import type { SandboxProvider } from "@/modules/validation/sandbox-port";
-import { completeOperationRun, failOperationRun, getOperationRunById, setOperationStage } from "../store";
+import { completeOperationRun, failOperationRun, getProjectOperationRunById, setOperationStage } from "../store";
 
 /**
  * Durable steps for a visual review (Sprint 11A §21, §32).
@@ -83,7 +83,7 @@ async function loadContext(
   supabase: SupabaseClient,
   operationId: string,
 ): Promise<{ artifact: ReviewArtifact; projectId: string; userId: string } | null> {
-  const operation = await getOperationRunById(supabase, operationId);
+  const operation = await getProjectOperationRunById(supabase, operationId);
   if (!operation) return null;
 
   const artifact = await findReviewByOperation(supabase, operationId);

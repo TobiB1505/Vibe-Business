@@ -534,6 +534,9 @@ async function recordNotEligibleObservation(
 
   await recordAuditEvent(supabase, {
     userId: params.userId,
+    // Stated explicitly rather than inferred from the payload, because the
+    // deduplicating read now filters on the column (ADR 0056 §8).
+    projectId: params.projectId,
     eventType: "change_merge.not_eligible",
     metadata: {
       project_id: params.projectId,

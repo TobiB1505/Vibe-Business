@@ -42,10 +42,10 @@ import {
   claimResultForOperation,
   completeOperationRun,
   failOperationRun,
-  getOperationRunById,
+  getProjectOperationRunById,
   markInferenceStarted,
   setOperationStage,
-  type StoredOperationRun,
+  type ProjectOperationRun,
 } from "../store";
 
 /**
@@ -92,8 +92,8 @@ export type StepOutcome<T> = ({ ok: true } & T) | { ok: false; failureCode: Oper
 async function loadOperation(
   supabase: SupabaseClient,
   operationId: string,
-): Promise<StepOutcome<{ operation: StoredOperationRun }>> {
-  const operation = await getOperationRunById(supabase, operationId);
+): Promise<StepOutcome<{ operation: ProjectOperationRun }>> {
+  const operation = await getProjectOperationRunById(supabase, operationId);
   if (!operation) return { ok: false, failureCode: "operation_not_found" };
 
   const { data: project } = await supabase
@@ -190,7 +190,7 @@ export async function loadUnderstandingSources(
  */
 async function resolveInputs(
   supabase: SupabaseClient,
-  operation: StoredOperationRun,
+  operation: ProjectOperationRun,
 ): Promise<
   StepOutcome<{ sources: BuildUnderstandingPackInput; identity: UnderstandingIdentity }>
 > {
@@ -429,7 +429,7 @@ export async function completeOperationStep(
   const transitioned = await completeOperationRun(deps.supabase, { operationId, resultId: profileId });
   if (!transitioned) return;
 
-  const operation = await getOperationRunById(deps.supabase, operationId);
+  const operation = await getProjectOperationRunById(deps.supabase, operationId);
   if (!operation) return;
 
   await recordAuditEvent(deps.supabase, {
@@ -445,7 +445,7 @@ export async function failOperationStep(
   operationId: string,
   failureCode: OperationFailureCode,
 ): Promise<void> {
-  const operation = await getOperationRunById(deps.supabase, operationId);
+  const operation = await getProjectOperationRunById(deps.supabase, operationId);
 
   // A claimed profile row must not be left `analyzing` forever: the partial
   // unique index would block every future attempt at the same input.

@@ -8,6 +8,10 @@ import {
 import { Surface } from "@/components/ui/surface";
 import { SectionHeader } from "@/components/ui/typography";
 import { requireSession } from "@/modules/auth/session";
+import { createClient } from "@/lib/supabase/server";
+import { findLatestErasure } from "@/modules/operations/account-erasure/service";
+import { erasureViewState } from "@/modules/operations/account-erasure/view";
+import { DeleteAccountSection } from "./delete-account";
 
 export const metadata = { title: "Settings" };
 
@@ -45,7 +49,9 @@ const SETTINGS = [
  * can hand a person to today.
  */
 export default async function SettingsPage() {
-  await requireSession("/app/settings");
+  const session = await requireSession("/app/settings");
+  const supabase = await createClient();
+  const erasure = erasureViewState(await findLatestErasure(supabase, session.userId));
 
   return (
     <div className="flex flex-col gap-8">
@@ -80,6 +86,14 @@ export default async function SettingsPage() {
           </Surface>
         ))}
       </div>
+
+      {/*
+        Below the grid rather than in it. The three cards above are navigation —
+        each hands the person somewhere else to manage something. This is the one
+        control on the page that does something irreversible when pressed, and
+        putting it in the same row would make it look like a fourth destination.
+      */}
+      <DeleteAccountSection state={erasure} />
     </div>
   );
 }

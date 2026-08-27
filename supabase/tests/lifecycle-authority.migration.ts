@@ -468,7 +468,14 @@ describe("K. no intra-project RESTRICT foreign key was modified", () => {
       "product_profiles.repository_snapshot_id",
       "project_founder_resolutions.request_id",
       "project_founder_resolutions.supersedes_resolution_id",
-      "repository_connections.github_installation_id",
+      // `repository_connections.github_installation_id` deliberately left this
+      // list in VB-002 M2′. It is not an intra-project edge and F1 is not what
+      // covers it: F3 measured it as the depth-mismatched account-level RESTRICT
+      // that made every user who had ever connected a repository undeletable,
+      // and ADR 0056 §11 converts exactly this one to `no action deferrable
+      // initially deferred`. `installation-reference.migration.ts` asserts both
+      // halves of that — the erasure it now permits, and the orphaning it still
+      // refuses at commit.
       "repository_intelligence_snapshots.repository_connection_id",
     ]);
   });

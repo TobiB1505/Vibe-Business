@@ -16,7 +16,7 @@ import {
   recordPreviewSandboxUsage,
 } from "@/modules/change-preview/store";
 import type { SandboxUsage } from "@/modules/validation/sandbox-port";
-import { getOperationRunById, completeOperationRun, setOperationStage } from "../store";
+import { getProjectOperationRunById, completeOperationRun, setOperationStage } from "../store";
 import type { PreviewDeps } from "./execution";
 
 /**
@@ -77,7 +77,7 @@ async function loadSession(
   supabase: SupabaseClient,
   operationId: string,
 ): Promise<{ session: PreviewSession; userId: string; projectId: string } | null> {
-  const operation = await getOperationRunById(supabase, operationId);
+  const operation = await getProjectOperationRunById(supabase, operationId);
   if (!operation?.subjectId) return null;
 
   const session = await getPreviewSession(supabase, {

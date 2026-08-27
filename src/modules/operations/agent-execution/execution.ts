@@ -120,10 +120,10 @@ import type { OperationFailureCode } from "../failures";
 import {
   completeOperationRun,
   failOperationRun,
-  getOperationRunById,
+  getProjectOperationRunById,
   pauseOperationForUser,
   setOperationStage,
-  type StoredOperationRun,
+  type ProjectOperationRun,
 } from "../store";
 
 /**
@@ -202,7 +202,7 @@ export type AgentExecutionDeps = {
   sandboxProvider: SandboxProvider;
   /** Built per step from the operation's own project — never from input. */
   resolveTarget: (
-    operation: StoredOperationRun,
+    operation: ProjectOperationRun,
     options: { withCloneCredential: boolean },
   ) => Promise<AgentRepositoryTarget | null>;
   now?: () => number;
@@ -264,9 +264,9 @@ async function loadRun(
   deps: AgentExecutionDeps,
   operationId: string,
 ): Promise<
-  StepOutcome<{ operation: StoredOperationRun; run: StoredAgentExecutionRun }>
+  StepOutcome<{ operation: ProjectOperationRun; run: StoredAgentExecutionRun }>
 > {
-  const operation = await getOperationRunById(deps.supabase, operationId);
+  const operation = await getProjectOperationRunById(deps.supabase, operationId);
   if (!operation) return { ok: false, failureCode: "operation_not_found" };
 
   // Ownership from the persisted row, never from input (Rule 53).
@@ -648,7 +648,7 @@ function buildRunProvider(
  * and the paths are re-derived. That is what makes any of them safe to retry.
  */
 type AgentRunContext = {
-  operation: StoredOperationRun;
+  operation: ProjectOperationRun;
   run: StoredAgentExecutionRun;
   spec: NonNullable<Awaited<ReturnType<typeof loadSpec>>>;
   limits: AgentRuntimeLimits;

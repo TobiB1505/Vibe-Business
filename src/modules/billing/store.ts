@@ -20,14 +20,15 @@ const POSTGRES_UNIQUE_VIOLATION = "23505";
 
 export type StripeCustomerLink = {
   id: string;
-  userId: string;
+  /** Null once the identity is erased — the mapping is tombstoned (ADR 0056 §9). */
+  userId: string | null;
   stripeCustomerId: string;
   livemode: boolean;
 };
 
 type CustomerRow = {
   id: string;
-  user_id: string;
+  user_id: string | null;
   stripe_customer_id: string;
   livemode: boolean;
 };
@@ -121,7 +122,8 @@ export async function linkStripeCustomer(
 
 export type SubscriptionSnapshot = {
   id: string;
-  userId: string;
+  /** Null once the identity is erased — the mapping is tombstoned (ADR 0056 §9). */
+  userId: string | null;
   stripeSubscriptionId: string;
   planKey: PaidPlanKey;
   status: string;
@@ -133,7 +135,7 @@ export type SubscriptionSnapshot = {
 
 type SubscriptionRow = {
   id: string;
-  user_id: string;
+  user_id: string | null;
   stripe_subscription_id: string;
   plan_key: PaidPlanKey;
   status: string;

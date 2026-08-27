@@ -98,6 +98,22 @@ export const OPERATION_TYPES = [
    * neither may be startable twice by a page reload.
    */
   "agent_execution",
+  /**
+   * Erasing an account: eleven ordered steps, one of them external (ADR 0056 §4).
+   *
+   * The first operation here that is not about a project, which is why
+   * `operation_runs.project_id` is nullable and why every RLS policy on that
+   * table branches on it (ADR 0057). Durable for the same reasons
+   * `agent_execution` is: it cancels a Stripe subscription, deletes an
+   * unbounded number of projects and sweeps Storage, and none of that may
+   * depend on a browser tab staying open.
+   *
+   * It is also the one operation that outlives its own subject. Step 11 deletes
+   * the identity, the `user_id` cascade nulls this row's owner, and the row
+   * survives as the record of what happened — because "the row is gone" cannot
+   * distinguish success from any other deletion (ADR 0057 §2).
+   */
+  "account_erasure",
 ] as const;
 export type OperationType = (typeof OPERATION_TYPES)[number];
 

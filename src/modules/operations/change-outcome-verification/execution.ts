@@ -24,7 +24,7 @@ import {
   openObservationWindow,
   recordObservationAttempt,
 } from "@/modules/outcome-verification/store";
-import { completeOperationRun, failOperationRun, getOperationRunById, setOperationStage } from "../store";
+import { completeOperationRun, failOperationRun, getProjectOperationRunById, setOperationStage } from "../store";
 
 /**
  * Durable steps for outcome verification (Sprint 12A §18, §19, §20, §42).
@@ -100,7 +100,7 @@ type OutcomeContext = {
  * the project itself (CLAUDE.md rule 53).
  */
 async function loadContext(deps: OutcomeDeps, operationId: string): Promise<OutcomeContext | null> {
-  const operation = await getOperationRunById(deps.supabase, operationId);
+  const operation = await getProjectOperationRunById(deps.supabase, operationId);
   if (!operation) return null;
 
   const verification = await findVerificationByOperation(deps.supabase, operationId);
@@ -357,7 +357,7 @@ export async function abortOutcomeStep(
   operationId: string,
   failureCode: OutcomeFailureCode,
 ): Promise<void> {
-  const operation = await getOperationRunById(deps.supabase, operationId);
+  const operation = await getProjectOperationRunById(deps.supabase, operationId);
   const verification = await findVerificationByOperation(deps.supabase, operationId);
 
   if (verification && operation && verification.projectId === operation.projectId) {
