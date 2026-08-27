@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { FounderInputCard } from "@/components/founder-input/founder-input-card";
 import { Button, TextAction } from "@/components/ui/button";
-import { DocumentIcon, CheckIcon } from "@/components/ui/dashboard-icons";
+import { ChevronDownIcon, DocumentIcon, CheckIcon } from "@/components/ui/dashboard-icons";
 import { CreditPrice } from "@/components/ui/credit-price";
 import { Disclosure } from "@/components/ui/disclosure";
 import { Notice } from "@/components/ui/states";
@@ -111,10 +111,13 @@ function ExpandableText({ text }: { text: string }) {
 /**
  * One numbered step of the plan.
  *
- * Scan first, expand second: the title, the one-sentence description and whose
- * work it is are visible without asking; the purpose, the completion criterion
- * and the prerequisites are one click away and never truncated. The sequence
- * label is text as well as colour — "Waiting for step 4: …", never a tinted dot.
+ * The plan reads like a to-do list before it reads like a specification. A
+ * closed row exposes the task and its short state; opening that row reveals the
+ * description, ownership, exact dependency, completion criterion and approval.
+ *
+ * The completion mark is intentionally not a checkbox. Completion is projected
+ * from durable plan state, and founder-owned work keeps its explicit attestation
+ * action below rather than pretending a local toggle can complete it.
  */
 function PlanStepRow({
   step,
@@ -133,63 +136,88 @@ function PlanStepRow({
   const dependencyTitles = stepDependencyTitles(step, allSteps);
   const isCurrent = display === "start_here";
   const sublabel = RESPONSIBILITY_SUBLABELS[step.executionSupport];
+  const compactState = isCurrent
+    ? "Start here"
+    : sequence.state === "waiting"
+      ? "Waiting"
+      : sequence.label;
 
   return (
     <li
+      data-testid="plan-step"
       className={cn(
-        "flex items-start gap-3 border-b py-4 last:border-b-0 last:pb-0",
-        isCurrent
-          ? "border-mint-line bg-mint-tint-soft -mx-3 rounded-well px-3"
-          : "border-line-2",
+        "border-b last:border-b-0",
+        isCurrent ? "border-mint-line" : "border-line-2",
       )}
     >
-      <span
-        aria-hidden
-        className={cn(
-          "mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full border font-mono text-ui tabular-nums",
-          isCurrent
-            ? "border-mint-line bg-mint-tint text-mint"
-            : done
-              ? "border-mint-line text-mint"
-              : "border-line-3 bg-surface-2 text-fg-meta",
-        )}
-      >
-        {done ? <CheckIcon size={12} /> : String(index + 1).padStart(2, "0")}
-      </span>
-
-      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-2">
-            {isCurrent && (
-              <StatusPill tone="active" dot>
-                Start here
-              </StatusPill>
+      <details className="group/step">
+        <summary
+          className={cn(
+            "flex min-h-14 cursor-pointer list-none items-center gap-3 rounded-nav px-2 py-2.5",
+            "transition-interactive hover:bg-surface-2 [&::-webkit-details-marker]:hidden",
+            isCurrent && "bg-mint-tint-soft hover:bg-mint-tint",
+          )}
+        >
+          <span
+            aria-hidden
+            className={cn(
+              "flex size-7 shrink-0 items-center justify-center rounded-full border font-mono text-meta tabular-nums",
+              isCurrent
+                ? "border-mint-line bg-mint-tint text-mint"
+                : done
+                  ? "border-mint-line bg-mint-tint-soft text-mint"
+                  : "border-line-3 bg-surface-2 text-fg-meta",
             )}
-            <span className="text-fg-secondary text-meta font-medium">
-              {RESPONSIBILITY_HEADLINES[step.executionSupport]}
-            </span>
-          </div>
-          {/* Sentence case, not the product's usual uppercase meta run: this
-              label is a sentence naming another step by its title, and set in
-              caps it shouts a whole line of the panel. Text first either way —
-              a waiting step says so in words as well as in amber. */}
+          >
+            {done ? <CheckIcon size={12} /> : String(index + 1).padStart(2, "0")}
+          </span>
+
+          <span className="text-fg min-w-0 flex-1 text-sm leading-snug font-medium">
+            {step.title}
+          </span>
+
           <span
             className={cn(
-              "text-meta",
+              "shrink-0 text-right text-xs",
+              isCurrent
+                ? "text-mint"
+                : sequence.state === "waiting"
+                  ? "text-amber"
+                  : sequence.state === "done"
+                    ? "text-mint"
+                    : "text-fg-meta",
+            )}
+          >
+            {compactState}
+          </span>
+
+          <ChevronDownIcon
+            aria-hidden
+            size={15}
+            className="text-fg-meta shrink-0 transition-transform duration-200 group-open/step:rotate-180"
+          />
+        </summary>
+
+        <div className="flex flex-col gap-4 px-2 pt-1 pb-5 pl-12">
+          <p className="text-fg-muted text-sm leading-relaxed">{step.description}</p>
+
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="text-fg-secondary text-xs font-medium">
+              {RESPONSIBILITY_HEADLINES[step.executionSupport]}
+            </span>
+            {sublabel && <span className="text-fg-muted text-xs">{sublabel}</span>}
+          </div>
+
+          <span
+            className={cn(
+              "text-xs",
               sequence.state === "waiting" ? "text-amber" : "text-fg-meta",
             )}
           >
             {sequence.label}
           </span>
-        </div>
 
-        {sublabel && <p className="text-fg-muted text-xs">{sublabel}</p>}
-
-        <h4 className="text-fg text-sm leading-snug font-semibold">{step.title}</h4>
-        <p className="text-fg-muted text-xs leading-relaxed">{step.description}</p>
-
-        <Disclosure label="Details" className="pt-0.5">
-          <div className="flex flex-col gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <div className="flex flex-col gap-1">
               <MonoLabel className="tracking-[0.14em]">Why this step exists</MonoLabel>
               <p className="text-fg-secondary text-sm leading-relaxed">{step.purpose}</p>
@@ -198,20 +226,22 @@ function PlanStepRow({
               <MonoLabel className="tracking-[0.14em]">Done when</MonoLabel>
               <p className="text-fg-secondary text-sm leading-relaxed">{step.completionCriteria}</p>
             </div>
-            {dependencyTitles.length > 0 && (
-              <div className="flex flex-col gap-1">
-                <MonoLabel className="tracking-[0.14em]">Depends on</MonoLabel>
-                <p className="text-fg-secondary text-sm leading-relaxed">
-                  {dependencyTitles.join(", ")}
-                </p>
-              </div>
-            )}
-            {step.requiresApproval && (
-              <p className="text-fg-muted text-xs">Approval required before Vibe acts on this.</p>
-            )}
           </div>
-        </Disclosure>
-      </div>
+
+          {dependencyTitles.length > 0 && (
+            <div className="flex flex-col gap-1">
+              <MonoLabel className="tracking-[0.14em]">Depends on</MonoLabel>
+              <p className="text-fg-secondary text-sm leading-relaxed">
+                {dependencyTitles.join(", ")}
+              </p>
+            </div>
+          )}
+
+          {step.requiresApproval && (
+            <p className="text-fg-muted text-xs">Approval required before Vibe acts on this.</p>
+          )}
+        </div>
+      </details>
     </li>
   );
 }
@@ -246,7 +276,11 @@ function PlanBody({
     .filter(Boolean)
     .join(" · ");
   const plannedSteps = (
-    <ol className="flex flex-col" data-testid="planned-steps">
+    <ol
+      className="border-line-2 bg-well flex flex-col rounded-well border px-2"
+      data-testid="planned-steps"
+      aria-label="Planned work checklist"
+    >
       {steps.map((step, index) => (
         <PlanStepRow
           key={step.id}
@@ -363,8 +397,8 @@ function PlanBody({
         No plan-level "Depends on".
 
         Every prerequisite a plan has is another of its own steps, and each step
-        row already states its own — "Waiting for step 4: Submit the sitemap".
-        Listing them again under the timeline restates the timeline. The
+        disclosure states its own — "Waiting for step 4: Submit the sitemap".
+        Listing them again under the checklist restates the checklist. The
         reference design's version of this section named an external dependency
         ("Existing Stripe integration"), which is a fact the domain does not
         model; inventing one to fill the slot is exactly what the rest of this

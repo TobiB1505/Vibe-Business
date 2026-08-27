@@ -211,6 +211,19 @@ describe("the stepper owns selection without owning business state", () => {
   });
 });
 
+describe("planned work is a compact read-only checklist", () => {
+  it("starts each task behind a native disclosure", () => {
+    expect(PLAN_DETAIL).toContain('<details className="group/step">');
+    expect(PLAN_DETAIL).toContain('data-testid="plan-step"');
+    expect(PLAN_DETAIL).toContain('aria-label="Planned work checklist"');
+  });
+
+  it("does not turn durable completion into a local checkbox", () => {
+    expect(copyOf(PLAN_DETAIL)).not.toContain('type="checkbox"');
+    expect(PLAN_DETAIL).toContain("attestFounderActionStepAction");
+  });
+});
+
 describe("preparing leads to the exact prepared change", () => {
   /** Regression 7: the handoff disappears. */
   it("links onward from a prepared change", () => {

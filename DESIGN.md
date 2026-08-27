@@ -84,6 +84,13 @@ but never compete as full cards or permanent side panels. Selection is local and
 immediate; the URL records it only so refresh and browser history preserve the
 founder's place, never to turn a step change into route navigation.
 
+Inside the active Move, planned work reads as a compact to-do checklist. Every
+row is closed by default and keeps only its title, order/completion mark and a
+short readiness state visible. Opening one row reveals ownership, description,
+exact dependencies, completion criteria and approval context. The completion
+mark reflects durable state; it is never an editable checkbox or a shortcut
+around the existing founder-confirmation action.
+
 Nothing on this surface may state a duration, a percentage or a step counter. A
 Move's effort is the coarse label the domain records, the parts of the product a
 plan touches are derived from stored evidence, and a run's progress is the named
