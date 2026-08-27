@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import {
   BusinessHealthIcon,
@@ -9,20 +8,8 @@ import {
   SparklesIcon,
   TargetIcon,
 } from "@/components/ui/dashboard-icons";
+import { useDocumentVisible } from "@/lib/client/use-document-visible";
 import { Surface } from "@/components/ui/surface";
-
-function useDocumentVisible() {
-  const [visible, setVisible] = useState(true);
-
-  useEffect(() => {
-    const update = () => setVisible(document.visibilityState === "visible");
-    update();
-    document.addEventListener("visibilitychange", update);
-    return () => document.removeEventListener("visibilitychange", update);
-  }, []);
-
-  return visible;
-}
 
 function PlanningCore({ active }: { active: boolean }) {
   const reduceMotion = useReducedMotion();
