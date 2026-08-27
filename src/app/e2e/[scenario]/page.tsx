@@ -716,9 +716,10 @@ export default async function E2eScenarioPage({
       <main className="mx-auto max-w-[70rem] p-8">
         {label}
         <AgentPanel
-          context={E2E_AGENT_SCENARIOS[scenario]()}
+          {...E2E_AGENT_SCENARIOS[scenario]()}
           preparedCount={scenario === "agent-ready" ? 2 : 0}
           planHref="/app/projects/project_e2e/plan"
+          agentHref="/app/projects/project_e2e/agent"
           productHref="/app/projects/project_e2e/product"
           executionHref={null}
         />
