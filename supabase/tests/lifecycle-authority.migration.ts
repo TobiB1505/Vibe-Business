@@ -382,30 +382,32 @@ describe("J. privilege catalog", () => {
         and has_function_privilege(r.role, p.oid, 'EXECUTE');
     `);
 
-    // Exactly one exception, and the argument for it is below. Anything else
-    // appearing here is a privilege-escalation surface nobody argued for.
+    // No exceptions. Anything appearing here is a privilege-escalation surface
+    // nobody argued for.
     //
-    // `record_auth_attempt` (VB-010) has to be both. `SECURITY DEFINER`,
-    // because the sign-in throttle must be writable by a caller who cannot
-    // read it, cannot clear it and cannot see another account's — and
-    // `20260827190821` left `anon` with no privilege on any table, which is
-    // what makes that possible rather than what obstructs it. Reachable by
-    // `anon`, because sign-in happens before there is a session, so `anon` is
-    // who is asking.
+    // There were two, and both are gone rather than grandfathered.
     //
-    // What bounds it is its own shape: it takes a SHA-256 and a boolean,
-    // returns two integers, reads and writes exactly one row keyed by that
-    // hash, and raises on anything that is not a hash. There is no argument
-    // through which it can reach another table or another account's row.
+    // `disconnect_project` had to be `SECURITY DEFINER` (its caller holds no
+    // `DELETE ON public.projects`) and had to be reachable by `authenticated`,
+    // because a founder clicking Disconnect was its only caller. It was safe —
+    // it took no owner argument, so its reach was exactly the `delete own
+    // projects` RLS policy it replaced — and `20260827020000` dropped it once
+    // Disconnect stopped being destructive.
     //
-    // `disconnect_project` used to sit here too: it had to be
-    // `SECURITY DEFINER` (its caller holds no `DELETE ON public.projects`) and
-    // had to be reachable by `authenticated`, because a founder clicking
-    // Disconnect was its only caller. It was safe — it took no owner argument,
-    // so its reach was exactly the `delete own projects` RLS policy it
-    // replaced — but it was still an exception, and `20260827020000` dropped
-    // the function once Disconnect stopped being destructive.
-    expect(reachable).toBe("record_auth_attempt");
+    // `record_auth_attempt` (VB-010) was the argued-for one, and the argument
+    // was wrong. It had to be `SECURITY DEFINER`, because the sign-in throttle
+    // must be writable by a caller who cannot read it — and it was reachable
+    // by `anon`, because sign-in precedes a session. What that reasoning missed
+    // is that `anon` is not "the person signing in": it is anyone holding the
+    // publishable key, which is published. Eight POSTs carrying a hash of a
+    // known address held that account out of sign-in for fifteen minutes at a
+    // time, repeatably, and nothing about the function's own shape could stop
+    // it — the bound was on what an argument could reach, not on who could
+    // pass one. `20260827233010` revoked the grant and the only caller is now a
+    // service-role client (VB-053, ADR 0060).
+    //
+    // Which leaves the honest form of this assertion: none.
+    expect(reachable).toBe("<none>");
   });
 
   it("pins search_path on every SECURITY DEFINER function in public", () => {
