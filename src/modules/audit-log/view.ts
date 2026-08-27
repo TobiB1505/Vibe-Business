@@ -190,6 +190,7 @@ const LABELS: Record<AuditEventType, string> = {
   // on `project_id`, which never matches a NULL row. Labelled anyway, plainly,
   // because the `Record<AuditEventType, string>` type requires it and a future
   // account-level activity surface should not find these unlabelled.
+  "credit_hold.orphaned": "Credits stayed reserved after the work finished",
   "credit_drift.detected": "Balance reconciliation found a discrepancy",
   "credit_drift.repaired": "Balance reconciliation corrected automatically",
   "credit_drift.repair_failed": "Balance reconciliation could not complete",
@@ -230,6 +231,7 @@ const LABELS: Record<AuditEventType, string> = {
 const EXPLICIT_TONES: Partial<Record<AuditEventType, ActivityTone>> = {
   // `.repair_failed` does not end in `.failed`, so the suffix heuristic below
   // would miss it and default to "neutral" — stated explicitly instead.
+  "credit_hold.orphaned": "problem",
   "credit_drift.repair_failed": "problem",
   "credit_drift.repaired": "success",
   // Not a failure of Vibe's, and not a success either: the product did not show

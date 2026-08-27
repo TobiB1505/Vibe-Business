@@ -229,6 +229,29 @@ export async function getProjectOperationRunById(
   return operation as ProjectOperationRun;
 }
 
+/**
+ * The operations behind a set of reservations, in one query (VB-020).
+ *
+ * Reads on whatever client it is handed, so a customer's own page gets its own
+ * rows and nothing else — RLS answers the ownership question, not this
+ * function. Empty in, empty out: PostgREST would otherwise be asked for
+ * `id=in.()`.
+ */
+export async function listOperationRunsByIds(
+  supabase: SupabaseClient,
+  operationIds: readonly string[],
+): Promise<StoredOperationRun[]> {
+  if (operationIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from("operation_runs")
+    .select(OPERATION_COLUMNS)
+    .in("id", operationIds);
+
+  if (error) throw error;
+  return ((data ?? []) as OperationRow[]).map(mapRow);
+}
+
 export type CreateOperationResult =
   | { ok: true; operation: StoredOperationRun }
   | { ok: false; error: "already_active" }
