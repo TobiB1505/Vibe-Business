@@ -142,6 +142,9 @@ An agent run settles at the reserved fixed price when the prepared change exists
 **No operator can correct a charge.**
 `refundCharge` is implemented, tested through its decision function, constrained by a database CHECK — and has zero callers. So does the adjustment kind. There is no admin surface of any kind.
 
+**Project deletion is dogfooded for the empty case only.**
+[VB-001](audits/2026-08-26-launch-readiness/README.md) shipped in slices — M1's database authority ([ADR 0056](decisions/0056-lifecycle-erasure-and-retention.md) §5), M1a's entry-privilege closure, the lifecycle orchestrator, M5's Disconnect/Delete split — and every slice's own claims are proven against real PostgreSQL (`supabase/tests/*.migration.ts`, 71 assertions) or covered by unit tests. What none of that reaches is a real browser session against a real Supabase project: the E2E suite's Supabase values point at a project that does not exist by design, so the signed-in flows are structurally outside it (rule 69's fourth question, not its third). One real deletion has been run through the deployed UI — `project.deleted` in the production audit log, 2026-08-27 — for a project holding only a repository connection, no audit, no plan, no execution spec, no screenshot. That confirms the control, the gate and the redirect wire up correctly; it does not confirm the cascade that M1's own migration tests already prove in isolation actually fires end-to-end through the orchestrator for a project with real history, and it exercises none of Disconnect, Reconnect, or a live refusal (`active_operation`, `agent_running`, `merge_in_progress`, `billing_not_finalized`, `storage_cleanup_failed`). ADR 0056 §17's Validated bar for VB-001 names a project with the full chain — spec, merge, approval — deleted end to end; that has not been run. **VB-001 stays Implemented.**
+
 ---
 
 ## Dropped
