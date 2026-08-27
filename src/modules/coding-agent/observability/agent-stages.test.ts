@@ -399,6 +399,12 @@ describe("a run waiting on the founder", () => {
     const caption = agentCoreCaption(paused());
     expect(caption).toMatch(/ask/i);
     expect(caption).toMatch(/answer/i);
+    /*
+     * And does not promise a resume. A paused attempt is never continued —
+     * resolution cancels it and a fresh attempt is admitted with its own hold,
+     * so "answering starts the run again" was a false promise.
+     */
+    expect(caption).not.toMatch(/again|resume|continue/i);
     // And still promises no duration.
     expect(caption).not.toMatch(/almost|soon|minute|hour|%/i);
   });

@@ -1,5 +1,5 @@
 import { WorkspaceSection, projectSectionHref } from "@/components/layout/project-shell";
-import { EmptyState } from "@/components/ui/states";
+import { EmptyState, Notice } from "@/components/ui/states";
 import {
   PLAN_OPPORTUNITY_PARAM,
   sanitizeRequestedOpportunityId,
@@ -28,6 +28,8 @@ import { AgentActivity } from "./agent-activity";
 import { AgentValidationChecks } from "./agent-validation-checks";
 import { AgentReadyFacts } from "./agent-start-cta";
 import { AgentQuestionPanel } from "./agent-question-panel";
+import { FounderInputCard } from "@/components/founder-input/founder-input-card";
+import { resolveAgentInterruptAction } from "./interrupt-actions";
 import { AgentFileActivity } from "./agent-file-activity";
 import { AgentMergeStage } from "./agent-merge-stage";
 import { AgentPreviewStage } from "./agent-preview-stage";
@@ -199,15 +201,28 @@ export default async function ProjectAgentPage({
           where the founder is the blocker.
         */}
         {workspace.interrupt !== null && (
-          /*
-            Rendered without an answer control, deliberately.
-            No component in this product can answer an execution interrupt yet
-            — `answerInterrupt` exists in the store and nothing in the UI calls
-            it. Drawing an input that cannot submit would be worse than showing
-            the question and saying where the answer goes, so the panel carries
-            the question and the slot stays empty until the action exists.
-          */
-          <AgentQuestionPanel interrupt={workspace.interrupt} />
+          <AgentQuestionPanel interrupt={workspace.interrupt}>
+            {workspace.founderInput !== null ? (
+              <FounderInputCard
+                projectId={project.id}
+                request={workspace.founderInput}
+                context="runtime_execution"
+                resolveAction={resolveAgentInterruptAction}
+                presentation="workspace"
+              />
+            ) : (
+              /*
+                An older execution, from before Founder Input Resolution. Its
+                question is readable and cannot be answered under the current
+                contract, and saying that is better than an input that resolves
+                nothing.
+              */
+              <Notice tone="waiting" label="answer required">
+                This run stopped before the current question format existed, so it cannot be
+                answered here. Starting a fresh attempt is the way forward.
+              </Notice>
+            )}
+          </AgentQuestionPanel>
         )}
 
         {workspace.timeline !== null ? (

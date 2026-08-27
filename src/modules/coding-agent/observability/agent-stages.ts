@@ -346,7 +346,14 @@ const CORE_CAPTIONS: Record<AgentStage, string> = {
 
 export function agentCoreCaption(steps: readonly AgentStageStep[]): string {
   if (steps.some((step) => step.state === "paused")) {
-    return "Vibe stopped to ask you something. Answering it starts the run again.";
+    /*
+     * Not "answering starts it again", which is what this said and is false.
+     * `finalizeAgentRun` is explicit: a paused attempt must neither charge nor
+     * invent a resume — resolution cancels this run, and a fresh attempt goes
+     * through admission with its own hold. Saying otherwise promised a
+     * continuation the architecture refuses to make.
+     */
+    return "Vibe stopped to ask you something. Your answer is what unblocks the work.";
   }
 
   const active = steps.find((step) => step.state === "active");

@@ -22,6 +22,8 @@ import {
 import { readAgentRunForLiveView } from "./observability/run-view";
 import { listExecutionEvents } from "./observability/store";
 import { findOpenInterruptForRun } from "./store";
+import { getFounderInputRequestForInterrupt } from "@/modules/founder-input/store";
+import type { FounderInputRequest } from "@/modules/founder-input/schema";
 import { buildExecutionTimeline, type TimelineStep } from "./observability/timeline";
 import { getAgentExecutionStatus } from "./service";
 
@@ -82,6 +84,15 @@ export type AgentWorkspaceView = {
    * class of lie as a stage that keeps ticking after a run has stopped.
    */
   interrupt: StoredExecutionInterrupt | null;
+  /**
+   * The answerable form of that question, when one exists.
+   *
+   * Founder Input Resolution is the canonical path — `answerExecutionInterrupt`
+   * in the store predates it and has no caller. Null when the interrupt has no
+   * request behind it, which is an older execution the current contract cannot
+   * answer.
+   */
+  founderInput: FounderInputRequest | null;
 };
 
 export async function readAgentWorkspace(
@@ -119,6 +130,7 @@ export async function readAgentWorkspace(
       previewChanges: [],
       mergeSummary: { filesChanged: 0 },
       interrupt: null,
+      founderInput: null,
     };
   };
 
@@ -198,6 +210,17 @@ export async function readAgentWorkspace(
   });
 
   /*
+   * Only asked for once a question exists, so an ordinary run pays nothing for
+   * a lookup that can only return null.
+   */
+  const founderInput = interrupt
+    ? await getFounderInputRequestForInterrupt(supabase, {
+        projectId,
+        executionInterruptId: interrupt.id,
+      })
+    : null;
+
+  /*
    * The stage a body is drawn for. `active` rather than "the furthest done",
    * because a paused or failed run must not be shown the body of a stage it
    * never reached.
@@ -227,6 +250,7 @@ export async function readAgentWorkspace(
       build: buildVerdict(change),
     },
     interrupt,
+    founderInput,
   };
 }
 
