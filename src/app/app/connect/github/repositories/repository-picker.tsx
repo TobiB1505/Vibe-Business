@@ -11,10 +11,13 @@ export function RepositoryPicker({
   repositories,
   installationRowId,
   canSelect,
+  projectId = null,
 }: {
   repositories: PickableRepository[];
   installationRowId: string;
   canSelect: boolean;
+  /** Present on a reconnect: attach to this project instead of creating one. */
+  projectId?: string | null;
 }) {
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -27,6 +30,7 @@ export function RepositoryPicker({
   return (
     <form action={formAction} className="flex flex-col gap-4">
       <input type="hidden" name="installationRowId" value={installationRowId} />
+      {projectId && <input type="hidden" name="projectId" value={projectId} />}
 
       {repositories.length > 5 && (
         <input

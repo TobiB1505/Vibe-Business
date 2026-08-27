@@ -10,7 +10,7 @@ import {
 } from "./actions";
 
 /**
- * Disconnecting a project (UI-6 §3).
+ * Disconnecting a repository (UI-6 §3, ADR 0056 §1).
  *
  * ## Why this stopped being `window.confirm`
  *
@@ -37,8 +37,13 @@ import {
  * that can change the outcome.
  */
 const FAILURE_MESSAGES: Record<DisconnectProjectFailure, string> = {
-  project_not_found: "This project could not be found. It may already have been disconnected.",
-  deletion_failed: "This project could not be disconnected, and is still connected. Try again in a moment.",
+  project_not_found: "There is no repository connected to this project.",
+  active_operation: "Vibe is still working on this project. Disconnect once it has finished.",
+  agent_running: "An agent is still working in this project. Disconnect once the run has finished.",
+  merge_in_progress: "A change is being merged right now. Disconnect once it has finished.",
+  billing_not_finalized:
+    "A Credit hold for this project has not settled yet. Disconnect again in a moment.",
+  detach_failed: "The repository could not be disconnected, and is still connected. Try again in a moment.",
 };
 
 const initialState: DisconnectProjectActionState = null;
@@ -54,9 +59,9 @@ export function DisconnectButton({ projectId }: { projectId: string }) {
     return (
       <form action={formAction} className="w-full">
         <ConfirmPanel
-          title="Disconnect this project?"
+          title="Disconnect this repository?"
           tone="caution"
-          confirmLabel="Disconnect project"
+          confirmLabel="Disconnect repository"
           confirmType="submit"
           // Disables both buttons and shows the busy state, so a second click
           // cannot submit a second delete while the first is in flight.
@@ -64,7 +69,11 @@ export function DisconnectButton({ projectId }: { projectId: string }) {
           onCancel={() => setConfirming(false)}
         >
           <>
-            <p>Vibe Business will stop tracking this repository.</p>
+            <p>Vibe Business will stop reading from and writing to this repository.</p>
+            <p>
+              The project keeps everything it has learned — its audits, plans and history — and you
+              can connect a repository to it again later.
+            </p>
             <p>This does not uninstall the GitHub App and does not change your repository.</p>
           </>
         </ConfirmPanel>
@@ -89,7 +98,7 @@ export function DisconnectButton({ projectId }: { projectId: string }) {
         className="text-sm"
         onClick={() => setConfirming(true)}
       >
-        Disconnect project
+        Disconnect repository
       </TextAction>
       {failure && (
         <p role="alert" className="text-sm text-amber">
