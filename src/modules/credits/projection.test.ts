@@ -11,6 +11,7 @@ import {
   type SandboxUsageRow,
 } from "./projection";
 import { rateUsage } from "./rating";
+import { NON_CHARGEABLE_SKUS } from "./schema";
 
 /**
  * Usage projection (BILLING CORE-1 §16, §18, §41, §42, §52, §69).
@@ -127,6 +128,79 @@ describe("AI usage projection", () => {
     expect(projectedCost).toBe(written.totalNanoUsd);
     // The §69 comparison `reconciliation.ts` actually makes.
     expect(projectedCost).toBe(storedCostToNanoUsd(row.provider_cost_usd));
+  });
+
+  /**
+   * The metering half, which is what the cost test above deliberately does not
+   * cover: the same cached turn must now also *count* the cache tokens, or a
+   * rate card has no quantity to rate.
+   */
+  it("meters cache read and cache write as their own SKUs", () => {
+    const events = projectAiUsage(
+      aiRow({
+        thinking_tokens: null,
+        cache_read_input_tokens: 40_000,
+        cache_creation_input_tokens: 2_000,
+      }),
+    );
+
+    expect(events.map((event) => event.sku)).toEqual([
+      "anthropic_input_tokens",
+      "anthropic_output_tokens",
+      "anthropic_cache_read_tokens",
+      "anthropic_cache_write_tokens",
+    ]);
+
+    const byS = new Map(events.map((event) => [event.sku, event]));
+    expect(byS.get("anthropic_cache_read_tokens")?.quantity).toBe(40_000);
+    expect(byS.get("anthropic_cache_write_tokens")?.quantity).toBe(2_000);
+  });
+
+  /**
+   * The invariant the cost test asserts, restated against the rows that were
+   * just added: metering a unit must not bill for it twice. The cache price is
+   * already inside the single figure on the input row.
+   */
+  it("attaches no second cost to the cache rows", () => {
+    const events = projectAiUsage(
+      aiRow({ cache_read_input_tokens: 40_000, cache_creation_input_tokens: 2_000 }),
+    );
+
+    const cache = events.filter((event) => event.sku.startsWith("anthropic_cache_"));
+    expect(cache).toHaveLength(2);
+    for (const event of cache) {
+      expect(event.rawCostNanoUsd).toBeNull();
+      expect(event.costStatus).toBe("not_billable");
+    }
+
+    // Exactly one row still carries the whole call's cost.
+    expect(events.filter((event) => event.rawCostNanoUsd !== null)).toHaveLength(1);
+  });
+
+  /**
+   * `not_billable` is a statement about provider cost, never about whether a
+   * customer may be charged. Thinking tokens are informational because the
+   * provider already counted them inside output; cache is billed separately at
+   * 0.1x and 1.25x input, so a rate card must be able to reach it.
+   */
+  it("keeps the cache SKUs rateable, unlike thinking tokens", () => {
+    expect(NON_CHARGEABLE_SKUS).toContain("anthropic_thinking_tokens");
+    expect(NON_CHARGEABLE_SKUS).not.toContain("anthropic_cache_read_tokens");
+    expect(NON_CHARGEABLE_SKUS).not.toContain("anthropic_cache_write_tokens");
+  });
+
+  /**
+   * A cache breakpoint that was never used reports zero, and every operation
+   * but an agent turn has none. A zero-quantity row on every AI call would be
+   * noise, not a measurement.
+   */
+  it("emits nothing for a call that used no cache", () => {
+    for (const value of [null, 0] as const) {
+      const events = projectAiUsage(
+        aiRow({ cache_read_input_tokens: value, cache_creation_input_tokens: value }),
+      );
+      expect(events.some((event) => event.sku.startsWith("anthropic_cache_"))).toBe(false);
+    }
   });
 
   /**
