@@ -335,6 +335,18 @@
   }
 }
 
+/* The guidance field's cursor. */
+@keyframes vibe-caret {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  55%,
+  100% {
+    opacity: 0;
+  }
+}
+
 @keyframes vibe-spin-ring {
   to {
     transform: rotate(360deg);

@@ -82,10 +82,55 @@ const SATELLITES = [
   },
 ] as const;
 
+/**
+ * The two sizes the design uses, and their tempos.
+ *
+ * `hero` is the ready state: large, and turning slowly enough to read as
+ * waiting. `compact` is the working state: smaller, faster, and carrying two
+ * orbiting dots. The difference in speed is a difference in *state*, not in
+ * progress — a compact orb turns at the same rate at minute one and minute
+ * forty.
+ */
+const SIZES = {
+  hero: {
+    frame: "h-[340px] w-[400px]",
+    outer: "h-[270px] w-[400px]",
+    dashed: "size-[330px]",
+    breathe: "size-[262px]",
+    inner: "size-[186px]",
+    core: "size-[158px]",
+    mark: 66,
+    spin: "46s",
+    spinBack: "34s",
+    breatheDuration: "6s",
+    coreDuration: "5.6s",
+    satellites: true,
+    dots: false,
+  },
+  compact: {
+    frame: "h-[280px] w-[300px]",
+    outer: "h-[196px] w-[300px]",
+    dashed: "size-[250px]",
+    breathe: "size-[200px]",
+    inner: "size-[200px]",
+    core: "size-[132px]",
+    mark: 56,
+    spin: "14s",
+    spinBack: "9s",
+    breatheDuration: "3.2s",
+    coreDuration: "2.8s",
+    satellites: false,
+    dots: true,
+  },
+} as const;
+
+export type AgentCoreSize = keyof typeof SIZES;
+
 export function AgentCore({
   state,
   caption,
   headline,
+  size = "hero",
   className,
 }: {
   state: AgentCoreState;
@@ -93,8 +138,10 @@ export function AgentCore({
   caption: string;
   /** The bolder line above it, when the caller has one worth saying. */
   headline?: string;
+  size?: AgentCoreSize;
   className?: string;
 }) {
+  const s = SIZES[size];
   const reduceMotion = useReducedMotion();
   const visible = useDocumentVisible();
   const animate = !reduceMotion && visible;
@@ -119,59 +166,88 @@ export function AgentCore({
       data-testid="agent-core"
       data-state={state}
     >
-      <div className="relative flex h-[340px] w-[400px] max-w-full items-center justify-center">
+      <div className={cn("relative flex max-w-full items-center justify-center", s.frame)}>
         {/* Outermost: a wide ellipse, turning slowly. */}
         <span
           aria-hidden="true"
           className={cn(
-            "absolute h-[270px] w-[400px] max-w-full rounded-[50%] border",
+            "absolute max-w-full rounded-[50%] border",
+            s.outer,
             ring("border-mint/15", "border-amber/15", "border-line-2/60"),
           )}
-          style={anim("vibe-orb-spin 46s linear infinite")}
+          style={anim(`vibe-orb-spin ${s.spin} linear infinite`)}
         />
         {/* Counter-turning, dashed — the two directions read as depth. */}
         <span
           aria-hidden="true"
           className={cn(
-            "absolute size-[330px] max-w-full rounded-full border border-dashed",
+            "absolute max-w-full rounded-full border border-dashed",
+            s.dashed,
             ring("border-mint/15", "border-amber/15", "border-line-2/50"),
           )}
-          style={anim("vibe-orb-spin-back 34s linear infinite")}
+          style={anim(`vibe-orb-spin-back ${s.spinBack} linear infinite`)}
         />
         <span
           aria-hidden="true"
           className={cn(
-            "absolute size-[262px] rounded-full border",
+            "absolute rounded-full border",
+            s.breathe,
             ring("border-mint/25", "border-amber/25", "border-line-2/60"),
           )}
-          style={anim("vibe-orb-breathe 6s var(--ease-vibe) infinite")}
+          style={anim(`vibe-orb-breathe ${s.breatheDuration} var(--ease-vibe) infinite`)}
         />
         <span
           aria-hidden="true"
           className={cn(
-            "absolute size-[186px] rounded-full border-[1.5px]",
+            "absolute rounded-full border-[1.5px]",
+            s.inner,
             ring("border-mint/45", "border-amber/50", "border-line-3"),
           )}
         />
 
+        {/*
+          Two dots on their own orbits, at speeds unrelated to the ring they
+          sit on. The design's way of saying "something is moving in there"
+          without drawing a rate anybody could read as a fraction.
+        */}
+        {s.dots && alive && (
+          <>
+            <span
+              aria-hidden="true"
+              className={cn("absolute max-w-full rounded-[50%]", s.outer)}
+              style={{ animation: "vibe-orb-spin 8s linear infinite" }}
+            >
+              <span className="bg-mint shadow-dot-mint absolute -top-[3px] left-1/2 size-[7px] rounded-full" />
+            </span>
+            <span
+              aria-hidden="true"
+              className={cn("absolute max-w-full rounded-full", s.dashed)}
+              style={{ animation: "vibe-orb-spin-back 11s linear infinite" }}
+            >
+              <span className="border-mint bg-app absolute -top-[3px] left-1/2 size-1.5 rounded-full border" />
+            </span>
+          </>
+        )}
+
         <span
-          className="relative flex size-[158px] items-center justify-center rounded-full"
+          className={cn("relative flex items-center justify-center rounded-full", s.core)}
           style={{
             background: `radial-gradient(circle at 50% 42%, color-mix(in oklab, var(--color-${waiting ? "amber" : "mint"}) ${lit ? 16 : 6}%, transparent), color-mix(in oklab, var(--color-app) 96%, transparent) 66%)`,
-            ...anim("vibe-orb-core 5.6s var(--ease-vibe) infinite"),
+            ...anim(`vibe-orb-core ${s.coreDuration} var(--ease-vibe) infinite`),
           }}
         >
           {/* Wrapped rather than widening the shared brand component's API
               for one surface. */}
           <span
             className={cn("transition-opacity duration-700", lit ? "opacity-100" : "opacity-45")}
-            style={anim("vibe-mark-float 5.6s var(--ease-vibe) infinite")}
+            style={anim(`vibe-mark-float ${s.coreDuration} var(--ease-vibe) infinite`)}
           >
-            <VibeMark size={66} />
+            <VibeMark size={s.mark} />
           </span>
         </span>
 
-        {SATELLITES.map((satellite) => (
+        {s.satellites &&
+          SATELLITES.map((satellite) => (
           <span
             key={satellite.key}
             aria-hidden="true"
@@ -193,9 +269,9 @@ export function AgentCore({
               className="text-fg-prose"
             >
               {satellite.path}
-            </svg>
-          </span>
-        ))}
+              </svg>
+            </span>
+          ))}
       </div>
 
       {headline !== undefined && (

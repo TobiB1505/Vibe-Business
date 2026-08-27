@@ -38,13 +38,38 @@ const PHASES = [
   "finished",
 ] as const;
 
+/** The real labels, so a screenshot shows what production shows. */
+const PHASE_LABELS: Record<(typeof PHASES)[number], Record<"pending" | "active" | "done", string>> = {
+  preparing: {
+    pending: "Prepare the project",
+    active: "Preparing your project",
+    done: "Project prepared",
+  },
+  working: { pending: "Make the change", active: "Making the change", done: "Change made" },
+  reviewing_change: {
+    pending: "Check the change",
+    active: "Checking the change",
+    done: "Change checked",
+  },
+  preparing_branch: {
+    pending: "Prepare your change",
+    active: "Preparing your change",
+    done: "Change prepared",
+  },
+  validating: {
+    pending: "Independent validation",
+    active: "Running independent validation",
+    done: "Validation passed",
+  },
+  finished: { pending: "Ready for review", active: "Finishing up", done: "Ready for review" },
+};
+
 function timeline(states: Partial<Record<(typeof PHASES)[number], TimelineStep["state"]>>): TimelineStep[] {
-  return PHASES.map((phase) => ({
-    phase,
-    label: phase,
-    state: states[phase] ?? "pending",
-    detail: null,
-  }));
+  return PHASES.map((phase) => {
+    const state = states[phase] ?? "pending";
+    const tense = state === "done" || state === "active" ? state : "pending";
+    return { phase, label: PHASE_LABELS[phase][tense], state, detail: null };
+  });
 }
 
 function progress(stage: ChangeStage) {
@@ -57,11 +82,42 @@ function progress(stage: ChangeStage) {
   };
 }
 
-type Fixture = { steps: AgentStageStep[]; core: AgentCoreState; caption: string };
+import type { AgentTask } from "@/app/app/projects/[projectId]/agent/agent-task-panel";
+
+/** The Move the reference set works on, in the shape the panel takes. */
+const TASK: AgentTask = {
+  title: "Make your pricing visible",
+  problem: "Turn your existing subscription model into something customers can see and buy.",
+  whyNow: "This is your biggest constraint right now and improves multiple areas of your business.",
+  impact: "high",
+  effort: "medium",
+  lens: "revenue_economics",
+  steps: [
+    "Add a clear pricing section to your website",
+    "Connect your existing checkout flow",
+    "Make the paid path obvious for visitors",
+    "Ensure everything works for signed-in users",
+  ],
+};
+
+type Fixture = {
+  steps: AgentStageStep[];
+  core: AgentCoreState;
+  caption: string;
+  /** The run's own phase rows, for the live-activity panel. */
+  activity: TimelineStep[];
+  task: AgentTask | null;
+};
 
 function build(input: Parameters<typeof agentStageSteps>[0]): Fixture {
   const steps = agentStageSteps(input);
-  return { steps, core: agentCoreState(steps), caption: agentCoreCaption(steps) };
+  return {
+    steps,
+    core: agentCoreState(steps),
+    caption: agentCoreCaption(steps),
+    activity: [...(input.timeline ?? [])],
+    task: input.timeline === null ? null : TASK,
+  };
 }
 
 const running = (status: OperationStatus = "running") => ({

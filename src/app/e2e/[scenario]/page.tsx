@@ -39,6 +39,9 @@ import {
   isE2eAgentStageScenario,
 } from "../agent-stage-scenarios";
 import { AgentWorkspacePanel } from "@/app/app/projects/[projectId]/agent/agent-workspace-panel";
+import { AgentActivity } from "@/app/app/projects/[projectId]/agent/agent-activity";
+import { AgentTaskPanel } from "@/app/app/projects/[projectId]/agent/agent-task-panel";
+import { AgentAssuranceBar } from "@/app/app/projects/[projectId]/agent/agent-assurance-bar";
 import { E2E_NEEDS_USER_SCENARIOS, isE2eNeedsUserScenario } from "../needs-user-scenarios";
 import {
   E2E_ACCOUNT_SCENARIOS,
@@ -557,11 +560,23 @@ export default async function E2eScenarioPage({
    * a live view full of fixture events would only make that harder to see.
    */
   if (isE2eAgentStageScenario(scenario)) {
-    const { steps, core, caption } = E2E_AGENT_STAGE_SCENARIOS[scenario]();
+    const { steps, core, caption, activity, task } = E2E_AGENT_STAGE_SCENARIOS[scenario]();
     return (
-      <main className="mx-auto max-w-[90rem] p-8">
+      <main className="mx-auto flex max-w-[90rem] flex-col gap-6 p-8">
         {label}
-        <AgentWorkspacePanel stages={steps} core={core} caption={caption} />
+        <AgentWorkspacePanel
+          stages={steps}
+          core={core}
+          caption={caption}
+          aside={
+            activity.length > 0 ? (
+              <AgentActivity steps={activity} live={core === "working"} />
+            ) : undefined
+          }
+        >
+          {task !== null && <AgentTaskPanel task={task} compact={activity.length > 0} />}
+        </AgentWorkspacePanel>
+        <AgentAssuranceBar />
       </main>
     );
   }
