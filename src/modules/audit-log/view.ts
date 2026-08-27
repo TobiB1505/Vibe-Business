@@ -48,7 +48,10 @@ const LABELS: Record<AuditEventType, string> = {
   "github.access.failed": "GitHub access failed",
   "repository.selected": "Repository selected",
   "project.created": "Project created",
-  "project.disconnected": "Project disconnected",
+  "project.disconnected": "Repository disconnected",
+  "project.repository_attached": "Repository connected",
+  "project.deleted": "Project deleted",
+  "project.delete_refused": "Project could not be deleted",
   "project.deletion_failed": "Project could not be disconnected",
   "project.production_url.updated": "Production URL updated",
   // Historical: nothing emits this since CORE-2, but stored rows still do.

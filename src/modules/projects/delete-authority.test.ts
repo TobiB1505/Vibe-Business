@@ -34,11 +34,16 @@ import { describe, expect, it } from "vitest";
  *
  * The two that own it, both verifying ownership in their own body:
  *
- *   * `disconnect_project(uuid, uuid)`      — temporary; sets no lifecycle
- *                                             marker, so execution history
- *                                             still refuses the cascade.
- *                                             Removed by M5.
- *   * `erase_project_lifecycle(uuid, uuid)` — M1; service-role only.
+ *   * `erase_project_lifecycle(uuid, uuid)` — M1; service-role only, reached
+ *                                             through the lifecycle
+ *                                             orchestrator, which gates on live
+ *                                             work first.
+ *
+ * M5 retired the third — `disconnect_project()` — by making Disconnect
+ * non-destructive. The SQL function is still deployed and now has no caller;
+ * dropping it is a follow-up migration, because a migration that removes a
+ * function the running build still calls is the skew M1a's rollout exists to
+ * avoid.
  */
 
 const SRC = join(process.cwd(), "src");
@@ -80,7 +85,7 @@ describe("no application code deletes a project directly", () => {
     expect(
       offenders,
       "DELETE on public.projects is revoked from every Data API role (VB-001 M1a, Migration B). " +
-        "Route the deletion through disconnect_project() or erase_project_lifecycle() — " +
+        "Route the deletion through the lifecycle orchestrator — " +
         "never by re-granting the privilege",
     ).toEqual([]);
   });
@@ -92,9 +97,12 @@ describe("no application code deletes a project directly", () => {
    */
   it("routes both project write paths through their narrow functions", () => {
     const connect = readFileSync(join(SRC, "modules", "projects", "connect.ts"), "utf8");
-    const disconnect = readFileSync(join(SRC, "modules", "projects", "disconnect.ts"), "utf8");
+    const detach = readFileSync(
+      join(SRC, "modules", "operations", "project-lifecycle", "detach.ts"),
+      "utf8",
+    );
 
     expect(code(connect)).toContain('rpc("create_project_with_repository"');
-    expect(code(disconnect)).toContain('rpc("disconnect_project"');
+    expect(code(detach)).toContain('rpc("detach_repository"');
   });
 });

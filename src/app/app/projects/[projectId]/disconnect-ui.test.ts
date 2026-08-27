@@ -32,8 +32,16 @@ describe("the failure is shown rather than swallowed", () => {
     // A `Record<DisconnectProjectFailure, string>` makes a new failure code
     // without copy a type error rather than a blank line in production.
     expect(src).toContain("Record<DisconnectProjectFailure, string>");
-    expect(src).toMatch(/project_not_found:\s*"[^"]+"/);
-    expect(src).toMatch(/deletion_failed:\s*"[^"]+"/);
+    for (const code of [
+      "project_not_found",
+      "active_operation",
+      "agent_running",
+      "merge_in_progress",
+      "billing_not_finalized",
+      "detach_failed",
+    ]) {
+      expect(src).toMatch(new RegExp(`${code}:\\s*\n?\\s*"[^"]+"`));
+    }
   });
 
   it("tells the person the project is still connected when the delete refused", () => {

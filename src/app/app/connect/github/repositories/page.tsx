@@ -26,10 +26,13 @@ import { OnboardingShell } from "../../../onboarding/onboarding-shell";
 export default async function ConnectGithubRepositoriesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ installation?: string }>;
+  searchParams: Promise<{ installation?: string; projectId?: string }>;
 }) {
   const session = await requireSession();
-  const { installation: installationRowId } = await searchParams;
+  // `projectId` marks a reconnect: the picker attaches to that existing project
+  // rather than creating a new one (VB-001 M5). It is untrusted here and is
+  // verified by the action, which re-establishes ownership server-side.
+  const { installation: installationRowId, projectId } = await searchParams;
 
   if (!installationRowId) {
     notFound();
@@ -113,6 +116,7 @@ export default async function ConnectGithubRepositoriesPage({
             repositories={repositories}
             installationRowId={installation.id}
             canSelect={canSelect}
+            projectId={projectId ?? null}
           />
         )}
 

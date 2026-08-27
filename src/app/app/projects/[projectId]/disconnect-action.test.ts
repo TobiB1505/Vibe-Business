@@ -32,8 +32,12 @@ vi.mock("@/lib/supabase/server", () => ({ createClient: async () => ({ __fake: "
 vi.mock("@/modules/audit-log/events", () => ({
   recordAuditEvent: (...args: unknown[]) => recordAuditEventMock(...args),
 }));
-vi.mock("@/modules/projects/disconnect", () => ({
-  disconnectProject: (...args: unknown[]) => disconnectProjectMock(...args),
+vi.mock("@/modules/operations/project-lifecycle/detach", () => ({
+  detachRepository: (...args: unknown[]) => disconnectProjectMock(...args),
+}));
+
+vi.mock("@/modules/operations/project-lifecycle/service", () => ({
+  deleteProjectLifecycle: vi.fn(),
 }));
 
 const { disconnectProjectAction } = await import("./actions");
@@ -72,9 +76,9 @@ beforeEach(() => {
 describe("success", () => {
   beforeEach(() => disconnectProjectMock.mockResolvedValue({ ok: true }));
 
-  it("redirects to the project list only after a successful delete", async () => {
+  it("stays on the project, and only after the disconnect succeeded", async () => {
     await expect(invoke()).rejects.toThrow(RedirectSignal);
-    expect(redirectMock).toHaveBeenCalledWith("/app");
+    expect(redirectMock).toHaveBeenCalledWith(`/app/projects/${PROJECT}/settings`);
   });
 
   it("records the disconnect audit event", async () => {
@@ -100,10 +104,10 @@ describe("success", () => {
     await expect(invoke()).rejects.toThrow(RedirectSignal);
 
     expect(requireSessionMock).toHaveBeenCalled();
-    expect(disconnectProjectMock).toHaveBeenCalledWith(expect.anything(), { projectId: PROJECT });
+    expect(disconnectProjectMock).toHaveBeenCalledWith({ projectId: PROJECT, userId: SERVER_USER });
 
-    const [, params] = disconnectProjectMock.mock.calls[0] as [unknown, Record<string, unknown>];
-    expect(Object.keys(params)).toEqual(["projectId"]);
+    const [params] = disconnectProjectMock.mock.calls[0] as [Record<string, unknown>];
+    expect(params.userId).toBe(SERVER_USER);
   });
 
   it("still attributes the audit event to the session user", async () => {
@@ -116,7 +120,7 @@ describe("success", () => {
 });
 
 describe("failure: not_found", () => {
-  beforeEach(() => disconnectProjectMock.mockResolvedValue({ ok: false, error: "not_found" }));
+  beforeEach(() => disconnectProjectMock.mockResolvedValue({ ok: false, reason: "project_not_found" }));
 
   it("does not redirect", async () => {
     await expect(invoke()).resolves.toBeDefined();
@@ -144,7 +148,7 @@ describe("failure: not_found", () => {
 });
 
 describe("failure: internal database failure", () => {
-  beforeEach(() => disconnectProjectMock.mockResolvedValue({ ok: false, error: "unknown" }));
+  beforeEach(() => disconnectProjectMock.mockResolvedValue({ ok: false, reason: "detach_failed" }));
 
   it("does not redirect", async () => {
     await expect(invoke()).resolves.toBeDefined();
@@ -152,12 +156,12 @@ describe("failure: internal database failure", () => {
   });
 
   it("returns the generic failure code", async () => {
-    await expect(invoke()).resolves.toEqual({ ok: false, error: "deletion_failed" });
+    await expect(invoke()).resolves.toEqual({ ok: false, error: "detach_failed" });
   });
 
   it("returns nothing but the closed code", async () => {
     // No SQLSTATE, table, constraint or trigger name of any shape.
-    expect(JSON.stringify(await invoke())).toBe('{"ok":false,"error":"deletion_failed"}');
+    expect(JSON.stringify(await invoke())).toBe('{"ok":false,"error":"detach_failed"}');
   });
 
   it("records a failure audit event carrying only bounded identifiers", async () => {
@@ -165,7 +169,7 @@ describe("failure: internal database failure", () => {
     expect(recordAuditEventMock).toHaveBeenCalledWith(expect.anything(), {
       userId: SERVER_USER,
       eventType: "project.deletion_failed",
-      metadata: { projectId: PROJECT, reason: "deletion_failed" },
+      metadata: { projectId: PROJECT, reason: "detach_failed" },
     });
   });
 
@@ -177,12 +181,14 @@ describe("failure: internal database failure", () => {
 
 describe("failure: a hostile message reintroduced into the store result", () => {
   beforeEach(() =>
-    // Past the type on purpose. The store's union has no `message` arm any
-    // more; this pins that the action's own mapping — not merely the store's
-    // shape — is what keeps schema text away from the browser.
+    // Past the type on purpose, twice over: the service's union has no
+    // `message` arm and no `unknown` reason. This pins that the action's own
+    // mapping — not merely the service's shape — is what keeps schema text away
+    // from the browser, and that an unrecognised reason lands on a code the
+    // button actually has copy for.
     disconnectProjectMock.mockResolvedValue({
       ok: false,
-      error: "unknown",
+      reason: "unknown",
       message: HOSTILE_DB_MESSAGE,
     }),
   );
@@ -190,7 +196,7 @@ describe("failure: a hostile message reintroduced into the store result", () => 
   it("surfaces none of it", async () => {
     const serialized = JSON.stringify(await invoke());
 
-    expect(serialized).toBe('{"ok":false,"error":"deletion_failed"}');
+    expect(serialized).toBe('{"ok":false,"error":"detach_failed"}');
     for (const fragment of [
       HOSTILE_DB_MESSAGE,
       "execution_specs",

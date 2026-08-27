@@ -8,6 +8,7 @@ import { recordAuditEvent } from "@/modules/audit-log/events";
 import { listInstallationRepositories } from "@/modules/github/repositories";
 import { getVerifiedInstallation } from "@/modules/github/connections";
 import { createProjectWithRepository } from "@/modules/projects/connect";
+import { attachRepositoryToProject } from "@/modules/projects/attach";
 import { ensureWelcomeGrant } from "@/modules/credits/grants";
 import { createProjectOnboarding } from "@/modules/onboarding/store";
 
@@ -62,6 +63,45 @@ export async function selectRepository(
   const repository = repositories.find((repo) => repo.githubRepositoryId === githubRepositoryId);
   if (!repository) {
     return { ok: false, error: "That repository is not accessible through this installation." };
+  }
+
+  /*
+   * Reconnecting an existing project rather than creating one (VB-001 M5).
+   *
+   * `projectId` arrives from a hidden form field and is untrusted. Nothing is
+   * checked here: `attach_repository_to_project` runs as the caller, so the
+   * RLS insert policy requires the caller to own both the project and the
+   * installation. A forged id reaches a project that is not theirs and the
+   * insert is refused — the same answer as a repository already connected,
+   * which is deliberately all a founder is told.
+   */
+  const projectId = formData.get("projectId");
+  if (typeof projectId === "string" && projectId.length > 0) {
+    const attached = await attachRepositoryToProject(supabase, {
+      projectId,
+      installationRowId: installationRow.id,
+      repository,
+    });
+
+    if (!attached.ok) {
+      return {
+        ok: false,
+        error:
+          attached.error === "already_connected"
+            ? "This repository is already connected to a project."
+            : "Could not connect this repository. Try again.",
+      };
+    }
+
+    await recordAuditEvent(supabase, {
+      userId: session.userId,
+      eventType: "project.repository_attached",
+      metadata: { projectId, githubRepositoryId: repository.githubRepositoryId },
+    });
+
+    // No welcome grant on a reconnect: it is account-scoped and already issued,
+    // and this creates no new project to provision.
+    redirect(`/app/projects/${projectId}`);
   }
 
   const result = await createProjectWithRepository(supabase, {

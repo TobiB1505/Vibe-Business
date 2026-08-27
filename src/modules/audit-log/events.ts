@@ -13,7 +13,21 @@ export type AuditEventType =
   | "github.installation.connected"
   | "repository.selected"
   | "project.created"
+  /**
+   * The repository link was severed and the project kept (VB-001 M5).
+   *
+   * The name predates the behaviour: until M5 this recorded a destructive
+   * delete, which is what `project.deletion_failed` below is the counterpart
+   * to. It now records what its word always said. History written under the
+   * old meaning stays as it is — an audit trail is a record, not a view.
+   */
   | "project.disconnected"
+  /** A repository was connected to a project that already existed (VB-001 M5). */
+  | "project.repository_attached"
+  /** The project and everything derived from it were destroyed (VB-001). */
+  | "project.deleted"
+  /** A destructive project deletion the application refused or could not complete. */
+  | "project.delete_refused"
   // A disconnect that did not happen. Emitted only when the project still
   // exists and is owned by the caller — a `project_not_found` outcome cannot
   // be recorded against a project id, because both the `project_id` foreign

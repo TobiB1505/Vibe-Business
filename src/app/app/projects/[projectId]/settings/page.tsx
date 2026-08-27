@@ -4,7 +4,9 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { Surface } from "@/components/ui/surface";
 import { getFounderIntent } from "@/modules/projects/founder-intent-store";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
+import { findReconnectInstallationId } from "@/modules/projects/attach";
 import { DisconnectButton } from "../disconnect-button";
+import { DeleteProjectButton } from "../delete-project-button";
 import { FounderIntentForm } from "../founder-intent-form";
 import { ProductionUrlForm } from "../production-url-form";
 
@@ -50,11 +52,28 @@ export default async function ProjectSettingsPage({
 
   const founderIntent = await getFounderIntent(supabase, projectId);
 
+  /*
+   * Reconnecting goes straight to the picker for the installation this project
+   * was already using, read from its connection history. Walking a founder back
+   * through account selection and a fresh authorization to reach a repository
+   * they already granted access to would be ceremony, not safety — the action
+   * re-verifies the installation server-side either way.
+   *
+   * Falls back to the ordinary connect flow when there is no history to read,
+   * which is the case for a project that never had a connection at all.
+   */
+  const reconnectInstallationId = project.repository
+    ? null
+    : await findReconnectInstallationId(supabase, projectId);
+  const reconnectHref = reconnectInstallationId
+    ? `/app/connect/github/repositories?installation=${reconnectInstallationId}&projectId=${projectId}`
+    : "/app/connect/github";
+
   return (
     <WorkspaceSection
       id="settings"
       title="Project Settings"
-      description="What Vibe is connected to, what you have told it, and how to disconnect."
+      description="What Vibe is connected to, what you have told it, and how to disconnect or delete it."
     >
       <div className="flex flex-col gap-5">
         {/*
@@ -107,17 +126,43 @@ export default async function ProjectSettingsPage({
                 <span className="font-mono text-xs">{project.repository.defaultBranch}</span>.
               </p>
             ) : (
-              <StatusPill tone="neutral">No repository connected</StatusPill>
+              <div className="flex flex-col items-start gap-3">
+                <StatusPill tone="neutral">No repository connected</StatusPill>
+                <p className="text-fg-muted text-sm">
+                  Vibe is not reading any repository for this project. Connect one to resume
+                  analysis and execution — everything the project already knows is kept.
+                </p>
+                <Link
+                  href={reconnectHref}
+                  className="text-fg-body hover:text-fg rounded-sm text-sm underline underline-offset-4 transition-interactive"
+                >
+                  Connect a repository
+                </Link>
+              </div>
             )}
           </div>
           {project.repository && (
             <div className="border-line-1 flex flex-wrap items-center justify-between gap-4 border-t pt-4">
               <p className="text-fg-muted text-xs">
-                Disconnecting removes Vibe&apos;s access to this repository.
+                Disconnecting stops Vibe reading this repository. The project and everything it has
+                learned stay.
               </p>
               <DisconnectButton projectId={project.id} />
             </div>
           )}
+
+          {/*
+            Two controls, because they are two things (ADR 0056 §1). Deleting is
+            offered whether or not a repository is connected: a project that was
+            disconnected is exactly the one somebody is most likely to want gone.
+          */}
+          <div className="border-line-1 flex flex-wrap items-center justify-between gap-4 border-t pt-4">
+            <p className="text-fg-muted text-xs">
+              Deleting removes the project and everything Vibe has learned about it. This cannot be
+              undone.
+            </p>
+            <DeleteProjectButton projectId={project.id} />
+          </div>
         </Surface>
 
         {/*

@@ -456,3 +456,146 @@ describe("repository connection detachment", () => {
     expect(edges).toBe("change_merges,execution_specs,repository_intelligence_snapshots");
   });
 });
+
+/**
+ * VB-001 M5 part 2 — the two write paths, and the privilege that makes the
+ * detach gate more than advisory.
+ */
+describe("detach and attach", () => {
+  function connect(userId: string, installationId: string, repoId: string, name: string): string {
+    return db
+      .sqlLast(`begin; ${asUser(userId)} ${connectCall(installationId, repoId, name)} commit;`)
+      .split("|")[0];
+  }
+
+  it("marks the live connection detached and keeps the row", () => {
+    const { userId, installationId } = makeInstallation("m5b-detach");
+    const projectId = connect(userId, installationId, `${freshRepositoryId()}`, "m5b-detach");
+
+    expect(db.sql(`select public.detach_repository('${projectId}'::uuid, '${userId}'::uuid);`)).toBe(
+      "detached",
+    );
+    expect(db.sql(`select count(*) from public.repository_connections where project_id = '${projectId}';`)).toBe("1");
+    expect(
+      db.sql(`select count(*) from public.repository_connections
+                where project_id = '${projectId}' and detached_at is null;`),
+    ).toBe("0");
+    // The project and everything under it survive — that is the split.
+    expect(db.sql(`select count(*) from public.projects where id = '${projectId}';`)).toBe("1");
+  });
+
+  it("is idempotent and reports nothing live to detach", () => {
+    const { userId, installationId } = makeInstallation("m5b-twice");
+    const projectId = connect(userId, installationId, `${freshRepositoryId()}`, "m5b-twice");
+
+    expect(db.sql(`select public.detach_repository('${projectId}'::uuid, '${userId}'::uuid);`)).toBe("detached");
+    expect(db.sql(`select public.detach_repository('${projectId}'::uuid, '${userId}'::uuid);`)).toBe("not_found");
+    expect(db.sql(`select public.detach_repository(null, null);`)).toBe("not_found");
+  });
+
+  it("mutates nothing for a caller who does not own the project", () => {
+    const victim = makeInstallation("m5b-victim");
+    const attacker = makeInstallation("m5b-attacker");
+    const projectId = connect(victim.userId, victim.installationId, `${freshRepositoryId()}`, "m5b-victim");
+
+    expect(
+      db.sql(`select public.detach_repository('${projectId}'::uuid, '${attacker.userId}'::uuid);`),
+    ).toBe("not_found");
+    expect(
+      db.sql(`select count(*) from public.repository_connections
+                where project_id = '${projectId}' and detached_at is null;`),
+    ).toBe("1");
+  });
+
+  /**
+   * The gate lives in TypeScript, so the privilege is what stops a caller
+   * writing the marker straight over PostgREST and skipping it.
+   */
+  it("grants no Data API role a direct UPDATE or DELETE on the table", () => {
+    const holders = db.sql(`
+      select coalesce(string_agg(distinct privilege_type, ',' order by privilege_type), '<none>')
+      from information_schema.role_table_grants
+      where table_schema = 'public' and table_name = 'repository_connections'
+        and privilege_type in ('UPDATE', 'DELETE')
+        and grantee in ('anon', 'authenticated', 'PUBLIC');
+    `);
+    expect(holders).toBe("<none>");
+  });
+
+  it("keeps INSERT, which create_project_with_repository needs as the caller", () => {
+    expect(
+      db.sql(`
+        select count(*)::text from information_schema.role_table_grants
+        where table_schema = 'public' and table_name = 'repository_connections'
+          and privilege_type = 'INSERT' and grantee = 'authenticated';
+      `),
+    ).toBe("1");
+  });
+
+  it("reaches detach_repository from service_role only", () => {
+    const grants = db.sql(`
+      select string_agg(r.rolname || '=' ||
+               has_function_privilege(r.rolname, 'public.detach_repository(uuid,uuid)', 'EXECUTE')::text,
+               ',' order by r.rolname)
+      from pg_roles r where r.rolname in ('anon', 'authenticated', 'service_role');
+    `);
+    expect(grants).toBe("anon=false,authenticated=false,service_role=true");
+  });
+
+  it("attaches a repository to a project that already exists", () => {
+    const { userId, installationId } = makeInstallation("m5b-attach");
+    const projectId = connect(userId, installationId, `${freshRepositoryId()}`, "m5b-attach");
+    db.sql(`select public.detach_repository('${projectId}'::uuid, '${userId}'::uuid);`);
+
+    const attached = db.sqlLast(`
+      begin;
+        ${asUser(userId)}
+        select connection_id, coalesce(failure, '-') from public.attach_repository_to_project(
+          '${projectId}'::uuid, '${installationId}'::uuid, ${freshRepositoryId()}::bigint,
+          'octo', 'again', 'octo/again', 'main', false, 'https://github.com/octo/again');
+      commit;
+    `);
+
+    expect(attached.split("|")[1]).toBe("-");
+    expect(
+      db.sql(`select count(*) from public.repository_connections
+                where project_id = '${projectId}' and detached_at is null;`),
+    ).toBe("1");
+    // The detached row stays as history beside the new live one.
+    expect(db.sql(`select count(*) from public.repository_connections where project_id = '${projectId}';`)).toBe("2");
+  });
+
+  it("refuses to attach a second live connection to the same project", () => {
+    const { userId, installationId } = makeInstallation("m5b-second");
+    const projectId = connect(userId, installationId, `${freshRepositoryId()}`, "m5b-second");
+
+    const attached = db.sqlLast(`
+      begin;
+        ${asUser(userId)}
+        select connection_id, coalesce(failure, '-') from public.attach_repository_to_project(
+          '${projectId}'::uuid, '${installationId}'::uuid, ${freshRepositoryId()}::bigint,
+          'octo', 'x', 'octo/x', 'main', false, 'https://github.com/octo/x');
+      commit;
+    `);
+    expect(attached.split("|")[1]).toBe("already_connected");
+  });
+
+  /** A forged project id reaches somebody else's project and RLS refuses it. */
+  it("refuses to attach to a project the caller does not own", () => {
+    const victim = makeInstallation("m5b-av");
+    const attacker = makeInstallation("m5b-aa");
+    const projectId = connect(victim.userId, victim.installationId, `${freshRepositoryId()}`, "m5b-av");
+    db.sql(`select public.detach_repository('${projectId}'::uuid, '${victim.userId}'::uuid);`);
+
+    const error = db.sqlExpectingError(`
+      begin;
+        ${asUser(attacker.userId)}
+        select * from public.attach_repository_to_project(
+          '${projectId}'::uuid, '${attacker.installationId}'::uuid, ${freshRepositoryId()}::bigint,
+          'octo', 'steal', 'octo/steal', 'main', false, 'https://github.com/octo/steal');
+      commit;
+    `);
+    expect(error).toContain("row-level security policy");
+    expect(db.sql(`select count(*) from public.repository_connections where project_id = '${projectId}';`)).toBe("1");
+  });
+});
