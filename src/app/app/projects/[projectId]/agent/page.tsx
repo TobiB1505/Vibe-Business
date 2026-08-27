@@ -254,7 +254,18 @@ export default async function ProjectAgentPage({
             }
           >
             {workspace.stage === "validate" ? (
-              <AgentValidationChecks checks={workspace.checks} />
+              <div className="flex min-w-0 flex-col gap-5">
+                <AgentValidationChecks checks={workspace.checks} />
+                {/* The one control this stage owns: run the checks again. */}
+                {change !== null && (
+                  <ChangeGates
+                    projectId={project.id}
+                    change={change}
+                    planHref={planHref}
+                    stage="validate"
+                  />
+                )}
+              </div>
             ) : (
               /*
                 The Move, in its own stored words. Absent when the run cannot be
@@ -311,6 +322,14 @@ export default async function ProjectAgentPage({
               reviewHref={`#${preparedChangeAnchorId(change.id)}`}
               filesHref={change.compareUrl ?? undefined}
             />
+            <div className="border-line-2 mt-7 border-t pt-6">
+              <ChangeGates
+                projectId={project.id}
+                change={change}
+                planHref={planHref}
+                stage="preview"
+              />
+            </div>
           </Surface>
         )}
 
@@ -327,12 +346,35 @@ export default async function ProjectAgentPage({
               reviewHref={`#${preparedChangeAnchorId(change.id)}`}
               canMerge={change.progress.approved}
             />
+            <div className="border-line-2 mt-7 border-t pt-6">
+              <ChangeGates
+                projectId={project.id}
+                change={change}
+                planHref={planHref}
+                stage="review"
+              />
+            </div>
           </Surface>
         )}
 
-        {change !== null && (
-          <ChangeGates projectId={project.id} change={change} planHref={planHref} />
-        )}
+        {change !== null &&
+          workspace.stage !== "validate" &&
+          workspace.stage !== "preview" &&
+          workspace.stage !== "review" && (
+            /*
+              A change whose stage owns no body of its own — a run still
+              working, or one already merged. It keeps its record and the
+              panels that only exist after a merge.
+            */
+            <Surface level="section" padding="lg">
+              <ChangeGates
+                projectId={project.id}
+                change={change}
+                planHref={planHref}
+                stage={workspace.stage}
+              />
+            </Surface>
+          )}
 
         {changes.length === 0 && workspace.timeline === null && (
           <EmptyState
