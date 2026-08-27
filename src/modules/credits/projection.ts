@@ -114,9 +114,9 @@ function costForAiRow(row: AiUsageRow): {
 /**
  * Splits one AI usage row into per-SKU billable usage (§17, §62).
  *
- * The row becomes up to three events — input, output, thinking — because the
- * billing model is per-SKU and a future rate card may price input and output
- * differently, as every provider already does.
+ * The row becomes up to five events — input, output, thinking, cache read and
+ * cache write — because the billing model is per-SKU and a future rate card may
+ * price them differently, as every provider already does.
  *
  * ## Where the cost lands, and why only once
  *
@@ -178,6 +178,31 @@ export function projectAiUsage(
       quantity: row.thinking_tokens,
       rawCostNanoUsd: null,
       // Already inside the output count the provider billed for.
+      costStatus: "not_billable",
+      providerPricingVersion: pricingVersion,
+    });
+  }
+
+  // Emitted only when non-zero, like thinking and for the same reason: every
+  // operation without a cache breakpoint reports zero, and a zero-quantity row
+  // on every AI call would be noise rather than a measurement.
+  //
+  // `not_billable` is about *provider cost* and nothing else — the cache price
+  // is already inside the one figure on the input row above. It says nothing
+  // about whether a customer can be charged: these SKUs are absent from
+  // `NON_CHARGEABLE_SKUS` precisely so a rate card can price them.
+  const cacheQuantities = [
+    ["anthropic_cache_read_tokens", row.cache_read_input_tokens],
+    ["anthropic_cache_write_tokens", row.cache_creation_input_tokens],
+  ] as const;
+
+  for (const [sku, quantity] of cacheQuantities) {
+    if (quantity === null || quantity <= 0) continue;
+    events.push({
+      ...base,
+      sku,
+      quantity,
+      rawCostNanoUsd: null,
       costStatus: "not_billable",
       providerPricingVersion: pricingVersion,
     });

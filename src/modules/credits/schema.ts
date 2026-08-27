@@ -107,34 +107,34 @@ export type UsageSourceKind = (typeof USAGE_SOURCE_KINDS)[number];
  *
  * Every entry here is something Vibe **actually observes today**.
  *
- * There is deliberately no `anthropic_cache_read_tokens` or
- * `anthropic_cache_write_tokens`, and this list has now outlived two reasons
- * for that. The first — that the adapter did not report cache usage and
- * `ai_usage_events` had no column for it — was made false by
- * `20260818210000_agent_execution.sql` and `ai/usage.ts`. The second, that
- * `credits/projection.ts` re-priced from input and output alone so a cache unit
- * would meter something nothing charged for, was made false by Sprint 0057 E2:
- * `costForAiRow` prices cache reads and writes, and the whole call cost rides
- * on the input row exactly as it always has.
+ * Cache read and cache write are here, and the distinction between them and
+ * `anthropic_thinking_tokens` is the one thing to understand about this list.
+ * Thinking is *informational*: Anthropic already counts it inside the output
+ * tokens it bills, so it is in `NON_CHARGEABLE_SKUS` and rating skips it.
+ * Cache is the opposite — a response counts cache reads and cache writes
+ * separately from the uncached input charged at the base rate, and bills them
+ * at 0.1× and 1.25× input. They are separately-billed units, so they stay
+ * rateable.
  *
- * What is left is a genuine absence rather than a decision, and it is narrower
- * than either: the *quantity* of cache tokens is not metered. Adding it is a
- * migration, because `billing_usage_events.sku` carries a CHECK constraint
- * listing every value — so it is not a comment's decision to make. It matters
- * once a Credit rate card exists, since `rating.ts` rates per SKU quantity and
- * would charge a customer nothing for the 55–70% of agent provider cost
- * `ECONOMY_MODEL.md` measured in cache. `CREDIT_RATE_CARDS` is empty today, so
- * nothing is currently mischarged. It is recorded in `docs/ROADMAP.md`.
+ * That has a consequence worth stating plainly, because it is the point of
+ * metering them at all. `CREDIT_RATE_CARDS` is empty, so nothing changes today.
+ * The first card that lists neither SKU will make `rateUsage` return
+ * `sku_not_priced` rather than charge zero for the 55–70% of agent provider
+ * cost `ECONOMY_MODEL.md` measured in cache. Refusing to rate is the intended
+ * behaviour; billing nothing was the defect.
  *
- * `anthropic_thinking_tokens` is recorded because it is billed, but see
- * `rating.ts`: it is already contained in the output-token count the provider
- * returns, so it is never priced twice.
+ * The *cost* axis is unaffected and unchanged: `costForAiRow` prices cache into
+ * one figure for the whole call, and that figure rides on the input row alone.
  */
 export const USAGE_SKUS = [
   "anthropic_input_tokens",
   "anthropic_output_tokens",
   /** Reported for transparency. Already inside `anthropic_output_tokens`. */
   "anthropic_thinking_tokens",
+  /** Cached input read back, billed at 0.1× input and counted separately from it. */
+  "anthropic_cache_read_tokens",
+  /** Input written to the cache, billed at 1.25× input and counted separately from it. */
+  "anthropic_cache_write_tokens",
   /** Remote browser wall-clock, Deep Scan and visual review alike. */
   "browser_duration_ms",
   /** Vercel sandbox wall-clock. */
@@ -151,6 +151,8 @@ export const SKU_UNITS: Record<UsageSku, "tokens" | "milliseconds" | "bytes"> = 
   anthropic_input_tokens: "tokens",
   anthropic_output_tokens: "tokens",
   anthropic_thinking_tokens: "tokens",
+  anthropic_cache_read_tokens: "tokens",
+  anthropic_cache_write_tokens: "tokens",
   browser_duration_ms: "milliseconds",
   sandbox_duration_ms: "milliseconds",
   sandbox_active_cpu_ms: "milliseconds",
