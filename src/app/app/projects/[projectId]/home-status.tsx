@@ -3,6 +3,7 @@ import { buttonClasses } from "@/components/ui/button";
 import { StatusDot } from "@/components/ui/status-pill";
 import { VibeCard } from "@/components/ui/surface";
 import { MonoLabel } from "@/components/ui/typography";
+import { planMoveHref } from "@/modules/action-plans/source";
 import { IMPACT_LABELS } from "@/modules/opportunities/schema";
 import type { HomeView } from "@/modules/projects/command-center";
 
@@ -164,7 +165,13 @@ export function HomeStatus({
           )}
 
           <div className="flex flex-wrap items-center gap-3 pt-1">
-            <Link href={planHref} className={buttonClasses({ variant: "primary", size: "sm" })}>
+            {/* "Review this move" now reviews *that* move: the label named one
+                Move and the link opened whatever was rank 1 when it was
+                clicked (UI-S3 §6). */}
+            <Link
+              href={nextMove.kind === "move" ? planMoveHref(planHref, nextMove.id) : planHref}
+              className={buttonClasses({ variant: "primary", size: "sm" })}
+            >
               {nextMove.kind === "move" ? "Review this move" : "Open Action Plan"}
             </Link>
             {/*

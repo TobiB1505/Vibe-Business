@@ -90,6 +90,7 @@ const THREE_PRODUCTS: DashboardProject[] = [
       reading(39, "2026-08-02T09:00:00Z", "rubric-v1"),
     ],
     topMove: {
+      id: "1-revenue-put-a-price-on-the-product",
       title: "Put a price on the product",
       problem: "Nobody can pay you. There is no pricing page and no checkout anywhere on the site.",
       impact: "high",
@@ -107,6 +108,7 @@ const THREE_PRODUCTS: DashboardProject[] = [
     lastAnalysedAt: "2026-08-19T09:00:00Z",
     scoreHistory: [reading(58, "2026-08-19T09:00:00Z")],
     topMove: {
+      id: "1-positioning-say-who-the-product-is-for",
       title: "Say who the product is for",
       problem: "The homepage describes what it does and never says who should use it.",
       impact: "medium",

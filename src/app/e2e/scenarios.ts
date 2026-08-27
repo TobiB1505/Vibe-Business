@@ -59,9 +59,22 @@ function baseChange(): Omit<
     // The real SEO capability's rationale, not invented copy: the browser
     // suite asserts against what the product would actually render.
     rationale: businessRationaleFor("nextjs_seo_foundations_v2"),
-    // Null wherever a rationale exists: the card renders one or the other, and
-    // `change_agentic_review_required` is the scenario that carries an origin.
-    origin: null,
+    /*
+     * A deterministic change has both: the written rationale below and the Move
+     * it answers. The card renders the rationale as its explanation and reduces
+     * the Move to a one-line link back (UI-S3 §4) — which is production's own
+     * shape, `changeOriginFrom` being independent of whether a rationale
+     * exists. `change_agentic_review_required` is the scenario with no
+     * rationale, where the full origin block renders instead.
+     */
+    origin: {
+      title: "Fix missing technical SEO foundations",
+      problem:
+        "The live site is missing canonical URL, robots.txt, a sitemap and structured data.",
+      whyNow:
+        "These are low-effort fixes that do not depend on positioning or monetization.",
+    },
+    opportunityId: "3-seo-fix-missing-technical-seo-foundations",
     validation: {
       status: "passed",
       phases: [],

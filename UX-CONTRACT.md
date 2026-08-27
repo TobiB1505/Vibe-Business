@@ -19,6 +19,7 @@
 | GitHub permissions and repository connection | `docs/decisions/0003-github-app-integration.md`, `docs/decisions/0009-github-installation-ownership-verification.md` | ADR | 2026-08-24 |
 | Safe approved merge behavior | `docs/decisions/0018-human-approval-authority.md`, `docs/decisions/0019-safe-approved-change-merge.md` | ADR | 2026-08-24 |
 | Billing | `PRODUCT.md#12-credit-model`, `docs/decisions/0024-billing-credit-ledger.md`, `docs/decisions/0025-billing-stripe-boundary.md` | Product contract + ADR | 2026-08-25 |
+| Move focus across surfaces | `docs/decisions/0058-move-focus-url-contract.md` | ADR | 2026-08-27 |
 
 ## Visual contract
 
@@ -77,6 +78,9 @@
 | Plan this Move | `Plan this move` in the planned-work panel | stable busy action; price stated beside it | same Action Plan with the plan, or named progress rows | persistent inline failure; the offer stays | submitted action remains contextual | ADR 0013, Rule 60 |
 | Re-scan business | `Re-scan business` beside the last-updated line | stable busy action; price stated beside it; route refresh on start | same Action Plan with the run's real stages | persistent inline failure | submitted action remains contextual | Rule 60 |
 | Start with Vibe | `Start with Vibe` on a Move with an executor | confirmation dialog first, then stable busy action | prepared change on `/agent` | persistent inline failure with retry only where honest | submitted action remains contextual | ADR 0014 |
+| Open the Agent for a Move | `See this move in Agent` beside the start control, or the Agent rail item while a Move is selected | route navigation only, never a run | Agent focused on that Move, naming what Vibe can do about it | an unresolvable Move degrades to the unfocused Agent, naming none | destination page heading | ADR 0058 |
+| Return to a Move from the Agent | the focused card's back link, or a prepared change's Move title | route navigation only, never a run | that Move selected on the Action Plan, scrolled to its detail | the link is absent where the Move cannot be named | Move detail region | ADR 0058 |
+| Review the Move a card names | `Review this move` on project Home, `View action plan` on the account dashboard | route navigation only | that Move selected on the Action Plan | no Move named means the plain Action Plan | destination page heading | ADR 0058 |
 
 ## Navigation and responsive behavior
 
@@ -98,6 +102,8 @@
 - The Action Plan is one guided decision: a horizontally scrollable Now/Next/Later stepper, one active Move card, then that Move's detail. Desktop, tablet and mobile keep this order; no breakpoint introduces a right sidebar or simultaneous full Move stack. The band, rank and status are text as well as geometry.
 - Planned work inside the active Move is a compact to-do checklist. Every step is closed by default; its summary keeps the title, order/completion mark and short readiness state visible. Opening the native disclosure reveals description, ownership, exact dependency wording, completion criteria and approval context. Completion is read-only projected state, never a checkbox; founder-owned completion continues through the explicit criterion-bound confirmation action.
 - Which Move is active is recorded in `?plan=` through the native History API, so refresh and Back/Forward restore selection without a route navigation. Selecting or swiping to a Move never starts a paid run.
+- `?plan=` names which Move a surface is about, and the Agent reads the same parameter as the Action Plan. It is untrusted text: sanitized, then resolved against that project's own Moves, so a stale, foreign or malformed value renders the ordinary unfocused surface rather than substituting a different Move. It carries no authority — no surface starts work, spends Credits or writes anything because a URL named a Move. Exactly one navigation item, Agent, carries the parameter onward, and only from the Action Plan; every other rail item is a plain section link.
+- The Agent names the Move a founder arrived with, states what Vibe can do about it using the Action Plan's own execution answer, and offers one link back. It offers no priced control: preparing a change stays beside the Move.
 - Billing uses three equal overview panels at desktop, then asymmetric content/support grids. Below `lg`, every region returns to document order without hiding plan status, expiry, purchase actions or signed Credit movement. No Billing panel owns a viewport height or nested scroll area.
 
 ## Async and resilience

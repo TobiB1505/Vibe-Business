@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
@@ -25,6 +26,7 @@ import {
 } from "@/modules/operations/view";
 import type { ActionPlanStep } from "@/modules/action-plans/schema";
 import type { ActionPlanReadiness, ActionPlanView } from "@/modules/action-plans/service";
+import { agentMoveHref, PLANNED_WORK_ANCHOR } from "@/modules/action-plans/source";
 import type {
   BlockedActionDestinations,
   OpportunityActionState,
@@ -76,8 +78,13 @@ import type { ValidationSummary } from "../validation-panel";
  *    Selecting a Move never starts one.
  */
 
-/** Stable anchor for deep links from older Action Plan URLs. */
-export const PLANNED_WORK_ANCHOR = "planned-work";
+/**
+ * Stable anchor for deep links into the Move detail.
+ *
+ * Re-exported rather than declared: `action-plans/source.ts` owns it, because
+ * that is where `planMoveHref` builds the URL that ends in it.
+ */
+export { PLANNED_WORK_ANCHOR };
 
 const POLL_INTERVAL_MS = 3_000;
 
@@ -815,6 +822,23 @@ export function PlanDetailPanel({
             preparedHref={preparedHref}
             blockedDestinations={blockedDestinations}
           />
+          {/*
+            The handoff the loop was missing (UI-S3 §5).
+            
+            `PrepareChangePanel` above links onward only once a change exists.
+            Before that, a founder looking at a Move Vibe can act on had no way
+            to reach the Agent *about this Move* — the rail's Agent link is a
+            section link and drops which Move they were reading.
+
+            It carries the selection and nothing else: the Agent describes and
+            points back, and starting the work stays here, beside the price.
+          */}
+          <Link
+            href={agentMoveHref(preparedHref, executionOpportunityId)}
+            className="text-fg-muted hover:text-fg-body w-fit rounded-sm text-sm underline underline-offset-4 transition-interactive"
+          >
+            See this move in Agent
+          </Link>
         </div>
       ) : null}
 

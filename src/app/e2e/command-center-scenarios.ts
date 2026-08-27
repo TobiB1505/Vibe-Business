@@ -5,6 +5,7 @@ import {
   type BusinessReadinessAudit,
 } from "@/modules/business-audit/schema";
 import { fakeSeoOpportunity } from "@/modules/execution/test-support";
+import { buildAgentFocus, type AgentFocus } from "@/modules/projects/agent-focus";
 import { fakeAudit } from "@/modules/opportunities/test-support";
 import { fakeProductProfile } from "@/modules/product-understanding/test-support";
 import {
@@ -129,27 +130,85 @@ export function isE2eHomeScenario(value: string): value is E2eHomeScenario {
   return value in E2E_HOME_SCENARIOS;
 }
 
+/** The Move the focus scenarios are about. Rank 3, so a positional rank shows. */
+const FOCUS_MOVE = fakeSeoOpportunity();
+
+function readyContext(): AgentContext {
+  return buildAgentContext({
+    hasProductUnderstanding: true,
+    hasRepositoryUnderstanding: true,
+    hasBusinessGoals: true,
+  });
+}
+
+/**
+ * The engineer's card, in every state it has (CORE-5; focus added by UI-S3).
+ *
+ * `focus` is what the card says about the Move a founder arrived with. The
+ * three original scenarios carry none, which is the state of someone who
+ * opened the Agent directly and is the page as it was before the focus
+ * existed.
+ */
 export const E2E_AGENT_SCENARIOS = {
-  "agent-ready": (): AgentContext =>
-    buildAgentContext({
+  "agent-ready": (): { context: AgentContext; focus: AgentFocus } => ({
+    context: buildAgentContext({
       hasProductUnderstanding: true,
       hasRepositoryUnderstanding: true,
       hasBusinessGoals: true,
     }),
+    focus: { kind: "none" },
+  }),
 
-  "agent-partial": (): AgentContext =>
-    buildAgentContext({
+  "agent-partial": (): { context: AgentContext; focus: AgentFocus } => ({
+    context: buildAgentContext({
       hasProductUnderstanding: true,
       hasRepositoryUnderstanding: true,
       hasBusinessGoals: false,
     }),
+    focus: { kind: "none" },
+  }),
 
-  "agent-not-briefed": (): AgentContext =>
-    buildAgentContext({
+  "agent-not-briefed": (): { context: AgentContext; focus: AgentFocus } => ({
+    context: buildAgentContext({
       hasProductUnderstanding: false,
       hasRepositoryUnderstanding: false,
       hasBusinessGoals: false,
     }),
+    focus: { kind: "none" },
+  }),
+
+  /** Arrived from the Action Plan on a Move Vibe has an executor for. */
+  "agent-focus-preparable": (): { context: AgentContext; focus: AgentFocus } => ({
+    context: readyContext(),
+    focus: buildAgentFocus({
+      requestedOpportunityId: FOCUS_MOVE.id,
+      opportunities: [FOCUS_MOVE],
+      action: { kind: "preparable", capability: "nextjs_seo_foundations_v2" },
+    }),
+  }),
+
+  /** The same Move, after a change was written for it. */
+  "agent-focus-prepared": (): { context: AgentContext; focus: AgentFocus } => ({
+    context: readyContext(),
+    focus: buildAgentFocus({
+      requestedOpportunityId: FOCUS_MOVE.id,
+      opportunities: [FOCUS_MOVE],
+      action: { kind: "already_prepared", preparedChangeId: "prepared_e2e" },
+    }),
+  }),
+
+  /**
+   * A Move id this project does not have — a superseded set, or someone
+   * else's. The card must name no Move at all rather than substitute one.
+   */
+  "agent-focus-unresolved": (): { context: AgentContext; focus: AgentFocus } => ({
+    context: readyContext(),
+    focus: buildAgentFocus({
+      requestedOpportunityId: "9-belongs-to-another-project",
+      opportunities: [FOCUS_MOVE],
+      action: null,
+    }),
+  }),
 } as const;
 
 export type E2eAgentScenario = keyof typeof E2E_AGENT_SCENARIOS;

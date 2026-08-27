@@ -71,7 +71,8 @@ export type HomeFinding = {
  * They read differently on screen and they must, so they are different here.
  */
 export type HomeNextMove =
-  | { kind: "move"; title: string; problem: string; impact: OpportunityImpact }
+  /** `id` so Home can link to *this* Move rather than to the plan (UI-S3 §6). */
+  | { kind: "move"; id: string; title: string; problem: string; impact: OpportunityImpact }
   | { kind: "none_found" }
   | { kind: "not_identified" };
 
@@ -158,6 +159,7 @@ function nextMoveFrom(opportunities: BusinessOpportunity[] | null): HomeNextMove
 
   return {
     kind: "move",
+    id: first.id,
     title: first.title,
     problem: first.problem,
     impact: first.impact,

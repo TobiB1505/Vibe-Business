@@ -3,12 +3,20 @@ import { buttonClasses } from "@/components/ui/button";
 import { ArrowRightIcon, InfoIcon, RocketIcon } from "@/components/ui/dashboard-icons";
 import { Surface } from "@/components/ui/surface";
 import { EFFORT_LABELS, IMPACT_LABELS } from "@/modules/opportunities/schema";
+import { planMoveHref } from "@/modules/action-plans/source";
 import type { DashboardProject } from "@/modules/projects/dashboard";
 
 /** The one highest-value action for the product leading the dashboard. */
 export function NextMoveCard({ project }: { project: DashboardProject }) {
   const planHref = `/app/projects/${project.id}/plan`;
   const move = project.topMove;
+  /*
+   * The card names one Move and its action opens the plan. Without the id it
+   * opened whichever Move was rank 1 at click time, which is the same Move
+   * almost always and a different one exactly when it matters — after a
+   * re-scan reordered the set (UI-S3 §6).
+   */
+  const href = move ? planMoveHref(planHref, move.id) : planHref;
 
   return (
     <Surface level="panel" padding="lg" className="flex flex-col gap-6">
@@ -52,10 +60,7 @@ export function NextMoveCard({ project }: { project: DashboardProject }) {
           )}
         </div>
 
-        <Link
-          href={planHref}
-          className={buttonClasses({ variant: "secondary", size: "md" })}
-        >
+        <Link href={href} className={buttonClasses({ variant: "secondary", size: "md" })}>
           {move ? "View action plan" : "Open action plan"}
           <ArrowRightIcon size={16} />
         </Link>
