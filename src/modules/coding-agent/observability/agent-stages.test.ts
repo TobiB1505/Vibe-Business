@@ -134,7 +134,11 @@ describe("a run that ended never reaches the rest", () => {
     expect(stateOf(steps, "validate")).toBe("skipped");
     expect(stateOf(steps, "preview")).toBe("skipped");
     expect(stateOf(steps, "review")).toBe("skipped");
-    expect(steps.find((step) => step.stage === "review")!.detail).toBe("Never reached");
+    /*
+     * No detail. The state word already says "Never reached", and the live rail
+     * rendered "Never reached · Never reached" until this was fixed.
+     */
+    expect(steps.find((step) => step.stage === "review")!.detail).toBeNull();
   });
 
   it("treats a cancelled run the same way — it also never got there", () => {
@@ -195,9 +199,8 @@ describe("stages 4 and 5 come from the prepared change", () => {
     });
 
     expect(stateOf(steps, "preview")).toBe("not_applicable");
-    expect(steps.find((step) => step.stage === "preview")!.detail).toBe(
-      "Not available for this change",
-    );
+    // Said once, by the state word, for the same reason.
+    expect(steps.find((step) => step.stage === "preview")!.detail).toBeNull();
   });
 
   it("stops both gates when validation failed, because nothing downstream can start", () => {

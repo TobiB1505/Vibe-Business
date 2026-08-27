@@ -35,7 +35,7 @@ describe("a completed change needs no analytics connection", () => {
       "change-rationale.tsx",
       "business-impact-panel.tsx",
       "outcome-panel.tsx",
-      "prepared-changes-section.tsx",
+      "agent/change-gates.tsx",
     ]) {
       const src = source(file);
       for (const forbidden of ["Search Console", "searchConsole", "Connect analytics", "OAuth"]) {
@@ -109,7 +109,7 @@ describe("the three concepts stay separate (§7)", () => {
   });
 
   it("orders them what changed → why → verified", () => {
-    const section = source("prepared-changes-section.tsx");
+    const section = source("agent/change-gates.tsx");
 
     expect(section.indexOf("<ChangeRationale")).toBeLessThan(section.indexOf("<OutcomePanel"));
     expect(section.indexOf("<OutcomePanel")).toBeLessThan(section.indexOf("<BusinessImpactPanel"));

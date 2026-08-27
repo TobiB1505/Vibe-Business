@@ -1,9 +1,7 @@
 import { notFound } from "next/navigation";
 import { PlanDetailPanel } from "@/app/app/projects/[projectId]/plan/plan-detail-panel";
-import {
-  PreparedChangesSection,
-  type PreparedChangeCard,
-} from "@/app/app/projects/[projectId]/prepared-changes-section";
+import type { PreparedChangeWorkspaceItem } from "@/modules/execution/workspace";
+import { ChangeGates } from "@/app/app/projects/[projectId]/agent/change-gates";
 import { IntelligenceSummary } from "@/app/app/projects/[projectId]/intelligence-summary";
 import { AuditOverview } from "@/app/app/projects/[projectId]/audit-overview";
 import { buildBusinessBrainView } from "@/modules/projects/business-brain-view";
@@ -893,14 +891,19 @@ export default async function E2eScenarioPage({
 
   if (!isE2eScenario(scenario)) notFound();
 
-  const change: PreparedChangeCard = E2E_SCENARIOS[scenario]();
+  const change: PreparedChangeWorkspaceItem = E2E_SCENARIOS[scenario]();
 
   return (
     <main className="mx-auto max-w-4xl p-8">
       {label}
-      <PreparedChangesSection
+      {/*
+        The component the Agent route mounts, given the same card. A fixture
+        that assembled the panels itself would drift from the route the moment
+        either changed, and these scenarios exist to catch exactly that.
+      */}
+      <ChangeGates
         projectId="project_e2e"
-        changes={[change]}
+        change={change}
         planHref="/app/projects/project_e2e/plan"
       />
     </main>

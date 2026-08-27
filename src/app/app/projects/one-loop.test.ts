@@ -34,12 +34,13 @@ const PRIORITIES = read(
 );
 const BRAIN_VIEW = read("src/modules/projects/business-brain-view.ts");
 const PREPARE_PANEL = read("src/app/app/projects/[projectId]/prepare-change-panel.tsx");
-const PREPARED_SECTION = read("src/app/app/projects/[projectId]/prepared-changes-section.tsx");
+const PREPARED_SECTION = read("src/app/app/projects/[projectId]/agent/change-gates.tsx");
 const RUN_AUDIT = read("src/app/app/projects/[projectId]/run-audit-button.tsx");
 const AUDIT_STORE = read("src/modules/business-audit/store.ts");
 const SOURCE = read("src/modules/action-plans/source.ts");
 const WORKSPACE_READ_MODEL = read("src/modules/execution/workspace.ts");
 const AGENT_PAGE = read("src/app/app/projects/[projectId]/agent/page.tsx");
+const CHANGE_GATES = read("src/app/app/projects/[projectId]/agent/change-gates.tsx");
 const AGENT_PANEL = read("src/app/app/projects/[projectId]/agent-panel.tsx");
 const AGENT_FOCUS = read("src/modules/projects/agent-focus.ts");
 const CHANGE_ORIGIN = read("src/app/app/projects/[projectId]/change-origin.tsx");
@@ -390,9 +391,14 @@ describe("the plan hands off to the agent, and the agent points back", () => {
    * blocked states once shipped hard-coded fragments that pointed at nothing.
    */
   it("takes the plan's URL from the route rather than building one", () => {
-    expect(PREPARED_SECTION).toContain("planHref: string");
+    expect(AGENT_PAGE).toContain("const planHref: string");
     expect(AGENT_PAGE).toContain('projectSectionHref(project.id, "action-plan")');
-    expect(copyOf(PREPARED_SECTION)).not.toContain("/app/projects/");
+    /*
+     * Narrowed when the gate panels moved onto the route: the rule is that the
+     * *plan's* URL comes from `projectSectionHref`, not that a route may never
+     * build any path. This page legitimately builds the internal dogfood href.
+     */
+    expect(copyOf(AGENT_PAGE)).not.toContain('`/app/projects/${project.id}/action-plan');
   });
 
   /**

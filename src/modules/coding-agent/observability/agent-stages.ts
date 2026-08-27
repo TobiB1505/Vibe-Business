@@ -187,8 +187,6 @@ export type AgentWorkspaceInput = {
   filesChanged?: number | null;
 };
 
-const TERMINAL: readonly OperationStatus[] = ["completed", "failed", "cancelled"];
-
 /**
  * The five stages, in order.
  *
@@ -200,7 +198,6 @@ const TERMINAL: readonly OperationStatus[] = ["completed", "failed", "cancelled"
 export function agentStageSteps(input: AgentWorkspaceInput): AgentStageStep[] {
   const { timeline, runStatus, changeProgress } = input;
 
-  const runEnded = runStatus !== null && TERMINAL.includes(runStatus);
   const runFailed = runStatus === "failed" || runStatus === "cancelled";
 
   const machine: AgentStageState[] =
@@ -258,7 +255,7 @@ export function agentStageSteps(input: AgentWorkspaceInput): AgentStageStep[] {
     stage,
     label: labelFor(stage, states[stage]),
     state: states[stage],
-    detail: detailFor(stage, states[stage], input, runEnded),
+    detail: detailFor(stage, states[stage], input),
   }));
 }
 
@@ -283,13 +280,15 @@ function detailFor(
   stage: AgentStage,
   state: AgentStageState,
   input: AgentWorkspaceInput,
-  runEnded: boolean,
 ): string | null {
   // No detail: the rail's state word already says "Waiting for you", and
   // saying it twice on one line is the redundancy this product keeps removing.
-  if (state === "paused") return null;
-  if (state === "skipped") return runEnded ? "Never reached" : null;
-  if (state === "not_applicable") return "Not available for this change";
+  /*
+   * Three states whose state word already says everything. A detail here would
+   * be the same sentence twice on one line — the live rail read "Never
+   * reached · Never reached", which is how you notice.
+   */
+  if (state === "paused" || state === "skipped" || state === "not_applicable") return null;
 
   if (stage === "understand" && state === "done" && typeof input.filesInspected === "number") {
     return `${input.filesInspected} ${input.filesInspected === 1 ? "file" : "files"} inspected`;
@@ -297,11 +296,11 @@ function detailFor(
   if (stage === "build" && state === "done" && typeof input.filesChanged === "number") {
     return `${input.filesChanged} ${input.filesChanged === 1 ? "file" : "files"} changed`;
   }
-  // The change's own sentence, already written to the founder and already the
-  // only place those words live.
-  if ((stage === "preview" || stage === "review") && input.changeProgress !== null) {
-    return state === "active" ? input.changeProgress.headline : null;
-  }
+  /*
+   * Deliberately not the change's headline. It is a full sentence written for a
+   * panel, and in a rail cell it overflowed into the next stage's label on the
+   * live screen. The stage's own body says it at the width it was written for.
+   */
   return null;
 }
 

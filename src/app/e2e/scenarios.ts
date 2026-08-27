@@ -1,4 +1,8 @@
-import type { PreparedChangeCard } from "@/app/app/projects/[projectId]/prepared-changes-section";
+/*
+ * The read model's own type, now that the card component that re-exported it is
+ * gone. Same object, one hop closer to where it is produced.
+ */
+import type { PreparedChangeWorkspaceItem as PreparedChangeCard } from "@/modules/execution/workspace";
 import type { OutcomeCard, OutcomeCheckLine } from "@/modules/outcome-verification/view";
 import type { BusinessImpactCard } from "@/modules/business-measurement/view";
 import { businessRationaleFor } from "@/modules/execution/business-rationale";

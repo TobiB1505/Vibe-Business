@@ -90,7 +90,7 @@ describe("the origin says what was asked for, never what was achieved", () => {
 });
 
 describe("the card shows one answer to why, not two", () => {
-  const section = source("prepared-changes-section.tsx");
+  const section = source("agent/change-gates.tsx");
 
   it("renders the origin only when no written rationale exists", () => {
     expect(section).toContain("{!change.rationale && (");
@@ -124,6 +124,16 @@ describe("the card shows one answer to why, not two", () => {
     // Both answer "what is this and why" and belong in the same place: first,
     // where the branch name used to be.
     expect(section.indexOf("<ChangeOrigin")).toBeGreaterThan(section.indexOf("<ChangeRationale"));
-    expect(section.indexOf("<ChangeOrigin")).toBeLessThan(section.indexOf("{change.branchName}"));
+
+    /*
+     * [2026-08-27] The branch name is no longer in this file. UI-19 moved the
+     * git identity into the merge stage, which the route renders above these
+     * gates — and above *that* sits the task panel carrying the Move, its
+     * problem and why it matters. The meaning still comes before the identity;
+     * it is now the route that orders them, so the route is where it is
+     * asserted.
+     */
+    const route = source("agent/page.tsx");
+    expect(route.indexOf("<AgentTaskPanel")).toBeLessThan(route.indexOf("<AgentMergeStage"));
   });
 });

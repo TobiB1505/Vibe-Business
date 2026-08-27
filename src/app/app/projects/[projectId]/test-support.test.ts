@@ -83,7 +83,6 @@ describe("every panel the allowlists cover still yields controls", () => {
     "preview-panel.tsx",
     "validation-panel.tsx",
     "review-panel.tsx",
-    "prepared-changes-section.tsx",
   ])("%s", (file) => {
     expect(actionLabels(source(file)).length).toBeGreaterThan(0);
   });

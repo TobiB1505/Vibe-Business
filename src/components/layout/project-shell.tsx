@@ -44,7 +44,7 @@ import { cn } from "@/lib/utils/cn";
  *   home         — the diagnosis, business map and what to do next
  *   my-product   — the product profile, its sources and what it can do
  *   action-plan  — `opportunities-panel` + `action-plan-panel`
- *   agent        — `prepared-changes-section` (validation, preview, review,
+ *   agent        — the five-stage workspace and the gate panels (validation,
  *                  approval and merge all live inside a prepared change)
  *   experiments  — what a merged change made measurable, via the project
  *                  impact model

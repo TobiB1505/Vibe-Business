@@ -21,7 +21,8 @@ import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/s
 import { readAgentWorkspace } from "@/modules/coding-agent/agent-workspace";
 import { agentCoreCaption } from "@/modules/coding-agent/observability/agent-stages";
 import { AgentPanel } from "../agent-panel";
-import { PreparedChangesSection, type PreparedChangeCard } from "../prepared-changes-section";
+import type { PreparedChangeWorkspaceItem } from "@/modules/execution/workspace";
+import { ChangeGates } from "./change-gates";
 import { AgentTaskPanel } from "./agent-task-panel";
 import { Surface } from "@/components/ui/surface";
 import { AgentActivity } from "./agent-activity";
@@ -104,7 +105,7 @@ export default async function ProjectAgentPage({
       projectId,
       userId,
       repositoryFullName: project.repository?.fullName ?? null,
-    }) as Promise<PreparedChangeCard[]>,
+    }) as Promise<PreparedChangeWorkspaceItem[]>,
     getLatestProfile(supabase, projectId),
     getLatestSuccessfulSnapshot(supabase, projectId),
     getLatestOpportunities(supabase, projectId),
@@ -187,6 +188,11 @@ export default async function ProjectAgentPage({
     userId,
     changes,
   });
+
+  const planHref: string = projectSectionHref(project.id, "action-plan");
+  /* One binding, so the gate panels below read as one change rather than as
+     seven reaches into the workspace view. */
+  const change = workspace.change;
 
   return (
     <WorkspaceSection
@@ -273,7 +279,7 @@ export default async function ProjectAgentPage({
               context={context}
               focus={focus}
               preparedCount={changes.length}
-              planHref={projectSectionHref(project.id, "action-plan")}
+              planHref={planHref}
               agentHref={projectSectionHref(project.id, "agent")}
               productHref={projectSectionHref(project.id, "my-product")}
               executionHref={executionHref}
@@ -295,46 +301,45 @@ export default async function ProjectAgentPage({
           />
         )}
 
-        {workspace.stage === "preview" && workspace.change !== null && (
+        {workspace.stage === "preview" && change !== null && (
           <Surface level="section" padding="lg">
             <AgentPreviewStage
-              images={workspace.change.reviewImages}
+              images={change.reviewImages}
               changes={workspace.previewChanges}
-              filesChanged={workspace.change.filePaths.length}
+              filesChanged={change.filePaths.length}
               reviewHref={projectSectionHref(project.id, "agent")}
-              filesHref={workspace.change.compareUrl ?? undefined}
+              filesHref={change.compareUrl ?? undefined}
             />
           </Surface>
         )}
 
-        {workspace.stage === "review" && workspace.change !== null && (
+        {workspace.stage === "review" && change !== null && (
           <Surface level="section" padding="lg">
             <AgentMergeStage
               summary={workspace.mergeSummary}
-              files={workspace.change.filePaths.map((path) => ({ path }))}
-              allChecksPassed={workspace.change.validation?.status === "passed"}
-              branchName={workspace.change.branchName}
-              baseBranch={workspace.change.baseBranch}
-              commitSha={workspace.change.commitSha}
-              compareUrl={workspace.change.compareUrl}
+              files={change.filePaths.map((path) => ({ path }))}
+              allChecksPassed={change.validation?.status === "passed"}
+              branchName={change.branchName}
+              baseBranch={change.baseBranch}
+              commitSha={change.commitSha}
+              compareUrl={change.compareUrl}
               reviewHref={projectSectionHref(project.id, "agent")}
-              canMerge={workspace.change.progress.approved}
+              canMerge={change.progress.approved}
             />
           </Surface>
         )}
 
-        {changes.length > 0 ? (
-          <PreparedChangesSection
-            projectId={project.id}
-            changes={changes}
-            planHref={projectSectionHref(project.id, "action-plan")}
-          />
-        ) : (
+        {change !== null && (
+          <ChangeGates projectId={project.id} change={change} planHref={planHref} />
+        )}
+
+        {changes.length === 0 && workspace.timeline === null && (
           <EmptyState
             title="Nothing prepared yet"
-            description="When you let Vibe act on one of your next moves, the prepared change appears here with its validation, preview, review and approval state."
+            description="When you let Vibe act on one of your next moves, it appears here with its checks, its preview and your approval."
           />
         )}
+
       </div>
     </WorkspaceSection>
   );

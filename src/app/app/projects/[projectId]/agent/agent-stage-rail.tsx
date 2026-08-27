@@ -122,7 +122,13 @@ export function AgentStageRail({ steps }: { steps: AgentStageStep[] }) {
               data-stage={step.stage}
               data-state={step.state}
             >
-              <div className="flex flex-none items-center gap-3.5">
+              {/*
+                `min-w-0` rather than `flex-none`. With a fixed cell and
+                `whitespace-nowrap` labels, a long stage name ran straight into
+                the next stage's on the live screen — five cells, no give, and
+                nowhere for the text to stop.
+              */}
+              <div className="flex min-w-0 items-center gap-3.5">
                 <span
                   className={cn(
                     "flex size-9 flex-none items-center justify-center rounded-full border-[1.5px] font-mono text-sm",
@@ -140,7 +146,7 @@ export function AgentStageRail({ steps }: { steps: AgentStageStep[] }) {
                 <span className="flex min-w-0 flex-col gap-0.5">
                   <span
                     className={cn(
-                      "truncate text-[0.9375rem] whitespace-nowrap",
+                      "truncate text-[0.9375rem]",
                       step.state === "active" ? "text-fg font-bold" : "font-semibold",
                       step.state === "pending" ? "text-fg-secondary" : "text-fg",
                     )}
@@ -148,10 +154,7 @@ export function AgentStageRail({ steps }: { steps: AgentStageStep[] }) {
                     {step.label}
                   </span>
                   <span
-                    className={cn(
-                      "truncate text-[0.8125rem] whitespace-nowrap",
-                      STATUS_TONE[step.state],
-                    )}
+                    className={cn("truncate text-[0.8125rem]", STATUS_TONE[step.state])}
                   >
                     {STATE_WORDS[step.state]}
                     {step.detail !== null && (
@@ -164,7 +167,9 @@ export function AgentStageRail({ steps }: { steps: AgentStageStep[] }) {
               {!last && (
                 <div
                   aria-hidden="true"
-                  className="mx-4 mt-4 hidden min-w-[26px] flex-1 items-center sm:flex"
+                  /* Shrinkable, so the connector yields to the labels rather
+                     than pushing the last stage off the edge. */
+                  className="mx-3 mt-4 hidden min-w-3 flex-1 shrink items-center sm:flex"
                 >
                   <div
                     className={cn(

@@ -316,7 +316,7 @@ describe("opening a project page starts nothing (§43)", () => {
 });
 
 describe("the outcome panel sits after merge and offers no gate beyond it", () => {
-  const src = source("prepared-changes-section.tsx");
+  const src = source("agent/change-gates.tsx");
 
   it("renders the outcome panel last", () => {
     expect(src.indexOf("<OutcomePanel")).toBeGreaterThan(src.indexOf("<MergePanel"));
