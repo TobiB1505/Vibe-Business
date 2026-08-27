@@ -44,6 +44,7 @@ import { AgentTaskPanel } from "@/app/app/projects/[projectId]/agent/agent-task-
 import { AgentValidationChecks } from "@/app/app/projects/[projectId]/agent/agent-validation-checks";
 import { AgentFileActivity } from "@/app/app/projects/[projectId]/agent/agent-file-activity";
 import { AgentPreviewStage } from "@/app/app/projects/[projectId]/agent/agent-preview-stage";
+import { AgentMergeStage } from "@/app/app/projects/[projectId]/agent/agent-merge-stage";
 import { AgentAssuranceBar } from "@/app/app/projects/[projectId]/agent/agent-assurance-bar";
 import { E2E_NEEDS_USER_SCENARIOS, isE2eNeedsUserScenario } from "../needs-user-scenarios";
 import {
@@ -563,8 +564,19 @@ export default async function E2eScenarioPage({
    * a live view full of fixture events would only make that harder to see.
    */
   if (isE2eAgentStageScenario(scenario)) {
-    const { steps, core, caption, activity, task, checks, fileEvents, previewChanges, previewImages } =
-      E2E_AGENT_STAGE_SCENARIOS[scenario]();
+    const {
+      steps,
+      core,
+      caption,
+      activity,
+      task,
+      checks,
+      fileEvents,
+      previewChanges,
+      previewImages,
+      mergeFiles,
+      mergeSummary,
+    } = E2E_AGENT_STAGE_SCENARIOS[scenario]();
     /* Stage 3 swaps the phase list for the record of what was touched. */
     const validating = steps.some(
       (step) => step.stage === "validate" && step.state === "active",
@@ -572,9 +584,23 @@ export default async function E2eScenarioPage({
     const previewing = steps.some(
       (step) => step.stage === "preview" && step.state === "active",
     );
+    const merging = steps.some((step) => step.stage === "review" && step.state === "active");
     return (
       <main className="mx-auto flex max-w-[90rem] flex-col gap-6 p-8">
         {label}
+        {merging ? (
+          <AgentMergeStage
+            summary={mergeSummary}
+            files={mergeFiles}
+            allChecksPassed
+            branchName="vibe/feat-pricing-visibility"
+            baseBranch="main"
+            commitSha="4f1c9a2b7de3115902d9f43161aa87dc5ebe6872"
+            compareUrl="https://github.com/example/repo/compare/main...vibe/feat-pricing-visibility"
+            reviewHref="#"
+            canMerge
+          />
+        ) : null}
         {previewing ? (
           <AgentPreviewStage
             images={previewImages}

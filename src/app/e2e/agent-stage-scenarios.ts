@@ -157,6 +157,29 @@ const PREVIEW_CHANGES: PreviewChange[] = [
  */
 const PREVIEW_IMAGES: PreviewImages | null = null;
 
+import type { MergeFile, MergeSummary } from "@/app/app/projects/[projectId]/agent/agent-merge-stage";
+
+/*
+ * Paths without line counts, because no diff statistic is stored. The fixture
+ * mirrors what production can actually supply rather than what the mockup drew.
+ */
+const MERGE_FILES: MergeFile[] = [
+  { path: "src/app/pricing/page.tsx" },
+  { path: "src/components/pricing/PricingPlans.tsx" },
+  { path: "src/components/pricing/PlanCard.tsx" },
+  { path: "src/lib/stripe/checkout.ts" },
+  { path: "src/app/api/checkout/route.ts" },
+  { path: "src/styles/pricing.module.css" },
+  { path: "src/data/plans.ts" },
+  { path: "public/images/pricing-hero.svg" },
+];
+
+const MERGE_SUMMARY: MergeSummary = {
+  filesChanged: MERGE_FILES.length,
+  tests: "passing",
+  build: "successful",
+};
+
 type Fixture = {
   steps: AgentStageStep[];
   core: AgentCoreState;
@@ -166,6 +189,8 @@ type Fixture = {
   task: AgentTask | null;
   checks: ValidationCheck[];
   previewChanges: PreviewChange[];
+  mergeFiles: MergeFile[];
+  mergeSummary: MergeSummary;
   previewImages: PreviewImages | null;
   fileEvents: StoredExecutionEvent[];
 };
@@ -180,6 +205,8 @@ function build(input: Parameters<typeof agentStageSteps>[0]): Fixture {
     task: input.timeline === null ? null : TASK,
     checks: CHECKS,
     previewChanges: PREVIEW_CHANGES,
+    mergeFiles: MERGE_FILES,
+    mergeSummary: MERGE_SUMMARY,
     previewImages: PREVIEW_IMAGES,
     fileEvents: FILE_EVENTS,
   };
@@ -242,6 +269,23 @@ export const E2E_AGENT_STAGE_SCENARIOS = {
       }),
       runStatus: "completed",
       changeProgress: progress("review_required"),
+      filesInspected: 12,
+      filesChanged: 8,
+    }),
+
+  /** Stage 5: what it costs, what it touches, and the change itself. */
+  "agent-stages-merge": () =>
+    build({
+      timeline: timeline({
+        preparing: "done",
+        working: "done",
+        reviewing_change: "done",
+        preparing_branch: "done",
+        validating: "done",
+        finished: "done",
+      }),
+      runStatus: "completed",
+      changeProgress: progress("ready_to_merge"),
       filesInspected: 12,
       filesChanged: 8,
     }),
