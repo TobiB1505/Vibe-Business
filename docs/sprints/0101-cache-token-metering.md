@@ -22,7 +22,7 @@ The consequence arrives with the first Credit rate card. `CREDIT_RATE_CARDS` is 
 
 ## What changed
 
-- **`20260827080000_cache_token_metering.sql`** — two values added to the `sku` CHECK.
+- **`20260827180206_cache_token_metering.sql`** — two values added to the `sku` CHECK.
 - **`credits/schema.ts`** — `USAGE_SKUS` and `SKU_UNITS`. The docblock explaining the absence is replaced by one explaining the cache-versus-thinking distinction, since the old one is now false.
 - **`credits/projection.ts`** — the two events, emitted only when the quantity is above zero, following `anthropic_thinking_tokens`' precedent and for its reason: every operation but an agent turn has no cache breakpoint, so a zero-quantity row on every AI call would be noise rather than a measurement.
 
@@ -36,9 +36,16 @@ The consequence arrives with the first Credit rate card. `CREDIT_RATE_CARDS` is 
 
 ## What has not been proved
 
-- **The migration is not deployed.** It is committed and asserted against the migration text by `credits/schema.test.ts`, and it has not been pushed to the remote database. Nothing in the application writes a cache SKU until it is.
-- **No reconciliation run against real data.** The claim that the next `reconcileAiUsage` backfills historical rows rests on the unique index and the projection, both tested — not on a run against the live ledger.
+- **No reconciliation run against real data.** The migration is deployed, but the claim that the next `reconcileAiUsage` backfills historical cache rows still rests on the unique index and the projection — both tested, neither observed against the live ledger. The 950 existing `billing_usage_events` rows were counted before and after the migration and are unchanged; nothing has yet written a cache row.
 - **Nothing was rated.** `CREDIT_RATE_CARDS` is empty, so the `sku_not_priced` behaviour this sprint's argument turns on is asserted in tests against a constructed card, never observed in production.
+
+## Deployment
+
+Applied to `dcbwlctscooefwnivxzv` on 2026-08-27, before the code merged, so the CHECK could never refuse a row the application had already started writing. The linked CLI workflow was unavailable — no access token and no database password in this environment — so it went out through the Supabase MCP, with the remote migration history and the live constraint definition read first (rule 30) rather than assumed.
+
+Verified by an independent read rather than from the apply response: the constraint now names both cache SKUs, and `billing_usage_events` holds the same 950 rows it held before.
+
+**The MCP apply path stamped a wall-clock version again** — `20260827180206` in `supabase_migrations.schema_migrations`, against the committed filename's `20260827080000`. That is the same drift PRs #95 and #98 hit. The local file is renamed to match what the remote recorded, which is the direction rule 34 allows without touching production internals.
 
 ## Validation
 
