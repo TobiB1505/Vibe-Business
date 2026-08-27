@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { RepositoryIntelligenceSnapshot } from "./schema";
@@ -88,7 +89,24 @@ export async function getLatestSnapshotAttempt(
 }
 
 /** The snapshot shown on the project page: the newest successful run. */
-export async function getLatestSuccessfulSnapshot(
+/**
+ * Deduplicated per request (VB-022).
+ *
+ * The Business Health render asks fourteen questions at once and several of the
+ * services answering them re-read the same documents underneath — the audit
+ * three times, the repository snapshot four. Each is a JSONB document, so the
+ * cost is bytes off the wire and parse time, repeated.
+ *
+ * `cache()` is per-render, keyed on the arguments — which works here only
+ * because every caller in a render shares the one `supabase` instance
+ * `requireProjectAccess` returned. A caller that made its own client would miss
+ * the cache rather than get a stale answer, which is the right way round.
+ *
+ * Outside a render it does not memoize at all — measured, not assumed — so
+ * durable execution keeps reading fresh state. That is what makes this safe to
+ * put on a store shared with the workflow steps.
+ */
+async function getLatestSuccessfulSnapshotUncached(
   supabase: SupabaseClient,
   projectId: string,
 ): Promise<StoredSnapshot | null> {
@@ -104,6 +122,8 @@ export async function getLatestSuccessfulSnapshot(
   if (error) throw error;
   return data ? mapRow(data as SnapshotRow) : null;
 }
+
+export const getLatestSuccessfulSnapshot = cache(getLatestSuccessfulSnapshotUncached);
 
 /**
  * One specific snapshot, scoped to its project.

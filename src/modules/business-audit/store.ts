@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 
 import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -213,7 +214,24 @@ export function computeAuditInputHash(params: {
 }
 
 /** The audit shown on the project page: the newest successful run. */
-export async function getLatestSuccessfulAudit(
+/**
+ * Deduplicated per request (VB-022).
+ *
+ * The Business Health render asks fourteen questions at once and several of the
+ * services answering them re-read the same documents underneath — the audit
+ * three times, the repository snapshot four. Each is a JSONB document, so the
+ * cost is bytes off the wire and parse time, repeated.
+ *
+ * `cache()` is per-render, keyed on the arguments — which works here only
+ * because every caller in a render shares the one `supabase` instance
+ * `requireProjectAccess` returned. A caller that made its own client would miss
+ * the cache rather than get a stale answer, which is the right way round.
+ *
+ * Outside a render it does not memoize at all — measured, not assumed — so
+ * durable execution keeps reading fresh state. That is what makes this safe to
+ * put on a store shared with the workflow steps.
+ */
+async function getLatestSuccessfulAuditUncached(
   supabase: SupabaseClient,
   projectId: string,
 ): Promise<StoredAudit | null> {
@@ -229,6 +247,8 @@ export async function getLatestSuccessfulAudit(
   if (error) throw error;
   return data ? mapRow(data as AuditRow) : null;
 }
+
+export const getLatestSuccessfulAudit = cache(getLatestSuccessfulAuditUncached);
 
 type AuditReadingRow = {
   overall_score: number | null;
@@ -263,6 +283,14 @@ export type StoredAuditReading = {
  * The Business Brain never opens historical audit documents merely to draw a
  * trend, and the comparability rule remains owned by `score-series.ts`.
  */
+/**
+ * How much score history one project's trend may read (VB-025).
+ *
+ * Not a page size — there is no paging here, and adding one would be a product
+ * change. It is a ceiling on a read that would otherwise grow forever.
+ */
+const AUDIT_READING_LIMIT = 60;
+
 export async function getProjectAuditReadings(
   supabase: SupabaseClient,
   projectId: string,
@@ -274,7 +302,13 @@ export async function getProjectAuditReadings(
     )
     .eq("project_id", projectId)
     .eq("status", "completed")
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    // VB-025. Unbounded, this grows with every audit a project ever ran and is
+    // read on every Health render. The cap is safe here because the order is
+    // already newest-first and the consumer is a score trend: sixty readings
+    // is more history than any chart shows, and the ones dropped are the
+    // oldest.
+    .limit(AUDIT_READING_LIMIT);
 
   if (error) throw error;
 

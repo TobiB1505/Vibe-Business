@@ -25,6 +25,7 @@ doc before enabling Google for real users.
 | `actions.ts` | Every Server Action: sign in, sign up, Google hand-off, password reset request, password update, sign out. |
 | `redirects.ts` | `sanitizeNextPath()` — the single open-redirect boundary. Also `internalRedirect()`. |
 | `errors.ts` | Classifies provider errors and maps them to copy. Nothing raw ever reaches a screen. |
+| `throttle.ts` | Per-account sign-in throttling (VB-010). One `SECURITY DEFINER` function holds all the state; a success clears only the caller's own verified identity. Fails open. |
 
 Routes and screens:
 

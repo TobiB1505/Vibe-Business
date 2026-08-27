@@ -815,6 +815,14 @@ export type StoredAgentActivity = {
   command: string | null;
 };
 
+/**
+ * How many activity rows one agent run may return (VB-025).
+ *
+ * An agent run can emit thousands, and this was unbounded. The newest are
+ * kept, because how a run *ended* is what a reader is looking for.
+ */
+const AGENT_ACTIVITY_LIMIT = 500;
+
 export async function listAgentActivity(
   supabase: SupabaseClient,
   params: { runId: string; projectId: string },
@@ -824,7 +832,13 @@ export async function listAgentActivity(
     .select("event, occurred_at, files_read, changed_paths, command")
     .eq("agent_execution_run_id", params.runId)
     .eq("project_id", params.projectId)
-    .order("sequence", { ascending: true });
+    // VB-025, and the direction matters. The rows are read ascending because
+    // an activity log is read forwards — but a cap on an ascending order keeps
+    // the *first* N and hides how the run ended, which is the half anyone
+    // reading this actually wants. So the newest are taken and the order is
+    // restored below.
+    .order("sequence", { ascending: false })
+    .limit(AGENT_ACTIVITY_LIMIT);
 
   if (error) throw error;
 
@@ -834,13 +848,17 @@ export async function listAgentActivity(
     files_read: number | null;
     changed_paths: string[] | null;
     command: string | null;
-  }[]).map((row) => ({
-    event: row.event,
-    occurredAt: row.occurred_at,
-    filesRead: row.files_read,
-    changedPaths: row.changed_paths,
-    command: row.command,
-  }));
+  }[])
+    // Read newest-first for the cap; handed back oldest-first, which is how an
+    // activity log is read.
+    .reverse()
+    .map((row) => ({
+      event: row.event,
+      occurredAt: row.occurred_at,
+      filesRead: row.files_read,
+      changedPaths: row.changed_paths,
+      command: row.command,
+    }));
 }
 
 /* ---------------------------------------------------------------------------

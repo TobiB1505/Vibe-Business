@@ -16,6 +16,19 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * the caller is `anon`, which holds no privilege on any table — this design
  * works with that rather than around it.
  *
+ * ## The function is publicly reachable, so it trusts its arguments as little
+ * as possible
+ *
+ * `anon` can call it, which means anyone holding the publishable key can —
+ * and that key is published. A success therefore clears the window belonging
+ * to the **caller's own session**, derived from the JWT inside the function;
+ * the identifier argument is not consulted on that path. That is what stops
+ * an attacker resetting a victim's counter between password guesses.
+ *
+ * It does not stop an attacker *spending* a known account's allowance, which
+ * would need the counter to be unwritable by the public. See VB-053 and the
+ * migration's docblock.
+ *
  * ## It fails open, on purpose
  *
  * If the database cannot answer, sign-in proceeds. That is the wrong default
@@ -47,6 +60,10 @@ const ALLOWED: ThrottleDecision = { allowed: true, retryAfterSeconds: 0 };
  * can in principle be raced by a concurrent attempt — worth one extra try
  * against a bound of eight, and worth far less than letting every attempt
  * reach the auth provider.
+ *
+ * `succeeded: true` must be called on the client that just signed in, not on a
+ * fresh one: the function reads the identity out of that client's new access
+ * token. Passing the identifier is not enough and is not meant to be.
  */
 export async function recordAuthAttempt(
   supabase: SupabaseClient,
