@@ -50,6 +50,14 @@ export type AgentStageState =
   | "active"
   | "done"
   | "failed"
+  /**
+   * The run stopped here and asked the founder something only they can answer.
+   *
+   * Not `active`: nothing is running, and a stage that kept reporting progress
+   * while waiting on a person would be narrating work nobody is doing. Not
+   * `failed` either — the run did not go wrong, and an answer restarts it.
+   */
+  | "paused"
   /** The run ended before reaching this stage. */
   | "skipped"
   /** This stage does not apply to this change, and never will. */
@@ -211,7 +219,16 @@ export function agentStageSteps(input: AgentWorkspaceInput): AgentStageStep[] {
    */
   const resolved = runFailed
     ? machine.map((state) => (state === "pending" || state === "active" ? "skipped" : state))
-    : machine;
+    : runStatus === "needs_user"
+      ? /*
+         * The run stopped to ask the founder something. Nothing is executing,
+         * so the stage it stopped on must not keep reporting progress — the
+         * design calls this the moment everything mint goes amber, and the
+         * reason it deserves its own state is that waiting on a person and
+         * working are indistinguishable in every stepper that lacks one.
+         */
+        machine.map((state) => (state === "active" ? "paused" : state))
+      : machine;
 
   const gatesUnreachable = runFailed || resolved.some((state) => state === "failed");
 
@@ -247,7 +264,9 @@ export function agentStageSteps(input: AgentWorkspaceInput): AgentStageStep[] {
 
 function labelFor(stage: AgentStage, state: AgentStageState): string {
   if (state === "done") return LABELS[stage].done;
-  if (state === "active") return LABELS[stage].active;
+  // A paused stage keeps its active wording. The work really is at this stage;
+  // it is simply waiting on an answer, which the state word says.
+  if (state === "active" || state === "paused") return LABELS[stage].active;
   return LABELS[stage].pending;
 }
 
@@ -266,6 +285,9 @@ function detailFor(
   input: AgentWorkspaceInput,
   runEnded: boolean,
 ): string | null {
+  // No detail: the rail's state word already says "Waiting for you", and
+  // saying it twice on one line is the redundancy this product keeps removing.
+  if (state === "paused") return null;
   if (state === "skipped") return runEnded ? "Never reached" : null;
   if (state === "not_applicable") return "Not available for this change";
 
@@ -292,9 +314,11 @@ function detailFor(
  * Which of the two settled meanings applies is carried by the caption and by
  * the rail, in words.
  */
-export type AgentCoreState = "idle" | "working" | "settled";
+export type AgentCoreState = "idle" | "working" | "waiting" | "settled";
 
 export function agentCoreState(steps: readonly AgentStageStep[]): AgentCoreState {
+  // Checked before `working`: a paused run has an amber hold, not a breath.
+  if (steps.some((step) => step.state === "paused")) return "waiting";
   if (steps.some((step) => step.state === "active")) return "working";
   const untouched = steps.every((step) => step.state === "pending");
   return untouched ? "idle" : "settled";
@@ -321,6 +345,10 @@ const CORE_CAPTIONS: Record<AgentStage, string> = {
 };
 
 export function agentCoreCaption(steps: readonly AgentStageStep[]): string {
+  if (steps.some((step) => step.state === "paused")) {
+    return "Vibe stopped to ask you something. Answering it starts the run again.";
+  }
+
   const active = steps.find((step) => step.state === "active");
   if (active) return CORE_CAPTIONS[active.stage];
 

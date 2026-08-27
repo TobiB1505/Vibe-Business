@@ -182,10 +182,44 @@
   --shadow-dot-amber: 0 0 8px 1px rgb(232 181 74 / 0.5);
 
   /* ── Motion ──────────────────────────────────────────────────────────
-     UI-0 ships the easing token and hover/focus transitions only. The
-     reveal and meter animations from the mockups belong to the separate
-     motion sprint; the token exists so that sprint has one curve to use. */
+     One curve, and named durations so a signature surface is not a pile of
+     magic numbers. UI-0 shipped the curve alone and said the reveal timings
+     belonged to a later motion sprint; UI-19 is that sprint, and these are the
+     values the design system carries.
+
+     Nothing readable moves for longer than `--duration-reveal`. The pulse and
+     flow loops are decorative only, and every one of them is behind a
+     reduced-motion check in the component that owns it. */
   --ease-vibe: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --duration-hover: 150ms;
+  --duration-reveal: 400ms;
+  --duration-pulse: 1.4s;
+  /* One row after the next on an entrance. Below the count where the last
+     item starts to feel like it was forgotten. */
+  --stagger-row: 80ms;
+}
+
+/* The active step's ring, breathing outward and fading. Decorative: the step's
+   state is carried by its mark, its label and its status word. */
+@keyframes vibe-step-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(0 229 160 / 0.34);
+  }
+  50% {
+    box-shadow: 0 0 0 9px rgb(0 229 160 / 0);
+  }
+}
+
+/* A short band travelling along the connector into the active step. It says
+   "this is where the work is", never how far along it is. */
+@keyframes vibe-step-flow {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
 }
 
 @layer base {

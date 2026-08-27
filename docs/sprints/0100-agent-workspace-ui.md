@@ -1,6 +1,6 @@
 # UI-19 — Agent Workspace (Plan)
 
-Status: Planned, not implemented
+Status: Implemented through the stage rail and core; browser-verified. Stage bodies for Preview and Review still sit below the panel rather than inside the stage narrative.
 
 Date: 2026-08-27
 
@@ -143,9 +143,38 @@ to 3 should reuse it rather than growing a parallel implementation.
 5. DESIGN.md and UX-CONTRACT.md amended to name Agent as the third signature
    surface, with its budget written down.
 
-## Open decisions
+## Decisions taken
 
-- Third signature surface: yes or no. Everything else in the brief depends on it.
-- Estimated time and expected file counts: drop, or replace with elapsed time
-  and real post-run counts.
-- The "Ask or guide Vibe" input: out of scope here, or its own ADR first.
+- **Agent is the third signature surface.** DESIGN.md and UX-CONTRACT.md carry
+  it and its motion budget.
+- **Estimates are out.** Counts shown are counts Vibe recorded; a unit test and
+  a browser test each forbid a duration, a range or a percentage appearing on
+  the surface at all.
+- **The steering input is out of this sprint** and needs its own ADR before it
+  could be built.
+
+## What importing the design changed
+
+The reference set carried a sixth artboard the plan had missed: the run stops
+and asks a question, everything mint turns amber, and the orb holds.
+
+`needs_user` is a real operation status, and the first implementation had no
+state for it — so the stage a run had stopped on kept rendering as *in
+progress*. A stepper narrating work nobody is doing, which is the exact failure
+this file argues against three sections earlier. `paused` is now its own stage
+state and its own core state, with the tests to hold it.
+
+The imported tracker also knows only three states where the run has seven. The
+rail keeps the design's ring, fill, connector and travelling band, and extends
+its vocabulary for `failed`, `paused`, `skipped` and `not_applicable` — with
+`skipped` and `pending` deliberately different in mark, fill, label and words,
+because that pair is the one every stepper renders identically.
+
+The travelling band loops rather than advancing, which is the design's own
+choice and the right one: it says *this is where the work is*, never how far
+along it is.
+
+`globals.css` said the reveal timings "belong to the separate motion sprint".
+This was that sprint, so the design system's `--duration-*`, `--stagger-row`
+and the two step keyframes now live there instead of as magic numbers in a
+component.

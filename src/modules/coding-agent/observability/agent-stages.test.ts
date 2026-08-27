@@ -363,3 +363,52 @@ describe("the caption never promises what nobody measured", () => {
     }
   });
 });
+
+/**
+ * Waiting on a person is not working (UI-19, found by importing the design).
+ *
+ * The reference set has an artboard the earlier plan missed: the run stops and
+ * asks a question, everything mint turns amber, and the orb holds. `needs_user`
+ * is a real operation status, and without a state of its own the stage it
+ * stopped on kept reporting progress — a stepper narrating work nobody was
+ * doing, which is the exact failure this file exists to prevent elsewhere.
+ */
+describe("a run waiting on the founder", () => {
+  const paused = () =>
+    agentStageSteps({
+      timeline: timeline({ preparing: "done", working: "active" }),
+      runStatus: "needs_user",
+      changeProgress: null,
+    });
+
+  it("pauses the stage it stopped on instead of running it", () => {
+    expect(stateOf(paused(), "build")).toBe("paused");
+    expect(stateOf(paused(), "understand")).toBe("done");
+  });
+
+  it("does not treat the pause as failure — later stages can still happen", () => {
+    expect(stateOf(paused(), "validate")).toBe("pending");
+    expect(stateOf(paused(), "preview")).toBe("pending");
+  });
+
+  it("holds the core rather than breathing or settling", () => {
+    expect(agentCoreState(paused())).toBe("waiting");
+  });
+
+  it("says an answer is what restarts it", () => {
+    const caption = agentCoreCaption(paused());
+    expect(caption).toMatch(/ask/i);
+    expect(caption).toMatch(/answer/i);
+    // And still promises no duration.
+    expect(caption).not.toMatch(/almost|soon|minute|hour|%/i);
+  });
+
+  it("keeps the stage's own wording and says what it is waiting for", () => {
+    const build = paused().find((step) => step.stage === "build")!;
+    expect(build.label).toMatch(/making the change/i);
+    // No detail of its own: the rail's state word already says it, and one
+    // line saying "Waiting for you · Waiting for your answer" is the
+    // redundancy this product keeps taking back out.
+    expect(build.detail).toBeNull();
+  });
+});

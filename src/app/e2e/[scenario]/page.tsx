@@ -34,6 +34,11 @@ import {
   E2E_AUDIT_CREDIT_SCENARIOS,
   isE2eAuditCreditScenario,
 } from "../audit-credit-scenarios";
+import {
+  E2E_AGENT_STAGE_SCENARIOS,
+  isE2eAgentStageScenario,
+} from "../agent-stage-scenarios";
+import { AgentWorkspacePanel } from "@/app/app/projects/[projectId]/agent/agent-workspace-panel";
 import { E2E_NEEDS_USER_SCENARIOS, isE2eNeedsUserScenario } from "../needs-user-scenarios";
 import {
   E2E_ACCOUNT_SCENARIOS,
@@ -542,6 +547,23 @@ export default async function E2eScenarioPage({
    * `disabled` comes from the real `auditBlockedByCredits` rather than from the
    * fixture, so the browser sees whatever the page would see.
    */
+  /*
+   * The Agent rail and core, driven by the real `agentStageSteps`.
+   *
+   * Mounted without the stage bodies: the claim under test is whether the five
+   * states are distinguishable and whether motion respects the media query, and
+   * a live view full of fixture events would only make that harder to see.
+   */
+  if (isE2eAgentStageScenario(scenario)) {
+    const { steps, core, caption } = E2E_AGENT_STAGE_SCENARIOS[scenario]();
+    return (
+      <main className="mx-auto max-w-[90rem] p-8">
+        {label}
+        <AgentWorkspacePanel stages={steps} core={core} caption={caption} />
+      </main>
+    );
+  }
+
   if (isE2eAuditCreditScenario(scenario)) {
     const { gate } = E2E_AUDIT_CREDIT_SCENARIOS[scenario];
     return (

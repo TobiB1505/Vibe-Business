@@ -59,6 +59,13 @@ export function AgentCore({
   const reduceMotion = useReducedMotion();
   const visible = useDocumentVisible();
   const alive = state === "working" && !reduceMotion && visible;
+  /*
+   * The design's paused artboard: everything mint goes amber and the orb slows
+   * to a hold. Held rather than stopped, because the run has not ended — it is
+   * waiting on an answer, and an answer restarts it.
+   */
+  const waiting = state === "waiting";
+  const lit = state !== "idle";
 
   return (
     <div
@@ -75,8 +82,7 @@ export function AgentCore({
             state === "idle" ? "opacity-30" : "opacity-100",
           )}
           style={{
-            background:
-              "radial-gradient(circle at 50% 50%, color-mix(in oklab, var(--color-mint) 22%, transparent) 0%, transparent 62%)",
+            background: `radial-gradient(circle at 50% 50%, color-mix(in oklab, var(--color-${waiting ? "amber" : "mint"}) 22%, transparent) 0%, transparent 62%)`,
           }}
         />
 
@@ -85,7 +91,7 @@ export function AgentCore({
           aria-hidden="true"
           className={cn(
             "absolute inset-6 rounded-full border transition-[border-color] duration-700",
-            state === "idle" ? "border-line-2" : "border-mint/25",
+            !lit ? "border-line-2" : waiting ? "border-amber/30" : "border-mint/25",
           )}
         />
 
@@ -108,7 +114,7 @@ export function AgentCore({
         <motion.div
           className={cn(
             "border-line-2 bg-app/80 relative flex size-32 items-center justify-center rounded-full border backdrop-blur-sm transition-[border-color] duration-700",
-            state !== "idle" && "border-mint/45",
+            lit && (waiting ? "border-amber/55" : "border-mint/45"),
           )}
           initial={reduceMotion ? false : { opacity: 0, scale: 0.94 }}
           animate={
