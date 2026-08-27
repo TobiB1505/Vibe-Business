@@ -1,4 +1,5 @@
 import "server-only";
+import { alertOperator } from "@/lib/observability/alert";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { recordAuditEvent } from "@/modules/audit-log/events";
@@ -243,11 +244,11 @@ export async function reconcileAndRepairLotAllocations(
       continue;
     }
 
-    // Observable, never silent (§66). A drifted lot is a financial defect.
-    console.error("[billing] a lot's materialized allocation disagrees with its allocation rows", {
-      grantId: lot.id,
-      drift: reconciliation.drift,
-    });
+    // Observable, never silent (§66), and now reaching somebody (VB-012).
+    await alertOperator(
+      "[billing] a lot's materialized allocation disagrees with its allocation rows",
+      { grantId: lot.id, drift: reconciliation.drift },
+    );
 
     await recordAuditEvent(supabase, {
       userId: params.userId,
@@ -448,7 +449,7 @@ async function returnToLot(
   // remains authoritative, so sustained contention here is logged rather than
   // thrown — failing the settlement that is giving Credits back would be worse
   // than a reconcilable drift on a cache.
-  console.error("[billing] could not return capacity to a credit lot", { lotId, amount });
+  await alertOperator("[billing] could not return capacity to a credit lot", { lotId, amount });
 }
 
 /**

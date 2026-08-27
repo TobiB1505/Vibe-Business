@@ -129,6 +129,17 @@ export class FakeDatabase {
   /** Set to make the next write to a table fail, for persistence-failure tests. */
   failNextWriteWith: { table: string; code?: string; message: string } | null = null;
 
+  /**
+   * Set to make the next *read* of a table fail.
+   *
+   * The write hook above has existed for a while; this is its counterpart, and
+   * it is needed for the same reason — a code path that only runs when a query
+   * errors is otherwise untestable, so its error handling is asserted by
+   * inspection. That is exactly how a `catch` that does the wrong thing
+   * survives review (VB-020).
+   */
+  failNextReadWith: { table: string; code?: string; message: string } | null = null;
+
   rows(table: string): Row[] {
     let rows = this.tables.get(table);
     if (!rows) {
@@ -1021,6 +1032,15 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
     return null;
   }
 
+  private readFailure(): QueryError {
+    const pending = this.db.failNextReadWith;
+    if (pending && pending.table === this.table) {
+      this.db.failNextReadWith = null;
+      return { code: pending.code, message: pending.message };
+    }
+    return null;
+  }
+
   private resolveRows(): Row[] {
     let rows = this.db.rows(this.table).filter((row) => matches(row, this.filters));
 
@@ -1151,6 +1171,9 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
 
       return { data: results, error: null };
     }
+
+    const readFailure = this.readFailure();
+    if (readFailure) return { data: null, error: readFailure };
 
     const rows = this.resolveRows();
     // A `head: true` count query returns no rows and a `count`, which is what

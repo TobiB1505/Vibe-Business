@@ -4,15 +4,21 @@ import { createBrowserbaseCaptureProvider } from "@/modules/review/browserbase/c
 import { REVIEW_POLICY } from "@/modules/review/policy";
 import type { ReviewFailureCode } from "@/modules/review/schema";
 import { createVercelSandboxProvider } from "@/modules/validation/vercel/provider";
-import { captureReviewStep, completeReviewStep, failReviewStep, type ReviewDeps } from "./execution";
+import {
+  captureReviewStep,
+  completeReviewStep,
+  failReviewStep,
+  sweepExpiredScreenshotsStep,
+  type ReviewDeps,
+} from "./execution";
 
 /**
  * The durable visual review (Sprint 11A §21).
  *
  * ```
- * capture (both sides, one session) ─▶ complete
- *              │
- *              └────────────────────▶ fail
+ * capture (both sides, one session) ─▶ complete ─┐
+ *              │                                 ├─▶ sweep expired screenshots
+ *              └────────────────────▶ fail ──────┘
  * ```
  *
  * Shorter than the validation and preview workflows because the work is
@@ -54,6 +60,11 @@ async function finishReview(operationId: string) {
   await completeReviewStep(deps(), operationId);
 }
 
+async function sweepExpiredScreenshots(operationId: string) {
+  "use step";
+  await sweepExpiredScreenshotsStep(deps(), operationId);
+}
+
 async function abortReview(operationId: string, failureCode: ReviewFailureCode) {
   "use step";
   await failReviewStep(deps(), operationId, failureCode);
@@ -76,8 +87,11 @@ export async function changeReviewWorkflow(operationId: string) {
 
   if (failureCode !== null) {
     await abortReview(operationId, failureCode);
-    return;
+  } else {
+    await finishReview(operationId);
   }
 
-  await finishReview(operationId);
+  // VB-004, on both paths and last. Retention has nothing to do with how this
+  // review went, and the step cannot fail the operation — see its docblock.
+  await sweepExpiredScreenshots(operationId);
 }

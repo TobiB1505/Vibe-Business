@@ -301,6 +301,14 @@ export type AuditEventType =
    * has no single user to attribute an event to and is deliberately absent
    * from this log (see the comment below).
    */
+  /**
+   * A Credit hold is still standing over an operation that finished (VB-020).
+   *
+   * Reported, not repaired: what is owed differs by how the operation ended,
+   * and only one of the two repairs is performable from the read that notices
+   * it — see `credits/orphaned-holds.ts`.
+   */
+  | "credit_hold.orphaned"
   | "credit_drift.detected"
   | "credit_drift.repaired"
   | "credit_drift.repair_failed"

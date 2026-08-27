@@ -1,3 +1,5 @@
+import { containsCredentialMaterial } from "@/lib/security/credential-patterns";
+
 /**
  * Secret material must not exist in a spec (EXECUTION CORE-3 §11, §48).
  *
@@ -22,39 +24,20 @@
  * who pastes a Stripe key into a plan step should not have it copied into a
  * durable artifact.
  *
- * The patterns below are deliberately narrow and high-signal: recognisable
- * credential prefixes and PEM headers, nothing that guesses at entropy. A
- * narrow matcher that never fires on ordinary prose is useful; a broad one that
- * rejects the word "secret" trains people to route around it.
+ * The patterns it matches against are deliberately narrow and high-signal:
+ * recognisable credential prefixes and PEM headers, nothing that guesses at
+ * entropy. A narrow matcher that never fires on ordinary prose is useful; a
+ * broad one that rejects the word "secret" trains people to route around it.
  */
 
 /**
- * Credential shapes worth refusing outright.
- *
- * Each is a vendor-defined prefix or a standard block header — a string that
- * has no meaning other than "this is a credential". Ordinary English cannot
- * produce one by accident.
+ * The pattern list lives in `lib/security/credential-patterns.ts`, because the
+ * error reporter needs the same fact and reacts to it differently — it redacts
+ * where this module refuses. Two copies of a security-relevant list is two
+ * lists that drift.
  */
-const CREDENTIAL_PATTERNS: readonly RegExp[] = [
-  /\bsk-ant-[A-Za-z0-9_-]{8,}/,
-  /\bsk_(?:live|test)_[A-Za-z0-9]{8,}/,
-  /\brk_(?:live|test)_[A-Za-z0-9]{8,}/,
-  /\bwhsec_[A-Za-z0-9]{8,}/,
-  /\bgh[pousr]_[A-Za-z0-9]{16,}/,
-  /\bgithub_pat_[A-Za-z0-9_]{16,}/,
-  /\bAKIA[0-9A-Z]{12,}/,
-  /\bxox[abposr]-[A-Za-z0-9-]{8,}/,
-  /-----BEGIN [A-Z ]*PRIVATE KEY-----/,
-  /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/,
-  // A service-role key is the one Supabase credential that bypasses RLS, so its
-  // assignment form is worth catching even without a recognisable body.
-  /\bSUPABASE_SERVICE_ROLE_KEY\s*[:=]\s*\S/i,
-];
 
-/** True when a string contains something that can only be a credential. */
-export function containsCredentialMaterial(value: string): boolean {
-  return CREDENTIAL_PATTERNS.some((pattern) => pattern.test(value));
-}
+export { containsCredentialMaterial };
 
 export class SecretMaterialRejected extends Error {
   constructor(readonly field: string) {

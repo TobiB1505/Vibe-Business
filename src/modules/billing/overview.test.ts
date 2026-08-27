@@ -171,3 +171,96 @@ describe("getHeaderCreditBalance does not trigger repair (ADR 0042 §P3)", () =>
     expect(header?.availableCredits).toBe(creditsToUnits(100));
   });
 });
+
+describe("the orphaned-hold detector on this same read (VB-020)", () => {
+  /**
+   * A Credit hold left standing over a finished operation used to be visible
+   * only to a SQL query in a deployment checklist. It is now noticed at the one
+   * read a customer makes about their own balance.
+   *
+   * These tests are about the wiring and about what it must never do to the
+   * page — the detection rules themselves are pinned in
+   * `credits/orphaned-holds.test.ts`.
+   */
+  async function accountWithHoldOver(operationStatus: string, completedMinutesAgo: number) {
+    const { account } = await ensureCreditAccount(supabase(), USER);
+    await grantCreditLot(supabase(), {
+      userId: USER,
+      sourceKind: "purchase",
+      credits: creditsToUnits(100),
+      reason: "test lot",
+      idempotencyKey: "lot:orphan",
+      expiresAt: null,
+    });
+
+    const operation = db.current.seed("operation_runs", {
+      project_id: PROJECT,
+      user_id: USER,
+      operation_type: "business_audit",
+      status: operationStatus,
+      stage: "running_ai",
+      input_identity: "identity-orphan",
+      started_at: new Date(Date.now() - 3_600_000).toISOString(),
+      completed_at: new Date(Date.now() - completedMinutesAgo * 60_000).toISOString(),
+    });
+
+    const claim = await claimReservation(supabase(), {
+      account,
+      reservedCredits: creditsToUnits(35),
+      idempotencyKey: "hold:orphan",
+      projectId: PROJECT,
+      operationRunId: String(operation.id),
+    });
+    if (!claim.ok) throw new Error("fixture could not take a hold");
+
+    return { accountId: account.id };
+  }
+
+  function orphanEvents() {
+    return db.current
+      .rows("audit_events")
+      .filter((row) => (row as { event_type?: string }).event_type === "credit_hold.orphaned");
+  }
+
+  it("records the stuck hold where a person can see it", async () => {
+    await accountWithHoldOver("failed", 60);
+
+    await getBillingOverview(supabase(), { userId: USER });
+
+    expect(orphanEvents()).toHaveLength(1);
+    expect(orphanEvents()[0]).toMatchObject({
+      metadata: expect.objectContaining({ owed: "release" }),
+    });
+  });
+
+  /**
+   * The failure that would make this detector worse than the condition: every
+   * successful operation is briefly terminal with an active hold, so a
+   * detector without a grace window fires on the happy path and gets ignored.
+   */
+  it("says nothing during the ordinary gap between completing and settling", async () => {
+    await accountWithHoldOver("completed", 0);
+
+    await getBillingOverview(supabase(), { userId: USER });
+
+    expect(orphanEvents()).toEqual([]);
+  });
+
+  /**
+   * A customer who cannot see their balance because something noticed a stuck
+   * hold is strictly worse off than one whose stuck hold went unreported.
+   */
+  it("never takes the billing page down when it fails", async () => {
+    await accountWithHoldOver("failed", 60);
+    // The failure that actually propagates: the read of the operations behind
+    // the holds. `recordAuditEvent` swallows its own errors, so injecting one
+    // there would have tested nothing — the first version of this test did
+    // exactly that and passed with the `catch` removed.
+    db.current.failNextReadWith = { table: "operation_runs", message: "boom" };
+
+    const overview = await getBillingOverview(supabase(), { userId: USER });
+
+    expect(overview.displayAvailable).toBeTruthy();
+    expect(orphanEvents()).toEqual([]);
+  });
+});

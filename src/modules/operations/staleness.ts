@@ -1,13 +1,18 @@
 import "server-only";
+import { alertOperator } from "@/lib/observability/alert";
 
 import { createServiceClient } from "@/lib/supabase/service";
 import {
   ACTION_PLANNING_CONFIG,
   BUSINESS_READINESS_AUDIT_CONFIG,
   OPPORTUNITY_GENERATION_CONFIG,
+  PRODUCT_UNDERSTANDING_CONFIG,
 } from "@/modules/ai/operations";
+import { PREVIEW_BUDGETS } from "@/modules/change-preview/budgets";
+import { REVIEW_POLICY } from "@/modules/review/policy";
+import { SANDBOX_BUDGETS } from "@/modules/validation/budgets";
 import { releaseOperationBilling } from "./billing";
-import { failOperationRun, getProjectOperationRunById } from "./store";
+import { failOperationRun, getOperationRunById } from "./store";
 import type { OperationType } from "./schema";
 
 /**
@@ -28,15 +33,35 @@ import type { OperationType } from "./schema";
  * are both no-ops on an operation that is already terminal, so a hundred page
  * loads repair it once.
  *
- * ## Why `agent_execution` is not in the deadline map
+ * ## Why `agent_execution` alone has no deadline here
  *
- * It already has its own, more precise mechanism (`expireStaleAgentExecution`),
- * keyed off `agent_execution_runs.started_at` and the sandbox's own lifetime
- * rather than `operation_runs.started_at` and an AI call's timeout — a
- * different bound for a genuinely different kind of operation. An
- * `operationType` with no entry here is a deliberate no-op, not an omission:
- * this is what keeps `agent_execution` and the never-billed families
- * (`product_understanding`, every `change_*`, `business_measurement`) untouched.
+ * It has its own, more precise mechanism (`expireStaleAgentExecution`), keyed
+ * off `agent_execution_runs.started_at` and the sandbox's own lifetime rather
+ * than `operation_runs.started_at` — a different bound for a genuinely
+ * different kind of operation.
+ *
+ * It is the **only** exemption, and the map is a total `Record` so that saying
+ * so is a decision rather than an omission. That is VB-014: the map used to be
+ * `Partial`, and eleven of the fifteen operation types were simply absent from
+ * it. A workflow that died carrying a product scan, a validation, a preview, a
+ * review, a merge or a measurement left its operation `running` forever — and
+ * because `operation_runs` carries a partial unique index on the active state,
+ * forever also meant the customer could never start that work again. Nothing
+ * was billed and nothing was broken; the feature was simply gone for that
+ * project, permanently, with the UI still showing a spinner.
+ *
+ * ## Where the numbers come from
+ *
+ * Where a family already declares its own ceiling, the deadline is derived from
+ * it rather than invented beside it — the sandbox's leak bound, the preview's
+ * TTL, the review session's timeout, the model call's timeout. Those move when
+ * somebody changes the real thing, which is the point.
+ *
+ * The rest get {@link UNDECLARED_CEILING_MS}, and that is honestly a chosen
+ * number. It is deliberately far above what any of them takes (the measured
+ * runs are seconds: an outcome verification did 8 checks in 2.5 s) because
+ * being late to notice a dead operation costs a spinner, and being early costs
+ * a customer a run that was still working.
  *
  * ## Why the deadline is `startedAt + timeoutMs + grace`, not a flat number
  *
@@ -53,10 +78,64 @@ import type { OperationType } from "./schema";
  */
 const OPERATION_STALE_GRACE_MS = 5 * 60 * 1000;
 
-const OPERATION_STALE_DEADLINE_MS: Partial<Record<OperationType, number>> = {
+/**
+ * For the families that declare no ceiling of their own.
+ *
+ * A backstop, not a timeout: nothing is expected to reach it, and the work it
+ * covers is measured in seconds.
+ */
+const UNDECLARED_CEILING_MS = 10 * 60 * 1000;
+
+/**
+ * `null` means "not swept here", and there is exactly one.
+ *
+ * Total rather than partial, so a new operation type cannot arrive unswept by
+ * being forgotten — the compiler asks.
+ */
+const OPERATION_STALE_DEADLINE_MS: Record<OperationType, number | null> = {
+  // Derived from the one paid call each of these makes.
   business_audit: BUSINESS_READINESS_AUDIT_CONFIG.timeoutMs + OPERATION_STALE_GRACE_MS,
   opportunity_generation: OPPORTUNITY_GENERATION_CONFIG.timeoutMs + OPERATION_STALE_GRACE_MS,
   action_planning: ACTION_PLANNING_CONFIG.timeoutMs + OPERATION_STALE_GRACE_MS,
+  product_understanding: PRODUCT_UNDERSTANDING_CONFIG.timeoutMs + OPERATION_STALE_GRACE_MS,
+
+  /**
+   * The sandbox's own leak bound. If the workflow dies outright, that timeout
+   * is what stops the paid VM — so an operation still `running` past it is one
+   * whose sandbox is already gone.
+   */
+  change_validation: SANDBOX_BUDGETS.totalLifetimeMs + OPERATION_STALE_GRACE_MS,
+
+  /** The preview's TTL: past it the environment it was creating no longer exists. */
+  change_preview: PREVIEW_BUDGETS.ttlMs + OPERATION_STALE_GRACE_MS,
+
+  /**
+   * Two captures, each bounded by the remote browser session's own timeout.
+   * Doubled because a review takes both sides before it is finished.
+   */
+  change_review: REVIEW_POLICY.sessionTimeoutSeconds * 2 * 1000 + OPERATION_STALE_GRACE_MS,
+
+  // No declared ceiling of their own: GitHub reads and writes, HTTP probes,
+  // a snapshot delete. All measured in seconds.
+  product_scan: UNDECLARED_CEILING_MS,
+  change_preparation: UNDECLARED_CEILING_MS,
+  change_merge: UNDECLARED_CEILING_MS,
+  preview_teardown: UNDECLARED_CEILING_MS,
+  change_outcome_verification: UNDECLARED_CEILING_MS,
+  business_measurement: UNDECLARED_CEILING_MS,
+
+  /**
+   * Erasure walks a delete cascade across roughly forty tables plus storage,
+   * so it gets far more room than anything else — and it needs a sweep more
+   * than anything else does. A died erasure leaves `operation_runs` holding
+   * the account-level active index, and `startAccountErasure` answers every
+   * later attempt with "already running": a person who asked to delete their
+   * account could never ask again.
+   */
+  account_erasure: 30 * 60 * 1000,
+
+  /** Its own mechanism — see the docblock. */
+  agent_execution: null,
 };
 
 /**
@@ -79,20 +158,32 @@ export async function expireStaleOperation(params: {
 }): Promise<{ expired: boolean }> {
   const supabase = createServiceClient();
 
-  const operation = await getProjectOperationRunById(supabase, params.operationId);
+  /*
+   * Read by id alone, not through the project-scoped getter (VB-014).
+   *
+   * That getter refuses a row whose `project_id` is null, which is exactly and
+   * only the account-level operations ADR 0057 introduced — so erasure, the one
+   * family where being wedged means a person cannot delete their account, was
+   * the one family this sweep could not see. Ownership is not what that filter
+   * was providing here: this function acts on the row it reads and reports to
+   * nobody, and the caller's own read is RLS-scoped separately.
+   */
+  const operation = await getOperationRunById(supabase, params.operationId);
   if (!operation || operation.status !== "running" || !operation.startedAt) {
     return { expired: false };
   }
 
   const deadlineMs = OPERATION_STALE_DEADLINE_MS[operation.operationType];
-  if (deadlineMs === undefined) return { expired: false };
+  if (deadlineMs === null) return { expired: false };
 
   const startedAt = Date.parse(operation.startedAt);
   if (!Number.isFinite(startedAt)) return { expired: false };
 
   if ((params.now ?? Date.now)() < startedAt + deadlineMs) return { expired: false };
 
-  console.error("[operations] expiring an operation nothing is carrying", {
+  // VB-012 — a swept operation means a workflow died, which is worth knowing
+  // about before the pattern becomes a customer's report.
+  await alertOperator("[operations] expiring an operation nothing is carrying", {
     operationId: params.operationId,
     operationType: operation.operationType,
     startedAt: operation.startedAt,
