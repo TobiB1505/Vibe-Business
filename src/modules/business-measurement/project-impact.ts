@@ -11,6 +11,7 @@ import { mergeFailureMessage } from "@/modules/merge/messages";
 import { buildMergeCard } from "@/modules/merge/view";
 import { getOutcomeCard } from "@/modules/outcome-verification/service";
 import type { OutcomeCard } from "@/modules/outcome-verification/view";
+import { mapWithConcurrency, PER_CHANGE_CONCURRENCY } from "@/lib/async/concurrency";
 
 /**
  * Project-level impact (Sprint UI-2 Phase C).
@@ -79,10 +80,15 @@ export async function getProjectImpact(
 
   const prepared = await listPreparedChangesForProject(supabase, projectId);
 
-  const entries: ProjectImpactEntry[] = [];
-  let unmergedCount = 0;
-
-  for (const change of prepared) {
+  // VB-024. This walked the prepared changes one at a time, and each step can
+  // reach GitHub through `getMergeCard` — so a project with ten changes paid
+  // ten sequential round trips before the page could render.
+  //
+  // Bounded rather than a plain `Promise.all(prepared.map(...))`: the merge
+  // card is a GitHub call, and firing one per prepared change at once is how a
+  // busy project trips a secondary rate limit. The ceiling is shared with the
+  // agent workspace, which fans out the same way.
+  const settled = await mapWithConcurrency(prepared, PER_CHANGE_CONCURRENCY, async (change) => {
     const merge = mergeTarget
       ? await getMergeCard(supabase, createGithubMergePort(mergeTarget), {
           projectId,
@@ -99,10 +105,7 @@ export async function getProjectImpact(
     // Only a merged change can have an outcome. Reading outcome and impact for
     // an unmerged one would spend six database reads to be told "unavailable" —
     // which is precisely the waste this read model exists to stop.
-    if (merge.state !== "merged") {
-      unmergedCount += 1;
-      continue;
-    }
+    if (merge.state !== "merged") return null;
 
     const [outcome, businessImpact] = await Promise.all([
       getOutcomeCard(supabase, { projectId, preparedChangeId: change.id }),
@@ -112,7 +115,7 @@ export async function getProjectImpact(
       }),
     ]);
 
-    entries.push({
+    return {
       preparedChangeId: change.id,
       branchName: change.branchName,
       commitSha: change.commitSha,
@@ -120,8 +123,15 @@ export async function getProjectImpact(
       mergedAt: merge.mergedAt ?? null,
       outcome,
       businessImpact,
-    });
-  }
+    } satisfies ProjectImpactEntry;
+  });
+
+  // Order follows `prepared`, not completion order: the list is what the
+  // founder reads, and a card moving because a GitHub call was slow would be a
+  // different defect than the one being fixed.
+  const entries = settled.filter((entry): entry is ProjectImpactEntry => entry !== null);
+  const unmergedCount = settled.length - entries.length;
 
   return { entries, unmergedCount };
 }
+

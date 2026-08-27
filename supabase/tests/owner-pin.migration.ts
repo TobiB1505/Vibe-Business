@@ -81,7 +81,11 @@ describe("the policy shape", () => {
       from pg_policies p
       where p.schemaname = 'public' and p.cmd = 'UPDATE'
         and p.tablename in (${PINNED_TABLES.map((t) => `'${t}'`).join(",")})
-        and coalesce(p.with_check, '') not like '%user_id = auth.uid()%';
+        -- Both spellings. VB-026 rewrote every policy to the InitPlan form,
+        -- so the pin now reads "SELECT auth.uid() AS uid" rather than the bare
+        -- call. Same guarantee either way: this asserts the shape, and the
+        -- tests below assert the behaviour that actually matters.
+        and coalesce(p.with_check, '') !~ 'user_id = (auth[.]uid[(][)]|[(] SELECT auth[.]uid[(][)])';
     `);
 
     expect(unpinned).toBe("");
@@ -250,5 +254,97 @@ describe("Data API privileges", () => {
         where n.nspname = 'public' and p.proname = 'set_updated_at';
       `),
     ).toContain("search_path=");
+  });
+});
+
+/**
+ * Wave 2's database batch (VB-026, VB-027, VB-036).
+ *
+ * The first two are performance findings, and the reason they are asserted
+ * here rather than left to the advisor is that both are *invariants a future
+ * migration can silently undo*: a hand-written policy reintroduces the per-row
+ * call, and a new table arrives with an unindexed foreign key. The advisor
+ * catches those a week later; this catches them in CI.
+ */
+describe("VB-026 — policies resolve the caller once per statement", () => {
+  it("leaves no policy calling auth.uid() per row", () => {
+    // Counted rather than pattern-matched, because the deparsed bare call sits
+    // inside parentheses and after a space — so "auth.uid() not preceded by X"
+    // is easy to write and easy to get vacuously right. Every occurrence must
+    // be a wrapped one: total calls minus wrapped calls has to be zero.
+    const perRow = db.sql(`
+      select coalesce(string_agg(distinct p.tablename || ':' || p.policyname, ', '), '')
+      from pg_policies p
+      cross join lateral (
+        select coalesce(p.qual, '') || ' ' || coalesce(p.with_check, '') as body
+      ) t
+      where p.schemaname = 'public'
+        and (length(t.body) - length(replace(t.body, 'auth.uid()', '')))
+          <> (length(t.body) - length(replace(t.body, 'SELECT auth.uid()', '')))
+             * length('auth.uid()') / length('SELECT auth.uid()');
+    `);
+
+    expect(perRow).toBe("");
+  });
+
+  /**
+   * The rewrite read each policy's own definition out of the catalog and put
+   * it back. That is safe only if nothing was lost on the way, so the count is
+   * pinned: a policy silently dropped during a rewrite would show up here and
+   * nowhere else until someone noticed a table was readable.
+   */
+  it("keeps every policy it rewrote", () => {
+    // 119 before this batch, minus the two INSERT policies VB-036 drops from
+    // the provider ledgers below. Stated as the arithmetic rather than as a
+    // magic number, so a future change has to say which of the two it moved.
+    expect(Number(db.sql(`select count(*) from pg_policies where schemaname = 'public';`))).toBe(
+      119 - 2,
+    );
+  });
+});
+
+describe("VB-027 — every foreign key has a covering index", () => {
+  it("leaves no foreign key unindexed, whatever its arity", () => {
+    const unindexed = db.sql(`
+      -- Composite keys included. They were the two the first draft missed by
+      -- filtering on a single column, and one of them would have been indexed
+      -- on the wrong column order had it been written by hand.
+      select coalesce(string_agg(c.relname || '.' || con.conname, ', ' order by c.relname), '')
+      from pg_constraint con
+      join pg_class c on c.oid = con.conrelid
+      join pg_namespace n on n.oid = c.relnamespace and n.nspname = 'public'
+      where con.contype = 'f'
+        and not exists (
+          select 1 from pg_index i
+          where i.indrelid = c.oid
+            and (i.indkey::int2[])[0:array_length(con.conkey, 1) - 1] = con.conkey
+        );
+    `);
+
+    expect(unindexed).toBe("");
+  });
+});
+
+describe("VB-036 — the provider ledgers take no client writes", () => {
+  for (const table of ["ai_usage_events", "deep_scan_provider_usage"] as const) {
+    it(`refuses a client INSERT into ${table}`, () => {
+      const error = db.sqlExpectingError(
+        asUser(owner, `insert into public.${table} (project_id) values (null);`),
+      );
+      expect(error).toMatch(/permission denied/i);
+    });
+  }
+
+  it("leaves durable execution able to write them", () => {
+    // The grant went, not the table. service_role bypasses RLS and keeps its
+    // privileges, or every AI call would stop being metered.
+    expect(
+      db.sql(`
+        select count(*) from information_schema.role_table_grants
+        where table_schema = 'public' and grantee = 'service_role'
+          and table_name in ('ai_usage_events', 'deep_scan_provider_usage')
+          and privilege_type = 'INSERT';
+      `),
+    ).toBe("2");
   });
 });

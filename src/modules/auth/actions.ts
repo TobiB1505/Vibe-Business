@@ -82,7 +82,10 @@ export async function signInWithPassword(
 
   const { error } = await supabase.auth.signInWithPassword(credentials);
 
-  // A success clears the window; a failure spends one of its allowance.
+  // A success clears the window; a failure spends one of its allowance. It has
+  // to be *this* client: `signInWithPassword` has just put the session on it,
+  // and the function reads whose success this is out of that token rather than
+  // out of the argument. A fresh client here would clear nothing.
   const throttle = await recordAuthAttempt(supabase, {
     identifier: credentials.email,
     succeeded: !error,

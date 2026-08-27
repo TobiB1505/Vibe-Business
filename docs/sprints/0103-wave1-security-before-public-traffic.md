@@ -36,6 +36,8 @@ Four findings, and they compound, so they are best read as one.
 
 **VB-010**: Supabase Auth limits by IP, and Vibe runs behind a shared Vercel egress pool, so one attacker's attempts against one account arrive mixed into everyone else's traffic.
 
+> **[Corrected 2026-08-27, the same day.]** Counting VB-010 among the closed findings was wrong when this was written. `record_auth_attempt` is granted to `anon` — correctly, because sign-in precedes a session — and everything it acted on came from its arguments, so one POST carrying `p_succeeded: true` and any address's hash cleared that account's window. Measured against the deployed database with nothing but the publishable key. An attacker resets the counter between guesses, so the allowance never runs down and the control bounded nothing against anyone who knew it existed. Repaired the same evening: a success now clears the window for the address in the caller's own verified JWT and does not consult the identifier argument at all. A second vector — an anonymous caller spending a *victim's* allowance to hold them out of password sign-in — is real, was equally live here, and is **not** closed; it needs a decision rather than a repair. Both are recorded in [sprint 0104](0104-wave2-database-and-performance.md), which found them; the second is VB-053.
+
 **VB-007**: `pnpm audit --prod` reported 6 vulnerabilities, 2 high. The launch gate requires zero.
 
 **VB-005** ([ADR 0059](../decisions/0059-security-response-headers.md)): no security headers at all.
