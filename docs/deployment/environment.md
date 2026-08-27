@@ -106,6 +106,41 @@ Nothing here needed to change:
 `VERCEL_URL` and `VERCEL_ENV` are injected automatically by Vercel on every
 build — never set them yourself.
 
+### Secrets Preview must not carry (VB-011)
+
+Vibe runs on **one Supabase project**. There is no separate preview database, so
+a Preview deployment holding a production credential is not a sandbox — it is
+production with a different URL, reachable by anyone with the deployment link,
+running unreviewed branch code.
+
+These five must be scoped to **Production only** in Vercel:
+
+| Variable | What a Preview holding it can do |
+|---|---|
+| `SUPABASE_SERVICE_ROLE_KEY` | Bypass RLS and read or write any tenant's rows |
+| `ANTHROPIC_API_KEY` | Spend real money on inference |
+| `VIBE_AGENT_GATEWAY_SECRET` | Mint tokens the gateway accepts, against the production budget |
+| `STRIPE_SECRET_KEY` (live) | Move real money |
+| The dogfood project allowlist | Reach the internal cost ceiling from an unreviewed branch |
+
+`VIBE_AGENT_GATEWAY_SECRET` appears in the table above as "as needed" for
+Preview. That line is about *deliberately* dogfooding the Coding Agent on one
+pinned Preview, which is a decision someone makes and then reverses. It is not
+a licence for the variable to sit on every Preview by default.
+
+**This is documentation, not verification.** Nothing in the repository can
+observe Vercel's environment-variable scoping, and no tooling available to an
+AI session lists it — so this section records the required state and does not
+attest to the actual one. Checking it means opening the Vercel dashboard,
+comparing the Preview and Production scopes for each row above, and removing
+what should not be there. Until someone does that, VB-011 stays UNKNOWN rather
+than closed, which is the status the launch-readiness audit gave it.
+
+The structural fix behind all of this is a second Supabase project, or Supabase
+branch databases, so that a Preview cannot reach production data even when it is
+misconfigured. That is a bigger decision than an environment variable and has
+not been taken.
+
 ## Real incident — the apex-vs-`www` redirect broke Stripe webhooks
 
 Discovered 2026-08-20, on this exact production domain, worth recording

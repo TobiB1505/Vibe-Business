@@ -32,6 +32,13 @@ export type OperationExecutionFailure =
   /** The audit row was already claimed by another in-flight run. */
   | "already_running"
   /**
+   * Started too often in the recent window (VB-008).
+   *
+   * Not a failure of the work — the work never began. Retryable, because
+   * waiting is exactly what fixes it.
+   */
+  | "start_limit_reached"
+  /**
    * A paid call was started and its outcome was never recorded.
    *
    * The provider may have billed it. This code exists so that ambiguity ends
@@ -111,6 +118,8 @@ const RETRYABLE: readonly OperationFailureCode[] = [
   "execution_start_failed",
   "inputs_changed",
   "already_running",
+  // Waiting is the remedy, and the message says how long in effect.
+  "start_limit_reached",
   // Both are fixed by doing something first, and the UI says what. Offering
   // the button is honest because the user can act on it.
   "audit_missing",

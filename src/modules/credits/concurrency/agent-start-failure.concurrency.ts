@@ -145,6 +145,11 @@ describe.skipIf(!configured)("Defect B — a failed start releases its hold", ()
         projectId: scaffolding.current!.projectId,
         userId: owner.userId,
         executionSpecId,
+        // VB-008. This gate drives one project sixty times on purpose, which is
+        // exactly what the per-project start window refuses. Saying what this
+        // caller is keeps the limit intact for every customer path rather than
+        // raising a ceiling until a race test fits under it.
+        initiatedBy: "system",
       });
 
       expect(outcome).toEqual({ kind: "failed", error: "execution_start_failed" });
@@ -272,6 +277,11 @@ describe.skipIf(!configured)("Defect B — a failed start releases its hold", ()
         projectId: scaffolding.current!.projectId,
         userId: owner.userId,
         executionSpecId,
+        // VB-008. This gate drives one project sixty times on purpose, which is
+        // exactly what the per-project start window refuses. Saying what this
+        // caller is keeps the limit intact for every customer path rather than
+        // raising a ceiling until a race test fits under it.
+        initiatedBy: "system",
       });
 
       expect(outcome).toEqual({ kind: "failed", error: "execution_start_failed" });

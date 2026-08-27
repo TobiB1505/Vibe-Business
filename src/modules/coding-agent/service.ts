@@ -87,6 +87,18 @@ export type StartAgentExecutionParams = {
   userId: string;
   /** Must belong to the project. Ownership is the query, not a check. */
   executionSpecId: string;
+  /**
+   * Who is asking (VB-008). Defaults to `customer`, which is the safe
+   * direction: a caller that forgets to say is rate-limited rather than
+   * exempt.
+   *
+   * The only `system` caller is the billing concurrency harness, which drives
+   * this primitive sixty times against one project on purpose. That is not the
+   * loop the limit exists to stop, and a per-project window and a
+   * single-project race gate cannot both be satisfied — so the harness says
+   * what it is instead of the limit being loosened for everyone.
+   */
+  initiatedBy?: "customer" | "system";
 };
 
 function view(operation: StoredOperationRun): OperationView {
@@ -190,6 +202,7 @@ export async function startAgentExecution(
     operationType: "agent_execution",
     inputIdentity: runIdentity,
     subjectId: stored.id,
+    initiatedBy: params.initiatedBy ?? "customer",
   });
 
   if (!created.ok) {

@@ -330,11 +330,22 @@ export async function revealAuditAndFindFirstMoveAction(projectId: string): Prom
   const outcome = await startOpportunityOperation(supabase, new VercelWorkflowExecutor(), {
     projectId,
     userId: session.userId,
-    // Part of the flow that delivers the free first audit, so it is free
+    // Free only on the reveal that is genuinely part of onboarding
     // (BILLING CORE-2 §40, CREDIT_ECONOMICS.md §Free usage). Charging a
     // brand-new user here would spend Credits they have not met yet, inside a
     // flow they did not choose to pay for.
-    requestedBy: "bundled_with_free_audit",
+    //
+    // VB-009: this said `bundled_with_free_audit` unconditionally, and this is
+    // a Server Action — so anyone who had finished onboarding could invoke it
+    // again and regenerate Moves for nothing, indefinitely, while the workspace
+    // control beside it charged 20 Credits for the same operation.
+    //
+    // `firstReveal` is the right gate rather than an onboarding-status read
+    // because it is not a read: `markOnboardingMilestone` updates
+    // `audit_revealed_at` only `.is(..., null)` and reports whether *this*
+    // caller won. Two concurrent invocations therefore produce exactly one free
+    // run, which a check-then-act on onboarding state could not promise.
+    requestedBy: firstReveal ? "bundled_with_free_audit" : "customer_requested",
   });
   // Opportunity generation is deliberately not a completion blocker. A real
   // result will be shown if it exists; otherwise the honest fallback remains.

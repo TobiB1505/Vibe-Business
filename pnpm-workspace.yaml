@@ -1,3 +1,11 @@
+overrides:
+  # VB-007. Both fixes exist inside the current major line, so these pin the
+  # patched minimum rather than forcing undici 8.x across 45 dependency paths.
+  # undici <7.29.0 and nanoid >=4.0.0 <5.1.16 carry the advisories; neither is a
+  # direct dependency, both arrive through `workflow` and `@vercel/sandbox`.
+  undici: ^7.29.0
+  nanoid: ^5.1.16
+
 allowBuilds:
   # Trusted application build tools only. This never approves install scripts
   # from customer repositories (CLAUDE.md rule 19).
@@ -21,5 +29,6 @@ minimumReleaseAgeExclude:
   - '@workflow/vite@4.0.17'
   - '@workflow/web@4.1.18'
   - workflow@4.8.2
+  - '@vercel/sandbox@3.2.0'
 patchedDependencies:
   playwright-core@1.62.1: patches/playwright-core@1.62.1.patch

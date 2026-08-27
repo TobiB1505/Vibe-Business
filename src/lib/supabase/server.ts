@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { getPublicEnv } from "@/lib/env/env";
 import { withJwtClockSkewRetry } from "@/lib/supabase/clock-skew";
+import { AUTH_COOKIE_OPTIONS } from "@/lib/supabase/cookie-options";
 
 /**
  * Supabase client for Server Components, Route Handlers, and Server Actions.
@@ -25,6 +26,7 @@ export async function createClient() {
        * see src/lib/supabase/clock-skew.ts.
        */
       global: { fetch: withJwtClockSkewRetry() },
+      cookieOptions: AUTH_COOKIE_OPTIONS,
       cookies: {
         getAll() {
           return cookieStore.getAll();

@@ -415,6 +415,74 @@ describe("event bookkeeping (§67)", () => {
     });
   });
 
+  /**
+   * VB-013 — a claim abandoned by a crash must not silence the event forever.
+   *
+   * The failure this closes is quiet and expensive. A crash between the claim
+   * insert and either completion or release leaves the row at `processing`.
+   * Every later retry loses the unique index, reads `processing`, and is
+   * answered `duplicate` — a 2xx, so Stripe stops retrying. The customer paid,
+   * no Credits posted, and nothing anywhere is red.
+   *
+   * Note on the fixture: `FakeDatabase` does not emulate the `set_updated_at`
+   * trigger, so `updated_at` is written explicitly here rather than defaulted.
+   * That is the value the predicate reads, and stating it in the test is what
+   * stops the assertion passing because the column happened to be empty.
+   */
+  it("re-claims an event abandoned at processing, and grants exactly once", async () => {
+    db.current.seed("billing_stripe_events", {
+      stripe_event_id: "evt_topup_1",
+      event_type: "checkout.session.completed",
+      livemode: false,
+      status: "processing",
+      received_at: new Date(Date.now() - 60 * 60_000).toISOString(),
+      updated_at: new Date(Date.now() - 60 * 60_000).toISOString(),
+    });
+
+    expect(await process(topUpEvent())).toMatchObject({ status: "processed" });
+    expect((await getBillingBalance(supabase(), USER))?.balance.posted).toBe(creditsToUnits(500));
+
+    // Re-stamped, never duplicated: the identity row is still one row.
+    expect(db.current.rows("billing_stripe_events")).toHaveLength(1);
+  });
+
+  it("leaves a claim that is merely recent alone", async () => {
+    // The dangerous direction. A handler still running must not have its event
+    // taken by a concurrent retry, because that processes the payment twice.
+    db.current.seed("billing_stripe_events", {
+      stripe_event_id: "evt_topup_1",
+      event_type: "checkout.session.completed",
+      livemode: false,
+      status: "processing",
+      received_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    });
+
+    expect(await process(topUpEvent())).toMatchObject({
+      status: "duplicate",
+      reason: "processing",
+    });
+    // No account, no lot, no ledger entry: nothing was granted.
+    expect(db.current.rows("billing_credit_ledger")).toHaveLength(0);
+  });
+
+  it("never re-claims an event that actually finished", async () => {
+    db.current.seed("billing_stripe_events", {
+      stripe_event_id: "evt_topup_1",
+      event_type: "checkout.session.completed",
+      livemode: false,
+      status: "processed",
+      received_at: new Date(Date.now() - 60 * 60_000).toISOString(),
+      updated_at: new Date(Date.now() - 60 * 60_000).toISOString(),
+    });
+
+    expect(await process(topUpEvent())).toMatchObject({
+      status: "duplicate",
+      reason: "processed",
+    });
+    expect(db.current.rows("billing_credit_ledger")).toHaveLength(0);
+  });
+
   it("releases its claim when processing throws, so Stripe's retry can re-run", async () => {
     // A transient failure must not permanently consume the event's one claim —
     // that would be a payment the customer made and never received Credits for.
