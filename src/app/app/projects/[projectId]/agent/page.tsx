@@ -1,8 +1,19 @@
 import { WorkspaceSection, projectSectionHref } from "@/components/layout/project-shell";
 import { EmptyState } from "@/components/ui/states";
+import {
+  PLAN_OPPORTUNITY_PARAM,
+  sanitizeRequestedOpportunityId,
+} from "@/modules/action-plans/source";
 import { isDogfoodEligibleProject } from "@/modules/coding-agent/website-preflight";
+import {
+  getActivePreparationFor,
+  getLatestFailedPreparationFor,
+  getOpportunityExecutionSummaries,
+} from "@/modules/execution/service";
+import { buildOpportunityActionState } from "@/modules/execution/view";
 import { getPreparedChangeWorkspace } from "@/modules/execution/workspace";
 import { getLatestOpportunities } from "@/modules/opportunities/service";
+import { buildAgentFocus } from "@/modules/projects/agent-focus";
 import { getLatestProfile } from "@/modules/product-understanding/store";
 import { buildAgentContext } from "@/modules/projects/command-center";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
@@ -42,6 +53,18 @@ import { AgentWorkspacePanel } from "./agent-workspace-panel";
  * That cost is legitimate *here*, because this is the screen that shows all of
  * it. Before the split, every other section paid it too.
  *
+ * ## The Move a founder arrived with (UI-S3 §3)
+ *
+ * `?plan=` names one Move. It is untrusted text: sanitized, then resolved
+ * against this project's own set, and a stale or foreign id degrades to the
+ * ordinary unfocused page rather than to an error or to rank 1.
+ *
+ * The reads it costs happen **only when a valid id is present**, and only for
+ * that one Move — so the ordinary visit to this already-expensive route costs
+ * exactly what it cost before. What the focus produces is a statement and a
+ * link back to the Action Plan. It starts nothing: preparing a change is
+ * priced and confirmed beside the Move it belongs to (Rule 60).
+ *
  * ## Gates
  *
  * The order — validation → preview → review → human approval → safe merge →
@@ -52,11 +75,20 @@ import { AgentWorkspacePanel } from "./agent-workspace-panel";
  */
 export default async function ProjectAgentPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ projectId: string }>;
+  searchParams: Promise<{ [PLAN_OPPORTUNITY_PARAM]?: string }>;
 }) {
   const { projectId } = await params;
   const { supabase, userId, project } = await requireProjectAccess(projectId);
+  const resolvedSearchParams = await searchParams;
+
+  // Untrusted, and never used as a lookup until it has been bounded. It becomes
+  // a focus only by matching a Move this project's own set contains.
+  const requestedOpportunityId = sanitizeRequestedOpportunityId(
+    resolvedSearchParams[PLAN_OPPORTUNITY_PARAM],
+  );
 
   const [changes, profile, repositorySnapshot, opportunities] = await Promise.all([
     getPreparedChangeWorkspace(supabase, {
@@ -68,6 +100,54 @@ export default async function ProjectAgentPage({
     getLatestSuccessfulSnapshot(supabase, projectId),
     getLatestOpportunities(supabase, projectId),
   ]);
+
+  /*
+   * What Vibe may do about the Move the founder arrived with.
+   *
+   * Three reads, all skipped entirely without a valid id, and all scoped to
+   * that one Move rather than to the set — this route already reads the most
+   * per view of any in the workspace, and a focus must not make an unfocused
+   * visit more expensive.
+   *
+   * The answer comes from `buildOpportunityActionState`, the same function the
+   * Action Plan renders, so the two screens cannot disagree about whether Vibe
+   * has an executor for this work.
+   */
+  const focusedMove = requestedOpportunityId
+    ? (opportunities?.set.opportunities.find((entry) => entry.id === requestedOpportunityId) ??
+      null)
+    : null;
+
+  const focusAction = focusedMove
+    ? await (async () => {
+        const [summaries, activeOperation, failedOperation] = await Promise.all([
+          getOpportunityExecutionSummaries(supabase, projectId),
+          getActivePreparationFor(supabase, { projectId, opportunityId: focusedMove.id }),
+          getLatestFailedPreparationFor(supabase, { projectId, opportunityId: focusedMove.id }),
+        ]);
+
+        const summary = summaries.find((entry) => entry.opportunityId === focusedMove.id);
+        // No summary at all means no repository snapshot exists yet. That is a
+        // missing premise rather than a verdict on the Move, and `buildAgentFocus`
+        // says so rather than calling it unautomatable.
+        if (!summary) return null;
+
+        return buildOpportunityActionState({
+          opportunity: focusedMove,
+          capability: summary.capability,
+          preparedChangeId: summary.preparedChangeId,
+          activeOperation,
+          failedOperation,
+          blockedReason: null,
+        });
+      })()
+    : null;
+
+  const focus = buildAgentFocus({
+    requestedOpportunityId,
+    opportunities: opportunities?.set.opportunities ?? [],
+    action: focusAction,
+  });
 
   const context = buildAgentContext({
     hasProductUnderstanding: profile !== null,
@@ -141,8 +221,10 @@ export default async function ProjectAgentPage({
           >
             <AgentPanel
               context={context}
+              focus={focus}
               preparedCount={changes.length}
               planHref={projectSectionHref(project.id, "action-plan")}
+              agentHref={projectSectionHref(project.id, "agent")}
               productHref={projectSectionHref(project.id, "my-product")}
               executionHref={executionHref}
             />
@@ -150,7 +232,11 @@ export default async function ProjectAgentPage({
         )}
 
         {changes.length > 0 ? (
-          <PreparedChangesSection projectId={project.id} changes={changes} />
+          <PreparedChangesSection
+            projectId={project.id}
+            changes={changes}
+            planHref={projectSectionHref(project.id, "action-plan")}
+          />
         ) : (
           <EmptyState
             title="Nothing prepared yet"

@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useEffect, useRef } from "react";
 import { DashboardIcon } from "@/components/ui/dashboard-icons";
+import { agentMoveHref, PLAN_OPPORTUNITY_PARAM } from "@/modules/action-plans/source";
 import type { ProjectNavItem } from "./project-shell";
 import { cn } from "@/lib/utils/cn";
 
@@ -40,9 +41,26 @@ import { cn } from "@/lib/utils/cn";
  * sections on a phone and the strip showed the first few, with nothing marked
  * current anywhere on screen — so the one job the active state has, telling you
  * where you are, failed exactly where orientation is hardest.
+ *
+ * ## One item carries the selected Move (UI-S3 §5)
+ *
+ * A founder picks a Move on the Action Plan and clicks Agent in this rail. Until
+ * now that arrived at a page which had never heard of the Move — the rail is a
+ * list of section links, and a section link drops what the founder was reading.
+ *
+ * So exactly one link, Agent, and only while the current route is the Action
+ * Plan, carries that route's `?plan=` onward. It follows the live selection
+ * with no state of its own: the workspace changes the parameter through
+ * `window.history.pushState`, and `useSearchParams` is synchronised with it.
+ *
+ * Narrow on purpose. This is not a general "propagate the query string" rule —
+ * that would send audit context, checkout returns and anything else a URL ever
+ * carries to destinations they mean nothing to. Every other item stays a plain
+ * section link, and the parameter authorises nothing at either end.
  */
 export function ProjectNav({ items }: { items: ProjectNavItem[] }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const stripRef = useRef<HTMLUListElement>(null);
   const activeRef = useRef<HTMLLIElement>(null);
 
@@ -69,6 +87,22 @@ export function ProjectNav({ items }: { items: ProjectNavItem[] }) {
     return pathname.startsWith(`${href}/`);
   }
 
+  const actionPlanHref = items.find((item) => item.id === "action-plan")?.href;
+  /*
+   * The Move the founder is currently reading, and only while they are reading
+   * it. Off the Action Plan there is no selection to carry, and a `plan`
+   * parameter on any other route is not this rail's to interpret.
+   */
+  const selectedMove =
+    actionPlanHref && pathname === actionPlanHref
+      ? searchParams.get(PLAN_OPPORTUNITY_PARAM)
+      : null;
+
+  function hrefFor(item: ProjectNavItem): string {
+    if (item.id !== "agent" || !selectedMove) return item.href;
+    return agentMoveHref(item.href, selectedMove);
+  }
+
   return (
     <ul
       ref={stripRef}
@@ -88,7 +122,7 @@ export function ProjectNav({ items }: { items: ProjectNavItem[] }) {
         return (
           <li key={item.id} ref={current ? activeRef : undefined} className="lg:w-full">
             <Link
-              href={item.href}
+              href={hrefFor(item)}
               aria-current={current ? "page" : undefined}
               className={cn(
                 "rounded-nav flex items-center gap-3 px-3 py-3 text-sm",

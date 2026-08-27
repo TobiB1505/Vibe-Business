@@ -54,6 +54,15 @@ export type ProjectScoreState = "scored" | "not_audited" | "insufficient_coverag
  * needs to decide whether to click.
  */
 export type DashboardMove = {
+  /**
+   * The Move's own id, so a card that names it can link to *it* (UI-S3 §6).
+   *
+   * One more column on a select that was already being made — the same
+   * argument the reproducibility set below rides on. Without it, "Next move"
+   * named one Move by title and linked to whatever rank 1 happened to be by
+   * the time the founder clicked.
+   */
+  id: string;
   title: string;
   /** The Move's own statement of what is wrong. One sentence, model-written. */
   problem: string;
@@ -166,6 +175,7 @@ type AuditRow = {
 };
 type SetRow = { id: string; project_id: string; created_at: string };
 type OpportunityRow = {
+  id: string;
   opportunity_set_id: string;
   rank: number;
   title: string;
@@ -227,7 +237,13 @@ function countPerKey<T>(rows: T[], key: (row: T) => string): Map<string, number>
 /** Column names to field names. Nothing is dropped and nothing is derived. */
 function dashboardMove(row: OpportunityRow | undefined): DashboardMove | null {
   if (!row) return null;
-  return { title: row.title, problem: row.problem, impact: row.impact, effort: row.effort };
+  return {
+    id: row.id,
+    title: row.title,
+    problem: row.problem,
+    impact: row.impact,
+    effort: row.effort,
+  };
 }
 
 /** Column names to field names. No rule lives here — see `score-series.ts`. */
@@ -321,7 +337,7 @@ export async function getDashboardOverview(
           // counting these rows, so naming the top Move costs no round trip.
           // Ordering by rank is what lets `firstPerKey` below return rank 1 by
           // construction rather than by a second pass.
-          .select("opportunity_set_id, rank, title, problem, impact, effort")
+          .select("id, opportunity_set_id, rank, title, problem, impact, effort")
           .in("opportunity_set_id", setIds)
           .order("rank", { ascending: true })
       : Promise.resolve({ data: [], error: null }),

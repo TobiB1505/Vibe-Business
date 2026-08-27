@@ -37,6 +37,15 @@ const PREPARE_PANEL = read("src/app/app/projects/[projectId]/prepare-change-pane
 const PREPARED_SECTION = read("src/app/app/projects/[projectId]/prepared-changes-section.tsx");
 const RUN_AUDIT = read("src/app/app/projects/[projectId]/run-audit-button.tsx");
 const AUDIT_STORE = read("src/modules/business-audit/store.ts");
+const SOURCE = read("src/modules/action-plans/source.ts");
+const WORKSPACE_READ_MODEL = read("src/modules/execution/workspace.ts");
+const AGENT_PAGE = read("src/app/app/projects/[projectId]/agent/page.tsx");
+const AGENT_PANEL = read("src/app/app/projects/[projectId]/agent-panel.tsx");
+const AGENT_FOCUS = read("src/modules/projects/agent-focus.ts");
+const CHANGE_ORIGIN = read("src/app/app/projects/[projectId]/change-origin.tsx");
+const PROJECT_NAV = read("src/components/layout/project-nav.tsx");
+const HOME_STATUS = read("src/app/app/projects/[projectId]/home-status.tsx");
+const NEXT_MOVE_CARD = read("src/app/app/next-move-card.tsx");
 
 /** `getMoveLineage` alone, not everything declared after it. */
 function moveLineageReader(): string {
@@ -293,5 +302,120 @@ describe("the loop speaks business", () => {
         expect(copy, `${name} must not say "${banned}"`).not.toContain(banned);
       }
     }
+  });
+});
+
+/**
+ * The last leg of the loop (UI-S3).
+ *
+ * Everything above pins diagnosis → Moves. These pin Moves → Agent → back,
+ * which is where the wiring stopped: `/agent` took no search parameters, the
+ * engineer's card stated three project-level booleans, and a prepared change
+ * quoted its Move at length and linked to nothing.
+ */
+describe("the plan hands off to the agent, and the agent points back", () => {
+  /** Regression: a second parameter name for the same fact. */
+  it("names the Move with one parameter shared by both surfaces", () => {
+    expect(SOURCE).toContain('export const PLAN_OPPORTUNITY_PARAM = "plan"');
+    expect(SOURCE).toContain("export function agentMoveHref");
+    expect(SOURCE).toContain("export function planMoveHref");
+    expect(AGENT_PAGE).toContain("PLAN_OPPORTUNITY_PARAM");
+  });
+
+  /**
+   * Regression: `planMoveHref`'s fragment pointed at `plan-this-move`, which
+   * nothing rendered. It had no callers, so nobody ever followed it.
+   */
+  it("targets a fragment the plan actually renders", () => {
+    expect(SOURCE).toContain('export const PLANNED_WORK_ANCHOR = "planned-work"');
+    expect(SOURCE).toContain("#${PLANNED_WORK_ANCHOR}");
+    expect(copyOf(SOURCE)).not.toContain("plan-this-move");
+    expect(PLAN_DETAIL).toContain("id={PLANNED_WORK_ANCHOR}");
+  });
+
+  /** §31, §46: the parameter is untrusted text and is never a raw lookup. */
+  it("sanitizes the requested Move before it means anything", () => {
+    expect(AGENT_PAGE).toContain("sanitizeRequestedOpportunityId");
+    const resolution = AGENT_PAGE.slice(
+      AGENT_PAGE.indexOf("const requestedOpportunityId"),
+      AGENT_PAGE.indexOf("const context = buildAgentContext"),
+    );
+    // Resolved against this project's own set, never fetched by the id alone.
+    expect(resolution).toContain("opportunities?.set.opportunities.find");
+  });
+
+  /**
+   * The regression this whole seam exists to prevent: the Agent claiming to be
+   * working on a Move the founder never chose.
+   */
+  it("never substitutes another Move for one it cannot resolve", () => {
+    expect(AGENT_FOCUS).toContain('return { kind: "unresolved" }');
+    for (const substitution of ["defaultPlannedOpportunity", "rank === 1", "[0]", "sort"]) {
+      expect(copyOf(AGENT_FOCUS), substitution).not.toContain(substitution);
+    }
+  });
+
+  /**
+   * Two screens, one decision. A second derivation of "can Vibe execute this"
+   * would eventually offer work the plan had already called blocked.
+   */
+  it("reads the Action Plan's execution answer rather than deriving its own", () => {
+    expect(AGENT_PAGE).toContain("buildOpportunityActionState({");
+    expect(AGENT_FOCUS).toContain("OpportunityActionState");
+    for (const derivation of ["executionReadiness", "resolveExecutionCapability", "capability ==="]) {
+      expect(copyOf(AGENT_FOCUS), derivation).not.toContain(derivation);
+    }
+  });
+
+  /**
+   * §60, and the AgentPanel's own contract: this card describes and points at
+   * where work is chosen. A focus must not turn it into a second place that
+   * spends money.
+   */
+  it("adds no priced control to the agent card", () => {
+    for (const control of ["PrepareChangePanel", "formAction", "CreditPrice", "<form"]) {
+      expect(copyOf(AGENT_PANEL), control).not.toContain(control);
+    }
+  });
+
+  /** Regression: a prepared change that quotes its Move and links nowhere. */
+  it("links a prepared change back to the Move it answers", () => {
+    expect(WORKSPACE_READ_MODEL).toContain("opportunityId: opportunity ? prepared.opportunityId : null");
+    expect(PREPARED_SECTION).toContain("planMoveHref(planHref, change.opportunityId)");
+    expect(CHANGE_ORIGIN).toContain("moveHref");
+  });
+
+  /**
+   * §6: a panel does not know what the workspace's segments are called. Two
+   * blocked states once shipped hard-coded fragments that pointed at nothing.
+   */
+  it("takes the plan's URL from the route rather than building one", () => {
+    expect(PREPARED_SECTION).toContain("planHref: string");
+    expect(AGENT_PAGE).toContain('projectSectionHref(project.id, "action-plan")');
+    expect(copyOf(PREPARED_SECTION)).not.toContain("/app/projects/");
+  });
+
+  /**
+   * Narrow on purpose. A general "carry the query string" rule would send
+   * audit context and checkout returns to destinations they mean nothing to.
+   */
+  it("carries the selection on the Agent item alone", () => {
+    expect(PROJECT_NAV).toContain('item.id !== "agent"');
+    expect(PROJECT_NAV).toContain("agentMoveHref(item.href, selectedMove)");
+    // Only while the founder is on the Action Plan, and only that parameter.
+    expect(PROJECT_NAV).toContain("pathname === actionPlanHref");
+    expect(PROJECT_NAV).toContain("searchParams.get(PLAN_OPPORTUNITY_PARAM)");
+    // The active state still ignores the query, or Agent would light up wrong.
+    expect(PROJECT_NAV).toContain("isActive(item.href)");
+  });
+
+  /**
+   * Regression: "Review this move" reviewed whatever was rank 1 at click time
+   * — the same Move almost always, and a different one exactly when a re-scan
+   * had reordered the set.
+   */
+  it("opens the Move a card names, not the plan's current first", () => {
+    expect(HOME_STATUS).toContain("planMoveHref(planHref, nextMove.id)");
+    expect(NEXT_MOVE_CARD).toContain("planMoveHref(planHref, move.id)");
   });
 });
