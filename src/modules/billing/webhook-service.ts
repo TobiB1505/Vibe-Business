@@ -126,6 +126,18 @@ async function applyBillingIntent(
  * narrow window before the mapping exists, and when both are present they must
  * agree — a mismatch means something is wrong enough that granting Credits to
  * either candidate would be a guess.
+ *
+ * ## A tombstoned mapping resolves to nobody
+ *
+ * Erasure keeps the Stripe mapping and nulls its owner (ADR 0056 §9), so a
+ * mapping row can outlive the identity behind it. An event arriving afterwards
+ * is not unresolvable — it is resolved, to an identity that no longer exists —
+ * and it must never fall through to the `claimedUserId` fallback. That fallback
+ * exists for the window *before* a mapping is written, and reaching it here
+ * would grant Credits from erased-account metadata into a brand-new wallet.
+ * §9's cancel-Stripe-first rule makes this rare; it does not make it
+ * impossible, because webhooks are asynchronous and can arrive after the
+ * cancellation that caused them.
  */
 async function resolveOwner(
   supabase: SupabaseClient,
@@ -135,6 +147,7 @@ async function resolveOwner(
     const linked = await findUserByStripeCustomer(supabase, params.stripeCustomerId);
 
     if (linked) {
+      if (linked.userId === null) return { ok: false, reason: "owner_erased" };
       if (params.claimedUserId && params.claimedUserId !== linked.userId) {
         return { ok: false, reason: "owner_mismatch" };
       }

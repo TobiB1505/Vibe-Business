@@ -221,6 +221,14 @@ The Stripe mapping rows are **tombstoned, not deleted, and their Stripe identifi
 
 A related defect is fixed as part of this work rather than left: `credits/service.ts` writes `userId: (await accountOwner(...)) ?? ""` in three places. An empty string is not a UUID, so the insert fails, and `recordAuditEvent` only logs to the console. A settlement landing after the owner is gone silently loses its financial audit record. §10's finalize-before-erasure rule prevents the situation; the `?? ""` is fixed anyway.
 
+> **[2026-08-27] Implemented as M3′ in `20260827040000_billing_owner_tombstone.sql`, with §6.** Three columns, and the `?? ""` removed as promised — `RecordAuditEventParams.userId` is now `string | null`, which is what `audit_events.user_id` (the schema's one `SET NULL` edge into `auth.users`) has always permitted.
+>
+> **The read audit §11 asks for was run by the compiler, not by grep, and it found one site.** Widening `CreditAccount.userId`, `StripeCustomerLink.userId` and `SubscriptionSnapshot.userId` to `string | null` produced exactly one type error across the repository: `resolveOwner` in `billing/webhook-service.ts`. That is a stronger audit than an enumeration of `.eq("user_id", …)` filters, which are all safe under a nullable column and are not where the risk was.
+>
+> **And the one site is worse than a type error.** `resolveOwner` returns `{ ok: true, userId }` from the mapping row. Against a tombstoned mapping it would have returned `ok: true` with a null owner, and `grantCreditLot(null)` would have opened a *second*, ownerless wallet and granted purchased Credits into it — money with no owner who could spend or dispute it, recorded as a normal successful grant. A tombstoned mapping now resolves to a typed `owner_erased` refusal, and specifically **not** to the `claimedUserId` fallback, which exists for the window before a mapping is written and would otherwise resurrect an erased identity out of Stripe's own copy of its id. §9's cancel-first rule makes this rare; webhooks are asynchronous, so it does not make it impossible.
+>
+> **What was confirmed rather than changed:** `billing_credit_accounts_user_idx` and `billing_stripe_customers_user_mode_idx` are plain `nulls distinct` btrees, so the second erasure in the product's life does not collide with the first — asserted, because a `nulls not distinct` index here is the kind of defect that would first appear in production. The `stripe_customer_id` and `stripe_subscription_id` unique indexes survive untouched, which is what keeps P-3's retention meaningful.
+
 ### 10. Active-work safety rules
 
 **Deletion is refused while consequential work can still complete.** Never delete state that a workflow, a sandbox, a merge or a settlement may still write to.

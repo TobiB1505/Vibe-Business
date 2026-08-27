@@ -345,6 +345,37 @@ describe("ownership (§24, §65)", () => {
     expect(await listAllLots(supabase(), await accountId())).toHaveLength(0);
   });
 
+  it("grants nothing once the mapping is tombstoned by erasure (ADR 0056 §9)", async () => {
+    // Erasure keeps the Stripe mapping and nulls its owner, so a webhook that
+    // arrives afterwards finds a row whose `user_id` is null. Before this was
+    // handled the null flowed straight into `grantCreditLot`, which would have
+    // opened a *second*, ownerless wallet and granted purchased Credits into
+    // it — silently, and with no owner who could ever spend or dispute them.
+    for (const row of db.current.rows("billing_stripe_customers")) row.user_id = null;
+
+    const event = topUpEvent();
+    event.checkoutSession!.metadata = { [VIBE_SKU_METADATA_KEY]: "pack_500" };
+
+    expect(await process(event)).toMatchObject({ status: "ignored", reason: "owner_erased" });
+    expect(db.current.rows("billing_credit_accounts")).toHaveLength(0);
+  });
+
+  it("does not fall back to payload metadata for a tombstoned mapping", async () => {
+    // The `claimedUserId` fallback exists for the window *before* a mapping is
+    // written. Reaching it here would resurrect an erased identity from the
+    // payment processor's own copy of its id.
+    for (const row of db.current.rows("billing_stripe_customers")) row.user_id = null;
+
+    const event = topUpEvent();
+    event.checkoutSession!.metadata = {
+      [VIBE_SKU_METADATA_KEY]: "pack_500",
+      [VIBE_USER_METADATA_KEY]: USER,
+    };
+
+    expect(await process(event)).toMatchObject({ status: "ignored", reason: "owner_erased" });
+    expect(db.current.rows("billing_credit_accounts")).toHaveLength(0);
+  });
+
   it("resolves the owner from Vibe's own mapping, not from the payload", async () => {
     // No metadata at all, and it still lands in the right account.
     const event = topUpEvent();
