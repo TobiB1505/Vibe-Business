@@ -211,6 +211,16 @@ Two constraints on the mechanism, both discovered rather than assumed:
 
 One framing note that keeps this proportionate: the reader-side allowlist in `audit-log/view.ts` means none of these fields can reach a screen today. This is a **data-at-rest retention** problem, not a UI leak.
 
+> **[2026-08-27] Implemented as M3 in `20260827060000_audit_metadata_scrub.sql`.** Two functions: a pure, immutable `scrub_audit_metadata(jsonb)` with no privileges and no table access, and a `security definer` driver granted to `service_role` only. Splitting them is what lets the transform be asserted directly, which §8 demands of an operation nobody can re-run.
+>
+> **The transform recurses, and the paragraph above is why it had to.** None of `changedPaths[].path`, `largestChanges[].path` or `violations[].path` is a top-level metadata key — all three sit inside richer evidence objects whose shapes differ per event and will change again. A transform walking a fixed set of top-level keys would have been correct the day it was written and quietly wrong afterwards. The rules are therefore applied to every object at every depth, and the payload's shape stops mattering.
+>
+> **The prerequisite was met, not exempted.** `merge/store.ts` now filters `change_merge.not_eligible` on the real `project_id` column; `prepared_change_id` stays in the payload because the scrub does not touch it — it identifies an artifact, not a person. The merge service states `projectId` explicitly rather than letting `resolveProjectId` infer it, and a test pins the column's presence, since an unpopulated column would silently return this to logging one entry per page render.
+>
+> **"Every event category, not a sample" is enforced against the source rather than a hand-written list.** Twenty-nine categories, derived from the repository's own `recordAuditEvent` call sites, each asserted with the §8-sensitive keys it actually writes. Between them they exercise all seventeen withheld keys.
+>
+> **And the denylist got the guard it needs.** §8's design is right — the retained set is open-ended, and an allowlist would destroy evidence every time somebody added a benign field — but it retains a *new* sensitive key by default, silently. `scrub-vocabulary.test.ts` reads the 175-key vocabulary out of the call sites and the two withholding lists out of the migration, and fails unless every key is deleted, nulled, pseudonymized, or listed as retained with a reason. It cannot tell a wrong classification from a right one; it prevents the case that actually happens, which is a key nobody thought about.
+
 ### 9. Stripe external-effect ordering
 
 **The Stripe subscription is cancelled before any local state is touched, and a failure to cancel stops the erasure.**
