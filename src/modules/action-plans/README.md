@@ -136,7 +136,7 @@ loses those values in normalization. Adding such a field is meant to be hard.
 | File | What it owns |
 |---|---|
 | `schema.ts` | The versioned contract: plan, step, actor, change kind, execution support, lifecycle |
-| `source.ts` | Binding a Move to the audit conclusion under it, from structured fields only |
+| `source.ts` | Binding a Move to the audit conclusion under it, from structured fields only; and the `?plan=` Move-focus URL contract the Action Plan and Agent share ([ADR 0058](../../../docs/decisions/0058-move-focus-url-contract.md)) |
 | `evidence.ts` | The focused evidence selection — profile always, plus what the source judgment cited |
 | `prompt.ts` / `rubric.ts` | What we ask for, and what "a good plan" means. Authored entirely by us |
 | `render.ts` | The fenced, untrusted-labelled user message |
