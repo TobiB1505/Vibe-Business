@@ -296,3 +296,54 @@ describe("disconnect_project is today's semantics without today's privilege", ()
     expect(grants).toBe("anon=false,authenticated=true,service_role=false");
   });
 });
+
+/**
+ * The gate's schema contract (VB-001, ADR 0056 §10).
+ *
+ * `findBlockingWork` names four tables, four columns and eight status strings.
+ * Its unit tests run against `FakeDatabase`, which stores whatever it is given
+ * — a typo'd column or a status value the real CHECK constraint would reject
+ * passes there and matches nothing in production, which is a gate that is
+ * silently open. This asserts the names against the real schema.
+ */
+describe("the active-work gate's schema contract", () => {
+  it.each([
+    ["operation_runs", "project_id"],
+    ["agent_execution_runs", "project_id"],
+    ["change_merges", "project_id"],
+    ["billing_credit_reservations", "project_id"],
+  ])("%s carries the %s the gate filters on", (table, column) => {
+    expect(
+      db.sql(`
+        select count(*)::text from information_schema.columns
+        where table_schema = 'public' and table_name = '${table}' and column_name = '${column}';
+      `),
+    ).toBe("1");
+  });
+
+  it.each([
+    ["operation_runs", "queued"],
+    ["operation_runs", "running"],
+    ["operation_runs", "needs_user"],
+    ["agent_execution_runs", "queued"],
+    ["agent_execution_runs", "running"],
+    ["agent_execution_runs", "needs_user_input"],
+    ["change_merges", "preflight"],
+    ["change_merges", "merging"],
+    ["billing_credit_reservations", "active"],
+  ])("%s accepts the status %s the gate blocks on", (table, status) => {
+    // The CHECK constraint is the authority on which strings can ever exist.
+    // A status the gate names but the column cannot hold is a gate that never
+    // fires — the failure mode this asserts against.
+    const accepted = db.sql(`
+      select count(*)::text
+      from pg_constraint c
+      join pg_class t on t.oid = c.conrelid
+      join pg_namespace n on n.oid = t.relnamespace and n.nspname = 'public'
+      where t.relname = '${table}'
+        and c.contype = 'c'
+        and pg_get_constraintdef(c.oid) like '%''${status}''::text%';
+    `);
+    expect(Number(accepted)).toBeGreaterThan(0);
+  });
+});
