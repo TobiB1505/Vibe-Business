@@ -82,16 +82,60 @@ export type AuditReadiness = {
  * without an invalidation system, and without a second source of truth that
  * could disagree with the one the understanding pipeline actually uses.
  */
-async function isProfileCurrent(
+/**
+ * Every document the Business Health read models share (VB-022).
+ *
+ * ## Why this exists
+ *
+ * Because three of them wanted the same evidence and each fetched it for
+ * itself. `getAuditReadiness` reads the repository snapshot; so does
+ * `getAuditCurrency`; so does the profile-currency check inside the first; and
+ * so does the page around them. Every one of those call sites is correct on its
+ * own — a single `await` inside a `Promise.all` — and the cost is only visible
+ * in the total: measured, four fetches of the repository snapshot, four of the
+ * live snapshot and three of the audit document, per render of the product's
+ * most-visited route. These are multi-hundred-kilobyte JSONB documents.
+ *
+ * ## Why not React `cache()`
+ *
+ * It was the obvious answer and it is the wrong shape here. `cache()` memoizes
+ * only inside a render — measured: outside one it calls straight through — so
+ * nothing in the test suite could prove the duplication had gone, and the
+ * memoization would silently not apply to any other caller. Passing the
+ * evidence explicitly is the same pattern VB-023 used for prepared changes, and
+ * it is checkable by counting.
+ *
+ * Every field is what the corresponding getter returns; nothing here is
+ * derived, and no read model re-decides anything because of where its input
+ * came from.
+ */
+export type AuditEvidence = {
+  repository: Awaited<ReturnType<typeof getLatestSuccessfulSnapshot>>;
+  live: Awaited<ReturnType<typeof getLatestSuccessfulLiveSnapshot>>;
+  authenticated: Awaited<ReturnType<typeof getLatestSuccessfulAuthenticatedSnapshot>>;
+  profile: Awaited<ReturnType<typeof getLatestProfile>>;
+  latestAudit: Awaited<ReturnType<typeof getLatestSuccessfulAudit>>;
+  founderIntent: Awaited<ReturnType<typeof getFounderIntent>>;
+};
+
+export async function readAuditEvidence(
   supabase: SupabaseClient,
   projectId: string,
-  storedInputHash: string,
-): Promise<boolean> {
-  const [repository, live, authenticated] = await Promise.all([
+): Promise<AuditEvidence> {
+  const [repository, live, authenticated, profile, latestAudit, founderIntent] = await Promise.all([
     getLatestSuccessfulSnapshot(supabase, projectId),
     getLatestSuccessfulLiveSnapshot(supabase, projectId),
     getLatestSuccessfulAuthenticatedSnapshot(supabase, projectId),
+    getLatestProfile(supabase, projectId),
+    getLatestSuccessfulAudit(supabase, projectId),
+    getFounderIntent(supabase, projectId),
   ]);
+
+  return { repository, live, authenticated, profile, latestAudit, founderIntent };
+}
+
+function isProfileCurrent(evidence: AuditEvidence, storedInputHash: string): boolean {
+  const { repository, live, authenticated } = evidence;
 
   const current = computeProfileInputHash({
     repositorySnapshotId: repository?.result ? repository.id : null,
@@ -111,19 +155,18 @@ async function isProfileCurrent(
 export async function getAuditReadiness(
   supabase: SupabaseClient,
   projectId: string,
+  /** Already read by the caller, when it is reading it anyway (VB-022). */
+  prefetched?: AuditEvidence,
 ): Promise<AuditReadiness> {
-  const [repository, live, profile] = await Promise.all([
-    getLatestSuccessfulSnapshot(supabase, projectId),
-    getLatestSuccessfulLiveSnapshot(supabase, projectId),
-    getLatestProfile(supabase, projectId),
-  ]);
+  const evidence = prefetched ?? (await readAuditEvidence(supabase, projectId));
+  const { repository, live, profile } = evidence;
 
   const hasRepositoryIntelligence = Boolean(repository?.result);
   const hasLiveProductIntelligence = Boolean(live?.result);
   const hasProductProfile = profile !== null;
 
   const productProfileCurrent = profile
-    ? await isProfileCurrent(supabase, projectId, profile.stored.inputHash)
+    ? isProfileCurrent(evidence, profile.stored.inputHash)
     : false;
 
   const missing: AuditPrerequisite[] = [];
@@ -272,16 +315,17 @@ export type AuditCurrency = {
 export async function getAuditCurrency(
   supabase: SupabaseClient,
   projectId: string,
+  /** Already read by the caller, when it is reading it anyway (VB-022). */
+  prefetched?: AuditEvidence,
 ): Promise<AuditCurrency> {
-  const [latestAudit, repositorySnapshot, liveSnapshot, profile, founderIntent, authenticatedSnapshot] =
-    await Promise.all([
-      getLatestSuccessfulAudit(supabase, projectId),
-      getLatestSuccessfulSnapshot(supabase, projectId),
-      getLatestSuccessfulLiveSnapshot(supabase, projectId),
-      getLatestProfile(supabase, projectId),
-      getFounderIntent(supabase, projectId),
-      getLatestSuccessfulAuthenticatedSnapshot(supabase, projectId),
-    ]);
+  const {
+    latestAudit,
+    repository: repositorySnapshot,
+    live: liveSnapshot,
+    profile,
+    founderIntent,
+    authenticated: authenticatedSnapshot,
+  } = prefetched ?? (await readAuditEvidence(supabase, projectId));
 
   if (!latestAudit || !repositorySnapshot?.result || !liveSnapshot?.result || !profile) {
     return { hasAudit: latestAudit !== null, upToDate: false, newDeepScanEvidence: false };

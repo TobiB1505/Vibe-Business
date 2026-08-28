@@ -1,17 +1,25 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { FakeDatabase, fakeSupabase } from "@/modules/operations/test-support";
-import { reconcileAndRepairBalance, releaseReservation, settleReservation } from "./service";
+import {
+  getBillingBalance,
+  reconcileAndRepairBalance,
+  releaseReservation,
+  settleReservation,
+} from "./service";
 import {
   claimReservation,
   closeReservation,
   ensureCreditAccount,
   getCreditBalance,
   getReservation,
+  LEDGER_READ_LIMIT,
   listActiveReservations,
   listLedgerEntries,
   postLedgerEntry,
+  sumLedgerDeltas,
   type CreditAccount,
 } from "./store";
+import { postedBalance } from "./balance";
 import { creditsToUnits, ZERO_CREDITS } from "./units";
 
 /**
@@ -291,6 +299,54 @@ describe("a zero-credit settlement is idempotent", () => {
  * (see `credits/lot-store.test.ts`'s `reconcileAndRepairLotAllocations`,
  * which mirrors these tests exactly).
  */
+describe("an account with more history than the ledger read transfers (VB-025)", () => {
+  /**
+   * The read that shows a customer their recent movements is capped. The one
+   * that proves their balance is not, and cannot be — a sum over a capped list
+   * is a *different number*, and on an account past the cap it would report
+   * drift on every render.
+   *
+   * That is not a cosmetic defect. `credit_drift.detected` alerts an operator,
+   * and with `BILLING_REPAIR_ENABLED` a false drift triggers a repair against a
+   * balance that was correct.
+   *
+   * So the cap is only safe because the sum moved to the database, and this is
+   * the test that says so: capping and summing the same read fails here.
+   */
+  it("shows a capped list and still reconciles against the whole ledger", async () => {
+    const { account } = await ensureCreditAccount(supabase(), USER);
+
+    const entries = LEDGER_READ_LIMIT + 25;
+    for (let index = 0; index < entries; index += 1) {
+      await postLedgerEntry(supabase(), {
+        creditAccountId: account.id,
+        kind: "grant",
+        creditDelta: creditsToUnits(1),
+        idempotencyKey: `bulk:${index}`,
+        reason: "test seed",
+      });
+    }
+
+    const shown = await listLedgerEntries(supabase(), account.id);
+    expect(shown).toHaveLength(LEDGER_READ_LIMIT);
+
+    // The number the balance rests on covers every entry, not the shown ones.
+    const posted = await sumLedgerDeltas(supabase(), account.id);
+    expect(posted).toBe(creditsToUnits(entries));
+
+    // And what the shown list would have said, which is the defect this
+    // arrangement exists to make impossible.
+    const fromShownRows = postedBalance(
+      shown.map((entry) => ({ kind: entry.kind, creditDelta: entry.creditDelta })),
+    );
+    expect(fromShownRows).not.toBe(posted);
+
+    const balance = await getBillingBalance(supabase(), USER);
+    expect(balance?.consistent).toBe(true);
+    expect(balance?.balance.posted).toBe(creditsToUnits(entries));
+  });
+});
+
 describe("reconcileAndRepairBalance (ADR 0042 §P3)", () => {
   const previousFlag = process.env.BILLING_REPAIR_ENABLED;
 
@@ -311,14 +367,13 @@ describe("reconcileAndRepairBalance (ADR 0042 §P3)", () => {
   }
 
   async function reconcilableInputs(account: CreditAccount) {
-    const entries = (await listLedgerEntries(supabase(), account.id)).map((entry) => ({
-      kind: entry.kind,
-      creditDelta: entry.creditDelta,
-    }));
+    // Summed in the database since VB-025, so the inputs are built the way the
+    // billing page builds them rather than by transferring every entry here.
+    const postedFromLedger = await sumLedgerDeltas(supabase(), account.id);
     const reservations = (await listActiveReservations(supabase(), account.id)).map((reservation) => ({
       reservedCredits: reservation.reservedCredits,
     }));
-    return { entries, reservations };
+    return { postedFromLedger, reservations };
   }
 
   /**
@@ -337,8 +392,8 @@ describe("reconcileAndRepairBalance (ADR 0042 §P3)", () => {
         idempotency_key: "crashed-before-materialize",
       });
 
-    const { entries, reservations } = await reconcilableInputs(account);
-    return { account, entries, reservations };
+    const { postedFromLedger, reservations } = await reconcilableInputs(account);
+    return { account, postedFromLedger, reservations };
   }
 
   /** Every `.rpc()` call fails with an error the repair path does not recognize. */
@@ -357,18 +412,18 @@ describe("reconcileAndRepairBalance (ADR 0042 §P3)", () => {
 
   it("is a no-op when the account's figures already agree with the ledger", async () => {
     const account = await fundedAccount(1000);
-    const { entries, reservations } = await reconcilableInputs(account);
+    const { postedFromLedger, reservations } = await reconcilableInputs(account);
 
-    const result = await reconcileAndRepairBalance(supabase(), { account, entries, reservations, userId: USER });
+    const result = await reconcileAndRepairBalance(supabase(), { account, postedFromLedger, reservations, userId: USER });
 
     expect(result).toEqual({ account, consistent: true });
     expect(driftEvents()).toHaveLength(0);
   });
 
   it("detects and audits drift without repairing while the flag is unset", async () => {
-    const { account, entries, reservations } = await driftedAccount(1000);
+    const { account, postedFromLedger, reservations } = await driftedAccount(1000);
 
-    const result = await reconcileAndRepairBalance(supabase(), { account, entries, reservations, userId: USER });
+    const result = await reconcileAndRepairBalance(supabase(), { account, postedFromLedger, reservations, userId: USER });
 
     expect(result.consistent).toBe(false);
     // Unchanged: repair never ran, so the cache still misses the crashed entry.
@@ -385,9 +440,9 @@ describe("reconcileAndRepairBalance (ADR 0042 §P3)", () => {
 
   it("repairs and audits when the flag is set", async () => {
     process.env.BILLING_REPAIR_ENABLED = "true";
-    const { account, entries, reservations } = await driftedAccount(1000);
+    const { account, postedFromLedger, reservations } = await driftedAccount(1000);
 
-    const result = await reconcileAndRepairBalance(supabase(), { account, entries, reservations, userId: USER });
+    const result = await reconcileAndRepairBalance(supabase(), { account, postedFromLedger, reservations, userId: USER });
 
     expect(result.consistent).toBe(true);
     expect(result.account.postedCredits).toBe(creditsToUnits(1500));
@@ -408,11 +463,11 @@ describe("reconcileAndRepairBalance (ADR 0042 §P3)", () => {
 
   it("audits repair_failed and keeps the unrepaired figure when the repair RPC throws", async () => {
     process.env.BILLING_REPAIR_ENABLED = "true";
-    const { account, entries, reservations } = await driftedAccount(1000);
+    const { account, postedFromLedger, reservations } = await driftedAccount(1000);
 
     const result = await reconcileAndRepairBalance(rpcAlwaysErrors(), {
       account,
-      entries,
+      postedFromLedger,
       reservations,
       userId: USER,
     });

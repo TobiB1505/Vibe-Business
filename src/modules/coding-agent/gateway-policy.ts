@@ -70,7 +70,14 @@ export type AgentRunGatewayState = {
 };
 
 export type AgentGatewayDecision =
-  | { ok: true }
+  /**
+   * The run this decision was made about, carried out rather than re-read.
+   *
+   * A caller that has been told "yes" needs the state the yes was based on —
+   * the remaining budget, for one — and looking it up again would be a second
+   * read that could disagree with the one that authorized (VB-016).
+   */
+  | { ok: true; run: AgentRunGatewayState }
   | { ok: false; refusal: AgentGatewayRefusal; status: number };
 
 /**
@@ -81,6 +88,36 @@ export type AgentGatewayDecision =
  * binding check must not have its budget consulted, because "how much has that
  * run spent" is not a question a stranger's token gets an answer to.
  */
+/**
+ * The request body with `max_tokens` lowered to what the run may still spend
+ * (VB-016).
+ *
+ * ## Why lowering rather than refusing
+ *
+ * Because a call asking for more than the remaining budget is not a hostile
+ * call — it is the SDK asking for its usual ceiling near the end of a run, and
+ * refusing it would end the run one turn early for a reason the customer never
+ * chose. Lowering lets it finish inside the authorization.
+ *
+ * ## What it never does
+ *
+ * Raise. A caller asking for less than it may have keeps its own number: the
+ * budget is a ceiling, not an allowance to be spent.
+ *
+ * Anything that is not an object is returned untouched — a body the API will
+ * reject is not this function's problem, and inventing a shape for it would be
+ * this gateway making up a request the sandbox did not send.
+ */
+export function clampMaxTokens(body: unknown, remaining: number): unknown {
+  if (body === null || typeof body !== "object" || Array.isArray(body)) return body;
+
+  const requested = (body as { max_tokens?: unknown }).max_tokens;
+  if (typeof requested !== "number" || !Number.isFinite(requested)) return body;
+  if (requested <= remaining) return body;
+
+  return { ...(body as Record<string, unknown>), max_tokens: remaining };
+}
+
 export function authorizeGatewayRequest(input: {
   claims: AgentGatewayClaims;
   run: AgentRunGatewayState | null;
@@ -133,7 +170,7 @@ export function authorizeGatewayRequest(input: {
     return { ok: false, refusal: "budget_exhausted", status: 429 };
   }
 
-  return { ok: true };
+  return { ok: true, run };
 }
 
 /**

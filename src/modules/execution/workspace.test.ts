@@ -9,6 +9,7 @@ import {
   fakeSupabase,
   newQueryRecorder,
   readsOf,
+  selectsOf,
   type QueryRecorder,
 } from "@/modules/operations/test-support";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
@@ -16,6 +17,7 @@ import { getOutcomeCard } from "@/modules/outcome-verification/service";
 import { getReviewCard } from "@/modules/review/service";
 import { getLatestValidation } from "@/modules/validation/service";
 import { FIXTURE_ROUTES, fakeRepositorySnapshotFor } from "./test-support";
+import { countPreparedChangesForProject } from "./store";
 import { getPreparedChangeWorkspace, listPreparedChangeSummaries } from "./workspace";
 
 /**
@@ -390,6 +392,19 @@ describe("what a render costs", () => {
     expect(summaries).toHaveLength(8);
     expect(summaries.every((summary) => summary.validationStatus === "passed")).toBe(true);
     expect(recorder.reads).toEqual(["prepared_changes", "validation_runs"]);
+  });
+
+  it("counts prepared changes without transferring any", async () => {
+    /*
+     * What the Agent route's `<Suspense>` shell renders before the changes
+     * arrive. It is a `head`-only count, and until VB-022 the in-memory client
+     * dropped those options and answered zero for every such query — so this
+     * asserts the number rather than trusting the double.
+     */
+    seedIdenticalChanges(5);
+
+    expect(await countPreparedChangesForProject(client(), PROJECT)).toBe(5);
+    expect(selectsOf(recorder, "prepared_changes")).toEqual(["id"]);
   });
 
   it("asks nothing at all when a project has no prepared changes", async () => {

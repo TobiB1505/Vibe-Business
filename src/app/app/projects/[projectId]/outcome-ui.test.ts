@@ -300,7 +300,9 @@ describe("opening a project page starts nothing (§43)", () => {
   );
 
   it("reads the outcome card", () => {
-    expect(workspace).toContain("getOutcomeCard(supabase");
+    // Batched for the whole list since VB-023; still a read, still no
+    // observation started.
+    expect(workspace).toContain("getOutcomeCards(supabase");
   });
 
   it("never starts a verification, from either the page or the read model", () => {

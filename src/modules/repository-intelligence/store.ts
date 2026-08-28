@@ -126,6 +126,42 @@ async function getLatestSuccessfulSnapshotUncached(
 export const getLatestSuccessfulSnapshot = cache(getLatestSuccessfulSnapshotUncached);
 
 /**
+ * Whether this project has ever produced a repository snapshot (VB-022).
+ *
+ * ## Why not `getLatestSuccessfulSnapshot(…) !== null`
+ *
+ * Because that answer costs the whole document. `result` is the analyzer's
+ * output — hundreds of kilobytes of JSONB — and several callers fetch it only
+ * to write `Boolean(snapshot?.result)`: onboarding, which is polled while a
+ * scan runs, and the Agent route's readiness line.
+ *
+ * ## Why `status` alone is the same predicate
+ *
+ * Because the database says so:
+ *
+ *     repository_intelligence_completed_has_result
+ *     CHECK (status <> 'completed' OR (result IS NOT NULL AND completeness IS NOT NULL))
+ *
+ * So "the latest completed snapshot has a result" and "a completed snapshot
+ * exists" cannot disagree. That is a constraint rather than an observation
+ * about today's rows, which is what makes dropping the document safe rather
+ * than merely safe-looking.
+ */
+export async function hasSuccessfulSnapshot(
+  supabase: SupabaseClient,
+  projectId: string,
+): Promise<boolean> {
+  const { count, error } = await supabase
+    .from("repository_intelligence_snapshots")
+    .select("id", { count: "exact", head: true })
+    .eq("project_id", projectId)
+    .eq("status", "completed");
+
+  if (error) throw error;
+  return (count ?? 0) > 0;
+}
+
+/**
  * One specific snapshot, scoped to its project.
  *
  * Used by change preparation, which must read the snapshot its execution

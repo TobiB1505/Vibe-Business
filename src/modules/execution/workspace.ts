@@ -22,10 +22,6 @@ import { changeOriginFrom } from "@/modules/execution/change-origin";
 import { deriveChangeProgress } from "@/modules/execution/change-progress";
 import { buildBranchUrl, buildCompareUrl } from "@/modules/execution/diff";
 import { listPreparedChangesForProject } from "@/modules/execution/store";
-import {
-  getSnapshotsByIds,
-  type StoredSnapshot,
-} from "@/modules/repository-intelligence/store";
 import { createGithubMergePort } from "@/modules/merge/github/adapter";
 import { getLatestMergesForPreparedChanges } from "@/modules/merge/store";
 import type { ChangeMerge } from "@/modules/merge/schema";
@@ -35,13 +31,11 @@ import { buildMergeCard } from "@/modules/merge/view";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { VercelWorkflowExecutor } from "@/modules/operations/vercel/executor";
 import { getOpportunityById } from "@/modules/opportunities/store";
-import { getOutcomeCard } from "@/modules/outcome-verification/service";
 import {
-  resolvePublicOrigin,
-  type PublicOrigin,
-} from "@/modules/outcome-verification/eligibility";
-import { getLatestVerificationsForPreparedChanges } from "@/modules/outcome-verification/store";
-import type { ChangeOutcomeVerification } from "@/modules/outcome-verification/schema";
+  getOutcomeCards,
+  unavailableOutcomeCard,
+} from "@/modules/outcome-verification/service";
+import type { OutcomeCard } from "@/modules/outcome-verification/view";
 import { getReviewCard, getReviewImages } from "@/modules/review/service";
 import { getLatestReviewsForPreparedChanges } from "@/modules/review/store";
 import type { ReviewArtifact } from "@/modules/review/schema";
@@ -178,20 +172,20 @@ type ChangeLifecycle = {
   review: ReviewArtifact | null;
   approval: ChangeApproval | null;
   merge: ChangeMerge | null;
-  outcome: ChangeOutcomeVerification | null;
   /**
-   * What a *merged* change costs on top, also read once for the list.
+   * The two cards whose reads are a *chain* only their own module knows.
    *
-   * A merged change stays in this list — nothing moves it out of `prepared` —
-   * so on a project that ships, these are the reads that accumulate. Both
-   * stay null while no change in the list is merged, and both services then
-   * never reach the branch that would want them.
+   * Outcome needs the verification, the project's public origin and the
+   * snapshot the change was prepared against; business impact needs the merge's
+   * plan and that plan's measurements. Both are batched inside the module that
+   * owns the chain rather than by this file, which would otherwise have to
+   * restate it (VB-023).
    */
-  snapshot: StoredSnapshot | null;
+  outcome: OutcomeCard;
   businessImpact: BusinessImpactCard;
 };
 
-function emptyLifecycle(businessImpact: BusinessImpactCard): ChangeLifecycle {
+function emptyLifecycle(outcome: OutcomeCard, businessImpact: BusinessImpactCard): ChangeLifecycle {
   return {
     validation: null,
     preview: null,
@@ -199,8 +193,7 @@ function emptyLifecycle(businessImpact: BusinessImpactCard): ChangeLifecycle {
     review: null,
     approval: null,
     merge: null,
-    outcome: null,
-    snapshot: null,
+    outcome,
     businessImpact,
   };
 }
@@ -211,63 +204,45 @@ async function readChangeLifecycles(
     projectId: string;
     prepared: readonly Awaited<ReturnType<typeof listPreparedChangesForProject>>[number][];
   },
-): Promise<{ lifecycles: Map<string, ChangeLifecycle>; publicOrigin: PublicOrigin | null }> {
+): Promise<Map<string, ChangeLifecycle>> {
   const scope = {
     projectId: params.projectId,
     preparedChangeIds: params.prepared.map((change) => change.id),
   };
 
-  const [validations, previews, reviews, approvals, merges, outcomes] = await Promise.all([
+  const [validations, previews, reviews, approvals, merges] = await Promise.all([
     getLatestValidationsForPreparedChanges(supabase, scope),
     getLatestPreviewsForPreparedChanges(supabase, scope),
     getLatestReviewsForPreparedChanges(supabase, scope),
     getLatestApprovalsForPreparedChanges(supabase, scope),
     getLatestMergesForPreparedChanges(supabase, scope),
-    getLatestVerificationsForPreparedChanges(supabase, scope),
   ]);
 
   /*
-   * The second wave, and it runs **only when something in the list was merged**
-   * (VB-023).
+   * The two cards whose reads are chains, each batched by the module that owns
+   * its chain (VB-023).
    *
    * A merged change is the one that keeps costing: it stays `prepared`, so it
-   * stays on this screen for the life of the project, and both the outcome card
-   * and the business-impact card stop short-circuiting for it. On a project
-   * where nothing has merged yet — every project, until it ships — none of
-   * these queries runs at all.
+   * stays on this screen for the life of the project, and both of these stop
+   * short-circuiting for it. On a project where nothing has merged yet — every
+   * project, until it ships — neither spends more than its own one read.
+   *
+   * Neither contacts anything outside the database. Rendering a project page
+   * must never reach an analytics vendor, must never create a measurement plan,
+   * and must never start a measurement or an observation (Sprint 12A §43,
+   * Sprint 12B §36, §45).
    */
-  const mergedChanges = params.prepared.filter(
-    (change) => merges.get(change.id)?.status === "merged",
-  );
+  const cardInputs = params.prepared.map((change) => ({
+    preparedChangeId: change.id,
+    merge: merges.get(change.id) ?? null,
+    prepared: change,
+  }));
 
-  const [publicOrigin, snapshots, businessImpact] = await Promise.all([
-    // One row per *project*, not per change. It was being read once per merged
-    // change, asking the same question and getting the same answer.
-    mergedChanges.length > 0 ? resolvePublicOrigin(supabase, params.projectId) : null,
-    getSnapshotsByIds(supabase, {
-      projectId: params.projectId,
-      snapshotIds: mergedChanges.map((change) => change.repositorySnapshotId),
-    }),
-    /*
-     * Business impact state (Sprint 12B §36, §45).
-     *
-     * Database reads and zero provider calls: rendering a project page must
-     * never contact an analytics vendor, must never create a measurement plan,
-     * and must never start a measurement. The registry is asked whether
-     * anything is *connected*, which today is a synchronous "no" for every
-     * project.
-     *
-     * Batched inside the module rather than here, because the reads are a
-     * chain — a merge names a plan, a plan names its measurements — and only
-     * that module knows it (VB-023).
-     */
+  const [outcomes, businessImpact] = await Promise.all([
+    getOutcomeCards(supabase, { projectId: params.projectId, changes: cardInputs }),
     getBusinessImpactCards(supabase, new NoConnectedMetricSources(), {
       projectId: params.projectId,
-      changes: params.prepared.map((change) => ({
-        preparedChangeId: change.id,
-        merge: merges.get(change.id) ?? null,
-        prepared: change,
-      })),
+      changes: cardInputs,
     }),
   ]);
 
@@ -286,13 +261,12 @@ async function readChangeLifecycles(
       review: reviews.get(id) ?? null,
       approval: approvals.get(id) ?? null,
       merge: merges.get(id) ?? null,
-      outcome: outcomes.get(id) ?? null,
-      snapshot: snapshots.get(change.repositorySnapshotId) ?? null,
+      outcome: outcomes.get(id) ?? unavailableOutcomeCard(),
       businessImpact: businessImpact.get(id) ?? unmergedBusinessImpactCard(),
     });
   }
 
-  return { lifecycles, publicOrigin };
+  return lifecycles;
 }
 
 /**
@@ -309,12 +283,6 @@ async function buildPreparedChangeCard(
     mergeTarget: Awaited<ReturnType<typeof resolveMergeTarget>> | null;
     prepared: Awaited<ReturnType<typeof listPreparedChangesForProject>>[number];
     lifecycle: ChangeLifecycle;
-    /**
-     * The project's public origin, resolved once for the list — `null` when
-     * nothing in it was merged, in which case no card reaches the branch that
-     * would use it.
-     */
-    publicOrigin: PublicOrigin | null;
   },
 ) {
   const { projectId, userId, prepared, mergeTarget, lifecycle } = params;
@@ -342,7 +310,7 @@ async function buildPreparedChangeCard(
     review: lifecycle.review,
   };
 
-  const [review, approval, merge, outcome, opportunity] = await Promise.all([
+  const [review, approval, merge, opportunity] = await Promise.all([
     // Review state, read from persisted rows. Like the preview card, this costs
     // no provider call: opening the page must never spend anything (§40).
     getReviewCard(supabase, {
@@ -390,18 +358,6 @@ async function buildPreparedChangeCard(
     // customer's production website, and must never start an observation. The
     // card is `unavailable` for everything that was not merged, which is most
     // prepared changes.
-    getOutcomeCard(supabase, {
-      projectId,
-      preparedChangeId: prepared.id,
-      prefetched: {
-        outcome: lifecycle.outcome,
-        merge: lifecycle.merge,
-        prepared,
-        publicOrigin: params.publicOrigin,
-        snapshot: lifecycle.snapshot,
-      },
-    }),
-
     // The Move this change was prepared to address. One row, no provider call,
     // and the only source of meaning an agent-produced change has: its
     // capability is `agentic_execution_v1` for every agentic change ever
@@ -472,7 +428,7 @@ async function buildPreparedChangeCard(
       review,
       approval,
       merge,
-      outcome,
+      outcome: lifecycle.outcome,
       businessImpact: lifecycle.businessImpact,
     }),
     id: prepared.id,
@@ -517,7 +473,7 @@ async function buildPreparedChangeCard(
     // a database action, and looking at it must stay free.
     approval,
     merge,
-    outcome,
+    outcome: lifecycle.outcome,
     // Deterministic and free: a lookup on the capability, no provider call
     // and no model (§6).
     rationale: businessRationaleFor(prepared.capability),
@@ -581,7 +537,7 @@ export async function getPreparedChangeWorkspace(
    * whole point: a batched read that ran per card would be the same N+1 with
    * more machinery.
    */
-  const { lifecycles, publicOrigin } = await readChangeLifecycles(supabase, {
+  const lifecycles = await readChangeLifecycles(supabase, {
     projectId: params.projectId,
     prepared,
   });
@@ -604,8 +560,9 @@ export async function getPreparedChangeWorkspace(
       repositoryFullName: params.repositoryFullName,
       mergeTarget,
       prepared: change,
-      lifecycle: lifecycles.get(change.id) ?? emptyLifecycle(unmergedBusinessImpactCard()),
-      publicOrigin,
+      lifecycle:
+        lifecycles.get(change.id) ??
+        emptyLifecycle(unavailableOutcomeCard(), unmergedBusinessImpactCard()),
     }),
   );
 }

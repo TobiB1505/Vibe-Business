@@ -209,6 +209,10 @@ export const E2E_REPOSITORIES_SCENARIOS = {
       private: privateRepository,
       htmlUrl: `https://github.com/TobiB1505/${name}`,
       connectedAt: `2026-08-${String(24 - index).padStart(2, "0")}T10:00:00Z`,
+      // One repository whose installation was removed on GitHub, so the
+      // browser suite meets the state a customer creates by revoking access
+      // rather than only the happy list (VB-041).
+      accessRevokedAt: index === 2 ? "2026-08-27T09:00:00Z" : null,
     })),
   "account-repositories-empty": (): ConnectedRepository[] => [],
 } as const;

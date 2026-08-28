@@ -56,3 +56,62 @@ for (const width of [1440, 1024, 768, 375]) {
     expect(overflow).toBeLessThanOrEqual(0);
   });
 }
+
+test.describe("a repository Vibe can no longer read (VB-041)", () => {
+  /**
+   * Removing the GitHub App is the ordinary way to withdraw access, and until
+   * this the page went on describing those repositories as connected. Vibe had
+   * already been told — a 404 on the installation probe is recorded on the
+   * installation row — so the gap was never detection, it was that nothing
+   * said anything.
+   */
+  test("says so, on the row, rather than looking connected", async ({ page }) => {
+    await page.goto(REPOSITORIES);
+
+    const notice = page
+      .getByText("Vibe can no longer read this repository — the GitHub App was removed.")
+      .first();
+
+    await expect(notice).toBeVisible();
+  });
+
+  test("offers the way back, which is a fresh installation", async ({ page }) => {
+    await page.goto(REPOSITORIES);
+
+    // `?new=1` is the only route that starts a real installation for a user
+    // who already has an installation row — the flow VB-041 gave a reason to
+    // reach and nothing linked to.
+    await expect(page.getByRole("link", { name: "Reconnect" }).first()).toHaveAttribute(
+      "href",
+      "/app/connect/github?new=1",
+    );
+  });
+
+  test("marks the row without claiming the repository changed", async ({ page }) => {
+    await page.goto(REPOSITORIES);
+
+    // "No access" replaces Private/Public: the visibility Vibe recorded at
+    // connection time is not a fact it can still vouch for, and the row should
+    // not imply it looked.
+    await expect(page.getByText("No access").first()).toBeVisible();
+  });
+
+  test("leaves every other row alone", async ({ page }) => {
+    await page.goto(REPOSITORIES);
+
+    /*
+     * One revoked installation in the fixture. A notice on every row would
+     * mean the state is being derived from the wrong thing.
+     *
+     * Filtered to what is *visible*: this page renders a table and a card list
+     * and hides one of them by breakpoint, so both notices exist in the DOM
+     * and only one is on screen. Counting DOM nodes here would assert the
+     * layout rather than the state.
+     */
+    await expect(
+      page
+        .getByText("Vibe can no longer read this repository — the GitHub App was removed.")
+        .locator("visible=true"),
+    ).toHaveCount(1);
+  });
+});

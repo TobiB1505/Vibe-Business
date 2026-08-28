@@ -26,6 +26,18 @@ import { ExperimentCard } from "../experiment-card";
  * workspace. That separation is what UI-2 Part 1's Phase C existed to create;
  * before it, this page was a by-product of rendering every prepared change in
  * full.
+ *
+ * ## Why there is no `<Suspense>` boundary here
+ *
+ * Because there is nothing left to stream around. The audit asked for one on
+ * the grounds that this route "blocks all HTML on GitHub network calls" — and
+ * it no longer makes any: the merge preflight it was spending them on answered
+ * a question about approved changes, and this page lists merged ones. What
+ * remains is a handful of database reads with nothing above them that does not
+ * depend on the result, and `loading.tsx` is already the boundary for that.
+ *
+ * A boundary added anyway would move the same wait behind a spinner and call
+ * it progress.
  */
 export default async function ProjectExperimentsPage({
   params,
