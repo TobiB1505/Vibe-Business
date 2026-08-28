@@ -30,6 +30,15 @@ export type StubAnthropic = {
   readonly url: string;
   /** How many message requests the SDK made. */
   readonly requests: number;
+  /**
+   * Every request body the SDK sent, verbatim (VB-035).
+   *
+   * The canary's strongest available evidence about *ingestion*: whatever the
+   * SDK read out of the workspace and decided the model should see is in here.
+   * A repository file that was ignored leaves no trace; one that was ingested
+   * cannot avoid leaving its text.
+   */
+  readonly bodies: readonly string[];
   close(): Promise<void>;
 };
 
@@ -106,6 +115,7 @@ function finalTurn(id: string): string {
 /** Starts the stub on an ephemeral port and replays `script`, one call per turn. */
 export async function startStubAnthropic(script: readonly ScriptedToolCall[]): Promise<StubAnthropic> {
   let requests = 0;
+  const bodies: string[] = [];
 
   const server: Server = createServer((req, res) => {
     let body = "";
@@ -120,6 +130,7 @@ export async function startStubAnthropic(script: readonly ScriptedToolCall[]): P
 
       const index = requests;
       requests += 1;
+      bodies.push(body);
 
       res.writeHead(200, { "content-type": "text/event-stream", "cache-control": "no-cache" });
       res.end(index < script.length ? toolUseTurn(`m${index}`, script[index]) : finalTurn(`m${index}`));
@@ -134,6 +145,9 @@ export async function startStubAnthropic(script: readonly ScriptedToolCall[]): P
     url: `http://127.0.0.1:${port}`,
     get requests() {
       return requests;
+    },
+    get bodies() {
+      return bodies;
     },
     close: () =>
       new Promise<void>((resolve) => {
