@@ -29,6 +29,13 @@ import { liveConnections } from "./repository-connection";
  * live questions with a network call behind each one, and an index page is the
  * wrong place to ask them — the workspace asks, freshly, where the answer
  * gates something.
+ *
+ * It does report what Vibe has **already been told**. `access_revoked_at` is
+ * set when a probe elsewhere in the product got a 404 for the installation —
+ * the shape GitHub uses when the App has been removed (VB-041). That is a
+ * stored fact, so surfacing it costs a column rather than a round trip, and
+ * saying nothing about it left a customer looking at repositories Vibe can no
+ * longer read with the page describing them as connected.
  */
 
 export type ConnectedRepository = {
@@ -42,6 +49,15 @@ export type ConnectedRepository = {
   private: boolean;
   htmlUrl: string;
   connectedAt: string;
+  /**
+   * When GitHub last told Vibe this repository's installation is gone.
+   *
+   * Null for every repository Vibe has not been told about — which includes
+   * both "still connected" and "nobody has looked recently". The row says the
+   * former; it cannot say the latter, and the copy is written so it does not
+   * pretend to.
+   */
+  accessRevokedAt: string | null;
 };
 
 type ProjectRow = { id: string; name: string };
@@ -54,6 +70,7 @@ type ConnectionRow = {
   private: boolean;
   html_url: string;
   created_at: string;
+  github_installations: { access_revoked_at: string | null } | null;
 };
 
 export async function listConnectedRepositories(
@@ -72,7 +89,14 @@ export async function listConnectedRepositories(
   const projects = (projectRows ?? []) as ProjectRow[];
   if (projects.length === 0) return [];
 
-  const { data: connectionRows, error: connectionsError } = await liveConnections(supabase, "project_id, owner, name, full_name, default_branch, private, html_url, created_at")
+  const { data: connectionRows, error: connectionsError } = await liveConnections(
+    supabase,
+    "project_id, owner, name, full_name, default_branch, private, html_url, created_at, " +
+      // The installation's own revocation marker, joined rather than fetched
+      // separately: it is one column on a row this query already reaches
+      // through its foreign key.
+      "github_installations(access_revoked_at)",
+  )
     .in(
       "project_id",
       projects.map((project) => project.id),
@@ -93,5 +117,6 @@ export async function listConnectedRepositories(
     private: row.private,
     htmlUrl: row.html_url,
     connectedAt: row.created_at,
+    accessRevokedAt: row.github_installations?.access_revoked_at ?? null,
   }));
 }

@@ -71,6 +71,31 @@ function TrustItem({ icon, title, description }: { icon: ReactNode; title: strin
   );
 }
 
+/**
+ * What a customer sees after removing the GitHub App (VB-041).
+ *
+ * Wave 4 gave Vibe the ability to *notice* — a 404 on the installation probe
+ * is GitHub's shape for "this App was removed", and it is recorded on the
+ * installation row — and it gave "Connect GitHub" somewhere sensible to send
+ * that user. What nothing did was **say so**, so this page went on describing
+ * repositories as connected that Vibe could no longer read.
+ *
+ * The sentence is about access, not about the repository: the code is fine and
+ * the customer's own settings are the reason. And it names the fix rather than
+ * describing the problem, because removing an App is usually deliberate and
+ * the only question left is how to undo it.
+ */
+function AccessRevokedNotice() {
+  return (
+    <p className="text-coral flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs">
+      <span>Vibe can no longer read this repository — the GitHub App was removed.</span>
+      <Link href="/app/connect/github?new=1" className="underline underline-offset-2">
+        Reconnect
+      </Link>
+    </p>
+  );
+}
+
 export function RepositoriesIndex({
   repositories,
   githubLogin,
@@ -315,6 +340,7 @@ export function RepositoriesIndex({
                                 {repository.name}
                               </a>
                               <span className="text-fg-meta block truncate font-mono text-meta">{repository.owner}/{repository.name}</span>
+                              {repository.accessRevokedAt && <AccessRevokedNotice />}
                             </div>
                           </div>
                         </td>
@@ -323,7 +349,13 @@ export function RepositoriesIndex({
                         </td>
                         <td className="px-5 py-4">
                           <div className="flex flex-col gap-1.5">
-                            <StatusPill tone="neutral">{repository.private ? "Private" : "Public"}</StatusPill>
+                            <StatusPill tone={repository.accessRevokedAt ? "problem" : "neutral"}>
+                              {repository.accessRevokedAt
+                                ? "No access"
+                                : repository.private
+                                  ? "Private"
+                                  : "Public"}
+                            </StatusPill>
                             <span className="text-fg-meta flex items-center gap-1.5 font-mono text-meta"><BranchIcon size={13} />{repository.defaultBranch}</span>
                           </div>
                         </td>
@@ -348,8 +380,19 @@ export function RepositoriesIndex({
                             <a href={repository.htmlUrl} target="_blank" rel="noreferrer noopener" className="text-fg-body hover:text-mint block truncate text-sm font-semibold">{repository.fullName}</a>
                             <Link href={`/app/projects/${repository.projectId}`} className="text-fg-muted hover:text-mint mt-1 block text-xs">{repository.projectName}</Link>
                           </div>
-                          <StatusPill tone="neutral">{repository.private ? "Private" : "Public"}</StatusPill>
+                          <StatusPill tone={repository.accessRevokedAt ? "problem" : "neutral"}>
+                            {repository.accessRevokedAt
+                              ? "No access"
+                              : repository.private
+                                ? "Private"
+                                : "Public"}
+                          </StatusPill>
                         </div>
+                        {repository.accessRevokedAt && (
+                          <div className="mt-2">
+                            <AccessRevokedNotice />
+                          </div>
+                        )}
                         <div className="text-fg-meta mt-4 flex flex-wrap items-center justify-between gap-2 text-xs">
                           <span className="flex items-center gap-1.5 font-mono"><BranchIcon size={13} />{repository.defaultBranch}</span>
                           <span>{formatTimestamp(repository.connectedAt)}</span>
