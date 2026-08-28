@@ -203,6 +203,24 @@ describe("signInWithPassword", () => {
 });
 
 describe("signUp", () => {
+  /**
+   * The password rule is Vibe's, not only the provider's (VB-037).
+   *
+   * Sign-up used to hand the password straight to Supabase, whose minimum is a
+   * dashboard setting — so the product's own password rule was something no
+   * reader of this repository could determine, and the audit found it sitting
+   * at six.
+   */
+  it("refuses a password shorter than eight characters, without asking Supabase", async () => {
+    const result = await signUp(null, formDataWith({ email: "new@example.com", password: "hunter2" }));
+
+    expect(result).toEqual({ ok: false, error: "Choose a password with at least 8 characters." });
+    expect(authMock.signUp).not.toHaveBeenCalled();
+  });
+
+  // The accepting side needs no test of its own: every existing case below
+  // signs up with `hunter22`, which is exactly eight.
+
   it("redirects to /app when Supabase returns a session immediately (confirm email disabled)", async () => {
     authMock.signUp.mockResolvedValue({ data: { session: { access_token: "x" } }, error: null });
 
@@ -487,7 +505,7 @@ describe("updatePassword", () => {
   it("rejects a too-short password without calling Supabase", async () => {
     const result = await updatePassword(null, formDataWith({ password: "abc" }));
 
-    expect(result).toEqual({ ok: false, error: "Choose a password with at least 6 characters." });
+    expect(result).toEqual({ ok: false, error: "Choose a password with at least 8 characters." });
     expect(authMock.updateUser).not.toHaveBeenCalled();
   });
 
@@ -516,7 +534,7 @@ describe("updatePassword", () => {
 
     expect(result).toEqual({
       ok: false,
-      error: "Choose a longer password — at least 6 characters.",
+      error: "Choose a longer password.",
     });
   });
 

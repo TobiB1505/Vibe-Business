@@ -141,7 +141,11 @@ const SIGN_IN_COPY: Record<AuthFailure, string> = {
   // accepts unauthenticated input, and Supabase itself obfuscates this case
   // rather than confirming it.
   user_already_exists: "We couldn't sign you in. Please try again.",
-  weak_password: "Choose a longer password — at least 6 characters.",
+  // No number here on purpose (VB-037). This copy answers a refusal that came
+  // from Supabase, whose minimum is a dashboard setting — so naming a length
+  // would be this file guessing at somebody else's rule and being wrong the
+  // moment it changes. The reset form states its own minimum, which it owns.
+  weak_password: "Choose a longer password.",
   rate_limited: "Too many attempts. Wait a moment and try again.",
   network: "We couldn't reach the server. Please try again.",
   oauth_cancelled: "Google sign-in was cancelled.",
