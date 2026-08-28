@@ -275,7 +275,7 @@ describe("opening a project page measures nothing (§36, §45)", () => {
   });
 
   it("says in the code why that read is free", () => {
-    expect(workspace).toContain("zero provider calls");
+    expect(workspace).toContain("must never reach an analytics vendor");
   });
 });
 
