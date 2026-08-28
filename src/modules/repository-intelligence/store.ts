@@ -153,6 +153,38 @@ export async function getSnapshotById(
 }
 
 /**
+ * The same lookup for a whole list, in one query (VB-023).
+ *
+ * A prepared change names the snapshot it was prepared against, and a screen
+ * showing twenty of them asked for twenty snapshots one at a time — usually
+ * the same snapshot, twenty times. Ids with no completed snapshot are absent
+ * from the map, so `.get(id) ?? null` reads as the single lookup does.
+ */
+export async function getSnapshotsByIds(
+  supabase: SupabaseClient,
+  params: { snapshotIds: readonly string[]; projectId: string },
+): Promise<Map<string, StoredSnapshot>> {
+  const ids = [...new Set(params.snapshotIds)];
+  if (ids.length === 0) return new Map();
+
+  const { data, error } = await supabase
+    .from("repository_intelligence_snapshots")
+    .select(SNAPSHOT_COLUMNS)
+    .in("id", ids)
+    .eq("project_id", params.projectId)
+    .eq("status", "completed");
+
+  if (error) throw error;
+
+  return new Map(
+    (data ?? []).map((row) => {
+      const snapshot = mapRow(row as unknown as SnapshotRow);
+      return [snapshot.id, snapshot];
+    }),
+  );
+}
+
+/**
  * Reuse lookup (Sprint 2 §31). A successful snapshot for the same commit
  * *and* the same analyzer version is still valid — nothing about the
  * inputs or the rules has changed, so re-reading GitHub would be pure

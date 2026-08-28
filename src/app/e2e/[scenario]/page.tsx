@@ -1,4 +1,6 @@
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
+import { SkeletonSection } from "@/components/ui/skeleton";
 import { PlanDetailPanel } from "@/app/app/projects/[projectId]/plan/plan-detail-panel";
 import {
   PreparedChangesSection,
@@ -711,6 +713,39 @@ export default async function E2eScenarioPage({
     );
   }
 
+  /*
+   * The Agent route's own render shape, so streaming can be observed (VB-023).
+   *
+   * The real route cannot be driven here — it needs a signed-in session against
+   * a Supabase project the browser suite deliberately does not have. What this
+   * reproduces is the structure the route now uses: the panel built from cheap
+   * reads, then the prepared changes inside a `<Suspense>` boundary with the
+   * same fallback.
+   *
+   * The delay is artificial and exists only to make the boundary observable —
+   * in the route it is a GitHub merge preflight. What the browser test proves
+   * is real either way: the panel and the skeleton reach the client while the
+   * slow half is still resolving, which before this could not happen at all.
+   */
+  if (scenario === "agent-streaming") {
+    return (
+      <main className="mx-auto max-w-[70rem] p-8">
+        {label}
+        <AgentPanel
+          {...E2E_AGENT_SCENARIOS["agent-ready"]()}
+          preparedCount={1}
+          planHref="/app/projects/project_e2e/plan"
+          agentHref="/app/projects/project_e2e/agent"
+          productHref="/app/projects/project_e2e/product"
+          executionHref={null}
+        />
+        <Suspense fallback={<SkeletonSection />}>
+          <SlowPreparedChanges />
+        </Suspense>
+      </main>
+    );
+  }
+
   if (isE2eAgentScenario(scenario)) {
     return (
       <main className="mx-auto max-w-[70rem] p-8">
@@ -808,5 +843,18 @@ export default async function E2eScenarioPage({
         planHref="/app/projects/project_e2e/plan"
       />
     </main>
+  );
+}
+
+/** Stands in for the merge preflight: slow, and nothing above it waits. */
+async function SlowPreparedChanges() {
+  await new Promise((resolve) => setTimeout(resolve, 1_000));
+
+  return (
+    <PreparedChangesSection
+      projectId="project_e2e"
+      changes={[E2E_SCENARIOS.change_awaiting_approval()]}
+      planHref="/app/projects/project_e2e/plan"
+    />
   );
 }

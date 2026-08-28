@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { readLatestPerPreparedChange } from "@/lib/db/latest-per-change";
 import type { SandboxUsage } from "@/modules/validation/sandbox-port";
 import type {
   TeardownReason,
@@ -105,23 +106,60 @@ export async function getValidatedArtifact(
   if (!data) return null;
 
   const row = data as unknown as Row;
-  const snapshotId = row.artifact_snapshot_id as string | null;
-  const expiresAt = row.artifact_expires_at as string | null;
 
-  // No snapshot, or no deadline. The database's own CHECK already refuses a
-  // retained artifact without an expiry; this is the same rule stated where the
-  // value is read, because a null here would otherwise become "never expires".
-  if (!snapshotId || !expiresAt) return null;
-  if (row.artifact_deleted_at) return null;
-
-  return {
-    validationRunId: String(row.id),
+  return validatedArtifactFrom({
+    id: String(row.id),
     projectId: String(row.project_id),
     preparedChangeId: String(row.prepared_change_id),
     validationProfile: row.validation_profile as ValidatedArtifact["validationProfile"],
     preparedCommitSha: String(row.prepared_commit_sha),
-    snapshotId,
-    expiresAt,
+    status: String(row.status),
+    artifactSnapshotId: (row.artifact_snapshot_id as string | null) ?? null,
+    artifactExpiresAt: (row.artifact_expires_at as string | null) ?? null,
+    artifactDeletedAt: (row.artifact_deleted_at as string | null) ?? null,
+  });
+}
+
+/**
+ * The same answer from a validation run already in hand (VB-023).
+ *
+ * The preview card is built beside the validation it previews, and that row
+ * carries every column this needs — so asking the database for it again is a
+ * read spent re-fetching bytes the render is holding.
+ *
+ * Extracted rather than duplicated: `getValidatedArtifact` above delegates
+ * here, so the rules for what counts as a usable artifact are stated once. A
+ * second copy of "passed, captured, not deleted" is how the two answers drift.
+ */
+export function validatedArtifactFrom(run: {
+  id: string;
+  projectId: string;
+  preparedChangeId: string;
+  validationProfile: ValidatedArtifact["validationProfile"];
+  preparedCommitSha: string;
+  status: string;
+  artifactSnapshotId: string | null;
+  artifactExpiresAt: string | null;
+  artifactDeletedAt: string | null;
+}): ValidatedArtifact | null {
+  // A failed validation has no artifact and never will. Filtered in the query
+  // above as well, because a predicate the database can apply belongs there.
+  if (run.status !== "passed") return null;
+
+  // No snapshot, or no deadline. The database's own CHECK already refuses a
+  // retained artifact without an expiry; this is the same rule stated where the
+  // value is read, because a null here would otherwise become "never expires".
+  if (!run.artifactSnapshotId || !run.artifactExpiresAt) return null;
+  if (run.artifactDeletedAt) return null;
+
+  return {
+    validationRunId: run.id,
+    projectId: run.projectId,
+    preparedChangeId: run.preparedChangeId,
+    validationProfile: run.validationProfile,
+    preparedCommitSha: run.preparedCommitSha,
+    snapshotId: run.artifactSnapshotId,
+    expiresAt: run.artifactExpiresAt,
     deletedAt: null,
   };
 }
@@ -197,6 +235,28 @@ export async function getLatestPreviewForPreparedChange(
 
   if (error) throw error;
   return data ? mapRow(data as unknown as Row) : null;
+}
+
+/**
+ * The same answer for a whole list, in one query (VB-023).
+ *
+ * The Agent screen assembles every prepared change at once, and asking this
+ * table once per card is the cost that made one render 261 round trips. Ids
+ * with no row are absent from the map, so `.get(id) ?? null` reads exactly as
+ * the single-change query above.
+ */
+export async function getLatestPreviewsForPreparedChanges(
+  supabase: SupabaseClient,
+  params: { projectId: string; preparedChangeIds: readonly string[] },
+): Promise<Map<string, PreviewSession>> {
+  const rows = await readLatestPerPreparedChange(supabase, {
+    table: "preview_sessions",
+    columns: COLUMNS,
+    projectId: params.projectId,
+    preparedChangeIds: params.preparedChangeIds,
+  });
+
+  return new Map([...rows].map(([id, row]) => [id, mapRow(row as unknown as Row)]));
 }
 
 export async function findPreviewByOperation(

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { readLatestPerPreparedChange } from "@/lib/db/latest-per-change";
 import type {
   ChangeOutcomeVerification,
   ExpectedOutcome,
@@ -192,6 +193,28 @@ export async function getLatestVerificationForPreparedChange(
 
   if (error) throw error;
   return data ? mapRow(data as unknown as Row) : null;
+}
+
+/**
+ * The same answer for a whole list, in one query (VB-023).
+ *
+ * The Agent screen assembles every prepared change at once, and asking this
+ * table once per card is the cost that made one render 261 round trips. Ids
+ * with no row are absent from the map, so `.get(id) ?? null` reads exactly as
+ * the single-change query above.
+ */
+export async function getLatestVerificationsForPreparedChanges(
+  supabase: SupabaseClient,
+  params: { projectId: string; preparedChangeIds: readonly string[] },
+): Promise<Map<string, ChangeOutcomeVerification>> {
+  const rows = await readLatestPerPreparedChange(supabase, {
+    table: "change_outcome_verifications",
+    columns: COLUMNS,
+    projectId: params.projectId,
+    preparedChangeIds: params.preparedChangeIds,
+  });
+
+  return new Map([...rows].map(([id, row]) => [id, mapRow(row as unknown as Row)]));
 }
 
 /** The verification a workflow step owns. Ownership comes from the operation. */

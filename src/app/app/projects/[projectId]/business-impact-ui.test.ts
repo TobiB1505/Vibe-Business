@@ -260,7 +260,8 @@ describe("opening a project page measures nothing (§36, §45)", () => {
   );
 
   it("reads the card", () => {
-    expect(workspace).toContain("getBusinessImpactCard(");
+    // Batched for the whole list since VB-023; still one call, still a read.
+    expect(workspace).toContain("getBusinessImpactCards(");
   });
 
   it("never starts a measurement or creates a plan, from either file", () => {

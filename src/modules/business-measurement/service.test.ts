@@ -1,10 +1,17 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { FakeExecutor, fakeSupabase } from "@/modules/operations/test-support";
+import { getPreparedChange } from "@/modules/execution/store";
+import { getLatestMergeForPreparedChange } from "@/modules/merge/store";
+import {
+  FakeExecutor,
+  fakeSupabase,
+  newQueryRecorder,
+} from "@/modules/operations/test-support";
 import { findCausalClaims } from "./causality";
 import { MEASUREMENT_POLICY_VERSION } from "./schema";
 import {
   ensureMeasurementPlan,
   getBusinessImpactCard,
+  getBusinessImpactCards,
   startBusinessMeasurement,
 } from "./service";
 import { NoConnectedMetricSources } from "./source";
@@ -287,6 +294,133 @@ describe("one measurement per question (§35, §46)", () => {
 
     expect(again.kind).toBe("active");
     expect(db.rows("business_outcome_measurements")).toHaveLength(1);
+  });
+});
+
+describe("reading a whole list's cards (VB-023)", () => {
+  /**
+   * The batch is what the Agent screen calls, and the single-change function
+   * now delegates to it — so nothing else in this repository verifies that the
+   * plan chain is resolved *per change* rather than once and shared.
+   *
+   * Two merged changes with two different plans is the smallest arrangement
+   * where getting that wrong is visible.
+   */
+  const SECOND_CHANGE = "prepared_measure_2";
+  const SECOND_MERGE = "merge_measure_2";
+
+  function seedSecondMergedChange() {
+    db.seed("prepared_changes", {
+      id: SECOND_CHANGE,
+      project_id: MEASUREMENT_FIXTURES.project,
+      user_id: MEASUREMENT_FIXTURES.user,
+      status: "prepared",
+      execution_capability: "nextjs_seo_foundations_v2",
+      execution_version: "nextjs-seo-foundations-v2",
+      repository_snapshot_id: MEASUREMENT_FIXTURES.snapshot,
+      commit_sha: "f".repeat(40),
+      base_sha: "b".repeat(40),
+      base_branch: "main",
+      branch_name: "vibe/seo-foundations-2",
+      files: [],
+    });
+
+    db.seed("change_merges", {
+      id: SECOND_MERGE,
+      project_id: MEASUREMENT_FIXTURES.project,
+      user_id: MEASUREMENT_FIXTURES.user,
+      prepared_change_id: SECOND_CHANGE,
+      prepared_commit_sha: "f".repeat(40),
+      prepared_base_sha: "b".repeat(40),
+      default_branch: "main",
+      merge_policy_version: "merge-policy-v1",
+      merge_strategy: "fast_forward_exact_commit",
+      status: "merged",
+      resulting_default_head_sha: "f".repeat(40),
+    });
+  }
+
+  async function changes() {
+    const supabase = client();
+    return [
+      {
+        preparedChangeId: MEASUREMENT_FIXTURES.preparedChange,
+        merge: await getLatestMergeForPreparedChange(supabase, {
+          projectId: MEASUREMENT_FIXTURES.project,
+          preparedChangeId: MEASUREMENT_FIXTURES.preparedChange,
+        }),
+        prepared: await getPreparedChange(supabase, {
+          projectId: MEASUREMENT_FIXTURES.project,
+          preparedChangeId: MEASUREMENT_FIXTURES.preparedChange,
+        }),
+      },
+      {
+        preparedChangeId: SECOND_CHANGE,
+        merge: await getLatestMergeForPreparedChange(supabase, {
+          projectId: MEASUREMENT_FIXTURES.project,
+          preparedChangeId: SECOND_CHANGE,
+        }),
+        prepared: await getPreparedChange(supabase, {
+          projectId: MEASUREMENT_FIXTURES.project,
+          preparedChangeId: SECOND_CHANGE,
+        }),
+      },
+    ];
+  }
+
+  it("gives each change its own plan", async () => {
+    seed();
+    seedSecondMergedChange();
+
+    await ensureMeasurementPlan(client(), params);
+    await ensureMeasurementPlan(client(), { ...params, preparedChangeId: SECOND_CHANGE });
+
+    const plans = db.rows("measurement_plans");
+    expect(plans).toHaveLength(2);
+
+    const cards = await getBusinessImpactCards(client(), new NoConnectedMetricSources(), {
+      projectId: MEASUREMENT_FIXTURES.project,
+      changes: await changes(),
+    });
+
+    const first = cards.get(MEASUREMENT_FIXTURES.preparedChange);
+    const second = cards.get(SECOND_CHANGE);
+
+    expect(first?.measurementPlanId).toBe(
+      plans.find((plan) => plan.prepared_change_id === MEASUREMENT_FIXTURES.preparedChange)?.id,
+    );
+    expect(second?.measurementPlanId).toBe(
+      plans.find((plan) => plan.prepared_change_id === SECOND_CHANGE)?.id,
+    );
+    expect(first?.measurementPlanId).not.toBe(second?.measurementPlanId);
+  });
+
+  it("reads the plan chain once for the list, not once per change", async () => {
+    seed();
+    seedSecondMergedChange();
+    await ensureMeasurementPlan(client(), params);
+    await ensureMeasurementPlan(client(), { ...params, preparedChangeId: SECOND_CHANGE });
+
+    const recorder = newQueryRecorder();
+    await getBusinessImpactCards(fakeSupabase(db, recorder), new NoConnectedMetricSources(), {
+      projectId: MEASUREMENT_FIXTURES.project,
+      changes: await changes(),
+    });
+
+    expect(recorder.reads).toEqual(["measurement_plans", "business_outcome_measurements"]);
+  });
+
+  it("costs nothing at all when nothing in the list was merged", async () => {
+    seed({ mergeStatus: "blocked" });
+
+    const recorder = newQueryRecorder();
+    const cards = await getBusinessImpactCards(fakeSupabase(db, recorder), new NoConnectedMetricSources(), {
+      projectId: MEASUREMENT_FIXTURES.project,
+      changes: await changes(),
+    });
+
+    expect(recorder.reads).toEqual([]);
+    expect(cards.get(MEASUREMENT_FIXTURES.preparedChange)?.state).toBe("unavailable");
   });
 });
 
