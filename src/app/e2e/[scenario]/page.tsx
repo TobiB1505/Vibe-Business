@@ -129,11 +129,22 @@ import {
  * `VIBE_E2E_FIXTURES` is set by the Playwright web server and by nothing else —
  * not in `.env`, not in Vercel, not in any deployment. Without it this route is
  * a 404 on every scenario, so a deployed build has no fixture surface at all.
+ *
+ * That argument rests on an environment variable staying unset forever, in a
+ * dashboard, by everyone (VB-043). It is a good argument and it is one
+ * mistyped variable name away from being wrong — so production refuses this
+ * route on its own terms as well, regardless of what any flag says. Two
+ * independent reasons for the same 404: the flag, and the platform's own
+ * statement about where the code is running.
  */
 
 export const dynamic = "force-dynamic";
 
 function fixturesEnabled(): boolean {
+  // `VERCEL_ENV` is set by the platform, not by this repository, and a
+  // production deployment cannot unset it. Checked first because it is the one
+  // that does not depend on anybody remembering anything.
+  if (process.env.VERCEL_ENV === "production") return false;
   return process.env.VIBE_E2E_FIXTURES === "1";
 }
 
