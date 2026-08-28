@@ -47,7 +47,7 @@ export async function readAgentRunGatewayState(
 
   const { data: run } = await supabase
     .from("agent_execution_runs")
-    .select("id, status, project_id, user_id, execution_spec_id")
+    .select("id, status, project_id, user_id, execution_spec_id, gateway_requests_started")
     .eq("id", params.runId)
     .maybeSingle();
 
@@ -58,6 +58,7 @@ export async function readAgentRunGatewayState(
     project_id: string;
     user_id: string;
     execution_spec_id: string;
+    gateway_requests_started: number | null;
   };
 
   /*
@@ -91,11 +92,40 @@ export async function readAgentRunGatewayState(
     userId: row.user_id,
     executionSpecId: row.execution_spec_id,
     spentOutputTokens: rows.reduce((total, entry) => total + (entry.output_tokens ?? 0), 0),
-    // Every forwarded request writes a row, succeeded or failed, so the request
-    // ceiling counts attempts rather than successes. A loop that fails every
-    // call is still a loop, and it still costs latency and provider quota.
-    forwardedRequests: rows.length,
+    /*
+     * Every forwarded request writes a row, succeeded or failed, so the request
+     * ceiling counts attempts rather than successes. A loop that fails every
+     * call is still a loop, and it still costs latency and provider quota.
+     *
+     * The larger of two counts (VB-016). The ledger rows land in `after()`, so
+     * under concurrency they lag; the claim counter is incremented before the
+     * credential is injected and does not. Taking the maximum means the counter
+     * can only tighten the ceiling, and a run that started before the column
+     * existed — its counter still zero — is still bounded by its ledger.
+     */
+    forwardedRequests: Math.max(rows.length, row.gateway_requests_started ?? 0),
   };
+}
+
+/**
+ * Claims one request against the run, before Vibe's key is injected (VB-016).
+ *
+ * Returns the count *after* this claim, or `null` when no run matched. The
+ * caller compares that number against the authorized maximum rather than
+ * trusting the read that preceded it: a check-then-act on state that lands
+ * after the response is not a ceiling under concurrency, it is a delay.
+ *
+ * Never released. An attempt that failed still happened, and a counter an
+ * unreliable network could reset would be worth less than no counter at all,
+ * because it would look like one.
+ */
+export async function claimGatewayRequest(params: GatewayRunLookup): Promise<number | null> {
+  const { data, error } = await createServiceClient().rpc("claim_gateway_request", {
+    p_run_id: params.runId,
+  });
+
+  if (error) throw error;
+  return data === null || data === undefined ? null : Number(data);
 }
 
 /**

@@ -25,10 +25,17 @@ const REAL_KEY = "sk-ant-vibe-real-key-do-not-leak";
 
 const readAgentRunGatewayState = vi.fn<() => Promise<AgentRunGatewayState | null>>();
 const recordGatewayUsage = vi.fn(async (_params: unknown) => {});
+/**
+ * The durable claim (VB-016), which the handler makes *before* it injects the
+ * key. Counted here, because "how many times was an attempt claimed" is the
+ * property the request ceiling now rests on.
+ */
+const claimGatewayRequest = vi.fn<() => Promise<number | null>>(async () => 1);
 
 vi.mock("@/modules/operations/agent-execution/gateway-state", () => ({
   readAgentRunGatewayState: () => readAgentRunGatewayState(),
   recordGatewayUsage: (params: unknown) => recordGatewayUsage(params),
+  claimGatewayRequest: () => claimGatewayRequest(),
 }));
 
 /**
@@ -127,6 +134,8 @@ beforeEach(() => {
   vi.stubEnv("ANTHROPIC_API_KEY", REAL_KEY);
   readAgentRunGatewayState.mockResolvedValue(liveRun());
   recordGatewayUsage.mockClear();
+  claimGatewayRequest.mockClear();
+  claimGatewayRequest.mockResolvedValue(1);
   // An undrained task from a previous test would otherwise write its usage row
   // into this one's assertions — the same bleed a real deployment cannot have,
   // because each request's `after` belongs to that request.
@@ -533,5 +542,94 @@ describe("a streamed response", () => {
     await drainAfter();
 
     expect(recordGatewayUsage).not.toHaveBeenCalled();
+  });
+});
+
+describe("the request ceiling holds under concurrency (VB-016)", () => {
+  /**
+   * The gap this closes.
+   *
+   * `readAgentRunGatewayState` counts usage rows, and those are written in
+   * `after()` — after the response. So requests arriving together all read the
+   * same total and all pass a check that looks correct in isolation. The
+   * durable claim is incremented before the key is injected, in one statement
+   * Postgres serializes, and what it *returns* is what decides.
+   */
+  it("refuses the request whose claim lands past the ceiling", async () => {
+    // The stale read still says there is room; the claim says otherwise.
+    readAgentRunGatewayState.mockResolvedValue(liveRun({ forwardedRequests: 0 }));
+    claimGatewayRequest.mockResolvedValue(41);
+
+    const response = await POST(samplingRequest());
+
+    expect(response.status).toBe(429);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("claims before the key is injected, never after", async () => {
+    const order: string[] = [];
+    claimGatewayRequest.mockImplementation(async () => {
+      order.push("claim");
+      return 1;
+    });
+    fetchMock.mockImplementation(async () => {
+      order.push("fetch");
+      return anthropicOk();
+    });
+
+    await POST(samplingRequest());
+
+    expect(order).toEqual(["claim", "fetch"]);
+  });
+
+  it("forwards nothing when the run vanished between the read and the claim", async () => {
+    claimGatewayRequest.mockResolvedValue(null);
+
+    const response = await POST(samplingRequest());
+
+    expect(response.status).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("still forwards the request that lands exactly on the ceiling", async () => {
+    claimGatewayRequest.mockResolvedValue(40);
+
+    const response = await POST(samplingRequest());
+
+    expect(response.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+});
+
+describe("max_tokens is lowered to the remaining budget (VB-016)", () => {
+  function forwardedBody(): Record<string, unknown> {
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    return JSON.parse(String(init.body)) as Record<string, unknown>;
+  }
+
+  it("lowers a call that would exceed what the run may still spend", async () => {
+    // 60_000 authorized, 59_800 already billed: 200 left, and the SDK asked
+    // for 1024.
+    readAgentRunGatewayState.mockResolvedValue(liveRun({ spentOutputTokens: 59_800 }));
+
+    await POST(samplingRequest());
+
+    expect(forwardedBody().max_tokens).toBe(200);
+  });
+
+  it("leaves a call well inside the budget alone", async () => {
+    await POST(samplingRequest());
+
+    expect(forwardedBody().max_tokens).toBe(1024);
+  });
+
+  it("keeps the rest of the request the sandbox sent", async () => {
+    readAgentRunGatewayState.mockResolvedValue(liveRun({ spentOutputTokens: 59_800 }));
+
+    await POST(samplingRequest());
+
+    const body = forwardedBody();
+    expect(body.model).toBe("claude-sonnet-5");
+    expect(body.messages).toEqual([{ role: "user", content: "hello" }]);
   });
 });
