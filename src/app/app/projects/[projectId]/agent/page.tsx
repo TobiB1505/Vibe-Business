@@ -42,6 +42,7 @@ import { AgentPreviewStage } from "./agent-preview-stage";
 import { AgentWorkspacePanel } from "./agent-workspace-panel";
 import { AgentCore } from "./agent-core";
 import { AgentBuildStage } from "./agent-build-stage";
+import { AgentValidateStage } from "./agent-validate-stage";
 
 /**
  * Agent (Sprint UI-2 Part 2 as Prepared; reframed by CORE-5).
@@ -315,20 +316,29 @@ export default async function ProjectAgentPage({
               </div>
             ),
             build: <AgentBuildStage task={workspace.task} live={live} />,
+            /*
+              Two columns, so the stage reads as the reference draws it: what is
+              being checked, beside the checks themselves, with the run's own
+              activity in the aside. The checks alone were a list of shields
+              with no sentence saying what they were for.
+            */
             validate: (
-              <div className="flex min-w-0 flex-col gap-5">
-                <AgentValidationChecks checks={workspace.checks} />
-                {change !== null && (
-                  <AgentValidateAction
-                    projectId={project.id}
-                    preparedChangeId={change.id}
-                    label={
-                      change.validation === null
-                        ? "Run the checks"
-                        : "Validate again"
-                    }
-                  />
-                )}
+              <div className="grid min-w-0 gap-7 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:items-start">
+                <AgentValidateStage running={live} />
+                <div className="flex min-w-0 flex-col gap-5">
+                  <AgentValidationChecks checks={workspace.checks} />
+                  {change !== null && (
+                    <AgentValidateAction
+                      projectId={project.id}
+                      preparedChangeId={change.id}
+                      label={
+                        change.validation === null
+                          ? "Run the checks"
+                          : "Validate again"
+                      }
+                    />
+                  )}
+                </div>
               </div>
             ),
             preview:

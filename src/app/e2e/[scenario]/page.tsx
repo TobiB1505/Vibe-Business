@@ -46,6 +46,7 @@ import { AgentMergeStage } from "@/app/app/projects/[projectId]/agent/agent-merg
 import { AgentReadyFacts } from "@/app/app/projects/[projectId]/agent/agent-start-cta";
 import { AgentCore } from "@/app/app/projects/[projectId]/agent/agent-core";
 import { AgentBuildStage } from "@/app/app/projects/[projectId]/agent/agent-build-stage";
+import { AgentValidateStage } from "@/app/app/projects/[projectId]/agent/agent-validate-stage";
 import { AgentAssuranceBar } from "@/app/app/projects/[projectId]/agent/agent-assurance-bar";
 import { E2E_NEEDS_USER_SCENARIOS, isE2eNeedsUserScenario } from "../needs-user-scenarios";
 import {
@@ -597,7 +598,12 @@ export default async function E2eScenarioPage({
               />
             ),
             build: <AgentBuildStage task={task} live={live} />,
-            validate: <AgentValidationChecks checks={checks} />,
+            validate: (
+              <div className="grid min-w-0 gap-7 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:items-start">
+                <AgentValidateStage running={live} />
+                <AgentValidationChecks checks={checks} />
+              </div>
+            ),
             preview: (
               <AgentPreviewStage
                 images={previewImages}
