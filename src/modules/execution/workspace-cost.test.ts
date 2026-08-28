@@ -14,6 +14,12 @@ import { describe, expect, it } from "vitest";
  * Modelled on the same assertion the dashboard already carries. Textual, and
  * therefore fallible: it proves nobody wrote the obvious form of the mistake,
  * not that the cost is optimal.
+ *
+ * That gap is now closed from the other side. `workspace.test.ts` runs the read
+ * model against a counting client and asserts the number of queries is the same
+ * for eight prepared changes as for one (VB-023) — which is the property this
+ * file can only approximate. Keep both: a count says what the cost *is*, and
+ * this says nobody reintroduced the shape that makes it grow.
  */
 
 function source(path: string): string {

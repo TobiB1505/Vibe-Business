@@ -1,8 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { assertPrefetchedFor, assertPreparedChangeIs } from "@/lib/db/latest-per-change";
 import { resolveOutcomeContract } from "@/modules/execution/outcome-contract";
-import { getPreparedChange } from "@/modules/execution/store";
+import { getPreparedChange, type StoredPreparedChange } from "@/modules/execution/store";
 import { normalizeProductionUrl } from "@/modules/live-product-intelligence/url";
 import { getLatestMergeForPreparedChange } from "@/modules/merge/store";
+import type { ChangeMerge } from "@/modules/merge/schema";
 import { getSnapshotById } from "@/modules/repository-intelligence/store";
 import { computeVerificationIdentity } from "./identity";
 import {
@@ -92,12 +94,26 @@ export async function resolvePublicOrigin(
  */
 export async function evaluateOutcomeEligibility(
   supabase: SupabaseClient,
-  params: { projectId: string; preparedChangeId: string },
+  params: {
+    projectId: string;
+    preparedChangeId: string;
+    /**
+     * The merge and the prepared change, when the caller already holds them
+     * (VB-023). Both are rows a list render has read once for the whole list,
+     * and re-reading them per card was two of the thirteen reads a card cost.
+     */
+    prefetched?: { merge: ChangeMerge | null; prepared: StoredPreparedChange | null };
+  },
 ): Promise<OutcomeEligibility> {
-  const [merge, prepared] = await Promise.all([
-    getLatestMergeForPreparedChange(supabase, params),
-    getPreparedChange(supabase, params),
-  ]);
+  const [merge, prepared] = params.prefetched
+    ? [
+        assertPrefetchedFor(params.prefetched.merge, params, "merge"),
+        assertPreparedChangeIs(params.prefetched.prepared, params),
+      ]
+    : await Promise.all([
+        getLatestMergeForPreparedChange(supabase, params),
+        getPreparedChange(supabase, params),
+      ]);
 
   // 1. A merge that reached `merged`. `blocked` never touched the repository
   //    and `failed` never ended verified, so neither has a production outcome

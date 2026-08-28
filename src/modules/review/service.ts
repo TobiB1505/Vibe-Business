@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { assertPrefetchedFor } from "@/lib/db/latest-per-change";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import { getPreviewSession } from "@/modules/change-preview/store";
 import { isPreviewExpired } from "@/modules/change-preview/schema";
@@ -312,13 +313,22 @@ export async function getReviewCard(
   params: {
     projectId: string;
     preparedChangeId: string;
+    /**
+     * The latest review this change already has, when the caller read it as
+     * part of a batch (VB-023). Present means "use this and read nothing";
+     * absent means "read it here", which is what every single-change caller
+     * still does.
+     */
+    prefetched?: { review: ReviewArtifact | null };
     resolveFailureMessage: (code: string) => string | null;
   },
 ): Promise<ReviewCard> {
-  const artifact = await getLatestReviewForPreparedChange(supabase, {
-    projectId: params.projectId,
-    preparedChangeId: params.preparedChangeId,
-  });
+  const artifact = params.prefetched
+    ? assertPrefetchedFor(params.prefetched.review, params, "review")
+    : await getLatestReviewForPreparedChange(supabase, {
+        projectId: params.projectId,
+        preparedChangeId: params.preparedChangeId,
+      });
 
   return buildReviewCard({
     artifact,

@@ -1,6 +1,9 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { assertPrefetchedFor } from "@/lib/db/latest-per-change";
+import type { StoredPreparedChange } from "@/modules/execution/store";
+import type { ChangeMerge } from "@/modules/merge/schema";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import type { OperationExecutor } from "@/modules/operations/executor";
 import {
@@ -16,6 +19,7 @@ import { outcomeFailureMessage } from "./messages";
 import {
   OUTCOME_EVIDENCE_SCHEMA_VERSION,
   OUTCOME_POLICY_VERSION,
+  type ChangeOutcomeVerification,
   type OutcomeFailureCode,
 } from "./schema";
 import {
@@ -257,10 +261,25 @@ export async function startOutcomeVerification(
  */
 export async function getOutcomeCard(
   supabase: SupabaseClient,
-  params: { projectId: string; preparedChangeId: string },
+  params: {
+    projectId: string;
+    preparedChangeId: string;
+    /**
+     * The verification, merge and prepared change the caller already holds
+     * (VB-023). Present means this card costs no read at all for a change that
+     * was never merged, which is most of them.
+     */
+    prefetched?: {
+      outcome: ChangeOutcomeVerification | null;
+      merge: ChangeMerge | null;
+      prepared: StoredPreparedChange | null;
+    };
+  },
 ): Promise<OutcomeCard> {
   const [latest, eligibility] = await Promise.all([
-    getLatestVerificationForPreparedChange(supabase, params),
+    params.prefetched
+      ? assertPrefetchedFor(params.prefetched.outcome, params, "outcome verification")
+      : getLatestVerificationForPreparedChange(supabase, params),
     evaluateOutcomeEligibility(supabase, params),
   ]);
 

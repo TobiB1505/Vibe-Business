@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { assertPrefetchedFor } from "@/lib/db/latest-per-change";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import type { OperationExecutor } from "@/modules/operations/executor";
 import {
@@ -23,6 +24,7 @@ import {
   type PreviewSession,
   type PreviewStatus,
   type TeardownReason,
+  type ValidatedArtifact,
 } from "./schema";
 import { buildPreviewCard, type PreviewCard } from "./view";
 import {
@@ -407,17 +409,26 @@ export async function getPreviewCard(
     preparedChangeId: string;
     /** The latest validation for this change, already loaded by the caller. */
     validation: { id: string; status: string } | null;
+    /**
+     * The session and artifact this change already has, when the caller read
+     * them as part of a batch (VB-023). Present means "use these and read
+     * nothing"; absent means "read them here".
+     */
+    prefetched?: { preview: PreviewSession | null; artifact: ValidatedArtifact | null };
     /** Safe copy for a failed session's code. Never a provider message. */
     resolveFailureMessage: (code: string) => string | null;
   },
 ): Promise<PreviewCard> {
-  const session = await getLatestPreviewForPreparedChange(supabase, {
-    projectId: params.projectId,
-    preparedChangeId: params.preparedChangeId,
-  });
+  const session = params.prefetched
+    ? assertPrefetchedFor(params.prefetched.preview, params, "preview session")
+    : await getLatestPreviewForPreparedChange(supabase, {
+        projectId: params.projectId,
+        preparedChangeId: params.preparedChangeId,
+      });
 
-  const artifact =
-    params.validation && params.validation.status === "passed"
+  const artifact = params.prefetched
+    ? assertPrefetchedFor(params.prefetched.artifact, params, "validated artifact")
+    : params.validation && params.validation.status === "passed"
       ? await getValidatedArtifact(supabase, {
           projectId: params.projectId,
           validatedArtifactId: params.validation.id,

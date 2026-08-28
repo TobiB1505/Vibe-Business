@@ -1,11 +1,15 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { assertPrefetchedFor, assertPreparedChangeIs } from "@/lib/db/latest-per-change";
 import { recordAuditEvent } from "@/modules/audit-log/events";
-import { getPreparedChange } from "@/modules/execution/store";
-import { isReviewExpired } from "@/modules/review/schema";
+import { getPreparedChange, type StoredPreparedChange } from "@/modules/execution/store";
+import { isReviewExpired, type ReviewArtifact } from "@/modules/review/schema";
 import { getLatestReviewForPreparedChange } from "@/modules/review/store";
-import { getLatestValidationForPreparedChange } from "@/modules/validation/store";
+import {
+  getLatestValidationForPreparedChange,
+  type StoredValidationRun,
+} from "@/modules/validation/store";
 import { computeApprovalIdentity } from "./identity";
 import {
   APPROVAL_POLICY_VERSION,
@@ -116,30 +120,54 @@ type ApprovalTarget = {
   identity: string;
 };
 
+/**
+ * The rows the target is derived from, when a caller already holds them.
+ *
+ * Every one is a row a list render has read once for the whole list, and
+ * re-reading them per card was three of the thirteen reads a card cost
+ * (VB-023). Supplying them changes nothing about which gates are checked or in
+ * what order — only where the bytes came from.
+ */
+export type PrefetchedApprovalInputs = {
+  prepared: StoredPreparedChange | null;
+  validation: StoredValidationRun | null;
+  review: ReviewArtifact | null;
+};
+
 async function resolveApprovalTarget(
   supabase: SupabaseClient,
-  params: { projectId: string; preparedChangeId: string },
+  params: {
+    projectId: string;
+    preparedChangeId: string;
+    prefetched?: PrefetchedApprovalInputs;
+  },
 ): Promise<{ ok: true; value: ApprovalTarget } | { ok: false; error: ApprovalBlockReason }> {
-  const prepared = await getPreparedChange(supabase, {
-    projectId: params.projectId,
-    preparedChangeId: params.preparedChangeId,
-  });
+  const prepared = params.prefetched
+    ? assertPreparedChangeIs(params.prefetched.prepared, params)
+    : await getPreparedChange(supabase, {
+        projectId: params.projectId,
+        preparedChangeId: params.preparedChangeId,
+      });
   if (!prepared || prepared.status !== "prepared" || !prepared.commitSha) {
     return { ok: false, error: "approval_change_not_prepared" };
   }
 
-  const validation = await getLatestValidationForPreparedChange(supabase, {
-    projectId: params.projectId,
-    preparedChangeId: params.preparedChangeId,
-  });
+  const validation = params.prefetched
+    ? assertPrefetchedFor(params.prefetched.validation, params, "validation")
+    : await getLatestValidationForPreparedChange(supabase, {
+        projectId: params.projectId,
+        preparedChangeId: params.preparedChangeId,
+      });
   if (!validation || validation.status !== "passed") {
     return { ok: false, error: "approval_validation_required" };
   }
 
-  const review = await getLatestReviewForPreparedChange(supabase, {
-    projectId: params.projectId,
-    preparedChangeId: params.preparedChangeId,
-  });
+  const review = params.prefetched
+    ? assertPrefetchedFor(params.prefetched.review, params, "review")
+    : await getLatestReviewForPreparedChange(supabase, {
+        projectId: params.projectId,
+        preparedChangeId: params.preparedChangeId,
+      });
 
   // V0.1 requires a completed comparison, and requires it to be a comparison of
   // *this* change under *this* validation (§4). A review bound to an earlier
@@ -348,16 +376,26 @@ export async function getApprovalCard(
     projectId: string;
     userId: string;
     preparedChangeId: string;
+    /**
+     * The prepared change, validation, review and approval the caller already
+     * holds (VB-023). What still costs a read either way is
+     * `findApprovalByIdentity` below: it is keyed by artifact identity rather
+     * than by change, and an approval identity is the one thing in this
+     * product that must never be resolved from a convenient nearby row.
+     */
+    prefetched?: PrefetchedApprovalInputs & { approval: ChangeApproval | null };
     /** Safe copy for a block reason. Never an internal error string. */
     resolveBlockMessage: (reason: ApprovalBlockReason) => string | null;
   },
 ): Promise<ApprovalCard> {
   const target = await resolveApprovalTarget(supabase, params);
 
-  const latest = await getLatestApprovalForPreparedChange(supabase, {
-    projectId: params.projectId,
-    preparedChangeId: params.preparedChangeId,
-  });
+  const latest = params.prefetched
+    ? assertPrefetchedFor(params.prefetched.approval, params, "approval")
+    : await getLatestApprovalForPreparedChange(supabase, {
+        projectId: params.projectId,
+        preparedChangeId: params.preparedChangeId,
+      });
 
   // Nothing is approvable, so there is nothing for an approval to still match.
   // Any approval that exists is therefore history about something else.
@@ -439,7 +477,17 @@ export async function getApprovalCard(
  */
 export async function findActiveApprovalForCurrentArtifact(
   supabase: SupabaseClient,
-  params: { projectId: string; preparedChangeId: string },
+  params: {
+    projectId: string;
+    preparedChangeId: string;
+    /**
+     * The rows the target is derived from, when the caller holds them
+     * (VB-023). Only the *premises* may be supplied this way. The approval
+     * itself is still looked up by identity below, because that lookup is the
+     * authority question and it is never answered from a row handed in.
+     */
+    prefetched?: PrefetchedApprovalInputs;
+  },
 ): Promise<ChangeApproval | null> {
   const target = await resolveApprovalTarget(supabase, params);
   if (!target.ok) return null;

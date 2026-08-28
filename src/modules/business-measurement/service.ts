@@ -1,10 +1,12 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { assertPrefetchedFor, assertPreparedChangeIs } from "@/lib/db/latest-per-change";
 import { recordAuditEvent } from "@/modules/audit-log/events";
-import { getPreparedChange } from "@/modules/execution/store";
+import { getPreparedChange, type StoredPreparedChange } from "@/modules/execution/store";
 import { resolveMeasurementContract } from "@/modules/execution/measurement-contract";
 import { getLatestMergeForPreparedChange } from "@/modules/merge/store";
+import type { ChangeMerge } from "@/modules/merge/schema";
 import type { OperationExecutor } from "@/modules/operations/executor";
 import {
   attachExecutionRun,
@@ -400,12 +402,27 @@ export async function startBusinessMeasurement(
 export async function getBusinessImpactCard(
   supabase: SupabaseClient,
   sources: MetricSourceRegistry,
-  params: { projectId: string; preparedChangeId: string; now?: Date },
+  params: {
+    projectId: string;
+    preparedChangeId: string;
+    now?: Date;
+    /**
+     * The merge and the prepared change, when the caller already holds them
+     * (VB-023). The unmerged case — which is most cards — then costs no read
+     * at all rather than two.
+     */
+    prefetched?: { merge: ChangeMerge | null; prepared: StoredPreparedChange | null };
+  },
 ): Promise<BusinessImpactCard> {
-  const [merge, prepared] = await Promise.all([
-    getLatestMergeForPreparedChange(supabase, params),
-    getPreparedChange(supabase, params),
-  ]);
+  const [merge, prepared] = params.prefetched
+    ? [
+        assertPrefetchedFor(params.prefetched.merge, params, "merge"),
+        assertPreparedChangeIs(params.prefetched.prepared, params),
+      ]
+    : await Promise.all([
+        getLatestMergeForPreparedChange(supabase, params),
+        getPreparedChange(supabase, params),
+      ]);
 
   if (!merge || merge.status !== "merged" || !prepared) {
     return buildBusinessImpactCard({
