@@ -1467,16 +1467,51 @@ const FAKE_RPC_HANDLERS: Record<string, (db: FakeDatabase, params: Record<string
   repair_lot_allocation: (db, params) => fakeRepairLotAllocation(db, params.p_grant_id),
 };
 
-export function fakeSupabase(db: FakeDatabase): SupabaseClient {
+/**
+ * What a read model actually asked the database for (VB-023).
+ *
+ * ## Why a count, when a source assertion already exists
+ *
+ * Because `workspace-cost.test.ts` is textual and says so: it proves nobody
+ * wrote `await` inside a loop, which is one shape of the mistake. It cannot
+ * see a fan-out spread across six modules' services, where every individual
+ * call site looks correct and the cost is only visible in the total.
+ *
+ * One table name is pushed per query, so a test can assert both the number and
+ * which tables it was spent on — "six reads" and "six reads of the same table"
+ * are different defects.
+ */
+export type QueryRecorder = { reads: string[]; writes: string[] };
+
+export function newQueryRecorder(): QueryRecorder {
+  return { reads: [], writes: [] };
+}
+
+/** How many times one table was read. */
+export function readsOf(recorder: QueryRecorder, table: string): number {
+  return recorder.reads.filter((entry) => entry === table).length;
+}
+
+export function fakeSupabase(db: FakeDatabase, recorder?: QueryRecorder): SupabaseClient {
+  const read = (table: string) => {
+    recorder?.reads.push(table);
+    return new FakeQuery(db, table, "select");
+  };
+  const write = <T>(table: string, build: () => T): T => {
+    recorder?.writes.push(table);
+    return build();
+  };
+
   return {
     from(table: string) {
       return {
-        select: () => new FakeQuery(db, table, "select"),
-        insert: (payload: Row | Row[]) => new FakeQuery(db, table, "insert", payload),
-        update: (payload: Row) => new FakeQuery(db, table, "update", payload),
-        delete: () => new FakeQuery(db, table, "delete"),
+        select: () => read(table),
+        insert: (payload: Row | Row[]) =>
+          write(table, () => new FakeQuery(db, table, "insert", payload)),
+        update: (payload: Row) => write(table, () => new FakeQuery(db, table, "update", payload)),
+        delete: () => write(table, () => new FakeQuery(db, table, "delete")),
         upsert: (payload: Row | Row[], options?: { onConflict?: string }) =>
-          new FakeQuery(db, table, "upsert", payload, options?.onConflict),
+          write(table, () => new FakeQuery(db, table, "upsert", payload, options?.onConflict)),
       };
     },
     rpc(name: string, params?: Record<string, unknown>) {
