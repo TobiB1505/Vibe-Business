@@ -50,11 +50,14 @@ function clockOf(occurredAt: string): string | null {
 
 export function AgentFileActivity({
   events,
-  /** How many to show. The rest stay behind the count line. */
+  /** How many to show. The rest stay behind the disclosure. */
   limit = 6,
+  title = "Vibe activity",
 }: {
   events: readonly StoredExecutionEvent[];
   limit?: number;
+  /** Named for what the stage is reporting, not for the component. */
+  title?: string;
 }) {
   const reduceMotion = useReducedMotion();
   const visible = useDocumentVisible();
@@ -70,7 +73,7 @@ export function AgentFileActivity({
     >
       <div className="flex items-center justify-between gap-2.5">
         <MonoLabel as="h3" className="text-mint">
-          Vibe activity
+          {title}
         </MonoLabel>
         <span
           aria-hidden="true"

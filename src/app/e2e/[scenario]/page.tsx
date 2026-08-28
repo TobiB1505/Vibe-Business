@@ -37,7 +37,6 @@ import {
   isE2eAgentStageScenario,
 } from "../agent-stage-scenarios";
 import { AgentWorkspacePanel } from "@/app/app/projects/[projectId]/agent/agent-workspace-panel";
-import { stageHasBody } from "@/modules/coding-agent/observability/agent-stages";
 import { AgentActivity } from "@/app/app/projects/[projectId]/agent/agent-activity";
 import { AgentTaskPanel } from "@/app/app/projects/[projectId]/agent/agent-task-panel";
 import { AgentValidationChecks } from "@/app/app/projects/[projectId]/agent/agent-validation-checks";
@@ -577,66 +576,46 @@ export default async function E2eScenarioPage({
       mergeFiles,
       mergeSummary,
     } = E2E_AGENT_STAGE_SCENARIOS[scenario]();
-    /* Stage 3 swaps the phase list for the record of what was touched. */
-    const validating = steps.some(
-      (step) => step.stage === "validate" && step.state === "active",
-    );
-    const previewing = steps.some(
-      (step) => step.stage === "preview" && step.state === "active",
-    );
-    const merging = steps.some((step) => step.stage === "review" && step.state === "active");
     return (
       <main className="mx-auto flex max-w-[90rem] flex-col gap-6 p-8">
         {label}
-        {merging ? (
-          <AgentMergeStage
-            summary={mergeSummary}
-            files={mergeFiles}
-            allChecksPassed
-            branchName="vibe/feat-pricing-visibility"
-            baseBranch="main"
-            commitSha="4f1c9a2b7de3115902d9f43161aa87dc5ebe6872"
-            compareUrl="https://github.com/example/repo/compare/main...vibe/feat-pricing-visibility"
-            reviewHref="#"
-            canMerge
-          />
-        ) : null}
-        {previewing ? (
-          <AgentPreviewStage
-            images={previewImages}
-            changes={previewChanges}
-            filesChanged={8}
-            reviewHref="#"
-            filesHref="#"
-          />
-        ) : null}
         <AgentWorkspacePanel
           stages={steps}
           core={core}
           caption={caption}
-          /* The same links the route builds, so the harness exercises the
-             rail's own behaviour rather than a version of it. */
-          stageHrefs={Object.fromEntries(
-            steps.map((step) => [
-              step.stage,
-              stageHasBody(steps, step.stage) ? `/e2e/${scenario}?stage=${step.stage}` : null,
-            ]),
-          )}
-          shown={steps.find((step) => step.state === "active")?.stage ?? null}
-          aside={
-            validating ? (
-              <AgentFileActivity events={fileEvents} />
-            ) : activity.length > 0 ? (
-              <AgentActivity steps={activity} live={core === "working"} />
-            ) : undefined
-          }
-        >
-          {validating ? (
-            <AgentValidationChecks checks={checks} />
-          ) : (
-            task !== null && <AgentTaskPanel task={task} compact={activity.length > 0} />
-          )}
-        </AgentWorkspacePanel>
+          initialStage={steps.find((step) => step.state === "active")?.stage ?? null}
+          bodies={{
+            understand: task !== null ? <AgentTaskPanel task={task} compact /> : undefined,
+            build: task !== null ? <AgentTaskPanel task={task} compact /> : undefined,
+            validate: <AgentValidationChecks checks={checks} />,
+            preview: (
+              <AgentPreviewStage
+                images={previewImages}
+                changes={previewChanges}
+                filesChanged={8}
+                reviewHref="#"
+                filesHref="#"
+              />
+            ),
+            review: (
+              <AgentMergeStage
+                summary={mergeSummary}
+                files={mergeFiles}
+                allChecksPassed
+                branchName="vibe/feat-pricing-visibility"
+                baseBranch="main"
+                commitSha="4f1c9a2b7de3115902d9f43161aa87dc5ebe6872"
+                compareUrl="https://github.com/example/repo/compare/main...vibe/feat-pricing-visibility"
+                reviewHref="#"
+                canMerge
+              />
+            ),
+          }}
+          asides={{
+            build: activity.length > 0 ? <AgentActivity steps={activity} live /> : undefined,
+            validate: <AgentFileActivity events={fileEvents} title="Validation activity" />,
+          }}
+        />
         {task === null && (
           <AgentReadyFacts
             repository="TobiB1505/Vibe-Business"

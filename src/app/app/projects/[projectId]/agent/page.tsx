@@ -19,10 +19,7 @@ import { buildAgentContext } from "@/modules/projects/command-center";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import { readAgentWorkspace } from "@/modules/coding-agent/agent-workspace";
-import {
-  agentCoreCaption,
-  stageHasBody,
-} from "@/modules/coding-agent/observability/agent-stages";
+import { agentCoreCaption } from "@/modules/coding-agent/observability/agent-stages";
 import { AgentPanel } from "../agent-panel";
 import type { PreparedChangeWorkspaceItem } from "@/modules/execution/workspace";
 import { preparedChangeAnchorId } from "@/components/layout/project-shell";
@@ -94,7 +91,7 @@ export default async function ProjectAgentPage({
   searchParams,
 }: {
   params: Promise<{ projectId: string }>;
-  searchParams: Promise<{ [PLAN_OPPORTUNITY_PARAM]?: string; stage?: string }>;
+  searchParams: Promise<{ [PLAN_OPPORTUNITY_PARAM]?: string }>;
 }) {
   const { projectId } = await params;
   const { supabase, userId, project } = await requireProjectAccess(projectId);
@@ -197,31 +194,7 @@ export default async function ProjectAgentPage({
 
   const planHref: string = projectSectionHref(project.id, "action-plan");
 
-  /*
-   * Which stage's body to show.
-   *
-   * The run's own position by default, and whatever the founder clicked in the
-   * rail when they clicked one. A URL parameter rather than client state: it is
-   * shareable, survives a reload, and keeps every body server-rendered — the
-   * panels below them do real reads and a client toggle would have meant
-   * fetching all five stages' worth on every load.
-   *
-   * Sanitized against the rail's own steps, so a hand-edited URL selects
-   * nothing rather than something invented.
-   */
-  const requestedStage = resolvedSearchParams.stage;
-  const openable = workspace.stages.filter((step) => stageHasBody(workspace.stages, step.stage));
-  const shown =
-    openable.find((step) => step.stage === requestedStage)?.stage ?? workspace.stage;
 
-  const stageHrefs = Object.fromEntries(
-    workspace.stages.map((step) => [
-      step.stage,
-      stageHasBody(workspace.stages, step.stage)
-        ? `${projectSectionHref(project.id, "agent")}?stage=${step.stage}`
-        : null,
-    ]),
-  );
   /* One binding, so the gate panels below read as one change rather than as
      seven reaches into the workspace view. */
   const change = workspace.change;
@@ -268,167 +241,137 @@ export default async function ProjectAgentPage({
           </AgentQuestionPanel>
         )}
 
-        {workspace.timeline !== null ? (
-          <AgentWorkspacePanel
-            stages={workspace.stages}
-            core={workspace.core}
-            caption={agentCoreCaption(workspace.stages)}
-            stageHrefs={stageHrefs}
-            shown={shown}
-            aside={
-              /*
-                By the validating stage the interesting question has changed
-                from "what is happening" to "what did it touch", so the rail
-                switches from the phase list to the record of files.
-              */
-              shown === "validate" ? (
-                <AgentFileActivity events={workspace.fileEvents} />
-              ) : (
-                <AgentActivity
-                  steps={workspace.timeline}
-                  live={workspace.core === "working" || workspace.core === "waiting"}
+        {/*
+          One panel, five bodies, all rendered here and switched on the client.
+          The founder is looking at one run from five angles rather than
+          navigating between five pages, and every angle is already paid for by
+          the read above.
+        */}
+        <AgentWorkspacePanel
+          stages={workspace.stages}
+          core={workspace.core}
+          caption={agentCoreCaption(workspace.stages)}
+          initialStage={workspace.stage ?? (workspace.timeline === null ? null : "review")}
+          bodies={{
+            /*
+              The ready state, and the way back to it. A founder whose last run
+              is finished can start the next one from here — before this, the
+              readiness card appeared only for a project that had never run at
+              all, so the one control that begins work disappeared the moment
+              it was first used.
+            */
+            understand: (
+              <div className="flex flex-col gap-6">
+                {workspace.task !== null && <AgentTaskPanel task={workspace.task} compact />}
+                <AgentPanel
+                  context={context}
+                  focus={focus}
+                  preparedCount={changes.length}
+                  planHref={planHref}
+                  agentHref={projectSectionHref(project.id, "agent")}
+                  productHref={projectSectionHref(project.id, "my-product")}
+                  executionHref={executionHref}
                 />
-              )
-            }
-          >
-            {shown === "validate" ? (
+                {/*
+                  What is true before a run starts: where it happens and what
+                  it is working from. The reference draws an estimated duration
+                  and a file range here; neither has an estimator behind it.
+                */}
+                <AgentReadyFacts
+                  repository={project.repository?.fullName ?? null}
+                  liveUrl={project.productionUrl ?? null}
+                />
+              </div>
+            ),
+            build:
+              workspace.task !== null ? <AgentTaskPanel task={workspace.task} compact /> : undefined,
+            validate: (
               <div className="flex min-w-0 flex-col gap-5">
                 <AgentValidationChecks checks={workspace.checks} />
-                {/*
-                  The stage owns its own control now. It used to render these
-                  rows and then mount the old validation panel underneath,
-                  which said the same thing again and held the only button —
-                  a founder saw their checks twice and had to scroll past the
-                  new card to act on it.
-                */}
                 {change !== null && (
                   <AgentValidateAction
                     projectId={project.id}
                     preparedChangeId={change.id}
-                    label={
-                      change.validation === null ? "Run the checks" : "Validate again"
-                    }
+                    label={change.validation === null ? "Run the checks" : "Validate again"}
                   />
                 )}
               </div>
-            ) : (
-              /*
-                The Move, in its own stored words. Absent when the run cannot be
-                followed back to one — a screen naming the wrong task would be
-                worse than one naming none.
-              */
-              workspace.task !== null && <AgentTaskPanel task={workspace.task} compact />
-            )}
-          </AgentWorkspacePanel>
-        ) : (
-          /*
-            Nothing has ever run. The readiness card is the honest thing to show
-            — it describes what Vibe knows and points at where work is chosen,
-            and it starts nothing, because preparing a change is a priced action
-            that belongs beside the Move it is for.
-          */
-          <AgentWorkspacePanel
-            stages={workspace.stages}
-            core={workspace.core}
-            caption={agentCoreCaption(workspace.stages)}
-            stageHrefs={stageHrefs}
-            shown={shown}
-          >
-            <AgentPanel
-              context={context}
-              focus={focus}
-              preparedCount={changes.length}
-              planHref={planHref}
-              agentHref={projectSectionHref(project.id, "agent")}
-              productHref={projectSectionHref(project.id, "my-product")}
-              executionHref={executionHref}
-            />
-          </AgentWorkspacePanel>
-        )}
-
-        {workspace.timeline === null && (
-          /*
-            The reference draws an estimated duration and an expected file
-            range here. Neither has anything behind it — no estimator exists,
-            and how many files a run touches is unknown until it has touched
-            them. What is true before a run starts is where it happens and what
-            it is working from, so the strip says that instead.
-          */
-          <AgentReadyFacts
-            repository={project.repository?.fullName ?? null}
-            liveUrl={project.productionUrl ?? null}
-          />
-        )}
-
-        {shown === "preview" && change !== null && (
-          <Surface level="section" padding="lg">
-            <AgentPreviewStage
-              images={change.reviewImages}
-              changes={workspace.previewChanges}
-              filesChanged={change.filePaths.length}
-              reviewHref={`#${preparedChangeAnchorId(change.id)}`}
-              filesHref={change.compareUrl ?? undefined}
-            />
-            {/*
-              The controls only. The stage above already names the change and
-              shows what moved, so the gates' own header would be the same
-              answer twice with the button underneath it.
-            */}
-            <div className="border-line-2 mt-7 border-t pt-6">
-              <ChangeGates
-                projectId={project.id}
-                change={change}
-                planHref={planHref}
-                stage="preview"
-                chrome={false}
-              />
-            </div>
-          </Surface>
-        )}
-
-        {shown === "review" && change !== null && (
-          <Surface level="section" padding="lg">
-            <AgentMergeStage
-              summary={workspace.mergeSummary}
-              files={change.filePaths.map((path) => ({ path }))}
-              allChecksPassed={change.validation?.status === "passed"}
-              branchName={change.branchName}
-              baseBranch={change.baseBranch}
-              commitSha={change.commitSha}
-              compareUrl={change.compareUrl}
-              reviewHref={`#${preparedChangeAnchorId(change.id)}`}
-              canMerge={change.progress.approved}
-            />
-            <div className="border-line-2 mt-7 border-t pt-6">
-              <ChangeGates
-                projectId={project.id}
-                change={change}
-                planHref={planHref}
-                stage="review"
-                chrome={false}
-              />
-            </div>
-          </Surface>
-        )}
-
-        {change !== null &&
-          shown !== "validate" &&
-          shown !== "preview" &&
-          shown !== "review" && (
+            ),
+            preview:
+              change === null ? undefined : (
+                <div className="flex min-w-0 flex-col gap-6">
+                  <AgentPreviewStage
+                    images={change.reviewImages}
+                    changes={workspace.previewChanges}
+                    filesChanged={change.filePaths.length}
+                    reviewHref={`#${preparedChangeAnchorId(change.id)}`}
+                    filesHref={change.compareUrl ?? undefined}
+                  />
+                  <ChangeGates
+                    projectId={project.id}
+                    change={change}
+                    planHref={planHref}
+                    stage="preview"
+                    chrome={false}
+                  />
+                </div>
+              ),
+            review:
+              change === null ? undefined : (
+                <div className="flex min-w-0 flex-col gap-6">
+                  <AgentMergeStage
+                    summary={workspace.mergeSummary}
+                    files={change.filePaths.map((path) => ({ path }))}
+                    allChecksPassed={change.validation?.status === "passed"}
+                    branchName={change.branchName}
+                    baseBranch={change.baseBranch}
+                    commitSha={change.commitSha}
+                    compareUrl={change.compareUrl}
+                    reviewHref={`#${preparedChangeAnchorId(change.id)}`}
+                    canMerge={change.progress.approved}
+                  />
+                  <ChangeGates
+                    projectId={project.id}
+                    change={change}
+                    planHref={planHref}
+                    stage="review"
+                    chrome={false}
+                  />
+                </div>
+              ),
+          }}
+          asides={{
             /*
-              A change whose stage owns no body of its own — a run still
-              working, or one already merged. It keeps its record and the
-              panels that only exist after a merge.
+              Each stage reports its own kind of progress. Build shows what the
+              agent did — files, commands, searches. Validate shows the checks'
+              own run, not the agent's, which is what made the old panel read as
+              the wrong activity under the right heading.
             */
-            <Surface level="section" padding="lg">
-              <ChangeGates
-                projectId={project.id}
-                change={change}
-                planHref={planHref}
-                stage={shown}
-              />
-            </Surface>
-          )}
+            build:
+              workspace.timeline !== null ? (
+                <AgentActivity
+                  steps={workspace.timeline}
+                  live={workspace.core === "working" || workspace.core === "waiting"}
+                />
+              ) : undefined,
+            validate:
+              workspace.fileEvents.length > 0 ? (
+                <AgentFileActivity events={workspace.fileEvents} title="Validation activity" />
+              ) : undefined,
+          }}
+        />
+
+        {change !== null && (
+          /*
+            The change's own record and the panels that exist only after a
+            merge. Not inside a stage: they belong to the change rather than to
+            any one step of it, and a founder looking at Preview should still be
+            able to see what moved and what it did in production.
+          */
+          <Surface level="section" padding="lg">
+            <ChangeGates projectId={project.id} change={change} planHref={planHref} stage={null} />
+          </Surface>
+        )}
 
         {changes.length === 0 && workspace.timeline === null && (
           <EmptyState

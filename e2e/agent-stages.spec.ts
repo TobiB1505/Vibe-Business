@@ -302,11 +302,28 @@ test.describe("the rail opens what it can open", () => {
 
     const rail = page.getByTestId("agent-stage-rail");
     for (const stage of ["understand", "build", "validate", "preview"]) {
-      await expect(rail.locator(`[data-stage="${stage}"] a`)).toHaveCount(1);
+      await expect(rail.locator(`[data-stage="${stage}"] button`)).toHaveCount(1);
     }
 
-    // Nothing has happened at Review yet, so it is text rather than a link.
-    await expect(rail.locator('[data-stage="review"] a')).toHaveCount(0);
+    /*
+     * A button rather than a link, and that is the point: switching stages
+     * costs nothing because every body was rendered by the read that drew the
+     * page. As a `?stage=` link each click re-ran that read — up to four GitHub
+     * calls per change — to change which of five already-fetched things was on
+     * screen.
+     */
+    await expect(rail.locator('[data-stage="review"] button')).toHaveCount(1);
+  });
+
+  test("switches without going back to the server", async ({ page }) => {
+    await page.goto(PREVIEW);
+
+    // Opening another stage must not navigate: the URL is unchanged and the
+    // body swaps in place.
+    const before = page.url();
+    await page.getByTestId("agent-stage-rail").locator('[data-stage="validate"] button').click();
+    await expect(page.getByTestId("agent-validation-checks")).toBeVisible();
+    expect(page.url()).toBe(before);
   });
 
   test("says which stage is open, to a screen reader as well", async ({ page }) => {

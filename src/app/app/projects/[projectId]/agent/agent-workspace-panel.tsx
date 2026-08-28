@@ -1,11 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { Surface } from "@/components/ui/surface";
-import { cn } from "@/lib/utils/cn";
 import { MonoLabel } from "@/components/ui/typography";
 import type {
   AgentCoreState,
+  AgentStage,
   AgentStageStep,
 } from "@/modules/coding-agent/observability/agent-stages";
 import { AgentCore } from "./agent-core";
@@ -14,48 +15,53 @@ import { AgentStageRail } from "./agent-stage-rail";
 /**
  * The Agent's signature panel (UI-19).
  *
- * ## The composition, and why it is this way round
+ * ## Why the stage switch is client-side
  *
- * The rail sits above and the core beside the work. A founder arriving mid-run
- * asks two questions in this order — *where is this* and *what is it doing* —
- * and the rail answers the first in one glance while the core answers the
- * second without pretending to know how much is left.
+ * It was a `?stage=` link, and every click cost three to four seconds. Not
+ * because a stage body is expensive — because the *page* is: the prepared-change
+ * workspace read makes up to four GitHub calls per change, signs image URLs and
+ * asks the sandbox provider for a preview origin. A server navigation re-ran all
+ * of it to change which of five already-fetched things was on screen.
  *
- * The core is not the hero. It is the thing to look at during a wait that has
- * no percentage, which is a smaller job than the reference composition implies
- * and the only honest one available.
+ * So the route renders every stage's body once and this holds which one is
+ * shown. The unselected ones are React elements that never mount, so no panel
+ * below them starts a poller it does not need. Switching is now free, which is
+ * what it always should have been: the founder is looking at one run from five
+ * angles, not navigating between five pages.
  *
- * ## Geometry is reserved
+ * ## What each region answers
  *
- * The panel's shape does not change as stages complete. Product Scan learned
- * this the expensive way: a surface that grows as events arrive moves the text
- * somebody is reading. Stages change their marks and their words in place.
+ *   the rail      where the work is, and what else there is to look at
+ *   the core      whether Vibe is doing something right now
+ *   the body      the one stage the founder is looking at
+ *   the aside     what has happened, in that stage's own terms
  */
 export function AgentWorkspacePanel({
   stages,
   core,
   caption,
   headline,
-  aside,
-  stageHrefs,
-  shown,
-  children,
+  initialStage,
+  bodies,
+  asides,
 }: {
   stages: AgentStageStep[];
   core: AgentCoreState;
   caption: string;
-  /** The bolder line above the caption, when the caller has one. */
   headline?: string;
-  /** The current stage's own body, rendered by the route. */
-  children?: React.ReactNode;
-  /** The third column — live activity while a run is going. */
-  aside?: React.ReactNode;
-  /** Where each stage leads, keyed by stage. */
-  stageHrefs?: Partial<Record<string, string | null>>;
-  /** The stage whose body is open. */
-  shown?: string | null;
+  /** The stage the run is actually on. Where the founder lands. */
+  initialStage: AgentStage | null;
+  /** One body per stage that has something to show. */
+  bodies: Partial<Record<AgentStage, React.ReactNode>>;
+  /** The third column, per stage — each stage reports its own kind of progress. */
+  asides?: Partial<Record<AgentStage, React.ReactNode>>;
 }) {
   const reduceMotion = useReducedMotion();
+  const [selected, setSelected] = useState<AgentStage | null>(initialStage);
+
+  const shown = selected !== null && bodies[selected] ? selected : initialStage;
+  const body = shown !== null ? bodies[shown] : undefined;
+  const aside = shown !== null ? asides?.[shown] : undefined;
 
   return (
     <Surface level="panel" padding="none" className="overflow-hidden p-4 sm:p-5 lg:p-6">
@@ -69,36 +75,32 @@ export function AgentWorkspacePanel({
           </span>
         </div>
 
-        <AgentStageRail steps={stages} hrefs={stageHrefs} selected={shown} />
+        <AgentStageRail
+          steps={stages}
+          selected={shown}
+          openable={Object.keys(bodies) as AgentStage[]}
+          onSelect={setSelected}
+        />
 
-        {/*
-          One column on a phone, and the core second there: on a narrow screen
-          the words matter more than the picture, and a founder should not have
-          to scroll past an animation to find out what is happening.
-        */}
-        {/*
-          Three columns while a run is going — the task, the core and the live
-          activity, which is the design's composition for stages 2 and 3. Two
-          when there is nothing to report beside it.
-        */}
         <motion.div
-          className={cn(
-            "grid min-w-0 gap-7 lg:items-start",
+          className={
             aside
-              ? "xl:grid-cols-[minmax(0,1fr)_minmax(20rem,auto)_minmax(0,1fr)]"
-              : "lg:grid-cols-[minmax(0,1.5fr)_minmax(18rem,1fr)]",
-          )}
-          initial={reduceMotion ? false : { opacity: 0, y: 12 }}
+              ? "grid min-w-0 gap-7 lg:items-start xl:grid-cols-[minmax(0,1fr)_minmax(20rem,auto)_minmax(0,1fr)]"
+              : "grid min-w-0 gap-7 lg:grid-cols-[minmax(0,1.5fr)_minmax(18rem,1fr)] lg:items-start"
+          }
+          /* Keyed on the stage so a switch fades rather than snapping, and
+             settles well inside the entrance budget. */
+          key={shown ?? "none"}
+          initial={reduceMotion ? false : { opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, ease: [0.2, 0.7, 0.2, 1], delay: reduceMotion ? 0 : 0.3 }}
+          transition={{ duration: 0.28, ease: [0.2, 0.7, 0.2, 1] }}
         >
-          <div className="order-2 min-w-0 lg:order-1">{children}</div>
+          <div className="order-2 min-w-0 lg:order-1">{body}</div>
           <div className="order-1 flex justify-center lg:order-2">
             <AgentCore
               state={core}
               caption={caption}
               headline={headline}
-              /* The design's working orb is the smaller, faster one. */
               size={core === "working" || core === "waiting" ? "compact" : "hero"}
             />
           </div>

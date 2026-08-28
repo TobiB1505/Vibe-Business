@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { motion, useReducedMotion } from "motion/react";
 import { useDocumentVisible } from "@/lib/client/use-document-visible";
 import { cn } from "@/lib/utils/cn";
@@ -103,44 +102,49 @@ const BEHIND: readonly AgentStageState[] = ["done", "skipped", "not_applicable"]
  * stages have nothing to open, so they are not offered.
  */
 function Cell({
-  href,
+  onOpen,
   selected,
   children,
 }: {
-  href: string | null;
+  onOpen: (() => void) | null;
   selected: boolean;
   children: React.ReactNode;
 }) {
   const shared = cn(
-    "flex min-w-0 items-center gap-3.5 rounded-nav px-2 py-1.5 -mx-2",
-    href !== null && "transition-interactive hover:bg-surface-2",
+    "flex min-w-0 items-center gap-3.5 rounded-nav px-2 py-1.5 -mx-2 text-left",
+    onOpen !== null && "transition-interactive hover:bg-surface-2 cursor-pointer",
     selected && "bg-surface-2",
   );
 
-  if (href === null) return <div className={shared}>{children}</div>;
+  if (onOpen === null) return <div className={shared}>{children}</div>;
 
   return (
-    <Link href={href} aria-current={selected ? "step" : undefined} className={shared}>
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-current={selected ? "step" : undefined}
+      className={shared}
+    >
       {children}
-    </Link>
+    </button>
   );
 }
 
 export function AgentStageRail({
   steps,
-  hrefs,
+  openable,
   selected,
+  onSelect,
 }: {
   steps: AgentStageStep[];
   /**
-   * Where each stage leads, keyed by stage. Absent or null for a stage with
-   * nothing to show — a link into an empty panel is worse than no link.
-   *
-   * A map rather than a function: this is a client component, and a server
-   * component cannot hand it one.
+   * Stages with a body worth opening. A stepper whose steps all look clickable
+   * and half of which do nothing is worse than one that never invites the
+   * click.
    */
-  hrefs?: Partial<Record<string, string | null>>;
+  openable?: readonly string[];
   selected?: string | null;
+  onSelect?: (stage: never) => void;
 }) {
   const reduceMotion = useReducedMotion();
   const visible = useDocumentVisible();
@@ -169,7 +173,14 @@ export function AgentStageRail({
               data-stage={step.stage}
               data-state={step.state}
             >
-              <Cell href={hrefs?.[step.stage] ?? null} selected={selected === step.stage}>
+              <Cell
+                onOpen={
+                  openable?.includes(step.stage) && onSelect
+                    ? () => onSelect(step.stage as never)
+                    : null
+                }
+                selected={selected === step.stage}
+              >
                 <span
                   className={cn(
                     "flex size-9 flex-none items-center justify-center rounded-full border-[1.5px] font-mono text-sm",
