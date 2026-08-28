@@ -44,6 +44,8 @@ import { AgentFileActivity } from "@/app/app/projects/[projectId]/agent/agent-fi
 import { AgentPreviewStage } from "@/app/app/projects/[projectId]/agent/agent-preview-stage";
 import { AgentMergeStage } from "@/app/app/projects/[projectId]/agent/agent-merge-stage";
 import { AgentReadyFacts } from "@/app/app/projects/[projectId]/agent/agent-start-cta";
+import { AgentCore } from "@/app/app/projects/[projectId]/agent/agent-core";
+import { AgentBuildStage } from "@/app/app/projects/[projectId]/agent/agent-build-stage";
 import { AgentAssuranceBar } from "@/app/app/projects/[projectId]/agent/agent-assurance-bar";
 import { E2E_NEEDS_USER_SCENARIOS, isE2eNeedsUserScenario } from "../needs-user-scenarios";
 import {
@@ -576,24 +578,31 @@ export default async function E2eScenarioPage({
       mergeFiles,
       mergeSummary,
     } = E2E_AGENT_STAGE_SCENARIOS[scenario]();
+    /* The orb turns for a live run and for nothing else. */
+    const live = core === "working" || core === "waiting";
     return (
       <main className="mx-auto flex max-w-[90rem] flex-col gap-6 p-8">
         {label}
         <AgentWorkspacePanel
           stages={steps}
-          core={core}
-          caption={caption}
-          initialStage={steps.find((step) => step.state === "active")?.stage ?? null}
+          initialStage={
+            steps.find((step) => step.state === "active" || step.state === "paused")?.stage ?? null
+          }
+          header={task !== null ? <AgentTaskPanel task={task} compact /> : undefined}
           bodies={{
-            understand: task !== null ? <AgentTaskPanel task={task} compact /> : undefined,
-            build: task !== null ? <AgentTaskPanel task={task} compact /> : undefined,
+            understand: (
+              <AgentReadyFacts
+                repository="TobiB1505/Vibe-Business"
+                liveUrl="https://vibebusiness.de"
+              />
+            ),
+            build: <AgentBuildStage task={task} live={live} />,
             validate: <AgentValidationChecks checks={checks} />,
             preview: (
               <AgentPreviewStage
                 images={previewImages}
                 changes={previewChanges}
                 filesChanged={8}
-                reviewHref="#"
                 filesHref="#"
               />
             ),
@@ -612,16 +621,26 @@ export default async function E2eScenarioPage({
             ),
           }}
           asides={{
-            build: activity.length > 0 ? <AgentActivity steps={activity} live /> : undefined,
+            /* The orb's two moments, and no others: the hero before a run, and
+               the run itself. */
+            understand:
+              core === "idle" ? (
+                <AgentCore
+                  state="idle"
+                  headline="Vibe is ready to work"
+                  caption={caption}
+                  size="hero"
+                />
+              ) : undefined,
+            build: (
+              <div className="flex flex-col items-center gap-6">
+                {live && <AgentCore state={core} caption={caption} size="compact" />}
+                {activity.length > 0 && <AgentActivity steps={activity} live={live} />}
+              </div>
+            ),
             validate: <AgentFileActivity events={fileEvents} title="Validation activity" />,
           }}
         />
-        {task === null && (
-          <AgentReadyFacts
-            repository="TobiB1505/Vibe-Business"
-            liveUrl="https://vibebusiness.de"
-          />
-        )}
         <AgentAssuranceBar />
       </main>
     );

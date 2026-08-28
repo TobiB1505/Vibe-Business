@@ -229,7 +229,11 @@ export function ChangeGates({
 
       {/* Only reachable through a merge: an outcome exists once a default
           branch actually moved, and the business question is weaker than the
-          delivery one above it. */}
+          delivery one above it. Both belong to the last stage — what a merged
+          change did in production is not something to answer while deciding
+          whether to preview it. */}
+      {show("review") && (
+        <>
       <OutcomePanel
         projectId={projectId}
         preparedChangeId={change.id}
@@ -241,6 +245,8 @@ export function ChangeGates({
         preparedChangeId={change.id}
         card={change.businessImpact}
       />
+        </>
+      )}
     </div>
   );
 }

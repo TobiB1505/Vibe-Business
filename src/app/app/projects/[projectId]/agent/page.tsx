@@ -1,4 +1,7 @@
-import { WorkspaceSection, projectSectionHref } from "@/components/layout/project-shell";
+import {
+  WorkspaceSection,
+  projectSectionHref,
+} from "@/components/layout/project-shell";
 import { EmptyState, Notice } from "@/components/ui/states";
 import {
   PLAN_OPPORTUNITY_PARAM,
@@ -26,7 +29,6 @@ import { preparedChangeAnchorId } from "@/components/layout/project-shell";
 import { AgentTrustPanel } from "./agent-header";
 import { ChangeGates } from "./change-gates";
 import { AgentTaskPanel } from "./agent-task-panel";
-import { Surface } from "@/components/ui/surface";
 import { AgentActivity } from "./agent-activity";
 import { AgentValidationChecks } from "./agent-validation-checks";
 import { AgentValidateAction } from "./agent-validate-action";
@@ -38,6 +40,8 @@ import { AgentFileActivity } from "./agent-file-activity";
 import { AgentMergeStage } from "./agent-merge-stage";
 import { AgentPreviewStage } from "./agent-preview-stage";
 import { AgentWorkspacePanel } from "./agent-workspace-panel";
+import { AgentCore } from "./agent-core";
+import { AgentBuildStage } from "./agent-build-stage";
 
 /**
  * Agent (Sprint UI-2 Part 2 as Prepared; reframed by CORE-5).
@@ -103,16 +107,17 @@ export default async function ProjectAgentPage({
     resolvedSearchParams[PLAN_OPPORTUNITY_PARAM],
   );
 
-  const [changes, profile, repositorySnapshot, opportunities] = await Promise.all([
-    getPreparedChangeWorkspace(supabase, {
-      projectId,
-      userId,
-      repositoryFullName: project.repository?.fullName ?? null,
-    }) as Promise<PreparedChangeWorkspaceItem[]>,
-    getLatestProfile(supabase, projectId),
-    getLatestSuccessfulSnapshot(supabase, projectId),
-    getLatestOpportunities(supabase, projectId),
-  ]);
+  const [changes, profile, repositorySnapshot, opportunities] =
+    await Promise.all([
+      getPreparedChangeWorkspace(supabase, {
+        projectId,
+        userId,
+        repositoryFullName: project.repository?.fullName ?? null,
+      }) as Promise<PreparedChangeWorkspaceItem[]>,
+      getLatestProfile(supabase, projectId),
+      getLatestSuccessfulSnapshot(supabase, projectId),
+      getLatestOpportunities(supabase, projectId),
+    ]);
 
   /*
    * What Vibe may do about the Move the founder arrived with.
@@ -127,19 +132,30 @@ export default async function ProjectAgentPage({
    * has an executor for this work.
    */
   const focusedMove = requestedOpportunityId
-    ? (opportunities?.set.opportunities.find((entry) => entry.id === requestedOpportunityId) ??
-      null)
+    ? (opportunities?.set.opportunities.find(
+        (entry) => entry.id === requestedOpportunityId,
+      ) ?? null)
     : null;
 
   const focusAction = focusedMove
     ? await (async () => {
-        const [summaries, activeOperation, failedOperation] = await Promise.all([
-          getOpportunityExecutionSummaries(supabase, projectId),
-          getActivePreparationFor(supabase, { projectId, opportunityId: focusedMove.id }),
-          getLatestFailedPreparationFor(supabase, { projectId, opportunityId: focusedMove.id }),
-        ]);
+        const [summaries, activeOperation, failedOperation] = await Promise.all(
+          [
+            getOpportunityExecutionSummaries(supabase, projectId),
+            getActivePreparationFor(supabase, {
+              projectId,
+              opportunityId: focusedMove.id,
+            }),
+            getLatestFailedPreparationFor(supabase, {
+              projectId,
+              opportunityId: focusedMove.id,
+            }),
+          ],
+        );
 
-        const summary = summaries.find((entry) => entry.opportunityId === focusedMove.id);
+        const summary = summaries.find(
+          (entry) => entry.opportunityId === focusedMove.id,
+        );
         // No summary at all means no repository snapshot exists yet. That is a
         // missing premise rather than a verdict on the Move, and `buildAgentFocus`
         // says so rather than calling it unautomatable.
@@ -166,7 +182,8 @@ export default async function ProjectAgentPage({
     hasProductUnderstanding: profile !== null,
     // Connected *and* read. A repository Vibe has never analyzed is not code
     // it can work from.
-    hasRepositoryUnderstanding: project.repository !== null && Boolean(repositorySnapshot?.result),
+    hasRepositoryUnderstanding:
+      project.repository !== null && Boolean(repositorySnapshot?.result),
     hasBusinessGoals: (opportunities?.set.opportunities.length ?? 0) > 0,
   });
 
@@ -194,10 +211,13 @@ export default async function ProjectAgentPage({
 
   const planHref: string = projectSectionHref(project.id, "action-plan");
 
-
   /* One binding, so the gate panels below read as one change rather than as
      seven reaches into the workspace view. */
   const change = workspace.change;
+
+  /* Whether anything is actually happening. The orb turns for this and
+     nothing else — a settled run gets no orb at all. */
+  const live = workspace.core === "working" || workspace.core === "waiting";
 
   return (
     <WorkspaceSection
@@ -234,8 +254,9 @@ export default async function ProjectAgentPage({
                 nothing.
               */
               <Notice tone="waiting" label="answer required">
-                This run stopped before the current question format existed, so it cannot be
-                answered here. Starting a fresh attempt is the way forward.
+                This run stopped before the current question format existed, so
+                it cannot be answered here. Starting a fresh attempt is the way
+                forward.
               </Notice>
             )}
           </AgentQuestionPanel>
@@ -249,9 +270,20 @@ export default async function ProjectAgentPage({
         */}
         <AgentWorkspacePanel
           stages={workspace.stages}
-          core={workspace.core}
-          caption={agentCoreCaption(workspace.stages)}
-          initialStage={workspace.stage ?? (workspace.timeline === null ? null : "review")}
+          initialStage={
+            workspace.stage ?? (workspace.timeline === null ? null : "review")
+          }
+          /*
+            What Vibe is working on, above the rail and on every stage. It used
+            to sit inside the Understand body, so it disappeared the moment the
+            founder looked at any other stage — five steps with no statement of
+            what they were steps toward.
+          */
+          header={
+            workspace.task !== null ? (
+              <AgentTaskPanel task={workspace.task} compact />
+            ) : undefined
+          }
           bodies={{
             /*
               The ready state, and the way back to it. A founder whose last run
@@ -262,7 +294,6 @@ export default async function ProjectAgentPage({
             */
             understand: (
               <div className="flex flex-col gap-6">
-                {workspace.task !== null && <AgentTaskPanel task={workspace.task} compact />}
                 <AgentPanel
                   context={context}
                   focus={focus}
@@ -283,8 +314,7 @@ export default async function ProjectAgentPage({
                 />
               </div>
             ),
-            build:
-              workspace.task !== null ? <AgentTaskPanel task={workspace.task} compact /> : undefined,
+            build: <AgentBuildStage task={workspace.task} live={live} />,
             validate: (
               <div className="flex min-w-0 flex-col gap-5">
                 <AgentValidationChecks checks={workspace.checks} />
@@ -292,7 +322,11 @@ export default async function ProjectAgentPage({
                   <AgentValidateAction
                     projectId={project.id}
                     preparedChangeId={change.id}
-                    label={change.validation === null ? "Run the checks" : "Validate again"}
+                    label={
+                      change.validation === null
+                        ? "Run the checks"
+                        : "Validate again"
+                    }
                   />
                 )}
               </div>
@@ -304,9 +338,14 @@ export default async function ProjectAgentPage({
                     images={change.reviewImages}
                     changes={workspace.previewChanges}
                     filesChanged={change.filePaths.length}
-                    reviewHref={`#${preparedChangeAnchorId(change.id)}`}
                     filesHref={change.compareUrl ?? undefined}
                   />
+                  {/*
+                    The controls that produce what the frames above are missing.
+                    Without a capture the stage is two empty rectangles, and the
+                    button that fills them used to sit far below under the old
+                    section — which is why the preview appeared to do nothing.
+                  */}
                   <ChangeGates
                     projectId={project.id}
                     change={change}
@@ -330,48 +369,67 @@ export default async function ProjectAgentPage({
                     reviewHref={`#${preparedChangeAnchorId(change.id)}`}
                     canMerge={change.progress.approved}
                   />
+                  {/*
+                    The decision, and the change's own record. This is the last
+                    stage, so the approval, the merge and what the change did in
+                    production belong here rather than in a second section below
+                    the panel — which is what that section was, and why the
+                    screen said everything twice.
+                  */}
                   <ChangeGates
                     projectId={project.id}
                     change={change}
                     planHref={planHref}
                     stage="review"
-                    chrome={false}
                   />
                 </div>
               ),
           }}
           asides={{
             /*
+              The orb has exactly two moments, and they are the two the
+              reference gives it: the hero before a run, and the run itself. A
+              finished merge gets none — it had been appearing beside one,
+              saying "Vibe is preparing what you need in order to decide".
+            */
+            understand:
+              workspace.core === "idle" ? (
+                <AgentCore
+                  state="idle"
+                  headline="Vibe is ready to work"
+                  caption={agentCoreCaption(workspace.stages)}
+                  size="hero"
+                />
+              ) : undefined,
+            build: (
+              <div className="flex flex-col items-center gap-6">
+                {live && (
+                  <AgentCore
+                    state={workspace.core}
+                    caption={agentCoreCaption(workspace.stages)}
+                    size="compact"
+                  />
+                )}
+                {workspace.timeline !== null && (
+                  <AgentActivity steps={workspace.timeline} live={live} />
+                )}
+              </div>
+            ),
+            /*
               Each stage reports its own kind of progress. Build shows what the
               agent did — files, commands, searches. Validate shows the checks'
               own run, not the agent's, which is what made the old panel read as
               the wrong activity under the right heading.
             */
-            build:
-              workspace.timeline !== null ? (
-                <AgentActivity
-                  steps={workspace.timeline}
-                  live={workspace.core === "working" || workspace.core === "waiting"}
-                />
-              ) : undefined,
             validate:
               workspace.fileEvents.length > 0 ? (
-                <AgentFileActivity events={workspace.fileEvents} title="Validation activity" />
+                <AgentFileActivity
+                  events={workspace.fileEvents}
+                  title="Validation activity"
+                />
               ) : undefined,
           }}
         />
-
-        {change !== null && (
-          /*
-            The change's own record and the panels that exist only after a
-            merge. Not inside a stage: they belong to the change rather than to
-            any one step of it, and a founder looking at Preview should still be
-            able to see what moved and what it did in production.
-          */
-          <Surface level="section" padding="lg">
-            <ChangeGates projectId={project.id} change={change} planHref={planHref} stage={null} />
-          </Surface>
-        )}
 
         {changes.length === 0 && workspace.timeline === null && (
           <EmptyState
@@ -379,7 +437,6 @@ export default async function ProjectAgentPage({
             description="When you let Vibe act on one of your next moves, it appears here with its checks, its preview and your approval."
           />
         )}
-
       </div>
     </WorkspaceSection>
   );

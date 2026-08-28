@@ -246,11 +246,17 @@ export async function readAgentWorkspace(
   });
 
   /*
-   * The stage a body is drawn for. `active` rather than "the furthest done",
-   * because a paused or failed run must not be shown the body of a stage it
-   * never reached.
+   * The stage a body is drawn for: the one the run is *on*.
+   *
+   * Not "the furthest done" — a paused or failed run must never be shown the
+   * body of a stage it never reached. But `paused` counts alongside `active`,
+   * because a run that stopped to ask a question is still standing on the stage
+   * it stopped in. Matching `active` alone sent that run to the top of the
+   * rail, which is the one moment a founder most needs to land where the
+   * question is.
    */
-  const stage = stages.find((step) => step.state === "active")?.stage ?? null;
+  const stage =
+    stages.find((step) => step.state === "active" || step.state === "paused")?.stage ?? null;
 
   /*
    * Every event, not only the ones naming a file.

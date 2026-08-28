@@ -95,10 +95,17 @@ test.describe("never reached does not read as not yet", () => {
 
 test.describe("nothing on this surface estimates", () => {
   test("shows no duration, range or percentage in any state", async ({ page }) => {
+    /*
+     * The whole surface, not the rail and the core.
+     *
+     * It read those two because they were the only regions on every stage. The
+     * core no longer is — the reference gives it the hero and the running run
+     * and nothing else — and scoping an estimate ban to two components was
+     * always narrower than the claim. This asserts the claim.
+     */
     for (const url of [IDLE, BUILDING, PAUSED, STOPPED, NO_PREVIEW]) {
       await page.goto(url);
-      const text = (await page.getByTestId("agent-stage-rail").innerText()) +
-        (await page.getByTestId("agent-core").innerText());
+      const text = await page.locator("main").innerText();
       expect(text, url).not.toMatch(/\d+\s*[–-]\s*\d+\s*(hour|minute|file)|~\s*\d|\d+\s*%/i);
     }
   });

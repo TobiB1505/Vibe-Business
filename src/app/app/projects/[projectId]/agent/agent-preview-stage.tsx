@@ -3,6 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { motion, useReducedMotion } from "motion/react";
+import { useStageNavigation } from "./agent-stage-navigation";
 import { buttonClasses } from "@/components/ui/button";
 import { useDocumentVisible } from "@/lib/client/use-document-visible";
 import { MonoLabel } from "@/components/ui/typography";
@@ -134,7 +135,6 @@ export function AgentPreviewStage({
   filesChanged,
   linesAdded,
   linesRemoved,
-  reviewHref,
   filesHref,
 }: {
   images: PreviewImages | null;
@@ -142,11 +142,11 @@ export function AgentPreviewStage({
   filesChanged: number;
   linesAdded?: number;
   linesRemoved?: number;
-  reviewHref: string;
   filesHref?: string;
 }) {
   const reduceMotion = useReducedMotion();
   const visible = useDocumentVisible();
+  const { go } = useStageNavigation();
   const animate = !reduceMotion && visible;
 
   return (
@@ -271,12 +271,20 @@ export function AgentPreviewStage({
         </section>
 
         <div className="flex flex-col gap-2.5">
-          <Link
-            href={reviewHref}
+          {/*
+            Forward, not down. This was an anchor to the merge panel lower on
+            the page, so pressing it scrolled and left the founder on stage four
+            looking at two preview frames. The step it moves the run to is stage
+            five, so it puts them on stage five.
+          */}
+          <button
+            type="button"
+            onClick={() => go?.("review")}
+            disabled={go === null}
             className={cn(buttonClasses({ variant: "primary" }), "justify-center")}
           >
             Review changes
-          </Link>
+          </button>
           <p className="text-fg-meta text-center text-xs">
             Nothing is live yet. You&rsquo;re in control.
           </p>
