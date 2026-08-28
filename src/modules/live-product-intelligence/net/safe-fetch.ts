@@ -126,11 +126,28 @@ async function resolveSafeAddress(
   return { ok: true, address: resolved[0] };
 }
 
+/**
+ * Ports a customer's product can legitimately be served from (VB-030).
+ *
+ * The address check below already refuses a private or link-local destination,
+ * which is what stops this reaching *our* infrastructure. What it cannot see is
+ * a **public** host running something that is not a website: a Redis on 6379, a
+ * database on 5432, an SSH banner on 22. Those are somebody's services, they
+ * are reachable, and nothing about "this resolves to a public address" says
+ * they are a web page.
+ *
+ * An empty port means the protocol's default, which is 80 or 443 either way.
+ */
+const ALLOWED_PORTS = new Set(["", "80", "443"]);
+
 /** URL-shape policy applied identically to the initial request and to every redirect target. */
 function checkUrlPolicy(url: URL): SafeFetchFailure | null {
   if (url.protocol !== "https:" && url.protocol !== "http:") return "unsafe_destination";
   if (url.username !== "" || url.password !== "") return "unsafe_destination";
   if (url.hostname.length === 0) return "unsafe_destination";
+  // Checked on every redirect target too, because that is the hop a hostile
+  // site controls: a page on 443 answering with `Location: http://host:6379/`.
+  if (!ALLOWED_PORTS.has(url.port)) return "unsafe_destination";
   return null;
 }
 

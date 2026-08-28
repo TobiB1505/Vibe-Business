@@ -48,7 +48,7 @@ function routePages(): { name: string; source: string }[] {
 
 describe("project workspace context", () => {
   it("makes no GitHub call", () => {
-    expect(CONTEXT).not.toContain("checkInstallationStillAccessible");
+    expect(CONTEXT).not.toContain("checkInstallationAccess");
     expect(CONTEXT).not.toContain("@/modules/github/");
   });
 
@@ -64,7 +64,7 @@ describe("project workspace context", () => {
 
     for (const page of pages) {
       expect(page.source, `${page.name} reaches for GitHub during render`).not.toContain(
-        "checkInstallationStillAccessible",
+        "checkInstallationAccess",
       );
     }
   });
@@ -77,6 +77,6 @@ describe("project workspace context", () => {
     // never to furniture rendered on every route.
     expect(layout).not.toContain("RepositoryAccessPill");
     expect(layout).not.toContain("Suspense");
-    expect(layout).not.toContain("await checkInstallationStillAccessible");
+    expect(layout).not.toContain("await checkInstallationAccess");
   });
 });

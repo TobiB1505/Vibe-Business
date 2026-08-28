@@ -68,6 +68,14 @@ const REVIEWED_SITES: readonly { file: string; why: string }[] = [
     why: "The welcome Credit grant writes a billing table; the user id comes from the session, never the client.",
   },
   {
+    file: join("modules", "credits", "refund.operator.probe.ts"),
+    why:
+      "VB-038. The operator path for correcting a charge — refundCharge had zero callers, so a " +
+      "customer charged for something Vibe got wrong could not be made whole. A probe, not a " +
+      "screen: it is excluded from vitest.config.mts's include, so CI can never reach a database " +
+      "through it, and it refuses to write without VIBE_REFUND_CONFIRM=yes.",
+  },
+  {
     file: join("modules", "auth", "throttle.ts"),
     why:
       "VB-053 / ADR 0060. record_auth_attempt is no longer callable by anon, because anon is " +

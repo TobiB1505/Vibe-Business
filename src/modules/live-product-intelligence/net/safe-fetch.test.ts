@@ -159,6 +159,62 @@ describe("safeFetch — redirects", () => {
     expect(transport.requestedUrls).toEqual(["https://public.test/"]);
   });
 
+  /*
+   * VB-030 — the address check cannot see this one.
+   *
+   * A public host is allowed to resolve to a public address; that is the whole
+   * point. What the resolved address does not say is whether the thing on the
+   * other end is a website. A crawl aimed at `:6379` reaches somebody's Redis,
+   * and it reaches it from Vibe.
+   */
+  it.each(["22", "6379", "5432", "8080", "3000", "9200"])(
+    "refuses a destination on port %s, whatever it resolves to",
+    async (port) => {
+      const transport = new FakeTransport({ "/": htmlResponse("<html></html>") });
+
+      const result = await safeFetch(`https://public.test:${port}/`, options(), {
+        transport,
+        resolveDns: fakeDns({ "public.test": ["93.184.216.34"] }),
+      });
+
+      expect(result).toEqual({ ok: false, error: "unsafe_destination" });
+      expect(transport.requests).toHaveLength(0);
+    },
+  );
+
+  it.each(["https://public.test/", "https://public.test:443/", "http://public.test:80/"])(
+    "still allows %s, which is the same two ports written three ways",
+    async (url) => {
+      const transport = new FakeTransport({ "/": htmlResponse("<html></html>") });
+
+      const result = await safeFetch(url, options(), {
+        transport,
+        resolveDns: fakeDns({ "public.test": ["93.184.216.34"] }),
+      });
+
+      expect(result.ok).toBe(true);
+    },
+  );
+
+  /**
+   * The hop a hostile site controls. A page served correctly on 443 answering
+   * `Location: http://host:6379/` is the shape this has to refuse, and it is
+   * why the check runs on every target rather than only on the first.
+   */
+  it("refuses a redirect onto a non-web port", async () => {
+    const transport = new FakeTransport({
+      "https://public.test/": redirectResponse("http://public.test:6379/"),
+    });
+
+    const result = await safeFetch("https://public.test/", options(), {
+      transport,
+      resolveDns: fakeDns({ "public.test": ["93.184.216.34"] }),
+    });
+
+    expect(result).toEqual({ ok: false, error: "unsafe_destination" });
+    expect(transport.requests).toHaveLength(1);
+  });
+
   it("refuses a redirect to a private literal address", async () => {
     const transport = new FakeTransport({
       "https://public.test/": redirectResponse("http://169.254.169.254/latest/meta-data/"),

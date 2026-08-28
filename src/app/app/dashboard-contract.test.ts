@@ -138,7 +138,7 @@ describe("the dashboard is summary-only", () => {
     for (const file of guarded) {
       expect(file.source, file.name).not.toContain("createVercelSandboxProvider");
       expect(file.source, file.name).not.toContain("createGithubMergePort");
-      expect(file.source, file.name).not.toContain("checkInstallationStillAccessible");
+      expect(file.source, file.name).not.toContain("checkInstallationAccess");
       expect(file.source, file.name).not.toContain("VercelWorkflowExecutor");
     }
   });

@@ -60,6 +60,87 @@ describe("§27 — Vibe computes the change", () => {
     ]);
   });
 
+  /*
+   * VB-029 — the write policy runs before the read, not after it.
+   *
+   * `verifyCandidateChange` always refused these paths; it just refused them
+   * once extraction had already pulled every observed path's bytes into this
+   * process. The refusal was right and the read had happened.
+   */
+  describe("a path the policy forbids", () => {
+    const forbidden = [
+      "/etc/passwd",
+      "../outside.ts",
+      ".env",
+      ".env.production",
+      ".github/workflows/deploy.yml",
+      "pnpm-lock.yaml",
+      "supabase/migrations/0001_x.sql",
+    ];
+
+    it.each(forbidden)("never has its bytes read (%s)", async (path) => {
+      const workspace = fakeWorkspace({ files: { [path]: "secret bytes\n" } });
+
+      const candidate = await extractCandidateChange({
+        spec: fakeAgentSpec(),
+        changes: [{ path, content: null }],
+        workspace,
+        base: base({}),
+        limits: LIMITS,
+      });
+
+      expect(workspace.readPaths).not.toContain(path);
+      expect(candidate.files).toEqual([]);
+      expect(candidate.forbiddenPaths).toEqual([path]);
+    });
+
+    /**
+     * Kept, not dropped. A run that tried to write somewhere forbidden must
+     * not be recorded as one that changed nothing — those are different
+     * findings and only one of them is a safety event.
+     */
+    it("still becomes a refusal rather than an empty change", async () => {
+      const workspace = fakeWorkspace({ files: { ".env": "KEY=1\n", "src/a.ts": "ok\n" } });
+
+      const candidate = await extractCandidateChange({
+        spec: fakeAgentSpec(),
+        changes: [
+          { path: ".env", content: null },
+          { path: "src/a.ts", content: null },
+        ],
+        workspace,
+        base: base({}),
+        limits: LIMITS,
+      });
+
+      const verification = verifyCandidateChange({
+        spec: fakeAgentSpec(),
+        candidate,
+        sourceRevisionVerified: true,
+      });
+
+      expect(verification.accepted).toBe(false);
+      if (!verification.accepted) expect(verification.rejections).toContain("forbidden_path");
+    });
+
+    it("still reads the paths that are allowed", async () => {
+      const workspace = fakeWorkspace({ files: { ".env": "KEY=1\n", "src/a.ts": "ok\n" } });
+
+      await extractCandidateChange({
+        spec: fakeAgentSpec(),
+        changes: [
+          { path: ".env", content: null },
+          { path: "src/a.ts", content: null },
+        ],
+        workspace,
+        base: base({}),
+        limits: LIMITS,
+      });
+
+      expect(workspace.readPaths).toEqual(["src/a.ts"]);
+    });
+  });
+
   /**
    * A file written back byte-identical to its base is not a change.
    *
@@ -134,6 +215,7 @@ describe("§28 — post-agent verification", () => {
       unchangedPaths: [],
       ignoredPaths: [],
       unreadablePaths: [],
+      forbiddenPaths: [],
     };
   }
 
@@ -197,7 +279,14 @@ describe("§28 — post-agent verification", () => {
   it("refuses a change with no files", () => {
     const verification = verifyCandidateChange({
       spec,
-      candidate: { files: [], totalBytes: 0, unchangedPaths: [], ignoredPaths: [], unreadablePaths: [] },
+      candidate: {
+        files: [],
+        totalBytes: 0,
+        unchangedPaths: [],
+        ignoredPaths: [],
+        unreadablePaths: [],
+        forbiddenPaths: [],
+      },
       sourceRevisionVerified: true,
     });
 
@@ -251,6 +340,7 @@ describe("§28 — post-agent verification", () => {
         unchangedPaths: [],
         ignoredPaths: [],
         unreadablePaths: [],
+        forbiddenPaths: [],
       },
       sourceRevisionVerified: true,
     });

@@ -8,7 +8,7 @@ GitHub Integration Layer — see [ARCHITECTURE.md §3.1](../../../ARCHITECTURE.m
 - `oauth.ts` — `buildInstallUrl()`, `exchangeUserCode()`, `fetchGithubIdentity()`: the GitHub App user authorization flow used **only** to verify identity/installation ownership. Never used as a Vibe Business login method.
 - `app-client.ts` — Octokit factories: `getInstallationOctokit()` (App-JWT-backed installation auth via `@octokit/auth-app`) and `getUserOctokit()` (transient user-token auth).
 - `installations.ts` — `listUserInstallations()`, `verifyInstallationAccessibleToUser()`: the ADR 0009 ownership check.
-- `repositories.ts` — `listInstallationRepositories()`, `checkInstallationStillAccessible()`: repository discovery via the installation's own token, never the user token.
+- `repositories.ts` — `listInstallationRepositories()`, `checkInstallationAccess()`: repository discovery via the installation's own token, never the user token. The probe answers `accessible` / `revoked` / `unavailable`, because an uninstalled App and a broken credential call for opposite responses (VB-041).
 - `connections.ts` — persists verified identity/installation metadata (never tokens) to Supabase, and reads installations back scoped to a user (`listVerifiedInstallations`, `getVerifiedInstallation`).
 - `connect-routing.ts` — pure decision for where "Connect a project" should go: start an installation, go straight to the repository picker, or ask which account to use.
 - `urls.ts` — GitHub URL construction, including the installation settings page used by "Manage GitHub repository access".
