@@ -1,0 +1,30 @@
+-- VB-053, corrected — `service_role` needs the grant explicitly.
+--
+-- `20260827233010` revoked `execute` on `record_auth_attempt` from `public`,
+-- `anon` and `authenticated`, on the stated assumption that `service_role`
+-- "needs no grant" because it holds the platform default. That assumption was
+-- wrong, and reading `pg_proc.proacl` back after the apply is what said so:
+--
+--     proacl = {postgres=X/postgres}
+--
+-- Nobody but the owner could execute it. `service_role` is an ordinary role
+-- with `bypassrls`, not a superuser and not a member of `postgres`, so it holds
+-- exactly what it is granted. And Supabase's default privileges apply when a
+-- function is *created* — `create or replace` keeps the existing ACL, and a
+-- `revoke all from public` clears what the default had left.
+--
+-- The failure would have been quiet. The throttle fails open by design, so
+-- every call would have errored, every call would have returned `allowed`, and
+-- sign-in would have worked perfectly with no throttling at all — the control
+-- present, wired, tested, and doing nothing.
+--
+-- ## Why the migration test did not catch it
+--
+-- The harness connects as the owner, so every behavioural assertion passed
+-- regardless of the grant. The privilege block asserted the *absence* of the
+-- privilege for the two roles that must not have it and never asserted its
+-- *presence* for the one that must. `auth-throttle.migration.ts` now runs its
+-- behavioural tests under `set local role service_role`, so the grant is
+-- load-bearing for every assertion in the file rather than for one of them.
+
+grant execute on function public.record_auth_attempt(text, boolean) to service_role;

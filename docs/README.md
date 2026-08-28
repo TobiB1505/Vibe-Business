@@ -10,7 +10,7 @@ What each directory holds, and which question it answers.
 | [business/](business/README.md) | **What the product costs to run and what it might be worth.** Measured unit economics, credit economics, pricing analysis. |
 | [audits/](audits/) | **Dated reviews of the product as it existed on one commit.** UX, intelligence architecture, economics architecture. |
 | [setup/](setup/github-app.md) | **One-time environment setup.** GitHub App, Supabase Auth, Sentry. Operational: following one of these must produce a working environment. |
-| [deployment/](deployment/environment.md) | **How URLs resolve** across development, preview and production. |
+| [deployment/](deployment/environment.md) | **How production is configured and changed.** How URLs resolve across the three tiers, which variables each carries, and — in [migrations-and-rollback.md](deployment/migrations-and-rollback.md) — the order a schema change and a deploy go in, and what to do when one has to be undone. |
 | [PROJECT_HISTORY_AND_LEARNINGS.md](PROJECT_HISTORY_AND_LEARNINGS.md) | **How the product got here.** The narrative, in German, with the durable principles each phase produced. |
 
 ## Which of these must be true right now

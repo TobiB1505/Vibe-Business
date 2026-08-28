@@ -755,11 +755,16 @@ describe("§27, §28 — Vibe computes and checks the change", () => {
 
     expect(outcome.ok).toBe(true);
     if (outcome.ok) {
-      expect(outcome.files.map((file) => file.path)).toEqual([
-        "src/app/new.tsx",
-        "src/app/page.tsx",
-      ]);
       expect(outcome.candidateDigest).toHaveLength(64);
+      /*
+       * The step no longer returns the files, and that is the assertion
+       * (VB-017). A step's return value crosses the Vercel Workflow log, which
+       * is a third-party durable store; customer-repository bytes may not be in
+       * one. What the change contained is asserted against the branch write
+       * below, where the bytes are rebuilt from the sandbox.
+       */
+      expect(Object.keys(outcome).sort()).toEqual(["candidateDigest", "observedPaths", "ok"]);
+      expect(JSON.stringify(outcome)).not.toContain("export default");
     }
   });
 
@@ -858,7 +863,7 @@ describe("§30 — trusted Vibe infrastructure writes the branch", () => {
     const outcome = await writeAgentBranchStep(
       shared,
       operation.id,
-      extracted.files,
+      extracted.observedPaths,
       extracted.candidateDigest,
     );
 
@@ -904,7 +909,7 @@ describe("§30 — trusted Vibe infrastructure writes the branch", () => {
     const outcome = await writeAgentBranchStep(
       shared,
       operation.id,
-      extracted.files,
+      extracted.observedPaths,
       extracted.candidateDigest,
     );
 
@@ -932,12 +937,48 @@ describe("§30 — trusted Vibe infrastructure writes the branch", () => {
     const outcome = await writeAgentBranchStep(
       shared,
       operation.id,
-      extracted.files,
+      extracted.observedPaths,
       extracted.candidateDigest,
     );
 
     expect(outcome).toEqual({ ok: false, failureCode: "repository_changed" });
     expect(git.writes).toBe(0);
+  });
+
+  /*
+   * VB-017 — the bytes are rebuilt here, so they have to earn the digest.
+   *
+   * Before this, the files arrived as an argument and `candidateDigest`
+   * travelled beside them without ever being compared to them: whatever came
+   * back out of the Vercel Workflow log was written to a customer's branch.
+   * Now the digest is the only thing that travels, and a mismatch is a refusal.
+   */
+  it("refuses to write bytes that do not hash to the digest it was given", async () => {
+    const { operation, shared, extracted } = await prepared();
+
+    const outcome = await writeAgentBranchStep(
+      shared,
+      operation.id,
+      extracted.observedPaths,
+      "0".repeat(64),
+    );
+
+    expect(outcome).toEqual({ ok: false, failureCode: "agent_change_rejected" });
+    expect(git.writes).toBe(0);
+  });
+
+  it("writes when the rebuilt bytes do hash to it, which is the same run", async () => {
+    const { operation, shared, extracted } = await prepared();
+
+    const outcome = await writeAgentBranchStep(
+      shared,
+      operation.id,
+      extracted.observedPaths,
+      extracted.candidateDigest,
+    );
+
+    expect(outcome.ok).toBe(true);
+    expect(git.writes).toBeGreaterThan(0);
   });
 
   it("refuses without write permission", async () => {
@@ -947,7 +988,7 @@ describe("§30 — trusted Vibe infrastructure writes the branch", () => {
     const outcome = await writeAgentBranchStep(
       shared,
       operation.id,
-      extracted.files,
+      extracted.observedPaths,
       extracted.candidateDigest,
     );
 
@@ -958,7 +999,12 @@ describe("§30 — trusted Vibe infrastructure writes the branch", () => {
   it("records the change under the agentic capability, with no opportunity set", async () => {
     const { operation, shared, extracted } = await prepared();
 
-    await writeAgentBranchStep(shared, operation.id, extracted.files, extracted.candidateDigest);
+    await writeAgentBranchStep(
+      shared,
+      operation.id,
+      extracted.observedPaths,
+      extracted.candidateDigest,
+    );
 
     const change = db.rows("prepared_changes")[0];
     expect(change).toMatchObject({

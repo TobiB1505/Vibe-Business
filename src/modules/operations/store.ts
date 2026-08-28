@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { OperationStage, OperationStatus, OperationType } from "./schema";
+import { arePaidOperationsDisabled, isPaidOperation } from "./kill-switch";
 import { ACCOUNT_WINDOW_MS, PROJECT_WINDOW_MS, startAllowed } from "./start-limits";
 
 /**
@@ -228,11 +229,36 @@ export async function getProjectOperationRunById(
   return operation as ProjectOperationRun;
 }
 
+/**
+ * The operations behind a set of reservations, in one query (VB-020).
+ *
+ * Reads on whatever client it is handed, so a customer's own page gets its own
+ * rows and nothing else — RLS answers the ownership question, not this
+ * function. Empty in, empty out: PostgREST would otherwise be asked for
+ * `id=in.()`.
+ */
+export async function listOperationRunsByIds(
+  supabase: SupabaseClient,
+  operationIds: readonly string[],
+): Promise<StoredOperationRun[]> {
+  if (operationIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from("operation_runs")
+    .select(OPERATION_COLUMNS)
+    .in("id", operationIds);
+
+  if (error) throw error;
+  return ((data ?? []) as OperationRow[]).map(mapRow);
+}
+
 export type CreateOperationResult =
   | { ok: true; operation: StoredOperationRun }
   | { ok: false; error: "already_active" }
   /** VB-008 — this operation has been started too often in the recent window. */
   | { ok: false; error: "start_limit_reached" }
+  /** VB-032 — an operator has paused paid work; reads are unaffected. */
+  | { ok: false; error: "paid_operations_disabled" }
   | { ok: false; error: "unknown"; message: string };
 
 const POSTGRES_UNIQUE_VIOLATION = "23505";
@@ -282,6 +308,16 @@ export async function createOperationRun(
   // guarantees live in the unique indexes, which are not raceable.
   if (params.initiatedBy === "customer" && !(await withinStartWindows(supabase, params))) {
     return { ok: false, error: "start_limit_reached" };
+  }
+
+  // VB-032, in the same funnel and for the same reason. It applies to `system`
+  // starts too: a follow-on operation Vibe creates for itself spends exactly
+  // the same money, and an incident that needs paid work stopped needs it
+  // stopped for the machinery as well as for the customer. What it never
+  // touches is a read, an operation already running, or the two exempt types
+  // — see `kill-switch.ts`.
+  if (isPaidOperation(params.operationType) && arePaidOperationsDisabled()) {
+    return { ok: false, error: "paid_operations_disabled" };
   }
 
   const { data, error } = await supabase

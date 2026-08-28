@@ -179,6 +179,8 @@ const RETAINED: Readonly<Record<string, readonly string[]>> = {
     "operation",
     "operationType",
     "outcome",
+    // VB-020: "release" | "settlement" — which repair a stuck hold is owed.
+    "owed",
     "outcome_profile",
     "plan",
     "previewProfile",

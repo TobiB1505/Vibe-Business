@@ -1871,10 +1871,36 @@ async function recordVerificationOutcome(
  * Step 3 — Vibe computes the change and checks it (§27, §28)
  * ------------------------------------------------------------------------ */
 
+/**
+ * What crosses the durable step boundary after a change is verified (VB-017).
+ *
+ * Deliberately **not** the files. `workflow.ts` passes a step's return value to
+ * the next step through the Vercel Workflow log, which is a third-party durable
+ * store, and customer-repository bytes have no business being in one
+ * ([CLAUDE.md](../../../../CLAUDE.md) rules 26 and 52). What travels is an
+ * identifier and a hash — the two things [ADR 0013](../../../../docs/decisions/0013-durable-operation-execution.md)
+ * always claimed were the only things that did.
+ *
+ * `writeAgentBranchStep` rebuilds the bytes from the sandbox and refuses unless
+ * they hash to `candidateDigest`. That is also stricter than what it replaced:
+ * the digest used to travel *beside* the bytes and was never compared to them,
+ * so the write step trusted whatever came back out of the log.
+ */
 export type ExtractOutcome = StepOutcome<{
-  files: readonly { path: string; content: string; contentHash: string; bytes: number }[];
+  /** Paths only — what the observation found, so the rebuild starts identically. */
+  observedPaths: readonly string[] | null;
   candidateDigest: string;
 }>;
+
+type RebuiltCandidate =
+  | {
+      ok: true;
+      candidate: Awaited<ReturnType<typeof extractCandidateChange>>;
+      evidence: ReturnType<typeof summarizeChangeEvidence>;
+      verification: ReturnType<typeof verifyCandidateChange>;
+      skippedIgnoreFiles: { path: string; reason: string }[];
+    }
+  | { ok: false; failureCode: OperationFailureCode };
 
 /** The writes the tool gateway brokered, under the `gateway_tools` topology. */
 async function readBrokeredWritePaths(
@@ -1899,28 +1925,39 @@ async function readBrokeredWritePaths(
   ];
 }
 
-export async function extractAndVerifyStep(
+/**
+ * Reads the workspace and produces the verified candidate (VB-017).
+ *
+ * Shared by the two steps that need it, because the bytes must not travel
+ * between them. `extractAndVerifyStep` calls it to decide whether there is a
+ * change worth writing and to record the evidence; `writeAgentBranchStep`
+ * calls it again to rebuild the bytes it is about to commit, and refuses
+ * unless they hash to the digest the first step already published.
+ *
+ * Deterministic between the two calls: the agent is finished, nothing writes
+ * to the workspace after it, and both authorities are read at the pinned base.
+ * If that ever stops being true the digest comparison notices and the write is
+ * refused, which is the safe direction.
+ *
+ * It performs no side effect of its own — no stage transition, no audit event,
+ * no lifecycle row — precisely so it can be called twice.
+ */
+async function rebuildVerifiedCandidate(
   deps: AgentExecutionDeps,
-  operationId: string,
-  /** What the agent step observed, when the harness ran in the sandbox. */
-  observedPaths: readonly string[] | null = null,
-): Promise<ExtractOutcome> {
-  const loaded = await loadRun(deps, operationId);
-  if (!loaded.ok) return loaded;
-  const { operation, run } = loaded;
-
-  const spec = await loadSpec(deps, run);
-  if (!spec || !spec.spec.budget) return { ok: false, failureCode: "missing_required_context" };
-
-  const target = await deps.resolveTarget(operation, { withCloneCredential: false });
-  if (!target) return { ok: false, failureCode: "missing_required_context" };
+  params: {
+    run: StoredAgentExecutionRun;
+    spec: NonNullable<Awaited<ReturnType<typeof loadSpec>>>;
+    target: NonNullable<Awaited<ReturnType<AgentExecutionDeps["resolveTarget"]>>>;
+    observedPaths: readonly string[] | null;
+  },
+): Promise<RebuiltCandidate> {
+  const { run, spec, target } = params;
+  if (!spec.spec.budget) return { ok: false, failureCode: "missing_required_context" };
 
   const sandbox = await deps.sandboxProvider.reconnect({ name: agentSandboxNameFor(run.id) });
   if (!sandbox || sandbox.liveness !== "running") {
     return { ok: false, failureCode: "sandbox_lost" };
   }
-
-  await setOperationStage(deps.supabase, { operationId, stage: "extracting_change" });
 
   const limits = deriveAgentLimits({ budget: spec.spec.budget, policy: spec.spec.policy });
   const workspace = createSandboxWorkspace({
@@ -1938,8 +1975,8 @@ export async function extractAndVerifyStep(
    * filesystem comparison the agent step performed while the sandbox was still
    * alive. The bytes come from the filesystem either way.
    */
-  const changedPaths = observedPaths
-    ? [...new Set(observedPaths)]
+  const changedPaths = params.observedPaths
+    ? [...new Set(params.observedPaths)]
     : await readBrokeredWritePaths(deps, run.id);
 
   if (changedPaths.length === 0) {
@@ -1975,17 +2012,6 @@ export async function extractAndVerifyStep(
     }),
   });
 
-  if (skippedIgnoreFiles.length > 0) {
-    // A bound that was reached is reported, never silently absorbed: an ignore
-    // file that went unread means some path may be in the change that the
-    // repository would have withheld.
-    console.warn("[agent-change] some ignore rules could not be read", {
-      operationId,
-      agentExecutionRunId: run.id,
-      skipped: skippedIgnoreFiles,
-    });
-  }
-
   /*
    * What the observation actually contained, written down before anything
    * decides on it.
@@ -1998,13 +2024,7 @@ export async function extractAndVerifyStep(
   const evidence = summarizeChangeEvidence({
     observedPaths: changedPaths,
     candidate,
-    detectedBy: observedPaths ? "workspace_scan" : "gateway_tool_trail",
-  });
-
-  console.info("[agent-change]", {
-    operationId,
-    agentExecutionRunId: run.id,
-    ...evidence,
+    detectedBy: params.observedPaths ? "workspace_scan" : "gateway_tool_trail",
   });
 
   // Checked before verification, because "the agent changed nothing" and "the
@@ -2015,8 +2035,6 @@ export async function extractAndVerifyStep(
     return { ok: false, failureCode: "agent_produced_no_change" };
   }
 
-  await setOperationStage(deps.supabase, { operationId, stage: "verifying_change" });
-
   // Source identity, re-observed immediately before the change is accepted.
   // The workspace was pinned at creation and `.git` was removed, so what is
   // checked is that the base's own bytes still hash as expected through the
@@ -2026,6 +2044,51 @@ export async function extractAndVerifyStep(
     candidate,
     sourceRevisionVerified: true,
   });
+
+  return { ok: true, candidate, evidence, verification, skippedIgnoreFiles };
+}
+
+export async function extractAndVerifyStep(
+  deps: AgentExecutionDeps,
+  operationId: string,
+  /** What the agent step observed, when the harness ran in the sandbox. */
+  observedPaths: readonly string[] | null = null,
+): Promise<ExtractOutcome> {
+  const loaded = await loadRun(deps, operationId);
+  if (!loaded.ok) return loaded;
+  const { operation, run } = loaded;
+
+  const spec = await loadSpec(deps, run);
+  if (!spec || !spec.spec.budget) return { ok: false, failureCode: "missing_required_context" };
+
+  const target = await deps.resolveTarget(operation, { withCloneCredential: false });
+  if (!target) return { ok: false, failureCode: "missing_required_context" };
+
+  await setOperationStage(deps.supabase, { operationId, stage: "extracting_change" });
+
+  const rebuilt = await rebuildVerifiedCandidate(deps, { run, spec, target, observedPaths });
+  if (!rebuilt.ok) return rebuilt;
+
+  const { candidate, evidence, verification, skippedIgnoreFiles } = rebuilt;
+
+  if (skippedIgnoreFiles.length > 0) {
+    // A bound that was reached is reported, never silently absorbed: an ignore
+    // file that went unread means some path may be in the change that the
+    // repository would have withheld.
+    console.warn("[agent-change] some ignore rules could not be read", {
+      operationId,
+      agentExecutionRunId: run.id,
+      skipped: skippedIgnoreFiles,
+    });
+  }
+
+  console.info("[agent-change]", {
+    operationId,
+    agentExecutionRunId: run.id,
+    ...evidence,
+  });
+
+  await setOperationStage(deps.supabase, { operationId, stage: "verifying_change" });
 
   if (!verification.accepted) {
     const metadata = changeRejectionMetadata({
@@ -2122,7 +2185,7 @@ export async function extractAndVerifyStep(
 
   return {
     ok: true,
-    files: verification.files,
+    observedPaths,
     candidateDigest: computeCandidateDigest(verification.files),
   };
 }
@@ -2134,7 +2197,8 @@ export async function extractAndVerifyStep(
 export async function writeAgentBranchStep(
   deps: AgentExecutionDeps,
   operationId: string,
-  files: readonly { path: string; content: string; contentHash: string; bytes: number }[],
+  /** Paths, not bytes — see {@link ExtractOutcome} (VB-017). */
+  observedPaths: readonly string[] | null,
   candidateDigest: string,
 ): Promise<StepOutcome<{ preparedChangeId: string; commitSha: string; branchName: string }>> {
   const loaded = await loadRun(deps, operationId);
@@ -2147,7 +2211,8 @@ export async function writeAgentBranchStep(
   const target = await deps.resolveTarget(operation, { withCloneCredential: false });
   if (!target) return { ok: false, failureCode: "missing_required_context" };
 
-  // A replay after the branch was written: adopt, never write twice.
+  // A replay after the branch was written: adopt, never write twice. Checked
+  // before the rebuild, so a replay costs no sandbox reads.
   const existing = await findPreparedChangeByOperation(deps.supabase, operationId);
   if (existing?.status === "prepared" && existing.commitSha !== null) {
     return {
@@ -2156,6 +2221,38 @@ export async function writeAgentBranchStep(
       commitSha: existing.commitSha,
       branchName: existing.branchName,
     };
+  }
+
+  /*
+   * The bytes, rebuilt here rather than carried here (VB-017).
+   *
+   * They used to arrive as this step's argument, which meant they had crossed
+   * the Vercel Workflow log — a third-party durable store holding a customer's
+   * repository content, against rules 26 and 52 and against ADR 0013's own
+   * claim that only identifiers travel.
+   *
+   * Reading them back out of the sandbox is not merely equivalent, it is
+   * stricter. `candidateDigest` used to travel *beside* the files and was never
+   * compared against them, so this step wrote whatever the log handed it. Now
+   * the digest is the only thing that travels and the bytes have to earn it.
+   */
+  const rebuilt = await rebuildVerifiedCandidate(deps, { run, spec, target, observedPaths });
+  if (!rebuilt.ok) return rebuilt;
+
+  if (!rebuilt.verification.accepted || rebuilt.verification.files.length === 0) {
+    // The first pass accepted this change, so a refusal here means the
+    // workspace is no longer what was verified. Refusing is the only safe
+    // reading; nothing is written.
+    return { ok: false, failureCode: "agent_change_rejected" };
+  }
+
+  const files = rebuilt.verification.files;
+
+  if (computeCandidateDigest(files) !== candidateDigest) {
+    // Same shape as a moved base: what was approved and what is here are not
+    // the same thing, so this refuses rather than reasoning about the
+    // difference (Rule 56's posture, applied to the workspace).
+    return { ok: false, failureCode: "agent_change_rejected" };
   }
 
   await setOperationStage(deps.supabase, { operationId, stage: "writing_repository" });

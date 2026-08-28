@@ -1,4 +1,5 @@
 import "server-only";
+import { alertOperator } from "@/lib/observability/alert";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { recordAuditEvent } from "@/modules/audit-log/events";
@@ -183,8 +184,9 @@ export async function reconcileAndRepairBalance(
   let reconciliation = reconcile();
   if (reconciliation.consistent) return { account, consistent: true };
 
-  // Observable, never silent (§66). A drifted balance is a financial defect.
-  console.error("[billing] materialized balance disagrees with the ledger", {
+  // Observable, never silent (§66), and now reaching somebody rather than a
+  // log stream (VB-012). A drifted balance is a financial defect.
+  await alertOperator("[billing] materialized balance disagrees with the ledger", {
     creditAccountId: account.id,
     postedDrift: reconciliation.drift.posted,
     reservedDrift: reconciliation.drift.reserved,

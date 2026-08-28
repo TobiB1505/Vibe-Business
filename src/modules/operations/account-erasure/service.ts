@@ -3,6 +3,7 @@ import "server-only";
 import { createHash } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { OperationExecutor } from "../executor";
+import { expireStaleOperation } from "../staleness";
 import { attachExecutionRun, createOperationRun, failOperationRun } from "../store";
 
 /**
@@ -80,7 +81,34 @@ export async function findLatestErasure(
   if (!data) return null;
 
   const row = data as { id: string; status: string; failure_code: string | null };
-  return { id: row.id, status: row.status, failureCode: row.failure_code };
+
+  /*
+   * The backstop, at the read that is the moment somebody cares (VB-014).
+   *
+   * The settings page is the only place an erasure's state is shown, so it is
+   * the only place a died one can be noticed. Without this, a workflow that
+   * stopped carrying an erasure leaves the row `running`, and
+   * `startAccountErasure` answers every later attempt "already running" off the
+   * account-level active index — so a person who asked to delete their account
+   * could never ask again, and nothing anywhere would say why.
+   *
+   * Only a `running` row is worth the call; the sweep is idempotent and
+   * bounded, and it refuses anything inside its deadline.
+   */
+  if (row.status !== "running") {
+    return { id: row.id, status: row.status, failureCode: row.failure_code };
+  }
+
+  const { expired } = await expireStaleOperation({ operationId: row.id });
+  if (!expired) {
+    return { id: row.id, status: row.status, failureCode: row.failure_code };
+  }
+
+  return {
+    id: row.id,
+    status: "failed",
+    failureCode: "operation_wall_clock_exceeded",
+  };
 }
 
 export async function startAccountErasure(

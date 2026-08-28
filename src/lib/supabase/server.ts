@@ -3,6 +3,7 @@ import "server-only";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { getPublicEnv } from "@/lib/env/env";
+import { SUPABASE_REQUEST_TIMEOUT_MS, withBoundedFetch } from "@/lib/net/bounded-fetch";
 import { withJwtClockSkewRetry } from "@/lib/supabase/clock-skew";
 import { AUTH_COOKIE_OPTIONS } from "@/lib/supabase/cookie-options";
 
@@ -24,8 +25,18 @@ export async function createClient() {
        * It is installed here rather than at a call site because the failure it
        * absorbs belongs to the session's first second, not to any one query —
        * see src/lib/supabase/clock-skew.ts.
+       *
+       * The deadline wraps it rather than the other way round (VB-031), so the
+       * bound covers the whole sequence including the skew retry's own wait.
+       * Inverted, a clock-skew retry could restart the clock indefinitely and
+       * the timeout would bound nothing.
        */
-      global: { fetch: withJwtClockSkewRetry() },
+      global: {
+        fetch: withBoundedFetch(
+          { timeoutMs: SUPABASE_REQUEST_TIMEOUT_MS },
+          withJwtClockSkewRetry(),
+        ),
+      },
       cookieOptions: AUTH_COOKIE_OPTIONS,
       cookies: {
         getAll() {

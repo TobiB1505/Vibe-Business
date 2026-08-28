@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getPublicEnv } from "@/lib/env/env";
 import { getSupabaseServiceEnv } from "@/lib/env/supabase-service";
+import { SUPABASE_REQUEST_TIMEOUT_MS, withBoundedFetch } from "@/lib/net/bounded-fetch";
 
 /**
  * The service-role Supabase client. **RLS does not apply to this client.**
@@ -57,5 +58,18 @@ export function createServiceClient(): SupabaseClient {
       autoRefreshToken: false,
       detectSessionInUrl: false,
     },
+    /**
+     * A deadline, because this client is the one durable execution uses
+     * (VB-031). `fetch` has no default timeout, so a socket that is accepted
+     * and then goes quiet holds a workflow step until the platform's own
+     * ceiling ends it — turning a slow dependency into a wedged operation.
+     *
+     * No retry: every write in this application's durable path is either
+     * consequential or already idempotent by unique index, and rules 50 and 73
+     * are explicit that an ambiguous outcome is resolved by reading rather than
+     * by trying again. The helper would only retry `GET`/`HEAD` anyway; not
+     * asking for it says so at the call site.
+     */
+    global: { fetch: withBoundedFetch({ timeoutMs: SUPABASE_REQUEST_TIMEOUT_MS }) },
   });
 }

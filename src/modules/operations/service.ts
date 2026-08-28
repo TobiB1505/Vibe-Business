@@ -318,6 +318,10 @@ export async function startBusinessAuditOperation(
     if (created.error === "start_limit_reached") {
       return { kind: "failed", error: "start_limit_reached" };
     }
+    // VB-032 — same shape, opposite remedy: waiting does not fix this one.
+    if (created.error === "paid_operations_disabled") {
+      return { kind: "failed", error: "paid_operations_disabled" };
+    }
     if (created.error === "already_active") {
       // Lost the race by milliseconds — the other click's operation is the
       // right answer, not an error. This is the double-click path, and the
@@ -547,6 +551,10 @@ export async function startOpportunityOperation(
     if (created.error === "start_limit_reached") {
       return { kind: "failed", error: "start_limit_reached" };
     }
+    // VB-032 — same shape, opposite remedy: waiting does not fix this one.
+    if (created.error === "paid_operations_disabled") {
+      return { kind: "failed", error: "paid_operations_disabled" };
+    }
     if (created.error === "already_active") {
       const existing = await findActiveOperationByIdentity(supabase, {
         projectId: params.projectId,
@@ -683,6 +691,10 @@ export async function startProductUnderstandingOperation(
     if (created.error === "start_limit_reached") {
       return { kind: "failed", error: "start_limit_reached" };
     }
+    // VB-032 — same shape, opposite remedy: waiting does not fix this one.
+    if (created.error === "paid_operations_disabled") {
+      return { kind: "failed", error: "paid_operations_disabled" };
+    }
     if (created.error === "already_active") {
       // Lost the race by milliseconds — the other click's operation is the
       // right answer, not an error.
@@ -779,6 +791,10 @@ export async function startProductScanOperation(
     // would be wrong. Retryable, and the message says waiting is the fix.
     if (created.error === "start_limit_reached") {
       return { kind: "failed", error: "start_limit_reached" };
+    }
+    // VB-032 — same shape, opposite remedy: waiting does not fix this one.
+    if (created.error === "paid_operations_disabled") {
+      return { kind: "failed", error: "paid_operations_disabled" };
     }
     if (created.error === "already_active") {
       const raced = await findActiveOperationByIdentity(supabase, {
@@ -963,6 +979,10 @@ export async function startActionPlanOperation(
     // would be wrong. Retryable, and the message says waiting is the fix.
     if (created.error === "start_limit_reached") {
       return { kind: "failed", error: "start_limit_reached" };
+    }
+    // VB-032 — same shape, opposite remedy: waiting does not fix this one.
+    if (created.error === "paid_operations_disabled") {
+      return { kind: "failed", error: "paid_operations_disabled" };
     }
     if (created.error === "already_active") {
       // Lost the race by milliseconds — the other click's operation is the

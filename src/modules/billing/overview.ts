@@ -9,6 +9,10 @@ import {
 } from "@/modules/credits/lot-store";
 import { spendableCapacity } from "@/modules/credits/lots";
 import { reconcileAndRepairBalance } from "@/modules/credits/service";
+import { findOrphanedHolds } from "@/modules/credits/orphaned-holds";
+import { listOperationRunsByIds } from "@/modules/operations/store";
+import { recordAuditEvent } from "@/modules/audit-log/events";
+import { alertOperator } from "@/lib/observability/alert";
 import { findCreditAccountByUser, listActiveReservations, listLedgerEntries } from "@/modules/credits/store";
 import { formatCreditsForDisplay, type CreditUnits, ZERO_CREDITS } from "@/modules/credits/units";
 import { welcomeGrantIdempotencyKey, type PlanKey } from "./catalog";
@@ -197,6 +201,7 @@ export async function getBillingOverview(
       reservations: reservations.map((reservation) => ({ reservedCredits: reservation.reservedCredits })),
       userId: params.userId,
     }),
+    reportOrphanedHolds(supabase, { account, reservations, userId: params.userId, now }),
   ]);
 
   /*
@@ -269,3 +274,78 @@ export async function getHeaderCreditBalance(
 
 /** Exported for the activity view's tests, which pin the customer-facing labels. */
 export const CREDIT_ACTIVITY_LABELS = { ledger: LEDGER_LABELS, operation: OPERATION_LABELS };
+
+/**
+ * Notices a Credit hold still standing over an operation that has finished
+ * (VB-020).
+ *
+ * On the same read, and for the same reason, as the two reconciliations above:
+ * this is the one place a customer deliberately looks at their balance, so it
+ * is where an unspendable hold is worth noticing. Before this, the only thing
+ * that could see one was a SQL query in a deployment checklist — run during an
+ * activation and never again.
+ *
+ * It reports and does not repair, deliberately. What is owed differs by how the
+ * operation ended, and only one of the two is performable from here — see
+ * `credits/orphaned-holds.ts`. An automatic release for a *completed*
+ * operation would refund work the customer received.
+ *
+ * Never throws into the page. A detector that can take down the billing screen
+ * is worse than the condition it detects, and a customer who cannot see their
+ * balance because something noticed a stuck hold is strictly worse off.
+ */
+async function reportOrphanedHolds(
+  supabase: SupabaseClient,
+  params: {
+    account: { id: string };
+    reservations: readonly { id: string; operationRunId: string | null; reservedCredits: CreditUnits }[];
+    userId: string;
+    now: Date;
+  },
+): Promise<void> {
+  try {
+    const operationIds = params.reservations
+      .map((reservation) => reservation.operationRunId)
+      .filter((id): id is string => id !== null);
+
+    if (operationIds.length === 0) return;
+
+    const operations = await listOperationRunsByIds(supabase, operationIds);
+    const orphaned = findOrphanedHolds({
+      reservations: params.reservations,
+      operations: operations.map((operation) => ({
+        id: operation.id,
+        operationType: operation.operationType,
+        status: operation.status,
+        completedAt: operation.completedAt,
+      })),
+      now: params.now,
+    });
+
+    if (orphaned.length === 0) return;
+
+    await alertOperator("[billing] credit holds are outliving their operations", {
+      creditAccountId: params.account.id,
+      orphanedCount: orphaned.length,
+    });
+
+    for (const hold of orphaned) {
+      await recordAuditEvent(supabase, {
+        userId: params.userId,
+        eventType: "credit_hold.orphaned",
+        metadata: {
+          creditAccountId: params.account.id,
+          reservationId: hold.reservationId,
+          operationId: hold.operationId,
+          operationType: hold.operationType,
+          status: hold.operationStatus,
+          reservedCredits: hold.reservedCredits,
+          durationMs: hold.durationMs,
+          owed: hold.owed,
+        },
+      });
+    }
+  } catch (error) {
+    console.error("[billing] the orphaned-hold detector failed", { error });
+  }
+}
