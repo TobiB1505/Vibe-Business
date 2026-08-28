@@ -291,6 +291,23 @@ const RETIRED_CLAIMS: readonly { path: string; claim: string; retiredBy: string 
       "own contract.",
   },
   {
+    path: "UX-CONTRACT.md",
+    claim: "ordered events every 2.5 seconds",
+    retiredBy:
+      "VB-044 — the Product Scan poll is 1.8 seconds and has been for some time. The contract " +
+      "now names the constant it is describing, so the next change to the interval has one " +
+      "obvious place to look rather than two numbers to notice disagreeing.",
+  },
+  {
+    path: "CLAUDE.md",
+    claim: "only `src/modules/operations/` may use it",
+    retiredBy:
+      "VB-044 — rule 53's wording lagged the boundary the tests enforce. The service-role " +
+      "client is also held by five reviewed sites that have no session to scope a client " +
+      "with, each recorded in REVIEWED_SITES with its reason. A rule that forbids what the " +
+      "repository does teaches a reader to disbelieve the rules.",
+  },
+  {
     path: "src/modules/business-audit/README.md",
     claim: "once per\ndimension key",
     retiredBy:
