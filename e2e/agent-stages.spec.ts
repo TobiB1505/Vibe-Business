@@ -351,3 +351,33 @@ test.describe("the rail stays one line per stage", () => {
     expect(Math.max(...heights) - Math.min(...heights)).toBeLessThanOrEqual(1);
   });
 });
+
+
+test.describe("the new stage replaces the old panel, it does not sit above it", () => {
+  /**
+   * Every stage used to render its own card and then mount the gate panel
+   * underneath, which repeated the change's status sentence and held the only
+   * button. A founder saw the same answer twice and had to scroll past the new
+   * card to act on it.
+   */
+  test("says the change's status once, not once per surface", async ({ page }) => {
+    await page.setViewportSize({ width: 1560, height: 1200 });
+    await page.goto(PREVIEW);
+
+    const preview = page.getByTestId("agent-preview");
+    await expect(preview).toBeVisible();
+
+    // The gates' own header is the duplicate. It stays away inside a stage.
+    const statuses = page.locator('[data-testid="prepared-change"] [role="status"]');
+    await expect(statuses).toHaveCount(0);
+  });
+
+  test("keeps the built-from record out of the stage that already lists files", async ({
+    page,
+  }) => {
+    await page.goto(MERGE);
+
+    await expect(page.getByTestId("agent-merge")).toContainText(/files changed/i);
+    await expect(page.getByText(/how this was built/i)).toHaveCount(0);
+  });
+});

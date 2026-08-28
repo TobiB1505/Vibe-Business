@@ -45,6 +45,7 @@ export function ChangeGates({
   change,
   planHref,
   stage = null,
+  chrome = true,
 }: {
   projectId: string;
   change: PreparedChangeWorkspaceItem;
@@ -57,6 +58,17 @@ export function ChangeGates({
    * the harness rather than the panels.
    */
   stage?: AgentStage | null;
+  /**
+   * Whether to draw the change's own header — its status sentence, its origin
+   * and the built-from record.
+   *
+   * Off inside a stage that already says those things. The preview stage names
+   * the change and shows what moved; the review stage names the branch, the
+   * commit and every file. Repeating the status sentence under either of them
+   * is the duplication this sprint keeps removing, and the founder ends up
+   * scrolling past their own answer to reach the button.
+   */
+  chrome?: boolean;
 }) {
   const show = (which: AgentStage) => stage === null || stage === which;
 
@@ -68,6 +80,8 @@ export function ChangeGates({
       /* Cleared of the sticky header when the plan deep-links here. */
       className="flex scroll-mt-24 flex-col gap-4"
     >
+      {chrome && (
+        <>
       {/*
         A live region, because this sentence is the one thing here that changes
         as the change advances — and a screen reader announces nothing when
@@ -102,6 +116,9 @@ export function ChangeGates({
           title={change.origin.title}
           href={planMoveHref(planHref, change.opportunityId)}
         />
+      )}
+
+        </>
       )}
 
       <details open={!change.progress.earlySettled} className="group space-y-3">
@@ -171,7 +188,8 @@ export function ChangeGates({
         this product, and a founder who wants to know precisely which files moved
         must always be able to find out.
       */}
-      <details className="group border-line-2 space-y-2 border-t pt-3">
+      {chrome && (
+        <details className="group border-line-2 space-y-2 border-t pt-3">
         <summary className="text-fg-muted hover:text-fg-prose cursor-pointer list-none text-xs">
           <span className="group-open:hidden">
             How this was built — {change.filePaths.length} file
@@ -197,8 +215,9 @@ export function ChangeGates({
               </li>
             ))}
           </ul>
-        </div>
-      </details>
+          </div>
+        </details>
+      )}
 
       {/* Last, and only reachable through everything above it: a merge needs an
           approval, an approval needs a review, a review needs a preview, a

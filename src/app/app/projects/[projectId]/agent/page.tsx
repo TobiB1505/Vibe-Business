@@ -369,12 +369,18 @@ export default async function ProjectAgentPage({
               reviewHref={`#${preparedChangeAnchorId(change.id)}`}
               filesHref={change.compareUrl ?? undefined}
             />
+            {/*
+              The controls only. The stage above already names the change and
+              shows what moved, so the gates' own header would be the same
+              answer twice with the button underneath it.
+            */}
             <div className="border-line-2 mt-7 border-t pt-6">
               <ChangeGates
                 projectId={project.id}
                 change={change}
                 planHref={planHref}
                 stage="preview"
+                chrome={false}
               />
             </div>
           </Surface>
@@ -399,6 +405,7 @@ export default async function ProjectAgentPage({
                 change={change}
                 planHref={planHref}
                 stage="review"
+                chrome={false}
               />
             </div>
           </Surface>
