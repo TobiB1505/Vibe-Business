@@ -4,7 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import { buildInstallUrl } from "@/modules/github/oauth";
 import { createConnectState } from "@/modules/github/state";
-import { listVerifiedInstallations } from "@/modules/github/connections";
+import {
+  listVerifiedInstallations,
+  recordInstallationAccess,
+} from "@/modules/github/connections";
+import { checkInstallationAccess } from "@/modules/github/repositories";
 import { resolveConnectDestination } from "@/modules/github/connect-routing";
 import { getGithubEnv } from "@/lib/env/github";
 
@@ -30,7 +34,43 @@ export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
 
   const installations = await listVerifiedInstallations(supabase, session.userId);
-  const destination = resolveConnectDestination(installations, {
+
+  /*
+   * Re-verify before reusing (VB-041).
+   *
+   * `github_installations` describes installations "verified as accessible",
+   * and until now nothing ever re-verified one — so removing the App on GitHub
+   * left a row that still claimed access, and this route sent the customer
+   * straight to a repository picker that could list nothing.
+   *
+   * This is the right place for the probe and close to the only one: it is a
+   * deliberate click about GitHub, it is rare, and it is the moment the answer
+   * decides something. Every render path is deliberately kept off it —
+   * `workspace-context.test.ts` and `dashboard-contract.test.ts` assert that,
+   * and they still do.
+   *
+   * A probe that cannot reach GitHub records nothing and changes nothing: the
+   * customer keeps whatever state they had, which is the safe direction when
+   * the failure is ours.
+   */
+  const probed = await Promise.all(
+    installations.map(async (installation) => {
+      if (installation.accessRevokedAt) return installation;
+
+      const access = await checkInstallationAccess(installation.installationId);
+      await recordInstallationAccess(supabase, {
+        installationRowId: installation.id,
+        userId: session.userId,
+        access,
+      });
+
+      return access === "revoked"
+        ? { ...installation, accessRevokedAt: new Date().toISOString() }
+        : installation;
+    }),
+  );
+
+  const destination = resolveConnectDestination(probed, {
     forceNewInstallation: searchParams.get("new") === "1",
   });
 

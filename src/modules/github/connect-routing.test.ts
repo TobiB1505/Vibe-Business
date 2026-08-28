@@ -39,3 +39,53 @@ describe("resolveConnectDestination", () => {
     ).toEqual({ kind: "start_installation" });
   });
 });
+
+describe("a revoked installation (VB-041)", () => {
+  /**
+   * The customer-visible failure this closes: removing the App on GitHub — the
+   * ordinary way to withdraw access — left a row that still claimed access, so
+   * "Connect GitHub" redirected to a repository picker that could list
+   * nothing. The product read as broken rather than as disconnected.
+   */
+  it("is not a candidate for reuse", () => {
+    expect(
+      resolveConnectDestination([{ id: "gone", accessRevokedAt: "2026-08-27T00:00:00.000Z" }]),
+    ).toEqual({ kind: "start_installation" });
+  });
+
+  /**
+   * From Vibe's side, "your only installation was removed" and "you have never
+   * installed" are the same situation, so they get the same destination — the
+   * real install flow, which is the only thing that fixes either.
+   */
+  it("leaves a user with one revoked and one working installation on the working one", () => {
+    expect(
+      resolveConnectDestination([
+        { id: "gone", accessRevokedAt: "2026-08-27T00:00:00.000Z" },
+        { id: "live", accessRevokedAt: null },
+      ]),
+    ).toEqual({ kind: "repository_picker", installationRowId: "live" });
+  });
+
+  it("still asks which account when more than one is usable", () => {
+    expect(
+      resolveConnectDestination([
+        { id: "gone", accessRevokedAt: "2026-08-27T00:00:00.000Z" },
+        { id: "a", accessRevokedAt: null },
+        { id: "b", accessRevokedAt: null },
+      ]),
+    ).toEqual({ kind: "choose_installation" });
+  });
+
+  /**
+   * An installation nothing has probed reads null, and null must keep meaning
+   * "no observation" rather than "revoked" — otherwise every first connect
+   * would restart the install flow.
+   */
+  it("treats an unprobed installation as usable", () => {
+    expect(resolveConnectDestination([{ id: "fresh" }])).toEqual({
+      kind: "repository_picker",
+      installationRowId: "fresh",
+    });
+  });
+});

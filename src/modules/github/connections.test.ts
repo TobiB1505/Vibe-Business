@@ -41,7 +41,14 @@ describe("listVerifiedInstallations", () => {
     const { client } = fakeSupabase({ data: [ROW], error: null });
 
     expect(await listVerifiedInstallations(client, "user-1")).toEqual([
-      { id: "installation-row-1", installationId: 42, accountLogin: "octocat", accountType: "User" },
+      {
+        id: "installation-row-1",
+        installationId: 42,
+        accountLogin: "octocat",
+        accountType: "User",
+        // Null is "nothing observed", never "confirmed working" (VB-041).
+        accessRevokedAt: null,
+      },
     ]);
   });
 
@@ -74,6 +81,7 @@ describe("getVerifiedInstallation", () => {
       installationId: 42,
       accountLogin: "octocat",
       accountType: "User",
+      accessRevokedAt: null,
     });
   });
 

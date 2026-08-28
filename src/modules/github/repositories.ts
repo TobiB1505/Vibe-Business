@@ -55,35 +55,50 @@ export async function listInstallationRepositories(installationId: number): Prom
 }
 
 /**
- * Cheap "is this installation still usable" probe for graceful degradation
- * (Sprint 1 §11: "GitHub access unavailable", never crash). Reuses the
- * repository listing call rather than a dedicated endpoint — any GitHub
- * API failure here (revoked/suspended/deleted installation, GitHub API
- * unavailable) is treated as "not accessible," never surfaced raw to the
- * user.
+ * What GitHub says about an installation right now (VB-041).
+ *
+ * Three answers rather than two, and the third is the point. This used to
+ * return a boolean, and its own comment complained about exactly what that
+ * cost: a misconfigured private key and a genuinely uninstalled App produced
+ * the same `false`, so nothing could act on the difference.
+ *
+ * They call for opposite responses. `revoked` is a fact about the customer's
+ * account that Vibe should record and tell them about — their App is gone and
+ * they need to reinstall it. `unavailable` is a fact about *this moment* —
+ * GitHub is down, or our own credentials are wrong — and recording it as
+ * revocation would tell a customer their connection was removed when it was
+ * not.
  */
-export async function checkInstallationStillAccessible(installationId: number): Promise<boolean> {
+export type InstallationAccess = "accessible" | "revoked" | "unavailable";
+
+/**
+ * GitHub answers 404 for an installation that does not exist, and 404 is also
+ * what it answers for one this App may not see. Both mean the same thing to
+ * Vibe: this installation is not ours to use any more.
+ *
+ * 401/403 are deliberately *not* here. They are what a wrong or expired App
+ * credential produces, which is our problem rather than the customer's.
+ */
+export function classifyProbeFailure(error: unknown): Exclude<InstallationAccess, "accessible"> {
+  return (error as { status?: number })?.status === 404 ? "revoked" : "unavailable";
+}
+
+export async function checkInstallationAccess(installationId: number): Promise<InstallationAccess> {
   try {
     await listInstallationRepositories(installationId);
-    return true;
+    return "accessible";
   } catch (error) {
-    /**
-     * The boolean is the contract — a revoked installation is an ordinary,
-     * expected state and must not throw. But swallowing the cause entirely
-     * made every failure look identical: a misconfigured private key rendered
-     * as "GitHub access unavailable", the same words a genuinely revoked
-     * installation gets, with nothing anywhere to tell them apart.
-     *
-     * Logged, not surfaced: the distinction matters to whoever is operating
-     * the system, and not to the user, who can act on neither. No credential
-     * is included — only the shape of the failure.
+    /*
+     * Logged, never surfaced raw: the shape of the failure matters to whoever
+     * is operating the system, and the customer can act only on the conclusion.
+     * No credential is included.
      */
-    console.error("[github.checkInstallationStillAccessible]", {
+    console.error("[github.checkInstallationAccess]", {
       installationId,
       name: error instanceof Error ? error.name : typeof error,
       status: (error as { status?: number })?.status,
       message: error instanceof Error ? error.message : undefined,
     });
-    return false;
+    return classifyProbeFailure(error);
   }
 }
