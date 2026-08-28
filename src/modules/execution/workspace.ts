@@ -10,6 +10,7 @@ import { businessRationaleFor } from "@/modules/execution/business-rationale";
 import { changeOriginFrom } from "@/modules/execution/change-origin";
 import { deriveChangeProgress } from "@/modules/execution/change-progress";
 import { buildBranchUrl, buildCompareUrl } from "@/modules/execution/diff";
+import { totalChangedLines } from "@/modules/execution/line-stats";
 import { listPreparedChangesForProject } from "@/modules/execution/store";
 import { createGithubMergePort } from "@/modules/merge/github/adapter";
 import { mergeFailureMessage } from "@/modules/merge/messages";
@@ -281,6 +282,21 @@ async function buildPreparedChangeCard(
     commitSha: prepared.commitSha,
     baseBranch: prepared.baseBranch,
     filePaths: prepared.files.map((file) => file.path),
+    /*
+     * The same files, with what each one gained and lost.
+     *
+     * Kept beside `filePaths` rather than replacing it: every caller that only
+     * wants the paths still gets exactly that, and a path is never absent
+     * because its counts are. A file prepared before the counts existed, or one
+     * too large to compare, simply carries none.
+     */
+    files: prepared.files.map((file) => ({
+      path: file.path,
+      linesAdded: file.linesAdded ?? null,
+      linesRemoved: file.linesRemoved ?? null,
+    })),
+    /* Null unless every file was counted — a partial sum reads as a total. */
+    lineStats: totalChangedLines(prepared.files),
     createdAt: prepared.createdAt,
     branchUrl: params.repositoryFullName
       ? buildBranchUrl(params.repositoryFullName, prepared.branchName)

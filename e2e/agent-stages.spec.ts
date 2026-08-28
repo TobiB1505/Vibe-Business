@@ -28,29 +28,26 @@ const MERGE = "/e2e/agent-stages-merge";
 const stage = (page: Page, name: string) =>
   page.getByTestId("agent-stage-rail").locator(`[data-stage="${name}"]`);
 
-test.describe("the five stages are always present", () => {
-  test("shows all five before anything has run", async ({ page }) => {
+test.describe("the workspace follows the target composition", () => {
+  test("shows the ready hero instead of an empty stepper before a run", async ({ page }) => {
     await page.goto(IDLE);
 
-    const rail = page.getByTestId("agent-stage-rail");
-    await expect(rail.locator("[data-stage]")).toHaveCount(5);
-    for (const name of ["understand", "build", "validate", "preview", "review"]) {
-      await expect(stage(page, name)).toHaveAttribute("data-state", "pending");
-    }
+    await expect(page.getByTestId("agent-ready-stage")).toBeVisible();
+    await expect(page.getByTestId("agent-stage-rail")).toHaveCount(0);
     await expect(page.getByTestId("agent-core")).toHaveAttribute("data-state", "idle");
   });
 
-  /** Geometry is reserved: the rail is the same height whatever the run is doing. */
-  test("does not change height between an idle and a running rail", async ({ page }) => {
+  /** Once a run exists, every stage uses one stable tracker geometry. */
+  test("does not change tracker height between running stages", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
-
-    await page.goto(IDLE);
-    const idle = await page.getByTestId("agent-stage-rail").boundingBox();
 
     await page.goto(BUILDING);
     const building = await page.getByTestId("agent-stage-rail").boundingBox();
 
-    expect(Math.abs(idle!.height - building!.height)).toBeLessThanOrEqual(1);
+    await page.goto(VALIDATING);
+    const validating = await page.getByTestId("agent-stage-rail").boundingBox();
+
+    expect(Math.abs(validating!.height - building!.height)).toBeLessThanOrEqual(1);
   });
 });
 
@@ -80,7 +77,7 @@ test.describe("never reached does not read as not yet", () => {
     await expect(stage(page, "validate")).toContainText(/never reached/i);
     await expect(stage(page, "validate")).not.toContainText(/pending/i);
 
-    await page.goto(IDLE);
+    await page.goto(BUILDING);
     await expect(stage(page, "validate")).toContainText(/pending/i);
     await expect(stage(page, "validate")).not.toContainText(/never reached/i);
   });
@@ -223,14 +220,20 @@ test.describe("stage four compares", () => {
     await expect(page.getByTestId("agent-preview").locator("img")).toHaveCount(0);
   });
 
-  test("shows the verified file count and no invented line totals", async ({ page }) => {
+  /**
+   * This used to assert that neither row appeared at all, because nothing
+   * measured them. Something does now — both sides of every file are compared
+   * when the change is prepared — so the claim moves from "never shown" to
+   * "shown exactly as counted". What it still forbids is a number nobody
+   * computed, which is the next test.
+   */
+  test("shows the verified file count and the measured line totals", async ({ page }) => {
     await page.goto(PREVIEW);
 
     const preview = page.getByTestId("agent-preview");
     await expect(preview).toContainText(/files changed/i);
-    // No diff statistic is stored, so neither row may appear.
-    await expect(preview).not.toContainText(/lines added/i);
-    await expect(preview).not.toContainText(/lines removed/i);
+    await expect(preview).toContainText("+410");
+    await expect(preview).toContainText("\u2212" + "25");
   });
 });
 
@@ -270,6 +273,29 @@ test.describe("stage five tells the truth about merging", () => {
     const files = page.getByTestId("agent-merge").locator("li");
     await expect(files).toHaveCount(8);
     await expect(page.getByTestId("agent-merge")).toContainText("src/lib/stripe/checkout.ts");
+  });
+
+  /**
+   * The counts are per file, and not every file has them: a change is measured
+   * file by file, and one too large to compare carries none. The failure this
+   * guards is the tempting default — rendering that file as `+0 \u22120`, which
+   * says "nothing changed here" about a file that did change.
+   */
+  test("shows each file's own counts, and none for one it could not measure", async ({ page }) => {
+    await page.goto(MERGE);
+
+    const counted = page
+      .getByTestId("agent-merge")
+      .locator("li")
+      .filter({ hasText: "src/app/pricing/page.tsx" });
+    await expect(counted).toContainText("+186");
+
+    const uncounted = page
+      .getByTestId("agent-merge")
+      .locator("li")
+      .filter({ hasText: "public/images/pricing-hero.svg" });
+    await expect(uncounted).not.toContainText("+0");
+    await expect(uncounted).not.toContainText(/[+\u2212]\s*\d/);
   });
 });
 

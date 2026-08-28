@@ -147,6 +147,49 @@ describe("§28 — post-agent verification", () => {
     expect(verification.accepted).toBe(true);
   });
 
+  /**
+   * The counts are Vibe's own observation, and this is the only place that
+   * holds both sides — the bytes read back from the workspace and the baseline
+   * from the pinned commit (§77). Fetching them from GitHub afterwards would
+   * make the number GitHub's account of the change rather than Vibe's.
+   */
+  it("counts what each accepted file added and removed", () => {
+    const verification = verifyCandidateChange({
+      spec,
+      candidate: {
+        ...candidateOf([]),
+        files: [
+          {
+            path: "src/app/page.tsx",
+            content: "one\ntwo\nthree\n",
+            baseContent: "one\nold\n",
+            status: "modified" as const,
+            bytes: 14,
+            contentHash: sha256("one\ntwo\nthree\n"),
+          },
+          {
+            path: "src/app/new.tsx",
+            content: "a\nb\n",
+            baseContent: null,
+            status: "added" as const,
+            bytes: 4,
+            contentHash: sha256("a\nb\n"),
+          },
+        ],
+      },
+      sourceRevisionVerified: true,
+    });
+
+    expect(verification.accepted).toBe(true);
+    if (!verification.accepted) return;
+
+    // Sorted by path, so `new` comes before `page`.
+    expect(verification.files.map((file) => [file.linesAdded, file.linesRemoved])).toEqual([
+      [2, 0],
+      [2, 1],
+    ]);
+  });
+
   it("refuses when the source revision could not be established", () => {
     const verification = verifyCandidateChange({
       spec,

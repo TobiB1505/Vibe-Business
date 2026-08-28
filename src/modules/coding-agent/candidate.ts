@@ -5,6 +5,7 @@ import {
 } from "@/modules/execution-contract/proposed-change";
 import type { WriteScopeViolation } from "@/modules/execution-contract/policy";
 import { isAgenticWritablePath } from "@/modules/execution/paths";
+import { countChangedLines } from "@/modules/execution/line-stats";
 import type { ExecutionSpec } from "@/modules/execution-contract/spec";
 import type { AgentRuntimeLimits } from "./budget";
 import type { GatewayChange } from "./gateway";
@@ -311,8 +312,23 @@ export type CandidateRejection = (typeof CANDIDATE_REJECTIONS)[number];
 export type CandidateVerification =
   | {
       accepted: true;
-      /** Exactly what will be written, in a stable order (§59). */
-      files: readonly { path: string; content: string; contentHash: string; bytes: number }[];
+      /**
+       * Exactly what will be written, in a stable order (§59).
+       *
+       * `linesAdded`/`linesRemoved` are counted here rather than fetched later,
+       * because this is the one place that holds both sides: the bytes read
+       * back from the workspace and the baseline from the pinned commit (§77).
+       * `null` for a file too large to compare inside the bound — absent, never
+       * zero.
+       */
+      files: readonly {
+        path: string;
+        content: string;
+        contentHash: string;
+        bytes: number;
+        linesAdded: number | null;
+        linesRemoved: number | null;
+      }[];
       deletions: readonly string[];
     }
   | {
@@ -391,12 +407,19 @@ export function verifyCandidateChange(input: {
   return {
     accepted: true,
     files: writes
-      .map((file) => ({
-        path: file.path,
-        content: file.content,
-        contentHash: file.contentHash,
-        bytes: file.bytes,
-      }))
+      .map((file) => {
+        /* Both sides are in hand here and nowhere later, so the count happens
+           here. A file past the bound reports nothing rather than a guess. */
+        const stats = countChangedLines(file.baseContent, file.content);
+        return {
+          path: file.path,
+          content: file.content,
+          contentHash: file.contentHash,
+          bytes: file.bytes,
+          linesAdded: stats?.added ?? null,
+          linesRemoved: stats?.removed ?? null,
+        };
+      })
       .sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)),
     deletions: [],
   };

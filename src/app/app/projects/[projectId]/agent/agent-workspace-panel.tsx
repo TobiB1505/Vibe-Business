@@ -3,7 +3,6 @@
 import { useCallback, useState } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { Surface } from "@/components/ui/surface";
-import { MonoLabel } from "@/components/ui/typography";
 import type {
   AgentStage,
   AgentStageStep,
@@ -16,12 +15,12 @@ import { StageNavigationProvider } from "./agent-stage-navigation";
  *
  * ## The frame, and what belongs in it
  *
- * The reference builds this screen as three fixed regions and then varies only
- * the last one:
- *
- *   the header    what Vibe is working on — the same on every stage
- *   the rail      where the work is, and what else there is to look at
- *   the body      the one stage the founder is looking at, in its own layout
+ * The implementation target uses three deliberate compositions rather than a
+ * single dashboard template: Understand is a task-and-Agent hero, Build keeps
+ * the tracker and the three live columns inside one card, and Validate through
+ * Review separate task identity, tracker and stage content into three calm
+ * surfaces. This component owns that composition while every body continues
+ * to own only the content of its stage.
  *
  * What is *not* a region is the orb. It was one here — a fixed middle column
  * rendered on all five stages — and that is why it appeared beside a finished
@@ -51,18 +50,15 @@ export function AgentWorkspacePanel({
 }: {
   stages: AgentStageStep[];
   /**
-   * What Vibe is working on, above the rail and constant across stages.
-   *
-   * It used to live inside the Understand body, which meant it vanished the
-   * moment the founder looked at any other stage — leaving five steps and no
-   * statement of what they were steps toward.
+   * The compact task identity above Validate, Preview and Review. Understand
+   * and Build carry the task in their own target composition.
    */
   header?: React.ReactNode;
   /** The stage the run is actually on. Where the founder lands. */
   initialStage: AgentStage | null;
   /** One body per stage that has something to show. */
   bodies: Partial<Record<AgentStage, React.ReactNode>>;
-  /** The second column, per stage — each stage reports its own kind of progress. */
+  /** Legacy second-column seam for callers that have not moved the aside into their stage body. */
   asides?: Partial<Record<AgentStage, React.ReactNode>>;
 }) {
   const reduceMotion = useReducedMotion();
@@ -87,50 +83,91 @@ export function AgentWorkspacePanel({
 
   const go = useCallback((stage: AgentStage) => setSelected(stage), []);
 
+  const content = aside ? (
+    <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,1.6fr)_minmax(19rem,1fr)] lg:items-start">
+      <div className="min-w-0">{body}</div>
+      <div className="min-w-0">{aside}</div>
+    </div>
+  ) : (
+    <div className="min-w-0">{body}</div>
+  );
+
+  const animatedContent = (
+    <motion.div
+      key={shown ?? "none"}
+      initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.28, ease: [0.2, 0.7, 0.2, 1] }}
+    >
+      {content}
+    </motion.div>
+  );
+
+  const lateStage = shown === "validate" || shown === "preview" || shown === "review";
+
   return (
     <StageNavigationProvider value={go}>
-      <Surface
-        level="panel"
-        padding="none"
-        className="overflow-hidden p-4 sm:p-5 lg:p-6"
-      >
-        <div className="flex flex-col gap-6">
-          <div className="flex flex-wrap items-baseline justify-between gap-3">
-            <MonoLabel as="h2" className="text-fg-secondary">
-              Agent
-            </MonoLabel>
-            <span className="text-fg-meta font-mono text-[0.6875rem]">
-              {stages.length} stages · nothing is applied without you
-            </span>
-          </div>
+      <div className="flex min-w-0 flex-col gap-5" data-current-stage={shown ?? "none"}>
+        {lateStage && header !== undefined && (
+          <Surface level="panel" padding="none" className="p-5 sm:p-6 lg:px-7 lg:py-6">
+            {header}
+          </Surface>
+        )}
 
-          {header}
-
-          <AgentStageRail
-            steps={stages}
-            selected={shown}
-            openable={openable}
-            onSelect={setSelected}
-          />
-
-          <motion.div
-            className={
-              aside
-                ? "grid min-w-0 gap-7 lg:grid-cols-[minmax(0,1.6fr)_minmax(19rem,1fr)] lg:items-start"
-                : "min-w-0"
-            }
-            /* Keyed on the stage so a switch fades rather than snapping, and
-               settles well inside the entrance budget. */
-            key={shown ?? "none"}
-            initial={reduceMotion ? false : { opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.28, ease: [0.2, 0.7, 0.2, 1] }}
+        {shown === "understand" && (
+          <Surface
+            level="card"
+            padding="none"
+            className="overflow-hidden p-5 sm:p-7 lg:p-[2.125rem]"
           >
-            <div className="min-w-0">{body}</div>
-            {aside && <div className="min-w-0">{aside}</div>}
-          </motion.div>
-        </div>
-      </Surface>
+            {animatedContent}
+          </Surface>
+        )}
+
+        {shown === "build" && (
+          <Surface
+            level="card"
+            padding="none"
+            className="relative overflow-hidden p-5 sm:p-7 lg:p-[1.875rem_2.125rem_2.125rem]"
+          >
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute -top-52 left-1/2 h-[28rem] w-[44rem] -translate-x-1/2 rounded-full blur-3xl"
+              style={{
+                background:
+                  "radial-gradient(circle, color-mix(in oklab, var(--color-mint) 10%, transparent), transparent 70%)",
+              }}
+            />
+            <div className="relative flex flex-col gap-8">
+              <AgentStageRail
+                steps={stages}
+                selected={shown}
+                openable={openable}
+                onSelect={setSelected}
+              />
+              {animatedContent}
+            </div>
+          </Surface>
+        )}
+
+        {lateStage && (
+          <>
+            <AgentStageRail
+              steps={stages}
+              selected={shown}
+              openable={openable}
+              onSelect={setSelected}
+            />
+            <Surface
+              level="card"
+              padding="none"
+              className="overflow-hidden p-5 sm:p-7 lg:p-[1.875rem_2.125rem]"
+            >
+              {animatedContent}
+            </Surface>
+          </>
+        )}
+      </div>
     </StageNavigationProvider>
   );
 }

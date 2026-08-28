@@ -49,17 +49,35 @@ export type AgentTask = {
   steps: string[];
 };
 
-export function AgentTaskPanel({ task, compact = false }: { task: AgentTask; compact?: boolean }) {
+export function AgentTaskPanel({
+  task,
+  compact = false,
+  summary = false,
+}: {
+  task: AgentTask;
+  compact?: boolean;
+  /**
+   * The condensed task identity used above stages three to five. It keeps the
+   * same stored task data, but leaves the execution checklist and rationale in
+   * the stage where they are useful instead of making the header a second
+   * page.
+   */
+  summary?: boolean;
+}) {
   const reduceMotion = useReducedMotion();
 
   return (
-    <div className="flex min-w-0 flex-col gap-4" data-testid="agent-task">
+    <div
+      className={cn("flex min-w-0 flex-col", summary ? "gap-3" : "gap-4")}
+      data-testid="agent-task"
+      data-variant={summary ? "summary" : compact ? "compact" : "full"}
+    >
       <MonoLabel className="text-mint">Current task</MonoLabel>
 
       <h2
         className={cn(
           "text-fg leading-tight font-bold tracking-[-0.03em] text-balance",
-          compact ? "text-2xl" : "text-[2rem]",
+          summary ? "text-[1.625rem]" : compact ? "text-2xl" : "text-[2rem]",
         )}
       >
         {task.title}
@@ -99,11 +117,18 @@ export function AgentTaskPanel({ task, compact = false }: { task: AgentTask; com
         )}
       </div>
 
-      <p className="text-fg-prose max-w-[46ch] text-base leading-relaxed text-pretty">
+      <p
+        className={cn(
+          "text-fg-prose text-pretty",
+          summary
+            ? "max-w-[56ch] text-[0.9375rem] leading-relaxed"
+            : "max-w-[46ch] text-base leading-relaxed",
+        )}
+      >
         {task.problem}
       </p>
 
-      {task.steps.length > 0 && (
+      {!summary && task.steps.length > 0 && (
         <div className="border-line-3 mt-1.5 flex flex-col gap-3.5 border-t pt-5">
           <MonoLabel className="text-mint">Vibe will</MonoLabel>
           <ul className="flex flex-col gap-3">
@@ -132,7 +157,7 @@ export function AgentTaskPanel({ task, compact = false }: { task: AgentTask; com
         </div>
       )}
 
-      {task.whyNow !== null && (
+      {!summary && task.whyNow !== null && (
         <Well className="mt-2 flex gap-3.5 p-4">
           <svg
             viewBox="0 0 24 24"

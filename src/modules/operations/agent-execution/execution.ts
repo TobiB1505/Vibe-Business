@@ -2382,10 +2382,16 @@ export async function writeAgentBranchStep(
   await markPreparedChangePrepared(deps.supabase, {
     preparedChangeId: prepared.id,
     commitSha: write.commitSha,
+    /* The counts come from verification, which held both the workspace bytes
+       and the pinned commit's baseline. A file it could not compare stores no
+       count rather than a zero (rule 44). */
     files: files.map((file) => ({
       path: file.path,
       contentHash: file.contentHash,
       bytes: file.bytes,
+      ...(file.linesAdded !== null && file.linesRemoved !== null
+        ? { linesAdded: file.linesAdded, linesRemoved: file.linesRemoved }
+        : {}),
     })),
   });
 

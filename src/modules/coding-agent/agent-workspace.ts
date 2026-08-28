@@ -292,6 +292,15 @@ export async function readAgentWorkspace(
     previewChanges: [],
     mergeSummary: {
       filesChanged: change?.filePaths.length ?? 0,
+      /*
+       * Counted when the change was prepared, from both sides of every file.
+       * Absent for a change Vibe could not measure whole — the deterministic
+       * capability writes without reading what it replaced — and absent is
+       * shown as nothing rather than as zero (rule 44).
+       */
+      ...(change?.lineStats
+        ? { linesAdded: change.lineStats.added, linesRemoved: change.lineStats.removed }
+        : {}),
       tests: testVerdict(change),
       build: buildVerdict(change),
     },

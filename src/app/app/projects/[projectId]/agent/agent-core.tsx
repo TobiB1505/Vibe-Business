@@ -130,6 +130,7 @@ export function AgentCore({
   state,
   caption,
   headline,
+  eyebrow,
   size = "hero",
   className,
 }: {
@@ -138,6 +139,8 @@ export function AgentCore({
   caption: string;
   /** The bolder line above it, when the caller has one worth saying. */
   headline?: string;
+  /** The short mint status line used by the ready hero. */
+  eyebrow?: string;
   size?: AgentCoreSize;
   className?: string;
 }) {
@@ -273,6 +276,17 @@ export function AgentCore({
             </span>
           ))}
       </div>
+
+      {eyebrow !== undefined && (
+        <motion.p
+          className="text-mint font-mono text-[0.6875rem] font-semibold tracking-[0.12em] uppercase"
+          initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.36, ease: [0.2, 0.7, 0.2, 1] }}
+        >
+          {eyebrow}
+        </motion.p>
+      )}
 
       {headline !== undefined && (
         <motion.p

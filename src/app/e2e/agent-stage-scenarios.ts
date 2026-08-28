@@ -163,19 +163,29 @@ import type { MergeFile, MergeSummary } from "@/app/app/projects/[projectId]/age
  * Paths without line counts, because no diff statistic is stored. The fixture
  * mirrors what production can actually supply rather than what the mockup drew.
  */
+/*
+ * Seven counted files and one that could not be measured.
+ *
+ * The odd one out is the point: a change is not all-or-nothing, so the file
+ * list has to render a path with no counts beside it without falling back to
+ * `+0 −0`. The totals below are therefore deliberately absent — a sum over
+ * seven of eight files would read as the whole change.
+ */
 const MERGE_FILES: MergeFile[] = [
-  { path: "src/app/pricing/page.tsx" },
-  { path: "src/components/pricing/PricingPlans.tsx" },
-  { path: "src/components/pricing/PlanCard.tsx" },
-  { path: "src/lib/stripe/checkout.ts" },
-  { path: "src/app/api/checkout/route.ts" },
-  { path: "src/styles/pricing.module.css" },
-  { path: "src/data/plans.ts" },
+  { path: "src/app/pricing/page.tsx", added: 186, removed: 12 },
+  { path: "src/components/pricing/PricingPlans.tsx", added: 98, removed: 0 },
+  { path: "src/components/pricing/PlanCard.tsx", added: 64, removed: 3 },
+  { path: "src/lib/stripe/checkout.ts", added: 22, removed: 2 },
+  { path: "src/app/api/checkout/route.ts", added: 18, removed: 0 },
+  { path: "src/styles/pricing.module.css", added: 14, removed: 8 },
+  { path: "src/data/plans.ts", added: 8, removed: 0 },
   { path: "public/images/pricing-hero.svg" },
 ];
 
 const MERGE_SUMMARY: MergeSummary = {
   filesChanged: MERGE_FILES.length,
+  linesAdded: 410,
+  linesRemoved: 25,
   tests: "passing",
   build: "successful",
 };

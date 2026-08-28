@@ -38,16 +38,15 @@ import {
 } from "../agent-stage-scenarios";
 import { AgentWorkspacePanel } from "@/app/app/projects/[projectId]/agent/agent-workspace-panel";
 import { AgentActivity } from "@/app/app/projects/[projectId]/agent/agent-activity";
-import { AgentTaskPanel } from "@/app/app/projects/[projectId]/agent/agent-task-panel";
 import { AgentValidationChecks } from "@/app/app/projects/[projectId]/agent/agent-validation-checks";
 import { AgentFileActivity } from "@/app/app/projects/[projectId]/agent/agent-file-activity";
 import { AgentPreviewStage } from "@/app/app/projects/[projectId]/agent/agent-preview-stage";
 import { AgentMergeStage } from "@/app/app/projects/[projectId]/agent/agent-merge-stage";
-import { AgentReadyFacts } from "@/app/app/projects/[projectId]/agent/agent-start-cta";
 import { AgentCore } from "@/app/app/projects/[projectId]/agent/agent-core";
 import { AgentBuildStage } from "@/app/app/projects/[projectId]/agent/agent-build-stage";
 import { AgentValidateStage } from "@/app/app/projects/[projectId]/agent/agent-validate-stage";
-import { AgentAssuranceBar } from "@/app/app/projects/[projectId]/agent/agent-assurance-bar";
+import { AgentReadyStage } from "@/app/app/projects/[projectId]/agent/agent-ready-stage";
+import { AgentRunTaskHeader } from "@/app/app/projects/[projectId]/agent/agent-run-task-header";
 import { E2E_NEEDS_USER_SCENARIOS, isE2eNeedsUserScenario } from "../needs-user-scenarios";
 import {
   E2E_ACCOUNT_SCENARIOS,
@@ -589,26 +588,40 @@ export default async function E2eScenarioPage({
           initialStage={
             steps.find((step) => step.state === "active" || step.state === "paused")?.stage ?? null
           }
-          header={task !== null ? <AgentTaskPanel task={task} compact /> : undefined}
+          header={<AgentRunTaskHeader task={task} stage="Scenario state" filesChanged={8} />}
           bodies={{
             understand: (
-              <AgentReadyFacts
+              <AgentReadyStage
+                task={task}
+                fallback={<p className="text-fg-body">No task is attached to this run.</p>}
+                planHref="#"
                 repository="TobiB1505/Vibe-Business"
                 liveUrl="https://vibebusiness.de"
+                caption={caption}
               />
             ),
-            build: <AgentBuildStage task={task} live={live} />,
+            build: (
+              <AgentBuildStage
+                task={task}
+                live={live}
+                core={<AgentCore state={core} caption={caption} size="compact" />}
+                activity={<AgentActivity steps={activity} live={live} />}
+              />
+            ),
             validate: (
-              <div className="grid min-w-0 gap-7 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:items-start">
-                <AgentValidateStage running={live} />
-                <AgentValidationChecks checks={checks} />
-              </div>
+              <AgentValidateStage
+                running={live}
+                checks={<AgentValidationChecks checks={checks} />}
+                activity={<AgentFileActivity events={fileEvents} title="Validation activity" />}
+              />
             ),
             preview: (
               <AgentPreviewStage
                 images={previewImages}
                 changes={previewChanges}
                 filesChanged={8}
+                linesAdded={mergeSummary.linesAdded}
+                linesRemoved={mergeSummary.linesRemoved}
                 filesHref="#"
               />
             ),
@@ -626,28 +639,7 @@ export default async function E2eScenarioPage({
               />
             ),
           }}
-          asides={{
-            /* The orb's two moments, and no others: the hero before a run, and
-               the run itself. */
-            understand:
-              core === "idle" ? (
-                <AgentCore
-                  state="idle"
-                  headline="Vibe is ready to work"
-                  caption={caption}
-                  size="hero"
-                />
-              ) : undefined,
-            build: (
-              <div className="flex flex-col items-center gap-6">
-                {live && <AgentCore state={core} caption={caption} size="compact" />}
-                {activity.length > 0 && <AgentActivity steps={activity} live={live} />}
-              </div>
-            ),
-            validate: <AgentFileActivity events={fileEvents} title="Validation activity" />,
-          }}
         />
-        <AgentAssuranceBar />
       </main>
     );
   }

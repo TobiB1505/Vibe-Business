@@ -28,11 +28,10 @@ import type { PreparedChangeWorkspaceItem } from "@/modules/execution/workspace"
 import { preparedChangeAnchorId } from "@/components/layout/project-shell";
 import { AgentTrustPanel } from "./agent-header";
 import { ChangeGates } from "./change-gates";
-import { AgentTaskPanel } from "./agent-task-panel";
+import type { AgentTask } from "./agent-task-panel";
 import { AgentActivity } from "./agent-activity";
 import { AgentValidationChecks } from "./agent-validation-checks";
 import { AgentValidateAction } from "./agent-validate-action";
-import { AgentReadyFacts } from "./agent-start-cta";
 import { AgentQuestionPanel } from "./agent-question-panel";
 import { FounderInputCard } from "@/components/founder-input/founder-input-card";
 import { resolveAgentInterruptAction } from "./interrupt-actions";
@@ -43,6 +42,8 @@ import { AgentWorkspacePanel } from "./agent-workspace-panel";
 import { AgentCore } from "./agent-core";
 import { AgentBuildStage } from "./agent-build-stage";
 import { AgentValidateStage } from "./agent-validate-stage";
+import { AgentReadyStage } from "./agent-ready-stage";
+import { AgentRunTaskHeader } from "./agent-run-task-header";
 
 /**
  * Agent (Sprint UI-2 Part 2 as Prepared; reframed by CORE-5).
@@ -216,6 +217,26 @@ export default async function ProjectAgentPage({
      seven reaches into the workspace view. */
   const change = workspace.change;
 
+  /*
+   * Before a run exists, `workspace.task` is correctly null: no execution spec
+   * has bound a task yet. A founder who arrived from one named Move has still
+   * supplied an honest task for the ready hero, so use that Move's own fields
+   * without pretending its plan steps were already bound to a run.
+   */
+  const readyTask: AgentTask | null =
+    workspace.task ??
+    (focusedMove
+      ? {
+          title: focusedMove.title,
+          problem: focusedMove.problem,
+          whyNow: focusedMove.whyNow || null,
+          impact: focusedMove.impact,
+          effort: focusedMove.effort,
+          lens: focusedMove.primaryLens,
+          steps: [],
+        }
+      : null);
+
   /* Whether anything is actually happening. The orb turns for this and
      nothing else — a settled run gets no orb at all. */
   const live = workspace.core === "working" || workspace.core === "waiting";
@@ -275,15 +296,20 @@ export default async function ProjectAgentPage({
             workspace.stage ?? (workspace.timeline === null ? null : "review")
           }
           /*
-            What Vibe is working on, above the rail and on every stage. It used
-            to sit inside the Understand body, so it disappeared the moment the
-            founder looked at any other stage — five steps with no statement of
-            what they were steps toward.
+            The compact task identity used by the three decision stages. Ready
+            and Build carry the same task inside their own target composition.
           */
           header={
-            workspace.task !== null ? (
-              <AgentTaskPanel task={workspace.task} compact />
-            ) : undefined
+            <AgentRunTaskHeader
+              task={workspace.task}
+              stage={
+                workspace.stage === null
+                  ? "Run settled"
+                  : workspace.stages.find((step) => step.stage === workspace.stage)?.label ??
+                    "Current run"
+              }
+              filesChanged={change === null ? null : change.filePaths.length}
+            />
           }
           bodies={{
             /*
@@ -294,40 +320,65 @@ export default async function ProjectAgentPage({
               it was first used.
             */
             understand: (
-              <div className="flex flex-col gap-6">
-                <AgentPanel
-                  context={context}
-                  focus={focus}
-                  preparedCount={changes.length}
-                  planHref={planHref}
-                  agentHref={projectSectionHref(project.id, "agent")}
-                  productHref={projectSectionHref(project.id, "my-product")}
-                  executionHref={executionHref}
-                />
-                {/*
-                  What is true before a run starts: where it happens and what
-                  it is working from. The reference draws an estimated duration
-                  and a file range here; neither has an estimator behind it.
-                */}
-                <AgentReadyFacts
-                  repository={project.repository?.fullName ?? null}
-                  liveUrl={project.productionUrl ?? null}
-                />
-              </div>
+              <AgentReadyStage
+                task={readyTask}
+                fallback={
+                  <AgentPanel
+                    context={context}
+                    focus={focus}
+                    preparedCount={changes.length}
+                    planHref={planHref}
+                    agentHref={projectSectionHref(project.id, "agent")}
+                    productHref={projectSectionHref(project.id, "my-product")}
+                    executionHref={executionHref}
+                    embedded
+                  />
+                }
+                planHref={planHref}
+                repository={project.repository?.fullName ?? null}
+                liveUrl={project.productionUrl ?? null}
+                caption="Choose a move from your Action Plan and Vibe will prepare the change in a secure environment for your review."
+              />
             ),
-            build: <AgentBuildStage task={workspace.task} live={live} />,
-            /*
-              Two columns, so the stage reads as the reference draws it: what is
-              being checked, beside the checks themselves, with the run's own
-              activity in the aside. The checks alone were a list of shields
-              with no sentence saying what they were for.
-            */
+            build: (
+              <AgentBuildStage
+                task={workspace.task}
+                live={live}
+                core={
+                  <AgentCore
+                    state={workspace.core}
+                    headline={live ? "Vibe is building your change" : "The build stage is complete"}
+                    caption={agentCoreCaption(workspace.stages)}
+                    size="compact"
+                  />
+                }
+                activity={
+                  workspace.timeline === null ? (
+                    <Notice tone="info" label="Live activity">
+                      Activity appears here when the run starts.
+                    </Notice>
+                  ) : (
+                    <AgentActivity steps={workspace.timeline} live={live} />
+                  )
+                }
+              />
+            ),
+            /* What is being checked, the checks, and the run's own activity —
+               the target's three-column validation workspace. */
             validate: (
-              <div className="grid min-w-0 gap-7 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.15fr)] lg:items-start">
-                <AgentValidateStage running={live} />
-                <div className="flex min-w-0 flex-col gap-5">
-                  <AgentValidationChecks checks={workspace.checks} />
-                  {change !== null && (
+              <AgentValidateStage
+                running={live}
+                checks={
+                  workspace.checks.length > 0 ? (
+                    <AgentValidationChecks checks={workspace.checks} />
+                  ) : (
+                    <Notice tone="info" label="Validation checks">
+                      Checks appear here when a prepared change reaches validation.
+                    </Notice>
+                  )
+                }
+                action={
+                  change !== null ? (
                     <AgentValidateAction
                       projectId={project.id}
                       preparedChangeId={change.id}
@@ -337,9 +388,21 @@ export default async function ProjectAgentPage({
                           : "Validate again"
                       }
                     />
-                  )}
-                </div>
-              </div>
+                  ) : undefined
+                }
+                activity={
+                  workspace.fileEvents.length > 0 ? (
+                    <AgentFileActivity
+                      events={workspace.fileEvents}
+                      title="Validation activity"
+                    />
+                  ) : (
+                    <Notice tone="info" label="Validation activity">
+                      The validation record appears here when checks begin.
+                    </Notice>
+                  )
+                }
+              />
             ),
             preview:
               change === null ? undefined : (
@@ -348,6 +411,11 @@ export default async function ProjectAgentPage({
                     images={change.reviewImages}
                     changes={workspace.previewChanges}
                     filesChanged={change.filePaths.length}
+                    /* Counted at preparation time, from both sides of every
+                       file. Absent when the change could not be measured
+                       whole — shown as nothing, never as zero. */
+                    linesAdded={change.lineStats?.added}
+                    linesRemoved={change.lineStats?.removed}
                     filesHref={change.compareUrl ?? undefined}
                   />
                   {/*
@@ -370,7 +438,12 @@ export default async function ProjectAgentPage({
                 <div className="flex min-w-0 flex-col gap-6">
                   <AgentMergeStage
                     summary={workspace.mergeSummary}
-                    files={change.filePaths.map((path) => ({ path }))}
+                    files={change.files.map((file) => ({
+                      path: file.path,
+                      ...(file.linesAdded !== null && file.linesRemoved !== null
+                        ? { added: file.linesAdded, removed: file.linesRemoved }
+                        : {}),
+                    }))}
                     allChecksPassed={change.validation?.status === "passed"}
                     branchName={change.branchName}
                     baseBranch={change.baseBranch}
@@ -394,50 +467,6 @@ export default async function ProjectAgentPage({
                   />
                 </div>
               ),
-          }}
-          asides={{
-            /*
-              The orb has exactly two moments, and they are the two the
-              reference gives it: the hero before a run, and the run itself. A
-              finished merge gets none — it had been appearing beside one,
-              saying "Vibe is preparing what you need in order to decide".
-            */
-            understand:
-              workspace.core === "idle" ? (
-                <AgentCore
-                  state="idle"
-                  headline="Vibe is ready to work"
-                  caption={agentCoreCaption(workspace.stages)}
-                  size="hero"
-                />
-              ) : undefined,
-            build: (
-              <div className="flex flex-col items-center gap-6">
-                {live && (
-                  <AgentCore
-                    state={workspace.core}
-                    caption={agentCoreCaption(workspace.stages)}
-                    size="compact"
-                  />
-                )}
-                {workspace.timeline !== null && (
-                  <AgentActivity steps={workspace.timeline} live={live} />
-                )}
-              </div>
-            ),
-            /*
-              Each stage reports its own kind of progress. Build shows what the
-              agent did — files, commands, searches. Validate shows the checks'
-              own run, not the agent's, which is what made the old panel read as
-              the wrong activity under the right heading.
-            */
-            validate:
-              workspace.fileEvents.length > 0 ? (
-                <AgentFileActivity
-                  events={workspace.fileEvents}
-                  title="Validation activity"
-                />
-              ) : undefined,
           }}
         />
 

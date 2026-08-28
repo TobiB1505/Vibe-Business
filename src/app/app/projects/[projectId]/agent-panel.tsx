@@ -1,4 +1,5 @@
 import Link from "next/link";
+import type { ElementType } from "react";
 import { preparedChangeHref } from "@/components/layout/project-shell";
 import { STATUS_GLYPHS, StatusDot, statusToneText, type StatusTone } from "@/components/ui/status-pill";
 import { VibeCard } from "@/components/ui/surface";
@@ -172,6 +173,7 @@ export function AgentPanel({
   productHref,
   /** The internal execution surface, when this project is allowed to reach it. */
   executionHref,
+  embedded = false,
 }: {
   context: AgentContext;
   focus?: AgentFocus;
@@ -180,13 +182,20 @@ export function AgentPanel({
   agentHref?: string;
   productHref: string;
   executionHref: string | null;
+  /** Removes the card chrome when the readiness content lives in the Agent hero. */
+  embedded?: boolean;
 }) {
   const tone = READINESS_TONE[context.readiness];
+  const Wrapper: ElementType = embedded ? "div" : VibeCard;
 
   return (
-    <VibeCard
-      padding="lg"
-      tone={context.readiness === "ready" ? "mint" : "neutral"}
+    <Wrapper
+      {...(embedded
+        ? {}
+        : {
+            padding: "lg",
+            tone: context.readiness === "ready" ? "mint" : "neutral",
+          })}
       className="flex flex-col gap-6"
     >
       <div className="flex flex-col gap-2">
@@ -279,6 +288,6 @@ export function AgentPanel({
           )}
         </p>
       </div>
-    </VibeCard>
+    </Wrapper>
   );
 }

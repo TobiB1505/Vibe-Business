@@ -57,6 +57,16 @@ function baseChange(): Omit<
     commitSha: APPROVED_COMMIT,
     baseBranch: "main",
     filePaths: ["src/app/robots.ts", "src/app/sitemap.ts"],
+    /*
+     * The deterministic capability's own shape: it generates files without
+     * reading what was there, so it knows what it wrote and not what it
+     * replaced. No counts, and the screen shows none rather than zeroes.
+     */
+    files: [
+      { path: "src/app/robots.ts", linesAdded: null, linesRemoved: null },
+      { path: "src/app/sitemap.ts", linesAdded: null, linesRemoved: null },
+    ],
+    lineStats: null,
     createdAt: "2026-08-13T18:00:00.000Z",
     branchUrl: null,
     compareUrl: null,
