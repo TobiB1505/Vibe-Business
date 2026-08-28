@@ -5,7 +5,7 @@ import { getPreparedChange, type StoredPreparedChange } from "@/modules/executio
 import { normalizeProductionUrl } from "@/modules/live-product-intelligence/url";
 import { getLatestMergeForPreparedChange } from "@/modules/merge/store";
 import type { ChangeMerge } from "@/modules/merge/schema";
-import { getSnapshotById } from "@/modules/repository-intelligence/store";
+import { getSnapshotById, type StoredSnapshot } from "@/modules/repository-intelligence/store";
 import { computeVerificationIdentity } from "./identity";
 import {
   OUTCOME_EVIDENCE_SCHEMA_VERSION,
@@ -66,10 +66,14 @@ export type OutcomeEligibility =
  * the policy may have tightened since, and this is the last checkpoint before
  * an outbound request is planned.
  */
+export type PublicOrigin =
+  | { ok: true; origin: string }
+  | { ok: false; reason: OutcomeFailureCode };
+
 export async function resolvePublicOrigin(
   supabase: SupabaseClient,
   projectId: string,
-): Promise<{ ok: true; origin: string } | { ok: false; reason: OutcomeFailureCode }> {
+): Promise<PublicOrigin> {
   const { data } = await supabase
     .from("projects")
     .select("production_url")
@@ -85,6 +89,13 @@ export async function resolvePublicOrigin(
   return { ok: true, origin: normalized.origin };
 }
 
+export type PrefetchedOutcomeInputs = {
+  merge: ChangeMerge | null;
+  prepared: StoredPreparedChange | null;
+  publicOrigin: PublicOrigin | null;
+  snapshot: StoredSnapshot | null;
+};
+
 /**
  * Whether the public outcome of one prepared change can be verified.
  *
@@ -98,11 +109,18 @@ export async function evaluateOutcomeEligibility(
     projectId: string;
     preparedChangeId: string;
     /**
-     * The merge and the prepared change, when the caller already holds them
-     * (VB-023). Both are rows a list render has read once for the whole list,
-     * and re-reading them per card was two of the thirteen reads a card cost.
+     * What the caller already holds (VB-023).
+     *
+     * The first two are rows a list render has read once for the whole list.
+     * The other two are what a *merged* change costs on top: the project's
+     * public origin, which is one row per project and was being read once per
+     * merged change, and the repository snapshot the change was prepared
+     * against, which is usually the same snapshot for every change in the list.
+     *
+     * `publicOrigin: null` means "resolve it here" — the caller supplies one
+     * only when something in its list could reach this branch at all.
      */
-    prefetched?: { merge: ChangeMerge | null; prepared: StoredPreparedChange | null };
+    prefetched?: PrefetchedOutcomeInputs;
   },
 ): Promise<OutcomeEligibility> {
   const [merge, prepared] = params.prefetched
@@ -135,17 +153,20 @@ export async function evaluateOutcomeEligibility(
 
   if (!prepared) return { eligible: false, reason: "outcome_merge_required" };
 
-  const origin = await resolvePublicOrigin(supabase, params.projectId);
+  const origin =
+    params.prefetched?.publicOrigin ?? (await resolvePublicOrigin(supabase, params.projectId));
   if (!origin.ok) return { eligible: false, reason: origin.reason };
 
   // The same structured route intelligence the generator consumed. Loaded by
   // the prepared change's own snapshot id, not "the latest snapshot": a
   // contract derived from evidence the change was never prepared against would
   // be describing a different commit's product.
-  const snapshot = await getSnapshotById(supabase, {
-    snapshotId: prepared.repositorySnapshotId,
-    projectId: params.projectId,
-  });
+  const snapshot = params.prefetched
+    ? params.prefetched.snapshot
+    : await getSnapshotById(supabase, {
+        snapshotId: prepared.repositorySnapshotId,
+        projectId: params.projectId,
+      });
 
   const contract = resolveOutcomeContract({
     capability: prepared.capability,

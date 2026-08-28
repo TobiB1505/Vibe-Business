@@ -15,6 +15,7 @@ import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { getOutcomeCard } from "@/modules/outcome-verification/service";
 import { getReviewCard } from "@/modules/review/service";
 import { getLatestValidation } from "@/modules/validation/service";
+import { FIXTURE_ROUTES, fakeRepositorySnapshotFor } from "./test-support";
 import { getPreparedChangeWorkspace, listPreparedChangeSummaries } from "./workspace";
 
 /**
@@ -60,9 +61,34 @@ function seedProject() {
   db.seed("projects", { id: PROJECT, user_id: USER, production_url: "https://acme.test" });
 }
 
+/**
+ * A snapshot whose `result` is a real analyzer shape.
+ *
+ * `{}` would do for the row to exist, and that is exactly why it will not do:
+ * an empty result makes the outcome contract *unsupported*, so a card built
+ * from the right snapshot and a card built from no snapshot at all come out
+ * identical — and the comparison below would prove nothing about either.
+ */
+function seedSnapshot() {
+  db.seed("repository_intelligence_snapshots", {
+    id: "snapshot_1",
+    project_id: PROJECT,
+    status: "completed",
+    source_commit_sha: COMMIT,
+    source_branch: "main",
+    analyzer_version: "repo-intelligence-v2",
+    completeness: "complete",
+    completeness_reasons: [],
+    failure_code: null,
+    result: { ...fakeRepositorySnapshotFor(), routes: { mode: "app_router", truncated: false, routes: FIXTURE_ROUTES } },
+    created_at: new Date(Date.UTC(2026, 0, 1)).toISOString(),
+    completed_at: new Date(Date.UTC(2026, 0, 1)).toISOString(),
+  });
+}
+
 function seedChange(
   index: number,
-  stage: "unvalidated" | "validated" | "reviewed" | "approved",
+  stage: "unvalidated" | "validated" | "reviewed" | "approved" | "merged",
 ): string {
   const id = `prepared_${index}`;
 
@@ -73,7 +99,7 @@ function seedChange(
     operation_run_id: `run_${index}`,
     opportunity_set_id: null,
     opportunity_id: null,
-    execution_capability: "seo_foundations_v1",
+    execution_capability: "nextjs_seo_foundations_v2",
     execution_version: "1",
     repository_snapshot_id: "snapshot_1",
     base_branch: "main",
@@ -138,23 +164,87 @@ function seedChange(
     created_at: new Date(Date.UTC(2026, 0, index, 3)).toISOString(),
   });
 
+  if (stage === "approved") return id;
+
+  db.seed("change_merges", {
+    id: `merge_${index}`,
+    project_id: PROJECT,
+    user_id: USER,
+    prepared_change_id: id,
+    change_approval_id: `approval_${index}`,
+    prepared_commit_sha: COMMIT,
+    prepared_base_sha: BASE_SHA,
+    default_branch: "main",
+    merge_policy_version: "merge-policy-v1",
+    merge_strategy: "fast_forward_exact_commit",
+    merge_identity: `m${index}`.padEnd(64, "0"),
+    operation_run_id: `run_${index}`,
+    status: "merged",
+    // Read back and equal to the approved commit — the state that makes an
+    // outcome verification eligible, and therefore the state that sends the
+    // card down its most expensive branch.
+    resulting_default_head_sha: COMMIT,
+    created_at: new Date(Date.UTC(2026, 0, index, 4)).toISOString(),
+  });
+
+  /*
+   * A merged change's measurement plan.
+   *
+   * Seeded for the same reason the snapshot carries a real analyzer result: a
+   * merged change with no plan and a merged change whose plan was looked up
+   * wrongly produce the same card, so without this the plan lookup is compared
+   * against nothing.
+   */
+  db.seed("measurement_plans", {
+    id: `plan_${index}`,
+    project_id: PROJECT,
+    user_id: USER,
+    prepared_change_id: id,
+    change_merge_id: `merge_${index}`,
+    business_goal: `Grow signups for change ${index}`,
+    primary_metric: "search_impressions",
+    secondary_metrics: [],
+    metric_direction: "higher_is_better",
+    metric_category: "search_visibility",
+    compatible_source_kinds: ["search_console"],
+    baseline_days: 14,
+    measurement_days: 14,
+    settling_days: 1,
+    minimum_observations: 500,
+    measurement_profile: "seo_foundations_measurement_v1",
+    measurement_profile_version: "1",
+    measurement_policy_version: "measurement-policy-v1",
+    status: "ready",
+    unsupported_reason: null,
+    created_at: new Date(Date.UTC(2026, 0, index, 5)).toISOString(),
+    updated_at: new Date(Date.UTC(2026, 0, index, 5)).toISOString(),
+  });
+
   return id;
 }
 
 /** One project holding a change at each stage of the lifecycle. */
 function seedEveryStage(): string[] {
   seedProject();
+  seedSnapshot();
   return [
     seedChange(1, "unvalidated"),
     seedChange(2, "validated"),
     seedChange(3, "reviewed"),
     seedChange(4, "approved"),
+    // Merged changes stay `prepared`, so they stay on this screen — which
+    // makes them the shape the equivalence check most needs to cover.
+    seedChange(5, "merged"),
   ];
 }
 
-function seedIdenticalChanges(count: number) {
+function seedIdenticalChanges(
+  count: number,
+  stage: Parameters<typeof seedChange>[1] = "validated",
+) {
   seedProject();
-  for (let index = 1; index <= count; index += 1) seedChange(index, "validated");
+  seedSnapshot();
+  for (let index = 1; index <= count; index += 1) seedChange(index, stage);
 }
 
 function reset() {
@@ -179,6 +269,7 @@ describe("assembling the workspace", () => {
     const cards = await workspace();
 
     expect(cards.map((card) => card.id)).toEqual([
+      "prepared_5",
       "prepared_4",
       "prepared_3",
       "prepared_2",
@@ -203,11 +294,27 @@ describe("assembling the workspace", () => {
 });
 
 describe("what a render costs", () => {
-  async function readCount(changes: number): Promise<number> {
+  async function readCount(
+    changes: number,
+    stage: Parameters<typeof seedChange>[1] = "validated",
+  ): Promise<number> {
     reset();
-    seedIdenticalChanges(changes);
+    seedIdenticalChanges(changes, stage);
     await workspace();
     return recorder.reads.length;
+  }
+
+  async function tableCounts(
+    changes: number,
+    stage: Parameters<typeof seedChange>[1],
+  ): Promise<Record<string, number>> {
+    reset();
+    seedIdenticalChanges(changes, stage);
+    await workspace();
+
+    const counts: Record<string, number> = {};
+    for (const table of recorder.reads) counts[table] = (counts[table] ?? 0) + 1;
+    return counts;
   }
 
   it("does not grow with the number of prepared changes", async () => {
@@ -217,6 +324,41 @@ describe("what a render costs", () => {
      * changes cost what one costs.
      */
     expect(await readCount(8)).toBe(await readCount(1));
+  });
+
+  it("adds only the three named per-change reads when changes are merged", async () => {
+    /*
+     * A merged change is the expensive branch, and the one that accumulates:
+     * nothing moves a change out of `prepared`, so every change a founder has
+     * ever merged stays on this screen. The outcome and business-impact cards
+     * stop short-circuiting for it and go looking for a measurement plan, the
+     * project's public origin and the repository snapshot it was prepared
+     * against — all now read once for the list.
+     *
+     * What is left per change is deliberate, and this says exactly what:
+     *
+     *  - `change_approvals` — the standing approval for the *current artifact
+     *    identity*. Never answered from a row handed in (rules 55, 70).
+     *  - `review_artifacts` and `projects` — `getReviewImages` re-checks
+     *    ownership, the ready state and the retention deadline immediately
+     *    before it signs URLs. Ownership is the query, not a later check.
+     *
+     * A fourth entry appearing here is a fan-out that came back.
+     */
+    const one = await tableCounts(1, "merged");
+    const eight = await tableCounts(8, "merged");
+
+    const perChange: Record<string, number> = {};
+    for (const table of new Set([...Object.keys(one), ...Object.keys(eight)])) {
+      const growth = (eight[table] ?? 0) - (one[table] ?? 0);
+      if (growth !== 0) perChange[table] = growth / 7;
+    }
+
+    expect(perChange).toEqual({
+      change_approvals: 1,
+      review_artifacts: 1,
+      projects: 1,
+    });
   });
 
   it("reads each lifecycle table exactly once", async () => {

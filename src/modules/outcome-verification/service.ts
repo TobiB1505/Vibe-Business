@@ -2,8 +2,6 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { assertPrefetchedFor } from "@/lib/db/latest-per-change";
-import type { StoredPreparedChange } from "@/modules/execution/store";
-import type { ChangeMerge } from "@/modules/merge/schema";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import type { OperationExecutor } from "@/modules/operations/executor";
 import {
@@ -14,7 +12,10 @@ import {
   type StoredOperationRun,
 } from "@/modules/operations/store";
 import { buildOperationView, type OperationView } from "@/modules/operations/view";
-import { evaluateOutcomeEligibility } from "./eligibility";
+import {
+  evaluateOutcomeEligibility,
+  type PrefetchedOutcomeInputs,
+} from "./eligibility";
 import { outcomeFailureMessage } from "./messages";
 import {
   OUTCOME_EVIDENCE_SCHEMA_VERSION,
@@ -269,11 +270,7 @@ export async function getOutcomeCard(
      * (VB-023). Present means this card costs no read at all for a change that
      * was never merged, which is most of them.
      */
-    prefetched?: {
-      outcome: ChangeOutcomeVerification | null;
-      merge: ChangeMerge | null;
-      prepared: StoredPreparedChange | null;
-    };
+    prefetched?: PrefetchedOutcomeInputs & { outcome: ChangeOutcomeVerification | null };
   },
 ): Promise<OutcomeCard> {
   const [latest, eligibility] = await Promise.all([

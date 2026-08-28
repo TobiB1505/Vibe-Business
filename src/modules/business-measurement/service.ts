@@ -29,7 +29,8 @@ import {
   createMeasurementPlan,
   findMeasurementByIdentity,
   findPlanForMerge,
-  getLatestMeasurementForPlan,
+  findPlansForMerges,
+  getLatestMeasurementsForPlans,
 } from "./store";
 import { buildBusinessImpactCard, type BusinessImpactCard } from "./view";
 import { planWindows, windowHasClosed } from "./windows";
@@ -424,49 +425,110 @@ export async function getBusinessImpactCard(
         getPreparedChange(supabase, params),
       ]);
 
-  if (!merge || merge.status !== "merged" || !prepared) {
-    return buildBusinessImpactCard({
-      plan: null,
-      measurement: null,
-      sourceConnected: false,
-      merged: false,
-      resolveFailureMessage: measurementFailureMessage,
-      now: params.now ?? new Date(),
-    });
+  const cards = await getBusinessImpactCards(supabase, sources, {
+    projectId: params.projectId,
+    now: params.now,
+    changes: [{ preparedChangeId: params.preparedChangeId, merge, prepared }],
+  });
+
+  return cards.get(params.preparedChangeId) ?? unmergedBusinessImpactCard(params.now);
+}
+
+/**
+ * The card for a change nothing has merged.
+ *
+ * Exported so a caller holding no entry for a change renders the same answer
+ * this module would give, rather than an invented one.
+ */
+export function unmergedBusinessImpactCard(now?: Date): BusinessImpactCard {
+  return buildBusinessImpactCard({
+    plan: null,
+    measurement: null,
+    sourceConnected: false,
+    merged: false,
+    resolveFailureMessage: measurementFailureMessage,
+    now: now ?? new Date(),
+  });
+}
+
+/**
+ * The same card for a whole list, with the plan chain read once (VB-023).
+ *
+ * ## Why the batch lives here rather than in the caller
+ *
+ * Because the reads are a *chain* — a merge names a plan, a plan names its
+ * measurements — and only this module knows that. A caller batching it for
+ * itself would have to know the chain too, which is how a module's internals
+ * end up restated in a page.
+ *
+ * A change that was never merged costs nothing at all: it is answered before
+ * either query, which is what keeps the ordinary list cheap.
+ */
+export async function getBusinessImpactCards(
+  supabase: SupabaseClient,
+  sources: MetricSourceRegistry,
+  params: {
+    projectId: string;
+    now?: Date;
+    changes: readonly {
+      preparedChangeId: string;
+      merge: ChangeMerge | null;
+      prepared: StoredPreparedChange | null;
+    }[];
+  },
+): Promise<Map<string, BusinessImpactCard>> {
+  const cards = new Map<string, BusinessImpactCard>();
+
+  const merged = params.changes.filter(
+    (change) => change.merge?.status === "merged" && change.prepared !== null,
+  );
+
+  for (const change of params.changes) {
+    if (!merged.includes(change)) cards.set(change.preparedChangeId, unmergedBusinessImpactCard(params.now));
   }
 
-  const plan = await findPlanForMerge(supabase, {
+  if (merged.length === 0) return cards;
+
+  const plans = await findPlansForMerges(supabase, {
     projectId: params.projectId,
-    changeMergeId: merge.id,
+    changeMergeIds: merged.map((change) => change.merge?.id ?? ""),
   });
 
-  const measurement = plan
-    ? await getLatestMeasurementForPlan(supabase, {
-        projectId: params.projectId,
-        measurementPlanId: plan.id,
-      })
-    : null;
-
-  // Asks the registry whether anything is connected. Today that is a
-  // synchronous "no" with no outbound request; when a connector exists it must
-  // stay a *connection* check rather than a metric query, or opening a page
-  // would start costing analytics quota (§36, §45).
-  const sourceConnected =
-    plan !== null && plan.status === "ready"
-      ? (await resolveSourceForMetric(sources, {
-          projectId: params.projectId,
-          metricKey: plan.primaryMetric,
-        })) !== null
-      : false;
-
-  return buildBusinessImpactCard({
-    plan,
-    measurement,
-    sourceConnected,
-    merged: true,
-    resolveFailureMessage: measurementFailureMessage,
-    now: params.now ?? new Date(),
+  const measurements = await getLatestMeasurementsForPlans(supabase, {
+    projectId: params.projectId,
+    measurementPlanIds: [...plans.values()].map((plan) => plan.id),
   });
+
+  for (const change of merged) {
+    const plan = plans.get(change.merge?.id ?? "") ?? null;
+    const measurement = plan ? (measurements.get(plan.id) ?? null) : null;
+
+    // Asks the registry whether anything is connected. Today that is a
+    // synchronous "no" with no outbound request; when a connector exists it must
+    // stay a *connection* check rather than a metric query, or opening a page
+    // would start costing analytics quota (§36, §45).
+    const sourceConnected =
+      plan !== null && plan.status === "ready"
+        ? (await resolveSourceForMetric(sources, {
+            projectId: params.projectId,
+            metricKey: plan.primaryMetric,
+          })) !== null
+        : false;
+
+    cards.set(
+      change.preparedChangeId,
+      buildBusinessImpactCard({
+        plan,
+        measurement,
+        sourceConnected,
+        merged: true,
+        resolveFailureMessage: measurementFailureMessage,
+        now: params.now ?? new Date(),
+      }),
+    );
+  }
+
+  return cards;
 }
 
 export type { BusinessImpactCard };

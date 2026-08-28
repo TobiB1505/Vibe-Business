@@ -236,6 +236,36 @@ export async function findPlanForMerge(
   return data ? mapPlan(data as unknown as Row) : null;
 }
 
+/**
+ * The same lookup for a whole list, in one query (VB-023).
+ *
+ * At most one plan per merge — the unique index on `(project_id,
+ * change_merge_id)` is what makes that true — so this keys by merge id and
+ * cannot lose one to another.
+ */
+export async function findPlansForMerges(
+  supabase: SupabaseClient,
+  params: { projectId: string; changeMergeIds: readonly string[] },
+): Promise<Map<string, MeasurementPlan>> {
+  const ids = [...new Set(params.changeMergeIds)];
+  if (ids.length === 0) return new Map();
+
+  const { data, error } = await supabase
+    .from("measurement_plans")
+    .select(PLAN_COLUMNS)
+    .eq("project_id", params.projectId)
+    .in("change_merge_id", ids);
+
+  if (error) throw error;
+
+  return new Map(
+    (data ?? []).map((row) => {
+      const plan = mapPlan(row as unknown as Row);
+      return [plan.changeMergeId, plan];
+    }),
+  );
+}
+
 export async function findPlanForPreparedChange(
   supabase: SupabaseClient,
   params: { projectId: string; preparedChangeId: string },
@@ -372,6 +402,59 @@ export async function getLatestMeasurementForPlan(
 
   if (error) throw error;
   return data ? mapMeasurement(data as unknown as Row) : null;
+}
+
+/**
+ * The newest measurement for each of several plans, in one query (VB-023).
+ *
+ * Ordered newest-first and grouped here, for the same reason
+ * `readLatestPerPreparedChange` does it that way: PostgREST has no
+ * `distinct on`, and the first row seen for a plan is that plan's latest.
+ *
+ * The budget is the plan count rather than a constant, because measurements
+ * accumulate per plan over a project's life and a fixed ceiling would start
+ * hiding older plans as they do. Any plan the batch could not resolve is
+ * re-read on its own.
+ */
+export async function getLatestMeasurementsForPlans(
+  supabase: SupabaseClient,
+  params: { projectId: string; measurementPlanIds: readonly string[] },
+): Promise<Map<string, BusinessOutcomeMeasurement>> {
+  const ids = [...new Set(params.measurementPlanIds)];
+  const latest = new Map<string, BusinessOutcomeMeasurement>();
+  if (ids.length === 0) return latest;
+
+  const budget = ids.length * 10;
+
+  const { data, error } = await supabase
+    .from("business_outcome_measurements")
+    .select(MEASUREMENT_COLUMNS)
+    .eq("project_id", params.projectId)
+    .in("measurement_plan_id", ids)
+    .order("created_at", { ascending: false })
+    .limit(budget);
+
+  if (error) throw error;
+
+  const rows = data ?? [];
+  for (const row of rows) {
+    const measurement = mapMeasurement(row as unknown as Row);
+    if (!latest.has(measurement.measurementPlanId)) {
+      latest.set(measurement.measurementPlanId, measurement);
+    }
+  }
+
+  if (rows.length < budget) return latest;
+
+  for (const id of ids.filter((planId) => !latest.has(planId))) {
+    const single = await getLatestMeasurementForPlan(supabase, {
+      projectId: params.projectId,
+      measurementPlanId: id,
+    });
+    if (single) latest.set(id, single);
+  }
+
+  return latest;
 }
 
 /** The measurement a workflow step owns. Ownership comes from the operation. */
