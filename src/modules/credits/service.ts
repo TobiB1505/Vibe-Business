@@ -10,7 +10,6 @@ import {
   reconcileBalance,
   totalRefunded,
   type ActiveReservation,
-  type LedgerDelta,
   type ReleaseReason,
 } from "./balance";
 import { rateUsage, type CreditRateCard } from "./rating";
@@ -29,7 +28,7 @@ import {
   getCreditBalance,
   getReservation,
   listActiveReservations,
-  listLedgerEntries,
+  sumLedgerDeltas,
   postLedgerEntry,
   repairAccountBalance,
   type CreditAccount,
@@ -167,7 +166,18 @@ export async function reconcileAndRepairBalance(
   supabase: SupabaseClient,
   params: {
     account: CreditAccount;
-    entries: readonly LedgerDelta[];
+    /**
+     * The posted balance the **whole** ledger implies, summed in the database
+     * (VB-025).
+     *
+     * This used to be every ledger row, transferred and reduced here. The
+     * number is the same; what changed is that it no longer grows with the
+     * account. It has to stay a sum over everything: a sum over a capped read
+     * would report drift on any account with more history than the cap, and a
+     * false drift is not cosmetic — with `BILLING_REPAIR_ENABLED` it triggers
+     * a repair.
+     */
+    postedFromLedger: CreditUnits;
     reservations: readonly ActiveReservation[];
     userId: string;
   },
@@ -177,7 +187,7 @@ export async function reconcileAndRepairBalance(
   const reconcile = () =>
     reconcileBalance(
       { posted: account.postedCredits, reserved: account.reservedCredits },
-      params.entries,
+      params.postedFromLedger,
       params.reservations,
     );
 
@@ -275,14 +285,14 @@ export async function getBillingBalance(
   const initialAccount = await findCreditAccountByUser(supabase, userId);
   if (!initialAccount) return null;
 
-  const [entries, reservations] = await Promise.all([
-    listLedgerEntries(supabase, initialAccount.id),
+  const [postedFromLedger, reservations] = await Promise.all([
+    sumLedgerDeltas(supabase, initialAccount.id),
     listActiveReservations(supabase, initialAccount.id),
   ]);
 
   const { account, consistent } = await reconcileAndRepairBalance(supabase, {
     account: initialAccount,
-    entries: entries.map((entry) => ({ kind: entry.kind, creditDelta: entry.creditDelta })),
+    postedFromLedger,
     reservations: reservations.map((reservation) => ({ reservedCredits: reservation.reservedCredits })),
     userId,
   });

@@ -13,7 +13,12 @@ import { findOrphanedHolds } from "@/modules/credits/orphaned-holds";
 import { listOperationRunsByIds } from "@/modules/operations/store";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import { alertOperator } from "@/lib/observability/alert";
-import { findCreditAccountByUser, listActiveReservations, listLedgerEntries } from "@/modules/credits/store";
+import {
+  findCreditAccountByUser,
+  listActiveReservations,
+  listLedgerEntries,
+  sumLedgerDeltas,
+} from "@/modules/credits/store";
 import { formatCreditsForDisplay, type CreditUnits, ZERO_CREDITS } from "@/modules/credits/units";
 import { welcomeGrantIdempotencyKey, type PlanKey } from "./catalog";
 import { findActiveSubscription } from "./store";
@@ -170,9 +175,14 @@ export async function getBillingOverview(
     };
   }
 
-  const [lots, entries, expiry, reservations] = await Promise.all([
+  const [lots, entries, postedFromLedger, expiry, reservations] = await Promise.all([
     listActiveLots(supabase, account.id),
+    // What the page *shows*: the most recent movements, capped (VB-025).
     listLedgerEntries(supabase, account.id),
+    // What reconciliation *needs*: one number over the whole ledger. Two reads
+    // now, because they were always two questions — and asking both of them
+    // with one unbounded transfer is what made this page degrade with age.
+    sumLedgerDeltas(supabase, account.id),
     findNextExpiry(supabase, account.id, now),
     listActiveReservations(supabase, account.id),
   ]);
@@ -197,7 +207,7 @@ export async function getBillingOverview(
     reconcileAndRepairLotAllocations(supabase, { lots, allocationsByGrant, userId: params.userId }),
     reconcileAndRepairBalance(supabase, {
       account,
-      entries: entries.map((entry) => ({ kind: entry.kind, creditDelta: entry.creditDelta })),
+      postedFromLedger,
       reservations: reservations.map((reservation) => ({ reservedCredits: reservation.reservedCredits })),
       userId: params.userId,
     }),

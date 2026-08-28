@@ -1357,7 +1357,22 @@ function fakeRepairLotAllocation(db: FakeDatabase, grantId: unknown): QueryError
   return null;
 }
 
-const FAKE_RPC_HANDLERS: Record<string, (db: FakeDatabase, params: Record<string, unknown>) => QueryError> = {
+/**
+ * What a fake RPC answers.
+ *
+ * Every handler until VB-025 was a *procedure* — it mutated the fake database
+ * and returned only an error or `null`, so the double could model
+ * `rpc(...)` returning nothing. `sum_ledger_deltas` is the first that has an
+ * answer, and a double that could only say `null` would have let the caller's
+ * reconciliation read a zero balance in every test.
+ */
+type FakeRpcResult = QueryError | { data: unknown };
+
+function isRpcData(result: FakeRpcResult): result is { data: unknown } {
+  return result !== null && typeof result === "object" && "data" in result;
+}
+
+const FAKE_RPC_HANDLERS: Record<string, (db: FakeDatabase, params: Record<string, unknown>) => FakeRpcResult> = {
   /**
    * ADR 0056 §8's scrub, modelled only as far as the orchestrator is
    * responsible for it.
@@ -1465,6 +1480,21 @@ const FAKE_RPC_HANDLERS: Record<string, (db: FakeDatabase, params: Record<string
     fakeMaterializeAllocationCapacity(db, params.p_allocation_id),
   repair_account_balance: (db, params) => fakeRepairAccountBalance(db, params.p_account_id),
   repair_lot_allocation: (db, params) => fakeRepairLotAllocation(db, params.p_grant_id),
+
+  /**
+   * `sum_ledger_deltas` (VB-025).
+   *
+   * The one handler that answers rather than acts. Modelled as the migration
+   * defines it — a plain sum over the account's entries, zero when it has
+   * none — so a test asserting reconciliation is asserting the same arithmetic
+   * production does.
+   */
+  sum_ledger_deltas: (db, params) => ({
+    data: db
+      .rows("billing_credit_ledger")
+      .filter((row) => row.credit_account_id === params.p_credit_account_id)
+      .reduce((total, row) => total + Number(row.credit_delta ?? 0), 0),
+  }),
 };
 
 /**
@@ -1515,14 +1545,16 @@ export function fakeSupabase(db: FakeDatabase, recorder?: QueryRecorder): Supaba
       };
     },
     rpc(name: string, params?: Record<string, unknown>) {
+      recorder?.reads.push(`rpc:${name}`);
       const handler = FAKE_RPC_HANDLERS[name];
-      const run = async (): Promise<{ data: null; error: QueryError }> => {
+      const run = async (): Promise<{ data: unknown; error: QueryError }> => {
         if (!handler) return { data: null, error: { message: `fakeSupabase: unknown rpc "${name}"` } };
-        const error = handler(db, params ?? {});
-        return { data: null, error };
+        const result = handler(db, params ?? {});
+        if (isRpcData(result)) return { data: result.data, error: null };
+        return { data: null, error: result };
       };
       return {
-        then: (onfulfilled?: (value: { data: null; error: QueryError }) => unknown, onrejected?: (reason: unknown) => unknown) =>
+        then: (onfulfilled?: (value: { data: unknown; error: QueryError }) => unknown, onrejected?: (reason: unknown) => unknown) =>
           run().then(onfulfilled, onrejected),
       };
     },

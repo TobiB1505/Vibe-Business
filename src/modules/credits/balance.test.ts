@@ -267,10 +267,18 @@ describe("materialized balance reconciliation", () => {
   const entries = [grant(1000), charge(450)];
   const reservations = [{ reservedCredits: creditsToUnits(100) }];
 
+  /*
+   * The sum moved to the database in VB-025, so `reconcileBalance` is handed a
+   * number rather than the entries. `postedBalance` is still the definition of
+   * how that number is reached — it is asserted directly above — and composing
+   * the two here keeps this describing the same arithmetic it always did.
+   */
+  const posted = postedBalance(entries);
+
   it("agrees when the cache is correct", () => {
     const result = reconcileBalance(
       { posted: creditsToUnits(550), reserved: creditsToUnits(100) },
-      entries,
+      posted,
       reservations,
     );
     expect(result.consistent).toBe(true);
@@ -280,7 +288,7 @@ describe("materialized balance reconciliation", () => {
   it("reports the exact drift when the cache is wrong", () => {
     const result = reconcileBalance(
       { posted: creditsToUnits(600), reserved: creditsToUnits(100) },
-      entries,
+      posted,
       reservations,
     );
     expect(result.consistent).toBe(false);
