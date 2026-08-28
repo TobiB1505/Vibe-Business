@@ -223,7 +223,10 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
       .filter((path) => (writtenAt.get(`${prefix}${path}`) ?? 0) > since)
       .sort();
 
-    return matched.length === 0 ? "" : `${matched.join("\n")}\n`;
+    // NUL-delimited, matching what `find -printf '%P\0'` emits and what
+    // `parsePaths` splits on (VB-029). A newline is a legal character in a
+    // filename, so it was never a safe delimiter.
+    return matched.map((path) => `${path}\0`).join("");
   }
 
   const handle: SandboxHandle = {
