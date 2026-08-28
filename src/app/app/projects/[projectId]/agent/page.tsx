@@ -32,6 +32,7 @@ import { AgentTaskPanel } from "./agent-task-panel";
 import { Surface } from "@/components/ui/surface";
 import { AgentActivity } from "./agent-activity";
 import { AgentValidationChecks } from "./agent-validation-checks";
+import { AgentValidateAction } from "./agent-validate-action";
 import { AgentReadyFacts } from "./agent-start-cta";
 import { AgentQuestionPanel } from "./agent-question-panel";
 import { FounderInputCard } from "@/components/founder-input/founder-input-card";
@@ -293,13 +294,20 @@ export default async function ProjectAgentPage({
             {shown === "validate" ? (
               <div className="flex min-w-0 flex-col gap-5">
                 <AgentValidationChecks checks={workspace.checks} />
-                {/* The one control this stage owns: run the checks again. */}
+                {/*
+                  The stage owns its own control now. It used to render these
+                  rows and then mount the old validation panel underneath,
+                  which said the same thing again and held the only button —
+                  a founder saw their checks twice and had to scroll past the
+                  new card to act on it.
+                */}
                 {change !== null && (
-                  <ChangeGates
+                  <AgentValidateAction
                     projectId={project.id}
-                    change={change}
-                    planHref={planHref}
-                    stage="validate"
+                    preparedChangeId={change.id}
+                    label={
+                      change.validation === null ? "Run the checks" : "Validate again"
+                    }
                   />
                 )}
               </div>

@@ -15,6 +15,12 @@ import type { StoredExecutionEvent } from "@/modules/coding-agent/observability/
  * it touch", so the rail switches to the event log itself: what Vibe did, when
  * it did it, and the path it did it to.
  *
+ * ## Everything Vibe did, not only what it wrote
+ *
+ * The whole event stream: the files it read and changed, the commands it ran,
+ * the milestones it passed. An earlier build filtered to events naming a file
+ * and showed four writes as if that were the activity.
+ *
  * ## Every line is Vibe's own sentence
  *
  * `summary` is composed by Vibe from a closed vocabulary and never by a model,
@@ -45,7 +51,7 @@ function clockOf(occurredAt: string): string | null {
 export function AgentFileActivity({
   events,
   /** How many to show. The rest stay behind the count line. */
-  limit = 5,
+  limit = 6,
 }: {
   events: readonly StoredExecutionEvent[];
   limit?: number;
@@ -130,9 +136,50 @@ export function AgentFileActivity({
       </ul>
 
       {remaining > 0 && (
-        <p className="text-fg-muted border-line-2 border-t pt-3.5 text-[0.8125rem]">
-          + {remaining} more {remaining === 1 ? "change" : "changes"}
-        </p>
+        /*
+          A disclosure, not a sentence. "+ 10 more changes" was a count that
+          did nothing — a founder reads it as an offer and gets no way to take
+          it. Every event is here; the list simply opens.
+        */
+        <details className="group border-line-2 border-t pt-3.5">
+          <summary className="text-fg-muted hover:text-fg-body marker:content-none flex cursor-pointer items-center gap-2 text-[0.8125rem]">
+            <span className="text-fg-meta transition-transform group-open:rotate-90">›</span>
+            <span className="group-open:hidden">
+              Show {remaining} more {remaining === 1 ? "change" : "changes"}
+            </span>
+            <span className="hidden group-open:inline">Show fewer</span>
+          </summary>
+
+          <ul className="mt-4 flex flex-col gap-4">
+            {events
+              .slice(0, events.length - shown.length)
+              .reverse()
+              .map((event) => {
+                const path = pathOf(event);
+                const clock = clockOf(event.occurredAt);
+                return (
+                  <li key={event.sequence} className="flex gap-3.5">
+                    <span className="w-[18px] flex-none" aria-hidden="true" />
+                    <span className="flex min-w-0 flex-1 flex-col gap-1.5">
+                      <span className="flex items-baseline justify-between gap-3">
+                        <span className="text-fg-body text-sm font-medium">{event.summary}</span>
+                        {clock !== null && (
+                          <span className="text-fg-meta flex-none font-mono text-[0.6875rem]">
+                            {clock}
+                          </span>
+                        )}
+                      </span>
+                      {path !== null && (
+                        <span className="border-line-2 bg-well text-fg-prose self-start rounded-full border px-2.5 py-0.5 font-mono text-[0.6875rem]">
+                          {path}
+                        </span>
+                      )}
+                    </span>
+                  </li>
+                );
+              })}
+          </ul>
+        </details>
       )}
     </section>
   );

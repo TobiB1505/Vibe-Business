@@ -120,7 +120,7 @@ export async function readAgentWorkspace(
     const stages = agentStageSteps({ timeline: null, runStatus: null, changeProgress: null });
     return {
       stages,
-      core: agentCoreState(stages),
+      core: agentCoreState(stages, false),
       timeline: null,
       change: null,
       task: null,
@@ -199,7 +199,22 @@ export async function readAgentWorkspace(
    * screen naming the wrong task is worse than one naming none. Every lookup
    * below returns null rather than a fallback for the same reason.
    */
-  let task = await resolveTask(supabase, { projectId, runView });
+  /*
+   * The task and the open question are independent, and both are independent of
+   * the change lookup above. Sequenced, they were the slowest part of a page
+   * that a founder reloads while waiting for a run.
+   */
+  const [resolvedTask, founderInput] = await Promise.all([
+    resolveTask(supabase, { projectId, runView }),
+    interrupt
+      ? getFounderInputRequestForInterrupt(supabase, {
+          projectId,
+          executionInterruptId: interrupt.id,
+        })
+      : Promise.resolve(null),
+  ]);
+
+  let task = resolvedTask;
 
   /*
    * The change's own stored origin, when the Move it came from is no longer in
@@ -231,31 +246,35 @@ export async function readAgentWorkspace(
   });
 
   /*
-   * Only asked for once a question exists, so an ordinary run pays nothing for
-   * a lookup that can only return null.
-   */
-  const founderInput = interrupt
-    ? await getFounderInputRequestForInterrupt(supabase, {
-        projectId,
-        executionInterruptId: interrupt.id,
-      })
-    : null;
-
-  /*
    * The stage a body is drawn for. `active` rather than "the furthest done",
    * because a paused or failed run must not be shown the body of a stage it
    * never reached.
    */
   const stage = stages.find((step) => step.state === "active")?.stage ?? null;
 
-  /* Only events that actually named a file belong in the validating record. */
-  const fileEvents = events.filter(
-    (event) => typeof event.metadata.path === "string" || typeof event.metadata.file === "string",
-  );
+  /*
+   * Every event, not only the ones naming a file.
+   *
+   * The first build filtered to path-bearing events, which threw away most of
+   * what Vibe actually did — the commands it ran, the searches it made, the
+   * milestones it passed. "Vibe activity" then showed four file writes and
+   * called that the activity.
+   *
+   * The audience split says `internal` events are the per-file, per-command
+   * detail that makes a run diagnosable, and this is the screen where a founder
+   * watches it happen. Secrets are stripped from every stored event by the
+   * redaction layer, and every summary is Vibe-authored from a closed
+   * vocabulary — there is no model narration in here to leak.
+   */
+  const fileEvents = events;
+
+  /* Only a live operation makes the orb move. A finished run whose change is
+     waiting on a founder is not Vibe working. */
+  const running = operation.status === "queued" || operation.status === "running";
 
   return {
     stages,
-    core: agentCoreState(stages),
+    core: agentCoreState(stages, running),
     timeline,
     change,
     task,
@@ -294,7 +313,14 @@ async function resolveTask(
   const spec = await getExecutionSpecById(supabase, { projectId: params.projectId, specId });
   if (!spec) return null;
 
-  const opportunities = await getLatestOpportunities(supabase, params.projectId);
+  /*
+   * Together, because neither answers the other. Read one after the other they
+   * were two more round-trips on a page that had already grown six.
+   */
+  const [opportunities, plan] = await Promise.all([
+    getLatestOpportunities(supabase, params.projectId),
+    getLatestActionPlan(supabase, params.projectId),
+  ]);
   const move = opportunities?.set.opportunities.find((entry) => entry.id === spec.opportunityId);
   /*
    * The Move is gone from the current set — regenerated, most likely. The run
@@ -304,7 +330,6 @@ async function resolveTask(
    */
   if (!move) return null;
 
-  const plan = await getLatestActionPlan(supabase, params.projectId);
   /*
    * Only this run's own plan. `getLatestActionPlan` answers "the newest", which
    * is a different question: a plan regenerated after the run started would

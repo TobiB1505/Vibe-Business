@@ -343,10 +343,20 @@ function detailFor(
  */
 export type AgentCoreState = "idle" | "working" | "waiting" | "settled";
 
-export function agentCoreState(steps: readonly AgentStageStep[]): AgentCoreState {
+export function agentCoreState(
+  steps: readonly AgentStageStep[],
+  /**
+   * Whether the agent itself is executing right now.
+   *
+   * Without this the core breathed whenever *any* stage was active — including
+   * Preview, which is a founder deciding and a run that finished minutes ago.
+   * The orb is a picture of Vibe working; it must not move while nothing is.
+   */
+  running = true,
+): AgentCoreState {
   // Checked before `working`: a paused run has an amber hold, not a breath.
   if (steps.some((step) => step.state === "paused")) return "waiting";
-  if (steps.some((step) => step.state === "active")) return "working";
+  if (running && steps.some((step) => step.state === "active")) return "working";
   const untouched = steps.every((step) => step.state === "pending");
   return untouched ? "idle" : "settled";
 }
