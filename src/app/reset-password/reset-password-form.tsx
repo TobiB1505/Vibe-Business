@@ -25,7 +25,7 @@ export function ResetPasswordForm() {
   return (
     <VibeCard padding="md">
       <form action={formAction} className="flex flex-col gap-4">
-        <Field id="password" label="New password" hint="At least 6 characters">
+        <Field id="password" label="New password" hint="At least 8 characters">
           <Input
             id="password"
             name="password"

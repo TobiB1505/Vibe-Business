@@ -12,6 +12,21 @@ import {
 } from "@/modules/auth/errors";
 import { DEFAULT_POST_AUTH_PATH, sanitizeNextPath } from "@/modules/auth/redirects";
 
+/**
+ * The shortest password Vibe accepts (VB-037).
+ *
+ * Supabase's own default is six, and six has been the industry's "technically
+ * a policy" number since it stopped meaning anything. Eight is where current
+ * guidance starts.
+ *
+ * Enforced here, in Vibe's own code, on both the sign-up and the reset path —
+ * so the two forms can state the same number and both be true. The Supabase
+ * dashboard's `Auth → Password minimum length` should be raised to match; that
+ * makes it a second, independent refusal rather than the only one, which is
+ * the right relationship between an application rule and a provider setting.
+ */
+const MINIMUM_PASSWORD_LENGTH = 8;
+
 function parseCredentials(formData: FormData): { email: string; password: string } | null {
   const email = formData.get("email");
   const password = formData.get("password");
@@ -120,6 +135,16 @@ export async function signUp(
 
   if (!credentials) {
     return { ok: false, error: "Enter your email and password." };
+  }
+
+  // Refused here rather than left to Supabase (VB-037). The provider's minimum
+  // is a dashboard setting, so relying on it alone would make this product's
+  // password rule something no reader of this repository could determine.
+  if (credentials.password.length < MINIMUM_PASSWORD_LENGTH) {
+    return {
+      ok: false,
+      error: `Choose a password with at least ${MINIMUM_PASSWORD_LENGTH} characters.`,
+    };
   }
 
   const origin = await requestOrigin();
@@ -250,8 +275,11 @@ export async function updatePassword(
   const password = formData.get("password");
   const confirmation = formData.get("password_confirmation");
 
-  if (typeof password !== "string" || password.length < 6) {
-    return { ok: false, error: "Choose a password with at least 6 characters." };
+  if (typeof password !== "string" || password.length < MINIMUM_PASSWORD_LENGTH) {
+    return {
+      ok: false,
+      error: `Choose a password with at least ${MINIMUM_PASSWORD_LENGTH} characters.`,
+    };
   }
   if (typeof confirmation === "string" && confirmation !== password) {
     return { ok: false, error: "Both passwords need to match." };

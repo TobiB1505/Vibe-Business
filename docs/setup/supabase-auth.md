@@ -75,6 +75,18 @@ including redirects. Do not remove that.
 Cloud (next section). The provider page shows a **Callback URL**; that is the
 URL Google needs, and it is *not* one of Vibe's routes.
 
+### Authentication → Passwords
+
+- **Minimum password length**: **8**, matching `MINIMUM_PASSWORD_LENGTH` in
+  `src/modules/auth/actions.ts` (VB-037). Vibe refuses anything shorter on both
+  the sign-up and the reset path before Supabase is asked, so this setting is a
+  second, independent refusal rather than the only one — which is the right
+  relationship between an application rule and a provider setting. Supabase's
+  own default is 6.
+- **Leaked password protection**: **on**. It checks candidate passwords against
+  HaveIBeenPwned. Off, this is the one remaining `WARN` in
+  `get_advisors --type security`.
+
 ### Authentication → URL Configuration
 
 - **Site URL**: the production custom domain (e.g. `https://vibebusiness.de`)
