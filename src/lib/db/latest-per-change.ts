@@ -61,28 +61,31 @@ export const LATEST_PER_CHANGE_ROW_BUDGET = 200;
 
 type Row = Record<string, unknown>;
 
-export type LatestPerChangeQuery = {
+export type LatestPerGroupQuery = {
   table: string;
   columns: string;
-  projectId: string;
-  preparedChangeIds: readonly string[];
+  /** The column the rows are grouped by — `prepared_change_id`, `project_id`. */
+  groupColumn: string;
+  groupIds: readonly string[];
+  /** Equality filters every row must satisfy, e.g. `{ status: "completed" }`. */
+  filters?: Readonly<Record<string, string>>;
   /** Overridable so the truncation path is reachable in a test. */
   rowBudget?: number;
 };
 
 /**
- * `Map` from prepared change id to its newest row. Ids with no row are absent
+ * `Map` from group id to that group's newest row. Ids with no row are absent
  * rather than present-and-null, so `.get(id) ?? null` reads the same as the
  * `maybeSingle()` it replaces.
  *
  * Ties on `created_at` resolve arbitrarily — as they always did, because the
- * per-change query this replaces had exactly the same ambiguity.
+ * per-group query this replaces had exactly the same ambiguity.
  */
-export async function readLatestPerPreparedChange(
+export async function readLatestPerGroup(
   supabase: SupabaseClient,
-  query: LatestPerChangeQuery,
+  query: LatestPerGroupQuery,
 ): Promise<Map<string, Row>> {
-  const ids = [...new Set(query.preparedChangeIds)];
+  const ids = [...new Set(query.groupIds)];
   const latest = new Map<string, Row>();
 
   // No ids is not an empty query — it is no query. PostgREST would happily run
@@ -91,12 +94,16 @@ export async function readLatestPerPreparedChange(
   if (ids.length === 0) return latest;
 
   const budget = query.rowBudget ?? LATEST_PER_CHANGE_ROW_BUDGET;
+  const filters = Object.entries(query.filters ?? {});
 
-  const { data, error } = await supabase
-    .from(query.table)
-    .select(query.columns)
-    .eq("project_id", query.projectId)
-    .in("prepared_change_id", ids)
+  const scoped = () => {
+    let builder = supabase.from(query.table).select(query.columns);
+    for (const [column, value] of filters) builder = builder.eq(column, value);
+    return builder;
+  };
+
+  const { data, error } = await scoped()
+    .in(query.groupColumn, ids)
     .order("created_at", { ascending: false })
     .limit(budget);
 
@@ -104,9 +111,9 @@ export async function readLatestPerPreparedChange(
 
   const rows = (data ?? []) as unknown as Row[];
   for (const row of rows) {
-    const changeId = String(row.prepared_change_id ?? "");
-    // Newest-first, so the first row seen for a change is that change's latest.
-    if (changeId && !latest.has(changeId)) latest.set(changeId, row);
+    const groupId = String(row[query.groupColumn] ?? "");
+    // Newest-first, so the first row seen for a group is that group's latest.
+    if (groupId && !latest.has(groupId)) latest.set(groupId, row);
   }
 
   // Short of the budget means every matching row was seen, so an id with no
@@ -116,11 +123,8 @@ export async function readLatestPerPreparedChange(
   const unresolved = ids.filter((id) => !latest.has(id));
 
   const recovered = await mapWithConcurrency(unresolved, PER_CHANGE_CONCURRENCY, async (id) => {
-    const single = await supabase
-      .from(query.table)
-      .select(query.columns)
-      .eq("project_id", query.projectId)
-      .eq("prepared_change_id", id)
+    const single = await scoped()
+      .eq(query.groupColumn, id)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
@@ -132,6 +136,34 @@ export async function readLatestPerPreparedChange(
   for (const [id, row] of recovered) if (row) latest.set(id, row);
 
   return latest;
+}
+
+/**
+ * The prepared-change case, which is where this shape started (VB-023).
+ *
+ * Kept as its own name because six stores read it that way and the extra
+ * argument would say nothing at those call sites: a store that only ever asks
+ * about one project's prepared changes should not have to name both columns
+ * every time.
+ */
+export async function readLatestPerPreparedChange(
+  supabase: SupabaseClient,
+  query: {
+    table: string;
+    columns: string;
+    projectId: string;
+    preparedChangeIds: readonly string[];
+    rowBudget?: number;
+  },
+): Promise<Map<string, Row>> {
+  return readLatestPerGroup(supabase, {
+    table: query.table,
+    columns: query.columns,
+    groupColumn: "prepared_change_id",
+    groupIds: query.preparedChangeIds,
+    filters: { project_id: query.projectId },
+    rowBudget: query.rowBudget,
+  });
 }
 
 /**
