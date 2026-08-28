@@ -1,4 +1,7 @@
+import { Suspense } from "react";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { WorkspaceSection, projectSectionHref } from "@/components/layout/project-shell";
+import { SkeletonSection } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/ui/states";
 import {
   PLAN_OPPORTUNITY_PARAM,
@@ -10,6 +13,7 @@ import {
   getLatestFailedPreparationFor,
   getOpportunityExecutionSummaries,
 } from "@/modules/execution/service";
+import { countPreparedChangesForProject } from "@/modules/execution/store";
 import { buildOpportunityActionState } from "@/modules/execution/view";
 import { getPreparedChangeWorkspace } from "@/modules/execution/workspace";
 import { getLatestOpportunities } from "@/modules/opportunities/service";
@@ -39,14 +43,28 @@ import { PreparedChangesSection, type PreparedChangeCard } from "../prepared-cha
  * ## The expensive route, and the only one that should be
  *
  * This is where the prepared-change workspace read model is called, and it is
- * the reason UI-2 Part 1 extracted it. Per change it reads validation, preview,
- * review, approval, outcome and business impact; for an approved change it
- * additionally spends up to four read-only GitHub calls; for a ready review it
- * signs image URLs; for a running preview it asks the sandbox provider for an
- * origin.
+ * the reason UI-2 Part 1 extracted it. It reads the lifecycle tables once for
+ * the whole list; for an approved change it additionally spends up to four
+ * read-only GitHub calls; for a ready review it signs image URLs; for a running
+ * preview it asks the sandbox provider for an origin.
  *
  * That cost is legitimate *here*, because this is the screen that shows all of
  * it. Before the split, every other section paid it too.
+ *
+ * ## Why the changes stream (VB-023)
+ *
+ * Because the remaining cost is a *GitHub* cost, and nothing above it depends
+ * on GitHub. The panel that says what Vibe's engineer knows about this business
+ * is built from three single-row reads; before this, it waited behind a merge
+ * preflight that could spend four network round trips per approved change.
+ *
+ * So the panel renders from the cheap reads and the prepared changes arrive
+ * inside a `<Suspense>` boundary. `loading.tsx` still covers the navigation
+ * itself; this covers the part of the page that is slow for a reason the rest
+ * of the page does not share.
+ *
+ * The count in the panel above is a `head`-only query — no rows — so the
+ * sentence "three changes are below" can be true before the three exist.
  *
  * ## The Move a founder arrived with (UI-S3 §3)
  *
@@ -85,12 +103,8 @@ export default async function ProjectAgentPage({
     resolvedSearchParams[PLAN_OPPORTUNITY_PARAM],
   );
 
-  const [changes, profile, repositorySnapshot, opportunities] = await Promise.all([
-    getPreparedChangeWorkspace(supabase, {
-      projectId,
-      userId,
-      repositoryFullName: project.repository?.fullName ?? null,
-    }) as Promise<PreparedChangeCard[]>,
+  const [preparedCount, profile, repositorySnapshot, opportunities] = await Promise.all([
+    countPreparedChangesForProject(supabase, projectId),
     getLatestProfile(supabase, projectId),
     getLatestSuccessfulSnapshot(supabase, projectId),
     getLatestOpportunities(supabase, projectId),
@@ -171,26 +185,74 @@ export default async function ProjectAgentPage({
         <AgentPanel
           context={context}
           focus={focus}
-          preparedCount={changes.length}
+          preparedCount={preparedCount}
           planHref={projectSectionHref(project.id, "action-plan")}
           agentHref={projectSectionHref(project.id, "agent")}
           productHref={projectSectionHref(project.id, "my-product")}
           executionHref={executionHref}
         />
 
-        {changes.length > 0 ? (
-          <PreparedChangesSection
-            projectId={project.id}
-            changes={changes}
-            planHref={projectSectionHref(project.id, "action-plan")}
-          />
+        {preparedCount > 0 ? (
+          <Suspense fallback={<SkeletonSection />}>
+            <PreparedChanges
+              supabase={supabase}
+              projectId={project.id}
+              userId={userId}
+              repositoryFullName={project.repository?.fullName ?? null}
+            />
+          </Suspense>
         ) : (
-          <EmptyState
-            title="Nothing prepared yet"
-            description="When you let Vibe act on one of your next moves, the prepared change appears here with its validation, preview, review and approval state."
-          />
+          <NothingPrepared />
         )}
       </div>
     </WorkspaceSection>
+  );
+}
+
+/**
+ * The prepared changes, assembled behind the `<Suspense>` boundary above.
+ *
+ * A separate component only so the boundary has something to suspend on: an
+ * `await` in the page body would block the whole page again, however it were
+ * written. Nothing here decides anything — the read model does, exactly as it
+ * did when the page awaited it directly.
+ */
+async function PreparedChanges({
+  supabase,
+  projectId,
+  userId,
+  repositoryFullName,
+}: {
+  supabase: SupabaseClient;
+  projectId: string;
+  userId: string;
+  repositoryFullName: string | null;
+}) {
+  const changes = (await getPreparedChangeWorkspace(supabase, {
+    projectId,
+    userId,
+    repositoryFullName,
+  })) as PreparedChangeCard[];
+
+  // The count above and this list are two reads of the same table moments
+  // apart, so they can disagree — a change discarded in between. The list is
+  // the one that saw the rows, so it decides what is shown.
+  if (changes.length === 0) return <NothingPrepared />;
+
+  return (
+    <PreparedChangesSection
+      projectId={projectId}
+      changes={changes}
+      planHref={projectSectionHref(projectId, "action-plan")}
+    />
+  );
+}
+
+function NothingPrepared() {
+  return (
+    <EmptyState
+      title="Nothing prepared yet"
+      description="When you let Vibe act on one of your next moves, the prepared change appears here with its validation, preview, review and approval state."
+    />
   );
 }
