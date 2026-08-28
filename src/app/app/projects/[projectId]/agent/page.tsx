@@ -21,7 +21,7 @@ import { buildAgentFocus } from "@/modules/projects/agent-focus";
 import { getLatestProfile } from "@/modules/product-understanding/store";
 import { buildAgentContext } from "@/modules/projects/command-center";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
-import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
+import { hasSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import { AgentPanel } from "../agent-panel";
 import { PreparedChangesSection, type PreparedChangeCard } from "../prepared-changes-section";
 
@@ -106,7 +106,8 @@ export default async function ProjectAgentPage({
   const [preparedCount, profile, repositorySnapshot, opportunities] = await Promise.all([
     countPreparedChangesForProject(supabase, projectId),
     getLatestProfile(supabase, projectId),
-    getLatestSuccessfulSnapshot(supabase, projectId),
+    // Existence only — the analyzer document is not rendered here (VB-022).
+    hasSuccessfulSnapshot(supabase, projectId),
     getLatestOpportunities(supabase, projectId),
   ]);
 
@@ -162,7 +163,7 @@ export default async function ProjectAgentPage({
     hasProductUnderstanding: profile !== null,
     // Connected *and* read. A repository Vibe has never analyzed is not code
     // it can work from.
-    hasRepositoryUnderstanding: project.repository !== null && Boolean(repositorySnapshot?.result),
+    hasRepositoryUnderstanding: project.repository !== null && repositorySnapshot,
     hasBusinessGoals: (opportunities?.set.opportunities.length ?? 0) > 0,
   });
 

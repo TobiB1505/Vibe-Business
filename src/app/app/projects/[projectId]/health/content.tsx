@@ -4,6 +4,7 @@ import {
   getAuditAccessStatus,
   getAuditCurrency,
   getAuditReadiness,
+  readAuditEvidence,
   type AuditPrerequisite,
 } from "@/modules/business-audit/service";
 import {
@@ -11,7 +12,6 @@ import {
   resolveAuditCreditGate,
 } from "@/modules/business-audit/entitlement";
 import {
-  getLatestSuccessfulAudit,
   getPausedAudit,
   getProjectAuditReadings,
 } from "@/modules/business-audit/store";
@@ -24,14 +24,12 @@ import {
 } from "@/modules/authenticated-product-intelligence/store";
 import { detectAuthenticatedSurfaces } from "@/modules/authenticated-product-intelligence/surface-detection";
 import { buildDeepScanViewModel } from "@/modules/authenticated-product-intelligence/view";
-import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intelligence/store";
 import { getActiveBusinessAuditOperation } from "@/modules/operations/service";
 import { movesPerConclusion, resolveMoveLineage } from "@/modules/opportunities/lineage";
 import { getLatestOpportunities } from "@/modules/opportunities/service";
 import { buildBusinessBrainView } from "@/modules/projects/business-brain-view";
 
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
-import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import { AuditCreditNotice } from "../audit-credit-notice";
 import { AuditEvidenceNotice } from "../audit-evidence-notice";
 import { AuditOverview } from "../audit-overview";
@@ -83,12 +81,26 @@ export async function ProjectBusinessHealth({ access }: { access: ProjectAccess 
   const { supabase, userId, project } = access;
   const projectId = project.id;
 
+  /*
+   * The evidence every read model below shares, fetched once (VB-022).
+   *
+   * The audit document, the repository snapshot, the live snapshot, the
+   * authenticated snapshot, the product profile and the founder intent were
+   * each fetched by this page *and* re-fetched inside `getAuditCurrency`,
+   * `getAuditReadiness` and the profile-currency check within it — measured at
+   * four fetches of the repository snapshot and four of the live snapshot per
+   * render of the most-visited route in the product, on documents that are
+   * hundreds of kilobytes of JSONB.
+   *
+   * Genuinely first, so it is awaited before the wave rather than inside it.
+   * One extra round trip's worth of latency buys back eight.
+   */
+  const evidence = await readAuditEvidence(supabase, projectId);
+  const { latestAudit, repository: latestSnapshot, live: latestLiveSnapshot } = evidence;
+
   const [
-    latestAudit,
     auditCurrency,
     activeAuditOperation,
-    latestSnapshot,
-    latestLiveSnapshot,
     auditReadiness,
     auditAccess,
     deepScanAccess,
@@ -98,14 +110,11 @@ export async function ProjectBusinessHealth({ access }: { access: ProjectAccess 
     pausedAudit,
     auditReadings,
   ] = await Promise.all([
-    getLatestSuccessfulAudit(supabase, projectId),
-    getAuditCurrency(supabase, projectId),
+    getAuditCurrency(supabase, projectId, evidence),
     // Discovered on the server so returning here shows a running audit rather
     // than an inviting button (Sprint 7 §19).
     getActiveBusinessAuditOperation(supabase, projectId),
-    getLatestSuccessfulSnapshot(supabase, projectId),
-    getLatestSuccessfulLiveSnapshot(supabase, projectId),
-    getAuditReadiness(supabase, projectId),
+    getAuditReadiness(supabase, projectId, evidence),
     getAuditAccessStatus(supabase, { projectId, userId }),
     getDeepScanAccessStatus(supabase, { projectId, userId }),
     getLatestSuccessfulAuthenticatedSnapshot(supabase, projectId),

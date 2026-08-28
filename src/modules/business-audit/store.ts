@@ -250,6 +250,41 @@ async function getLatestSuccessfulAuditUncached(
 
 export const getLatestSuccessfulAudit = cache(getLatestSuccessfulAuditUncached);
 
+/**
+ * When the latest completed audit happened, without reading it (VB-022).
+ *
+ * Onboarding asks two questions of the audit — does one exist, and when — and
+ * paid for the whole scored document to answer them, on a route that is polled
+ * while an audit runs.
+ *
+ * `status = 'completed'` is the same predicate as "has a result" here, and by
+ * constraint rather than by observation:
+ *
+ *     business_readiness_audits_completed_has_result
+ *     CHECK (status <> 'completed' OR (result IS NOT NULL AND …))
+ */
+export type AuditStamp = { id: string; completedAt: string | null; createdAt: string };
+
+export async function getLatestAuditStamp(
+  supabase: SupabaseClient,
+  projectId: string,
+): Promise<AuditStamp | null> {
+  const { data, error } = await supabase
+    .from("business_readiness_audits")
+    .select("id, completed_at, created_at")
+    .eq("project_id", projectId)
+    .eq("status", "completed")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!data) return null;
+
+  const row = data as unknown as { id: string; completed_at: string | null; created_at: string };
+  return { id: row.id, completedAt: row.completed_at, createdAt: row.created_at };
+}
+
 type AuditReadingRow = {
   overall_score: number | null;
   created_at: string;

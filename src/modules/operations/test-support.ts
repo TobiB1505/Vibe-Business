@@ -1511,10 +1511,31 @@ const FAKE_RPC_HANDLERS: Record<string, (db: FakeDatabase, params: Record<string
  * which tables it was spent on — "six reads" and "six reads of the same table"
  * are different defects.
  */
-export type QueryRecorder = { reads: string[]; writes: string[] };
+export type QueryRecorder = {
+  reads: string[];
+  writes: string[];
+  /**
+   * `table:columns` for every read, so a test can assert *what* was asked for
+   * (VB-022).
+   *
+   * Counting queries catches a read model asking the same question twice.
+   * It cannot catch one asking for a two-hundred-kilobyte JSONB document in
+   * order to test a boolean, which is the other half of the same finding — and
+   * the half a reader of the code will not notice, because `Boolean(x?.result)`
+   * looks free.
+   */
+  selects: string[];
+};
 
 export function newQueryRecorder(): QueryRecorder {
-  return { reads: [], writes: [] };
+  return { reads: [], writes: [], selects: [] };
+}
+
+/** Every column list one table was read with. */
+export function selectsOf(recorder: QueryRecorder, table: string): string[] {
+  return recorder.selects
+    .filter((entry) => entry.startsWith(`${table}:`))
+    .map((entry) => entry.slice(table.length + 1));
 }
 
 /** How many times one table was read. */
@@ -1523,9 +1544,17 @@ export function readsOf(recorder: QueryRecorder, table: string): number {
 }
 
 export function fakeSupabase(db: FakeDatabase, recorder?: QueryRecorder): SupabaseClient {
-  const read = (table: string) => {
+  const read = (
+    table: string,
+    columns?: string,
+    options?: { count?: "exact"; head?: boolean },
+  ) => {
     recorder?.reads.push(table);
-    return new FakeQuery(db, table, "select");
+    recorder?.selects.push(`${table}:${columns ?? ""}`);
+    // The options were dropped here until VB-022, so a `head`-only count query
+    // came back as an ordinary row read and answered zero. `FakeQuery.select`
+    // has understood them all along; nothing was passing them on.
+    return new FakeQuery(db, table, "select").select(columns, options);
   };
   const write = <T>(table: string, build: () => T): T => {
     recorder?.writes.push(table);
@@ -1535,7 +1564,8 @@ export function fakeSupabase(db: FakeDatabase, recorder?: QueryRecorder): Supaba
   return {
     from(table: string) {
       return {
-        select: () => read(table),
+        select: (columns?: string, options?: { count?: "exact"; head?: boolean }) =>
+          read(table, columns, options),
         insert: (payload: Row | Row[]) =>
           write(table, () => new FakeQuery(db, table, "insert", payload)),
         update: (payload: Row) => write(table, () => new FakeQuery(db, table, "update", payload)),
