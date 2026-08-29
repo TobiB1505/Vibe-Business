@@ -11,7 +11,10 @@ import { changeOriginFrom } from "@/modules/execution/change-origin";
 import { deriveChangeProgress } from "@/modules/execution/change-progress";
 import { buildBranchUrl, buildCompareUrl } from "@/modules/execution/diff";
 import { totalChangedLines } from "@/modules/execution/line-stats";
-import { listPreparedChangesForProject } from "@/modules/execution/store";
+import {
+  getPreparedChange,
+  listPreparedChangesForProject,
+} from "@/modules/execution/store";
 import { createGithubMergePort } from "@/modules/merge/github/adapter";
 import { mergeFailureMessage } from "@/modules/merge/messages";
 import { resolveMergeTarget, getMergeCard } from "@/modules/merge/service";
@@ -411,4 +414,41 @@ export async function getPreparedChangeWorkspace(
       prepared: change,
     }),
   );
+}
+
+/**
+ * The full workspace card for one exact prepared change.
+ *
+ * The Agent workspace follows one run, and a run names its result by id. It
+ * must not assemble every historical change just to find that one result: the
+ * full card can sign review images, resolve a live preview and perform a
+ * read-only merge preflight. Keeping this lookup exact makes route cost follow
+ * what the screen renders while preserving the same gate builders.
+ */
+export async function getPreparedChangeWorkspaceItem(
+  supabase: SupabaseClient,
+  params: {
+    projectId: string;
+    userId: string;
+    repositoryFullName: string | null;
+    preparedChangeId: string;
+  },
+): Promise<PreparedChangeWorkspaceItem | null> {
+  const [mergeTarget, prepared] = await Promise.all([
+    params.repositoryFullName ? resolveMergeTarget(supabase, params.projectId) : null,
+    getPreparedChange(supabase, {
+      projectId: params.projectId,
+      preparedChangeId: params.preparedChangeId,
+    }),
+  ]);
+
+  if (prepared === null || prepared.status !== "prepared") return null;
+
+  return await buildPreparedChangeCard(supabase, {
+    projectId: params.projectId,
+    userId: params.userId,
+    repositoryFullName: params.repositoryFullName,
+    mergeTarget,
+    prepared,
+  });
 }

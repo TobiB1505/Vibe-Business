@@ -136,6 +136,8 @@ export function AgentPreviewStage({
   linesAdded,
   linesRemoved,
   filesHref,
+  actions,
+  reviewReady = false,
 }: {
   images: PreviewImages | null;
   changes: readonly PreviewChange[];
@@ -143,6 +145,10 @@ export function AgentPreviewStage({
   linesAdded?: number;
   linesRemoved?: number;
   filesHref?: string;
+  /** Canonical preview and comparison actions for this exact change. */
+  actions?: React.ReactNode;
+  /** A stored comparison exists, so the decision stage has evidence to show. */
+  reviewReady?: boolean;
 }) {
   const reduceMotion = useReducedMotion();
   const visible = useDocumentVisible();
@@ -270,6 +276,8 @@ export function AgentPreviewStage({
           </dl>
         </section>
 
+        {actions}
+
         <div className="flex flex-col gap-2.5">
           {/*
             Forward, not down. This was an anchor to the merge panel lower on
@@ -277,14 +285,16 @@ export function AgentPreviewStage({
             looking at two preview frames. The step it moves the run to is stage
             five, so it puts them on stage five.
           */}
-          <button
-            type="button"
-            onClick={() => go?.("review")}
-            disabled={go === null}
-            className={cn(buttonClasses({ variant: "primary" }), "justify-center")}
-          >
-            Review changes
-          </button>
+          {reviewReady && (
+            <button
+              type="button"
+              onClick={() => go?.("review")}
+              disabled={go === null}
+              className={cn(buttonClasses({ variant: "primary" }), "justify-center")}
+            >
+              Review and approve
+            </button>
+          )}
           <p className="text-fg-meta text-center text-xs">
             Nothing is live yet. You&rsquo;re in control.
           </p>

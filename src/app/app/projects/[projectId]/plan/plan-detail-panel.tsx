@@ -55,7 +55,6 @@ import {
 import { getOperationStatusAction } from "../run-audit-action";
 import { startPlanAction, type StartPlanActionState } from "../plan-action";
 import { PrepareChangePanel } from "../prepare-change-panel";
-import type { ValidationSummary } from "../validation-panel";
 
 /**
  * Planned work: what Vibe would do about the selected Move (ACTION PLAN UI-2).
@@ -574,7 +573,6 @@ export function PlanDetailPanel({
   activeOperation,
   execution = null,
   branchUrl = null,
-  validationSummary = null,
   preparedHref = "/app",
   blockedDestinations = {
     product: "/app",
@@ -599,7 +597,6 @@ export function PlanDetailPanel({
   activeOperation: OperationView | null;
   execution?: OpportunityActionState | null;
   branchUrl?: string | null;
-  validationSummary?: ValidationSummary | null;
   preparedHref?: string;
   blockedDestinations?: BlockedActionDestinations;
   auditHref: string;
@@ -818,28 +815,26 @@ export function PlanDetailPanel({
             opportunityId={executionOpportunityId}
             actionState={execution}
             branchUrl={branchUrl}
-            validationSummary={validationSummary}
             preparedHref={preparedHref}
             blockedDestinations={blockedDestinations}
           />
-          {/*
-            The handoff the loop was missing (UI-S3 §5).
-            
-            `PrepareChangePanel` above links onward only once a change exists.
-            Before that, a founder looking at a Move Vibe can act on had no way
-            to reach the Agent *about this Move* — the rail's Agent link is a
-            section link and drops which Move they were reading.
-
-            It carries the selection and nothing else: the Agent describes and
-            points back, and starting the work stays here, beside the price.
-          */}
-          <Link
-            href={agentMoveHref(preparedHref, executionOpportunityId)}
-            className="text-fg-muted hover:text-fg-body w-fit rounded-sm text-sm underline underline-offset-4 transition-interactive"
-          >
-            See this move in Agent
-          </Link>
         </div>
+      ) : null}
+
+      {/*
+        Every planned Move keeps its identity when it enters the Agent. The
+        Agent may still refuse to start it — policy, risk and the allowlist stay
+        server-owned — but the workspace should never lose the task merely
+        because this Move uses the agentic route instead of a deterministic
+        capability.
+      */}
+      {!running && !planView?.founderInputRequest && executionOpportunityId ? (
+        <Link
+          href={agentMoveHref(preparedHref, executionOpportunityId)}
+          className="text-fg-muted hover:text-fg-body w-fit rounded-sm text-sm underline underline-offset-4 transition-interactive"
+        >
+          Open this move in Agent
+        </Link>
       ) : null}
 
       {planView && !running ? (

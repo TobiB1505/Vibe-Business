@@ -20,7 +20,6 @@ import type {
   OpportunityActionState,
 } from "@/modules/execution/view";
 import { getOperationStatusAction } from "../run-audit-action";
-import type { ValidationSummary } from "../validation-panel";
 import { MoveCard } from "./move-card";
 import { MoveStepper } from "./move-stepper";
 import { PlanDetailPanel } from "./plan-detail-panel";
@@ -43,7 +42,6 @@ export function ActionPlanWorkspace({
   opportunities,
   executionStates,
   branchUrls,
-  validationSummaries,
   stale,
   movesOperation,
   movesBlockedReason,
@@ -65,7 +63,6 @@ export function ActionPlanWorkspace({
   opportunities: BusinessOpportunity[];
   executionStates: Record<string, OpportunityActionState>;
   branchUrls: Record<string, string>;
-  validationSummaries: Record<string, ValidationSummary>;
   stale: boolean;
   movesOperation: OperationView | null;
   movesBlockedReason: "audit_missing" | "audit_stale" | null;
@@ -268,7 +265,6 @@ export function ActionPlanWorkspace({
                     }
                     execution={executionStates[activeOpportunity.id] ?? null}
                     branchUrl={branchUrls[activeOpportunity.id] ?? null}
-                    validationSummary={validationSummaries[activeOpportunity.id] ?? null}
                     preparedHref={preparedHref}
                     blockedDestinations={blockedDestinations}
                     auditHref={auditHref}

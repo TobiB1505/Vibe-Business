@@ -117,10 +117,13 @@ export function MergePanel({
   projectId,
   preparedChangeId,
   card,
+  presentation = "section",
 }: {
   projectId: string;
   preparedChangeId: string;
   card: MergeCard;
+  /** Removes legacy divider chrome when the decision lives in the Agent stage. */
+  presentation?: "section" | "workspace";
 }) {
   const router = useRouter();
   const [state, setState] = useState<MergeActionState>(null);
@@ -149,7 +152,13 @@ export function MergePanel({
   }
 
   return (
-    <section className="space-y-3 border-t border-line-2 pt-4">
+    <section
+      className={
+        presentation === "workspace"
+          ? "space-y-3"
+          : "space-y-3 border-t border-line-2 pt-4"
+      }
+    >
       <h4 className="text-sm font-medium text-fg-body">Merge</h4>
 
       {confirming ? (

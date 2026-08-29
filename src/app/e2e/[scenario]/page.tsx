@@ -273,7 +273,6 @@ export default async function E2eScenarioPage({
           opportunities={fixture.opportunities}
           executionStates={fixture.executionStates}
           branchUrls={{}}
-          validationSummaries={{}}
           stale={fixture.stale}
           movesOperation={fixture.movesOperation}
           movesBlockedReason={fixture.blockedReason}
@@ -593,7 +592,6 @@ export default async function E2eScenarioPage({
             understand: (
               <AgentReadyStage
                 task={task}
-                fallback={<p className="text-fg-body">No task is attached to this run.</p>}
                 planHref="#"
                 repository="TobiB1505/Vibe-Business"
                 liveUrl="https://vibebusiness.de"
@@ -634,7 +632,7 @@ export default async function E2eScenarioPage({
                 baseBranch="main"
                 commitSha="4f1c9a2b7de3115902d9f43161aa87dc5ebe6872"
                 compareUrl="https://github.com/example/repo/compare/main...vibe/feat-pricing-visibility"
-                reviewHref="#"
+                backHref="#"
                 canMerge
               />
             ),

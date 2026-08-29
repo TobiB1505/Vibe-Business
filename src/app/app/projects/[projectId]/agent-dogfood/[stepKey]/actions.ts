@@ -1,6 +1,14 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import {
+  preparedChangeHref,
+  projectSectionHref,
+} from "@/components/layout/project-shell";
+import {
+  agentChangeHref,
+  agentMoveHref,
+} from "@/modules/action-plans/source";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ReviewClassificationResult } from "@/modules/review/classification";
 import {
@@ -64,8 +72,9 @@ export type StartDogfoodRunState =
 export async function startDogfoodRunAction(
   projectId: string,
   stepKey: string,
-  _prevState: StartDogfoodRunState,
+  previousState: StartDogfoodRunState,
 ): Promise<StartDogfoodRunState> {
+  void previousState;
   const session = await requireSession();
   const supabase = await createClient();
 
@@ -108,13 +117,21 @@ export async function startDogfoodRunAction(
 
   if (outcome.kind === "failed") return { ok: false, error: outcome.error };
 
+  const agentHref = agentMoveHref(
+    projectSectionHref(projectId, "agent"),
+    preview.spec.opportunityId,
+  );
+
   if (outcome.kind === "reused") {
-    redirect(`/app/projects/${projectId}/agent`);
+    redirect(
+      preparedChangeHref(
+        agentChangeHref(agentHref, outcome.preparedChangeId),
+        outcome.preparedChangeId,
+      ),
+    );
   }
 
-  redirect(
-    `/app/projects/${projectId}/agent-dogfood/${encodeURIComponent(stepKey)}?run=${outcome.operation.operationId}`,
-  );
+  redirect(agentHref);
 }
 
 export type DogfoodRunStatus = {
@@ -353,9 +370,18 @@ export async function resolveDogfoodFounderInputAction(
       message: "Your answer was saved, but the new execution could not start. Start the step again from Action Plan.",
     };
   }
-  if (outcome.kind === "reused") redirect(`/app/projects/${projectId}/agent`);
-
-  redirect(
-    `/app/projects/${projectId}/agent-dogfood/${encodeURIComponent(oldSpec.step_key)}?run=${outcome.operation.operationId}`,
+  const agentHref = agentMoveHref(
+    projectSectionHref(projectId, "agent"),
+    preview.spec.opportunityId,
   );
+  if (outcome.kind === "reused") {
+    redirect(
+      preparedChangeHref(
+        agentChangeHref(agentHref, outcome.preparedChangeId),
+        outcome.preparedChangeId,
+      ),
+    );
+  }
+
+  redirect(agentHref);
 }

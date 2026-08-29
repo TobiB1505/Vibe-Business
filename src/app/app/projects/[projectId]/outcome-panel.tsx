@@ -196,12 +196,15 @@ export function OutcomePanel({
   preparedChangeId,
   card,
   businessImpactLabel,
+  presentation = "section",
 }: {
   projectId: string;
   preparedChangeId: string;
   card: OutcomeCard;
   /** The business measurement's own short answer, for the ladder (Sprint 12B §33). */
   businessImpactLabel?: string;
+  /** Removes legacy divider chrome when history is nested in the Agent stage. */
+  presentation?: "section" | "workspace";
 }) {
   const router = useRouter();
   const [state, setState] = useState<OutcomeActionState>(null);
@@ -248,7 +251,13 @@ export function OutcomePanel({
   if (hidden) return null;
 
   return (
-    <section className="space-y-3 border-t border-line-2 pt-4">
+    <section
+      className={
+        presentation === "workspace"
+          ? "space-y-3"
+          : "space-y-3 border-t border-line-2 pt-4"
+      }
+    >
       <h4 className="text-sm font-medium text-fg-body">Outcome</h4>
 
       {current.state === "not_started" ? (

@@ -1,33 +1,33 @@
 import {
   WorkspaceSection,
+  preparedChangeAnchorId,
   projectSectionHref,
 } from "@/components/layout/project-shell";
-import { EmptyState, Notice } from "@/components/ui/states";
+import { Notice } from "@/components/ui/states";
 import {
+  AGENT_CHANGE_PARAM,
   PLAN_OPPORTUNITY_PARAM,
+  planMoveHref,
+  sanitizeRequestedChangeId,
   sanitizeRequestedOpportunityId,
 } from "@/modules/action-plans/source";
-import { isDogfoodEligibleProject } from "@/modules/coding-agent/website-preflight";
 import {
   getActivePreparationFor,
   getLatestFailedPreparationFor,
   getOpportunityExecutionSummaries,
 } from "@/modules/execution/service";
 import { buildOpportunityActionState } from "@/modules/execution/view";
-import { getPreparedChangeWorkspace } from "@/modules/execution/workspace";
 import { getLatestOpportunities } from "@/modules/opportunities/service";
 import { buildAgentFocus } from "@/modules/projects/agent-focus";
-import { getLatestProfile } from "@/modules/product-understanding/store";
-import { buildAgentContext } from "@/modules/projects/command-center";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
-import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import { readAgentWorkspace } from "@/modules/coding-agent/agent-workspace";
-import { agentCoreCaption } from "@/modules/coding-agent/observability/agent-stages";
-import { AgentPanel } from "../agent-panel";
-import type { PreparedChangeWorkspaceItem } from "@/modules/execution/workspace";
-import { preparedChangeAnchorId } from "@/components/layout/project-shell";
+import { resolveDogfoodPlanRoutes } from "@/modules/coding-agent/website-preflight";
+import {
+  agentCoreCaption,
+  agentCoreState,
+  agentStageSteps,
+} from "@/modules/coding-agent/observability/agent-stages";
 import { AgentTrustPanel } from "./agent-header";
-import { ChangeGates } from "./change-gates";
 import type { AgentTask } from "./agent-task-panel";
 import { AgentActivity } from "./agent-activity";
 import { AgentValidationChecks } from "./agent-validation-checks";
@@ -44,60 +44,37 @@ import { AgentBuildStage } from "./agent-build-stage";
 import { AgentValidateStage } from "./agent-validate-stage";
 import { AgentReadyStage } from "./agent-ready-stage";
 import { AgentRunTaskHeader } from "./agent-run-task-header";
+import { AgentPreviewActions, AgentReviewDecision } from "./agent-stage-actions";
+import { AgentStartAction } from "./agent-start-action";
 
 /**
- * Agent (Sprint UI-2 Part 2 as Prepared; reframed by CORE-5).
+ * The customer-facing Agent workspace.
  *
- * ## What the page is now about
+ * One Move is the task, one agent run is the work, and that run's exact
+ * prepared change supplies validation, preview, review, approval and merge.
+ * The route never assembles the project's historical changes: resolving the
+ * result id on the durable operation keeps the hot path bounded to the object
+ * the founder is actually looking at.
  *
- * The same lifecycle, told as the work of a team member rather than as a queue
- * of artifacts. `AgentPanel` opens with what Vibe's engineer knows about this
- * business; the prepared changes below it are what it has produced. Nothing
- * about the gates changed.
+ * `?plan=` is an address, never authority. It is bounded before use. When it
+ * matches the immutable task already bound to this run, that persisted binding
+ * is sufficient and no second Action Plan read is paid. A different requested
+ * Move is resolved against the project's current set and uses the same
+ * execution answer as the Action Plan.
  *
- * The three extra reads this costs — the product profile, the repository
- * snapshot and the opportunity set — are existence checks, and each is a
- * single row. They are what makes the readiness claim derived rather than
- * asserted.
- *
- * ## The expensive route, and the only one that should be
- *
- * This is where the prepared-change workspace read model is called, and it is
- * the reason UI-2 Part 1 extracted it. Per change it reads validation, preview,
- * review, approval, outcome and business impact; for an approved change it
- * additionally spends up to four read-only GitHub calls; for a ready review it
- * signs image URLs; for a running preview it asks the sandbox provider for an
- * origin.
- *
- * That cost is legitimate *here*, because this is the screen that shows all of
- * it. Before the split, every other section paid it too.
- *
- * ## The Move a founder arrived with (UI-S3 §3)
- *
- * `?plan=` names one Move. It is untrusted text: sanitized, then resolved
- * against this project's own set, and a stale or foreign id degrades to the
- * ordinary unfocused page rather than to an error or to rank 1.
- *
- * The reads it costs happen **only when a valid id is present**, and only for
- * that one Move — so the ordinary visit to this already-expensive route costs
- * exactly what it cost before. What the focus produces is a statement and a
- * link back to the Action Plan. It starts nothing: preparing a change is
- * priced and confirmed beside the Move it belongs to (Rule 60).
- *
- * ## Gates
- *
- * The order — validation → preview → review → human approval → safe merge →
- * outcome — is decided by the services behind the read model and rendered by
- * `PreparedChangesSection`. Nothing on this route re-decides it, and no gate
- * can be skipped by arriving at this URL directly: the state comes from
- * persisted rows, not from navigation.
+ * The gate order remains service-owned. Navigation changes only which view of
+ * the run is visible; it cannot make validation pass, create an approval or
+ * authorize a merge.
  */
 export default async function ProjectAgentPage({
   params,
   searchParams,
 }: {
   params: Promise<{ projectId: string }>;
-  searchParams: Promise<{ [PLAN_OPPORTUNITY_PARAM]?: string }>;
+  searchParams: Promise<{
+    [PLAN_OPPORTUNITY_PARAM]?: string;
+    [AGENT_CHANGE_PARAM]?: string;
+  }>;
 }) {
   const { projectId } = await params;
   const { supabase, userId, project } = await requireProjectAccess(projectId);
@@ -108,18 +85,37 @@ export default async function ProjectAgentPage({
   const requestedOpportunityId = sanitizeRequestedOpportunityId(
     resolvedSearchParams[PLAN_OPPORTUNITY_PARAM],
   );
+  const requestedPreparedChangeId = sanitizeRequestedChangeId(
+    resolvedSearchParams[AGENT_CHANGE_PARAM],
+  );
 
-  const [changes, profile, repositorySnapshot, opportunities] =
-    await Promise.all([
-      getPreparedChangeWorkspace(supabase, {
-        projectId,
-        userId,
-        repositoryFullName: project.repository?.fullName ?? null,
-      }) as Promise<PreparedChangeWorkspaceItem[]>,
-      getLatestProfile(supabase, projectId),
-      getLatestSuccessfulSnapshot(supabase, projectId),
-      getLatestOpportunities(supabase, projectId),
-    ]);
+  /*
+   * One run, one result. The workspace now resolves only the prepared change
+   * named by that run instead of assembling every historical change and then
+   * discarding all but one. This is the route's critical loading path.
+   */
+  const workspace = await readAgentWorkspace(supabase, {
+    projectId: project.id,
+    userId,
+    repositoryFullName: project.repository?.fullName ?? null,
+    selectedPreparedChangeId: requestedPreparedChangeId,
+  });
+
+  /*
+   * The normal handoff carries the Move that the durable run already names.
+   * Trust that project-scoped immutable binding instead of loading the entire
+   * Action Plan and three execution summaries again on every stage refresh.
+   * A different requested Move still goes through the full current-set check.
+   */
+  const requestedTaskMatchesRun =
+    requestedOpportunityId !== null &&
+    workspace.task !== null &&
+    requestedOpportunityId === workspace.taskOpportunityId;
+
+  const opportunities =
+    requestedOpportunityId && !requestedTaskMatchesRun
+      ? await getLatestOpportunities(supabase, projectId)
+      : null;
 
   /*
    * What Vibe may do about the Move the founder arrived with.
@@ -133,14 +129,20 @@ export default async function ProjectAgentPage({
    * Action Plan renders, so the two screens cannot disagree about whether Vibe
    * has an executor for this work.
    */
-  const focusedMove = requestedOpportunityId
-    ? (opportunities?.set.opportunities.find(
-        (entry) => entry.id === requestedOpportunityId,
-      ) ?? null)
-    : null;
+  const focusedMove =
+    requestedOpportunityId && !requestedTaskMatchesRun
+      ? (opportunities?.set.opportunities.find(
+          (entry) => entry.id === requestedOpportunityId,
+        ) ?? null)
+      : null;
 
-  const focusAction = focusedMove
-    ? await (async () => {
+  const focusedMoveOwnsReadyView =
+    focusedMove !== null && focusedMove.id !== workspace.taskOpportunityId;
+
+  /* Both answers depend on the resolved Move, but not on each other. */
+  const [focusAction, agentRoutes] = await Promise.all([
+    focusedMove
+      ? (async () => {
         const [summaries, activeOperation, failedOperation] = await Promise.all(
           [
             getOpportunityExecutionSummaries(supabase, projectId),
@@ -171,51 +173,72 @@ export default async function ProjectAgentPage({
           failedOperation,
           blockedReason: null,
         });
-      })()
-    : null;
+        })()
+      : Promise.resolve(null),
+    focusedMoveOwnsReadyView
+      ? resolveDogfoodPlanRoutes(supabase, { projectId, userId })
+      : Promise.resolve(null),
+  ]);
 
-  const focus = buildAgentFocus({
-    requestedOpportunityId,
-    opportunities: opportunities?.set.opportunities ?? [],
-    action: focusAction,
-  });
-
-  const context = buildAgentContext({
-    hasProductUnderstanding: profile !== null,
-    // Connected *and* read. A repository Vibe has never analyzed is not code
-    // it can work from.
-    hasRepositoryUnderstanding:
-      project.repository !== null && Boolean(repositorySnapshot?.result),
-    hasBusinessGoals: (opportunities?.set.opportunities.length ?? 0) > 0,
-  });
+  const focus = requestedTaskMatchesRun
+    ? null
+    : buildAgentFocus({
+        requestedOpportunityId,
+        opportunities: opportunities?.set.opportunities ?? [],
+        action: focusAction,
+      });
 
   /*
-   * The internal execution surface, offered only where the allowlist already
-   * allows it. Resolved server-side; the link's absence is the same answer the
-   * route itself gives (`notFound`), so nothing here reveals that it exists.
+   * A founder may inspect a different Move while an older run remains the
+   * project's latest. That old run must not masquerade as work on the selected
+   * Move. Keep the task-ready view and leave its later stages empty until this
+   * Move owns a run or an exact prepared artifact.
    */
-  const executionHref = isDogfoodEligibleProject(project.id)
-    ? `/app/projects/${project.id}/agent-dogfood`
-    : null;
+  const readyStages = focusedMoveOwnsReadyView
+    ? agentStageSteps({ timeline: null, runStatus: null, changeProgress: null })
+    : workspace.stages;
+  const displayedWorkspace = focusedMoveOwnsReadyView
+    ? {
+        ...workspace,
+        stages: readyStages,
+        core: agentCoreState(readyStages, false),
+        timeline: null,
+        change: null,
+        stage: null,
+        fileEvents: [],
+        checks: [],
+        previewChanges: [],
+        mergeSummary: { filesChanged: 0 },
+        interrupt: null,
+        founderInput: null,
+      }
+    : workspace;
 
   /*
-   * The five-stage view of the latest run, and the change it produced.
-   *
-   * Reuses the prepared changes this route already read rather than paying for
-   * the workspace twice — that read is the expensive one here, and it is the
-   * cost UI-2 Part 1 split apart in the first place.
+   * Agent economics are intentionally still allowlist-only. Resolve a start
+   * only for the selected ready Move; the server action repeats the complete
+   * preflight on click, so this render is discoverability, never admission.
    */
-  const workspace = await readAgentWorkspace(supabase, {
-    projectId: project.id,
-    userId,
-    changes,
-  });
+  const agenticResolution =
+    agentRoutes?.available && agentRoutes.plan.opportunityId === focusedMove?.id
+      ? agentRoutes.resolutions.find((resolution) => resolution.mode === "agentic")
+      : null;
+  const agenticStep =
+    agentRoutes?.available && agenticResolution
+      ? (agentRoutes.plan.steps.find(
+          (step) => step.order === agenticResolution.stepOrder,
+        ) ?? null)
+      : null;
 
-  const planHref: string = projectSectionHref(project.id, "action-plan");
+  const basePlanHref: string = projectSectionHref(project.id, "action-plan");
+  const taskOpportunityId = focusedMove?.id ?? workspace.taskOpportunityId;
+  const planHref = taskOpportunityId
+    ? planMoveHref(basePlanHref, taskOpportunityId)
+    : basePlanHref;
 
   /* One binding, so the gate panels below read as one change rather than as
      seven reaches into the workspace view. */
-  const change = workspace.change;
+  const change = displayedWorkspace.change;
 
   /*
    * Before a run exists, `workspace.task` is correctly null: no execution spec
@@ -223,30 +246,29 @@ export default async function ProjectAgentPage({
    * supplied an honest task for the ready hero, so use that Move's own fields
    * without pretending its plan steps were already bound to a run.
    */
-  const readyTask: AgentTask | null =
-    workspace.task ??
-    (focusedMove
-      ? {
-          title: focusedMove.title,
-          problem: focusedMove.problem,
-          whyNow: focusedMove.whyNow || null,
-          impact: focusedMove.impact,
-          effort: focusedMove.effort,
-          lens: focusedMove.primaryLens,
-          steps: [],
-        }
-      : null);
+  const readyTask: AgentTask | null = focusedMove
+    ? {
+        title: focusedMove.title,
+        problem: focusedMove.problem,
+        whyNow: focusedMove.whyNow || null,
+        impact: focusedMove.impact,
+        effort: focusedMove.effort,
+        lens: focusedMove.primaryLens,
+        steps: [],
+      }
+    : displayedWorkspace.task;
 
   /* Whether anything is actually happening. The orb turns for this and
      nothing else — a settled run gets no orb at all. */
-  const live = workspace.core === "working" || workspace.core === "waiting";
+  const live =
+    displayedWorkspace.core === "working" || displayedWorkspace.core === "waiting";
 
   return (
     <WorkspaceSection
       id="agent"
       title="Agent"
       description={
-        workspace.timeline === null
+        displayedWorkspace.timeline === null
           ? "Vibe can work on your product and prepare changes for your review."
           : "Vibe is working on your task and preparing changes for your review."
       }
@@ -258,12 +280,12 @@ export default async function ProjectAgentPage({
           primary object on the screen, above the stages. It is the one state
           where the founder is the blocker.
         */}
-        {workspace.interrupt !== null && (
-          <AgentQuestionPanel interrupt={workspace.interrupt}>
-            {workspace.founderInput !== null ? (
+        {displayedWorkspace.interrupt !== null && (
+          <AgentQuestionPanel interrupt={displayedWorkspace.interrupt}>
+            {displayedWorkspace.founderInput !== null ? (
               <FounderInputCard
                 projectId={project.id}
-                request={workspace.founderInput}
+                request={displayedWorkspace.founderInput}
                 context="runtime_execution"
                 resolveAction={resolveAgentInterruptAction}
                 presentation="workspace"
@@ -290,28 +312,33 @@ export default async function ProjectAgentPage({
           navigating between five pages, and every angle is already paid for by
           the read above.
         */}
-        <AgentWorkspacePanel
-          stages={workspace.stages}
-          initialStage={
-            workspace.stage ?? (workspace.timeline === null ? null : "review")
-          }
-          /*
-            The compact task identity used by the three decision stages. Ready
-            and Build carry the same task inside their own target composition.
-          */
-          header={
-            <AgentRunTaskHeader
-              task={workspace.task}
-              stage={
-                workspace.stage === null
-                  ? "Run settled"
-                  : workspace.stages.find((step) => step.stage === workspace.stage)?.label ??
-                    "Current run"
-              }
-              filesChanged={change === null ? null : change.filePaths.length}
-            />
-          }
-          bodies={{
+        <div
+          id={change === null ? undefined : preparedChangeAnchorId(change.id)}
+          data-prepared-change-id={change?.id}
+          data-testid={change === null ? undefined : "prepared-change"}
+          className="scroll-mt-24"
+        >
+          <AgentWorkspacePanel
+            stages={displayedWorkspace.stages}
+            initialStage={displayedWorkspace.stage}
+            /*
+              The compact task identity used by the three decision stages. Ready
+              and Build carry the same task inside their own target composition.
+            */
+            header={
+              <AgentRunTaskHeader
+                task={displayedWorkspace.task}
+                stage={
+                  displayedWorkspace.stage === null
+                    ? "Run settled"
+                    : (displayedWorkspace.stages.find(
+                        (step) => step.stage === displayedWorkspace.stage,
+                      )?.label ?? "Current run")
+                }
+                filesChanged={change === null ? null : change.filePaths.length}
+              />
+            }
+            bodies={{
             /*
               The ready state, and the way back to it. A founder whose last run
               is finished can start the next one from here — before this, the
@@ -322,43 +349,41 @@ export default async function ProjectAgentPage({
             understand: (
               <AgentReadyStage
                 task={readyTask}
-                fallback={
-                  <AgentPanel
-                    context={context}
-                    focus={focus}
-                    preparedCount={changes.length}
-                    planHref={planHref}
-                    agentHref={projectSectionHref(project.id, "agent")}
-                    productHref={projectSectionHref(project.id, "my-product")}
-                    executionHref={executionHref}
-                    embedded
-                  />
-                }
                 planHref={planHref}
                 repository={project.repository?.fullName ?? null}
                 liveUrl={project.productionUrl ?? null}
-                caption="Choose a move from your Action Plan and Vibe will prepare the change in a secure environment for your review."
+                startAction={
+                  agenticStep ? (
+                    <AgentStartAction projectId={project.id} stepKey={agenticStep.id} />
+                  ) : undefined
+                }
+                caption={
+                  (requestedTaskMatchesRun && change !== null) ||
+                  (focus?.kind === "focused" && focus.action.kind === "already_prepared")
+                    ? "This Move already has a prepared change. Review its checks, preview and approval here."
+                    : "Choose or start this Move from your Action Plan. Vibe will carry that exact task through a secure, reviewable flow."
+                }
               />
             ),
             build: (
               <AgentBuildStage
-                task={workspace.task}
+                task={displayedWorkspace.task}
                 live={live}
                 core={
                   <AgentCore
-                    state={workspace.core}
+                    state={displayedWorkspace.core}
                     headline={live ? "Vibe is building your change" : "The build stage is complete"}
-                    caption={agentCoreCaption(workspace.stages)}
+                    caption={agentCoreCaption(displayedWorkspace.stages)}
                     size="compact"
                   />
                 }
                 activity={
-                  workspace.timeline === null ? (
+                  displayedWorkspace.timeline === null ? (
                     <Notice tone="info" label="Live activity">
                       Activity appears here when the run starts.
                     </Notice>
                   ) : (
-                    <AgentActivity steps={workspace.timeline} live={live} />
+                    <AgentActivity steps={displayedWorkspace.timeline} live={live} />
                   )
                 }
               />
@@ -369,8 +394,8 @@ export default async function ProjectAgentPage({
               <AgentValidateStage
                 running={live}
                 checks={
-                  workspace.checks.length > 0 ? (
-                    <AgentValidationChecks checks={workspace.checks} />
+                  displayedWorkspace.checks.length > 0 ? (
+                    <AgentValidationChecks checks={displayedWorkspace.checks} />
                   ) : (
                     <Notice tone="info" label="Validation checks">
                       Checks appear here when a prepared change reaches validation.
@@ -391,9 +416,9 @@ export default async function ProjectAgentPage({
                   ) : undefined
                 }
                 activity={
-                  workspace.fileEvents.length > 0 ? (
+                  displayedWorkspace.fileEvents.length > 0 ? (
                     <AgentFileActivity
-                      events={workspace.fileEvents}
+                      events={displayedWorkspace.fileEvents}
                       title="Validation activity"
                     />
                   ) : (
@@ -409,7 +434,7 @@ export default async function ProjectAgentPage({
                 <div className="flex min-w-0 flex-col gap-6">
                   <AgentPreviewStage
                     images={change.reviewImages}
-                    changes={workspace.previewChanges}
+                    changes={displayedWorkspace.previewChanges}
                     filesChanged={change.filePaths.length}
                     /* Counted at preparation time, from both sides of every
                        file. Absent when the change could not be measured
@@ -417,19 +442,8 @@ export default async function ProjectAgentPage({
                     linesAdded={change.lineStats?.added}
                     linesRemoved={change.lineStats?.removed}
                     filesHref={change.compareUrl ?? undefined}
-                  />
-                  {/*
-                    The controls that produce what the frames above are missing.
-                    Without a capture the stage is two empty rectangles, and the
-                    button that fills them used to sit far below under the old
-                    section — which is why the preview appeared to do nothing.
-                  */}
-                  <ChangeGates
-                    projectId={project.id}
-                    change={change}
-                    planHref={planHref}
-                    stage="preview"
-                    chrome={false}
+                    reviewReady={change.review.state === "ready"}
+                    actions={<AgentPreviewActions projectId={project.id} change={change} />}
                   />
                 </div>
               ),
@@ -437,7 +451,7 @@ export default async function ProjectAgentPage({
               change === null ? undefined : (
                 <div className="flex min-w-0 flex-col gap-6">
                   <AgentMergeStage
-                    summary={workspace.mergeSummary}
+                    summary={displayedWorkspace.mergeSummary}
                     files={change.files.map((file) => ({
                       path: file.path,
                       ...(file.linesAdded !== null && file.linesRemoved !== null
@@ -449,33 +463,15 @@ export default async function ProjectAgentPage({
                     baseBranch={change.baseBranch}
                     commitSha={change.commitSha}
                     compareUrl={change.compareUrl}
-                    reviewHref={`#${preparedChangeAnchorId(change.id)}`}
-                    canMerge={change.progress.approved}
-                  />
-                  {/*
-                    The decision, and the change's own record. This is the last
-                    stage, so the approval, the merge and what the change did in
-                    production belong here rather than in a second section below
-                    the panel — which is what that section was, and why the
-                    screen said everything twice.
-                  */}
-                  <ChangeGates
-                    projectId={project.id}
-                    change={change}
-                    planHref={planHref}
-                    stage="review"
+                    backHref={planHref}
+                    decision={<AgentReviewDecision projectId={project.id} change={change} />}
+                    canMerge={change.merge.state === "ready"}
                   />
                 </div>
               ),
-          }}
-        />
-
-        {changes.length === 0 && workspace.timeline === null && (
-          <EmptyState
-            title="Nothing prepared yet"
-            description="When you let Vibe act on one of your next moves, it appears here with its checks, its preview and your approval."
+            }}
           />
-        )}
+        </div>
       </div>
     </WorkspaceSection>
   );

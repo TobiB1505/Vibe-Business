@@ -3,7 +3,10 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getLatestActionPlan } from "@/modules/action-plans/service";
 import { getExecutionSpecById } from "@/modules/execution-contract/store";
-import type { PreparedChangeWorkspaceItem } from "@/modules/execution/workspace";
+import {
+  getPreparedChangeWorkspaceItem,
+  type PreparedChangeWorkspaceItem,
+} from "@/modules/execution/workspace";
 import { getLatestOpportunities } from "@/modules/opportunities/service";
 import type { AgentTask } from "@/app/app/projects/[projectId]/agent/agent-task-panel";
 import { findLatestOperation } from "@/modules/operations/store";
@@ -67,6 +70,8 @@ export type AgentWorkspaceView = {
    * worse than one naming none.
    */
   task: AgentTask | null;
+  /** The Move id named by the run's own execution spec, for the return link. */
+  taskOpportunityId: string | null;
   /** Which of the five the run is sitting on, so the route picks one body. */
   stage: AgentStage | null;
   /** Events that touched a file, for the validating stage's record. */
@@ -100,41 +105,63 @@ export async function readAgentWorkspace(
   params: {
     projectId: string;
     userId: string;
-    /**
-     * The prepared changes the route already read. Passed in rather than read
-     * again: the workspace read is the expensive one on this route, and paying
-     * for it twice to answer one question about one change would be the cost
-     * UI-2 split it apart to avoid.
-     */
-    changes: readonly PreparedChangeWorkspaceItem[];
+    repositoryFullName: string | null;
+    /** Exact artifact named by the Agent URL, after bounded parsing. */
+    selectedPreparedChangeId: string | null;
   },
 ): Promise<AgentWorkspaceView> {
-  const { projectId, userId, changes } = params;
+  const { projectId, userId, repositoryFullName, selectedPreparedChangeId } =
+    params;
 
-  const stored = await findLatestOperation(supabase, {
-    projectId,
-    operationType: "agent_execution",
-  });
+  const [stored, selectedChange] = await Promise.all([
+    findLatestOperation(supabase, {
+      projectId,
+      operationType: "agent_execution",
+    }),
+    selectedPreparedChangeId
+      ? getPreparedChangeWorkspaceItem(supabase, {
+          projectId,
+          userId,
+          repositoryFullName,
+          preparedChangeId: selectedPreparedChangeId,
+        })
+      : Promise.resolve(null),
+  ]);
 
-  const idle = () => {
-    const stages = agentStageSteps({ timeline: null, runStatus: null, changeProgress: null });
+  const idle = (change: PreparedChangeWorkspaceItem | null = null): AgentWorkspaceView => {
+    const stages = agentStageSteps({
+      timeline: null,
+      runStatus: null,
+      changeProgress: change?.progress ?? null,
+    });
+    const task = taskFromChange(change);
     return {
       stages,
       core: agentCoreState(stages, false),
       timeline: null,
-      change: null,
-      task: null,
-      stage: null,
+      change,
+      task,
+      taskOpportunityId: change?.opportunityId ?? null,
+      stage: stageForWorkspace(stages, change),
       fileEvents: [],
-      checks: [],
+      checks: validationChecks(change),
       previewChanges: [],
-      mergeSummary: { filesChanged: 0 },
+      mergeSummary: mergeSummaryFor(change),
       interrupt: null,
       founderInput: null,
     };
   };
 
-  if (stored === null) return idle();
+  if (stored === null) return idle(selectedChange);
+
+  /*
+   * A selected deterministic or historical artifact must never inherit the
+   * activity and task of the latest unrelated agent run. Its own stored Move
+   * origin and gate state are the complete, truthful workspace in that case.
+   */
+  if (selectedChange !== null && stored.resultId !== selectedChange.id) {
+    return idle(selectedChange);
+  }
 
   /*
    * Delegated rather than rebuilt. This is the call that also repairs a run
@@ -147,12 +174,12 @@ export async function readAgentWorkspace(
     userId,
     operationId: stored.id,
   });
-  if (operation === null) return idle();
+  if (operation === null) return idle(selectedChange);
 
   const runId = operation.agentExecutionRunId;
-  if (runId === null) return idle();
+  if (runId === null) return idle(selectedChange);
 
-  const [runView, events, interrupt] = await Promise.all([
+  const [runView, events, interrupt, change] = await Promise.all([
     readAgentRunForLiveView(supabase, { runId, projectId }),
     listExecutionEvents(supabase, { runId, projectId }),
     /*
@@ -163,6 +190,16 @@ export async function readAgentWorkspace(
     operation.status === "needs_user"
       ? findOpenInterruptForRun(supabase, { projectId, agentExecutionRunId: runId })
       : Promise.resolve(null),
+    selectedChange !== null
+      ? Promise.resolve(selectedChange)
+      : operation.resultId
+        ? getPreparedChangeWorkspaceItem(supabase, {
+            projectId,
+            userId,
+            repositoryFullName,
+            preparedChangeId: operation.resultId,
+          })
+        : Promise.resolve(null),
   ]);
 
   /*
@@ -180,16 +217,6 @@ export async function readAgentWorkspace(
     candidateFileCount: filesChanged,
     filesInspected,
   });
-
-  /*
-   * `resultId` is the prepared change a completed run wrote. Matched by id
-   * rather than by taking the newest change: a project can hold several, and
-   * the stepper is about *this* run's change. Taking the newest would show a
-   * founder the gates of a change their last run did not produce.
-   */
-  const change = operation.resultId
-    ? (changes.find((candidate) => candidate.id === operation.resultId) ?? null)
-    : null;
 
   /*
    * The Move this run is working on.
@@ -214,7 +241,8 @@ export async function readAgentWorkspace(
       : Promise.resolve(null),
   ]);
 
-  let task = resolvedTask;
+  let task = resolvedTask.task;
+  let taskOpportunityId = resolvedTask.opportunityId;
 
   /*
    * The change's own stored origin, when the Move it came from is no longer in
@@ -235,6 +263,7 @@ export async function readAgentWorkspace(
       lens: null,
       steps: [],
     };
+    taskOpportunityId = change.opportunityId;
   }
 
   const stages = agentStageSteps({
@@ -255,8 +284,7 @@ export async function readAgentWorkspace(
    * rail, which is the one moment a founder most needs to land where the
    * question is.
    */
-  const stage =
-    stages.find((step) => step.state === "active" || step.state === "paused")?.stage ?? null;
+  const stage = stageForWorkspace(stages, change);
 
   /*
    * Every event, not only the ones naming a file.
@@ -284,31 +312,71 @@ export async function readAgentWorkspace(
     timeline,
     change,
     task,
+    taskOpportunityId,
     stage,
     fileEvents,
     checks: validationChecks(change),
     // Nothing stored describes a change in prose, so the preview rail carries
     // no invented summaries. The frames and the file list carry the answer.
     previewChanges: [],
-    mergeSummary: {
-      filesChanged: change?.filePaths.length ?? 0,
-      /*
-       * Counted when the change was prepared, from both sides of every file.
-       * Absent for a change Vibe could not measure whole — the deterministic
-       * capability writes without reading what it replaced — and absent is
-       * shown as nothing rather than as zero (rule 44).
-       */
-      ...(change?.lineStats
-        ? { linesAdded: change.lineStats.added, linesRemoved: change.lineStats.removed }
-        : {}),
-      tests: testVerdict(change),
-      build: buildVerdict(change),
-    },
+    mergeSummary: mergeSummaryFor(change),
     interrupt,
     founderInput,
   };
 }
 
+function taskFromChange(change: PreparedChangeWorkspaceItem | null): AgentTask | null {
+  if (!change?.origin) return null;
+  return {
+    title: change.origin.title,
+    problem: change.origin.problem,
+    whyNow: change.origin.whyNow || null,
+    impact: null,
+    effort: null,
+    lens: null,
+    steps: [],
+  };
+}
+
+/** The first gate that genuinely needs attention for this exact artifact. */
+function stageForWorkspace(
+  stages: AgentStageStep[],
+  change: PreparedChangeWorkspaceItem | null,
+): AgentStage | null {
+  const live = stages.find(
+    (step) => step.state === "active" || step.state === "paused",
+  )?.stage;
+  if (live) return live;
+  if (change === null) return null;
+
+  switch (change.progress.stage) {
+    case "not_validated":
+    case "validating":
+    case "validation_failed":
+      return "validate";
+    case "reviewing":
+    case "review_required":
+    case "review_unavailable":
+      return "preview";
+    default:
+      return "review";
+  }
+}
+
+function mergeSummaryFor(change: PreparedChangeWorkspaceItem | null): MergeSummary {
+  return {
+    filesChanged: change?.filePaths.length ?? 0,
+    /* Absent when preparation could not measure every file; never fake zero. */
+    ...(change?.lineStats
+      ? {
+          linesAdded: change.lineStats.added,
+          linesRemoved: change.lineStats.removed,
+        }
+      : {}),
+    tests: testVerdict(change),
+    build: buildVerdict(change),
+  };
+}
 
 /** Impact and effort are already closed enums; this only narrows their type. */
 const CHIP = ["high", "medium", "low"] as const;
@@ -321,12 +389,12 @@ async function resolveTask(
     projectId: string;
     runView: Awaited<ReturnType<typeof readAgentRunForLiveView>>;
   },
-): Promise<AgentTask | null> {
+): Promise<{ task: AgentTask | null; opportunityId: string | null }> {
   const specId = params.runView?.executionSpecId;
-  if (!specId) return null;
+  if (!specId) return { task: null, opportunityId: null };
 
   const spec = await getExecutionSpecById(supabase, { projectId: params.projectId, specId });
-  if (!spec) return null;
+  if (!spec) return { task: null, opportunityId: null };
 
   /*
    * Together, because neither answers the other. Read one after the other they
@@ -343,7 +411,7 @@ async function resolveTask(
    * are unavailable, and inventing them from the newest Move would put a
    * different problem's headline over this run.
    */
-  if (!move) return null;
+  if (!move) return { task: null, opportunityId: spec.opportunityId };
 
   /*
    * Only this run's own plan. `getLatestActionPlan` answers "the newest", which
@@ -356,13 +424,16 @@ async function resolveTask(
       : [];
 
   return {
-    title: move.title,
-    problem: move.problem,
-    whyNow: move.whyNow || null,
-    impact: chip(move.impact),
-    effort: chip(move.effort),
-    lens: move.primaryLens,
-    steps,
+    opportunityId: spec.opportunityId,
+    task: {
+      title: move.title,
+      problem: move.problem,
+      whyNow: move.whyNow || null,
+      impact: chip(move.impact),
+      effort: chip(move.effort),
+      lens: move.primaryLens,
+      steps,
+    },
   };
 }
 

@@ -5,7 +5,14 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Notice } from "@/components/ui/states";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
-import { validateChangeAction } from "../validate-change-action";
+import { operationPollPhase, type OperationView } from "@/modules/operations/view";
+import { useOperationPoll } from "@/lib/client/use-operation-poll";
+import {
+  getValidationProgressAction,
+  validateChangeAction,
+} from "../validate-change-action";
+
+const POLL_INTERVAL_MS = 2_500;
 
 /**
  * Run the checks again, from the stage that shows them (UI-19).
@@ -39,6 +46,33 @@ export function AgentValidateAction({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [problem, setProblem] = useState<string | null>(null);
+  const [started, setStarted] = useState<OperationView | null>(null);
+
+  const { latest } = useOperationPoll<OperationView>({
+    key: started?.operationId ?? null,
+    enabled: operationPollPhase(started) === "working",
+    intervalMs: POLL_INTERVAL_MS,
+    poll: async () => {
+      const operationId = started?.operationId;
+      if (!operationId) return { kind: "unavailable" };
+
+      const result = await getValidationProgressAction(
+        projectId,
+        preparedChangeId,
+        operationId,
+      );
+      return result.ok
+        ? { kind: "value", value: result.operation }
+        : { kind: "unavailable" };
+    },
+    continueAfter: (next) => operationPollPhase(next) === "working",
+    onReading: (next) => {
+      if (operationPollPhase(next) !== "working") router.refresh();
+    },
+  });
+
+  const operation = latest ?? started;
+  const running = pending || operationPollPhase(operation) === "working";
 
   return (
     <div className="flex flex-col gap-3">
@@ -47,12 +81,14 @@ export function AgentValidateAction({
           type="button"
           variant="secondary"
           size="sm"
-          disabled={pending}
+          disabled={running}
+          busy={running}
           onClick={() =>
             startTransition(async () => {
               setProblem(null);
               const result = await validateChangeAction(projectId, preparedChangeId);
               if (result.ok) {
+                setStarted(result.kind === "running" ? result.operation : null);
                 router.refresh();
                 return;
               }
@@ -69,9 +105,15 @@ export function AgentValidateAction({
             })
           }
         >
-          {pending ? "Starting…" : label}
+          {pending ? "Starting…" : running ? "Checks running…" : label}
         </Button>
       </div>
+
+      {running && (
+        <p role="status" className="text-fg-muted text-xs">
+          Vibe is validating this exact change in an isolated environment. You can leave this page.
+        </p>
+      )}
 
       {problem !== null && (
         <Notice tone="problem" label="could not start">

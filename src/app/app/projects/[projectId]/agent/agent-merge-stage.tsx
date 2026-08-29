@@ -81,8 +81,8 @@ export function AgentMergeStage({
   baseBranch,
   commitSha,
   compareUrl,
-  reviewHref,
-  mergeControl,
+  backHref,
+  decision,
   canMerge,
 }: {
   summary: MergeSummary;
@@ -92,9 +92,10 @@ export function AgentMergeStage({
   baseBranch: string;
   commitSha: string | null;
   compareUrl: string | null;
-  reviewHref: string;
-  /** The real merge action, owned by the route that can perform it. */
-  mergeControl?: React.ReactNode;
+  /** Return to the Move that created this task. */
+  backHref: string;
+  /** Canonical approval and merge controls for this exact artifact. */
+  decision?: React.ReactNode;
   canMerge: boolean;
 }) {
   const reduceMotion = useReducedMotion();
@@ -356,6 +357,8 @@ export function AgentMergeStage({
         </section>
       </div>
 
+      {decision}
+
       <div className="border-line-2 flex flex-wrap items-center justify-between gap-5 border-t pt-6">
         <div className="flex min-w-0 max-w-[52ch] flex-col gap-1.5">
           <span className="text-fg-body text-[0.9375rem] font-semibold">What happens next?</span>
@@ -371,12 +374,9 @@ export function AgentMergeStage({
           </span>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
-          <Link href={reviewHref} className={buttonClasses({ variant: "secondary" })}>
-            Request changes
-          </Link>
-          {mergeControl}
-        </div>
+        <Link href={backHref} className={buttonClasses({ variant: "secondary" })}>
+          Back to this Move
+        </Link>
       </div>
 
       <p className="text-fg-meta text-center text-xs">

@@ -148,10 +148,13 @@ export function BusinessImpactPanel({
   projectId,
   preparedChangeId,
   card,
+  presentation = "section",
 }: {
   projectId: string;
   preparedChangeId: string;
   card: BusinessImpactCard;
+  /** Removes legacy divider chrome when history is nested in the Agent stage. */
+  presentation?: "section" | "workspace";
 }) {
   const router = useRouter();
   const [state, setState] = useState<BusinessImpactActionState>(null);
@@ -189,7 +192,13 @@ export function BusinessImpactPanel({
 
   if (noEvidenceYet) {
     return (
-      <section className="space-y-2 border-t border-line-2 pt-4">
+      <section
+        className={
+          presentation === "workspace"
+            ? "space-y-2"
+            : "space-y-2 border-t border-line-2 pt-4"
+        }
+      >
         <h4 className="text-sm font-medium text-fg-secondary">Impact tracking</h4>
         <p className="text-sm text-fg-muted">Long-term impact has not been measured.</p>
 
@@ -214,7 +223,13 @@ export function BusinessImpactPanel({
   }
 
   return (
-    <section className="space-y-3 border-t border-line-2 pt-4">
+    <section
+      className={
+        presentation === "workspace"
+          ? "space-y-3"
+          : "space-y-3 border-t border-line-2 pt-4"
+      }
+    >
       <h4 className="text-sm font-medium text-fg-body">Business impact</h4>
 
       {card.state === "scheduled" ? (
