@@ -218,6 +218,30 @@ describe("every relative link in the documentation resolves", () => {
  */
 const RETIRED_CLAIMS: readonly { path: string; claim: string; retiredBy: string }[] = [
   {
+    path: "PRODUCT.md",
+    claim: "Deep Scan is not wired to them",
+    retiredBy:
+      "ADR 0061 — `launch-v1` prices an additional Deep Scan at 25 Credits and it is " +
+      "purchasable. The refusal it describes is still reachable and now means what it says: " +
+      "no policy prices an additional scan. History may quote the old sentence; §12.1 may not.",
+  },
+  {
+    path: "src/modules/economy/README.md",
+    claim: "Nothing outside this module imports it",
+    retiredBy:
+      "ADR 0061 — three primitives are now readable from outside (execution-class, " +
+      "infrastructure-rates, sandbox-cost), none of which decides an amount. " +
+      "`sprint-0054-safety.test.ts` enforces that exact list; the estimator stays unreachable.",
+  },
+  {
+    path: "src/modules/coding-agent/README.md",
+    claim: "No customer can start an agent",
+    retiredBy:
+      "ADR 0061 — `EXECUTION_BUDGET_POLICIES` carries `launch-v1-budget`, with a budget per " +
+      "execution pricing class. Rule 78's bar was a measured cost; sixteen delivered dogfood " +
+      "runs met it. What the sentence was protecting — that no price ships without one — holds.",
+  },
+  {
     path: "src/app/login/page.tsx",
     claim: "Read-only access to start",
     retiredBy:

@@ -90,10 +90,20 @@ result is trustworthy. `ValidationAuthority` is a single-value type so that
 
 ## The honest state of the product
 
-`EXECUTION_BUDGET_POLICIES` is still empty. No customer can start an agent,
-because no Agent price has been approved and none can be until there is a
-measured cost. `authorization.ts` is the only door to the internal dogfood
-economics, and it requires a project id on an operator-managed allowlist.
+`EXECUTION_BUDGET_POLICIES` carries one entry, `launch-v1-budget`, with a
+budget per execution pricing class. It was empty for three sprints because
+[rule 78](../../../CLAUDE.md) requires a measured cost before a customer-facing
+Agent price, and sixteen delivered dogfood runs are that measurement.
+
+What has not changed is that the evidence is thin and uneven: `standard`
+carries the sample, `small` has one cost observation and `complex` has none, so
+`credits/retail.ts` marks the Agent price `basis: "modelled"` and
+`margin-guard.test.ts` names the two tiers whose margin it cannot check.
+
+`authorization.ts` is still the only door between the two books. It now
+resolves the production budget for any project, and the internal dogfood
+economics — which is what makes a run non-production — only for a project id on
+an operator-managed allowlist.
 
 Run `pnpm agent:preflight` against a real project to see the whole §43 picture —
 route, risk, validation profile, granted capabilities, ceilings, and the exact

@@ -165,7 +165,7 @@ The one thing deliberately absent: **no consumption rate card is active.** `CRED
 
 **[Confirmed principle — no secrets in the ledger]** Usage events never contain prompt text, model responses, reasoning, or API keys.
 
-**[Open decision — narrowed]** The **consumption** rate card is not decided: what a Credit buys per operation, and at what margin. Retail purchase pricing *is* decided (`src/modules/billing/catalog.ts`), and candidate consumption models are simulated against real runs in [docs/business/CREDIT_PRICING_V1.md](docs/business/CREDIT_PRICING_V1.md), whose own verdict is that the evidence is not yet sufficient to activate one.
+**[Confirmed — ADR 0061]** What a Credit buys per operation *is* decided: `launch-v1` in `src/modules/credits/retail.ts` prices Business Audit at 55, Next Moves and Action Plan at 30, an additional Deep Scan at 25, and an agent improvement at 150 / 200 / 350 by execution pricing class. It takes effect at the same instant Anthropic's September Sonnet rates do, because it exists to hold the margin those rates move. `src/modules/credits/margin-guard.ts` recomputes every price's contribution margin from the provider rates in force and fails below 70%, so the next upstream rate change is a red test rather than a discovery made later. Prices carry a `PriceBasis`: three are `measured`, the Agent is `modelled` (its `complex` tier has zero cost observations), and Deep Scan is `policy` — no browser-provider rate exists to check it against.
 
 ### 3.12 Audit Log
 
@@ -239,7 +239,7 @@ This is the register of genuinely **undecided** questions, and nothing else. Wor
 
 **Still open:**
 
-1. **Credit consumption rate card** — what a Credit buys per operation, and at what margin. Narrowed rather than resolved: the ledger, the retail purchase price and the simulation exist ([§3.11](#311-usagecredit-layer)); the activation decision does not, and [docs/business/CREDIT_PRICING_V1.md](docs/business/CREDIT_PRICING_V1.md) argues the evidence is not yet sufficient to make it.
+1. **The per-SKU consumption rate card** — `CREDIT_RATE_CARDS` in `src/modules/credits/rating.ts`, which rates measured provider usage into Credits for Vibe's own cost telemetry. Not the same question as what a customer pays: [ADR 0061](docs/decisions/0061-launch-v1-operation-rate-card.md) decided that and left this alone, because `economy/` already answers "what did this cost" in nanodollars and a card here would have to price cache tokens — 55–70% of agentic provider cost — to avoid returning `sku_not_priced`. It ships empty ([§3.11](#311-usagecredit-layer)).
 2. **Analytics provider for the customer's product** — the metric-source port is vendor-neutral by design ([ADR 0021](docs/decisions/0021-business-outcome-measurement.md)) and no adapter is written, so every project resolves to `waiting_for_source`. Vibe's own product analytics is separate and already answered (`@vercel/analytics`), as is Vibe's own ad attribution ([ADR 0041](docs/decisions/0041-marketing-attribution-pixel.md)).
 3. **Previewing a repository whose validated artifact cannot be started** by a single detected dev/start command ([§3.9](#39-preview-layer)).
 4. **Production hosting migration as a possible future product feature** — not scoped, not committed to.
