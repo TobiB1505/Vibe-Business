@@ -154,9 +154,17 @@ export function uniformBudgetsByClass(
  *
  * `maxProviderSpendUsd` is sized to a 50% floor margin against the class price
  * at €0.016333/Credit (EUR/USD 1.08): the point past which a single run stops
- * being worth delivering. The most expensive agent run ever measured is $0.9237
- * restated at post-2026-09-01 Sonnet rates, so `standard` carries roughly 2x
- * headroom over the worst observation rather than over a typical one.
+ * being worth delivering. The most expensive agent run ever measured costs
+ * $0.646, so `standard`'s $1.75 carries roughly 2.7x headroom over the worst
+ * observation rather than over a typical one.
+ *
+ * That headroom widened without anything here moving. The figure used to be
+ * $0.9237, because it was the same run restated at the $3/$15 Sonnet 5 rates
+ * scheduled for 1 September 2026 — a rise Anthropic withdrew before it took
+ * effect ([ADR 0062](../../../docs/decisions/0062-sonnet-5-price-rise-cancelled.md)).
+ * The ceilings are deliberately left where they are: they were never derived
+ * from the worst observation, only sanity-checked against it, and a stop that
+ * is more conservative than its check is not a fault to correct.
  *
  * ## Why the blast-radius limits widen with the class
  *
@@ -179,8 +187,9 @@ export function uniformBudgetsByClass(
  */
 export const LAUNCH_V1_BUDGET_POLICY: ExecutionBudgetPolicy = {
   version: "launch-v1-budget",
-  // The same instant `retail-v1` gives way to `launch-v1` in `credits/retail.ts`,
-  // and the same instant Sonnet 5's price rises in `ai/pricing.ts`. One event.
+  // The same instant `retail-v1` gives way to `launch-v1` in `credits/retail.ts`.
+  // It was chosen to coincide with a Sonnet 5 price rise that was then withdrawn;
+  // it is now simply the launch date, and the two policies still move together.
   effectiveFrom: "2026-09-01T00:00:00.000Z",
   effectiveTo: null,
   budgetsByClass: {

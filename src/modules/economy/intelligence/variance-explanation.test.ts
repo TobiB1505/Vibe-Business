@@ -173,13 +173,17 @@ describe("the other signals a variance can be attributed to", () => {
   });
 
   it("names a provider price change between quote and bill", () => {
+    // A deliberately fictional successor version. No real price change has ever
+    // separated a quote from its bill, so the fixture must not name a version
+    // string that could be mistaken for one — least of all the cancelled
+    // September 2026 Sonnet rise, which never priced a call (ADR 0062).
     const explanation = explainVariance(
-      input({ actualPricingVersion: "claude-sonnet-5-standard-2026-09" }),
+      input({ actualPricingVersion: "test-only-successor-pricing-version" }),
     );
     const pricing = explanation.reasons.find((reason) => reason.reason === "provider_pricing_changed");
 
     expect(pricing?.evidence).toContain("claude-sonnet-5-introductory-2026");
-    expect(pricing?.evidence).toContain("claude-sonnet-5-standard-2026-09");
+    expect(pricing?.evidence).toContain("test-only-successor-pricing-version");
   });
 
   it("admits when the estimate rested on nothing", () => {

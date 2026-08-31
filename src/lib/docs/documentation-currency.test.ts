@@ -354,6 +354,44 @@ const RETIRED_CLAIMS: readonly { path: string; claim: string; retiredBy: string 
       "by the next merge and stayed false through roughly ten sprints. Banning the label rather than " +
       "the stale hash is deliberate: a refreshed pin is the same defect with a newer number.",
   },
+  {
+    path: "ARCHITECTURE.md",
+    claim: "prices Business Audit at 55",
+    retiredBy:
+      "ADR 0062 \u2014 the whole card was derived against a Sonnet 5 rise to $3/$15 that Anthropic " +
+      "withdrew before it took effect. 35 / 20 / 20, re-derived by the same rule at the rates that " +
+      "actually apply. ADR 0061 keeps the sentence in a dated correction; \u00a73.11 may not.",
+  },
+  {
+    path: "ARCHITECTURE.md",
+    claim: "the same instant Anthropic's September Sonnet rates do",
+    retiredBy:
+      "ADR 0062 \u2014 there are no September Sonnet rates. `LAUNCH_V1_EFFECTIVE_FROM` still says " +
+      "2026-09-01 because moving it would backdate or delay for no reason, but it is the launch " +
+      "date now, not a mirror of a provider event.",
+  },
+  {
+    path: "src/modules/credits/README.md",
+    claim: "| Business Audit | 55 | measured |",
+    retiredBy: "ADR 0062 \u2014 as ARCHITECTURE.md. The price table is 35 / 20 / 20.",
+  },
+  {
+    path: "docs/business/CREDIT_RATE_CARD_LAUNCH_V1.md",
+    claim: "Cost/delivered (Sept rates)",
+    retiredBy:
+      "ADR 0062 \u2014 every dollar figure in the derivation was a measured cost restated at rates " +
+      "that never arrived, presented in a table beside genuinely measured ones. There is one set " +
+      "of Sonnet rates and the column no longer needs qualifying.",
+  },
+  {
+    path: "src/modules/ai/pricing.ts",
+    claim: "claude-sonnet-5-standard-2026-09",
+    retiredBy:
+      "ADR 0062 \u2014 the cancelled row is deleted rather than held, so nothing in the price book " +
+      "may name it again. `pricing.test.ts` enforces this against the array itself; this entry " +
+      "enforces it against the prose. `economy/intelligence/model-version.ts` still carries the " +
+      "string in an append-only record of what v1 was issued under, which is history, not a price.",
+  },
 ];
 
 describe("a retired claim does not come back", () => {

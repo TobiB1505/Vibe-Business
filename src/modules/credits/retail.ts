@@ -153,12 +153,16 @@ export type RetailPricePolicy = {
 /**
  * The instant `retail-v1` ends and `launch-v1` begins.
  *
- * Deliberately the same instant Anthropic's Sonnet 5 increase takes effect
- * (`claude-sonnet-5-standard-2026-09` in `ai/pricing.ts`). The two are the same
- * event seen from two sides: the cost of every Sonnet-priced operation rises
- * 50% at this instant, and `launch-v1` is what keeps the margin where
- * `retail-v1` was calibrated to put it. Splitting them would leave a window in
- * which Vibe knowingly sold below its own standard.
+ * It was chosen to mirror a Sonnet 5 price increase scheduled for the same
+ * instant — the card existed to hold the margin across that step. **Anthropic
+ * withdrew the increase** ([ADR 0062](../../../docs/decisions/0062-sonnet-5-price-rise-cancelled.md)),
+ * so the provider price book now spans this instant with no step in it, and
+ * the date is simply the launch date.
+ *
+ * Kept rather than moved. Nothing has settled under `launch-v1`, so there is no
+ * charge to protect; but moving it earlier would backdate what `retail-v1`
+ * covered — nine settled charges name that policy — and moving it later would
+ * delay the card for a reason that no longer exists.
  */
 const LAUNCH_V1_EFFECTIVE_FROM = "2026-09-01T00:00:00.000Z";
 
@@ -230,18 +234,43 @@ const RETAIL_V1: RetailPricePolicy = {
  * Vibe a margin it does not have.
  *
  * Costs are the production figures from `ai_usage_events` and
- * `sandbox_usage_events`, restated at the post-2026-09-01 Sonnet rates:
+ * `sandbox_usage_events`, at Claude Sonnet 5's $2/$10 per MTok — which
+ * [ADR 0062](../../../docs/decisions/0062-sonnet-5-price-rise-cancelled.md)
+ * records is now the permanent price:
  *
  * ```
- * Business Audit      $0.1899/delivered   →  53.8  →   55 Credits   (80.4% margin)
- * Next Moves          $0.1025/delivered   →  29.1  →   30 Credits   (80.6%)
- * Action Plan         $0.1012/delivered   →  28.7  →   30 Credits   (80.9%)
- * Agent, standard     $0.6507/delivered   → 184.4  →  200 Credits   (81.6%)
+ * Business Audit      $0.1219/delivered   →  34.5  →   35 Credits   (80.3% margin)
+ * Next Moves          $0.0683/delivered   →  19.4  →   20 Credits   (80.6%)
+ * Action Plan         $0.0674/delivered   →  19.1  →   20 Credits   (80.9%)
+ * Agent, standard     $0.4282/delivered   → 121.4  →  125 Credits   (see below)
  * ```
  *
  * Next Moves and Action Plan land on the same number because their measured
  * effective costs are within 1% of each other. That is the arithmetic, not a
  * rounding convenience.
+ *
+ * ## Why the Action Plan is 20 and not `retail-v1`'s 15
+ *
+ * The only measured price that does not return to its `retail-v1` value. That
+ * 15 was derived from a single observation of $0.044; five deliveries now say
+ * $0.056, and a failed run whose cost was never recorded carries a 1.2×
+ * uplift on top. At 15 Credits the margin is 74.5% — above the guard floor,
+ * below the target the whole card is derived against. 20 is the smallest
+ * multiple of five that meets it.
+ *
+ * ## Why the Agent is 200 and not the 125 the rule produces
+ *
+ * Because the mean is not the exposure. The rule prices `standard` at 125
+ * Credits on a mean of $0.4282, but the most expensive agent run ever measured
+ * costs $0.646 — which at 125 Credits is a 70.7% margin, sitting on the floor.
+ * At 200 the same run still clears 81.7%.
+ *
+ * Agent cost has by far the widest spread of anything in this card, and the
+ * evidence under it is the thinnest: sixteen dogfood runs against one
+ * repository, `small` carrying a single observation and `complex` none at all.
+ * The headroom is a deliberate reserve against that, recorded as
+ * `basis: "modelled"` and asserted in `margin-guard.test.ts` as an inequality
+ * so that quietly dropping the tiers to their derived price fails.
  *
  * ## What the two non-`measured` prices are
  *
@@ -252,15 +281,16 @@ const RETAIL_V1: RetailPricePolicy = {
  * field is the only honest way to ship it. It replaces a typed refusal that
  * could not be acted on with a price that can.
  *
- * **The `complex` agent tier, 350 Credits, `modelled`.** Zero runs have ever
- * been classified `complex`, so its cost is a ratio against `standard`, not an
+ * **The agent tiers, 150 / 200 / 350, `modelled`.** Zero runs have ever been
+ * classified `complex`, so its cost is a ratio against `standard`, not an
  * observation. `small` has one. Only `standard` is carried by a real sample,
- * and it is also the tier the classifier's own rules send most work to.
+ * and it is also the tier the classifier's own rules send most work to — and
+ * even that sample is dogfood traffic against a single repository.
  *
  * ## What is deliberately still absent
  *
  * Validation, preview and review. They are bundled into the agent price, and
- * their measured cost (~$0.045 + ~$0.022 + browser) is inside the $0.6507
+ * their measured cost (~$0.045 + ~$0.022 + browser) is inside the $0.4282
  * above. A customer bought a validated improvement, not a pipeline; line-item
  * them and the total price of an improvement stops being knowable in advance.
  */
@@ -269,12 +299,12 @@ const LAUNCH_V1: RetailPricePolicy = {
   effectiveFrom: LAUNCH_V1_EFFECTIVE_FROM,
   effectiveTo: null,
   prices: {
-    business_audit: { price: { kind: "fixed", creditUnits: creditsToUnits(55) }, basis: "measured" },
+    business_audit: { price: { kind: "fixed", creditUnits: creditsToUnits(35) }, basis: "measured" },
     opportunity_generation: {
-      price: { kind: "fixed", creditUnits: creditsToUnits(30) },
+      price: { kind: "fixed", creditUnits: creditsToUnits(20) },
       basis: "measured",
     },
-    action_plan: { price: { kind: "fixed", creditUnits: creditsToUnits(30) }, basis: "measured" },
+    action_plan: { price: { kind: "fixed", creditUnits: creditsToUnits(20) }, basis: "measured" },
     product_understanding: { price: { kind: "free" }, basis: "measured" },
     deep_scan: { price: { kind: "fixed", creditUnits: creditsToUnits(25) }, basis: "policy" },
     agent_execution: {

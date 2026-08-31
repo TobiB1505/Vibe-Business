@@ -36,14 +36,14 @@ Provider Cost Price Book and Customer Retail Credit Policy stay different concep
 
 ## What a customer pays, and how each number came to be one
 
-`launch-v1` is the policy in force ([ADR 0061](../../../docs/decisions/0061-launch-v1-operation-rate-card.md)); `retail-v1` is closed and kept forever, because the charges that name it must stay explainable.
+`launch-v1` is the policy in force ([ADR 0061](../../../docs/decisions/0061-launch-v1-operation-rate-card.md), re-derived by [ADR 0062](../../../docs/decisions/0062-sonnet-5-price-rise-cancelled.md) after Anthropic withdrew the Sonnet 5 rise it was priced against); `retail-v1` is closed and kept forever, because the charges that name it must stay explainable.
 
 | Operation | Credits | Basis |
 | --- | --- | --- |
 | Product Understanding | free | measured |
-| Business Audit | 55 | measured |
-| Next Moves | 30 | measured |
-| Action Plan | 30 | measured |
+| Business Audit | 35 | measured |
+| Next Moves | 20 | measured |
+| Action Plan | 20 | measured |
 | Deep Scan (additional) | 25 | **policy** — no browser-provider rate exists to check it against |
 | Agent improvement | 150 / 200 / 350 by execution class | **modelled** — `standard` carries the sample; `small` has one observation, `complex` has none |
 

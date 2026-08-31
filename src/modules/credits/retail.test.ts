@@ -30,26 +30,29 @@ const DURING_V1 = new Date("2026-08-20T00:00:00.000Z");
 const DURING_LAUNCH = new Date("2026-09-01T00:00:00.000Z");
 
 describe("approved launch-v1 retail prices", () => {
-  it("charges 55 Credits for a Business Audit", () => {
+  it("charges 35 Credits for a Business Audit", () => {
     expect(retailChargeFor("business_audit", DURING_LAUNCH)).toEqual({
       kind: "charge",
-      creditUnits: creditsToUnits(55),
+      creditUnits: creditsToUnits(35),
       policyVersion: "launch-v1",
     });
   });
 
-  it("charges 30 Credits for Opportunity Generation", () => {
+  it("charges 20 Credits for Opportunity Generation", () => {
     expect(retailChargeFor("opportunity_generation", DURING_LAUNCH)).toEqual({
       kind: "charge",
-      creditUnits: creditsToUnits(30),
+      creditUnits: creditsToUnits(20),
       policyVersion: "launch-v1",
     });
   });
 
-  it("charges 30 Credits for an Action Plan", () => {
+  it("charges 20 Credits for an Action Plan — the one price that did not return to retail-v1", () => {
+    // retail-v1's 15 came from a single observation of $0.044. Five deliveries
+    // now say $0.056, which at 15 Credits is a 74.5% margin — above the guard
+    // floor, below the target the card is derived against.
     expect(retailChargeFor("action_plan", DURING_LAUNCH)).toEqual({
       kind: "charge",
-      creditUnits: creditsToUnits(30),
+      creditUnits: creditsToUnits(20),
       policyVersion: "launch-v1",
     });
   });
@@ -110,7 +113,7 @@ describe("a class-priced operation refuses to guess its tier", () => {
   it("ignores a class supplied for a fixed-price operation", () => {
     expect(retailChargeFor("business_audit", DURING_LAUNCH, { pricingClass: "complex" })).toEqual({
       kind: "charge",
-      creditUnits: creditsToUnits(55),
+      creditUnits: creditsToUnits(35),
       policyVersion: "launch-v1",
     });
   });
@@ -168,10 +171,12 @@ describe("policy resolution", () => {
 });
 
 describe("historical immutability (§38)", () => {
-  it("still resolves an audit run under retail-v1 at 35 Credits, not 55", () => {
+  it("still resolves an audit run under retail-v1 at its own policy's price", () => {
     // The property that matters, and it is now a fact about shipped policy
     // rather than a fixture: nine charges name `retail-v1`, and asking what the
-    // price was when they happened must never return `launch-v1`'s number.
+    // price was when they happened must return that policy's number and its
+    // version — even where `launch-v1` happens to have landed on the same
+    // figure, as it does for the audit and for Next Moves.
     expect(retailChargeFor("business_audit", DURING_V1)).toEqual({
       kind: "charge",
       creditUnits: creditsToUnits(35),
@@ -224,7 +229,7 @@ describe("historical immutability (§38)", () => {
 
     expect(retailChargeFor("business_audit", DURING_LAUNCH, { policies })).toEqual({
       kind: "charge",
-      creditUnits: creditsToUnits(55),
+      creditUnits: creditsToUnits(35),
       policyVersion: "launch-v1",
     });
   });

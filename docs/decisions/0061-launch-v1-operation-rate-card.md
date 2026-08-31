@@ -4,6 +4,17 @@
 **Date:** 2026-08-31
 **Extends:** [ADR 0024](0024-vibe-credits-economic-layer.md), [ADR 0025](0025-stripe-payment-rail-and-credit-grants.md)
 **Satisfies:** [CLAUDE.md](../../CLAUDE.md) rule 78
+**Amended by:** [ADR 0062](0062-sonnet-5-price-rise-cancelled.md) — the rate table below is superseded; the reasoning is not
+
+> **[2026-08-31] Correction.** Anthropic withdrew the Sonnet 5 rise to $3/$15 before it took
+> effect. Every price in this ADR was derived at those rates and is therefore ~57% too high:
+> Business Audit **35** (not 55), Next Moves **20** (not 30), Action Plan **20** (not 30). Deep
+> Scan (25) and the agent tiers (150 / 200 / 350) are unchanged. The derivation rule, the
+> `PriceBasis` design, the guard, and the argument for pricing at all are unaffected — the input
+> changed, not the method. See [ADR 0062](0062-sonnet-5-price-rise-cancelled.md); the current card
+> is [CREDIT_RATE_CARD_LAUNCH_V1.md](../business/CREDIT_RATE_CARD_LAUNCH_V1.md). This ADR is a
+> record and is left standing as written, including the sentence below asserting the increase
+> lands on 2026-09-01, which was true of Anthropic's published schedule on the day it was written.
 
 ## Context
 

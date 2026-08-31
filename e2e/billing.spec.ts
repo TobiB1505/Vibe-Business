@@ -338,9 +338,9 @@ test.describe("the price table under launch-v1 (rule 69)", () => {
     const text = await page.locator("body").innerText();
 
     expect(text).toContain("Business Audit");
-    expect(text).toContain("55 Credits");
+    expect(text).toContain("35 Credits");
     expect(text).toContain("Next moves");
-    expect(text).toContain("30 Credits");
+    expect(text).toContain("20 Credits");
     expect(text).toContain("Deep Scan (additional)");
     expect(text).toContain("25 Credits");
   });
@@ -377,11 +377,12 @@ test.describe("the price table under launch-v1 (rule 69)", () => {
   test("says what a plan buys, in work rather than in Credits", async ({ page }) => {
     const text = await page.locator("body").innerText();
 
-    // 1,000 ÷ 200 = 5, rounded down. Computed from the catalog and the rate
-    // card, never typed, so it cannot drift from what is actually charged.
+    // 1,000 ÷ 200 = 5 and 1,000 ÷ 35 = 28, both rounded down. Computed from the
+    // catalog and the rate card, never typed, so it cannot drift from what is
+    // actually charged.
     expect(text).toContain("Builder buys");
-    expect(text).toContain("5 standard agent improvements, or 18 Business Audits each month");
-    expect(text).toContain("15 standard agent improvements, or 54 Business Audits each month");
+    expect(text).toContain("5 standard agent improvements, or 28 Business Audits each month");
+    expect(text).toContain("15 standard agent improvements, or 85 Business Audits each month");
   });
 
   test("still exposes no provider cost, token count or internal unit", async ({ page }) => {

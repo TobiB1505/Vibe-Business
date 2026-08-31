@@ -1,4 +1,4 @@
-import { calculateProviderCost } from "@/modules/ai/pricing";
+import { calculateProviderCost, type ModelPricing } from "@/modules/ai/pricing";
 import { deriveSandboxCost, type SandboxUsage } from "@/modules/economy/sandbox-cost";
 import { VERCEL_SANDBOX_RATES } from "@/modules/economy/infrastructure-rates";
 import {
@@ -6,30 +6,37 @@ import {
   type ExecutionPricingClass,
 } from "@/modules/economy/execution-class";
 import { RETAIL_OPERATION_KINDS, resolveRetailPrice, type RetailOperationKind } from "./retail";
-import { CREDIT_UNITS_PER_CREDIT, type CreditUnits } from "./units";
+import { creditUnits, CREDIT_UNITS_PER_CREDIT, type CreditUnits } from "./units";
 
 /**
  * What `launch-v1` earns on each thing it sells, recomputed from live rates.
  *
  * ## The failure this exists to make loud
  *
- * On 2026-08-31, `retail-v1`'s prices had been correct for thirteen days and
- * were about to stop being correct overnight. `ai/pricing.ts` already carried
- * `claude-sonnet-5-standard-2026-09` — a 50% rise on every Sonnet token
- * dimension, effective the next midnight — and nothing anywhere connected that
- * scheduled fact to the fact that it moved every margin in the product from
- * roughly 80% to roughly 68%. Not a test, not a type, not an assertion. The
- * prices would simply have become wrong, silently, while every test stayed
- * green.
+ * A provider rate can move without anything in this repository changing, and
+ * on the day it moves every price becomes wrong at once — silently, with the
+ * whole suite still green. This module is the connection between the two
+ * facts. It reads the provider rates **in force at the instant it is asked**
+ * — not a copy, not a constant, the same `calculateProviderCost` the ledger
+ * uses — applies them to the frozen measured profiles below, and reports the
+ * contribution margin of each price. Its test fails when one drops through the
+ * floor.
  *
- * This module is the missing connection. It reads the provider rates **in force
- * at the instant it is asked** — not a copy, not a constant, the same
- * `calculateProviderCost` the ledger uses — applies them to the measured token
- * and duration profiles below, and reports the contribution margin of each
- * price. Its test fails when one drops through the floor.
+ * ## Why it cuts both ways
  *
- * The next scheduled rate change is therefore a red test with a date on it,
- * rather than a discovery made later from a bank statement.
+ * It was written for a 50% Sonnet rise scheduled for 2026-09-01, which would
+ * have taken `retail-v1` from roughly 80% margin to roughly 68% overnight. It
+ * then earned its keep in the opposite direction: **Anthropic withdrew that
+ * rise**, and because this module prices from the table rather than from a
+ * stored dollar figure, correcting one row in `ai/pricing.ts` recomputed every
+ * margin and showed that the raised prices built for the increase were now
+ * ~57% too high (ADR 0062).
+ *
+ * That is the property worth keeping. A guard that only detected *increases*
+ * would have left a cancelled increase in the prices forever, because nothing
+ * would have been failing. `margin-guard.test.ts` proves both directions: a
+ * synthetic future rate rise still drives a margin below {@link MARGIN_FLOOR},
+ * and the live rates still clear it.
  *
  * ## What this is not
  *
@@ -62,8 +69,36 @@ import { CREDIT_UNITS_PER_CREDIT, type CreditUnits } from "./units";
  */
 export const CREDIT_VALUE_NANO_USD = 17_640_000;
 
-/** EUR/USD used to derive {@link CREDIT_VALUE_NANO_USD}. Recorded, never computed with. */
+/**
+ * EUR/USD used to derive {@link CREDIT_VALUE_NANO_USD}.
+ *
+ * **A stated planning assumption, not a live rate.** Vibe prices in euro and
+ * pays its providers in dollars; nothing in this repository observes the
+ * market, and no FX service exists or is wanted here. It is declared once, in
+ * this file, and carried into {@link economicsAssumptions} so that a report
+ * cannot quote a margin without also disclosing the rate that produced it.
+ *
+ * Changing it is a re-derivation of the whole card, not a config tweak — see
+ * `docs/business/CREDIT_RATE_CARD_LAUNCH_V1.md`.
+ */
 export const ASSUMED_EUR_USD = 1.08;
+
+/**
+ * The share of revenue the card allows provider cost to take: 20%, i.e. an 80%
+ * contribution margin target.
+ *
+ * The divisor in the derivation rule every price in `retail.ts` was produced
+ * by. It existed only as prose in three docblocks, which is how a target ends
+ * up being three slightly different numbers; it is a constant here so the
+ * derivation test computes against the same value the documentation quotes.
+ *
+ * Distinct from {@link MARGIN_FLOOR} below, and from
+ * `economy/intelligence/model-version.ts`'s `marginTarget: 0.75` — that one is
+ * the *estimator's* assumption about a future run, is append-only, and answers
+ * a different question. Three numbers, three purposes; the mistake would be
+ * reconciling them into one.
+ */
+export const TARGET_COST_SHARE = 0.2;
 
 /**
  * The floor a live price may not fall through: 70% contribution margin.
@@ -136,8 +171,10 @@ export const LAUNCH_V1_COST_PROFILES: readonly CostProfile[] = [
   {
     operation: "business_audit",
     model: SONNET,
-    // 27 costed jobs. $0.1125 mean at the pre-rise rates; the delivered basis
-    // adds the 13 failed calls that cost $0.4470 and produced nothing.
+    // 27 costed jobs, $0.1125 mean; the delivered basis adds the 13 failed
+    // calls that cost $0.4470 and produced nothing. A failed audit's measured
+    // mean cost is *higher* than a successful one's, so pricing against the
+    // success mean would claim a margin Vibe does not have.
     inputTokens: 12_530,
     outputTokens: 9_680,
     cacheReadInputTokens: 0,
@@ -191,6 +228,45 @@ export const LAUNCH_V1_COST_PROFILES: readonly CostProfile[] = [
   },
 ];
 
+/**
+ * Every assumption a margin figure rests on, in one object.
+ *
+ * Returned alongside the margins rather than left in docblocks, because a
+ * contribution margin is meaningless without the credit value and the FX rate
+ * that produced it — and a reader who has to go and find them will quote the
+ * number without them.
+ */
+export type EconomicsAssumptions = {
+  creditValueNanoUsd: number;
+  /** Stated, never observed. See {@link ASSUMED_EUR_USD}. */
+  assumedEurUsd: number;
+  targetCostShare: number;
+  marginFloor: number;
+};
+
+export function economicsAssumptions(): EconomicsAssumptions {
+  return {
+    creditValueNanoUsd: CREDIT_VALUE_NANO_USD,
+    assumedEurUsd: ASSUMED_EUR_USD,
+    targetCostShare: TARGET_COST_SHARE,
+    marginFloor: MARGIN_FLOOR,
+  };
+}
+
+/**
+ * The smallest customer-facing price that meets the target, in credit units.
+ *
+ * The derivation rule itself, executable: cost over the target cost share over
+ * what a Credit is worth, rounded up to the nearest five. Exported so the test
+ * can check the shipped prices against the rule rather than against numbers
+ * retyped from a document — which is how a card and its own documentation
+ * drift apart.
+ */
+export function targetPriceCreditUnits(costNanoUsd: number): CreditUnits {
+  const credits = costNanoUsd / TARGET_COST_SHARE / CREDIT_VALUE_NANO_USD;
+  return creditUnits(Math.ceil(credits / 5) * 5 * CREDIT_UNITS_PER_CREDIT);
+}
+
 export type MarginReport = {
   operation: RetailOperationKind;
   pricingClass: ExecutionPricingClass | null;
@@ -235,8 +311,16 @@ function priceFor(profile: CostProfile, at: Date): CreditUnits | null {
  * of the error is stated rather than hidden: a real margin is at or slightly
  * below what this reports, never above it by much, because the floor omits
  * idle CPU that was nonetheless provisioned.
+ *
+ * `pricing` overrides the provider price book for one call. It exists for the
+ * hypothetical-increase test and has no production caller; the default is the
+ * real table, which stays the single source of truth for provider cost.
  */
-export function marginFor(profile: CostProfile, at: Date = new Date()): MarginReport | null {
+export function marginFor(
+  profile: CostProfile,
+  at: Date = new Date(),
+  pricing?: readonly ModelPricing[],
+): MarginReport | null {
   const credits = priceFor(profile, at);
   if (credits === null) return null;
 
@@ -247,6 +331,11 @@ export function marginFor(profile: CostProfile, at: Date = new Date()): MarginRe
     cacheReadInputTokens: profile.cacheReadInputTokens,
     cacheCreationInputTokens: profile.cacheCreationInputTokens,
     at,
+    // Defaults to the real price book. Supplied only to ask what a *different*
+    // set of provider rates would do to this price — which is how the test
+    // proves the guard still refuses an increase now that the one it was built
+    // for was cancelled.
+    pricing,
   });
 
   const sandbox = profile.sandbox ? deriveSandboxCost(profile.sandbox, VERCEL_SANDBOX_RATES) : null;
@@ -268,8 +357,11 @@ export function marginFor(profile: CostProfile, at: Date = new Date()): MarginRe
 }
 
 /** Every profile's margin at the rates in force. */
-export function launchV1Margins(at: Date = new Date()): readonly MarginReport[] {
-  return LAUNCH_V1_COST_PROFILES.map((profile) => marginFor(profile, at)).filter(
+export function launchV1Margins(
+  at: Date = new Date(),
+  pricing?: readonly ModelPricing[],
+): readonly MarginReport[] {
+  return LAUNCH_V1_COST_PROFILES.map((profile) => marginFor(profile, at, pricing)).filter(
     (report): report is MarginReport => report !== null,
   );
 }
