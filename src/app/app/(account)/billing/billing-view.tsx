@@ -13,8 +13,17 @@ import { Surface } from "@/components/ui/surface";
 import { MonoLabel, SectionHeader } from "@/components/ui/typography";
 import { getPlan, listCreditPacks, listPaidPlans } from "@/modules/billing/catalog";
 import type { BillingOverview, CreditActivityEntry } from "@/modules/billing/overview";
-import { RETAIL_OPERATION_KINDS, resolveRetailPrice } from "@/modules/credits/retail";
-import { formatCreditsForDisplay } from "@/modules/credits/units";
+import {
+  RETAIL_OPERATION_KINDS,
+  resolveRetailPrice,
+  retailChargeFor,
+  type RetailOperationKind,
+} from "@/modules/credits/retail";
+import {
+  EXECUTION_PRICING_CLASSES,
+  type ExecutionPricingClass,
+} from "@/modules/economy/execution-class";
+import { formatCreditsForDisplay, type CreditUnits } from "@/modules/credits/units";
 import {
   BuyCreditPackForm,
   ClaimWelcomeCreditsForm,
@@ -39,11 +48,28 @@ export const CHECKOUT_NOTICES: Record<
   },
 };
 
-const OPERATION_NAMES: Record<string, string> = {
+const OPERATION_NAMES: Record<RetailOperationKind, string> = {
   business_audit: "Business Audit",
   opportunity_generation: "Next moves",
   action_plan: "Action Plan",
   product_understanding: "Understanding your product",
+  deep_scan: "Deep Scan (additional)",
+  agent_execution: "Agent improvement",
+};
+
+/**
+ * What a class-priced row shows instead of one number.
+ *
+ * Agent work costs one of three amounts and which one is decided by the step,
+ * before anything runs. A price table has no step, so it shows all three rather
+ * than a range or a "from" — a customer comparing plans needs to know the top
+ * of the scale, and "from 150 Credits" hides exactly the number they would want
+ * to budget against.
+ */
+const EXECUTION_CLASS_NAMES: Record<ExecutionPricingClass, string> = {
+  small: "Focused",
+  standard: "Standard",
+  complex: "Broad",
 };
 
 function formatDate(iso: string): string {
@@ -227,25 +253,66 @@ export function BillingView({
               <MonoLabel id="credit-prices-heading" as="h2" className="text-mint">Credit prices</MonoLabel>
               <p className="text-fg mt-2 font-semibold">Know the cost before you start</p>
             </div>
-            <span className="text-fg-meta hidden items-center gap-1.5 text-xs sm:inline-flex"><InfoIcon size={14} /> Fixed prices</span>
+            <span className="text-fg-meta hidden items-center gap-1.5 text-xs sm:inline-flex"><InfoIcon size={14} /> Known before you start</span>
           </div>
           <ul className="divide-line-2 divide-y">
             {RETAIL_OPERATION_KINDS.map((operation) => {
               const resolved = resolveRetailPrice(operation);
-              if (!resolved) return null;
+              // An operation this policy does not sell has no row at all. A
+              // "—" would still be a claim about a price.
+              if (!resolved || resolved.price.kind === "not_priced") return null;
+
+              const price = resolved.price;
+
               return (
-                <li key={operation} className="flex items-center justify-between gap-4 px-5 py-4 sm:px-6">
+                <li key={operation} className="flex items-start justify-between gap-4 px-5 py-4 sm:px-6">
                   <div className="flex min-w-0 items-center gap-3">
                     <span aria-hidden="true" className="bg-mint-tint text-mint flex size-9 shrink-0 items-center justify-center rounded-nav"><SparklesIcon size={16} /></span>
-                    <span className="text-fg-body text-sm">{OPERATION_NAMES[operation]}</span>
+                    <span className="text-fg-body text-sm">
+                      {OPERATION_NAMES[operation]}
+                      {resolved.basis !== "measured" && (
+                        <sup className="text-fg-meta ml-0.5 text-[0.65rem]">*</sup>
+                      )}
+                    </span>
                   </div>
-                  <span className="text-fg shrink-0 text-sm font-semibold tabular-nums">
-                    {resolved.price.kind === "free" ? "Free" : `${formatCreditsForDisplay(resolved.price.creditUnits)} Credits`}
-                  </span>
+
+                  {price.kind === "by_execution_class" ? (
+                    <span className="flex shrink-0 flex-col items-end gap-1">
+                      {EXECUTION_PRICING_CLASSES.map((pricingClass) => (
+                        <span key={pricingClass} className="flex items-baseline gap-2">
+                          <span className="text-fg-meta text-xs">{EXECUTION_CLASS_NAMES[pricingClass]}</span>
+                          <span className="text-fg text-sm font-semibold tabular-nums">
+                            {formatCreditsForDisplay(price.creditUnitsByClass[pricingClass])} Credits
+                          </span>
+                        </span>
+                      ))}
+                    </span>
+                  ) : (
+                    <span className="text-fg shrink-0 text-sm font-semibold tabular-nums">
+                      {price.kind === "free"
+                        ? "Free"
+                        : `${formatCreditsForDisplay(price.creditUnits)} Credits`}
+                    </span>
+                  )}
                 </li>
               );
             })}
           </ul>
+
+          {/*
+            The footnote, not a badge.
+
+            A badge next to a price reads as a property of the offer — "new",
+            "popular", "discounted". This is a statement about Vibe's own
+            confidence in the number, which is a smaller and more honest claim,
+            and it belongs where a reader looks after the table rather than
+            beside the figure they are trying to compare.
+          */}
+          <p className="text-fg-meta border-line-2 border-t px-5 py-4 text-xs sm:px-6">
+            <span aria-hidden="true">*</span> Agent prices scale with how broad a
+            change is, and Vibe tells you which before you start. A Deep Scan
+            price covers the browser session that reads your signed-in product.
+          </p>
         </Surface>
 
         <Surface as="section" aria-labelledby="credit-packs-heading" id="credit-packs" level="panel" padding="none" className="scroll-mt-6 overflow-hidden">
@@ -311,6 +378,30 @@ export function BillingView({
               <StartPlanForm key={plan.key} planKey={plan.key} planName={plan.name} price={`${formatPrice(plan.priceCents)} / month`} credits={formatCreditsForDisplay(plan.monthlyCreditUnits)} disabled={!stripeReady} current={overview.plan.key === plan.key} />
             ))}
           </div>
+
+          {/*
+            What the grant is actually worth, in the units of work the customer
+            came here to buy.
+
+            "1,000 Credits" is a number nobody can price without the table
+            above and a calculator, and a customer choosing a plan is choosing
+            how much work they can do — not how many Credits they will hold.
+            Both figures are computed from the same catalog and the same rate
+            card the charge uses, so this can never drift from the real answer.
+          */}
+          <dl className="border-line-2 divide-line-2 divide-y border-t">
+            {plans.map((plan) => {
+              const buys = planPurchasingPower(plan.monthlyCreditUnits);
+              if (!buys) return null;
+
+              return (
+                <div key={plan.key} className="flex items-baseline justify-between gap-4 px-5 py-3 sm:px-6">
+                  <dt className="text-fg-meta text-xs">{plan.name} buys, each month</dt>
+                  <dd className="text-fg-body text-right text-xs">{buys}</dd>
+                </div>
+              );
+            })}
+          </dl>
         </Surface>
       </div>
 
@@ -319,6 +410,35 @@ export function BillingView({
       </footer>
     </div>
   );
+}
+
+/**
+ * A monthly grant expressed as work, not as Credits.
+ *
+ * Whole units only, and rounded **down**: a plan that funds 4.8 audits buys
+ * four, and telling somebody it buys five is the kind of small dishonesty a
+ * billing page cannot afford. Returns null when nothing in the card is priced,
+ * so a policy with no prices renders no claim rather than "0 audits".
+ */
+function planPurchasingPower(monthlyCreditUnits: CreditUnits): string | null {
+  if (monthlyCreditUnits <= 0) return null;
+
+  const agent = retailChargeFor("agent_execution", new Date(), { pricingClass: "standard" });
+  const audit = retailChargeFor("business_audit");
+
+  const parts: string[] = [];
+
+  if (agent.kind === "charge") {
+    const runs = Math.floor(monthlyCreditUnits / agent.creditUnits);
+    if (runs > 0) parts.push(`${runs} standard agent ${runs === 1 ? "improvement" : "improvements"}`);
+  }
+
+  if (audit.kind === "charge") {
+    const audits = Math.floor(monthlyCreditUnits / audit.creditUnits);
+    if (audits > 0) parts.push(`${audits} Business ${audits === 1 ? "Audit" : "Audits"}`);
+  }
+
+  return parts.length === 0 ? null : `${parts.join(", or ")}`;
 }
 
 function PlanBenefit({ children }: { children: React.ReactNode }) {
