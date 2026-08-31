@@ -72,13 +72,19 @@ export function BuyCreditPackForm({
       <input type="hidden" name="pack" value={packKey} />
       <div className="flex items-center justify-between gap-4">
         <div className="min-w-0">
-          <p className="text-fg font-semibold tabular-nums">{credits} Credits</p>
+          <p className="text-fg font-semibold tabular-nums">
+            {credits} Credits
+          </p>
           <p className="text-fg-muted mt-1 text-sm">
             <span>{price}</span> one time
           </p>
         </div>
         {disabled ? (
-          <button type="button" disabled className={buttonClasses({ variant: "secondary", size: "sm" })}>
+          <button
+            type="button"
+            disabled
+            className={buttonClasses({ variant: "secondary", size: "sm" })}
+          >
             Unavailable
           </button>
         ) : (
@@ -117,18 +123,31 @@ export function StartPlanForm({
         <div className="min-w-0">
           <p className="text-fg font-semibold">{planName}</p>
           <p className="text-fg-muted mt-1 text-sm">{price}</p>
-          <p className="text-fg-prose mt-1 text-xs tabular-nums">{credits} Credits each month</p>
+          <p className="text-fg-prose mt-1 text-xs tabular-nums">
+            {credits} Credits each month
+          </p>
         </div>
         {current ? (
           <span className="bg-mint-tint text-mint border-mint-line shrink-0 rounded-full border px-3 py-1 text-xs font-semibold">
             Current<span className="sr-only"> plan</span>
           </span>
         ) : disabled ? (
-          <button type="button" disabled className={buttonClasses({ variant: "secondary", size: "sm" })}>
+          <button
+            type="button"
+            disabled
+            className={buttonClasses({ variant: "secondary", size: "sm" })}
+          >
             Unavailable
           </button>
         ) : (
-          <SubmitButton variant="accent" pendingLabel="Opening…">
+          // `whitespace-nowrap`: "Choose Builder" wrapped to two lines in the
+          // narrow plans column, giving each plan a two-line button beside a
+          // one-line price.
+          <SubmitButton
+            variant="accent"
+            pendingLabel="Opening…"
+            className="whitespace-nowrap"
+          >
             Choose {planName}
           </SubmitButton>
         )}

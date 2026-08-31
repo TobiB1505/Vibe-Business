@@ -7,7 +7,7 @@ import {
   listAllocationsForGrants,
   reconcileAndRepairLotAllocations,
 } from "@/modules/credits/lot-store";
-import { spendableCapacity } from "@/modules/credits/lots";
+import { remainingCapacity, spendableCapacity, spendableLots, type CreditLot } from "@/modules/credits/lots";
 import { reconcileAndRepairBalance } from "@/modules/credits/service";
 import { findOrphanedHolds } from "@/modules/credits/orphaned-holds";
 import { listOperationRunsByIds } from "@/modules/operations/store";
@@ -17,30 +17,47 @@ import {
   findCreditAccountByUser,
   listActiveReservations,
   listLedgerEntries,
+  listReservationsByIds,
   sumLedgerDeltas,
+  type LedgerEntry,
 } from "@/modules/credits/store";
-import { formatCreditsForDisplay, type CreditUnits, ZERO_CREDITS } from "@/modules/credits/units";
-import { welcomeGrantIdempotencyKey, type PlanKey } from "./catalog";
+import {
+  creditUnits,
+  formatCreditsForDisplay,
+  type CreditUnits,
+  ZERO_CREDITS,
+} from "@/modules/credits/units";
+import { DEEP_SCAN_RESERVATION_PREFIX } from "@/modules/authenticated-product-intelligence/billing";
+import { GRANT_KEY_PREFIXES, welcomeGrantIdempotencyKey, type PlanKey } from "./catalog";
 import { findActiveSubscription } from "./store";
 
 /**
  * The customer billing read model (BILLING CORE-2 §49–§53, §94).
  *
- * ## The five questions this exists to answer
+ * ## The questions this exists to answer
  *
  * ```
  * How many Credits do I have?
+ * How much of my included monthly allowance is left, and when does it renew?
+ * Is anything holding Credits right now?
  * What plan am I on?
  * When do my expiring Credits expire?
  * How can I get more?
  * What did I recently spend Credits on?
  * ```
  *
- * And nothing else. There is no lot breakdown, no allocation view, no reserved
- * figure, no provider cost, no token count and no nanodollar — not because
- * they are hidden, but because there is no field here that could carry them
- * (§50, §52). A customer's mental model is "I have Credits and things cost
- * Credits", and the type is shaped to keep it that way.
+ * And nothing else. There is no lot breakdown, no allocation view, no provider
+ * cost, no token count and no nanodollar — not because they are hidden, but
+ * because there is no field here that could carry them (§50, §52). A customer's
+ * mental model is "I have Credits and things cost Credits", and the type is
+ * shaped to keep it that way.
+ *
+ * `reservedCredits` is the one figure that comes close to the line, and it is
+ * here because of what a customer sees without it: a balance lower than their
+ * own history explains, with nothing on the page accounting for the difference.
+ * It is reported as *Credits held by work that is running*, never as a
+ * reservation, an allocation or a hold — the fact is the customer's, the
+ * vocabulary is not.
  *
  * ## Read-only, by construction
  *
@@ -73,11 +90,13 @@ export type CreditActivityEntry = {
 };
 
 /**
- * Human labels for what moved a balance.
+ * The label a movement falls back to when nothing more specific resolves.
  *
- * Deliberately coarse. A customer needs to recognize the line, not audit it —
- * "Business Audit · -35" is the whole requirement, and a more precise label
- * would mean exposing the internal vocabulary §94 forbids.
+ * Deliberately coarse, and deliberately still here. Everything below tries to
+ * name *what the Credits were for*; this is what remains true when that fails —
+ * a charge whose operation row has been erased, a manual adjustment, a grant
+ * from a source that predates the key prefixes. A vague label that is true
+ * beats a specific one that was guessed.
  */
 const LEDGER_LABELS: Record<string, string> = {
   grant: "Credits added",
@@ -89,16 +108,51 @@ const LEDGER_LABELS: Record<string, string> = {
 };
 
 /**
- * Operation labels, keyed by the retail policy's own operation names.
+ * What a charge bought, in the words the rest of the product uses.
  *
- * A charge records which operation it paid for through its reservation, and
- * this is where that becomes a sentence a founder recognizes.
+ * Keyed by `operation_runs.operation_type`, and matching the names on the
+ * billing page's own price table — the point of the line is that a founder can
+ * put "Business Audit · -35" next to "Business Audit · 35 Credits" and see the
+ * same two words.
+ *
+ * ## Why this was dead code until now
+ *
+ * It existed, exported "for the activity view's tests", and no renderer ever
+ * called it: every charge went through {@link LEDGER_LABELS} and came out as
+ * "Credits used". The browser fixtures meanwhile said "Agent improvement", so
+ * the suite asserted a label production could not produce — rule 69's failure
+ * mode running backwards, a screen *less* honest than the test of it.
+ *
+ * Only operations a customer actually pays for are listed. An operation type
+ * absent here has no customer-facing name because it has no customer-facing
+ * price, and it falls back rather than inventing one.
  */
 const OPERATION_LABELS: Record<string, string> = {
   business_audit: "Business Audit",
   opportunity_generation: "Next moves",
   action_plan: "Action Plan",
+  agent_execution: "Agent improvement",
 };
+
+/** The one paid operation with no `operation_runs` row to read a name from. */
+const DEEP_SCAN_LABEL = "Deep Scan";
+
+/**
+ * Where added Credits came from, by the key that wrote them.
+ *
+ * A `grant` row records an amount and an idempotency key and no source kind, so
+ * this is the only thing that separates "your plan renewed" from "you bought a
+ * pack" — a distinction a customer reading their history plainly cares about,
+ * and the difference between one meaningful line and three identical ones.
+ *
+ * Prefix order matters only in that it must not be ambiguous; the three
+ * prefixes in `GRANT_KEY_PREFIXES` share no common start.
+ */
+const GRANT_LABELS: readonly { prefix: string; label: string }[] = [
+  { prefix: GRANT_KEY_PREFIXES.subscription, label: "Monthly Credits" },
+  { prefix: GRANT_KEY_PREFIXES.topUp, label: "Credit Pack" },
+  { prefix: GRANT_KEY_PREFIXES.welcome, label: "Welcome Credits" },
+];
 
 export type BillingPlanView = {
   key: PlanKey;
@@ -109,13 +163,53 @@ export type BillingPlanView = {
   endingAtPeriodEnd: boolean;
 };
 
+/**
+ * What this month's included Credits have left in them.
+ *
+ * ## Why "remaining" and not "used"
+ *
+ * Because a lot's `allocatedCreditUnits` merges two different things — Credits
+ * already charged, and Credits a *live reservation* is holding — and there is
+ * no third figure that separates them per lot. "540 of 3,000 used" would
+ * therefore count an agent run that is still running as spent: the number would
+ * jump when the run started and then not move when it settled, which is a
+ * billing screen telling a customer something happened that did not.
+ *
+ * `remaining` conflates nothing. It is exactly what {@link spendableCapacity}
+ * would fund out of this lot, and what is held rather than spent is reported
+ * separately as {@link BillingOverview.reservedCredits}.
+ *
+ * Null on Free, and null for a subscriber whose period lot has lapsed — in both
+ * cases there is no monthly allowance to be a fraction of.
+ */
+export type MonthlyAllowanceView = {
+  remaining: CreditUnits;
+  initial: CreditUnits;
+  displayRemaining: string;
+  displayInitial: string;
+};
+
 export type BillingOverview = {
   /** Credits that can fund new work right now. The only number §50 shows. */
   availableCredits: CreditUnits;
   /** Already formatted, e.g. `"2,480"`. */
   displayAvailable: string;
+  /**
+   * Credits held by work that is still running, when there is any.
+   *
+   * Already excluded from `availableCredits` — a hold reduces what a new
+   * operation can use, which is the whole point of one. Surfaced separately
+   * only so that a balance which dropped without a charge appearing in the
+   * history has a visible explanation, and shown on the page only when it is
+   * non-zero: a permanent "0 Credits reserved" line teaches a customer about
+   * reservations, which is precisely what §52 says not to do.
+   */
+  reservedCredits: CreditUnits;
+  displayReserved: string;
   /** The next tranche to lapse, when one exists (§50). */
   nextExpiry: { credits: CreditUnits; displayCredits: string; expiresAt: string } | null;
+  /** This subscription period's included Credits. Null when there is no plan. */
+  monthlyAllowance: MonthlyAllowanceView | null;
   plan: BillingPlanView;
   recentActivity: CreditActivityEntry[];
   /**
@@ -168,7 +262,10 @@ export async function getBillingOverview(
     return {
       availableCredits: ZERO_CREDITS,
       displayAvailable: "0",
+      reservedCredits: ZERO_CREDITS,
+      displayReserved: "0",
       nextExpiry: null,
+      monthlyAllowance: null,
       plan,
       recentActivity: [],
       welcomeGranted: false,
@@ -229,9 +326,24 @@ export async function getBillingOverview(
   const welcomeKey = welcomeGrantIdempotencyKey(params.userId);
   const welcomeGranted = entries.some((entry) => entry.idempotencyKey === welcomeKey);
 
+  /*
+   * What live work is holding, from the reservations this call already read.
+   *
+   * They were fetched for `reconcileAndRepairBalance` and then discarded. One
+   * sum over an array in memory is the entire cost of answering "why is my
+   * balance lower than my history explains?".
+   */
+  const reservedCredits = creditUnits(
+    reservations.reduce((total, reservation) => total + reservation.reservedCredits, 0),
+  );
+
+  const shown = entries.slice(0, limit);
+
   return {
     availableCredits,
     displayAvailable: formatCredits(availableCredits),
+    reservedCredits,
+    displayReserved: formatCredits(reservedCredits),
     nextExpiry: expiry
       ? {
           credits: expiry.credits,
@@ -239,23 +351,148 @@ export async function getBillingOverview(
           expiresAt: expiry.expiresAt,
         }
       : null,
+    monthlyAllowance: monthlyAllowance(lotReconciliation.lots, now),
     plan,
-    recentActivity: entries.slice(0, limit).map(toActivityEntry),
+    recentActivity: await describeActivity(supabase, shown),
     welcomeGranted,
   };
 }
 
-function toActivityEntry(entry: {
-  id: string;
-  kind: string;
-  creditDelta: CreditUnits;
-  createdAt: string;
-  operationRunId: string | null;
-  rateCardVersion: string | null;
-}): CreditActivityEntry {
+/**
+ * This period's included Credits, from the subscription lot funding them.
+ *
+ * A subscription grant is written per invoice and expires at the period end, so
+ * at most one is spendable at any instant — which is what makes "of 3,000" a
+ * fact rather than a sum over an unknown number of tranches. Two would mean a
+ * grant outlived its period, and taking the newest is the honest reading of
+ * that: it is the one the customer is currently inside.
+ *
+ * Purchased packs are deliberately not counted. They are not part of a monthly
+ * allowance and adding them would make the denominator move when somebody
+ * topped up.
+ */
+function monthlyAllowance(lots: readonly CreditLot[], now: Date): MonthlyAllowanceView | null {
+  const subscriptionLots = spendableLots(lots, now)
+    .filter((lot) => lot.sourceKind === "subscription")
+    .sort((a, b) => Date.parse(b.grantedAt) - Date.parse(a.grantedAt));
+
+  const lot = subscriptionLots[0];
+  if (!lot) return null;
+
+  const remaining = remainingCapacity(lot);
+
+  return {
+    remaining,
+    initial: lot.initialCreditUnits,
+    displayRemaining: formatCredits(remaining),
+    displayInitial: formatCredits(lot.initialCreditUnits),
+  };
+}
+
+/**
+ * Names each movement, in as few reads as the names require.
+ *
+ * ## The rule every branch obeys
+ *
+ * A label is *resolved* from a record or it is not claimed. Nothing here
+ * guesses from an amount, from a position in the list, or from what an entry
+ * probably was — an activity line is the only account a customer will ever get
+ * of where their Credits went, and a plausible wrong label is worse than a
+ * vague right one. Unresolved falls back to {@link LEDGER_LABELS}.
+ *
+ * ## Two reads, both batched, both over the rows actually displayed
+ *
+ * Charges name their operation through `operation_runs`. Deep Scan is the one
+ * paid operation with no row there — it is not a durable operation and
+ * `credits/store.ts` records `operationRunId: null` for it deliberately — so
+ * its reservations are read instead and matched on the prefix that identifies
+ * them. Grants and purchases need no read at all: the key that wrote them
+ * already says where they came from.
+ *
+ * ## Never fails the page
+ *
+ * Same reasoning as `reportOrphanedHolds` below, and it matters more here
+ * because this runs on the happy path: if naming a charge throws, the customer
+ * loses their *balance* — the one thing they opened this page for — to a lookup
+ * that only decorates it. So both reads degrade to no records, every line falls
+ * back to {@link LEDGER_LABELS}, and the history renders in the vaguer
+ * vocabulary rather than not at all.
+ */
+async function describeActivity(
+  supabase: SupabaseClient,
+  entries: readonly LedgerEntry[],
+): Promise<CreditActivityEntry[]> {
+  const operationIds = [
+    ...new Set(
+      entries
+        .filter((entry) => entry.kind === "charge" && entry.operationRunId !== null)
+        .map((entry) => entry.operationRunId as string),
+    ),
+  ];
+
+  const reservationIds = [
+    ...new Set(
+      entries
+        .filter((entry) => entry.kind === "charge" && entry.operationRunId === null)
+        .map((entry) => entry.reservationId)
+        .filter((id): id is string => id !== null),
+    ),
+  ];
+
+  const [operations, reservations] = await Promise.all([
+    listOperationRunsByIds(supabase, operationIds).catch(namingFailed("operation_runs")),
+    listReservationsByIds(supabase, reservationIds).catch(namingFailed("reservations")),
+  ]);
+
+  const operationTypeById = new Map(operations.map((run) => [run.id, run.operationType]));
+  const reservationKeyById = new Map(reservations.map((held) => [held.id, held.idempotencyKey]));
+
+  return entries.map((entry) => toActivityEntry(entry, { operationTypeById, reservationKeyById }));
+}
+
+/** Logs, then yields nothing to name entries with. Never rethrows. */
+function namingFailed(source: string): (error: unknown) => never[] {
+  return (error: unknown) => {
+    console.error("[billing] could not name recent Credit activity", { source, error });
+    return [];
+  };
+}
+
+/** The label for one entry, or null when nothing in the record names it. */
+function resolveLabel(
+  entry: LedgerEntry,
+  records: {
+    operationTypeById: ReadonlyMap<string, string>;
+    reservationKeyById: ReadonlyMap<string, string>;
+  },
+): string | null {
+  if (entry.kind === "charge") {
+    if (entry.operationRunId !== null) {
+      const operationType = records.operationTypeById.get(entry.operationRunId);
+      return operationType ? (OPERATION_LABELS[operationType] ?? null) : null;
+    }
+
+    const key = entry.reservationId ? records.reservationKeyById.get(entry.reservationId) : undefined;
+    return key?.startsWith(DEEP_SCAN_RESERVATION_PREFIX) ? DEEP_SCAN_LABEL : null;
+  }
+
+  if (entry.kind === "grant" || entry.kind === "purchase") {
+    return GRANT_LABELS.find(({ prefix }) => entry.idempotencyKey.startsWith(prefix))?.label ?? null;
+  }
+
+  return null;
+}
+
+function toActivityEntry(
+  entry: LedgerEntry,
+  records: {
+    operationTypeById: ReadonlyMap<string, string>;
+    reservationKeyById: ReadonlyMap<string, string>;
+  },
+): CreditActivityEntry {
   return {
     id: entry.id,
-    label: LEDGER_LABELS[entry.kind] ?? "Credits",
+    label: resolveLabel(entry, records) ?? LEDGER_LABELS[entry.kind] ?? "Credits",
     creditDelta: entry.creditDelta,
     displayAmount: `${entry.creditDelta > 0 ? "+" : ""}${formatCredits(entry.creditDelta)}`,
     at: entry.createdAt,
@@ -281,9 +518,6 @@ export async function getHeaderCreditBalance(
 
   return { availableCredits, display: formatCredits(availableCredits) };
 }
-
-/** Exported for the activity view's tests, which pin the customer-facing labels. */
-export const CREDIT_ACTIVITY_LABELS = { ledger: LEDGER_LABELS, operation: OPERATION_LABELS };
 
 /**
  * Notices a Credit hold still standing over an operation that has finished

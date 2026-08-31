@@ -55,9 +55,20 @@ import type { DeepScanAccessMode } from "./entitlement";
  * project row (Rule 53).
  */
 
+/**
+ * What every Deep Scan reservation's idempotency key begins with.
+ *
+ * A constant rather than a literal inside the function below, because it is the
+ * only thing that identifies a Deep Scan charge after the fact: these
+ * reservations carry `operationRunId: null` deliberately (see below), so the
+ * billing page has no operation row to read a name from and matches this
+ * instead. Two literals that had to agree is exactly the drift this avoids.
+ */
+export const DEEP_SCAN_RESERVATION_PREFIX = "deep-scan:";
+
 /** The reservation identity of one Deep Scan attempt. */
 export function deepScanIdempotencyKey(sessionId: string): string {
-  return `deep-scan:${sessionId}`;
+  return `${DEEP_SCAN_RESERVATION_PREFIX}${sessionId}`;
 }
 
 /**

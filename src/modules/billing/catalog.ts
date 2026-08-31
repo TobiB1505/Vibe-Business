@@ -201,6 +201,25 @@ export const WELCOME_CREDIT_UNITS: CreditUnits = creditsToUnits(100);
 export const WELCOME_CREDIT_VALIDITY_DAYS = 30;
 
 /**
+ * What each kind of grant's idempotency key begins with.
+ *
+ * The three builders below already encoded this, one literal each. Naming the
+ * prefixes makes them readable in the other direction, which is what the
+ * billing page needs: a `grant` or `purchase` ledger row records no source
+ * kind, so where its Credits came from — a renewal, a pack, the welcome
+ * allowance — is recoverable only from the key that wrote it.
+ *
+ * Reading a key is a *display* concern and nothing more. The uniqueness
+ * guarantee stays the ledger's index, and no authority anywhere is derived
+ * from a string prefix.
+ */
+export const GRANT_KEY_PREFIXES = {
+  welcome: "welcome-credit-v1:",
+  subscription: "subscription-period-v1:",
+  topUp: "topup-v1:",
+} as const;
+
+/**
  * The durable identity of an account's one Welcome grant.
  *
  * Versioned in the string so a future, deliberately different welcome offer is
@@ -211,7 +230,7 @@ export const WELCOME_CREDIT_VALIDITY_DAYS = 30;
  * index (§70).
  */
 export function welcomeGrantIdempotencyKey(userId: string): string {
-  return `welcome-credit-v1:${userId}`;
+  return `${GRANT_KEY_PREFIXES.welcome}${userId}`;
 }
 
 /**
@@ -223,7 +242,7 @@ export function welcomeGrantIdempotencyKey(userId: string): string {
  * Stripe may restate.
  */
 export function subscriptionGrantIdempotencyKey(stripeInvoiceId: string): string {
-  return `subscription-period-v1:${stripeInvoiceId}`;
+  return `${GRANT_KEY_PREFIXES.subscription}${stripeInvoiceId}`;
 }
 
 /**
@@ -233,5 +252,5 @@ export function subscriptionGrantIdempotencyKey(stripeInvoiceId: string): string
  * `checkout.session.completed` computes the same key and posts nothing.
  */
 export function topUpGrantIdempotencyKey(stripeCheckoutSessionId: string): string {
-  return `topup-v1:${stripeCheckoutSessionId}`;
+  return `${GRANT_KEY_PREFIXES.topUp}${stripeCheckoutSessionId}`;
 }

@@ -93,8 +93,7 @@ test.describe("the plan", () => {
     await open(page, "billing-free");
 
     await expect(page.getByRole("heading", { name: "Free", exact: true })).toBeVisible();
-    await expect(page.getByText("First Business Audit included", { exact: true })).toBeVisible();
-    await expect(page.getByText("First Deep Scan for each product", { exact: true })).toBeVisible();
+    await expect(page.getByText(/first Business Audit and first Deep Scan/)).toBeVisible();
   });
 
   test("names a paid plan and when it renews", async ({ page }) => {
@@ -183,10 +182,16 @@ test.describe("prices", () => {
   test("states what every operation costs, before anything is bought", async ({ page }) => {
     await open(page, "billing-free");
 
-    await expect(page.getByText("Business Audit", { exact: true })).toBeVisible();
-    await expect(page.getByText("35 Credits", { exact: true })).toBeVisible();
-    await expect(page.getByText("20 Credits", { exact: true })).toBeVisible();
-    await expect(page.getByText("15 Credits", { exact: true })).toBeVisible();
+    /*
+     * Scoped to the price list, because the same words now appear in the
+     * history too — which is the point: a charge and a price that name the
+     * same thing differently is what the activity projection exists to end.
+     */
+    const prices = page.getByRole("region", { name: "Credit prices" });
+    await expect(prices.getByText("Business Audit", { exact: true })).toBeVisible();
+    await expect(prices.getByText("35 Credits", { exact: true })).toBeVisible();
+    await expect(prices.getByText("20 Credits", { exact: true })).toBeVisible();
+    await expect(prices.getByText("15 Credits", { exact: true })).toBeVisible();
   });
 
   test("shows Product Understanding as Free rather than as 0 Credits (§56)", async ({ page }) => {
@@ -202,12 +207,21 @@ test.describe("prices", () => {
 });
 
 test.describe("recent activity", () => {
-  test("labels entries in the customer's language, never as enums (§53)", async ({ page }) => {
+  /**
+   * The history says what the Credits were *for*.
+   *
+   * Every one of these used to read "Credits used" or "Credits added" — the
+   * ledger's own kind, which tells a customer nothing they did not already know
+   * from the sign in front of the number. `overview.test.ts` proves each label
+   * is resolved from a real ledger row rather than from a mapping table; this
+   * proves the resolved label survives being rendered.
+   */
+  test("names what each movement was for, never a ledger kind (§53)", async ({ page }) => {
     await open(page, "billing-free");
 
-    await expect(page.getByText("Credits used")).toBeVisible();
-    await expect(page.getByText("Credit purchase")).toBeVisible();
-    await expect(page.getByText("Credits added")).toBeVisible();
+    await expect(page.getByText("Business Audit", { exact: true }).last()).toBeVisible();
+    await expect(page.getByText("Credit Pack", { exact: true })).toBeVisible();
+    await expect(page.getByText("Welcome Credits", { exact: true })).toBeVisible();
   });
 
   test("carries the sign in the text, not in colour alone (§93)", async ({ page }) => {
@@ -217,9 +231,92 @@ test.describe("recent activity", () => {
     await expect(page.getByText("+500", { exact: true })).toBeVisible();
   });
 
+  test("shows a plan renewal as Credits arriving, in plan words", async ({ page }) => {
+    await open(page, "billing-builder");
+
+    const history = page.getByRole("region", { name: "Recent usage" });
+    await expect(history.getByText("Monthly Credits", { exact: true })).toBeVisible();
+    await expect(history.getByText("+1,000", { exact: true })).toBeVisible();
+  });
+
+  test("shows a refund as Credits coming back", async ({ page }) => {
+    await open(page, "billing-launch-v1");
+
+    await expect(page.getByText("Refund", { exact: true })).toBeVisible();
+    await expect(page.getByText("+35", { exact: true })).toBeVisible();
+  });
+
+  test("names the Deep Scan that has no operation behind it", async ({ page }) => {
+    await open(page, "billing-launch-v1");
+
+    await expect(page.getByText("Deep Scan", { exact: true })).toBeVisible();
+  });
+
   test("says so plainly when there is no history", async ({ page }) => {
     await open(page, "billing-empty");
-    await expect(page.getByText("Nothing yet.")).toBeVisible();
+
+    await expect(page.getByText("No Credit activity yet")).toBeVisible();
+    // An empty state that explains itself, rather than one that could be read
+    // as something having failed to load.
+    await expect(page.getByText(/will appear here/)).toBeVisible();
+  });
+});
+
+test.describe("the balance answers more than one number (§50)", () => {
+  test("says what is left of the included monthly Credits, and when they renew", async ({ page }) => {
+    await open(page, "billing-builder");
+
+    await expect(page.getByText(/1,000 of 1,000 monthly Credits left/)).toBeVisible();
+    await expect(page.getByText(/Your included Credits renew on/)).toBeVisible();
+  });
+
+  /**
+   * The only line on the page that can explain a balance the history does not
+   * add up to. It is deliberately absent at zero: a permanent "0 Credits held"
+   * would teach every customer what a hold is in order to tell them nothing.
+   */
+  test("explains Credits a running job is holding", async ({ page }) => {
+    await open(page, "billing-builder");
+
+    await expect(page.getByText(/held for work that is still running/)).toBeVisible();
+    await expect(page.getByText("200", { exact: true })).toBeVisible();
+  });
+
+  test("says nothing about holds when nothing is held", async ({ page }) => {
+    await open(page, "billing-free");
+
+    await expect(page.getByText(/held for work that is still running/)).toHaveCount(0);
+  });
+
+  test("claims no monthly allowance on a plan that includes none", async ({ page }) => {
+    await open(page, "billing-free");
+
+    await expect(page.getByText(/monthly Credits left/)).toHaveCount(0);
+  });
+});
+
+test.describe("a balance too low to buy anything (§43)", () => {
+  /**
+   * The billing page never refuses an operation — `authorizeOperationCredits`
+   * does, server-side, and no figure rendered here may override it. What this
+   * state has to get right is smaller: a wallet below the cheapest thing on the
+   * price table must still read as a calm, buyable page.
+   */
+  test("shows the real balance and keeps buying reachable", async ({ page }) => {
+    await open(page, "billing-low");
+
+    await expect(page.getByTestId("credit-balance")).toHaveText(/8\s+Credits/);
+    await expect(page.getByText(/8 of 1,000 monthly Credits left/)).toBeVisible();
+    await expect(page.getByRole("link", { name: /Buy Credits/ })).toBeVisible();
+  });
+
+  test("does not scold, warn or block", async ({ page }) => {
+    await open(page, "billing-low");
+
+    const text = await page.locator("main").innerText();
+    for (const alarm of ["Out of Credits", "You cannot", "Error", "Warning"]) {
+      expect(text, `low balance screen says "${alarm}"`).not.toContain(alarm);
+    }
   });
 });
 
@@ -287,6 +384,28 @@ test.describe("no internal vocabulary reaches the customer (§52, §94)", () => 
     await open(page, "billing-free");
 
     await expect(page.getByText(/Visa|4242|Billing history|Usage by product/i)).toHaveCount(0);
+  });
+});
+
+test.describe("loading is not zero (§50)", () => {
+  /**
+   * A skeleton must not read as a balance.
+   *
+   * "Unknown" and "0 Credits" are different facts about somebody's money, and
+   * a placeholder shaped like a figure collapses them. `loading.tsx` was
+   * written to avoid that deliberately — and until this test it was a route
+   * convention no browser could reach, so the intention had never been
+   * checked against what a person would actually see.
+   */
+  test("shows no number at all while the balance is unknown", async ({ page }) => {
+    await page.goto("/e2e/billing-loading");
+
+    const status = page.getByRole("status", { name: /Loading your billing details/ });
+    await expect(status).toBeVisible();
+
+    // Any digit would be a claim. Scoped to the skeleton, since the fixture
+    // route prints its own scenario label above it.
+    expect(await status.innerText()).not.toMatch(/[0-9]/);
   });
 });
 
@@ -370,7 +489,10 @@ test.describe("the price table under launch-v1 (rule 69)", () => {
     expect(text).toContain("Agent prices scale with how broad a change is");
 
     // And a measured row does not carry the marker.
-    const audit = page.getByText("Business Audit", { exact: true });
+    const audit = page
+      .getByRole("region", { name: "Credit prices" })
+      .getByRole("listitem")
+      .filter({ hasText: "Business Audit" });
     await expect(audit).not.toContainText("*");
   });
 

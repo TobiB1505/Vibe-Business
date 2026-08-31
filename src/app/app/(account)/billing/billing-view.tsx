@@ -2,7 +2,6 @@ import Link from "next/link";
 import { buttonClasses } from "@/components/ui/button";
 import {
   ArrowRightIcon,
-  CheckIcon,
   InfoIcon,
   LockIcon,
   PlusIcon,
@@ -11,8 +10,15 @@ import {
 import { Notice } from "@/components/ui/states";
 import { Surface } from "@/components/ui/surface";
 import { MonoLabel, SectionHeader } from "@/components/ui/typography";
-import { getPlan, listCreditPacks, listPaidPlans } from "@/modules/billing/catalog";
-import type { BillingOverview, CreditActivityEntry } from "@/modules/billing/overview";
+import {
+  getPlan,
+  listCreditPacks,
+  listPaidPlans,
+} from "@/modules/billing/catalog";
+import type {
+  BillingOverview,
+  CreditActivityEntry,
+} from "@/modules/billing/overview";
 import {
   RETAIL_OPERATION_KINDS,
   resolveRetailPrice,
@@ -24,7 +30,10 @@ import {
   EXECUTION_PRICING_CLASSES,
   type ExecutionPricingClass,
 } from "@/modules/economy/execution-class";
-import { formatCreditsForDisplay, type CreditUnits } from "@/modules/credits/units";
+import {
+  formatCreditsForDisplay,
+  type CreditUnits,
+} from "@/modules/credits/units";
 import {
   BuyCreditPackForm,
   ClaimWelcomeCreditsForm,
@@ -93,11 +102,6 @@ function formatPrice(cents: number): string {
   return `€${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)}`;
 }
 
-function expiryShare(overview: BillingOverview): number {
-  if (!overview.nextExpiry || overview.availableCredits <= 0) return 0;
-  return Math.min(100, Math.round((overview.nextExpiry.credits / overview.availableCredits) * 100));
-}
-
 function planTiming(overview: BillingOverview): string {
   if (overview.plan.key === "free") return "No renewal date";
   if (!overview.plan.renewsAt) return "Active subscription";
@@ -143,27 +147,54 @@ export function BillingView({
   const packs = listCreditPacks();
   const plans = listPaidPlans();
   const currentPlan = getPlan(overview.plan.key);
-  const expiryPercent = expiryShare(overview);
 
   // Resolved once, so the table and the footnote below cannot disagree about
   // which prices exist.
   const priceRows = RETAIL_OPERATION_KINDS.map((operation) => ({
     operation,
     resolved: resolveRetailPrice(operation, at),
-  })).filter((row): row is PriceRow => {
-    // An operation the policy does not sell has no row at all. A "—" would
-    // still be a claim about a price.
-    return row.resolved !== null && row.resolved.price.kind !== "not_priced";
-  });
+  }))
+    .filter((row): row is PriceRow => {
+      // An operation the policy does not sell has no row at all. A "—" would
+      // still be a claim about a price.
+      return row.resolved !== null && row.resolved.price.kind !== "not_priced";
+    })
+    /*
+     * Priced rows first, included ones last.
+     *
+     * `RETAIL_OPERATION_KINDS` is ordered by the product's own journey, which
+     * put "Understanding your product · Free" in the middle of four amounts —
+     * so the one column a reader is scanning stopped being a column of numbers
+     * halfway down. Order within each group is left exactly as the policy
+     * declares it; only the two groups are separated.
+     */
+    .sort(
+      (a, b) =>
+        Number(a.resolved.price.kind === "free") -
+        Number(b.resolved.price.kind === "free"),
+    );
 
   // Shown only when a row above actually needs it. A footnote explaining
   // agent tiers and Deep Scan under a policy that prices neither is a
   // statement about rows that are not on the page.
-  const hasQualifiedPrice = priceRows.some((row) => row.resolved.basis !== "measured");
+  const hasQualifiedPrice = priceRows.some(
+    (row) => row.resolved.basis !== "measured",
+  );
+
+  // Whether the balance has any context worth a line beneath it.
+  const hasBalanceFacts =
+    overview.monthlyAllowance !== null ||
+    (overview.plan.renewsAt !== null && !overview.plan.endingAtPeriodEnd) ||
+    overview.reservedCredits > 0 ||
+    overview.nextExpiry !== null;
 
   return (
     <div className="flex flex-col gap-5 sm:gap-6">
-      <SectionHeader level={1} title="Billing" description="Manage your plan, Credits and billing." />
+      <SectionHeader
+        level={1}
+        title="Billing"
+        description="Manage your plan, Credits and billing."
+      />
 
       {notice && (
         <Notice tone={notice.tone} label={notice.label}>
@@ -171,169 +202,313 @@ export function BillingView({
         </Notice>
       )}
 
-      <section aria-label="Billing overview" className="grid gap-4 lg:grid-cols-3">
-        <Surface level="panel" padding="md" className="flex min-h-72 flex-col">
+      {/*
+        The balance leads, and the plan sits beside it.
+
+        Three equal cards is three equal claims on attention, and the question
+        somebody opens this page with is not "what plan am I on" — it is "how
+        many Credits do I have". So the balance takes two thirds and everything
+        it needs to be understood sits inside it: the number, what share of the
+        included allowance is left, when that renews, anything a running job is
+        holding, and what lapses next. A card that answers one question with a
+        number and leaves the rest of the sentence on another card is how a
+        customer ends up doing arithmetic on a billing page.
+
+        The card that used to sit third — "How Credits work", three lines of
+        static copy and a jump link — is gone. Its one real sentence now sits
+        under the price table it was pointing at.
+      */}
+      <section
+        aria-label="Billing overview"
+        className="grid gap-4 lg:grid-cols-3"
+      >
+        <Surface
+          level="panel"
+          padding="md"
+          className="flex flex-col lg:col-span-2"
+        >
+          <MonoLabel className="text-mint">Available Credits</MonoLabel>
+
+          <p
+            className="text-fg mt-5 text-[3.15rem] leading-none font-bold tracking-[-0.04em] tabular-nums"
+            data-testid="credit-balance"
+          >
+            {overview.displayAvailable}
+            <span className="sr-only"> Credits</span>
+          </p>
+          <p className="text-fg-muted mt-2 text-sm">Credits available</p>
+
+          {/*
+            Rendered only when there is something to say.
+
+            An account with no plan, no hold and no expiry has no facts to list,
+            and an empty `dl` still occupies its margins — which on the
+            zero-balance screen left a visible hole between "Credits available"
+            and the buttons, in the card that is supposed to be the calmest
+            thing on the page.
+          */}
+          {hasBalanceFacts && (
+            <dl className="mt-6 flex flex-col gap-2.5 text-sm">
+              {overview.monthlyAllowance && (
+                <BalanceFact term="Included this month">
+                  <span className="text-fg font-semibold tabular-nums">
+                    {overview.monthlyAllowance.displayRemaining}
+                  </span>{" "}
+                  of {overview.monthlyAllowance.displayInitial} monthly Credits
+                  left
+                </BalanceFact>
+              )}
+
+              {overview.plan.renewsAt && !overview.plan.endingAtPeriodEnd && (
+                <BalanceFact term="Renews">
+                  Your included Credits renew on{" "}
+                  {formatDate(overview.plan.renewsAt)}
+                </BalanceFact>
+              )}
+
+              {/*
+              Shown only while something is actually holding Credits.
+
+              A permanent "0 Credits reserved" line would teach every customer
+              what a reservation is in order to tell them nothing, which is
+              exactly the internal vocabulary §52 keeps off this page. When it
+              is not zero it is the only thing on the screen that explains a
+              balance the history does not add up to.
+            */}
+              {overview.reservedCredits > 0 && (
+                <BalanceFact term="In progress">
+                  <span className="text-fg font-semibold tabular-nums">
+                    {overview.displayReserved}
+                  </span>{" "}
+                  Credits are held for work that is still running
+                </BalanceFact>
+              )}
+
+              {overview.nextExpiry && (
+                <BalanceFact term="Expiring">
+                  <span className="text-fg font-semibold tabular-nums">
+                    {overview.nextExpiry.displayCredits}
+                  </span>{" "}
+                  expire on {formatDate(overview.nextExpiry.expiresAt)}
+                </BalanceFact>
+              )}
+            </dl>
+          )}
+
+          <div className="mt-auto flex flex-col gap-3 pt-6 sm:flex-row sm:items-center">
+            <a
+              href="#credit-packs"
+              className={buttonClasses({ variant: "primary", size: "sm" })}
+            >
+              Buy Credits
+              <PlusIcon size={16} />
+            </a>
+            <a
+              href="#credit-prices"
+              className="text-mint inline-flex items-center gap-2 self-start rounded-sm text-sm font-semibold underline-offset-4 hover:underline sm:self-auto"
+            >
+              See what Credits buy
+              <ArrowRightIcon size={15} />
+            </a>
+          </div>
+        </Surface>
+
+        {/*
+          The plan card states the plan and offers the one control that manages
+          it. It used to also list the plan's benefits — which is the `#plans`
+          section's job, two screens down, where the plans are actually
+          compared. Saying it twice made the page longer without answering
+          anything a second time.
+        */}
+        <Surface level="panel" padding="md" className="flex flex-col">
           <div className="flex items-start justify-between gap-4">
-            <MonoLabel className="text-mint">Current plan</MonoLabel>
-            <span aria-hidden="true" className="bg-mint-tint text-mint flex size-10 items-center justify-center rounded-full">
+            <MonoLabel className="text-mint">Your plan</MonoLabel>
+            <span
+              aria-hidden="true"
+              className="bg-mint-tint text-mint flex size-10 items-center justify-center rounded-full"
+            >
               <SparklesIcon size={20} />
             </span>
           </div>
 
-          <h2 className="text-fg mt-4 text-[1.65rem] leading-none font-bold">{overview.plan.name}</h2>
+          <h2 className="text-fg mt-4 text-[1.65rem] leading-none font-bold">
+            {overview.plan.name}
+          </h2>
           <p className="text-fg mt-2 flex items-baseline gap-1.5">
-            <span className="text-title font-semibold">{formatPrice(currentPlan.priceCents)}</span>
-            {currentPlan.priceCents > 0 && <span className="text-fg-muted text-sm">/ month</span>}
+            <span className="text-title font-semibold">
+              {formatPrice(currentPlan.priceCents)}
+            </span>
+            {currentPlan.priceCents > 0 && (
+              <span className="text-fg-muted text-sm">/ month</span>
+            )}
           </p>
-          <p className={overview.plan.endingAtPeriodEnd ? "text-amber mt-2 text-sm" : "text-fg-muted mt-2 text-sm"}>
+          <p
+            className={
+              overview.plan.endingAtPeriodEnd
+                ? "text-amber mt-2 text-sm"
+                : "text-fg-muted mt-2 text-sm"
+            }
+          >
             {planTiming(overview)}
           </p>
 
-          <ul className="mt-5 flex flex-col gap-2.5 text-sm">
-            {overview.plan.key === "free" ? (
-              <>
-                <PlanBenefit>First Business Audit included</PlanBenefit>
-                <PlanBenefit>First Deep Scan for each product</PlanBenefit>
-                <PlanBenefit>No monthly charge</PlanBenefit>
-              </>
-            ) : (
-              <>
-                <PlanBenefit>{formatCreditsForDisplay(currentPlan.monthlyCreditUnits)} monthly Credits</PlanBenefit>
-                <PlanBenefit>One-off top-ups stay available</PlanBenefit>
-                <PlanBenefit>Renewal managed securely by Stripe</PlanBenefit>
-              </>
-            )}
-          </ul>
+          <p className="text-fg-prose mt-4 text-sm">
+            {overview.plan.key === "free"
+              ? "Your first Business Audit and first Deep Scan for each product are included."
+              : `${formatCreditsForDisplay(currentPlan.monthlyCreditUnits)} Credits included every month.`}
+          </p>
 
-          <div className="mt-auto pt-5">
+          <div className="mt-auto pt-6">
             {overview.plan.key !== "free" && stripeReady ? (
               <ManageBillingForm />
             ) : overview.plan.key === "free" ? (
-              <Link href="#plans" className={buttonClasses({ variant: "secondary", size: "sm" })}>
+              <Link
+                href="#plans"
+                className={buttonClasses({ variant: "secondary", size: "sm" })}
+              >
                 View plans
                 <ArrowRightIcon size={15} />
               </Link>
             ) : (
-              <button type="button" disabled className={`${buttonClasses({ variant: "secondary", size: "sm" })} w-full`}>
+              <button
+                type="button"
+                disabled
+                className={`${buttonClasses({ variant: "secondary", size: "sm" })} w-full`}
+              >
                 Management unavailable
               </button>
             )}
           </div>
         </Surface>
-
-        <Surface level="panel" padding="md" className="flex min-h-72 flex-col">
-          <MonoLabel className="text-mint">Available Credits</MonoLabel>
-          <div className="mt-6 flex items-center justify-between gap-5">
-            <div className="min-w-0">
-              <p className="text-fg text-[2.65rem] leading-none font-bold tracking-[-0.04em] tabular-nums" data-testid="credit-balance">
-                {overview.displayAvailable}
-                <span className="sr-only"> Credits</span>
-              </p>
-              <p className="text-fg-muted mt-2 text-sm">Credits available</p>
-            </div>
-
-            <div
-              className="relative flex size-28 shrink-0 items-center justify-center rounded-full p-3"
-              style={{ background: `conic-gradient(var(--color-mint) 0 ${expiryPercent}%, var(--color-line-track) ${expiryPercent}% 100%)` }}
-              aria-label={overview.nextExpiry ? `${expiryPercent}% of your available Credits expire next` : "No Credits currently have an expiry date"}
-            >
-              <div className="bg-app flex size-full flex-col items-center justify-center rounded-full">
-                <span className="text-fg text-title font-bold tabular-nums">{overview.nextExpiry ? `${expiryPercent}%` : "—"}</span>
-                <span className="text-fg-meta max-w-16 text-center text-[0.625rem] leading-tight">{overview.nextExpiry ? "next to expire" : "no expiry"}</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-5 min-h-10">
-            {overview.nextExpiry ? (
-              <p className="text-fg-prose text-sm">
-                <span className="text-fg font-semibold tabular-nums">{overview.nextExpiry.displayCredits}</span>{" "}
-                expire on {formatDate(overview.nextExpiry.expiresAt)}
-              </p>
-            ) : (
-              <p className="text-fg-muted text-sm">No Credits currently have an expiry date.</p>
-            )}
-          </div>
-
-          <a href="#credit-packs" className={`${buttonClasses({ variant: "primary", size: "sm" })} mt-auto w-full`}>
-            Buy Credits
-            <PlusIcon size={16} />
-          </a>
-        </Surface>
-
-        <Surface level="panel" padding="md" className="flex min-h-72 flex-col">
-          <div className="text-mint flex size-9 items-center justify-center"><SparklesIcon size={26} /></div>
-          <h2 className="text-fg mt-4 text-title font-bold">How Credits work</h2>
-          <p className="text-fg-prose mt-3 max-w-[34ch] text-sm leading-6">
-            Credits power Vibe&rsquo;s business intelligence and Agent work. Each task uses a fixed amount, shown before you start it.
-          </p>
-          <a href="#credit-prices" className="text-mint mt-auto inline-flex items-center gap-2 self-start rounded-sm pt-5 text-sm font-semibold underline-offset-4 hover:underline">
-            See Credit prices
-            <ArrowRightIcon size={15} />
-          </a>
-        </Surface>
       </section>
 
       {!overview.welcomeGranted && (
-        <Surface level="section" tone="mint" padding="md" className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+        <Surface
+          level="section"
+          tone="mint"
+          padding="md"
+          className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center"
+        >
           <div>
             <MonoLabel className="text-mint">Welcome Credits</MonoLabel>
-            <p className="text-fg mt-2 font-semibold">Your account is eligible for 100 Welcome Credits.</p>
-            <p className="text-fg-muted mt-1 text-sm">They are valid for 30 days.</p>
+            <p className="text-fg mt-2 font-semibold">
+              Your account is eligible for 100 Welcome Credits.
+            </p>
+            <p className="text-fg-muted mt-1 text-sm">
+              They are valid for 30 days.
+            </p>
           </div>
           <ClaimWelcomeCreditsForm />
         </Surface>
       )}
 
+      {/*
+        One grid, two columns that each stack — not two grids stacked.
+
+        The price table is roughly twice the height of the pack list, so as two
+        separate rows the right-hand side ended in several hundred pixels of
+        nothing before the plans began again below it. Reading order is
+        unchanged, and each column still flows in the order it did.
+      */}
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(20rem,0.7fr)]">
-        <Surface as="section" aria-labelledby="credit-prices-heading" id="credit-prices" level="panel" padding="none" className="scroll-mt-6 overflow-hidden">
-          <div className="border-line-2 flex items-center justify-between gap-4 border-b px-5 py-5 sm:px-6">
-            <div>
-              <MonoLabel id="credit-prices-heading" as="h2" className="text-mint">Credit prices</MonoLabel>
-              <p className="text-fg mt-2 font-semibold">Know the cost before you start</p>
+        <div className="flex flex-col gap-4">
+          <Surface
+            as="section"
+            aria-labelledby="credit-prices-heading"
+            id="credit-prices"
+            level="panel"
+            padding="none"
+            className="scroll-mt-6 overflow-hidden"
+          >
+            <div className="border-line-2 flex items-start justify-between gap-4 border-b px-5 py-5 sm:px-6">
+              <div className="min-w-0">
+                <MonoLabel
+                  id="credit-prices-heading"
+                  as="h2"
+                  className="text-mint"
+                >
+                  Credit prices
+                </MonoLabel>
+                <p className="text-fg mt-2 font-semibold">
+                  Know the cost before you start
+                </p>
+                <p className="text-fg-prose mt-1.5 max-w-[46ch] text-sm">
+                  Credits power Vibe&rsquo;s business intelligence and Agent
+                  work. Every task shows what it costs beside the button that
+                  starts it.
+                </p>
+              </div>
+              <span className="text-fg-meta hidden shrink-0 items-center gap-1.5 pt-1 text-xs sm:inline-flex">
+                <InfoIcon size={14} /> Known before you start
+              </span>
             </div>
-            <span className="text-fg-meta hidden items-center gap-1.5 text-xs sm:inline-flex"><InfoIcon size={14} /> Known before you start</span>
-          </div>
-          <ul className="divide-line-2 divide-y">
-            {priceRows.map(({ operation, resolved }) => {
-              const price = resolved.price;
+            <ul className="divide-line-2 divide-y">
+              {priceRows.map(({ operation, resolved }) => {
+                const price = resolved.price;
 
-              return (
-                <li key={operation} className="flex items-start justify-between gap-4 px-5 py-4 sm:px-6">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <span aria-hidden="true" className="bg-mint-tint text-mint flex size-9 shrink-0 items-center justify-center rounded-nav"><SparklesIcon size={16} /></span>
-                    <span className="text-fg-body text-sm">
-                      {OPERATION_NAMES[operation]}
-                      {resolved.basis !== "measured" && (
-                        <sup className="text-fg-meta ml-0.5 text-[0.65rem]">*</sup>
-                      )}
-                    </span>
-                  </div>
+                return (
+                  /*
+                   * Stacked on a phone, opposed on a desktop.
+                   *
+                   * The agent row is three label/amount pairs, and on a narrow
+                   * screen forcing it to share a line with the operation name
+                   * squeezed both into two-line wraps. Below `sm` the name gets
+                   * the full width and the amounts sit under it, indented past
+                   * the icon so the column still reads as a column.
+                   */
+                  <li
+                    key={operation}
+                    className="flex flex-col gap-2 px-5 py-4 sm:flex-row sm:items-start sm:justify-between sm:gap-4 sm:px-6"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span
+                        aria-hidden="true"
+                        className="bg-mint-tint text-mint flex size-9 shrink-0 items-center justify-center rounded-nav"
+                      >
+                        <SparklesIcon size={16} />
+                      </span>
+                      <span className="text-fg-body text-sm">
+                        {OPERATION_NAMES[operation]}
+                        {resolved.basis !== "measured" && (
+                          <sup className="text-fg-meta ml-0.5 text-[0.65rem]">
+                            *
+                          </sup>
+                        )}
+                      </span>
+                    </div>
 
-                  {price.kind === "by_execution_class" ? (
-                    <span className="flex shrink-0 flex-col items-end gap-1">
-                      {EXECUTION_PRICING_CLASSES.map((pricingClass) => (
-                        <span key={pricingClass} className="flex items-baseline gap-2">
-                          <span className="text-fg-meta text-xs">{EXECUTION_CLASS_NAMES[pricingClass]}</span>
-                          <span className="text-fg text-sm font-semibold tabular-nums">
-                            {formatCreditsForDisplay(price.creditUnitsByClass[pricingClass])} Credits
+                    {price.kind === "by_execution_class" ? (
+                      <span className="flex shrink-0 flex-col gap-1 pl-12 sm:items-end sm:pl-0">
+                        {EXECUTION_PRICING_CLASSES.map((pricingClass) => (
+                          <span
+                            key={pricingClass}
+                            className="flex items-baseline justify-between gap-2 sm:justify-end"
+                          >
+                            <span className="text-fg-meta text-xs">
+                              {EXECUTION_CLASS_NAMES[pricingClass]}
+                            </span>
+                            <span className="text-fg text-sm font-semibold tabular-nums">
+                              {formatCreditsForDisplay(
+                                price.creditUnitsByClass[pricingClass],
+                              )}{" "}
+                              Credits
+                            </span>
                           </span>
-                        </span>
-                      ))}
-                    </span>
-                  ) : (
-                    <span className="text-fg shrink-0 text-sm font-semibold tabular-nums">
-                      {price.kind === "free"
-                        ? "Free"
-                        : `${formatCreditsForDisplay(price.creditUnits)} Credits`}
-                    </span>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
+                        ))}
+                      </span>
+                    ) : (
+                      <span className="text-fg shrink-0 pl-12 text-sm font-semibold tabular-nums sm:pl-0">
+                        {price.kind === "free"
+                          ? "Free"
+                          : `${formatCreditsForDisplay(price.creditUnits)} Credits`}
+                      </span>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
 
-          {/*
+            {/*
             The footnote, not a badge.
 
             A badge next to a price reads as a property of the offer — "new",
@@ -342,107 +517,223 @@ export function BillingView({
             and it belongs where a reader looks after the table rather than
             beside the figure they are trying to compare.
           */}
-          {hasQualifiedPrice && (
-            <p className="text-fg-meta border-line-2 border-t px-5 py-4 text-xs sm:px-6">
-              <span aria-hidden="true">*</span> Agent prices scale with how broad a
-              change is, and Vibe tells you which before you start. A Deep Scan
-              price covers the browser session that reads your signed-in product.
-            </p>
-          )}
-        </Surface>
+            {/*
+            The settlement truth, in the customer's words.
 
-        <Surface as="section" aria-labelledby="credit-packs-heading" id="credit-packs" level="panel" padding="none" className="scroll-mt-6 overflow-hidden">
-          <div className="border-line-2 border-b px-5 py-5 sm:px-6">
-            <MonoLabel id="credit-packs-heading" as="h2" className="text-mint">Top up Credits</MonoLabel>
-            <p className="text-fg mt-2 font-semibold">One-off purchases</p>
-          </div>
-          <div className="divide-line-2 divide-y">
-            {packs.map((pack) => (
-              <BuyCreditPackForm key={pack.key} packKey={pack.key} credits={pack.credits.toLocaleString("en-GB")} price={formatPrice(pack.priceCents)} disabled={!stripeReady} />
-            ))}
-          </div>
-        </Surface>
-      </div>
+            `settleOperationCredits` settles at the reserved amount and
+            `releaseOperationCredits` returns the whole hold, so an Agent
+            improvement costs exactly its tier price or exactly nothing —
+            there is no partial charge anywhere in the system. "Up to 200
+            Credits" would therefore be the wrong kind of hedge: it implies a
+            variable settlement no code path can produce, and a customer who
+            budgeted for "up to" and was charged the top of it every time would
+            be right to feel misled. What is genuinely conditional is not the
+            amount but whether anything is charged at all, and that is what
+            this says.
+          */}
+            {hasQualifiedPrice && (
+              <p className="text-fg-meta border-line-2 border-t px-5 py-4 text-xs sm:px-6">
+                <span aria-hidden="true">*</span> Agent prices scale with how
+                broad a change is, and Vibe tells you which before you start.
+                You are charged only if the Agent delivers a change &mdash; if
+                it doesn&rsquo;t, the Credits stay yours. A Deep Scan price
+                covers the browser session that reads your signed-in product.
+              </p>
+            )}
+          </Surface>
 
-      {!stripeReady && (
-        <Notice tone="info" label="Not available yet">
-          Payments aren&rsquo;t set up on this deployment yet, so Credits can&rsquo;t be purchased.
-        </Notice>
-      )}
-
-      <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1.45fr)_minmax(20rem,0.7fr)]">
-        <Surface as="section" aria-labelledby="recent-activity-heading" level="panel" padding="none" className="overflow-hidden">
-          <div className="border-line-2 flex items-center justify-between gap-4 border-b px-5 py-5 sm:px-6">
-            <div>
-              <MonoLabel id="recent-activity-heading" as="h2" className="text-mint">Recent usage</MonoLabel>
-              <p className="text-fg mt-2 font-semibold">Latest Credit activity</p>
+          <Surface
+            as="section"
+            aria-labelledby="recent-activity-heading"
+            level="panel"
+            padding="none"
+            className="overflow-hidden"
+          >
+            <div className="border-line-2 flex items-center justify-between gap-4 border-b px-5 py-5 sm:px-6">
+              <div>
+                <MonoLabel
+                  id="recent-activity-heading"
+                  as="h2"
+                  className="text-mint"
+                >
+                  Recent usage
+                </MonoLabel>
+                <p className="text-fg mt-2 font-semibold">
+                  Latest Credit activity
+                </p>
+              </div>
+              <span className="text-fg-meta text-xs">Newest first</span>
             </div>
-            <span className="text-fg-meta text-xs">Newest first</span>
-          </div>
-          {overview.recentActivity.length === 0 ? (
-            <p className="text-fg-muted px-5 py-8 text-sm sm:px-6">Nothing yet.</p>
-          ) : (
-            <ul className="divide-line-2 divide-y">
-              {overview.recentActivity.map((entry) => (
-                <li key={entry.id} className="flex items-center justify-between gap-4 px-5 py-4 sm:px-6">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <span aria-hidden="true" className="bg-mint-tint text-mint flex size-9 shrink-0 items-center justify-center rounded-nav">{activityIcon(entry)}</span>
-                    <div className="flex min-w-0 flex-col gap-1">
-                      <span className="text-fg-body truncate text-sm font-medium">{entry.label}</span>
-                      <span className="text-fg-meta text-xs">{formatDate(entry.at)}</span>
+            {overview.recentActivity.length === 0 ? (
+              /*
+              An empty history is a normal state, not a missing one. It says
+              what will fill it, so a new account reads this as "nothing has
+              happened yet" rather than "something failed to load".
+            */
+              <div className="px-5 py-8 sm:px-6">
+                <p className="text-fg-body text-sm font-medium">
+                  No Credit activity yet
+                </p>
+                <p className="text-fg-muted mt-1.5 max-w-[42ch] text-sm">
+                  Credits you add and tasks you run will appear here.
+                </p>
+              </div>
+            ) : (
+              <ul className="divide-line-2 divide-y">
+                {overview.recentActivity.map((entry) => (
+                  <li
+                    key={entry.id}
+                    className="flex items-center justify-between gap-4 px-5 py-4 sm:px-6"
+                  >
+                    <div className="flex min-w-0 items-center gap-3">
+                      <span
+                        aria-hidden="true"
+                        className="bg-mint-tint text-mint flex size-9 shrink-0 items-center justify-center rounded-nav"
+                      >
+                        {activityIcon(entry)}
+                      </span>
+                      <div className="flex min-w-0 flex-col gap-1">
+                        <span className="text-fg-body truncate text-sm font-medium">
+                          {entry.label}
+                        </span>
+                        <span className="text-fg-meta text-xs">
+                          {formatDate(entry.at)}
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                  {/* The sign carries the meaning, so it is never colour
+                    {/* The sign carries the meaning, so it is never colour
                       alone (§93) — a "+" and a "-" are readable without it.
                       No unit suffix here: unlike the price list and plan
                       benefit rows, this text must stay exactly the signed
                       amount, and a browser test asserts on it verbatim. */}
-                  <span className={entry.creditDelta > 0 ? "text-mint shrink-0 text-sm font-semibold tabular-nums" : "text-fg-body shrink-0 text-sm font-semibold tabular-nums"}>{entry.displayAmount}</span>
-                </li>
+                    <span
+                      className={
+                        entry.creditDelta > 0
+                          ? "text-mint shrink-0 text-sm font-semibold tabular-nums"
+                          : "text-fg-body shrink-0 text-sm font-semibold tabular-nums"
+                      }
+                    >
+                      {entry.displayAmount}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Surface>
+        </div>
+
+        <div className="flex flex-col gap-4">
+          <Surface
+            as="section"
+            aria-labelledby="credit-packs-heading"
+            id="credit-packs"
+            level="panel"
+            padding="none"
+            className="scroll-mt-6 overflow-hidden"
+          >
+            <div className="border-line-2 border-b px-5 py-5 sm:px-6">
+              <MonoLabel
+                id="credit-packs-heading"
+                as="h2"
+                className="text-mint"
+              >
+                Top up Credits
+              </MonoLabel>
+              <p className="text-fg mt-2 font-semibold">One-off purchases</p>
+            </div>
+            <div className="divide-line-2 divide-y">
+              {packs.map((pack) => (
+                <BuyCreditPackForm
+                  key={pack.key}
+                  packKey={pack.key}
+                  credits={pack.credits.toLocaleString("en-GB")}
+                  price={formatPrice(pack.priceCents)}
+                  disabled={!stripeReady}
+                />
               ))}
-            </ul>
+            </div>
+          </Surface>
+
+          {/* Beside the controls it disables, rather than a page-width banner
+            between two sections that both still look purchasable. */}
+          {!stripeReady && (
+            <Notice tone="info" label="Not available yet">
+              Payments aren&rsquo;t set up on this deployment yet, so Credits
+              can&rsquo;t be purchased.
+            </Notice>
           )}
-        </Surface>
 
-        <Surface as="section" aria-labelledby="plans-heading" id="plans" level="panel" padding="none" className="scroll-mt-6 overflow-hidden">
-          <div className="border-line-2 border-b px-5 py-5 sm:px-6">
-            <MonoLabel id="plans-heading" as="h2" className="text-mint">Plans</MonoLabel>
-            <p className="text-fg mt-2 font-semibold">Monthly Credits</p>
-          </div>
-          <div className="divide-line-2 divide-y">
-            {plans.map((plan) => (
-              <StartPlanForm key={plan.key} planKey={plan.key} planName={plan.name} price={`${formatPrice(plan.priceCents)} / month`} credits={formatCreditsForDisplay(plan.monthlyCreditUnits)} disabled={!stripeReady} current={overview.plan.key === plan.key} />
-            ))}
-          </div>
+          <Surface
+            as="section"
+            aria-labelledby="plans-heading"
+            id="plans"
+            level="panel"
+            padding="none"
+            className="scroll-mt-6 overflow-hidden"
+          >
+            <div className="border-line-2 border-b px-5 py-5 sm:px-6">
+              <MonoLabel id="plans-heading" as="h2" className="text-mint">
+                Plans
+              </MonoLabel>
+              {/*
+              "Choose a plan", not "Monthly Credits".
 
-          {/*
+              The activity list now labels a plan renewal "Monthly Credits", and
+              this panel headed the same two words — two different things saying
+              the same thing on one screen. This one is a chooser, so it says so.
+            */}
+              <p className="text-fg mt-2 font-semibold">Choose a plan</p>
+            </div>
+            <div className="divide-line-2 divide-y">
+              {plans.map((plan) => (
+                <StartPlanForm
+                  key={plan.key}
+                  planKey={plan.key}
+                  planName={plan.name}
+                  price={`${formatPrice(plan.priceCents)} / month`}
+                  credits={formatCreditsForDisplay(plan.monthlyCreditUnits)}
+                  disabled={!stripeReady}
+                  current={overview.plan.key === plan.key}
+                />
+              ))}
+            </div>
+
+            {/*
             What the grant is actually worth, in the units of work the customer
-            came here to buy.
+            came here to buy — and given room, because it is the only thing on
+            this page that answers the question a plan is actually chosen on.
 
-            "1,000 Credits" is a number nobody can price without the table
-            above and a calculator, and a customer choosing a plan is choosing
-            how much work they can do — not how many Credits they will hold.
-            Both figures are computed from the same catalog and the same rate
-            card the charge uses, so this can never drift from the real answer.
+            "1,000 Credits" is a number nobody can price without the table above
+            and a calculator, and a customer choosing a plan is choosing how much
+            work they can do, not how many Credits they will hold. Both figures
+            are computed from the same catalog and the same rate card the charge
+            uses, so this can never drift from the real answer. It was an `xs`
+            right-aligned `dl` at the bottom of the narrow column, wrapping to
+            three lines: the least legible element on the screen carrying the
+            most decision-relevant sentence.
           */}
-          <dl className="border-line-2 divide-line-2 divide-y border-t">
-            {plans.map((plan) => {
-              const buys = planPurchasingPower(plan.monthlyCreditUnits, at);
-              if (!buys) return null;
+            <dl className="border-line-2 divide-line-2 divide-y border-t">
+              {plans.map((plan) => {
+                const buys = planPurchasingPower(plan.monthlyCreditUnits, at);
+                if (!buys) return null;
 
-              return (
-                <div key={plan.key} className="flex items-baseline justify-between gap-4 px-5 py-3 sm:px-6">
-                  <dt className="text-fg-meta shrink-0 text-xs">{plan.name} buys</dt>
-                  <dd className="text-fg-body text-right text-xs">{buys} each month</dd>
-                </div>
-              );
-            })}
-          </dl>
-        </Surface>
+                return (
+                  <div key={plan.key} className="px-5 py-3.5 sm:px-6">
+                    <dt className="text-fg-meta text-xs">{plan.name} buys</dt>
+                    <dd className="text-fg-body mt-1 text-sm">
+                      {buys} each month
+                    </dd>
+                  </div>
+                );
+              })}
+            </dl>
+          </Surface>
+        </div>
       </div>
 
       <footer className="text-fg-meta flex items-center justify-center gap-2 px-4 pb-2 text-center text-xs">
-        <LockIcon size={14} /> Payments are securely processed by Stripe. Vibe never stores your card details.
+        <LockIcon size={14} /> Payments are securely processed by Stripe. Vibe
+        never stores your card details.
       </footer>
     </div>
   );
@@ -456,32 +747,56 @@ export function BillingView({
  * billing page cannot afford. Returns null when nothing in the card is priced,
  * so a policy with no prices renders no claim rather than "0 audits".
  */
-function planPurchasingPower(monthlyCreditUnits: CreditUnits, at: Date): string | null {
+function planPurchasingPower(
+  monthlyCreditUnits: CreditUnits,
+  at: Date,
+): string | null {
   if (monthlyCreditUnits <= 0) return null;
 
-  const agent = retailChargeFor("agent_execution", at, { pricingClass: "standard" });
+  const agent = retailChargeFor("agent_execution", at, {
+    pricingClass: "standard",
+  });
   const audit = retailChargeFor("business_audit", at);
 
   const parts: string[] = [];
 
   if (agent.kind === "charge") {
     const runs = Math.floor(monthlyCreditUnits / agent.creditUnits);
-    if (runs > 0) parts.push(`${runs} standard agent ${runs === 1 ? "improvement" : "improvements"}`);
+    if (runs > 0)
+      parts.push(
+        `${runs} standard agent ${runs === 1 ? "improvement" : "improvements"}`,
+      );
   }
 
   if (audit.kind === "charge") {
     const audits = Math.floor(monthlyCreditUnits / audit.creditUnits);
-    if (audits > 0) parts.push(`${audits} Business ${audits === 1 ? "Audit" : "Audits"}`);
+    if (audits > 0)
+      parts.push(`${audits} Business ${audits === 1 ? "Audit" : "Audits"}`);
   }
 
   return parts.length === 0 ? null : `${parts.join(", or ")}`;
 }
 
-function PlanBenefit({ children }: { children: React.ReactNode }) {
+/**
+ * One line of context under the balance.
+ *
+ * A `dt`/`dd` pair rather than a sentence in a `<p>`, because each of these is
+ * genuinely a labelled fact and a screen reader should be able to hear which.
+ * The term is visually hidden: sighted readers get it from the sentence itself
+ * ("… monthly Credits left", "expire on …"), and printing both would say
+ * everything twice.
+ */
+function BalanceFact({
+  term,
+  children,
+}: {
+  term: string;
+  children: React.ReactNode;
+}) {
   return (
-    <li className="text-fg-prose flex items-start gap-2.5">
-      <CheckIcon className="text-mint mt-0.5 shrink-0" size={15} />
-      <span>{children}</span>
-    </li>
+    <div className="flex items-baseline gap-2">
+      <dt className="sr-only">{term}</dt>
+      <dd className="text-fg-prose">{children}</dd>
+    </div>
   );
 }

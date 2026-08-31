@@ -8,6 +8,7 @@ import {
   EXECUTION_RISK_LABELS,
 } from "@/modules/execution-contract/view";
 import { preflightRefusalLabel } from "@/modules/coding-agent/view";
+import { formatCreditsForDisplay } from "@/modules/credits/units";
 import { isDogfoodEligibleProject, previewDogfoodStep } from "@/modules/coding-agent/website-preflight";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
 import { getDogfoodRunStatusAction } from "./actions";
@@ -106,7 +107,25 @@ export default async function AgentDogfoodStepPage({
               <div className="flex flex-wrap gap-6">
                 <Field label="max turns">{String(preview.preflight.limits.maxTurns)}</Field>
                 <Field label="max files changed">{String(preview.preflight.limits.maxChangedFiles)}</Field>
-                <Field label="max Credits">{String(preview.preflight.limits.budgetPolicyVersion)}</Field>
+                {/*
+                  This said `launch-v1-budget`.
+
+                  The label read "max Credits" and the value was
+                  `budgetPolicyVersion` — a policy identifier printed where a
+                  customer amount belongs, on the one screen in the product
+                  that starts an agent run. `maxCredits` is now projected
+                  through the preflight, so the two fields below say the two
+                  different things they always claimed to: what the run may
+                  cost a customer, and what Vibe will pay a provider.
+                */}
+                <Field label="max Credits">
+                  {preview.preflight.economics.maxCredits === null
+                    ? "—"
+                    : `${formatCreditsForDisplay(preview.preflight.economics.maxCredits)} Credits`}
+                </Field>
+                <Field label="budget policy">
+                  {String(preview.preflight.limits.budgetPolicyVersion)}
+                </Field>
                 <Field label="provider ceiling">
                   {`$${preview.preflight.limits.maxProviderSpendUsd.toFixed(2)}`}
                 </Field>

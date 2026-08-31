@@ -32,6 +32,7 @@ import {
 import { AgentPanel } from "@/app/app/projects/[projectId]/agent-panel";
 import { HomeStatus } from "@/app/app/projects/[projectId]/home-status";
 import { AppErrorPreview } from "../app-error-preview";
+import BillingLoading from "@/app/app/(account)/billing/loading";
 import {
   E2E_AUDIT_CREDIT_SCENARIOS,
   isE2eAuditCreditScenario,
@@ -589,6 +590,26 @@ export default async function E2eScenarioPage({
    */
   if (scenario === "app-error" || scenario === "app-error-no-digest") {
     return <AppErrorPreview digest={scenario === "app-error" ? "1813753987@E394" : undefined} />;
+  }
+
+  /*
+   * The billing skeleton, so "unknown is not zero" is checkable rather than
+   * merely intended.
+   *
+   * `loading.tsx` is a route convention, which means nothing in the browser
+   * suite could ever see it — and the failure it guards against is a *visual*
+   * one: a placeholder shaped like a figure reads as a balance, and a customer
+   * who glances at a loading billing page and sees "0" has been told something
+   * false about their money. Rendering the real component here lets the suite
+   * assert what a person would actually see.
+   */
+  if (scenario === "billing-loading") {
+    return (
+      <main className="mx-auto max-w-5xl p-8">
+        {label}
+        <BillingLoading />
+      </main>
+    );
   }
 
   /*
