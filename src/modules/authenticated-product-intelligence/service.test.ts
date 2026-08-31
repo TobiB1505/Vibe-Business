@@ -548,7 +548,7 @@ describe("audit events", () => {
 });
 
 describe("an additional Deep Scan is held, then settled or released (launch-v1)", () => {
-  it("takes exactly one hold per start", async () => {
+  it("takes exactly one hold per start, and tells it what the scan is paid by", async () => {
     const db = new FakeDatabase();
     const supabase = fakeSupabase(db);
     const provider = new FakeBrowserProvider();
@@ -557,6 +557,13 @@ describe("an additional Deep Scan is held, then settled or released (launch-v1)"
     await startDeepScan(supabase, provider, { projectId, userId: OWNER });
 
     expect(holdMock).toHaveBeenCalledTimes(1);
+    // The access mode is passed, never re-derived. `authorizeOperationCredits`
+    // resolves the retail price of `deep_scan` and knows nothing about
+    // entitlements, so a hold that decided for itself would charge 25 Credits
+    // for the scan this project is entitled to.
+    expect(holdMock).toHaveBeenCalledWith(
+      expect.objectContaining({ accessMode: "included_first_scan" }),
+    );
   });
 
   it("buys no browser at all when the hold is refused", async () => {

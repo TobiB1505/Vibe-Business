@@ -10,6 +10,7 @@ import {
 } from "@/modules/credits/operation-billing";
 import { resolveBillingOwner } from "@/modules/credits/service";
 import { findCreditAccountByUser, findReservationByIdempotencyKey } from "@/modules/credits/store";
+import type { DeepScanAccessMode } from "./entitlement";
 
 /**
  * The Credit hold behind an additional Deep Scan (`launch-v1`, PRODUCT.md §12.1).
@@ -62,13 +63,29 @@ export function deepScanIdempotencyKey(sessionId: string): string {
 /**
  * Holds the price of an additional Deep Scan before any browser is created.
  *
- * Returns `{ ok: true, billable: false }` for an included scan, which never
- * reaches a reservation — the same free path every unpriced operation takes.
+ * ## Why the access mode is a parameter and not something this looks up
+ *
+ * `authorizeOperationCredits` resolves the retail price of `deep_scan` and
+ * knows nothing about entitlements — it would hold 25 Credits for *every* scan,
+ * including the one the project is entitled to. Whether this particular scan is
+ * the included one was decided by `authorizeDeepScan`, from the existence of a
+ * persisted snapshot, and that decision is the only correct answer to the
+ * question. Re-deriving it here would be a second answer, and the failure mode
+ * is charging somebody for their free scan.
+ *
+ * So the caller passes what the entitlement decided, and an included scan
+ * returns `{ ok: true, billable: false }` without touching the billing
+ * machinery at all — the same free path `retail.ts`'s `free` operations take,
+ * and for the same reason: there is no amount to reserve.
  */
 export async function holdDeepScanCredits(params: {
   projectId: string;
   sessionId: string;
+  /** What `authorizeDeepScan` decided this scan is paid for by. */
+  accessMode: DeepScanAccessMode;
 }): Promise<AuthorizeOperationCreditsResult> {
+  if (params.accessMode !== "credits") return { ok: true, billable: false };
+
   return authorizeOperationCredits(createServiceClient(), {
     projectId: params.projectId,
     operation: "deep_scan",

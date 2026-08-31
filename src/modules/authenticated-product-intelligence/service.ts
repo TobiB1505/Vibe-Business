@@ -197,7 +197,7 @@ export async function startDeepScan(
   // `launch-v1`; the included scan resolves free and never reaches a
   // reservation. Discovering an empty wallet after paying Browserbase would be
   // both a cost leak and an insult.
-  const held = await holdDeepScanCredits({ projectId: params.projectId, sessionId });
+  const held = await holdDeepScanCredits({ projectId: params.projectId, sessionId, accessMode });
   if (!held.ok) {
     return {
       ok: false,
