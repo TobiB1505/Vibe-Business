@@ -114,6 +114,51 @@ describe("the production Agent price is activated, and bound to its ceiling", ()
   });
 });
 
+describe("the allowlist decides who is not billed, not who may run", () => {
+  const env = { VIBE_INTERNAL_AGENT_DOGFOOD_PROJECT_IDS: "project-1" };
+
+  it("keeps an allowlisted project on non-production economics after launch", () => {
+    // Production resolves for every project now. Checking it first would have
+    // silently converted the dogfood account into a paying customer — the same
+    // runs, the same allowlist, settling real Credits — and left the internal
+    // book as unreachable code describing itself as live.
+    const economics = resolveAgentEconomics({
+      projectId: "project-1",
+      pricingClass: "standard",
+      at: LAUNCH,
+      env,
+    });
+
+    expect(economics?.nonProduction).toBe(true);
+    expect(economics?.budget.budgetPolicyVersion).toBe("core4-dogfood-budget-v1");
+  });
+
+  it("gives every project that is not named the production economics", () => {
+    const economics = resolveAgentEconomics({
+      projectId: "project-2",
+      pricingClass: "standard",
+      at: LAUNCH,
+      env,
+    });
+
+    expect(economics?.nonProduction).toBe(false);
+    expect(economics?.budget.budgetPolicyVersion).toBe("launch-v1-budget");
+  });
+
+  it("never lets being on the list cost a project its access", () => {
+    // An allowlisted project whose dogfood policy had lapsed must fall through
+    // to production, not be refused. The list means "do not bill this one".
+    const economics = resolveAgentEconomics({
+      projectId: "project-1",
+      pricingClass: "standard",
+      at: LAUNCH,
+      env,
+    });
+
+    expect(economics).not.toBeNull();
+  });
+});
+
 describe("§18 — reachable only from an internal allowlist", () => {
   it("authorizes nobody when the allowlist is unset", () => {
     expect(internalDogfoodProjectIds({})).toEqual([]);

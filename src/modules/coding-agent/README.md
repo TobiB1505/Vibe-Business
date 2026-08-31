@@ -100,10 +100,13 @@ carries the sample, `small` has one cost observation and `complex` has none, so
 `credits/retail.ts` marks the Agent price `basis: "modelled"` and
 `margin-guard.test.ts` names the two tiers whose margin it cannot check.
 
-`authorization.ts` is still the only door between the two books. It now
-resolves the production budget for any project, and the internal dogfood
-economics — which is what makes a run non-production — only for a project id on
-an operator-managed allowlist.
+`authorization.ts` is still the only door between the two books, and it checks
+the allowlist **first**. Production now resolves for every project, so checking
+it first would have silently converted the dogfood account into a paying
+customer. A project named in the operator-managed environment variable keeps
+non-production economics; every project that is not named gets the production
+ones. What the list means changed with `launch-v1`: it used to say "let this one
+run at all", and now says "do not bill this one".
 
 Run `pnpm agent:preflight` against a real project to see the whole §43 picture —
 route, risk, validation profile, granted capabilities, ceilings, and the exact

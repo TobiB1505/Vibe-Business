@@ -79,6 +79,20 @@ The class is fixed on the immutable `ExecutionSpec` at build time and never re-d
 
 `maxCredits` is the customer's authorization and must equal the retail class price exactly — `checkBudgetBinding` refuses admission unless the reservation covers it, so a mismatch does not undercharge, it makes every run of that class refuse to start for what looks like a billing fault. `maxProviderSpendUsd` is Vibe's stop on its own invoice, sized to a 50% floor margin. The most expensive agent run ever measured is $0.9237 restated at September rates, so `standard` carries roughly 2× headroom over the worst observation rather than over a typical one.
 
+### The dogfood allowlist is checked before production, and that ordering is a decision
+
+`resolveAgentEconomics` used to check production first, on the reasoning that an approved policy should start being returned the day it is added without anybody remembering to reorder the branches. That was right while `EXECUTION_BUDGET_POLICIES` was empty.
+
+It becomes wrong the moment one exists. Production now resolves for every project, so production-first would silently convert the internal dogfood account into a paying customer — the same runs, the same allowlist, now settling real Credits — and leave `EXECUTION_DOGFOOD_BUDGET_POLICIES`, `credits/internal.ts` and `isDogfoodEligibleProject` as unreachable code still describing itself as live.
+
+The dogfood exists to buy cost data without charging anybody, and that purpose outlives the price it made possible. So the allowlist is checked first. What being on it *means* changed: it used to say "let this project run at all", and now says "do not bill this one". An allowlisted project whose dogfood policy has lapsed falls through to production rather than being refused — being on the list must never be a way to lose access.
+
+### An included Deep Scan is still free, and that had to be made true
+
+The first implementation held Credits unconditionally. `authorizeOperationCredits` resolves the retail price of `deep_scan` and knows nothing about entitlements, so a project's *first* Deep Scan — included since Sprint 5 — would have reserved and settled 25 Credits.
+
+`holdDeepScanCredits` takes the access mode `authorizeDeepScan` decided, and an included scan returns without touching the billing machinery. The mode is passed rather than re-derived: whether this scan is the included one was settled from the existence of a persisted snapshot, and a second answer computed elsewhere is exactly how the first one gets contradicted. The audit path has had this shape since Core-2 (`payWithCredits` guards its hold); Deep Scan now matches it.
+
 ### `not_priced` is a refusal, and it is not `free`
 
 `RetailPrice` gains a variant that looks redundant and is not. `retail-v1` genuinely sold neither Deep Scan nor the Agent, and recording that as `not_priced` rather than omitting the key is what makes a charge dated inside that window answerable — *"retail-v1 had no price for it"*, not *"somebody forgot to add one"*.
