@@ -6,7 +6,7 @@ import {
 import { buildExecutionSpec, type ExecutionSpec } from "@/modules/execution-contract/spec";
 import {
   FIXTURE_PLAN,
-  fakeBudgetPolicy,
+  fakeBudget,
   fakePlanStep,
   fakeRepositoryBinding,
   fakeWriteScope,
@@ -105,7 +105,7 @@ export function fakeAgentSpec(overrides: Partial<Parameters<typeof buildExecutio
       sandboxPolicyVersion: SANDBOX_POLICY_VERSION,
       sandboxSteps: ["install", "typecheck", "test", "build"],
     },
-    budget: { budgetPolicyVersion: "fixture", ...fakeBudgetPolicy().budget },
+    budget: { budgetPolicyVersion: "fixture", ...fakeBudget() },
     credit: { quoteId: "quote-1", maxAuthorizedCredits: creditsToUnits(200) },
     writeScope: fakeWriteScope(),
     createdAt: "2026-08-18T00:00:00.000Z",

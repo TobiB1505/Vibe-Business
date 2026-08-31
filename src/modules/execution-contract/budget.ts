@@ -1,4 +1,8 @@
 import { creditsToUnits, type CreditUnits } from "@/modules/credits/units";
+import {
+  EXECUTION_PRICING_CLASSES,
+  type ExecutionPricingClass,
+} from "@/modules/economy/execution-class";
 
 /**
  * The execution budget contract (EXECUTION CORE-3 §24, §25, §26).
@@ -16,22 +20,25 @@ import { creditsToUnits, type CreditUnits } from "@/modules/credits/units";
  * object because a run stops on whichever is reached first, and splitting them
  * would let one be enforced while the other was forgotten.
  *
- * ## Why there are no production numbers
+ * ## Where the production numbers came from
  *
- * §25 is explicit: do not choose arbitrary production numbers now. There is
- * also a harder reason, and it is the same one `credits/rating.ts` records for
- * its rate cards — Vibe has no measured cost for an agent run, because no agent
- * run has ever happened. A number invented today would look like a decision and
- * be a guess, and it would be baked into every spec produced before the first
- * real dogfood corrected it.
+ * §25 was explicit that arbitrary production numbers must not be chosen, and
+ * CLAUDE.md rule 78 states the bar they had to clear instead: never activate a
+ * customer-facing Agent price without a measured cost behind it. For three
+ * sprints {@link EXECUTION_BUDGET_POLICIES} was empty because that measurement
+ * did not exist — no agent run had ever happened, and a number invented in its
+ * place would have looked like a decision and been a guess.
  *
- * So {@link EXECUTION_BUDGET_POLICIES} is empty, {@link resolveExecutionBudget}
- * returns null, and admission refuses with `agentic_pricing_not_configured`.
- * That is not a gap — it is the honest state of the product, and it is exactly
- * how `retail.ts` already describes Agentic Execution: *"Deliberately absent:
- * Deep Scan and Agentic Execution. Neither has an approved price."*
+ * It exists now. The CORE-4 dogfood delivered sixteen agent runs against a real
+ * repository, metered into `ai_usage_events` and `sandbox_usage_events`, and
+ * {@link LAUNCH_V1_BUDGET_POLICY} is derived from that distribution rather than
+ * from a target.
  *
- * Tests supply a fixture policy. Nothing in production does.
+ * What has *not* changed is the shape of the honesty. The evidence is thin and
+ * uneven — `standard` carries the sample, `small` has one observation, and
+ * `complex` has none — so the per-class ceilings below are not equally
+ * well-founded, and `credits/retail.ts`'s `PriceBasis` records which is which.
+ * A future policy replaces this one; it never edits it.
  */
 
 /**
@@ -97,17 +104,138 @@ export type ExecutionBudgetPolicy = {
   effectiveFrom: string;
   /** Exclusive ISO instant; null means "current". */
   effectiveTo: string | null;
-  budget: Omit<ExecutionBudget, "budgetPolicyVersion">;
+  /**
+   * One budget per execution pricing class.
+   *
+   * A `Record` rather than a single budget, because `credits/retail.ts` prices
+   * agentic execution per class and `checkBudgetBinding` refuses a reservation
+   * that does not cover `maxCredits`. One shared budget would therefore force
+   * every class to reserve the most expensive tier's ceiling — a customer whose
+   * step classified `small` would have to hold 350 Credits to run 150 Credits
+   * of work.
+   *
+   * Every class must be present. A policy that omitted one would resolve
+   * `undefined` at exactly the moment money moves.
+   */
+  budgetsByClass: Readonly<Record<ExecutionPricingClass, Omit<ExecutionBudget, "budgetPolicyVersion">>>;
+};
+
+/**
+ * Builds a policy whose three classes share one budget.
+ *
+ * For a policy that genuinely does not vary by class — the internal dogfood
+ * ceiling, and every test fixture. Written once here so those callers do not
+ * each repeat the same three-key object and risk them drifting apart.
+ */
+export function uniformBudgetsByClass(
+  budget: Omit<ExecutionBudget, "budgetPolicyVersion">,
+): Readonly<Record<ExecutionPricingClass, Omit<ExecutionBudget, "budgetPolicyVersion">>> {
+  return Object.fromEntries(EXECUTION_PRICING_CLASSES.map((c) => [c, budget])) as Readonly<
+    Record<ExecutionPricingClass, Omit<ExecutionBudget, "budgetPolicyVersion">>
+  >;
+}
+
+/**
+ * The launch production budget (`launch-v1`).
+ *
+ * ## Two ceilings per class, answering two different questions
+ *
+ * ```
+ * maxCredits            what the customer authorized     = the retail class price, exactly
+ * maxProviderSpendUsd   what Vibe will pay to deliver it = a floor-margin stop
+ * ```
+ *
+ * `maxCredits` **must** equal the corresponding entry in `credits/retail.ts`'s
+ * `launch-v1` `agent_execution` price. `checkBudgetBinding` refuses admission
+ * unless the reservation covers it, so a mismatch does not undercharge — it
+ * makes every run of that class refuse to start, for what looks like a billing
+ * fault. `assertBudgetMatchesRetail` in this module's test holds the two
+ * together.
+ *
+ * `maxProviderSpendUsd` is sized to a 50% floor margin against the class price
+ * at €0.016333/Credit (EUR/USD 1.08): the point past which a single run stops
+ * being worth delivering. The most expensive agent run ever measured is $0.9237
+ * restated at post-2026-09-01 Sonnet rates, so `standard` carries roughly 2x
+ * headroom over the worst observation rather than over a typical one.
+ *
+ * ## Why the blast-radius limits widen with the class
+ *
+ * They are not a cost dial. A `complex` step is `complex` because it touches a
+ * sensitive surface or spans several named business surfaces
+ * (`ExecutionPricingClassReason`), and such work legitimately needs more turns
+ * and more wall clock to inspect before it edits. A `small` step that wanted 60
+ * turns is telling us its classification was wrong, and stopping it is the
+ * correct outcome.
+ *
+ * Every `maxWallClockMs` here stays below `AGENT_SANDBOX_LIFETIME_MS`
+ * (30 minutes) in `coding-agent/budget.ts`, so the run's budget expires before
+ * its workspace does rather than the other way around.
+ *
+ * `maxChangedFiles` / `maxChangedBytes` deliberately do **not** widen past the
+ * dogfood's 8 / 60 KB for `small` and `standard`. The dogfood observation that
+ * one run reached exactly eight files is a reason to watch that ceiling, not to
+ * raise it; only `complex`, which is defined by spanning more than one surface,
+ * gets more.
+ */
+export const LAUNCH_V1_BUDGET_POLICY: ExecutionBudgetPolicy = {
+  version: "launch-v1-budget",
+  // The same instant `retail-v1` gives way to `launch-v1` in `credits/retail.ts`,
+  // and the same instant Sonnet 5's price rises in `ai/pricing.ts`. One event.
+  effectiveFrom: "2026-09-01T00:00:00.000Z",
+  effectiveTo: null,
+  budgetsByClass: {
+    small: {
+      maxCredits: creditsToUnits(150),
+      maxAiCalls: 40,
+      maxAgentTurns: 30,
+      maxRepairAttempts: 3,
+      maxWallClockMs: 15 * 60 * 1000,
+      maxSandboxMs: 12 * 60 * 1000,
+      maxChangedFiles: 8,
+      maxChangedBytes: 60 * 1024,
+      maxNetworkRequests: 0,
+      maxProviderSpendUsd: 1.3,
+    },
+    standard: {
+      maxCredits: creditsToUnits(200),
+      maxAiCalls: 60,
+      maxAgentTurns: 40,
+      maxRepairAttempts: 3,
+      maxWallClockMs: 20 * 60 * 1000,
+      maxSandboxMs: 15 * 60 * 1000,
+      maxChangedFiles: 8,
+      maxChangedBytes: 60 * 1024,
+      maxNetworkRequests: 0,
+      maxProviderSpendUsd: 1.75,
+    },
+    complex: {
+      maxCredits: creditsToUnits(350),
+      maxAiCalls: 90,
+      maxAgentTurns: 60,
+      maxRepairAttempts: 4,
+      maxWallClockMs: 25 * 60 * 1000,
+      maxSandboxMs: 20 * 60 * 1000,
+      maxChangedFiles: 12,
+      maxChangedBytes: 90 * 1024,
+      maxNetworkRequests: 0,
+      maxProviderSpendUsd: 3,
+    },
+  },
 };
 
 /**
  * Every approved budget policy, newest last.
  *
- * **Empty, deliberately.** Adding an entry is a commercial and safety decision
- * with a measured cost behind it, made after the first real agent dogfood in
- * Core-4 — not an implementation detail somebody fills in to make a test pass.
+ * No longer empty. It was, for as long as CLAUDE.md rule 78's bar — a measured
+ * cost — was unmet; {@link LAUNCH_V1_BUDGET_POLICY} is the first entry, and it
+ * is a commercial and safety decision with sixteen delivered dogfood runs
+ * behind it, not an implementation detail somebody filled in to make a test
+ * pass. A superseded policy is never deleted: a run that named it must stay
+ * explainable.
  */
-export const EXECUTION_BUDGET_POLICIES: readonly ExecutionBudgetPolicy[] = [];
+export const EXECUTION_BUDGET_POLICIES: readonly ExecutionBudgetPolicy[] = [
+  LAUNCH_V1_BUDGET_POLICY,
+];
 
 /**
  * The CORE-4 internal dogfood budget (CORE-4 §17, §18).
@@ -162,8 +290,13 @@ export const CORE4_DOGFOOD_BUDGET_POLICY: ExecutionBudgetPolicy = {
   version: "core4-dogfood-budget-v1",
   effectiveFrom: "2026-08-18T00:00:00.000Z",
   effectiveTo: null,
-  budget: {
-    // An internal test ceiling, priced by `credits/dogfood.ts`. Never shown to
+  // One budget for all three classes, unchanged from what the sixteen dogfood
+  // runs actually ran under. The dogfood is an experiment with a ceiling, not a
+  // rate card, so varying it by pricing class would be inventing a distinction
+  // this policy has never made — and would silently reinterpret what those runs
+  // were bounded by, which is the whole value of the dataset.
+  budgetsByClass: uniformBudgetsByClass({
+    // An internal test ceiling, priced by `credits/internal.ts`. Never shown to
     // a customer and never charged to one.
     maxCredits: creditsToUnits(100),
     maxAiCalls: 60,
@@ -175,7 +308,7 @@ export const CORE4_DOGFOOD_BUDGET_POLICY: ExecutionBudgetPolicy = {
     maxChangedBytes: 60 * 1024,
     maxNetworkRequests: 0,
     maxProviderSpendUsd: 3,
-  },
+  }),
 };
 
 /**
@@ -189,12 +322,21 @@ export const EXECUTION_DOGFOOD_BUDGET_POLICIES: readonly ExecutionBudgetPolicy[]
 ];
 
 /**
- * The budget in force at an instant, or null when none is.
+ * The budget in force for one execution class at an instant, or null when none
+ * is.
  *
  * Half-open `[effectiveFrom, effectiveTo)`, matching `resolveRetailPolicy` and
  * `resolveRateCard` exactly.
+ *
+ * `pricingClass` is required rather than defaulted, for the same reason
+ * `retailChargeFor` throws instead of assuming a tier: there is no class that
+ * is safe to guess. Defaulting low authorizes the cheapest ceiling for the most
+ * expensive work; defaulting high blocks work the customer paid for. The caller
+ * classified the step before it got here (`classifyExecutionPricingClass`), and
+ * passing that result on is the whole job.
  */
 export function resolveExecutionBudget(
+  pricingClass: ExecutionPricingClass,
   at: Date = new Date(),
   policies: readonly ExecutionBudgetPolicy[] = EXECUTION_BUDGET_POLICIES,
 ): ExecutionBudget | null {
@@ -205,7 +347,7 @@ export function resolveExecutionBudget(
     const to =
       policy.effectiveTo === null ? Number.POSITIVE_INFINITY : Date.parse(policy.effectiveTo);
     if (timestamp >= from && timestamp < to) {
-      return { budgetPolicyVersion: policy.version, ...policy.budget };
+      return { budgetPolicyVersion: policy.version, ...policy.budgetsByClass[pricingClass] };
     }
   }
 

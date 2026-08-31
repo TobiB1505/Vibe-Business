@@ -6,7 +6,9 @@ import {
   resolveExecutionBudget,
 } from "@/modules/execution-contract/budget";
 import { compileExecutionPolicy } from "@/modules/execution-contract/policy";
-import { RETAIL_OPERATION_KINDS } from "@/modules/credits/retail";
+import { RETAIL_OPERATION_KINDS, retailChargeFor } from "@/modules/credits/retail";
+import { CREDIT_VALUE_NANO_USD } from "@/modules/credits/margin-guard";
+import { EXECUTION_PRICING_CLASSES } from "@/modules/economy/execution-class";
 import { internalChargeFor, INTERNAL_OPERATION_KINDS } from "@/modules/credits/internal";
 import { creditsToUnits } from "@/modules/credits/units";
 import {
@@ -32,19 +34,66 @@ import {
  */
 
 const AT = new Date("2026-08-19T00:00:00.000Z");
+/** Inside `launch-v1-budget`. */
+const LAUNCH = new Date("2026-09-01T00:00:00.000Z");
 
-describe("§18 — no production Agent price is activated", () => {
-  it("ships no production budget policy at all", () => {
-    expect(EXECUTION_BUDGET_POLICIES).toEqual([]);
-    expect(resolveExecutionBudget(AT)).toBeNull();
+/**
+ * §18 said: do not activate a customer-facing production Agent price without a
+ * measured cost behind it. CLAUDE.md rule 78 says the same thing and is still
+ * in force.
+ *
+ * `launch-v1` satisfied it rather than repealed it — sixteen delivered dogfood
+ * runs are the measurement — so these tests changed from "nothing is priced" to
+ * "the price and the ceiling agree, and the two books stay apart". The
+ * separation §18 was protecting is the part that must not move, and it is what
+ * the rest of this file now asserts.
+ */
+describe("the production Agent price is activated, and bound to its ceiling", () => {
+  it("ships exactly one production budget policy", () => {
+    expect(EXECUTION_BUDGET_POLICIES.map((policy) => policy.version)).toEqual([
+      "launch-v1-budget",
+    ]);
   });
 
-  it("keeps Agentic Execution out of the customer rate card", () => {
-    // `retail.ts` is the customer-facing book. Agentic Execution is absent from
-    // it, deliberately: no price has been approved and none can be until the
-    // dogfood produces a measured cost.
-    expect(RETAIL_OPERATION_KINDS).not.toContain("agent_execution");
+  it("still refuses when no policy is in force at the instant asked", () => {
+    // The refusal path §18 relied on is intact: it is now reached by a date
+    // outside every policy's interval rather than by an empty registry, and
+    // admission still turns it into `agentic_pricing_not_configured`.
+    expect(resolveExecutionBudget("standard", new Date("2026-01-01T00:00:00.000Z"))).toBeNull();
+  });
+
+  it("prices Agentic Execution in the customer book, per class", () => {
+    expect(RETAIL_OPERATION_KINDS).toContain("agent_execution");
+    // The internal ceiling never becomes a customer price. It is a different
+    // book and a different kind, and no customer path can name it.
     expect(RETAIL_OPERATION_KINDS).not.toContain("agent_execution_dogfood");
+  });
+
+  it("charges exactly what the production budget authorizes, class for class", () => {
+    // The two numbers must agree or `checkBudgetBinding` refuses admission for
+    // a configuration mistake rather than for a real shortfall. This is the
+    // same invariant the dogfood test below asserts, applied to the book a
+    // customer is actually charged from.
+    for (const pricingClass of EXECUTION_PRICING_CLASSES) {
+      const budget = resolveExecutionBudget(pricingClass, LAUNCH)!;
+      const price = retailChargeFor("agent_execution", LAUNCH, { pricingClass });
+
+      expect(price.kind).toBe("charge");
+      expect(price.kind === "charge" && price.creditUnits).toBe(budget.maxCredits);
+    }
+  });
+
+  it("leaves headroom between what a run may cost Vibe and what it earns", () => {
+    // `maxProviderSpendUsd` is Vibe's stop on its own invoice, and it must sit
+    // below the revenue the class price produces or a run at the ceiling would
+    // be delivered at a loss. Checked as a relationship rather than as two
+    // pinned numbers, so the assertion survives a repricing.
+    for (const pricingClass of EXECUTION_PRICING_CLASSES) {
+      const budget = resolveExecutionBudget(pricingClass, LAUNCH)!;
+      const revenueUsd = (budget.maxCredits / 1_000) * (CREDIT_VALUE_NANO_USD / 1e9);
+
+      expect(budget.maxProviderSpendUsd).toBeLessThan(revenueUsd * 0.55);
+    }
   });
 
   it("keeps the dogfood ceiling in its own book", () => {
@@ -55,41 +104,42 @@ describe("§18 — no production Agent price is activated", () => {
   });
 
   /**
-   * The two numbers must agree or admission refuses for a configuration
-   * mistake rather than for a real shortfall: `checkBudgetBinding` requires the
-   * reservation to cover the spec's authorized maximum.
+   * The same invariant, in the internal book. Unchanged by `launch-v1`, and
+   * asserted separately on purpose: the dogfood ceiling and the customer price
+   * are two books, and a test that checked only one would let them merge.
    */
-  it("reserves exactly the ceiling the budget authorizes", () => {
+  it("reserves exactly the ceiling the dogfood budget authorizes", () => {
     const reserved = internalChargeFor("agent_execution_dogfood", AT);
-    expect(reserved?.creditUnits).toBe(CORE4_DOGFOOD_BUDGET_POLICY.budget.maxCredits);
+    expect(reserved?.creditUnits).toBe(CORE4_DOGFOOD_BUDGET_POLICY.budgetsByClass.standard.maxCredits);
   });
 });
 
 describe("§18 — reachable only from an internal allowlist", () => {
   it("authorizes nobody when the allowlist is unset", () => {
     expect(internalDogfoodProjectIds({})).toEqual([]);
-    expect(resolveAgentEconomics({ projectId: "project-1", at: AT, env: {} })).toBeNull();
+    expect(resolveAgentEconomics({ projectId: "project-1", pricingClass: "standard", at: AT, env: {} })).toBeNull();
     expect(isAgenticExecutionAuthorized({ projectId: "project-1", at: AT, env: {} })).toBe(false);
   });
 
   it("authorizes nobody when the allowlist is empty", () => {
     const env = { VIBE_INTERNAL_AGENT_DOGFOOD_PROJECT_IDS: "  ,  , " };
     expect(internalDogfoodProjectIds(env)).toEqual([]);
-    expect(resolveAgentEconomics({ projectId: "project-1", at: AT, env })).toBeNull();
+    expect(resolveAgentEconomics({ projectId: "project-1", pricingClass: "standard", at: AT, env })).toBeNull();
   });
 
   it("authorizes exactly the listed projects and nobody else", () => {
     const env = { VIBE_INTERNAL_AGENT_DOGFOOD_PROJECT_IDS: "project-1, project-2" };
 
-    expect(resolveAgentEconomics({ projectId: "project-1", at: AT, env })).not.toBeNull();
-    expect(resolveAgentEconomics({ projectId: "project-2", at: AT, env })).not.toBeNull();
+    expect(resolveAgentEconomics({ projectId: "project-1", pricingClass: "standard", at: AT, env })).not.toBeNull();
+    expect(resolveAgentEconomics({ projectId: "project-2", pricingClass: "standard", at: AT, env })).not.toBeNull();
     // A customer project, which is every project that is not on the list.
-    expect(resolveAgentEconomics({ projectId: "project-3", at: AT, env })).toBeNull();
+    expect(resolveAgentEconomics({ projectId: "project-3", pricingClass: "standard", at: AT, env })).toBeNull();
   });
 
   it("marks the dogfood economics non-production, explicitly", () => {
     const economics = resolveAgentEconomics({
       projectId: "project-1",
+      pricingClass: "standard",
       at: AT,
       env: { VIBE_INTERNAL_AGENT_DOGFOOD_PROJECT_IDS: "project-1" },
     });
@@ -101,7 +151,7 @@ describe("§18 — reachable only from an internal allowlist", () => {
 });
 
 describe("§17 — the CORE-4 dogfood policy is conservative and complete", () => {
-  const budget = CORE4_DOGFOOD_BUDGET_POLICY.budget;
+  const budget = CORE4_DOGFOOD_BUDGET_POLICY.budgetsByClass.standard;
 
   it("bounds every dimension §17 names", () => {
     // Agent turns, repair loops, wall clock, changed files, diff size, AI/provider
@@ -150,7 +200,7 @@ describe("§17 — the CORE-4 dogfood policy is conservative and complete", () =
 });
 
 describe("budget and write scope must describe the same blast radius", () => {
-  const budget = { budgetPolicyVersion: "x", ...CORE4_DOGFOOD_BUDGET_POLICY.budget };
+  const budget = { budgetPolicyVersion: "x", ...CORE4_DOGFOOD_BUDGET_POLICY.budgetsByClass.standard };
 
   const policy = compileExecutionPolicy({
     mode: "agentic",

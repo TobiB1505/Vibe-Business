@@ -14,6 +14,7 @@ import { fakeAgenticResolution, fakeAgentSpec } from "./test-support";
  */
 
 const ECONOMICS = resolveAgentEconomics({
+  pricingClass: "standard",
   projectId: "project-1",
   at: new Date("2026-08-19T00:00:00.000Z"),
   env: { VIBE_INTERNAL_AGENT_DOGFOOD_PROJECT_IDS: "project-1" },

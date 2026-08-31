@@ -4,6 +4,7 @@ import {
   resolveExecutionBudget,
   type ExecutionBudget,
 } from "@/modules/execution-contract/budget";
+import type { ExecutionPricingClass } from "@/modules/economy/execution-class";
 
 /**
  * Who may run an agent at all, and under whose economics (CORE-4 §18).
@@ -19,9 +20,15 @@ import {
  * So there are two budget worlds and this file is the only door between them:
  *
  * ```
- * production      EXECUTION_BUDGET_POLICIES            empty → nobody
+ * production      EXECUTION_BUDGET_POLICIES            launch-v1-budget, per class
  * internal        EXECUTION_DOGFOOD_BUDGET_POLICIES    allowlisted projects only
  * ```
+ *
+ * Both worlds still exist and the door between them is still this file. What
+ * changed at `launch-v1` is only which side answers first: the production
+ * branch now resolves for every project, so the allowlist stops being the only
+ * way to run an agent and becomes what it always described itself as — a way to
+ * run one under *internal, non-production* economics.
  *
  * ## Why an allowlist of project ids rather than a feature flag
  *
@@ -80,20 +87,28 @@ const DOGFOOD_DISCLOSURE =
 /**
  * The economics that authorize agentic execution for one project, or null.
  *
- * Production first, so that the day an approved policy is added this function
- * starts returning it without anybody remembering to reorder these branches.
- * Today `EXECUTION_BUDGET_POLICIES` is empty, so the production branch never
- * fires and the honest answer for a customer project is `null` — which
- * admission turns into `agentic_pricing_not_configured` (Core-3 §24).
+ * Production first, so that an approved policy is returned without anybody
+ * remembering to reorder these branches. Since `launch-v1-budget` that branch
+ * fires for every project; before it, `EXECUTION_BUDGET_POLICIES` was empty and
+ * the honest answer for a customer project was `null`, which admission turns
+ * into `agentic_pricing_not_configured` (Core-3 §24). That refusal is still
+ * reachable — a date outside every policy's interval produces it — and is still
+ * the correct answer when it happens.
+ *
+ * `pricingClass` comes from `classifyExecutionPricingClass` and must be the
+ * same class the reservation was priced at. It is not optional and has no
+ * default: see `resolveExecutionBudget` for why guessing a tier is unsafe in
+ * both directions.
  */
 export function resolveAgentEconomics(params: {
   projectId: string;
+  pricingClass: ExecutionPricingClass;
   at?: Date;
   env?: Record<string, string | undefined>;
 }): AgentEconomicPolicy | null {
   const at = params.at ?? new Date();
 
-  const production = resolveExecutionBudget(at);
+  const production = resolveExecutionBudget(params.pricingClass, at);
   if (production) {
     return {
       budget: production,
@@ -104,19 +119,35 @@ export function resolveAgentEconomics(params: {
 
   if (!internalDogfoodProjectIds(params.env).includes(params.projectId)) return null;
 
-  const dogfood = resolveExecutionBudget(at, EXECUTION_DOGFOOD_BUDGET_POLICIES);
+  const dogfood = resolveExecutionBudget(
+    params.pricingClass,
+    at,
+    EXECUTION_DOGFOOD_BUDGET_POLICIES,
+  );
   if (!dogfood) return null;
 
   return { budget: dogfood, nonProduction: true, disclosure: DOGFOOD_DISCLOSURE };
 }
 
-/** Whether agentic execution is authorized at all, for the resolver's gate. */
+/**
+ * Whether agentic execution is authorized at all, for the resolver's gate.
+ *
+ * Deliberately class-free, and the answer is total rather than a sample: an
+ * `ExecutionBudgetPolicy` must define all three classes, so a policy that
+ * authorizes one authorizes every one. `standard` is passed because a value is
+ * required, not because the answer depends on it.
+ *
+ * A gate asks "could this project run an agent"; only a step that has actually
+ * been classified asks "under which ceiling". Keeping the gate class-free is
+ * what stops a caller inventing a class in order to answer a question that
+ * never needed one.
+ */
 export function isAgenticExecutionAuthorized(params: {
   projectId: string;
   at?: Date;
   env?: Record<string, string | undefined>;
 }): boolean {
-  return resolveAgentEconomics(params) !== null;
+  return resolveAgentEconomics({ ...params, pricingClass: "standard" }) !== null;
 }
 
 /**

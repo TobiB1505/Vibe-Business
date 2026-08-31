@@ -109,13 +109,46 @@ describe("the Economy Intelligence layer bills nobody", () => {
    */
   const PERMITTED_ECONOMY_READERS = [join("modules", "coding-agent", "dogfood")];
 
-  it("is read only by the economy module and the internal calibration harness", () => {
-    const offenders = walk(join(process.cwd(), "src")).filter(
-      (file) =>
-        !file.includes(join("modules", "economy")) &&
-        !PERMITTED_ECONOMY_READERS.some((permitted) => file.includes(permitted)) &&
-        readFileSync(file, "utf8").includes('from "@/modules/economy/'),
-    );
+  /**
+   * What the rest of the application may import from here, by module.
+   *
+   * `launch-v1` widened this a second time, and again narrowly. Activating a
+   * per-class Agent price means the money paths have to know a step's execution
+   * pricing class — and the only honest way to know it is to ask the classifier
+   * the analysis itself uses. A second copy would let the price a customer was
+   * shown and the class Vibe reasons about drift apart, which is the failure
+   * this whole suite exists to prevent.
+   *
+   * The three modules below are the ones safe to be read this way, and they
+   * share a property: none of them decides an amount.
+   *
+   * ```
+   * execution-class.ts        classifies a step. Contains no money at all.
+   * infrastructure-rates.ts   what Vibe pays a provider. Not what it charges.
+   * sandbox-cost.ts           dimensions to nanodollars. Arithmetic, not policy.
+   * ```
+   *
+   * Everything else stays unreadable from outside, and the test below keeps the
+   * one that matters unreadable by anybody: the predictive estimator, which
+   * produces a number that would eventually authorize something.
+   */
+  const PERMITTED_ECONOMY_IMPORTS = [
+    "@/modules/economy/execution-class",
+    "@/modules/economy/infrastructure-rates",
+    "@/modules/economy/sandbox-cost",
+  ];
+
+  it("is read only by the economy module, the calibration harness and the permitted primitives", () => {
+    const offenders = walk(join(process.cwd(), "src")).filter((file) => {
+      if (file.includes(join("modules", "economy"))) return false;
+      if (PERMITTED_ECONOMY_READERS.some((permitted) => file.includes(permitted))) return false;
+
+      const imports = [
+        ...readFileSync(file, "utf8").matchAll(/from "(@\/modules\/economy\/[^"]+)"/g),
+      ].map((match) => match[1]!);
+
+      return imports.some((module) => !PERMITTED_ECONOMY_IMPORTS.includes(module));
+    });
 
     expect(offenders).toEqual([]);
   });

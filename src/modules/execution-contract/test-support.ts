@@ -1,7 +1,7 @@
 import type { ActionPlanStep } from "@/modules/action-plans/schema";
 import { creditsToUnits } from "@/modules/credits/units";
 import type { RepositoryIntelligenceSnapshot } from "@/modules/repository-intelligence/schema";
-import type { ExecutionBudgetPolicy } from "./budget";
+import { uniformBudgetsByClass, type ExecutionBudget, type ExecutionBudgetPolicy } from "./budget";
 import type { ExecutionWriteScope } from "./policy";
 import type { PlanContext, RepositoryContext, ResolveExecutionInput } from "./resolver";
 import type { ExecutionRepositoryBinding } from "./spec";
@@ -168,26 +168,40 @@ export function fakeResolveInput(
  * today would be a guess wearing a decision's clothes (§25). Tests need
  * *some* ceiling to prove the binding logic, so they bring their own.
  */
+export function fakeBudget(
+  overrides: Partial<Omit<ExecutionBudget, "budgetPolicyVersion">> = {},
+): Omit<ExecutionBudget, "budgetPolicyVersion"> {
+  return {
+    maxCredits: creditsToUnits(200),
+    maxAiCalls: 20,
+    maxAgentTurns: 40,
+    maxRepairAttempts: 3,
+    maxWallClockMs: 900_000,
+    maxSandboxMs: 600_000,
+    maxChangedFiles: 15,
+    maxChangedBytes: 200_000,
+    maxNetworkRequests: 0,
+    maxProviderSpendUsd: 5,
+    ...overrides,
+  };
+}
+
+/**
+ * A fixture policy, uniform across the three execution pricing classes.
+ *
+ * Uniform on purpose: a fixture that varied by class would make every test
+ * depend on which class its fake step happens to classify as, which is a fact
+ * about `execution-class.ts` and not about the thing under test. Tests that
+ * care about per-class ceilings build their own policy.
+ */
 export function fakeBudgetPolicy(
-  overrides: Partial<ExecutionBudgetPolicy["budget"]> = {},
+  overrides: Partial<Omit<ExecutionBudget, "budgetPolicyVersion">> = {},
 ): ExecutionBudgetPolicy {
   return {
     version: "execution-budget-fixture-v1",
     effectiveFrom: "2020-01-01T00:00:00.000Z",
     effectiveTo: null,
-    budget: {
-      maxCredits: creditsToUnits(200),
-      maxAiCalls: 20,
-      maxAgentTurns: 40,
-      maxRepairAttempts: 3,
-      maxWallClockMs: 900_000,
-      maxSandboxMs: 600_000,
-      maxChangedFiles: 15,
-      maxChangedBytes: 200_000,
-      maxNetworkRequests: 0,
-      maxProviderSpendUsd: 5,
-      ...overrides,
-    },
+    budgetsByClass: uniformBudgetsByClass(fakeBudget(overrides)),
   };
 }
 

@@ -36,7 +36,7 @@ function buildFixtureSpec(
   const resolution = resolveStepExecution(
     fakeResolveInput({ step, plan: fakePlanContext([step]) }),
   );
-  const budget = resolveExecutionBudget(new Date("2026-08-18T00:00:00.000Z"), [
+  const budget = resolveExecutionBudget("standard", new Date("2026-08-18T00:00:00.000Z"), [
     fakeBudgetPolicy(),
   ]);
 

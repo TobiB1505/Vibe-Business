@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { creditsToUnits } from "@/modules/credits/units";
-import { RETAIL_OPERATION_KINDS } from "@/modules/credits/retail";
+import { RETAIL_OPERATION_KINDS, retailChargeFor } from "@/modules/credits/retail";
+import { EXECUTION_PRICING_CLASSES } from "@/modules/economy/execution-class";
+import { AGENT_SANDBOX_LIFETIME_MS } from "@/modules/coding-agent/budget";
 import { EXECUTION_BUDGET_POLICIES, checkBudgetBinding, resolveExecutionBudget } from "./budget";
 import { admitExecutionSpec } from "./service";
 import { resolveStepExecution } from "./resolver";
@@ -21,7 +23,7 @@ import {
  * Budget binding (EXECUTION CORE-3 §24, §25, §26, §49).
  */
 
-const FIXTURE_BUDGET = resolveExecutionBudget(new Date("2026-08-18T00:00:00.000Z"), [
+const FIXTURE_BUDGET = resolveExecutionBudget("standard", new Date("2026-08-18T00:00:00.000Z"), [
   fakeBudgetPolicy(),
 ])!;
 
@@ -49,16 +51,51 @@ function agenticSpec(budget = FIXTURE_BUDGET) {
   };
 }
 
-describe("budget policy — no production numbers exist yet (§25)", () => {
-  it("ships no approved policy", () => {
-    expect(EXECUTION_BUDGET_POLICIES).toEqual([]);
-    expect(resolveExecutionBudget(new Date("2026-08-18T00:00:00.000Z"))).toBeNull();
+describe("budget policy — the production numbers and where they came from (§25)", () => {
+  it("ships exactly one approved policy, and none before it took effect", () => {
+    expect(EXECUTION_BUDGET_POLICIES.map((policy) => policy.version)).toEqual([
+      "launch-v1-budget",
+    ]);
+    // §25 forbade arbitrary production numbers, and for three sprints the
+    // honest answer was an empty registry. `launch-v1-budget` is dated, so the
+    // period in which no policy existed is still resolvable as exactly that.
+    expect(resolveExecutionBudget("standard", new Date("2026-08-18T00:00:00.000Z"))).toBeNull();
   });
 
-  it("matches the retail policy, which prices no agentic operation either", () => {
+  it("defines every execution pricing class, so none can resolve undefined", () => {
+    // A missing class would resolve `undefined` at exactly the moment money
+    // moves — an `ExecutionBudget` whose every field is undefined, passed
+    // straight into `checkBudgetBinding`.
+    for (const policy of EXECUTION_BUDGET_POLICIES) {
+      expect(Object.keys(policy.budgetsByClass).sort()).toEqual(
+        [...EXECUTION_PRICING_CLASSES].sort(),
+      );
+    }
+  });
+
+  it("matches the retail policy, which prices the same operation per class", () => {
     // The two must agree: a Credit ceiling with no customer price behind it
-    // would be a number nobody approved.
-    expect(RETAIL_OPERATION_KINDS).not.toContain("agentic_execution");
+    // would be a number nobody approved, and `checkBudgetBinding` would refuse
+    // every run of that class for what looks like a billing fault.
+    expect(RETAIL_OPERATION_KINDS).toContain("agent_execution");
+
+    const at = new Date("2026-09-01T00:00:00.000Z");
+    for (const pricingClass of EXECUTION_PRICING_CLASSES) {
+      const price = retailChargeFor("agent_execution", at, { pricingClass });
+      expect(price.kind === "charge" && price.creditUnits).toBe(
+        resolveExecutionBudget(pricingClass, at)!.maxCredits,
+      );
+    }
+  });
+
+  it("keeps every wall-clock ceiling inside the sandbox's own lifetime", () => {
+    // A budget that outlived its workspace would have the VM reclaimed with the
+    // harness still working and the run still paid for.
+    for (const pricingClass of EXECUTION_PRICING_CLASSES) {
+      const budget = resolveExecutionBudget(pricingClass, new Date("2026-09-01T00:00:00.000Z"))!;
+      expect(budget.maxWallClockMs).toBeLessThan(AGENT_SANDBOX_LIFETIME_MS);
+      expect(budget.maxSandboxMs).toBeLessThan(budget.maxWallClockMs);
+    }
   });
 
   it("resolves a fixture policy on the same half-open interval convention", () => {
@@ -66,8 +103,8 @@ describe("budget policy — no production numbers exist yet (§25)", () => {
       { ...fakeBudgetPolicy(), effectiveFrom: "2026-01-01T00:00:00.000Z", effectiveTo: "2026-06-01T00:00:00.000Z" },
     ];
 
-    expect(resolveExecutionBudget(new Date("2026-01-01T00:00:00.000Z"), policies)).not.toBeNull();
-    expect(resolveExecutionBudget(new Date("2026-06-01T00:00:00.000Z"), policies)).toBeNull();
+    expect(resolveExecutionBudget("standard", new Date("2026-01-01T00:00:00.000Z"), policies)).not.toBeNull();
+    expect(resolveExecutionBudget("standard", new Date("2026-06-01T00:00:00.000Z"), policies)).toBeNull();
   });
 });
 
