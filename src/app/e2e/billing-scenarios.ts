@@ -123,9 +123,48 @@ export const E2E_BILLING_SCENARIOS = {
       welcomeGranted: true,
     } satisfies BillingOverview,
   },
+  /**
+   * The screen under `launch-v1`, rendered at an instant inside it.
+   *
+   * Exists because the price table resolves a versioned, effective-dated
+   * policy, so the only page a browser test could otherwise see is whichever
+   * policy happens to be in force on the day CI runs. That is how a repricing
+   * ships with a green domain layer and a screen nobody has looked at
+   * ([CLAUDE.md](../../../CLAUDE.md) rule 69) — and it is exactly what happened
+   * here: the first render of this page after `launch-v1` was authored showed
+   * `retail-v1`'s prices and a footnote about agent tiers that were not on it.
+   *
+   * `at` moves no money. Every reservation resolves its own price server-side
+   * from the real clock.
+   */
+  "billing-launch-v1": {
+    stripeReady: true,
+    at: "2026-09-15T12:00:00.000Z",
+    overview: {
+      availableCredits: creditsToUnits(1_000),
+      displayAvailable: "1,000",
+      nextExpiry: null,
+      plan: {
+        key: "builder",
+        name: "Builder",
+        renewsAt: "2026-10-15T00:00:00.000Z",
+        endingAtPeriodEnd: false,
+      },
+      recentActivity: [
+        {
+          id: "l1",
+          label: "Agent improvement",
+          creditDelta: creditsToUnits(-200),
+          displayAmount: "-200",
+          at: "2026-09-14T10:00:00.000Z",
+        },
+      ],
+      welcomeGranted: true,
+    } satisfies BillingOverview,
+  },
 } as const satisfies Record<
   string,
-  { stripeReady: boolean; checkoutState?: string; overview: BillingOverview }
+  { stripeReady: boolean; checkoutState?: string; at?: string; overview: BillingOverview }
 >;
 
 export type E2eBillingScenario = keyof typeof E2E_BILLING_SCENARIOS;

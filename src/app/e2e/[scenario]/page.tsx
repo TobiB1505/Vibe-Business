@@ -89,6 +89,8 @@ import type { ActionPlanReadiness } from "@/modules/action-plans/service";
 import { ProductLogo } from "@/components/brand/product-logo";
 import { BillingView } from "@/app/app/(account)/billing/billing-view";
 import { E2E_BILLING_SCENARIOS, isE2eBillingScenario } from "../billing-scenarios";
+import { DeepScanPanel } from "@/app/app/projects/[projectId]/deep-scan-panel";
+import { E2E_DEEP_SCAN_SCENARIOS, isE2eDeepScanScenario } from "../deep-scan-scenarios";
 import { E2E_MOVES_SCENARIOS, isE2eMovesScenario } from "../moves-scenarios";
 import {
   E2E_ONBOARDING_SCENARIOS,
@@ -225,6 +227,7 @@ export default async function E2eScenarioPage({
           overview={fixture.overview}
           stripeReady={fixture.stripeReady}
           checkoutState={"checkoutState" in fixture ? fixture.checkoutState : undefined}
+          at={"at" in fixture ? new Date(fixture.at) : undefined}
         />
       </main>
     );
@@ -837,6 +840,21 @@ export default async function E2eScenarioPage({
           auditHref="/app/projects/project_e2e#business-audit"
           understandingHref="/app/projects/project_e2e/product"
         />
+      </main>
+    );
+  }
+
+  /*
+   * The Deep Scan panel (`launch-v1`). The same component the project page
+   * renders, given a complete `DeepScanViewModel` written by hand from the read
+   * model's own types. No browser provider, no session, no Credit hold — the
+   * panel's start action is a Server Action these fixtures never reach.
+   */
+  if (isE2eDeepScanScenario(scenario)) {
+    return (
+      <main className="mx-auto max-w-3xl p-8">
+        {label}
+        <DeepScanPanel projectId="project_e2e" model={E2E_DEEP_SCAN_SCENARIOS[scenario]} />
       </main>
     );
   }

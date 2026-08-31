@@ -320,3 +320,84 @@ test.describe("accessibility (§93)", () => {
     expect(overflow).toBeLessThanOrEqual(0);
   });
 });
+
+/**
+ * The screen under `launch-v1`, in a browser.
+ *
+ * The domain layer's prices were correct and every test was green while this
+ * page rendered `retail-v1`'s three rows under a footnote describing agent
+ * tiers that were not on it. Three greens and an untested screen is the failure
+ * mode [CLAUDE.md](../CLAUDE.md) rule 69 names, and this is it happening.
+ */
+test.describe("the price table under launch-v1 (rule 69)", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("/e2e/billing-launch-v1");
+  });
+
+  test("states every operation the policy sells, and none it does not", async ({ page }) => {
+    const text = await page.locator("body").innerText();
+
+    expect(text).toContain("Business Audit");
+    expect(text).toContain("55 Credits");
+    expect(text).toContain("Next moves");
+    expect(text).toContain("30 Credits");
+    expect(text).toContain("Deep Scan (additional)");
+    expect(text).toContain("25 Credits");
+  });
+
+  test("shows all three agent tiers rather than a range or a 'from'", async ({ page }) => {
+    // A customer budgeting needs the top of the scale. "From 150 Credits" hides
+    // exactly the number they would plan against, and the cheapest of three is
+    // a lie.
+    const text = await page.locator("body").innerText();
+
+    expect(text).toContain("Agent improvement");
+    expect(text).toContain("150 Credits");
+    expect(text).toContain("200 Credits");
+    expect(text).toContain("350 Credits");
+  });
+
+  test("keeps Product Understanding free rather than at 0 Credits", async ({ page }) => {
+    const row = page.getByText("Understanding your product").locator("xpath=ancestor::li[1]");
+    await expect(row).toContainText("Free");
+    await expect(row).not.toContainText("0 Credits");
+  });
+
+  test("qualifies the prices that are not measured, and only those", async ({ page }) => {
+    const text = await page.locator("body").innerText();
+
+    // The footnote is present here because rows on this page need it.
+    expect(text).toContain("Agent prices scale with how broad a change is");
+
+    // And a measured row does not carry the marker.
+    const audit = page.getByText("Business Audit", { exact: true });
+    await expect(audit).not.toContainText("*");
+  });
+
+  test("says what a plan buys, in work rather than in Credits", async ({ page }) => {
+    const text = await page.locator("body").innerText();
+
+    // 1,000 ÷ 200 = 5, rounded down. Computed from the catalog and the rate
+    // card, never typed, so it cannot drift from what is actually charged.
+    expect(text).toContain("Builder buys");
+    expect(text).toContain("5 standard agent improvements, or 18 Business Audits each month");
+    expect(text).toContain("15 standard agent improvements, or 54 Business Audits each month");
+  });
+
+  test("still exposes no provider cost, token count or internal unit", async ({ page }) => {
+    const text = (await page.locator("body").innerText()).toLowerCase();
+
+    for (const forbidden of ["token", "nanousd", "usd", "sandbox", "anthropic", "margin", "cogs"]) {
+      expect(text, `launch-v1 billing page leaks "${forbidden}"`).not.toContain(forbidden);
+    }
+  });
+
+  test("does not overflow horizontally on a phone", async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 800 });
+    const overflows = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+    );
+    expect(overflows).toBe(false);
+  });
+});
+

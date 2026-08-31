@@ -17,6 +17,7 @@ import {
   RETAIL_OPERATION_KINDS,
   resolveRetailPrice,
   retailChargeFor,
+  type ResolvedRetailPrice,
   type RetailOperationKind,
 } from "@/modules/credits/retail";
 import {
@@ -72,6 +73,14 @@ const EXECUTION_CLASS_NAMES: Record<ExecutionPricingClass, string> = {
   complex: "Broad",
 };
 
+/** One rendered row: an operation the policy in force actually sells. */
+type PriceRow = {
+  operation: RetailOperationKind;
+  resolved: Omit<ResolvedRetailPrice, "price"> & {
+    price: Exclude<ResolvedRetailPrice["price"], { kind: "not_priced" }>;
+  };
+};
+
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-GB", {
     day: "numeric",
@@ -111,16 +120,46 @@ export function BillingView({
   overview,
   stripeReady,
   checkoutState,
+  at = new Date(),
 }: {
   overview: BillingOverview;
   stripeReady: boolean;
   checkoutState?: string;
+  /**
+   * The instant the price table resolves at. Defaults to now.
+   *
+   * A parameter rather than an implicit `new Date()`, so that the browser suite
+   * can render this screen under a *future* policy. Without it the only page a
+   * test could ever see is the one whose policy happens to be in force on the
+   * day CI runs — which is how a repricing ships with a correct domain layer and
+   * a screen nobody has looked at ([CLAUDE.md](../../../../CLAUDE.md) rule 69).
+   *
+   * It moves no money. Every reservation resolves its own price server-side
+   * from the real clock; this only decides what is displayed.
+   */
+  at?: Date;
 }) {
   const notice = checkoutState ? CHECKOUT_NOTICES[checkoutState] : undefined;
   const packs = listCreditPacks();
   const plans = listPaidPlans();
   const currentPlan = getPlan(overview.plan.key);
   const expiryPercent = expiryShare(overview);
+
+  // Resolved once, so the table and the footnote below cannot disagree about
+  // which prices exist.
+  const priceRows = RETAIL_OPERATION_KINDS.map((operation) => ({
+    operation,
+    resolved: resolveRetailPrice(operation, at),
+  })).filter((row): row is PriceRow => {
+    // An operation the policy does not sell has no row at all. A "—" would
+    // still be a claim about a price.
+    return row.resolved !== null && row.resolved.price.kind !== "not_priced";
+  });
+
+  // Shown only when a row above actually needs it. A footnote explaining
+  // agent tiers and Deep Scan under a policy that prices neither is a
+  // statement about rows that are not on the page.
+  const hasQualifiedPrice = priceRows.some((row) => row.resolved.basis !== "measured");
 
   return (
     <div className="flex flex-col gap-5 sm:gap-6">
@@ -256,12 +295,7 @@ export function BillingView({
             <span className="text-fg-meta hidden items-center gap-1.5 text-xs sm:inline-flex"><InfoIcon size={14} /> Known before you start</span>
           </div>
           <ul className="divide-line-2 divide-y">
-            {RETAIL_OPERATION_KINDS.map((operation) => {
-              const resolved = resolveRetailPrice(operation);
-              // An operation this policy does not sell has no row at all. A
-              // "—" would still be a claim about a price.
-              if (!resolved || resolved.price.kind === "not_priced") return null;
-
+            {priceRows.map(({ operation, resolved }) => {
               const price = resolved.price;
 
               return (
@@ -308,11 +342,13 @@ export function BillingView({
             and it belongs where a reader looks after the table rather than
             beside the figure they are trying to compare.
           */}
-          <p className="text-fg-meta border-line-2 border-t px-5 py-4 text-xs sm:px-6">
-            <span aria-hidden="true">*</span> Agent prices scale with how broad a
-            change is, and Vibe tells you which before you start. A Deep Scan
-            price covers the browser session that reads your signed-in product.
-          </p>
+          {hasQualifiedPrice && (
+            <p className="text-fg-meta border-line-2 border-t px-5 py-4 text-xs sm:px-6">
+              <span aria-hidden="true">*</span> Agent prices scale with how broad a
+              change is, and Vibe tells you which before you start. A Deep Scan
+              price covers the browser session that reads your signed-in product.
+            </p>
+          )}
         </Surface>
 
         <Surface as="section" aria-labelledby="credit-packs-heading" id="credit-packs" level="panel" padding="none" className="scroll-mt-6 overflow-hidden">
@@ -391,13 +427,13 @@ export function BillingView({
           */}
           <dl className="border-line-2 divide-line-2 divide-y border-t">
             {plans.map((plan) => {
-              const buys = planPurchasingPower(plan.monthlyCreditUnits);
+              const buys = planPurchasingPower(plan.monthlyCreditUnits, at);
               if (!buys) return null;
 
               return (
                 <div key={plan.key} className="flex items-baseline justify-between gap-4 px-5 py-3 sm:px-6">
-                  <dt className="text-fg-meta text-xs">{plan.name} buys, each month</dt>
-                  <dd className="text-fg-body text-right text-xs">{buys}</dd>
+                  <dt className="text-fg-meta shrink-0 text-xs">{plan.name} buys</dt>
+                  <dd className="text-fg-body text-right text-xs">{buys} each month</dd>
                 </div>
               );
             })}
@@ -420,11 +456,11 @@ export function BillingView({
  * billing page cannot afford. Returns null when nothing in the card is priced,
  * so a policy with no prices renders no claim rather than "0 audits".
  */
-function planPurchasingPower(monthlyCreditUnits: CreditUnits): string | null {
+function planPurchasingPower(monthlyCreditUnits: CreditUnits, at: Date): string | null {
   if (monthlyCreditUnits <= 0) return null;
 
-  const agent = retailChargeFor("agent_execution", new Date(), { pricingClass: "standard" });
-  const audit = retailChargeFor("business_audit");
+  const agent = retailChargeFor("agent_execution", at, { pricingClass: "standard" });
+  const audit = retailChargeFor("business_audit", at);
 
   const parts: string[] = [];
 
