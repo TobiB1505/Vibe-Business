@@ -76,6 +76,17 @@ const REVIEWED_SITES: readonly { file: string; why: string }[] = [
       "through it, and it refuses to write without VIBE_REFUND_CONFIRM=yes.",
   },
   {
+    file: join("modules", "authenticated-product-intelligence", "billing.ts"),
+    why:
+      "launch-v1. An additional Deep Scan is Credit-priced, and the hold has to be taken before " +
+      "Vibe buys a browser — so it happens inside a Server Action's request, not inside a durable " +
+      "operation, because a Deep Scan is not one: it has no operation_runs row and no " +
+      "OPERATION_TYPES entry. Every billing table has a select policy and deliberately no write " +
+      "policy, so the caller's cookie-scoped client is refused with 42501. Ownership is not taken " +
+      "from the caller's arguments: resolveBillingOwner reads it from the persisted project row, " +
+      "and every query this file makes is scoped by the credit account that resolves from it.",
+  },
+  {
     file: join("modules", "auth", "throttle.ts"),
     why:
       "VB-053 / ADR 0060. record_auth_attempt is no longer callable by anon, because anon is " +

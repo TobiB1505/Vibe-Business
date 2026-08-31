@@ -17,6 +17,12 @@ function facts(overrides: Partial<DeepScanEntitlementFacts> = {}): DeepScanEntit
     recentStartCount: 0,
     lastAbandonedAt: null,
     productionOrigin: "https://app.example.com",
+    // The default fixture is a project on `launch-v1`: an additional scan is
+    // priced and the wallet covers it. Tests that care about the unpriced world
+    // set `additionalScanPrice: null` explicitly, which is what `retail-v1`
+    // resolved to and what a future policy without a Deep Scan price would.
+    additionalScanPrice: 25_000,
+    availableCredits: 100_000,
     now: NOW,
     ...overrides,
   };
@@ -30,21 +36,58 @@ describe("authorizeDeepScan — included first scan", () => {
     });
   });
 
-  it("blocks a second scan with credits_required once one succeeded", () => {
+  it("moves a second scan onto Credits once one succeeded", () => {
     expect(authorizeDeepScan(facts({ hasSuccessfulIncludedScan: true }))).toEqual({
-      allowed: false,
-      reason: "credits_required",
+      allowed: true,
+      accessMode: "credits",
     });
   });
 
-  it("evaluates credits_required before anything that could cost provider money", () => {
-    // Every other gate is simultaneously open; the entitlement still decides.
-    // This ordering is what stops us paying Browserbase and only then telling
-    // the user they cannot run a scan.
+  it("blocks a second scan with credits_required when no policy prices one", () => {
+    // The state `retail-v1` was in for the whole of its life, and the one a
+    // future policy without a Deep Scan price would return to. Null is not
+    // zero: it means "not for sale", and the honest answer is a refusal rather
+    // than a free scan.
+    expect(
+      authorizeDeepScan(facts({ hasSuccessfulIncludedScan: true, additionalScanPrice: null })),
+    ).toEqual({ allowed: false, reason: "credits_required" });
+  });
+
+  it("blocks a second scan when the balance does not cover it", () => {
+    expect(
+      authorizeDeepScan(facts({ hasSuccessfulIncludedScan: true, availableCredits: 24_999 })),
+    ).toEqual({ allowed: false, reason: "insufficient_credits" });
+  });
+
+  it("decides how a scan is paid for before anything could cost provider money", () => {
+    // Every other gate is simultaneously open; the entitlement still decides
+    // first. This ordering is what stops us paying Browserbase and only then
+    // telling the user they cannot run a scan.
     const decision = authorizeDeepScan(
-      facts({ hasSuccessfulIncludedScan: true, hasLiveSession: false, recentStartCount: 0 }),
+      facts({
+        hasSuccessfulIncludedScan: true,
+        additionalScanPrice: null,
+        hasLiveSession: false,
+        recentStartCount: 0,
+      }),
     );
     expect(decision).toEqual({ allowed: false, reason: "credits_required" });
+  });
+
+  it("applies the abuse limits to a paid scan exactly as to an included one", () => {
+    // Paying buys a scan, not the right to hammer a login page. A live session,
+    // a cooldown and an exhausted start window each still refuse.
+    const paid = { hasSuccessfulIncludedScan: true } as const;
+
+    expect(authorizeDeepScan(facts({ ...paid, hasLiveSession: true }))).toEqual({
+      allowed: false,
+      reason: "scan_already_running",
+    });
+    expect(
+      authorizeDeepScan(
+        facts({ ...paid, recentStartCount: START_ATTEMPT_LIMITS.maxStartsPerWindow }),
+      ),
+    ).toEqual({ allowed: false, reason: "start_attempts_exhausted" });
   });
 
   it("refuses when no production origin is configured", () => {
@@ -54,8 +97,11 @@ describe("authorizeDeepScan — included first scan", () => {
     });
   });
 
-  it("never returns the credits access mode while credits are unimplemented", () => {
-    for (const override of [{}, { recentStartCount: 2 }, { hasSuccessfulIncludedScan: true }]) {
+  it("never charges for a scan the included entitlement still covers", () => {
+    // The direction that would be expensive to get wrong: a project with its
+    // free scan intact must never resolve `credits`, whatever else is true of
+    // its wallet.
+    for (const override of [{}, { recentStartCount: 2 }, { availableCredits: 1_000_000 }]) {
       const decision = authorizeDeepScan(facts(override));
       if (decision.allowed) expect(decision.accessMode).toBe("included_first_scan");
     }
@@ -80,9 +126,11 @@ describe("authorizeDeepScan — failures do not consume the entitlement", () => 
   });
 
   it("cannot be reset by a simple retry once genuinely consumed", () => {
+    // Retrying does not give the free scan back. It resolves to `credits`
+    // forever after, which is a purchase and not the entitlement.
     const consumed = facts({ hasSuccessfulIncludedScan: true });
     for (let attempt = 0; attempt < 5; attempt += 1) {
-      expect(authorizeDeepScan(consumed)).toEqual({ allowed: false, reason: "credits_required" });
+      expect(authorizeDeepScan(consumed)).toEqual({ allowed: true, accessMode: "credits" });
     }
   });
 });
@@ -148,16 +196,28 @@ describe("toDeepScanAccessStatus", () => {
     expect(toDeepScanAccessStatus(facts(), null)).toEqual({
       includedScanAvailable: true,
       additionalScansRequireCredits: true,
+      additionalScanPrice: 25_000,
       retryAvailableAt: null,
       activeSession: null,
       blockedReason: null,
     });
   });
 
-  it("reports the included scan as used and names why a new one is blocked", () => {
+  it("reports the included scan as used, and the price of another", () => {
     const status = toDeepScanAccessStatus(facts({ hasSuccessfulIncludedScan: true }), null);
     expect(status.includedScanAvailable).toBe(false);
+    expect(status.additionalScanPrice).toBe(25_000);
+    // Nothing is blocking: it is purchasable, which is the whole change.
+    expect(status.blockedReason).toBeNull();
+  });
+
+  it("names credits_required only when no additional scan is for sale", () => {
+    const status = toDeepScanAccessStatus(
+      facts({ hasSuccessfulIncludedScan: true, additionalScanPrice: null }),
+      null,
+    );
     expect(status.blockedReason).toBe("credits_required");
+    expect(status.additionalScanPrice).toBeNull();
   });
 
   it("exposes only Vibe's own session id and status", () => {
@@ -214,11 +274,21 @@ describe("toDeepScanAccessStatus — a cooldown says when, not just no", () => {
   });
 
   it("does not offer a retry time for denials waiting cannot fix", () => {
-    // Credits and a missing origin are not outlastable; implying otherwise
-    // would be a lie the UI would faithfully repeat.
-    const credits = toDeepScanAccessStatus(facts({ hasSuccessfulIncludedScan: true }), null);
-    expect(credits.blockedReason).toBe("credits_required");
-    expect(credits.retryAvailableAt).toBeNull();
+    // A missing price, an empty wallet and a missing origin are not outlastable;
+    // implying otherwise would be a lie the UI would faithfully repeat.
+    const unpriced = toDeepScanAccessStatus(
+      facts({ hasSuccessfulIncludedScan: true, additionalScanPrice: null }),
+      null,
+    );
+    expect(unpriced.blockedReason).toBe("credits_required");
+    expect(unpriced.retryAvailableAt).toBeNull();
+
+    const short = toDeepScanAccessStatus(
+      facts({ hasSuccessfulIncludedScan: true, availableCredits: 0 }),
+      null,
+    );
+    expect(short.blockedReason).toBe("insufficient_credits");
+    expect(short.retryAvailableAt).toBeNull();
 
     const noOrigin = toDeepScanAccessStatus(facts({ productionOrigin: null }), null);
     expect(noOrigin.retryAvailableAt).toBeNull();

@@ -2,6 +2,7 @@ import type { DeepScanAccessMode, DeepScanAccessStatus, DeepScanDenialReason } f
 import type { AuthenticatedSurfaceDetection } from "./surface-detection";
 import type { AuthenticatedProductIntelligenceSnapshot } from "./schema";
 import type { DeepScanSessionStatus } from "./store";
+import { creditUnits, type CreditUnits } from "@/modules/credits/units";
 
 /**
  * The safe Deep Scan view model (Sprint 5 §5, §13).
@@ -33,8 +34,12 @@ export type DeepScanUiState =
   | "waiting_for_login"
   | "analyzing"
   | "completed"
-  /** The included scan is used and credits do not exist yet. */
+  /** The included scan is used and the policy in force prices no additional one. */
   | "credits_required"
+  /** The included scan is used, an additional one is priced, and this balance covers it. */
+  | "additional_available"
+  /** The included scan is used, an additional one is priced, and the balance is short. */
+  | "insufficient_credits"
   /** Temporarily blocked: cooldown, attempt limit, or a session already live. */
   | "blocked"
   /** The last attempt ended without a snapshot; the included scan survives. */
@@ -68,7 +73,20 @@ export type DeepScanViewModel = {
   state: DeepScanUiState;
   includedScanAvailable: boolean;
   /** Always true while credits are unimplemented. The UI explains; it never sells. */
-  additionalScansRequireCredits: true;
+  additionalScansRequireCredits: boolean;
+  /**
+   * What an additional Deep Scan costs, in credit units, or null when the
+   * policy in force sells none.
+   *
+   * Null and zero are different, and the difference is the whole reason
+   * `credits_required` still exists as a state: no price means "not for sale",
+   * which the panel explains rather than sells.
+   *
+   * Branded here rather than in `entitlement.ts`, which deliberately holds no
+   * Credit types at all — this is the layer that renders, so this is where the
+   * number becomes a Credit amount.
+   */
+  additionalScanPrice: CreditUnits | null;
   /** Vibe's own session id and status only. */
   activeSession: { id: string; status: DeepScanSessionStatus } | null;
   blockedReason: DeepScanDenialReason | null;
@@ -186,6 +204,13 @@ export function buildDeepScanViewModel(input: BuildViewModelInput): DeepScanView
     // exists, that is what the section is about.
     if (lastResult) return "completed";
     if (accessStatus.blockedReason === "credits_required") return "credits_required";
+    if (accessStatus.blockedReason === "insufficient_credits") return "insufficient_credits";
+    // The included scan is gone, an additional one is priced, and nothing is
+    // blocking. Ranked below the failure and blocked branches below so a
+    // cooldown or a live session is still reported as itself.
+    if (!accessStatus.includedScanAvailable && accessStatus.additionalScanPrice !== null && canStart) {
+      return "additional_available";
+    }
     if (lastFailure) return "last_attempt_failed";
     if (accessStatus.blockedReason !== null) return "blocked";
     return showRecommendation ? "recommended" : "not_recommended";
@@ -195,6 +220,10 @@ export function buildDeepScanViewModel(input: BuildViewModelInput): DeepScanView
     state,
     includedScanAvailable: accessStatus.includedScanAvailable,
     additionalScansRequireCredits: true,
+    additionalScanPrice:
+      accessStatus.additionalScanPrice === null
+        ? null
+        : creditUnits(accessStatus.additionalScanPrice),
     activeSession: active,
     blockedReason: accessStatus.blockedReason,
     showRecommendation,
