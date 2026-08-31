@@ -1,7 +1,13 @@
 import "server-only";
 
 import { createServiceClient } from "@/lib/supabase/service";
-import { ZERO_CREDITS } from "@/modules/credits/units";
+import { ZERO_CREDITS, type CreditUnits } from "@/modules/credits/units";
+import { quoteCredits } from "@/modules/credits/service";
+import {
+  EXECUTION_PRICING_CLASS_POLICY_VERSION,
+  type ExecutionPricingClass,
+  type ExecutionPricingClassReason,
+} from "@/modules/economy/execution-class";
 import { AGENT_SANDBOX_LIFETIME_MS } from "@/modules/coding-agent/budget";
 import {
   claimAgentExecutionRun,
@@ -170,6 +176,22 @@ export async function holdAgentExecutionCredits(params: {
   projectId: string;
   userId: string;
   operationRunId: string;
+  /** The class the spec was built at, and the class the price is taken from. */
+  pricingClass: ExecutionPricingClass;
+  /**
+   * Which book governs this run, taken from the resolved economics rather than
+   * inferred here.
+   *
+   * `credits/internal.ts` and `credits/retail.ts` are deliberately separate
+   * books, and the caller has already asked `resolveAgentEconomics` which one
+   * applies. Re-deciding it here would be a second answer to a question that
+   * already has one, and the failure mode is a customer charged out of the
+   * internal dogfood ceiling — or, worse, a dogfood run charged at retail.
+   */
+  nonProduction: boolean;
+  /** The quote recorded immediately before this hold, when one was written. */
+  quoteId?: string | null;
+  now?: Date;
 }): Promise<AuthorizeOperationCreditsResult> {
   const supabase = createServiceClient();
 
@@ -185,10 +207,76 @@ export async function holdAgentExecutionCredits(params: {
 
   return authorizeOperationCredits(supabase, {
     projectId: params.projectId,
-    operation: "agent_execution_dogfood",
+    operation: params.nonProduction ? "agent_execution_dogfood" : "agent_execution",
+    pricingClass: params.pricingClass,
+    quoteId: params.quoteId ?? null,
     idempotencyKey: params.operationRunId,
     operationRunId: params.operationRunId,
+    now: params.now,
   });
+}
+
+/**
+ * Records what the customer was quoted, immediately before the hold (ADR 0024 §4).
+ *
+ * ## Why a quote at all, when the price is fixed
+ *
+ * Because "200 Credits" and "200 Credits, because this step touches one named
+ * business surface" are the same number and different claims, and only the
+ * second is one a customer can check. The `assumptions` carry the class and the
+ * classifier's own reason, so a run's price stays explainable after the policy
+ * that produced it has been superseded.
+ *
+ * `estimated` equals `maximum` on purpose. A class price is knowable before the
+ * agent spends anything and does not move with how the run goes — that is the
+ * whole point of pricing a class rather than a cost (ADR 0038). A quote whose
+ * ceiling exceeded its estimate would imply a variability this price does not
+ * have.
+ *
+ * A quote authorizes nothing; the reservation does. Failing to write one must
+ * therefore never fail the run, which is why this returns null rather than
+ * throwing — the customer's money is governed by the hold that follows.
+ */
+export async function quoteAgentExecutionCredits(params: {
+  projectId: string;
+  userId: string;
+  operationRunId: string;
+  credits: CreditUnits;
+  pricingClass: ExecutionPricingClass;
+  pricingClassReason: ExecutionPricingClassReason;
+  policyVersion: string;
+  budgetPolicyVersion: string;
+}): Promise<string | null> {
+  const supabase = createServiceClient();
+
+  const owned = await ownsProject(supabase, { projectId: params.projectId, userId: params.userId });
+  if (!owned) return null;
+
+  try {
+    const quote = await quoteCredits(supabase, {
+      userId: params.userId,
+      projectId: params.projectId,
+      operationType: "agent_execution",
+      estimatedCredits: params.credits,
+      maximumCredits: params.credits,
+      rateCardVersion: params.policyVersion,
+      assumptions: {
+        pricingClass: params.pricingClass,
+        pricingClassReason: params.pricingClassReason,
+        pricingClassPolicyVersion: EXECUTION_PRICING_CLASS_POLICY_VERSION,
+        budgetPolicyVersion: params.budgetPolicyVersion,
+        operationRunId: params.operationRunId,
+      },
+    });
+
+    return quote.id;
+  } catch {
+    // Deliberately swallowed. A quote is a record of what was shown, not an
+    // authority over what is spent — see the docblock. Losing one costs
+    // explainability, and failing the run over it would cost the customer the
+    // work they asked for.
+    return null;
+  }
 }
 
 /**

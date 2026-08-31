@@ -16,11 +16,12 @@ import {
   isInternalOperationKind,
   type InternalOperationKind,
 } from "./internal";
-import { retailChargeFor, type RetailOperationKind } from "./retail";
+import { retailChargeFor, type RetailChargeResolution, type RetailOperationKind } from "./retail";
 import { releaseReservation, resolveBillingOwner, settleReservation } from "./service";
 import { claimReservation, ensureCreditAccount, getReservation } from "./store";
 import { creditUnits, type CreditUnits, ZERO_CREDITS } from "./units";
 import type { ReleaseReason } from "./balance";
+import type { ExecutionPricingClass } from "@/modules/economy/execution-class";
 
 /**
  * Charging a customer for a predictable operation
@@ -57,7 +58,20 @@ import type { ReleaseReason } from "./balance";
  * Authorization
  * ------------------------------------------------------------------------ */
 
-export type OperationCreditRefusal = "insufficient_credits" | "account_suspended" | "account_not_found";
+export type OperationCreditRefusal =
+  | "insufficient_credits"
+  | "account_suspended"
+  | "account_not_found"
+  /**
+   * The policy in force sells no such operation.
+   *
+   * Distinct from every other refusal and from the free path, because it is the
+   * only one that is about the *catalogue* rather than about this customer. It
+   * exists because `retail-v1` genuinely did not price Deep Scan or the Agent,
+   * and a policy that says so must refuse rather than run them for nothing —
+   * see `retail.ts`'s `not_priced`.
+   */
+  | "operation_not_priced";
 
 /**
  * Operations that can hold a Credit reservation.
@@ -74,19 +88,30 @@ export type BillableOperationKind = RetailOperationKind | InternalOperationKind;
 /**
  * What one operation costs, from whichever book governs it.
  *
- * Null means free *or* unpriced, and both are handled by the same caller
- * branch: nothing is reserved and nothing will be charged. Agentic execution
- * for an ordinary customer project resolves through neither book and lands
- * here as null — which is correct, because such a project never gets past
- * `resolveAgentEconomics` in the first place.
+ * Three outcomes, not two. `free` and `not_priced` were once the same `null`,
+ * and the collapse was safe only while the operations that could be unpriced
+ * — Deep Scan and the Agent — could not reach this function at all. Under
+ * `launch-v1` they can, so the difference has to be carried: `free` runs and
+ * charges nothing, `not_priced` refuses. Conflating them would run the most
+ * expensive operation Vibe has for nothing, under a policy that never sold it.
+ *
+ * The internal dogfood book has no unpriced case — it prices exactly the one
+ * operation it names — so its `null` still means only "not in this book", which
+ * for a `BillableOperationKind` cannot happen.
  */
 function chargeFor(
   operation: BillableOperationKind,
   now: Date,
-): { creditUnits: CreditUnits; policyVersion: string } | null {
-  return isInternalOperationKind(operation)
-    ? internalChargeFor(operation, now)
-    : retailChargeFor(operation, now);
+  pricingClass: ExecutionPricingClass | null,
+): RetailChargeResolution {
+  if (isInternalOperationKind(operation)) {
+    const internal = internalChargeFor(operation, now);
+    return internal
+      ? { kind: "charge", creditUnits: internal.creditUnits, policyVersion: internal.policyVersion }
+      : { kind: "not_priced", policyVersion: "internal-none" };
+  }
+
+  return retailChargeFor(operation, now, { pricingClass });
 }
 
 export type AuthorizeOperationCreditsResult =
@@ -135,15 +160,42 @@ export async function authorizeOperationCredits(
     operation: BillableOperationKind;
     idempotencyKey: string;
     operationRunId?: string | null;
+    /**
+     * Required exactly when the operation is priced per execution class.
+     *
+     * Never defaulted — `retailChargeFor` throws rather than pick a tier, and
+     * this parameter exists so that the throw happens at a call site that can
+     * be read, rather than deep inside a reservation.
+     */
+    pricingClass?: ExecutionPricingClass | null;
+    /**
+     * The quote this hold acts on, when one was recorded.
+     *
+     * Stored on the reservation so "you approved 200" is answerable from the
+     * hold itself rather than by joining on a timestamp (ADR 0024 §4).
+     */
+    quoteId?: string | null;
     now?: Date;
   },
 ): Promise<AuthorizeOperationCreditsResult> {
   const now = params.now ?? new Date();
 
-  const price = chargeFor(params.operation, now);
+  const resolved = chargeFor(params.operation, now, params.pricingClass ?? null);
+
   // Free operations never touch the billing machinery at all — no reservation,
   // no zero-Credit charge, no entry in the customer's history (§56).
-  if (!price) return { ok: true, billable: false };
+  if (resolved.kind === "free") return { ok: true, billable: false };
+
+  if (resolved.kind === "not_priced") {
+    return {
+      ok: false,
+      refusal: "operation_not_priced",
+      requiredCredits: ZERO_CREDITS,
+      availableCredits: ZERO_CREDITS,
+    };
+  }
+
+  const price = resolved;
 
   const owner = await resolveBillingOwner(supabase, params.projectId);
   if (!owner) {
@@ -174,6 +226,7 @@ export async function authorizeOperationCredits(
     idempotencyKey: params.idempotencyKey,
     projectId: params.projectId,
     operationRunId: params.operationRunId ?? null,
+    quoteId: params.quoteId ?? null,
   });
 
   if (!claim.ok) {
