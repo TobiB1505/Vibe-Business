@@ -437,7 +437,10 @@ export function deriveBusinessSignals(input: DeterministicInput): BusinessSignal
 
   push(
     "pricing_surface",
-    "A pricing surface exists.",
+    // Not "a pricing surface exists": this sentence is read by the Business
+    // Audit's model on every run, and "pricing surface" is a term the audit's
+    // customer-language boundary rejects a billed result for echoing.
+    "The site shows prices where a visitor can find them.",
     "Vibe could not identify a pricing path in the sources it read.",
     combine({ live: liveSurface(live, "pricing"), repo: repoSurface(repo, "pricing_page") }),
   );

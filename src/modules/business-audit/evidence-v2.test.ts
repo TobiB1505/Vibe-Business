@@ -68,7 +68,9 @@ describe("v2 without a Deep Scan", () => {
   });
 
   it("states the gap as absent evidence rather than leaving it invisible", () => {
-    expect(pack.absentSources.some((note) => note.includes("Deep Scan"))).toBe(true);
+    expect(
+      pack.absentSources.some((note) => note.includes("behind the product's login")),
+    ).toBe(true);
   });
 });
 

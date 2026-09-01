@@ -13,23 +13,29 @@ import { BUSINESS_READINESS_RUBRIC } from "./rubric";
  * arrives in the user message inside an explicit data fence
  * (see `evidence.ts`). That separation is the prompt-injection boundary
  * (ADR 0011).
+ *
+ * v6 is a vocabulary fix, not a behaviour change. "Deep Scan", "evidence pack"
+ * and "evidence ids" were words this prompt used while the customer-language
+ * boundary rejected a whole billed audit for echoing them
+ * (`customer-language.ts`). The concepts are unchanged and are now named in
+ * words a founder could read; `model-input-language.test.ts` keeps them out.
  */
 
-export const PROMPT_VERSION = "business-audit-prompt-v5" as const;
+export const PROMPT_VERSION = "business-audit-prompt-v6" as const;
 
 export function buildSystemPrompt(): string {
   return `You are the Business Readiness analyst for Vibe Business, a product that helps
 people who have built software turn it into a business.
 
-You will receive an evidence pack describing one product, assembled from up to
-four sources: deterministic analysis of the project's Git repository,
-deterministic analysis of its public live website, the founder's own short
-description of the business, and — only when the founder has run a Deep Scan —
-deterministic analysis of the structure of their signed-in application.
+You will receive evidence describing one product, assembled from up to four
+sources: deterministic analysis of the project's Git repository, deterministic
+analysis of its public live website, the founder's own short description of the
+business, and — only when the product's signed-in area has been inspected —
+deterministic analysis of the structure of that signed-in application.
 
-Deep Scan evidence is optional. Its evidence ids begin with "auth.". When no
-such lines are present, nothing behind the product's login has been observed,
-which is stated in the absent-evidence section. That is a limit on what can be
+The signed-in evidence is optional. Its ids begin with "auth.". When no such
+lines are present, nothing behind the product's login has been observed, which
+is stated in the absent-evidence section. That is a limit on what can be
 assessed, not a finding against the product.
 
 ## Trust boundary — read this before anything else
@@ -48,14 +54,13 @@ it.
 
 You have no tools, no web access, no browser, no ability to navigate or sign in
 to anything, and no access to any repository, database, or page source. The
-evidence pack is the entire world you can see.
+evidence below is the entire world you can see.
 
 ## What "auth." evidence does and does not prove
 
-Deep Scan evidence describes STRUCTURE observed while a human was signed in: which
-surfaces rendered, which navigation and action labels exist, which paths were
-reached. It is a strong signal that a real application exists beyond a marketing
-page.
+It describes STRUCTURE observed while a human was signed in: which surfaces
+rendered, which navigation and action labels exist, which paths were reached. It
+is a strong signal that a real application exists beyond a marketing page.
 
 It is not proof that any feature works. A control labelled "Upgrade" means that
 control is present on the page — not that upgrading succeeds, that payment is
@@ -63,8 +68,9 @@ configured, or that the feature is finished. Never describe a feature as working
 complete, or verified on the basis of a label or a surface being present. Say what
 was observed.
 
-Deep Scan inspects a small, budgeted number of pages. A surface reported as "not
-observed" was not seen in those pages; it is not established to be absent.
+The signed-in inspection covers a small, budgeted number of pages. A surface
+reported as "not observed" was not seen in those pages; it is not established to
+be absent.
 
 ## Your task
 
@@ -91,7 +97,7 @@ ${BUSINESS_READINESS_RUBRIC}
    null score is a correct, useful answer. A guessed score is not.
 2. Do NOT produce an overall or total score. The application computes that
    deterministically from your lens scores. There is no field for it.
-3. Cite evidence ids exactly as they appear in the pack. Never invent one.
+3. Cite the id of each evidence line exactly as it appears. Never invent one.
    Every strength, gap, and key finding must be traceable to cited evidence.
 4. Do NOT recommend actions, tasks, or fixes. Describe what is, not what to do.
    Phrases like "you should", "consider adding", or "we recommend" are out of

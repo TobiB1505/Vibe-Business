@@ -86,9 +86,16 @@
  * score is an ordinal expression of the already-required health judgment, not
  * a second overall score and never an input to materiality. Null remains the
  * only honest value when the lens is unclear, founder-blocked or unsupported.
+ *
+ * v12 is the fourth sighting of the lesson v9 recorded, and this time the
+ * priming was not an example but the rubric's own working vocabulary: it said
+ * "evidence pack", "evidence ids", "founder intent" and "product surface" —
+ * four phrases the customer-language boundary rejects a billed audit for. The
+ * words are gone; the instructions they carried are unchanged.
+ * `model-input-language.test.ts` now fails if a blocking term returns.
  */
 
-export const RUBRIC_VERSION = "business-readiness-rubric-v11" as const;
+export const RUBRIC_VERSION = "business-readiness-rubric-v12" as const;
 
 export const BUSINESS_READINESS_RUBRIC = `# Business Readiness Rubric (${RUBRIC_VERSION})
 
@@ -122,15 +129,15 @@ low number.
 
 ## Evidence discipline
 
-Every strength, gap, and conclusion must cite the evidence ids it rests on.
-Cite only ids present in the evidence pack. Never invent an id. If you
-cannot cite evidence for a claim, do not make the claim.
+Every strength, gap, and conclusion must cite the id of each evidence line it
+rests on. Cite only ids present in the evidence below. Never invent an id. If
+you cannot cite evidence for a claim, do not make the claim.
 
 ## Business reasoning — nine lenses, before you conclude anything
 
-The evidence pack is what the scanners can see. It is not a way to think
-about a business. Before synthesizing, assess this product as a business
-through all nine lenses below.
+The evidence is what the scanners can see. It is not a way to think about a
+business. Before synthesizing, assess this product as a business through all
+nine lenses below.
 
 The question is never "which business-related product features are missing?".
 It is **"what does this specific product still need in order to become a
@@ -173,7 +180,7 @@ from the label.
 ### Assess each lens — health score and materiality stay separate
 
 For each lens give: its **health**, its evidence-grounded diagnostic **score**,
-its **materiality**, a short internal summary, the evidence ids behind it, and
+its **materiality**, a short internal summary, the evidence behind it, and
 — when it is blocked — what only the founder could tell you.
 
 These two are independent, and keeping them apart is the single most important
@@ -321,9 +328,9 @@ real money per use has an economics question even before it has a price.
 
 ### The founder's goal changes what matters
 
-Founder intent is in the evidence. Someone trying to win their first paying
-customer needs offer, audience and revenue attended to before retention
-tuning. Someone with paying customers trying to keep them has the reverse
+What the founder is trying to do is in the evidence. Someone trying to win
+their first paying customer needs offer, audience and revenue attended to
+before retention tuning. Someone with paying customers trying to keep them has the reverse
 priority. The same evidence should produce a different ordering for a different
 stated goal — if it would not, the goal is not being used.
 
@@ -340,8 +347,8 @@ asserting.
 
 ### Unknown stays unknown
 
-If evidence and founder intent together cannot answer a lens, mark it
-\`unclear\` or \`blocked_by_missing_context\` and name what is missing. Never
+If the evidence and what the founder stated together cannot answer a lens,
+mark it \`unclear\` or \`blocked_by_missing_context\` and name what is missing. Never
 invent a business fact. Never state a legal, tax or regulatory conclusion —
 company structure, jurisdiction, VAT and regulated-industry rules cannot be
 read from a repository or a website. You may say that such a question will need
@@ -354,7 +361,7 @@ The lenses are the working-out. Now step back and say what it MEANS.
 **Synthesize. Do not enumerate.** Do not return every valid observation as its
 own conclusion. Read all the evidence, find the patterns, and report only the
 conclusions a founder should act on. Leaving an observation out of the
-synthesis does not discard it — every lens assessment and every evidence id
+synthesis does not discard it — every lens assessment and every cited line
 is preserved and shown elsewhere.
 
 ### Group related evidence into one conclusion
@@ -373,7 +380,7 @@ conclusion citing all of them, never one conclusion each.
 "Pricing is not in the navigation", "there is no purchase button" and "no
 checkout exists" are three symptoms of one root problem. Report the root.
 
-And go one level further than the product surface. A missing pricing page is a
+And go one level deeper than what the product shows. A missing pricing page is a
 symptom; the root may be that the business has not yet decided how the value it
 creates becomes revenue — especially where delivering the product costs real
 money per use. Those are different problems with different answers, and only
@@ -435,7 +442,7 @@ written layer 2 in layer 1's place.
 The findings are not lost — they are the cited evidence, and they remain
 inspectable underneath the conclusion.
 
-**A missing product surface belongs in the evidence, not in the explanation —
+**A missing page or feature belongs in the evidence, not in the explanation —
 unless the absence itself is genuinely the business problem.** Context decides:
 for a business with a clear model, real demand and known economics, "customers
 literally cannot complete a purchase" *is* the problem and should be said
@@ -606,8 +613,8 @@ confirmed…". Never state an unobserved thing as a fact.
 
 ### Every conclusion is grounded
 
-Each one cites at least one real evidence id, and names the dimensions it
-touches. A conclusion may span several dimensions — an unclear buying path is
+Each one cites at least one real id from the evidence, and names the
+dimensions it touches. A conclusion may span several dimensions — an unclear buying path is
 monetization and conversion at once — and that is correct, not a mistake to
 avoid.
 

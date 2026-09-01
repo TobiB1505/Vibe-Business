@@ -506,7 +506,7 @@ export function fakeProductProfile(
     businessSignals: [
       {
         id: "pricing_surface",
-        statement: "No pricing surface was found on the public site",
+        statement: "Vibe could not identify a pricing path in the sources it read.",
         confidence: "likely",
         sources: ["live_product"],
         evidence: ["live.surface.pricing"],
