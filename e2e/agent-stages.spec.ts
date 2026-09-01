@@ -149,11 +149,27 @@ test.describe("motion", () => {
   test("animates the active stage when motion is allowed", async ({ page }) => {
     await page.goto(BUILDING);
 
-    const names = await stage(page, "build")
-      .locator("*")
-      .evaluateAll((nodes) => nodes.map((node) => getComputedStyle(node).animationName));
-
-    expect(names.some((name) => name.includes("vibe-step-glow"))).toBe(true);
+    /*
+     * Polled, not sampled once.
+     *
+     * `useDocumentVisible` deliberately starts `false` — there is no `document`
+     * during server rendering, and a motion that begins before we know whether
+     * anyone is looking is the thing that hook exists to prevent. So the glow
+     * appears one tick after hydration, and reading the computed style on the
+     * first frame is a race the assertion loses at random. It made this test
+     * flaky in CI: red on the first attempt, green on the retry.
+     */
+    await expect
+      .poll(
+        async () =>
+          await stage(page, "build")
+            .locator("*")
+            .evaluateAll((nodes) =>
+              nodes.some((node) => getComputedStyle(node).animationName.includes("vibe-step-glow")),
+            ),
+        { message: "the active stage never started its glow" },
+      )
+      .toBe(true);
   });
 });
 

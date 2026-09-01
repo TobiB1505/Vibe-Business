@@ -1,3 +1,6 @@
+import { Suspense } from "react";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { SkeletonSection } from "@/components/ui/skeleton";
 import {
   WorkspaceSection,
   preparedChangeAnchorId,
@@ -83,6 +86,65 @@ export default async function ProjectAgentPage({
   const { projectId } = await params;
   const { supabase, userId, project } = await requireProjectAccess(projectId);
   const resolvedSearchParams = await searchParams;
+
+  /*
+   * The section header reaches the browser before the workspace does (VB-023,
+   * B15).
+   *
+   * `readAgentWorkspace` resolves the run's own prepared change, and building
+   * that card can sign review images and run a read-only merge preflight
+   * against GitHub. Awaiting it in the route body means the whole screen —
+   * header, trust panel, chrome — waits on a network round trip to somebody
+   * else's API. It streams instead, and `workspace-routes.test.ts` holds the
+   * boundary in place.
+   *
+   * The description is one sentence for every state, because it renders before
+   * the state is known. A header that first said "Vibe can work on your
+   * product" and then swapped to "Vibe is working on your task" would be a
+   * false status line arriving one tick early.
+   */
+  return (
+    <WorkspaceSection
+      id="agent"
+      title="Agent"
+      description="Each change moves through validation, preview, review and your approval before anything can be merged."
+      actions={<AgentTrustPanel />}
+    >
+      <Suspense fallback={<SkeletonSection />}>
+        <AgentWorkspaceBody
+          supabase={supabase}
+          project={project}
+          userId={userId}
+          resolvedSearchParams={resolvedSearchParams}
+        />
+      </Suspense>
+    </WorkspaceSection>
+  );
+}
+
+/**
+ * Everything the Agent screen shows once its workspace is known.
+ *
+ * A separate component only so the boundary above has something to suspend on:
+ * an `await` in the route body would block the whole page again, however it
+ * were written. Nothing here decides anything the route used to decide — the
+ * read model does, exactly as it did when the route awaited it directly.
+ */
+async function AgentWorkspaceBody({
+  supabase,
+  project,
+  userId,
+  resolvedSearchParams,
+}: {
+  supabase: SupabaseClient;
+  project: Awaited<ReturnType<typeof requireProjectAccess>>["project"];
+  userId: string;
+  resolvedSearchParams: {
+    [PLAN_OPPORTUNITY_PARAM]?: string;
+    [AGENT_CHANGE_PARAM]?: string;
+  };
+}) {
+  const projectId = project.id;
 
   // Untrusted, and never used as a lookup until it has been bounded. It becomes
   // a focus only by matching a Move this project's own set contains.
@@ -293,17 +355,7 @@ export default async function ProjectAgentPage({
   const live = agentWorking;
 
   return (
-    <WorkspaceSection
-      id="agent"
-      title="Agent"
-      description={
-        displayedWorkspace.timeline === null
-          ? "Vibe can work on your product and prepare changes for your review."
-          : "Vibe is working on your task and preparing changes for your review."
-      }
-      actions={<AgentTrustPanel />}
-    >
-      <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-5">
         {/*
           A run that stopped to ask something makes the question the only
           primary object on the screen, above the stages. It is the one state
@@ -504,8 +556,7 @@ export default async function ProjectAgentPage({
               ),
             }}
           />
-        </div>
       </div>
-    </WorkspaceSection>
+    </div>
   );
 }

@@ -71,12 +71,25 @@ export function AgentWorkspacePanel({
   /*
    * Where to land when nothing is running.
    *
-   * `initialStage` is the *active* stage, and a run that has not started has
-   * none — which used to render an empty body beside the orb. The first stage
-   * with something to show is the honest answer, and for a project that has
-   * never run it is Understand, which carries the control that begins work.
+   * `initialStage` is the *active* stage, and a run with none is one of two
+   * very different things: it has not started, or it is over. Landing both on
+   * the first openable stage told the second story as the first — a run that
+   * died in Build came back to the pre-run hero and its "Run with Vibe"
+   * control, with the rail that would have said *where* it died not rendered
+   * at all. That is the false status line this product keeps removing.
+   *
+   * So: the active stage, else the furthest stage the run actually reached,
+   * else the first openable one. `done` and `failed` are what "reached" means;
+   * `skipped` and `not_applicable` are the opposite of reached, and landing on
+   * one would point at the stage that never happened.
    */
-  const landing = initialStage ?? openable[0] ?? null;
+  const furthestReached =
+    [...stages]
+      .reverse()
+      .find((step) => (step.state === "done" || step.state === "failed") && bodies[step.stage])
+      ?.stage ?? null;
+
+  const landing = initialStage ?? furthestReached ?? openable[0] ?? null;
   const shown = selected !== null && bodies[selected] ? selected : landing;
   const body = shown !== null ? bodies[shown] : undefined;
   const aside = shown !== null ? asides?.[shown] : undefined;
