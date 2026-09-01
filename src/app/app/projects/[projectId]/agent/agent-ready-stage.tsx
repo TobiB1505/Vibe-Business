@@ -8,7 +8,8 @@ import { AgentTaskPanel, type AgentTask } from "./agent-task-panel";
  * Stage one is the signature hero from the implementation target: the task is
  * the answer, the Agent is a presence, and the three grounded facts close the
  * surface. An allowlisted, freshly resolvable Agent step may supply the real
- * start action; every other state navigates back to the Action Plan.
+ * start action. Without a selected task the fallback goes to the Action Plan;
+ * a selected but unavailable task never receives a false start affordance.
  */
 export function AgentReadyStage({
   task,
@@ -27,10 +28,13 @@ export function AgentReadyStage({
   startAction?: React.ReactNode;
 }) {
   return (
-    <div className="relative min-w-0 overflow-hidden" data-testid="agent-ready-stage">
+    <div
+      className="relative min-w-0 overflow-visible"
+      data-testid="agent-ready-stage"
+    >
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute -top-44 right-12 h-[32rem] w-[38rem] rounded-full blur-3xl"
+        className="pointer-events-none absolute -top-44 right-0 h-[32rem] w-[38rem] max-w-full rounded-full blur-3xl"
         style={{
           background:
             "radial-gradient(circle, color-mix(in oklab, var(--color-mint) 13%, transparent), transparent 68%)",
@@ -60,7 +64,7 @@ export function AgentReadyStage({
           )}
         </div>
 
-        <div className="flex min-w-0 flex-col items-center gap-5 pt-1 lg:pt-0">
+        <div className="flex min-w-0 flex-col items-center gap-5 pt-4 lg:pt-3">
           <AgentCore
             state="idle"
             eyebrow="Vibe is ready to work"
@@ -68,35 +72,37 @@ export function AgentReadyStage({
             caption={caption}
             size="hero"
           />
-          <AgentStartCta
-            note={
-              startAction
-                ? "Vibe re-checks the current code and every safety limit before starting"
-                : "Choose the move before anything starts"
-            }
-          >
-            {startAction ?? (
-              <Link
-                href={planHref}
-                className={`${buttonClasses({ variant: "primary", size: "md" })} w-full justify-center`}
-              >
-                Open Action Plan
-                <svg
-                  viewBox="0 0 24 24"
-                  width="19"
-                  height="19"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
+          {(startAction !== undefined || task === null) && (
+            <AgentStartCta
+              note={
+                startAction
+                  ? "Vibe re-checks the current code and every safety limit before starting"
+                  : "Choose the Move before anything starts"
+              }
+            >
+              {startAction ?? (
+                <Link
+                  href={planHref}
+                  className={`${buttonClasses({ variant: "primary", size: "md" })} w-full justify-center`}
                 >
-                  <path d="M4 12h16m-6-6 6 6-6 6" />
-                </svg>
-              </Link>
-            )}
-          </AgentStartCta>
+                  Choose a Move
+                  <svg
+                    viewBox="0 0 24 24"
+                    width="19"
+                    height="19"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M4 12h16m-6-6 6 6-6 6" />
+                  </svg>
+                </Link>
+              )}
+            </AgentStartCta>
+          )}
         </div>
       </div>
 

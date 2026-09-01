@@ -74,7 +74,7 @@ export type AgentWorkspaceView = {
   taskOpportunityId: string | null;
   /** Which of the five the run is sitting on, so the route picks one body. */
   stage: AgentStage | null;
-  /** Events that touched a file, for the validating stage's record. */
+  /** The Agent's stored event record, shown beside the working Build stage. */
   fileEvents: StoredExecutionEvent[];
   /** The sandbox's own steps, as rows. Empty when nothing has been validated. */
   checks: ValidationCheck[];

@@ -127,7 +127,7 @@ export function AgentReadyFacts({
   return (
     <div
       className={cn(
-        "rounded-panel border-line-2 bg-surface-2 grid gap-6 border px-6 py-5 sm:grid-cols-3",
+        "rounded-panel border-line-2 bg-surface-2 grid min-h-[6.5rem] gap-7 border px-7 py-6 sm:grid-cols-3",
         className,
       )}
       data-testid="agent-ready-facts"

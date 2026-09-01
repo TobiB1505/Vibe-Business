@@ -118,7 +118,7 @@ export function AgentWorkspacePanel({
           <Surface
             level="card"
             padding="none"
-            className="overflow-hidden p-5 sm:p-7 lg:p-[2.125rem]"
+            className="overflow-visible p-5 sm:p-7 lg:p-[2.125rem]"
           >
             {animatedContent}
           </Surface>

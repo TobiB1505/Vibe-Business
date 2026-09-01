@@ -139,55 +139,6 @@ export default async function ProjectAgentPage({
   const focusedMoveOwnsReadyView =
     focusedMove !== null && focusedMove.id !== workspace.taskOpportunityId;
 
-  /* Both answers depend on the resolved Move, but not on each other. */
-  const [focusAction, agentRoutes] = await Promise.all([
-    focusedMove
-      ? (async () => {
-        const [summaries, activeOperation, failedOperation] = await Promise.all(
-          [
-            getOpportunityExecutionSummaries(supabase, projectId),
-            getActivePreparationFor(supabase, {
-              projectId,
-              opportunityId: focusedMove.id,
-            }),
-            getLatestFailedPreparationFor(supabase, {
-              projectId,
-              opportunityId: focusedMove.id,
-            }),
-          ],
-        );
-
-        const summary = summaries.find(
-          (entry) => entry.opportunityId === focusedMove.id,
-        );
-        // No summary at all means no repository snapshot exists yet. That is a
-        // missing premise rather than a verdict on the Move, and `buildAgentFocus`
-        // says so rather than calling it unautomatable.
-        if (!summary) return null;
-
-        return buildOpportunityActionState({
-          opportunity: focusedMove,
-          capability: summary.capability,
-          preparedChangeId: summary.preparedChangeId,
-          activeOperation,
-          failedOperation,
-          blockedReason: null,
-        });
-        })()
-      : Promise.resolve(null),
-    focusedMoveOwnsReadyView
-      ? resolveDogfoodPlanRoutes(supabase, { projectId, userId })
-      : Promise.resolve(null),
-  ]);
-
-  const focus = requestedTaskMatchesRun
-    ? null
-    : buildAgentFocus({
-        requestedOpportunityId,
-        opportunities: opportunities?.set.opportunities ?? [],
-        action: focusAction,
-      });
-
   /*
    * A founder may inspect a different Move while an older run remains the
    * project's latest. That old run must not masquerade as work on the selected
@@ -213,22 +164,6 @@ export default async function ProjectAgentPage({
         founderInput: null,
       }
     : workspace;
-
-  /*
-   * Agent economics are intentionally still allowlist-only. Resolve a start
-   * only for the selected ready Move; the server action repeats the complete
-   * preflight on click, so this render is discoverability, never admission.
-   */
-  const agenticResolution =
-    agentRoutes?.available && agentRoutes.plan.opportunityId === focusedMove?.id
-      ? agentRoutes.resolutions.find((resolution) => resolution.mode === "agentic")
-      : null;
-  const agenticStep =
-    agentRoutes?.available && agenticResolution
-      ? (agentRoutes.plan.steps.find(
-          (step) => step.order === agenticResolution.stepOrder,
-        ) ?? null)
-      : null;
 
   const basePlanHref: string = projectSectionHref(project.id, "action-plan");
   const taskOpportunityId = focusedMove?.id ?? workspace.taskOpportunityId;
@@ -257,11 +192,83 @@ export default async function ProjectAgentPage({
         steps: [],
       }
     : displayedWorkspace.task;
+  const agentWorking =
+    displayedWorkspace.core === "working" || displayedWorkspace.core === "waiting";
+
+  /*
+   * Agent economics are intentionally still allowlist-only. The ready screen
+   * may be carrying the task from the run/change binding rather than from a
+   * newly focused Move, so key admission to the exact displayed task instead
+   * of to `focusedMove` alone. That was the defect behind the stale "Open
+   * Action Plan" fallback even though the task was already on screen.
+   *
+   * This read stays off the hot path while a run is active. The server action
+   * repeats the complete preflight on click, so this render remains
+   * discoverability, never admission.
+   */
+  /* The focus answer and start discoverability are independent. Keep them in
+     one parallel read window so restoring the real start control does not
+     reintroduce the old serial Agent-page latency. */
+  const [focusAction, agentRoutes] = await Promise.all([
+    focusedMove
+      ? (async () => {
+          const [summaries, activeOperation, failedOperation] = await Promise.all(
+            [
+              getOpportunityExecutionSummaries(supabase, projectId),
+              getActivePreparationFor(supabase, {
+                projectId,
+                opportunityId: focusedMove.id,
+              }),
+              getLatestFailedPreparationFor(supabase, {
+                projectId,
+                opportunityId: focusedMove.id,
+              }),
+            ],
+          );
+
+          const summary = summaries.find(
+            (entry) => entry.opportunityId === focusedMove.id,
+          );
+          if (!summary) return null;
+
+          return buildOpportunityActionState({
+            opportunity: focusedMove,
+            capability: summary.capability,
+            preparedChangeId: summary.preparedChangeId,
+            activeOperation,
+            failedOperation,
+            blockedReason: null,
+          });
+        })()
+      : Promise.resolve(null),
+    readyTask !== null &&
+    taskOpportunityId !== null &&
+    !agentWorking
+      ? resolveDogfoodPlanRoutes(supabase, { projectId, userId })
+      : Promise.resolve(null),
+  ]);
+
+  const focus = requestedTaskMatchesRun
+    ? null
+    : buildAgentFocus({
+        requestedOpportunityId,
+        opportunities: opportunities?.set.opportunities ?? [],
+        action: focusAction,
+      });
+  const agenticResolution =
+    agentRoutes?.available && agentRoutes.plan.opportunityId === taskOpportunityId
+      ? agentRoutes.resolutions.find((resolution) => resolution.mode === "agentic")
+      : null;
+  const agenticStep =
+    agentRoutes?.available && agenticResolution
+      ? (agentRoutes.plan.steps.find(
+          (step) => step.order === agenticResolution.stepOrder,
+        ) ?? null)
+      : null;
 
   /* Whether anything is actually happening. The orb turns for this and
      nothing else — a settled run gets no orb at all. */
-  const live =
-    displayedWorkspace.core === "working" || displayedWorkspace.core === "waiting";
+  const live = agentWorking;
 
   return (
     <WorkspaceSection
@@ -361,7 +368,11 @@ export default async function ProjectAgentPage({
                   (requestedTaskMatchesRun && change !== null) ||
                   (focus?.kind === "focused" && focus.action.kind === "already_prepared")
                     ? "This Move already has a prepared change. Review its checks, preview and approval here."
-                    : "Choose or start this Move from your Action Plan. Vibe will carry that exact task through a secure, reviewable flow."
+                    : agenticStep
+                      ? "Run this Move here. Vibe will carry the exact task through a secure, reviewable flow."
+                      : readyTask
+                        ? "This Move is selected, but an Agent run is not currently available for it."
+                        : "Choose a Move from your Action Plan, then return here to run it with Vibe."
                 }
               />
             ),
@@ -378,12 +389,22 @@ export default async function ProjectAgentPage({
                   />
                 }
                 activity={
-                  displayedWorkspace.timeline === null ? (
+                  displayedWorkspace.fileEvents.length > 0 ? (
+                    <AgentFileActivity
+                      events={displayedWorkspace.fileEvents}
+                      title="Live activity"
+                      live={live}
+                    />
+                  ) : displayedWorkspace.timeline === null ? (
                     <Notice tone="info" label="Live activity">
                       Activity appears here when the run starts.
                     </Notice>
                   ) : (
-                    <AgentActivity steps={displayedWorkspace.timeline} live={live} />
+                    <AgentActivity
+                      steps={displayedWorkspace.timeline}
+                      title="Agent progress"
+                      live={live}
+                    />
                   )
                 }
               />
@@ -407,6 +428,7 @@ export default async function ProjectAgentPage({
                     <AgentValidateAction
                       projectId={project.id}
                       preparedChangeId={change.id}
+                      rerun={change.validation !== null}
                       label={
                         change.validation === null
                           ? "Run the checks"
@@ -414,18 +436,6 @@ export default async function ProjectAgentPage({
                       }
                     />
                   ) : undefined
-                }
-                activity={
-                  displayedWorkspace.fileEvents.length > 0 ? (
-                    <AgentFileActivity
-                      events={displayedWorkspace.fileEvents}
-                      title="Validation activity"
-                    />
-                  ) : (
-                    <Notice tone="info" label="Validation activity">
-                      The validation record appears here when checks begin.
-                    </Notice>
-                  )
                 }
               />
             ),

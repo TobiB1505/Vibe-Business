@@ -170,7 +170,16 @@ test.describe("375px", () => {
 });
 
 
-test.describe("stage three shows the checks, not a promise", () => {
+test.describe("agent activity and independent validation stay distinct", () => {
+  test("keeps the Agent's live event record in Build", async ({ page }) => {
+    await page.goto(BUILDING);
+
+    await expect(page.getByTestId("agent-file-activity")).toContainText(
+      "src/app/pricing/page.tsx",
+    );
+    await expect(page.getByTestId("agent-file-activity")).toContainText("Live activity");
+  });
+
   test("names only checks the sandbox runs", async ({ page }) => {
     await page.goto(VALIDATING);
 
@@ -186,11 +195,10 @@ test.describe("stage three shows the checks, not a promise", () => {
     await expect(checks).not.toContainText(/security scan/i);
   });
 
-  test("switches the rail from intent to record", async ({ page }) => {
+  test("does not repeat the Agent event record inside validation", async ({ page }) => {
     await page.goto(VALIDATING);
 
-    // Paths, not phases: by this stage the question is what was touched.
-    await expect(page.getByTestId("agent-file-activity")).toContainText("src/app/pricing/page.tsx");
+    await expect(page.getByTestId("agent-file-activity")).toHaveCount(0);
     await expect(page.getByTestId("agent-activity")).toHaveCount(0);
   });
 });

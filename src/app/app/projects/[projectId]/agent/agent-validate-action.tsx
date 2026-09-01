@@ -9,6 +9,7 @@ import { operationPollPhase, type OperationView } from "@/modules/operations/vie
 import { useOperationPoll } from "@/lib/client/use-operation-poll";
 import {
   getValidationProgressAction,
+  rerunChangeValidationAction,
   validateChangeAction,
 } from "../validate-change-action";
 
@@ -25,23 +26,22 @@ const POLL_INTERVAL_MS = 2_500;
  * card to act on it. The new card owns the action now; the panel is not mounted
  * for this stage at all.
  *
- * ## What it does not do
- *
- * Poll. `ValidationPanel` watches a running validation and streams its stages,
- * which is the right behaviour on a screen dedicated to one gate. Here the rail
- * above already moves when the run advances, and the route revalidates on the
- * action's own success — a second poller on the same page would be two things
- * asking the same question at different times.
+ * A retry opts out of pass reuse: "Validate again" means a new isolated
+ * observation. The poll below follows that durable operation and refreshes the
+ * server-owned result only when it settles.
  */
 export function AgentValidateAction({
   projectId,
   preparedChangeId,
   label,
+  rerun,
 }: {
   projectId: string;
   preparedChangeId: string;
   /** "Validate again" once checks have run; "Run the checks" before that. */
   label: string;
+  /** Whether this click must produce a fresh validation observation. */
+  rerun: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -79,17 +79,23 @@ export function AgentValidateAction({
       <div>
         <Button
           type="button"
-          variant="secondary"
-          size="sm"
+          variant="accent"
+          size="md"
           disabled={running}
           busy={running}
+          className="min-w-[11.5rem]"
           onClick={() =>
             startTransition(async () => {
               setProblem(null);
-              const result = await validateChangeAction(projectId, preparedChangeId);
+              const result = await (rerun
+                ? rerunChangeValidationAction(projectId, preparedChangeId)
+                : validateChangeAction(projectId, preparedChangeId));
               if (result.ok) {
-                setStarted(result.kind === "running" ? result.operation : null);
-                router.refresh();
+                if (result.kind === "running") {
+                  setStarted(result.operation);
+                } else {
+                  router.refresh();
+                }
                 return;
               }
               /*
@@ -105,6 +111,22 @@ export function AgentValidateAction({
             })
           }
         >
+          {!running && (
+            <svg
+              viewBox="0 0 24 24"
+              width="17"
+              height="17"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.9"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M20 11a8 8 0 1 1-2.35-5.65" />
+              <path d="M20 4v7h-7" />
+            </svg>
+          )}
           {pending ? "Starting…" : running ? "Checks running…" : label}
         </Button>
       </div>

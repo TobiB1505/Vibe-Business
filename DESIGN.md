@@ -142,6 +142,8 @@ Motion for React owns the entrance, the core's breath and the single orbiting si
 
 Estimated durations, expected file ranges and any other unmeasured number are out of bounds on this surface, as they are everywhere else in the product. Counts shown are counts Vibe recorded: files read from the harness's own tool stream, files changed from the verified candidate.
 
+The Build stage owns the Agent's live event record beside the working core. Validate owns only the independently observed sandbox checks and their explicit retry; it never re-labels implementation events as validation activity. Stage footers reserve calm vertical space around their safety language so those guarantees read as part of the workspace rather than as a cramped legal afterthought.
+
 ## Do's and Don'ts
 
 - Do keep account metrics honest and derived from stored domain data.

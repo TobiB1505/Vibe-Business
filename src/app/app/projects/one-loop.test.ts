@@ -47,6 +47,9 @@ const AGENT_STAGE_ACTIONS = read(
 const AGENT_VALIDATE = read(
   "src/app/app/projects/[projectId]/agent/agent-validate-action.tsx",
 );
+const VALIDATE_ACTION = read(
+  "src/app/app/projects/[projectId]/validate-change-action.ts",
+);
 const AGENT_WORKSPACE_READ = read("src/modules/coding-agent/agent-workspace.ts");
 const DOGFOOD_ACTIONS = read(
   "src/app/app/projects/[projectId]/agent-dogfood/[stepKey]/actions.ts",
@@ -393,6 +396,9 @@ describe("the plan hands off to the agent, and the agent points back", () => {
     expect(DOGFOOD_ACTIONS).toContain("previewDogfoodStep");
     expect(DOGFOOD_ACTIONS).toContain("startAgentExecution");
     expect(copyOf(AGENT_START)).not.toContain("startAgentExecution(");
+    expect(AGENT_START).toContain("Run with Vibe");
+    expect(AGENT_PAGE).toContain("agentRoutes.plan.opportunityId === taskOpportunityId");
+    expect(AGENT_PAGE).toContain("!agentWorking");
   });
 
   /** Regression: a prepared change that quotes its Move and links nowhere. */
@@ -443,6 +449,9 @@ describe("the plan hands off to the agent, and the agent points back", () => {
     expect(AGENT_VALIDATE).toContain("getValidationProgressAction");
     expect(AGENT_VALIDATE).toContain("useOperationPoll");
     expect(AGENT_VALIDATE).toContain("router.refresh()");
+    expect(AGENT_VALIDATE).toContain("rerunChangeValidationAction");
+    expect(VALIDATE_ACTION).toContain("reusePassed: boolean");
+    expect(VALIDATE_ACTION).toContain('revalidatePath(`/app/projects/${projectId}/agent`)');
   });
 
   it("loads the exact prepared artifact named by the handoff", () => {

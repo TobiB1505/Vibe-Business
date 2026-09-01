@@ -71,11 +71,19 @@ function seed(options: { preparedStatus?: string; commitSha?: string | null; pac
   });
 }
 
-function start(params: { userId?: string; projectId?: string; preparedChangeId?: string } = {}) {
+function start(
+  params: {
+    userId?: string;
+    projectId?: string;
+    preparedChangeId?: string;
+    reusePassed?: boolean;
+  } = {},
+) {
   return startChangeValidation(fakeSupabase(db), executor, {
     projectId: params.projectId ?? PROJECT,
     userId: params.userId ?? USER,
     preparedChangeId: params.preparedChangeId ?? PREPARED,
+    reusePassed: params.reusePassed,
   });
 }
 
@@ -227,6 +235,36 @@ describe("idempotency (§21, §35)", () => {
     expect(executor.starts).toHaveLength(0);
   });
 
+  it("starts a new run when the founder explicitly validates again", async () => {
+    seed();
+    db.seed("validation_runs", {
+      id: "validation_1",
+      project_id: PROJECT,
+      user_id: USER,
+      prepared_change_id: PREPARED,
+      operation_run_id: "operation_old",
+      validation_identity: identityFor(),
+      status: "passed",
+      stage: "completed",
+      steps: {},
+      validation_profile: "nextjs_node_v1",
+      validation_profile_version: validationProfileVersionFor("nextjs_node_v1"),
+      sandbox_policy_version: SANDBOX_POLICY_VERSION,
+      sandbox_provider: "vercel_sandbox",
+      package_manager: "pnpm",
+      prepared_commit_sha: FIXTURE_COMMIT_SHA,
+      artifact_snapshot_id: "snap_validation_1",
+      artifact_expires_at: "2099-01-01T00:00:00.000Z",
+      artifact_deleted_at: null,
+    });
+
+    const outcome = await start({ reusePassed: false });
+
+    expect(outcome.kind).toBe("started");
+    expect(executor.starts).toHaveLength(1);
+    expect(executor.starts[0].operationType).toBe("change_validation");
+  });
+
   it("does not reuse a pass whose artifact capture failed", async () => {
     // The first real 10B dogfood reached exactly this state: validation passed,
     // snapshot() threw, and the next explicit click was incorrectly answered
@@ -312,7 +350,7 @@ describe("idempotency (§21, §35)", () => {
     expect((await start()).kind).toBe("started");
   });
 
-  it("returns the running operation instead of starting a second", async () => {
+  it("returns the running operation instead of starting a second explicit retry", async () => {
     seed();
     db.seed("operation_runs", {
       id: "operation_active",
@@ -325,7 +363,7 @@ describe("idempotency (§21, §35)", () => {
       subject_id: PREPARED,
     });
 
-    const outcome = await start();
+    const outcome = await start({ reusePassed: false });
 
     expect(outcome.kind).toBe("running");
     expect(executor.starts).toHaveLength(0);

@@ -95,6 +95,26 @@ export async function validateChangeAction(
   projectId: string,
   preparedChangeId: string,
 ): Promise<NonNullable<ValidateChangeActionState>> {
+  return startValidationAction(projectId, preparedChangeId, true);
+}
+
+/**
+ * An explicit founder retry is a new observation, not a lookup of the pass
+ * already on screen. It still accepts only the same two identifiers and runs
+ * through the same ownership, identity, operation and sandbox boundaries.
+ */
+export async function rerunChangeValidationAction(
+  projectId: string,
+  preparedChangeId: string,
+): Promise<NonNullable<ValidateChangeActionState>> {
+  return startValidationAction(projectId, preparedChangeId, false);
+}
+
+async function startValidationAction(
+  projectId: string,
+  preparedChangeId: string,
+  reusePassed: boolean,
+): Promise<NonNullable<ValidateChangeActionState>> {
   const session = await requireSession();
   const supabase = await createClient();
 
@@ -102,15 +122,18 @@ export async function validateChangeAction(
     projectId,
     userId: session.userId,
     preparedChangeId,
+    reusePassed,
   });
 
   switch (outcome.kind) {
     case "started":
     case "running":
       revalidatePath(`/app/projects/${projectId}`);
+      revalidatePath(`/app/projects/${projectId}/agent`);
       return { ok: true, kind: "running", operation: outcome.operation };
     case "reused":
       revalidatePath(`/app/projects/${projectId}`);
+      revalidatePath(`/app/projects/${projectId}/agent`);
       return { ok: true, kind: "reused", validationRunId: outcome.validationRunId };
     case "failed":
       return { ok: false, error: outcome.error };

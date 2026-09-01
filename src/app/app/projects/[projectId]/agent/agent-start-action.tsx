@@ -52,7 +52,7 @@ export function AgentStartAction({
         busy={pending}
         className="w-full justify-center"
       >
-        {pending ? "Starting…" : "Start with Vibe"}
+        {pending ? "Starting…" : "Run with Vibe"}
       </Button>
     </form>
   );

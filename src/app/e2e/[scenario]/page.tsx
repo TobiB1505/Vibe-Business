@@ -592,7 +592,7 @@ export default async function E2eScenarioPage({
             understand: (
               <AgentReadyStage
                 task={task}
-                planHref="#"
+                planHref="/e2e/action-plan-ranked"
                 repository="TobiB1505/Vibe-Business"
                 liveUrl="https://vibebusiness.de"
                 caption={caption}
@@ -603,14 +603,19 @@ export default async function E2eScenarioPage({
                 task={task}
                 live={live}
                 core={<AgentCore state={core} caption={caption} size="compact" />}
-                activity={<AgentActivity steps={activity} live={live} />}
+                activity={
+                  fileEvents.length > 0 ? (
+                    <AgentFileActivity events={fileEvents} title="Live activity" live={live} />
+                  ) : (
+                    <AgentActivity steps={activity} title="Agent progress" live={live} />
+                  )
+                }
               />
             ),
             validate: (
               <AgentValidateStage
                 running={live}
                 checks={<AgentValidationChecks checks={checks} />}
-                activity={<AgentFileActivity events={fileEvents} title="Validation activity" />}
               />
             ),
             preview: (

@@ -44,7 +44,7 @@ import type { AgentCoreState } from "@/modules/coding-agent/observability/agent-
 const SATELLITES = [
   {
     key: "code",
-    position: "top-0 left-1/2 -translate-x-1/2",
+    position: "top-3.5 left-1/2 -translate-x-1/2",
     path: <path d="m8.5 8-4 4 4 4M15.5 8l4 4-4 4M13.5 5l-3 14" />,
   },
   {

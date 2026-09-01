@@ -40,9 +40,9 @@ import type { OpportunityActionState } from "@/modules/execution/view";
  * ## What it may not do
  *
  * Authorize anything. A focus is an address a URL carried, and a URL is
- * untrusted. Nothing derived here starts work, and the Agent card renders no
- * priced control — preparing a change stays beside the Move, behind a
- * confirmation, with its cost stated (Rule 60).
+ * untrusted. The Agent may render `Run with Vibe`, but that control re-resolves
+ * the existing allowlisted plan step and every start premise on the server;
+ * no value produced here grants admission or spends anything (Rule 60).
  */
 
 /** The Move, narrowed to the three fields a person reads on the Agent card. */

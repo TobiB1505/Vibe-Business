@@ -6,14 +6,14 @@ import { MonoLabel } from "@/components/ui/typography";
 import type { StoredExecutionEvent } from "@/modules/coding-agent/observability/events";
 
 /**
- * Vibe activity, as a record (UI-19, artboard 2c).
+ * Vibe activity, as a record (UI-19, build stage).
  *
  * ## Why this differs from the stage-two list
  *
- * Stage two shows *intent* — the six phases, one of them lit. By stage three
- * the interesting question has changed from "what is happening" to "what did
- * it touch", so the rail switches to the event log itself: what Vibe did, when
- * it did it, and the path it did it to.
+ * The stage rail already shows intent. This record belongs beside the working
+ * core because it is the Agent's activity: what Vibe did, when it did it, and
+ * the path it touched. Validation owns the independent sandbox checks instead
+ * of repeating the Agent run's history.
  *
  * ## Everything Vibe did, not only what it wrote
  *
@@ -53,11 +53,14 @@ export function AgentFileActivity({
   /** How many to show. The rest stay behind the disclosure. */
   limit = 6,
   title = "Vibe activity",
+  live = false,
 }: {
   events: readonly StoredExecutionEvent[];
   limit?: number;
   /** Named for what the stage is reporting, not for the component. */
   title?: string;
+  /** A pulse means new Agent events may still arrive. Settled records stay still. */
+  live?: boolean;
 }) {
   const reduceMotion = useReducedMotion();
   const visible = useDocumentVisible();
@@ -75,15 +78,17 @@ export function AgentFileActivity({
         <MonoLabel as="h3" className="text-mint">
           {title}
         </MonoLabel>
-        <span
-          aria-hidden="true"
-          className="bg-mint shadow-dot-mint size-[7px] rounded-full"
-          style={
-            animate
-              ? { animation: "vibe-soft-pulse var(--duration-pulse) var(--ease-vibe) infinite" }
-              : undefined
-          }
-        />
+        {live && (
+          <span
+            aria-hidden="true"
+            className="bg-mint shadow-dot-mint size-[7px] rounded-full"
+            style={
+              animate
+                ? { animation: "vibe-soft-pulse var(--duration-pulse) var(--ease-vibe) infinite" }
+                : undefined
+            }
+          />
+        )}
       </div>
 
       <ul className="flex flex-col gap-4">

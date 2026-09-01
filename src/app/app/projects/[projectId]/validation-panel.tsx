@@ -13,7 +13,12 @@ import {
   type OperationView,
 } from "@/modules/operations/view";
 import { failedPhase, type ValidationPhaseView, type ValidationSummary } from "@/modules/validation/view";
-import { getValidationProgressAction, validateChangeAction, type ValidateChangeActionState } from "./validate-change-action";
+import {
+  getValidationProgressAction,
+  rerunChangeValidationAction,
+  validateChangeAction,
+  type ValidateChangeActionState,
+} from "./validate-change-action";
 
 /**
  * Isolated validation, as the user sees it (Sprint 10A §44, §45, §15 refactor).
@@ -192,10 +197,14 @@ export function ValidationPanel({
    */
   const [clearedFor, setClearedFor] = useState(0);
 
-  function validate() {
+  function validate(rerun = false) {
     startTransition(async () => {
       setClearedFor((runs) => runs + 1);
-      setState(await validateChangeAction(projectId, preparedChangeId));
+      setState(
+        await (rerun
+          ? rerunChangeValidationAction(projectId, preparedChangeId)
+          : validateChangeAction(projectId, preparedChangeId)),
+      );
     });
   }
 
@@ -314,11 +323,16 @@ export function ValidationPanel({
             </p>
           </div>
 
-          {/* Always available, and always safe: validation identity plus
-              artifact availability decide what happens. A current pass with a
-              live artifact is reused; a missing/expired artifact or a policy
-              change starts the explicit new validation the user requested. */}
-          <Button type="button" variant="secondary" size="sm" onClick={validate} disabled={pending}>
+          {/* An explicit retry records a new isolated observation. Ownership,
+              validation identity and active-operation deduplication still
+              apply, but the pass already on screen is not reused. */}
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => validate(true)}
+            disabled={pending}
+          >
             {shown.underCurrentPolicy ? "Validate again" : "Check under the current rules"}
           </Button>
         </div>
@@ -337,7 +351,13 @@ export function ValidationPanel({
               sandbox time on a change that already needs work.
             </p>
           )}
-          <Button type="button" variant="primary" size="sm" onClick={validate} disabled={pending}>
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            onClick={() => validate(true)}
+            disabled={pending}
+          >
             Validate again
           </Button>
         </div>
@@ -348,7 +368,13 @@ export function ValidationPanel({
             Vibe will check out this exact commit in an isolated environment, install dependencies,
             and build it. Your repository is not modified.
           </p>
-          <Button type="button" variant="primary" size="sm" onClick={validate} disabled={pending}>
+          <Button
+            type="button"
+            variant="primary"
+            size="sm"
+            onClick={() => validate(false)}
+            disabled={pending}
+          >
             Validate change
           </Button>
         </div>

@@ -59,6 +59,12 @@ export type StartValidationParams = {
   projectId: string;
   userId: string;
   preparedChangeId: string;
+  /**
+   * Normal gate reads reuse an exact current pass. An explicit founder retry
+   * sets this false so the requested new observation actually runs, while the
+   * active-operation identity still blocks duplicate work.
+   */
+  reusePassed?: boolean;
 };
 
 export type StartValidationOutcome =
@@ -162,10 +168,13 @@ export async function startChangeValidation(
   // to learn from a second microVM (§21). A pass whose capture failed, expired
   // or was deleted must be allowed to run again; otherwise Preview's explicit
   // "Validate again" action can never recover the missing artifact.
-  const reusable = await findReusableValidationRun(supabase, {
-    projectId: params.projectId,
-    validationIdentity: resolved.identity,
-  });
+  const reusable =
+    params.reusePassed === false
+      ? null
+      : await findReusableValidationRun(supabase, {
+          projectId: params.projectId,
+          validationIdentity: resolved.identity,
+        });
   if (reusable) return { kind: "reused", validationRunId: reusable.id, status: "passed" };
 
   // Second cheapest: it is already running. Return the live operation rather

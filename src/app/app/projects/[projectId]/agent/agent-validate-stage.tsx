@@ -4,13 +4,11 @@ import { Well } from "@/components/ui/surface";
 /**
  * Stage three's first column (UI-19, reference artboard 2c).
  *
- * ## Why the checks were not enough on their own
+ * ## Why Agent activity does not live here
  *
- * The reference gives this stage three columns — what is happening, the checks
- * themselves, and the run's activity — and the build had only the last two. A
- * founder arrived at a list of shields with no sentence saying what was being
- * checked or what it leads to, which is the one thing a waiting screen owes
- * whoever is waiting.
+ * Validation is deliberately two columns: what the independent gate means and
+ * the checks it ran. The Agent's event stream belongs to Build; repeating it
+ * here made implementation activity look like validation evidence.
  *
  * ## What it promises
  *
@@ -21,17 +19,15 @@ import { Well } from "@/components/ui/surface";
 export function AgentValidateStage({
   running,
   checks,
-  activity,
   action,
 }: {
   running: boolean;
   checks?: React.ReactNode;
-  activity?: React.ReactNode;
   action?: React.ReactNode;
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-7" data-testid="agent-validate-intro">
-      <div className="grid min-w-0 gap-8 lg:grid-cols-2 xl:grid-cols-[minmax(0,.9fr)_minmax(0,1.12fr)_minmax(19rem,1fr)] xl:items-start">
+      <div className="grid min-w-0 gap-8 lg:grid-cols-[minmax(0,.9fr)_minmax(0,1.18fr)] lg:items-start lg:gap-12">
         <div className="flex min-w-0 flex-col gap-4">
           <MonoLabel className="text-mint">Stage 3 of 5</MonoLabel>
 
@@ -77,12 +73,9 @@ export function AgentValidateStage({
           {action}
         </div>
 
-        {activity !== undefined && (
-          <div className="min-w-0 lg:col-span-2 xl:col-span-1">{activity}</div>
-        )}
       </div>
 
-      <div className="border-line-2 flex flex-wrap items-center justify-between gap-4 border-t pt-5">
+      <div className="border-line-2 mt-2 flex min-h-[5.25rem] flex-wrap items-center justify-between gap-4 border-t px-1 py-7">
         <span className="text-fg-muted flex items-center gap-3 text-sm">
           <svg
             viewBox="0 0 24 24"

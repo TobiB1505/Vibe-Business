@@ -71,11 +71,11 @@ export function AgentAssuranceBar({ showGuidance = true }: { showGuidance?: bool
 
   return (
     <div
-      className="rounded-panel border-line-2 bg-surface-2 grid items-center gap-6 border px-6 py-5 lg:grid-cols-3 xl:grid-cols-[1fr_1fr_1fr_minmax(0,25rem)]"
+      className="rounded-panel border-line-2 bg-surface-2 grid min-h-[7.5rem] items-center gap-7 border px-7 py-7 lg:grid-cols-3 xl:grid-cols-[1fr_1fr_1fr_minmax(0,25rem)] xl:px-8"
       data-testid="agent-assurance"
     >
       {ASSURANCES.map((item) => (
-        <div key={item.key} className="flex items-start gap-3.5">
+        <div key={item.key} className="flex items-start gap-4">
           <span
             className={cn(
               "flex flex-none items-center justify-center",
