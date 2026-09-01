@@ -136,9 +136,19 @@ export async function findReusableValidationRun(
     .eq("project_id", params.projectId)
     .eq("validation_identity", params.validationIdentity)
     .eq("status", "passed")
-    .not("artifact_snapshot_id", "is", null)
-    .is("artifact_deleted_at", null)
-    .gt("artifact_expires_at", new Date().toISOString())
+    /*
+     * Sprint 0114 removed three predicates here, and the removal is the point.
+     *
+     * A pass used to be reusable only while its *captured filesystem* was still
+     * usable, because a preview booted from it — so a deleted or expired
+     * artifact had to make the run runnable again or Preview's "Validate again"
+     * could never recover. Nothing captures an artifact any more (ADR 0064), so
+     * those predicates would now be false for every run and every validation
+     * would re-run a check it had already passed.
+     *
+     * What is left is the question this function was always really asking:
+     * these exact bytes, under this exact policy, already passed.
+     */
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();

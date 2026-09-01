@@ -116,7 +116,6 @@ function baseChange(): Omit<
       failureMessage: null,
       expiresAt: null,
       readyAt: null,
-      revalidationRequired: false,
     },
     validatedArtifactId: null,
     review: {
@@ -471,8 +470,7 @@ export const E2E_SCENARIOS = {
         failureMessage: null,
         expiresAt: null,
         readyAt: null,
-        revalidationRequired: false,
-      },
+        },
       validatedArtifactId: "validation_e2e",
       review: {
         state: "not_generated",

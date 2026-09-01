@@ -1,36 +1,34 @@
 import { describe, expect, it } from "vitest";
-import { describeCommand } from "@/modules/validation/commands";
+import { describeCommand, installCommand } from "@/modules/validation/commands";
+import { DEPENDENCY_HOSTS, SOURCE_HOSTS } from "@/modules/validation/sandbox-port";
 import { fakeSandboxProvider } from "@/modules/validation/test-support";
 import { PREVIEW_BUDGETS, PREVIEW_RESOURCES } from "./budgets";
 import { previewHealthProbeCommand, previewServerCommand } from "./commands";
 import { previewSandboxNameFor } from "./identity";
 import {
   PREVIEW_ENVIRONMENT,
-  restoreValidatedArtifact,
+  provisionPreviewWorkspace,
   startPreviewServer,
   teardownPreview,
-  verifyRestoredArtifact,
 } from "./orchestrator";
 import {
+  FIXTURE_COMMIT_SHA,
   PREVIEW_SESSION_ID,
-  PREVIEW_SNAPSHOT_ID,
-  RESTORED_FILES,
+  clonedSandboxFiles,
   fakePreviewTarget,
-  restoredSandboxFiles,
-  sha256,
 } from "./test-support";
 
 /**
  * The preview security sequence, asserted against a recorded transcript
- * (Sprint 10B-2 §30, §31, §34).
+ * (Sprint 10B-2 §30, §31, §34; Sprint 0114).
  *
  * These are checks against what the fake provider *observed*, not readings of
  * the source. That distinction is the whole reason the fake records an ordered
- * event list: "the server did not start before integrity was checked" is a
- * statement about a sequence, and only a recording can falsify it.
+ * event list: "the server did not start before the credential was destroyed" is
+ * a statement about a sequence, and only a recording can falsify it.
  */
 
-/** A clock that does not advance, so a 90-second budget costs no seconds. */
+/** A clock that does not advance, so a three-minute budget costs no seconds. */
 function frozenClock() {
   let now = 0;
   return {
@@ -41,252 +39,206 @@ function frozenClock() {
   };
 }
 
-describe("restoring a validated artifact", () => {
-  it("creates the sandbox from exactly the stored snapshot", async () => {
-    const provider = fakeSandboxProvider({ files: restoredSandboxFiles() });
+/** A workspace whose HEAD is the prepared commit and whose install succeeds. */
+function readyProvider(
+  options: { files?: Record<string, string>; healthStatus?: number | null } = {},
+) {
+  return fakeSandboxProvider({
+    files: options.files ?? clonedSandboxFiles(),
+    ...(options.healthStatus !== undefined ? { healthStatus: options.healthStatus } : {}),
+    results: { "git rev-parse HEAD": { exitCode: 0, output: FIXTURE_COMMIT_SHA } },
+  });
+}
 
-    const outcome = await restoreValidatedArtifact(provider, fakePreviewTarget());
+describe("acquiring the source", () => {
+  it("clones exactly the prepared commit, never a branch", async () => {
+    const provider = readyProvider();
+
+    const outcome = await provisionPreviewWorkspace(provider, fakePreviewTarget());
 
     expect(outcome.ok).toBe(true);
     const created = provider.createdWith();
-    expect(created?.source).toEqual({ kind: "snapshot", snapshotId: PREVIEW_SNAPSHOT_ID });
+    expect(created?.source).toEqual({
+      kind: "git",
+      repositoryUrl: "https://github.com/acme/product.git",
+      revision: FIXTURE_COMMIT_SHA,
+      credential: { username: "x-access-token", password: "ghs_fixture" },
+    });
   });
 
-  it("never acquires source from GitHub", async () => {
-    const provider = fakeSandboxProvider({ files: restoredSandboxFiles() });
+  it("refuses when the provider produced a different commit", async () => {
+    // A preview of the wrong bytes on a public URL is worse than no preview.
+    const provider = fakeSandboxProvider({
+      files: clonedSandboxFiles(),
+      results: { "git rev-parse HEAD": { exitCode: 0, output: "b".repeat(40) } },
+    });
 
-    await restoreValidatedArtifact(provider, fakePreviewTarget());
+    const outcome = await provisionPreviewWorkspace(provider, fakePreviewTarget());
 
-    // The distinguishing property of preview: no clone, so no credential, so
-    // no second source-acquisition path to secure (§9).
-    expect(provider.createdWith()?.source.kind).not.toBe("git");
-    expect(JSON.stringify(provider.createdWith())).not.toContain("github");
+    expect(outcome).toMatchObject({ ok: false, failureCode: "preview_source_unavailable" });
+    // And nothing repository-controlled ran.
+    expect(provider.backgroundCommands()).toEqual([]);
   });
 
-  it("applies deny-all egress at creation, before the filesystem exists", async () => {
-    const provider = fakeSandboxProvider({ files: restoredSandboxFiles() });
+  it("destroys the clone credential and verifies its absence", async () => {
+    const provider = readyProvider();
 
-    await restoreValidatedArtifact(provider, fakePreviewTarget());
+    await provisionPreviewWorkspace(provider, fakePreviewTarget());
 
-    // The first policy in the transcript is the creation policy. A sandbox that
-    // existed under a weaker one, even briefly, would be a window.
-    expect(provider.policies()[0]).toEqual({ mode: "deny_all" });
+    const commands = provider.commands();
+    const scrub = commands.findIndex((command) => command.startsWith("rm -rf .git"));
+    const install = commands.findIndex((command) => command.startsWith("pnpm install"));
+
+    expect(scrub).toBeGreaterThanOrEqual(0);
+    // Short expiry is not a security boundary (rule 63): the token stops
+    // existing before anything from the repository runs.
+    expect(scrub).toBeLessThan(install);
   });
 
-  it("never widens egress after creation", async () => {
-    const provider = fakeSandboxProvider({ files: restoredSandboxFiles() });
-    const target = fakePreviewTarget();
-    const clock = frozenClock();
+  it("refuses to continue when the credential store survived removal", async () => {
+    const provider = fakeSandboxProvider({
+      files: clonedSandboxFiles({ "product/.git/config": "[remote]\n  url = https://x@github.com" }),
+      // `rm -f` reports success whether or not it removed anything, which is
+      // exactly why the orchestrator verifies rather than assumes.
+      unremovablePaths: ["product/.git/config"],
+      results: { "git rev-parse HEAD": { exitCode: 0, output: FIXTURE_COMMIT_SHA } },
+    });
 
-    await restoreValidatedArtifact(provider, target);
-    await verifyRestoredArtifact(provider, target);
-    await startPreviewServer(provider, target, { clock });
+    const outcome = await provisionPreviewWorkspace(provider, fakePreviewTarget());
 
-    // "The preview needs the internet to be reachable" is a confusion between
-    // inbound and outbound. Every policy in the whole session is deny-all.
-    for (const policy of provider.policies()) {
-      expect(policy).toEqual({ mode: "deny_all" });
-    }
+    expect(outcome).toMatchObject({ ok: false, failureCode: "preview_credential_scrub_failed" });
+    expect(provider.commands().some((command) => command.startsWith("pnpm install"))).toBe(false);
+  });
+});
+
+describe("the network, at each phase", () => {
+  it("opens GitHub at creation, the registry to install, then nothing", async () => {
+    const provider = readyProvider();
+
+    await provisionPreviewWorkspace(provider, fakePreviewTarget());
+
+    // The whole of rule 81 in one assertion: two windows, each as narrow as the
+    // work needs, and shut before repository code can run.
+    expect(provider.policies()).toEqual([
+      { mode: "allow_domains", domains: SOURCE_HOSTS },
+      { mode: "allow_domains", domains: DEPENDENCY_HOSTS },
+      { mode: "deny_all" },
+    ]);
   });
 
+  it("closes the registry even when the install fails", async () => {
+    // The failure path is exactly where "we'll close it later" turns into "we
+    // didn't".
+    const provider = fakeSandboxProvider({
+      files: clonedSandboxFiles(),
+      results: {
+        "git rev-parse HEAD": { exitCode: 0, output: FIXTURE_COMMIT_SHA },
+        [describeCommand(installCommand("pnpm"))]: { exitCode: 1, output: "ERR_PNPM_OUTDATED_LOCKFILE" },
+      },
+    });
+
+    const outcome = await provisionPreviewWorkspace(provider, fakePreviewTarget());
+
+    expect(outcome).toMatchObject({ ok: false, failureCode: "preview_install_failed" });
+    expect(provider.policies().at(-1)).toEqual({ mode: "deny_all" });
+  });
+
+  it("has the network shut before the server starts", async () => {
+    const provider = readyProvider();
+
+    await provisionPreviewWorkspace(provider, fakePreviewTarget());
+    await startPreviewServer(provider, fakePreviewTarget(), { clock: frozenClock() });
+
+    expect(provider.policies().at(-1)).toEqual({ mode: "deny_all" });
+    expect(provider.backgroundCommands()).toHaveLength(1);
+  });
+});
+
+describe("the sandbox a preview gets", () => {
   it("exposes exactly one port, and it is Vibe's", async () => {
-    const provider = fakeSandboxProvider({ files: restoredSandboxFiles() });
+    const provider = readyProvider();
 
-    await restoreValidatedArtifact(provider, fakePreviewTarget());
+    await provisionPreviewWorkspace(provider, fakePreviewTarget());
 
     expect(provider.exposedPorts()).toEqual([PREVIEW_BUDGETS.port]);
   });
 
   it("bounds the sandbox's own lifetime by the preview TTL", async () => {
-    const provider = fakeSandboxProvider({ files: restoredSandboxFiles() });
+    // Two clocks, deliberately. This is the one that stops the VM even if
+    // nothing in Vibe ever runs again.
+    const provider = readyProvider();
 
-    await restoreValidatedArtifact(provider, fakePreviewTarget());
+    await provisionPreviewWorkspace(provider, fakePreviewTarget());
 
-    // The provider timeout is what stops the VM if nothing in Vibe ever runs
-    // again. Without it, a lost workflow would leave a public server up until
-    // the provider's five-minute default — or, with a longer default, far
-    // beyond the TTL the product promises (§18).
     expect(provider.createdWith()?.timeoutMs).toBe(PREVIEW_BUDGETS.ttlMs);
   });
 
   it("provisions the preview shape rather than the validation shape", async () => {
-    const provider = fakeSandboxProvider({ files: restoredSandboxFiles() });
+    const provider = readyProvider();
 
-    await restoreValidatedArtifact(provider, fakePreviewTarget());
+    await provisionPreviewWorkspace(provider, fakePreviewTarget());
 
     expect(provider.createdWith()?.vcpus).toBe(PREVIEW_RESOURCES.vcpus);
   });
 
   it("carries no privileged environment into the preview runtime", async () => {
-    const provider = fakeSandboxProvider({ files: restoredSandboxFiles() });
+    const provider = readyProvider();
 
-    await restoreValidatedArtifact(provider, fakePreviewTarget());
+    await provisionPreviewWorkspace(provider, fakePreviewTarget());
 
     const env = provider.createdWith()?.env ?? {};
-    expect(Object.keys(env).sort()).toEqual(["CI", "NEXT_TELEMETRY_DISABLED", "NODE_ENV"]);
-
-    // Asserted by *shape* as well as by list, so a future variable in one of
-    // these families fails here rather than at a security review.
-    const serialized = JSON.stringify(env);
-    for (const marker of ["ghs_", "sk-ant", "service_role", "SUPABASE", "ANTHROPIC", "VERCEL_"]) {
-      expect(serialized).not.toContain(marker);
+    expect(env).toEqual({ ...PREVIEW_ENVIRONMENT });
+    for (const name of Object.keys(env)) {
+      expect(name).not.toMatch(/^(GITHUB|GH|ANTHROPIC|SUPABASE|VERCEL|BROWSERBASE|AWS|OPENAI)_/);
     }
   });
 
+  it("refuses a privileged environment as a Vibe defect, before creating anything", async () => {
+    const provider = readyProvider();
+
+    const outcome = await provisionPreviewWorkspace(provider, fakePreviewTarget(), {
+      ...PREVIEW_ENVIRONMENT,
+      GITHUB_TOKEN: "ghp_leaked",
+    });
+
+    expect(outcome).toMatchObject({ ok: false, failureCode: "preview_privileged_environment" });
+    // The name, never the value — a value here would be the secret being refused.
+    if (!outcome.ok) expect(outcome.failureDetail).not.toContain("ghp_leaked");
+    expect(provider.createCount()).toBe(0);
+  });
+
   it("adopts an existing sandbox rather than creating a second one", async () => {
-    const provider = fakeSandboxProvider({ files: restoredSandboxFiles() });
-    const target = fakePreviewTarget();
+    const provider = readyProvider();
 
-    await restoreValidatedArtifact(provider, target);
-    await restoreValidatedArtifact(provider, target);
+    await provisionPreviewWorkspace(provider, fakePreviewTarget());
+    await provisionPreviewWorkspace(provider, fakePreviewTarget());
 
-    // Replay safety, and the thing that makes `maxRetries = 0` survivable: a
-    // second creation is a second paid VM on a second public URL (§32).
+    // A replay must never buy a second microVM on a second public URL.
     expect(provider.createCount()).toBe(1);
   });
 
   it("names the sandbox after the session, never after the identity", async () => {
-    const provider = fakeSandboxProvider({ files: restoredSandboxFiles() });
+    const provider = readyProvider();
 
-    await restoreValidatedArtifact(provider, fakePreviewTarget());
+    await provisionPreviewWorkspace(provider, fakePreviewTarget());
 
-    const name = provider.createdWith()?.name ?? "";
-    expect(name).toBe(previewSandboxNameFor(PREVIEW_SESSION_ID));
-    // Sandbox names are third-party metadata. No customer identifiers.
-    expect(name).not.toContain("product");
-    expect(name).not.toContain("acme");
+    expect(provider.createdWith()?.name).toBe(previewSandboxNameFor(PREVIEW_SESSION_ID));
   });
 
   it("classifies a provider failure rather than falling back to anything", async () => {
     const provider = fakeSandboxProvider({ failCreate: true });
 
-    const outcome = await restoreValidatedArtifact(provider, fakePreviewTarget());
+    const outcome = await provisionPreviewWorkspace(provider, fakePreviewTarget());
 
     expect(outcome).toMatchObject({ ok: false, failureCode: "preview_provider_unavailable" });
   });
 });
 
-describe("integrity of the restored artifact", () => {
-  it("passes when the restored filesystem matches the manifest", async () => {
-    const provider = fakeSandboxProvider({ files: restoredSandboxFiles() });
-    const target = fakePreviewTarget();
-
-    await restoreValidatedArtifact(provider, target);
-
-    expect(await verifyRestoredArtifact(provider, target)).toMatchObject({ ok: true });
-  });
-
-  it("refuses when a prepared file's content changed in storage", async () => {
-    const provider = fakeSandboxProvider({
-      files: restoredSandboxFiles({ "product/app/robots.ts": "export default 'tampered';\n" }),
-    });
-    const target = fakePreviewTarget();
-
-    await restoreValidatedArtifact(provider, target);
-    const outcome = await verifyRestoredArtifact(provider, target);
-
-    expect(outcome).toMatchObject({
-      ok: false,
-      failureCode: "preview_artifact_integrity_failed",
-    });
-  });
-
-  it("refuses when a prepared file did not come back at all", async () => {
-    const provider = fakeSandboxProvider({
-      files: restoredSandboxFiles({ "product/app/robots.ts": null }),
-    });
-    const target = fakePreviewTarget();
-
-    await restoreValidatedArtifact(provider, target);
-
-    expect(await verifyRestoredArtifact(provider, target)).toMatchObject({
-      ok: false,
-      failureCode: "preview_artifact_integrity_failed",
-    });
-  });
-
-  it("refuses when a build-identity file differs from what was validated", async () => {
-    const provider = fakeSandboxProvider({
-      files: restoredSandboxFiles({ "product/pnpm-lock.yaml": "lockfileVersion: '6.0'\n" }),
-    });
-    const target = fakePreviewTarget();
-
-    await restoreValidatedArtifact(provider, target);
-
-    // A matching `robots.ts` beside a different lockfile is a different build.
-    expect(await verifyRestoredArtifact(provider, target)).toMatchObject({
-      ok: false,
-      failureCode: "preview_artifact_integrity_failed",
-    });
-  });
-
-  it("refuses when a credential-bearing .git came back with the snapshot", async () => {
-    const provider = fakeSandboxProvider({
-      files: restoredSandboxFiles({
-        "product/.git/config":
-          '[remote "origin"]\n\turl = https://x-access-token:ghs_secret@github.com/acme/product.git\n',
-      }),
-    });
-    const target = fakePreviewTarget();
-
-    await restoreValidatedArtifact(provider, target);
-    const outcome = await verifyRestoredArtifact(provider, target);
-
-    expect(outcome).toMatchObject({
-      ok: false,
-      failureCode: "preview_artifact_integrity_failed",
-    });
-    // The refusal must not quote the credential it refused.
-    expect(JSON.stringify(outcome)).not.toContain("ghs_secret");
-  });
-
-  it("refuses a privileged environment as a Vibe defect, not an artifact defect", async () => {
-    const provider = fakeSandboxProvider({ files: restoredSandboxFiles() });
-    const target = fakePreviewTarget();
-    await restoreValidatedArtifact(provider, target);
-
-    const outcome = await verifyRestoredArtifact(provider, target, {
-      ...PREVIEW_ENVIRONMENT,
-      SUPABASE_SERVICE_ROLE_KEY: "eyJhbGciOi.secret",
-    });
-
-    expect(outcome).toMatchObject({ ok: false, failureCode: "preview_privileged_environment" });
-    // Names, never values: the detail must not carry the secret being refused.
-    expect(JSON.stringify(outcome)).not.toContain("eyJhbGciOi.secret");
-  });
-
-  it("does not re-run install, typecheck, test or build", async () => {
-    const provider = fakeSandboxProvider({ files: restoredSandboxFiles() });
-    const target = fakePreviewTarget();
-
-    await restoreValidatedArtifact(provider, target);
-    await verifyRestoredArtifact(provider, target);
-
-    // Preview restores a validated artifact. Re-validating it would mean the
-    // capture was pointless, and would answer a settled question with a second
-    // bill (§11).
-    for (const command of provider.commands()) {
-      expect(command).not.toMatch(/install|tsc|vitest|next build|run build/);
-    }
-  });
-
-  it("treats an absent build-identity manifest as nothing to compare", async () => {
-    const provider = fakeSandboxProvider({ files: restoredSandboxFiles() });
-    const target = fakePreviewTarget({ buildIdentityFiles: [] });
-
-    await restoreValidatedArtifact(provider, target);
-
-    // A run validated before digests were recorded carries none. The prepared
-    // file hashes still run, and they are the load-bearing check.
-    expect(await verifyRestoredArtifact(provider, target)).toMatchObject({ ok: true });
-  });
-});
-
 describe("starting the preview server", () => {
   it("starts the production server and reports the provider's origin", async () => {
-    const provider = fakeSandboxProvider({ files: restoredSandboxFiles() });
+    const provider = readyProvider();
     const target = fakePreviewTarget();
-    await restoreValidatedArtifact(provider, target);
+    await provisionPreviewWorkspace(provider, target);
 
     const outcome = await startPreviewServer(provider, target, { clock: frozenClock() });
 
@@ -296,21 +248,28 @@ describe("starting the preview server", () => {
     );
   });
 
-  it("never starts a development server", async () => {
-    const provider = fakeSandboxProvider({ files: restoredSandboxFiles() });
+  it("starts exactly one server, and it is the one Vibe wrote", async () => {
+    /*
+     * The inverse of what this test asserted before Sprint 0114, and worth
+     * reading as such. ADR 0016 §7 refused `next dev` because a preview claimed
+     * to be the validated application; a preview now runs *before* validation
+     * and claims only to be the prepared code, so the development server is the
+     * right instrument and ADR 0064 says why.
+     *
+     * What did not change is the part that was always the security property:
+     * one server, named by Vibe, never a repository-defined script.
+     */
+    const provider = readyProvider();
     const target = fakePreviewTarget();
-    await restoreValidatedArtifact(provider, target);
+    await provisionPreviewWorkspace(provider, target);
 
     await startPreviewServer(provider, target, { clock: frozenClock() });
 
-    // A dev server rebuilds on demand and serves unminified code with error
-    // overlays: a different application from the one that was validated (§14).
+    expect(provider.backgroundCommands()).toEqual([describeCommand(previewServerCommand())]);
     for (const command of provider.backgroundCommands()) {
-      expect(command).not.toContain("dev");
+      expect(command).not.toContain("pnpm");
+      expect(command).not.toContain("npx");
     }
-    expect(provider.backgroundCommands()).toEqual([
-      describeCommand(previewServerCommand()),
-    ]);
   });
 
   it("binds all interfaces on Vibe's port", async () => {
@@ -333,13 +292,13 @@ describe("starting the preview server", () => {
 
   it("reports a process that exited instead of waiting out the budget", async () => {
     const provider = fakeSandboxProvider({
-      files: restoredSandboxFiles(),
+      files: clonedSandboxFiles(),
       backgroundExitCode: 1,
       backgroundOutput: "Error: Cannot find module './server'",
       healthStatus: null,
     });
     const target = fakePreviewTarget();
-    await restoreValidatedArtifact(provider, target);
+    await provisionPreviewWorkspace(provider, target);
 
     const outcome = await startPreviewServer(provider, target, { clock: frozenClock() });
 
@@ -348,13 +307,13 @@ describe("starting the preview server", () => {
 
   it("names a missing-configuration exit as such", async () => {
     const provider = fakeSandboxProvider({
-      files: restoredSandboxFiles(),
+      files: clonedSandboxFiles(),
       backgroundExitCode: 1,
       backgroundOutput: "Error: Missing required environment variable DATABASE_URL",
       healthStatus: null,
     });
     const target = fakePreviewTarget();
-    await restoreValidatedArtifact(provider, target);
+    await provisionPreviewWorkspace(provider, target);
 
     // A user can act on exactly one of these two, so they are different codes.
     expect(await startPreviewServer(provider, target, { clock: frozenClock() })).toMatchObject({
@@ -364,9 +323,9 @@ describe("starting the preview server", () => {
   });
 
   it("fails when the server never answers within its budget", async () => {
-    const provider = fakeSandboxProvider({ files: restoredSandboxFiles(), healthStatus: null });
+    const provider = fakeSandboxProvider({ files: clonedSandboxFiles(), healthStatus: null });
     const target = fakePreviewTarget();
-    await restoreValidatedArtifact(provider, target);
+    await provisionPreviewWorkspace(provider, target);
 
     expect(await startPreviewServer(provider, target, { clock: frozenClock() })).toMatchObject({
       ok: false,
@@ -375,9 +334,9 @@ describe("starting the preview server", () => {
   });
 
   it("stops probing after a bounded number of attempts, even on a stopped clock", async () => {
-    const provider = fakeSandboxProvider({ files: restoredSandboxFiles(), healthStatus: null });
+    const provider = fakeSandboxProvider({ files: clonedSandboxFiles(), healthStatus: null });
     const target = fakePreviewTarget();
-    await restoreValidatedArtifact(provider, target);
+    await provisionPreviewWorkspace(provider, target);
 
     await startPreviewServer(provider, target, { clock: frozenClock() });
 
@@ -393,11 +352,11 @@ describe("starting the preview server", () => {
 
   it("keeps probing while the server is still warming up", async () => {
     const provider = fakeSandboxProvider({
-      files: restoredSandboxFiles(),
+      files: clonedSandboxFiles(),
       healthFailingProbes: 3,
     });
     const target = fakePreviewTarget();
-    await restoreValidatedArtifact(provider, target);
+    await provisionPreviewWorkspace(provider, target);
 
     const outcome = await startPreviewServer(provider, target, { clock: frozenClock() });
 
@@ -408,17 +367,17 @@ describe("starting the preview server", () => {
   });
 
   it("treats a 5xx as an application failure and a 404 as a running application", async () => {
-    const erroring = fakeSandboxProvider({ files: restoredSandboxFiles(), healthStatus: 500 });
+    const erroring = readyProvider({ healthStatus: 500 });
     const target = fakePreviewTarget();
-    await restoreValidatedArtifact(erroring, target);
+    await provisionPreviewWorkspace(erroring, target);
 
     expect(await startPreviewServer(erroring, target, { clock: frozenClock() })).toMatchObject({
       ok: false,
       failureCode: "preview_health_check_failed",
     });
 
-    const empty = fakeSandboxProvider({ files: restoredSandboxFiles(), healthStatus: 404 });
-    await restoreValidatedArtifact(empty, target);
+    const empty = readyProvider({ healthStatus: 404 });
+    await provisionPreviewWorkspace(empty, target);
 
     // A root 404 is a running application whose author has no index route.
     // Failing it would substitute Vibe's opinion about their site map for a
@@ -430,11 +389,11 @@ describe("starting the preview server", () => {
 
   it("classifies a missing provider route separately from an application failure", async () => {
     const provider = fakeSandboxProvider({
-      files: restoredSandboxFiles(),
+      files: clonedSandboxFiles(),
       failPublicOrigin: true,
     });
     const target = fakePreviewTarget();
-    await restoreValidatedArtifact(provider, target);
+    await provisionPreviewWorkspace(provider, target);
 
     // The server is demonstrably answering; what is missing is the route. The
     // user must not be told their change is broken (§17).
@@ -446,12 +405,12 @@ describe("starting the preview server", () => {
 
   it("classifies a server that could not be started at all", async () => {
     const provider = fakeSandboxProvider({
-      files: restoredSandboxFiles(),
+      files: clonedSandboxFiles(),
       failBackground: true,
       healthStatus: null,
     });
     const target = fakePreviewTarget();
-    await restoreValidatedArtifact(provider, target);
+    await provisionPreviewWorkspace(provider, target);
 
     expect(await startPreviewServer(provider, target, { clock: frozenClock() })).toMatchObject({
       ok: false,
@@ -460,9 +419,9 @@ describe("starting the preview server", () => {
   });
 
   it("does not start a second server when the port already answers", async () => {
-    const provider = fakeSandboxProvider({ files: restoredSandboxFiles() });
+    const provider = readyProvider();
     const target = fakePreviewTarget();
-    await restoreValidatedArtifact(provider, target);
+    await provisionPreviewWorkspace(provider, target);
 
     await startPreviewServer(provider, target, { clock: frozenClock() });
     await startPreviewServer(provider, target, { clock: frozenClock() });
@@ -484,9 +443,9 @@ describe("starting the preview server", () => {
   });
 
   it("makes no AI call and reads no page body", async () => {
-    const provider = fakeSandboxProvider({ files: restoredSandboxFiles() });
+    const provider = readyProvider();
     const target = fakePreviewTarget();
-    await restoreValidatedArtifact(provider, target);
+    await provisionPreviewWorkspace(provider, target);
 
     await startPreviewServer(provider, target, { clock: frozenClock() });
 
@@ -498,27 +457,27 @@ describe("starting the preview server", () => {
 });
 
 describe("teardown", () => {
-  it("stops the sandbox and deletes the artifact snapshot", async () => {
-    const provider = fakeSandboxProvider({ files: restoredSandboxFiles() });
+  it("stops the sandbox and deletes a v1 session's artifact snapshot", async () => {
+    const provider = readyProvider();
     const target = fakePreviewTarget();
-    await restoreValidatedArtifact(provider, target);
+    await provisionPreviewWorkspace(provider, target);
 
     const teardown = await teardownPreview(
       provider,
-      { previewSessionId: target.previewSessionId, snapshotId: target.snapshotId },
+      { previewSessionId: target.previewSessionId, snapshotId: "snap_v1_legacy" },
       { deleteArtifact: true },
     );
 
     expect(teardown).toMatchObject({ cleanup: "stopped", artifactDeleted: true });
     expect(provider.stopped()).toBe(true);
-    expect(provider.deletedArtifacts()).toEqual([PREVIEW_SNAPSHOT_ID]);
+    expect(provider.deletedArtifacts()).toEqual(["snap_v1_legacy"]);
   });
 
   it("is idempotent when called twice", async () => {
-    const provider = fakeSandboxProvider({ files: restoredSandboxFiles() });
+    const provider = readyProvider();
     const target = fakePreviewTarget();
-    await restoreValidatedArtifact(provider, target);
-    const args = { previewSessionId: target.previewSessionId, snapshotId: target.snapshotId };
+    await provisionPreviewWorkspace(provider, target);
+    const args = { previewSessionId: target.previewSessionId, snapshotId: "snap_v1_legacy" };
 
     const first = await teardownPreview(provider, args, { deleteArtifact: true });
     const second = await teardownPreview(provider, args, { deleteArtifact: true });
@@ -531,15 +490,15 @@ describe("teardown", () => {
 
   it("records a snapshot deletion failure without hiding it", async () => {
     const provider = fakeSandboxProvider({
-      files: restoredSandboxFiles(),
+      files: clonedSandboxFiles(),
       failDeleteArtifact: true,
     });
     const target = fakePreviewTarget();
-    await restoreValidatedArtifact(provider, target);
+    await provisionPreviewWorkspace(provider, target);
 
     const teardown = await teardownPreview(
       provider,
-      { previewSessionId: target.previewSessionId, snapshotId: target.snapshotId },
+      { previewSessionId: target.previewSessionId, snapshotId: "snap_v1_legacy" },
       { deleteArtifact: true },
     );
 
@@ -549,13 +508,13 @@ describe("teardown", () => {
   });
 
   it("reports a stop failure without pretending the sandbox is gone", async () => {
-    const provider = fakeSandboxProvider({ files: restoredSandboxFiles(), failStop: true });
+    const provider = fakeSandboxProvider({ files: clonedSandboxFiles(), failStop: true });
     const target = fakePreviewTarget();
-    await restoreValidatedArtifact(provider, target);
+    await provisionPreviewWorkspace(provider, target);
 
     const teardown = await teardownPreview(
       provider,
-      { previewSessionId: target.previewSessionId, snapshotId: target.snapshotId },
+      { previewSessionId: target.previewSessionId, snapshotId: "snap_v1_legacy" },
       { deleteArtifact: true },
     );
 
@@ -565,13 +524,13 @@ describe("teardown", () => {
   });
 
   it("leaves the snapshot alone when asked not to delete it", async () => {
-    const provider = fakeSandboxProvider({ files: restoredSandboxFiles() });
+    const provider = readyProvider();
     const target = fakePreviewTarget();
-    await restoreValidatedArtifact(provider, target);
+    await provisionPreviewWorkspace(provider, target);
 
     await teardownPreview(
       provider,
-      { previewSessionId: target.previewSessionId, snapshotId: target.snapshotId },
+      { previewSessionId: target.previewSessionId, snapshotId: "snap_v1_legacy" },
       { deleteArtifact: false },
     );
 
@@ -580,12 +539,20 @@ describe("teardown", () => {
 });
 
 describe("fixtures", () => {
-  it("hashes the filesystem it claims to describe", () => {
-    // Guards the guard: a fixture whose hashes never matched would let an
-    // integrity check that does nothing pass every test above.
+  it("has no snapshot to delete for a session that cloned", async () => {
+    // The normal case from Sprint 0114 onward. Asked for and answered "nothing
+    // to do", rather than the caller having to know not to ask.
+    const provider = readyProvider();
     const target = fakePreviewTarget();
-    expect(target.preparedFiles[0].contentHash).toBe(
-      sha256(RESTORED_FILES["product/app/robots.ts"]),
+    await provisionPreviewWorkspace(provider, target);
+
+    const teardown = await teardownPreview(
+      provider,
+      { previewSessionId: target.previewSessionId, snapshotId: null },
+      { deleteArtifact: true },
     );
+
+    expect(teardown).toMatchObject({ cleanup: "stopped", artifactDeleted: false });
+    expect(provider.deletedArtifacts()).toEqual([]);
   });
 });

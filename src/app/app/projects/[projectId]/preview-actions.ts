@@ -68,7 +68,7 @@ function failureMessage(code: string): string {
  */
 export async function startPreviewAction(
   projectId: string,
-  validatedArtifactId: string,
+  preparedChangeId: string,
   confirmPublicExposure: boolean,
 ): Promise<NonNullable<StartPreviewActionState>> {
   const session = await requireSession();
@@ -77,7 +77,7 @@ export async function startPreviewAction(
   const outcome = await startChangePreview(supabase, new VercelWorkflowExecutor(), {
     projectId,
     userId: session.userId,
-    validatedArtifactId,
+    preparedChangeId,
     confirmPublicExposure,
   });
 

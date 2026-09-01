@@ -45,6 +45,13 @@ function deps(): PreviewDeps {
   return {
     supabase: createServiceClient(),
     provider: createVercelSandboxProvider(),
+    /*
+     * Teardown acquires no source, so it never needs a repository or a
+     * credential. Present because `PreviewDeps` is one shape, and refusing
+     * rather than returning null would make "cleanup cannot run" depend on a
+     * repository lookup — cleanup must work when nothing else does.
+     */
+    resolveTarget: async () => null,
   };
 }
 

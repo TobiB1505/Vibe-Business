@@ -12,6 +12,9 @@ import {
 } from "@/modules/operations/store";
 import { buildOperationView, type OperationView } from "@/modules/operations/view";
 import type { SandboxProvider } from "@/modules/validation/sandbox-port";
+import { getPreparedChange } from "@/modules/execution/store";
+import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
+import { resolveValidationProfile } from "@/modules/validation/profile";
 import { PREVIEW_BUDGETS } from "./budgets";
 import { computePreviewIdentity, computeTeardownIdentity } from "./identity";
 import { resolvePreviewOrigin } from "./orchestrator";
@@ -24,7 +27,6 @@ import {
   type PreviewSession,
   type PreviewStatus,
   type TeardownReason,
-  type ValidatedArtifact,
 } from "./schema";
 import { buildPreviewCard, type PreviewCard } from "./view";
 import {
@@ -33,7 +35,6 @@ import {
   findActivePreviewByIdentity,
   getLatestPreviewForPreparedChange,
   getPreviewSession,
-  getValidatedArtifact,
 } from "./store";
 
 /**
@@ -69,13 +70,14 @@ export type StartPreviewParams = {
   projectId: string;
   userId: string;
   /**
-   * The ValidatedArtifact to preview.
+   * The prepared change to preview.
    *
-   * Its id is the validation run that captured it — capture is strictly one per
-   * passing run. Resolved against the caller's project, so another tenant's
-   * artifact is invisible rather than forbidden.
+   * Resolved against the caller's project, so another tenant's change is
+   * invisible rather than forbidden. Everything else a preview needs — the
+   * commit, the repository, the package manager — is read from server state,
+   * never sent (Sprint 0114).
    */
-  validatedArtifactId: string;
+  preparedChangeId: string;
   /**
    * Explicit acknowledgement that a public, unlisted URL will be published.
    *
@@ -142,33 +144,36 @@ export async function startChangePreview(
     return { kind: "failed", error: "preview_exposure_not_confirmed" };
   }
 
-  const artifact = await getValidatedArtifact(supabase, {
+  const prepared = await getPreparedChange(supabase, {
     projectId: params.projectId,
-    validatedArtifactId: params.validatedArtifactId,
+    preparedChangeId: params.preparedChangeId,
   });
 
-  // Scoped to the project and to a *passing* run, so a failed validation, a
-  // run with no captured artifact, an already-deleted artifact and another
-  // tenant's artifact are all the same answer: there is nothing here.
-  if (!artifact) return { kind: "failed", error: "preview_artifact_unavailable" };
-
-  // Checked against Vibe's own recorded deadline rather than discovered by
-  // asking the provider to restore something that is gone (§10).
-  if (isPreviewExpired({ expiresAt: artifact.expiresAt })) {
-    return { kind: "failed", error: "preview_artifact_expired" };
+  /*
+   * A commit is the whole precondition now.
+   *
+   * It used to be a *passing validation whose artifact was still usable*, which
+   * is what made a preview strictly later than a five-minute check. A
+   * development server needs no build, so the question is only whether there is
+   * something to serve (ADR 0064).
+   */
+  if (!prepared || prepared.status !== "prepared" || !prepared.commitSha) {
+    return { kind: "failed", error: "preview_change_not_prepared" };
   }
 
-  // Derived from the validation profile that produced the artifact — never from
-  // an Opportunity's prose or any other model output (§3).
-  const previewProfile = previewProfileFor(artifact.validationProfile);
+  /*
+   * Resolved from the analyzer's snapshot through validation's own profile
+   * resolver — one detection of these facts, not two (§3, rules 25 and 57).
+   */
+  const snapshot = await getLatestSuccessfulSnapshot(supabase, params.projectId);
+  const resolution = snapshot?.result ? resolveValidationProfile(snapshot.result) : null;
+  const previewProfile = resolution?.supported ? previewProfileFor(resolution.profile) : null;
   if (!previewProfile) return { kind: "failed", error: "preview_not_supported" };
 
   const identity = computePreviewIdentity({
     projectId: params.projectId,
-    preparedChangeId: artifact.preparedChangeId,
-    validationRunId: artifact.validationRunId,
-    artifactSnapshotId: artifact.snapshotId,
-    preparedCommitSha: artifact.preparedCommitSha,
+    preparedChangeId: prepared.id,
+    preparedCommitSha: prepared.commitSha,
     previewProfile,
     previewProfileVersion: previewProfileVersionFor(previewProfile),
     previewPolicyVersion: PREVIEW_POLICY_VERSION,
@@ -198,7 +203,7 @@ export async function startChangePreview(
     userId: params.userId,
     operationType: "change_preview",
     inputIdentity: identity,
-    subjectId: artifact.validationRunId,
+    subjectId: prepared.id,
     initiatedBy: "customer",
   });
 
@@ -220,10 +225,9 @@ export async function startChangePreview(
   const claim = await claimPreviewSession(supabase, {
     projectId: params.projectId,
     userId: params.userId,
-    preparedChangeId: artifact.preparedChangeId,
-    validationRunId: artifact.validationRunId,
+    preparedChangeId: prepared.id,
+    preparedCommitSha: prepared.commitSha,
     operationRunId: created.operation.id,
-    artifactSnapshotId: artifact.snapshotId,
     previewProfile,
     previewProfileVersion: previewProfileVersionFor(previewProfile),
     previewPolicyVersion: PREVIEW_POLICY_VERSION,
@@ -260,8 +264,7 @@ export async function startChangePreview(
       projectId: params.projectId,
       operationId: created.operation.id,
       previewSessionId: claim.session.id,
-      validationRunId: artifact.validationRunId,
-      preparedChangeId: artifact.preparedChangeId,
+      preparedChangeId: prepared.id,
       previewProfile,
       previewPolicyVersion: PREVIEW_POLICY_VERSION,
       // Recorded because the user consented to a public URL and an audit log is
@@ -397,24 +400,23 @@ export async function getPreviewStatus(
  * So this reads three rows and returns a state. Every action that costs
  * something is behind an explicit click.
  *
- * The artifact is resolved through `getValidatedArtifact`, which already
- * filters on a passing run, a captured snapshot and a live deletion state — so
- * "there is no artifact" and "the artifact is not usable" are the same answer
- * here, and the view turns them into the same sentence.
+ * Under `preview-policy-v2` there is no artifact to resolve and no validation to
+ * wait for: a preview needs a prepared commit and nothing else, which is why
+ * this now reads one row (Sprint 0114).
  */
 export async function getPreviewCard(
   supabase: SupabaseClient,
   params: {
     projectId: string;
     preparedChangeId: string;
-    /** The latest validation for this change, already loaded by the caller. */
-    validation: { id: string; status: string } | null;
+    /** Whether the change has a commit to serve. Resolved by the caller. */
+    prepared: boolean;
     /**
-     * The session and artifact this change already has, when the caller read
-     * them as part of a batch (VB-023). Present means "use these and read
-     * nothing"; absent means "read them here".
+     * The session this change already has, when the caller read it as part of a
+     * batch (VB-023). Present means "use this and read nothing"; absent means
+     * "read it here".
      */
-    prefetched?: { preview: PreviewSession | null; artifact: ValidatedArtifact | null };
+    prefetched?: { preview: PreviewSession | null };
     /** Safe copy for a failed session's code. Never a provider message. */
     resolveFailureMessage: (code: string) => string | null;
   },
@@ -426,18 +428,8 @@ export async function getPreviewCard(
         preparedChangeId: params.preparedChangeId,
       });
 
-  const artifact = params.prefetched
-    ? assertPrefetchedFor(params.prefetched.artifact, params, "validated artifact")
-    : params.validation && params.validation.status === "passed"
-      ? await getValidatedArtifact(supabase, {
-          projectId: params.projectId,
-          validatedArtifactId: params.validation.id,
-        })
-      : null;
-
   return buildPreviewCard({
-    validation: params.validation,
-    artifact: artifact ? { expiresAt: artifact.expiresAt } : null,
+    prepared: params.prepared,
     session,
     failureMessage: session?.failureCode
       ? params.resolveFailureMessage(session.failureCode)

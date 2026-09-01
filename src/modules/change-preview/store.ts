@@ -30,7 +30,8 @@ import type {
 const POSTGRES_UNIQUE_VIOLATION = "23505";
 
 const COLUMNS =
-  "id, project_id, user_id, prepared_change_id, validation_run_id, operation_run_id, " +
+  "id, project_id, user_id, prepared_change_id, prepared_commit_sha, validation_run_id, " +
+  "operation_run_id, " +
   "artifact_snapshot_id, preview_profile, preview_profile_version, preview_policy_version, " +
   "provider, runtime, port, status, stage, failure_code, cleanup_status, preview_identity, " +
   "teardown_reason, " +
@@ -44,9 +45,10 @@ function mapRow(row: Row): PreviewSession {
     projectId: String(row.project_id),
     userId: String(row.user_id),
     preparedChangeId: String(row.prepared_change_id),
-    validationRunId: String(row.validation_run_id),
+    preparedCommitSha: String(row.prepared_commit_sha),
+    validationRunId: (row.validation_run_id as string | null) ?? null,
     operationRunId: String(row.operation_run_id),
-    artifactSnapshotId: String(row.artifact_snapshot_id),
+    artifactSnapshotId: (row.artifact_snapshot_id as string | null) ?? null,
     previewProfile: row.preview_profile as PreviewProfile,
     previewProfileVersion: String(row.preview_profile_version),
     previewPolicyVersion: String(row.preview_policy_version),
@@ -307,9 +309,9 @@ export async function claimPreviewSession(
     projectId: string;
     userId: string;
     preparedChangeId: string;
-    validationRunId: string;
+    /** The commit this session will serve. Server-resolved, never sent. */
+    preparedCommitSha: string;
     operationRunId: string;
-    artifactSnapshotId: string;
     previewProfile: PreviewProfile;
     previewProfileVersion: string;
     previewPolicyVersion: string;
@@ -325,9 +327,8 @@ export async function claimPreviewSession(
       project_id: params.projectId,
       user_id: params.userId,
       prepared_change_id: params.preparedChangeId,
-      validation_run_id: params.validationRunId,
+      prepared_commit_sha: params.preparedCommitSha,
       operation_run_id: params.operationRunId,
-      artifact_snapshot_id: params.artifactSnapshotId,
       preview_profile: params.previewProfile,
       preview_profile_version: params.previewProfileVersion,
       preview_policy_version: params.previewPolicyVersion,

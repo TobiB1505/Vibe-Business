@@ -1,4 +1,7 @@
 import { createServiceClient } from "@/lib/supabase/service";
+import { mintInstallationCloneCredential } from "@/modules/github/installation-token";
+import { getProjectWithRepository } from "@/modules/projects/queries";
+import type { ProjectOperationRun } from "../store";
 import { createVercelSandboxProvider } from "@/modules/validation/vercel/provider";
 import type { PreviewFailureCode } from "@/modules/change-preview/schema";
 import type { PreviewTeardown } from "@/modules/change-preview/orchestrator";
@@ -6,9 +9,9 @@ import {
   cleanupFailedPreviewStep,
   completePreviewStep,
   failPreviewStep,
-  restoreArtifactStep,
+  provisionPreviewStep,
   startPreviewStep,
-  verifyArtifactStep,
+  type PreviewRepositoryTarget,
   type PreviewDeps,
 } from "./execution";
 
@@ -18,10 +21,18 @@ import {
  * ## The step graph
  *
  * ```
- * restore ─▶ verify ─▶ start + health ─▶ complete
- *    │          │             │
- *    └──────────┴─────────────┴──▶ cleanup ─▶ fail
+ * provision ─▶ start + health ─▶ complete
+ *     │               │
+ *     └───────────────┴──▶ cleanup ─▶ fail
  * ```
+ *
+ * Two steps rather than three, and the split is forced rather than chosen
+ * (Sprint 0114). `provision` clones, proves the commit, destroys the credential
+ * and installs — up to 240s. `start` runs the dev server and health-checks it —
+ * up to 180s, because the first request is what compiles the route. Neither
+ * fits with the other under one 300s step deadline, and a detached process
+ * handle cannot cross a step boundary, so the server start and its health check
+ * have to stay together.
  *
  * ## Fail-safe, and why the control flow is written this way
  *
@@ -55,28 +66,61 @@ import {
  * failure mode of not retrying that is a public VM nobody stops.
  */
 
+/**
+ * The repository, resolved from the operation's own project.
+ *
+ * The same shape validation uses, and deliberately not shared with it: a
+ * preview and a validation clone the same repository for different reasons, and
+ * a helper both imported would be one place for one of them to quietly acquire
+ * the other's needs. What matters is that neither takes any of it from a
+ * client (§27).
+ */
+async function resolveTarget(
+  operation: ProjectOperationRun,
+  options: { withCloneCredential: boolean },
+): Promise<PreviewRepositoryTarget | null> {
+  const supabase = createServiceClient();
+
+  const project = await getProjectWithRepository(supabase, operation.projectId);
+  if (!project?.repository) return null;
+
+  const { owner, name: repo, installationId } = project.repository;
+  if (!owner || !repo) return null;
+
+  // Minted only for the step that clones, at the last possible moment, and
+  // never persisted. The server-start step resolves a target without one: the
+  // source is on disk by then, so a token would be exposure bought for nothing.
+  let cloneCredential: { username: string; password: string } | null = null;
+  if (options.withCloneCredential) {
+    cloneCredential = await mintInstallationCloneCredential(installationId);
+    if (!cloneCredential) return null;
+  }
+
+  return {
+    repositoryUrl: `https://github.com/${owner}/${repo}.git`,
+    // Vercel materializes the clone at `/vercel/sandbox/<repo>/`.
+    sourceRoot: repo,
+    cloneCredential,
+  };
+}
+
 function deps(): PreviewDeps {
   return {
     supabase: createServiceClient(),
     // The real provider, only ever constructed here. Tests inject a fake; there
     // is no local-execution implementation to fall back to (ADR 0015 §4).
     provider: createVercelSandboxProvider(),
+    resolveTarget,
   };
 }
 
-async function restoreArtifact(operationId: string) {
+async function provisionPreview(operationId: string) {
   "use step";
-  return restoreArtifactStep(deps(), operationId);
+  return provisionPreviewStep(deps(), operationId);
 }
 // Creating a sandbox is billable and its outcome is not knowable from outside.
 // A platform retry could buy a second microVM on a second public URL.
-restoreArtifact.maxRetries = 0;
-
-async function verifyArtifact(operationId: string) {
-  "use step";
-  return verifyArtifactStep(deps(), operationId);
-}
-verifyArtifact.maxRetries = 0;
+provisionPreview.maxRetries = 0;
 
 async function startPreview(operationId: string) {
   "use step";
@@ -109,13 +153,8 @@ export async function changePreviewWorkflow(operationId: string) {
   let failureCode: PreviewFailureCode | null = null;
 
   try {
-    const restored = await restoreArtifact(operationId);
-    if (!restored.ok) failureCode = restored.failureCode;
-
-    if (failureCode === null) {
-      const verified = await verifyArtifact(operationId);
-      if (!verified.ok) failureCode = verified.failureCode;
-    }
+    const provisioned = await provisionPreview(operationId);
+    if (!provisioned.ok) failureCode = provisioned.failureCode;
 
     if (failureCode === null) {
       const started = await startPreview(operationId);

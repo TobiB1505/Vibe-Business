@@ -26,12 +26,13 @@ function session(overrides: Partial<PreviewSession> = {}): PreviewSession {
     projectId: "project_1",
     userId: "user_1",
     preparedChangeId: "prepared_1",
-    validationRunId: "validation_1",
+    preparedCommitSha: "a".repeat(40),
+    validationRunId: null,
     operationRunId: "operation_1",
-    artifactSnapshotId: "snap_1",
-    previewProfile: "nextjs_preview_v1",
-    previewProfileVersion: "nextjs-preview-v1",
-    previewPolicyVersion: "preview-policy-v1",
+    artifactSnapshotId: null,
+    previewProfile: "nextjs_dev_preview_v1",
+    previewProfileVersion: "nextjs-dev-preview-v1",
+    previewPolicyVersion: "preview-policy-v2",
     provider: "vercel_sandbox",
     runtime: "vercel/sandbox/node:24",
     port: 3000,
@@ -55,8 +56,7 @@ function session(overrides: Partial<PreviewSession> = {}): PreviewSession {
 function card(input: Partial<PreviewCardInput> = {}) {
   return buildPreviewCard(
     {
-      validation: { status: "passed" },
-      artifact: { expiresAt: LATER },
+      prepared: true,
       session: null,
       failureMessage: null,
       ...input,
@@ -66,45 +66,34 @@ function card(input: Partial<PreviewCardInput> = {}) {
 }
 
 describe("eligibility states", () => {
-  it("says nothing is available when the change was never validated", () => {
-    expect(card({ validation: null, artifact: null }).state).toBe("not_available");
+  it("says nothing is available when the change has no commit", () => {
+    expect(card({ prepared: false }).state).toBe("not_available");
   });
 
-  it("requires validation when the run did not pass", () => {
-    const result = card({ validation: { status: "failed" }, artifact: null });
-
-    expect(result.state).toBe("needs_validation");
-    // No re-validation nudge here: the user is already looking at a failed
-    // validation with its own "Validate again" button. Two would compete.
-    expect(result.revalidationRequired).toBe(false);
-  });
-
-  it("offers a start when a live artifact exists", () => {
+  it("offers a start as soon as a commit exists", () => {
+    /*
+     * The whole of Sprint 0114 in one assertion. This used to require a passing
+     * validation *and* a live captured artifact — which is what made a person
+     * wait roughly five minutes to look at code that was already written.
+     */
     expect(card().state).toBe("ready_to_start");
   });
 
-  it("reports an expired artifact separately from a missing one", () => {
-    // Different sentences, and a user can act on knowing which: an expiry is a
-    // clock, a deletion is a preview that already happened.
-    expect(card({ artifact: { expiresAt: EARLIER } }).state).toBe("artifact_expired");
-    expect(card({ artifact: null }).state).toBe("artifact_unavailable");
-  });
-
-  it("marks both artifact-gone states as needing a deliberate re-validation", () => {
-    // The honest cost. Never rendered as a free refresh (§15).
-    expect(card({ artifact: null }).revalidationRequired).toBe(true);
-    expect(card({ artifact: { expiresAt: EARLIER } }).revalidationRequired).toBe(true);
+  it("does not wait for a validation of any status", () => {
+    // A preview runs alongside validation now, not after it. There is no input
+    // here through which a validation could still gate one.
+    expect(card().state).toBe("ready_to_start");
   });
 });
 
 describe("live sessions", () => {
   it("shows a starting preview with its stage", () => {
     const result = card({
-      session: session({ status: "starting", stage: "restoring_artifact", readyAt: null }),
+      session: session({ status: "starting", stage: "starting_dev_server", readyAt: null }),
     });
 
     expect(result.state).toBe("starting");
-    expect(result.stage).toBe("restoring_artifact");
+    expect(result.stage).toBe("starting_dev_server");
     expect(result.operationRunId).toBe("operation_1");
   });
 
@@ -116,13 +105,8 @@ describe("live sessions", () => {
     expect(result.previewSessionId).toBe("preview_1");
   });
 
-  it("shows a running preview even though its artifact is already gone", () => {
-    // The artifact is deleted at teardown, so a running preview whose artifact
-    // has been consumed is the normal case. Reading the artifact first would
-    // report `artifact_unavailable` while the user looks at a working preview.
-    const result = card({ session: session(), artifact: null });
-
-    expect(result.state).toBe("running");
+  it("shows a running preview", () => {
+    expect(card({ session: session() }).state).toBe("running");
   });
 
   it("never exposes a sandbox or snapshot identifier", () => {
@@ -130,7 +114,6 @@ describe("live sessions", () => {
 
     // The card is what reaches the browser. A provider sandbox id there would
     // be internal infrastructure detail on a customer's screen (§8).
-    expect(JSON.stringify(result)).not.toContain("snap_1");
     expect(JSON.stringify(result)).not.toContain("vercel/sandbox");
   });
 });
@@ -144,22 +127,9 @@ describe("expiry is decided on the server", () => {
     expect(result.state).toBe("expired");
   });
 
-  it("reports expiry even while the artifact row still looks live", () => {
-    // The window between a deadline passing and an authorized read converging
-    // the state. The artifact is about to be deleted by that read, so offering
-    // a start here would describe a window closing as it is read — and would
-    // hide from the user the thing that actually happened.
-    const result = card({
-      session: session({ expiresAt: EARLIER }),
-      artifact: { expiresAt: LATER },
-    });
-
-    expect(result.state).toBe("expired");
-  });
-
   it("treats a starting session past its deadline as expired", () => {
     const result = card({
-      session: session({ status: "starting", stage: "starting_server", expiresAt: EARLIER }),
+      session: session({ status: "starting", stage: "starting_dev_server", expiresAt: EARLIER }),
     });
 
     expect(result.state).toBe("expired");
@@ -177,17 +147,14 @@ describe("terminal sessions", () => {
   it("shows a stopped preview", () => {
     const result = card({
       session: session({ status: "stopped", stoppedAt: EARLIER }),
-      artifact: null,
     });
 
     expect(result.state).toBe("stopped");
-    expect(result.revalidationRequired).toBe(true);
   });
 
   it("shows an expired preview", () => {
     const result = card({
       session: session({ status: "expired", expiresAt: EARLIER, stoppedAt: EARLIER }),
-      artifact: null,
     });
 
     expect(result.state).toBe("expired");
@@ -200,7 +167,6 @@ describe("terminal sessions", () => {
         failureCode: "preview_health_check_failed",
         stoppedAt: EARLIER,
       }),
-      artifact: null,
       failureMessage: "The preview started but never answered, so Vibe stopped it.",
     });
 
@@ -209,15 +175,19 @@ describe("terminal sessions", () => {
     expect(result.failureMessage).toContain("never answered");
   });
 
-  it("offers a fresh start when a terminal session is followed by a new artifact", () => {
-    // Previewed, stopped, then re-validated. Without this the panel would be
-    // stuck on "Preview stopped" with no way forward.
-    const result = card({
-      session: session({ status: "stopped", stoppedAt: EARLIER }),
-      artifact: { expiresAt: LATER },
-    });
+  it("reports a finished session as finished rather than as ready", () => {
+    /*
+     * The opposite of what this asserted under v1, and the reason is that the
+     * thing it was weighing has gone. A settled session used to be outranked by
+     * a still-usable artifact, because "previewed, stopped, then re-validated"
+     * left a live artifact sitting there already paid for.
+     *
+     * Starting again costs a fresh clone either way now, so the honest card
+     * says what happened and the panel offers a new preview beside it.
+     */
+    const result = card({ session: session({ status: "stopped", stoppedAt: EARLIER }) });
 
-    expect(result.state).toBe("ready_to_start");
+    expect(result.state).toBe("stopped");
   });
 });
 

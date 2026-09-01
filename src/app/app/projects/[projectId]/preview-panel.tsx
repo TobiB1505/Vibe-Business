@@ -429,30 +429,12 @@ export function PreviewPanel({
           </p>
           <NotApproved approved={approved} merged={merged} />
         </div>
-      ) : previewState === "needs_validation" || previewState === "not_available" ? (
+      ) : previewState === "not_available" ? (
         <div className="space-y-2">
-          <p className="text-sm text-fg-secondary">Validation required</p>
+          <p className="text-sm text-fg-secondary">Nothing to preview yet</p>
           <p className="text-xs text-fg-muted">
-            This change must pass isolated validation before Vibe can create a temporary preview.
+            Vibe has not written a commit for this change.
           </p>
-        </div>
-      ) : previewState === "artifact_unavailable" || previewState === "artifact_expired" ? (
-        <div className="space-y-2">
-          <p className="text-sm text-fg-secondary">
-            {previewState === "artifact_expired"
-              ? "Saved build expired"
-              : "Saved build unavailable"}
-          </p>
-          {/* Deliberately not phrased as a free refresh. A new validation
-              provisions a paid sandbox, and the user starts it or nobody
-              does (§15, CLAUDE.md rule 60). */}
-          <p className="text-xs text-fg-muted">
-            The build Vibe saved from the last safety check is no longer kept. Run the checks
-            again to make a new one.
-          </p>
-          <Button type="button" variant="secondary" size="sm" onClick={validateAgain}>
-            Validate again
-          </Button>
         </div>
       ) : previewState === "failed" ? (
         <div className="space-y-2">
@@ -460,17 +442,6 @@ export function PreviewPanel({
           {/* Safe copy from a stable code. Never a provider message, never a
               sandbox stack trace (§14). */}
           {card.failureMessage && <p className="text-sm text-fg-secondary">{card.failureMessage}</p>}
-          {card.revalidationRequired && (
-            <>
-              <p className="text-xs text-fg-muted">
-                The saved build was released when the preview ended. Run the checks again to
-                make a new one.
-              </p>
-              <Button type="button" variant="secondary" size="sm" onClick={validateAgain}>
-                Validate again
-              </Button>
-            </>
-          )}
         </div>
       ) : previewState === "stopped" || previewState === "expired" ? (
         <div className="space-y-2">
@@ -482,17 +453,6 @@ export function PreviewPanel({
               ? "The temporary preview has ended."
               : "The temporary preview was stopped and its environment was released."}
           </p>
-          {card.revalidationRequired && (
-            <>
-              <p className="text-xs text-fg-muted">
-                The saved build was released when the preview ended. Run the checks again to
-                make a new one.
-              </p>
-              <Button type="button" variant="secondary" size="sm" onClick={validateAgain}>
-                Validate again
-              </Button>
-            </>
-          )}
         </div>
       ) : confirming ? (
         <ConfirmDialog

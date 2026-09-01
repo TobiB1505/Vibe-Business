@@ -1,20 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PREVIEW_BUDGETS } from "@/modules/change-preview/budgets";
 import {
-  PREVIEW_SNAPSHOT_ID,
-  RESTORED_FILES,
-  restoredSandboxFiles,
-  sha256,
-} from "@/modules/change-preview/test-support";
+  CURRENT_PREVIEW_PROFILE,
+} from "@/modules/change-preview/schema";
+import { clonedSandboxFiles } from "@/modules/change-preview/test-support";
 import { FakeDatabase, fakeSupabase } from "@/modules/operations/test-support";
 import { FIXTURE_COMMIT_SHA, fakeSandboxProvider, fakeValidatableSnapshot } from "@/modules/validation/test-support";
 import {
   cleanupFailedPreviewStep,
   completePreviewStep,
   failPreviewStep,
-  restoreArtifactStep,
+  provisionPreviewStep,
   startPreviewStep,
-  verifyArtifactStep,
   type PreviewDeps,
 } from "./execution";
 
@@ -42,7 +39,6 @@ vi.mock("@/modules/projects/queries", () => ({
 const USER = "user_1";
 const PROJECT = "project_1";
 const PREPARED = "prepared_1";
-const VALIDATION = "validation_1";
 const OPERATION = "operation_1";
 const SESSION = "preview_1";
 
@@ -50,12 +46,21 @@ let db: FakeDatabase;
 let provider: ReturnType<typeof fakeSandboxProvider>;
 
 function deps(): PreviewDeps {
-  return { supabase: fakeSupabase(db), provider };
+  return {
+    supabase: fakeSupabase(db),
+    provider,
+    resolveTarget: async (_operation, options) => ({
+      repositoryUrl: "https://github.com/acme/product.git",
+      sourceRoot: "product",
+      // Minted only where the clone happens, exactly as production does.
+      cloneCredential: options.withCloneCredential
+        ? { username: "x-access-token", password: "ghs_fixture" }
+        : null,
+    }),
+  };
 }
 
-function seed(
-  options: { artifactExpiresAt?: string; sessionOverrides?: Record<string, unknown> } = {},
-) {
+function seed(options: { sessionOverrides?: Record<string, unknown> } = {}) {
   db.seed("projects", { id: PROJECT, user_id: USER });
 
   db.seed("operation_runs", {
@@ -66,7 +71,7 @@ function seed(
     input_identity: "i".repeat(64),
     status: "running",
     stage: "preflight",
-    subject_id: VALIDATION,
+    subject_id: PREPARED,
   });
 
   db.seed("prepared_changes", {
@@ -75,33 +80,7 @@ function seed(
     user_id: USER,
     status: "prepared",
     commit_sha: FIXTURE_COMMIT_SHA,
-    files: [
-      {
-        path: "app/robots.ts",
-        contentHash: sha256(RESTORED_FILES["product/app/robots.ts"]),
-        bytes: 48,
-      },
-    ],
-  });
-
-  db.seed("validation_runs", {
-    id: VALIDATION,
-    project_id: PROJECT,
-    user_id: USER,
-    prepared_change_id: PREPARED,
-    validation_profile: "nextjs_node_v1",
-    prepared_commit_sha: FIXTURE_COMMIT_SHA,
-    status: "passed",
-    artifact_snapshot_id: PREVIEW_SNAPSHOT_ID,
-    artifact_expires_at:
-      options.artifactExpiresAt ?? new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-    artifact_deleted_at: null,
-    source_integrity: {
-      buildIdentityDigests: {
-        "package.json": sha256(RESTORED_FILES["product/package.json"]),
-        "pnpm-lock.yaml": sha256(RESTORED_FILES["product/pnpm-lock.yaml"]),
-      },
-    },
+    files: [{ path: "app/robots.ts", contentHash: "a".repeat(64), bytes: 48 }],
   });
 
   db.seed("repository_intelligence_snapshots", {
@@ -117,10 +96,9 @@ function seed(
     project_id: PROJECT,
     user_id: USER,
     prepared_change_id: PREPARED,
-    validation_run_id: VALIDATION,
+    prepared_commit_sha: FIXTURE_COMMIT_SHA,
     operation_run_id: OPERATION,
-    artifact_snapshot_id: PREVIEW_SNAPSHOT_ID,
-    preview_profile: "nextjs_preview_v1",
+    preview_profile: CURRENT_PREVIEW_PROFILE,
     preview_identity: "p".repeat(64),
     status: "starting",
     stage: "preflight",
@@ -134,15 +112,17 @@ function seed(
 
 beforeEach(() => {
   db = new FakeDatabase();
-  provider = fakeSandboxProvider({ files: restoredSandboxFiles() });
+  provider = fakeSandboxProvider({
+    files: clonedSandboxFiles(),
+    results: { "git rev-parse HEAD": { exitCode: 0, output: FIXTURE_COMMIT_SHA } },
+  });
 });
 
 describe("the durable happy path", () => {
-  it("restores, verifies, starts and marks the session running", async () => {
+  it("provisions, starts and marks the session running", async () => {
     seed();
 
-    expect(await restoreArtifactStep(deps(), OPERATION)).toEqual({ ok: true });
-    expect(await verifyArtifactStep(deps(), OPERATION)).toEqual({ ok: true });
+    expect(await provisionPreviewStep(deps(), OPERATION)).toEqual({ ok: true });
     expect(await startPreviewStep(deps(), OPERATION)).toEqual({ ok: true });
 
     const session = db.rows("preview_sessions")[0];
@@ -153,8 +133,7 @@ describe("the durable happy path", () => {
   it("uses exactly one sandbox across every step", async () => {
     seed();
 
-    await restoreArtifactStep(deps(), OPERATION);
-    await verifyArtifactStep(deps(), OPERATION);
+    await provisionPreviewStep(deps(), OPERATION);
     await startPreviewStep(deps(), OPERATION);
 
     // One PreviewSession must produce one sandbox however many invocations it
@@ -165,8 +144,7 @@ describe("the durable happy path", () => {
 
   it("completes the operation once the session is running", async () => {
     seed();
-    await restoreArtifactStep(deps(), OPERATION);
-    await verifyArtifactStep(deps(), OPERATION);
+    await provisionPreviewStep(deps(), OPERATION);
     await startPreviewStep(deps(), OPERATION);
 
     await completePreviewStep(deps(), OPERATION);
@@ -179,8 +157,7 @@ describe("the durable happy path", () => {
 
   it("never records an AI usage event", async () => {
     seed();
-    await restoreArtifactStep(deps(), OPERATION);
-    await verifyArtifactStep(deps(), OPERATION);
+    await provisionPreviewStep(deps(), OPERATION);
     await startPreviewStep(deps(), OPERATION);
 
     // Nothing in a preview calls a model, so no inference row is earned (§27).
@@ -190,8 +167,7 @@ describe("the durable happy path", () => {
   it("keeps the preview's sandbox and snapshot alive on success", async () => {
     seed();
 
-    await restoreArtifactStep(deps(), OPERATION);
-    await verifyArtifactStep(deps(), OPERATION);
+    await provisionPreviewStep(deps(), OPERATION);
     await startPreviewStep(deps(), OPERATION);
 
     // The running sandbox *is* the preview, and the snapshot is what it exists
@@ -206,16 +182,15 @@ describe("re-entry", () => {
   it("does not create a second sandbox when the restore step replays", async () => {
     seed();
 
-    await restoreArtifactStep(deps(), OPERATION);
-    await restoreArtifactStep(deps(), OPERATION);
+    await provisionPreviewStep(deps(), OPERATION);
+    await provisionPreviewStep(deps(), OPERATION);
 
     expect(provider.createCount()).toBe(1);
   });
 
   it("does not start a second server when the start step replays", async () => {
     seed();
-    await restoreArtifactStep(deps(), OPERATION);
-    await verifyArtifactStep(deps(), OPERATION);
+    await provisionPreviewStep(deps(), OPERATION);
 
     await startPreviewStep(deps(), OPERATION);
     await startPreviewStep(deps(), OPERATION);
@@ -225,113 +200,132 @@ describe("re-entry", () => {
 });
 
 describe("refusals before repository code runs", () => {
-  it("refuses an artifact that expired between the click and the step", async () => {
-    seed({ artifactExpiresAt: new Date(Date.now() - 1000).toISOString() });
-
-    const outcome = await restoreArtifactStep(deps(), OPERATION);
-
-    // Between the service check and this one there is a queue. A deadline that
-    // passed in the meantime must not be discovered by asking the provider
-    // to restore something that is gone (§10).
-    expect(outcome).toEqual({ ok: false, failureCode: "preview_artifact_expired" });
-    expect(provider.createCount()).toBe(0);
-  });
-
-  it("refuses an artifact deleted between the click and the step", async () => {
+  it("refuses when the change's commit moved between the click and the step", async () => {
+    // Between the service check and this one there is a queue. A change that
+    // now points somewhere else is not the change this session was claimed for,
+    // and serving it on a public URL would be serving bytes nobody asked about.
     seed();
-    db.rows("validation_runs")[0].artifact_deleted_at = new Date().toISOString();
+    db.rows("prepared_changes")[0].commit_sha = "b".repeat(40);
 
-    expect(await restoreArtifactStep(deps(), OPERATION)).toEqual({
+    expect(await provisionPreviewStep(deps(), OPERATION)).toEqual({
       ok: false,
-      failureCode: "preview_artifact_unavailable",
+      failureCode: "preview_source_unavailable",
     });
     expect(provider.createCount()).toBe(0);
   });
 
-  it("starts no server when the restored artifact fails integrity", async () => {
+  it("refuses when the provider produced a different commit", async () => {
     provider = fakeSandboxProvider({
-      files: restoredSandboxFiles({ "product/app/robots.ts": "tampered\n" }),
+      files: clonedSandboxFiles(),
+      results: { "git rev-parse HEAD": { exitCode: 0, output: "c".repeat(40) } },
     });
     seed();
-    await restoreArtifactStep(deps(), OPERATION);
 
-    const outcome = await verifyArtifactStep(deps(), OPERATION);
-
-    expect(outcome).toEqual({ ok: false, failureCode: "preview_artifact_integrity_failed" });
+    expect(await provisionPreviewStep(deps(), OPERATION)).toEqual({
+      ok: false,
+      failureCode: "preview_source_unavailable",
+    });
     expect(provider.backgroundCommands()).toEqual([]);
   });
 
-  it("starts no server when a credential-bearing .git came back", async () => {
+  it("starts no server when the clone credential survived removal", async () => {
     provider = fakeSandboxProvider({
-      files: restoredSandboxFiles({
+      files: clonedSandboxFiles({
         "product/.git/config":
           '[remote "origin"]\n\turl = https://x-access-token:ghs_secret@github.com/acme/product.git\n',
       }),
+      unremovablePaths: ["product/.git/config"],
+      results: { "git rev-parse HEAD": { exitCode: 0, output: FIXTURE_COMMIT_SHA } },
     });
     seed();
-    await restoreArtifactStep(deps(), OPERATION);
 
-    expect(await verifyArtifactStep(deps(), OPERATION)).toEqual({
+    expect(await provisionPreviewStep(deps(), OPERATION)).toEqual({
       ok: false,
-      failureCode: "preview_artifact_integrity_failed",
+      failureCode: "preview_credential_scrub_failed",
     });
     expect(provider.backgroundCommands()).toEqual([]);
   });
 
-  it("records an integrity failure without leaking the credential", async () => {
+  it("never records the credential it refused to leave behind", async () => {
     provider = fakeSandboxProvider({
-      files: restoredSandboxFiles({
+      files: clonedSandboxFiles({
         "product/.git/config": "url = https://x-access-token:ghs_secret@github.com/acme/product.git",
       }),
+      unremovablePaths: ["product/.git/config"],
+      results: { "git rev-parse HEAD": { exitCode: 0, output: FIXTURE_COMMIT_SHA } },
     });
     seed();
-    await restoreArtifactStep(deps(), OPERATION);
-    await verifyArtifactStep(deps(), OPERATION);
+
+    await provisionPreviewStep(deps(), OPERATION);
 
     expect(JSON.stringify(db.rows("audit_log_events"))).not.toContain("ghs_secret");
+    expect(JSON.stringify(db.rows("preview_sessions"))).not.toContain("ghs_secret");
+  });
+
+  it("starts no server when the install fails", async () => {
+    provider = fakeSandboxProvider({
+      files: clonedSandboxFiles(),
+      results: {
+        "git rev-parse HEAD": { exitCode: 0, output: FIXTURE_COMMIT_SHA },
+        "pnpm install --frozen-lockfile --ignore-scripts": { exitCode: 1, output: "lockfile" },
+      },
+    });
+    seed();
+
+    expect(await provisionPreviewStep(deps(), OPERATION)).toEqual({
+      ok: false,
+      failureCode: "preview_install_failed",
+    });
+    expect(provider.backgroundCommands()).toEqual([]);
   });
 });
 
 describe("cleanup on failure", () => {
-  it("stops the sandbox and deletes the artifact when the start fails", async () => {
+  it("stops the sandbox when the start fails", async () => {
     provider = fakeSandboxProvider({
-      files: restoredSandboxFiles(),
+      files: clonedSandboxFiles(),
+      results: { "git rev-parse HEAD": { exitCode: 0, output: FIXTURE_COMMIT_SHA } },
       backgroundExitCode: 1,
       healthStatus: null,
     });
     seed();
-    await restoreArtifactStep(deps(), OPERATION);
-    await verifyArtifactStep(deps(), OPERATION);
+    await provisionPreviewStep(deps(), OPERATION);
     const started = await startPreviewStep(deps(), OPERATION);
     expect(started.ok).toBe(false);
 
     const teardown = await cleanupFailedPreviewStep(deps(), OPERATION);
 
-    expect(teardown).toMatchObject({ cleanup: "stopped", artifactDeleted: true });
-    expect(provider.deletedArtifacts()).toEqual([PREVIEW_SNAPSHOT_ID]);
-    expect(db.rows("validation_runs")[0].artifact_deleted_at).toBeTruthy();
+    // The VM is what costs money by the minute, and it is the whole of what a
+    // preview leaves behind now: no snapshot is taken, so none is deleted.
+    expect(teardown).toMatchObject({ cleanup: "stopped", artifactDeleted: false });
+    expect(provider.deletedArtifacts()).toEqual([]);
   });
 
-  it("cleans up after an integrity failure", async () => {
+  it("cleans up after a failure that happened before the server started", async () => {
     provider = fakeSandboxProvider({
-      files: restoredSandboxFiles({ "product/pnpm-lock.yaml": "lockfileVersion: '6.0'\n" }),
+      files: clonedSandboxFiles(),
+      results: {
+        "git rev-parse HEAD": { exitCode: 0, output: FIXTURE_COMMIT_SHA },
+        "pnpm install --frozen-lockfile --ignore-scripts": { exitCode: 1, output: "lockfile" },
+      },
     });
     seed();
-    await restoreArtifactStep(deps(), OPERATION);
-    await verifyArtifactStep(deps(), OPERATION);
+    await provisionPreviewStep(deps(), OPERATION);
 
-    const teardown = await cleanupFailedPreviewStep(deps(), OPERATION);
+    await cleanupFailedPreviewStep(deps(), OPERATION);
 
-    // A snapshot whose restored bytes are wrong is worth nothing to anyone and
-    // is still a customer's filesystem in third-party storage (§33).
+    // A sandbox that will never serve anything is still a paid VM.
     expect(provider.stopped()).toBe(true);
-    expect(teardown.artifactDeleted).toBe(true);
   });
 
   it("records the failure on the session, the ledger and the operation", async () => {
-    provider = fakeSandboxProvider({ files: restoredSandboxFiles(), healthStatus: null });
+    provider = fakeSandboxProvider({
+      files: clonedSandboxFiles(),
+      results: { "git rev-parse HEAD": { exitCode: 0, output: FIXTURE_COMMIT_SHA } },
+      healthStatus: null,
+    });
     seed();
-    await restoreArtifactStep(deps(), OPERATION);
+    await provisionPreviewStep(deps(), OPERATION);
     const teardown = await cleanupFailedPreviewStep(deps(), OPERATION);
 
     await failPreviewStep(deps(), OPERATION, "preview_health_check_failed", teardown);
@@ -348,29 +342,32 @@ describe("cleanup on failure", () => {
 
   it("does not let a cleanup failure replace the reason the preview failed", async () => {
     provider = fakeSandboxProvider({
-      files: restoredSandboxFiles(),
+      files: clonedSandboxFiles(),
+      results: { "git rev-parse HEAD": { exitCode: 0, output: FIXTURE_COMMIT_SHA } },
       healthStatus: null,
-      failDeleteArtifact: true,
+      failStop: true,
     });
     seed();
-    await restoreArtifactStep(deps(), OPERATION);
+    await provisionPreviewStep(deps(), OPERATION);
     const teardown = await cleanupFailedPreviewStep(deps(), OPERATION);
 
     await failPreviewStep(deps(), OPERATION, "preview_health_check_failed", teardown);
 
     const session = db.rows("preview_sessions")[0];
-    // The user asked why their preview did not work. "We could not delete a
-    // snapshot" is not that answer — but it is recorded beside it (§19).
+    // The user asked why their preview did not work. "We could not stop the
+    // sandbox" is not that answer — but it is recorded beside it (§19).
     expect(session.failure_code).toBe("preview_health_check_failed");
-    expect(session.cleanup_status).toBe("artifact_delete_failed");
-    expect(session.artifact_deleted_at).toBeFalsy();
-    expect(db.rows("validation_runs")[0].artifact_deleted_at).toBeFalsy();
+    expect(session.cleanup_status).toBe("stop_failed");
   });
 
   it("records one usage row however many times the terminal step runs", async () => {
-    provider = fakeSandboxProvider({ files: restoredSandboxFiles(), healthStatus: null });
+    provider = fakeSandboxProvider({
+      files: clonedSandboxFiles(),
+      results: { "git rev-parse HEAD": { exitCode: 0, output: FIXTURE_COMMIT_SHA } },
+      healthStatus: null,
+    });
     seed();
-    await restoreArtifactStep(deps(), OPERATION);
+    await provisionPreviewStep(deps(), OPERATION);
     const teardown = await cleanupFailedPreviewStep(deps(), OPERATION);
 
     await failPreviewStep(deps(), OPERATION, "preview_failed", teardown);

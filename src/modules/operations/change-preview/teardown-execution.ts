@@ -125,8 +125,9 @@ export async function terminatePreviewStep(
   const teardown = await teardownPreview(
     deps.provider,
     { previewSessionId: session.id, snapshotId: session.artifactSnapshotId },
-    // Always. The artifact exists to serve a preview, and this preview is over
-    // (ADR 0016 §11).
+    // Always asked for; a no-op from Sprint 0114 onward, because a preview
+    // clones rather than restoring and there is no artifact to delete. A v1
+    // session still carries one, and it exists to serve a preview that is over.
     { deleteArtifact: true },
   );
 
@@ -225,12 +226,14 @@ export async function convergePreviewStep(
       previewSessionId: session.id,
       projectId,
     });
-    // The artifact, not the run. The ValidationRun stays historically `passed`
+    // Only a v1 session has one. The ValidationRun stays historically `passed`
     // and the PreparedChange stays `prepared` (ADR 0016 §11).
-    await markValidatedArtifactDeleted(deps.supabase, {
-      validationRunId: session.validationRunId,
-      projectId,
-    });
+    if (session.validationRunId !== null) {
+      await markValidatedArtifactDeleted(deps.supabase, {
+        validationRunId: session.validationRunId,
+        projectId,
+      });
+    }
   }
 
   if (persisted) {

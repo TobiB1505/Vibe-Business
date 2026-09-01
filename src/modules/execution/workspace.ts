@@ -445,16 +445,16 @@ async function buildPreparedChangeCard(
       : Promise.resolve(null),
   ]);
 
-  // Preview state is the server's answer, not something the panel derives
-  // from validation plus a guess. This read costs three rows and no provider
-  // call: opening the page must never spend anything (Sprint 10B-3 §2, §22).
-  //
-  // Genuinely second: it is told which validation it is previewing.
+  // Preview state is the server's answer, not something the panel derives from
+  // a guess. This read costs one row and no provider call: opening the page
+  // must never spend anything (Sprint 10B-3 §2, §22).
   const preview = await getPreviewCard(supabase, {
     projectId,
     preparedChangeId: prepared.id,
-    validation: validation ? { id: validation.id, status: validation.status } : null,
-    prefetched: { preview: lifecycle.preview, artifact: lifecycle.artifact },
+    // A commit is the whole precondition now: a preview runs alongside
+    // validation rather than after it (Sprint 0114).
+    prepared: prepared.status === "prepared" && prepared.commitSha !== null,
+    prefetched: { preview: lifecycle.preview },
     resolveFailureMessage: (code) =>
       OPERATION_FAILURE_MESSAGES[code as keyof typeof OPERATION_FAILURE_MESSAGES] ?? null,
   });

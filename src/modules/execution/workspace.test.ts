@@ -448,7 +448,7 @@ describe("batching did not change the answer", () => {
       expect(card.preview).toEqual(
         await getPreviewCard(client(), {
           ...scope,
-          validation: validation ? { id: validation.id, status: validation.status } : null,
+          prepared: true,
           resolveFailureMessage: (code) =>
             OPERATION_FAILURE_MESSAGES[code as keyof typeof OPERATION_FAILURE_MESSAGES] ?? null,
         }),
