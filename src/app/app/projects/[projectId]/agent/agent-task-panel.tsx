@@ -12,10 +12,19 @@ import type { BusinessLens } from "@/modules/business-audit/schema";
  *
  * ## Everything here is stored, or absent
  *
- * The headline, the lens, the impact and effort chips, the problem and the
- * "why this" line are the Move's own fields. The checklist is the Action Plan's
- * steps, by their titles. Nothing is generated for the screen: a Move without
- * a plan shows no checklist rather than an invented one, and a Move with no
+ * The lens, the impact and effort chips, the problem and the "why this" line
+ * are the Move's own fields. The **headline is the run's own step** once a run
+ * is bound to one, with the Move kept above it as context — a run executes one
+ * step, never a whole Move, and a screen that named only the Move could not say
+ * which part was being built.
+ *
+ * The checklist is that step plus the preparation folded into it, taken from
+ * the run's immutable instruction package rather than from the newest Action
+ * Plan. That is a stronger guarantee than the one it replaced: a spec cannot
+ * drift, while the plan it came from can be regenerated underneath it.
+ *
+ * Nothing is generated for the screen: a run with no bound step shows the
+ * Move's title and no checklist rather than an invented one, and a Move with no
  * lens shows no lens chip.
  *
  * ## Why the checklist is titles only
@@ -45,7 +54,19 @@ export type AgentTask = {
   impact: keyof typeof IMPACT_LABELS | null;
   effort: keyof typeof EFFORT_LABELS | null;
   lens: BusinessLens | null;
-  /** Step titles from the stored Action Plan. Empty when there is no plan. */
+  /**
+   * The one plan step this run is doing. Null before a run is bound to one.
+   *
+   * A run executes a *step*, never a whole Move — the start action submits a
+   * step key and the spec records it — and until this existed the screen said
+   * only the Move, so a founder watching the agent work could not tell which
+   * part of a five-step plan was being built.
+   */
+  step: { order: number; title: string } | null;
+  /**
+   * What this run will do: its absorbed preparation and its own step, in plan
+   * order. Not the whole plan — see `resolveTask`.
+   */
   steps: string[];
 };
 
@@ -74,13 +95,27 @@ export function AgentTaskPanel({
     >
       <MonoLabel className="text-mint">Current task</MonoLabel>
 
+      {/*
+        The step is the headline once a run is bound to one, and the Move stays
+        above it as context. Both, deliberately: the step says what is being
+        built, the Move says what it is for — and the summary variant sits above
+        the approval stages, which is exactly where knowing which step's change
+        is being approved matters most.
+      */}
+      {task.step !== null && (
+        <p className="text-fg-muted text-sm" data-testid="agent-task-move">
+          Step {String(task.step.order).padStart(2, "0")} · {task.title}
+        </p>
+      )}
+
       <h2
         className={cn(
           "text-fg leading-tight font-bold tracking-[-0.03em] text-balance",
           summary ? "text-[1.625rem]" : compact ? "text-2xl" : "text-[2rem]",
         )}
+        data-testid="agent-task-headline"
       >
-        {task.title}
+        {task.step?.title ?? task.title}
       </h2>
 
       <div className="flex flex-wrap items-center gap-3">

@@ -504,3 +504,33 @@ test.describe("a refused start says which gate stopped it", () => {
     }
   });
 });
+
+/**
+ * Which string is the heading.
+ *
+ * Only a browser can prove this one. A run executes one step; the screen used
+ * to put the whole Move's title in the `<h2>` and list every plan step beneath
+ * it, so a founder watching the agent work could not tell which part was being
+ * built.
+ */
+test.describe("the run's subject is the step, with the Move as its context", () => {
+  test("puts the step in the heading and keeps the Move above it", async ({ page }) => {
+    await page.goto("/e2e/agent-stages-building");
+
+    await expect(page.getByTestId("agent-task-headline")).toHaveText(
+      "Add a clear pricing section to your website",
+    );
+    // The Move is still there — it says what the step is for.
+    await expect(page.getByTestId("agent-task-move").first()).toContainText(
+      "Make your pricing visible",
+    );
+    await expect(page.getByTestId("agent-task-move").first()).toContainText("Step 02");
+  });
+
+  test("keeps the step in the compact header above the approval stages", async ({ page }) => {
+    await page.goto("/e2e/agent-stages-merge");
+
+    const headline = page.getByTestId("agent-task-headline").first();
+    await expect(headline).toHaveText("Add a clear pricing section to your website");
+  });
+});

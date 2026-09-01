@@ -93,6 +93,7 @@ const TASK: AgentTask = {
   impact: "high",
   effort: "medium",
   lens: "revenue_economics",
+  step: { order: 2, title: "Add a clear pricing section to your website" },
   steps: [
     "Add a clear pricing section to your website",
     "Connect your existing checkout flow",
