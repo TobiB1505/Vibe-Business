@@ -375,6 +375,58 @@ export const E2E_SCENARIOS = {
     }),
 
   /**
+   * **A change with nothing to look at** (Sprint 0055, ADR 0040).
+   *
+   * The state that was unreachable before this sprint. Validation passed, no
+   * preview was ever started and no comparison was ever captured — and the
+   * person may decide anyway, because the change alters no rendered page.
+   *
+   * Three things it proves, and each of them was a defect before: the card
+   * offers **Approve** with `review.state === "not_generated"`; the preview and
+   * comparison panels are **absent** rather than blocking; and the card *says*
+   * which review this is, so a missing comparison reads as a decision rather
+   * than as something Vibe forgot.
+   */
+  change_code_review_ready: (): PreparedChangeCard =>
+    withProgress({
+      ...baseChange(),
+      filePaths: ["src/lib/pricing.ts", "src/lib/retail.ts"],
+      // No routes, no visual paths: nothing here can put a pixel on a page.
+      reviewClassification: {
+        classification: "code",
+        policyVersion: REVIEW_CLASSIFICATION_VERSION,
+        visualPaths: [],
+        codePaths: ["src/lib/pricing.ts", "src/lib/retail.ts"],
+        routes: [],
+        scopes: [],
+        downgradedPaths: [],
+      },
+      preview: { ...baseChange().preview, state: "ready_to_start" },
+      review: { ...baseChange().review, state: "not_generated", reviewArtifactId: null },
+      reviewImages: null,
+      outcome: outcomeCard(),
+      businessImpact: businessImpactCard(),
+      approval: {
+        state: "not_approved",
+        approvalId: null,
+        approvedAt: null,
+        revokedAt: null,
+        approvedCommitSha: null,
+        invalidationReason: null,
+        blockReason: null,
+        blockMessage: null,
+        canApprove: true,
+        currentCommitSha: APPROVED_COMMIT,
+      },
+      merge: mergeCard({
+        state: "not_eligible",
+        failureCode: "merge_approval_required",
+        failureMessage: MERGE_FAILURE_MESSAGES.merge_approval_required,
+        canMerge: false,
+      }),
+    }),
+
+  /**
    * **The first real change this card ever carried** (UI-5 dogfood).
    *
    * A rebuild of the screen that found two defects at once, so the browser

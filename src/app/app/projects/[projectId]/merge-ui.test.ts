@@ -45,7 +45,15 @@ describe("the merge panel offers merging and nothing more (§15, §25)", () => {
       .filter(Boolean);
 
     for (const label of labels) {
-      expect(["Merge approved change", "Cancel"]).toContain(label);
+      expect([
+        "Merge approved change",
+        "Cancel",
+        // A same-page anchor back to the diff on this card (ADR 0040). It
+        // navigates within the screen the reader is already on: it starts
+        // nothing, spends nothing and leaves nothing. The list stays a list of
+        // *offers*, and this one is "look again before you decide".
+        "see what changed",
+      ]).toContain(label);
     }
   });
 
