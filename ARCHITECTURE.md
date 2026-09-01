@@ -337,6 +337,8 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0063](docs/decisions/0063-review-classification-as-a-gate.md) | The review classification becomes a gate, and a diff becomes approval evidence (Accepted; supersedes 0037 §2's "advisory", amends 0018. A change altering no rendered page is approved on a reproducible diff instead of two identical screenshots) | Review, approvals, `change_approvals`, prepared-change card |
 | [0064](docs/decisions/0064-preview-before-validation.md) | The preview comes before the check, and serves the commit (Accepted; supersedes 0016 §1, §3, §7, §11. A preview clones the prepared commit and runs a development server beside validation instead of restoring the build that validation captured — so a person looks immediately, and nothing keeps a customer's file tree at the provider) | Preview, validation, `preview_sessions`, §3.9 |
 | [0065](docs/decisions/0065-the-preview-is-the-review.md) | The preview is the review (Accepted; supersedes 0017 as a gate, amends 0063 and 0018. A visual approval binds to the preview session of the same commit plus the code diff, and no browser session is paid to photograph one route of it) | Review, approvals, `change_approvals`, §3.9, §3.10 |
+| [0066](docs/decisions/0066-payment-meaning-across-evidence-families.md) | Payment meaning is read from every evidence family that can carry it | §3.6 |
+| [0067](docs/decisions/0067-plan-screen-renders-the-resolver.md) | The plan screen renders the execution resolver | §3.6 |
 
 ### Layers with no section above
 

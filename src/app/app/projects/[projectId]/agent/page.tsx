@@ -255,6 +255,9 @@ async function AgentWorkspaceBody({
         impact: focusedMove.impact,
         effort: focusedMove.effort,
         lens: focusedMove.primaryLens,
+        // No run is bound yet, so no step is either. `readyStageTask` below
+        // names the one the button would start, once the route has resolved it.
+        step: null,
         steps: [],
       }
     : displayedWorkspace.task;
@@ -346,6 +349,30 @@ async function AgentWorkspaceBody({
           riskClass: agenticResolution.riskClass,
         })
       : null;
+  /*
+   * The ready hero names the step the button would start, not just the Move.
+   *
+   * `agenticStep` is what `AgentStartAction` submits, and until this existed
+   * the caption said "Run this Move here" over a button that starts exactly one
+   * step — silently the first agentic one in the plan. The founder could not
+   * tell which.
+   */
+  const readyStageTask: AgentTask | null =
+    readyTask && agenticStep && agenticResolution
+      ? {
+          ...readyTask,
+          step: { order: agenticStep.order, title: agenticStep.title },
+          steps: [
+            ...(agentRoutes?.available ? agentRoutes.plan.steps : [])
+              .filter((step) => agenticResolution.absorbedPreparation.includes(step.order))
+              .map((step) => ({ order: step.order, title: step.title })),
+            { order: agenticStep.order, title: agenticStep.title },
+          ]
+            .sort((a, b) => a.order - b.order)
+            .map((entry) => entry.title),
+        }
+      : readyTask;
+
   const creditEstimate = routeEconomics
     ? formatCreditsForDisplay(routeEconomics.budget.maxCredits)
     : null;
@@ -429,13 +456,20 @@ async function AgentWorkspaceBody({
             */
             understand: (
               <AgentReadyStage
-                task={readyTask}
+                task={readyStageTask}
                 planHref={planHref}
                 repository={project.repository?.fullName ?? null}
                 liveUrl={project.productionUrl ?? null}
                 startAction={
                   agenticStep ? (
-                    <AgentStartAction projectId={project.id} stepKey={agenticStep.id} />
+                    <AgentStartAction
+                      projectId={project.id}
+                      stepKey={agenticStep.id}
+                      /* Where a stale-code refusal sends the founder. Built here,
+                         never in the panel — the panel does not know what the
+                         workspace's segments are called. */
+                      repositoryReadHref={projectSectionHref(project.id, "my-product")}
+                    />
                   ) : undefined
                 }
                 creditEstimate={creditEstimate}
@@ -444,7 +478,7 @@ async function AgentWorkspaceBody({
                   (focus?.kind === "focused" && focus.action.kind === "already_prepared")
                     ? "This Move already has a prepared change. Review its checks, preview and approval here."
                     : agenticStep
-                      ? "Run this Move here. Vibe will carry the exact task through a secure, reviewable flow."
+                      ? `Run step ${String(agenticStep.order).padStart(2, "0")} of this Move here. Vibe carries that one step through a secure, reviewable flow.`
                       : readyTask
                         ? "This Move is selected, but an Agent run is not currently available for it."
                         : "Choose a Move from your Action Plan, then return here to run it with Vibe."

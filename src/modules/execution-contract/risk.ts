@@ -1,4 +1,8 @@
-import { SURFACE_NAMESPACES } from "@/modules/business-audit/evidence-ids";
+import {
+  readAuthSurfaceCitation,
+  readIntegrationCitation,
+  SURFACE_NAMESPACES,
+} from "@/modules/business-audit/evidence-ids";
 import type { StepChangeKind } from "@/modules/action-plans/schema";
 import type { ExecutionRiskClass } from "./schema";
 
@@ -52,6 +56,20 @@ const FINANCIAL_SURFACES: readonly string[] = ["payments", "checkout_billing"];
 const SECURITY_SURFACES: readonly string[] = ["authentication", "login", "signup"];
 
 /**
+ * Signed-in surfaces that carry financial authority.
+ *
+ * The `auth.` family is the Deep Scan's, and it is *not* a statement that a
+ * step changes authentication — `auth.surface.dashboard` is a dashboard seen
+ * while signed in. Only billing is escalated, and only because a billing area
+ * is a payment surface wherever it was observed from.
+ *
+ * Widening this beyond billing would put every signed-in-product change outside
+ * the V1 boundary, which is a decision with an ADR behind it and not a constant
+ * somebody lengthens.
+ */
+const FINANCIAL_AUTH_SURFACES: readonly string[] = ["billing"];
+
+/**
  * Change kinds that actually alter something outside Vibe.
  *
  * Risk is a statement about *consequence*, not about subject matter, so only
@@ -85,11 +103,47 @@ function surfaceIdOf(evidenceId: string): string | null {
   return null;
 }
 
-function citesSurface(evidenceIds: readonly string[], surfaces: readonly string[]): boolean {
-  return evidenceIds.some((id) => {
-    const surface = surfaceIdOf(id);
-    return surface !== null && surfaces.includes(surface);
-  });
+/**
+ * What one evidence id says about consequence, across every family that can say it.
+ *
+ * Reading only `repo.surface.*` / `live.surface.*` was a hole with a real step
+ * in it: the live plan's *"Wire the pricing page to a working Stripe checkout
+ * and surface billing to signed-in users"* cites `repo.integration.stripe` and
+ * `auth.surface.billing_not_observed` — payment work, in both of the two
+ * families this function did not read, classified `moderate` and eligible for
+ * an agent. `FINANCIAL_SURFACES` said "at any risk tolerance"; the parser
+ * disagreed with it silently.
+ *
+ * Still keyed on **our** ids and never on prose, and polarity is still ignored
+ * everywhere: a step adding payments is exactly as prohibited as one changing
+ * them.
+ */
+type RiskMeaning = "financial" | "security" | null;
+
+function meaningOf(evidenceId: string): RiskMeaning {
+  const surface = surfaceIdOf(evidenceId);
+  if (surface !== null) {
+    if (FINANCIAL_SURFACES.includes(surface)) return "financial";
+    if (SECURITY_SURFACES.includes(surface)) return "security";
+    return null;
+  }
+
+  const auth = readAuthSurfaceCitation(evidenceId);
+  if (auth !== null) {
+    return FINANCIAL_AUTH_SURFACES.includes(auth.surfaceId) ? "financial" : null;
+  }
+
+  const integration = readIntegrationCitation(evidenceId);
+  if (integration !== null) {
+    if (integration.category === "payments") return "financial";
+    if (integration.category === "auth") return "security";
+  }
+
+  return null;
+}
+
+function cites(evidenceIds: readonly string[], meaning: RiskMeaning): boolean {
+  return evidenceIds.some((id) => meaningOf(id) === meaning);
 }
 
 export type RiskClassificationInput = {
@@ -120,8 +174,8 @@ export function classifyExecutionRisk(step: RiskClassificationInput): ExecutionR
   // `product_change`.
   if (!MUTATING_CHANGE_KINDS.includes(step.changeKind)) return "low";
 
-  if (citesSurface(step.evidenceIds, FINANCIAL_SURFACES)) return "prohibited";
-  if (citesSurface(step.evidenceIds, SECURITY_SURFACES)) return "high";
+  if (cites(step.evidenceIds, "financial")) return "prohibited";
+  if (cites(step.evidenceIds, "security")) return "high";
 
   // Setting up an account, an integration or a listing is work outside the
   // product, against a third party, usually with credentials attached. It is

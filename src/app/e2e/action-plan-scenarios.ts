@@ -4,6 +4,7 @@ import type { ActionPlanReadiness, ActionPlanView } from "@/modules/action-plans
 import { firstActionableStep, planProgress } from "@/modules/action-plans/sequence";
 import type { StoredActionPlan } from "@/modules/action-plans/store";
 import type { OperationView } from "@/modules/operations/view";
+import { stepResponsibility, type StepResponsibility } from "@/modules/action-plans/view";
 
 /**
  * Action Plan panel fixtures (ACTION PLANNER UI-1).
@@ -277,6 +278,13 @@ export type ActionPlanFixture = {
   readiness: ActionPlanReadiness;
   planView: ActionPlanView | null;
   activeOperation: OperationView | null;
+  /**
+   * What each step's responsibility line says, as the route resolves it.
+   *
+   * Absent means "the route resolved nothing for this plan", which is a real
+   * state and renders the stored classification exactly as it always did.
+   */
+  responsibilityByStepKey?: Record<string, StepResponsibility>;
 };
 
 export const E2E_ACTION_PLAN_SCENARIOS = {
@@ -375,6 +383,30 @@ export const E2E_ACTION_PLAN_SCENARIOS = {
       activeOperation: null,
     };
   },
+
+  /**
+   * The step the agent could build, said honestly.
+   *
+   * "Build a dedicated pricing page" is `vibe` + `product_change` with no
+   * registry capability, so the stored classification is `not_yet_supported`
+   * and the screen read "Not automated yet" — while the execution resolver
+   * classifies exactly this shape `agentic` and the Agent workspace offers to
+   * run it.
+   */
+  action_plan_agentic_step: (): ActionPlanFixture => ({
+    opportunityId: "move_e2e",
+    moveTitle: MOVE_TITLE,
+    defaultMoveTitle: MOVE_TITLE,
+    readiness: readiness(),
+    planView: planView({}),
+    activeOperation: null,
+    responsibilityByStepKey: {
+      "step-add-pricing-page": stepResponsibility(
+        { executionSupport: "not_yet_supported" },
+        { intrinsicMode: "agentic" },
+      ),
+    },
+  }),
 
   /** The same plan, but the audit has since moved. */
   action_plan_stale: (): ActionPlanFixture => ({

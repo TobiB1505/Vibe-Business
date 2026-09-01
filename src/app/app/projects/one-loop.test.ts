@@ -304,6 +304,62 @@ describe("running an audit enters the audit's own lifecycle", () => {
   });
 });
 
+describe("the plan screen believes the resolver about what Vibe could build", () => {
+  /**
+   * Regression: a `vibe` + `product_change` step with no registry capability
+   * read "Not automated yet" on this screen while the Agent workspace offered
+   * to run the same step. The stored classification knows one registry entry;
+   * the resolver knows the coding agent.
+   */
+  it("resolves each step's route on the route, with no allowlist in front of it", () => {
+    expect(MOVES_PAGE).toContain("resolvePlanExecutionRoutes");
+    expect(MOVES_PAGE).not.toContain("resolveDogfoodPlanRoutes");
+    // State only. A screen that classifies a whole plan must spend nothing.
+    expect(MOVES_PAGE).not.toContain("liveHead");
+    expect(MOVES_PAGE).not.toContain("establishLivePremise");
+  });
+
+  it("hands the panel two strings, never the resolution", () => {
+    expect(MOVES_PAGE).toContain("responsibilityByStepKey");
+    expect(PLAN_DETAIL).not.toContain("RESPONSIBILITY_SUBLABELS[step.executionSupport]");
+    expect(PLAN_DETAIL).not.toContain("ExecutionResolution");
+  });
+});
+
+describe("a refused run says which gate stopped it", () => {
+  /**
+   * Regression: the start action answered every refusal with one opaque
+   * `not_eligible`, rendered as "the page will show why above" — while the
+   * page's own render had resolved fine, which is why the button existed. The
+   * production case was a default branch that moved between the last
+   * repository read and the click.
+   */
+  it("carries the reason the fresh chain established, as closed enums", () => {
+    expect(DOGFOOD_ACTIONS).toContain("preview.resolution.reason");
+    expect(DOGFOOD_ACTIONS).toContain("preview.resolution.admission");
+    expect(DOGFOOD_ACTIONS).toContain("preview.preflight.refusals[0]");
+    // Never the resolution object itself: it carries capability ids and
+    // version strings that must not cross into a component.
+    expect(DOGFOOD_ACTIONS).not.toContain("resolution: preview.resolution");
+  });
+
+  it("renders it, and never claims the page explains it", () => {
+    expect(AGENT_START).toContain("AgentStartRefusalNotice");
+    expect(read("src/modules/coding-agent/view.ts")).not.toContain("will show why above");
+  });
+
+  /** Rule 60: a re-read costs, so it is offered as a link and never started here. */
+  it("offers the repository re-read without starting one", () => {
+    const notice = read(
+      "src/app/app/projects/[projectId]/agent/agent-start-refusal-notice.tsx",
+    );
+
+    expect(notice).toContain("<Link");
+    expect(notice).not.toContain("startUnderstandingAction");
+    expect(notice).not.toContain("useActionState");
+  });
+});
+
 describe("a finished re-scan reaches the screen", () => {
   /**
    * Regression: the workspace polled the generation run, watched it finish and

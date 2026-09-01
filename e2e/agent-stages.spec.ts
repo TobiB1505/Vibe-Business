@@ -459,3 +459,78 @@ test.describe("the new stage replaces the old panel, it does not sit above it", 
     await expect(page.getByText(/how this was built/i)).toHaveCount(0);
   });
 });
+
+/**
+ * A refused start, on screen.
+ *
+ * The incident this covers: the founder pressed "Run with Vibe", the fresh
+ * chain refused because the default branch had moved since Vibe last read the
+ * repository, and the screen said "This step is no longer eligible — the page
+ * will show why above." The page could not; its own render is what put the
+ * button there.
+ */
+test.describe("a refused start says which gate stopped it", () => {
+  test("names the moved branch and offers the read the founder starts", async ({ page }) => {
+    await page.goto("/e2e/agent-start-refused-head-moved");
+
+    const notice = page.getByTestId("agent-start-refusal");
+    await expect(notice).toBeVisible();
+    await expect(notice.getByText("Your code has changed since Vibe last read it.")).toBeVisible();
+
+    // Offered, never taken: a re-read costs Credits and is the founder's to start.
+    const recovery = notice.getByRole("link", { name: "Re-read my code" });
+    await expect(recovery).toHaveAttribute("href", "/app/projects/project_e2e/product");
+    await expect(notice.getByText("Vibe never re-reads your code on its own")).toBeVisible();
+  });
+
+  test("offers no paid re-read against a permanent refusal", async ({ page }) => {
+    await page.goto("/e2e/agent-start-refused-payments");
+
+    const notice = page.getByTestId("agent-start-refusal");
+    await expect(notice).toBeVisible();
+    await expect(
+      notice.getByText("Vibe never changes anything to do with taking payments."),
+    ).toBeVisible();
+    await expect(notice.getByRole("link")).toHaveCount(0);
+  });
+
+  test("leaks no internal identifier and makes no promise about the page", async ({ page }) => {
+    for (const scenario of ["agent-start-refused-head-moved", "agent-start-refused-payments"]) {
+      await page.goto(`/e2e/${scenario}`);
+      const notice = await page.getByTestId("agent-start-refusal").innerText();
+
+      expect(notice).not.toContain("_");
+      expect(notice).not.toContain("above");
+    }
+  });
+});
+
+/**
+ * Which string is the heading.
+ *
+ * Only a browser can prove this one. A run executes one step; the screen used
+ * to put the whole Move's title in the `<h2>` and list every plan step beneath
+ * it, so a founder watching the agent work could not tell which part was being
+ * built.
+ */
+test.describe("the run's subject is the step, with the Move as its context", () => {
+  test("puts the step in the heading and keeps the Move above it", async ({ page }) => {
+    await page.goto("/e2e/agent-stages-building");
+
+    await expect(page.getByTestId("agent-task-headline")).toHaveText(
+      "Add a clear pricing section to your website",
+    );
+    // The Move is still there — it says what the step is for.
+    await expect(page.getByTestId("agent-task-move").first()).toContainText(
+      "Make your pricing visible",
+    );
+    await expect(page.getByTestId("agent-task-move").first()).toContainText("Step 02");
+  });
+
+  test("keeps the step in the compact header above the approval stages", async ({ page }) => {
+    await page.goto("/e2e/agent-stages-merge");
+
+    const headline = page.getByTestId("agent-task-headline").first();
+    await expect(headline).toHaveText("Add a clear pricing section to your website");
+  });
+});

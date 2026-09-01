@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import type { ActionPlanBlockReason } from "./service";
-import { EXECUTION_SUPPORT, type ActionPlanStep } from "./schema";
+import {
+  EXECUTION_SUPPORT,
+  type ActionPlanStep,
+  type ExecutionSupport,
+} from "./schema";
 import {
   RESPONSIBILITY_HEADLINES,
   RESPONSIBILITY_SUBLABELS,
@@ -13,6 +17,7 @@ import {
   stepDependencyTitles,
   stepDisplayState,
   stepSequenceStatus,
+  stepResponsibility,
 } from "./view";
 
 /**
@@ -378,6 +383,86 @@ describe("planEvidenceSummary", () => {
     expect(planEvidenceSummary([step({ order: 1, evidenceIds: [] })])).toEqual({
       signals: 0,
       sources: 0,
+    });
+  });
+});
+
+/**
+ * Which layer the plan screen believes about "can Vibe do this".
+ *
+ * There are three answers, and this screen used to render the weakest.
+ * `executionSupport` is derived from the deterministic capability registry —
+ * one entry — so a `vibe` + `product_change` step with no registry match is
+ * stored `not_yet_supported` and read as "Not automated yet", while
+ * `resolveStepExecution` classifies the same step `agentic` and the Agent
+ * workspace offers to run it. Both sentences were true of the same step at the
+ * same time, in the same product.
+ */
+describe("stepResponsibility", () => {
+  const agentic = { intrinsicMode: "agentic" } as const;
+
+  function step(executionSupport: ExecutionSupport) {
+    return { executionSupport };
+  }
+
+  it("says an agent-buildable step could be built", () => {
+    const responsibility = stepResponsibility(step("not_yet_supported"), agentic);
+
+    expect(responsibility.headline).toBe("Vibe could build this");
+    expect(responsibility.sublabel).toBe(
+      "This is the kind of change Vibe could build for you.",
+    );
+  });
+
+  /**
+   * "Could build" is a capability statement and must never harden into a claim
+   * that something is running — the reason `EXECUTION_MODE_LABELS` was written
+   * before any screen rendered it.
+   */
+  it("promises nothing is already happening", () => {
+    const { headline, sublabel } = stepResponsibility(step("not_yet_supported"), agentic);
+
+    for (const text of [headline, sublabel ?? ""]) {
+      expect(text.toLowerCase()).not.toContain("automatically");
+      expect(text.toLowerCase()).not.toContain("running");
+      expect(text.toLowerCase()).not.toContain("now");
+    }
+  });
+
+  it("keeps today's answer when the route resolved nothing", () => {
+    expect(stepResponsibility(step("not_yet_supported"), null)).toEqual({
+      headline: "Vibe's work",
+      sublabel: "Not automated yet",
+    });
+  });
+
+  it("keeps today's answer when the resolver cannot build it either", () => {
+    expect(
+      stepResponsibility(step("not_yet_supported"), { intrinsicMode: "unsupported" }),
+    ).toEqual({ headline: "Vibe's work", sublabel: "Not automated yet" });
+  });
+
+  /**
+   * A step waiting on an earlier one is still a step the agent could build.
+   * The row prints its own "Waiting for step N" line from `stepSequenceStatus`
+   * immediately below — two facts, neither contradicting the other.
+   */
+  it("reads a blocked-but-buildable step as buildable", () => {
+    expect(stepResponsibility(step("not_yet_supported"), agentic).headline).toBe(
+      "Vibe could build this",
+    );
+  });
+
+  /** The deterministic path's meaning does not move. */
+  it.each([
+    ["vibe_executes_now", "Vibe can do this"],
+    ["vibe_prepares", "Vibe can prepare this"],
+    ["founder_decides", "Needs your decision"],
+    ["founder_acts", "You'll need to do this"],
+  ] as const)("leaves %s alone whatever the resolver says", (support, headline) => {
+    expect(stepResponsibility(step(support), agentic)).toEqual({
+      headline,
+      sublabel: null,
     });
   });
 });

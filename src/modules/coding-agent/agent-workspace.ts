@@ -1,7 +1,6 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getLatestActionPlan } from "@/modules/action-plans/service";
 import { getExecutionSpecById } from "@/modules/execution-contract/store";
 import {
   getPreparedChangeWorkspaceItem,
@@ -261,6 +260,9 @@ export async function readAgentWorkspace(
       impact: null,
       effort: null,
       lens: null,
+      // The stored origin is the Move's, not a step's. Naming no step is the
+      // honest answer; inventing one from the newest plan would not be.
+      step: null,
       steps: [],
     };
     taskOpportunityId = change.opportunityId;
@@ -334,6 +336,9 @@ function taskFromChange(change: PreparedChangeWorkspaceItem | null): AgentTask |
     impact: null,
     effort: null,
     lens: null,
+    // No spec, so no step: the run is real and the rail describes it, but which
+    // step it is doing is unavailable rather than guessed.
+    step: null,
     steps: [],
   };
 }
@@ -396,14 +401,7 @@ async function resolveTask(
   const spec = await getExecutionSpecById(supabase, { projectId: params.projectId, specId });
   if (!spec) return { task: null, opportunityId: null };
 
-  /*
-   * Together, because neither answers the other. Read one after the other they
-   * were two more round-trips on a page that had already grown six.
-   */
-  const [opportunities, plan] = await Promise.all([
-    getLatestOpportunities(supabase, params.projectId),
-    getLatestActionPlan(supabase, params.projectId),
-  ]);
+  const opportunities = await getLatestOpportunities(supabase, params.projectId);
   const move = opportunities?.set.opportunities.find((entry) => entry.id === spec.opportunityId);
   /*
    * The Move is gone from the current set — regenerated, most likely. The run
@@ -414,14 +412,26 @@ async function resolveTask(
   if (!move) return { task: null, opportunityId: spec.opportunityId };
 
   /*
-   * Only this run's own plan. `getLatestActionPlan` answers "the newest", which
-   * is a different question: a plan regenerated after the run started would
-   * list steps this run was never given.
+   * What this run will do, from the run's own immutable instruction package.
+   *
+   * It used to be every title in the project's newest Action Plan, which
+   * answered a different question twice over: the plan may have been
+   * regenerated since the run started (the old guard emptied the list entirely
+   * when it had), and even the right plan lists four steps this run was never
+   * given. A founder reading "Vibe will…" over the whole Move could not tell
+   * which part was being built.
+   *
+   * The spec cannot drift: it is the boundary that was compiled, and it names
+   * exactly the run's own step plus the preparation folded into it.
    */
-  const steps =
-    plan && plan.plan.id === spec.actionPlanId
-      ? plan.plan.steps.map((step) => step.title)
-      : [];
+  const objective = spec.spec.objective;
+  const planned = [
+    ...objective.preparation.map((entry) => ({
+      order: entry.stepOrder,
+      title: entry.title,
+    })),
+    { order: spec.stepOrder, title: objective.stepTitle },
+  ].sort((a, b) => a.order - b.order);
 
   return {
     opportunityId: spec.opportunityId,
@@ -432,7 +442,8 @@ async function resolveTask(
       impact: chip(move.impact),
       effort: chip(move.effort),
       lens: move.primaryLens,
-      steps,
+      step: { order: spec.stepOrder, title: objective.stepTitle },
+      steps: planned.map((entry) => entry.title),
     },
   };
 }

@@ -66,3 +66,30 @@ describe("the customer-facing agent read stays inside what a founder may select"
     expect(SOURCE).toContain("getAgentExecutionStatus");
   });
 });
+
+/**
+ * What the screen says the run is doing.
+ *
+ * A run executes one *step* — the start action submits a step key and the spec
+ * records it — but the task was built from `spec.opportunityId` alone, so the
+ * headline was the whole Move and the "Vibe will" list was every title in the
+ * project's newest Action Plan. A founder watching the agent work could not
+ * tell which part of a five-step plan was being built.
+ */
+describe("the run's subject comes from its own instruction package", () => {
+  it("reads the step and its preparation from the spec", () => {
+    expect(SOURCE).toContain("spec.stepOrder");
+    expect(SOURCE).toContain("objective.stepTitle");
+    expect(SOURCE).toContain("objective.preparation");
+  });
+
+  /**
+   * The newest plan answers a different question. Its own guard emptied the
+   * checklist whenever the plan had been regenerated since the run started, and
+   * even the right plan lists steps this run was never given. The spec cannot
+   * drift: it is the boundary that was compiled.
+   */
+  it("no longer asks the newest Action Plan what this run is doing", () => {
+    expect(SOURCE).not.toContain("getLatestActionPlan");
+  });
+});

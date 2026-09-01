@@ -139,6 +139,20 @@ const SIGNAL_RULES: SignalRule[] = [
   { id: "sentry", name: "Sentry", category: "monitoring", dependencies: ["@sentry/nextjs", "@sentry/node", "@sentry/react", "@sentry/browser"], manifestToken: "sentry-sdk" },
 ];
 
+/**
+ * What each integration id is a signal *of*.
+ *
+ * Derived from the catalogue above rather than written a second time. The
+ * consumer that needs it is the execution risk gate, which must refuse a step
+ * citing `repo.integration.stripe` as payment work — and a hand-kept copy of
+ * this list would mean the next payments provider added above silently arrives
+ * unclassified, which is the one direction that failure must never run.
+ */
+export const INTEGRATION_CATEGORY_BY_ID: Readonly<Record<string, SignalCategory>> =
+  Object.freeze(
+    Object.fromEntries(SIGNAL_RULES.map((rule) => [rule.id, rule.category])),
+  );
+
 function evidence(kind: Evidence["kind"], path: string, detail?: string): Evidence {
   return detail === undefined ? { kind, path } : { kind, path, detail };
 }

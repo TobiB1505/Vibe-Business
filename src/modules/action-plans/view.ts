@@ -4,6 +4,11 @@ import {
   BUSINESS_SURFACE_LABELS,
   type BusinessSurfaceId,
 } from "@/modules/repository-intelligence/schema";
+import {
+  EXECUTION_MODE_LABELS,
+  EXECUTION_REASON_LABELS,
+} from "@/modules/execution-contract/view";
+import type { ExecutionResolution } from "@/modules/execution-contract/schema";
 import type { ActionPlanBlockReason } from "./service";
 import type {
   ActionPlanStep,
@@ -146,6 +151,62 @@ export const RESPONSIBILITY_HEADLINES: Record<ExecutionSupport, string> = {
 export const RESPONSIBILITY_SUBLABELS: Partial<Record<ExecutionSupport, string>> = {
   not_yet_supported: "Not automated yet",
 };
+
+/**
+ * What one step's responsibility line says, given what Vibe can currently do.
+ *
+ * ## Why the stored classification is not the whole answer
+ *
+ * There are three independent answers to "can Vibe do this", and the plan
+ * screen used to render the weakest. `executionSupport` is derived by
+ * `classify.ts` from the deterministic capability registry alone — one entry —
+ * so a `vibe` + `product_change` step with no registry match is stored as
+ * `not_yet_supported` and read as *"Vibe's work / Not automated yet"*, while
+ * `resolveStepExecution` would classify the same step `agentic` and the Agent
+ * workspace would offer to run it. Both sentences were on screen at once, in
+ * the same product, about the same step.
+ *
+ * The resolver is the one that knows about the coding agent, so for that one
+ * stored value it speaks. Everywhere else the stored answer is unchanged:
+ *
+ *  * `vibe_executes_now` keeps "Vibe can do this" — `isExecutableByVibe` is
+ *    untouched and the deterministic path's meaning does not move;
+ *  * `vibe_prepares` keeps "Vibe can prepare this" — letting the resolver speak
+ *    there would render "Not something Vibe can build yet" over real work that
+ *    Vibe genuinely does;
+ *  * no resolution at all keeps today's copy, which is the honest answer when
+ *    the route could not resolve one.
+ *
+ * ## Why `intrinsicMode`
+ *
+ * A step waiting on an earlier one is still a step the agent could build, and
+ * the row prints its own "Waiting for step N" line immediately below from
+ * `stepSequenceStatus`. Two facts, neither contradicting the other. `mode`
+ * would collapse them into "blocked" and lose the capability statement.
+ *
+ * Neither new string may read as "this is happening automatically" — "could
+ * build" is a capability statement, which is exactly why
+ * `EXECUTION_MODE_LABELS.agentic` was written the way it was.
+ */
+export type StepResponsibility = { headline: string; sublabel: string | null };
+
+export function stepResponsibility(
+  step: Pick<ActionPlanStep, "executionSupport">,
+  resolution: Pick<ExecutionResolution, "intrinsicMode"> | null,
+): StepResponsibility {
+  const stored: StepResponsibility = {
+    headline: RESPONSIBILITY_HEADLINES[step.executionSupport],
+    sublabel: RESPONSIBILITY_SUBLABELS[step.executionSupport] ?? null,
+  };
+
+  if (step.executionSupport !== "not_yet_supported") return stored;
+  if (resolution?.intrinsicMode !== "agentic") return stored;
+
+  return {
+    headline: EXECUTION_MODE_LABELS.agentic,
+    sublabel: EXECUTION_REASON_LABELS.agentic_v1_eligible,
+  };
+}
 
 /** Where a step's compact sequence status lands — three states, each a distinct visual weight. */
 export type StepSequenceState = "ready" | "waiting" | "done";
