@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 import { withWorkflow } from "workflow/next";
 import { securityHeaders } from "./src/lib/security/headers";
+import { retiredAddressRedirects } from "./src/lib/routing/retired-addresses";
 
 const nextConfig: NextConfig = {
   /**
@@ -44,6 +45,17 @@ const nextConfig: NextConfig = {
    */
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders() }];
+  },
+
+  /**
+   * The workspace addresses that used to exist (PERF-023).
+   *
+   * The table and the reasoning live in `src/lib/routing/retired-addresses.ts`,
+   * where a test can reach them: this file cannot be loaded outside a Next
+   * build, so a redirect written only here is a redirect nothing asserts.
+   */
+  async redirects() {
+    return retiredAddressRedirects();
   },
 };
 
