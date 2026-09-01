@@ -280,7 +280,7 @@ describe("opening a project page measures nothing (§36, §45)", () => {
 });
 
 describe("the three levels stay separate, and business impact is last (§33)", () => {
-  const src = source("prepared-changes-section.tsx");
+  const src = source("agent/change-gates.tsx");
 
   it("renders business impact after the production outcome", () => {
     expect(src.indexOf("<BusinessImpactPanel")).toBeGreaterThan(src.indexOf("<OutcomePanel"));

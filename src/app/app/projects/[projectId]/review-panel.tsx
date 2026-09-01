@@ -132,6 +132,7 @@ export function ReviewPanel({
   filesChanged,
   approved,
   merged,
+  presentation = "section",
 }: {
   projectId: string;
   preparedChangeId: string;
@@ -145,6 +146,8 @@ export function ReviewPanel({
   approved: boolean;
   /** The default branch carries this change, verified by reading it back. */
   merged: boolean;
+  /** Removes legacy divider chrome when the controls live in the Agent stage. */
+  presentation?: "section" | "workspace";
 }) {
   const router = useRouter();
   /*
@@ -180,8 +183,14 @@ export function ReviewPanel({
   const afterAt = localTime(card.afterCapturedAt);
 
   return (
-    <section className="space-y-3 border-t border-line-2 pt-4">
-      <h4 className="text-sm font-medium text-fg-body">Review</h4>
+    <section
+      className={
+        presentation === "workspace"
+          ? "space-y-3"
+          : "space-y-3 border-t border-line-2 pt-4"
+      }
+    >
+      <h4 className="text-sm font-medium text-fg-body">Visual comparison</h4>
 
       {capturing ? (
         <div className="space-y-2">

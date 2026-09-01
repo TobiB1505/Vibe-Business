@@ -172,6 +172,7 @@ export function PreviewPanel({
   productionUrl,
   approved,
   merged,
+  presentation = "section",
 }: {
   projectId: string;
   preparedChangeId: string;
@@ -182,6 +183,8 @@ export function PreviewPanel({
   approved: boolean;
   /** The default branch carries this change, verified by reading it back. */
   merged: boolean;
+  /** Removes legacy divider chrome when the controls live in the Agent stage. */
+  presentation?: "section" | "workspace";
 }) {
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
@@ -360,8 +363,14 @@ export function PreviewPanel({
   const stopping = previewState === "stopping" || intent === "stop";
 
   return (
-    <section className="space-y-3 border-t border-line-2 pt-4">
-      <h4 className="text-sm font-medium text-fg-body">Preview</h4>
+    <section
+      className={
+        presentation === "workspace"
+          ? "space-y-3"
+          : "space-y-3 border-t border-line-2 pt-4"
+      }
+    >
+      <h4 className="text-sm font-medium text-fg-body">Temporary preview</h4>
 
       {starting ? (
         <div className="space-y-2">

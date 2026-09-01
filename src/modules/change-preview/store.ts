@@ -10,7 +10,6 @@ import type {
   PreviewSession,
   PreviewStage,
   PreviewStatus,
-  ValidatedArtifact,
 } from "./schema";
 
 /**

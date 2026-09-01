@@ -173,6 +173,21 @@ export type PreparedFile = {
   /** sha256 of the generated content, for post-write verification (§25). */
   contentHash: string;
   bytes: number;
+  /**
+   * How many lines this file gained and lost.
+   *
+   * Derived counts, not content — rule 26 forbids storing a copy of a
+   * customer's repository, and nothing about the source can be reconstructed
+   * from two integers. The content itself stays on the branch.
+   *
+   * Absent when Vibe did not observe both sides. The deterministic capability
+   * generates files without reading what was there, so it knows what it wrote
+   * and not what it replaced; reporting `removed: 0` for that would be a
+   * measurement nobody made (rule 44). Absent is carried to the screen as
+   * nothing shown, never as zero.
+   */
+  linesAdded?: number;
+  linesRemoved?: number;
 };
 
 export type PreparedChange = {

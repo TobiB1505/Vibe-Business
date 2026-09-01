@@ -1,4 +1,8 @@
-import type { PreparedChangeCard } from "@/app/app/projects/[projectId]/prepared-changes-section";
+/*
+ * The read model's own type, now that the card component that re-exported it is
+ * gone. Same object, one hop closer to where it is produced.
+ */
+import type { PreparedChangeWorkspaceItem as PreparedChangeCard } from "@/modules/execution/workspace";
 import type { OutcomeCard, OutcomeCheckLine } from "@/modules/outcome-verification/view";
 import type { BusinessImpactCard } from "@/modules/business-measurement/view";
 import { businessRationaleFor } from "@/modules/execution/business-rationale";
@@ -54,6 +58,16 @@ function baseChange(): Omit<
     commitSha: APPROVED_COMMIT,
     baseBranch: "main",
     filePaths: ["src/app/robots.ts", "src/app/sitemap.ts"],
+    /*
+     * The deterministic capability's own shape: it generates files without
+     * reading what was there, so it knows what it wrote and not what it
+     * replaced. No counts, and the screen shows none rather than zeroes.
+     */
+    files: [
+      { path: "src/app/robots.ts", linesAdded: null, linesRemoved: null },
+      { path: "src/app/sitemap.ts", linesAdded: null, linesRemoved: null },
+    ],
+    lineStats: null,
     createdAt: "2026-08-13T18:00:00.000Z",
     branchUrl: null,
     compareUrl: null,

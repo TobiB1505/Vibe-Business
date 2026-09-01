@@ -34,13 +34,30 @@ const PRIORITIES = read(
 );
 const BRAIN_VIEW = read("src/modules/projects/business-brain-view.ts");
 const PREPARE_PANEL = read("src/app/app/projects/[projectId]/prepare-change-panel.tsx");
-const PREPARED_SECTION = read("src/app/app/projects/[projectId]/prepared-changes-section.tsx");
 const RUN_AUDIT = read("src/app/app/projects/[projectId]/run-audit-button.tsx");
 const AUDIT_STORE = read("src/modules/business-audit/store.ts");
 const SOURCE = read("src/modules/action-plans/source.ts");
 const WORKSPACE_READ_MODEL = read("src/modules/execution/workspace.ts");
 const AGENT_PAGE = read("src/app/app/projects/[projectId]/agent/page.tsx");
-const AGENT_PANEL = read("src/app/app/projects/[projectId]/agent-panel.tsx");
+const AGENT_READY = read("src/app/app/projects/[projectId]/agent/agent-ready-stage.tsx");
+const AGENT_START = read("src/app/app/projects/[projectId]/agent/agent-start-action.tsx");
+const AGENT_STAGE_ACTIONS = read(
+  "src/app/app/projects/[projectId]/agent/agent-stage-actions.tsx",
+);
+const AGENT_VALIDATE = read(
+  "src/app/app/projects/[projectId]/agent/agent-validate-action.tsx",
+);
+const VALIDATE_ACTION = read(
+  "src/app/app/projects/[projectId]/validate-change-action.ts",
+);
+const AGENT_WORKSPACE_READ = read("src/modules/coding-agent/agent-workspace.ts");
+const DOGFOOD_ACTIONS = read(
+  "src/app/app/projects/[projectId]/agent-dogfood/[stepKey]/actions.ts",
+);
+const DOGFOOD_PAGE = read("src/app/app/projects/[projectId]/agent-dogfood/page.tsx");
+const DOGFOOD_STEP_PAGE = read(
+  "src/app/app/projects/[projectId]/agent-dogfood/[stepKey]/page.tsx",
+);
 const AGENT_FOCUS = read("src/modules/projects/agent-focus.ts");
 const CHANGE_ORIGIN = read("src/app/app/projects/[projectId]/change-origin.tsx");
 const PROJECT_NAV = read("src/components/layout/project-nav.tsx");
@@ -237,7 +254,9 @@ describe("preparing leads to the exact prepared change", () => {
   /** Regression 7: the handoff disappears. */
   it("links onward from a prepared change", () => {
     expect(PREPARE_PANEL).toContain("Review prepared change");
-    expect(PREPARE_PANEL).toContain("preparedChangeHref(preparedHref, preparedChangeId)");
+    expect(PREPARE_PANEL).toContain("agentMoveHref(preparedHref, opportunityId)");
+    expect(PREPARE_PANEL).toContain("agentChangeHref(agentHref, preparedChangeId)");
+    expect(PREPARE_PANEL).toContain("agentChangeHref(agentHref, next.resultId)");
   });
 
   /**
@@ -261,8 +280,8 @@ describe("preparing leads to the exact prepared change", () => {
   });
 
   it("makes the prepared card addressable by that same id", () => {
-    expect(PREPARED_SECTION).toContain("preparedChangeAnchorId(change.id)");
-    expect(PREPARED_SECTION).toContain("scroll-mt-24");
+    expect(AGENT_PAGE).toContain("preparedChangeAnchorId(change.id)");
+    expect(AGENT_PAGE).toContain("scroll-mt-24");
   });
 });
 
@@ -317,7 +336,9 @@ describe("the plan hands off to the agent, and the agent points back", () => {
   /** Regression: a second parameter name for the same fact. */
   it("names the Move with one parameter shared by both surfaces", () => {
     expect(SOURCE).toContain('export const PLAN_OPPORTUNITY_PARAM = "plan"');
+    expect(SOURCE).toContain('export const AGENT_CHANGE_PARAM = "change"');
     expect(SOURCE).toContain("export function agentMoveHref");
+    expect(SOURCE).toContain("export function agentChangeHref");
     expect(SOURCE).toContain("export function planMoveHref");
     expect(AGENT_PAGE).toContain("PLAN_OPPORTUNITY_PARAM");
   });
@@ -336,9 +357,10 @@ describe("the plan hands off to the agent, and the agent points back", () => {
   /** §31, §46: the parameter is untrusted text and is never a raw lookup. */
   it("sanitizes the requested Move before it means anything", () => {
     expect(AGENT_PAGE).toContain("sanitizeRequestedOpportunityId");
+    expect(AGENT_PAGE).toContain("sanitizeRequestedChangeId");
     const resolution = AGENT_PAGE.slice(
       AGENT_PAGE.indexOf("const requestedOpportunityId"),
-      AGENT_PAGE.indexOf("const context = buildAgentContext"),
+      AGENT_PAGE.indexOf("const basePlanHref"),
     );
     // Resolved against this project's own set, never fetched by the id alone.
     expect(resolution).toContain("opportunities?.set.opportunities.find");
@@ -367,21 +389,32 @@ describe("the plan hands off to the agent, and the agent points back", () => {
     }
   });
 
-  /**
-   * §60, and the AgentPanel's own contract: this card describes and points at
-   * where work is chosen. A focus must not turn it into a second place that
-   * spends money.
-   */
-  it("adds no priced control to the agent card", () => {
-    for (const control of ["PrepareChangePanel", "formAction", "CreditPrice", "<form"]) {
-      expect(copyOf(AGENT_PANEL), control).not.toContain(control);
-    }
+  it("starts only through the existing freshly admitted server action", () => {
+    expect(AGENT_PAGE).toContain("resolveDogfoodPlanRoutes");
+    expect(AGENT_READY).toContain("startAction");
+    expect(AGENT_START).toContain("startDogfoodRunAction");
+    expect(DOGFOOD_ACTIONS).toContain("previewDogfoodStep");
+    expect(DOGFOOD_ACTIONS).toContain("startAgentExecution");
+    expect(copyOf(AGENT_START)).not.toContain("startAgentExecution(");
+    expect(AGENT_START).toContain("Run with Vibe");
+    /*
+     * The ceiling is the server's answer, never a number the page invents —
+     * and since `launch-v1` it is resolved for the *step* that would run,
+     * because the Agent price is per execution pricing class (Sprint 0111).
+     * The route set can no longer answer it plan-wide.
+     */
+    expect(AGENT_PAGE).toContain("resolveRouteAgentEconomics");
+    expect(AGENT_PAGE).toContain("formatCreditsForDisplay(routeEconomics.budget.maxCredits)");
+    expect(AGENT_READY).toContain("creditEstimate={startAction ? creditEstimate : null}");
+    expect(AGENT_PAGE).toContain("agentRoutes.plan.opportunityId === taskOpportunityId");
+    expect(AGENT_PAGE).toContain("!agentWorking");
   });
 
   /** Regression: a prepared change that quotes its Move and links nowhere. */
   it("links a prepared change back to the Move it answers", () => {
     expect(WORKSPACE_READ_MODEL).toContain("opportunityId: opportunity ? prepared.opportunityId : null");
-    expect(PREPARED_SECTION).toContain("planMoveHref(planHref, change.opportunityId)");
+    expect(AGENT_PAGE).toContain("planMoveHref(basePlanHref, taskOpportunityId)");
+    expect(AGENT_PAGE).toContain("backHref={planHref}");
     expect(CHANGE_ORIGIN).toContain("moveHref");
   });
 
@@ -390,9 +423,56 @@ describe("the plan hands off to the agent, and the agent points back", () => {
    * blocked states once shipped hard-coded fragments that pointed at nothing.
    */
   it("takes the plan's URL from the route rather than building one", () => {
-    expect(PREPARED_SECTION).toContain("planHref: string");
+    expect(AGENT_PAGE).toContain("const basePlanHref: string");
     expect(AGENT_PAGE).toContain('projectSectionHref(project.id, "action-plan")');
-    expect(copyOf(PREPARED_SECTION)).not.toContain("/app/projects/");
+    /*
+     * Narrowed when the gate panels moved onto the route: the rule is that the
+     * *plan's* URL comes from `projectSectionHref`, not that a route may never
+     * build any path. This page legitimately builds the internal dogfood href.
+     */
+    expect(copyOf(AGENT_PAGE)).not.toContain('`/app/projects/${project.id}/action-plan');
+  });
+
+  it("keeps every production gate inside the new stage workspace", () => {
+    expect(AGENT_PAGE).toContain("AgentPreviewActions");
+    expect(AGENT_PAGE).toContain("AgentReviewDecision");
+    expect(AGENT_STAGE_ACTIONS).toContain("PreviewPanel");
+    expect(AGENT_STAGE_ACTIONS).toContain("ReviewPanel");
+    expect(AGENT_STAGE_ACTIONS).toContain("ApprovalPanel");
+    expect(AGENT_STAGE_ACTIONS).toContain("MergePanel");
+    expect(AGENT_PAGE).not.toContain("AgentPanel");
+    expect(AGENT_PAGE).not.toContain("ChangeGates");
+  });
+
+  it("leaves no legacy Agent run screen visible", () => {
+    for (const source of [DOGFOOD_PAGE, DOGFOOD_STEP_PAGE]) {
+      expect(source).toContain("redirect(projectSectionHref(projectId, \"agent\"))");
+      expect(source).not.toContain("RunPanel");
+      expect(source).not.toContain("StatusView");
+    }
+    expect(DOGFOOD_ACTIONS).toContain("redirect(agentHref)");
+  });
+
+  it("keeps validation live until the durable operation settles", () => {
+    expect(AGENT_VALIDATE).toContain("validateChangeAction");
+    expect(AGENT_VALIDATE).toContain("getValidationProgressAction");
+    expect(AGENT_VALIDATE).toContain("useOperationPoll");
+    expect(AGENT_VALIDATE).toContain("router.refresh()");
+    expect(AGENT_VALIDATE).toContain("rerunChangeValidationAction");
+    expect(VALIDATE_ACTION).toContain("reusePassed: boolean");
+    expect(VALIDATE_ACTION).toContain('revalidatePath(`/app/projects/${projectId}/agent`)');
+  });
+
+  it("loads the exact prepared artifact named by the handoff", () => {
+    expect(AGENT_PAGE).toContain("selectedPreparedChangeId: requestedPreparedChangeId");
+    expect(WORKSPACE_READ_MODEL).toContain("getPreparedChange(supabase");
+    expect(WORKSPACE_READ_MODEL).not.toContain("prepared.find");
+  });
+
+  it("does not assemble historical changes or reload the current Move on the hot path", () => {
+    expect(AGENT_PAGE).not.toContain("getPreparedChangeWorkspace(");
+    expect(AGENT_WORKSPACE_READ).toContain("getPreparedChangeWorkspaceItem");
+    expect(AGENT_PAGE).toContain("requestedOpportunityId && !requestedTaskMatchesRun");
   });
 
   /**

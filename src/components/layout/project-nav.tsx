@@ -138,7 +138,16 @@ export function ProjectNav({ items }: { items: ProjectNavItem[] }) {
                 className={cn("shrink-0", current && "text-mint")}
               />
               <span className="whitespace-nowrap">{item.label}</span>
-              {typeof item.count === "number" && (
+              {typeof item.status === "string" ? (
+                <span className="text-mint ml-auto inline-flex items-center gap-1.5 font-mono text-[0.65625rem] tracking-[0.1em] uppercase">
+                  <span
+                    aria-hidden="true"
+                    className="bg-mint shadow-dot-mint size-[5px] rounded-full motion-safe:animate-[vibe-soft-pulse_var(--duration-pulse)_var(--ease-vibe)_infinite]"
+                  />
+                  {item.status}
+                </span>
+              ) : (
+                typeof item.count === "number" && (
                 <span
                   className={cn(
                     "ml-auto rounded-full px-2 py-0.5 font-mono text-[0.65625rem]",
@@ -147,8 +156,9 @@ export function ProjectNav({ items }: { items: ProjectNavItem[] }) {
                       : "bg-surface-hover text-fg-prose",
                   )}
                 >
-                  {item.count}
-                </span>
+                    {item.count}
+                  </span>
+                )
               )}
             </Link>
           </li>

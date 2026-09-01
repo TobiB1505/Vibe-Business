@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useActionState, useState } from "react";
-import { Button, TextAction, buttonClasses} from "@/components/ui/button";
+import { useActionState, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Button, TextAction, buttonClasses } from "@/components/ui/button";
 import { preparedChangeHref } from "@/components/layout/project-shell";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { useOperationPoll } from "@/lib/client/use-operation-poll";
@@ -24,7 +25,7 @@ import {
 import { DiffView } from "@/components/change/diff-view";
 import type { PreparedDiff } from "@/modules/execution/diff";
 import { getOperationStatusAction } from "./run-audit-action";
-import { ValidationPanel, type ValidationSummary } from "./validation-panel";
+import { agentChangeHref, agentMoveHref } from "@/modules/action-plans/source";
 import {
   getPreparedDiffAction,
   prepareChangeAction,
@@ -95,7 +96,6 @@ export function PrepareChangePanel({
   opportunityId,
   actionState,
   branchUrl,
-  validationSummary,
   preparedHref,
   blockedDestinations,
 }: {
@@ -105,8 +105,6 @@ export function PrepareChangePanel({
   actionState: OpportunityActionState;
   /** Built from stored linkage, never client-supplied (§15). */
   branchUrl: string | null;
-  /** The latest isolated validation for this artifact (Sprint 10A §44). */
-  validationSummary: ValidationSummary | null;
   /** Where the prepared change lives, so preparing leads somewhere (UI-S2 §26). */
   preparedHref: string;
   /**
@@ -117,11 +115,13 @@ export function PrepareChangePanel({
    */
   blockedDestinations: BlockedActionDestinations;
 }) {
+  const router = useRouter();
   const action = prepareChangeAction.bind(null, projectId, opportunityId);
   const [state, formAction, pending] = useActionState(action, initialState);
   const [confirming, setConfirming] = useState(false);
   const [diff, setDiff] = useState<PreparedDiff | null>(null);
   const [diffError, setDiffError] = useState<string | null>(null);
+  const agentHref = agentMoveHref(preparedHref, opportunityId);
 
   const serverOperation = actionState.kind === "preparing" ? actionState.operation : null;
   const startedOperation = state?.ok && state.kind === "running" ? state.operation : null;
@@ -145,6 +145,15 @@ export function PrepareChangePanel({
     },
     // Stops on its own answer: the server render cannot know the run ended.
     continueAfter: (next) => operationPollPhase(next) === "working",
+    onReading: (next) => {
+      if (next.status === "completed" && next.resultId) {
+        router.push(
+          preparedChangeHref(agentChangeHref(agentHref, next.resultId), next.resultId),
+        );
+      } else if (operationPollPhase(next) !== "working") {
+        router.refresh();
+      }
+    },
   });
 
   const operation = freshestOperation(polled ?? serverOperation, startedOperation);
@@ -159,6 +168,19 @@ export function PrepareChangePanel({
         : operation?.status === "completed"
           ? operation.resultId
           : null;
+
+  /* A reused result has no running operation to poll. It still hands off to
+     the same exact Move and prepared change as a newly completed run. */
+  useEffect(() => {
+    if (state?.ok && state.kind === "reused") {
+      router.push(
+        preparedChangeHref(
+          agentChangeHref(agentHref, state.preparedChangeId),
+          state.preparedChangeId,
+        ),
+      );
+    }
+  }, [agentHref, router, state]);
 
   async function loadDiff(id: string) {
     setDiffError(null);
@@ -222,7 +244,10 @@ export function PrepareChangePanel({
         */}
         <div className="flex flex-wrap items-center gap-3">
           <Link
-            href={preparedChangeHref(preparedHref, preparedChangeId)}
+            href={preparedChangeHref(
+              agentChangeHref(agentHref, preparedChangeId),
+              preparedChangeId,
+            )}
             className={buttonClasses()}
             data-testid="review-prepared-change"
           >
@@ -246,20 +271,6 @@ export function PrepareChangePanel({
         {diffError && <p className="text-sm text-amber">{diffError}</p>}
         {diff && <DiffView diff={diff} />}
 
-        {/* Isolated validation of this exact commit (Sprint 10A §44). Offered
-            only once a change exists — there is nothing to validate before. */}
-        <ValidationPanel
-          projectId={projectId}
-          preparedChangeId={preparedChangeId}
-          summary={validationSummary}
-          runningOperation={null}
-          /*
-           * A change that was prepared moments ago. Neither is possible yet,
-           * and stating them is the honest reading rather than a default.
-           */
-          approved={false}
-          merged={false}
-        />
       </div>
     );
   }

@@ -2,10 +2,8 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { SkeletonSection } from "@/components/ui/skeleton";
 import { PlanDetailPanel } from "@/app/app/projects/[projectId]/plan/plan-detail-panel";
-import {
-  PreparedChangesSection,
-  type PreparedChangeCard,
-} from "@/app/app/projects/[projectId]/prepared-changes-section";
+import type { PreparedChangeWorkspaceItem } from "@/modules/execution/workspace";
+import { ChangeGates } from "@/app/app/projects/[projectId]/agent/change-gates";
 import { IntelligenceSummary } from "@/app/app/projects/[projectId]/intelligence-summary";
 import { AuditOverview } from "@/app/app/projects/[projectId]/audit-overview";
 import { buildBusinessBrainView } from "@/modules/projects/business-brain-view";
@@ -37,6 +35,21 @@ import {
   E2E_AUDIT_CREDIT_SCENARIOS,
   isE2eAuditCreditScenario,
 } from "../audit-credit-scenarios";
+import {
+  E2E_AGENT_STAGE_SCENARIOS,
+  isE2eAgentStageScenario,
+} from "../agent-stage-scenarios";
+import { AgentWorkspacePanel } from "@/app/app/projects/[projectId]/agent/agent-workspace-panel";
+import { AgentActivity } from "@/app/app/projects/[projectId]/agent/agent-activity";
+import { AgentValidationChecks } from "@/app/app/projects/[projectId]/agent/agent-validation-checks";
+import { AgentFileActivity } from "@/app/app/projects/[projectId]/agent/agent-file-activity";
+import { AgentPreviewStage } from "@/app/app/projects/[projectId]/agent/agent-preview-stage";
+import { AgentMergeStage } from "@/app/app/projects/[projectId]/agent/agent-merge-stage";
+import { AgentCore } from "@/app/app/projects/[projectId]/agent/agent-core";
+import { AgentBuildStage } from "@/app/app/projects/[projectId]/agent/agent-build-stage";
+import { AgentValidateStage } from "@/app/app/projects/[projectId]/agent/agent-validate-stage";
+import { AgentReadyStage } from "@/app/app/projects/[projectId]/agent/agent-ready-stage";
+import { AgentRunTaskHeader } from "@/app/app/projects/[projectId]/agent/agent-run-task-header";
 import { E2E_NEEDS_USER_SCENARIOS, isE2eNeedsUserScenario } from "../needs-user-scenarios";
 import {
   E2E_ACCOUNT_SCENARIOS,
@@ -277,7 +290,6 @@ export default async function E2eScenarioPage({
           opportunities={fixture.opportunities}
           executionStates={fixture.executionStates}
           branchUrls={{}}
-          validationSummaries={{}}
           stale={fixture.stale}
           movesOperation={fixture.movesOperation}
           movesBlockedReason={fixture.blockedReason}
@@ -561,6 +573,103 @@ export default async function E2eScenarioPage({
    * `disabled` comes from the real `auditBlockedByCredits` rather than from the
    * fixture, so the browser sees whatever the page would see.
    */
+  /*
+   * The Agent rail and core, driven by the real `agentStageSteps`.
+   *
+   * Mounted without the stage bodies: the claim under test is whether the five
+   * states are distinguishable and whether motion respects the media query, and
+   * a live view full of fixture events would only make that harder to see.
+   */
+  if (isE2eAgentStageScenario(scenario)) {
+    const {
+      steps,
+      core,
+      caption,
+      activity,
+      task,
+      checks,
+      fileEvents,
+      previewChanges,
+      previewImages,
+      mergeFiles,
+      mergeSummary,
+    } = E2E_AGENT_STAGE_SCENARIOS[scenario]();
+    /* The orb turns for a live run and for nothing else. */
+    const live = core === "working" || core === "waiting";
+    return (
+      <main className="mx-auto flex max-w-[90rem] flex-col gap-6 p-8">
+        {label}
+        <AgentWorkspacePanel
+          stages={steps}
+          initialStage={
+            steps.find((step) => step.state === "active" || step.state === "paused")?.stage ?? null
+          }
+          header={<AgentRunTaskHeader task={task} stage="Scenario state" filesChanged={8} />}
+          bodies={{
+            understand: (
+              <AgentReadyStage
+                task={task}
+                planHref="/e2e/action-plan-ranked"
+                repository="TobiB1505/Vibe-Business"
+                liveUrl="https://vibebusiness.de"
+                caption={caption}
+                creditEstimate="100"
+                startAction={
+                  <button type="button" className="w-full rounded-full px-5 py-3">
+                    Run with Vibe
+                  </button>
+                }
+              />
+            ),
+            build: (
+              <AgentBuildStage
+                task={task}
+                live={live}
+                core={<AgentCore state={core} caption={caption} size="compact" />}
+                activity={
+                  fileEvents.length > 0 ? (
+                    <AgentFileActivity events={fileEvents} title="Live activity" live={live} />
+                  ) : (
+                    <AgentActivity steps={activity} title="Agent progress" live={live} />
+                  )
+                }
+              />
+            ),
+            validate: (
+              <AgentValidateStage
+                running={live}
+                checks={<AgentValidationChecks checks={checks} />}
+              />
+            ),
+            preview: (
+              <AgentPreviewStage
+                images={previewImages}
+                changes={previewChanges}
+                filesChanged={8}
+                linesAdded={mergeSummary.linesAdded}
+                linesRemoved={mergeSummary.linesRemoved}
+                filesHref="#"
+              />
+            ),
+            review: (
+              <AgentMergeStage
+                summary={mergeSummary}
+                files={mergeFiles}
+                allChecksPassed
+                branchName="vibe/feat-pricing-visibility"
+                baseBranch="main"
+                commitSha="4f1c9a2b7de3115902d9f43161aa87dc5ebe6872"
+                compareUrl="https://github.com/example/repo/compare/main...vibe/feat-pricing-visibility"
+                backHref="#"
+                canMerge
+              />
+            ),
+          }}
+        />
+      </main>
+    );
+  }
+
   if (isE2eAuditCreditScenario(scenario)) {
     const { gate } = E2E_AUDIT_CREDIT_SCENARIOS[scenario];
     return (
@@ -882,14 +991,19 @@ export default async function E2eScenarioPage({
 
   if (!isE2eScenario(scenario)) notFound();
 
-  const change: PreparedChangeCard = E2E_SCENARIOS[scenario]();
+  const change: PreparedChangeWorkspaceItem = E2E_SCENARIOS[scenario]();
 
   return (
     <main className="mx-auto max-w-4xl p-8">
       {label}
-      <PreparedChangesSection
+      {/*
+        The component the Agent route mounts, given the same card. A fixture
+        that assembled the panels itself would drift from the route the moment
+        either changed, and these scenarios exist to catch exactly that.
+      */}
+      <ChangeGates
         projectId="project_e2e"
-        changes={[change]}
+        change={change}
         planHref="/app/projects/project_e2e/plan"
       />
     </main>
@@ -901,9 +1015,9 @@ async function SlowPreparedChanges() {
   await new Promise((resolve) => setTimeout(resolve, 1_000));
 
   return (
-    <PreparedChangesSection
+    <ChangeGates
       projectId="project_e2e"
-      changes={[E2E_SCENARIOS.change_awaiting_approval()]}
+      change={E2E_SCENARIOS.change_awaiting_approval()}
       planHref="/app/projects/project_e2e/plan"
     />
   );

@@ -174,6 +174,7 @@ export function MergePanel({
   projectId,
   preparedChangeId,
   card,
+  presentation = "section",
   /** How the change was reviewed, for the confirmation's one summary line. */
   classification,
   filesChanged,
@@ -181,6 +182,8 @@ export function MergePanel({
   projectId: string;
   preparedChangeId: string;
   card: MergeCard;
+  /** Removes legacy divider chrome when the decision lives in the Agent stage. */
+  presentation?: "section" | "workspace";
   classification: ReviewClassificationResult | null;
   filesChanged: number;
 }) {
@@ -211,7 +214,13 @@ export function MergePanel({
   }
 
   return (
-    <section className="space-y-3 border-t border-line-2 pt-4">
+    <section
+      className={
+        presentation === "workspace"
+          ? "space-y-3"
+          : "space-y-3 border-t border-line-2 pt-4"
+      }
+    >
       <h4 className="text-sm font-medium text-fg-body">Merge</h4>
 
       {confirming ? (

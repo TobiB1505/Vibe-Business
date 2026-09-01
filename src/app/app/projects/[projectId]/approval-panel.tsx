@@ -139,12 +139,15 @@ export function ApprovalPanel({
   preparedChangeId,
   card,
   merged,
+  presentation = "section",
 }: {
   projectId: string;
   preparedChangeId: string;
   card: ApprovalCard;
   /** The default branch carries this change, verified by reading it back. */
   merged: boolean;
+  /** Removes legacy divider chrome when the decision lives in the Agent stage. */
+  presentation?: "section" | "workspace";
 }) {
   const router = useRouter();
   const [state, setState] = useState<ApproveActionState | RevokeActionState>(null);
@@ -201,7 +204,13 @@ export function ApprovalPanel({
   const busy = intent !== null;
 
   return (
-    <section className="space-y-3 border-t border-line-2 pt-4">
+    <section
+      className={
+        presentation === "workspace"
+          ? "space-y-3"
+          : "space-y-3 border-t border-line-2 pt-4"
+      }
+    >
       <h4 className="text-sm font-medium text-fg-body">Approval</h4>
 
       {confirming === "approve" ? (

@@ -124,12 +124,16 @@ describe("the approval panel offers approval and nothing more", () => {
 });
 
 describe("no deploy affordance exists anywhere in the project page", () => {
+  /*
+   * The panels, and only the panels. `agent/change-gates.tsx` mounts them and
+   * renders no control of its own, so `actionLabels` finds nothing there and
+   * says so rather than passing vacuously.
+   */
   const files = [
     "approval-panel.tsx",
     "review-panel.tsx",
     "preview-panel.tsx",
     "validation-panel.tsx",
-    "prepared-changes-section.tsx",
   ];
 
   it("has no approve-and-merge, merge, deploy or ship control outside the merge panel", () => {
@@ -157,7 +161,7 @@ describe("no deploy affordance exists anywhere in the project page", () => {
     // Validation → preview → review → approval → merge. The order on screen is
     // the order of the gates, and merge is last because it is the only one that
     // writes somewhere a user's product runs from.
-    const section = source("prepared-changes-section.tsx");
+    const section = source("agent/change-gates.tsx");
     expect(section.indexOf("<ReviewPanel")).toBeLessThan(section.indexOf("<ApprovalPanel"));
     expect(section.indexOf("<ApprovalPanel")).toBeLessThan(section.indexOf("<MergePanel"));
   });

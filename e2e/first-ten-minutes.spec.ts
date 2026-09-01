@@ -58,7 +58,9 @@ test.describe("the landing page", () => {
     await page.goto("/");
 
     const hero = page.getByRole("main").locator("section").first();
-    const primary = hero.getByRole("link", { name: "Get started" });
+    // The hero's own first control. Its words changed with UI-19; where it
+    // sends a stranger with no account did not.
+    const primary = hero.getByRole("link", { name: "Start with your GitHub repo" });
     await expect(primary).toBeVisible();
     await expect(primary).toHaveAttribute("href", "/signup");
 
@@ -69,19 +71,25 @@ test.describe("the landing page", () => {
 
   test("offers signing in as the secondary route", async ({ page }) => {
     await page.goto("/");
-    const hero = page.getByRole("main").locator("section").first();
-    await expect(hero.getByRole("link", { name: "Sign in" })).toHaveAttribute("href", "/login");
+    // In the shell every public page wears since UI-19, rather than in the
+    // hero. What matters is that an existing customer finds the way back in
+    // without the page asking a stranger to sign in first.
+    await expect(
+      page.getByRole("banner").getByRole("link", { name: "Sign in" }),
+    ).toHaveAttribute("href", "/login");
   });
 
   test("says what the product does, in one heading a founder can act on", async ({ page }) => {
     await page.goto("/");
 
-    await expect(page.getByRole("heading", { level: 1 })).toContainText("vibe-coded the product");
+    await expect(page.getByRole("heading", { level: 1 })).toContainText(
+      "You built the product. Now build the business.",
+    );
     await expect(
-      page.getByRole("heading", { name: "Turn what you built into a business." }),
+      page.getByRole("heading", { name: "From code to business. Vibe every step." }),
     ).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: "See what is working and where to start." }),
+      page.getByRole("heading", { name: "See your business as a system." }),
     ).toBeVisible();
   });
 
@@ -100,7 +108,9 @@ test.describe("the landing page", () => {
     for (const area of ["Offer", "Audience", "Acquisition", "Conversion", "Retention"]) {
       await expect(page.getByText(area, { exact: true }).first()).toBeVisible();
     }
-    await expect(page.getByText("Nothing is filled in here")).toBeVisible();
+    await expect(
+      page.getByText("Scores and relationships appear only after Vibe has evidence"),
+    ).toBeVisible();
   });
 
   test("reaches the legal surfaces from the footer", async ({ page }) => {

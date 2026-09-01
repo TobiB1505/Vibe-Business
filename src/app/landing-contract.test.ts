@@ -40,7 +40,14 @@ function copyOf(source: string): string {
 
 const LANDING = read("src/app/page.tsx");
 const SHELL = read("src/components/layout/marketing-shell.tsx");
-const PROOF = read("src/components/marketing/business-map-preview.tsx");
+/*
+ * The proof section the landing page actually renders (UI-19).
+ *
+ * It was `business-map-preview.tsx` until the redesign; nothing imports that
+ * file any more, and a contract pointed at an unrendered component guards
+ * nothing. This is the component a visitor meets.
+ */
+const PROOF = read("src/components/marketing/landing-business-brain.tsx");
 const SIGNUP = read("src/app/signup/page.tsx");
 
 const PRIVACY = read("src/app/privacy/page.tsx");
@@ -70,19 +77,32 @@ const SELLING_SURFACES: [string, string][] = [
 ];
 
 describe("the landing page sends people the right way", () => {
-  it("points the primary call to action at signing up, not signing in", () => {
+  /**
+   * The claim, restated for the page as it is (UI-19).
+   *
+   * It used to compare the hero's first `/signup` against its first `/login`,
+   * because the hero carried both. The redesigned hero carries one destination
+   * — sign-up — and signing in moved to the marketing shell, which every
+   * public page wears. The regression being guarded has not changed: a
+   * stranger with no account must not be asked to sign in first. So the
+   * assertion is now the stronger form of the same thing.
+   */
+  it("points the first control on the page at signing up, not signing in", () => {
     expect(LANDING).toContain('href="/signup"');
-    // The hero's first control. If this ever reads `/login` again, the product
-    // is asking a stranger with no account to sign in.
-    const hero = LANDING.slice(0, LANDING.indexOf("How it works"));
-    const firstCta = hero.indexOf('href="/signup"');
-    const firstSignIn = hero.indexOf('href="/login"');
+
+    const firstCta = LANDING.indexOf('href="/signup"');
+    const firstSignIn = LANDING.indexOf('href="/login"');
     expect(firstCta).toBeGreaterThan(-1);
-    expect(firstCta).toBeLessThan(firstSignIn);
+    // Either the page offers no sign-in of its own, or sign-up comes first.
+    if (firstSignIn > -1) expect(firstCta).toBeLessThan(firstSignIn);
   });
 
-  it("still offers signing in as the secondary way", () => {
-    expect(LANDING).toContain('href="/login"');
+  it("still offers signing in, on every public page", () => {
+    // In the shell rather than in the hero since UI-19. An existing customer
+    // must always find the way back in; where it sits is a design decision,
+    // whether it exists is not.
+    expect(SHELL).toContain('href="/login"');
+    expect(SHELL).toContain("Sign in");
   });
 
   /**
@@ -157,10 +177,20 @@ describe("the landing page describes the product that exists", () => {
     }
   });
 
+  /**
+   * The positioning, in the words the page now uses (UI-19).
+   *
+   * "You vibe-coded the product. Now vibe the business." was the pinned pair
+   * for months and is deliberately retired here: the same claim reads "You
+   * built the product. Now build the business.", and *vibe-coded* is precisely
+   * the developer vocabulary the sweep above bans from a stranger's first
+   * screen. What is pinned is unchanged in kind — the page still leads with
+   * what the visitor already has and what Vibe adds to it.
+   */
   it("keeps the product positioning it was written to carry", () => {
-    expect(LANDING).toContain("You vibe-coded the product.");
-    expect(LANDING).toContain("Now vibe the business.");
-    expect(LANDING).toContain("Turn what you built into a business.");
+    expect(LANDING).toContain("You built the product. Now build");
+    expect(LANDING).toContain("the business.");
+    expect(LANDING).toContain("From product to business, together.");
   });
 });
 
@@ -187,7 +217,9 @@ describe("the product proof is real", () => {
     const text = copy.replace(/style=\{\{[\s\S]*?\}\}/g, "");
     expect(text).not.toMatch(/\b(?:[1-9]|10)\s*\/\s*10\b/);
     expect(text).not.toMatch(/\b\d{1,3}\s*%/);
-    expect(copy).toContain("Nothing is filled in here");
+    // The same claim, in the words the preview now uses: nothing is filled in,
+    // and the page says so rather than letting an empty map imply data.
+    expect(copy).toContain("Scores and relationships appear only after Vibe has evidence");
   });
 });
 

@@ -44,7 +44,7 @@ import { cn } from "@/lib/utils/cn";
  *   home         — the diagnosis, business map and what to do next
  *   my-product   — the product profile, its sources and what it can do
  *   action-plan  — `opportunities-panel` + `action-plan-panel`
- *   agent        — `prepared-changes-section` (validation, preview, review,
+ *   agent        — the five-stage workspace and the gate panels (validation,
  *                  approval and merge all live inside a prepared change)
  *   experiments  — what a merged change made measurable, via the project
  *                  impact model
@@ -172,6 +172,15 @@ export type ProjectNavItem = {
   count?: number | null;
   /** Mint when the count is something Vibe is offering to act on. */
   countTone?: "accent" | "neutral";
+  /**
+   * A live state word instead of a count, with a pulsing dot beside it.
+   *
+   * For the Agent, whose interesting fact is what it is doing rather than how
+   * many artifacts it has produced — "13" was the number of prepared changes,
+   * which is not what a founder glancing at the rail wants to know. Replaces
+   * the count when both are set.
+   */
+  status?: string | null;
 };
 
 export function ProjectSidebar({

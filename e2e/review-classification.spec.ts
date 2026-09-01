@@ -48,8 +48,8 @@ test.describe("a change with nothing to look at", () => {
     // The panels that would have blocked this change are gone, not disabled.
     // Offering to photograph a page that did not change is offering to spend a
     // founder's money on two identical images.
-    await expect(panel(page, "Preview")).toHaveCount(0);
-    await expect(panel(page, "Review")).toHaveCount(0);
+    await expect(panel(page, "Temporary preview")).toHaveCount(0);
+    await expect(panel(page, "Visual comparison")).toHaveCount(0);
 
     // And the decision is available, which before this sprint it was not.
     await expect(page.getByRole("button", { name: "Approve change" })).toBeVisible();
@@ -83,7 +83,7 @@ test.describe("a change that alters a page", () => {
     // this fixture still does — nothing creates a new one (ADR 0065).
     await page.goto("/e2e/change_awaiting_approval");
 
-    await expect(panel(page, "Preview")).toBeVisible();
+    await expect(panel(page, "Temporary preview")).toBeVisible();
     await expect(panel(page, "What changed")).toContainText("Preview and code diff");
   });
 });

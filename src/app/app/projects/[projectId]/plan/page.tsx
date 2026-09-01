@@ -19,7 +19,6 @@ import {
   getActiveActionPlanOperation,
   getActiveOpportunityOperation,
 } from "@/modules/operations/service";
-import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
 import { getActionPlanReadiness, getLatestActionPlan } from "@/modules/action-plans/service";
 import {
@@ -28,10 +27,6 @@ import {
   resolveRequestedOpportunity,
   sanitizeRequestedOpportunityId,
 } from "@/modules/action-plans/source";
-import { SANDBOX_POLICY_VERSION } from "@/modules/validation/schema";
-import { getLatestValidation } from "@/modules/validation/service";
-import { buildValidationSummary } from "@/modules/validation/view";
-import type { ValidationSummary } from "../validation-panel";
 import { ActionPlanWorkspace } from "./action-plan-workspace";
 import { MovesRefreshBar } from "./moves-refresh-bar";
 
@@ -151,10 +146,6 @@ export default async function ProjectMovesPage({
   // answer rather than deciding whether Vibe has an executor (Sprint 9C §2).
   const executionStates: Record<string, ReturnType<typeof buildOpportunityActionState>> = {};
   const branchUrls: Record<string, string> = {};
-  // Isolated validation state per prepared change (Sprint 10A §44), resolved
-  // server-side for the same reason execution state is: the browser renders an
-  // answer, it does not decide what Vibe is willing to run.
-  const validationSummaries: Record<string, ValidationSummary> = {};
 
   /*
    * Three reads per Move, none of which depends on another Move's answer, so
@@ -173,7 +164,7 @@ export default async function ProjectMovesPage({
       );
       if (!opportunity) return null;
 
-      const [activeOperation, failedOperation, validation] = await Promise.all([
+      const [activeOperation, failedOperation] = await Promise.all([
         getActivePreparationFor(supabase, { projectId, opportunityId: summary.opportunityId }),
         // Without this a failed preparation silently re-offers the start button
         // instead of saying what went wrong.
@@ -181,21 +172,15 @@ export default async function ProjectMovesPage({
           projectId,
           opportunityId: summary.opportunityId,
         }),
-        summary.preparedChangeId
-          ? getLatestValidation(supabase, {
-              projectId,
-              preparedChangeId: summary.preparedChangeId,
-            })
-          : null,
       ]);
 
-      return { summary, opportunity, activeOperation, failedOperation, validation };
+      return { summary, opportunity, activeOperation, failedOperation };
     }),
   );
 
   for (const resolved of resolvedSummaries) {
     if (!resolved) continue;
-    const { summary, opportunity, activeOperation, failedOperation, validation } = resolved;
+    const { summary, opportunity, activeOperation, failedOperation } = resolved;
 
     executionStates[summary.opportunityId] = buildOpportunityActionState({
       opportunity,
@@ -213,14 +198,6 @@ export default async function ProjectMovesPage({
       );
     }
 
-    if (validation) {
-      validationSummaries[summary.opportunityId] = buildValidationSummary(validation, {
-        currentPolicyVersion: SANDBOX_POLICY_VERSION,
-        failureMessage: validation.failureCode
-          ? (OPERATION_FAILURE_MESSAGES[validation.failureCode] ?? null)
-          : null,
-      });
-    }
   }
 
   return (
@@ -244,7 +221,6 @@ export default async function ProjectMovesPage({
         opportunities={opportunities?.set.opportunities ?? []}
         executionStates={executionStates}
         branchUrls={branchUrls}
-        validationSummaries={validationSummaries}
         stale={opportunities?.stale ?? false}
         movesOperation={activeOpportunityOperation}
         movesBlockedReason={opportunityReadiness.blockedReason}

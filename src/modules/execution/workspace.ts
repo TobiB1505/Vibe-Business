@@ -18,7 +18,11 @@ import { businessRationaleFor } from "@/modules/execution/business-rationale";
 import { changeOriginFrom } from "@/modules/execution/change-origin";
 import { deriveChangeProgress } from "@/modules/execution/change-progress";
 import { buildBranchUrl, buildCompareUrl } from "@/modules/execution/diff";
-import { listPreparedChangesForProject } from "@/modules/execution/store";
+import { totalChangedLines } from "@/modules/execution/line-stats";
+import {
+  getPreparedChange,
+  listPreparedChangesForProject,
+} from "@/modules/execution/store";
 import { createGithubMergePort } from "@/modules/merge/github/adapter";
 import { getLatestMergesForPreparedChanges } from "@/modules/merge/store";
 import type { ChangeMerge } from "@/modules/merge/schema";
@@ -504,6 +508,21 @@ async function buildPreparedChangeCard(
     commitSha: prepared.commitSha,
     baseBranch: prepared.baseBranch,
     filePaths: prepared.files.map((file) => file.path),
+    /*
+     * The same files, with what each one gained and lost.
+     *
+     * Kept beside `filePaths` rather than replacing it: every caller that only
+     * wants the paths still gets exactly that, and a path is never absent
+     * because its counts are. A file prepared before the counts existed, or one
+     * too large to compare, simply carries none.
+     */
+    files: prepared.files.map((file) => ({
+      path: file.path,
+      linesAdded: file.linesAdded ?? null,
+      linesRemoved: file.linesRemoved ?? null,
+    })),
+    /* Null unless every file was counted — a partial sum reads as a total. */
+    lineStats: totalChangedLines(prepared.files),
     createdAt: prepared.createdAt,
     branchUrl: params.repositoryFullName
       ? buildBranchUrl(params.repositoryFullName, prepared.branchName)
@@ -666,4 +685,71 @@ export async function getPreparedChangeWorkspace(
         emptyLifecycle(unavailableOutcomeCard(), unmergedBusinessImpactCard()),
     }),
   );
+}
+
+/**
+ * The full workspace card for one exact prepared change.
+ *
+ * The Agent workspace follows one run, and a run names its result by id. It
+ * must not assemble every historical change just to find that one result: the
+ * full card can sign review images, resolve a live preview and perform a
+ * read-only merge preflight. Keeping this lookup exact makes route cost follow
+ * what the screen renders while preserving the same gate builders.
+ */
+export async function getPreparedChangeWorkspaceItem(
+  supabase: SupabaseClient,
+  params: {
+    projectId: string;
+    userId: string;
+    repositoryFullName: string | null;
+    preparedChangeId: string;
+  },
+): Promise<PreparedChangeWorkspaceItem | null> {
+  const [mergeTarget, prepared] = await Promise.all([
+    params.repositoryFullName ? resolveMergeTarget(supabase, params.projectId) : null,
+    getPreparedChange(supabase, {
+      projectId: params.projectId,
+      preparedChangeId: params.preparedChangeId,
+    }),
+  ]);
+
+  if (prepared === null || prepared.status !== "prepared") return null;
+
+  /*
+   * The same two things the list read supplies, for a list of one (VB-023,
+   * Sprint 0114).
+   *
+   * `buildPreparedChangeCard` stopped resolving its own lifecycle when the
+   * batched read model landed: every row it needs is fetched once for the whole
+   * set, and a card that re-read them per change was the fan-out that made one
+   * render cost hundreds of round trips. Passing a one-element set through the
+   * same batch keeps this path on the same code — and, crucially, on the same
+   * *rules*: whatever the list reads, this reads too, so the two screens cannot
+   * come to disagree about what a card is.
+   *
+   * `productionUrl` is the "before" half of a before/after, read once here for
+   * the same reason (ADR 0065).
+   */
+  const [lifecycles, project] = await Promise.all([
+    readChangeLifecycles(supabase, {
+      projectId: params.projectId,
+      prepared: [prepared],
+      reader: mergeTarget
+        ? createGithubRepositoryReader(mergeTarget.installationId, mergeTarget.owner, mergeTarget.repo)
+        : null,
+    }),
+    getProjectWithRepository(supabase, params.projectId),
+  ]);
+
+  return await buildPreparedChangeCard(supabase, {
+    projectId: params.projectId,
+    userId: params.userId,
+    repositoryFullName: params.repositoryFullName,
+    mergeTarget,
+    productionUrl: project?.productionUrl ?? null,
+    prepared,
+    lifecycle:
+      lifecycles.get(prepared.id) ??
+      emptyLifecycle(unavailableOutcomeCard(), unmergedBusinessImpactCard()),
+  });
 }

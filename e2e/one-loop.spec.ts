@@ -244,7 +244,7 @@ test.describe("preparing leads to the prepared change", () => {
     await expect(link).toHaveText("Review prepared change");
     await expect(link).toHaveAttribute(
       "href",
-      "/app/projects/project_e2e/agent#prepared-change-prepared_change_e2e",
+      "/app/projects/project_e2e/agent?plan=move-audience-copy&change=prepared_change_e2e#prepared-change-prepared_change_e2e",
     );
   });
 

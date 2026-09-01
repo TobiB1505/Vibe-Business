@@ -210,6 +210,36 @@ export type DogfoodPlanRoutes =
       resolutions: readonly ExecutionResolution[];
     };
 
+/**
+ * The Credit ceiling behind one offered Agent route (ADR 0061, launch-v1).
+ *
+ * Deliberately per step rather than per plan. `resolveDogfoodPlanRoutes` used
+ * to carry a single `economics` for the whole plan, which was answerable while
+ * one price covered every agent run. It is not any more: `launch-v1` prices an
+ * improvement by execution pricing class, and the class reads a *step's* own
+ * risk class — so a plan-wide ceiling would have to pick a tier nobody
+ * resolved, and defaulting low is a revenue leak that presents as a working
+ * system (Sprint 0111).
+ *
+ * `null` where no class resolves, which is the same answer `previewDogfoodStep`
+ * gives, and the screen renders no ceiling rather than a guessed one.
+ */
+export function resolveRouteAgentEconomics(params: {
+  projectId: string;
+  step: Parameters<typeof stepPricingClass>[0]["step"];
+  riskClass: Parameters<typeof stepPricingClass>[0]["riskClass"];
+  env?: Record<string, string | undefined>;
+}): AgentEconomicPolicy | null {
+  const pricingClass = stepPricingClass({ step: params.step, riskClass: params.riskClass });
+  if (!pricingClass) return null;
+
+  return resolveAgentEconomics({
+    projectId: params.projectId,
+    pricingClass,
+    env: params.env,
+  });
+}
+
 export async function resolveDogfoodPlanRoutes(
   supabase: SupabaseClient,
   params: { projectId: string; userId: string; env?: Record<string, string | undefined> },

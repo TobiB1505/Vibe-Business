@@ -1,8 +1,9 @@
 "use client";
 
-import { type CSSProperties, useEffect, useId, useState } from "react";
+import { useId, type CSSProperties } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import type { BusinessLens } from "@/modules/business-audit/schema";
+import { useDocumentVisible } from "@/lib/client/use-document-visible";
 import { cn } from "@/lib/utils/cn";
 import type {
   BusinessBrainNode,
@@ -76,19 +77,6 @@ function corePath(node: BusinessBrainNode): string {
   const bendY = CORE.y + (at.y - CORE.y) * 0.46;
   const perpendicular = node.id.length % 2 === 0 ? 15 : -15;
   return `M ${CORE.x} ${CORE.y} Q ${bendX + perpendicular} ${bendY - perpendicular} ${at.x} ${at.y}`;
-}
-
-function useDocumentVisible(): boolean {
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    const update = () => setVisible(document.visibilityState === "visible");
-    update();
-    document.addEventListener("visibilitychange", update);
-    return () => document.removeEventListener("visibilitychange", update);
-  }, []);
-
-  return visible;
 }
 
 function statusTone(node: BusinessBrainNode): string {

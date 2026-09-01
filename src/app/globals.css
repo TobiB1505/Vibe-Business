@@ -182,10 +182,175 @@
   --shadow-dot-amber: 0 0 8px 1px rgb(232 181 74 / 0.5);
 
   /* ── Motion ──────────────────────────────────────────────────────────
-     UI-0 ships the easing token and hover/focus transitions only. The
-     reveal and meter animations from the mockups belong to the separate
-     motion sprint; the token exists so that sprint has one curve to use. */
+     One curve, and named durations so a signature surface is not a pile of
+     magic numbers. UI-0 shipped the curve alone and said the reveal timings
+     belonged to a later motion sprint; UI-19 is that sprint, and these are the
+     values the design system carries.
+
+     Nothing readable moves for longer than `--duration-reveal`. The pulse and
+     flow loops are decorative only, and every one of them is behind a
+     reduced-motion check in the component that owns it. */
   --ease-vibe: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --duration-hover: 150ms;
+  --duration-reveal: 400ms;
+  --duration-pulse: 1.4s;
+  /* One row after the next on an entrance. Below the count where the last
+     item starts to feel like it was forgotten. */
+  --stagger-row: 80ms;
+}
+
+/* The active step's ring, breathing outward and fading. Decorative: the step's
+   state is carried by its mark, its label and its status word. */
+@keyframes vibe-step-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgb(0 229 160 / 0.34);
+  }
+  50% {
+    box-shadow: 0 0 0 9px rgb(0 229 160 / 0);
+  }
+}
+
+/* A short band travelling along the connector into the active step. It says
+   "this is where the work is", never how far along it is. */
+@keyframes vibe-step-flow {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+
+/* ── The Agent's core ────────────────────────────────────────────────────
+   Four concentric rings, a breathing core and a floating mark. Every one of
+   these is decorative: the run's state is carried by the rail's marks, labels
+   and status words, and each animation is behind a reduced-motion and
+   document-visibility check in the component that owns it.
+
+   The speeds are constant on purpose. A ring that sped up as a run advanced
+   would be a progress bar without a measurement behind it. */
+@keyframes vibe-orb-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes vibe-orb-spin-back {
+  to {
+    transform: rotate(-360deg);
+  }
+}
+
+@keyframes vibe-orb-breathe {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.62;
+  }
+  50% {
+    transform: scale(1.09);
+    opacity: 1;
+  }
+}
+
+@keyframes vibe-orb-core {
+  0%,
+  100% {
+    box-shadow:
+      0 0 46px 4px rgb(0 229 160 / 0.3),
+      inset 0 0 30px rgb(0 229 160 / 0.12);
+  }
+  50% {
+    box-shadow:
+      0 0 78px 10px rgb(0 229 160 / 0.5),
+      inset 0 0 44px rgb(0 229 160 / 0.2);
+  }
+}
+
+@keyframes vibe-mark-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-5px);
+  }
+}
+
+/* The atmosphere behind a signature surface. Background only — nothing
+   readable moves with it. */
+@keyframes vibe-glow-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+    opacity: 0.5;
+  }
+  50% {
+    transform: translate3d(-36px, 26px, 0) scale(1.12);
+    opacity: 0.85;
+  }
+}
+
+/* A highlight crossing a primary action once every few seconds. */
+@keyframes vibe-sweep {
+  from {
+    transform: translateX(-120%);
+  }
+  to {
+    transform: translateX(360%);
+  }
+}
+
+@keyframes vibe-arrow-nudge {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(4px);
+  }
+}
+
+/* One row arriving. Used with --stagger-row, never on more rows than a reader
+   would wait for. */
+@keyframes vibe-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes vibe-soft-pulse {
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* The guidance field's cursor. */
+@keyframes vibe-caret {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  55%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes vibe-spin-ring {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 @layer base {

@@ -47,7 +47,7 @@ test.describe("a preview offered while the check is still running", () => {
     // The claim `next dev` cannot support, and the reason ADR 0016 §7 had to be
     // superseded openly rather than quietly reversed: this is the prepared code
     // running, not the application that passed a check.
-    await expect(panel(page, "Preview")).toContainText(
+    await expect(panel(page, "Temporary preview")).toContainText(
       "It is the prepared code running, not a checked build.",
     );
   });
@@ -67,7 +67,7 @@ test.describe("the before half", () => {
     // working page and concludes it passed something.
     await page.goto("/e2e/change_visual_preview_ready");
 
-    await expect(panel(page, "Preview")).toContainText(
+    await expect(panel(page, "Temporary preview")).toContainText(
       "This is the prepared code running, not a checked build.",
     );
   });
@@ -88,7 +88,7 @@ test.describe("a visual change approved on its preview", () => {
 
     // The panel that used to stand between a preview and a decision is gone —
     // not empty, not disabled, absent. Nothing creates a comparison any more.
-    await expect(panel(page, "Review")).toHaveCount(0);
+    await expect(panel(page, "Visual comparison")).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Approve change" })).toBeVisible();
   });
 

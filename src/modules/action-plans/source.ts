@@ -283,6 +283,8 @@ export const PLANNED_WORK_ANCHOR = "planned-work";
  * Move, behind a confirmation, with its price stated (Rule 60).
  */
 export const PLAN_OPPORTUNITY_PARAM = "plan";
+/** The exact prepared artifact the Agent should open. Address only. */
+export const AGENT_CHANGE_PARAM = "change";
 
 /**
  * The Action Plan, opened on one Move.
@@ -307,6 +309,18 @@ export function agentMoveHref(agentHref: string, opportunityId: string): string 
 }
 
 /**
+ * Add one exact prepared change to an Agent URL while preserving its Move.
+ *
+ * The fragment makes the artifact addressable in the browser; this parameter
+ * makes the same identity visible to the server render. It grants nothing:
+ * the read still scopes the change to the signed-in user's project.
+ */
+export function agentChangeHref(agentHref: string, preparedChangeId: string): string {
+  const separator = agentHref.includes("?") ? "&" : "?";
+  return `${agentHref}${separator}${AGENT_CHANGE_PARAM}=${encodeURIComponent(preparedChangeId)}`;
+}
+
+/**
  * `requested` from a URL is untrusted text (mirrors `resolveMovesContext`).
  *
  * Bounded before it ever reaches a comparison — an opportunity id is
@@ -314,6 +328,12 @@ export function agentMoveHref(agentHref: string, opportunityId: string): string 
  * made.
  */
 export function sanitizeRequestedOpportunityId(requested: string | null | undefined): string | null {
+  if (typeof requested !== "string" || requested.length === 0 || requested.length > 128) return null;
+  return requested;
+}
+
+/** Same bounded address contract for a prepared change id. */
+export function sanitizeRequestedChangeId(requested: string | null | undefined): string | null {
   if (typeof requested !== "string" || requested.length === 0 || requested.length > 128) return null;
   return requested;
 }
