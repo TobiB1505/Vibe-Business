@@ -16,6 +16,7 @@ import { alertOperator } from "@/lib/observability/alert";
 import {
   findCreditAccountByUser,
   listActiveReservations,
+  hasLedgerEntryWithKey,
   listLedgerEntries,
   listReservationsByIds,
   sumLedgerDeltas,
@@ -272,7 +273,9 @@ export async function getBillingOverview(
     };
   }
 
-  const [lots, entries, postedFromLedger, expiry, reservations] = await Promise.all([
+  const welcomeKey = welcomeGrantIdempotencyKey(params.userId);
+
+  const [lots, entries, postedFromLedger, expiry, reservations, welcomeGranted] = await Promise.all([
     listActiveLots(supabase, account.id),
     // What the page *shows*: the most recent movements, capped (VB-025).
     listLedgerEntries(supabase, account.id),
@@ -282,6 +285,9 @@ export async function getBillingOverview(
     sumLedgerDeltas(supabase, account.id),
     findNextExpiry(supabase, account.id, now),
     listActiveReservations(supabase, account.id),
+    // Asked of the database rather than derived from `entries`, which is
+    // capped and newest-first while this row is the oldest one an account has.
+    hasLedgerEntryWithKey(supabase, account.id, welcomeKey),
   ]);
 
   /*
@@ -322,9 +328,6 @@ export async function getBillingOverview(
    * above, so a repair this same call just made is reflected immediately.
    */
   const availableCredits = spendableCapacity(lotReconciliation.lots, now);
-
-  const welcomeKey = welcomeGrantIdempotencyKey(params.userId);
-  const welcomeGranted = entries.some((entry) => entry.idempotencyKey === welcomeKey);
 
   /*
    * What live work is holding, from the reservations this call already read.
