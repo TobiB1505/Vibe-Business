@@ -247,8 +247,19 @@ export async function getBillingOverview(
   const now = params.now ?? new Date();
   const limit = params.activityLimit ?? 8;
 
-  const account = await findCreditAccountByUser(supabase, params.userId);
-  const subscription = await findActiveSubscription(supabase, params.userId);
+  /*
+   * Two independent questions, asked together (PERF-017).
+   *
+   * Neither read needs the other's answer, and they were sequential only
+   * because they were written on consecutive lines. An account that does not
+   * exist yet pays for one subscription read it will not use — a state that
+   * ends the moment anything charges the wallet, and cheaper than a round trip
+   * on every render for everyone else.
+   */
+  const [account, subscription] = await Promise.all([
+    findCreditAccountByUser(supabase, params.userId),
+    findActiveSubscription(supabase, params.userId),
+  ]);
 
   const plan: BillingPlanView = subscription
     ? {

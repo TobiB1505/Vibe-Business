@@ -591,25 +591,38 @@ async function withinStartWindows(
   const now = Date.now();
 
   try {
-    const account = await supabase
-      .from("operation_runs")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", params.userId)
-      .eq("operation_type", params.operationType)
-      .gte("created_at", new Date(now - ACCOUNT_WINDOW_MS).toISOString());
-    if (account.error) return true;
-
-    let projectCount = 0;
-    if (params.projectId !== null) {
-      const project = await supabase
+    /*
+     * Two counts, asked together (PERF-007).
+     *
+     * The project count was awaited after the account count although it never
+     * depended on it — the condition it sits behind is `projectId`, which the
+     * caller supplied. This gate stands in front of every operation start, so
+     * a sequential pair here is a round trip added to every click that spends
+     * Credits.
+     */
+    const [account, project] = await Promise.all([
+      supabase
         .from("operation_runs")
         .select("id", { count: "exact", head: true })
-        .eq("project_id", params.projectId)
+        .eq("user_id", params.userId)
         .eq("operation_type", params.operationType)
-        .gte("created_at", new Date(now - PROJECT_WINDOW_MS).toISOString());
-      if (project.error) return true;
-      projectCount = project.count ?? 0;
-    }
+        .gte("created_at", new Date(now - ACCOUNT_WINDOW_MS).toISOString()),
+      params.projectId === null
+        ? null
+        : supabase
+            .from("operation_runs")
+            .select("id", { count: "exact", head: true })
+            .eq("project_id", params.projectId)
+            .eq("operation_type", params.operationType)
+            .gte("created_at", new Date(now - PROJECT_WINDOW_MS).toISOString()),
+    ]);
+
+    // Failing open, exactly as before: a gate that cannot read its own history
+    // must not become the reason a paid operation is refused.
+    if (account.error) return true;
+    if (project?.error) return true;
+
+    const projectCount = project?.count ?? 0;
 
     return startAllowed(params.operationType, {
       project: projectCount,
