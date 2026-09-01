@@ -20,8 +20,25 @@ export const config = {
    * and refreshing a session it does not have would make that answer depend on
    * Supabase Auth — so an auth outage would report the application down when
    * it is up, and every probe would cost a round trip to a third party.
+   *
+   * The Stripe webhook and the Agent Gateway join them for exactly that
+   * argument (PERF-016). Each says in its own docblock that authentication is
+   * the signature, or the token, and nothing else; neither reads a cookie.
+   * Running them through a session refresh puts Supabase Auth in front of
+   * Stripe's delivery timeout and in front of a paid upstream call, and buys
+   * a refreshed session nobody holds.
+   *
+   * ## What is deliberately still matched
+   *
+   * The marketing and legal pages, which the audit proposed excluding too. The
+   * cost it named is not there to save: `getClaims()` returns without network
+   * I/O when the request carries no session, so an anonymous visitor to `/`
+   * already pays nothing — and for a signed-in one the refresh is doing its
+   * job rather than wasting a trip. Routes are enumerated rather than the
+   * `api` tree excluded wholesale, so a future route that does need a session
+   * is covered by default instead of quietly uncovered.
    */
   matcher: [
-    "/((?!_next/static|_next/image|favicon.ico|api/health|\\.well-known/workflow|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|api/health|api/billing/stripe/webhook|api/agent-gateway|\\.well-known/workflow|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
