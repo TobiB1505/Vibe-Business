@@ -1,16 +1,25 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { requireSession } from "@/modules/auth/session";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
-import { VercelWorkflowExecutor } from "@/modules/operations/vercel/executor";
-import { getReviewCard, getReviewImages, startChangeReview } from "@/modules/review/service";
+import { getReviewCard, getReviewImages } from "@/modules/review/service";
 import type { ReviewImages } from "@/modules/review/service";
 import type { ReviewCard } from "@/modules/review/view";
 
 /**
  * Review server actions (Sprint 11A §33, §34).
+ *
+ * ## Read-only since Sprint 0114
+ *
+ * There is no longer an action that *starts* a comparison. A preview is the
+ * review now (ADR 0065), so no screen offers one — and an exported server
+ * action is a reachable endpoint whether or not a screen calls it, which would
+ * leave a paid browser session one crafted request away from being spent on
+ * evidence nothing asks for any more.
+ *
+ * What remains reads historical artifacts, so an approval taken on a comparison
+ * can still show what it was bound to.
  *
  * A thin, safe boundary and nothing more. Every action:
  *
@@ -32,68 +41,6 @@ import type { ReviewCard } from "@/modules/review/view";
  * "before" URL could point Vibe's browser at any site on the internet and have
  * the screenshot stored under their project as though it were their product.
  */
-
-export type StartReviewActionState =
-  | { ok: true; kind: "capturing"; reviewArtifactId: string; operationId: string }
-  /** This exact comparison already exists. No second browser session (§19). */
-  | { ok: true; kind: "reused"; reviewArtifactId: string; status: string }
-  | { ok: true; kind: "running"; operationId: string }
-  | { ok: false; error: string; message: string }
-  | null;
-
-function failureMessage(code: string): string {
-  return (
-    OPERATION_FAILURE_MESSAGES[code as keyof typeof OPERATION_FAILURE_MESSAGES] ??
-    "The comparison could not be created."
-  );
-}
-
-/**
- * Starts one comparison.
- *
- * Reached only from an explicit click. There is no caller that runs this on
- * render, on poll, or when a preview becomes ready — a browser session costs
- * money by the second, and spending it without being asked is the invisible
- * cost CLAUDE.md rule 60 forbids (§23, §40).
- */
-export async function startReviewAction(
-  projectId: string,
-  preparedChangeId: string,
-  previewSessionId: string,
-): Promise<NonNullable<StartReviewActionState>> {
-  const session = await requireSession();
-  const supabase = await createClient();
-
-  const outcome = await startChangeReview(supabase, new VercelWorkflowExecutor(), {
-    projectId,
-    userId: session.userId,
-    preparedChangeId,
-    previewSessionId,
-  });
-
-  switch (outcome.kind) {
-    case "capturing":
-      revalidatePath(`/app/projects/${projectId}`);
-      return {
-        ok: true,
-        kind: "capturing",
-        reviewArtifactId: outcome.reviewArtifactId,
-        operationId: outcome.operation.operationId,
-      };
-    case "reused":
-      revalidatePath(`/app/projects/${projectId}`);
-      return {
-        ok: true,
-        kind: "reused",
-        reviewArtifactId: outcome.reviewArtifactId,
-        status: outcome.status,
-      };
-    case "running":
-      return { ok: true, kind: "running", operationId: outcome.operation.operationId };
-    case "failed":
-      return { ok: false, error: outcome.error, message: failureMessage(outcome.error) };
-  }
-}
 
 export type ReviewImagesActionState = { ok: true; images: ReviewImages } | { ok: false };
 

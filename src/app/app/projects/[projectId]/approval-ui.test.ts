@@ -61,6 +61,26 @@ const FORBIDDEN = /\b(merge|merged|deploy|deployed|ship|shipped|publish|publishe
  */
 const FORBIDDEN_EXCEPT_MERGE = /\b(deploy|deployed|ship|shipped|publish|published|live)\b/i;
 
+/**
+ * The one label allowed to carry a forbidden word, and the argument for it.
+ *
+ * Exempt by exact string rather than by loosening the pattern, so the exemption
+ * stays visible on the screen it applies to and a second one has to be argued
+ * for in the same place.
+ *
+ * "Open your live site now" is a plain link to the customer's *own* site, in a
+ * second tab — the honest "before" half of a before/after (ADR 0065). "Live
+ * site" is this product's standing phrase for the site the customer already
+ * runs; the audit surfaces say it throughout. What §22 forbids is a Vibe
+ * control implying Vibe put something live, and this is its opposite: it starts
+ * nothing, spends nothing, and points away from Vibe entirely.
+ */
+const PERMITTED_LABELS: readonly string[] = ["Open your live site now"];
+
+function forbiddenLabels(src: string): string[] {
+  return actionLabels(src).filter((label) => !PERMITTED_LABELS.includes(label.trim()));
+}
+
 describe("the approval panel offers approval and nothing more", () => {
   const src = source("approval-panel.tsx");
 
@@ -117,7 +137,7 @@ describe("no deploy affordance exists anywhere in the project page", () => {
     // the validation or review panel would still be a control that claims an
     // authority its own section has not established.
     for (const file of files) {
-      for (const label of actionLabels(source(file))) {
+      for (const label of forbiddenLabels(source(file))) {
         expect(label, `${file} renders a forbidden action`).not.toMatch(FORBIDDEN);
       }
     }

@@ -138,14 +138,11 @@ export function ApprovalPanel({
   projectId,
   preparedChangeId,
   card,
-  /** The comparison the user is looking at. Sent so a stale tab is refused. */
-  reviewArtifactId,
   merged,
 }: {
   projectId: string;
   preparedChangeId: string;
   card: ApprovalCard;
-  reviewArtifactId: string | null;
   /** The default branch carries this change, verified by reading it back. */
   merged: boolean;
 }) {
@@ -167,15 +164,23 @@ export function ApprovalPanel({
   const openerRef = useReturnFocus<HTMLButtonElement>(confirming !== null);
 
   function approve() {
-    if (!reviewArtifactId) return;
-
     setIntent("approve");
     startTransition(async () => {
       setConfirming(null);
       // The confirmation travels as an explicit argument. The dialog closing is
       // not what authorizes this; the boolean is, and the server refuses
       // without it (§8).
-      setState(await approveChangeAction(projectId, preparedChangeId, reviewArtifactId, true));
+      /*
+       * Never a comparison id (ADR 0065).
+       *
+       * Both forms a new approval may take — a diff, or a diff plus the preview
+       * of the same commit — are resolved server-side from persisted rows, so
+       * there is nothing here for a client to name. The argument stays because
+       * the server still compares it: a stale tab that predates this sprint and
+       * sends an artifact id is refused rather than quietly approving something
+       * else.
+       */
+      setState(await approveChangeAction(projectId, preparedChangeId, null, true));
       router.refresh();
       setIntent(null);
     });
@@ -275,7 +280,7 @@ export function ApprovalPanel({
               variant="primary"
               size="sm"
               onClick={() => setConfirming("approve")}
-              disabled={busy || !reviewArtifactId}
+              disabled={busy}
             >
               Approve change
             </Button>
@@ -296,7 +301,7 @@ export function ApprovalPanel({
               variant="primary"
               size="sm"
               onClick={() => setConfirming("approve")}
-              disabled={busy || !reviewArtifactId}
+              disabled={busy}
             >
               Approve change
             </Button>
@@ -314,7 +319,7 @@ export function ApprovalPanel({
             variant="primary"
             size="sm"
             onClick={() => setConfirming("approve")}
-            disabled={busy || !reviewArtifactId}
+            disabled={busy}
           >
             Approve change
           </Button>

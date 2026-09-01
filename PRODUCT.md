@@ -113,8 +113,8 @@ The first complete product loop ("Core Loop V0.1"):
 8. Vibe Business creates a separate Git branch.
 9. AI prepares a concrete code improvement on that branch.
 10. The project is built and tested.
-11. A temporary isolated preview of the validated change is created — never a deploy into the user's own hosting ([ADR 0016](docs/decisions/0016-temporary-preview-isolation.md)).
-12. User sees Current vs. Vibe Proposal.
+11. A temporary isolated preview of the change is created — never a deploy into the user's own hosting ([ADR 0016](docs/decisions/0016-temporary-preview-isolation.md)), and it can be opened while step 10 is still running ([ADR 0064](docs/decisions/0064-preview-before-validation.md)).
+12. User sees Current vs. Vibe Proposal — the live site in one tab, the preview in the other, and the code diff on the card ([ADR 0065](docs/decisions/0065-the-preview-is-the-review.md)).
 13. User chooses Reject or Approve.
 14. Only after explicit approval is the change merged.
 15. Vibe Business later measures the impact of the change.

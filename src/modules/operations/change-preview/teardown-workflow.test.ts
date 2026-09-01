@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PREVIEW_BUDGETS } from "@/modules/change-preview/budgets";
-import { PREVIEW_SNAPSHOT_ID } from "@/modules/change-preview/test-support";
 import { FakeDatabase, fakeSupabase } from "@/modules/operations/test-support";
 import { fakeSandboxProvider } from "@/modules/validation/test-support";
 
@@ -63,7 +62,7 @@ function seed(overrides: Record<string, unknown> = {}) {
     user_id: USER,
     prepared_change_id: PREPARED,
     status: "passed",
-    artifact_snapshot_id: PREVIEW_SNAPSHOT_ID,
+    artifact_snapshot_id: "snap_v1_legacy",
     artifact_expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
     artifact_deleted_at: null,
   });
@@ -75,7 +74,7 @@ function seed(overrides: Record<string, unknown> = {}) {
     prepared_change_id: PREPARED,
     validation_run_id: VALIDATION,
     operation_run_id: "start_op_1",
-    artifact_snapshot_id: PREVIEW_SNAPSHOT_ID,
+    artifact_snapshot_id: "snap_v1_legacy",
     preview_profile: "nextjs_preview_v1",
     preview_identity: "p".repeat(64),
     provider: "vercel_sandbox",
@@ -106,7 +105,7 @@ describe("what a teardown does", () => {
     seed();
     await provider.current.create({
       name: "vibe-preview-1",
-      source: { kind: "snapshot", snapshotId: PREVIEW_SNAPSHOT_ID },
+      source: { kind: "snapshot", snapshotId: "snap_v1_legacy" },
       networkPolicy: { mode: "deny_all" },
       ports: [PREVIEW_BUDGETS.port],
       timeoutMs: PREVIEW_BUDGETS.ttlMs,
@@ -116,7 +115,7 @@ describe("what a teardown does", () => {
     await previewTeardownWorkflow(OPERATION);
 
     expect(provider.current.stopped()).toBe(true);
-    expect(provider.current.deletedArtifacts()).toEqual([PREVIEW_SNAPSHOT_ID]);
+    expect(provider.current.deletedArtifacts()).toEqual(["snap_v1_legacy"]);
 
     const [usage] = db.current.rows("sandbox_usage_events");
     expect(usage.operation).toBe("change_preview");
@@ -198,7 +197,7 @@ describe("cleanup outranks accounting", () => {
     seed();
     await provider.current.create({
       name: "vibe-preview-1",
-      source: { kind: "snapshot", snapshotId: PREVIEW_SNAPSHOT_ID },
+      source: { kind: "snapshot", snapshotId: "snap_v1_legacy" },
       networkPolicy: { mode: "deny_all" },
       ports: [PREVIEW_BUDGETS.port],
       timeoutMs: PREVIEW_BUDGETS.ttlMs,
@@ -211,7 +210,7 @@ describe("cleanup outranks accounting", () => {
     // The sandbox is gone and stays gone. Nothing resurrects or retains a paid
     // VM to make the books balance.
     expect(provider.current.stopped()).toBe(true);
-    expect(provider.current.deletedArtifacts()).toEqual([PREVIEW_SNAPSHOT_ID]);
+    expect(provider.current.deletedArtifacts()).toEqual(["snap_v1_legacy"]);
   });
 
   it("still records the spend on a later attempt", async () => {

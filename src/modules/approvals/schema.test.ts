@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { checkedValues, migrationSql } from "@/modules/operations/migration-test-support";
-import { computeApprovalIdentity } from "./identity";
+import { computeApprovalIdentity, type ApprovalEvidence } from "./identity";
 import {
   APPROVAL_INVALIDATION_REASONS,
   APPROVAL_POLICY_VERSION,
@@ -115,7 +115,7 @@ describe("approval identity", () => {
     preparedCommitSha: "a".repeat(40),
     preparedBaseSha: "b".repeat(40),
     validationRunId: "validation_1",
-    reviewArtifactId: "review_1",
+    evidence: { kind: "review_artifact", reviewArtifactId: "review_1" } as ApprovalEvidence,
     approvalPolicyVersion: APPROVAL_POLICY_VERSION,
   };
 
@@ -132,8 +132,11 @@ describe("approval identity", () => {
       { preparedCommitSha: "c".repeat(40) },
       { preparedBaseSha: "d".repeat(40) },
       { validationRunId: "validation_2" },
-      { reviewArtifactId: "review_2" },
-      { approvalPolicyVersion: "approval-policy-v2" },
+      { evidence: { kind: "review_artifact", reviewArtifactId: "review_2" } as ApprovalEvidence },
+      // The two evidence *forms* are different things to approve even when the
+      // change, the commit and the validation are identical (ADR 0063).
+      { evidence: { kind: "code_diff", codeReviewDigest: "f".repeat(64) } as ApprovalEvidence },
+      { approvalPolicyVersion: "approval-policy-v99" },
       { projectId: "project_2" },
       { preparedChangeId: "prepared_2" },
     ]) {

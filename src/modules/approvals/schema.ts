@@ -1,3 +1,5 @@
+import type { ReviewClassification } from "@/modules/review/classification";
+
 /**
  * The human approval domain (Sprint 11B §1, §2, §3, §11).
  *
@@ -45,7 +47,7 @@
  * Changing any of that changes what a stored approval means, so the version is
  * part of the approval's identity and old rows keep their original meaning.
  */
-export const APPROVAL_POLICY_VERSION = "approval-policy-v1" as const;
+export const APPROVAL_POLICY_VERSION = "approval-policy-v3" as const;
 
 /**
  * Approval statuses (§2).
@@ -79,6 +81,17 @@ export const APPROVAL_INVALIDATION_REASONS = [
   "validation_superseded",
   /** A newer ready comparison superseded the one that was approved. */
   "review_superseded",
+  /**
+   * The change now deserves a different kind of review than the one approved.
+   *
+   * The classification is derived partly from the analyzer's route table, and
+   * that table moves: a newer repository snapshot can reveal that a changed
+   * file serves a route, turning a change that needed only a diff into one that
+   * needs a visual review. The human's decision has not been superseded by
+   * newer evidence of the same kind — it is being asked a different question,
+   * and saying so is not the same sentence as "your comparison was replaced".
+   */
+  "review_requirement_changed",
 ] as const;
 export type ApprovalInvalidationReason = (typeof APPROVAL_INVALIDATION_REASONS)[number];
 
@@ -95,6 +108,15 @@ export const APPROVAL_BLOCK_REASONS = [
   "approval_validation_required",
   /** No comparison exists, or the one that does is not `ready` (§4). */
   "approval_review_required",
+  /**
+   * The change alters a rendered page and no interactive preview of this exact
+   * commit has run (Sprint 0114).
+   *
+   * Distinct from `approval_review_required`, which is about a *comparison*.
+   * The remedy is different and so is the sentence: one asks for a screenshot
+   * pair, this asks the person to look at the thing.
+   */
+  "approval_preview_required",
   /**
    * The comparison exists but its images are past retention (§4).
    *
@@ -129,7 +151,36 @@ export type ChangeApproval = {
 
   preparedChangeId: string;
   validationRunId: string;
-  reviewArtifactId: string;
+
+  /**
+   * The comparison the human looked at. Null for a code-diff approval.
+   *
+   * Exactly one of this and `codeReviewDigest` is set — the database enforces
+   * it, so neither the domain nor a reader has to hold the rule in their head.
+   */
+  reviewArtifactId: string | null;
+  /**
+   * The diff the human looked at, as a reproducible identity.
+   *
+   * sha256 over project, change, base, commit, sorted changed paths and the
+   * diff policy version. It is not a hash of the *bytes* — those are never
+   * persisted (rule 26) — it is a hash of everything needed to fetch them
+   * again and get the same diff, which is the property a screenshot lacks.
+   *
+   * What it does **not** claim: that anyone read it. It records what was shown,
+   * which is the same claim `reviewArtifactId` makes about two images.
+   */
+  codeReviewDigest: string | null;
+
+  /**
+   * The interactive preview the human was shown. Null for a code-only approval,
+   * and for every approval made before Sprint 0114.
+   */
+  previewSessionId: string | null;
+
+  /** Which review this change deserved, as decided at approval time (ADR 0063). */
+  reviewClassification: ReviewClassification | null;
+  reviewClassificationPolicyVersion: string | null;
 
   /**
    * The exact commit that was approved.

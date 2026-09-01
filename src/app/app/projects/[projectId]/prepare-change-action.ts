@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { requireSession } from "@/modules/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import { getPreparedDiff, type PreparedDiff } from "@/modules/execution/diff";
-import { createGithubGitWritePort } from "@/modules/execution/github/adapter";
+import { createGithubRepositoryReader } from "@/modules/github/repository-reader";
 import { startChangePreparation } from "@/modules/execution/service";
 import { getProjectWithRepository } from "@/modules/projects/queries";
 import type { OperationFailureCode } from "@/modules/operations/failures";
@@ -83,12 +83,18 @@ export async function getPreparedDiffAction(
   if (!project || project.userId !== session.userId) return { ok: false, error: "not_found" };
   if (!project.repository) return { ok: false, error: "unavailable" };
 
-  const port = createGithubGitWritePort({
-    installationId: project.repository.installationId,
-    owner: project.repository.owner,
-    repo: project.repository.name,
-  });
+  /*
+   * A read-only reader, not the write port this used to use. The diff needs
+   * both versions of every file at two pinned commits, and it must have no way
+   * to write — which is now a property of the type it is given rather than a
+   * claim about the code it is passed to.
+   */
+  const reader = createGithubRepositoryReader(
+    project.repository.installationId,
+    project.repository.owner,
+    project.repository.name,
+  );
 
-  const result = await getPreparedDiff(supabase, port, { projectId, preparedChangeId });
+  const result = await getPreparedDiff(supabase, reader, { projectId, preparedChangeId });
   return result.ok ? { ok: true, diff: result.diff } : { ok: false, error: result.error };
 }

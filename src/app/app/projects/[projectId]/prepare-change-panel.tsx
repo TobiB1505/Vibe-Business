@@ -21,6 +21,7 @@ import {
   type BlockedActionDestinations,
   type OpportunityActionState,
 } from "@/modules/execution/view";
+import { DiffView } from "@/components/change/diff-view";
 import type { PreparedDiff } from "@/modules/execution/diff";
 import { getOperationStatusAction } from "./run-audit-action";
 import { ValidationPanel, type ValidationSummary } from "./validation-panel";
@@ -83,44 +84,6 @@ function ConfirmDialog({
           Cancel
         </TextAction>
       </div>
-    </div>
-  );
-}
-
-function DiffView({ diff }: { diff: PreparedDiff }) {
-  return (
-    <div className="space-y-3">
-      <dl className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-fg-muted">
-        <div className="flex gap-2">
-          <dt>Base</dt>
-          <dd className="text-fg-prose">{diff.baseSha.slice(0, 7)}</dd>
-        </div>
-        <div className="flex gap-2">
-          <dt>Prepared</dt>
-          <dd className="text-fg-prose">{diff.commitSha.slice(0, 7)}</dd>
-        </div>
-      </dl>
-
-      {diff.files.map((file) => (
-        <div key={file.path} className="space-y-1">
-          <p className="text-xs text-fg-secondary">{file.path}</p>
-          {/* Plain text in a <pre>. React escapes every line; nothing here
-              parses, highlights or evaluates repository content. */}
-          <pre className="overflow-x-auto rounded-md border border-line-2 bg-app p-3 text-xs leading-relaxed text-fg-prose">
-            {file.lines.map((line, index) => (
-              <span key={index} className="block">
-                <span className="text-mint">+ </span>
-                {line}
-              </span>
-            ))}
-          </pre>
-          {file.truncated && (
-            <p className="text-xs text-fg-muted">This file was truncated for review.</p>
-          )}
-        </div>
-      ))}
-
-      {diff.truncated && <p className="text-xs text-fg-muted">Some files were omitted for review.</p>}
     </div>
   );
 }

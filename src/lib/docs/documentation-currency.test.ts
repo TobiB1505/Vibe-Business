@@ -242,6 +242,29 @@ const RETIRED_CLAIMS: readonly { path: string; claim: string; retiredBy: string 
       "runs met it. What the sentence was protecting — that no price ships without one — holds.",
   },
   {
+    path: "ARCHITECTURE.md",
+    claim: "restores the exact filesystem artifact captured from a passing validation",
+    retiredBy:
+      "Sprint 0114, ADR 0064 — a preview clones the prepared commit and runs a development " +
+      "server beside validation. No artifact is captured, restored or retained; ADR 0016 still " +
+      "describes what it decided at the time and may quote this.",
+  },
+  {
+    path: "src/modules/approvals/README.md",
+    claim: "The evidence takes one of two forms",
+    retiredBy:
+      "Sprint 0114, ADR 0065 — three: a diff, a diff plus the preview session of the same " +
+      "commit, and a review artifact on historical rows only. The diff is in every new form.",
+  },
+  {
+    path: "README.md",
+    claim: "captures a before/after comparison",
+    retiredBy:
+      "Sprint 0114, ADR 0065 — no browser session photographs a preview any more. The before " +
+      "half is a link to the customer's live site as it is now, and the after half is the " +
+      "running preview itself.",
+  },
+  {
     path: "src/app/login/page.tsx",
     claim: "Read-only access to start",
     retiredBy:

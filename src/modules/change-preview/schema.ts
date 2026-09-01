@@ -40,6 +40,8 @@
  * different trust levels in one codebase.
  */
 
+import type { ValidationProfile } from "@/modules/validation/schema";
+
 /**
  * Preview profiles (§3).
  *
@@ -52,40 +54,65 @@
  * artifact — never from an Opportunity's prose, a repository's README, or any
  * other text a model or a customer wrote (CLAUDE.md rules 25, 57).
  */
-export const PREVIEW_PROFILES = ["nextjs_preview_v1"] as const;
+export const PREVIEW_PROFILES = ["nextjs_preview_v1", "nextjs_dev_preview_v1"] as const;
 export type PreviewProfile = (typeof PREVIEW_PROFILES)[number];
+
+/**
+ * The profile every new preview uses (Sprint 0114).
+ *
+ * `nextjs_preview_v1` — a production server on a restored validated artifact —
+ * remains in the union because sessions that ran under it are history and their
+ * rows still say so. Nothing creates one any more.
+ */
+export const CURRENT_PREVIEW_PROFILE: PreviewProfile = "nextjs_dev_preview_v1";
 
 /** Bumped when what a profile *starts* changes meaning. */
 export const PREVIEW_PROFILE_VERSIONS: Record<PreviewProfile, string> = {
   nextjs_preview_v1: "nextjs-preview-v1",
+  nextjs_dev_preview_v1: "nextjs-dev-preview-v1",
 };
-
-import type { ValidationProfile } from "@/modules/validation/schema";
 
 /**
- * Which validated artifacts `nextjs_preview_v1` can start.
+ * Which repositories a preview can be started for.
  *
- * A `Record` over the closed validation-profile union rather than an `if`:
- * adding a validation profile without deciding whether preview supports it
- * becomes a type error instead of a silent `false` or, worse, a silent `true`.
+ * Answered by `resolveValidationProfile`, not by a second detection of the same
+ * facts. That resolver already decides — from the analyzer's snapshot, never
+ * from an Opportunity's prose, a README, or any other text a model or customer
+ * wrote (rules 25, 57) — whether this is a single-app Next.js repository with a
+ * package manager Vibe supports. A preview needs exactly the same three things,
+ * and it needs the package manager and workspace root the resolver returns
+ * anyway.
+ *
+ * Keying it on the validation *profile* rather than on a completed validation
+ * *run* is the change Sprint 0114 made: a preview no longer waits for a run.
+ *
+ * One entry, deliberately, for the same reason validation has one: a profile is
+ * a promise about which runtime starts which server on which port. "Supports
+ * everything" would mean "promises nothing", and a guessed start command
+ * produces a URL nobody should trust.
  */
 export const PREVIEWABLE_VALIDATION_PROFILES: Record<ValidationProfile, PreviewProfile | null> = {
-  nextjs_node_v1: "nextjs_preview_v1",
+  nextjs_node_v1: CURRENT_PREVIEW_PROFILE,
 };
+
+export function previewProfileFor(validationProfile: ValidationProfile): PreviewProfile | null {
+  return PREVIEWABLE_VALIDATION_PROFILES[validationProfile] ?? null;
+}
 
 /**
  * The preview runtime policy version (§4).
  *
  * Versions, together, everything that decides what a running preview *is*:
  *
- *  - the runtime it starts in (restored artifact, never a fresh image);
+ *  - the runtime it starts in (a fresh clone of the prepared commit);
  *  - the single Vibe-controlled port;
- *  - the server command strategy (production server, never `next dev`);
- *  - the network policy (inbound one port, outbound `deny-all`);
+ *  - the server command strategy (a development server — see ADR 0064);
+ *  - the network policy at each phase (GitHub, then the registry, then
+ *    `deny-all` before any repository code runs);
  *  - the TTL;
- *  - health-check behaviour;
- *  - the secret policy (none, and proven absent before the server starts);
- *  - cleanup and snapshot-deletion semantics.
+ *  - health-check behaviour, including a budget that covers a cold compile;
+ *  - the secret policy (none, and proven absent before the sandbox exists);
+ *  - cleanup semantics.
  *
  * It is part of the preview identity, so a policy change invalidates preview
  * reuse by construction rather than by anyone remembering to. That is the same
@@ -93,7 +120,7 @@ export const PREVIEWABLE_VALIDATION_PROFILES: Record<ValidationProfile, PreviewP
  * reason: a stored "this ran fine" must never be reinterpreted under rules it
  * was not checked against (CLAUDE.md rule 65).
  */
-export const PREVIEW_POLICY_VERSION = "preview-policy-v1" as const;
+export const PREVIEW_POLICY_VERSION = "preview-policy-v2" as const;
 
 export const PREVIEW_PROVIDERS = ["vercel_sandbox"] as const;
 export type PreviewProviderId = (typeof PREVIEW_PROVIDERS)[number];
@@ -131,11 +158,20 @@ export function isPreviewActive(status: PreviewStatus): boolean {
  */
 export const PREVIEW_STAGES = [
   "preflight",
+  /** Cloning the prepared commit, and proving it is that commit. */
+  "acquiring_source",
+  /** Installing from the committed lockfile, with the registry reachable. */
+  "installing",
+  "starting_dev_server",
+  "checking_preview",
+  "completed",
+  /*
+   * v1 stages. No new session reaches one — a preview restores nothing — but
+   * rows recorded them and a stored fact is not rewritten to match the present.
+   */
   "restoring_artifact",
   "verifying_artifact",
   "starting_server",
-  "checking_preview",
-  "completed",
 ] as const;
 export type PreviewStage = (typeof PREVIEW_STAGES)[number];
 
@@ -147,9 +183,9 @@ export type PreviewStage = (typeof PREVIEW_STAGES)[number];
  * user-safe copy` (ADR 0015 §9).
  */
 export const PREVIEW_FAILURE_CODES = [
-  /** No passing validation exists for this change, so there is nothing to preview. */
-  "validation_required",
-  /** The validation profile that produced the artifact has no preview profile. */
+  /** The change has no commit to serve. */
+  "preview_change_not_prepared",
+  /** This repository's framework has no preview profile. */
   "preview_not_supported",
   /**
    * The user did not explicitly confirm public exposure (§8).
@@ -158,18 +194,23 @@ export const PREVIEW_FAILURE_CODES = [
    * creation, zero exposed port, zero provider spend.
    */
   "preview_exposure_not_confirmed",
-  /** No artifact was captured, or it has already been deleted. */
-  "preview_artifact_unavailable",
-  /** The artifact's own deadline passed. Checked before any provider spend (§10). */
-  "preview_artifact_expired",
   /**
-   * The restored filesystem is not the validated filesystem (§11).
+   * The provider did not produce the prepared commit (Sprint 0114).
    *
-   * Covers a changed-file hash mismatch, a build-identity mismatch, and a
-   * credential-bearing `.git` that came back with the snapshot. Zero
-   * repository-controlled code runs after this.
+   * Either the clone failed or what came back is not what Vibe prepared. Zero
+   * repository-controlled code runs after this: a preview of the wrong bytes on
+   * a public URL is worse than no preview.
    */
-  "preview_artifact_integrity_failed",
+  "preview_source_unavailable",
+  /**
+   * The clone credential survived its removal (rule 63).
+   *
+   * The one failure here that is about Vibe's own boundary rather than about
+   * the customer's code, and the reason nothing is allowed to run afterwards.
+   */
+  "preview_credential_scrub_failed",
+  /** Dependencies could not be installed from the committed lockfile. */
+  "preview_install_failed",
   /**
    * A privileged Vibe credential was found in the preview environment (§12).
    *
@@ -188,7 +229,7 @@ export const PREVIEW_FAILURE_CODES = [
   "preview_health_check_failed",
   /** The sandbox provider could not create, reconnect, or route. */
   "preview_provider_unavailable",
-  /** Teardown or snapshot deletion did not verifiably complete. Never hides a result. */
+  /** Teardown did not verifiably complete. Never hides a result. */
   "preview_cleanup_failed",
   /** Anything else, reported honestly rather than guessed at. */
   "preview_failed",
@@ -204,13 +245,25 @@ export const PREVIEW_CLEANUP_STATUSES = [
   "stopped",
   "stop_failed",
   "not_provisioned",
-  /** The sandbox is gone but its snapshot could not be deleted. Retryable (§19). */
+  /**
+   * A v1 session whose sandbox stopped but whose snapshot could not be deleted.
+   *
+   * Unreachable under `preview-policy-v2`, which captures no snapshot. Kept
+   * because rows recorded it.
+   */
   "artifact_delete_failed",
 ] as const;
 export type PreviewCleanupStatus = (typeof PREVIEW_CLEANUP_STATUSES)[number];
 
 /**
- * The artifact a preview restores from.
+ * The artifact a v1 preview restored from.
+ *
+ * **Historical under `preview-policy-v2`.** Validation captures no snapshot any
+ * more (ADR 0064), so no new artifact comes into existence and nothing restores
+ * one. The type and its reader remain because rows recorded before the change
+ * still carry the columns, and a stored fact is not rewritten to match the
+ * present.
+ *
  *
  * Identified by its validation run, because capture is strictly one-per-passing
  * run: `validation_runs.artifact_snapshot_id` is set once, by the cleanup step
@@ -240,10 +293,25 @@ export type PreviewSession = {
   userId: string;
 
   preparedChangeId: string;
-  validationRunId: string;
+  /**
+   * The commit this session served. Server-resolved, never client-supplied.
+   *
+   * The whole answer to *what was previewed* under `preview-policy-v2`. It used
+   * to be implied by a snapshot id, which meant reading it required a join to a
+   * validation run that no longer has to exist.
+   */
+  preparedCommitSha: string;
+  /**
+   * The validation this session was started alongside, when one existed.
+   *
+   * Null under `preview-policy-v2` whenever a preview is started before
+   * validation — which is the normal case and the point of the sprint. Recorded
+   * when it is known, never required.
+   */
+  validationRunId: string | null;
   operationRunId: string;
-  /** The exact snapshot this session restored. Never client-supplied. */
-  artifactSnapshotId: string;
+  /** The snapshot a v1 session restored. Always null under v2. */
+  artifactSnapshotId: string | null;
 
   previewProfile: PreviewProfile;
   previewProfileVersion: string;
@@ -251,7 +319,7 @@ export type PreviewSession = {
 
   provider: PreviewProviderId;
   runtime: string | null;
-  /** Vibe-controlled, from `preview-policy-v1`. Never a client choice (§14). */
+  /** Vibe-controlled, from the preview policy. Never a client choice (§14). */
   port: number;
 
   status: PreviewStatus;
@@ -274,7 +342,12 @@ export type PreviewSession = {
   readyAt: string | null;
   expiresAt: string;
   stoppedAt: string | null;
-  /** When the ValidatedArtifact snapshot was deleted for this session (§19). */
+  /**
+   * When this session's ValidatedArtifact snapshot was deleted.
+   *
+   * Always null under `preview-policy-v2`, which captures no snapshot. Kept
+   * because sessions that ran under v1 did, and their rows still say when.
+   */
   artifactDeletedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -282,16 +355,6 @@ export type PreviewSession = {
 
 export function previewProfileVersionFor(profile: PreviewProfile): string {
   return PREVIEW_PROFILE_VERSIONS[profile];
-}
-
-/**
- * The preview profile for a validated artifact, or null.
- *
- * Null is the answer for every framework that is not Next.js, and it stays the
- * answer until a second profile is deliberately built. Refusing is the feature.
- */
-export function previewProfileFor(validationProfile: ValidationProfile): PreviewProfile | null {
-  return PREVIEWABLE_VALIDATION_PROFILES[validationProfile] ?? null;
 }
 
 /**

@@ -4,7 +4,12 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { ConfirmPanel, useReturnFocus } from "@/components/ui/confirm-panel";
 import { Button } from "@/components/ui/button";
+import { preparedChangeAnchorId } from "@/components/layout/project-shell";
 import type { MergeCard } from "@/modules/merge/view";
+import {
+  REVIEW_CLASSIFICATION_LABELS,
+  type ReviewClassificationResult,
+} from "@/modules/review/classification";
 import { mergeApprovedChangeAction, type MergeActionState } from "./merge-actions";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
 
@@ -28,6 +33,14 @@ import { formatTimestamp } from "@/lib/utils/format-datetime";
  * omit: moving a default branch may trigger the customer's own CI/CD. Vibe did
  * not deploy anything — and saying "no production effect" would still be false.
  * So the confirmation says both, *before* the click (§26).
+ *
+ * ## What the dialog says about the change itself
+ *
+ * One line: how it was reviewed, and how many files it touches. Deliberately
+ * not the diff — this dialog has three sentences it must get right, and burying
+ * them under a code listing is how a confirmation stops being read. The line
+ * links back to the diff on the card instead, which is where a person reads it
+ * with room (ADR 0063).
  *
  * ## What this component never decides
  *
@@ -55,10 +68,46 @@ function NotDeployed() {
   );
 }
 
+/**
+ * How this change was reviewed, restated at the moment of the write.
+ *
+ * A person approving and a person merging are the same person minutes apart,
+ * and the second act is the consequential one. Saying which evidence stood
+ * behind the first is the difference between "you approved something" and "you
+ * approved this, on a code diff, over these files".
+ */
+function ReviewedAs({
+  classification,
+  filesChanged,
+  preparedChangeId,
+}: {
+  classification: ReviewClassificationResult | null;
+  filesChanged: number;
+  preparedChangeId: string;
+}) {
+  if (!classification) return null;
+
+  return (
+    <p className="text-fg-secondary">
+      Reviewed as: {REVIEW_CLASSIFICATION_LABELS[classification.classification]} ·{" "}
+      {filesChanged} file{filesChanged === 1 ? "" : "s"} ·{" "}
+      <a
+        href={`#${preparedChangeAnchorId(preparedChangeId)}`}
+        className="underline underline-offset-2 hover:text-fg-body"
+      >
+        see what changed
+      </a>
+    </p>
+  );
+}
+
 function MergeDialog({
   defaultBranch,
   fromSha,
   toSha,
+  classification,
+  filesChanged,
+  preparedChangeId,
   onCancel,
   onConfirm,
   pending,
@@ -66,6 +115,9 @@ function MergeDialog({
   defaultBranch: string | null;
   fromSha: string | null;
   toSha: string | null;
+  classification: ReviewClassificationResult | null;
+  filesChanged: number;
+  preparedChangeId: string;
   onCancel: () => void;
   onConfirm: () => void;
   pending: boolean;
@@ -80,6 +132,11 @@ function MergeDialog({
     >
       <>
         <p>You approved this exact change earlier.</p>
+        <ReviewedAs
+          classification={classification}
+          filesChanged={filesChanged}
+          preparedChangeId={preparedChangeId}
+        />
         <p>
           Vibe will now update the repository&apos;s default branch
           {defaultBranch ? (
@@ -117,10 +174,15 @@ export function MergePanel({
   projectId,
   preparedChangeId,
   card,
+  /** How the change was reviewed, for the confirmation's one summary line. */
+  classification,
+  filesChanged,
 }: {
   projectId: string;
   preparedChangeId: string;
   card: MergeCard;
+  classification: ReviewClassificationResult | null;
+  filesChanged: number;
 }) {
   const router = useRouter();
   const [state, setState] = useState<MergeActionState>(null);
@@ -157,6 +219,9 @@ export function MergePanel({
           defaultBranch={card.defaultBranch}
           fromSha={card.currentDefaultHeadSha}
           toSha={card.targetCommitSha}
+          classification={classification}
+          filesChanged={filesChanged}
+          preparedChangeId={preparedChangeId}
           onCancel={() => setConfirming(false)}
           onConfirm={merge}
           pending={pending}

@@ -175,16 +175,21 @@ export const OPERATION_STAGES = [
   "collecting_results",
   "cleaning_up",
   /**
-   * Temporary preview (Sprint 10B-2 §23).
+   * Temporary preview (Sprint 10B-2 §23; reshaped by Sprint 0114).
    *
-   * Granular for the same reason validation's are: a restore-plus-boot is tens
-   * of seconds, and one opaque stage tells a waiting user nothing that a
-   * percentage would not tell them falsely.
+   * Granular for the same reason validation's are: a clone-install-and-boot is
+   * a couple of minutes, and one opaque stage tells a waiting user nothing that
+   * a percentage would not tell them falsely.
+   *
+   * `acquiring_source` and `installing` are shared with validation, which does
+   * the same two things for a different reason. The three names below
+   * `starting_dev_server` are v1's, kept because rows recorded them.
    */
+  "starting_dev_server",
+  "checking_preview",
   "restoring_artifact",
   "verifying_artifact",
   "starting_server",
-  "checking_preview",
   /** Visual review (Sprint 11A §21). Two captures, named plainly. */
   "capturing_before",
   "capturing_after",
@@ -298,13 +303,14 @@ export function hasEnteredPaidWork(stage: OperationStage): boolean {
     stage === "writing_repository" ||
     stage === "validating" ||
     stage === "persisting" ||
-    // Restoring an artifact creates a billed microVM. Not inference, but the
-    // property this function exists to express is "money may already have been
-    // spent", and a sandbox creation qualifies (Sprint 10B-2 §27).
+    // A preview creates a billed microVM. Not inference, but the property this
+    // function exists to express is "money may already have been spent", and a
+    // sandbox creation qualifies (Sprint 10B-2 §27).
+    stage === "starting_dev_server" ||
+    stage === "checking_preview" ||
     stage === "restoring_artifact" ||
     stage === "verifying_artifact" ||
     stage === "starting_server" ||
-    stage === "checking_preview" ||
     // Agentic execution (CORE-4 §37). `preparing_workspace` provisions a billed
     // microVM and `running_agent` is the paid inference loop; both are past the
     // point where money may already have been spent, so neither may be quietly

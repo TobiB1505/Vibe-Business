@@ -16,6 +16,7 @@ import {
   recordPreviewSandboxUsage,
 } from "@/modules/change-preview/store";
 import type { SandboxUsage } from "@/modules/validation/sandbox-port";
+import { sweepExpiredReviewScreenshots } from "../change-review/retention";
 import { getProjectOperationRunById, completeOperationRun, setOperationStage } from "../store";
 import type { PreviewDeps } from "./execution";
 
@@ -125,8 +126,9 @@ export async function terminatePreviewStep(
   const teardown = await teardownPreview(
     deps.provider,
     { previewSessionId: session.id, snapshotId: session.artifactSnapshotId },
-    // Always. The artifact exists to serve a preview, and this preview is over
-    // (ADR 0016 §11).
+    // Always asked for; a no-op from Sprint 0114 onward, because a preview
+    // clones rather than restoring and there is no artifact to delete. A v1
+    // session still carries one, and it exists to serve a preview that is over.
     { deleteArtifact: true },
   );
 
@@ -225,12 +227,14 @@ export async function convergePreviewStep(
       previewSessionId: session.id,
       projectId,
     });
-    // The artifact, not the run. The ValidationRun stays historically `passed`
+    // Only a v1 session has one. The ValidationRun stays historically `passed`
     // and the PreparedChange stays `prepared` (ADR 0016 §11).
-    await markValidatedArtifactDeleted(deps.supabase, {
-      validationRunId: session.validationRunId,
-      projectId,
-    });
+    if (session.validationRunId !== null) {
+      await markValidatedArtifactDeleted(deps.supabase, {
+        validationRunId: session.validationRunId,
+        projectId,
+      });
+    }
   }
 
   if (persisted) {
@@ -248,4 +252,52 @@ export async function convergePreviewStep(
   }
 
   await completeOperationRun(deps.supabase, { operationId, resultId: session.id });
+}
+
+/**
+ * Deletes screenshots whose retention has run out, for this project (VB-004).
+ *
+ * ## Why it lives here now
+ *
+ * Because its previous home stopped running. The sweep was the last step of the
+ * visual-review workflow — the operation that filled the bucket also emptied it
+ * — and Sprint 0114 made that workflow unreachable for new changes. Nothing
+ * else called it, so a product that had declared a seven-day retention would
+ * have kept images of a customer's product until the project was deleted.
+ *
+ * Preview teardown is the correct new home for the same reason review was the
+ * old one: it is an operation the customer already caused, it already holds the
+ * service-role client the bucket's policies require (rule 53), and it now runs
+ * for *every* preview rather than only for the ones somebody photographed. No
+ * scheduler is introduced to do it, which would need its own decision (rule 24).
+ *
+ * The bytes it deletes are historical — nothing writes `review_artifacts` any
+ * more — so this is a drain, not a cycle. It stays until the last artifact has
+ * passed its deadline and the screenshot tables are removed.
+ *
+ * Never throws and never fails the operation. The work the customer asked for —
+ * stopping their sandbox — is finished and recorded by the time this runs; a
+ * storage outage must not turn a completed teardown into a retrying step.
+ */
+export async function sweepExpiredScreenshotsStep(
+  deps: PreviewDeps,
+  operationId: string,
+): Promise<void> {
+  try {
+    // The project comes from the persisted operation row, never from an
+    // argument (rule 53): a service-role client must not be pointed at a
+    // project a caller named.
+    const operation = await getProjectOperationRunById(deps.supabase, operationId);
+    if (!operation?.projectId) return;
+
+    const outcome = await sweepExpiredReviewScreenshots(deps.supabase, {
+      projectId: operation.projectId,
+    });
+
+    if (outcome.failed) {
+      console.error("[preview] the expired-screenshot sweep did not complete", { operationId });
+    }
+  } catch {
+    console.error("[preview] the expired-screenshot sweep threw", { operationId });
+  }
 }

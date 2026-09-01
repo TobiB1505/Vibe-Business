@@ -153,18 +153,20 @@ export const OPERATION_FAILURE_MESSAGES: Record<OperationFailureCode, string> = 
   // Temporary preview (Sprint 10B-2 §26). Every one of these says what happened
   // and, where it is true, what the user can do about it. None of them implies
   // a preview means the change is approved, correct or safe.
-  validation_required: "Validate this change first — a preview runs the exact validated build.",
+  preview_change_not_prepared: "There is nothing to preview yet — Vibe has not written a commit for this change.",
   preview_not_supported: "Vibe cannot preview this project yet. Previews currently support single-app Next.js repositories.",
   // The confirmation is a server-side requirement, not a UI courtesy, so this
   // is reachable and has to read as a sentence rather than an internal state.
   preview_exposure_not_confirmed: "A preview publishes an unlisted public URL, so Vibe needs you to confirm before starting one.",
-  // Says why it is gone, because "unavailable" alone reads like a fault.
-  preview_artifact_unavailable:
-    "The validated build Vibe kept for this change is no longer available. Validate again to create a fresh one.",
-  preview_artifact_expired:
-    "The validated build Vibe kept for this change expired. Validate again to create a fresh one.",
-  preview_artifact_integrity_failed:
-    "The restored build did not match the validated change, so Vibe did not start it.",
+  // Says what was wrong with the code Vibe fetched, not that the user did
+  // something. A preview of the wrong bytes on a public URL is worse than none.
+  preview_source_unavailable:
+    "Vibe could not get the exact commit for this change, so it did not start a preview.",
+  // A Vibe-side boundary failure, like the privileged-environment one below.
+  preview_credential_scrub_failed:
+    "Vibe stopped the preview because it could not confirm its access to your repository was removed first. This is a bug — please report it.",
+  preview_install_failed:
+    "The project's dependencies could not be installed from its lockfile, so there is nothing to serve.",
   // A Vibe-side defect, and the copy does not pretend otherwise.
   preview_privileged_environment:
     "Vibe stopped the preview because its environment was not clean. This is a bug — please report it.",

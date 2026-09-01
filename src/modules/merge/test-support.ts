@@ -1,4 +1,5 @@
 import { computeApprovalIdentity } from "@/modules/approvals/identity";
+import { APPROVAL_POLICY_VERSION } from "@/modules/approvals/schema";
 import { FakeDatabase } from "@/modules/operations/test-support";
 import { FIXTURE_COMMIT_SHA } from "@/modules/validation/test-support";
 import type { FastForwardOutcome, MergeApprovedChangePort } from "./git-port";
@@ -267,7 +268,7 @@ export function approvalIdentityForFixture(): string {
     preparedCommitSha: MERGE_TARGET_SHA,
     preparedBaseSha: MERGE_BASE_SHA,
     validationRunId: MERGE_FIXTURES.validation,
-    reviewArtifactId: MERGE_FIXTURES.review,
-    approvalPolicyVersion: "approval-policy-v1",
+    evidence: { kind: "review_artifact", reviewArtifactId: MERGE_FIXTURES.review },
+    approvalPolicyVersion: APPROVAL_POLICY_VERSION,
   });
 }

@@ -59,7 +59,7 @@ Probe and dogfood scripts (`ai:probe-audit-schema`, `ai:dogfood-action-plan`, `b
 
 ## Current state
 
-The V0.1 Core Loop is implemented end to end: a founder connects a repository and optionally a live URL, Vibe builds repository, live-product and (optionally) authenticated Deep Scan intelligence, forms a product understanding, produces a Business Readiness Audit, ranks opportunities, plans a move, prepares the change with a coding agent on an isolated branch, validates it in an isolated sandbox, previews it, captures a before/after comparison, takes an explicit human approval bound to that exact commit, fast-forwards the default branch, and then verifies what became true in production.
+The V0.1 Core Loop is implemented end to end: a founder connects a repository and optionally a live URL, Vibe builds repository, live-product and (optionally) authenticated Deep Scan intelligence, forms a product understanding, produces a Business Readiness Audit, ranks opportunities, plans a move, prepares the change with a coding agent on an isolated branch, validates it in an isolated sandbox, serves an interactive preview of it beside the check rather than after it, takes an explicit human approval bound to that exact commit and to the preview of it, fast-forwards the default branch, and then verifies what became true in production.
 
 Underneath it: durable operation execution, four provider usage ledgers, a Vibe Credits ledger with Stripe as the funding rail, an append-only application audit log, and an economy layer that estimates what a run will cost and measures how wrong the estimate was.
 

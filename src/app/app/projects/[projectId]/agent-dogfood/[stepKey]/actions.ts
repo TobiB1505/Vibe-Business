@@ -1,14 +1,8 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import type { SupabaseClient } from "@supabase/supabase-js";
 import type { ReviewClassificationResult } from "@/modules/review/classification";
-import {
-  classifyReviewForPreparedChange,
-  type FileTextReader,
-} from "@/modules/review/classification-inputs";
-import { createGithubRepositoryReader } from "@/modules/github/repository-reader";
-import { getProjectWithRepository } from "@/modules/projects/queries";
+import { resolveReviewClassification } from "@/modules/review/classification-service";
 import { requireSession } from "@/modules/auth/session";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -141,31 +135,6 @@ export type DogfoodRunStatus = {
 };
 
 /** Durable status, re-read from the database on every call (§16, §18, §20). */
-/**
- * Read-only repository access for the render-impact probe, or null.
- *
- * Null whenever the project has no connected repository — and null on any
- * failure, because a probe that cannot run leaves the path-based answer
- * standing, which is the more thorough review rather than a degraded one.
- */
-async function repositoryReaderFor(
-  supabase: SupabaseClient,
-  projectId: string,
-): Promise<FileTextReader | null> {
-  try {
-    const project = await getProjectWithRepository(supabase, projectId);
-    if (!project?.repository) return null;
-
-    return createGithubRepositoryReader(
-      project.repository.installationId,
-      project.repository.owner,
-      project.repository.name,
-    );
-  } catch {
-    return null;
-  }
-}
-
 export async function getDogfoodRunStatusAction(
   projectId: string,
   operationId: string,
@@ -215,17 +184,15 @@ export async function getDogfoodRunStatusAction(
   // `resultId` is the prepared change id a completed run wrote. Classification
   // is only meaningful once one exists, so it is not attempted before then.
   //
-  // The reader lets classification prove that a changed page file only altered
-  // metadata, and so cannot have changed what a visitor sees. It is read-only
-  // by type and its content never leaves that call. Without a connected
-  // repository there is nothing to compare against, and the path-based answer —
-  // the more thorough one — stands.
+  // Through the shared service, which resolves the repository reader the
+  // render-impact probe needs. That probe is what proves a changed page file
+  // only altered metadata and so cannot have changed what a visitor sees;
+  // without a connected repository there is nothing to compare against, and the
+  // path-based answer — the more thorough one — stands.
   const recommendedReview = operation.resultId
-    ? await classifyReviewForPreparedChange({
-        supabase,
+    ? await resolveReviewClassification(supabase, {
         projectId,
         preparedChangeId: operation.resultId,
-        reader: await repositoryReaderFor(supabase, projectId),
       })
     : null;
 

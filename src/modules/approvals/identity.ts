@@ -17,7 +17,7 @@ import { createHash } from "node:crypto";
  *  - which prepared change
  *  - which commit, and which base it was prepared against
  *  - which validation proved it builds
- *  - which comparison the human actually looked at
+ *  - which evidence the human actually looked at
  *  - under which approval policy
  *
  * Change any one of them and this is a different thing to approve. The hash
@@ -36,13 +36,46 @@ import { createHash } from "node:crypto";
  * **The timestamp.** Two approvals of the same artifact are the same approval,
  * which is what makes a double-click harmless (§12).
  */
+/**
+ * Which evidence a human was shown, as one opaque string.
+ *
+ * Two forms, tagged so they can never collide: a comparison of two screenshots,
+ * or a diff of two commits. The tag is what stops a review artifact id from
+ * ever hashing to the same identity as a diff digest that happened to share its
+ * characters — and, more usefully, it makes the identity say *which kind of
+ * review this was*, so an approval given for a diff can never come to stand for
+ * a visual one.
+ */
+export type ApprovalEvidence =
+  /** Two stored screenshots. Historical: nothing creates one from Sprint 0114. */
+  | { kind: "review_artifact"; reviewArtifactId: string }
+  /** A reproducible diff, for a change that alters no rendered page. */
+  | { kind: "code_diff"; codeReviewDigest: string }
+  /**
+   * A reproducible diff *and* the interactive preview that ran beside it.
+   *
+   * The form a visual change takes from Sprint 0114 on. The diff is in it
+   * because a preview shows what a change looks like and only the diff shows
+   * what it does — so a visual approval now binds to strictly more than it did
+   * when it named a photograph of one route (ADR 0065).
+   */
+  | { kind: "code_diff_with_preview"; codeReviewDigest: string; previewSessionId: string };
+
+export function approvalEvidenceKey(evidence: ApprovalEvidence): string {
+  if (evidence.kind === "review_artifact") {
+    return `review_artifact:${evidence.reviewArtifactId}`;
+  }
+  if (evidence.kind === "code_diff") return `code_diff:${evidence.codeReviewDigest}`;
+  return `code_diff_with_preview:${evidence.codeReviewDigest}:${evidence.previewSessionId}`;
+}
+
 export function computeApprovalIdentity(params: {
   projectId: string;
   preparedChangeId: string;
   preparedCommitSha: string;
   preparedBaseSha: string;
   validationRunId: string;
-  reviewArtifactId: string;
+  evidence: ApprovalEvidence;
   approvalPolicyVersion: string;
 }): string {
   // Fixed order rather than object key order, so a refactor cannot silently
@@ -53,7 +86,7 @@ export function computeApprovalIdentity(params: {
     params.preparedCommitSha,
     params.preparedBaseSha,
     params.validationRunId,
-    params.reviewArtifactId,
+    approvalEvidenceKey(params.evidence),
     params.approvalPolicyVersion,
   ]);
 

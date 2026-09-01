@@ -8,9 +8,11 @@ import type { MergeCard } from "@/modules/merge/view";
 import type { OutcomeCard } from "@/modules/outcome-verification/view";
 import type { BusinessImpactCard } from "@/modules/business-measurement/view";
 import type { PreviewCard } from "@/modules/change-preview/view";
+import type { ReviewClassificationResult } from "@/modules/review/classification";
 import type { ReviewCard } from "@/modules/review/view";
 import type { ReviewImages } from "@/modules/review/service";
 import { ApprovalPanel } from "./approval-panel";
+import { ChangeDiffSection } from "./change-diff-section";
 import { ChangeOrigin, MoveBacklink } from "./change-origin";
 import { ChangeRationale } from "./change-rationale";
 import { MergePanel } from "./merge-panel";
@@ -68,7 +70,18 @@ export type PreparedChangeCard = {
    * start a preview and can name nothing else — no snapshot, no sandbox, no
    * port, no command (§6).
    */
-  validatedArtifactId: string | null;
+  /**
+   * Which review this change deserves, decided on the server (ADR 0063).
+   *
+   * The card reads it to decide which evidence to *show* — a diff, a visual
+   * comparison, or both. It never re-decides it, and it is not what authorizes
+   * anything: `approval.canApprove` is still the server's answer to whether a
+   * person may decide, resolved from the same classification.
+   *
+   * Null when it could not be determined, which reads as the stricter answer:
+   * the visual panels stay, exactly as they were before this sprint.
+   */
+  reviewClassification: ReviewClassificationResult | null;
   /** Review state, decided on the server like every other panel's. */
   review: ReviewCard;
   /** Signed, short-lived image URLs. Minted server-side, never persisted (§16). */
@@ -77,6 +90,14 @@ export type PreparedChangeCard = {
   previewSessionId: string | null;
   /** Provider-resolved preview origin, for "Open". Null once the preview ends. */
   previewOrigin: string | null;
+  /**
+   * The project's verified public origin, for the "before" half (ADR 0065).
+   *
+   * Labelled as *the live site now*, never as the base commit — the same
+   * semantics ADR 0017 §4 pinned for the screenshot this replaces. Null when no
+   * production URL has been verified, and then nothing is offered.
+   */
+  productionUrl: string | null;
   /**
    * Approval state, decided on the server (Sprint 11B §24).
    *
@@ -169,7 +190,18 @@ export function PreparedChangesSection({
       </p>
 
       <ul className="space-y-4">
-        {changes.map((change) => (
+        {changes.map((change) => {
+          /*
+           * One question asked once per card (ADR 0063).
+           *
+           * Read here rather than in each panel for the reason `ChangeProgress`
+           * exists at all: a decision spelled out in three places is three
+           * places that can come to disagree, and this one decides whether a
+           * founder is shown a comparison or told there is nothing to compare.
+           */
+          const codeOnly = change.reviewClassification?.classification === "code";
+
+          return (
           <li
             key={change.id}
             /*
@@ -233,6 +265,21 @@ export function PreparedChangesSection({
                 href={planMoveHref(planHref, change.opportunityId)}
               />
             )}
+
+            {/*
+              * What actually changed, and which review it deserves (ADR 0063).
+              *
+              * Above the gates and below the meaning, because it answers the
+              * question a person arrives with once they know why the change
+              * exists. For a code-only change it *is* the review — the panels
+              * below are absent, and this is what a person decides from.
+              */}
+            <ChangeDiffSection
+              projectId={projectId}
+              preparedChangeId={change.id}
+              classification={change.reviewClassification}
+              filesChanged={change.filePaths.length}
+            />
 
             {/*
               * How it was built (UI-5; folded by CORE-5).
@@ -343,7 +390,12 @@ export function PreparedChangesSection({
               */}
             <details open={!change.progress.earlySettled} className="group space-y-3">
               <summary className="cursor-pointer list-none text-xs text-fg-muted hover:text-fg-prose">
-                <span className="group-open:hidden">Checked, previewed, reviewed and approved</span>
+                {/* A code-only change was never previewed or photographed, and
+                    saying it was is the class of false status line UI-5 exists
+                    to remove. */}
+                <span className="group-open:hidden">
+                  {codeOnly ? "Checked and approved" : "Checked, previewed and approved"}
+                </span>
                 <span className="hidden group-open:inline">How this change got here</span>
               </summary>
 
@@ -356,6 +408,18 @@ export function PreparedChangesSection({
                 merged={change.progress.merged}
               />
 
+              {/*
+                * Preview and comparison, for a change that has something to
+                * look at (ADR 0063).
+                *
+                * Absent for a code-only change, and absent rather than disabled:
+                * an offer to photograph a page that did not change is an offer
+                * to spend a founder's money on two identical images. The
+                * classification line in "What changed" above says so in Vibe's
+                * own words, so the absence is explained rather than noticed.
+                */}
+              {!codeOnly && (
+                <>
               {/* Below validation, deliberately: a preview restores what a
                   validation produced, so the order on screen is the order of the
                   gates. There is no Merge, Deploy or Approve button here or
@@ -364,11 +428,11 @@ export function PreparedChangesSection({
                 projectId={projectId}
                 preparedChangeId={change.id}
                 card={change.preview}
-                validatedArtifactId={change.validatedArtifactId}
                 // Already resolved for this render. Without it the panel renders
                 // "Resolving preview address…" until its first poll, for an
                 // origin the server handed the page milliseconds earlier.
                 serverOrigin={change.previewOrigin}
+                productionUrl={change.productionUrl}
                 approved={change.progress.approved}
                 merged={change.progress.merged}
               />
@@ -376,12 +440,15 @@ export function PreparedChangesSection({
               {/* Below Preview, because a comparison photographs a running
                   preview. The order on screen is the order of the gates — and
                   there is no Approve, Merge or Deploy control after it. */}
+              {/* History only (ADR 0065). Nothing creates a comparison any
+                  more; a change that has one from before still shows it, so an
+                  approval made on it can still say what it rested on. */}
+              {change.review.state !== "not_generated" && (
               <ReviewPanel
                 projectId={projectId}
                 preparedChangeId={change.id}
                 card={change.review}
                 images={change.reviewImages}
-                previewSessionId={change.previewSessionId}
                 previewOrigin={change.previewOrigin}
                 branchUrl={change.branchUrl}
                 commitSha={change.commitSha}
@@ -389,6 +456,9 @@ export function PreparedChangesSection({
                 approved={change.progress.approved}
                 merged={change.progress.merged}
               />
+              )}
+                </>
+              )}
 
               {/* Below the evidence, because approval is a human decision about
                   it rather than another measurement of it. */}
@@ -396,7 +466,6 @@ export function PreparedChangesSection({
                 projectId={projectId}
                 preparedChangeId={change.id}
                 card={change.approval}
-                reviewArtifactId={change.review.reviewArtifactId}
                 merged={change.progress.merged}
               />
             </details>
@@ -408,7 +477,13 @@ export function PreparedChangesSection({
 
                 There is no Deploy, Ship or Publish control after it — none of
                 those exist anywhere in the product, and a merge is not one. */}
-            <MergePanel projectId={projectId} preparedChangeId={change.id} card={change.merge} />
+            <MergePanel
+              projectId={projectId}
+              preparedChangeId={change.id}
+              card={change.merge}
+              classification={change.reviewClassification}
+              filesChanged={change.filePaths.length}
+            />
 
             {/* After Merge, and only reachable through it: an outcome exists
                 only once a default branch actually moved. It is the first
@@ -433,7 +508,8 @@ export function PreparedChangesSection({
               card={change.businessImpact}
             />
           </li>
-        ))}
+          );
+        })}
       </ul>
     </section>
   );

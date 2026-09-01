@@ -142,9 +142,9 @@ describe("starting a preview", () => {
     const [, , params] = startChangePreviewMock.mock.calls[0];
     expect(Object.keys(params as object).sort()).toEqual([
       "confirmPublicExposure",
+      "preparedChangeId",
       "projectId",
       "userId",
-      "validatedArtifactId",
     ]);
   });
 
