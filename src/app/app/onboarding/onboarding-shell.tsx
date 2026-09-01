@@ -19,7 +19,16 @@ export function OnboardingShell({
 }: {
   children: ReactNode;
   email: string | null;
-  state: OnboardingState;
+  /**
+   * Null while the page that would know is still being read.
+   *
+   * A `loading.tsx` runs before any of this route's reads, so it has neither
+   * the address nor the state — and the progress rail is the one part of this
+   * chrome that makes a claim. Null draws every phase as not-yet-reached
+   * rather than guessing a position, which is the honest frame to hold open:
+   * the wait is the only thing being reported.
+   */
+  state: OnboardingState | null;
   projectName?: string;
   /**
    * Whether leaving actually leads somewhere.
@@ -31,8 +40,8 @@ export function OnboardingShell({
    */
   canLeave?: boolean;
 }) {
-  const active = onboardingPhase(state);
-  const position = phasePosition(active);
+  const active = state === null ? null : onboardingPhase(state);
+  const position = active === null ? -1 : phasePosition(active);
 
   return (
     <div className="bg-app text-fg-body min-h-dvh">
