@@ -2,6 +2,7 @@ import "server-only";
 import { alertOperator } from "@/lib/observability/alert";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { createServiceClient } from "@/lib/supabase/service";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import {
   lotsDueForExpiry,
@@ -263,7 +264,11 @@ export async function reconcileAndRepairLotAllocations(
     }
 
     try {
-      await repairLotAllocation(supabase, lot.id);
+      // Service-role, for the reason `reconcileAndRepairBalance` states in
+      // full (PERF-011): the tables this writes have no write policy, so the
+      // caller's client is refused. `lot` reached this function from a read
+      // the caller made under RLS against its own credit account.
+      await repairLotAllocation(createServiceClient(), lot.id);
     } catch (error) {
       allConsistent = false;
       await recordAuditEvent(supabase, {

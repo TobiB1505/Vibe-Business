@@ -1,5 +1,6 @@
 import "server-only";
 
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { getPublicEnv } from "@/lib/env/env";
@@ -11,8 +12,48 @@ import { AUTH_COOKIE_OPTIONS } from "@/lib/supabase/cookie-options";
  * Supabase client for Server Components, Route Handlers, and Server Actions.
  * Reads/writes the auth session via request cookies. Never import this from
  * a Client Component — `next/headers` already prevents that at build time.
+ *
+ * ## One client per request (PERF-013)
+ *
+ * Every caller used to construct its own. That is invisible where it happens
+ * and expensive where it accumulates: a project route resolves ownership in
+ * its layout and again in the page — deliberately, because an App Router
+ * layout does not gate the routes beneath it — so the same project row was
+ * read twice per navigation, three times on the Agent route. The read models
+ * that already memoize with `cache()` could not help, because `cache()` is
+ * keyed on its arguments and the client *is* an argument: two clients meant
+ * two cache entries for the same question.
+ *
+ * ## Why `cache()` here, when this repository turned it down elsewhere
+ *
+ * `business-audit/service.ts` rejected `cache()` for the evidence pack and was
+ * right to: there the duplication was inside one render, the value could be
+ * passed explicitly, and passing it is checkable by counting reads. None of
+ * that holds here. A layout and a page render independently, so there is no
+ * call site that could hand the client from one to the other — memoizing per
+ * request is not the easier fix, it is the only one.
+ *
+ * ## Why it is safe
+ *
+ * Within one request the cookies do not change, so neither does the session
+ * this client acts under; the ownership checks are unaffected, because each
+ * route still performs its own — they simply stop paying for a second
+ * connection to ask the same question. Outside a render `cache()` passes
+ * straight through, so nothing is shared between requests. And durable
+ * execution never reaches this function at all: a workflow step has no session
+ * and uses `createServiceClient`.
+ *
+ * ## What is not proved
+ *
+ * No test covers the memoization, and none can: `cache()` only memoizes inside
+ * a React request scope, and this repository's test environment is Node. What
+ * would show it is the read count in production — one `projects` row per
+ * project navigation instead of two — which is visible in Supabase's edge logs
+ * without instrumenting anything.
  */
-export async function createClient() {
+export const createClient = cache(createRequestClient);
+
+async function createRequestClient() {
   const cookieStore = await cookies();
   const env = getPublicEnv();
 

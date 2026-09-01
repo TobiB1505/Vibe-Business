@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { formatDate } from "@/lib/utils/format-datetime";
 import { Button } from "@/components/ui/button";
 import { CreditPrice } from "@/components/ui/credit-price";
 import { RefreshIcon } from "@/components/ui/dashboard-icons";
@@ -91,13 +92,9 @@ export function MovesRefreshBar({
  * made.
  */
 function formatGeneratedAt(value: string): string {
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-
-  return parsed.toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: "UTC",
-  });
+  // Via `format-datetime.ts` rather than `Intl` (PERF-021). The pinned zone
+  // here was already right; what it still depended on was the ICU data
+  // compiled into each runtime, and the shared helper is arithmetic on the UTC
+  // getters, which cannot disagree. Same string: "14 Aug 2026".
+  return formatDate(value) ?? value;
 }

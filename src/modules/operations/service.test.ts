@@ -21,8 +21,12 @@ import {
  * database, two clients with different write access to it.
  */
 const serviceDb = { current: new FakeDatabase() };
+const serviceClientCalls = { count: 0 };
 vi.mock("@/lib/supabase/service", () => ({
-  createServiceClient: () => fakeSupabase(serviceDb.current),
+  createServiceClient: () => {
+    serviceClientCalls.count += 1;
+    return fakeSupabase(serviceDb.current);
+  },
 }));
 
 const {
@@ -603,5 +607,62 @@ describe("reading operation state", () => {
       status: "failed",
       failure_code: "operation_wall_clock_exceeded",
     });
+  });
+
+  /**
+   * The sweep is a repair, and repairs cost nothing when there is nothing
+   * wrong (PERF-020).
+   *
+   * It used to run before this function's own read, unconditionally: a
+   * service-role client and a primary-key read on every tick of every polling
+   * surface, for everyone signed in, to answer "no" every time. This is the
+   * busiest read in the product, so "essentially always a no-op" was the
+   * expensive part rather than the reassuring one.
+   */
+  it("does not reach for a service-role client while the run is alive", async () => {
+    await start();
+    const operation = db.rows("operation_runs")[0];
+    operation.status = "running";
+    operation.started_at = new Date().toISOString();
+
+    serviceClientCalls.count = 0;
+    const status = await getOperationStatus(fakeSupabase(db), {
+      projectId: PROJECT,
+      operationId: String(operation.id),
+    });
+
+    expect(status?.status).toBe("running");
+    expect(serviceClientCalls.count, "a live poll opened a service-role client").toBe(0);
+  });
+
+  it("does not reach for one for an operation that already finished", async () => {
+    await start();
+    const operation = db.rows("operation_runs")[0];
+    operation.status = "completed";
+    operation.stage = "completed";
+    operation.completed_at = new Date().toISOString();
+
+    serviceClientCalls.count = 0;
+    await getOperationStatus(fakeSupabase(db), {
+      projectId: PROJECT,
+      operationId: String(operation.id),
+    });
+
+    expect(serviceClientCalls.count).toBe(0);
+  });
+
+  it("still reaches for one when the run is past its deadline", async () => {
+    await start();
+    const operation = db.rows("operation_runs")[0];
+    operation.status = "running";
+    operation.started_at = new Date(Date.now() - 60 * 60_000).toISOString();
+
+    serviceClientCalls.count = 0;
+    await getOperationStatus(fakeSupabase(db), {
+      projectId: PROJECT,
+      operationId: String(operation.id),
+    });
+
+    expect(serviceClientCalls.count).toBeGreaterThan(0);
   });
 });

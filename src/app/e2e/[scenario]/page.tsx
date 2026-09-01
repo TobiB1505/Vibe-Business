@@ -420,8 +420,6 @@ export default async function E2eScenarioPage({
         <ProjectBreadcrumb projectName="Acme" />
         <WorkspaceSection
           id="my-product"
-          title="My Product"
-          description="Here's how Vibe understands your product."
           actions={
             <UnderstandingProgress
               projectId="project_e2e"

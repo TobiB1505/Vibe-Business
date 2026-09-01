@@ -34,6 +34,7 @@ import {
   type CreditAccount,
   type CreditReservation,
 } from "./store";
+import { createServiceClient } from "@/lib/supabase/service";
 import { creditUnits, type CreditUnits, ZERO_CREDITS } from "./units";
 
 /**
@@ -217,7 +218,23 @@ export async function reconcileAndRepairBalance(
   }
 
   try {
-    await repairAccountBalance(supabase, account.id);
+    /*
+     * The repair runs under a service-role client, and the read that found the
+     * drift does not (PERF-011).
+     *
+     * `repair_account_balance` is granted to `service_role` alone, because the
+     * writes it delegates to are on tables that carry a select policy and
+     * deliberately no write policy — the same shape as every other billing
+     * write in the product. Called with the caller's cookie-scoped client it
+     * could only ever answer `42501`, so with `BILLING_REPAIR_ENABLED` set the
+     * repair path could not succeed once: every drifted account rendered its
+     * billing page, failed, and wrote a `credit_drift.repair_failed` row.
+     *
+     * Ownership is not taken from an argument. `account` was read a moment ago
+     * through `supabase`, under RLS, from the session's own user id — this
+     * repairs that row and no other.
+     */
+    await repairAccountBalance(createServiceClient(), account.id);
   } catch (error) {
     await recordAuditEvent(supabase, {
       userId: params.userId,

@@ -1,7 +1,11 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { PROJECT_SECTIONS, projectSectionHref } from "@/components/layout/project-shell";
+import {
+  PROJECT_SECTIONS,
+  WORKSPACE_SECTION_HEADINGS,
+  projectSectionHref,
+} from "@/components/layout/project-shell";
 
 /**
  * The workspace routes as a set (Sprint UI-2 Part 2; renamed by CORE-5).
@@ -293,6 +297,67 @@ describe("the shared layout stays cheap (UI-2.5 performance contract)", () => {
   it("never signs a review image or asks a provider for anything", () => {
     for (const forbidden of ["createVercelSandboxProvider", "createGithubMergePort", "getPreviewStatus"]) {
       expect(layout, `layout reaches for ${forbidden}`).not.toContain(forbidden);
+    }
+  });
+});
+
+/**
+ * A section and the skeleton standing in for it say the same thing (PERF-015).
+ *
+ * The founder sees the skeleton first and the page second, so a disagreement
+ * between them is a visible copy swap at the moment their screen arrives.
+ * Three had drifted before the heading moved into one registry.
+ *
+ * The rule is not "the strings match" — that check passes for as long as
+ * somebody remembers to update both files. It is that neither file is allowed
+ * to carry the string at all.
+ */
+describe("workspace headings", () => {
+  function workspaceFiles(): { name: string; source: string }[] {
+    const files: { name: string; source: string }[] = [];
+
+    const walk = (directory: string, prefix: string) => {
+      for (const leaf of ["page.tsx", "loading.tsx", "content.tsx"]) {
+        const path = join(directory, leaf);
+        if (existsSync(path)) {
+          files.push({ name: `${prefix}${leaf}`, source: readFileSync(path, "utf8") });
+        }
+      }
+      for (const entry of readdirSync(directory, { withFileTypes: true })) {
+        if (entry.isDirectory()) walk(join(directory, entry.name), `${prefix}${entry.name}/`);
+      }
+    };
+
+    walk(ROUTE_DIR, "");
+    return files;
+  }
+
+  it("takes the title and description from the id, never from a prop", () => {
+    const offenders = workspaceFiles()
+      .filter((file) => file.source.includes("<WorkspaceSection"))
+      .filter((file) => /<WorkspaceSection\b[^>]*?\b(title|description)=/.test(file.source))
+      .map((file) => file.name);
+
+    expect(
+      offenders,
+      "a heading passed as a prop is a heading two files can spell differently",
+    ).toEqual([]);
+  });
+
+  it("renders a heading the registry knows", () => {
+    const ids = new Set(Object.keys(WORKSPACE_SECTION_HEADINGS));
+
+    for (const file of workspaceFiles()) {
+      for (const [, id] of file.source.matchAll(/<WorkspaceSection\s+id="([^"]+)"/g)) {
+        expect(ids.has(id), `${file.name} renders an unknown section id: ${id}`).toBe(true);
+      }
+    }
+  });
+
+  it("gives every section a title and a description", () => {
+    for (const [id, heading] of Object.entries(WORKSPACE_SECTION_HEADINGS)) {
+      expect(heading.title.length, id).toBeGreaterThan(0);
+      expect(heading.description.length, id).toBeGreaterThan(20);
     }
   });
 });

@@ -75,6 +75,20 @@ export function ProductLogo({
       src={src}
       alt={alt}
       referrerPolicy="no-referrer"
+      /*
+       * Deliberately unsized (PERF-021).
+       *
+       * This does shift the row when a customer's logo loads, and the obvious
+       * fix — `height={size}` — is not one: `size` is documented as the
+       * *fallback* mark's size, and two of the four call sites pass no
+       * className, so today their real logo renders at its natural size.
+       * Adopting `size` there would resize a customer's logo on the screen
+       * where Vibe first shows what it understood, and that is a visual change
+       * to make while looking at it rather than while reading the file.
+       *
+       * The shift is bounded by whatever the caller's className allows, which
+       * on the two sites that pass one is nothing.
+       */
       className={className}
       onError={() => setFailed(true)}
       data-testid="product-logo"

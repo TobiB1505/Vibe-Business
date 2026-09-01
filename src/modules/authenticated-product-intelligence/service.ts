@@ -563,20 +563,46 @@ export async function cancelDeepScan(
  *
  * Returns Vibe's own session id and status at most — no provider session id,
  * no capability URL, no cost.
+ *
+ * ## `owned`
+ *
+ * Both callers reach here from `requireProjectAccess`, which has already read
+ * the project and already compared its owner to the session — so the read
+ * below was the fourth read of one row on Business Health, the most visited
+ * route in the product (PERF-004).
+ *
+ * Passing it is the fix rather than memoizing the read, for the reason
+ * `business-audit/service.ts` gives: a value a caller can hand over is one
+ * whose absence a test can count. `getAuditAccessStatus` took the same
+ * parameter in the same sprint.
+ *
+ * What it does not do is weaken the gate. `owned` is not a claim assembled
+ * from a caller's arguments — it is a row read under the caller's own
+ * RLS-scoped client, whose owner was compared there. Omitting it reads and
+ * checks here exactly as before, which is what the tests hold in place.
  */
 export async function getDeepScanAccessStatus(
   supabase: SupabaseClient,
-  params: { projectId: string; userId: string },
+  params: {
+    projectId: string;
+    userId: string;
+    owned?: { productionUrl: string | null };
+  },
 ): Promise<DeepScanAccessStatus | null> {
-  const project = await loadOwnedProject(supabase, params.projectId, params.userId);
-  if (!project) return null;
+  const productionOrigin = params.owned
+    ? params.owned.productionUrl
+    : (await loadOwnedProject(supabase, params.projectId, params.userId))?.production_url;
 
-  const facts = await gatherEntitlementFacts(supabase, {
-    projectId: params.projectId,
-    productionOrigin: project.production_url,
-  });
+  // Undefined is "no such project for this user". Null is a project with no
+  // production URL, which is a state this function has a real answer for.
+  if (productionOrigin === undefined) return null;
 
-  const active = await getActiveSession(supabase, params.projectId);
+  // Neither needs the other's answer. They were sequential only because they
+  // were written on consecutive lines.
+  const [facts, active] = await Promise.all([
+    gatherEntitlementFacts(supabase, { projectId: params.projectId, productionOrigin }),
+    getActiveSession(supabase, params.projectId),
+  ]);
 
   return toDeepScanAccessStatus(facts, active ? { id: active.id, status: active.status } : null);
 }

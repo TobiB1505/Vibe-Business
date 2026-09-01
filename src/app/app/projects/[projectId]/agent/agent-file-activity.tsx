@@ -1,6 +1,7 @@
 "use client";
 
 import { motion, useReducedMotion } from "motion/react";
+import { formatTime } from "@/lib/utils/format-datetime";
 import { useDocumentVisible } from "@/lib/client/use-document-visible";
 import { MonoLabel } from "@/components/ui/typography";
 import type { StoredExecutionEvent } from "@/modules/coding-agent/observability/events";
@@ -42,10 +43,17 @@ function pathOf(event: StoredExecutionEvent): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
+/**
+ * The gutter clock, in UTC (PERF-021).
+ *
+ * It read the browser's locale and zone through `toLocaleTimeString`, in a
+ * Client Component the server renders first — so the two produced different
+ * strings and React threw the subtree away and rebuilt it. `format-datetime.ts`
+ * is where this repository settled that question, and this was one of two
+ * panels still asking it independently.
+ */
 function clockOf(occurredAt: string): string | null {
-  const at = new Date(occurredAt);
-  if (Number.isNaN(at.getTime())) return null;
-  return at.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+  return formatTime(occurredAt);
 }
 
 export function AgentFileActivity({

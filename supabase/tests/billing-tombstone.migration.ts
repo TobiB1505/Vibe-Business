@@ -144,3 +144,54 @@ describe("erasing the identity", () => {
     expect(after.customers - before.customers).toBe(2);
   });
 });
+
+/* ---------------------------------------------------------------------------
+ * Who may run a repair (PERF-011)
+ * ------------------------------------------------------------------------ */
+
+/**
+ * The repair primitives write the materialized figures the whole Credit
+ * balance rests on. Every billing table carries a select policy and
+ * deliberately no write policy, so those writes are refused for any role RLS
+ * applies to — which is why both functions are granted to `service_role`
+ * alone, and why the caller has to be a service-role client.
+ *
+ * That grant was already correct and the caller was not: the billing page ran
+ * the repair with its cookie-scoped client, so with `BILLING_REPAIR_ENABLED`
+ * set every drifted account got `42501` and a `credit_drift.repair_failed`
+ * row on every render. The caller is fixed in `src/`; this pins the grant, so
+ * that the same symptom is never "fixed" the other way round — by opening a
+ * financial write to the role a browser holds.
+ */
+describe("who may repair a materialized balance", () => {
+  function acl(fn: string): string {
+    return db
+      .sql(
+        `select coalesce(has_function_privilege('anon', p.oid, 'execute')::text, '?') || '|' ||` +
+          ` has_function_privilege('authenticated', p.oid, 'execute')::text || '|' ||` +
+          ` has_function_privilege('service_role', p.oid, 'execute')::text` +
+          ` from pg_proc p join pg_namespace n on n.oid = p.pronamespace` +
+          ` where n.nspname = 'public' and p.proname = '${fn}';`,
+      )
+      .trim();
+  }
+
+  it("is the service role alone, for the account-level repair", () => {
+    expect(acl("repair_account_balance")).toBe("false|false|true");
+  });
+
+  it("is the service role alone, for the lot-level repair", () => {
+    expect(acl("repair_lot_allocation")).toBe("false|false|true");
+  });
+
+  /**
+   * The primitives they delegate to, for the same reason: a caller that could
+   * materialize a ledger entry directly could move a balance without writing
+   * the row that justifies it.
+   */
+  it("is the service role alone, for the primitives they delegate to", () => {
+    expect(acl("materialize_ledger_entry")).toBe("false|false|true");
+    expect(acl("materialize_reservation_hold")).toBe("false|false|true");
+    expect(acl("materialize_allocation_capacity")).toBe("false|false|true");
+  });
+});

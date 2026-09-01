@@ -87,6 +87,25 @@ const REVIEWED_SITES: readonly { file: string; why: string }[] = [
       "and every query this file makes is scoped by the credit account that resolves from it.",
   },
   {
+    file: join("modules", "credits", "service.ts"),
+    why:
+      "PERF-011. `repair_account_balance` is granted to service_role alone, because the writes it " +
+      "delegates to land on tables that carry a select policy and deliberately no write policy. " +
+      "Called with the billing page's cookie-scoped client it could only answer 42501, so the " +
+      "repair path ADR 0042 designed could not succeed once — a drifted account wrote a " +
+      "credit_drift.repair_failed row on every render instead. Ownership is not taken from the " +
+      "caller's arguments: the account row was read a moment earlier through the caller's own " +
+      "RLS-scoped client, from the session's user id, and the repair names that row.",
+  },
+  {
+    file: join("modules", "credits", "lot-store.ts"),
+    why:
+      "PERF-011, the lot-side half of the same repair and the same refusal. The lots reached " +
+      "reconcileAndRepairLotAllocations from a read the caller made under RLS against its own " +
+      "credit account; repairLotAllocation still takes its client as an argument, so the " +
+      "concurrency gate keeps driving it with clients of its own.",
+  },
+  {
     file: join("modules", "auth", "throttle.ts"),
     why:
       "VB-053 / ADR 0060. record_auth_attempt is no longer callable by anon, because anon is " +

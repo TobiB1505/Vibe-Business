@@ -114,7 +114,25 @@ describe("the probe is reachable without auth", () => {
     expect(matcher.test("/login")).toBe(true);
   });
 
-  it("still runs it for the other API routes, which are not liveness probes", () => {
-    expect(matcher.test("/api/billing/stripe/webhook")).toBe(true);
+  /**
+   * The other two API routes are excluded on the same argument (PERF-016).
+   *
+   * Each authenticates itself — the Stripe webhook by signature, the Agent
+   * Gateway by a short-lived execution-scoped token — and neither reads a
+   * cookie. A session refresh in front of them puts Supabase Auth inside
+   * Stripe's delivery timeout and inside a paid upstream call, for a session
+   * nobody is holding.
+   */
+  it("does not run it for the routes that authenticate themselves", () => {
+    expect(matcher.test("/api/billing/stripe/webhook")).toBe(false);
+    expect(matcher.test("/api/agent-gateway/v1/messages")).toBe(false);
+  });
+
+  /**
+   * Enumerated, not the whole `api` tree: a route added later that does need
+   * a session should be covered by default rather than quietly uncovered.
+   */
+  it("still runs it for an API route nobody has excluded", () => {
+    expect(matcher.test("/api/something-added-later")).toBe(true);
   });
 });

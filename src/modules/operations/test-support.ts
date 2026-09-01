@@ -1047,9 +1047,27 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
     if (this.orderColumn) {
       const column = this.orderColumn;
       rows = [...rows].sort((a, b) => {
-        const left = String(a[column] ?? "");
-        const right = String(b[column] ?? "");
-        return this.orderAscending ? left.localeCompare(right) : right.localeCompare(left);
+        const direction = this.orderAscending ? 1 : -1;
+        const left = a[column];
+        const right = b[column];
+
+        /*
+         * Numbers compare as numbers.
+         *
+         * Everything used to be stringified before comparison, which sorts an
+         * integer column as text: `sequence` came back 1, 10, 11, … 2, 20. Every
+         * ordered read in the product that is keyed on a counter rather than a
+         * timestamp was therefore modelled wrongly — the Product Scan timeline,
+         * the agent execution events, the agent activity feed, all of which order
+         * by `sequence` and several of which then cap the result, so the fake
+         * would hand back a different *set* of rows than Postgres would, not just
+         * a different order.
+         */
+        if (typeof left === "number" && typeof right === "number") {
+          return (left - right) * direction;
+        }
+
+        return String(left ?? "").localeCompare(String(right ?? "")) * direction;
       });
     }
 
@@ -1495,6 +1513,27 @@ const FAKE_RPC_HANDLERS: Record<string, (db: FakeDatabase, params: Record<string
       .filter((row) => row.credit_account_id === params.p_credit_account_id)
       .reduce((total, row) => total + Number(row.credit_delta ?? 0), 0),
   }),
+
+  /**
+   * `sum_agent_run_usage` (PERF-002).
+   *
+   * Modelled as the migration defines it, including the two things the
+   * gateway's ceiling depends on: every row the run wrote counts, whatever its
+   * status (VB-016), and a run with no rows answers zero rather than nothing.
+   * Shaped as `returns table(...)` reaches PostgREST — an array of one row —
+   * so the caller's unwrapping is exercised here too.
+   */
+  sum_agent_run_usage: (db, params) => {
+    const rows = db.rows("ai_usage_events").filter((row) => row.job_id === params.p_run_id);
+    return {
+      data: [
+        {
+          spent_output_tokens: rows.reduce((total, row) => total + Number(row.output_tokens ?? 0), 0),
+          forwarded_requests: rows.length,
+        },
+      ],
+    };
+  },
 };
 
 /**

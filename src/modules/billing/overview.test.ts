@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FakeDatabase, fakeSupabase } from "@/modules/operations/test-support";
 import { grantCreditLot } from "@/modules/credits/grants";
 import {
@@ -6,7 +6,12 @@ import {
   listActiveLots,
   listReservationAllocations,
 } from "@/modules/credits/lot-store";
-import { claimReservation, ensureCreditAccount } from "@/modules/credits/store";
+import {
+  claimReservation,
+  ensureCreditAccount,
+  LEDGER_READ_LIMIT,
+  listLedgerEntries,
+} from "@/modules/credits/store";
 import { creditsToUnits } from "@/modules/credits/units";
 import { deepScanIdempotencyKey } from "@/modules/authenticated-product-intelligence/billing";
 import {
@@ -28,6 +33,20 @@ import { getBillingOverview, getHeaderCreditBalance } from "./overview";
  */
 
 const db = { current: new FakeDatabase() };
+
+/**
+ * The repair primitives run under a service-role client in production
+ * (PERF-011): the tables they write carry a select policy and no write policy,
+ * so the caller's own client is refused. `FakeDatabase` has no RLS to bypass,
+ * so both clients are the same fake here — which is what keeps these tests
+ * about the repair's arithmetic rather than about who is allowed to run it.
+ * Who is allowed is asserted by `service-boundary.test.ts` and by the grants
+ * in the migration.
+ */
+vi.mock("@/lib/supabase/service", () => ({
+  createServiceClient: () => fakeSupabase(db.current),
+}));
+
 const supabase = () => fakeSupabase(db.current);
 
 const USER = "11111111-1111-1111-1111-111111111111";
@@ -552,5 +571,80 @@ describe("what the balance card is allowed to claim", () => {
     const overview = await getBillingOverview(supabase(), { userId: USER });
 
     expect(overview.monthlyAllowance).toBeNull();
+  });
+});
+
+/**
+ * The welcome grant is the oldest row an account has, and the ledger read that
+ * used to answer this question is capped and newest-first (VB-025). So the
+ * answer decayed with age: past `LEDGER_READ_LIMIT` movements the row fell out
+ * of the window, `welcomeGranted` flipped to false, and the screen re-offered
+ * Credits the customer had already been given.
+ */
+describe("whether the welcome allowance was already granted (PERF-012)", () => {
+  /** One welcome grant, then enough newer movements to push it out of the window. */
+  async function accountWithBuriedWelcomeGrant(newerEntries: number): Promise<void> {
+    const { account } = await ensureCreditAccount(supabase(), USER);
+
+    db.current.seed("billing_credit_ledger", {
+      credit_account_id: account.id,
+      kind: "grant",
+      credit_delta: creditsToUnits(100),
+      idempotency_key: welcomeGrantIdempotencyKey(USER),
+      created_at: "2020-01-01T00:00:00.000Z",
+    });
+
+    for (let index = 0; index < newerEntries; index += 1) {
+      db.current.seed("billing_credit_ledger", {
+        credit_account_id: account.id,
+        kind: "charge",
+        credit_delta: creditsToUnits(-1),
+        idempotency_key: `charge:${index}`,
+        created_at: `2026-01-01T00:00:${String(index % 60).padStart(2, "0")}.000Z`,
+      });
+    }
+  }
+
+  it("still reports the grant once it is older than the ledger read cap", async () => {
+    await accountWithBuriedWelcomeGrant(LEDGER_READ_LIMIT + 20);
+
+    // The premise, asserted rather than assumed: without this the test passes
+    // for the wrong reason the day the cap or the ordering changes.
+    const { account } = await ensureCreditAccount(supabase(), USER);
+    const window = await listLedgerEntries(supabase(), account.id);
+    expect(window.some((entry) => entry.idempotencyKey === welcomeGrantIdempotencyKey(USER))).toBe(
+      false,
+    );
+
+    const overview = await getBillingOverview(supabase(), { userId: USER });
+
+    expect(
+      overview.welcomeGranted,
+      "the grant exists; the read that looks for it must not be the capped window",
+    ).toBe(true);
+  });
+
+  it("reports it on a young account too, where the window would also have found it", async () => {
+    await accountWithBuriedWelcomeGrant(3);
+
+    const overview = await getBillingOverview(supabase(), { userId: USER });
+
+    expect(overview.welcomeGranted).toBe(true);
+  });
+
+  it("reports no grant when the account genuinely never received one", async () => {
+    await ensureCreditAccount(supabase(), USER);
+    await grantCreditLot(supabase(), {
+      userId: USER,
+      sourceKind: "purchase",
+      credits: creditsToUnits(500),
+      reason: "a pack, not the welcome allowance",
+      idempotencyKey: "lot:pack",
+      expiresAt: null,
+    });
+
+    const overview = await getBillingOverview(supabase(), { userId: USER });
+
+    expect(overview.welcomeGranted).toBe(false);
   });
 });

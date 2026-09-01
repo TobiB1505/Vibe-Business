@@ -112,10 +112,13 @@
 
 ## Async and resilience
 
+- Every signed-in route paints a first frame before its reads finish, and that frame describes the screen it stands in for rather than a different one (`loading-coverage.test.ts` holds the rule; the two operator-only dogfood routes are the named exceptions). A workspace section's heading is the same before and after the wait, because both come from `WORKSPACE_SECTION_HEADINGS` rather than from a string each file passes.
+- A Client Component never reads a clock or a locale while rendering. Times and dates come from `src/lib/utils/format-datetime.ts` in UTC, and a wall clock from `useBrowserClock`, which answers nothing until a browser is the one being asked — so the server's markup and the browser's first render always agree.
 - Index reads are server-owned. Failures reach the account route error boundary; the UI does not imply an empty dataset.
 - Search and sorting are local over the loaded account inventory, so no stale request or spinner exists.
 - GitHub live status is not fetched on the index. Stored connection metadata is labeled honestly and revalidation stays at the consequential workflow that needs it.
 - Product Scan polls canonical Supabase operation state and at most 24 ordered events every 1.8 seconds (`POLL_INTERVAL_MS` in `src/components/product-scan/product-scan-experience.tsx`, which is where the number lives). It refreshes server content only on a terminal transition. A public-product failure degrades to partial when another source remains usable; it never removes a successful source reading.
+- Every polling surface asks for one reading at a time and treats a failed reading as an answer: a read still outstanding is never asked again in parallel, and consecutive failures double the wait up to eight intervals before the ordinary cadence resumes (`pollBackoffMultiplier` in `src/lib/client/use-operation-poll.ts`). Nothing about the operation itself changes — the last known reading stands and the surface keeps saying what it already said.
 - The Action Plan polls canonical operation state every 2.5–3 seconds for the moves run and the planning run, and names the stages each executor actually records. A stage outside the known sequence claims no position rather than guessing one; nothing renders a percentage or a step counter.
 - Billing reads remain server-owned and never move money or Credits. Checkout and portal mutations are pessimistic, block duplicate submission and report persistent local errors. A Checkout return says only that payment confirmation is pending; Credits appear only after the signed Stripe webhook updates canonical state.
 

@@ -101,15 +101,12 @@ export default async function ProjectAgentPage({
    * The description is one sentence for every state, because it renders before
    * the state is known. A header that first said "Vibe can work on your
    * product" and then swapped to "Vibe is working on your task" would be a
-   * false status line arriving one tick early.
+   * false status line arriving one tick early. It lives in
+   * `WORKSPACE_SECTION_HEADINGS` now, which is what stops the same sentence
+   * from arriving twice in two different wordings.
    */
   return (
-    <WorkspaceSection
-      id="agent"
-      title="Agent"
-      description="Each change moves through validation, preview, review and your approval before anything can be merged."
-      actions={<AgentTrustPanel />}
-    >
+    <WorkspaceSection id="agent" actions={<AgentTrustPanel />}>
       <Suspense fallback={<SkeletonSection />}>
         <AgentWorkspaceBody
           supabase={supabase}

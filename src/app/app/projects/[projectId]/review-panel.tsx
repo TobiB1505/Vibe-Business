@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { buttonClasses } from "@/components/ui/button";
 import { useOperationPoll } from "@/lib/client/use-operation-poll";
 import { shouldRefreshForState } from "@/modules/operations/view";
+import { REVIEW_POLICY } from "@/modules/review/policy";
 import type { ReviewCard } from "@/modules/review/view";
 import type { ReviewImages } from "@/modules/review/service";
 import { getReviewStatusAction } from "./review-actions";
@@ -105,11 +106,18 @@ function Panel({
             and the image optimizer would fetch and cache these bytes on a
             public, longer-lived optimizer URL — which is exactly the
             permanently-public screenshot URL §16 forbids. */}
+        {/* The capture's own frame, so the space is reserved before the bytes
+            arrive (PERF-021). REVIEW_POLICY.viewport is what the browser was
+            told to be, and `fullPage: false` is why these are exactly that
+            rectangle — so this is derived rather than a guess, and a change to
+            the capture size cannot leave a stale ratio behind here. */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={src}
           alt={`${label} screenshot`}
-          className="w-full rounded-md border border-line-2 bg-app"
+          width={REVIEW_POLICY.viewport.width}
+          height={REVIEW_POLICY.viewport.height}
+          className="h-auto w-full rounded-md border border-line-2 bg-app"
         />
       </a>
 
