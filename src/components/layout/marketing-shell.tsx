@@ -37,10 +37,26 @@ export function MarketingShell({ children }: { children: ReactNode }) {
       />
 
       <header className="border-line-1 bg-app/60 sticky top-0 z-30 border-b backdrop-blur-xl">
-        <nav className="mx-auto flex w-full max-w-[80rem] items-center gap-4 px-5 py-4 sm:px-10">
+        <nav className="mx-auto flex w-full max-w-[96rem] items-center gap-4 px-5 py-4 sm:px-10">
           <Link href="/" className="rounded-nav" aria-label="Vibe Business — home">
             <VibeLockup size={22} />
           </Link>
+          <div className="ml-8 hidden items-center gap-7 lg:flex">
+            {[
+              ["Product", "/#product"],
+              ["How it works", "/#how"],
+              ["Business Brain", "/#brain"],
+              ["Pricing", "/#pricing"],
+            ].map(([label, href]) => (
+              <Link
+                key={href}
+                href={href}
+                className="text-fg-secondary hover:text-fg rounded-sm text-sm font-medium transition-interactive"
+              >
+                {label}
+              </Link>
+            ))}
+          </div>
           <div className="ml-auto flex items-center gap-2 sm:gap-4">
             <Link
               href="/login"
@@ -55,7 +71,7 @@ export function MarketingShell({ children }: { children: ReactNode }) {
         </nav>
       </header>
 
-      <main className="mx-auto w-full max-w-[80rem] px-5 sm:px-10">{children}</main>
+      <main className="mx-auto w-full max-w-[96rem] px-5 sm:px-10">{children}</main>
 
       <footer className="border-line-1 mt-20 border-t">
         {/*
@@ -64,7 +80,7 @@ export function MarketingShell({ children }: { children: ReactNode }) {
           screen pushed itself between "Vibe Business" and "Privacy" and left
           the links wrapping around it.
         */}
-        <div className="mx-auto flex w-full max-w-[80rem] flex-col gap-4 px-5 py-8 sm:px-10">
+        <div className="mx-auto flex w-full max-w-[96rem] flex-col gap-4 px-5 py-8 sm:px-10">
           <nav aria-label="Footer" className="flex flex-wrap items-center gap-x-6 gap-y-3 text-xs">
             <span className="text-fg-muted font-mono">Vibe Business</span>
             {[
