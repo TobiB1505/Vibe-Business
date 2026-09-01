@@ -2,6 +2,7 @@ import { preparedChangeAnchorId } from "@/components/layout/project-shell";
 import { planMoveHref } from "@/modules/action-plans/source";
 import type { AgentStage } from "@/modules/coding-agent/observability/agent-stages";
 import type { PreparedChangeWorkspaceItem } from "@/modules/execution/workspace";
+import { ChangeDiffSection } from "../change-diff-section";
 import { ChangeOrigin, MoveBacklink } from "../change-origin";
 import { ChangeRationale } from "../change-rationale";
 import { ValidationPanel } from "../validation-panel";
@@ -72,6 +73,16 @@ export function ChangeGates({
 }) {
   const show = (which: AgentStage) => stage === null || stage === which;
 
+  /*
+   * One question asked once for this change (ADR 0063).
+   *
+   * Read here rather than in each panel for the reason `ChangeProgress` exists
+   * at all: a decision spelled out in three places is three places that can
+   * come to disagree, and this one decides whether a founder is shown a
+   * preview or told there is nothing to look at.
+   */
+  const codeOnly = change.reviewClassification?.classification === "code";
+
   return (
     <div
       data-testid="prepared-change"
@@ -121,9 +132,28 @@ export function ChangeGates({
         </>
       )}
 
+      {/*
+        What actually changed, and which review it deserves (ADR 0063).
+        
+        Above the gates and below the meaning, because it answers the question a
+        person arrives with once they know why the change exists. For a
+        code-only change it *is* the review — the panels below are absent, and
+        this is what a person decides from.
+      */}
+      <ChangeDiffSection
+        projectId={projectId}
+        preparedChangeId={change.id}
+        classification={change.reviewClassification}
+        filesChanged={change.filePaths.length}
+      />
+
       <details open={!change.progress.earlySettled} className="group space-y-3">
         <summary className="text-fg-muted hover:text-fg-prose cursor-pointer list-none text-xs">
-          <span className="group-open:hidden">Checked, previewed, reviewed and approved</span>
+          {/* A code-only change was never previewed or photographed, and saying
+              it was is the class of false status line UI-5 exists to remove. */}
+          <span className="group-open:hidden">
+            {codeOnly ? "Checked and approved" : "Checked, previewed and approved"}
+          </span>
           <span className="hidden group-open:inline">How this change got here</span>
         </summary>
 
@@ -138,28 +168,41 @@ export function ChangeGates({
           />
         )}
 
-        {/* Below validation: a preview restores what a validation produced, so
-            the order on screen is the order of the gates. */}
-        {show("preview") && (
+        {/*
+          Preview, for a change that has something to look at (ADR 0063).
+
+          Absent for a code-only change, and absent rather than disabled: an
+          offer to serve a page that did not change is an offer to spend a
+          founder's money on a sandbox nobody needs to open. The classification
+          line in "What changed" above says so in Vibe's own words, so the
+          absence is explained rather than noticed.
+        */}
+        {!codeOnly && show("preview") && (
           <PreviewPanel
             projectId={projectId}
             preparedChangeId={change.id}
             card={change.preview}
-            validatedArtifactId={change.validatedArtifactId}
+            // Already resolved for this render. Without it the panel renders
+            // "Resolving preview address…" for an origin the server handed the
+            // page milliseconds earlier.
             serverOrigin={change.previewOrigin}
+            productionUrl={change.productionUrl}
             approved={change.progress.approved}
             merged={change.progress.merged}
           />
         )}
 
-        {/* Below preview, because a comparison photographs a running one. */}
-        {show("preview") && (
+        {/*
+          History only (ADR 0065). Nothing creates a comparison any more; a
+          change that has one from before still shows it, so an approval made
+          on it can still say what it rested on.
+        */}
+        {!codeOnly && show("preview") && change.review.state !== "not_generated" && (
           <ReviewPanel
             projectId={projectId}
             preparedChangeId={change.id}
             card={change.review}
             images={change.reviewImages}
-            previewSessionId={change.previewSessionId}
             previewOrigin={change.previewOrigin}
             branchUrl={change.branchUrl}
             commitSha={change.commitSha}
@@ -176,7 +219,6 @@ export function ChangeGates({
             projectId={projectId}
             preparedChangeId={change.id}
             card={change.approval}
-            reviewArtifactId={change.review.reviewArtifactId}
             merged={change.progress.merged}
           />
         )}
@@ -224,7 +266,13 @@ export function ChangeGates({
           preview needs a validation. There is no Deploy, Ship or Publish
           control after it — none of those exist anywhere in the product. */}
       {show("review") && (
-        <MergePanel projectId={projectId} preparedChangeId={change.id} card={change.merge} />
+        <MergePanel
+          projectId={projectId}
+          preparedChangeId={change.id}
+          card={change.merge}
+          classification={change.reviewClassification}
+          filesChanged={change.filePaths.length}
+        />
       )}
 
       {/* Only reachable through a merge: an outcome exists once a default

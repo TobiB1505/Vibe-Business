@@ -2,14 +2,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FakeDatabase, fakeSupabase } from "@/modules/operations/test-support";
 import { fakeSnapshot } from "@/modules/execution-contract/test-support";
 import { fakeLiveSnapshot } from "@/modules/business-audit/test-support";
-import { creditsToUnits } from "@/modules/credits/units";
 
 const getHead = vi.fn(async () => ({ defaultBranch: "main", commitSha: SNAPSHOT_SHA }));
 const createGithubRepositoryReader = vi.fn(() => ({ getHead }));
 vi.mock("@/modules/github/repository-reader", () => ({ createGithubRepositoryReader }));
 
-const { previewDogfoodStep, isDogfoodEligibleProject, resolveDogfoodPlanRoutes } =
-  await import("./website-preflight");
+const {
+  previewDogfoodStep,
+  isDogfoodEligibleProject,
+  resolveDogfoodPlanRoutes,
+  resolveRouteAgentEconomics,
+} = await import("./website-preflight");
 const { GithubDomainError } = await import("@/modules/github/errors");
 
 /**
@@ -553,7 +556,21 @@ describe("resolveDogfoodPlanRoutes — the list routes against real repository s
     // The regression, stated directly.
     expect(implementation.mode).toBe("agentic");
     expect(implementation.absorbedPreparation).toEqual([1]);
-    expect(routes.economics?.budget.maxCredits).toBe(creditsToUnits(100));
+    /*
+     * The ceiling belongs to the step, not to the plan (launch-v1).
+     *
+     * This used to assert one plan-wide `routes.economics`. `launch-v1` prices
+     * an agent improvement by execution pricing class, and the class reads this
+     * step's own risk class — so the route set can no longer answer it, and the
+     * screen resolves it for the step it is actually offering.
+     */
+    const economics = resolveRouteAgentEconomics({
+      projectId: PROJECT,
+      step: routes.plan.steps[1],
+      riskClass: implementation.riskClass,
+      env: ALLOWLIST,
+    });
+    expect(economics?.budget.maxCredits).toBeGreaterThan(0);
   });
 
   it("offers dependent execution after the founder-owned requirement is resolved", async () => {

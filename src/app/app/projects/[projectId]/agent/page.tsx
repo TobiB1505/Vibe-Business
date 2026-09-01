@@ -21,7 +21,10 @@ import { getLatestOpportunities } from "@/modules/opportunities/service";
 import { buildAgentFocus } from "@/modules/projects/agent-focus";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
 import { readAgentWorkspace } from "@/modules/coding-agent/agent-workspace";
-import { resolveDogfoodPlanRoutes } from "@/modules/coding-agent/website-preflight";
+import {
+  resolveDogfoodPlanRoutes,
+  resolveRouteAgentEconomics,
+} from "@/modules/coding-agent/website-preflight";
 import {
   agentCoreCaption,
   agentCoreState,
@@ -266,10 +269,24 @@ export default async function ProjectAgentPage({
           (step) => step.order === agenticResolution.stepOrder,
         ) ?? null)
       : null;
-  const creditEstimate =
-    agenticStep && agentRoutes?.available && agentRoutes.economics
-      ? formatCreditsForDisplay(agentRoutes.economics.budget.maxCredits)
+  /*
+   * The ceiling for the step that would actually run (launch-v1).
+   *
+   * Resolved here rather than carried on the route set, because the Agent price
+   * is per execution pricing class and the class is a property of this step —
+   * see `resolveRouteAgentEconomics`.
+   */
+  const routeEconomics =
+    agenticStep && agenticResolution
+      ? resolveRouteAgentEconomics({
+          projectId,
+          step: agenticStep,
+          riskClass: agenticResolution.riskClass,
+        })
       : null;
+  const creditEstimate = routeEconomics
+    ? formatCreditsForDisplay(routeEconomics.budget.maxCredits)
+    : null;
 
   /* Whether anything is actually happening. The orb turns for this and
      nothing else — a settled run gets no orb at all. */

@@ -3,31 +3,26 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import {
-  restoreValidatedArtifact,
+  provisionPreviewWorkspace,
   startPreviewServer,
   teardownPreview,
-  verifyRestoredArtifact,
   type PreviewTarget,
   type PreviewTeardown,
 } from "@/modules/change-preview/orchestrator";
 import {
   completePreviewSession,
   findPreviewByOperation,
-  getValidatedArtifact,
-  getValidationSourceIntegrity,
   markPreviewRunning,
   markValidatedArtifactDeleted,
   recordPreviewSandboxUsage,
   setPreviewStage,
 } from "@/modules/change-preview/store";
 import {
-  isPreviewExpired,
   type PreviewFailureCode,
   type PreviewSession,
   type PreviewStage,
 } from "@/modules/change-preview/schema";
 import { getPreparedChange } from "@/modules/execution/store";
-import { getProjectWithRepository } from "@/modules/projects/queries";
 import { resolveValidationProfile } from "@/modules/validation/profile";
 import type { SandboxProvider } from "@/modules/validation/sandbox-port";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
@@ -89,6 +84,36 @@ export type PreviewDeps = {
    * one (ADR 0015 §4).
    */
   provider: SandboxProvider;
+  /**
+   * Rebuilt from the operation's own project — never from client input.
+   *
+   * The same port validation uses, and for the same reason: the repository and
+   * its clone credential are the two things a client must have no way to name,
+   * and a dependency the workflow supplies is how that becomes structural
+   * rather than a rule someone remembers.
+   *
+   * `withCloneCredential` is requested only by the provisioning step. Nothing
+   * else resolves a target at all — by the time the server starts there is
+   * nothing left to authenticate to (rule 63).
+   */
+  resolveTarget: (
+    operation: ProjectOperationRun,
+    options: { withCloneCredential: boolean },
+  ) => Promise<PreviewRepositoryTarget | null>;
+};
+
+export type PreviewRepositoryTarget = {
+  repositoryUrl: string;
+  /** The directory the provider clones into, i.e. the repository name. */
+  sourceRoot: string;
+  /**
+   * A short-lived GitHub installation token, scoped to source acquisition only.
+   *
+   * Minted immediately before the clone and destroyed inside the sandbox before
+   * any repository-controlled command runs. Never persisted, never placed in
+   * the sandbox environment.
+   */
+  cloneCredential: { username: string; password: string } | null;
 };
 
 export type PreviewStepOutcome = { ok: true } | { ok: false; failureCode: PreviewFailureCode };
@@ -127,6 +152,7 @@ async function loadOperation(
 async function resolveContext(
   deps: PreviewDeps,
   operationId: string,
+  options: { withCloneCredential: boolean } = { withCloneCredential: false },
 ): Promise<
   | { ok: true; operation: ProjectOperationRun; session: PreviewSession; target: PreviewTarget }
   | { ok: false; failureCode: PreviewFailureCode }
@@ -138,39 +164,34 @@ async function resolveContext(
   const session = await findPreviewByOperation(deps.supabase, operationId);
   if (!session) return { ok: false, failureCode: "preview_failed" };
 
-  const artifact = await getValidatedArtifact(deps.supabase, {
-    projectId: operation.projectId,
-    validatedArtifactId: session.validationRunId,
-  });
-  if (!artifact) return { ok: false, failureCode: "preview_artifact_unavailable" };
-
   const prepared = await getPreparedChange(deps.supabase, {
     projectId: operation.projectId,
     preparedChangeId: session.preparedChangeId,
   });
-  if (!prepared) return { ok: false, failureCode: "preview_artifact_unavailable" };
+  if (!prepared || prepared.commitSha !== session.preparedCommitSha) {
+    // Either the change is gone, or it now points at a different commit from
+    // the one this session was claimed for. Both mean the same thing: there is
+    // nothing here that may be served on a public URL.
+    return { ok: false, failureCode: "preview_source_unavailable" };
+  }
 
-  // The repository *shape* — which workspace the app lives in. Read from the
-  // deterministic snapshot, never from an Opportunity's prose or any other
-  // model output (CLAUDE.md rule 25).
+  // The repository *shape* — which workspace the app lives in, and which
+  // package manager to install with. Read from the deterministic snapshot,
+  // never from an Opportunity's prose or any other model output (rule 25).
   const snapshot = await getLatestSuccessfulSnapshot(deps.supabase, operation.projectId);
   if (!snapshot?.result) return { ok: false, failureCode: "preview_not_supported" };
 
   const profile = resolveValidationProfile(snapshot.result);
   if (!profile.supported) return { ok: false, failureCode: "preview_not_supported" };
 
-  // The directory the provider cloned into during validation, preserved inside
-  // the snapshot. Taken from the connection table rather than from analysis
-  // output, for the same reason validation takes it from there: it is the one
-  // record of which repository this project actually is.
-  const project = await getProjectWithRepository(deps.supabase, operation.projectId);
-  const repositoryName = project?.repository?.name;
-  if (!repositoryName) return { ok: false, failureCode: "preview_not_supported" };
-
-  const integrity = await getValidationSourceIntegrity(deps.supabase, {
-    projectId: operation.projectId,
-    validationRunId: session.validationRunId,
-  });
+  /*
+   * The repository to clone, the directory the provider will clone into, and —
+   * only for the step that clones — the credential to clone with. Resolved from
+   * server state, which is what makes "the client cannot choose the repo" a
+   * structural fact rather than a validation rule.
+   */
+  const repository = await deps.resolveTarget(operation, options);
+  if (!repository) return { ok: false, failureCode: "preview_not_supported" };
 
   return {
     ok: true,
@@ -178,18 +199,12 @@ async function resolveContext(
     session,
     target: {
       previewSessionId: session.id,
-      // Resolved from the owned artifact row. There is no parameter through
-      // which a client could name a snapshot (§9).
-      snapshotId: session.artifactSnapshotId,
-      sourceRoot: repositoryName,
+      preparedCommitSha: session.preparedCommitSha,
+      repositoryUrl: repository.repositoryUrl,
+      cloneCredential: repository.cloneCredential,
+      packageManager: profile.packageManager,
+      sourceRoot: repository.sourceRoot,
       workspaceRoot: profile.workspaceRoot,
-      preparedFiles: prepared.files.map((file) => ({
-        path: file.path,
-        contentHash: file.contentHash,
-      })),
-      buildIdentityFiles: Object.entries(integrity?.buildIdentityDigests ?? {}).map(
-        ([path, contentHash]) => ({ path, contentHash }),
-      ),
     },
   };
 }
@@ -219,50 +234,39 @@ async function announceStage(
 }
 
 /**
- * Step 1 — restore the validated artifact into a fresh sandbox (§9, §10).
+ * Step 1 — acquire the source and install, before any repository code runs.
  *
  * The only billable-and-ambiguous operation in the run, alone in its own step
  * so that step can refuse retries without the refusal spreading to work which
  * is safe to repeat. A platform retry here could buy a second microVM, on a
  * second public URL, for a preview the first one may already be serving.
  *
- * The artifact deadline is re-checked here even though the service checked it
- * before creating the operation. Between the two there is a queue, and a
- * deadline that passed in the meantime must not be discovered by asking the
- * provider to restore something that is gone (§10).
+ * It is also where the credential exists and stops existing. Everything after
+ * this step runs with nothing to authenticate to.
  */
-export async function restoreArtifactStep(
+export async function provisionPreviewStep(
   deps: PreviewDeps,
   operationId: string,
 ): Promise<PreviewStepOutcome> {
-  const resolved = await resolveContext(deps, operationId);
+  const resolved = await resolveContext(deps, operationId, { withCloneCredential: true });
   if (!resolved.ok) return resolved;
   const { operation, session, target } = resolved;
-
-  const artifact = await getValidatedArtifact(deps.supabase, {
-    projectId: operation.projectId,
-    validatedArtifactId: session.validationRunId,
-  });
-  if (!artifact) return { ok: false, failureCode: "preview_artifact_unavailable" };
-  if (isPreviewExpired({ expiresAt: artifact.expiresAt })) {
-    return { ok: false, failureCode: "preview_artifact_expired" };
-  }
 
   await announceStage(deps, {
     operationId,
     projectId: operation.projectId,
     previewSessionId: session.id,
-    stage: "restoring_artifact",
+    stage: "acquiring_source",
   });
 
-  const outcome = await restoreValidatedArtifact(deps.provider, target);
+  const outcome = await provisionPreviewWorkspace(deps.provider, target);
   if (!outcome.ok) return { ok: false, failureCode: outcome.failureCode };
 
   await announceStage(deps, {
     operationId,
     projectId: operation.projectId,
     previewSessionId: session.id,
-    stage: "restoring_artifact",
+    stage: "installing",
     runtime: outcome.runtime,
   });
 
@@ -270,55 +274,15 @@ export async function restoreArtifactStep(
 }
 
 /**
- * Step 2 — prove the restored filesystem is the validated one (§11, §12).
- *
- * Read-only and idempotent, so it is safe to re-enter — but not to platform-
- * retry, because a retry runs inside a sandbox whose liveness it cannot assume.
- * Recovery is re-entry against persisted state, not repetition.
- */
-export async function verifyArtifactStep(
-  deps: PreviewDeps,
-  operationId: string,
-): Promise<PreviewStepOutcome> {
-  const resolved = await resolveContext(deps, operationId);
-  if (!resolved.ok) return resolved;
-  const { operation, session, target } = resolved;
-
-  await announceStage(deps, {
-    operationId,
-    projectId: operation.projectId,
-    previewSessionId: session.id,
-    stage: "verifying_artifact",
-  });
-
-  const outcome = await verifyRestoredArtifact(deps.provider, target);
-  if (!outcome.ok) {
-    await recordAuditEvent(deps.supabase, {
-      userId: operation.userId,
-      eventType: "change_preview.integrity_failed",
-      metadata: {
-        projectId: operation.projectId,
-        operationId,
-        previewSessionId: session.id,
-        validationRunId: session.validationRunId,
-        failureCode: outcome.failureCode,
-        // The detail, not the origin: an audit event must never carry the
-        // capability-like preview URL (§16).
-        failureDetail: outcome.failureDetail,
-      },
-    });
-    return { ok: false, failureCode: outcome.failureCode };
-  }
-
-  return { ok: true };
-}
-
-/**
- * Step 3 — start the production server and health-check it (§14, §17).
+ * Step 2 — start the development server and health-check it (§14, §17).
  *
  * The first repository-controlled code of the preview runs here, and only
- * because steps 1 and 2 already established that the bytes are the validated
- * bytes and the environment holds nothing of value.
+ * because step 1 already established that the commit is the prepared commit,
+ * the clone credential is gone, and the network is shut.
+ *
+ * The health probe is also the warm-up: a development server compiles the route
+ * the first request asks for, which is why the budget is three minutes rather
+ * than the ninety seconds a restored production build needed (Sprint 0114).
  */
 export async function startPreviewStep(
   deps: PreviewDeps,
@@ -332,7 +296,7 @@ export async function startPreviewStep(
     operationId,
     projectId: operation.projectId,
     previewSessionId: session.id,
-    stage: "starting_server",
+    stage: "starting_dev_server",
   });
 
   const outcome = await startPreviewServer(deps.provider, target);
@@ -397,11 +361,16 @@ export async function cleanupFailedPreviewStep(
   }
   const { operation, session, target } = resolved;
 
-  const teardown = await teardownPreview(deps.provider, target, { deleteArtifact: true });
+  const teardown = await teardownPreview(
+    deps.provider,
+    { previewSessionId: target.previewSessionId, snapshotId: session.artifactSnapshotId },
+    { deleteArtifact: true },
+  );
 
-  if (teardown.artifactDeleted) {
-    // The artifact, not the run. The ValidationRun stays historically passed
-    // and the PreparedChange stays historically prepared (§20).
+  if (teardown.artifactDeleted && session.validationRunId !== null) {
+    // Only a v1 session has an artifact to mark. The ValidationRun stays
+    // historically passed and the PreparedChange stays historically prepared
+    // (§20).
     await markValidatedArtifactDeleted(deps.supabase, {
       validationRunId: session.validationRunId,
       projectId: operation.projectId,

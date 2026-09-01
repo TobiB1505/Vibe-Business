@@ -1,7 +1,11 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { findActiveApprovalForCurrentArtifact } from "@/modules/approvals/service";
+import { assertPrefetchedFor, assertPreparedChangeIs } from "@/lib/db/latest-per-change";
+import {
+  findActiveApprovalForCurrentArtifact,
+  type PrefetchedApprovalInputs,
+} from "@/modules/approvals/service";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import { getPreparedChange } from "@/modules/execution/store";
 import type { OperationExecutor } from "@/modules/operations/executor";
@@ -20,6 +24,7 @@ import { runMergePreflight, type MergePreflightResult } from "./preflight";
 import {
   FAST_FORWARD_EXACT_COMMIT,
   MERGE_POLICY_VERSION,
+  type ChangeMerge,
   type MergeFailureCode,
 } from "./schema";
 import {
@@ -117,7 +122,19 @@ export async function resolveMergeTarget(
 export async function evaluateMergeEligibility(
   supabase: SupabaseClient,
   port: MergeApprovedChangePort,
-  params: { projectId: string; preparedChangeId: string },
+  params: {
+    projectId: string;
+    preparedChangeId: string;
+    /**
+     * The prepared change, validation and review the caller already holds
+     * (VB-023). Premises only: the standing approval is still resolved by
+     * identity, and the default branch head is still read live from GitHub
+     * immediately below. Neither may come from a row handed in — that is the
+     * distinction CLAUDE.md rule 55 draws between a routing signal and
+     * permission.
+     */
+    prefetched?: PrefetchedApprovalInputs;
+  },
 ): Promise<{
   result: MergePreflightResult;
   approvalId: string | null;
@@ -132,10 +149,12 @@ export async function evaluateMergeEligibility(
   observedDefaultHead: string | null;
   targetSha: string | null;
 }> {
-  const prepared = await getPreparedChange(supabase, {
-    projectId: params.projectId,
-    preparedChangeId: params.preparedChangeId,
-  });
+  const prepared = params.prefetched
+    ? assertPreparedChangeIs(params.prefetched.prepared, params)
+    : await getPreparedChange(supabase, {
+        projectId: params.projectId,
+        preparedChangeId: params.preparedChangeId,
+      });
 
   const unresolved = { approvalId: null, observedDefaultHead: null, targetSha: null } as const;
 
@@ -437,10 +456,23 @@ export async function startMerge(
 export async function getMergeCard(
   supabase: SupabaseClient,
   port: MergeApprovedChangePort,
-  params: { projectId: string; userId: string; preparedChangeId: string },
+  params: {
+    projectId: string;
+    userId: string;
+    preparedChangeId: string;
+    /**
+     * The merge and the eligibility premises the caller already holds
+     * (VB-023). The GitHub preflight is unaffected: it is per change by
+     * nature, it is what the card exists to report, and answering it from a
+     * stored snapshot would defeat the point.
+     */
+    prefetched?: PrefetchedApprovalInputs & { merge: ChangeMerge | null };
+  },
 ): Promise<MergeCard> {
   const [latestMerge, evaluated] = await Promise.all([
-    getLatestMergeForPreparedChange(supabase, params),
+    params.prefetched
+      ? assertPrefetchedFor(params.prefetched.merge, params, "merge")
+      : getLatestMergeForPreparedChange(supabase, params),
     evaluateMergeEligibility(supabase, port, params),
   ]);
 

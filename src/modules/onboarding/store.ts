@@ -2,14 +2,14 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { recordAuditEvent } from "@/modules/audit-log/events";
-import { getLatestSuccessfulAudit, getPausedAudit } from "@/modules/business-audit/store";
+import { getLatestAuditStamp, getPausedAudit } from "@/modules/business-audit/store";
 import {
   getActiveBusinessAuditOperation,
   getActiveProductScanOperation,
 } from "@/modules/operations/service";
 import { getLatestOpportunities } from "@/modules/opportunities/service";
 import { getLatestProfile } from "@/modules/product-understanding/store";
-import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
+import { hasSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import { liveConnections } from "@/modules/projects/repository-connection";
 import {
   deriveOnboardingState,
@@ -36,7 +36,15 @@ export type ProjectOnboarding = StoredOnboarding & {
     htmlUrl: string;
   } | null;
   productProfile: Awaited<ReturnType<typeof getLatestProfile>>;
-  audit: Awaited<ReturnType<typeof getLatestSuccessfulAudit>>;
+  /**
+   * That a completed audit exists, and when — not the audit itself (VB-022).
+   *
+   * The scored document is hundreds of kilobytes and is rendered in exactly one
+   * onboarding state. This read runs on every poll of every other state, so it
+   * reads the stamp and the reveal fetches the document when it is the thing
+   * being shown.
+   */
+  audit: Awaited<ReturnType<typeof getLatestAuditStamp>>;
   pausedAudit: Awaited<ReturnType<typeof getPausedAudit>>;
   auditOperation: Awaited<ReturnType<typeof getActiveBusinessAuditOperation>>;
   understandingOperation: Awaited<ReturnType<typeof getActiveProductScanOperation>>;
@@ -257,8 +265,10 @@ export async function getProjectOnboarding(
         .eq("project_id", params.projectId)
         .maybeSingle(),
       getLatestProfile(supabase, params.projectId),
-      getLatestSuccessfulSnapshot(supabase, params.projectId),
-      getLatestSuccessfulAudit(supabase, params.projectId),
+      // Existence and a timestamp, not the documents (VB-022). Onboarding is
+      // polled while a scan runs, and both of these are large JSONB.
+      hasSuccessfulSnapshot(supabase, params.projectId),
+      getLatestAuditStamp(supabase, params.projectId),
       getPausedAudit(supabase, params.projectId),
       getActiveBusinessAuditOperation(supabase, params.projectId),
       getActiveProductScanOperation(supabase, params.projectId),
@@ -281,7 +291,7 @@ export async function getProjectOnboarding(
   } else {
     // Migration-safe fallback for a project created by an older application
     // instance during a rolling deploy. An existing completed audit is mature.
-    const mature = Boolean(audit?.result);
+    const mature = audit !== null;
     const completedAt = mature ? (audit?.completedAt ?? audit?.createdAt ?? new Date().toISOString()) : null;
     const initialState: OnboardingState = mature ? "complete" : repository ? "add_live_product" : "connect_source";
     const liveSiteStatus: LiveSiteStatus = project.production_url ? "provided" : mature ? "no_live_site_yet" : "undecided";
@@ -325,14 +335,14 @@ export async function getProjectOnboarding(
   const nextState = deriveOnboardingState({
     hasProductSource: Boolean(repository),
     liveSiteStatus,
-    hasRepositorySnapshot: Boolean(snapshot?.result),
+    hasRepositorySnapshot: snapshot,
     understandingRunning: Boolean(understandingOperation),
     hasProductProfile: Boolean(profile),
     productConfirmed: Boolean(profile?.stored.confirmedAt),
     auditNeedsUser: Boolean(pausedAudit),
     auditRunning: Boolean(auditOperation),
     auditAnalyzing: auditOperation?.stage === "running_ai",
-    hasAudit: Boolean(audit?.result),
+    hasAudit: audit !== null,
     auditRevealed: stored.auditRevealedAt !== null,
     completed: stored.completedAt !== null,
   });

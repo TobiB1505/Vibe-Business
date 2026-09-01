@@ -11,9 +11,20 @@ Two things enforce that rather than describe it:
 - `CREDIT_RATE_CARDS` in `credits/rating.ts` is `[]`, and each sprint's own
   `sprint-NNNN-safety.test.ts` asserts it still is.
 
-Nothing outside this module imports it. That is deliberate for now: wiring the
-estimator into the execution flow needs persistence, which is the Credit
-Settlement sprint's decision to make.
+Three primitives are readable from outside, and nothing else:
+
+| Module | Read by | Why it is safe |
+| --- | --- | --- |
+| `execution-class.ts` | `execution-contract/`, `credits/`, the billing UI | Classifies a step. Contains no money at all. |
+| `infrastructure-rates.ts` | `credits/margin-guard.ts` | What Vibe *pays* a provider, never what it charges. |
+| `sandbox-cost.ts` | `credits/margin-guard.ts` | Dimensions to nanodollars. Arithmetic, not policy. |
+
+`sprint-0054-safety.test.ts` enforces that list: any other import from this
+module, from anywhere but the internal calibration harness, fails the build.
+The predictive estimator in `intelligence/` stays unreachable — wiring it into
+the execution flow needs persistence, which is a later decision, and a quote
+that reached the execution path is a quote that would eventually authorize
+something.
 
 ## Files
 

@@ -75,7 +75,7 @@ describe("execution resolver — real product dogfood", () => {
       .eq("project_id", projectId)
       .maybeSingle();
 
-    const budget = resolveExecutionBudget();
+    const budget = resolveExecutionBudget("standard");
 
     const resolutions = resolvePlanExecution({
       plan: {

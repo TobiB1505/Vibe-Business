@@ -461,6 +461,7 @@ describe("K. no intra-project RESTRICT foreign key was modified", () => {
       "business_readiness_audits.live_snapshot_id",
       "business_readiness_audits.product_profile_id",
       "business_readiness_audits.repository_snapshot_id",
+      "change_approvals.preview_session_id",
       "change_approvals.review_artifact_id",
       "change_merges.change_approval_id",
       "change_merges.repository_connection_id",

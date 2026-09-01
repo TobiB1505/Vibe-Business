@@ -1,6 +1,8 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { mapWithConcurrency, PER_CHANGE_CONCURRENCY } from "@/lib/async/concurrency";
+import { readLatestPerGroup } from "@/lib/db/latest-per-change";
 
 import type { AuditReading } from "./score-series";
 
@@ -197,6 +199,31 @@ const AUDIT_COLUMNS =
   "project_id, product_profile_id, overall_score, created_at, schema_version, audit_version, evidence_pack_version, prompt_version, rubric_version, provider, model";
 
 /**
+ * How much audit history one dashboard render may transfer, per project
+ * (VB-025).
+ *
+ * The read was unbounded: every completed audit of every project the user owns,
+ * on every render, forever. It feeds two things — each card's *current* score
+ * and its score trend — and only the second wants more than one row.
+ *
+ * The budget is per project rather than absolute so a second project does not
+ * shorten the first one's trend. It is still a global `limit`, though, and a
+ * project with unusually deep history can therefore crowd others out of the
+ * response: the repair below is what stops that becoming a card that says a
+ * project has never been audited when it has. What it can shorten is a trend,
+ * which is honest degradation; what it must never do is lose a score.
+ */
+const AUDIT_HISTORY_PER_PROJECT = 12;
+
+/**
+ * How many prepared changes' validation runs one render may transfer.
+ *
+ * Same shape, same reason: only the newest run per change decides anything, and
+ * `validation_runs` grows every time a customer re-validates.
+ */
+const VALIDATION_ROWS_PER_CHANGE = 4;
+
+/**
  * Rows are fetched newest-first and reduced to the first per key. Postgres has
  * `distinct on`, PostgREST does not expose it, and adding a view for it would
  * be a schema change this sprint does not need at current volumes.
@@ -263,6 +290,48 @@ function auditReading(row: AuditRow): AuditReading {
   };
 }
 
+/**
+ * The newest audit per project, with the crowding case repaired (VB-025).
+ *
+ * The batched read is ordered newest-first *globally* and capped, so a project
+ * whose entire history sits below another project's can be missing from the
+ * response entirely. For the trend that is a shorter line; for the score it
+ * would be a card claiming the project has never been audited, which is a
+ * different sentence and a false one.
+ *
+ * So a project with no row is re-read individually — but only when the budget
+ * was actually spent, because a response short of its limit saw everything and
+ * "no row" then means no audit. That is the same rule
+ * `readLatestPerGroup` applies, stated here because this read wants the
+ * history as well as the latest and so cannot delegate to it.
+ */
+async function repairMissingLatestAudits(
+  supabase: SupabaseClient,
+  params: { projects: ProjectRow[]; auditRows: AuditRow[]; budget: number },
+): Promise<Map<string, AuditRow>> {
+  const latest = firstPerKey(params.auditRows, (row) => row.project_id);
+  if (params.auditRows.length < params.budget) return latest;
+
+  const missing = params.projects.filter((project) => !latest.has(project.id));
+
+  const recovered = await mapWithConcurrency(missing, PER_CHANGE_CONCURRENCY, async (project) => {
+    const { data, error } = await supabase
+      .from("business_readiness_audits")
+      .select(AUDIT_COLUMNS)
+      .eq("project_id", project.id)
+      .eq("status", "completed")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw error;
+    return (data ?? null) as AuditRow | null;
+  });
+
+  for (const row of recovered) if (row) latest.set(row.project_id, row);
+  return latest;
+}
+
 export async function getDashboardOverview(
   supabase: SupabaseClient,
   userId: string,
@@ -294,13 +363,18 @@ export async function getDashboardOverview(
       .select(AUDIT_COLUMNS)
       .in("project_id", projectIds)
       .eq("status", "completed")
-      .order("created_at", { ascending: false }),
-    supabase
-      .from("opportunity_sets")
-      .select("id, project_id, created_at")
-      .in("project_id", projectIds)
-      .eq("status", "completed")
-      .order("created_at", { ascending: false }),
+      .order("created_at", { ascending: false })
+      .limit(projects.length * AUDIT_HISTORY_PER_PROJECT),
+    // Only the newest set per project is ever read, so this is the shape
+    // `readLatestPerGroup` exists for: bounded, and repaired for any project
+    // a full response crowded out (VB-023, VB-025).
+    readLatestPerGroup(supabase, {
+      table: "opportunity_sets",
+      columns: "id, project_id, created_at",
+      groupColumn: "project_id",
+      groupIds: projectIds,
+      filters: { status: "completed" },
+    }),
     supabase
       .from("prepared_changes")
       .select("id, project_id")
@@ -310,7 +384,7 @@ export async function getDashboardOverview(
       .eq("status", "prepared"),
   ]);
 
-  for (const result of [repos, audits, sets, prepared]) {
+  for (const result of [repos, audits, prepared]) {
     if (result.error) throw result.error;
   }
 
@@ -319,9 +393,13 @@ export async function getDashboardOverview(
   const repoRows = (repos.data ?? []) as unknown as RepoRow[];
   const repoByProject = firstPerKey(repoRows, (row) => row.project_id);
   const auditRows = (audits.data ?? []) as AuditRow[];
-  const latestAuditByProject = firstPerKey(auditRows, (row) => row.project_id);
   const auditsByProject = groupPerKey(auditRows, (row) => row.project_id);
-  const latestSetByProject = firstPerKey((sets.data ?? []) as SetRow[], (row) => row.project_id);
+  const latestAuditByProject = await repairMissingLatestAudits(supabase, {
+    projects,
+    auditRows,
+    budget: projects.length * AUDIT_HISTORY_PER_PROJECT,
+  });
+  const latestSetByProject = sets as Map<string, SetRow>;
   const preparedRows = (prepared.data ?? []) as PreparedRow[];
   const preparedByProject = countPerKey(preparedRows, (row) => row.project_id);
 
@@ -347,6 +425,7 @@ export async function getDashboardOverview(
           .select("prepared_change_id, status, created_at")
           .in("prepared_change_id", preparedIds)
           .order("created_at", { ascending: false })
+          .limit(preparedIds.length * VALIDATION_ROWS_PER_CHANGE)
       : Promise.resolve({ data: [], error: null }),
   ]);
 

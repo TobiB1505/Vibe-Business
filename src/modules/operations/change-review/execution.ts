@@ -21,11 +21,9 @@ import type { SandboxProvider } from "@/modules/validation/sandbox-port";
 import {
   completeOperationRun,
   failOperationRun,
-  getOperationRunById,
   getProjectOperationRunById,
   setOperationStage,
 } from "../store";
-import { sweepExpiredReviewScreenshots } from "./retention";
 
 /**
  * Durable steps for a visual review (Sprint 11A §21, §32).
@@ -263,43 +261,6 @@ async function recordUsage(
 }
 
 /** Step 2 — mark the comparison ready. */
-/**
- * Deletes screenshots whose retention has run out, for this project (VB-004).
- *
- * Runs at the end of every review, successful or not: expiry has nothing to do
- * with how *this* review went, and a failed review is just as good a moment to
- * notice that older bytes are past their deadline.
- *
- * Never throws and never fails the operation. The work the customer asked for
- * is already finished and recorded by the time this runs; a storage outage
- * must not turn a completed review into a retrying step, and it must certainly
- * not turn it into a failed one. The residue is bytes that outlive their
- * deadline until the next review or the project's deletion — which is the
- * situation this whole function is improving, not a new one it creates.
- */
-export async function sweepExpiredScreenshotsStep(
-  deps: ReviewDeps,
-  operationId: string,
-): Promise<void> {
-  try {
-    // The project comes from the persisted operation row, never from an
-    // argument (rule 53): a service-role client must not be pointed at a
-    // project a caller named.
-    const operation = await getOperationRunById(deps.supabase, operationId);
-    if (!operation?.projectId) return;
-
-    const outcome = await sweepExpiredReviewScreenshots(deps.supabase, {
-      projectId: operation.projectId,
-    });
-
-    if (outcome.failed) {
-      console.error("[review] the expired-screenshot sweep did not complete", { operationId });
-    }
-  } catch {
-    console.error("[review] the expired-screenshot sweep threw", { operationId });
-  }
-}
-
 export async function completeReviewStep(deps: ReviewDeps, operationId: string): Promise<void> {
   const loaded = await loadContext(deps.supabase, operationId);
   if (!loaded) return;

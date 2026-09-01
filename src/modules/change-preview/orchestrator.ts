@@ -1,12 +1,13 @@
-import { createHash } from "node:crypto";
-import { describeCommand } from "@/modules/validation/commands";
+import { describeCommand, installCommand } from "@/modules/validation/commands";
 import { sanitizeCommandOutput } from "@/modules/validation/logs";
 import { inSandbox } from "@/modules/validation/orchestrator";
-import type {
-  SandboxHandle,
-  SandboxProcess,
-  SandboxProvider,
-  SandboxUsage,
+import {
+  DEPENDENCY_HOSTS,
+  SOURCE_HOSTS,
+  type SandboxHandle,
+  type SandboxProcess,
+  type SandboxProvider,
+  type SandboxUsage,
 } from "@/modules/validation/sandbox-port";
 import { PREVIEW_BUDGETS, PREVIEW_RESOURCES } from "./budgets";
 import {
@@ -16,43 +17,59 @@ import {
   previewServerCommand,
 } from "./commands";
 import { previewSandboxNameFor } from "./identity";
+import type { SupportedPackageManager } from "@/modules/validation/schema";
 import type { PreviewCleanupStatus, PreviewFailureCode } from "./schema";
 
 /**
- * One preview session, phase by phase (Sprint 10B-2 §9–§17).
+ * One preview session, phase by phase (Sprint 10B-2 §9–§17; Sprint 0114).
  *
- * This file is the security boundary of the sprint, the way
- * `validation/orchestrator.ts` was of 10A. Everything above it decides
- * *whether* a preview may start; everything below it is a provider adapter.
+ * This file is the security boundary of the preview, the way
+ * `validation/orchestrator.ts` is of a validation run. Everything above it
+ * decides *whether* a preview may start; everything below it is a provider
+ * adapter.
  *
  * ## The sequence, and why each step is where it is
  *
  * ```
- * 1. restore from snapshot     egress deny-all, one inbound port, no secrets
- * 2. re-verify file hashes     the restored tree is the validated tree
- * 3. re-verify .git absence    a snapshot could have carried a credential back
- * 4. re-verify env             no Vibe privilege reached the preview runtime
- * 5. start the server          ← the first repository-controlled code
- * 6. health check              answered, or classified as why not
+ * 1. clone the pinned commit   GitHub only, one inbound port, no secrets
+ * 2. prove it is that commit   the provider's word is not the answer
+ * 3. destroy the credential    and verify its absence, before any repo code
+ * 4. install                   registry reachable, and only here
+ * 5. close the network         deny-all, before the first repository command
+ * 6. start the dev server      ← the first repository-controlled code
+ * 7. health check              answered, or classified as why not
  * ```
  *
- * Steps 2–4 all happen **before** the application starts. That is the point:
- * by the time `next start` runs someone else's JavaScript on a public URL, the
- * bytes have been proved to be the validated bytes and the environment has been
- * proved to hold nothing of value.
+ * Steps 2–5 all happen **before** the application starts. By the time
+ * `next dev` runs someone else's JavaScript on a public URL, the commit has
+ * been proved to be the one Vibe prepared, the clone credential has been proved
+ * gone, and the network has been proved shut.
+ *
+ * ## What changed in Sprint 0114, and why
+ *
+ * This used to restore the filesystem snapshot a *passing* validation captured.
+ * That made a preview strictly later than validation — and validation's last
+ * step is the build, so a person waited roughly five minutes to look at code
+ * that had been written before the wait began.
+ *
+ * A development server needs no build, so a preview can now be offered as soon
+ * as a change is prepared and run *alongside* validation instead of after it.
+ * The cost of that is stated rather than hidden: what runs here is the prepared
+ * code, not the validated artifact, and nothing in this module or above it may
+ * describe it as validated (ADR 0064).
+ *
+ * The whole ValidatedArtifact mechanism goes with it — capture, restore,
+ * integrity re-verification, deletion, and a customer's built filesystem
+ * sitting in provider storage for 24 hours. There is no longer anything that
+ * needs it.
  *
  * ## What is deliberately absent
  *
- * No clone. No GitHub token. No `main`, no branch, no fetch. No install, no
- * typecheck, no test, no build — all four already ran, and re-running them
- * would mean the artifact was not trusted, which would mean there was no point
- * capturing it. No Repository Intelligence. No model call of any kind.
- *
- * The only source is `ValidatedArtifact.snapshotId`, resolved server-side from
- * a row the user owns. There is no code path that searches for a recent
- * sandbox, resumes an arbitrary stopped one, or rebuilds when the snapshot is
- * missing — a hidden rebuild would be a *different* artifact wearing the
- * validated one's name (§9).
+ * No typecheck, no test, no build — `modules/validation` answers whether the
+ * change is sound and remains the only thing that does. No Repository
+ * Intelligence. No model call of any kind. No second acquisition path: the
+ * clone is the one, it uses a credential minted for it alone, and that
+ * credential is destroyed before anything from the repository executes.
  *
  * ## Network direction is two decisions, not one
  *
@@ -61,30 +78,34 @@ import type { PreviewCleanupStatus, PreviewFailureCode } from "./schema";
  * traffic including DNS; exposed ports are a separate, inbound concern with
  * their own routes.
  *
- * So a preview is inbound-public on exactly one port and outbound-denied, and
- * those are independent settings rather than a compromise between them. "The
- * preview needs the internet to be reachable" is a confusion between the two
- * directions, and it is not a reason to widen egress for a server whose job is
- * to render an already-built application (§13).
+ * So a preview is inbound-public on exactly one port and outbound-restricted,
+ * and those are independent settings rather than a compromise between them.
+ * Egress is open to GitHub while cloning and to the registry while installing,
+ * and to nothing at all from the moment repository code can run (rule 81).
  */
 
 export type PreviewTarget = {
   previewSessionId: string;
-  /** Resolved from the owned ValidatedArtifact. Never client-supplied (§9). */
-  snapshotId: string;
-  /** Directory the provider cloned into during validation, preserved in the snapshot. */
+  /** The commit Vibe prepared and verified. Never a branch, never client-supplied. */
+  preparedCommitSha: string;
+  repositoryUrl: string;
+  /**
+   * Short-lived, single-purpose, destroyed in phase 3. Never persisted.
+   *
+   * Only provisioning has any use for it. Every later phase reconnects without
+   * one, because by then there is nothing left to authenticate to (rule 63).
+   */
+  cloneCredential: { username: string; password: string } | null;
+  packageManager: SupportedPackageManager;
+  /**
+   * The directory the provider clones into, relative to the sandbox home.
+   *
+   * Vercel materializes a git source at `/vercel/sandbox/<repo>/`, not at
+   * `/vercel/sandbox` — taken from the repository name on the server, never
+   * guessed inside the sandbox. The same fact validation records.
+   */
   sourceRoot: string;
   workspaceRoot: string;
-  /** Path + sha256 of every file Vibe prepared, re-checked after restore (§11). */
-  preparedFiles: readonly { path: string; contentHash: string }[];
-  /**
-   * Build-identity files and their digests as recorded at validation time.
-   *
-   * Compared against the restored filesystem. Never re-fetched from GitHub:
-   * preview must not acquire a source, and a second acquisition path would be a
-   * second credential (§9).
-   */
-  buildIdentityFiles: readonly { path: string; contentHash: string }[];
 };
 
 /**
@@ -106,7 +127,22 @@ export type PreviewTarget = {
  */
 export const PREVIEW_ENVIRONMENT: Readonly<Record<string, string>> = Object.freeze({
   CI: "1",
-  NODE_ENV: "production",
+  /*
+   * `development`, not `production` — and this is a real difference, not a
+   * detail (Sprint 0114).
+   *
+   * A development server *is* a development environment: React runs its
+   * development build, warnings appear, and an application that branches on
+   * `NODE_ENV` takes the other branch. Forcing `production` here would not undo
+   * any of that; it would only produce a Next.js warning about a non-standard
+   * value and an application whose two halves disagree about which environment
+   * they are in.
+   *
+   * So it says what is true. What follows from it — that a preview is not
+   * evidence about production behaviour — is the product's to state, and
+   * `modules/validation` is what actually answers that question.
+   */
+  NODE_ENV: "development",
   NEXT_TELEMETRY_DISABLED: "1",
 });
 
@@ -137,10 +173,6 @@ const MISSING_ENVIRONMENT_MARKERS: readonly RegExp[] = [
   /environment variable ["'`]?[A-Z][A-Z0-9_]{2,}["'`]? is (?:not set|required|missing)/i,
   /invalid environment variables/i,
 ];
-
-function sha256(content: string): string {
-  return createHash("sha256").update(content, "utf8").digest("hex");
-}
 
 /**
  * A safe description of an unknown thrown value.
@@ -186,104 +218,47 @@ async function attach(
 }
 
 // ---------------------------------------------------------------------------
-// Phase 1 — restore the artifact
+// Phase 1 — acquire the source and install, before any repository code runs
 // ---------------------------------------------------------------------------
 
-export type RestoreOutcome =
+export type ProvisionPreviewOutcome =
   | { ok: true; sandboxId: string; runtime: string }
   | { ok: false; failureCode: PreviewFailureCode; failureDetail: string | null };
 
 /**
- * Creates a fresh sandbox from exactly the validated snapshot (§9).
+ * Creates the sandbox, proves the commit, destroys the credential, installs.
  *
  * Everything security-relevant is passed at creation, so the VM never exists
  * under weaker settings for even a moment:
  *
- *  - `deny_all` egress, from the first instant;
- *  - exactly one inbound port, Vibe's;
+ *  - egress limited to GitHub, which is all a clone needs;
+ *  - exactly one inbound port, Vibe's, and a different direction from the line
+ *    above — `ports` can only be set here, so this is where the decision to
+ *    serve publicly is actually made;
  *  - the preview environment, which holds no privilege;
  *  - the TTL as the provider's own timeout, so the VM stops even if Vibe never
- *    runs again (§18).
+ *    runs again.
  *
  * Re-entry is safe and is what makes the durable step idempotent: a replay
  * finds the sandbox already answering to the deterministic name and adopts it
  * rather than creating a second paid VM.
+ *
+ * ## Why the credential is destroyed here rather than trusted to expire
+ *
+ * Because short expiry is not a security boundary (rule 63). The clone
+ * credential exists for one command; the moment the source is on disk it is
+ * pure additional reach, and everything after this point is repository-
+ * controlled. Its absence is *verified*, not assumed — a scrub that silently
+ * failed would leave a token in a VM that is about to serve a public port.
  */
-export async function restoreValidatedArtifact(
-  provider: SandboxProvider,
-  target: PreviewTarget,
-): Promise<RestoreOutcome> {
-  const existing = await attach(provider, target);
-  if (existing) return { ok: true, sandboxId: existing.id, runtime: existing.runtime };
-
-  try {
-    const sandbox = await provider.create({
-      name: previewSandboxNameFor(target.previewSessionId),
-      source: { kind: "snapshot", snapshotId: target.snapshotId },
-      // Outbound. Closed before the restored filesystem exists, and never
-      // reopened: nothing a preview does legitimately requires egress.
-      networkPolicy: { mode: "deny_all" },
-      // Inbound. Exactly one, and a different direction from the line above.
-      ports: [PREVIEW_BUDGETS.port],
-      timeoutMs: PREVIEW_BUDGETS.ttlMs,
-      env: { ...PREVIEW_ENVIRONMENT },
-      vcpus: PREVIEW_RESOURCES.vcpus,
-    });
-
-    return { ok: true, sandboxId: sandbox.id, runtime: sandbox.runtime };
-  } catch (error) {
-    // Includes the case where the snapshot no longer exists provider-side. The
-    // application already refused an expired or deleted artifact before
-    // spending anything; this is the residual race, and the answer is still to
-    // fail rather than to acquire the source some other way (§10).
-    return {
-      ok: false,
-      failureCode: "preview_provider_unavailable",
-      failureDetail: detail(describeError(error)),
-    };
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Phase 2 — prove the restored artifact is the validated artifact
-// ---------------------------------------------------------------------------
-
-export type IntegrityOutcome =
-  | { ok: true; runtime: string }
-  | { ok: false; failureCode: PreviewFailureCode; failureDetail: string | null };
-
-/**
- * Re-verifies the restored filesystem before any application code runs (§11).
- *
- * ## Why this is not redundant with validation
- *
- * Validation proved that *a* filesystem contained the prepared change. This
- * proves that the filesystem which came back out of provider storage is that
- * same one. Between the two there is a snapshot, a storage system, and a
- * restore — three things Vibe does not implement — and a preview that skipped
- * this would be serving a public URL on the strength of a provider's word.
- *
- * It is deliberately **not** a re-validation. No install, no typecheck, no
- * test, no build: those establish that the code works, which is already
- * settled, and re-running them would be spending minutes to re-answer a
- * question whose answer is the reason we are here.
- *
- * ## The credential check is the important one
- *
- * A snapshot is a filesystem image. If a `.git` with a credential-bearing
- * remote ever survived into one, restoring it would put that credential in a
- * VM that is about to serve a public port. Capture re-verified its absence
- * before snapshotting (Sprint 10B-1); this verifies it again after restoring,
- * because the two checks are separated by everything above.
- */
-export async function verifyRestoredArtifact(
+export async function provisionPreviewWorkspace(
   provider: SandboxProvider,
   target: PreviewTarget,
   environment: Readonly<Record<string, string>> = PREVIEW_ENVIRONMENT,
-): Promise<IntegrityOutcome> {
-  // Vibe's own environment construction, checked before anything is started.
+): Promise<ProvisionPreviewOutcome> {
+  // Vibe's own environment construction, checked before anything is created.
   // Ordered first because it needs no provider call: a defect here should not
-  // cost a reconnect to discover.
+  // cost a sandbox to discover.
   const privileged = Object.keys(environment).filter((name) =>
     PRIVILEGED_ENVIRONMENT_PREFIXES.some((prefix) => name.startsWith(prefix)),
   );
@@ -296,67 +271,122 @@ export async function verifyRestoredArtifact(
     };
   }
 
-  const sandbox = await attach(provider, target);
-  if (!sandbox) {
-    return {
-      ok: false,
-      failureCode: "preview_provider_unavailable",
-      failureDetail: detail("the preview environment was no longer available"),
-    };
-  }
+  const sandbox = (await attach(provider, target)) ?? (await create(provider, target, environment));
+  if (!("liveness" in sandbox)) return sandbox;
 
-  const fail = (failureDetail: string): IntegrityOutcome => ({
-    ok: false,
-    failureCode: "preview_artifact_integrity_failed",
-    failureDetail: detail(failureDetail),
-  });
+  const workdir = inSandbox(target.sourceRoot, target.workspaceRoot);
 
   try {
-    // A credential-bearing git store must not survive a restore. Checked before
-    // the file hashes, because a credential present is a refusal regardless of
-    // whether the rest of the tree is perfect.
+    /*
+     * The provider cloned a revision; this proves it cloned *that* revision.
+     * Validation asks the same question of the same commit for the same reason:
+     * a preview of the wrong bytes on a public URL is worse than no preview.
+     */
+    const head = await sandbox.run({
+      command: { command: "git", args: ["rev-parse", "HEAD"] },
+      cwd: workdir,
+      timeoutMs: PREVIEW_BUDGETS.sourceTimeoutMs,
+    });
+    const observed = head.output.trim().split(/\s+/).pop() ?? "";
+    if (head.exitCode !== 0 || observed !== target.preparedCommitSha) {
+      return {
+        ok: false,
+        failureCode: "preview_source_unavailable",
+        failureDetail: detail(
+          head.exitCode === 0
+            ? `expected ${target.preparedCommitSha}, found ${observed}`
+            : "the prepared commit could not be resolved",
+        ),
+      };
+    }
+
+    /*
+     * On this provider there is no `.git` to remove, so this is defence in
+     * depth rather than the primary control — and it is kept precisely because
+     * that is a fact about *this* provider and image, not a guarantee. A future
+     * provider that does leave a checkout would put a credential-bearing remote
+     * on disk, and this is what stops it reaching repository code.
+     */
+    await sandbox.run({
+      command: { command: "rm", args: ["-rf", ".git"] },
+      cwd: workdir,
+      timeoutMs: PREVIEW_BUDGETS.sourceTimeoutMs,
+    });
+
     const gitConfig = await sandbox.readFile({
       path: inSandbox(target.sourceRoot, target.workspaceRoot, ".git/config"),
       maxBytes: 4096,
     });
     if (gitConfig !== null) {
-      return fail("a git credential store was present in the restored artifact");
+      return {
+        ok: false,
+        failureCode: "preview_credential_scrub_failed",
+        failureDetail: detail("the git credential store survived removal"),
+      };
     }
 
-    for (const file of target.preparedFiles.slice(0, PREVIEW_BUDGETS.maxIntegrityFiles)) {
-      const content = await sandbox.readFile({
-        path: inSandbox(target.sourceRoot, target.workspaceRoot, file.path),
-        maxBytes: PREVIEW_BUDGETS.maxIntegrityFileBytes,
-      });
+    // GitHub is revoked here: the source is already on disk, so continued
+    // access to it would be pure additional reach.
+    await sandbox.applyNetworkPolicy({ mode: "allow_domains", domains: DEPENDENCY_HOSTS });
 
-      if (content === null) return fail(`prepared file missing after restore: ${file.path}`);
-      if (sha256(content) !== file.contentHash) {
-        return fail(`content hash mismatch after restore: ${file.path}`);
-      }
+    const install = await sandbox.run({
+      command: installCommand(target.packageManager),
+      cwd: workdir,
+      timeoutMs: PREVIEW_BUDGETS.installTimeoutMs,
+    });
+
+    /*
+     * Closed regardless of how the install ended. A failed install is not a
+     * reason to leave the registry reachable for whatever runs next, and the
+     * failure path is exactly where "we'll close it later" turns into "we
+     * didn't". `deny-all` blocks DNS as well as traffic, closing the covert
+     * channel an allowlist leaves open (rule 81).
+     */
+    await sandbox.applyNetworkPolicy({ mode: "deny_all" });
+
+    if (install.exitCode !== 0) {
+      return {
+        ok: false,
+        failureCode: "preview_install_failed",
+        failureDetail: detail(sanitizeCommandOutput(install.output).text),
+      };
     }
 
-    // Build identity, compared against what validation recorded rather than
-    // against GitHub. Preview acquires no source and holds no credential, so
-    // the recorded digest is the only honest reference — and it is the right
-    // one: the question is whether the artifact changed in storage, not whether
-    // the repository has moved on since.
-    for (const file of target.buildIdentityFiles) {
-      const content = await sandbox.readFile({
-        path: inSandbox(target.sourceRoot, target.workspaceRoot, file.path),
-        maxBytes: PREVIEW_BUDGETS.maxBuildIdentityFileBytes,
-      });
+    return { ok: true, sandboxId: sandbox.id, runtime: sandbox.runtime };
+  } catch (error) {
+    return { ok: false, failureCode: "preview_failed", failureDetail: detail(describeError(error)) };
+  }
+}
 
-      if (content === null) return fail(`build identity file missing after restore: ${file.path}`);
-      if (sha256(content) !== file.contentHash) {
-        return fail(`build identity mismatch after restore: ${file.path}`);
-      }
-    }
-
-    return { ok: true, runtime: sandbox.runtime };
+/** The create half, split out so the happy path above reads as one sequence. */
+async function create(
+  provider: SandboxProvider,
+  target: PreviewTarget,
+  environment: Readonly<Record<string, string>>,
+): Promise<SandboxHandle | { ok: false; failureCode: PreviewFailureCode; failureDetail: string | null }> {
+  try {
+    return await provider.create({
+      name: previewSandboxNameFor(target.previewSessionId),
+      source: {
+        kind: "git",
+        repositoryUrl: target.repositoryUrl,
+        revision: target.preparedCommitSha,
+        credential: target.cloneCredential,
+      },
+      // Outbound, and only what a clone needs. Narrowed twice below, never
+      // widened.
+      networkPolicy: { mode: "allow_domains", domains: SOURCE_HOSTS },
+      // Inbound. Exactly one, settable only here, and the whole reason this
+      // sandbox is separate from validation's.
+      ports: [PREVIEW_BUDGETS.port],
+      timeoutMs: PREVIEW_BUDGETS.ttlMs,
+      env: { ...environment },
+      vcpus: PREVIEW_RESOURCES.vcpus,
+    });
   } catch (error) {
     return {
       ok: false,
-      failureCode: "preview_failed",
+      failureCode: "preview_provider_unavailable",
       failureDetail: detail(describeError(error)),
     };
   }
@@ -628,9 +658,10 @@ export type PreviewTeardown = {
 export async function teardownPreview(
   provider: SandboxProvider,
   // Narrower than a full `PreviewTarget` on purpose: teardown needs a name to
-  // reconnect with and a snapshot to delete. Asking for the integrity manifest
-  // as well would invite a caller to believe cleanup depends on it.
-  target: { previewSessionId: string; snapshotId: string },
+  // reconnect with, and — for a v1 session — a snapshot to delete. Asking for
+  // the repository as well would invite a caller to believe cleanup depends on
+  // it, and cleanup must work when nothing else does.
+  target: { previewSessionId: string; snapshotId: string | null },
   options: { deleteArtifact: boolean },
 ): Promise<PreviewTeardown> {
   let sandbox: SandboxHandle | null = null;
@@ -660,13 +691,19 @@ export async function teardownPreview(
     }
   }
 
-  if (!options.deleteArtifact) {
+  /*
+   * `snapshotId === null` is the normal case from Sprint 0114 onward: a preview
+   * clones rather than restoring, so there is no artifact to delete. A v1
+   * session still carries one and still has it deleted.
+   */
+  if (!options.deleteArtifact || target.snapshotId === null) {
     return { cleanup, usage, runtime, artifactDeleted: false };
   }
 
+  const snapshotId = target.snapshotId;
   let artifactDeleted = true;
   try {
-    await provider.deleteArtifact(target.snapshotId);
+    await provider.deleteArtifact(snapshotId);
   } catch {
     artifactDeleted = false;
     // Deliberately does not overwrite a `stop_failed`: the sandbox is the thing

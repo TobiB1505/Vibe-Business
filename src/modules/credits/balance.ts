@@ -86,10 +86,24 @@ export function computeBalance(
  */
 export function reconcileBalance(
   materialized: { posted: CreditUnits; reserved: CreditUnits },
-  entries: readonly LedgerDelta[],
+  /**
+   * The posted balance the whole ledger implies (VB-025).
+   *
+   * A number rather than the entries themselves, because the sum is now taken
+   * where the rows are. `postedBalance` remains the definition of how that
+   * number is reached and is still what the arithmetic tests assert; this
+   * function's job is the *comparison*, and it was never the place that needed
+   * to see every row.
+   */
+  postedFromLedger: CreditUnits,
   reservations: readonly ActiveReservation[],
 ): { consistent: boolean; expected: CreditBalance; drift: { posted: CreditUnits; reserved: CreditUnits } } {
-  const expected = computeBalance(entries, reservations);
+  const reserved = reservedBalance(reservations);
+  const expected: CreditBalance = {
+    posted: postedFromLedger,
+    reserved,
+    available: subtractCredits(postedFromLedger, reserved),
+  };
   const drift = {
     posted: subtractCredits(materialized.posted, expected.posted),
     reserved: subtractCredits(materialized.reserved, expected.reserved),

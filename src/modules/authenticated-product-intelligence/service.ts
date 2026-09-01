@@ -1,10 +1,17 @@
 import "server-only";
 
+import { randomUUID } from "node:crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { ReleaseReason } from "@/modules/credits/balance";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intelligence/store";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import { analyzeAuthenticatedProduct } from "./analyzer";
+import {
+  holdDeepScanCredits,
+  releaseDeepScanCredits,
+  settleDeepScanCredits,
+} from "./billing";
 import { DEFAULT_AUTHENTICATED_BUDGETS } from "./budgets";
 import {
   authorizeDeepScan,
@@ -181,8 +188,34 @@ export async function startDeepScan(
   const accessMode: DeepScanAccessMode = decision.accessMode;
   const origin = new URL(project.production_url!).origin;
 
+  // Minted here, so the hold below has a durable identity and the session row
+  // it belongs to carries the same one. See `billing.ts` for why the order is
+  // id → hold → browser and not browser → row → hold.
+  const sessionId = randomUUID();
+
+  // Money before the browser (§18). An additional scan is Credit-priced under
+  // `launch-v1`; the included scan resolves free and never reaches a
+  // reservation. Discovering an empty wallet after paying Browserbase would be
+  // both a cost leak and an insult.
+  const held = await holdDeepScanCredits({ projectId: params.projectId, sessionId, accessMode });
+  if (!held.ok) {
+    return {
+      ok: false,
+      error: held.refusal === "operation_not_priced" ? "credits_required" : "insufficient_credits",
+    };
+  }
+
+  const releaseHold = async (reason: ReleaseReason) => {
+    await releaseDeepScanCredits({ projectId: params.projectId, sessionId, reason });
+  };
+
   const created = await provider.createSession({ timeoutSeconds: SESSION_TIMEOUT_SECONDS });
-  if (!created.ok) return { ok: false, error: created.error };
+  if (!created.ok) {
+    // The provider never gave us a browser. Nothing was delivered, so nothing
+    // is owed — the same rule the included scan has always followed.
+    await releaseHold("failed_without_usage");
+    return { ok: false, error: created.error };
+  }
 
   const handle = created.value;
 
@@ -193,6 +226,7 @@ export async function startDeepScan(
   const expiresAt = new Date(Number.isFinite(providerExpiry) ? Math.min(providerExpiry, ownExpiry) : ownExpiry);
 
   const record = await createSessionRecord(supabase, {
+    id: sessionId,
     projectId: params.projectId,
     provider: provider.name,
     providerSessionId: handle.providerSessionId,
@@ -205,6 +239,10 @@ export async function startDeepScan(
     // We already paid for a browser we are not going to use — release it
     // immediately rather than letting it idle to its timeout.
     await provider.terminateSession(handle.providerSessionId).catch(() => undefined);
+    // Our own persistence failing is explicitly one of the six outcomes that
+    // must not cost the user anything (PRODUCT.md §12.1). Vibe still paid
+    // Browserbase, which is what `abandoned_with_usage` records.
+    await releaseHold("abandoned_with_usage");
     return record.error === "scan_already_running"
       ? { ok: false, error: "scan_already_running" }
       : { ok: false, error: "persist_failed" };
@@ -237,6 +275,7 @@ export async function startDeepScan(
       session,
       status: "failed",
     });
+    await releaseHold("abandoned_with_usage");
     return { ok: false, error: liveView.error };
   }
 
@@ -315,6 +354,11 @@ export async function analyzeDeepScan(
       session,
       status: "expired",
     });
+    await releaseDeepScanCredits({
+      projectId: session.projectId,
+      sessionId: session.id,
+      reason: "abandoned_with_usage",
+    });
     return { ok: false, error: "browser_session_expired" };
   }
 
@@ -337,6 +381,13 @@ export async function analyzeDeepScan(
       userId: params.userId,
       eventType: "deep_scan.failed",
       metadata: { projectId: session.projectId, sessionId: session.id, reason: code },
+    });
+    // No snapshot, no charge. The single most important line in this file for a
+    // paying customer, and the exact mirror of `consumesIncludedEntitlement`.
+    await releaseDeepScanCredits({
+      projectId: session.projectId,
+      sessionId: session.id,
+      reason: "abandoned_with_usage",
     });
     return { ok: false, error: code };
   };
@@ -427,11 +478,22 @@ export async function analyzeDeepScan(
       session,
       status: "failed",
     });
+    await releaseDeepScanCredits({
+      projectId: session.projectId,
+      sessionId: session.id,
+      reason: "abandoned_with_usage",
+    });
     return {
       ok: false,
       error: persisted.error === "included_scan_already_consumed" ? "included_scan_already_consumed" : "persist_failed",
     };
   }
+
+  // The snapshot is persisted, which is the one event that consumes anything —
+  // the included scan for a free run, Credits for a paid one. Settled after the
+  // persist for the same reason the entitlement is derived from it: the
+  // snapshot's existence is the proof, not our intention to create one.
+  await settleDeepScanCredits({ projectId: session.projectId, sessionId: session.id });
 
   await updateSessionStatus(supabase, session.id, "completed");
   await terminate(supabase, provider, session.providerSessionId, session.id);
@@ -480,6 +542,11 @@ export async function cancelDeepScan(
     projectId: session.projectId,
     session,
     status: "cancelled",
+  });
+  await releaseDeepScanCredits({
+    projectId: session.projectId,
+    sessionId: session.id,
+    reason: "cancelled_before_usage",
   });
 
   await recordAuditEvent(supabase, {

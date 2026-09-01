@@ -126,6 +126,42 @@ async function getLatestSuccessfulSnapshotUncached(
 export const getLatestSuccessfulSnapshot = cache(getLatestSuccessfulSnapshotUncached);
 
 /**
+ * Whether this project has ever produced a repository snapshot (VB-022).
+ *
+ * ## Why not `getLatestSuccessfulSnapshot(…) !== null`
+ *
+ * Because that answer costs the whole document. `result` is the analyzer's
+ * output — hundreds of kilobytes of JSONB — and several callers fetch it only
+ * to write `Boolean(snapshot?.result)`: onboarding, which is polled while a
+ * scan runs, and the Agent route's readiness line.
+ *
+ * ## Why `status` alone is the same predicate
+ *
+ * Because the database says so:
+ *
+ *     repository_intelligence_completed_has_result
+ *     CHECK (status <> 'completed' OR (result IS NOT NULL AND completeness IS NOT NULL))
+ *
+ * So "the latest completed snapshot has a result" and "a completed snapshot
+ * exists" cannot disagree. That is a constraint rather than an observation
+ * about today's rows, which is what makes dropping the document safe rather
+ * than merely safe-looking.
+ */
+export async function hasSuccessfulSnapshot(
+  supabase: SupabaseClient,
+  projectId: string,
+): Promise<boolean> {
+  const { count, error } = await supabase
+    .from("repository_intelligence_snapshots")
+    .select("id", { count: "exact", head: true })
+    .eq("project_id", projectId)
+    .eq("status", "completed");
+
+  if (error) throw error;
+  return (count ?? 0) > 0;
+}
+
+/**
  * One specific snapshot, scoped to its project.
  *
  * Used by change preparation, which must read the snapshot its execution
@@ -150,6 +186,38 @@ export async function getSnapshotById(
 
   if (error) throw error;
   return data ? mapRow(data as SnapshotRow) : null;
+}
+
+/**
+ * The same lookup for a whole list, in one query (VB-023).
+ *
+ * A prepared change names the snapshot it was prepared against, and a screen
+ * showing twenty of them asked for twenty snapshots one at a time — usually
+ * the same snapshot, twenty times. Ids with no completed snapshot are absent
+ * from the map, so `.get(id) ?? null` reads as the single lookup does.
+ */
+export async function getSnapshotsByIds(
+  supabase: SupabaseClient,
+  params: { snapshotIds: readonly string[]; projectId: string },
+): Promise<Map<string, StoredSnapshot>> {
+  const ids = [...new Set(params.snapshotIds)];
+  if (ids.length === 0) return new Map();
+
+  const { data, error } = await supabase
+    .from("repository_intelligence_snapshots")
+    .select(SNAPSHOT_COLUMNS)
+    .in("id", ids)
+    .eq("project_id", params.projectId)
+    .eq("status", "completed");
+
+  if (error) throw error;
+
+  return new Map(
+    (data ?? []).map((row) => {
+      const snapshot = mapRow(row as unknown as SnapshotRow);
+      return [snapshot.id, snapshot];
+    }),
+  );
 }
 
 /**

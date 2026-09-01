@@ -115,7 +115,7 @@
 - Index reads are server-owned. Failures reach the account route error boundary; the UI does not imply an empty dataset.
 - Search and sorting are local over the loaded account inventory, so no stale request or spinner exists.
 - GitHub live status is not fetched on the index. Stored connection metadata is labeled honestly and revalidation stays at the consequential workflow that needs it.
-- Product Scan polls canonical Supabase operation state and at most 24 ordered events every 2.5 seconds. It refreshes server content only on a terminal transition. A public-product failure degrades to partial when another source remains usable; it never removes a successful source reading.
+- Product Scan polls canonical Supabase operation state and at most 24 ordered events every 1.8 seconds (`POLL_INTERVAL_MS` in `src/components/product-scan/product-scan-experience.tsx`, which is where the number lives). It refreshes server content only on a terminal transition. A public-product failure degrades to partial when another source remains usable; it never removes a successful source reading.
 - The Action Plan polls canonical operation state every 2.5–3 seconds for the moves run and the planning run, and names the stages each executor actually records. A stage outside the known sequence claims no position rather than guessing one; nothing renders a percentage or a step counter.
 - Billing reads remain server-owned and never move money or Credits. Checkout and portal mutations are pessimistic, block duplicate submission and report persistent local errors. A Checkout return says only that payment confirmation is pending; Credits appear only after the signed Stripe webhook updates canonical state.
 

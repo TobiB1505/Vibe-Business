@@ -6,7 +6,7 @@ import {
 import { buildExecutionSpec, type ExecutionSpec } from "@/modules/execution-contract/spec";
 import {
   FIXTURE_PLAN,
-  fakeBudgetPolicy,
+  fakeBudget,
   fakePlanStep,
   fakeRepositoryBinding,
   fakeWriteScope,
@@ -105,7 +105,7 @@ export function fakeAgentSpec(overrides: Partial<Parameters<typeof buildExecutio
       sandboxPolicyVersion: SANDBOX_POLICY_VERSION,
       sandboxSteps: ["install", "typecheck", "test", "build"],
     },
-    budget: { budgetPolicyVersion: "fixture", ...fakeBudgetPolicy().budget },
+    budget: { budgetPolicyVersion: "fixture", ...fakeBudget() },
     credit: { quoteId: "quote-1", maxAuthorizedCredits: creditsToUnits(200) },
     writeScope: fakeWriteScope(),
     createdAt: "2026-08-18T00:00:00.000Z",
@@ -135,6 +135,14 @@ export type FakeWorkspaceOptions = {
 export type FakeWorkspace = AgentWorkspace & {
   readonly files: Map<string, string>;
   readonly commandsRun: SandboxCommand[];
+  /**
+   * Every path `read` was asked for, in order.
+   *
+   * Recorded so a test can assert that a path's bytes were **never fetched**,
+   * which is a different claim from "the path was refused" — VB-029 is about
+   * the order those two happen in.
+   */
+  readonly readPaths: string[];
 };
 
 const DEFAULT_FILES: Record<string, string> = {
@@ -148,11 +156,13 @@ const DEFAULT_FILES: Record<string, string> = {
 export function fakeWorkspace(options: FakeWorkspaceOptions = {}): FakeWorkspace {
   const files = new Map(Object.entries({ ...DEFAULT_FILES, ...options.files }));
   const commandsRun: SandboxCommand[] = [];
+  const readPaths: string[] = [];
   const results = [...(options.commandResults ?? [])];
 
   return {
     files,
     commandsRun,
+    readPaths,
 
     async list(input: { path: string; maxEntries: number }): Promise<readonly WorkspaceEntry[]> {
       const prefix = input.path.length === 0 ? "" : `${input.path.replace(/\/+$/, "")}/`;
@@ -193,6 +203,7 @@ export function fakeWorkspace(options: FakeWorkspaceOptions = {}): FakeWorkspace
     },
 
     async read(input: { path: string; maxBytes: number }): Promise<WorkspaceReadResult> {
+      readPaths.push(input.path);
       const content = files.get(input.path);
       if (content === undefined) return { kind: "absent" };
       if (Buffer.byteLength(content, "utf8") > input.maxBytes) return { kind: "too_large" };

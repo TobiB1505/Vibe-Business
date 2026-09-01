@@ -8,11 +8,11 @@ import type {
  *
  * ## The question this exists to ask
  *
- * `src/modules/review/` has exactly one profile — `public_visual_review_v1`, a
- * before/after screenshot comparison. It is good at what it does and it cannot
- * ask whether it is the right instrument. Photograph a backend-only change and
- * you get two identical pictures of a page that did not change: a confident,
- * useless result that looks like a review.
+ * A visual review is a running preview of the change, opened and clicked
+ * through. It is good at what it does and it cannot ask whether it is the right
+ * instrument. Start one for a backend-only change and you get a page that looks
+ * exactly as it did: a confident, useless result that looks like a review — and
+ * a paid sandbox to produce it.
  *
  * So this answers the prior question, and only that. It starts nothing, gates
  * nothing and authorizes nothing — it is a recommendation attached to a change
@@ -50,11 +50,16 @@ export type ReviewClassification = (typeof REVIEW_CLASSIFICATIONS)[number];
 /**
  * Bumped when the rules below change what a classification means.
  *
+ * v3 is Sprint 0114: the *rules* are identical, and what `visual` asks for is
+ * not. It used to mean "photograph this page"; it now means "run this and look
+ * at it" (ADR 0065). A stored classification must never be reinterpreted under
+ * rules it was not decided by, and that includes what it asked someone to do.
+ *
  * Not part of any identity — this output is recomputed on read and never
  * stored, so nothing can be reinterpreted under rules it was not decided by.
  * The version exists so a displayed recommendation can be traced to a policy.
  */
-export const REVIEW_CLASSIFICATION_VERSION = "review-classification-v2" as const;
+export const REVIEW_CLASSIFICATION_VERSION = "review-classification-v3" as const;
 
 /**
  * Files whose contents can only reach rendered output.
@@ -164,9 +169,8 @@ function isVisual(path: string, routeSources: ReadonlySet<string>): boolean {
  * `code` is the fallback in both directions — for a change with no visual paths
  * and for the degenerate case of no changed paths at all. That asymmetry is
  * deliberate. Recommending a code diff for something visual wastes a reviewer's
- * attention; recommending a screenshot comparison for something invisible
- * produces two identical images and the false impression that the change was
- * looked at.
+ * attention; asking someone to boot a preview of something invisible spends
+ * their money to show them a page that did not change.
  *
  * ## Why the proof can only ever subtract
  *
@@ -229,28 +233,29 @@ export function classifyReview(input: ClassifyReviewInput): ReviewClassification
 }
 
 /**
- * Why a page file did not earn a screenshot.
+ * Why a page file did not earn a preview.
  *
  * Deliberately says what *did* change rather than implying nothing did.
  * `metadata.title` really does render — in the browser tab, and on other
  * people's sites through Open Graph. What is true is narrower and is exactly
- * the point: `public_visual_review_v1` photographs the page, not the chrome, so
- * a screenshot is the wrong instrument here and a diff is the right one.
+ * the point: none of it is on the page, so booting the application to look at
+ * the page would answer a question nobody asked, and the diff answers the one
+ * they did.
  */
 export const REVIEW_DOWNGRADE_NOTE =
   "Some changed page files only alter page metadata — the title, description and " +
   "search-engine directives. What a visitor sees on the page is unchanged, so a " +
-  "before/after screenshot would compare two identical images.";
+  "preview would show you exactly what is there now.";
 
 /** Vibe's own words for the panel. Never a model's. */
 export const REVIEW_CLASSIFICATION_LABELS: Record<ReviewClassification, string> = {
-  visual: "Visual preview",
+  visual: "Preview",
   code: "Code diff",
-  visual_and_code: "Visual preview and code diff",
+  visual_and_code: "Preview and code diff",
 };
 
 export const REVIEW_CLASSIFICATION_NOTES: Record<ReviewClassification, string> = {
-  visual: "This change alters what a visitor sees. Looking at it is the review.",
+  visual: "This change alters what a visitor sees. Opening it is the review.",
   code: "This change does not alter a rendered page. Reading the diff is the review.",
   visual_and_code:
     "This change alters both what a visitor sees and what runs behind it. Both are worth a look.",

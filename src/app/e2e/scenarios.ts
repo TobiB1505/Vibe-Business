@@ -7,6 +7,7 @@ import type { OutcomeCard, OutcomeCheckLine } from "@/modules/outcome-verificati
 import type { BusinessImpactCard } from "@/modules/business-measurement/view";
 import { businessRationaleFor } from "@/modules/execution/business-rationale";
 import { deriveChangeProgress } from "@/modules/execution/change-progress";
+import { REVIEW_CLASSIFICATION_VERSION } from "@/modules/review/classification";
 import { MERGE_FAILURE_MESSAGES } from "@/modules/merge/messages";
 import { APPROVAL_BLOCK_MESSAGES } from "@/modules/approvals/messages";
 import { OBSERVED_CHANGE_DISCLAIMER } from "@/modules/business-measurement/causality";
@@ -89,6 +90,24 @@ function baseChange(): Omit<
         "These are low-effort fixes that do not depend on positioning or monetization.",
     },
     opportunityId: "3-seo-fix-missing-technical-seo-foundations",
+    /** The "before" half, labelled as the live site now (ADR 0065). */
+    productionUrl: "https://vibe-e2e.example",
+    /*
+     * `visual_and_code`: the SEO capability writes `src/app/robots.ts` and
+     * `src/app/sitemap.ts`, neither of which renders — but the scenarios below
+     * are the ones that exercise the *visual* path, so the fixture keeps the
+     * comparison panels and adds the diff beside them. `change_code_review_ready`
+     * is the scenario that classifies as `code`.
+     */
+    reviewClassification: {
+      classification: "visual_and_code",
+      policyVersion: REVIEW_CLASSIFICATION_VERSION,
+      visualPaths: ["src/app/page.tsx"],
+      codePaths: ["src/app/robots.ts", "src/app/sitemap.ts"],
+      routes: ["/"],
+      scopes: [],
+      downgradedPaths: [],
+    },
     validation: {
       status: "passed",
       phases: [],
@@ -113,9 +132,7 @@ function baseChange(): Omit<
       failureMessage: null,
       expiresAt: null,
       readyAt: null,
-      revalidationRequired: false,
     },
-    validatedArtifactId: null,
     review: {
       state: "ready",
       reviewArtifactId: "review_e2e",
@@ -372,6 +389,164 @@ export const E2E_SCENARIOS = {
     }),
 
   /**
+   * **A preview offered before the check has finished** (Sprint 0114, ADR 0064).
+   *
+   * The waiting this sprint exists to remove. Validation is running — install,
+   * typecheck, test and build, roughly five minutes — and under the old rules
+   * the preview button was disabled for all of it, because a preview booted the
+   * snapshot the build produced. The code was finished the whole time.
+   *
+   * Three things it proves, and each was impossible before: **Start temporary
+   * preview** is offered while validation runs; the card does not claim the
+   * change is checked; and the live site is linked beside it, so a person can
+   * hold the two next to each other in two tabs.
+   */
+  preview_before_validation: (): PreparedChangeCard =>
+    withProgress({
+      ...baseChange(),
+      outcome: outcomeCard(),
+      businessImpact: businessImpactCard(),
+      validation: {
+        status: "running",
+        phases: [],
+        failureMessage: null,
+        sandboxDurationMs: null,
+        depth: {
+          depth: "standard",
+          label: "Standard",
+          reason: "Change not classified; validated in full",
+          notRun: [],
+        },
+        underCurrentPolicy: true,
+      },
+      preview: { ...baseChange().preview, state: "ready_to_start" },
+      review: { ...baseChange().review, state: "not_generated", reviewArtifactId: null },
+      reviewImages: null,
+      approval: {
+        state: "not_eligible",
+        approvalId: null,
+        approvedAt: null,
+        revokedAt: null,
+        approvedCommitSha: null,
+        invalidationReason: null,
+        // The gate that has not moved: a preview lets somebody look earlier,
+        // never decide earlier (ADR 0064).
+        blockReason: "approval_validation_required",
+        blockMessage: APPROVAL_BLOCK_MESSAGES.approval_validation_required,
+        canApprove: false,
+        currentCommitSha: APPROVED_COMMIT,
+      },
+      merge: mergeCard({
+        state: "not_eligible",
+        failureCode: "merge_approval_required",
+        failureMessage: MERGE_FAILURE_MESSAGES.merge_approval_required,
+        canMerge: false,
+      }),
+    }),
+
+  /**
+   * **A visual change approved on the preview itself** (Sprint 0114, ADR 0065).
+   *
+   * The state that replaces two screenshots. A preview of this exact commit ran
+   * and became reachable, the check has passed, and the person may decide — with
+   * no browser session having been paid for and no comparison ever captured.
+   *
+   * `review.state` is `not_generated` on purpose: this change has no comparison
+   * and never will, so the comparison panel must be absent rather than empty.
+   */
+  change_visual_preview_ready: (): PreparedChangeCard =>
+    withProgress({
+      ...baseChange(),
+      outcome: outcomeCard(),
+      businessImpact: businessImpactCard(),
+      // Running, because the two halves of a before/after are offered
+      // together: the preview in one tab and the live site in the other. The
+      // approval is available while it runs — the preview is not a step to get
+      // past, it is the thing being looked at.
+      preview: {
+        ...baseChange().preview,
+        state: "running",
+        previewSessionId: "preview_e2e",
+        readyAt: "2026-08-13T23:40:00.000Z",
+        expiresAt: "2026-08-13T23:55:00.000Z",
+      },
+      previewSessionId: "preview_e2e",
+      previewOrigin: "https://preview-e2e.example",
+      review: { ...baseChange().review, state: "not_generated", reviewArtifactId: null },
+      reviewImages: null,
+      approval: {
+        state: "not_approved",
+        approvalId: null,
+        approvedAt: null,
+        revokedAt: null,
+        approvedCommitSha: null,
+        invalidationReason: null,
+        blockReason: null,
+        blockMessage: null,
+        canApprove: true,
+        currentCommitSha: APPROVED_COMMIT,
+      },
+      merge: mergeCard({
+        state: "not_eligible",
+        failureCode: "merge_approval_required",
+        failureMessage: MERGE_FAILURE_MESSAGES.merge_approval_required,
+        canMerge: false,
+      }),
+    }),
+
+  /**
+   * **A change with nothing to look at** (Sprint 0055, ADR 0063).
+   *
+   * The state that was unreachable before this sprint. Validation passed, no
+   * preview was ever started and no comparison was ever captured — and the
+   * person may decide anyway, because the change alters no rendered page.
+   *
+   * Three things it proves, and each of them was a defect before: the card
+   * offers **Approve** with `review.state === "not_generated"`; the preview and
+   * comparison panels are **absent** rather than blocking; and the card *says*
+   * which review this is, so a missing comparison reads as a decision rather
+   * than as something Vibe forgot.
+   */
+  change_code_review_ready: (): PreparedChangeCard =>
+    withProgress({
+      ...baseChange(),
+      filePaths: ["src/lib/pricing.ts", "src/lib/retail.ts"],
+      // No routes, no visual paths: nothing here can put a pixel on a page.
+      reviewClassification: {
+        classification: "code",
+        policyVersion: REVIEW_CLASSIFICATION_VERSION,
+        visualPaths: [],
+        codePaths: ["src/lib/pricing.ts", "src/lib/retail.ts"],
+        routes: [],
+        scopes: [],
+        downgradedPaths: [],
+      },
+      preview: { ...baseChange().preview, state: "ready_to_start" },
+      review: { ...baseChange().review, state: "not_generated", reviewArtifactId: null },
+      reviewImages: null,
+      outcome: outcomeCard(),
+      businessImpact: businessImpactCard(),
+      approval: {
+        state: "not_approved",
+        approvalId: null,
+        approvedAt: null,
+        revokedAt: null,
+        approvedCommitSha: null,
+        invalidationReason: null,
+        blockReason: null,
+        blockMessage: null,
+        canApprove: true,
+        currentCommitSha: APPROVED_COMMIT,
+      },
+      merge: mergeCard({
+        state: "not_eligible",
+        failureCode: "merge_approval_required",
+        failureMessage: MERGE_FAILURE_MESSAGES.merge_approval_required,
+        canMerge: false,
+      }),
+    }),
+
+  /**
    * **The first real change this card ever carried** (UI-5 dogfood).
    *
    * A rebuild of the screen that found two defects at once, so the browser
@@ -416,9 +591,7 @@ export const E2E_SCENARIOS = {
         failureMessage: null,
         expiresAt: null,
         readyAt: null,
-        revalidationRequired: false,
-      },
-      validatedArtifactId: "validation_e2e",
+        },
       review: {
         state: "not_generated",
         reviewArtifactId: null,
@@ -441,8 +614,11 @@ export const E2E_SCENARIOS = {
         revokedAt: null,
         approvedCommitSha: null,
         invalidationReason: null,
-        blockReason: "approval_review_required",
-        blockMessage: APPROVAL_BLOCK_MESSAGES.approval_review_required,
+        // A visual change nobody has previewed. Before Sprint 0114 this read
+        // `approval_review_required` and asked for a comparison — of a preview
+        // that had never been started.
+        blockReason: "approval_preview_required",
+        blockMessage: APPROVAL_BLOCK_MESSAGES.approval_preview_required,
         canApprove: false,
         currentCommitSha: "94c3165",
       },

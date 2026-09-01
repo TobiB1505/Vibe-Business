@@ -397,7 +397,14 @@ describe("the plan hands off to the agent, and the agent points back", () => {
     expect(DOGFOOD_ACTIONS).toContain("startAgentExecution");
     expect(copyOf(AGENT_START)).not.toContain("startAgentExecution(");
     expect(AGENT_START).toContain("Run with Vibe");
-    expect(AGENT_PAGE).toContain("formatCreditsForDisplay(agentRoutes.economics.budget.maxCredits)");
+    /*
+     * The ceiling is the server's answer, never a number the page invents —
+     * and since `launch-v1` it is resolved for the *step* that would run,
+     * because the Agent price is per execution pricing class (Sprint 0111).
+     * The route set can no longer answer it plan-wide.
+     */
+    expect(AGENT_PAGE).toContain("resolveRouteAgentEconomics");
+    expect(AGENT_PAGE).toContain("formatCreditsForDisplay(routeEconomics.budget.maxCredits)");
     expect(AGENT_READY).toContain("creditEstimate={startAction ? creditEstimate : null}");
     expect(AGENT_PAGE).toContain("agentRoutes.plan.opportunityId === taskOpportunityId");
     expect(AGENT_PAGE).toContain("!agentWorking");

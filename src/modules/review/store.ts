@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { readLatestPerPreparedChange } from "@/lib/db/latest-per-change";
 import type {
   CaptureStatus,
   ReviewArtifact,
@@ -191,6 +192,28 @@ export async function getLatestReviewForPreparedChange(
 
   if (error) throw error;
   return data ? mapRow(data as unknown as Row) : null;
+}
+
+/**
+ * The same answer for a whole list, in one query (VB-023).
+ *
+ * The Agent screen assembles every prepared change at once, and asking this
+ * table once per card is the cost that made one render 261 round trips. Ids
+ * with no row are absent from the map, so `.get(id) ?? null` reads exactly as
+ * the single-change query above.
+ */
+export async function getLatestReviewsForPreparedChanges(
+  supabase: SupabaseClient,
+  params: { projectId: string; preparedChangeIds: readonly string[] },
+): Promise<Map<string, ReviewArtifact>> {
+  const rows = await readLatestPerPreparedChange(supabase, {
+    table: "review_artifacts",
+    columns: COLUMNS,
+    projectId: params.projectId,
+    preparedChangeIds: params.preparedChangeIds,
+  });
+
+  return new Map([...rows].map(([id, row]) => [id, mapRow(row as unknown as Row)]));
 }
 
 /** One artifact the caller owns. Ownership is the query, not a later check. */

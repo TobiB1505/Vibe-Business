@@ -29,17 +29,27 @@
 
 /** How a Deep Scan run is paid for. Persisted with the run. */
 export type DeepScanAccessMode =
-  /** The project's one included scan. The only executable mode today. */
+  /** The project's one included scan. */
   | "included_first_scan"
   /**
-   * Reserved. Vibe Credits do not exist yet: nothing in this sprint returns
-   * this mode, and no balance, price, or purchase is represented anywhere.
+   * Paid for out of the account's Vibe Credit balance, at `launch-v1`'s Deep
+   * Scan price. Reachable only once the included scan has been consumed.
    */
   | "credits";
 
 export type DeepScanDenialReason =
-  /** The included scan is used and credits are not implemented yet. */
+  /**
+   * The included scan is used and no Credit price is in force.
+   *
+   * Kept, and still reachable: a policy with no Deep Scan price resolves here
+   * rather than running a scan for free. Under `launch-v1` an additional scan
+   * has a price, so the ordinary path past a consumed entitlement is
+   * `insufficient_credits` — which is a different sentence to a customer, and
+   * the one that has a checkout behind it.
+   */
   | "credits_required"
+  /** An additional scan is priced, and this balance does not cover it. */
+  | "insufficient_credits"
   /** A live session already exists for this project. */
   | "scan_already_running"
   /** Too many recent starts — see START_ATTEMPT_LIMITS. */
@@ -88,6 +98,18 @@ export type DeepScanEntitlementFacts = {
   lastAbandonedAt: Date | null;
   /** The project's configured production origin, if any. */
   productionOrigin: string | null;
+  /**
+   * What an additional scan costs right now, or null when the policy in force
+   * does not price one.
+   *
+   * Passed in rather than resolved here for the reason this module's header
+   * states: it holds no pricing knowledge, so that pricing can change without
+   * touching the entitlement rule. Null and zero are different — null means
+   * "not for sale", and it is why `credits_required` still exists.
+   */
+  additionalScanPrice: number | null;
+  /** Spendable balance, in credit units. */
+  availableCredits: number;
   now?: Date;
 };
 
@@ -107,13 +129,34 @@ export function authorizeDeepScan(facts: DeepScanEntitlementFacts): DeepScanAuth
     return { allowed: false, reason: "production_origin_missing" };
   }
 
-  // 2. Entitlement. First, because it is the decision that must never be made
-  //    after spending provider money.
+  // 2. Entitlement, and how this scan would be paid for. First, because it is
+  //    the decision that must never be made after spending provider money.
+  //
+  //    The included scan is checked before the balance, so a project that still
+  //    has its free scan is never told about a price it does not have to pay.
+  let accessMode: DeepScanAccessMode = "included_first_scan";
+
   if (facts.hasSuccessfulIncludedScan) {
-    // Credits are not implemented. This is the honest terminal answer, not a
-    // route into a checkout that does not exist.
-    return { allowed: false, reason: "credits_required" };
+    // No price in force: the honest terminal answer, and not a route into a
+    // checkout that cannot help.
+    if (facts.additionalScanPrice === null) {
+      return { allowed: false, reason: "credits_required" };
+    }
+
+    // Priced, but this wallet does not cover it. A refusal the customer can act
+    // on — and, like every check here, made before a browser exists.
+    if (facts.availableCredits < facts.additionalScanPrice) {
+      return { allowed: false, reason: "insufficient_credits" };
+    }
+
+    accessMode = "credits";
   }
+
+  // 3-5. Abuse limits. Deliberately applied to a paid scan exactly as to an
+  //      included one: they bound how *often* a login page can be hammered and
+  //      how many browsers can be open at once, and paying buys neither. They
+  //      come after the entitlement decision so the user is told the reason
+  //      that is actually about them.
 
   // 3. One live browser per project.
   if (facts.hasLiveSession) {
@@ -133,7 +176,7 @@ export function authorizeDeepScan(facts: DeepScanEntitlementFacts): DeepScanAuth
     return { allowed: false, reason: "start_attempts_exhausted" };
   }
 
-  return { allowed: true, accessMode: "included_first_scan" };
+  return { allowed: true, accessMode };
 }
 
 /**
@@ -144,8 +187,24 @@ export function authorizeDeepScan(facts: DeepScanEntitlementFacts): DeepScanAuth
  */
 export type DeepScanAccessStatus = {
   includedScanAvailable: boolean;
-  /** Always true while credits are unimplemented; the UI explains, never sells. */
-  additionalScansRequireCredits: true;
+  /**
+   * Whether an additional scan costs Credits.
+   *
+   * Was the literal `true` while there was no price and the UI could only
+   * explain. It is still `true` under `launch-v1` — an additional scan is
+   * Credit-gated, which is what this field has always said — but it is a
+   * `boolean` now rather than a literal, because a policy with no Deep Scan
+   * price is still reachable and the type should not assert otherwise.
+   */
+  additionalScansRequireCredits: boolean;
+  /**
+   * What an additional scan costs, in credit units, or null when none is for
+   * sale under the policy in force.
+   *
+   * The UI shows a price only when there is one. Null renders the same
+   * explanation it always did, rather than a zero.
+   */
+  additionalScanPrice: number | null;
   /** Vibe's own session id and status only. */
   activeSession: { id: string; status: string } | null;
   /** Present when a scan cannot start right now, so the UI can explain why. */
@@ -175,6 +234,7 @@ export function toDeepScanAccessStatus(
   return {
     includedScanAvailable: !facts.hasSuccessfulIncludedScan,
     additionalScansRequireCredits: true,
+    additionalScanPrice: facts.additionalScanPrice,
     activeSession,
     blockedReason: decision.allowed ? null : decision.reason,
     retryAvailableAt,
@@ -192,4 +252,24 @@ export function consumesIncludedEntitlement(run: {
   snapshotPersisted: boolean;
 }): boolean {
   return run.accessMode === "included_first_scan" && run.snapshotPersisted;
+}
+
+/**
+ * Whether a finished run should be charged.
+ *
+ * The same rule as {@link consumesIncludedEntitlement}, applied to the other
+ * access mode, and stated as its own function for the same reason: what a scan
+ * costs and what it consumes are one decision made twice, and writing it once
+ * per mode is what keeps them from drifting.
+ *
+ * A provider outage, an expired login, a cancelled window or our own
+ * persistence failing must not cost a paid customer Credits any more than they
+ * cost a free one their included scan. Everything that does not persist a
+ * snapshot releases the hold.
+ */
+export function consumesCredits(run: {
+  accessMode: DeepScanAccessMode;
+  snapshotPersisted: boolean;
+}): boolean {
+  return run.accessMode === "credits" && run.snapshotPersisted;
 }

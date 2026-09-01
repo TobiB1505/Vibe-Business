@@ -2,7 +2,6 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { recordAuditEvent } from "@/modules/audit-log/events";
-import { SANDBOX_BUDGETS } from "@/modules/validation/budgets";
 import { getPreparedChange } from "@/modules/execution/store";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import { depthRunsStep } from "@/modules/validation/depth";
@@ -10,7 +9,6 @@ import { resolveDepthForPreparedChange } from "@/modules/validation/depth-inputs
 import { computeValidationIdentity } from "@/modules/validation/identity";
 import {
   buildSatisfiesProfile,
-  captureValidatedArtifact,
   provisionSandbox,
   runCheckPhase,
   stopSandbox,
@@ -635,81 +633,26 @@ export async function cleanupSandboxStep(
     stage: "cleaning_up",
   });
 
-  // A passing run keeps its filesystem as a bounded artifact instead of merely
-  // being torn down, so a preview can start from the exact validated bytes.
-  // Capture is terminal — it stops the sandbox itself — so it replaces cleanup
-  // rather than preceding it (§5).
-  const passing = buildSatisfiesProfile(run.steps);
-
-  if (passing) {
-    const captured = await captureValidatedArtifact(deps.provider, target);
-
-    if (captured.ok) {
-      // Deliberately **not** written here. The database refuses an artifact on
-      // a row that is not yet `passed`, and at this point the run is still
-      // `running` — the verdict is recorded by the finalize step that follows.
-      //
-      // Writing it here threw a CHECK violation, which failed this step, which
-      // retried it, which found the sandbox already stopped by the successful
-      // snapshot and reported `sandbox_lost`. Four rounds of dogfood chased
-      // that phantom while the provider had been doing its job perfectly: the
-      // snapshot existed, 1.14 GB of it, orphaned in provider storage with
-      // nothing in Vibe pointing at it.
-      //
-      // So the artifact travels to finalize and is written in the same
-      // statement that sets `status = 'passed'`. One write, constraint
-      // satisfied, nothing to retry.
-      const startedFrom = run.startedAt ? Date.parse(run.startedAt) : null;
-      return {
-        cleanup: "stopped",
-        runtime: run.sandboxRuntime,
-        sandboxDurationMs:
-          startedFrom !== null && Number.isFinite(startedFrom) ? Date.now() - startedFrom : null,
-        usage: captured.usage,
-        artifact: {
-          snapshotId: captured.artifact.snapshotId,
-          sizeBytes: captured.artifact.sizeBytes,
-          // Vibe's own deadline, not the provider's report, so retention is a
-          // number we chose even if the provider declines to say.
-          expiresAt: new Date(Date.now() + SANDBOX_BUDGETS.validatedArtifactTtlMs).toISOString(),
-        },
-      };
-    }
-
-    // Capture failed. The validation still passed — that verdict is about the
-    // commands, not about whether we kept a copy — so the run is not failed
-    // here. Preview will simply have nothing to resume and will say so.
-    await recordAuditEvent(deps.supabase, {
-      userId: operation.userId,
-      eventType: "change_validation.artifact_capture_failed",
-      metadata: {
-        projectId: operation.projectId,
-        operationId,
-        validationRunId: run.id,
-        reason: captured.reason,
-        // The whole point of the fix. A reason with no detail is what made the
-        // first real capture failure undiagnosable (ADR 0015 §9).
-        detail: captured.detail,
-      },
-    });
-
-    if (captured.usage) {
-      // Already terminated, and holding the numbers. Falling through to
-      // `stopSandbox` would reconnect to nothing, report `not_provisioned`, and
-      // write a ledger row claiming a 326-second sandbox never existed — which
-      // is exactly what the first failed capture did.
-      const startedFrom = run.startedAt ? Date.parse(run.startedAt) : null;
-      return {
-        cleanup: "stopped",
-        runtime: run.sandboxRuntime,
-        sandboxDurationMs:
-          startedFrom !== null && Number.isFinite(startedFrom) ? Date.now() - startedFrom : null,
-        usage: captured.usage,
-        artifact: null,
-      };
-    }
-  }
-
+  /*
+   * Every run is torn down, including a passing one (Sprint 0114).
+   *
+   * A pass used to be *snapshotted* instead of stopped, so a preview could boot
+   * from the exact validated bytes. Nothing boots from a snapshot any more — a
+   * preview clones the prepared commit and runs a development server, which is
+   * what let it stop waiting for this run to finish at all (ADR 0064).
+   *
+   * What that removes is more than a branch: the capture, the restore, the
+   * integrity re-verification of a restored filesystem, the deletion, and a
+   * customer's built filesystem sitting in a third party's storage for 24 hours
+   * because Vercel refuses a shorter expiry. Keeping any of it would mean
+   * paying a provider to retain customer data for a purpose that no longer
+   * exists.
+   *
+   * `artifact: null` on every path below is the whole of what finalize now
+   * writes, and the CHECK that refuses an artifact on a non-passing row is left
+   * in place: it costs nothing and it is the guard that would catch this being
+   * reintroduced carelessly.
+   */
   const outcome = await stopSandbox(deps.provider, target);
 
   // Wall time from the claim, which is the closest honest bound on how long the

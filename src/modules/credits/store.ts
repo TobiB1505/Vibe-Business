@@ -213,6 +213,20 @@ export async function findLedgerEntryByIdempotencyKey(
   return data ? mapLedgerEntry(data as LedgerRow) : null;
 }
 
+/**
+ * How much ledger history one read may transfer (VB-025).
+ *
+ * Not a page size — there is no paging here, and adding one would be a product
+ * change. It is a ceiling on a read that grows with every Credit a customer
+ * has ever spent and was made on every render of the billing page.
+ *
+ * Safe to cap only because the *balance* no longer comes from here. Summing a
+ * capped list would report drift on any account older than the cap, and with
+ * `BILLING_REPAIR_ENABLED` a false drift triggers a repair — see
+ * `sumLedgerDeltas`.
+ */
+export const LEDGER_READ_LIMIT = 100;
+
 export async function listLedgerEntries(
   supabase: SupabaseClient,
   creditAccountId: string,
@@ -221,10 +235,45 @@ export async function listLedgerEntries(
     .from("billing_credit_ledger")
     .select(LEDGER_COLUMNS)
     .eq("credit_account_id", creditAccountId)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(LEDGER_READ_LIMIT);
 
   if (error) throw error;
   return ((data ?? []) as LedgerRow[]).map(mapLedgerEntry);
+}
+
+/**
+ * The posted balance the ledger implies, summed in the database (VB-025).
+ *
+ * ## Why this is not `listLedgerEntries().reduce(…)`
+ *
+ * Because that is the read this exists to replace. Reconciliation needs one
+ * number over **every** entry — that is what makes it an independent check on
+ * the materialized figure rather than a comparison of a cache with itself — and
+ * getting that number by transferring every row is what made the billing page
+ * degrade with account age.
+ *
+ * A PostgREST aggregate would need no function at all. This project's
+ * PostgREST refuses them (`PGRST123`), which is a fact about the deployment
+ * rather than about PostgREST, so it was measured rather than assumed.
+ *
+ * The function is `SECURITY INVOKER`: RLS decides which entries are visible,
+ * exactly as it does for a direct select. It moves an aggregation into the
+ * database, never an authority.
+ */
+export async function sumLedgerDeltas(
+  supabase: SupabaseClient,
+  creditAccountId: string,
+): Promise<CreditUnits> {
+  const { data, error } = await supabase.rpc("sum_ledger_deltas", {
+    p_credit_account_id: creditAccountId,
+  });
+
+  if (error) throw error;
+
+  // `sum()` over `bigint` comes back as a string from PostgREST when it is
+  // large enough, and the cast in the function keeps it an integer either way.
+  return creditUnits(Number(data ?? 0));
 }
 
 export type PostLedgerEntryParams = {
@@ -408,6 +457,32 @@ export async function getReservation(
 
   if (error) throw error;
   return data ? mapReservation(data as ReservationRow) : null;
+}
+
+/**
+ * Reservations by id, in one read.
+ *
+ * Mirrors `operations/store.ts`'s `listOperationRunsByIds`, and exists for the
+ * same reason: the billing page needs a handful of reservations to *name* the
+ * charges it is already displaying, and a per-row read would put a query count
+ * on the size of the history.
+ *
+ * Ordinary RLS applies — this is a plain select, so it can only return
+ * reservations the caller's session may already see.
+ */
+export async function listReservationsByIds(
+  supabase: SupabaseClient,
+  reservationIds: readonly string[],
+): Promise<CreditReservation[]> {
+  if (reservationIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from("billing_credit_reservations")
+    .select(RESERVATION_COLUMNS)
+    .in("id", reservationIds);
+
+  if (error) throw error;
+  return ((data ?? []) as ReservationRow[]).map(mapReservation);
 }
 
 export async function listActiveReservations(

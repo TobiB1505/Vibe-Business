@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   authorizeGatewayRequest,
+  clampMaxTokens,
   gatewayRefusalBody,
   type AgentRunGatewayState,
 } from "./gateway-policy";
@@ -61,13 +62,27 @@ function authorize(overrides: {
 
 describe("a live run inside its ceilings", () => {
   it("is forwarded", () => {
-    expect(authorize()).toEqual({ ok: true });
+    expect(authorize()).toMatchObject({ ok: true });
   });
 
   it("is still forwarded one request below each ceiling", () => {
     expect(
       authorize({ run: run({ forwardedRequests: 39, spentOutputTokens: 59_999 }) }),
-    ).toEqual({ ok: true });
+    ).toMatchObject({ ok: true });
+  });
+
+  /**
+   * A "yes" carries the state it was based on (VB-016).
+   *
+   * The caller needs the remaining budget in order to lower `max_tokens`, and
+   * reading it again would be a second read that could disagree with the one
+   * that authorized. So the decision hands it back rather than inviting that.
+   */
+  it("hands back the run the decision was made about", () => {
+    const state = run({ forwardedRequests: 3, spentOutputTokens: 100 });
+    const decision = authorize({ run: state });
+
+    expect(decision.ok && decision.run).toBe(state);
   });
 });
 
@@ -205,5 +220,45 @@ describe("what a refused caller is told", () => {
 
   it("is shaped like an API error the SDK can read", () => {
     expect(gatewayRefusalBody().error.type).toBe("authentication_error");
+  });
+});
+
+describe("lowering max_tokens to the remaining budget (VB-016)", () => {
+  /**
+   * Without this a single call may ask for more output than the whole run was
+   * authorized for, and the ceiling only notices in `after()` — by which point
+   * the provider has already billed the tokens.
+   */
+  it("lowers a request that would exceed what is left", () => {
+    expect(clampMaxTokens({ model: "m", max_tokens: 8_000 }, 1_200)).toEqual({
+      model: "m",
+      max_tokens: 1_200,
+    });
+  });
+
+  it("never raises a request that asked for less", () => {
+    const body = { model: "m", max_tokens: 500 };
+
+    // Same object, not merely an equal one: nothing was rewritten.
+    expect(clampMaxTokens(body, 60_000)).toBe(body);
+  });
+
+  it("leaves a body it does not understand exactly as the sandbox sent it", () => {
+    // A body the API will reject is not this gateway's to repair, and inventing
+    // a shape for it would be Vibe sending a request nobody made.
+    for (const body of [null, undefined, "not-json", 7, [], { model: "m" }, { max_tokens: "lots" }]) {
+      expect(clampMaxTokens(body, 10)).toBe(body);
+    }
+  });
+
+  it("keeps every other field of the request", () => {
+    const clamped = clampMaxTokens(
+      { model: "m", max_tokens: 9_000, stream: true, messages: [{ role: "user" }] },
+      100,
+    ) as Record<string, unknown>;
+
+    expect(clamped.stream).toBe(true);
+    expect(clamped.messages).toEqual([{ role: "user" }]);
+    expect(clamped.max_tokens).toBe(100);
   });
 });

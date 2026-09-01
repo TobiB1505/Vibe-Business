@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { GithubIdentity, InstallationAccountType, VerifiedInstallation } from "./types";
+import type { InstallationAccess } from "./repositories";
 
 /**
  * A verified installation as stored by Vibe Business. `id` is our own
@@ -15,6 +16,14 @@ export type VerifiedInstallationRecord = {
   installationId: number;
   accountLogin: string;
   accountType: InstallationAccountType;
+  /**
+   * When GitHub last said this installation no longer exists (VB-041).
+   *
+   * Null is "no such observation", not "confirmed working" — nothing probes
+   * on a schedule, so an installation revoked five minutes ago still reads
+   * null until something asks GitHub.
+   */
+  accessRevokedAt: string | null;
 };
 
 type InstallationRow = {
@@ -22,6 +31,7 @@ type InstallationRow = {
   installation_id: number;
   github_account_login: string;
   account_type: InstallationAccountType;
+  access_revoked_at: string | null;
 };
 
 function mapInstallationRow(row: InstallationRow): VerifiedInstallationRecord {
@@ -30,10 +40,12 @@ function mapInstallationRow(row: InstallationRow): VerifiedInstallationRecord {
     installationId: row.installation_id,
     accountLogin: row.github_account_login,
     accountType: row.account_type,
+    accessRevokedAt: row.access_revoked_at ?? null,
   };
 }
 
-const INSTALLATION_COLUMNS = "id, installation_id, github_account_login, account_type";
+const INSTALLATION_COLUMNS =
+  "id, installation_id, github_account_login, account_type, access_revoked_at";
 
 /**
  * Every verified installation belonging to `userId`. RLS already scopes
@@ -133,4 +145,32 @@ export async function upsertGithubInstallation(
 
   if (error) throw error;
   return data;
+}
+
+/**
+ * Writes down what GitHub just said about an installation (VB-041).
+ *
+ * Called only where a probe actually happened, so the column records an
+ * observation rather than an inference. `unavailable` writes nothing at all:
+ * GitHub being down, or our own App credential being wrong, is not evidence
+ * that the customer removed anything — and marking it as revocation would tell
+ * them their connection was withdrawn when it was not.
+ *
+ * `accessible` clears the mark, so reinstalling the App fixes this without an
+ * operator, which is the only acceptable recovery for a state the customer
+ * created themselves.
+ */
+export async function recordInstallationAccess(
+  supabase: SupabaseClient,
+  params: { installationRowId: string; userId: string; access: InstallationAccess },
+): Promise<void> {
+  if (params.access === "unavailable") return;
+
+  const { error } = await supabase
+    .from("github_installations")
+    .update({ access_revoked_at: params.access === "revoked" ? new Date().toISOString() : null })
+    .eq("id", params.installationRowId)
+    .eq("user_id", params.userId);
+
+  if (error) throw error;
 }

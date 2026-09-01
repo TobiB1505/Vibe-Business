@@ -1129,8 +1129,8 @@ describe("§20, §35 — cleanup and settlement", () => {
 describe("the sandbox-hosted harness", () => {
   const HOME = "/vercel/sandbox";
   const LIST =
-    "find . ( -name node_modules -o -name .git -o -name .next -o -name dist -o -name build -o -name .turbo -o -name .vercel -o -name coverage ) -prune -o -type f -printf %P\n";
-  const TOUCHED = `find . ( -name node_modules -o -name .git -o -name .next -o -name dist -o -name build -o -name .turbo -o -name .vercel -o -name coverage ) -prune -o -type f -newer ${HOME}/.vibe-agent/marker -printf %P\n`;
+    "find . ( -name node_modules -o -name .git -o -name .next -o -name dist -o -name build -o -name .turbo -o -name .vercel -o -name coverage ) -prune -o -type f -printf %P\0";
+  const TOUCHED = `find . ( -name node_modules -o -name .git -o -name .next -o -name dist -o -name build -o -name .turbo -o -name .vercel -o -name coverage ) -prune -o -type f -newer ${HOME}/.vibe-agent/marker -printf %P\0`;
 
   /** The workspace as the fake sandbox reports it, before and after the run. */
   function walk(options: { before: string[]; after: string[]; touched: string[] }) {
@@ -1140,10 +1140,13 @@ describe("the sandbox-hosted harness", () => {
         exitCode: 0,
         get output() {
           listings += 1;
-          return `${(listings === 1 ? options.before : options.after).join("\n")}\n`;
+          // NUL-delimited, as `find -printf '%P\0'` emits (VB-029).
+          return (listings === 1 ? options.before : options.after)
+            .map((path) => `${path}\0`)
+            .join("");
         },
       },
-      [TOUCHED]: { exitCode: 0, output: `${options.touched.join("\n")}\n` },
+      [TOUCHED]: { exitCode: 0, output: options.touched.map((path) => `${path}\0`).join("") },
       "pwd": { exitCode: 0, output: `${HOME}\n` },
     };
   }

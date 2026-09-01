@@ -54,9 +54,28 @@ So the answer to a bad migration is **a compensating migration applied the same 
 
 ### When the data itself is wrong
 
-Supabase's own point-in-time recovery is the only mechanism that undoes a destructive migration, and it restores the **whole project** to a moment — every table, every tenant, including work done correctly since. It is a last resort with a real cost, and using it is a decision, not a step in a runbook.
+**There is no restore path today, and this section used to say there was.**
 
-**This has never been exercised.** No restore drill has been run against this project. Until one has, treat "we can restore" as an assumption rather than a capability — which is the strongest argument for the compatibility rules above.
+It said point-in-time recovery was the mechanism that undoes a destructive migration. That was written from the general shape of Supabase rather than from this project, and Wave 5's verification pass checked it: the organization is on the **free plan**, and [Supabase's own documentation](https://supabase.com/docs/guides/platform/backups) is explicit that daily backups cover *"all Pro, Team, and Enterprise Plan projects"* and recommends that free-plan projects *"regularly export their data using the Supabase CLI `db dump` command and maintain off-site backups."*
+
+So: no automatic daily backups, no PITR, and nothing to restore from unless somebody took a dump first. Every audit, action plan, prepared change and Credit-ledger row lives in one database with no recovery point behind it.
+
+That is not a thing a runbook can fix, and pretending otherwise is worse than saying it plainly. Two things follow, and only one of them is an engineering decision:
+
+- **The compatibility rules above stop being good practice and become the only protection.** A migration that drops or rewrites data has no undo. Add-don't-rename, nullable-or-defaulted, widen-before-narrow: those are what stands between a bad migration and permanent loss.
+- **Whether to buy a recovery point is an operator's decision, not an engineer's.** Daily backups and PITR are a paid plan. The alternative the documentation names — scheduled `db dump` to off-site storage — is a real option and also a decision about where customer data is allowed to sit.
+
+### Taking a dump before anything destructive
+
+Until a plan with backups exists, this is the whole of the safety net, and it is manual:
+
+```bash
+supabase db dump --linked --file backup-$(date -u +%Y%m%dT%H%M%SZ).sql
+```
+
+Run it **before** applying a migration that drops a column, drops a table, or rewrites data — and put the file somewhere that is not the laptop it was taken on. It is a logical dump: it restores schema and data into an empty database, not the project in place.
+
+**Neither the dump nor a restore from one has been exercised against this project.** Until one has, treat "we can restore" as an assumption rather than a capability.
 
 ## The CI gate this deliberately does not have
 

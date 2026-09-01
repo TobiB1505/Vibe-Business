@@ -10,7 +10,8 @@ Deterministic change preparation: turns an approved Action Step into a commit on
 | Premise revalidation before a write | `preflight.ts` |
 | The write itself — blob, tree, commit, ref | `github-writer.ts`, `github/`, `git-port.ts` |
 | Commit message compilation (deterministic, never model output) | `commit-message.ts` |
-| Identity, paths, diffing, change origin | `identity.ts`, `paths.ts`, `diff.ts`, `change-origin.ts` |
+| Identity, paths, change origin | `identity.ts`, `paths.ts`, `change-origin.ts` |
+| Reading a change back as a diff, and identifying that diff | `diff.ts`, `diff-lines.ts`, `code-review-digest.ts` |
 | What a delivered change is expected to produce in production | `outcome-contract.ts`, `measurement-contract.ts` |
 | Persistence, service entry point, read models | `store.ts`, `service.ts`, `view.ts`, `change-progress.ts` |
 
@@ -25,3 +26,4 @@ The other invariants worth knowing before changing anything here:
 - **Only isolated branches**, except through the approval architecture — the default branch is moved by `modules/merge`, never from here (rules 58, 71).
 - **Model output never controls a path, ref, branch name, commit message or generated code** (rule 57). Everything under `generators/` is deterministic capability code, and `paths.test.ts` asserts the module contains no placeholder paths.
 - **Stored evidence routes; it never authorizes.** `preflight.ts` re-reads live repository state immediately before a write and blocks on drift rather than reasoning about it (rules 55, 56).
+- **No diff is ever persisted.** `diff.ts` reads both versions of every changed file from GitHub at the two commits the prepared change recorded, on demand, and stores nothing — a stored diff would make Supabase a source mirror of every customer repository (rule 26). `code-review-digest.ts` identifies a diff without holding it: two immutable commits plus the shown paths reproduce it exactly, which is what lets an approval bind to one ([ADR 0063](../../../docs/decisions/0063-review-classification-as-a-gate.md)).

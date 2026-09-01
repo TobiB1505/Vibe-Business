@@ -188,6 +188,36 @@ describe("routes load only what they render", () => {
     }
   });
 
+  /**
+   * The Agent route's slow half is behind a `<Suspense>` boundary (VB-023).
+   *
+   * ## Why the check is on the *body*, not on the file
+   *
+   * Because a page that imports `Suspense`, renders a boundary, and still
+   * awaits the workspace read before its `return` streams nothing at all — and
+   * that page looks completely correct from a distance. What matters is which
+   * side of the render the expensive read sits on, so that is what is read
+   * here: everything before the component returns.
+   *
+   * The boundary's actual streaming behaviour is observed in a browser, in
+   * `e2e/agent-streaming.spec.ts`. This is the half that browser cannot reach,
+   * because the real route needs a session the browser suite does not have.
+   */
+  it("does not await the prepared workspace before the Agent route renders", () => {
+    const agent = source("agent/page.tsx");
+
+    const body = agent.slice(
+      agent.indexOf("export default async function ProjectAgentPage"),
+      agent.indexOf("  return (", agent.indexOf("export default async function ProjectAgentPage")),
+    );
+
+    expect(body).not.toBe("");
+    expect(body, "the Agent page awaits the workspace read before rendering").not.toContain(
+      "getPreparedChangeWorkspace",
+    );
+    expect(agent, "the Agent page has no Suspense boundary").toContain("<Suspense");
+  });
+
   it("keeps Home on the shared Business Health read model", () => {
     expect(source("page.tsx")).toContain("ProjectBusinessHealth");
     expect(source("page.tsx")).not.toContain("listPreparedChangeSummaries");

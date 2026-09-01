@@ -118,6 +118,22 @@ export type CandidateChange = {
    * repository file.
    */
   unreadablePaths: readonly string[];
+  /**
+   * Observed paths the write policy forbids, refused **before** they were read
+   * (VB-029).
+   *
+   * The policy used to be applied only in `verifyCandidateChange`, which runs
+   * after this function has already pulled every observed path's bytes into
+   * memory. So a path that could never legitimately be written — absolute,
+   * traversing, `.env`, a lockfile, a workflow — was read first and refused
+   * afterwards, and its contents had by then been in this process.
+   *
+   * Refusing first costs nothing and means the bytes are never fetched. The
+   * paths are kept rather than dropped, because `verifyCandidateChange` still
+   * has to turn them into a `forbidden_path` rejection: a run that tried to
+   * write somewhere forbidden must not be recorded as one that changed nothing.
+   */
+  forbiddenPaths: readonly string[];
 };
 
 export function sha256(content: string): string {
@@ -160,10 +176,27 @@ export async function extractCandidateChange(input: {
   const unchangedPaths: string[] = [];
   const ignoredPaths: IgnoredCandidatePath[] = [];
   const unreadablePaths: string[] = [];
+  const forbiddenPaths: string[] = [];
 
   // Sorted, so two runs that produced the same set produce byte-identical
   // records — the property `execution/identity.ts` relies on downstream.
-  const paths = [...new Set(input.changes.map((change) => change.path))].sort();
+  const observed = [...new Set(input.changes.map((change) => change.path))].sort();
+
+  /*
+   * The write policy, applied before a single byte is read (VB-029).
+   *
+   * `verifyCandidateChange` checks the same thing and keeps checking it — the
+   * two-independent-refusals discipline this module already documents. What
+   * changes here is only the *order*: that check used to run after the loop
+   * below had read every observed path, so an absolute path, a `..`, an
+   * `.env` or a workflow file was fetched into this process and refused
+   * afterwards. The refusal was correct and the read had already happened.
+   */
+  const paths: string[] = [];
+  for (const path of observed) {
+    if (isAgenticWritablePath(path)) paths.push(path);
+    else forbiddenPaths.push(path);
+  }
 
   const tracked = await readTrackedPaths(input.tree ?? null, input.spec.repository.baseSha);
 
@@ -243,6 +276,7 @@ export async function extractCandidateChange(input: {
     unchangedPaths,
     ignoredPaths,
     unreadablePaths,
+    forbiddenPaths,
   };
 }
 
@@ -380,9 +414,22 @@ export function verifyCandidateChange(input: {
       file.content !== null && file.contentHash !== null,
   );
 
-  // Re-checked here even though the gateway already refused these paths at
-  // write time. Two independent refusals, for the same reason `isToolAllowed`
-  // states its rule twice: this one holds even if the gateway is replaced.
+  /*
+   * A forbidden path is a rejection whether it was caught early or late.
+   *
+   * `extractCandidateChange` now refuses these before reading them (VB-029), so
+   * in practice they arrive in `forbiddenPaths` and never as a file. The
+   * per-file check stays anyway: it is the third of the independent refusals
+   * this policy is checked by — the gateway at write time, extraction before
+   * the read, and here immediately before the branch is written — and it is the
+   * one that still holds if either of the other two is replaced.
+   *
+   * Either way the run is recorded as having tried to write somewhere
+   * forbidden, which is the thing a reader must be able to find. Dropping the
+   * paths silently would make it look like a run that changed nothing.
+   */
+  if (input.candidate.forbiddenPaths.length > 0) rejections.push("forbidden_path");
+
   for (const file of writes) {
     if (!isAgenticWritablePath(file.path) && !rejections.includes("forbidden_path")) {
       rejections.push("forbidden_path");

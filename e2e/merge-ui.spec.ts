@@ -288,7 +288,7 @@ test.describe("approval is shown beside the merge it authorizes", () => {
   test("renders the approved commit and the boundary copy", async ({ page }) => {
     await page.goto("/e2e/merge_ready");
 
-    await page.getByText("Checked, previewed, reviewed and approved").click();
+    await page.getByText("Checked, previewed and approved").click();
 
     await expect(page.getByText("Change approved")).toBeVisible();
     await expect(page.getByText("This approval applies only to commit")).toBeVisible();
@@ -306,7 +306,7 @@ test.describe("approval is shown beside the merge it authorizes", () => {
     await expect(page.getByText("Change approved")).not.toBeVisible();
     await expect(mergeSection(page).getByText("Ready to merge")).toBeVisible();
 
-    await page.getByText("Checked, previewed, reviewed and approved").click();
+    await page.getByText("Checked, previewed and approved").click();
     await expect(page.getByText("Change approved")).toBeVisible();
   });
 });
@@ -327,7 +327,7 @@ test.describe("a change still moving shows its gates", () => {
 
     // Open, not folded away — these gates are the work, not the history.
     await expect(page.getByText("How this change got here")).toBeVisible();
-    await expect(page.getByText("Checked, previewed, reviewed and approved")).not.toBeVisible();
+    await expect(page.getByText("Checked, previewed and approved")).not.toBeVisible();
     await expect(page.getByRole("button", { name: "Approve change" })).toBeVisible();
 
     // And the disclaimers are true here, which is the case they were written
@@ -348,7 +348,7 @@ test.describe("a change still moving shows its gates", () => {
 
     // Nothing is running: the preview has not been started and the comparison
     // is waiting for one. The card used to claim Vibe was preparing something.
-    await expect(page.getByText("Ready for you to preview and compare.")).toBeVisible();
+    await expect(page.getByText("Ready for you to open a preview and look.")).toBeVisible();
     await expect(page.getByText("Vibe is preparing what you need to review.")).toHaveCount(0);
 
     // And it leads with meaning rather than with a branch name.

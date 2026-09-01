@@ -11,6 +11,7 @@ import {
   claimAgentExecutionRunRow,
   expireStaleAgentExecution,
   holdAgentExecutionCredits,
+  quoteAgentExecutionCredits,
 } from "@/modules/operations/agent-execution/server-writes";
 import type { OperationExecutor } from "@/modules/operations/executor";
 import {
@@ -154,10 +155,20 @@ export async function startAgentExecution(
   if (!stored) return { kind: "failed", error: "execution_spec_not_found" };
   if (stored.mode !== "agentic") return { kind: "failed", error: "spec_not_agentic" };
 
-  // §18: production has no approved Agent economics, so an ordinary customer
-  // project stops here. The dogfood policy is reachable only for a project on
-  // an operator-managed allowlist.
-  const economics = resolveAgentEconomics({ projectId: params.projectId });
+  // The class the spec was built at, never a fresh classification. The customer
+  // was shown a price for *this* tier and a reservation was taken against it;
+  // re-deriving the class here could disagree with both and would bound a run
+  // by a ceiling nobody authorized.
+  const pricingClass = stored.spec.pricingClass;
+  if (!pricingClass) return { kind: "failed", error: "agentic_execution_not_authorized" };
+
+  // Resolved against the policy in force *now*, not against the one baked into
+  // the spec: a lapsed policy must stop a start, which is what
+  // `agentic_pricing_not_configured` exists to say. Under `launch-v1-budget`
+  // this resolves for any project; the dogfood policy remains reachable only
+  // for a project on the operator-managed allowlist, and is what makes a run
+  // non-production.
+  const economics = resolveAgentEconomics({ projectId: params.projectId, pricingClass });
   if (!economics) return { kind: "failed", error: "agentic_execution_not_authorized" };
 
   const runIdentity = computeAgentRunIdentity({
@@ -234,10 +245,28 @@ export async function startAgentExecution(
    * above, and `holdAgentExecutionCredits` re-establishes it rather than
    * trusting that.
    */
+  // Recorded before the hold, because a quote is what the customer was shown
+  // and the hold is what acts on it. Writing it afterwards would record an
+  // agreement reached after the money moved. It authorizes nothing and cannot
+  // fail the start — see `quoteAgentExecutionCredits`.
+  const quoteId = await quoteAgentExecutionCredits({
+    projectId: params.projectId,
+    userId: params.userId,
+    operationRunId: operation.id,
+    credits: economics.budget.maxCredits,
+    pricingClass,
+    pricingClassReason: stored.spec.pricingClassReason,
+    policyVersion: economics.nonProduction ? "internal-dogfood-v1" : "launch-v1",
+    budgetPolicyVersion: economics.budget.budgetPolicyVersion,
+  });
+
   const authorized = await holdAgentExecutionCredits({
     projectId: params.projectId,
     userId: params.userId,
     operationRunId: operation.id,
+    pricingClass,
+    nonProduction: economics.nonProduction,
+    quoteId,
   });
 
   if (!authorized.ok) {

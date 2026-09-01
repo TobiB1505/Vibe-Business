@@ -4,11 +4,16 @@
  * Two rules make this trustworthy:
  *
  *  1. **Effective-dated.** Provider prices change on a date, so a price is a
- *     row with a validity window, not a constant. This is not hypothetical:
- *     Claude Sonnet 5 is on introductory pricing ($2/$10 per MTok) through
- *     31 August 2026 and moves to $3/$15 on 1 September 2026. An audit run
- *     today and an identical one in September genuinely cost different
- *     amounts, and the ledger has to say so.
+ *     row with a validity window, not a constant. Every usage event stores
+ *     the `pricingVersion` that priced it, so what a past call cost stays
+ *     answerable however the price book moves afterwards.
+ *
+ *     The window is also what makes an *announced* change safe to hold: a
+ *     future row prices nothing until its instant arrives. What it must never
+ *     become is a stale plan that arrives anyway. Claude Sonnet 5's scheduled
+ *     rise to $3/$15 on 1 September 2026 was withdrawn by Anthropic before it
+ *     took effect, and the row is gone rather than dormant — see
+ *     {@link MODEL_PRICING}.
  *  2. **Integer arithmetic.** Costs are computed in whole nanodollars
  *     (1e-9 USD) and only rendered as a decimal string at the end. Floating
  *     point cannot represent $0.0000021 exactly, and a ledger that drifts in
@@ -56,26 +61,55 @@ export type ModelPricing = {
  */
 export const MODEL_PRICING: ModelPricing[] = [
   {
+    /**
+     * Sonnet 5 at $2/$10, open-ended.
+     *
+     * ## Why the version still says "introductory" for a permanent price
+     *
+     * Because 295 `ai_usage_events` rows and 755 `billing_usage_events` rows
+     * name this string, and `credits/projection.ts` re-derives a stored row's
+     * cost by resolving it. The version identifies *which prices were in force*,
+     * not what Anthropic called them at the time, and renaming it would break
+     * exactly the historical interpretability it exists for. The name is
+     * history; the window is the fact.
+     *
+     * ## Why there is no September row
+     *
+     * There was one. Anthropic announced $2/$10 as introductory pricing through
+     * 31 August 2026 with a rise to $3/$15 on 1 September, this file carried
+     * both sides of it, and `credits/margin-guard.ts` was built to keep the
+     * margin whole across the step.
+     *
+     * **The rise was then withdrawn.** Verified 2026-08-31 against Anthropic's
+     * own pricing page, which states it in those terms:
+     *
+     * > The $2/$10 per million input/output token pricing for Claude Sonnet 5,
+     * > announced at launch as introductory pricing through August 31, 2026, is
+     * > now the standard price. The previously scheduled increase to $3/$15 per
+     * > million input/output tokens on September 1, 2026 will not occur.
+     * > — https://platform.claude.com/docs/en/about-claude/pricing
+     *
+     * Corroborated by the Sonnet 5 model page and the models overview, both of
+     * which list $2/$10 with no scheduled change.
+     *
+     * The row was deleted rather than left dormant or flagged. A cancelled
+     * future price that still exists in this array is one edit — or one
+     * misread window — away from pricing real usage, and it protects nothing:
+     * it never billed a call, so no stored cost depends on it. What it *was*
+     * belongs in the record ([ADR 0062](../../../docs/decisions/0062-sonnet-5-price-rise-cancelled.md)),
+     * not in a table a resolver walks. `pricing.test.ts` fails if it comes back.
+     */
     pricingVersion: "claude-sonnet-5-introductory-2026",
     model: "claude-sonnet-5",
     effectiveFrom: "2026-01-01T00:00:00.000Z",
-    // Introductory pricing runs "through August 31, 2026", so it stops
-    // applying at the first instant of 1 September 2026 UTC.
-    effectiveTo: "2026-09-01T00:00:00.000Z",
+    effectiveTo: null,
     inputNanoUsdPerToken: 2_000, // $2 / MTok
     outputNanoUsdPerToken: 10_000, // $10 / MTok
     cacheReadNanoUsdPerToken: 200, // 0.1× input
-    cacheWriteNanoUsdPerToken: 2_500, // 1.25× input
-  },
-  {
-    pricingVersion: "claude-sonnet-5-standard-2026-09",
-    model: "claude-sonnet-5",
-    effectiveFrom: "2026-09-01T00:00:00.000Z",
-    effectiveTo: null,
-    inputNanoUsdPerToken: 3_000, // $3 / MTok
-    outputNanoUsdPerToken: 15_000, // $15 / MTok
-    cacheReadNanoUsdPerToken: 300, // 0.1× input
-    cacheWriteNanoUsdPerToken: 3_750, // 1.25× input
+    // 1.25× input — the 5-minute cache write. Anthropic also publishes a
+    // 1-hour write at 2× ($4 / MTok); Vibe uses no 1-hour breakpoint, so one
+    // write rate is the whole story here.
+    cacheWriteNanoUsdPerToken: 2_500,
   },
   {
     // Product Understanding runs on Haiku 4.5 (CORE-1 §21). No introductory
@@ -98,11 +132,27 @@ export class UnpricedModelError extends Error {
   }
 }
 
-/** Resolves the pricing row in force for `model` at instant `at`. */
-export function resolvePricing(model: string, at: Date = new Date()): ModelPricing {
+/**
+ * Resolves the pricing row in force for `model` at instant `at`.
+ *
+ * `pricing` defaults to {@link MODEL_PRICING} and exists so a caller can ask
+ * "what would this cost under a *different* price book?" without mutating the
+ * real one. `resolveRetailPolicy`, `resolveRateCard` and `resolveExecutionBudget`
+ * all take their own registry the same way, for the same reason.
+ *
+ * Its one production-shaped use is `credits/margin-guard.ts`, which prices a
+ * hypothetical future provider increase to prove the guard still refuses one.
+ * A test that reached in and mutated `MODEL_PRICING` to do that would leak into
+ * every other test in the file.
+ */
+export function resolvePricing(
+  model: string,
+  at: Date = new Date(),
+  pricing: readonly ModelPricing[] = MODEL_PRICING,
+): ModelPricing {
   const timestamp = at.getTime();
 
-  const match = MODEL_PRICING.find((entry) => {
+  const match = pricing.find((entry) => {
     if (entry.model !== model) return false;
     const from = Date.parse(entry.effectiveFrom);
     const to = entry.effectiveTo === null ? Number.POSITIVE_INFINITY : Date.parse(entry.effectiveTo);
@@ -162,8 +212,10 @@ export function calculateProviderCost(params: {
   cacheReadInputTokens?: number;
   cacheCreationInputTokens?: number;
   at?: Date;
+  /** An alternative price book. Defaults to {@link MODEL_PRICING}; see {@link resolvePricing}. */
+  pricing?: readonly ModelPricing[];
 }): CostBreakdown {
-  const pricing = resolvePricing(params.model, params.at ?? new Date());
+  const pricing = resolvePricing(params.model, params.at ?? new Date(), params.pricing);
 
   const inputNanoUsd = Math.round(params.inputTokens * pricing.inputNanoUsdPerToken);
   // Thinking tokens are already included in `outputTokens` by the provider,

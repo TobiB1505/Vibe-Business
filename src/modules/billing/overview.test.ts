@@ -8,6 +8,12 @@ import {
 } from "@/modules/credits/lot-store";
 import { claimReservation, ensureCreditAccount } from "@/modules/credits/store";
 import { creditsToUnits } from "@/modules/credits/units";
+import { deepScanIdempotencyKey } from "@/modules/authenticated-product-intelligence/billing";
+import {
+  subscriptionGrantIdempotencyKey,
+  topUpGrantIdempotencyKey,
+  welcomeGrantIdempotencyKey,
+} from "./catalog";
 import { getBillingOverview, getHeaderCreditBalance } from "./overview";
 
 /**
@@ -262,5 +268,289 @@ describe("the orphaned-hold detector on this same read (VB-020)", () => {
 
     expect(overview.displayAvailable).toBeTruthy();
     expect(orphanEvents()).toEqual([]);
+  });
+});
+
+/* ---------------------------------------------------------------------------
+ * Activity labels
+ * ------------------------------------------------------------------------ */
+
+/**
+ * What each line of Credit history is called.
+ *
+ * ## Why these are worth a test each
+ *
+ * Because the labels were wrong for as long as they existed, and nothing could
+ * see it. `OPERATION_LABELS` sat in `overview.ts` exported "for the activity
+ * view's tests" and was called by no renderer, so every charge — an audit, a
+ * plan, an agent run — came out of `toActivityEntry` as "Credits used". The
+ * browser fixtures meanwhile said "Agent improvement" and the e2e asserted it.
+ * The suite was green and described a screen that did not exist.
+ *
+ * So the assertions below are deliberately made against **ledger rows**, not
+ * against a mapping table: a test that checked `OPERATION_LABELS.business_audit`
+ * would have passed throughout the entire period the bug existed.
+ */
+describe("recent activity is named from the record, never guessed", () => {
+  async function fund(): Promise<{ accountId: string }> {
+    const { account } = await ensureCreditAccount(supabase(), USER);
+    await grantCreditLot(supabase(), {
+      userId: USER,
+      sourceKind: "purchase",
+      credits: creditsToUnits(5_000),
+      reason: "test lot",
+      idempotencyKey: "lot:labels",
+      expiresAt: null,
+    });
+    return { accountId: account.id };
+  }
+
+  /** A settled charge against a real operation run, as production writes one. */
+  async function charge(params: {
+    accountId: string;
+    operationType: string;
+    credits: number;
+    key: string;
+  }): Promise<void> {
+    const operation = db.current.seed("operation_runs", {
+      project_id: PROJECT,
+      user_id: USER,
+      operation_type: params.operationType,
+      status: "completed",
+      stage: "done",
+      input_identity: `identity-${params.key}`,
+    });
+
+    db.current.seed("billing_credit_ledger", {
+      credit_account_id: params.accountId,
+      kind: "charge",
+      credit_delta: -creditsToUnits(params.credits),
+      operation_run_id: String(operation.id),
+      idempotency_key: params.key,
+    });
+  }
+
+  async function labels(): Promise<string[]> {
+    const overview = await getBillingOverview(supabase(), { userId: USER });
+    return overview.recentActivity.map((entry) => entry.label);
+  }
+
+  /** Only what was spent — `fund()` posts a purchase of its own. */
+  async function chargeLabels(): Promise<string[]> {
+    const overview = await getBillingOverview(supabase(), { userId: USER });
+    return overview.recentActivity.filter((entry) => entry.creditDelta < 0).map((entry) => entry.label);
+  }
+
+  it("calls a charge what the customer bought", async () => {
+    const { accountId } = await fund();
+    await charge({ accountId, operationType: "business_audit", credits: 35, key: "c:audit" });
+
+    expect(await labels()).toContain("Business Audit");
+  });
+
+  it("names an agent run, which is the most expensive line anyone will see", async () => {
+    const { accountId } = await fund();
+    await charge({ accountId, operationType: "agent_execution", credits: 200, key: "c:agent" });
+
+    const overview = await getBillingOverview(supabase(), { userId: USER });
+    const entry = overview.recentActivity.find((row) => row.label === "Agent improvement");
+
+    expect(entry?.displayAmount).toBe("-200");
+  });
+
+  /**
+   * Deep Scan is the one paid operation with no `operation_runs` row — it is
+   * not durable, and its reservation deliberately carries a null run id. The
+   * only thing that identifies it afterwards is the key prefix.
+   */
+  it("names a Deep Scan from its reservation, having no operation to read", async () => {
+    const { accountId } = await fund();
+    const reservation = db.current.seed("billing_credit_reservations", {
+      credit_account_id: accountId,
+      project_id: PROJECT,
+      operation_run_id: null,
+      reserved_credits: creditsToUnits(25),
+      status: "settled",
+      settled_credits: creditsToUnits(25),
+      idempotency_key: deepScanIdempotencyKey("session-1"),
+    });
+
+    db.current.seed("billing_credit_ledger", {
+      credit_account_id: accountId,
+      kind: "charge",
+      credit_delta: -creditsToUnits(25),
+      operation_run_id: null,
+      reservation_id: String(reservation.id),
+      idempotency_key: "c:scan",
+    });
+
+    expect(await labels()).toContain("Deep Scan");
+  });
+
+  it("tells a plan renewal, a pack and the welcome allowance apart", async () => {
+    const { accountId } = await fund();
+
+    for (const [key, credits] of [
+      [subscriptionGrantIdempotencyKey("in_1"), 3_000],
+      [topUpGrantIdempotencyKey("cs_1"), 1_000],
+      [welcomeGrantIdempotencyKey(USER), 100],
+    ] as const) {
+      db.current.seed("billing_credit_ledger", {
+        credit_account_id: accountId,
+        kind: "grant",
+        credit_delta: creditsToUnits(credits),
+        idempotency_key: key,
+      });
+    }
+
+    const found = await labels();
+    expect(found).toContain("Monthly Credits");
+    expect(found).toContain("Credit Pack");
+    expect(found).toContain("Welcome Credits");
+  });
+
+  /**
+   * The branch the whole design rests on. An operation type with no
+   * customer-facing price has no customer-facing name, and inventing one — or
+   * printing `change_validation` — would be worse than the vague truth.
+   */
+  it("falls back rather than naming an operation the customer never bought", async () => {
+    const { accountId } = await fund();
+    await charge({ accountId, operationType: "change_validation", credits: 5, key: "c:validation" });
+
+    expect(await chargeLabels()).toEqual(["Credits used"]);
+  });
+
+  it("falls back when the operation behind a charge is gone", async () => {
+    const { accountId } = await fund();
+    db.current.seed("billing_credit_ledger", {
+      credit_account_id: accountId,
+      kind: "charge",
+      credit_delta: -creditsToUnits(35),
+      operation_run_id: "99999999-9999-9999-9999-999999999999",
+      idempotency_key: "c:erased",
+    });
+
+    expect(await chargeLabels()).toEqual(["Credits used"]);
+  });
+
+  /**
+   * A customer who cannot see their balance because a *label* lookup failed is
+   * strictly worse off than one whose history reads "Credits used" — and unlike
+   * the orphaned-hold detector, this runs on the happy path.
+   */
+  it("never takes the billing page down when naming fails", async () => {
+    const { accountId } = await fund();
+    await charge({ accountId, operationType: "business_audit", credits: 35, key: "c:audit" });
+    db.current.failNextReadWith = { table: "operation_runs", message: "boom" };
+
+    const overview = await getBillingOverview(supabase(), { userId: USER });
+
+    // The balance is unaffected: it comes from lots, and naming is decoration.
+    expect(overview.displayAvailable).toBe("5,000");
+    expect(overview.recentActivity.filter((entry) => entry.creditDelta < 0)).toEqual([
+      expect.objectContaining({ label: "Credits used" }),
+    ]);
+  });
+});
+
+/* ---------------------------------------------------------------------------
+ * Balance context
+ * ------------------------------------------------------------------------ */
+
+describe("what the balance card is allowed to claim", () => {
+  it("reports Credits a live hold is holding, so a lower balance has an explanation", async () => {
+    const { account } = await ensureCreditAccount(supabase(), USER);
+    await grantCreditLot(supabase(), {
+      userId: USER,
+      sourceKind: "subscription",
+      credits: creditsToUnits(1_000),
+      reason: "period",
+      idempotencyKey: "lot:period",
+      expiresAt: null,
+      periodStart: "2026-08-01T00:00:00.000Z",
+      periodEnd: "2026-09-01T00:00:00.000Z",
+    });
+
+    const claim = await claimReservation(supabase(), {
+      account,
+      reservedCredits: creditsToUnits(200),
+      idempotencyKey: "hold:agent",
+      projectId: PROJECT,
+    });
+    if (!claim.ok) throw new Error("fixture could not take a hold");
+
+    const overview = await getBillingOverview(supabase(), { userId: USER });
+
+    expect(overview.reservedCredits).toBe(creditsToUnits(200));
+    expect(overview.displayReserved).toBe("200");
+  });
+
+  it("says nothing about a hold when there is none", async () => {
+    await ensureCreditAccount(supabase(), USER);
+    await grantCreditLot(supabase(), {
+      userId: USER,
+      sourceKind: "purchase",
+      credits: creditsToUnits(100),
+      reason: "pack",
+      idempotencyKey: "lot:pack",
+      expiresAt: null,
+    });
+
+    const overview = await getBillingOverview(supabase(), { userId: USER });
+
+    expect(overview.reservedCredits).toBe(0);
+  });
+
+  /**
+   * The allowance is the *subscription* lot's, not the wallet's. A purchased
+   * pack is not part of a monthly allowance, and counting it would make the
+   * denominator move when somebody topped up — "800 of 3,000" becoming
+   * "800 of 4,000" for buying Credits is a page arguing with itself.
+   */
+  it("measures the monthly allowance against the plan grant alone", async () => {
+    await ensureCreditAccount(supabase(), USER);
+    await grantCreditLot(supabase(), {
+      userId: USER,
+      sourceKind: "subscription",
+      credits: creditsToUnits(3_000),
+      reason: "period",
+      idempotencyKey: "lot:period",
+      expiresAt: null,
+      periodStart: "2026-08-01T00:00:00.000Z",
+      periodEnd: "2026-09-01T00:00:00.000Z",
+    });
+    await grantCreditLot(supabase(), {
+      userId: USER,
+      sourceKind: "purchase",
+      credits: creditsToUnits(1_000),
+      reason: "pack",
+      idempotencyKey: "lot:pack",
+      expiresAt: null,
+    });
+
+    const overview = await getBillingOverview(supabase(), { userId: USER });
+
+    expect(overview.availableCredits).toBe(creditsToUnits(4_000));
+    expect(overview.monthlyAllowance).toMatchObject({
+      displayRemaining: "3,000",
+      displayInitial: "3,000",
+    });
+  });
+
+  it("claims no allowance for an account with no plan grant", async () => {
+    await ensureCreditAccount(supabase(), USER);
+    await grantCreditLot(supabase(), {
+      userId: USER,
+      sourceKind: "welcome",
+      credits: creditsToUnits(100),
+      reason: "welcome",
+      idempotencyKey: "lot:welcome",
+      expiresAt: null,
+    });
+
+    const overview = await getBillingOverview(supabase(), { userId: USER });
+
+    expect(overview.monthlyAllowance).toBeNull();
   });
 });

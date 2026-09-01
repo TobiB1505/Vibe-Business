@@ -8,7 +8,6 @@ import {
   captureReviewStep,
   completeReviewStep,
   failReviewStep,
-  sweepExpiredScreenshotsStep,
   type ReviewDeps,
 } from "./execution";
 
@@ -16,10 +15,15 @@ import {
  * The durable visual review (Sprint 11A §21).
  *
  * ```
- * capture (both sides, one session) ─▶ complete ─┐
- *              │                                 ├─▶ sweep expired screenshots
- *              └────────────────────▶ fail ──────┘
+ * capture (both sides, one session) ─▶ complete
+ *              │
+ *              └────────────────────▶ fail
  * ```
+ *
+ * Unreachable for new changes since Sprint 0114: a preview *is* the review now
+ * (ADR 0065), and nothing starts this workflow. It stays so a historical
+ * approval can still show what it was bound to. The screenshot retention sweep
+ * that used to end this workflow moved to preview teardown, which still runs.
  *
  * Shorter than the validation and preview workflows because the work is
  * genuinely smaller: one browser session, two navigations, two uploads. It is
@@ -60,11 +64,6 @@ async function finishReview(operationId: string) {
   await completeReviewStep(deps(), operationId);
 }
 
-async function sweepExpiredScreenshots(operationId: string) {
-  "use step";
-  await sweepExpiredScreenshotsStep(deps(), operationId);
-}
-
 async function abortReview(operationId: string, failureCode: ReviewFailureCode) {
   "use step";
   await failReviewStep(deps(), operationId, failureCode);
@@ -90,8 +89,4 @@ export async function changeReviewWorkflow(operationId: string) {
   } else {
     await finishReview(operationId);
   }
-
-  // VB-004, on both paths and last. Retention has nothing to do with how this
-  // review went, and the step cannot fail the operation — see its docblock.
-  await sweepExpiredScreenshots(operationId);
 }

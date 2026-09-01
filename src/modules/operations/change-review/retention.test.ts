@@ -183,13 +183,20 @@ describe("the batch is bounded", () => {
 
 describe("the step around it", () => {
   /**
-   * The work the customer asked for is finished and recorded by the time this
-   * runs. A storage outage must not turn a completed review into a retrying
-   * step, and must certainly not turn it into a failed one.
+   * The work the customer asked for — stopping their sandbox — is finished and
+   * recorded by the time this runs. A storage outage must not turn a completed
+   * teardown into a retrying step, and must certainly not turn it into a failed
+   * one.
+   *
+   * Imported from preview teardown since Sprint 0114: the review workflow that
+   * used to end with this step is unreachable for new changes, so the sweep
+   * would have stopped running where it was (ADR 0065).
    */
   it("never throws, whatever the sweep does", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => {});
-    const { sweepExpiredScreenshotsStep } = await import("./execution");
+    const { sweepExpiredScreenshotsStep } = await import(
+      "../change-preview/teardown-execution"
+    );
 
     const exploding = {
       from: () => {

@@ -5,6 +5,7 @@ import { getLatestCompletedActionPlan } from "@/modules/action-plans/store";
 import type { ActionPlanStep } from "@/modules/action-plans/schema";
 import { benchmarkStep, fixtureForStepKey } from "./dogfood/fixtures";
 import { buildExecutionSpec, type ExecutionSpec } from "@/modules/execution-contract/spec";
+import { stepPricingClass } from "@/modules/execution-contract/pricing-class";
 import {
   resolvePlanExecution,
   resolveStepExecution,
@@ -22,7 +23,12 @@ import { resolveExecutionValidation } from "@/modules/execution-contract/validat
 import { createGithubRepositoryReader } from "@/modules/github/repository-reader";
 import { GithubDomainError } from "@/modules/github/errors";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
-import { resolveAgentEconomics, type AgentEconomicPolicy } from "./authorization";
+import {
+  internalDogfoodProjectIds,
+  isAgenticExecutionAuthorized,
+  resolveAgentEconomics,
+  type AgentEconomicPolicy,
+} from "./authorization";
 import { CORE4_DOGFOOD_DISCOVERY } from "./budget";
 import { runAgentPreflight, type AgentPreflight } from "./preflight";
 import { completedStepsFromFounderResolutions } from "@/modules/founder-input/completion";
@@ -126,7 +132,7 @@ export function isDogfoodEligibleProject(
   projectId: string,
   env: Record<string, string | undefined> = process.env,
 ): boolean {
-  return resolveAgentEconomics({ projectId, env })?.nonProduction === true;
+  return internalDogfoodProjectIds(env).includes(projectId);
 }
 
 async function loadOwnedRepositoryConnection(
@@ -202,9 +208,37 @@ export type DogfoodPlanRoutes =
       available: true;
       plan: NonNullable<Awaited<ReturnType<typeof getLatestCompletedActionPlan>>>;
       resolutions: readonly ExecutionResolution[];
-      /** The server-resolved Credit ceiling behind any offered Agent route. */
-      economics: AgentEconomicPolicy | null;
     };
+
+/**
+ * The Credit ceiling behind one offered Agent route (ADR 0061, launch-v1).
+ *
+ * Deliberately per step rather than per plan. `resolveDogfoodPlanRoutes` used
+ * to carry a single `economics` for the whole plan, which was answerable while
+ * one price covered every agent run. It is not any more: `launch-v1` prices an
+ * improvement by execution pricing class, and the class reads a *step's* own
+ * risk class — so a plan-wide ceiling would have to pick a tier nobody
+ * resolved, and defaulting low is a revenue leak that presents as a working
+ * system (Sprint 0111).
+ *
+ * `null` where no class resolves, which is the same answer `previewDogfoodStep`
+ * gives, and the screen renders no ceiling rather than a guessed one.
+ */
+export function resolveRouteAgentEconomics(params: {
+  projectId: string;
+  step: Parameters<typeof stepPricingClass>[0]["step"];
+  riskClass: Parameters<typeof stepPricingClass>[0]["riskClass"];
+  env?: Record<string, string | undefined>;
+}): AgentEconomicPolicy | null {
+  const pricingClass = stepPricingClass({ step: params.step, riskClass: params.riskClass });
+  if (!pricingClass) return null;
+
+  return resolveAgentEconomics({
+    projectId: params.projectId,
+    pricingClass,
+    env: params.env,
+  });
+}
 
 export async function resolveDogfoodPlanRoutes(
   supabase: SupabaseClient,
@@ -244,16 +278,16 @@ export async function resolveDogfoodPlanRoutes(
     liveHead: null,
   };
 
-  const economics = resolveAgentEconomics({ projectId: params.projectId, env: params.env });
-
   return {
     available: true,
     plan,
-    economics,
     resolutions: resolvePlanExecution({
       plan: { steps: plan.steps, completedSteps, isCurrent: true },
       repository,
-      agenticBudgetAuthorized: economics !== null,
+      agenticBudgetAuthorized: isAgenticExecutionAuthorized({
+        projectId: params.projectId,
+        env: params.env,
+      }),
     }),
   };
 }
@@ -533,8 +567,6 @@ export async function resolveExecutableStep(
     liveHead,
   };
 
-  const economics = resolveAgentEconomics({ projectId: params.projectId, env: params.env });
-
   const liveEvidence = await establishLivePremise(supabase, {
     projectId: params.projectId,
     userId: params.userId,
@@ -550,13 +582,25 @@ export async function resolveExecutableStep(
       isCurrent: true,
     },
     repository,
-    agenticBudgetAuthorized: economics !== null,
+    agenticBudgetAuthorized: isAgenticExecutionAuthorized({
+      projectId: params.projectId,
+      env: params.env,
+    }),
     liveEvidence,
   });
 
   if (resolution.mode !== "agentic") {
     return { eligible: false, reason: "not_agentic", resolution };
   }
+
+  // The class is resolvable only now: it reads the resolution's own risk class,
+  // which does not exist before the step resolves. The gate above is class-free
+  // for exactly that reason — it answers "could an agent run at all", which is
+  // a question with no tier in it.
+  const pricingClass = stepPricingClass({ step, riskClass: resolution.riskClass });
+  const economics = pricingClass
+    ? resolveAgentEconomics({ projectId: params.projectId, pricingClass, env: params.env })
+    : null;
 
   // A spec needs the plan's own lineage. Asserted rather than defaulted — a
   // spec built from a placeholder would tell the agent to work toward an

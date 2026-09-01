@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { FakeDatabase, fakeSupabase } from "@/modules/operations/test-support";
 import { grantCreditLot } from "./grants";
 import {
@@ -34,11 +34,43 @@ import { creditsToUnits, ZERO_CREDITS } from "./units";
  * get past the same structures Postgres would apply, not merely past an `if`.
  */
 
+/**
+ * The instant every price in this file resolves at.
+ *
+ * Pinned rather than left to the wall clock, and that fixes a defect this file
+ * had before `launch-v1` existed: most of these tests never pass a `now`, so
+ * they resolved whatever retail policy happened to be in force when CI ran.
+ * Every `creditsToUnits(35)` below was an assertion about the calendar as much
+ * as about the code, and every one of them would have started failing the
+ * morning `launch-v1` took effect — for nothing anybody had changed.
+ *
+ * Deliberately inside **`retail-v1`**, not the current policy. What this file
+ * tests is the *machinery*: holds, lot allocation in spend order, settlement,
+ * release, contention, idempotency. None of that depends on what an audit
+ * happens to cost, and re-pointing thirty assertions at every future repricing
+ * would make the price the subject of tests that are not about it.
+ * `retail.test.ts` owns which policy applies when, and
+ * `margin-guard.test.ts` owns whether its numbers still hold up.
+ */
+const NOW = new Date("2026-08-20T12:00:00.000Z");
+
 const db = { current: new FakeDatabase() };
 const supabase = () => fakeSupabase(db.current);
 
 const USER = "11111111-1111-1111-1111-111111111111";
 const PROJECT = "22222222-2222-2222-2222-222222222222";
+
+beforeAll(() => {
+  // `Date` only. Faking `setTimeout` too would freeze `contention.ts`'s retry
+  // backoff, and the contention tests below — which are the point of this file
+  // — would hang rather than exercise the CAS loop they exist for.
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(NOW);
+});
+
+afterAll(() => {
+  vi.useRealTimers();
+});
 
 beforeEach(() => {
   db.current = new FakeDatabase();
@@ -671,7 +703,7 @@ describe("expiry and reservations (§17)", () => {
       operation: "business_audit",
       idempotencyKey: "operation:op-1",
       operationRunId: "op-1",
-      now: new Date("2026-09-01T00:00:00.000Z"),
+      now: NOW,
     });
 
     // The lapsed 100 does not count toward affordability, so 20 is all there is.
@@ -692,7 +724,7 @@ describe("expiry and reservations (§17)", () => {
       operation: "business_audit",
       idempotencyKey: "operation:op-1",
       operationRunId: "op-1",
-      now: new Date("2026-09-01T00:00:00.000Z"),
+      now: NOW,
     });
     if (!held.ok || !held.billable) throw new Error("expected a hold");
 

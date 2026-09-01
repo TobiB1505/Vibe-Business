@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { countPreparedChangesForProject } from "@/modules/execution/store";
 
 /**
  * Workspace navigation counts (Sprint UI-2.5 Phase B).
@@ -48,23 +49,22 @@ export type ProjectWorkspaceCounts = {
 const UNKNOWN: ProjectWorkspaceCounts = { nextMoves: null, prepared: null };
 
 /**
- * `head: true` with `count: "exact"` asks Postgres for the count and returns
- * no rows at all — that is what keeps this off the expensive path.
+ * The execution module's own count, with this file's "a badge is never worth a
+ * broken nav" failure rule wrapped around it.
+ *
+ * Delegated rather than repeated: the `status = 'prepared'` filter is what
+ * makes the badge match the page it labels, and two copies of it are two
+ * chances for the badge to start describing something else.
  */
 async function countPreparedChanges(
   supabase: SupabaseClient,
   projectId: string,
 ): Promise<number | null> {
-  const { count, error } = await supabase
-    .from("prepared_changes")
-    .select("id", { count: "exact", head: true })
-    .eq("project_id", projectId)
-    // The same filter `listPreparedChangesForProject` uses. A count that
-    // included discarded changes would not match the page it labels.
-    .eq("status", "prepared");
-
-  if (error) return null;
-  return count ?? null;
+  try {
+    return await countPreparedChangesForProject(supabase, projectId);
+  } catch {
+    return null;
+  }
 }
 
 async function countNextMoves(

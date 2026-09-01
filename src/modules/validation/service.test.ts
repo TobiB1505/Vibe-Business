@@ -265,11 +265,22 @@ describe("idempotency (§21, §35)", () => {
     expect(executor.starts[0].operationType).toBe("change_validation");
   });
 
-  it("does not reuse a pass whose artifact capture failed", async () => {
-    // The first real 10B dogfood reached exactly this state: validation passed,
-    // snapshot() threw, and the next explicit click was incorrectly answered
-    // with "nothing was re-run". That made recovery impossible even after the
-    // capture defect had been fixed.
+  it("reuses a pass regardless of any artifact state", async () => {
+    /*
+     * The inverse of what these tests asserted before Sprint 0114, and worth
+     * reading as such.
+     *
+     * Reuse used to require a *usable captured artifact*, because a preview
+     * booted from one — so a pass whose capture failed, expired or was deleted
+     * had to be re-runnable, or Preview's "Validate again" could never recover
+     * it. The first real 10B dogfood hit exactly that: snapshot() threw, and
+     * the next click was answered with "nothing was re-run".
+     *
+     * Nothing captures an artifact any more (ADR 0064). Keeping those
+     * predicates would make all three false for every run, so every validation
+     * would re-run a check it had already passed — the same defect pointing the
+     * other way, and costing a sandbox every time.
+     */
     seed();
     db.seed("validation_runs", {
       id: "validation_without_artifact",
@@ -290,40 +301,15 @@ describe("idempotency (§21, §35)", () => {
       artifact_snapshot_id: null,
       artifact_expires_at: null,
       artifact_deleted_at: null,
+      created_at: new Date().toISOString(),
     });
 
-    expect((await start()).kind).toBe("started");
-    expect(executor.starts).toHaveLength(1);
+    const outcome = await start();
+
+    expect(outcome).toMatchObject({ kind: "reused" });
+    expect(executor.starts).toHaveLength(0);
   });
 
-  it.each([
-    ["expired", { artifact_expires_at: "2020-01-01T00:00:00.000Z", artifact_deleted_at: null }],
-    ["deleted", { artifact_expires_at: "2099-01-01T00:00:00.000Z", artifact_deleted_at: "2026-08-13T00:00:00.000Z" }],
-  ])("does not reuse a pass whose artifact is %s", async (_state, artifact) => {
-    seed();
-    db.seed("validation_runs", {
-      id: `validation_${_state}`,
-      project_id: PROJECT,
-      user_id: USER,
-      prepared_change_id: PREPARED,
-      operation_run_id: "operation_old",
-      validation_identity: identityFor(),
-      status: "passed",
-      stage: "completed",
-      steps: {},
-      validation_profile: "nextjs_node_v1",
-      validation_profile_version: validationProfileVersionFor("nextjs_node_v1"),
-      sandbox_policy_version: SANDBOX_POLICY_VERSION,
-      sandbox_provider: "vercel_sandbox",
-      package_manager: "pnpm",
-      prepared_commit_sha: FIXTURE_COMMIT_SHA,
-      artifact_snapshot_id: `snap_${_state}`,
-      ...artifact,
-    });
-
-    expect((await start()).kind).toBe("started");
-    expect(executor.starts).toHaveLength(1);
-  });
 
   it("does not reuse a previous failure", async () => {
     // A failed build is not a durable fact about the artifact — the registry

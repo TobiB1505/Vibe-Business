@@ -1,6 +1,11 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { StoredPreparedChange } from "@/modules/execution/store";
+import type { ChangeMerge } from "@/modules/merge/schema";
+import { getSnapshotsByIds } from "@/modules/repository-intelligence/store";
+import { getLatestVerificationsForPreparedChanges } from "./store";
+import { assertPrefetchedFor } from "@/lib/db/latest-per-change";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import type { OperationExecutor } from "@/modules/operations/executor";
 import {
@@ -11,11 +16,16 @@ import {
   type StoredOperationRun,
 } from "@/modules/operations/store";
 import { buildOperationView, type OperationView } from "@/modules/operations/view";
-import { evaluateOutcomeEligibility } from "./eligibility";
+import {
+  evaluateOutcomeEligibility,
+  resolvePublicOrigin,
+  type PrefetchedOutcomeInputs,
+} from "./eligibility";
 import { outcomeFailureMessage } from "./messages";
 import {
   OUTCOME_EVIDENCE_SCHEMA_VERSION,
   OUTCOME_POLICY_VERSION,
+  type ChangeOutcomeVerification,
   type OutcomeFailureCode,
 } from "./schema";
 import {
@@ -255,12 +265,107 @@ export async function startOutcomeVerification(
  * **no outbound HTTP** — opening a project page must never contact a customer's
  * production website, and must never create an observation operation (§43).
  */
+/**
+ * The card for a change with no verification and no eligibility.
+ *
+ * Exported so a caller holding no entry for a change renders the same answer
+ * this module would give, rather than an invented one.
+ */
+export function unavailableOutcomeCard(): OutcomeCard {
+  return buildOutcomeCard({
+    latest: null,
+    eligibility: { eligible: false, reason: "outcome_merge_required" },
+    resolveFailureMessage: outcomeFailureMessage,
+  });
+}
+
+/**
+ * The same card for a whole list, with the shared reads made once (VB-023).
+ *
+ * ## Why the batch lives here
+ *
+ * Because a merged change's eligibility needs three things a caller cannot
+ * batch without knowing this module's internals: the latest verification, the
+ * project's public origin — one row per *project*, previously read once per
+ * merged change — and the repository snapshot the change was prepared against,
+ * which in practice is the same snapshot for every change in a list.
+ *
+ * A change that was never merged costs nothing beyond the verification read: it
+ * is refused before the origin is consulted, which is what keeps the ordinary
+ * list cheap.
+ */
+export async function getOutcomeCards(
+  supabase: SupabaseClient,
+  params: {
+    projectId: string;
+    changes: readonly {
+      preparedChangeId: string;
+      merge: ChangeMerge | null;
+      prepared: StoredPreparedChange | null;
+    }[];
+  },
+): Promise<Map<string, OutcomeCard>> {
+  const preparedChangeIds = params.changes.map((change) => change.preparedChangeId);
+
+  const merged = params.changes.filter(
+    (change) => change.merge?.status === "merged" && change.prepared !== null,
+  );
+
+  const [verifications, publicOrigin, snapshots] = await Promise.all([
+    getLatestVerificationsForPreparedChanges(supabase, {
+      projectId: params.projectId,
+      preparedChangeIds,
+    }),
+    // Only asked when something in the list could reach the branch that wants
+    // it. On a project that has never merged, this is no query at all.
+    merged.length > 0 ? resolvePublicOrigin(supabase, params.projectId) : null,
+    getSnapshotsByIds(supabase, {
+      projectId: params.projectId,
+      snapshotIds: merged.map((change) => change.prepared?.repositorySnapshotId ?? ""),
+    }),
+  ]);
+
+  const cards = new Map<string, OutcomeCard>();
+
+  for (const change of params.changes) {
+    cards.set(
+      change.preparedChangeId,
+      await getOutcomeCard(supabase, {
+        projectId: params.projectId,
+        preparedChangeId: change.preparedChangeId,
+        prefetched: {
+          outcome: verifications.get(change.preparedChangeId) ?? null,
+          merge: change.merge,
+          prepared: change.prepared,
+          publicOrigin,
+          snapshot: change.prepared
+            ? (snapshots.get(change.prepared.repositorySnapshotId) ?? null)
+            : null,
+        },
+      }),
+    );
+  }
+
+  return cards;
+}
+
 export async function getOutcomeCard(
   supabase: SupabaseClient,
-  params: { projectId: string; preparedChangeId: string },
+  params: {
+    projectId: string;
+    preparedChangeId: string;
+    /**
+     * The verification, merge and prepared change the caller already holds
+     * (VB-023). Present means this card costs no read at all for a change that
+     * was never merged, which is most of them.
+     */
+    prefetched?: PrefetchedOutcomeInputs & { outcome: ChangeOutcomeVerification | null };
+  },
 ): Promise<OutcomeCard> {
   const [latest, eligibility] = await Promise.all([
-    getLatestVerificationForPreparedChange(supabase, params),
+    params.prefetched
+      ? assertPrefetchedFor(params.prefetched.outcome, params, "outcome verification")
+      : getLatestVerificationForPreparedChange(supabase, params),
     evaluateOutcomeEligibility(supabase, params),
   ]);
 

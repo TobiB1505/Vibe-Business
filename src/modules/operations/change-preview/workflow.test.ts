@@ -1,11 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PREVIEW_BUDGETS } from "@/modules/change-preview/budgets";
-import {
-  PREVIEW_SNAPSHOT_ID,
-  RESTORED_FILES,
-  restoredSandboxFiles,
-  sha256,
-} from "@/modules/change-preview/test-support";
+import { CURRENT_PREVIEW_PROFILE } from "@/modules/change-preview/schema";
+import { clonedSandboxFiles } from "@/modules/change-preview/test-support";
+import { DEPENDENCY_HOSTS, SOURCE_HOSTS } from "@/modules/validation/sandbox-port";
 import { FakeDatabase, fakeSupabase } from "@/modules/operations/test-support";
 import {
   FIXTURE_COMMIT_SHA,
@@ -55,12 +52,20 @@ vi.mock("@/modules/projects/queries", () => ({
   }),
 }));
 
+vi.mock("@/modules/github/installation-token", () => ({
+  // The one place a raw token leaves the Octokit boundary in production. Here
+  // it is a string, so the workflow's own handling of it is what is under test.
+  mintInstallationCloneCredential: async () => ({
+    username: "x-access-token",
+    password: "ghs_fixture",
+  }),
+}));
+
 const { changePreviewWorkflow } = await import("./workflow");
 
 const USER = "user_1";
 const PROJECT = "project_1";
 const PREPARED = "prepared_1";
-const VALIDATION = "validation_1";
 const OPERATION = "operation_1";
 const SESSION = "preview_1";
 
@@ -75,7 +80,7 @@ function seed() {
     input_identity: "i".repeat(64),
     status: "running",
     stage: "preflight",
-    subject_id: VALIDATION,
+    subject_id: PREPARED,
   });
 
   db.current.seed("prepared_changes", {
@@ -84,32 +89,7 @@ function seed() {
     user_id: USER,
     status: "prepared",
     commit_sha: FIXTURE_COMMIT_SHA,
-    files: [
-      {
-        path: "app/robots.ts",
-        contentHash: sha256(RESTORED_FILES["product/app/robots.ts"]),
-        bytes: 48,
-      },
-    ],
-  });
-
-  db.current.seed("validation_runs", {
-    id: VALIDATION,
-    project_id: PROJECT,
-    user_id: USER,
-    prepared_change_id: PREPARED,
-    validation_profile: "nextjs_node_v1",
-    prepared_commit_sha: FIXTURE_COMMIT_SHA,
-    status: "passed",
-    artifact_snapshot_id: PREVIEW_SNAPSHOT_ID,
-    artifact_expires_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-    artifact_deleted_at: null,
-    source_integrity: {
-      buildIdentityDigests: {
-        "package.json": sha256(RESTORED_FILES["product/package.json"]),
-        "pnpm-lock.yaml": sha256(RESTORED_FILES["product/pnpm-lock.yaml"]),
-      },
-    },
+    files: [{ path: "app/robots.ts", contentHash: "a".repeat(64), bytes: 48 }],
   });
 
   db.current.seed("repository_intelligence_snapshots", {
@@ -125,10 +105,9 @@ function seed() {
     project_id: PROJECT,
     user_id: USER,
     prepared_change_id: PREPARED,
-    validation_run_id: VALIDATION,
+    prepared_commit_sha: FIXTURE_COMMIT_SHA,
     operation_run_id: OPERATION,
-    artifact_snapshot_id: PREVIEW_SNAPSHOT_ID,
-    preview_profile: "nextjs_preview_v1",
+    preview_profile: CURRENT_PREVIEW_PROFILE,
     preview_identity: "p".repeat(64),
     status: "starting",
     stage: "preflight",
@@ -141,11 +120,14 @@ function seed() {
 
 beforeEach(() => {
   db.current = new FakeDatabase();
-  provider.current = fakeSandboxProvider({ files: restoredSandboxFiles() });
+  provider.current = fakeSandboxProvider({
+    files: clonedSandboxFiles(),
+    results: { "git rev-parse HEAD": { exitCode: 0, output: FIXTURE_COMMIT_SHA } },
+  });
 });
 
 describe("the workflow's ordering", () => {
-  it("restores, verifies, starts and completes", async () => {
+  it("provisions, starts and completes", async () => {
     seed();
 
     await changePreviewWorkflow(OPERATION);
@@ -154,28 +136,41 @@ describe("the workflow's ordering", () => {
     expect(db.current.rows("operation_runs")[0].status).toBe("completed");
   });
 
-  it("starts no server when the restored artifact fails integrity", async () => {
+  it("starts no server when the provider produced a different commit", async () => {
     provider.current = fakeSandboxProvider({
-      files: restoredSandboxFiles({ "product/app/robots.ts": "tampered\n" }),
+      files: clonedSandboxFiles(),
+      results: { "git rev-parse HEAD": { exitCode: 0, output: "c".repeat(40) } },
     });
     seed();
 
     await changePreviewWorkflow(OPERATION);
 
     // The load-bearing assertion of the sprint. Untrusted application code must
-    // not run — and must certainly not be served on a public URL — after the
-    // restored bytes failed to match the validated ones (§30).
+    // not run — and must certainly not be served on a public URL — when what
+    // came back is not the commit Vibe prepared (§30).
+    expect(provider.current.backgroundCommands()).toEqual([]);
+    expect(db.current.rows("preview_sessions")[0].failure_code).toBe("preview_source_unavailable");
+  });
+
+  it("starts no server when the clone credential survived removal", async () => {
+    provider.current = fakeSandboxProvider({
+      files: clonedSandboxFiles({ "product/.git/config": "[remote]\n  url = https://x@github" }),
+      unremovablePaths: ["product/.git/config"],
+      results: { "git rev-parse HEAD": { exitCode: 0, output: FIXTURE_COMMIT_SHA } },
+    });
+    seed();
+
+    await changePreviewWorkflow(OPERATION);
+
     expect(provider.current.backgroundCommands()).toEqual([]);
     expect(db.current.rows("preview_sessions")[0].failure_code).toBe(
-      "preview_artifact_integrity_failed",
+      "preview_credential_scrub_failed",
     );
   });
 
-  it("starts no server when the artifact expired before the workflow ran", async () => {
+  it("starts no server when the change has no commit to serve", async () => {
     seed();
-    db.current.rows("validation_runs")[0].artifact_expires_at = new Date(
-      Date.now() - 1000,
-    ).toISOString();
+    db.current.rows("prepared_changes")[0].commit_sha = null;
 
     await changePreviewWorkflow(OPERATION);
 
@@ -183,9 +178,10 @@ describe("the workflow's ordering", () => {
     expect(provider.current.backgroundCommands()).toEqual([]);
   });
 
-  it("cleans up and deletes the artifact on every failing path", async () => {
+  it("cleans up on every failing path", async () => {
     provider.current = fakeSandboxProvider({
-      files: restoredSandboxFiles(),
+      files: clonedSandboxFiles(),
+      results: { "git rev-parse HEAD": { exitCode: 0, output: FIXTURE_COMMIT_SHA } },
       healthStatus: null,
     });
     seed();
@@ -193,9 +189,7 @@ describe("the workflow's ordering", () => {
     await changePreviewWorkflow(OPERATION);
 
     expect(provider.current.stopped()).toBe(true);
-    expect(provider.current.deletedArtifacts()).toEqual([PREVIEW_SNAPSHOT_ID]);
     expect(db.current.rows("preview_sessions")[0].status).toBe("failed");
-    expect(db.current.rows("validation_runs")[0].artifact_deleted_at).toBeTruthy();
   });
 
   it("does not tear down a preview that started successfully", async () => {
@@ -204,10 +198,9 @@ describe("the workflow's ordering", () => {
     await changePreviewWorkflow(OPERATION);
 
     // The deliberate asymmetry with the validation workflow: the running
-    // sandbox *is* the product, and the snapshot is what it exists to serve.
-    // Unconditional cleanup here would stop every preview the moment it worked.
+    // sandbox *is* the product. Unconditional cleanup here would stop every
+    // preview the moment it worked.
     expect(provider.current.stopped()).toBe(false);
-    expect(provider.current.deletedArtifacts()).toEqual([]);
   });
 
   it("creates exactly one sandbox and starts exactly one server", async () => {
@@ -220,13 +213,17 @@ describe("the workflow's ordering", () => {
     expect(provider.current.exposedPorts()).toEqual([PREVIEW_BUDGETS.port]);
   });
 
-  it("never opens egress at any point in the run", async () => {
+  it("narrows egress twice and never widens it", async () => {
     seed();
 
     await changePreviewWorkflow(OPERATION);
 
-    for (const policy of provider.current.policies()) {
-      expect(policy).toEqual({ mode: "deny_all" });
-    }
+    // Two windows, each as narrow as the work needs, and shut before any
+    // repository-controlled command runs (rule 81).
+    expect(provider.current.policies()).toEqual([
+      { mode: "allow_domains", domains: SOURCE_HOSTS },
+      { mode: "allow_domains", domains: DEPENDENCY_HOSTS },
+      { mode: "deny_all" },
+    ]);
   });
 });

@@ -4,6 +4,7 @@ import {
   resolveExecutionBudget,
   type ExecutionBudget,
 } from "@/modules/execution-contract/budget";
+import type { ExecutionPricingClass } from "@/modules/economy/execution-class";
 
 /**
  * Who may run an agent at all, and under whose economics (CORE-4 §18).
@@ -19,9 +20,15 @@ import {
  * So there are two budget worlds and this file is the only door between them:
  *
  * ```
- * production      EXECUTION_BUDGET_POLICIES            empty → nobody
+ * production      EXECUTION_BUDGET_POLICIES            launch-v1-budget, per class
  * internal        EXECUTION_DOGFOOD_BUDGET_POLICIES    allowlisted projects only
  * ```
+ *
+ * Both worlds still exist and the door between them is still this file. What
+ * changed at `launch-v1` is only which side answers first: the production
+ * branch now resolves for every project, so the allowlist stops being the only
+ * way to run an agent and becomes what it always described itself as — a way to
+ * run one under *internal, non-production* economics.
  *
  * ## Why an allowlist of project ids rather than a feature flag
  *
@@ -80,43 +87,88 @@ const DOGFOOD_DISCLOSURE =
 /**
  * The economics that authorize agentic execution for one project, or null.
  *
- * Production first, so that the day an approved policy is added this function
- * starts returning it without anybody remembering to reorder these branches.
- * Today `EXECUTION_BUDGET_POLICIES` is empty, so the production branch never
- * fires and the honest answer for a customer project is `null` — which
- * admission turns into `agentic_pricing_not_configured` (Core-3 §24).
+ * ## The allowlist is checked first, and that ordering is the decision
+ *
+ * It used to be production first, on the reasoning that an approved policy
+ * should start being returned the day it is added *without anybody remembering
+ * to reorder these branches*. That was right while `EXECUTION_BUDGET_POLICIES`
+ * was empty and the production branch could never fire.
+ *
+ * `launch-v1-budget` makes it wrong. Production now resolves for every project,
+ * so production-first would silently convert the internal dogfood account into
+ * a paying customer — the same runs, the same allowlist, now settling real
+ * Credits against the retail book — and would leave `EXECUTION_DOGFOOD_BUDGET_POLICIES`,
+ * `credits/internal.ts` and `isDogfoodEligibleProject` as unreachable code that
+ * still describes itself as live.
+ *
+ * The dogfood exists to buy cost data without charging anybody, and that purpose
+ * outlives the price it made possible. So a project somebody deliberately named
+ * in an operator-managed environment variable keeps non-production economics,
+ * and every project that is not named gets the production ones. Adding a
+ * project to that list is still a deployment action with a person attached;
+ * what it now means is "do not bill this one", rather than "let this one run at
+ * all".
+ *
+ * The `agentic_pricing_not_configured` refusal (Core-3 §24) is still reachable
+ * — a date outside every policy's interval produces it — and is still the
+ * correct answer when it happens.
+ *
+ * `pricingClass` comes from `classifyExecutionPricingClass` and must be the
+ * same class the reservation was priced at. It is not optional and has no
+ * default: see `resolveExecutionBudget` for why guessing a tier is unsafe in
+ * both directions.
  */
 export function resolveAgentEconomics(params: {
   projectId: string;
+  pricingClass: ExecutionPricingClass;
   at?: Date;
   env?: Record<string, string | undefined>;
 }): AgentEconomicPolicy | null {
   const at = params.at ?? new Date();
 
-  const production = resolveExecutionBudget(at);
-  if (production) {
-    return {
-      budget: production,
-      nonProduction: false,
-      disclosure: "Approved production Agent economics.",
-    };
+  if (internalDogfoodProjectIds(params.env).includes(params.projectId)) {
+    const dogfood = resolveExecutionBudget(
+      params.pricingClass,
+      at,
+      EXECUTION_DOGFOOD_BUDGET_POLICIES,
+    );
+    if (dogfood) {
+      return { budget: dogfood, nonProduction: true, disclosure: DOGFOOD_DISCLOSURE };
+    }
+    // An allowlisted project whose dogfood policy has lapsed falls through to
+    // production rather than being refused. Being on the list must never be a
+    // way to *lose* access; it is only a way to avoid being billed.
   }
 
-  if (!internalDogfoodProjectIds(params.env).includes(params.projectId)) return null;
+  const production = resolveExecutionBudget(params.pricingClass, at);
+  if (!production) return null;
 
-  const dogfood = resolveExecutionBudget(at, EXECUTION_DOGFOOD_BUDGET_POLICIES);
-  if (!dogfood) return null;
-
-  return { budget: dogfood, nonProduction: true, disclosure: DOGFOOD_DISCLOSURE };
+  return {
+    budget: production,
+    nonProduction: false,
+    disclosure: "Approved production Agent economics.",
+  };
 }
 
-/** Whether agentic execution is authorized at all, for the resolver's gate. */
+/**
+ * Whether agentic execution is authorized at all, for the resolver's gate.
+ *
+ * Deliberately class-free, and the answer is total rather than a sample: an
+ * `ExecutionBudgetPolicy` must define all three classes, so a policy that
+ * authorizes one authorizes every one. `standard` is passed because a value is
+ * required, not because the answer depends on it.
+ *
+ * A gate asks "could this project run an agent"; only a step that has actually
+ * been classified asks "under which ceiling". Keeping the gate class-free is
+ * what stops a caller inventing a class in order to answer a question that
+ * never needed one.
+ */
 export function isAgenticExecutionAuthorized(params: {
   projectId: string;
   at?: Date;
   env?: Record<string, string | undefined>;
 }): boolean {
-  return resolveAgentEconomics(params) !== null;
+  return resolveAgentEconomics({ ...params, pricingClass: "standard" }) !== null;
 }
 
 /**

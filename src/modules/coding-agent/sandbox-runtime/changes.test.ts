@@ -20,8 +20,8 @@ import {
 
 const MARKER = "/vercel/sandbox/.vibe-agent/marker";
 
-const LIST = "find . ( -name node_modules -o -name .git -o -name .next -o -name dist -o -name build -o -name .turbo -o -name .vercel -o -name coverage ) -prune -o -type f -printf %P\n";
-const TOUCHED = `find . ( -name node_modules -o -name .git -o -name .next -o -name dist -o -name build -o -name .turbo -o -name .vercel -o -name coverage ) -prune -o -type f -newer ${MARKER} -printf %P\n`;
+const LIST = "find . ( -name node_modules -o -name .git -o -name .next -o -name dist -o -name build -o -name .turbo -o -name .vercel -o -name coverage ) -prune -o -type f -printf %P\0";
+const TOUCHED = `find . ( -name node_modules -o -name .git -o -name .next -o -name dist -o -name build -o -name .turbo -o -name .vercel -o -name coverage ) -prune -o -type f -newer ${MARKER} -printf %P\0`;
 
 async function handle(options: FakeSandboxOptions = {}) {
   const provider = fakeSandboxProvider(options);
@@ -35,8 +35,12 @@ async function handle(options: FakeSandboxOptions = {}) {
   return { provider, sandbox };
 }
 
+/**
+ * What `find -printf '%P\0'` actually emits: a NUL after every entry and no
+ * trailing newline (VB-029).
+ */
 function lines(...paths: string[]) {
-  return { exitCode: 0, output: `${paths.join("\n")}\n` };
+  return { exitCode: 0, output: paths.map((path) => `${path}\0`).join("") };
 }
 
 async function changes(after: string[], touched: string[], before: string[]) {

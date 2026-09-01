@@ -24,9 +24,10 @@ import { HISTORICAL_CLASSIFICATIONS, HISTORICAL_RUNS } from "./historical-runs";
  * cost: the failure rate (how often an attempt is thrown away before
  * delivering anything), and two independent inflation multipliers — AI
  * provider price and infrastructure price — applied separately because they
- * are separate real risks with separate causes (`ai/pricing.ts` already
- * records a scheduled 50% Sonnet rise on 2026-09-01; a sandbox price change
- * is a different provider's decision entirely).
+ * are separate real risks with separate causes (Anthropic once had a 50%
+ * Sonnet 5 rise scheduled for 2026-09-01 and withdrew it before it took
+ * effect; a sandbox price change is a different provider's decision entirely,
+ * and neither one predicts the other).
  *
  * ## Where the per-attempt components come from
  *

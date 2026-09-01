@@ -6,6 +6,8 @@ import { START_ATTEMPT_LIMITS, type DeepScanAccessMode, type DeepScanEntitlement
 import type { AuthenticatedCompleteness, AuthenticatedCompletenessReason } from "./budgets";
 import type { DeepScanProviderUsage } from "./provider-usage";
 import type { AuthenticatedProductIntelligenceSnapshot } from "./schema";
+import { retailChargeFor } from "@/modules/credits/retail";
+import { resolveOperationCreditCost } from "@/modules/operations/billing";
 
 /**
  * Persistence for Deep Scan sessions, snapshots and provider usage
@@ -132,6 +134,14 @@ export type CreateSessionResult =
 export async function createSessionRecord(
   supabase: SupabaseClient,
   params: {
+    /**
+     * The row's id, minted by the caller.
+     *
+     * Supplied rather than defaulted because the Credit hold for a paid scan is
+     * taken *before* this row exists — the hold must precede any provider spend
+     * — and both need the same identity. See `billing.ts`.
+     */
+    id: string;
     projectId: string;
     provider: string;
     providerSessionId: string;
@@ -143,6 +153,7 @@ export async function createSessionRecord(
   const { data, error } = await supabase
     .from("authenticated_browser_sessions")
     .insert({
+      id: params.id,
       project_id: params.projectId,
       provider: params.provider,
       provider_session_id: params.providerSessionId,
@@ -493,6 +504,12 @@ export async function failSnapshotRun(
  * `hasSuccessfulIncludedScan` is **derived** from the existence of a completed
  * snapshot funded by the included mode — never read from a flag, so it cannot
  * disagree with the snapshots the user can actually see.
+ *
+ * The price and the balance are read here, not decided here: the entitlement
+ * module holds no pricing knowledge on purpose, so this is where the two meet.
+ * A project that still has its included scan needs neither, and the balance
+ * lookup is skipped for it — rendering the panel for a new project must not
+ * mint a Credit account as a side effect.
  */
 export async function gatherEntitlementFacts(
   supabase: SupabaseClient,
@@ -539,8 +556,27 @@ export async function gatherEntitlementFacts(
   const lastAbandonedRaw = (abandoned.data as { updated_at: string } | null)?.updated_at ?? null;
   const lastAbandonedAt = lastAbandonedRaw ? new Date(lastAbandonedRaw) : null;
 
+  const price = retailChargeFor("deep_scan", now);
+  const additionalScanPrice = price.kind === "charge" ? price.creditUnits : null;
+
+  const hasSuccessfulIncludedScan = consumed.data !== null;
+
+  // Read-only, and only when it can matter. `resolveOperationCreditCost` looks
+  // a wallet up rather than ensuring one, so a project that has never spent
+  // anything reports a balance of zero — which is the true answer.
+  const cost =
+    hasSuccessfulIncludedScan && additionalScanPrice !== null
+      ? await resolveOperationCreditCost(supabase, {
+          projectId: params.projectId,
+          operation: "deep_scan",
+          now,
+        })
+      : null;
+
   return {
-    hasSuccessfulIncludedScan: consumed.data !== null,
+    hasSuccessfulIncludedScan,
+    additionalScanPrice,
+    availableCredits: cost?.availableCredits ?? 0,
     hasLiveSession: active !== null,
     recentStartCount,
     lastAbandonedAt: lastAbandonedAt && Number.isFinite(lastAbandonedAt.getTime()) ? lastAbandonedAt : null,

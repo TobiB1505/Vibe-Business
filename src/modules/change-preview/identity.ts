@@ -16,19 +16,23 @@ import type { PreviewProfile } from "./schema";
  * have. Change any of those and a live session was started under rules the new
  * request is not asking about, so it must not be handed back as an answer.
  *
- * ## Why the prepared commit is in here alongside the ids
+ * ## Why the commit, and no longer the snapshot
  *
- * Deliberately redundant, exactly as in `computeValidationIdentity`. The
- * validation run id alone would be sufficient today; the commit sha is what was
- * actually built and served, and an artifact-centric identity should say so
- * rather than rely on a foreign key to imply it.
+ * A preview used to be identified by the artifact it restored — the validation
+ * run plus the snapshot id. Under `preview-policy-v2` there is no snapshot: a
+ * preview clones the prepared commit, so the commit *is* what was served, and
+ * an identity should say what was served rather than name a foreign key that
+ * implies it (Sprint 0114).
+ *
+ * The validation run is gone from here for a stronger reason than redundancy.
+ * A preview no longer waits for one, so including it would mean the same commit
+ * previewed before and after a validation produced two identities and two paid
+ * sandboxes for the same bytes.
  */
 export function computePreviewIdentity(params: {
   projectId: string;
   preparedChangeId: string;
-  validationRunId: string;
-  /** The snapshot restored. Two captures of the same run are not the same preview. */
-  artifactSnapshotId: string;
+  /** What was actually served. Two previews of one commit are one preview. */
   preparedCommitSha: string;
   previewProfile: PreviewProfile;
   previewProfileVersion: string;
@@ -39,8 +43,6 @@ export function computePreviewIdentity(params: {
   const canonical = JSON.stringify([
     params.projectId,
     params.preparedChangeId,
-    params.validationRunId,
-    params.artifactSnapshotId,
     params.preparedCommitSha,
     params.previewProfile,
     params.previewProfileVersion,

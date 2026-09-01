@@ -99,18 +99,35 @@ function pruneExpression(): string[] {
   return ["(", ...names, ")", "-prune", "-o"];
 }
 
+/**
+ * Splits a NUL-delimited listing (VB-029).
+ *
+ * A newline is not a delimiter, because a newline is a legal character in a
+ * POSIX filename — everything but `/` and NUL is. Splitting on `\n` turned one
+ * file called `a\nb` into two paths, `a` and `b`, and neither of them is a file
+ * the agent touched. NUL is the one byte that cannot appear in a name, which is
+ * why `find` offers it and why it is the only safe delimiter here.
+ *
+ * If the transport ever mangled NUL, the listing would fail to split and come
+ * back as one enormous path or as nothing — both of which degrade to
+ * `truncated`, which callers already refuse to prepare a change from. The
+ * failure mode of that assumption being wrong is a refusal, not a wrong diff.
+ *
+ * Names are **not** trimmed. A leading or trailing space is part of the name,
+ * and silently renaming a file to something the repository does not contain is
+ * how a "change" ends up describing a path that is not there.
+ */
 function parsePaths(output: string): { paths: Set<string>; truncated: boolean } {
   const paths = new Set<string>();
   let truncated = false;
 
-  for (const line of output.split("\n")) {
-    const path = line.trim();
-    if (path.length === 0) continue;
+  for (const entry of output.split("\0")) {
+    if (entry.length === 0) continue;
     if (paths.size >= MAX_WORKSPACE_PATHS) {
       truncated = true;
       break;
     }
-    paths.add(path);
+    paths.add(entry);
   }
 
   return { paths, truncated };
@@ -129,7 +146,18 @@ export async function listWorkspaceFiles(input: {
   cwd: string;
 }): Promise<WorkspaceListing> {
   const result = await input.sandbox.run({
-    command: { command: "find", args: [".", ...pruneExpression(), "-type", "f", "-printf", "%P\n"] },
+    /*
+     * `-type f` is load-bearing, not tidiness (VB-029).
+     *
+     * It matches regular files and nothing else — so a symlink is never in this
+     * listing, and `find` without `-L` does not descend through a symlinked
+     * directory either. That is what keeps a link the agent created out of the
+     * observed set entirely, rather than being caught later by a read that
+     * would already have followed it.
+     *
+     * `%P\0` rather than `%P\n`: see `parsePaths`.
+     */
+    command: { command: "find", args: [".", ...pruneExpression(), "-type", "f", "-printf", "%P\0"] },
     cwd: input.cwd,
     timeoutMs: LISTING_TIMEOUT_MS,
   });
@@ -182,7 +210,10 @@ export async function captureWorkspaceBaseline(input: {
 
   return writeSandboxTextFile(input.sandbox, {
     path: input.baselinePath,
-    content: [...listing.paths].sort().join("\n"),
+    // NUL-delimited, matching `parsePaths` — the file has to be written the
+    // way it will be read, and a newline is a legal character in a name
+    // (VB-029).
+    content: [...listing.paths].sort().map((path) => `${path}\0`).join(""),
   });
 }
 
@@ -199,7 +230,7 @@ export async function readWorkspaceBaseline(input: {
 }): Promise<WorkspaceListing | null> {
   const content = await input.sandbox.readFile({
     path: input.baselinePath,
-    // Generous: this is one short path per line, and truncating it would
+    // Generous: this is one short path per entry, and truncating it would
     // silently turn existing files into additions.
     maxBytes: 8 * 1024 * 1024,
   });
@@ -261,7 +292,8 @@ export async function discoverWorkspaceChanges(input: {
         "-newer",
         input.markerPath,
         "-printf",
-        "%P\n",
+        // NUL, for the same reason as the full listing above (VB-029).
+        "%P\0",
       ],
     },
     cwd: input.cwd,

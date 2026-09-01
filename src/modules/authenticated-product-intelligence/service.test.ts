@@ -15,6 +15,30 @@ const analyzeMock = vi.fn();
 const connectMock = vi.fn();
 const disconnectMock = vi.fn(async () => undefined);
 
+/**
+ * The Credit seam, mocked at the module boundary like the browser and the
+ * analyzer.
+ *
+ * `billing.ts` obtains a service-role client, because every billing table has a
+ * select policy and deliberately no write policy — so it cannot run against the
+ * database double here, and injecting a client instead would defeat the reason
+ * it is service-role in the first place.
+ *
+ * What this file can and does test is the part that belongs to *this* module:
+ * that the hold is taken before a browser is bought, and that every outcome
+ * which does not persist a snapshot releases it. The Credit arithmetic behind
+ * those calls is `credits/`'s to prove, and it does.
+ */
+const holdMock = vi.fn(async (_params: unknown) => ({ ok: true, billable: false }) as unknown);
+const settleMock = vi.fn(async (_params: unknown) => undefined);
+const releaseMock = vi.fn(async (_params: unknown) => undefined);
+
+vi.mock("./billing", () => ({
+  holdDeepScanCredits: (params: unknown) => holdMock(params),
+  settleDeepScanCredits: (params: unknown) => settleMock(params),
+  releaseDeepScanCredits: (params: unknown) => releaseMock(params),
+}));
+
 vi.mock("./analyzer", () => ({
   analyzeAuthenticatedProduct: (input: unknown) => analyzeMock(input),
 }));
@@ -91,6 +115,12 @@ function setup(options: { productionUrl?: string | null } = {}) {
 beforeEach(() => {
   analyzeMock.mockReset();
   connectMock.mockReset();
+  holdMock.mockReset();
+  settleMock.mockReset();
+  releaseMock.mockReset();
+  holdMock.mockResolvedValue({ ok: true, billable: false });
+  settleMock.mockResolvedValue(undefined);
+  releaseMock.mockResolvedValue(undefined);
   analyzeMock.mockResolvedValue({ ok: true, snapshot: fakeSnapshot() });
   connectMock.mockResolvedValue({ port: { pages: async () => [], blocked: {} }, disconnect: disconnectMock });
 });
@@ -122,6 +152,18 @@ describe("startDeepScan — authorization precedes provider spend", () => {
     expect(provider.created).toBe(0);
   });
 
+  /**
+   * The invariant is `provider.created === 0`, not the reason.
+   *
+   * The reason moved with the rate card. Under `retail-v1` an additional scan
+   * was `not_priced`, so a consumed entitlement ended in `credits_required` —
+   * "not for sale". `launch-v1` prices one at 25 Credits (ADR 0061), and this
+   * project's wallet is empty, so the honest refusal is now the one that names
+   * which number is short. `entitlement.test.ts` proves both branches of
+   * `authorizeDeepScan` against explicit facts; this proves the ordering that
+   * matters commercially — the refusal happens **before** Vibe pays anyone for
+   * a browser, whichever refusal it is.
+   */
   it("never creates a browser once the included scan is consumed", async () => {
     const { db, supabase, projectId } = setup();
     db.seed("authenticated_product_intelligence_snapshots", {
@@ -134,7 +176,7 @@ describe("startDeepScan — authorization precedes provider spend", () => {
     const provider = new FakeBrowserProvider();
     const result = await startDeepScan(supabase, provider, { projectId, userId: OWNER });
 
-    expect(result).toEqual({ ok: false, error: "credits_required" });
+    expect(result).toEqual({ ok: false, error: "insufficient_credits" });
     expect(provider.created).toBe(0);
   });
 
@@ -264,10 +306,12 @@ describe("analyzeDeepScan — entitlement consumption", () => {
     expect(snapshots[0]!.status).toBe("completed");
     expect(snapshots[0]!.access_mode).toBe("included_first_scan");
 
-    // And the entitlement is now visibly gone.
+    // And the entitlement is now visibly gone. The block is about this
+    // wallet rather than about the catalogue: `launch-v1` prices a second
+    // scan, and nothing has funded this account — see the note above.
     const status = await getDeepScanAccessStatus(supabase, { projectId, userId: OWNER });
     expect(status?.includedScanAvailable).toBe(false);
-    expect(status?.blockedReason).toBe("credits_required");
+    expect(status?.blockedReason).toBe("insufficient_credits");
   });
 
   it.each([
@@ -514,5 +558,114 @@ describe("audit events", () => {
     const failure = db.rows("audit_events").find((event) => event.event_type === "deep_scan.failed");
     expect(failure).toBeTruthy();
     expect((failure!.metadata as Record<string, unknown>).reason).toBe("authentication_not_confirmed");
+  });
+});
+
+describe("an additional Deep Scan is held, then settled or released (launch-v1)", () => {
+  it("takes exactly one hold per start, and tells it what the scan is paid by", async () => {
+    const db = new FakeDatabase();
+    const supabase = fakeSupabase(db);
+    const provider = new FakeBrowserProvider();
+    const projectId = seedProject(db, { userId: OWNER });
+
+    await startDeepScan(supabase, provider, { projectId, userId: OWNER });
+
+    expect(holdMock).toHaveBeenCalledTimes(1);
+    // The access mode is passed, never re-derived. `authorizeOperationCredits`
+    // resolves the retail price of `deep_scan` and knows nothing about
+    // entitlements, so a hold that decided for itself would charge 25 Credits
+    // for the scan this project is entitled to.
+    expect(holdMock).toHaveBeenCalledWith(
+      expect.objectContaining({ accessMode: "included_first_scan" }),
+    );
+  });
+
+  it("buys no browser at all when the hold is refused", async () => {
+    const db = new FakeDatabase();
+    const supabase = fakeSupabase(db);
+    const provider = new FakeBrowserProvider();
+    const projectId = seedProject(db, { userId: OWNER });
+
+    holdMock.mockResolvedValueOnce({
+      ok: false,
+      refusal: "insufficient_credits",
+      requiredCredits: 25_000,
+      availableCredits: 0,
+    });
+
+    const result = await startDeepScan(supabase, provider, { projectId, userId: OWNER });
+
+    // The ordering claim in the form that actually matters. `created === 0` is
+    // provable; "the hold was called first" would still pass if the hold moved
+    // after the session and the refusal simply arrived late.
+    expect(result.ok).toBe(false);
+    expect(provider.created).toBe(0);
+    expect(db.rows("authenticated_browser_sessions")).toHaveLength(0);
+  });
+
+  it("settles only after a snapshot is persisted", async () => {
+    const db = new FakeDatabase();
+    const supabase = fakeSupabase(db);
+    const provider = new FakeBrowserProvider();
+    const projectId = seedProject(db, { userId: OWNER });
+
+    await runFullScan(supabase, provider, projectId);
+
+    expect(settleMock).toHaveBeenCalledTimes(1);
+    expect(releaseMock).not.toHaveBeenCalled();
+  });
+
+  it("releases the hold when the analysis fails, and charges nothing", async () => {
+    const db = new FakeDatabase();
+    const supabase = fakeSupabase(db);
+    const provider = new FakeBrowserProvider();
+    const projectId = seedProject(db, { userId: OWNER });
+
+    const started = await startDeepScan(supabase, provider, { projectId, userId: OWNER });
+    if (!started.ok) throw new Error("start failed");
+
+    analyzeMock.mockResolvedValueOnce({ ok: false, error: "authenticated_analysis_failed" });
+    await analyzeDeepScan(supabase, provider, { sessionId: started.sessionId, userId: OWNER });
+
+    // A failed scan must cost a paying customer exactly what it costs a free
+    // one: nothing. The mirror of `consumesIncludedEntitlement`.
+    expect(settleMock).not.toHaveBeenCalled();
+    expect(releaseMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("releases the hold when the user cancels", async () => {
+    const db = new FakeDatabase();
+    const supabase = fakeSupabase(db);
+    const provider = new FakeBrowserProvider();
+    const projectId = seedProject(db, { userId: OWNER });
+
+    const started = await startDeepScan(supabase, provider, { projectId, userId: OWNER });
+    if (!started.ok) throw new Error("start failed");
+
+    await cancelDeepScan(supabase, provider, { sessionId: started.sessionId, userId: OWNER });
+
+    expect(settleMock).not.toHaveBeenCalled();
+    expect(releaseMock).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: "cancelled_before_usage" }),
+    );
+  });
+
+  it("holds and settles against the same session id", async () => {
+    const db = new FakeDatabase();
+    const supabase = fakeSupabase(db);
+    const provider = new FakeBrowserProvider();
+    const projectId = seedProject(db, { userId: OWNER });
+
+    const { started } = await runFullScan(supabase, provider, projectId);
+
+    // The identity that makes the hold findable again. If these ever diverge,
+    // a settled scan leaves a hold standing forever and the customer's
+    // available balance quietly shrinks.
+    expect(holdMock).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: started.sessionId }),
+    );
+    expect(settleMock).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: started.sessionId }),
+    );
   });
 });

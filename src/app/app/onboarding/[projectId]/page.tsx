@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/server";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import { requireSession } from "@/modules/auth/session";
 import { getAuditReadiness } from "@/modules/business-audit/service";
+import { getLatestSuccessfulAudit } from "@/modules/business-audit/store";
 import { getOnboardingFirstMove } from "@/modules/action-plans/service";
 import {
   ACTOR_LABELS,
@@ -67,8 +68,20 @@ export default async function ProjectOnboardingPage({
     : [];
 
   const auditReadiness =
-    onboarding.productProfile?.stored.confirmedAt && !onboarding.audit?.result
+    onboarding.productProfile?.stored.confirmedAt && !onboarding.audit
       ? await getAuditReadiness(supabase, projectId)
+      : null;
+
+  /*
+   * The scored document, read only in the state that renders it (VB-022).
+   *
+   * `getProjectOnboarding` returns a stamp — that an audit exists, and when —
+   * because this route is polled throughout onboarding and the document is
+   * large. Here is the one state that needs its contents.
+   */
+  const revealedAudit =
+    onboarding.state === "audit_reveal"
+      ? await getLatestSuccessfulAudit(supabase, projectId)
       : null;
   const opportunityOperation =
     onboarding.state === "first_move"
@@ -369,8 +382,8 @@ export default async function ProjectOnboardingPage({
         </section>
       )}
 
-      {onboarding.state === "audit_reveal" && onboarding.audit?.result && (
-        <OnboardingAuditReveal audit={onboarding.audit.result} projectId={projectId} />
+      {onboarding.state === "audit_reveal" && revealedAudit?.result && (
+        <OnboardingAuditReveal audit={revealedAudit.result} projectId={projectId} />
       )}
 
       {onboarding.state === "first_move" && (

@@ -33,14 +33,8 @@ import { isPreviewExpired, type PreviewFailureCode, type PreviewSession, type Pr
  */
 
 export type PreviewCardState =
-  /** No prepared change artifact to preview at all. */
+  /** The change has no commit to serve. */
   | "not_available"
-  /** Validation has not passed, so there is nothing validated to run. */
-  | "needs_validation"
-  /** Validation passed, but the retained artifact has passed its deadline. */
-  | "artifact_expired"
-  /** Validation passed, but no artifact was captured or it has been deleted. */
-  | "artifact_unavailable"
   | "ready_to_start"
   | "starting"
   | "running"
@@ -62,14 +56,6 @@ export type PreviewCard = {
   failureMessage: string | null;
   expiresAt: string | null;
   readyAt: string | null;
-  /**
-   * Whether a re-validation is the honest next step, and what it costs.
-   *
-   * Present only when the artifact is genuinely gone. Never phrased as a free
-   * refresh: a new ValidationRun provisions a paid sandbox, and the user starts
-   * it deliberately or not at all (§15, CLAUDE.md rule 60).
-   */
-  revalidationRequired: boolean;
 };
 
 /**
@@ -80,18 +66,27 @@ export type PreviewCard = {
  */
 export const PREVIEW_STAGE_LABELS: Record<PreviewStage, string> = {
   preflight: "Checking preview eligibility",
+  acquiring_source: "Getting your code",
+  installing: "Installing dependencies",
+  starting_dev_server: "Starting your application",
+  checking_preview: "Waiting for the first page to build",
+  completed: "Preview ready",
+  // v1 stages. No new session reaches one; a row that recorded one still
+  // renders a sentence rather than a blank.
   restoring_artifact: "Restoring validated artifact",
   verifying_artifact: "Verifying artifact integrity",
   starting_server: "Starting application",
-  checking_preview: "Checking application",
-  completed: "Preview ready",
 };
 
 export type PreviewCardInput = {
-  /** Null when the change has never been validated. */
-  validation: { status: string } | null;
-  /** Null when no artifact was captured, or it has been deleted. */
-  artifact: { expiresAt: string } | null;
+  /**
+   * Whether the change has a commit to serve.
+   *
+   * The whole precondition under `preview-policy-v2`. It used to be *a passing
+   * validation whose captured artifact was still usable*, which is what made a
+   * preview strictly later than a five-minute check (Sprint 0114).
+   */
+  prepared: boolean;
   /** The most recent preview session for this change, in any state. */
   session: PreviewSession | null;
   /** Safe copy for `session.failureCode`, resolved by the caller. */
@@ -107,7 +102,6 @@ export function buildPreviewCard(input: PreviewCardInput, now: Date = new Date()
     failureMessage: null,
     expiresAt: null,
     readyAt: null,
-    revalidationRequired: false,
   } as const;
 
   // A claimed teardown outranks everything, including the deadline. The work is
@@ -153,22 +147,12 @@ export function buildPreviewCard(input: PreviewCardInput, now: Date = new Date()
     }
   }
 
-  // Everything from here needs a passing validation to say anything useful.
-  if (!input.validation) return { ...empty, state: "not_available" };
-  if (input.validation.status !== "passed") return { ...empty, state: "needs_validation" };
+  // A commit to serve is the whole precondition. A preview no longer waits for
+  // validation — that is the point of it (Sprint 0114).
+  if (!input.prepared) return { ...empty, state: "not_available" };
 
   const terminal = terminalSession(input, now);
   if (terminal) return terminal;
-
-  if (!input.artifact) {
-    // Captured and deleted, or never captured. Both mean the same thing to the
-    // user and both are fixed the same way — deliberately, by them.
-    return { ...empty, state: "artifact_unavailable", revalidationRequired: true };
-  }
-
-  if (isPreviewExpired({ expiresAt: input.artifact.expiresAt }, now)) {
-    return { ...empty, state: "artifact_expired", revalidationRequired: true };
-  }
 
   return { ...empty, state: "ready_to_start" };
 }
@@ -176,33 +160,19 @@ export function buildPreviewCard(input: PreviewCardInput, now: Date = new Date()
 /**
  * A finished session, and why it finished.
  *
- * Returned only when the artifact cannot support a *new* preview either —
- * otherwise a change that was previewed, stopped, and then re-validated would
- * be stuck showing "Preview stopped" with no way forward.
+ * Simpler than it was, because what it used to weigh has gone. Under v1 a
+ * settled session was outranked by a still-usable artifact — previewed,
+ * stopped, then re-validated was a real sequence, and reporting it as "Preview
+ * stopped" left the user looking at history with a live artifact sitting there
+ * already paid for.
+ *
+ * There is no artifact now, and starting again costs a fresh clone either way,
+ * so a finished session is simply reported as finished and the card offers a
+ * new one alongside it.
  */
 function terminalSession(input: PreviewCardInput, now: Date): PreviewCard | null {
   const session = input.session;
   if (!session) return null;
-
-  const artifactUsable =
-    input.artifact !== null && !isPreviewExpired({ expiresAt: input.artifact.expiresAt }, now);
-
-  const unconverged =
-    (session.status === "starting" || session.status === "running") &&
-    isPreviewExpired(session, now);
-
-
-  // A usable artifact outranks a *settled* session. Previewed, stopped, then
-  // re-validated is a real sequence, and reporting it as "Preview stopped"
-  // would leave the user looking at history with no way forward while a live
-  // artifact sits there, already paid for.
-  //
-  // It does not outrank an **unconverged** one. A session whose deadline passed
-  // but whose row still says `running` is a state the system has not finished
-  // processing — its artifact is about to be deleted by the next authorized
-  // read — and "your preview expired" is what actually happened. Offering a
-  // start there would describe a window that is closing as it is read.
-  if (artifactUsable && !unconverged) return null;
 
   const base = {
     previewSessionId: session.id,
@@ -212,11 +182,6 @@ function terminalSession(input: PreviewCardInput, now: Date): PreviewCard | null
     failureMessage: session.failureCode ? input.failureMessage : null,
     expiresAt: session.expiresAt,
     readyAt: session.readyAt,
-    // Always true here: this branch is only reached when no usable artifact
-    // remains. The artifact is deleted when a preview ends, so another preview
-    // costs a validation — said plainly rather than discovered by clicking
-    // (§15).
-    revalidationRequired: true,
   };
 
   if (session.status === "failed") return { ...base, state: "failed" };
@@ -226,9 +191,7 @@ function terminalSession(input: PreviewCardInput, now: Date): PreviewCard | null
   // `starting` or `running` past its deadline. The row has not converged yet —
   // an authorized read is what converges it — but the user must not be offered
   // a preview URL in the meantime (§13).
-  if (isPreviewExpired(session, now)) {
-    return { ...base, state: "expired", stage: null };
-  }
+  if (isPreviewExpired(session, now)) return { ...base, state: "expired" };
 
   return null;
 }

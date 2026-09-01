@@ -42,6 +42,8 @@ export type CanaryOutcome = {
   /** Files the scripted commands would have created had they executed. */
   markers: Record<string, boolean>;
   stdio: string;
+  /** Every request body the SDK sent to the model (VB-035). */
+  requestBodies: readonly string[];
 };
 
 export type CanaryInput = {
@@ -58,6 +60,14 @@ export type CanaryInput = {
   markerPaths?: Record<string, string>;
   /** Repository-relative paths the script writes to, so their parents exist. */
   scriptedPaths?: readonly string[];
+  /**
+   * Arbitrary files planted in the workspace before the run (VB-035).
+   *
+   * The point of the canary is that the workspace is a *customer's* repository,
+   * and a customer's repository can contain a `CLAUDE.md` addressed to the
+   * agent.
+   */
+  workspaceFiles?: Record<string, string>;
   maxTurns?: number;
   timeoutMs?: number;
 };
@@ -80,6 +90,12 @@ export async function runCanary(input: CanaryInput): Promise<CanaryOutcome> {
    * legitimately enters repair — which is correct behaviour and a useless test.
    * The workspace has to be real enough that a failure means what it says.
    */
+  for (const [path, content] of Object.entries(input.workspaceFiles ?? {})) {
+    const parent = path.split("/").slice(0, -1).join("/");
+    if (parent) await mkdir(join(workspace, parent), { recursive: true });
+    await writeFile(join(workspace, path), content, "utf8");
+  }
+
   for (const path of input.scriptedPaths ?? []) {
     const parent = path.split("/").slice(0, -1).join("/");
     if (parent) await mkdir(join(workspace, parent), { recursive: true });
@@ -170,6 +186,7 @@ export async function runCanary(input: CanaryInput): Promise<CanaryOutcome> {
     result: parseAgentRuntimeResult(await read(join(dir, "result.json"))),
     markers,
     stdio,
+    requestBodies: stub.bodies,
   };
 }
 

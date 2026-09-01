@@ -9,6 +9,7 @@ import {
   PREVIEW_PROFILES,
   PREVIEW_STATUSES,
   isPreviewExpired,
+  CURRENT_PREVIEW_PROFILE,
   previewProfileFor,
   previewProfileVersionFor,
 } from "./schema";
@@ -116,13 +117,7 @@ describe("preview identity", () => {
   it("changes when the policy version changes", () => {
     // The load-bearing property: tightening the preview policy invalidates
     // reuse by construction rather than by anyone remembering to (§22).
-    expect(computePreviewIdentity({ ...base, previewPolicyVersion: "preview-policy-v2" })).not.toBe(
-      computePreviewIdentity(base),
-    );
-  });
-
-  it("changes when the restored snapshot changes", () => {
-    expect(computePreviewIdentity({ ...base, artifactSnapshotId: "snap_2" })).not.toBe(
+    expect(computePreviewIdentity({ ...base, previewPolicyVersion: "preview-policy-v99" })).not.toBe(
       computePreviewIdentity(base),
     );
   });
@@ -147,7 +142,7 @@ describe("preview identity", () => {
 
 describe("preview policy", () => {
   it("supports Next.js validation and nothing else", () => {
-    expect(previewProfileFor("nextjs_node_v1")).toBe("nextjs_preview_v1");
+    expect(previewProfileFor("nextjs_node_v1")).toBe(CURRENT_PREVIEW_PROFILE);
     // Refusing is the feature: a guessed start command produces a public URL
     // nobody should trust (§3).
     expect(

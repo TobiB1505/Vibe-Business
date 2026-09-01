@@ -1,4 +1,6 @@
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
+import { SkeletonSection } from "@/components/ui/skeleton";
 import { PlanDetailPanel } from "@/app/app/projects/[projectId]/plan/plan-detail-panel";
 import type { PreparedChangeWorkspaceItem } from "@/modules/execution/workspace";
 import { ChangeGates } from "@/app/app/projects/[projectId]/agent/change-gates";
@@ -28,6 +30,7 @@ import {
 import { AgentPanel } from "@/app/app/projects/[projectId]/agent-panel";
 import { HomeStatus } from "@/app/app/projects/[projectId]/home-status";
 import { AppErrorPreview } from "../app-error-preview";
+import BillingLoading from "@/app/app/(account)/billing/loading";
 import {
   E2E_AUDIT_CREDIT_SCENARIOS,
   isE2eAuditCreditScenario,
@@ -100,6 +103,8 @@ import type { ActionPlanReadiness } from "@/modules/action-plans/service";
 import { ProductLogo } from "@/components/brand/product-logo";
 import { BillingView } from "@/app/app/(account)/billing/billing-view";
 import { E2E_BILLING_SCENARIOS, isE2eBillingScenario } from "../billing-scenarios";
+import { DeepScanPanel } from "@/app/app/projects/[projectId]/deep-scan-panel";
+import { E2E_DEEP_SCAN_SCENARIOS, isE2eDeepScanScenario } from "../deep-scan-scenarios";
 import { E2E_MOVES_SCENARIOS, isE2eMovesScenario } from "../moves-scenarios";
 import {
   E2E_ONBOARDING_SCENARIOS,
@@ -140,11 +145,22 @@ import {
  * `VIBE_E2E_FIXTURES` is set by the Playwright web server and by nothing else —
  * not in `.env`, not in Vercel, not in any deployment. Without it this route is
  * a 404 on every scenario, so a deployed build has no fixture surface at all.
+ *
+ * That argument rests on an environment variable staying unset forever, in a
+ * dashboard, by everyone (VB-043). It is a good argument and it is one
+ * mistyped variable name away from being wrong — so production refuses this
+ * route on its own terms as well, regardless of what any flag says. Two
+ * independent reasons for the same 404: the flag, and the platform's own
+ * statement about where the code is running.
  */
 
 export const dynamic = "force-dynamic";
 
 function fixturesEnabled(): boolean {
+  // `VERCEL_ENV` is set by the platform, not by this repository, and a
+  // production deployment cannot unset it. Checked first because it is the one
+  // that does not depend on anybody remembering anything.
+  if (process.env.VERCEL_ENV === "production") return false;
   return process.env.VIBE_E2E_FIXTURES === "1";
 }
 
@@ -225,6 +241,7 @@ export default async function E2eScenarioPage({
           overview={fixture.overview}
           stripeReady={fixture.stripeReady}
           checkoutState={"checkoutState" in fixture ? fixture.checkoutState : undefined}
+          at={"at" in fixture ? new Date(fixture.at) : undefined}
         />
       </main>
     );
@@ -685,6 +702,26 @@ export default async function E2eScenarioPage({
   }
 
   /*
+   * The billing skeleton, so "unknown is not zero" is checkable rather than
+   * merely intended.
+   *
+   * `loading.tsx` is a route convention, which means nothing in the browser
+   * suite could ever see it — and the failure it guards against is a *visual*
+   * one: a placeholder shaped like a figure reads as a balance, and a customer
+   * who glances at a loading billing page and sees "0" has been told something
+   * false about their money. Rendering the real component here lets the suite
+   * assert what a person would actually see.
+   */
+  if (scenario === "billing-loading") {
+    return (
+      <main className="mx-auto max-w-5xl p-8">
+        {label}
+        <BillingLoading />
+      </main>
+    );
+  }
+
+  /*
    * The Command Center's two new surfaces (CORE-5).
    *
    * Both render the real component over a view model the real builder
@@ -820,6 +857,39 @@ export default async function E2eScenarioPage({
     );
   }
 
+  /*
+   * The Agent route's own render shape, so streaming can be observed (VB-023).
+   *
+   * The real route cannot be driven here — it needs a signed-in session against
+   * a Supabase project the browser suite deliberately does not have. What this
+   * reproduces is the structure the route now uses: the panel built from cheap
+   * reads, then the prepared changes inside a `<Suspense>` boundary with the
+   * same fallback.
+   *
+   * The delay is artificial and exists only to make the boundary observable —
+   * in the route it is a GitHub merge preflight. What the browser test proves
+   * is real either way: the panel and the skeleton reach the client while the
+   * slow half is still resolving, which before this could not happen at all.
+   */
+  if (scenario === "agent-streaming") {
+    return (
+      <main className="mx-auto max-w-[70rem] p-8">
+        {label}
+        <AgentPanel
+          {...E2E_AGENT_SCENARIOS["agent-ready"]()}
+          preparedCount={1}
+          planHref="/app/projects/project_e2e/plan"
+          agentHref="/app/projects/project_e2e/agent"
+          productHref="/app/projects/project_e2e/product"
+          executionHref={null}
+        />
+        <Suspense fallback={<SkeletonSection />}>
+          <SlowPreparedChanges />
+        </Suspense>
+      </main>
+    );
+  }
+
   if (isE2eAgentScenario(scenario)) {
     return (
       <main className="mx-auto max-w-[70rem] p-8">
@@ -904,6 +974,21 @@ export default async function E2eScenarioPage({
     );
   }
 
+  /*
+   * The Deep Scan panel (`launch-v1`). The same component the project page
+   * renders, given a complete `DeepScanViewModel` written by hand from the read
+   * model's own types. No browser provider, no session, no Credit hold — the
+   * panel's start action is a Server Action these fixtures never reach.
+   */
+  if (isE2eDeepScanScenario(scenario)) {
+    return (
+      <main className="mx-auto max-w-3xl p-8">
+        {label}
+        <DeepScanPanel projectId="project_e2e" model={E2E_DEEP_SCAN_SCENARIOS[scenario]} />
+      </main>
+    );
+  }
+
   if (!isE2eScenario(scenario)) notFound();
 
   const change: PreparedChangeWorkspaceItem = E2E_SCENARIOS[scenario]();
@@ -922,5 +1007,18 @@ export default async function E2eScenarioPage({
         planHref="/app/projects/project_e2e/plan"
       />
     </main>
+  );
+}
+
+/** Stands in for the merge preflight: slow, and nothing above it waits. */
+async function SlowPreparedChanges() {
+  await new Promise((resolve) => setTimeout(resolve, 1_000));
+
+  return (
+    <ChangeGates
+      projectId="project_e2e"
+      change={E2E_SCENARIOS.change_awaiting_approval()}
+      planHref="/app/projects/project_e2e/plan"
+    />
   );
 }

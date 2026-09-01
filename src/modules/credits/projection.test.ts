@@ -226,15 +226,49 @@ describe("AI usage projection", () => {
     expect(events.filter((event) => event.rawCostNanoUsd !== null)).toHaveLength(1);
   });
 
-  /** Effective dating is respected: history is priced as it was priced then. */
-  it("prices an old call at the rate in force when it happened", () => {
-    const introductory = projectAiUsage(aiRow({ created_at: "2026-08-14T18:00:00.000Z" }));
-    const standard = projectAiUsage(aiRow({ created_at: "2026-09-02T18:00:00.000Z" }));
+  /**
+   * Effective dating is respected: history is priced as it was priced then.
+   *
+   * The row's own `created_at` is what `costForAiRow` resolves against, never
+   * the wall clock — which is what makes this projection safe to re-run after a
+   * price book changes. It used to be demonstrated with the Sonnet 5 step on
+   * 2026-09-01; that step was cancelled (ADR 0062), so the property is now
+   * shown against the only window boundary left in the book: Haiku 4.5's own
+   * opening instant.
+   */
+  it("prices a call at the rate in force when it happened, not now", () => {
+    const haiku = { model: "claude-haiku-4-5-20251001" };
 
-    // $2→$3 in, $10→$15 out on 1 September.
-    expect(introductory[0].rawCostNanoUsd).toBe(80_000_000);
-    expect(standard[0].rawCostNanoUsd).toBe(120_000_000);
-    expect(introductory[0].providerPricingVersion).not.toBe(standard[0].providerPricingVersion);
+    const inside = projectAiUsage(aiRow({ ...haiku, created_at: "2026-08-14T18:00:00.000Z" }));
+    const before = projectAiUsage(aiRow({ ...haiku, created_at: "2025-09-15T18:00:00.000Z" }));
+
+    // 20,000 × $1/MTok + 4,000 × $5/MTok.
+    expect(inside[0].rawCostNanoUsd).toBe(40_000_000);
+    expect(inside[0].providerPricingVersion).toBe("claude-haiku-4-5-2025-10");
+
+    // Before the model had a price at all — reported as unrated, never as free.
+    expect(before[0].costStatus).toBe("rate_unavailable");
+    expect(before[0].rawCostNanoUsd).toBeNull();
+  });
+
+  /**
+   * Historical safety across the cancelled 2026-09-01 Sonnet step.
+   *
+   * This projection **recomputes** cost from `MODEL_PRICING` rather than reading
+   * `provider_cost_usd`, so correcting the price book is exactly the operation
+   * that could silently re-rate settled history. It cannot here, and this is
+   * where that is asserted: a row either side of the instant that used to be a
+   * 50% step now prices identically, under the same version.
+   */
+  it("does not re-rate anything across the cancelled September step", () => {
+    const before = projectAiUsage(aiRow({ created_at: "2026-08-31T23:59:59.999Z" }));
+    const after = projectAiUsage(aiRow({ created_at: "2026-09-01T00:00:00.000Z" }));
+
+    // 20,000 × $2/MTok + 4,000 × $10/MTok, on both sides.
+    expect(before[0].rawCostNanoUsd).toBe(80_000_000);
+    expect(after[0].rawCostNanoUsd).toBe(80_000_000);
+    expect(after[0].providerPricingVersion).toBe(before[0].providerPricingVersion);
+    expect(before[0].providerPricingVersion).toBe("claude-sonnet-5-introductory-2026");
   });
 
   /**

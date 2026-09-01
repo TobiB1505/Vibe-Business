@@ -192,8 +192,12 @@ export const OPERATION_STAGE_LABELS: Record<OperationStage, string> = {
   building: "Building application",
   collecting_results: "Collecting results",
   cleaning_up: "Cleaning up",
-  // Temporary preview. "Restoring" rather than "building": the build already
-  // happened, and saying otherwise would misdescribe what a preview is.
+  // Temporary preview. `acquiring_source` and `installing` are shared with
+  // validation above — a preview does the same two things for a different
+  // reason, and one sentence describes both.
+  starting_dev_server: "Starting your application",
+  // v1 preview stages. No new operation reaches one; a stored row still renders
+  // a sentence rather than a blank.
   restoring_artifact: "Restoring the validated build",
   verifying_artifact: "Verifying the restored build",
   starting_server: "Starting the application",

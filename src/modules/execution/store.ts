@@ -158,6 +158,30 @@ export async function listPreparedChangesForProject(
   return (data ?? []).map((row) => mapRow(row as Row));
 }
 
+/**
+ * How many prepared changes a project has, without transferring any (UI-4).
+ *
+ * `head: true` with `count: "exact"` asks Postgres for the number and returns
+ * no rows, which is what lets a caller say "three changes are below" while the
+ * three are still being assembled.
+ *
+ * The `status` filter is the same one `listPreparedChangesForProject` uses,
+ * stated once here so a count can never disagree with the list it describes.
+ */
+export async function countPreparedChangesForProject(
+  supabase: SupabaseClient,
+  projectId: string,
+): Promise<number> {
+  const { count, error } = await supabase
+    .from("prepared_changes")
+    .select("id", { count: "exact", head: true })
+    .eq("project_id", projectId)
+    .eq("status", "prepared");
+
+  if (error) throw error;
+  return count ?? 0;
+}
+
 export async function getPreparedChange(
   supabase: SupabaseClient,
   params: { projectId: string; preparedChangeId: string },

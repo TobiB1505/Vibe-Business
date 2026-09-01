@@ -16,6 +16,7 @@ function accessStatus(overrides: Partial<DeepScanAccessStatus> = {}): DeepScanAc
   return {
     includedScanAvailable: true,
     additionalScansRequireCredits: true,
+    additionalScanPrice: 25_000,
     activeSession: null,
     blockedReason: null,
     retryAvailableAt: null,
@@ -197,21 +198,62 @@ describe("buildDeepScanViewModel — completed", () => {
 });
 
 describe("buildDeepScanViewModel — credits", () => {
-  it("reports credits_required once the included scan is used with no result to show", () => {
+  it("reports credits_required when no policy prices an additional scan", () => {
     const model = build({
-      accessStatus: accessStatus({ includedScanAvailable: false, blockedReason: "credits_required" }),
+      accessStatus: accessStatus({
+        includedScanAvailable: false,
+        additionalScanPrice: null,
+        blockedReason: "credits_required",
+      }),
     });
 
     expect(model.state).toBe("credits_required");
     expect(model.canStart).toBe(false);
-    expect(model.additionalScansRequireCredits).toBe(true);
+    expect(model.additionalScanPrice).toBeNull();
   });
 
-  it("never claims a credit balance or price", () => {
+  it("offers a priced additional scan once the included one is used", () => {
+    const model = build({
+      accessStatus: accessStatus({ includedScanAvailable: false, blockedReason: null }),
+    });
+
+    expect(model.state).toBe("additional_available");
+    expect(model.additionalScanPrice).toBe(25_000);
+    expect(model.canStart).toBe(true);
+  });
+
+  it("reports insufficient_credits rather than pretending the scan is unavailable", () => {
+    const model = build({
+      accessStatus: accessStatus({
+        includedScanAvailable: false,
+        blockedReason: "insufficient_credits",
+      }),
+    });
+
+    expect(model.state).toBe("insufficient_credits");
+    expect(model.canStart).toBe(false);
+    // The price is still carried, because "you need 25 and you have 12" is the
+    // sentence a customer can act on. `credits_required` never had one.
+    expect(model.additionalScanPrice).toBe(25_000);
+  });
+
+  /**
+   * The guarantee that survived `launch-v1`, narrowed to what it was always
+   * really protecting.
+   *
+   * A Credit price is now exactly what this model is *for* — a customer
+   * deciding whether to spend needs to see it. What must still never appear is
+   * anything from Vibe's own side of the ledger: a wallet balance, a provider
+   * cost, a dollar amount, or a browser-seconds figure. Those are Vibe's
+   * economics, and §12.1 keeps them out of the customer's view.
+   */
+  it("carries a Credit price and nothing from Vibe's own ledger", () => {
     const serialized = JSON.stringify(
-      build({ accessStatus: accessStatus({ includedScanAvailable: false, blockedReason: "credits_required" }) }),
+      build({ accessStatus: accessStatus({ includedScanAvailable: false, blockedReason: null }) }),
     );
-    expect(serialized).not.toMatch(/price|balance|usd|\$/i);
+
+    expect(serialized).toContain("additionalScanPrice");
+    expect(serialized).not.toMatch(/balance|usd|\$|nanoUsd|providerCost|browserMs/i);
   });
 });
 

@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Button, TextAction } from "@/components/ui/button";
+import Link from "next/link";
+import { Button, TextAction, buttonClasses } from "@/components/ui/button";
+import { formatCreditsForDisplay } from "@/modules/credits/units";
 import type { DeepScanViewModel } from "@/modules/authenticated-product-intelligence/view";
 import {
   analyzeDeepScanAction,
@@ -34,6 +36,7 @@ import { formatTimestamp } from "@/lib/utils/format-datetime";
 const ERROR_MESSAGES: Record<string, string> = {
   production_origin_missing: "Add your production website URL before running a Deep Scan.",
   credits_required: "Your included Deep Scan for this project has been used.",
+  insufficient_credits: "You don't have enough Credits for another Deep Scan.",
   scan_already_running: "A Deep Scan is already running for this project.",
   cooldown_active: "Please wait a moment before starting another Deep Scan.",
   start_attempts_exhausted: "Too many Deep Scan attempts recently. Try again later.",
@@ -463,13 +466,51 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
               Additional Deep Scans will use Vibe Credits.
             </p>
           </>
+        ) : model.state === "additional_available" && model.additionalScanPrice !== null ? (
+          <>
+            <Heading title="Additional Deep Scan" />
+            <p className="text-sm text-fg-secondary">
+              Your included Deep Scan for this project has been used. Another one costs{" "}
+              {formatCreditsForDisplay(model.additionalScanPrice)} Credits.
+            </p>
+            {/*
+              Said before the click, not after it. A Deep Scan that fails,
+              is cancelled, or expires costs nothing — the hold is released —
+              and a customer deciding whether to spend deserves to know that
+              while they are deciding.
+            */}
+            <p className="text-xs text-fg-muted">
+              You&apos;re only charged if Vibe comes back with a result.
+            </p>
+            <Button type="button" onClick={handleStart} disabled={disabled} busy={disabled}>
+              {disabled
+                ? "Starting…"
+                : `Run Deep Scan · ${formatCreditsForDisplay(model.additionalScanPrice)} Credits`}
+            </Button>
+          </>
+        ) : model.state === "insufficient_credits" && model.additionalScanPrice !== null ? (
+          <>
+            <Heading title="Additional Deep Scan" />
+            <p className="text-sm text-fg-secondary">
+              Another Deep Scan costs {formatCreditsForDisplay(model.additionalScanPrice)}{" "}
+              Credits, and your balance doesn&apos;t cover it yet.
+            </p>
+            <Link href="/app/billing" className={buttonClasses({ variant: "secondary" })}>
+              Top up Credits
+            </Link>
+          </>
         ) : model.state === "credits_required" ? (
           <>
             <Heading title="Additional Deep Scan" />
-            <p className="text-sm text-fg-secondary">Additional Deep Scans will use Vibe Credits.</p>
-            <Button type="button" disabled>
-              Coming with Vibe Credits
-            </Button>
+            {/*
+              Reachable only when no policy prices an additional scan. It is
+              the honest terminal answer, not a route into a checkout that
+              cannot help — the same reason this state has always existed.
+            */}
+            <p className="text-sm text-fg-secondary">
+              Your included Deep Scan for this project has been used. Additional Deep Scans
+              aren&apos;t available right now.
+            </p>
           </>
         ) : model.state === "unavailable" ? (
           <>

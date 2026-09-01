@@ -137,17 +137,23 @@ Each stage below is described as a logical layer/responsibility inside the modul
 
 ### 3.9 Preview Layer
 
-**[Confirmed — ADR 0016]** A preview **restores the exact filesystem artifact captured from a passing validation** into a fresh sandbox and serves it on a temporary URL. It is not a deploy: no build is re-run, nothing enters the customer's hosting, and the environment grants nothing. Implemented in `src/modules/change-preview/`. The `PreviewProvider` boundary from [ADR 0004](docs/decisions/0004-vercel-as-initial-host-and-preview-provider.md) was left unimplemented deliberately — deploying needs authority this product does not have; see `src/modules/previews/README.md` for the comparison.
+**[Confirmed — ADR 0016, amended by ADR 0064]** A preview **clones the prepared commit** into its own fresh sandbox, installs, and serves it on a temporary URL under a development server. It is not a deploy: nothing enters the customer's hosting and the environment grants nothing. It is also not the checked build — it runs *alongside* validation rather than after it, so a person can look while the five-minute check is still going, and the product says so wherever a preview is offered. Implemented in `src/modules/change-preview/`. The `PreviewProvider` boundary from [ADR 0004](docs/decisions/0004-vercel-as-initial-host-and-preview-provider.md) was left unimplemented deliberately — deploying needs authority this product does not have; see `src/modules/previews/README.md` for the comparison.
 
-**[Confirmed — ADR 0017]** A preview is not a review. A **visual review artifact** captures a controlled before/after comparison at identical dimensions — a database CHECK refuses a `ready` artifact that has one side or mismatched sizes, because two images of different widths are not a comparison. It carries no score and no verdict, and the whole review path makes zero AI calls.
+**[Confirmed — ADR 0064]** No filesystem artifact is captured, restored or retained any more. Validation stops at its result, and 24 hours of a customer's file tree no longer sits at the provider for a preview that will not use it.
 
-**[Open decision]** Previewing a repository whose validated artifact cannot be started by a single detected dev/start command.
+**[Confirmed — ADR 0063]** A preview is not always the right instrument. `review/classification.ts` decides deterministically — from verified changed paths, the analyzer's route table and a structural render-impact proof, with no model call — whether a change deserves a preview, a code diff, or both. A change that alters no rendered page is asked for neither preview nor comparison.
+
+**[Confirmed — ADR 0065]** For a change that *does* alter a page, the preview **is** the review. Screenshot comparison ([ADR 0017](docs/decisions/0017-visual-review-artifacts.md)) is unreachable for new changes: it photographed one route at one viewport, which is a poorer instrument than the running application it photographed, and Vibe paid a browser session for the reduction. Historical artifacts stay readable so an approval taken on one can still show what it rested on.
+
+**[Open decision]** Previewing a repository whose prepared commit cannot be served by a single detected dev command.
 
 ### 3.10 Approval Layer
 
 **[Confirmed principle]** Enforces the permission boundary defined in [PRODUCT.md §9](PRODUCT.md#9-approval-model). Merge to the default branch is only ever triggered by an explicit, attributable user approval action recorded in the Audit Log — never inferred, defaulted, or timed out into approval.
 
-**[Confirmed — ADR 0018]** An approval binds to an **immutable artifact identity** — project, prepared change, commit, base, validation run, review artifact and policy version, hashed, with a partial unique index on it. There is no `approved = true` and no "latest" lookup: change any part of the artifact and the old consent no longer covers it. Repository drift *after* an approval never rewrites what a human decided; it makes the merge unsafe, which is a different question asked at a different time.
+**[Confirmed — ADR 0018, amended by ADR 0063]** An approval binds to an **immutable artifact identity** — project, prepared change, commit, base, validation run, **the evidence a person was shown**, and policy version, hashed, with a partial unique index on it. There is no `approved = true` and no "latest" lookup: change any part of the artifact and the old consent no longer covers it. Repository drift *after* an approval never rewrites what a human decided; it makes the merge unsafe, which is a different question asked at a different time.
+
+**[Confirmed — ADR 0063, amended by ADR 0065]** The evidence takes one of three forms, and the review classification decides which. A change that alters no rendered page names a `code_review_digest` — a hash of the two commits, the shown paths and the diff policy version. A change that alters one names that digest **and** the `preview_sessions` row of the same commit: the sandbox is gone in fifteen minutes, the row is immutable and says an interactive preview of exactly these bytes ran and became reachable. A third form, a review artifact, exists only on historical rows. The diff is the *stronger* binding: two immutable commits reproduce it byte for byte indefinitely, while review images expire and their "before" side is production as it was — which is why the diff is now part of every new approval, visual or not. Three database CHECKs admit exactly those three shapes and no fourth. The merge gate reads the form off the approval row rather than re-asking the classification, because the analyzer's route table moves and a standing human decision must not become unfindable because of it.
 
 **[Confirmed — ADR 0019]** That second question is answered immediately before the write: Vibe fast-forwards the default branch to exactly the approved commit or refuses. Never a force-update, never a rewrite, never a merge or rebase to resolve drift, and the attempt is marked before it is made so an ambiguous outcome is resolved by *reading* rather than by writing again. `merged` means one sentence — the default branch points at the approved commit and Vibe read it back. Implemented in `src/modules/approvals/` and `src/modules/merge/`.
 
@@ -165,7 +171,7 @@ The one thing deliberately absent: **no consumption rate card is active.** `CRED
 
 **[Confirmed principle — no secrets in the ledger]** Usage events never contain prompt text, model responses, reasoning, or API keys.
 
-**[Open decision — narrowed]** The **consumption** rate card is not decided: what a Credit buys per operation, and at what margin. Retail purchase pricing *is* decided (`src/modules/billing/catalog.ts`), and candidate consumption models are simulated against real runs in [docs/business/CREDIT_PRICING_V1.md](docs/business/CREDIT_PRICING_V1.md), whose own verdict is that the evidence is not yet sufficient to activate one.
+**[Confirmed — ADR 0061, re-derived by ADR 0062]** What a Credit buys per operation *is* decided: `launch-v1` in `src/modules/credits/retail.ts` prices Business Audit at 35, Next Moves and Action Plan at 20, an additional Deep Scan at 25, and an agent improvement at 150 / 200 / 350 by execution pricing class, effective `2026-09-01T00:00:00.000Z`. `src/modules/credits/margin-guard.ts` recomputes every price's contribution margin from the provider rates in force at the instant it is asked, applied to frozen production quantities, and fails below 70% — which is how the card came to be re-derived: it was first priced against a scheduled Sonnet 5 rise to $3/$15 that Anthropic then withdrew, and the guard showed those prices to be ~57% too high. Prices carry a `PriceBasis`: three are `measured`, the Agent is `modelled` (its `complex` tier has zero cost observations), and Deep Scan is `policy` — no browser-provider rate exists to check it against.
 
 ### 3.12 Audit Log
 
@@ -239,7 +245,7 @@ This is the register of genuinely **undecided** questions, and nothing else. Wor
 
 **Still open:**
 
-1. **Credit consumption rate card** — what a Credit buys per operation, and at what margin. Narrowed rather than resolved: the ledger, the retail purchase price and the simulation exist ([§3.11](#311-usagecredit-layer)); the activation decision does not, and [docs/business/CREDIT_PRICING_V1.md](docs/business/CREDIT_PRICING_V1.md) argues the evidence is not yet sufficient to make it.
+1. **The per-SKU consumption rate card** — `CREDIT_RATE_CARDS` in `src/modules/credits/rating.ts`, which rates measured provider usage into Credits for Vibe's own cost telemetry. Not the same question as what a customer pays: [ADR 0061](docs/decisions/0061-launch-v1-operation-rate-card.md) decided that and left this alone, because `economy/` already answers "what did this cost" in nanodollars and a card here would have to price cache tokens — 55–70% of agentic provider cost — to avoid returning `sku_not_priced`. It ships empty ([§3.11](#311-usagecredit-layer)).
 2. **Analytics provider for the customer's product** — the metric-source port is vendor-neutral by design ([ADR 0021](docs/decisions/0021-business-outcome-measurement.md)) and no adapter is written, so every project resolves to `waiting_for_source`. Vibe's own product analytics is separate and already answered (`@vercel/analytics`), as is Vibe's own ad attribution ([ADR 0041](docs/decisions/0041-marketing-attribution-pixel.md)).
 3. **Previewing a repository whose validated artifact cannot be started** by a single detected dev/start command ([§3.9](#39-preview-layer)).
 4. **Production hosting migration as a possible future product feature** — not scoped, not committed to.
@@ -281,9 +287,9 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0013](docs/decisions/0013-durable-operation-execution.md) | Durable operation execution | §4 |
 | [0014](docs/decisions/0014-first-execution-safety.md) | First execution safety: model opinion authorizes nothing | §3.6, §3.7 |
 | [0015](docs/decisions/0015-untrusted-repository-execution-provider.md) | Vercel Sandbox as the execution provider | §3.8 |
-| [0016](docs/decisions/0016-temporary-preview-isolation.md) | Temporary preview isolation | §3.9 |
-| [0017](docs/decisions/0017-visual-review-artifacts.md) | Visual review artifacts | §3.9 |
-| [0018](docs/decisions/0018-human-approval-authority.md) | Approval binds to an immutable artifact identity | §3.10 |
+| [0016](docs/decisions/0016-temporary-preview-isolation.md) | Temporary preview isolation (§1, §3, §7, §11 superseded by 0064) | §3.9 |
+| [0017](docs/decisions/0017-visual-review-artifacts.md) | Visual review artifacts (superseded as a gate by 0065; historical rows only) | §3.9 |
+| [0018](docs/decisions/0018-human-approval-authority.md) | Approval binds to an immutable artifact identity (amended by 0063) | §3.10 |
 | [0019](docs/decisions/0019-safe-approved-change-merge.md) | Safe approved-change merge | §3.10 |
 | [0020](docs/decisions/0020-production-outcome-verification.md) | Production outcome verification | Measurement |
 | [0021](docs/decisions/0021-business-outcome-measurement.md) | Business outcome measurement | Measurement |
@@ -326,6 +332,11 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0058](docs/decisions/0058-move-focus-url-contract.md) | Move focus is a shared URL contract, never authority: one parameter names which Move a surface is about, resolved against stored Moves and never permitting work (Accepted; Action Plan, Agent and both next-move cards implemented) | Action Plan, Agent, project shell |
 | [0059](docs/decisions/0059-security-response-headers.md) | Security response headers, and a CSP that starts by watching rather than enforcing (Accepted; six headers live, CSP report-only — it protects nothing until enforced) | HTTP responses, `next.config.ts`, CSP |
 | [0060](docs/decisions/0060-sign-in-throttle-authority.md) | The sign-in throttle's authority is who may call it (Accepted; `record_auth_attempt` unreachable through the Data API, one reviewed service-role site) | Sign-in, `auth_attempt_windows`, rule 53 |
+| [0061](docs/decisions/0061-launch-v1-operation-rate-card.md) | What a Credit buys, and what each number is worth trusting (Accepted; rate table amended by 0062. `launch-v1` prices every customer-facing operation, each with a `PriceBasis`) | Credits, retail prices, execution budgets, §3.11 |
+| [0062](docs/decisions/0062-sonnet-5-price-rise-cancelled.md) | A cancelled provider price is deleted, not held (Accepted; amends 0061. The Sonnet 5 rise to $3/$15 was withdrawn, so the row is gone and a permanent regression test keeps it gone; `launch-v1` re-derived to 35 / 20 / 20) | `ai/pricing.ts`, margin guard, §3.11 |
+| [0063](docs/decisions/0063-review-classification-as-a-gate.md) | The review classification becomes a gate, and a diff becomes approval evidence (Accepted; supersedes 0037 §2's "advisory", amends 0018. A change altering no rendered page is approved on a reproducible diff instead of two identical screenshots) | Review, approvals, `change_approvals`, prepared-change card |
+| [0064](docs/decisions/0064-preview-before-validation.md) | The preview comes before the check, and serves the commit (Accepted; supersedes 0016 §1, §3, §7, §11. A preview clones the prepared commit and runs a development server beside validation instead of restoring the build that validation captured — so a person looks immediately, and nothing keeps a customer's file tree at the provider) | Preview, validation, `preview_sessions`, §3.9 |
+| [0065](docs/decisions/0065-the-preview-is-the-review.md) | The preview is the review (Accepted; supersedes 0017 as a gate, amends 0063 and 0018. A visual approval binds to the preview session of the same commit plus the code diff, and no browser session is paid to photograph one route of it) | Review, approvals, `change_approvals`, §3.9, §3.10 |
 
 ### Layers with no section above
 

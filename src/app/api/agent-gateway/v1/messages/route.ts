@@ -3,6 +3,7 @@ import { alertOperator } from "@/lib/observability/alert";
 
 import {
   authorizeGatewayRequest,
+  clampMaxTokens,
   gatewayRefusalBody,
   type AgentGatewayRefusal,
 } from "@/modules/coding-agent/gateway-policy";
@@ -14,6 +15,7 @@ import {
   type GatewayStreamUsage,
 } from "@/modules/coding-agent/gateway-usage";
 import {
+  claimGatewayRequest,
   readAgentRunGatewayState,
   recordGatewayUsage,
 } from "@/modules/operations/agent-execution/gateway-state";
@@ -169,6 +171,42 @@ export async function POST(request: NextRequest) {
   }
 
   /*
+   * The attempt is claimed before the credential is injected (VB-016).
+   *
+   * The check above read state that lands *after* the response: usage rows are
+   * written in `after()`, because the tokens are not known until the stream
+   * ends. Two requests arriving together therefore both read the same total and
+   * both pass — the ceiling becomes a delay rather than a limit.
+   *
+   * So the count is incremented in one serialized statement and the value it
+   * returns is what decides. Mark the attempt, then let the observation answer
+   * (rule 73's shape, one layer down). A run that vanished between the two
+   * reads returns null, which is a refusal rather than a forward.
+   */
+  const claimed = await claimGatewayRequest({ runId: claims.runId });
+  if (claimed === null) {
+    return refuse("run_not_found", 403, { runId: claims.runId });
+  }
+  if (claimed > claims.maxRequests) {
+    return refuse("request_limit_reached", 429, { runId: claims.runId });
+  }
+
+  /*
+   * `max_tokens` is lowered to what is left of the authorized budget (VB-016).
+   *
+   * Without this a single call may ask for more output than the whole run was
+   * approved for, and the ceiling only notices afterwards — the tokens are
+   * already billed by then. Lowered, never raised: a caller asking for less
+   * than it may have keeps its own number, because this is a ceiling and not a
+   * quota to be spent.
+   *
+   * `remaining` is at least one: `authorizeGatewayRequest` has already refused
+   * an exhausted budget above.
+   */
+  const remaining = claims.maxOutputTokens - decision.run.spentOutputTokens;
+  const forwardedBody = clampMaxTokens(body, remaining);
+
+  /*
    * The credential is injected here and nowhere else.
    *
    * A fresh header set is built rather than forwarding the caller's: passing
@@ -190,7 +228,7 @@ export async function POST(request: NextRequest) {
     upstream = await fetch(`${ANTHROPIC_ORIGIN}${ROUTE}`, {
       method: "POST",
       headers,
-      body: JSON.stringify(body),
+      body: JSON.stringify(forwardedBody),
     });
   } catch (error) {
     await recordGatewayUsage({

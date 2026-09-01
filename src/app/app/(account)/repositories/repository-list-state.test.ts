@@ -17,6 +17,7 @@ const repositories: ConnectedRepository[] = [
     private: true,
     htmlUrl: "https://github.com/vibe/landing-pro",
     connectedAt: "2026-08-24T10:00:00Z",
+    accessRevokedAt: null,
   },
   {
     projectId: "1",
@@ -28,6 +29,7 @@ const repositories: ConnectedRepository[] = [
     private: false,
     htmlUrl: "https://github.com/vibe/analyzer",
     connectedAt: "2026-08-20T10:00:00Z",
+    accessRevokedAt: null,
   },
 ];
 

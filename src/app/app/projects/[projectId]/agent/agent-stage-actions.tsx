@@ -32,7 +32,9 @@ export function AgentPreviewActions({
           Preview controls
         </MonoLabel>
         <p className="text-fg-muted text-sm leading-relaxed">
-          Start the isolated preview, then capture the comparison you will approve.
+          {/* No comparison to capture any more (ADR 0065): the preview itself is
+              what a visual approval binds to. */}
+          Start the isolated preview and look at the change running.
         </p>
       </div>
 
@@ -41,20 +43,23 @@ export function AgentPreviewActions({
           projectId={projectId}
           preparedChangeId={change.id}
           card={change.preview}
-          validatedArtifactId={change.validatedArtifactId}
           serverOrigin={change.previewOrigin}
+          productionUrl={change.productionUrl}
           approved={change.progress.approved}
           merged={change.progress.merged}
           presentation="workspace"
         />
 
+        {/* History only (ADR 0065). Nothing captures a comparison any more; a
+            change that has one from before still shows what an approval rested
+            on. */}
+        {change.review.state !== "not_generated" && (
         <div className="border-line-2 border-t pt-5">
           <ReviewPanel
             projectId={projectId}
             preparedChangeId={change.id}
             card={change.review}
             images={change.reviewImages}
-            previewSessionId={change.previewSessionId}
             previewOrigin={change.previewOrigin}
             branchUrl={change.branchUrl}
             commitSha={change.commitSha}
@@ -64,6 +69,7 @@ export function AgentPreviewActions({
             presentation="workspace"
           />
         </div>
+        )}
       </div>
     </section>
   );
@@ -97,7 +103,6 @@ export function AgentReviewDecision({
             projectId={projectId}
             preparedChangeId={change.id}
             card={change.approval}
-            reviewArtifactId={change.review.reviewArtifactId}
             merged={change.progress.merged}
             presentation="workspace"
           />
@@ -108,6 +113,8 @@ export function AgentReviewDecision({
             projectId={projectId}
             preparedChangeId={change.id}
             card={change.merge}
+            classification={change.reviewClassification}
+            filesChanged={change.filePaths.length}
             presentation="workspace"
           />
         </div>

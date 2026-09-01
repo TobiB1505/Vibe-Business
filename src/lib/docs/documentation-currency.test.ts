@@ -218,6 +218,53 @@ describe("every relative link in the documentation resolves", () => {
  */
 const RETIRED_CLAIMS: readonly { path: string; claim: string; retiredBy: string }[] = [
   {
+    path: "PRODUCT.md",
+    claim: "Deep Scan is not wired to them",
+    retiredBy:
+      "ADR 0061 — `launch-v1` prices an additional Deep Scan at 25 Credits and it is " +
+      "purchasable. The refusal it describes is still reachable and now means what it says: " +
+      "no policy prices an additional scan. History may quote the old sentence; §12.1 may not.",
+  },
+  {
+    path: "src/modules/economy/README.md",
+    claim: "Nothing outside this module imports it",
+    retiredBy:
+      "ADR 0061 — three primitives are now readable from outside (execution-class, " +
+      "infrastructure-rates, sandbox-cost), none of which decides an amount. " +
+      "`sprint-0054-safety.test.ts` enforces that exact list; the estimator stays unreachable.",
+  },
+  {
+    path: "src/modules/coding-agent/README.md",
+    claim: "No customer can start an agent",
+    retiredBy:
+      "ADR 0061 — `EXECUTION_BUDGET_POLICIES` carries `launch-v1-budget`, with a budget per " +
+      "execution pricing class. Rule 78's bar was a measured cost; sixteen delivered dogfood " +
+      "runs met it. What the sentence was protecting — that no price ships without one — holds.",
+  },
+  {
+    path: "ARCHITECTURE.md",
+    claim: "restores the exact filesystem artifact captured from a passing validation",
+    retiredBy:
+      "Sprint 0114, ADR 0064 — a preview clones the prepared commit and runs a development " +
+      "server beside validation. No artifact is captured, restored or retained; ADR 0016 still " +
+      "describes what it decided at the time and may quote this.",
+  },
+  {
+    path: "src/modules/approvals/README.md",
+    claim: "The evidence takes one of two forms",
+    retiredBy:
+      "Sprint 0114, ADR 0065 — three: a diff, a diff plus the preview session of the same " +
+      "commit, and a review artifact on historical rows only. The diff is in every new form.",
+  },
+  {
+    path: "README.md",
+    claim: "captures a before/after comparison",
+    retiredBy:
+      "Sprint 0114, ADR 0065 — no browser session photographs a preview any more. The before " +
+      "half is a link to the customer's live site as it is now, and the after half is the " +
+      "running preview itself.",
+  },
+  {
     path: "src/app/login/page.tsx",
     claim: "Read-only access to start",
     retiredBy:
@@ -291,6 +338,23 @@ const RETIRED_CLAIMS: readonly { path: string; claim: string; retiredBy: string 
       "own contract.",
   },
   {
+    path: "UX-CONTRACT.md",
+    claim: "ordered events every 2.5 seconds",
+    retiredBy:
+      "VB-044 — the Product Scan poll is 1.8 seconds and has been for some time. The contract " +
+      "now names the constant it is describing, so the next change to the interval has one " +
+      "obvious place to look rather than two numbers to notice disagreeing.",
+  },
+  {
+    path: "CLAUDE.md",
+    claim: "only `src/modules/operations/` may use it",
+    retiredBy:
+      "VB-044 — rule 53's wording lagged the boundary the tests enforce. The service-role " +
+      "client is also held by five reviewed sites that have no session to scope a client " +
+      "with, each recorded in REVIEWED_SITES with its reason. A rule that forbids what the " +
+      "repository does teaches a reader to disbelieve the rules.",
+  },
+  {
     path: "src/modules/business-audit/README.md",
     claim: "once per\ndimension key",
     retiredBy:
@@ -312,6 +376,44 @@ const RETIRED_CLAIMS: readonly { path: string; claim: string; retiredBy: string 
       "reading it records. A register is rewritten every time an entry closes, so the pin was false " +
       "by the next merge and stayed false through roughly ten sprints. Banning the label rather than " +
       "the stale hash is deliberate: a refreshed pin is the same defect with a newer number.",
+  },
+  {
+    path: "ARCHITECTURE.md",
+    claim: "prices Business Audit at 55",
+    retiredBy:
+      "ADR 0062 \u2014 the whole card was derived against a Sonnet 5 rise to $3/$15 that Anthropic " +
+      "withdrew before it took effect. 35 / 20 / 20, re-derived by the same rule at the rates that " +
+      "actually apply. ADR 0061 keeps the sentence in a dated correction; \u00a73.11 may not.",
+  },
+  {
+    path: "ARCHITECTURE.md",
+    claim: "the same instant Anthropic's September Sonnet rates do",
+    retiredBy:
+      "ADR 0062 \u2014 there are no September Sonnet rates. `LAUNCH_V1_EFFECTIVE_FROM` still says " +
+      "2026-09-01 because moving it would backdate or delay for no reason, but it is the launch " +
+      "date now, not a mirror of a provider event.",
+  },
+  {
+    path: "src/modules/credits/README.md",
+    claim: "| Business Audit | 55 | measured |",
+    retiredBy: "ADR 0062 \u2014 as ARCHITECTURE.md. The price table is 35 / 20 / 20.",
+  },
+  {
+    path: "docs/business/CREDIT_RATE_CARD_LAUNCH_V1.md",
+    claim: "Cost/delivered (Sept rates)",
+    retiredBy:
+      "ADR 0062 \u2014 every dollar figure in the derivation was a measured cost restated at rates " +
+      "that never arrived, presented in a table beside genuinely measured ones. There is one set " +
+      "of Sonnet rates and the column no longer needs qualifying.",
+  },
+  {
+    path: "src/modules/ai/pricing.ts",
+    claim: "claude-sonnet-5-standard-2026-09",
+    retiredBy:
+      "ADR 0062 \u2014 the cancelled row is deleted rather than held, so nothing in the price book " +
+      "may name it again. `pricing.test.ts` enforces this against the array itself; this entry " +
+      "enforces it against the prose. `economy/intelligence/model-version.ts` still carries the " +
+      "string in an append-only record of what v1 was issued under, which is history, not a price.",
   },
 ];
 

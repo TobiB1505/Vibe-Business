@@ -1,17 +1,13 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { getBusinessImpactCard } from "@/modules/business-measurement/service";
+import { getBusinessImpactCards } from "@/modules/business-measurement/service";
 import { NoConnectedMetricSources } from "@/modules/business-measurement/source";
 import type { BusinessImpactCard } from "@/modules/business-measurement/view";
 import { listPreparedChangesForProject } from "@/modules/execution/store";
-import { createGithubMergePort } from "@/modules/merge/github/adapter";
-import { getMergeCard, resolveMergeTarget } from "@/modules/merge/service";
-import { mergeFailureMessage } from "@/modules/merge/messages";
-import { buildMergeCard } from "@/modules/merge/view";
-import { getOutcomeCard } from "@/modules/outcome-verification/service";
+import { getLatestMergesForPreparedChanges } from "@/modules/merge/store";
+import { getOutcomeCards } from "@/modules/outcome-verification/service";
 import type { OutcomeCard } from "@/modules/outcome-verification/view";
-import { mapWithConcurrency, PER_CHANGE_CONCURRENCY } from "@/lib/async/concurrency";
 
 /**
  * Project-level impact (Sprint UI-2 Phase C).
@@ -23,6 +19,16 @@ import { mapWithConcurrency, PER_CHANGE_CONCURRENCY } from "@/lib/async/concurre
  * the only way to ask "what has changed for this business" was to build every
  * prepared change's full card first — including the review images, the preview
  * origin and the GitHub merge preflight, none of which impact needs.
+ *
+ * ## It reaches nothing outside the database
+ *
+ * Until VB-023 this built a full merge *card* per prepared change, and a merge
+ * card spends up to four read-only GitHub calls to say whether an approved
+ * branch is still where its approval expects it. That question belongs on the
+ * Agent screen. Here it was being asked about changes that had **already
+ * merged** — which are past that preflight — so the round trip bought a fact
+ * `change_merges.status` already states. The audit named this route as one of
+ * two "blocking all HTML on GitHub network calls" (B15); it makes none.
  *
  * UI-1 recorded that as Impact's route-split risk being High "because it has no
  * data of its own today". This gives it some.
@@ -72,66 +78,79 @@ export async function getProjectImpact(
   supabase: SupabaseClient,
   params: { projectId: string; userId: string; repositoryConnected: boolean },
 ): Promise<ProjectImpact> {
-  const { projectId, userId } = params;
-
-  const mergeTarget = params.repositoryConnected
-    ? await resolveMergeTarget(supabase, projectId)
-    : null;
+  const { projectId } = params;
 
   const prepared = await listPreparedChangesForProject(supabase, projectId);
+  const preparedChangeIds = prepared.map((change) => change.id);
 
-  // VB-024. This walked the prepared changes one at a time, and each step can
-  // reach GitHub through `getMergeCard` — so a project with ten changes paid
-  // ten sequential round trips before the page could render.
-  //
-  // Bounded rather than a plain `Promise.all(prepared.map(...))`: the merge
-  // card is a GitHub call, and firing one per prepared change at once is how a
-  // busy project trips a secondary rate limit. The ceiling is shared with the
-  // agent workspace, which fans out the same way.
-  const settled = await mapWithConcurrency(prepared, PER_CHANGE_CONCURRENCY, async (change) => {
-    const merge = mergeTarget
-      ? await getMergeCard(supabase, createGithubMergePort(mergeTarget), {
-          projectId,
-          userId,
-          preparedChangeId: change.id,
-        })
-      : buildMergeCard({
-          latestMerge: null,
-          eligibility: { outcome: "blocked", reason: "merge_repository_unavailable" },
-          changeApprovalId: null,
-          resolveFailureMessage: mergeFailureMessage,
-        });
-
-    // Only a merged change can have an outcome. Reading outcome and impact for
-    // an unmerged one would spend six database reads to be told "unavailable" —
-    // which is precisely the waste this read model exists to stop.
-    if (merge.state !== "merged") return null;
-
-    const [outcome, businessImpact] = await Promise.all([
-      getOutcomeCard(supabase, { projectId, preparedChangeId: change.id }),
-      getBusinessImpactCard(supabase, new NoConnectedMetricSources(), {
-        projectId,
-        preparedChangeId: change.id,
-      }),
-    ]);
-
-    return {
-      preparedChangeId: change.id,
-      branchName: change.branchName,
-      commitSha: change.commitSha,
-      baseBranch: change.baseBranch,
-      mergedAt: merge.mergedAt ?? null,
-      outcome,
-      businessImpact,
-    } satisfies ProjectImpactEntry;
+  /*
+   * Which changes merged, from the merge table — with no GitHub call at all.
+   *
+   * This used to build the full **merge card** for every prepared change, and
+   * a merge card spends up to four read-only GitHub calls per approved change
+   * so it can tell a user whether the branch is still where their approval
+   * expects it. That is exactly the right answer on the Agent screen, and it is
+   * worthless here: this page shows changes that *already merged*, and a
+   * merged change is past the preflight it was asking about.
+   *
+   * So the whole third-party round trip was being spent to learn a fact one
+   * column already states. The audit named this route as one of the two
+   * "blocking all HTML on GitHub network calls" (B15); it no longer makes one.
+   */
+  const merges = await getLatestMergesForPreparedChanges(supabase, {
+    projectId,
+    preparedChangeIds,
   });
 
-  // Order follows `prepared`, not completion order: the list is what the
-  // founder reads, and a card moving because a GitHub call was slow would be a
-  // different defect than the one being fixed.
-  const entries = settled.filter((entry): entry is ProjectImpactEntry => entry !== null);
-  const unmergedCount = settled.length - entries.length;
+  const mergedChanges = prepared.filter((change) => merges.get(change.id)?.status === "merged");
 
-  return { entries, unmergedCount };
+  /*
+   * Outcome and business impact for the merged ones, batched (VB-023).
+   *
+   * Only a merged change can have an outcome. Reading outcome and impact for an
+   * unmerged one would spend six database reads to be told "unavailable" —
+   * which is precisely the waste this read model exists to stop.
+   */
+  const [outcomes, impacts] = await Promise.all([
+    getOutcomeCards(supabase, {
+      projectId,
+      changes: mergedChanges.map((change) => ({
+        preparedChangeId: change.id,
+        merge: merges.get(change.id) ?? null,
+        prepared: change,
+      })),
+    }),
+    getBusinessImpactCards(supabase, new NoConnectedMetricSources(), {
+      projectId,
+      changes: mergedChanges.map((change) => ({
+        preparedChangeId: change.id,
+        merge: merges.get(change.id) ?? null,
+        prepared: change,
+      })),
+    }),
+  ]);
+
+  // Order follows `prepared`, not completion order: the list is what the
+  // founder reads, and a card moving because one read was slow would be a
+  // different defect than the one being fixed.
+  const entries = mergedChanges.flatMap((change) => {
+    const outcome = outcomes.get(change.id);
+    const businessImpact = impacts.get(change.id);
+    if (!outcome || !businessImpact) return [];
+
+    return [
+      {
+        preparedChangeId: change.id,
+        branchName: change.branchName,
+        commitSha: change.commitSha,
+        baseBranch: change.baseBranch,
+        mergedAt: merges.get(change.id)?.mergedAt ?? null,
+        outcome,
+        businessImpact,
+      } satisfies ProjectImpactEntry,
+    ];
+  });
+
+  return { entries, unmergedCount: prepared.length - entries.length };
 }
 

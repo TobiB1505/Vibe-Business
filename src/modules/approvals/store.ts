@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { readLatestPerPreparedChange } from "@/lib/db/latest-per-change";
+import type { ReviewClassification } from "@/modules/review/classification";
 import type {
   ApprovalInvalidationReason,
   ApprovalStatus,
@@ -27,6 +29,8 @@ const POSTGRES_UNIQUE_VIOLATION = "23505";
 
 const COLUMNS =
   "id, user_id, project_id, prepared_change_id, validation_run_id, review_artifact_id, " +
+  "code_review_digest, preview_session_id, review_classification, " +
+  "review_classification_policy_version, " +
   "prepared_commit_sha, prepared_base_sha, approval_policy_version, approval_identity, " +
   "status, approved_at, revoked_at, invalidated_at, invalidation_reason, created_at, updated_at";
 
@@ -39,7 +43,12 @@ function mapRow(row: Row): ChangeApproval {
     projectId: String(row.project_id),
     preparedChangeId: String(row.prepared_change_id),
     validationRunId: String(row.validation_run_id),
-    reviewArtifactId: String(row.review_artifact_id),
+    reviewArtifactId: (row.review_artifact_id as string | null) ?? null,
+    codeReviewDigest: (row.code_review_digest as string | null) ?? null,
+    previewSessionId: (row.preview_session_id as string | null) ?? null,
+    reviewClassification: (row.review_classification as ReviewClassification | null) ?? null,
+    reviewClassificationPolicyVersion:
+      (row.review_classification_policy_version as string | null) ?? null,
     preparedCommitSha: String(row.prepared_commit_sha),
     preparedBaseSha: String(row.prepared_base_sha),
     approvalPolicyVersion: String(row.approval_policy_version),
@@ -74,7 +83,12 @@ export async function createApproval(
     userId: string;
     preparedChangeId: string;
     validationRunId: string;
-    reviewArtifactId: string;
+    /** Exactly one of these two is set. The database refuses any other shape. */
+    reviewArtifactId: string | null;
+    codeReviewDigest: string | null;
+    previewSessionId: string | null;
+    reviewClassification: ReviewClassification | null;
+    reviewClassificationPolicyVersion: string | null;
     preparedCommitSha: string;
     preparedBaseSha: string;
     approvalPolicyVersion: string;
@@ -89,6 +103,10 @@ export async function createApproval(
       prepared_change_id: params.preparedChangeId,
       validation_run_id: params.validationRunId,
       review_artifact_id: params.reviewArtifactId,
+      code_review_digest: params.codeReviewDigest,
+      preview_session_id: params.previewSessionId,
+      review_classification: params.reviewClassification,
+      review_classification_policy_version: params.reviewClassificationPolicyVersion,
       prepared_commit_sha: params.preparedCommitSha,
       prepared_base_sha: params.preparedBaseSha,
       approval_policy_version: params.approvalPolicyVersion,
@@ -177,6 +195,28 @@ export async function getLatestApprovalForPreparedChange(
 
   if (error) throw error;
   return data ? mapRow(data as unknown as Row) : null;
+}
+
+/**
+ * The same answer for a whole list, in one query (VB-023).
+ *
+ * The Agent screen assembles every prepared change at once, and asking this
+ * table once per card is the cost that made one render 261 round trips. Ids
+ * with no row are absent from the map, so `.get(id) ?? null` reads exactly as
+ * the single-change query above.
+ */
+export async function getLatestApprovalsForPreparedChanges(
+  supabase: SupabaseClient,
+  params: { projectId: string; preparedChangeIds: readonly string[] },
+): Promise<Map<string, ChangeApproval>> {
+  const rows = await readLatestPerPreparedChange(supabase, {
+    table: "change_approvals",
+    columns: COLUMNS,
+    projectId: params.projectId,
+    preparedChangeIds: params.preparedChangeIds,
+  });
+
+  return new Map([...rows].map(([id, row]) => [id, mapRow(row as unknown as Row)]));
 }
 
 export async function getApproval(

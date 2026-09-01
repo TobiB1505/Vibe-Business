@@ -138,7 +138,7 @@ describe("the dashboard is summary-only", () => {
     for (const file of guarded) {
       expect(file.source, file.name).not.toContain("createVercelSandboxProvider");
       expect(file.source, file.name).not.toContain("createGithubMergePort");
-      expect(file.source, file.name).not.toContain("checkInstallationStillAccessible");
+      expect(file.source, file.name).not.toContain("checkInstallationAccess");
       expect(file.source, file.name).not.toContain("VercelWorkflowExecutor");
     }
   });
@@ -241,25 +241,34 @@ describe("the dashboard does not scale its queries with its projects", () => {
   });
 
   /**
-   * The audits read is deliberately *not* bounded, and that is not an
-   * oversight worth "fixing".
+   * The audits read is bounded, and a bound alone would be a defect (VB-025).
    *
-   * It is ordered newest-first across every project and reduced to the latest
-   * per project. A `.limit()` on it would starve exactly the project the
-   * `lastActivityAt` note in `dashboard.ts` describes: a quiet product whose
-   * newest audit falls outside a window filled by a busy one would render as
-   * never analysed. Correctness beats the ceiling here, and the row is one
-   * integer plus four small columns.
+   * This test used to forbid the `.limit()` outright, for a reason that has not
+   * gone away: the read is ordered newest-first across *every* project and
+   * reduced to the latest per project, so a window filled by a busy product
+   * starves a quiet one, and its card would say never analysed about a project
+   * that has been analysed.
+   *
+   * What changed is that the starved project is now re-read on its own — only
+   * when the budget was actually spent, because a short response saw
+   * everything. So the ceiling and the correctness are both present, and this
+   * asserts they stay that way *together*: a cap that loses its repair is the
+   * defect the original phrasing was protecting against.
+   *
+   * The guarantee itself is behavioural and lives in `dashboard.test.ts`, which
+   * builds the crowded account and reads the quiet project's score back. This
+   * is the structural half — it notices a cap arriving somewhere new.
    */
-  it("does not truncate a cross-project latest-per-project read", () => {
+  it("bounds the cross-project audit read and repairs what the bound hides", () => {
     const auditsQuery = readModel.slice(
       readModel.indexOf('from("business_readiness_audits")'),
       readModel.indexOf('from("opportunity_sets")'),
     );
 
     expect(auditsQuery.length).toBeGreaterThan(0);
-    expect(auditsQuery, "a limit here silently drops a quiet project's score").not.toContain(
-      ".limit(",
+    expect(auditsQuery, "an unbounded read grows with the account forever").toContain(".limit(");
+    expect(readModel, "a cap without the repair starves a quiet project").toContain(
+      "repairMissingLatestAudits",
     );
   });
 });

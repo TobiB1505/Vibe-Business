@@ -172,6 +172,10 @@ const RETAINED: Readonly<Record<string, readonly string[]>> = {
     "interruptType",
     "invalidation_reason",
     "materiality",
+    // Sprint 0055: "visual" | "code" | "visual_and_code", and which of the two
+    // evidence forms a human's yes actually rested on.
+    "review_classification",
+    "review_evidence",
     "merge_strategy",
     "metric_direction",
     "metric_key",

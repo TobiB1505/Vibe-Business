@@ -96,7 +96,7 @@ export function SignupForm({ next }: { next: string }) {
             />
           </Field>
 
-          <Field id="password" label="Password" hint="At least 6 characters" error={error}>
+          <Field id="password" label="Password" hint="At least 8 characters" error={error}>
             <Input
               id="password"
               name="password"
