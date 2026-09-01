@@ -74,11 +74,7 @@ export default async function ProjectDeepScanPage({
     : null;
 
   return (
-    <WorkspaceSection
-      id="deep-scan"
-      title="Deep Scan"
-      description="What your product looks like after signing in — the part repository and public-page evidence cannot reach."
-    >
+    <WorkspaceSection id="deep-scan">
       {deepScanModel ? (
         <DeepScanPanel projectId={project.id} model={deepScanModel} />
       ) : (

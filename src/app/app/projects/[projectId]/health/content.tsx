@@ -272,8 +272,6 @@ export async function ProjectBusinessHealth({ access }: { access: ProjectAccess 
     // the only way out of that state. It now resolves on this route.
     <WorkspaceSection
       id="business-audit"
-      title="Business Health"
-      description="Your whole business in one connected view — what is working, what matters and where to move next."
       actions={
         <RunAuditButton
           projectId={project.id}

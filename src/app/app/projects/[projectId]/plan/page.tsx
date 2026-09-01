@@ -209,8 +209,6 @@ export default async function ProjectMovesPage({
   return (
     <WorkspaceSection
       id="action-plan"
-      title="Action Plan"
-      description="Your prioritized plan to strengthen your business."
       actions={
         <MovesRefreshBar
           projectId={project.id}

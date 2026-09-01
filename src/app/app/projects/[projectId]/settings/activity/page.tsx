@@ -25,11 +25,7 @@ export default async function ProjectActivityPage({
   const activity = await listAuditEventsForProject(supabase, { projectId, userId });
 
   return (
-    <WorkspaceSection
-      id="activity"
-      title="Activity"
-      description="The append-only record of what Vibe did, when, and with what result."
-    >
+    <WorkspaceSection id="activity">
       <ActivityFeed entries={buildActivityFeed(activity.events)} hasMore={activity.hasMore} />
     </WorkspaceSection>
   );

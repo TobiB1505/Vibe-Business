@@ -56,11 +56,7 @@ export default async function ProjectExperimentsPage({
   const preparedHref = projectSectionHref(project.id, "agent");
 
   return (
-    <WorkspaceSection
-      id="experiments"
-      title="Experiments"
-      description="Every change Vibe shipped, and what became true afterwards. Vibe reports what it observed; it never claims a change caused it."
-    >
+    <WorkspaceSection id="experiments">
       {impact.entries.length > 0 ? (
         <div className="flex flex-col gap-4">
           <ul className="flex flex-col gap-4">
