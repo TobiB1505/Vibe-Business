@@ -710,6 +710,21 @@ export async function getApprovalCard(
  * — commit, base, validation, policy version — is still re-derived from current
  * state, so a regenerated commit or a newer validation still ends the
  * approval's applicability exactly as before.
+ *
+ * ## The one narrowing this introduced, stated rather than left to be found
+ *
+ * It used to ask `findActiveApprovalByIdentity`: *is there **any** active row
+ * whose hash matches?* It now asks: *is the **latest** approval for this change
+ * active, and does it match?* Those differ in exactly one case — an active
+ * approval that is not the newest row for its prepared change, whose identity
+ * matches current state.
+ *
+ * That state is one the product works to prevent: a superseded approval is
+ * marked `invalidated` by `getApprovalCard`, and `approveChange` returns the
+ * existing row rather than inserting a duplicate for the same identity. Where
+ * it could still arise, the new answer is **null**, which blocks a merge rather
+ * than authorizing one. Narrowing a merge gate in the direction of refusal is
+ * the acceptable side of a behaviour change; the reverse would not be.
  */
 export async function findActiveApprovalForCurrentArtifact(
   supabase: SupabaseClient,

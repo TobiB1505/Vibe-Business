@@ -788,3 +788,108 @@ describe("evidence form (ADR 0063)", () => {
     expect(state.blockReason).toBeNull();
   });
 });
+
+/**
+ * What the merge gate will and will not find (Sprint 0113).
+ *
+ * The gate was narrowed when it stopped resolving evidence for itself: it now
+ * asks whether the *latest* approval still describes the artifact, rather than
+ * whether any active row's hash matches. These pin both sides of that.
+ */
+describe("the standing approval a merge may rest on", () => {
+  it("finds the approval for the artifact on screen", async () => {
+    seed();
+    const approved = await approve();
+    if (approved.kind !== "approved") throw new Error("expected an approval");
+
+    const found = await findActiveApprovalForCurrentArtifact(client(), {
+      projectId: PROJECT,
+      preparedChangeId: PREPARED,
+    });
+
+    expect(found?.id).toBe(approved.approval.id);
+  });
+
+  it("finds nothing once the approval is revoked", async () => {
+    seed();
+    const approved = await approve();
+    if (approved.kind !== "approved") throw new Error("expected an approval");
+
+    await revokeChangeApproval(client(), {
+      projectId: PROJECT,
+      userId: USER,
+      approvalId: approved.approval.id,
+      confirmed: true,
+    });
+
+    expect(
+      await findActiveApprovalForCurrentArtifact(client(), {
+        projectId: PROJECT,
+        preparedChangeId: PREPARED,
+      }),
+    ).toBeNull();
+  });
+
+  it("finds nothing when the standing approval names a different artifact", async () => {
+    // The safe direction, and the one this gate must never get wrong: an
+    // approval of other bytes is not authority for these.
+    seed();
+    db.seed("change_approvals", {
+      id: "approval_other",
+      project_id: PROJECT,
+      user_id: USER,
+      prepared_change_id: PREPARED,
+      validation_run_id: VALIDATION,
+      review_artifact_id: REVIEW,
+      code_review_digest: null,
+      review_classification: null,
+      review_classification_policy_version: null,
+      prepared_commit_sha: "9".repeat(40),
+      prepared_base_sha: BASE_SHA,
+      approval_policy_version: APPROVAL_POLICY_VERSION,
+      approval_identity: identityFor({ commitSha: "9".repeat(40) }),
+      status: "approved",
+      approved_at: "2026-08-14T02:00:00.000Z",
+      created_at: "2026-08-14T02:00:00.000Z",
+    });
+
+    expect(
+      await findActiveApprovalForCurrentArtifact(client(), {
+        projectId: PROJECT,
+        preparedChangeId: PREPARED,
+      }),
+    ).toBeNull();
+  });
+
+  it("refuses a row that carries no evidence at all", async () => {
+    // Unreachable through the product — the database refuses the shape — and
+    // refused here anyway. An approval that cannot say what it rested on
+    // authorizes nothing.
+    seed();
+    db.seed("change_approvals", {
+      id: "approval_evidenceless",
+      project_id: PROJECT,
+      user_id: USER,
+      prepared_change_id: PREPARED,
+      validation_run_id: VALIDATION,
+      review_artifact_id: null,
+      code_review_digest: null,
+      review_classification: null,
+      review_classification_policy_version: null,
+      prepared_commit_sha: FIXTURE_COMMIT_SHA,
+      prepared_base_sha: BASE_SHA,
+      approval_policy_version: APPROVAL_POLICY_VERSION,
+      approval_identity: identityFor(),
+      status: "approved",
+      approved_at: "2026-08-14T02:00:00.000Z",
+      created_at: "2026-08-14T02:00:00.000Z",
+    });
+
+    expect(
+      await findActiveApprovalForCurrentArtifact(client(), {
+        projectId: PROJECT,
+        preparedChangeId: PREPARED,
+      }),
+    ).toBeNull();
+  });
+});
