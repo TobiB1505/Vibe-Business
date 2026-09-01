@@ -221,6 +221,29 @@ export const E2E_MOVES_SCENARIOS = {
       },
     }),
 
+  /**
+   * A re-scan running while the previous plan is still on screen.
+   *
+   * `moves_generating` only ever covered the empty case, so the state a
+   * founder with Moves actually reaches after pressing "Re-scan business" was
+   * the one state this suite never rendered — and it showed nothing at all.
+   */
+  moves_rescanning: () =>
+    base({
+      movesOperation: {
+        operationId: "moves_rescan_e2e",
+        status: "running",
+        stage: "prioritizing",
+        startedAt: "2026-09-01T00:00:00.000Z",
+        completedAt: null,
+        failureCode: null,
+        resultId: null,
+        shouldPoll: true,
+        retryAllowed: false,
+        stalled: false,
+      },
+    }),
+
   /** No audit to prioritize from — a block with a way out, not a dead end (§19F). */
   moves_blocked: () =>
     base({ opportunities: [], lineage: {}, executionStates: {}, blockedReason: "audit_missing" }),

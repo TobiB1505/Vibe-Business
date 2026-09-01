@@ -304,6 +304,31 @@ describe("running an audit enters the audit's own lifecycle", () => {
   });
 });
 
+describe("a finished re-scan reaches the screen", () => {
+  /**
+   * Regression: the workspace polled the generation run, watched it finish and
+   * told nobody. Everything a finished run produces — the new Moves, their
+   * readiness, the set's date — is rendered by the server, so without a
+   * refresh the founder kept reading the previous plan (or "No moves yet"
+   * seconds after a run that had succeeded) until a manual reload.
+   */
+  it("refreshes the route when the run leaves working, not on every tick", () => {
+    expect(WORKSPACE).toContain("useRouter");
+    expect(WORKSPACE).toContain('operationPollPhase(next) !== "working"');
+    expect(WORKSPACE).toContain("router.refresh()");
+    expect(WORKSPACE.match(/router\.refresh\(\)/g)).toHaveLength(1);
+  });
+
+  /** A re-scan over an existing plan had no running state at all: `PlanGenerating`
+   *  answers the empty case only, and it is in the other branch. */
+  it("says a re-scan is running while the previous Moves are still shown", () => {
+    expect(WORKSPACE).toContain('data-testid="moves-rescanning"');
+    expect(WORKSPACE).toContain('operationProgressSteps("opportunity_generation"');
+    const rescan = WORKSPACE.slice(WORKSPACE.indexOf('data-testid="moves-rescanning"'));
+    expect(rescan).toContain("The plan below is your previous one until this finishes.");
+  });
+});
+
 describe("the loop speaks business", () => {
   it("carries no implementation commentary on the changed surfaces", () => {
     for (const [name, source] of [
