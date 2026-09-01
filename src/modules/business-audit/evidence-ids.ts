@@ -1,3 +1,6 @@
+import { INTEGRATION_CATEGORY_BY_ID } from "@/modules/repository-intelligence/detectors/integrations";
+import { SIGNAL_CATEGORY_LABELS, type SignalCategory } from "@/modules/repository-intelligence/schema";
+
 /**
  * The evidence id vocabulary, and how to read one under the pack that minted it.
  *
@@ -125,4 +128,63 @@ export function surfaceEvidenceId(
 ): string {
   const { present, absent } = SURFACE_NAMESPACES[namespace];
   return `${detected ? present : absent}${surfaceId}`;
+}
+
+/* ---------------------------------------------------------------------------
+ * The two id families that are not surface citations, and are read like them
+ * ------------------------------------------------------------------------ */
+
+/**
+ * The signed-in pack's surface prefix, and its one absence dialect.
+ *
+ * Deliberately **not** an entry in `SURFACE_NAMESPACES`. That record is a pair
+ * of *prefixes* and three consumers iterate it as such; `auth.` expresses
+ * absence as a **suffix** (`evidence-v2.ts` mints
+ * `auth.surface.billing_not_observed`), so a misfit entry there would be a
+ * latent bug in every one of them.
+ */
+const AUTH_SURFACE_PREFIX = "auth.surface.";
+const AUTH_NOT_OBSERVED_SUFFIX = "_not_observed";
+
+/**
+ * Reads a signed-in surface citation, dropping its polarity.
+ *
+ * "Not observed" is not "absent" — the Deep Scan inspects a handful of pages
+ * under a budget — but a consumer asking *what surface is this about* wants the
+ * same answer either way. A consumer that needs presence must not use this.
+ */
+export function readAuthSurfaceCitation(evidenceId: string): { surfaceId: string } | null {
+  if (!evidenceId.startsWith(AUTH_SURFACE_PREFIX)) return null;
+
+  const tail = evidenceId.slice(AUTH_SURFACE_PREFIX.length);
+  return {
+    surfaceId: tail.endsWith(AUTH_NOT_OBSERVED_SUFFIX)
+      ? tail.slice(0, -AUTH_NOT_OBSERVED_SUFFIX.length)
+      : tail,
+  };
+}
+
+const INTEGRATION_PREFIX = "repo.integration.";
+
+/**
+ * Reads a repository integration citation, and says what kind of thing it is.
+ *
+ * The category comes from the detector catalogue itself
+ * (`INTEGRATION_CATEGORY_BY_ID`), so a provider added there is classified here
+ * without anyone remembering a second list. An id the catalogue does not know —
+ * including the bare-category form the product-scan reveal stream mints — is
+ * returned with `category: null` rather than guessed at.
+ */
+export function readIntegrationCitation(
+  evidenceId: string,
+): { integrationId: string; category: SignalCategory | null } | null {
+  if (!evidenceId.startsWith(INTEGRATION_PREFIX)) return null;
+
+  const integrationId = evidenceId.slice(INTEGRATION_PREFIX.length);
+  return {
+    integrationId,
+    category:
+      INTEGRATION_CATEGORY_BY_ID[integrationId] ??
+      (integrationId in SIGNAL_CATEGORY_LABELS ? (integrationId as SignalCategory) : null),
+  };
 }

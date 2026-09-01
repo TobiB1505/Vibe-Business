@@ -72,8 +72,18 @@ export const EXECUTION_RESOLVER_VERSION = "execution-resolver-v2" as const;
  */
 export const EXECUTION_POLICY_VERSION = "execution-policy-v1" as const;
 
-/** How structured step facts map to a risk class. */
-export const EXECUTION_RISK_POLICY_VERSION = "execution-risk-policy-v1" as const;
+/**
+ * How structured step facts map to a risk class.
+ *
+ * v2 reads two evidence families v1 did not — `auth.surface.*` and
+ * `repo.integration.*` — so a step citing a billing area or a payments
+ * provider is refused as payment work rather than classified `moderate`. The
+ * bump is not cosmetic: this constant is an input to
+ * `computeExecutionSpecIdentity`, and a spec classified under v1 was measured
+ * against a gate that could not see either family. A stored pass must never be
+ * reinterpreted under rules it was not checked against (Rule 65).
+ */
+export const EXECUTION_RISK_POLICY_VERSION = "execution-risk-policy-v2" as const;
 
 /* ---------------------------------------------------------------------------
  * Execution modes (§5)
