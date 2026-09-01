@@ -1,9 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { ConfirmPanel, useReturnFocus } from "@/components/ui/confirm-panel";
 import { Button } from "@/components/ui/button";
+import { useBrowserClock } from "@/lib/client/use-browser-clock";
 import { useOperationPoll } from "@/lib/client/use-operation-poll";
 import { shouldRefreshForState } from "@/modules/operations/view";
 import { PREVIEW_STAGE_LABELS, type PreviewCard } from "@/modules/change-preview/view";
@@ -209,7 +210,6 @@ export function PreviewPanel({
   const [intent, setIntent] = useState<"start" | "stop" | "validate" | null>(null);
   const [live, setLive] = useState<Live | null>(null);
   const [stage, setStage] = useState<PreviewStage | null>(card.stage);
-  const [now, setNow] = useState(() => Date.now());
 
   const startedSessionId = state?.ok
     ? "previewSessionId" in state
@@ -302,12 +302,17 @@ export function PreviewPanel({
     },
   });
 
-  // Drives the countdown only. The server is what refuses an expired origin.
-  useEffect(() => {
-    if (previewState !== "running") return;
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
-  }, [previewState]);
+  /**
+   * Drives the countdown only. The server is what refuses an expired origin.
+   *
+   * Null while nothing is running, which stops the ticker, and null on the
+   * server and the hydrating render, which is what keeps the countdown out of
+   * the markup until the browser owns the clock (PERF-021). It used to seed
+   * itself from `Date.now()` in an initial state — read once by Node and once
+   * by the browser, a second or so apart, which is a whole minute of
+   * difference at any minute boundary.
+   */
+  const now = useBrowserClock(previewState === "running" ? 1000 : null);
 
   function confirmStart() {
     setIntent("start");
@@ -346,7 +351,7 @@ export function PreviewPanel({
   }
 
   const expiresAt = live?.expiresAt ?? card.expiresAt;
-  const countdown = expiresAt ? remaining(expiresAt, now) : null;
+  const countdown = expiresAt && now !== null ? remaining(expiresAt, now) : null;
   const starting = previewState === "starting" || intent === "start";
   /**
    * A stop the user has asked for, before the server render agrees.

@@ -1,3 +1,5 @@
+import { formatClockTime } from "@/lib/utils/format-datetime";
+
 /**
  * Turning measurements into something readable, in one place.
  *
@@ -55,10 +57,15 @@ export function formatPercent(ratio: number | null | undefined): string | null {
   return `${(ratio * 100).toFixed(1)}%`;
 }
 
-/** `HH:MM:SS`, in the reader's own timezone. The feed is read at a glance. */
+/**
+ * `HH:MM:SS`, in UTC. The feed is read at a glance.
+ *
+ * It rendered the reader's own timezone through `toLocaleTimeString`, which is
+ * a hydration mismatch in a Client Component that is also server-rendered: the
+ * Node process and the browser disagree about both locale and zone, so React
+ * discarded the subtree and rebuilt it (PERF-021). `format-datetime.ts` exists
+ * for exactly this and says why UTC is the answer.
+ */
 export function formatClock(iso: string): string {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime())
-    ? "--:--:--"
-    : date.toLocaleTimeString(undefined, { hour12: false });
+  return formatClockTime(iso) ?? "--:--:--";
 }

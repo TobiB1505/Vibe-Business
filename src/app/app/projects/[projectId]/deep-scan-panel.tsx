@@ -13,6 +13,7 @@ import {
   startDeepScanAction,
 } from "./deep-scan-actions";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
+import { useBrowserClock } from "@/lib/client/use-browser-clock";
 
 /**
  * Deep Scan panel (Sprint 5 §3, §7, §16, §17).
@@ -65,10 +66,18 @@ function messageFor(code: string): string {
   return ERROR_MESSAGES[code] ?? "Deep Scan couldn't be completed.";
 }
 
-/** "in about 2 minutes" — coarse on purpose; a live countdown would be noise. */
-function waitHint(retryAvailableAt: string | null): string | null {
-  if (!retryAvailableAt) return null;
-  const remainingMs = Date.parse(retryAvailableAt) - Date.now();
+/**
+ * "in about 2 minutes" — coarse on purpose; a live countdown would be noise.
+ *
+ * `now` is a parameter rather than a `Date.now()` inside, because this renders
+ * in a client component that is also server-rendered: reading the clock during
+ * render reads two different clocks a second or so apart, and one minute
+ * boundary between them is a hydration mismatch (PERF-021). `useBrowserClock`
+ * supplies it, and answers null until there is a browser to ask.
+ */
+function waitHint(retryAvailableAt: string | null, now: number | null): string | null {
+  if (!retryAvailableAt || now === null) return null;
+  const remainingMs = Date.parse(retryAvailableAt) - now;
   if (!Number.isFinite(remainingMs) || remainingMs <= 0) return null;
   const minutes = Math.ceil(remainingMs / 60_000);
   return minutes <= 1 ? "You can try again in about a minute." : `You can try again in about ${minutes} minutes.`;
@@ -353,6 +362,8 @@ function ResultSummary({ result }: { result: NonNullable<DeepScanViewModel["last
 }
 
 export function DeepScanPanel({ projectId, model }: { projectId: string; model: DeepScanViewModel }) {
+  // Coarse by design — the hint says "about two minutes", so it need not tick.
+  const browserNow = useBrowserClock();
   const router = useRouter();
   const [pending, startTransition] = useTransition();
 
@@ -586,7 +597,7 @@ export function DeepScanPanel({ projectId, model }: { projectId: string; model: 
               // an abandoned attempt). Saying nothing here reads as "retry is
               // broken", which is exactly how it was reported.
               <p className="text-sm text-fg-muted">
-                {waitHint(model.retryAvailableAt) ??
+                {waitHint(model.retryAvailableAt, browserNow) ??
                   (model.blockedReason ? messageFor(model.blockedReason) : "Deep Scan can't be started right now.")}
               </p>
             )}

@@ -83,6 +83,20 @@ export function formatTime(iso: string | null | undefined): string | null {
 }
 
 /**
+ * `13:34:37` — a live feed's left gutter, where seconds are the point.
+ *
+ * No zone suffix, unlike the others: this renders once per row against a
+ * column of identical timestamps, where what a reader takes from it is the
+ * gap between two lines rather than the absolute moment. The zone is named
+ * once by whatever heading the feed sits under.
+ */
+export function formatClockTime(iso: string | null | undefined): string | null {
+  const date = parse(iso);
+  if (!date) return null;
+  return `${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}:${pad(date.getUTCSeconds())}`;
+}
+
+/**
  * `1,240` / `12.5` — grouped integers, two decimals otherwise.
  *
  * `Number.prototype.toLocaleString()` has the same split-brain problem as the

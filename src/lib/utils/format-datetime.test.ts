@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { formatDate, formatNumber, formatTime, formatTimestamp } from "./format-datetime";
+import {
+  formatClockTime,
+  formatDate,
+  formatNumber,
+  formatTime,
+  formatTimestamp,
+} from "./format-datetime";
 
 /**
  * The property under test is determinism, not prettiness. These assert exact
@@ -55,6 +61,25 @@ describe("formatDate and formatTime", () => {
   it("returns null for absent input", () => {
     expect(formatDate(null)).toBeNull();
     expect(formatTime(null)).toBeNull();
+  });
+});
+
+describe("formatClockTime", () => {
+  it("keeps the seconds a live feed is read for", () => {
+    expect(formatClockTime("2026-08-14T13:34:37.000Z")).toBe("13:34:37");
+  });
+
+  it("is UTC like the rest, not the runtime's zone", () => {
+    expect(formatClockTime("2026-08-14T15:34:37.000+02:00")).toBe("13:34:37");
+  });
+
+  it("pads every field so a gutter column never jumps", () => {
+    expect(formatClockTime("2026-01-05T04:07:09.000Z")).toBe("04:07:09");
+  });
+
+  it("returns null rather than a broken string", () => {
+    expect(formatClockTime(null)).toBeNull();
+    expect(formatClockTime("not a date")).toBeNull();
   });
 });
 
