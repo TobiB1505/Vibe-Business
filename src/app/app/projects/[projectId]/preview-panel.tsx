@@ -453,6 +453,16 @@ export function PreviewPanel({
             </p>
           )}
 
+          {/* Said beside the running preview, not only in the dialog that
+              started it (ADR 0064). This is the moment a person is most likely
+              to read a working page as a checked one — it is a development
+              server on the prepared commit, and the checks are a separate
+              answer arriving separately. */}
+          <p className="text-xs text-fg-muted">
+            This is the prepared code running, not a checked build. Vibe&apos;s safety checks are
+            a separate answer.
+          </p>
+
           <p className="text-xs text-amber/80">
             Anyone with the preview URL may be able to access it until it expires.
           </p>

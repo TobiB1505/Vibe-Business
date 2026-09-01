@@ -62,6 +62,16 @@ test.describe("a preview offered while the check is still running", () => {
 });
 
 test.describe("the before half", () => {
+  test("says what the running preview is, beside the running preview", async ({ page }) => {
+    // Not only in the dialog that started it. This is where somebody reads a
+    // working page and concludes it passed something.
+    await page.goto("/e2e/change_visual_preview_ready");
+
+    await expect(panel(page, "Preview")).toContainText(
+      "This is the prepared code running, not a checked build.",
+    );
+  });
+
   test("links the live site as it is now", async ({ page }) => {
     await page.goto("/e2e/change_visual_preview_ready");
 
