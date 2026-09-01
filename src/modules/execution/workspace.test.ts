@@ -464,6 +464,11 @@ describe("batching did not change the answer", () => {
         await getApprovalCard(client(), {
           ...scope,
           userId: USER,
+          // The read model resolves this per change and the card carries it, so
+          // the comparison is made against the same answer rather than a
+          // second one. Passing `null` here would compare a card built under
+          // the classification against one built without it.
+          classification: card.reviewClassification,
           resolveBlockMessage: approvalBlockMessage,
         }),
       );

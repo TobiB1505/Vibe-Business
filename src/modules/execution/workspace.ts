@@ -36,6 +36,13 @@ import {
   unavailableOutcomeCard,
 } from "@/modules/outcome-verification/service";
 import type { OutcomeCard } from "@/modules/outcome-verification/view";
+import {
+  classifyReviewForPreparedChange,
+  loadSurface,
+  type FileTextReader,
+} from "@/modules/review/classification-inputs";
+import type { ReviewClassificationResult } from "@/modules/review/classification";
+import { createGithubRepositoryReader } from "@/modules/github/repository-reader";
 import { getReviewCard, getReviewImages } from "@/modules/review/service";
 import { getLatestReviewsForPreparedChanges } from "@/modules/review/store";
 import type { ReviewArtifact } from "@/modules/review/schema";
@@ -183,6 +190,15 @@ type ChangeLifecycle = {
    */
   outcome: OutcomeCard;
   businessImpact: BusinessImpactCard;
+  /**
+   * Which review this change deserves (ADR 0040).
+   *
+   * Recomputed on read like everything else about it — it is never stored on a
+   * prepared change, only pinned onto an approval when one is made. Null
+   * whenever it could not be determined, which every consumer reads as the
+   * stricter answer.
+   */
+  reviewClassification: ReviewClassificationResult | null;
 };
 
 function emptyLifecycle(outcome: OutcomeCard, businessImpact: BusinessImpactCard): ChangeLifecycle {
@@ -195,6 +211,7 @@ function emptyLifecycle(outcome: OutcomeCard, businessImpact: BusinessImpactCard
     merge: null,
     outcome,
     businessImpact,
+    reviewClassification: null,
   };
 }
 
@@ -203,6 +220,13 @@ async function readChangeLifecycles(
   params: {
     projectId: string;
     prepared: readonly Awaited<ReturnType<typeof listPreparedChangesForProject>>[number][];
+    /**
+     * Read-only repository access, built once for the whole list.
+     *
+     * Null when no repository is connected, which degrades every classification
+     * to its path-based answer — the stricter one.
+     */
+    reader: FileTextReader | null;
   },
 ): Promise<Map<string, ChangeLifecycle>> {
   const scope = {
@@ -210,13 +234,58 @@ async function readChangeLifecycles(
     preparedChangeIds: params.prepared.map((change) => change.id),
   };
 
-  const [validations, previews, reviews, approvals, merges] = await Promise.all([
+  const [validations, previews, reviews, approvals, merges, surface] = await Promise.all([
     getLatestValidationsForPreparedChanges(supabase, scope),
     getLatestPreviewsForPreparedChanges(supabase, scope),
     getLatestReviewsForPreparedChanges(supabase, scope),
     getLatestApprovalsForPreparedChanges(supabase, scope),
     getLatestMergesForPreparedChanges(supabase, scope),
+    /*
+     * The analyzer's route table, once for the list rather than once per card.
+     *
+     * Every prepared change in a project is a change to the same repository at
+     * roughly the same commit, so they share one route table. Loading it inside
+     * the classifier — which is what a single-change caller does — would be the
+     * same snapshot read repeated for every card on the screen.
+     */
+    // Skipped entirely for an empty list, like every read beside it: a project
+    // with no prepared changes must ask the database nothing at all.
+    params.prepared.length > 0
+      ? loadSurface({ supabase, projectId: params.projectId })
+      : Promise.resolve(null),
   ]);
+
+  /*
+   * Which review each change deserves (ADR 0040).
+   *
+   * Bounded like every other per-change read on this page, and genuinely per
+   * change: the changed paths differ, and the render-impact probe reads two
+   * versions of any candidate page file from GitHub. That probe costs nothing
+   * at all for an ordinary change — a component, a stylesheet, a route handler
+   * — because its path guard runs before any network call.
+   *
+   * Every failure inside degrades to `null`, which reads as the stricter
+   * answer everywhere it is consulted. A classification that could not be
+   * determined never becomes permission to skip a review (rule 44).
+   */
+  const classifications = new Map<string, ReviewClassificationResult | null>(
+    await mapWithConcurrency(params.prepared, PER_CHANGE_CONCURRENCY, async (change) => [
+      change.id,
+      await classifyReviewForPreparedChange({
+        supabase,
+        projectId: params.projectId,
+        preparedChangeId: change.id,
+        reader: params.reader,
+        surface,
+        // The row this list already read, and `null` for the evidence-derived
+        // scopes. Together with the shared surface those are every database
+        // read the classifier would otherwise make per card — and the scopes
+        // are four of them for a value nothing on this screen displays.
+        prepared: change,
+        requirement: null,
+      }),
+    ]),
+  );
 
   /*
    * The two cards whose reads are chains, each batched by the module that owns
@@ -263,6 +332,7 @@ async function readChangeLifecycles(
       merge: merges.get(id) ?? null,
       outcome: outcomes.get(id) ?? unavailableOutcomeCard(),
       businessImpact: businessImpact.get(id) ?? unmergedBusinessImpactCard(),
+      reviewClassification: classifications.get(id) ?? null,
     });
   }
 
@@ -308,6 +378,7 @@ async function buildPreparedChangeCard(
     prepared,
     validation: lifecycle.validation,
     review: lifecycle.review,
+    approval: lifecycle.approval,
   };
 
   const [review, approval, merge, opportunity] = await Promise.all([
@@ -327,7 +398,8 @@ async function buildPreparedChangeCard(
       projectId,
       userId,
       preparedChangeId: prepared.id,
-      prefetched: { ...prefetchedApproval, approval: lifecycle.approval },
+      classification: lifecycle.reviewClassification,
+      prefetched: prefetchedApproval,
       resolveBlockMessage: approvalBlockMessage,
     }),
 
@@ -430,8 +502,10 @@ async function buildPreparedChangeCard(
       merge,
       outcome: lifecycle.outcome,
       businessImpact: lifecycle.businessImpact,
+      reviewClassification: lifecycle.reviewClassification,
     }),
     id: prepared.id,
+    reviewClassification: lifecycle.reviewClassification,
     branchName: prepared.branchName,
     commitSha: prepared.commitSha,
     baseBranch: prepared.baseBranch,
@@ -537,9 +611,23 @@ export async function getPreparedChangeWorkspace(
    * whole point: a batched read that ran per card would be the same N+1 with
    * more machinery.
    */
+  /*
+   * One read-only reader for the whole list, from the linkage the merge target
+   * already resolved. Building it per change is the pattern the dogfood route
+   * uses and the one this file exists to avoid: it re-reads the project and its
+   * repository connection every time.
+   *
+   * Read-only by type. A read model must have no way to write, and here that is
+   * a property of what it holds rather than a claim about what it does.
+   */
+  const reader: FileTextReader | null = mergeTarget
+    ? createGithubRepositoryReader(mergeTarget.installationId, mergeTarget.owner, mergeTarget.repo)
+    : null;
+
   const lifecycles = await readChangeLifecycles(supabase, {
     projectId: params.projectId,
     prepared,
+    reader,
   });
 
   /*

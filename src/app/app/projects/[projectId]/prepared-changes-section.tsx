@@ -8,6 +8,7 @@ import type { MergeCard } from "@/modules/merge/view";
 import type { OutcomeCard } from "@/modules/outcome-verification/view";
 import type { BusinessImpactCard } from "@/modules/business-measurement/view";
 import type { PreviewCard } from "@/modules/change-preview/view";
+import type { ReviewClassificationResult } from "@/modules/review/classification";
 import type { ReviewCard } from "@/modules/review/view";
 import type { ReviewImages } from "@/modules/review/service";
 import { ApprovalPanel } from "./approval-panel";
@@ -69,6 +70,18 @@ export type PreparedChangeCard = {
    * port, no command (§6).
    */
   validatedArtifactId: string | null;
+  /**
+   * Which review this change deserves, decided on the server (ADR 0040).
+   *
+   * The card reads it to decide which evidence to *show* — a diff, a visual
+   * comparison, or both. It never re-decides it, and it is not what authorizes
+   * anything: `approval.canApprove` is still the server's answer to whether a
+   * person may decide, resolved from the same classification.
+   *
+   * Null when it could not be determined, which reads as the stricter answer:
+   * the visual panels stay, exactly as they were before this sprint.
+   */
+  reviewClassification: ReviewClassificationResult | null;
   /** Review state, decided on the server like every other panel's. */
   review: ReviewCard;
   /** Signed, short-lived image URLs. Minted server-side, never persisted (§16). */

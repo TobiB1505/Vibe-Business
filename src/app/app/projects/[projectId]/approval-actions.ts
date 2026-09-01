@@ -6,6 +6,7 @@ import { approveChange, revokeChangeApproval } from "@/modules/approvals/service
 import { approvalBlockMessage } from "@/modules/approvals/messages";
 import type { ApprovalBlockReason } from "@/modules/approvals/schema";
 import { requireSession } from "@/modules/auth/session";
+import { resolveReviewClassification } from "@/modules/review/classification-service";
 
 /**
  * Approval server actions (Sprint 11B §8, §9).
@@ -15,11 +16,14 @@ import { requireSession } from "@/modules/auth/session";
  *
  * ## What the client can say
  *
- * A project id, a prepared change id, a review artifact id, and an explicit
- * confirmation. That is the entire surface.
+ * A project id, a prepared change id, a review artifact id *or null*, and an
+ * explicit confirmation. That is the entire surface.
  *
  * It cannot name the approver, the commit, the base, the validation run, the
- * policy version, the timestamp or the resulting status. Those are resolved by
+ * policy version, the timestamp, the resulting status — or which kind of review
+ * this change deserves, which is resolved below from Vibe's own analysis of the
+ * changed paths. A client that could name that could approve a visible change
+ * on a diff nobody looked at (ADR 0040). Those are resolved by
  * the service from persisted state, so an approval cannot be recorded against
  * bytes no human ever saw — which matters because Sprint 11C will treat these
  * rows as the reason it is allowed to write to someone's default branch.
@@ -52,7 +56,7 @@ export type RevokeActionState =
 export async function approveChangeAction(
   projectId: string,
   preparedChangeId: string,
-  reviewArtifactId: string,
+  reviewArtifactId: string | null,
   confirmed: boolean,
 ): Promise<NonNullable<ApproveActionState>> {
   const session = await requireSession();
@@ -63,6 +67,10 @@ export async function approveChangeAction(
     userId: session.userId,
     preparedChangeId,
     reviewArtifactId,
+    // Resolved here rather than accepted from the client, and resolved *again*
+    // rather than trusted from the render that drew the button: the page a
+    // person is looking at may be minutes old.
+    classification: await resolveReviewClassification(supabase, { projectId, preparedChangeId }),
     confirmed,
   });
 

@@ -1,10 +1,20 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { FakeDatabase, fakeSupabase } from "@/modules/operations/test-support";
 import { FIXTURE_COMMIT_SHA } from "@/modules/validation/test-support";
-import { computeApprovalIdentity } from "./identity";
+import {
+  REVIEW_CLASSIFICATION_VERSION,
+  type ReviewClassification,
+  type ReviewClassificationResult,
+} from "@/modules/review/classification";
+import { computeApprovalIdentity, type ApprovalEvidence } from "./identity";
 import { approvalBlockMessage } from "./messages";
 import { APPROVAL_POLICY_VERSION } from "./schema";
-import { approveChange, getApprovalCard, revokeChangeApproval } from "./service";
+import {
+  approveChange,
+  findActiveApprovalForCurrentArtifact,
+  getApprovalCard,
+  revokeChangeApproval,
+} from "./service";
 
 /**
  * Eligibility, identity, confirmation and authority (Sprint 11B §29–§33).
@@ -47,6 +57,7 @@ function identityFor(
     baseSha?: string;
     validationRunId?: string;
     reviewArtifactId?: string;
+    evidence?: ApprovalEvidence;
     policyVersion?: string;
   } = {},
 ) {
@@ -56,9 +67,35 @@ function identityFor(
     preparedCommitSha: overrides.commitSha ?? FIXTURE_COMMIT_SHA,
     preparedBaseSha: overrides.baseSha ?? BASE_SHA,
     validationRunId: overrides.validationRunId ?? VALIDATION,
-    reviewArtifactId: overrides.reviewArtifactId ?? REVIEW,
+    evidence: overrides.evidence ?? {
+      kind: "review_artifact",
+      reviewArtifactId: overrides.reviewArtifactId ?? REVIEW,
+    },
     approvalPolicyVersion: overrides.policyVersion ?? APPROVAL_POLICY_VERSION,
   });
+}
+
+/**
+ * The classification a test runs under.
+ *
+ * `null` by default, which is the stricter path and exactly what every test
+ * written before ADR 0040 assumed: a visual comparison is required. The
+ * code-diff tests opt in explicitly.
+ */
+function classificationOf(
+  classification: ReviewClassification,
+  overrides: Partial<ReviewClassificationResult> = {},
+): ReviewClassificationResult {
+  return {
+    classification,
+    policyVersion: REVIEW_CLASSIFICATION_VERSION,
+    visualPaths: [],
+    codePaths: ["src/app/robots.ts"],
+    routes: [],
+    scopes: [],
+    downgradedPaths: [],
+    ...overrides,
+  };
 }
 
 function seed(
@@ -115,21 +152,31 @@ function seed(
   }
 }
 
-function approve(overrides: { reviewArtifactId?: string; confirmed?: boolean; userId?: string } = {}) {
+function approve(
+  overrides: {
+    reviewArtifactId?: string | null;
+    confirmed?: boolean;
+    userId?: string;
+    classification?: ReviewClassificationResult | null;
+  } = {},
+) {
   return approveChange(client(), {
     projectId: PROJECT,
     userId: overrides.userId ?? USER,
     preparedChangeId: PREPARED,
-    reviewArtifactId: overrides.reviewArtifactId ?? REVIEW,
+    reviewArtifactId:
+      overrides.reviewArtifactId === undefined ? REVIEW : overrides.reviewArtifactId,
+    classification: overrides.classification ?? null,
     confirmed: overrides.confirmed ?? true,
   });
 }
 
-function card(userId = USER) {
+function card(userId = USER, classification: ReviewClassificationResult | null = null) {
   return getApprovalCard(client(), {
     projectId: PROJECT,
     userId,
     preparedChangeId: PREPARED,
+    classification,
     resolveBlockMessage: approvalBlockMessage,
   });
 }
@@ -210,6 +257,7 @@ describe("authority", () => {
       userId: OTHER_USER,
       preparedChangeId: PREPARED,
       reviewArtifactId: REVIEW,
+      classification: null,
       confirmed: true,
     });
 
@@ -614,5 +662,129 @@ describe("no side effects", () => {
     // the first belongs in a durable, widely readable log (§17).
     expect(metadata).not.toContain("signed:");
     expect(metadata).not.toContain("http");
+  });
+});
+
+/**
+ * Which evidence a change may be approved on (Sprint 0055, ADR 0040).
+ *
+ * The defect this closes is concrete: before it, `approval_review_required`
+ * blocked every change until a before/after comparison existed — including a
+ * change that alters no rendered page, where the comparison is two identical
+ * pictures the user paid a browser session for.
+ *
+ * The properties that matter are symmetric. A code-only change must be
+ * approvable without one; everything else must still be refused without one.
+ */
+describe("evidence form (ADR 0040)", () => {
+  const CODE = () => classificationOf("code");
+  const VISUAL = () => classificationOf("visual", { visualPaths: ["src/app/page.tsx"] });
+  const BOTH = () =>
+    classificationOf("visual_and_code", { visualPaths: ["src/app/page.tsx"] });
+
+  it("approves a code-only change with no comparison at all", async () => {
+    seed({ withReview: false });
+
+    const outcome = await approve({ reviewArtifactId: null, classification: CODE() });
+
+    expect(outcome.kind).toBe("approved");
+    if (outcome.kind !== "approved") return;
+    expect(outcome.approval.reviewArtifactId).toBeNull();
+    expect(outcome.approval.codeReviewDigest).toMatch(/^[0-9a-f]{64}$/);
+    expect(outcome.approval.reviewClassification).toBe("code");
+  });
+
+  it("still refuses a visual change with no comparison", async () => {
+    seed({ withReview: false });
+
+    expect(await approve({ reviewArtifactId: null, classification: VISUAL() })).toEqual({
+      kind: "blocked",
+      reason: "approval_review_required",
+    });
+  });
+
+  it("still refuses a change that is visual *and* code", async () => {
+    // Half of it is visible, and the half that is visible is the half a diff
+    // cannot show. A partial answer is not a cheaper one.
+    seed({ withReview: false });
+
+    expect(await approve({ reviewArtifactId: null, classification: BOTH() })).toEqual({
+      kind: "blocked",
+      reason: "approval_review_required",
+    });
+  });
+
+  it("falls back to requiring a comparison when the classification is unknown", async () => {
+    // Missing evidence is never a good result (rule 44). An undeterminable
+    // classification leaves exactly the behaviour that existed before ADR 0040.
+    seed({ withReview: false });
+
+    expect(await approve({ reviewArtifactId: null, classification: null })).toEqual({
+      kind: "blocked",
+      reason: "approval_review_required",
+    });
+  });
+
+  it("refuses a client that sends an artifact id for a code-only change", async () => {
+    // A stale tab, rendered before the classification said no comparison was
+    // needed. The server's answer wins, and it wins by refusing rather than by
+    // ignoring what the client sent.
+    seed();
+
+    expect(await approve({ reviewArtifactId: REVIEW, classification: CODE() })).toEqual({
+      kind: "blocked",
+      reason: "approval_review_required",
+    });
+  });
+
+  it("gives a code approval a different identity than a visual one", async () => {
+    // The same commit, the same base, the same validation — and two different
+    // things to approve, because the evidence differs.
+    seed();
+
+    const visual = identityFor();
+    const code = identityFor({
+      evidence: { kind: "code_diff", codeReviewDigest: "a".repeat(64) },
+    });
+
+    expect(visual).not.toBe(code);
+  });
+
+  it("keeps a standing code approval usable by the merge gate", async () => {
+    seed({ withReview: false });
+    const approved = await approve({ reviewArtifactId: null, classification: CODE() });
+    if (approved.kind !== "approved") throw new Error("expected an approval");
+
+    /*
+     * The merge gate is given no classification at all, on purpose (rule 68):
+     * the analyzer's route table moves, and a human's decision must not stop
+     * being findable because a table they never saw now says something else.
+     */
+    const found = await findActiveApprovalForCurrentArtifact(client(), {
+      projectId: PROJECT,
+      preparedChangeId: PREPARED,
+    });
+
+    expect(found?.id).toBe(approved.approval.id);
+  });
+
+  it("records which evidence the human actually looked at", async () => {
+    seed({ withReview: false });
+
+    await approve({ reviewArtifactId: null, classification: CODE() });
+
+    const event = db.rows("audit_events")[0];
+    expect(event.event_type).toBe("change_approval.created");
+    expect(JSON.stringify(event.metadata)).toContain("code_diff");
+  });
+
+  it("shows a code-only change as approvable on the card", async () => {
+    seed({ withReview: false });
+
+    const state = await card(USER, CODE());
+
+    expect(state.state).toBe("not_approved");
+    expect(state.canApprove).toBe(true);
+    expect(state.blockReason).toBeNull();
   });
 });

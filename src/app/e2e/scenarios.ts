@@ -3,6 +3,7 @@ import type { OutcomeCard, OutcomeCheckLine } from "@/modules/outcome-verificati
 import type { BusinessImpactCard } from "@/modules/business-measurement/view";
 import { businessRationaleFor } from "@/modules/execution/business-rationale";
 import { deriveChangeProgress } from "@/modules/execution/change-progress";
+import { REVIEW_CLASSIFICATION_VERSION } from "@/modules/review/classification";
 import { MERGE_FAILURE_MESSAGES } from "@/modules/merge/messages";
 import { APPROVAL_BLOCK_MESSAGES } from "@/modules/approvals/messages";
 import { OBSERVED_CHANGE_DISCLAIMER } from "@/modules/business-measurement/causality";
@@ -75,6 +76,22 @@ function baseChange(): Omit<
         "These are low-effort fixes that do not depend on positioning or monetization.",
     },
     opportunityId: "3-seo-fix-missing-technical-seo-foundations",
+    /*
+     * `visual_and_code`: the SEO capability writes `src/app/robots.ts` and
+     * `src/app/sitemap.ts`, neither of which renders — but the scenarios below
+     * are the ones that exercise the *visual* path, so the fixture keeps the
+     * comparison panels and adds the diff beside them. `change_code_review_ready`
+     * is the scenario that classifies as `code`.
+     */
+    reviewClassification: {
+      classification: "visual_and_code",
+      policyVersion: REVIEW_CLASSIFICATION_VERSION,
+      visualPaths: ["src/app/page.tsx"],
+      codePaths: ["src/app/robots.ts", "src/app/sitemap.ts"],
+      routes: ["/"],
+      scopes: [],
+      downgradedPaths: [],
+    },
     validation: {
       status: "passed",
       phases: [],

@@ -80,20 +80,62 @@ export type ReviewClassificationInput = {
    * and the one this function returned before the probe existed.
    */
   reader?: FileTextReader | null;
+  /**
+   * The analyzer's route table, when a caller has already resolved it.
+   *
+   * A list of prepared changes shares one repository and therefore one route
+   * table, and loading it per change is the same snapshot read repeated. Absent
+   * means "resolve it here", which is what a single-change caller wants; `null`
+   * means "there is none", and is passed through rather than re-looked-up.
+   *
+   * It changes nothing about the decision — only where the bytes came from.
+   */
+  surface?: ResolvedExecutionSurface | null;
+  /**
+   * The prepared change, when a caller already holds it.
+   *
+   * A list render reads every prepared change once for the whole list, and
+   * re-reading one here per card was the first of the per-change costs this
+   * classification added. Supplying it changes nothing about the decision —
+   * only where the row came from.
+   */
+  prepared?: PreparedChangeInputs;
+  /**
+   * The evidence-derived scopes, or `null` for "do not look them up".
+   *
+   * Absent means resolve them, which walks agent run → execution spec → stored
+   * spec → plan step: four reads, for a value that is **carried for the
+   * explanation and never consulted for the decision**. A caller that does not
+   * display scopes should pass `null` rather than buy them, and a list render
+   * is exactly that caller.
+   */
+  requirement?: ExecutionSurfaceRequirement | null;
+};
+
+/** The two fields of a prepared change this needs, and nothing more. */
+export type PreparedChangeInputs = {
+  baseSha: string;
+  commitSha: string | null;
+  files: readonly { path: string }[];
+  operationRunId: string;
 };
 
 export async function classifyReviewForPreparedChange(
   input: ReviewClassificationInput,
 ): Promise<ReviewClassificationResult | null> {
-  const prepared = await getPreparedChange(input.supabase, {
-    projectId: input.projectId,
-    preparedChangeId: input.preparedChangeId,
-  });
+  const prepared =
+    input.prepared ??
+    (await getPreparedChange(input.supabase, {
+      projectId: input.projectId,
+      preparedChangeId: input.preparedChangeId,
+    }));
   if (!prepared) return null;
 
   const [surface, requirement] = await Promise.all([
-    loadSurface(input),
-    loadRequirement(input, prepared.operationRunId),
+    input.surface !== undefined ? Promise.resolve(input.surface) : loadSurface(input),
+    input.requirement !== undefined
+      ? Promise.resolve(input.requirement)
+      : loadRequirement(input, prepared.operationRunId),
   ]);
 
   const changedPaths = prepared.files.map((file) => file.path);
@@ -175,8 +217,8 @@ async function loadProvenNonRendering(
  * depend on which side a route falls on — both are visual. Loading a second
  * snapshot to refine a distinction nobody reads would be work for its own sake.
  */
-async function loadSurface(
-  input: ReviewClassificationInput,
+export async function loadSurface(
+  input: { supabase: SupabaseClient; projectId: string },
 ): Promise<ResolvedExecutionSurface | null> {
   try {
     const snapshot = await getLatestSuccessfulSnapshot(input.supabase, input.projectId);

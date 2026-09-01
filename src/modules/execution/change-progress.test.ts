@@ -408,3 +408,81 @@ describe("headline", () => {
     }
   });
 });
+
+/**
+ * The visual gates only apply to a change that has something visual about it
+ * (Sprint 0055, ADR 0040).
+ */
+describe("the review gate a change actually has", () => {
+  function classification(kind: string, overrides: Record<string, unknown> = {}) {
+    return {
+      classification: kind,
+      policyVersion: "review-classification-v2",
+      visualPaths: [],
+      codePaths: ["src/lib/pricing.ts"],
+      routes: [],
+      scopes: [],
+      downgradedPaths: [],
+      ...overrides,
+    };
+  }
+
+  /** Validated, nothing previewed, nothing captured, nobody has approved. */
+  function afterValidation(reviewClassification: unknown) {
+    return input({
+      preview: { state: "ready_to_start" },
+      review: { state: "not_generated" },
+      approval: { state: "not_approved" },
+      merge: { state: "not_eligible", failureCode: "merge_approval_required" },
+      reviewClassification,
+    });
+  }
+
+  it("sends a code-only change straight to the person", () => {
+    // Photographing it would produce two identical images. There is no gate to
+    // pass, so the change is not waiting on one.
+    const progress = deriveChangeProgress(afterValidation(classification("code")));
+
+    expect(progress.stage).toBe("awaiting_approval");
+    expect(progress.headline).toBe("Ready for you to review and approve.");
+  });
+
+  it("still asks for a comparison when the change alters a page", () => {
+    const progress = deriveChangeProgress(
+      afterValidation(classification("visual", { visualPaths: ["src/app/page.tsx"] })),
+    );
+
+    expect(progress.stage).toBe("review_required");
+  });
+
+  it("still asks for a comparison when the change is visual and code", () => {
+    const progress = deriveChangeProgress(
+      afterValidation(classification("visual_and_code", { visualPaths: ["src/app/page.tsx"] })),
+    );
+
+    expect(progress.stage).toBe("review_required");
+  });
+
+  it("keeps the stricter path when the classification is unknown", () => {
+    // Exactly the behaviour that existed before this sprint. A classification
+    // Vibe could not determine is never read as permission (rule 44).
+    expect(deriveChangeProgress(afterValidation(null)).stage).toBe("review_required");
+  });
+
+  it("does not let a code classification skip validation", () => {
+    // The visual gates are the only ones this removes. Nothing may reach a
+    // person before the bytes are known to build.
+    const progress = deriveChangeProgress(
+      input({
+        validation: null,
+        preview: { state: "not_available" },
+        review: { state: "not_generated" },
+        approval: { state: "not_eligible" },
+        merge: { state: "not_eligible", failureCode: "merge_approval_required" },
+        reviewClassification: classification("code"),
+      }),
+    );
+
+    expect(progress.stage).toBe("not_validated");
+  });
+});

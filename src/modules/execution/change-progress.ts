@@ -3,6 +3,7 @@ import type { BusinessImpactCard } from "@/modules/business-measurement/view";
 import type { PreviewCard } from "@/modules/change-preview/view";
 import type { MergeCard } from "@/modules/merge/view";
 import type { OutcomeCard } from "@/modules/outcome-verification/view";
+import type { ReviewClassificationResult } from "@/modules/review/classification";
 import type { ReviewCard } from "@/modules/review/view";
 import type { ValidationSummary } from "@/modules/validation/view";
 
@@ -128,7 +129,23 @@ const STAGE_HEADLINES: Record<ChangeStage, string> = {
 function reviewGate(
   review: ReviewCard,
   preview: PreviewCard,
+  classification: ReviewClassificationResult | null,
 ): "reviewing" | "review_required" | "review_unavailable" | null {
+  /*
+   * A change that alters no rendered page has no visual gate to pass (ADR 0040).
+   *
+   * Not "the gate passes" — there is no gate. Photographing a backend change
+   * produces two identical images, so requiring one before a person may decide
+   * was asking them to buy a browser session to look at nothing. The diff is
+   * the review, it is on the card above these panels, and the next move is
+   * theirs.
+   *
+   * `null` and `visual_and_code` both fall through to the visual gates. Half a
+   * change being visible is a whole reason to look at it, and a classification
+   * Vibe could not determine is never read as permission (rule 44).
+   */
+  if (classification?.classification === "code") return null;
+
   if (review.state === "capturing") return "reviewing";
   if (previewInFlight(preview)) return "reviewing";
   if (review.state === "ready") return null;
@@ -201,6 +218,13 @@ export type ChangeProgressInput = {
   merge: MergeCard;
   outcome: OutcomeCard;
   businessImpact: BusinessImpactCard;
+  /**
+   * Which review this change deserves (ADR 0040).
+   *
+   * Null when it could not be determined, which reads as the stricter answer
+   * everywhere it is consulted.
+   */
+  reviewClassification: ReviewClassificationResult | null;
 };
 
 export function deriveChangeProgress(input: ChangeProgressInput): ChangeProgress {
@@ -227,16 +251,19 @@ export function deriveChangeProgress(input: ChangeProgressInput): ChangeProgress
         ? "stalled"
         : approved
           ? "ready_to_merge"
-          : (validationGate(validation) ?? reviewGate(review, preview) ?? "awaiting_approval");
+          : (validationGate(validation) ??
+            reviewGate(review, preview, input.reviewClassification) ??
+            "awaiting_approval");
 
   return {
     stage,
     headline: STAGE_HEADLINES[stage],
     /*
-     * Approval is the last of the four early gates and it cannot be reached
-     * without them: an approval requires a validation that passed and a review
-     * that is ready. So one answer settles all four, and a revoked or
-     * superseded approval correctly opens them again.
+     * Approval is the last of the early gates and it cannot be reached without
+     * the ones before it: an approval requires a validation that passed, and —
+     * for a change that alters a rendered page — a review that is ready. So one
+     * answer settles them all, and a revoked or superseded approval correctly
+     * opens them again.
      *
      * True for a stalled change too. Its four gates really are behind it — and
      * what still stands is exactly what a person needs told plainly rather

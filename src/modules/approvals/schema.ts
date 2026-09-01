@@ -1,3 +1,5 @@
+import type { ReviewClassification } from "@/modules/review/classification";
+
 /**
  * The human approval domain (Sprint 11B §1, §2, §3, §11).
  *
@@ -45,7 +47,7 @@
  * Changing any of that changes what a stored approval means, so the version is
  * part of the approval's identity and old rows keep their original meaning.
  */
-export const APPROVAL_POLICY_VERSION = "approval-policy-v1" as const;
+export const APPROVAL_POLICY_VERSION = "approval-policy-v2" as const;
 
 /**
  * Approval statuses (§2).
@@ -79,6 +81,17 @@ export const APPROVAL_INVALIDATION_REASONS = [
   "validation_superseded",
   /** A newer ready comparison superseded the one that was approved. */
   "review_superseded",
+  /**
+   * The change now deserves a different kind of review than the one approved.
+   *
+   * The classification is derived partly from the analyzer's route table, and
+   * that table moves: a newer repository snapshot can reveal that a changed
+   * file serves a route, turning a change that needed only a diff into one that
+   * needs a visual review. The human's decision has not been superseded by
+   * newer evidence of the same kind — it is being asked a different question,
+   * and saying so is not the same sentence as "your comparison was replaced".
+   */
+  "review_requirement_changed",
 ] as const;
 export type ApprovalInvalidationReason = (typeof APPROVAL_INVALIDATION_REASONS)[number];
 
@@ -129,7 +142,30 @@ export type ChangeApproval = {
 
   preparedChangeId: string;
   validationRunId: string;
-  reviewArtifactId: string;
+
+  /**
+   * The comparison the human looked at. Null for a code-diff approval.
+   *
+   * Exactly one of this and `codeReviewDigest` is set — the database enforces
+   * it, so neither the domain nor a reader has to hold the rule in their head.
+   */
+  reviewArtifactId: string | null;
+  /**
+   * The diff the human looked at, as a reproducible identity.
+   *
+   * sha256 over project, change, base, commit, sorted changed paths and the
+   * diff policy version. It is not a hash of the *bytes* — those are never
+   * persisted (rule 26) — it is a hash of everything needed to fetch them
+   * again and get the same diff, which is the property a screenshot lacks.
+   *
+   * What it does **not** claim: that anyone read it. It records what was shown,
+   * which is the same claim `reviewArtifactId` makes about two images.
+   */
+  codeReviewDigest: string | null;
+
+  /** Which review this change deserved, as decided at approval time (ADR 0040). */
+  reviewClassification: ReviewClassification | null;
+  reviewClassificationPolicyVersion: string | null;
 
   /**
    * The exact commit that was approved.
