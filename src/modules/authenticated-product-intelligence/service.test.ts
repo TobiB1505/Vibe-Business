@@ -152,6 +152,18 @@ describe("startDeepScan — authorization precedes provider spend", () => {
     expect(provider.created).toBe(0);
   });
 
+  /**
+   * The invariant is `provider.created === 0`, not the reason.
+   *
+   * The reason moved with the rate card. Under `retail-v1` an additional scan
+   * was `not_priced`, so a consumed entitlement ended in `credits_required` —
+   * "not for sale". `launch-v1` prices one at 25 Credits (ADR 0061), and this
+   * project's wallet is empty, so the honest refusal is now the one that names
+   * which number is short. `entitlement.test.ts` proves both branches of
+   * `authorizeDeepScan` against explicit facts; this proves the ordering that
+   * matters commercially — the refusal happens **before** Vibe pays anyone for
+   * a browser, whichever refusal it is.
+   */
   it("never creates a browser once the included scan is consumed", async () => {
     const { db, supabase, projectId } = setup();
     db.seed("authenticated_product_intelligence_snapshots", {
@@ -164,7 +176,7 @@ describe("startDeepScan — authorization precedes provider spend", () => {
     const provider = new FakeBrowserProvider();
     const result = await startDeepScan(supabase, provider, { projectId, userId: OWNER });
 
-    expect(result).toEqual({ ok: false, error: "credits_required" });
+    expect(result).toEqual({ ok: false, error: "insufficient_credits" });
     expect(provider.created).toBe(0);
   });
 
@@ -294,10 +306,12 @@ describe("analyzeDeepScan — entitlement consumption", () => {
     expect(snapshots[0]!.status).toBe("completed");
     expect(snapshots[0]!.access_mode).toBe("included_first_scan");
 
-    // And the entitlement is now visibly gone.
+    // And the entitlement is now visibly gone. The block is about this
+    // wallet rather than about the catalogue: `launch-v1` prices a second
+    // scan, and nothing has funded this account — see the note above.
     const status = await getDeepScanAccessStatus(supabase, { projectId, userId: OWNER });
     expect(status?.includedScanAvailable).toBe(false);
-    expect(status?.blockedReason).toBe("credits_required");
+    expect(status?.blockedReason).toBe("insufficient_credits");
   });
 
   it.each([
