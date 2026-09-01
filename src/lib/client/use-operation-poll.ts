@@ -44,12 +44,49 @@ import { useEffect, useRef, useState } from "react";
  * held in a ref and the effect depends only on identity, whether it is on,
  * and how often.
  *
+ * It also owns the two things a bare `setInterval` gets wrong (PERF-003).
+ * **One request at a time**: the callers' intervals run from 1.8s and the
+ * Supabase client's deadline is fifteen seconds, so a slow read used to stack
+ * concurrent Server Actions for the same operation — a tab that fell behind
+ * pressed harder on the thing that was already struggling. **A failure is an
+ * answer**: `void tick()` turned a rejected read into an unhandled rejection
+ * and then asked again at the same cadence, which is the shape of a retry
+ * storm. A failed read now costs a backoff instead.
+ *
  * The timing logic here is a handful of lines with no decisions in them; the
- * decisions live in `operationPollPhase`, `freshestOperation` and
- * `shouldRefreshForState`, which are pure and unit-tested. This file is not,
- * because the repository's test environment is Node with no DOM, and adding
- * one for a single file would change how every other test runs.
+ * decisions live in `pollBackoffMultiplier` above and in `operationPollPhase`,
+ * `freshestOperation` and `shouldRefreshForState`, which are pure and
+ * unit-tested. The hook itself is not, because the repository's test
+ * environment is Node with no DOM, and adding one for a single file would
+ * change how every other test runs.
  */
+
+/**
+ * The ceiling on the backoff, in multiples of the caller's interval.
+ *
+ * Eight is where a 1.8s poll becomes a ~15s poll — slow enough to stop being
+ * pressure on something that is already failing, fast enough that a recovery
+ * is noticed within one screenful of attention rather than after a coffee.
+ */
+export const POLL_BACKOFF_MAX_MULTIPLIER = 8;
+
+/**
+ * How long to wait after a failed read, as a multiple of the interval.
+ *
+ * The decision, kept pure and out of the effect below for the same reason
+ * `operationPollPhase` is: a schedule buried in a timer is a schedule nobody
+ * can assert on.
+ *
+ * Doubling rather than a fixed delay, because the two failures this exists for
+ * differ in kind. A single dropped request should cost one skipped reading; a
+ * backend that is genuinely down should stop being asked every two seconds by
+ * every open tab. Capped, because a poll that has backed off past the point of
+ * usefulness is indistinguishable from one that stopped.
+ */
+export function pollBackoffMultiplier(consecutiveFailures: number): number {
+  if (consecutiveFailures <= 0) return 1;
+  return Math.min(2 ** consecutiveFailures, POLL_BACKOFF_MAX_MULTIPLIER);
+}
 
 export type PollReading<T> =
   | { kind: "value"; value: T }
@@ -126,6 +163,11 @@ export function useOperationPoll<T>({
   const onReadingRef = useRef(onReading);
   const continueAfterRef = useRef(continueAfter);
   const previousRef = useRef<T | null>(null);
+  /** Whether a read is outstanding. The guard against stacking requests. */
+  const inFlightRef = useRef(false);
+  /** Consecutive failed reads, and the moment the next one may be attempted. */
+  const failuresRef = useRef(0);
+  const nextAttemptAtRef = useRef(0);
 
   useEffect(() => {
     pollRef.current = poll;
@@ -136,8 +178,12 @@ export function useOperationPoll<T>({
   useEffect(() => {
     if (!key || !enabled || current.stopped) return;
 
-    // A new subject starts with no history to compare against.
+    // A new subject starts with no history to compare against, and inherits
+    // neither the previous one's outstanding read nor its backoff.
     previousRef.current = null;
+    inFlightRef.current = false;
+    failuresRef.current = 0;
+    nextAttemptAtRef.current = 0;
 
     let cancelled = false;
 
@@ -146,7 +192,37 @@ export function useOperationPoll<T>({
       // schedule, so returning to the tab does not wait a full interval.
       if (typeof document !== "undefined" && document.hidden) return;
 
-      const next = await pollRef.current();
+      // One at a time. The previous read is still outstanding, so asking again
+      // would not produce a fresher answer — only a second request competing
+      // with the first for the same connection.
+      if (inFlightRef.current) return;
+
+      // Still backing off from a failure. Same skip-rather-than-reschedule
+      // shape as the hidden tab above, so recovery lands on the next tick
+      // after the wait rather than a full interval later.
+      if (Date.now() < nextAttemptAtRef.current) return;
+
+      let next: PollReading<T>;
+      inFlightRef.current = true;
+      try {
+        next = await pollRef.current();
+      } catch {
+        // A read that threw is a failure, not a reason to stop: the operation
+        // it is watching is unaffected by this browser's network. Swallowed
+        // deliberately and narrowly — the alternative was an unhandled
+        // rejection, and the caller has a server-rendered value to keep
+        // showing meanwhile.
+        failuresRef.current += 1;
+        nextAttemptAtRef.current =
+          Date.now() + intervalMs * pollBackoffMultiplier(failuresRef.current);
+        return;
+      } finally {
+        inFlightRef.current = false;
+      }
+
+      // An answer arrived, so the next one may be asked for on schedule.
+      failuresRef.current = 0;
+      nextAttemptAtRef.current = 0;
 
       // The component may have unmounted, or moved on to another subject,
       // while the request was in flight; a setState then is both useless and
