@@ -17,6 +17,10 @@ export const APPROVAL_BLOCK_MESSAGES: Record<ApprovalBlockReason, string> = {
   approval_change_not_prepared: "This change has not been prepared yet.",
   approval_validation_required: "This change must pass isolated validation before you can approve it.",
   approval_review_required: "Generate a before/after comparison first — approval needs a completed review.",
+  // Names the action rather than the artifact. The preview is the review now,
+  // and it costs a sandbox — so the copy says who starts it (rule 60).
+  approval_preview_required:
+    "Start a preview and look at the change first — approval needs a preview of this exact commit.",
   approval_review_expired:
     "The comparison for this change is no longer available. Generate a new one to approve this change.",
   approval_already_exists: "This change is already approved.",

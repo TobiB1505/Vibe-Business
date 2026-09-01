@@ -138,30 +138,11 @@ export function ApprovalPanel({
   projectId,
   preparedChangeId,
   card,
-  /**
-   * The comparison the user is looking at, or null for a code-diff review.
-   *
-   * Sent so a stale tab is refused: the server resolves what this change may be
-   * approved on and rejects anything else — including an artifact id for a
-   * change it has since decided needs no comparison (ADR 0063).
-   */
-  reviewArtifactId,
-  /**
-   * Whether this change is approved on its diff rather than on a comparison.
-   *
-   * The panel needs it for one reason only: `reviewArtifactId` is null in that
-   * case, and without this the null would read as "nothing to approve yet" and
-   * disable the button — which is the exact block this sprint removed, moved
-   * one layer up.
-   */
-  codeReview,
   merged,
 }: {
   projectId: string;
   preparedChangeId: string;
   card: ApprovalCard;
-  reviewArtifactId: string | null;
-  codeReview: boolean;
   /** The default branch carries this change, verified by reading it back. */
   merged: boolean;
 }) {
@@ -183,18 +164,23 @@ export function ApprovalPanel({
   const openerRef = useReturnFocus<HTMLButtonElement>(confirming !== null);
 
   function approve() {
-    // Exactly one evidence form, and the server decides which. A visual review
-    // with no artifact is a tab whose comparison has gone; a code review with
-    // one is a tab that predates the classification.
-    if (!codeReview && !reviewArtifactId) return;
-
     setIntent("approve");
     startTransition(async () => {
       setConfirming(null);
       // The confirmation travels as an explicit argument. The dialog closing is
       // not what authorizes this; the boolean is, and the server refuses
       // without it (§8).
-      setState(await approveChangeAction(projectId, preparedChangeId, reviewArtifactId, true));
+      /*
+       * Never a comparison id (ADR 0065).
+       *
+       * Both forms a new approval may take — a diff, or a diff plus the preview
+       * of the same commit — are resolved server-side from persisted rows, so
+       * there is nothing here for a client to name. The argument stays because
+       * the server still compares it: a stale tab that predates this sprint and
+       * sends an artifact id is refused rather than quietly approving something
+       * else.
+       */
+      setState(await approveChangeAction(projectId, preparedChangeId, null, true));
       router.refresh();
       setIntent(null);
     });
@@ -294,7 +280,7 @@ export function ApprovalPanel({
               variant="primary"
               size="sm"
               onClick={() => setConfirming("approve")}
-              disabled={busy || (!codeReview && !reviewArtifactId)}
+              disabled={busy}
             >
               Approve change
             </Button>
@@ -315,7 +301,7 @@ export function ApprovalPanel({
               variant="primary"
               size="sm"
               onClick={() => setConfirming("approve")}
-              disabled={busy || (!codeReview && !reviewArtifactId)}
+              disabled={busy}
             >
               Approve change
             </Button>
@@ -333,7 +319,7 @@ export function ApprovalPanel({
             variant="primary"
             size="sm"
             onClick={() => setConfirming("approve")}
-            disabled={busy || !reviewArtifactId}
+            disabled={busy}
           >
             Approve change
           </Button>

@@ -427,12 +427,24 @@ describe("the review gate a change actually has", () => {
     };
   }
 
-  /** Validated, nothing previewed, nothing captured, nobody has approved. */
-  function afterValidation(reviewClassification: unknown) {
+  /**
+   * Validated, nothing previewed, nobody has approved.
+   *
+   * `blockReason` is what the approval service says, and it is what the visual
+   * gate reads (ADR 0065): whether a preview counts is a question about *this
+   * exact commit*, and only that service can answer it.
+   */
+  function afterValidation(
+    reviewClassification: unknown,
+    approval: Record<string, unknown> = {
+      state: "not_approved",
+      blockReason: "approval_preview_required",
+    },
+  ) {
     return input({
       preview: { state: "ready_to_start" },
       review: { state: "not_generated" },
-      approval: { state: "not_approved" },
+      approval,
       merge: { state: "not_eligible", failureCode: "merge_approval_required" },
       reviewClassification,
     });
@@ -447,20 +459,54 @@ describe("the review gate a change actually has", () => {
     expect(progress.headline).toBe("Ready for you to review and approve.");
   });
 
-  it("still asks for a comparison when the change alters a page", () => {
+  it("asks for a preview when the change alters a page", () => {
     const progress = deriveChangeProgress(
       afterValidation(classification("visual", { visualPaths: ["src/app/page.tsx"] })),
     );
 
     expect(progress.stage).toBe("review_required");
+    expect(progress.headline).toBe("Ready for you to open a preview and look.");
   });
 
-  it("still asks for a comparison when the change is visual and code", () => {
+  it("asks for a preview when the change is visual and code", () => {
+    // Half of it is visible, and the half that is visible is the half a diff
+    // cannot show.
     const progress = deriveChangeProgress(
       afterValidation(classification("visual_and_code", { visualPaths: ["src/app/page.tsx"] })),
     );
 
     expect(progress.stage).toBe("review_required");
+  });
+
+  it("stops asking once a preview of this commit has run", () => {
+    // The approval service is what decides that, and this reads its answer
+    // rather than forming a second opinion from the preview card.
+    const progress = deriveChangeProgress(
+      afterValidation(classification("visual", { visualPaths: ["src/app/page.tsx"] }), {
+        state: "not_approved",
+        blockReason: null,
+      }),
+    );
+
+    expect(progress.stage).toBe("awaiting_approval");
+  });
+
+  it("never asks for a comparison, whatever the classification", () => {
+    // Nothing creates one any more (ADR 0065). A `review` card in any state
+    // must not be able to hold a visual change back.
+    for (const kind of ["visual", "visual_and_code"]) {
+      const progress = deriveChangeProgress(
+        input({
+          preview: { state: "stopped" },
+          review: { state: "not_generated" },
+          approval: { state: "not_approved", blockReason: null },
+          merge: { state: "not_eligible", failureCode: "merge_approval_required" },
+          reviewClassification: classification(kind, { visualPaths: ["src/app/page.tsx"] }),
+        }),
+      );
+
+      expect(progress.stage).toBe("awaiting_approval");
+    }
   });
 
   it("keeps the stricter path when the classification is unknown", () => {

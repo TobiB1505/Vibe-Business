@@ -29,7 +29,8 @@ const POSTGRES_UNIQUE_VIOLATION = "23505";
 
 const COLUMNS =
   "id, user_id, project_id, prepared_change_id, validation_run_id, review_artifact_id, " +
-  "code_review_digest, review_classification, review_classification_policy_version, " +
+  "code_review_digest, preview_session_id, review_classification, " +
+  "review_classification_policy_version, " +
   "prepared_commit_sha, prepared_base_sha, approval_policy_version, approval_identity, " +
   "status, approved_at, revoked_at, invalidated_at, invalidation_reason, created_at, updated_at";
 
@@ -44,6 +45,7 @@ function mapRow(row: Row): ChangeApproval {
     validationRunId: String(row.validation_run_id),
     reviewArtifactId: (row.review_artifact_id as string | null) ?? null,
     codeReviewDigest: (row.code_review_digest as string | null) ?? null,
+    previewSessionId: (row.preview_session_id as string | null) ?? null,
     reviewClassification: (row.review_classification as ReviewClassification | null) ?? null,
     reviewClassificationPolicyVersion:
       (row.review_classification_policy_version as string | null) ?? null,
@@ -84,6 +86,7 @@ export async function createApproval(
     /** Exactly one of these two is set. The database refuses any other shape. */
     reviewArtifactId: string | null;
     codeReviewDigest: string | null;
+    previewSessionId: string | null;
     reviewClassification: ReviewClassification | null;
     reviewClassificationPolicyVersion: string | null;
     preparedCommitSha: string;
@@ -101,6 +104,7 @@ export async function createApproval(
       validation_run_id: params.validationRunId,
       review_artifact_id: params.reviewArtifactId,
       code_review_digest: params.codeReviewDigest,
+      preview_session_id: params.previewSessionId,
       review_classification: params.reviewClassification,
       review_classification_policy_version: params.reviewClassificationPolicyVersion,
       prepared_commit_sha: params.preparedCommitSha,

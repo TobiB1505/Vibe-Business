@@ -12,11 +12,8 @@ import {
 } from "@/modules/business-measurement/service";
 import { NoConnectedMetricSources } from "@/modules/business-measurement/source";
 import { getPreviewCard, getPreviewStatus } from "@/modules/change-preview/service";
-import {
-  getLatestPreviewsForPreparedChanges,
-  validatedArtifactFrom,
-} from "@/modules/change-preview/store";
-import type { PreviewSession, ValidatedArtifact } from "@/modules/change-preview/schema";
+import { getLatestPreviewsForPreparedChanges } from "@/modules/change-preview/store";
+import type { PreviewSession } from "@/modules/change-preview/schema";
 import { businessRationaleFor } from "@/modules/execution/business-rationale";
 import { changeOriginFrom } from "@/modules/execution/change-origin";
 import { deriveChangeProgress } from "@/modules/execution/change-progress";
@@ -31,6 +28,7 @@ import { buildMergeCard } from "@/modules/merge/view";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
 import { VercelWorkflowExecutor } from "@/modules/operations/vercel/executor";
 import { getOpportunityById } from "@/modules/opportunities/store";
+import { getProjectWithRepository } from "@/modules/projects/queries";
 import {
   getOutcomeCards,
   unavailableOutcomeCard,
@@ -175,7 +173,6 @@ type ChangeLifecycle = {
   validation: StoredValidationRun | null;
   preview: PreviewSession | null;
   /** Derived from the validation row above — never a seventh query. */
-  artifact: ValidatedArtifact | null;
   review: ReviewArtifact | null;
   approval: ChangeApproval | null;
   merge: ChangeMerge | null;
@@ -205,7 +202,6 @@ function emptyLifecycle(outcome: OutcomeCard, businessImpact: BusinessImpactCard
   return {
     validation: null,
     preview: null,
-    artifact: null,
     review: null,
     approval: null,
     merge: null,
@@ -324,9 +320,6 @@ async function readChangeLifecycles(
     lifecycles.set(id, {
       validation,
       preview: previews.get(id) ?? null,
-      // The same rule `getValidatedArtifact` applies, applied to the row that
-      // is already here. See `validatedArtifactFrom`.
-      artifact: validation ? validatedArtifactFrom(validation) : null,
       review: reviews.get(id) ?? null,
       approval: approvals.get(id) ?? null,
       merge: merges.get(id) ?? null,
@@ -351,6 +344,8 @@ async function buildPreparedChangeCard(
     userId: string;
     repositoryFullName: string | null;
     mergeTarget: Awaited<ReturnType<typeof resolveMergeTarget>> | null;
+    /** The verified public origin, for the "before" half of a comparison. */
+    productionUrl: string | null;
     prepared: Awaited<ReturnType<typeof listPreparedChangesForProject>>[number];
     lifecycle: ChangeLifecycle;
   },
@@ -377,7 +372,6 @@ async function buildPreparedChangeCard(
   const prefetchedApproval = {
     prepared,
     validation: lifecycle.validation,
-    review: lifecycle.review,
     approval: lifecycle.approval,
   };
 
@@ -525,7 +519,6 @@ async function buildPreparedChangeCard(
     preview,
     // The artifact's id is its validation run's, and only a passing run can
     // have one. A failed run offers nothing for the client to name.
-    validatedArtifactId: validation?.status === "passed" ? validation.id : null,
     review,
     // Signed on this render, after the service re-checked ownership, the
     // ready state and the retention deadline. Never persisted, and short
@@ -542,6 +535,7 @@ async function buildPreparedChangeCard(
     // stopped one would buy a browser session that fails (§6).
     previewSessionId: preview.state === "running" ? preview.previewSessionId : null,
     previewOrigin,
+    productionUrl: params.productionUrl,
     // Approval state, resolved from persisted rows (Sprint 11B §24, §27).
     // Costs a handful of reads and no provider call of any kind: approval is
     // a database action, and looking at it must stay free.
@@ -624,11 +618,29 @@ export async function getPreparedChangeWorkspace(
     ? createGithubRepositoryReader(mergeTarget.installationId, mergeTarget.owner, mergeTarget.repo)
     : null;
 
-  const lifecycles = await readChangeLifecycles(supabase, {
-    projectId: params.projectId,
-    prepared,
-    reader,
-  });
+  const [lifecycles, project] = await Promise.all([
+    readChangeLifecycles(supabase, {
+      projectId: params.projectId,
+      prepared,
+      reader,
+    }),
+    /*
+     * The project's own verified production origin, read once for the list.
+     *
+     * The "before" half of a before/after (ADR 0065). It is *the public live
+     * product as it is now*, not the base commit — the same honest semantics
+     * ADR 0017 §4 pinned for the comparison it replaces, and the card labels it
+     * that way. Null when no production origin has been verified, and then the
+     * card simply does not offer one.
+     *
+     * Guarded on an empty list like every read beside it: a project with no
+     * prepared changes must ask the database nothing at all, and this read
+     * exists only to fill a field on a card.
+     */
+    prepared.length > 0
+      ? getProjectWithRepository(supabase, params.projectId)
+      : Promise.resolve(null),
+  ]);
 
   /*
    * Cards are built together rather than in a queue. Two of the reads inside
@@ -647,6 +659,7 @@ export async function getPreparedChangeWorkspace(
       userId: params.userId,
       repositoryFullName: params.repositoryFullName,
       mergeTarget,
+      productionUrl: project?.productionUrl ?? null,
       prepared: change,
       lifecycle:
         lifecycles.get(change.id) ??

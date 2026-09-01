@@ -47,13 +47,26 @@ import { createHash } from "node:crypto";
  * a visual one.
  */
 export type ApprovalEvidence =
+  /** Two stored screenshots. Historical: nothing creates one from Sprint 0114. */
   | { kind: "review_artifact"; reviewArtifactId: string }
-  | { kind: "code_diff"; codeReviewDigest: string };
+  /** A reproducible diff, for a change that alters no rendered page. */
+  | { kind: "code_diff"; codeReviewDigest: string }
+  /**
+   * A reproducible diff *and* the interactive preview that ran beside it.
+   *
+   * The form a visual change takes from Sprint 0114 on. The diff is in it
+   * because a preview shows what a change looks like and only the diff shows
+   * what it does — so a visual approval now binds to strictly more than it did
+   * when it named a photograph of one route (ADR 0065).
+   */
+  | { kind: "code_diff_with_preview"; codeReviewDigest: string; previewSessionId: string };
 
 export function approvalEvidenceKey(evidence: ApprovalEvidence): string {
-  return evidence.kind === "review_artifact"
-    ? `review_artifact:${evidence.reviewArtifactId}`
-    : `code_diff:${evidence.codeReviewDigest}`;
+  if (evidence.kind === "review_artifact") {
+    return `review_artifact:${evidence.reviewArtifactId}`;
+  }
+  if (evidence.kind === "code_diff") return `code_diff:${evidence.codeReviewDigest}`;
+  return `code_diff_with_preview:${evidence.codeReviewDigest}:${evidence.previewSessionId}`;
 }
 
 export function computeApprovalIdentity(params: {

@@ -71,125 +71,18 @@ function mapRow(row: Row): PreviewSession {
   };
 }
 
-/**
- * The ValidatedArtifact for one validation run the caller owns (§7, §10).
+/*
+ * The artifact readers that used to live here are gone (ADR 0064).
  *
- * Every gate that can refuse before a cent of provider spend is here, and each
- * one is a *query predicate* rather than a later check:
+ * `getValidatedArtifact`, `validatedArtifactFrom` and
+ * `getValidationSourceIntegrity` all served one caller: booting a preview from
+ * a validation's snapshot and re-checking the restored filesystem against what
+ * validation had hashed. A preview clones the prepared commit now, so there is
+ * no snapshot to find and no restored filesystem to re-check.
  *
- *  - the run belongs to this project (the caller's project, established above);
- *  - the run `passed` — a failed validation has no artifact and never will;
- *  - an artifact was actually captured;
- *  - it has not already been deleted.
- *
- * Expiry is checked by the caller against `expiresAt`, not filtered here, so
- * "expired" and "never existed" can be told apart in the failure code the user
- * sees. `preview_artifact_expired` is actionable — re-validate — and
- * `preview_artifact_unavailable` is a different sentence entirely.
+ * The columns and the `ValidatedArtifact` type stay — historical rows still
+ * carry them, and teardown still marks a v1 session's artifact deleted.
  */
-export async function getValidatedArtifact(
-  supabase: SupabaseClient,
-  params: { projectId: string; validatedArtifactId: string },
-): Promise<ValidatedArtifact | null> {
-  const { data, error } = await supabase
-    .from("validation_runs")
-    .select(
-      "id, project_id, prepared_change_id, validation_profile, prepared_commit_sha, " +
-        "artifact_snapshot_id, artifact_expires_at, artifact_deleted_at, status",
-    )
-    // The artifact's public id is its validation run id: capture is strictly
-    // one per passing run (see `ValidatedArtifact`).
-    .eq("id", params.validatedArtifactId)
-    .eq("project_id", params.projectId)
-    .eq("status", "passed")
-    .maybeSingle();
-
-  if (error) throw error;
-  if (!data) return null;
-
-  const row = data as unknown as Row;
-
-  return validatedArtifactFrom({
-    id: String(row.id),
-    projectId: String(row.project_id),
-    preparedChangeId: String(row.prepared_change_id),
-    validationProfile: row.validation_profile as ValidatedArtifact["validationProfile"],
-    preparedCommitSha: String(row.prepared_commit_sha),
-    status: String(row.status),
-    artifactSnapshotId: (row.artifact_snapshot_id as string | null) ?? null,
-    artifactExpiresAt: (row.artifact_expires_at as string | null) ?? null,
-    artifactDeletedAt: (row.artifact_deleted_at as string | null) ?? null,
-  });
-}
-
-/**
- * The same answer from a validation run already in hand (VB-023).
- *
- * The preview card is built beside the validation it previews, and that row
- * carries every column this needs — so asking the database for it again is a
- * read spent re-fetching bytes the render is holding.
- *
- * Extracted rather than duplicated: `getValidatedArtifact` above delegates
- * here, so the rules for what counts as a usable artifact are stated once. A
- * second copy of "passed, captured, not deleted" is how the two answers drift.
- */
-export function validatedArtifactFrom(run: {
-  id: string;
-  projectId: string;
-  preparedChangeId: string;
-  validationProfile: ValidatedArtifact["validationProfile"];
-  preparedCommitSha: string;
-  status: string;
-  artifactSnapshotId: string | null;
-  artifactExpiresAt: string | null;
-  artifactDeletedAt: string | null;
-}): ValidatedArtifact | null {
-  // A failed validation has no artifact and never will. Filtered in the query
-  // above as well, because a predicate the database can apply belongs there.
-  if (run.status !== "passed") return null;
-
-  // No snapshot, or no deadline. The database's own CHECK already refuses a
-  // retained artifact without an expiry; this is the same rule stated where the
-  // value is read, because a null here would otherwise become "never expires".
-  if (!run.artifactSnapshotId || !run.artifactExpiresAt) return null;
-  if (run.artifactDeletedAt) return null;
-
-  return {
-    validationRunId: run.id,
-    projectId: run.projectId,
-    preparedChangeId: run.preparedChangeId,
-    validationProfile: run.validationProfile,
-    preparedCommitSha: run.preparedCommitSha,
-    snapshotId: run.artifactSnapshotId,
-    expiresAt: run.artifactExpiresAt,
-    deletedAt: null,
-  };
-}
-
-/** Source integrity as validation recorded it, for the restore-time recheck (§11). */
-export async function getValidationSourceIntegrity(
-  supabase: SupabaseClient,
-  params: { projectId: string; validationRunId: string },
-): Promise<{ buildIdentityDigests: Record<string, string> } | null> {
-  const { data, error } = await supabase
-    .from("validation_runs")
-    .select("source_integrity")
-    .eq("id", params.validationRunId)
-    .eq("project_id", params.projectId)
-    .maybeSingle();
-
-  if (error) throw error;
-  if (!data) return null;
-
-  const integrity = (data as unknown as Row).source_integrity as
-    | { buildIdentityDigests?: Record<string, string> }
-    | null;
-
-  // A run validated before digests were recorded carries none. Treated as
-  // "nothing to compare" rather than as agreement — the prepared-change hashes
-  // still run, and they are the load-bearing check (§11).
-  return { buildIdentityDigests: integrity?.buildIdentityDigests ?? {} };
-}
 
 /** The live preview for one exact identity, if any (§22). */
 export async function findActivePreviewByIdentity(
@@ -232,6 +125,48 @@ export async function getLatestPreviewForPreparedChange(
     .eq("project_id", params.projectId)
     .eq("prepared_change_id", params.preparedChangeId)
     .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? mapRow(data as unknown as Row) : null;
+}
+
+/**
+ * A preview of this exact commit that actually became reachable (Sprint 0114).
+ *
+ * The evidence a visual approval binds to. Three predicates, and each is doing
+ * work:
+ *
+ *  - the **commit**, because a preview of an earlier attempt is a preview of
+ *    different bytes;
+ *  - `ready_at is not null`, because a session that never answered is not
+ *    something a person could have looked at — a *status* would be the wrong
+ *    question, since the session is expected to be over by now;
+ *  - the project, because ownership is a query predicate here as everywhere.
+ *
+ * **Oldest first**, deliberately. Every ready preview of one commit served the
+ * identical bytes, so any of them is equally true evidence — which makes the
+ * choice a question about stability rather than about truth. Newest-first would
+ * mean that starting a second preview to look again silently changes what a new
+ * approval would bind to, and invalidates a standing one; the person did not
+ * change their mind, they scrolled the same page twice (rule 68).
+ *
+ * The earliest ready session is stable for the life of the commit, so an
+ * approval's evidence stops moving the moment it exists.
+ */
+export async function findReadyPreviewForCommit(
+  supabase: SupabaseClient,
+  params: { projectId: string; preparedChangeId: string; preparedCommitSha: string },
+): Promise<PreviewSession | null> {
+  const { data, error } = await supabase
+    .from("preview_sessions")
+    .select(COLUMNS)
+    .eq("project_id", params.projectId)
+    .eq("prepared_change_id", params.preparedChangeId)
+    .eq("prepared_commit_sha", params.preparedCommitSha)
+    .not("ready_at", "is", null)
+    .order("created_at", { ascending: true })
     .limit(1)
     .maybeSingle();
 

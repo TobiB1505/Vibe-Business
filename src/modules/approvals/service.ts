@@ -4,10 +4,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { assertPrefetchedFor, assertPreparedChangeIs } from "@/lib/db/latest-per-change";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import { getPreparedChange, type StoredPreparedChange } from "@/modules/execution/store";
+import { findReadyPreviewForCommit } from "@/modules/change-preview/store";
 import { computeCodeReviewDigest } from "@/modules/execution/code-review-digest";
 import type { ReviewClassificationResult } from "@/modules/review/classification";
-import { isReviewExpired, type ReviewArtifact } from "@/modules/review/schema";
-import { getLatestReviewForPreparedChange } from "@/modules/review/store";
 import {
   getLatestValidationForPreparedChange,
   type StoredValidationRun,
@@ -150,7 +149,6 @@ type ApprovalTarget = {
 export type PrefetchedApprovalInputs = {
   prepared: StoredPreparedChange | null;
   validation: StoredValidationRun | null;
-  review: ReviewArtifact | null;
 };
 
 /**
@@ -165,8 +163,8 @@ export type PrefetchedApprovalInputs = {
  * computing it once is how they are made to.
  *
  * `null` is a real answer and means *not determinable*, which resolves to the
- * stricter path: a visual comparison is required, exactly as it was before this
- * sprint. Missing evidence is never a good result (CLAUDE.md rule 44).
+ * stricter path: the change must have been previewed, not merely diffed.
+ * Missing evidence is never a good result (CLAUDE.md rule 44).
  */
 export type ApprovalClassification = ReviewClassificationResult | null;
 
@@ -180,6 +178,23 @@ export type ApprovalClassification = ReviewClassificationResult | null;
  */
 export function approvableOnDiffAlone(classification: ApprovalClassification): boolean {
   return classification?.classification === "code";
+}
+
+/**
+ * Whether this change has to have been *looked at* before it may be approved.
+ *
+ * `visual` and `visual_and_code` answer yes. So does `null` — a classification
+ * that could not be determined takes the stricter path, and since Sprint 0114
+ * the stricter path *is* this one: diff plus a preview of the same commit binds
+ * to strictly more than the screenshot pair it replaces, and unlike that pair
+ * it can still be produced (rule 44, ADR 0065).
+ *
+ * Everything that is not approvable on the diff alone is therefore here, which
+ * is why this is written as the complement rather than as a second list that
+ * could drift from the first.
+ */
+function requiresPreview(classification: ApprovalClassification): boolean {
+  return !approvableOnDiffAlone(classification);
 }
 
 /**
@@ -281,20 +296,31 @@ async function resolveApprovalTarget(
    * never the caller. The thing being reviewed does not get to choose how it is
    * reviewed, and neither does a client with a stale tab.
    */
-  const evidence: ApprovalEvidence | { blocked: ApprovalBlockReason } = approvableOnDiffAlone(
+  /*
+   * Which evidence this change is entitled to be approved on (ADR 0063, 0065).
+   *
+   * The classification decides, and it is Vibe's own deterministic answer from
+   * verified changed paths and the analyzer's route table — never a model, and
+   * never the caller. The thing being reviewed does not get to choose how it is
+   * reviewed, and neither does a client with a stale tab.
+   *
+   * The diff is in every new form. A preview shows what a change looks like;
+   * only the diff shows what it does — so a visual approval binds to strictly
+   * more than it did when it named a photograph of one route.
+   */
+  const codeReviewDigest = computeCodeReviewDigest({
+    projectId: params.projectId,
+    preparedChangeId: params.preparedChangeId,
+    preparedBaseSha: premises.value.preparedBaseSha,
+    preparedCommitSha: premises.value.preparedCommitSha,
+    paths: premises.value.changedPaths,
+  });
+
+  const evidence: ApprovalEvidence | { blocked: ApprovalBlockReason } = requiresPreview(
     params.classification,
   )
-    ? {
-        kind: "code_diff",
-        codeReviewDigest: computeCodeReviewDigest({
-          projectId: params.projectId,
-          preparedChangeId: params.preparedChangeId,
-          preparedBaseSha: premises.value.preparedBaseSha,
-          preparedCommitSha: premises.value.preparedCommitSha,
-          paths: premises.value.changedPaths,
-        }),
-      }
-    : await resolveReviewArtifactEvidence(supabase, params, premises.value.validationRunId);
+    ? await resolvePreviewEvidence(supabase, params, premises.value, codeReviewDigest)
+    : { kind: "code_diff", codeReviewDigest };
 
   if ("blocked" in evidence) return { ok: false, error: evidence.blocked };
 
@@ -313,6 +339,13 @@ async function resolveApprovalTarget(
 
 /** What a stored approval actually rested on. Null for a row shaped like neither. */
 function evidenceOf(approval: ChangeApproval): ApprovalEvidence | null {
+  if (approval.codeReviewDigest !== null && approval.previewSessionId !== null) {
+    return {
+      kind: "code_diff_with_preview",
+      codeReviewDigest: approval.codeReviewDigest,
+      previewSessionId: approval.previewSessionId,
+    };
+  }
   if (approval.codeReviewDigest !== null) {
     return { kind: "code_diff", codeReviewDigest: approval.codeReviewDigest };
   }
@@ -323,48 +356,31 @@ function evidenceOf(approval: ChangeApproval): ApprovalEvidence | null {
 }
 
 /**
- * The visual half, unchanged from Sprint 11B §4.
+ * The preview a person was shown, for a change that alters a rendered page.
  *
- * Extracted only so the branch above reads as one decision rather than two
- * nested ones. Every refusal, and the reason for it, is exactly what it was.
+ * Resolved from server state, never from the client: a caller names a prepared
+ * change and nothing else, and what counts as having looked at it is a preview
+ * of *this exact commit* that actually became reachable.
+ *
+ * A session that failed, or one of an earlier attempt, is not evidence — and
+ * the refusal says to start a preview rather than to generate a comparison,
+ * because the comparison is not what is missing (ADR 0065).
  */
-async function resolveReviewArtifactEvidence(
+async function resolvePreviewEvidence(
   supabase: SupabaseClient,
-  params: {
-    projectId: string;
-    preparedChangeId: string;
-    prefetched?: PrefetchedApprovalInputs;
-  },
-  validationRunId: string,
+  params: { projectId: string; preparedChangeId: string },
+  premises: ApprovalPremises,
+  codeReviewDigest: string,
 ): Promise<ApprovalEvidence | { blocked: ApprovalBlockReason }> {
-  const review = params.prefetched
-    ? assertPrefetchedFor(params.prefetched.review, params, "review")
-    : await getLatestReviewForPreparedChange(supabase, {
-        projectId: params.projectId,
-        preparedChangeId: params.preparedChangeId,
-      });
+  const preview = await findReadyPreviewForCommit(supabase, {
+    projectId: params.projectId,
+    preparedChangeId: params.preparedChangeId,
+    preparedCommitSha: premises.preparedCommitSha,
+  });
 
-  // Requires a completed comparison, and requires it to be a comparison of
-  // *this* change under *this* validation (§4). A review bound to an earlier
-  // validation is evidence about different bytes.
-  if (
-    !review ||
-    review.status !== "ready" ||
-    review.preparedChangeId !== params.preparedChangeId ||
-    review.validationRunId !== validationRunId
-  ) {
-    return { blocked: "approval_review_required" };
-  }
+  if (!preview) return { blocked: "approval_preview_required" };
 
-  // Retention has passed, so the images are gone. Approving evidence nobody can
-  // look at is not a human review, it is a click (§4).
-  //
-  // Note what this does *not* do: it never invalidates an approval that was
-  // already given. A decision made while the comparison was viewable stays a
-  // decision; only a *new* approval needs viewable evidence.
-  if (isReviewExpired(review)) return { blocked: "approval_review_expired" };
-
-  return { kind: "review_artifact", reviewArtifactId: review.id };
+  return { kind: "code_diff_with_preview", codeReviewDigest, previewSessionId: preview.id };
 }
 
 /**
@@ -393,9 +409,12 @@ function invalidationReasonFor(
    * moves, and telling a user their comparison was superseded when they never
    * had one is a sentence they cannot act on.
    */
-  const approvedOnDiff = approval.codeReviewDigest !== null;
-  const targetOnDiff = target.evidence.kind === "code_diff";
-  if (approvedOnDiff !== targetOnDiff) return "review_requirement_changed";
+  const approvedForm = approval.previewSessionId
+    ? "code_diff_with_preview"
+    : approval.codeReviewDigest
+      ? "code_diff"
+      : "review_artifact";
+  if (approvedForm !== target.evidence.kind) return "review_requirement_changed";
 
   return "review_superseded";
 }
@@ -447,8 +466,12 @@ export async function approveChange(
     validationRunId: target.value.validationRunId,
     reviewArtifactId: expectedArtifactId,
     codeReviewDigest:
-      target.value.evidence.kind === "code_diff"
-        ? target.value.evidence.codeReviewDigest
+      target.value.evidence.kind === "review_artifact"
+        ? null
+        : target.value.evidence.codeReviewDigest,
+    previewSessionId:
+      target.value.evidence.kind === "code_diff_with_preview"
+        ? target.value.evidence.previewSessionId
         : null,
     // Pinned onto the row, not recomputed later. The classification reads the
     // analyzer's route table, and that table moves; a human's decision must
@@ -490,7 +513,11 @@ export async function approveChange(
       // Which evidence a human actually looked at. Without it the record cannot
       // distinguish an approval that rested on a comparison from one that
       // rested on a diff — and those are different decisions.
-      review_evidence: created.approval.codeReviewDigest ? "code_diff" : "review_artifact",
+      review_evidence: created.approval.previewSessionId
+        ? "code_diff_with_preview"
+        : created.approval.codeReviewDigest
+          ? "code_diff"
+          : "review_artifact",
       review_classification: created.approval.reviewClassification,
     },
   });

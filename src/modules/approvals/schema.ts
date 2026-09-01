@@ -47,7 +47,7 @@ import type { ReviewClassification } from "@/modules/review/classification";
  * Changing any of that changes what a stored approval means, so the version is
  * part of the approval's identity and old rows keep their original meaning.
  */
-export const APPROVAL_POLICY_VERSION = "approval-policy-v2" as const;
+export const APPROVAL_POLICY_VERSION = "approval-policy-v3" as const;
 
 /**
  * Approval statuses (§2).
@@ -109,6 +109,15 @@ export const APPROVAL_BLOCK_REASONS = [
   /** No comparison exists, or the one that does is not `ready` (§4). */
   "approval_review_required",
   /**
+   * The change alters a rendered page and no interactive preview of this exact
+   * commit has run (Sprint 0114).
+   *
+   * Distinct from `approval_review_required`, which is about a *comparison*.
+   * The remedy is different and so is the sentence: one asks for a screenshot
+   * pair, this asks the person to look at the thing.
+   */
+  "approval_preview_required",
+  /**
    * The comparison exists but its images are past retention (§4).
    *
    * Deliberately distinct from `approval_review_required`: "you never made one"
@@ -162,6 +171,12 @@ export type ChangeApproval = {
    * which is the same claim `reviewArtifactId` makes about two images.
    */
   codeReviewDigest: string | null;
+
+  /**
+   * The interactive preview the human was shown. Null for a code-only approval,
+   * and for every approval made before Sprint 0114.
+   */
+  previewSessionId: string | null;
 
   /** Which review this change deserved, as decided at approval time (ADR 0063). */
   reviewClassification: ReviewClassification | null;

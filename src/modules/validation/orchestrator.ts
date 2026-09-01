@@ -6,7 +6,6 @@ import { sanitizeCommandOutput } from "./logs";
 import {
   DEPENDENCY_HOSTS,
   SOURCE_HOSTS,
-  type SandboxArtifact,
   type SandboxHandle,
   type SandboxProvider,
   type SandboxUsage,

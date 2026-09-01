@@ -76,6 +76,8 @@ function baseChange(): Omit<
         "These are low-effort fixes that do not depend on positioning or monetization.",
     },
     opportunityId: "3-seo-fix-missing-technical-seo-foundations",
+    /** The "before" half, labelled as the live site now (ADR 0065). */
+    productionUrl: "https://vibe-e2e.example",
     /*
      * `visual_and_code`: the SEO capability writes `src/app/robots.ts` and
      * `src/app/sitemap.ts`, neither of which renders — but the scenarios below
@@ -117,7 +119,6 @@ function baseChange(): Omit<
       expiresAt: null,
       readyAt: null,
     },
-    validatedArtifactId: null,
     review: {
       state: "ready",
       reviewArtifactId: "review_e2e",
@@ -471,7 +472,6 @@ export const E2E_SCENARIOS = {
         expiresAt: null,
         readyAt: null,
         },
-      validatedArtifactId: "validation_e2e",
       review: {
         state: "not_generated",
         reviewArtifactId: null,

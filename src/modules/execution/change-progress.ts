@@ -108,8 +108,8 @@ const STAGE_HEADLINES: Record<ChangeStage, string> = {
    * division of labour `stalled` has with the merge panel.
    */
   reviewing: "Vibe is preparing what you need to review.",
-  review_required: "Ready for you to preview and compare.",
-  review_unavailable: "The comparison for this change is not available.",
+  review_required: "Ready for you to open a preview and look.",
+  review_unavailable: "The preview for this change did not start.",
   awaiting_approval: "Ready for you to review and approve.",
   ready_to_merge: "Approved by you, ready to go into your repository.",
   merging: "Vibe is updating your repository.",
@@ -129,22 +129,37 @@ const STAGE_HEADLINES: Record<ChangeStage, string> = {
 function reviewGate(
   review: ReviewCard,
   preview: PreviewCard,
+  approval: ApprovalCard,
   classification: ReviewClassificationResult | null,
 ): "reviewing" | "review_required" | "review_unavailable" | null {
   /*
    * A change that alters no rendered page has no visual gate to pass (ADR 0063).
    *
-   * Not "the gate passes" — there is no gate. Photographing a backend change
-   * produces two identical images, so requiring one before a person may decide
-   * was asking them to buy a browser session to look at nothing. The diff is
-   * the review, it is on the card above these panels, and the next move is
-   * theirs.
-   *
-   * `null` and `visual_and_code` both fall through to the visual gates. Half a
-   * change being visible is a whole reason to look at it, and a classification
-   * Vibe could not determine is never read as permission (rule 44).
+   * Not "the gate passes" — there is no gate. The diff is the review, it is on
+   * the card above these panels, and the next move is the person's.
    */
   if (classification?.classification === "code") return null;
+
+  /*
+   * Everything visual now turns on the *preview*, not on a comparison
+   * (ADR 0065). The preview is the whole running application; the comparison
+   * was one route at one viewport, and Vibe was paying a browser session to
+   * turn the first into the second.
+   *
+   * Read from the approval card's own block reason rather than re-derived from
+   * the preview card, and that is not a shortcut. Whether a preview counts is a
+   * question about *this exact commit*, which the approval service answers and
+   * this model cannot: the latest session on a change may be of an earlier
+   * attempt. Deciding it twice is how a headline comes to say "ready to
+   * approve" above an Approve button that refuses.
+   */
+  if (classification) {
+    if (previewInFlight(preview)) return "reviewing";
+    if (approval.blockReason === "approval_preview_required") {
+      return preview.state === "failed" ? "review_unavailable" : "review_required";
+    }
+    return null;
+  }
 
   if (review.state === "capturing") return "reviewing";
   if (previewInFlight(preview)) return "reviewing";
@@ -252,7 +267,7 @@ export function deriveChangeProgress(input: ChangeProgressInput): ChangeProgress
         : approved
           ? "ready_to_merge"
           : (validationGate(validation) ??
-            reviewGate(review, preview, input.reviewClassification) ??
+            reviewGate(review, preview, approval, input.reviewClassification) ??
             "awaiting_approval");
 
   return {

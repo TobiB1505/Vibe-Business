@@ -1,17 +1,12 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
-import { Button, buttonClasses } from "@/components/ui/button";
+import { buttonClasses } from "@/components/ui/button";
 import { useOperationPoll } from "@/lib/client/use-operation-poll";
 import { shouldRefreshForState } from "@/modules/operations/view";
 import type { ReviewCard } from "@/modules/review/view";
 import type { ReviewImages } from "@/modules/review/service";
-import {
-  getReviewStatusAction,
-  startReviewAction,
-  type StartReviewActionState,
-} from "./review-actions";
+import { getReviewStatusAction } from "./review-actions";
 import { formatTimestamp } from "@/lib/utils/format-datetime";
 
 /**
@@ -129,8 +124,6 @@ export function ReviewPanel({
   card,
   /** Signed, short-lived image URLs. Null unless the card is ready (§16). */
   images,
-  /** The running preview to photograph, when there is one. */
-  previewSessionId,
   /** The preview's current public origin, for "Open preview". Null once stopped. */
   previewOrigin,
   /** Existing code-diff equivalent. Kept available for technical users (§27). */
@@ -144,7 +137,6 @@ export function ReviewPanel({
   preparedChangeId: string;
   card: ReviewCard;
   images: ReviewImages | null;
-  previewSessionId: string | null;
   previewOrigin: string | null;
   branchUrl: string | null;
   commitSha: string | null;
@@ -155,8 +147,6 @@ export function ReviewPanel({
   merged: boolean;
 }) {
   const router = useRouter();
-  const [state, setState] = useState<StartReviewActionState>(null);
-  const [pending, startTransition] = useTransition();
   /*
    * Watch the comparison, rather than re-rendering the page to find out
    * (UI-4 §5).
@@ -173,7 +163,7 @@ export function ReviewPanel({
    */
   useOperationPoll<ReviewCard>({
     key: `${preparedChangeId}:review`,
-    enabled: card.state === "capturing" || pending,
+    enabled: card.state === "capturing",
     intervalMs: POLL_INTERVAL_MS,
     poll: async () => ({
       kind: "value",
@@ -185,16 +175,7 @@ export function ReviewPanel({
     },
   });
 
-  function generate() {
-    if (!previewSessionId) return;
-
-    startTransition(async () => {
-      setState(await startReviewAction(projectId, preparedChangeId, previewSessionId));
-      router.refresh();
-    });
-  }
-
-  const capturing = card.state === "capturing" || pending;
+  const capturing = card.state === "capturing";
   const beforeAt = localTime(card.beforeCapturedAt);
   const afterAt = localTime(card.afterCapturedAt);
 
@@ -282,11 +263,6 @@ export function ReviewPanel({
           <p className="text-sm text-coral">Comparison failed</p>
           {/* Safe copy from a stable code. Never a provider message (§31). */}
           {card.failureMessage && <p className="text-sm text-fg-secondary">{card.failureMessage}</p>}
-          {previewSessionId && (
-            <Button type="button" variant="primary" size="sm" onClick={generate} disabled={pending}>
-              Try again
-            </Button>
-          )}
         </div>
       ) : card.state === "expired" ? (
         <div className="space-y-2">
@@ -295,30 +271,13 @@ export function ReviewPanel({
             Review images are kept for a limited time and this one has been removed.
           </p>
         </div>
-      ) : previewSessionId ? (
-        <div className="space-y-2">
-          <p className="text-sm text-fg-secondary">Not generated</p>
-          <p className="text-xs text-fg-muted">
-            Generate a visual before/after comparison of your current live page and the temporary
-            preview. Vibe opens both in an isolated browser and stores two screenshots.
-          </p>
-          <Button type="button" variant="primary" size="sm" onClick={generate} disabled={pending}>
-            Generate comparison
-          </Button>
-        </div>
       ) : (
-        <div className="space-y-2">
-          <p className="text-sm text-fg-secondary">Preview required</p>
-          {/* Never offers to start one. A preview is provider spend, and the
-              user starts it deliberately from its own section (§6, §23). */}
-          <p className="text-xs text-fg-muted">
-            Start a temporary preview above — a comparison photographs the running preview beside
-            your current live page.
-          </p>
-        </div>
+        /* Unreachable in practice, and deliberately inert: the section is only
+           rendered when a historical artifact exists, and nothing creates a new
+           one. It offers no way to make one, because there is none (ADR 0065). */
+        <p className="text-sm text-fg-secondary">No comparison was captured for this change.</p>
       )}
 
-      {state?.ok === false && <p className="text-sm text-coral">{state.message}</p>}
     </section>
   );
 }

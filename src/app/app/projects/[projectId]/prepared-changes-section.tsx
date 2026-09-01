@@ -70,7 +70,6 @@ export type PreparedChangeCard = {
    * start a preview and can name nothing else — no snapshot, no sandbox, no
    * port, no command (§6).
    */
-  validatedArtifactId: string | null;
   /**
    * Which review this change deserves, decided on the server (ADR 0063).
    *
@@ -91,6 +90,14 @@ export type PreparedChangeCard = {
   previewSessionId: string | null;
   /** Provider-resolved preview origin, for "Open". Null once the preview ends. */
   previewOrigin: string | null;
+  /**
+   * The project's verified public origin, for the "before" half (ADR 0065).
+   *
+   * Labelled as *the live site now*, never as the base commit — the same
+   * semantics ADR 0017 §4 pinned for the screenshot this replaces. Null when no
+   * production URL has been verified, and then nothing is offered.
+   */
+  productionUrl: string | null;
   /**
    * Approval state, decided on the server (Sprint 11B §24).
    *
@@ -387,7 +394,7 @@ export function PreparedChangesSection({
                     saying it was is the class of false status line UI-5 exists
                     to remove. */}
                 <span className="group-open:hidden">
-                  {codeOnly ? "Checked and approved" : "Checked, previewed, reviewed and approved"}
+                  {codeOnly ? "Checked and approved" : "Checked, previewed and approved"}
                 </span>
                 <span className="hidden group-open:inline">How this change got here</span>
               </summary>
@@ -421,11 +428,11 @@ export function PreparedChangesSection({
                 projectId={projectId}
                 preparedChangeId={change.id}
                 card={change.preview}
-                validatedArtifactId={change.validatedArtifactId}
                 // Already resolved for this render. Without it the panel renders
                 // "Resolving preview address…" until its first poll, for an
                 // origin the server handed the page milliseconds earlier.
                 serverOrigin={change.previewOrigin}
+                productionUrl={change.productionUrl}
                 approved={change.progress.approved}
                 merged={change.progress.merged}
               />
@@ -433,12 +440,15 @@ export function PreparedChangesSection({
               {/* Below Preview, because a comparison photographs a running
                   preview. The order on screen is the order of the gates — and
                   there is no Approve, Merge or Deploy control after it. */}
+              {/* History only (ADR 0065). Nothing creates a comparison any
+                  more; a change that has one from before still shows it, so an
+                  approval made on it can still say what it rested on. */}
+              {change.review.state !== "not_generated" && (
               <ReviewPanel
                 projectId={projectId}
                 preparedChangeId={change.id}
                 card={change.review}
                 images={change.reviewImages}
-                previewSessionId={change.previewSessionId}
                 previewOrigin={change.previewOrigin}
                 branchUrl={change.branchUrl}
                 commitSha={change.commitSha}
@@ -446,6 +456,7 @@ export function PreparedChangesSection({
                 approved={change.progress.approved}
                 merged={change.progress.merged}
               />
+              )}
                 </>
               )}
 
@@ -455,8 +466,6 @@ export function PreparedChangesSection({
                 projectId={projectId}
                 preparedChangeId={change.id}
                 card={change.approval}
-                reviewArtifactId={codeOnly ? null : change.review.reviewArtifactId}
-                codeReview={codeOnly}
                 merged={change.progress.merged}
               />
             </details>

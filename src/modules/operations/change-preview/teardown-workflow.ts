@@ -4,6 +4,7 @@ import type { PreviewDeps } from "./execution";
 import {
   convergePreviewStep,
   recordPreviewUsageStep,
+  sweepExpiredScreenshotsStep,
   terminatePreviewStep,
   type TeardownRecord,
 } from "./teardown-execution";
@@ -12,8 +13,8 @@ import {
  * The durable preview teardown (Sprint 10B-3, ADR 0016 §14).
  *
  * ```
- * terminate ─▶ record usage ─▶ converge
- *  destructive   retryable      retryable
+ * terminate ─▶ record usage ─▶ converge ─▶ sweep expired screenshots
+ *  destructive   retryable      retryable   best effort, never fails
  * ```
  *
  * Manual stop and expiry both enter here. They differ only in the reason the
@@ -39,6 +40,14 @@ import {
  * Cleanup outranks accounting. If the ledger step fails after the sandbox is
  * already stopped, the sandbox stays stopped and the ledger step retries alone.
  * Nothing resurrects or retains a VM to make the books balance.
+ *
+ * ## The sweep on the end
+ *
+ * Screenshot retention used to be the last step of the visual-review workflow,
+ * which Sprint 0114 made unreachable for new changes. It runs here instead —
+ * the last step of an operation the customer already caused, holding the client
+ * the bucket's policies require — rather than becoming a scheduler this product
+ * has not decided to have (rule 24). It cannot fail the operation.
  */
 
 function deps(): PreviewDeps {
@@ -73,6 +82,11 @@ async function converge(operationId: string, teardown: TeardownRecord) {
   await convergePreviewStep(deps(), operationId, teardown);
 }
 
+async function sweepExpiredScreenshots(operationId: string) {
+  "use step";
+  await sweepExpiredScreenshotsStep(deps(), operationId);
+}
+
 export async function previewTeardownWorkflow(operationId: string) {
   "use workflow";
 
@@ -86,4 +100,8 @@ export async function previewTeardownWorkflow(operationId: string) {
   await recordUsage(operationId, teardown);
 
   await converge(operationId, teardown);
+
+  // VB-004, last and unconditional. Retention has nothing to do with how this
+  // teardown went, and the step cannot fail the operation — see its docblock.
+  await sweepExpiredScreenshots(operationId);
 }

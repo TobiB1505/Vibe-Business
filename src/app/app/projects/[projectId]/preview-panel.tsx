@@ -8,7 +8,6 @@ import { useOperationPoll } from "@/lib/client/use-operation-poll";
 import { shouldRefreshForState } from "@/modules/operations/view";
 import { PREVIEW_STAGE_LABELS, type PreviewCard } from "@/modules/change-preview/view";
 import type { PreviewStage } from "@/modules/change-preview/schema";
-import { validateChangeAction } from "./validate-change-action";
 import {
   getPreviewStatusAction,
   startPreviewAction,
@@ -23,16 +22,23 @@ import { formatTime } from "@/lib/utils/format-datetime";
  *
  * ## The vocabulary is the product guarantee
  *
- * A running preview means one thing: the exact validated artifact started and
- * answered inside an isolated environment. It is never rendered as *approved*,
- * *reviewed*, *merged* or *deployed*, and the panel keeps saying so at the
+ * A running preview means one thing: the change's exact commit started and
+ * answered inside an isolated environment. It is never rendered as *validated*,
+ * *approved*, *merged* or *deployed*, and the panel keeps saying so at the
  * moment a user is most likely to assume otherwise — when they are looking at
  * their own application working.
  *
  * ```
- * sandbox_validation_passed → preview_available → human review → merge → deploy
- *                                    ↑ we are here
+ * change prepared → preview_available → validation → human approval → merge
+ *                          ↑ we are here, and it no longer waits for the next box
  * ```
+ *
+ * Sprint 0114 moved this box left. A preview used to boot from a *passing*
+ * validation's snapshot, so it arrived after roughly five minutes of checks;
+ * it now runs a development server on a fresh clone and can be started the
+ * moment a change exists. What that costs is stated rather than hidden: it is
+ * the prepared code running, not the checked application, and the confirmation
+ * says so before the click (ADR 0064).
  *
  * ## The preview URL is untrusted, and stays outside Vibe
  *
@@ -115,8 +121,15 @@ function ConfirmDialog({
     >
       <>
         <p>
-          Vibe will start the validated application in an isolated environment and make it
-          temporarily available through a public, unlisted URL.
+          Vibe will start your application from this change&apos;s exact commit, in an isolated
+          environment, and make it temporarily available through a public, unlisted URL.
+        </p>
+        {/* The sentence ADR 0064 exists to make sure is said. A preview runs
+            before the safety checks finish, and it is a development server —
+            so it shows the code, not the checked application. */}
+        <p className="text-amber">
+          This is a preview of the code, not a checked build. Vibe&apos;s safety checks run
+          separately and are what decide whether the change is sound.
         </p>
         <p className="text-amber">
           Anyone who has the URL may be able to open it until the preview expires.
@@ -146,18 +159,25 @@ export function PreviewPanel({
   projectId,
   preparedChangeId,
   card,
-  /** The passing validation whose artifact would be previewed, if there is one. */
-  validatedArtifactId,
   /** The origin this render already resolved, before the first poll returns. */
   serverOrigin,
+  /**
+   * The project's verified public origin, for the "before" half (ADR 0065).
+   *
+   * Offered beside a running preview so a person can put the two side by side
+   * in two tabs. Labelled as *the live site now*, never as the base commit —
+   * production may have moved since this change was prepared, and saying
+   * otherwise would be the comparison lying quietly.
+   */
+  productionUrl,
   approved,
   merged,
 }: {
   projectId: string;
   preparedChangeId: string;
   card: PreviewCard;
-  validatedArtifactId: string | null;
   serverOrigin: string | null;
+  productionUrl: string | null;
   /** A human approved this exact commit, and that still stands (UI-5 §4). */
   approved: boolean;
   /** The default branch carries this change, verified by reading it back. */
@@ -287,31 +307,20 @@ export function PreviewPanel({
   }, [previewState]);
 
   function confirmStart() {
-    if (!validatedArtifactId) return;
-
     setIntent("start");
     startTransition(async () => {
       setConfirming(false);
+      /*
+       * The prepared change, not a validated artifact (ADR 0064).
+       *
+       * A preview clones the prepared commit and serves it, so it no longer
+       * waits for a build to exist — which is the point: the validation this
+       * used to require takes minutes, and this is what a person looks at
+       * while it runs.
+       */
       // The confirmation travels to the server as an explicit argument. The
       // dialog closing is not what authorizes this; the boolean is (§5).
-      setState(await startPreviewAction(projectId, validatedArtifactId, true));
-      router.refresh();
-      setIntent(null);
-    });
-  }
-
-  /**
-   * Starts a fresh validation, because the artifact this preview needed is gone.
-   *
-   * Called only from an explicit click, never on render, never on poll, never
-   * as a "helpful" recovery from a failed preview. A new ValidationRun
-   * provisions a paid sandbox, and spending on a user's behalf is exactly what
-   * CLAUDE.md rule 60 forbids (§15, §22).
-   */
-  function validateAgain() {
-    setIntent("validate");
-    startTransition(async () => {
-      await validateChangeAction(projectId, preparedChangeId);
+      setState(await startPreviewAction(projectId, preparedChangeId, true));
       router.refresh();
       setIntent(null);
     });
@@ -403,6 +412,26 @@ export function PreviewPanel({
               </span>
             )}
 
+            {/*
+              * The "before" half, and the honest label for it (ADR 0065).
+              *
+              * A plain link to the customer's own site in a second tab — no
+              * screenshot, no capture, no browser session, nothing stored. It
+              * says *now*, because production may have moved since this change
+              * was prepared and calling it "before" would quietly make the
+              * comparison a claim about the base commit.
+              */}
+            {productionUrl && (
+              <a
+                href={productionUrl}
+                target="_blank"
+                rel="noreferrer noopener"
+                className="rounded-md border border-line-2 px-3 py-1.5 text-sm text-fg-prose hover:text-fg"
+              >
+                Open your live site now
+              </a>
+            )}
+
             <Button
               type="button"
               variant="secondary"
@@ -467,8 +496,9 @@ export function PreviewPanel({
         <div className="space-y-2">
           <p className="text-sm text-fg-secondary">Not started</p>
           <p className="text-xs text-fg-muted">
-            Vibe will run the exact validated build in an isolated environment for 15 minutes, on a
-            public, unlisted URL. Your repository and production site are not changed.
+            Vibe will run this change&rsquo;s code in an isolated environment for 15 minutes, on a
+            public, unlisted URL. It is the prepared code running, not a checked build. Your
+            repository and production site are not changed.
           </p>
           <Button
             ref={openerRef}
@@ -476,7 +506,7 @@ export function PreviewPanel({
             variant="primary"
             size="sm"
             onClick={() => setConfirming(true)}
-            disabled={intent !== null || !validatedArtifactId}
+            disabled={intent !== null}
           >
             Start temporary preview
           </Button>
