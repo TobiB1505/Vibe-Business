@@ -2,7 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { inspectLiveProduct } from "@/modules/live-product-intelligence/service";
-import { appendProductScanEvent } from "@/modules/product-scan/store";
+import { appendProductScanEvent, appendProductScanEvents } from "@/modules/product-scan/store";
 import { liveProductFindingEvents, repositoryFindingEvents } from "@/modules/product-scan/findings";
 import { getProfileById } from "@/modules/product-understanding/store";
 import { inspectRepository } from "@/modules/repository-intelligence/service";
@@ -39,6 +39,26 @@ async function append(
     projectId: operation.projectId,
     userId: operation.userId,
     event,
+  });
+}
+
+/**
+ * A run of findings, in one pass (PERF-008).
+ *
+ * The finding lists below are appended as a group, and appending them one at a
+ * time cost four round trips each — up to 96 inside a step, while the browser
+ * polls the same operation every 1.8 seconds.
+ */
+async function appendAll(
+  deps: ExecutionDeps,
+  operation: ProjectOperationRun,
+  events: readonly Parameters<typeof appendProductScanEvent>[1]["event"][],
+) {
+  await appendProductScanEvents(deps.supabase, {
+    operationId: operation.id,
+    projectId: operation.projectId,
+    userId: operation.userId,
+    events,
   });
 }
 
@@ -98,9 +118,7 @@ export async function scanRepositoryStep(
   });
 
   if (result.snapshot.result) {
-    for (const event of repositoryFindingEvents(result.snapshot.result, result.snapshot.id)) {
-      await append(deps, operation, event);
-    }
+    await appendAll(deps, operation, repositoryFindingEvents(result.snapshot.result, result.snapshot.id));
   }
   return { ok: true, continued: true };
 }
@@ -173,9 +191,7 @@ export async function scanLiveProductStep(
   });
 
   if (result.snapshot.result) {
-    for (const event of liveProductFindingEvents(result.snapshot.result, result.snapshot.id)) {
-      await append(deps, operation, event);
-    }
+    await appendAll(deps, operation, liveProductFindingEvents(result.snapshot.result, result.snapshot.id));
   }
   return { ok: true, continued: true };
 }
