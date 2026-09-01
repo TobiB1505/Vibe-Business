@@ -24,9 +24,12 @@ import { cn } from "@/lib/utils/cn";
  */
 export function AgentStartCta({
   children,
+  creditEstimate,
   note = "You can stop Vibe at any time",
 }: {
   children: React.ReactNode;
+  /** Already-resolved run ceiling. Never derived in the client. */
+  creditEstimate?: string | null;
   note?: string;
 }) {
   const reduceMotion = useReducedMotion();
@@ -35,6 +38,35 @@ export function AgentStartCta({
 
   return (
     <div className="flex w-full max-w-[27rem] flex-col items-center gap-3" data-testid="agent-start">
+      {creditEstimate && (
+        <div
+          className="border-line-2 bg-surface-2 flex w-full items-center justify-between gap-4 rounded-panel border px-4 py-3"
+          data-testid="agent-credit-estimate"
+        >
+          <span className="flex min-w-0 items-center gap-2.5">
+            <svg
+              viewBox="0 0 24 24"
+              width="17"
+              height="17"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="text-mint flex-none"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="8.5" />
+              <path d="M9.2 8.5h4.1a2.2 2.2 0 0 1 0 4.4h-2.6a2.2 2.2 0 0 0 0 4.4h4.1M12 6.6v10.8" />
+            </svg>
+            <span className="text-fg-muted text-sm">Estimated Credit use</span>
+          </span>
+          <strong className="text-fg-body shrink-0 text-sm font-semibold tabular-nums">
+            Up to {creditEstimate} Credits
+          </strong>
+        </div>
+      )}
+
       <div className="relative w-full overflow-hidden rounded-full">
         {children}
         {animate && (

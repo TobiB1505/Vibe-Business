@@ -46,6 +46,7 @@ import { AgentReadyStage } from "./agent-ready-stage";
 import { AgentRunTaskHeader } from "./agent-run-task-header";
 import { AgentPreviewActions, AgentReviewDecision } from "./agent-stage-actions";
 import { AgentStartAction } from "./agent-start-action";
+import { formatCreditsForDisplay } from "@/modules/credits/units";
 
 /**
  * The customer-facing Agent workspace.
@@ -265,6 +266,10 @@ export default async function ProjectAgentPage({
           (step) => step.order === agenticResolution.stepOrder,
         ) ?? null)
       : null;
+  const creditEstimate =
+    agenticStep && agentRoutes?.available && agentRoutes.economics
+      ? formatCreditsForDisplay(agentRoutes.economics.budget.maxCredits)
+      : null;
 
   /* Whether anything is actually happening. The orb turns for this and
      nothing else — a settled run gets no orb at all. */
@@ -364,6 +369,7 @@ export default async function ProjectAgentPage({
                     <AgentStartAction projectId={project.id} stepKey={agenticStep.id} />
                   ) : undefined
                 }
+                creditEstimate={creditEstimate}
                 caption={
                   (requestedTaskMatchesRun && change !== null) ||
                   (focus?.kind === "focused" && focus.action.kind === "already_prepared")

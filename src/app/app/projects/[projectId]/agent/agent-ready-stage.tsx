@@ -18,6 +18,7 @@ export function AgentReadyStage({
   liveUrl,
   caption,
   startAction,
+  creditEstimate,
 }: {
   task: AgentTask | null;
   planHref: string;
@@ -26,6 +27,8 @@ export function AgentReadyStage({
   caption: string;
   /** Canonical server-backed start, present only when policy exposes it. */
   startAction?: React.ReactNode;
+  /** Formatted server-owned ceiling for the exact run being offered. */
+  creditEstimate?: string | null;
 }) {
   return (
     <div
@@ -74,6 +77,7 @@ export function AgentReadyStage({
           />
           {(startAction !== undefined || task === null) && (
             <AgentStartCta
+              creditEstimate={startAction ? creditEstimate : null}
               note={
                 startAction
                   ? "Vibe re-checks the current code and every safety limit before starting"

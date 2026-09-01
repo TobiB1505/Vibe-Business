@@ -397,6 +397,8 @@ describe("the plan hands off to the agent, and the agent points back", () => {
     expect(DOGFOOD_ACTIONS).toContain("startAgentExecution");
     expect(copyOf(AGENT_START)).not.toContain("startAgentExecution(");
     expect(AGENT_START).toContain("Run with Vibe");
+    expect(AGENT_PAGE).toContain("formatCreditsForDisplay(agentRoutes.economics.budget.maxCredits)");
+    expect(AGENT_READY).toContain("creditEstimate={startAction ? creditEstimate : null}");
     expect(AGENT_PAGE).toContain("agentRoutes.plan.opportunityId === taskOpportunityId");
     expect(AGENT_PAGE).toContain("!agentWorking");
   });

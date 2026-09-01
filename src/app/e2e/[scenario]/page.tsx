@@ -596,6 +596,12 @@ export default async function E2eScenarioPage({
                 repository="TobiB1505/Vibe-Business"
                 liveUrl="https://vibebusiness.de"
                 caption={caption}
+                creditEstimate="100"
+                startAction={
+                  <button type="button" className="w-full rounded-full px-5 py-3">
+                    Run with Vibe
+                  </button>
+                }
               />
             ),
             build: (

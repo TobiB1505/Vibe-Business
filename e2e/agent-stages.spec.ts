@@ -35,6 +35,10 @@ test.describe("the workspace follows the target composition", () => {
     await expect(page.getByTestId("agent-ready-stage")).toBeVisible();
     await expect(page.getByTestId("agent-stage-rail")).toHaveCount(0);
     await expect(page.getByTestId("agent-core")).toHaveAttribute("data-state", "idle");
+    await expect(page.getByTestId("agent-credit-estimate")).toContainText(
+      "Up to 100 Credits",
+    );
+    await expect(page.getByRole("button", { name: "Run with Vibe" })).toBeVisible();
   });
 
   /** Once a run exists, every stage uses one stable tracker geometry. */
@@ -90,7 +94,7 @@ test.describe("never reached does not read as not yet", () => {
   });
 });
 
-test.describe("nothing on this surface estimates", () => {
+test.describe("the surface invents no progress or duration estimate", () => {
   test("shows no duration, range or percentage in any state", async ({ page }) => {
     /*
      * The whole surface, not the rail and the core.

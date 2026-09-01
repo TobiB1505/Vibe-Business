@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FakeDatabase, fakeSupabase } from "@/modules/operations/test-support";
 import { fakeSnapshot } from "@/modules/execution-contract/test-support";
 import { fakeLiveSnapshot } from "@/modules/business-audit/test-support";
+import { creditsToUnits } from "@/modules/credits/units";
 
 const getHead = vi.fn(async () => ({ defaultBranch: "main", commitSha: SNAPSHOT_SHA }));
 const createGithubRepositoryReader = vi.fn(() => ({ getHead }));
@@ -552,6 +553,7 @@ describe("resolveDogfoodPlanRoutes — the list routes against real repository s
     // The regression, stated directly.
     expect(implementation.mode).toBe("agentic");
     expect(implementation.absorbedPreparation).toEqual([1]);
+    expect(routes.economics?.budget.maxCredits).toBe(creditsToUnits(100));
   });
 
   it("offers dependent execution after the founder-owned requirement is resolved", async () => {

@@ -202,6 +202,8 @@ export type DogfoodPlanRoutes =
       available: true;
       plan: NonNullable<Awaited<ReturnType<typeof getLatestCompletedActionPlan>>>;
       resolutions: readonly ExecutionResolution[];
+      /** The server-resolved Credit ceiling behind any offered Agent route. */
+      economics: AgentEconomicPolicy | null;
     };
 
 export async function resolveDogfoodPlanRoutes(
@@ -247,6 +249,7 @@ export async function resolveDogfoodPlanRoutes(
   return {
     available: true,
     plan,
+    economics,
     resolutions: resolvePlanExecution({
       plan: { steps: plan.steps, completedSteps, isCurrent: true },
       repository,
