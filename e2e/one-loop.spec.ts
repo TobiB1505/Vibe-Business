@@ -295,6 +295,42 @@ test.describe("the empty states each have a next step", () => {
   });
 });
 
+test.describe("a re-scan over a plan that already exists", () => {
+  /**
+   * The state the empty-plan scenario above does not reach. A founder with
+   * Moves pressed "Re-scan business", the button returned to rest, and the
+   * page said nothing for the ~70 seconds the run took — so the click looked
+   * like it had done nothing at all.
+   */
+  test("says a re-scan is running, and keeps the previous plan readable", async ({ page }) => {
+    await page.goto("/e2e/moves_rescanning");
+
+    const running = page.getByTestId("moves-rescanning");
+    await expect(running).toBeVisible();
+    await expect(running.getByText("Re-scanning your business")).toBeVisible();
+    await expect(
+      running.getByText("The plan below is your previous one until this finishes.", {
+        exact: false,
+      }),
+    ).toBeVisible();
+
+    // The previous answer stays on screen: it is still the current one until
+    // the new set lands.
+    await expect(page.getByTestId("move-stepper")).toBeVisible();
+    await expect(page.getByTestId("move-card")).toHaveCount(1);
+
+    // Named durable stages only — no invented fraction or countdown.
+    const body = await page.locator("body").innerText();
+    expect(body).not.toMatch(/\d+%/);
+    expect(body).not.toMatch(/step \d+ of \d+/i);
+  });
+
+  test("shows no re-scan notice when nothing is running", async ({ page }) => {
+    await page.goto("/e2e/moves_ranked");
+    await expect(page.getByTestId("moves-rescanning")).toHaveCount(0);
+  });
+});
+
 test.describe("the plan forms before the first move exists", () => {
   test("reserves the full workspace and reports real named stages", async ({ page }) => {
     await page.goto("/e2e/moves_generating");

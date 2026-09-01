@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import { InfoIcon } from "@/components/ui/dashboard-icons";
 import { Notice } from "@/components/ui/states";
@@ -9,7 +10,12 @@ import { Surface } from "@/components/ui/surface";
 import { MonoLabel } from "@/components/ui/typography";
 import { useOperationPoll } from "@/lib/client/use-operation-poll";
 import { OPERATION_FAILURE_MESSAGES } from "@/modules/operations/messages";
-import { operationPollPhase, type OperationView } from "@/modules/operations/view";
+import {
+  operationPollPhase,
+  operationProgressSteps,
+  OPERATION_STAGE_LABELS,
+  type OperationView,
+} from "@/modules/operations/view";
 import { buildOpportunityBlockNotice, moveLensLabel } from "@/modules/opportunities/view";
 import type { BusinessOpportunity } from "@/modules/opportunities/schema";
 import type { MoveLineageMap, MovesContext } from "@/modules/opportunities/lineage";
@@ -24,6 +30,7 @@ import { MoveCard } from "./move-card";
 import { MoveStepper } from "./move-stepper";
 import { PlanDetailPanel } from "./plan-detail-panel";
 import { PlanGenerating } from "./plan-generating";
+import { PlanProgressSteps } from "./plan-progress-steps";
 
 const POLL_INTERVAL_MS = 3_000;
 const SWIPE_DISTANCE = 72;
@@ -83,6 +90,7 @@ export function ActionPlanWorkspace({
   auditHref: string;
   understandingHref: string;
 }) {
+  const router = useRouter();
   const reduceMotion = useReducedMotion();
   const initialId =
     opportunities.find((opportunity) => opportunity.id === selectedOpportunityId)?.id ??
@@ -103,6 +111,21 @@ export function ActionPlanWorkspace({
       return result.ok ? { kind: "value", value: result.operation } : { kind: "unavailable" };
     },
     continueAfter: (next) => operationPollPhase(next) === "working",
+    /*
+     * The half this poller was missing (UI-4 §5).
+     *
+     * Everything a finished generation produces is rendered by the *server*:
+     * the new Moves, their readiness, the set's own date in the refresh bar.
+     * Watching the run end and telling nobody left the founder looking at the
+     * previous plan — or, from empty, at "No moves yet" seconds after a run
+     * that had just succeeded — until they reloaded by hand.
+     *
+     * On the transition, never on the tick: a refresh per reading is the
+     * defect `use-operation-poll` was extracted to remove.
+     */
+    onReading: (next) => {
+      if (operationPollPhase(next) !== "working") router.refresh();
+    },
   });
 
   const movesOperationView = polledMoves ?? movesOperation;
@@ -174,6 +197,42 @@ export function ActionPlanWorkspace({
 
       {hasOpportunities && activeOpportunity ? (
         <>
+          {/*
+            A re-scan, while the previous plan is still on screen.
+            `PlanGenerating` answers the empty case only, so a founder who
+            already had Moves pressed "Re-scan business" and watched nothing
+            happen for over a minute: the button returned to rest, the old plan
+            stayed, and the run was invisible. The previous plan deliberately
+            stays readable underneath — it is still the current answer until
+            the new one lands — so this says which one they are reading.
+          */}
+          {movesRunning && movesOperationView ? (
+            <Surface
+              level="section"
+              padding="md"
+              className="border-mint-line flex flex-col gap-4"
+              role="status"
+              data-testid="moves-rescanning"
+            >
+              <div className="flex flex-col gap-1.5">
+                <MonoLabel className="text-mint">Re-scanning your business</MonoLabel>
+                <p className="text-fg-prose text-sm leading-relaxed">
+                  {movesOperationView.stalled
+                    ? "This is taking much longer than expected."
+                    : `${OPERATION_STAGE_LABELS[movesOperationView.stage]}…`}
+                </p>
+              </div>
+              <PlanProgressSteps
+                steps={operationProgressSteps("opportunity_generation", movesOperationView)}
+              />
+              <p className="text-fg-muted text-xs leading-relaxed">
+                {movesOperationView.stalled
+                  ? "You can start again if this attempt never finishes."
+                  : "The plan below is your previous one until this finishes. You can leave this page. Vibe will continue."}
+              </p>
+            </Surface>
+          ) : null}
+
           <div className="border-line-2 bg-surface-1 rounded-panel flex items-center gap-3 border px-4 py-3">
             <InfoIcon size={15} className="text-fg-meta shrink-0" />
             <p className="text-fg-muted text-xs leading-relaxed">
