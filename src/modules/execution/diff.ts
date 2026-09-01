@@ -1,15 +1,37 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { GitWritePort } from "./git-port";
+import { computeLineDiff, type DiffHunk } from "./diff-lines";
 import { getPreparedChange } from "./store";
 
 /**
- * Bounded diff retrieval for review (Sprint 9C §12, §13, §26).
+ * Bounded diff retrieval for review (Sprint 9C §12, §13, §26; Sprint 0055 §1).
  *
  * The GitHub branch is the canonical artifact, so the diff is fetched on
  * demand and never persisted — storing it would quietly turn Supabase into a
- * source-code mirror of every customer repository.
+ * source-code mirror of every customer repository. `20260818210000_agent_execution.sql`
+ * says the same thing about the agent's own tables: *deliberately absent —
+ * prompts, model output, reasoning, source files, diffs*.
+ *
+ * ## Why two commits rather than a branch
+ *
+ * This used to read one side, from `branchName`, because the only capability
+ * that existed only ever *added* files — so the added content was the diff, and
+ * a branch name was good enough to fetch it.
+ *
+ * Neither half survives the agent. It edits files that already exist, so a diff
+ * needs the version that was there before; and a branch is a moving pointer,
+ * while a review has to be about two exact commits. Both sides are therefore
+ * read at pinned SHAs from the prepared change Vibe recorded:
+ *
+ * ```
+ * before   prepared.baseSha      the commit the change was prepared on
+ * after    prepared.commitSha    the commit Vibe wrote and verified
+ * ```
+ *
+ * That is what lets the same diff be recomputed byte-identically later, which
+ * is what an approval can honestly bind to (ADR 0040). A screenshot cannot be
+ * regenerated; this can.
  *
  * ## Everything here is untrusted text
  *
@@ -17,16 +39,16 @@ import { getPreparedChange } from "./store";
  * a text renderer, never as markup. This module's contract is that a caller
  * receives lines of text; what a caller must not do — `dangerouslySetInnerHTML`,
  * markdown-with-HTML, remote asset loading — is the UI's obligation, and the
- * review component honours it.
+ * diff component honours it.
  *
- * ## The limits apply even though this capability writes two small files
+ * ## The limits are the caller's ceiling, not an estimate of the content
  *
  * The whole point of a bound is that it holds when the assumption behind it
  * stops being true. A future capability, a tampered branch, or a repository
  * that answers with something unexpected all hit the same ceiling.
  */
 
-/** Deliberately small. Two metadata routes are a few hundred bytes each. */
+/** Deliberately small. A prepared change is a handful of files, not a release. */
 export const DIFF_LIMITS = {
   maxFiles: 10,
   maxBytesPerFile: 64 * 1024,
@@ -34,12 +56,53 @@ export const DIFF_LIMITS = {
   maxLinesPerFile: 500,
 } as const;
 
+/**
+ * The policy version for a rendered diff.
+ *
+ * Part of what a `code` approval binds to (ADR 0040): the digest says *this
+ * diff, computed under these rules, was what was shown*. Changing a limit, the
+ * context width or the line algorithm changes what was shown, so it changes the
+ * version — and an approval taken under the old rules can no longer be matched
+ * against the new one.
+ */
+export const DIFF_POLICY_VERSION = "diff-policy-v1" as const;
+
+/**
+ * Reads a file at an exact commit. The same bounded port the analyzer, the
+ * candidate extractor and the review classifier already use, declared narrowly
+ * here so the GitHub reader satisfies it structurally and a test double is
+ * three lines.
+ *
+ * One method, and no way to write: "a diff read can never modify a repository"
+ * is a property of this type rather than a claim about the code below.
+ */
+export type DiffContentReader = {
+  getTextFile(path: string, commitSha: string, maxBytes: number): Promise<string | null>;
+};
+
+/**
+ * What happened to one file.
+ *
+ * `deleted` is deliberately absent. The GitHub writer is additive and refuses
+ * deletions, so a prepared change never contains one — and `getTextFile`
+ * returns `null` for an absent file, a binary one, an oversized one and a
+ * directory alike, which means a missing head side cannot be *told apart* from
+ * a deletion anyway. Collapsing the two is the mistake `candidate.ts` records
+ * making once: an oversized build artifact read as the agent removing a
+ * repository file.
+ */
+export type DiffFileStatus = "added" | "modified" | "unreadable";
+
 export type DiffFile = {
   path: string;
-  /** Plain text lines. Rendered as text, never as markup. */
-  lines: string[];
-  /** True when the file was cut short by a limit above. */
+  status: DiffFileStatus;
+  /** Empty for `unreadable`, and for a file whose two versions are identical. */
+  hunks: DiffHunk[];
+  added: number;
+  removed: number;
+  /** True when either side was cut short by a limit above. */
   truncated: boolean;
+  /** Size of the head side, as read. Zero when it could not be read. */
   bytes: number;
 };
 
@@ -48,9 +111,13 @@ export type PreparedDiff = {
   branchName: string;
   baseSha: string;
   commitSha: string;
+  policyVersion: typeof DIFF_POLICY_VERSION;
   files: DiffFile[];
   /** True when files were dropped to stay inside the total budget. */
   truncated: boolean;
+  /** Totals across every file shown. */
+  added: number;
+  removed: number;
 };
 
 export type DiffFailure =
@@ -61,36 +128,56 @@ export type DiffFailure =
 
 export type DiffResult = { ok: true; diff: PreparedDiff } | { ok: false; error: DiffFailure };
 
-function boundFile(path: string, content: string): DiffFile {
-  const clipped = content.length > DIFF_LIMITS.maxBytesPerFile;
-  const usable = clipped ? content.slice(0, DIFF_LIMITS.maxBytesPerFile) : content;
+/** Clips one side to the per-file ceiling, reporting whether it had to. */
+function clip(content: string): { text: string; truncated: boolean; bytes: number } {
+  const byBytes = content.length > DIFF_LIMITS.maxBytesPerFile;
+  const usable = byBytes ? content.slice(0, DIFF_LIMITS.maxBytesPerFile) : content;
 
-  const allLines = usable.split("\n");
-  const tooManyLines = allLines.length > DIFF_LIMITS.maxLinesPerFile;
-  const lines = tooManyLines ? allLines.slice(0, DIFF_LIMITS.maxLinesPerFile) : allLines;
+  const lines = usable.split("\n");
+  const byLines = lines.length > DIFF_LIMITS.maxLinesPerFile;
+  const text = byLines ? lines.slice(0, DIFF_LIMITS.maxLinesPerFile).join("\n") : usable;
+
+  return { text, truncated: byBytes || byLines, bytes: Buffer.byteLength(text, "utf8") };
+}
+
+/**
+ * One file's two versions, compared.
+ *
+ * A head side that cannot be read is reported as `unreadable` rather than
+ * omitted: review has to show that something is there it could not display,
+ * because a file silently missing from a diff is a file nobody reviewed.
+ */
+function compareFile(path: string, baseText: string | null, headText: string | null): DiffFile {
+  if (headText === null) {
+    return { path, status: "unreadable", hunks: [], added: 0, removed: 0, truncated: false, bytes: 0 };
+  }
+
+  const head = clip(headText);
+  const base = baseText === null ? null : clip(baseText);
+  const diff = computeLineDiff(base?.text ?? "", head.text);
 
   return {
     path,
-    lines,
-    truncated: clipped || tooManyLines,
-    bytes: Buffer.byteLength(usable, "utf8"),
+    status: base === null ? "added" : "modified",
+    hunks: diff.hunks,
+    added: diff.added,
+    removed: diff.removed,
+    truncated: head.truncated || (base?.truncated ?? false),
+    bytes: head.bytes,
   };
 }
 
 /**
- * Reads the prepared files from the branch Vibe created.
+ * Reads both versions of every prepared file and compares them.
  *
- * The branch, the paths and the commit all come from the stored prepared
- * change, which came from server-resolved state — never from the caller. A
- * client cannot ask for the contents of an arbitrary ref (§12, §29).
- *
- * This capability only ever adds files, so the "diff" is the added content.
- * A capability that modified existing files would need base-vs-head
- * comparison; that is a different capability and a different renderer.
+ * The paths, the base commit and the head commit all come from the stored
+ * prepared change, which came from server-resolved state — never from the
+ * caller. A client cannot ask for the contents of an arbitrary ref, an
+ * arbitrary path, or an arbitrary commit (§12, §29).
  */
 export async function getPreparedDiff(
   supabase: SupabaseClient,
-  port: GitWritePort,
+  reader: DiffContentReader,
   params: { projectId: string; preparedChangeId: string },
 ): Promise<DiffResult> {
   const prepared = await getPreparedChange(supabase, params);
@@ -99,9 +186,10 @@ export async function getPreparedDiff(
     return { ok: false, error: "not_prepared" };
   }
 
+  const commitSha = prepared.commitSha;
   const files: DiffFile[] = [];
   let totalBytes = 0;
-  let truncated = false;
+  let truncated = prepared.files.length > DIFF_LIMITS.maxFiles;
 
   for (const file of prepared.files.slice(0, DIFF_LIMITS.maxFiles)) {
     if (totalBytes >= DIFF_LIMITS.maxTotalBytes) {
@@ -109,20 +197,20 @@ export async function getPreparedDiff(
       break;
     }
 
-    const content = await port.getFileContent(file.path, prepared.branchName);
-    if (content === null) {
-      // The branch no longer holds a file we recorded. Reported as a gap
-      // rather than silently omitted, so review shows something is wrong.
-      files.push({ path: file.path, lines: [], truncated: false, bytes: 0 });
-      continue;
-    }
+    /*
+     * Both sides at once. The base read is the one that makes this a diff
+     * rather than a listing, and it is fetched at the pinned base SHA — a
+     * source the change itself never touched (rule 55).
+     */
+    const [baseText, headText] = await Promise.all([
+      reader.getTextFile(file.path, prepared.baseSha, DIFF_LIMITS.maxBytesPerFile),
+      reader.getTextFile(file.path, commitSha, DIFF_LIMITS.maxBytesPerFile),
+    ]);
 
-    const bounded = boundFile(file.path, content);
-    totalBytes += bounded.bytes;
-    files.push(bounded);
+    const compared = compareFile(file.path, baseText, headText);
+    totalBytes += compared.bytes;
+    files.push(compared);
   }
-
-  if (prepared.files.length > DIFF_LIMITS.maxFiles) truncated = true;
 
   return {
     ok: true,
@@ -130,9 +218,12 @@ export async function getPreparedDiff(
       preparedChangeId: prepared.id,
       branchName: prepared.branchName,
       baseSha: prepared.baseSha,
-      commitSha: prepared.commitSha,
+      commitSha,
+      policyVersion: DIFF_POLICY_VERSION,
       files,
       truncated,
+      added: files.reduce((sum, file) => sum + file.added, 0),
+      removed: files.reduce((sum, file) => sum + file.removed, 0),
     },
   };
 }
@@ -144,6 +235,7 @@ export async function getPreparedDiff(
  * `encodeURIComponent` on the branch segment because a ref can legitimately
  * contain slashes — `vibe/seo-foundations-…` always does.
  */
+
 export function buildBranchUrl(repositoryFullName: string, branchName: string): string {
   const [owner, repo] = repositoryFullName.split("/");
   return `https://github.com/${owner}/${repo}/tree/${encodeRef(branchName)}`;
