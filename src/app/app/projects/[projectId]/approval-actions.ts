@@ -23,7 +23,7 @@ import { resolveReviewClassification } from "@/modules/review/classification-ser
  * policy version, the timestamp, the resulting status — or which kind of review
  * this change deserves, which is resolved below from Vibe's own analysis of the
  * changed paths. A client that could name that could approve a visible change
- * on a diff nobody looked at (ADR 0040). Those are resolved by
+ * on a diff nobody looked at (ADR 0063). Those are resolved by
  * the service from persisted state, so an approval cannot be recorded against
  * bytes no human ever saw — which matters because Sprint 11C will treat these
  * rows as the reason it is allowed to write to someone's default branch.

@@ -134,7 +134,7 @@ describe("approval identity", () => {
       { validationRunId: "validation_2" },
       { evidence: { kind: "review_artifact", reviewArtifactId: "review_2" } as ApprovalEvidence },
       // The two evidence *forms* are different things to approve even when the
-      // change, the commit and the validation are identical (ADR 0040).
+      // change, the commit and the validation are identical (ADR 0063).
       { evidence: { kind: "code_diff", codeReviewDigest: "f".repeat(64) } as ApprovalEvidence },
       { approvalPolicyVersion: "approval-policy-v99" },
       { projectId: "project_2" },

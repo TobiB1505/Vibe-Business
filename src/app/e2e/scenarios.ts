@@ -375,7 +375,7 @@ export const E2E_SCENARIOS = {
     }),
 
   /**
-   * **A change with nothing to look at** (Sprint 0055, ADR 0040).
+   * **A change with nothing to look at** (Sprint 0055, ADR 0063).
    *
    * The state that was unreachable before this sprint. Validation passed, no
    * preview was ever started and no comparison was ever captured — and the

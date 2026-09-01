@@ -48,7 +48,7 @@ describe("the merge panel offers merging and nothing more (§15, §25)", () => {
       expect([
         "Merge approved change",
         "Cancel",
-        // A same-page anchor back to the diff on this card (ADR 0040). It
+        // A same-page anchor back to the diff on this card (ADR 0063). It
         // navigates within the screen the reader is already on: it starts
         // nothing, spends nothing and leaves nothing. The list stays a list of
         // *offers*, and this one is "look again before you decide".

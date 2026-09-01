@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { computeCodeReviewDigest } from "./code-review-digest";
 
 /**
- * The identity of a rendered diff (Sprint 0055 §3, ADR 0040).
+ * The identity of a rendered diff (Sprint 0055 §3, ADR 0063).
  *
  * One property carries the file, and it is the one that makes this admissible
  * as approval evidence at all: the same two commits and the same paths produce

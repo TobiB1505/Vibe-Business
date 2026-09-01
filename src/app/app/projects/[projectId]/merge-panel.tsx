@@ -40,7 +40,7 @@ import { formatTimestamp } from "@/lib/utils/format-datetime";
  * not the diff — this dialog has three sentences it must get right, and burying
  * them under a code listing is how a confirmation stops being read. The line
  * links back to the diff on the card instead, which is where a person reads it
- * with room (ADR 0040).
+ * with room (ADR 0063).
  *
  * ## What this component never decides
  *

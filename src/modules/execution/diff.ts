@@ -30,7 +30,7 @@ import { getPreparedChange } from "./store";
  * ```
  *
  * That is what lets the same diff be recomputed byte-identically later, which
- * is what an approval can honestly bind to (ADR 0040). A screenshot cannot be
+ * is what an approval can honestly bind to (ADR 0063). A screenshot cannot be
  * regenerated; this can.
  *
  * ## Everything here is untrusted text
@@ -59,7 +59,7 @@ export const DIFF_LIMITS = {
 /**
  * The policy version for a rendered diff.
  *
- * Part of what a `code` approval binds to (ADR 0040): the digest says *this
+ * Part of what a `code` approval binds to (ADR 0063): the digest says *this
  * diff, computed under these rules, was what was shown*. Changing a limit, the
  * context width or the line algorithm changes what was shown, so it changes the
  * version — and an approval taken under the old rules can no longer be matched

@@ -191,7 +191,7 @@ type ChangeLifecycle = {
   outcome: OutcomeCard;
   businessImpact: BusinessImpactCard;
   /**
-   * Which review this change deserves (ADR 0040).
+   * Which review this change deserves (ADR 0063).
    *
    * Recomputed on read like everything else about it — it is never stored on a
    * prepared change, only pinned onto an approval when one is made. Null
@@ -256,7 +256,7 @@ async function readChangeLifecycles(
   ]);
 
   /*
-   * Which review each change deserves (ADR 0040).
+   * Which review each change deserves (ADR 0063).
    *
    * Bounded like every other per-change read on this page, and genuinely per
    * change: the changed paths differ, and the render-impact probe reads two

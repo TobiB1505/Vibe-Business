@@ -13,7 +13,7 @@ import {
 import { getPreparedDiffAction } from "./prepare-change-action";
 
 /**
- * What changed, on the card a person decides from (Sprint 0055 §2, ADR 0040).
+ * What changed, on the card a person decides from (Sprint 0055 §2, ADR 0063).
  *
  * ## Why this loads on demand rather than on render
  *

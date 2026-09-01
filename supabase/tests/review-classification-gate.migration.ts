@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startCluster, type Cluster } from "./harness";
 
 /**
- * Sprint 0055 — the database contract behind two evidence forms (ADR 0040).
+ * Sprint 0055 — the database contract behind two evidence forms (ADR 0063).
  *
  * ## Why this runs against a real cluster
  *
@@ -151,7 +151,7 @@ describe("exactly one evidence form", () => {
   });
 
   it("accepts a code approval with no comparison at all", () => {
-    // The defect ADR 0040 closes: before this migration `review_artifact_id`
+    // The defect ADR 0063 closes: before this migration `review_artifact_id`
     // was `not null`, so this row could not exist and a backend-only change
     // could not be approved without two identical screenshots.
     const artifact = makeArtifact("evid-code");

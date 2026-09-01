@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { DIFF_POLICY_VERSION } from "./diff";
 
 /**
- * The identity of one rendered diff (Sprint 0055 §3, ADR 0040).
+ * The identity of one rendered diff (Sprint 0055 §3, ADR 0063).
  *
  * ## What this is for
  *

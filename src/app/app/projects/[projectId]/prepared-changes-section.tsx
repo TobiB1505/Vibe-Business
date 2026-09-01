@@ -72,7 +72,7 @@ export type PreparedChangeCard = {
    */
   validatedArtifactId: string | null;
   /**
-   * Which review this change deserves, decided on the server (ADR 0040).
+   * Which review this change deserves, decided on the server (ADR 0063).
    *
    * The card reads it to decide which evidence to *show* — a diff, a visual
    * comparison, or both. It never re-decides it, and it is not what authorizes
@@ -185,7 +185,7 @@ export function PreparedChangesSection({
       <ul className="space-y-4">
         {changes.map((change) => {
           /*
-           * One question asked once per card (ADR 0040).
+           * One question asked once per card (ADR 0063).
            *
            * Read here rather than in each panel for the reason `ChangeProgress`
            * exists at all: a decision spelled out in three places is three
@@ -260,7 +260,7 @@ export function PreparedChangesSection({
             )}
 
             {/*
-              * What actually changed, and which review it deserves (ADR 0040).
+              * What actually changed, and which review it deserves (ADR 0063).
               *
               * Above the gates and below the meaning, because it answers the
               * question a person arrives with once they know why the change
@@ -403,7 +403,7 @@ export function PreparedChangesSection({
 
               {/*
                 * Preview and comparison, for a change that has something to
-                * look at (ADR 0040).
+                * look at (ADR 0063).
                 *
                 * Absent for a code-only change, and absent rather than disabled:
                 * an offer to photograph a page that did not change is an offer

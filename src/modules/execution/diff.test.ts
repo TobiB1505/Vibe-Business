@@ -233,7 +233,7 @@ describe("base versus head (Sprint 0055 §1)", () => {
   });
 
   it("carries the two commits and the policy version, so the diff can be recomputed", async () => {
-    // What an approval binds to (ADR 0040): the same two immutable commits under
+    // What an approval binds to (ADR 0063): the same two immutable commits under
     // the same rules produce the same diff.
     const result = await getPreparedDiff(
       fakeSupabase(db),

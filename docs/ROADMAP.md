@@ -132,6 +132,12 @@ All four snapshot tables retain every version; no code compares two. A re-scan t
 **No surface can show an agent run in flight.**
 Every lookup in `coding-agent/store.ts` is keyed by `operationRunId` or by `(projectId, runIdentity)`; there is no `getLatestAgentRun(projectId)` and no listing. The live model (`coding-agent/observability/live-view.ts`) is real and complete, and is reachable only through an operation id the internal dogfood page carries in `?run=`. So the customer-facing Agent page added by [Sprint 0058](sprints/0084-core5-command-center.md) can say what the agent knows and what it has produced, and can say nothing about what it is doing now — for a product whose central promise is an AI engineer working on your business, that is the missing half of the screen.
 
+**A code-only review has never actually run end to end.**
+[Sprint 0113](sprints/0113-review-classification-as-a-gate.md) made the review classification a gate: a change altering no rendered page is approved on a reproducible diff instead of two identical screenshots ([ADR 0063](decisions/0063-review-classification-as-a-gate.md)). Domain, SQL/RLS and browser layers are all tested. The fourth of rule 69's questions is not answered — no real agent run has gone through the path, so the saving it exists to produce (a merged change with no preview row in `sandbox_usage_events` and none in `review_browser_usage`) is derived rather than observed.
+
+**A wrongly-classified change gets no visual review, and nothing would notice.**
+`review/classification.ts` is now load-bearing rather than advisory, so its false negatives cost something. Its structural test is a *positive* one — anything unrecognised falls through to `code`, which is the direction that removes a visual review. The route table is consulted first and is the analyzer's own conclusion about the repository, and `visual_and_code` keeps a mixed change on the stricter side; but nothing measures how often the fallback decides, and `downgradedPaths` is the only part of the decision a user is shown a reason for.
+
 **Nothing learns from a run.**
 `agent_execution_runs` carries around ninety observation columns and `execution-context/verification.ts` names the feedback in prose — a validation failure on a run whose agent verification was `low` "is exactly the signal that would justify moving a task class up a mode" — and nothing reads it. `economy/intelligence/` is the one correctly-built learning layer and is deliberately unwired.
 

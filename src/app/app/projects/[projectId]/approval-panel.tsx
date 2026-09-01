@@ -143,7 +143,7 @@ export function ApprovalPanel({
    *
    * Sent so a stale tab is refused: the server resolves what this change may be
    * approved on and rejects anything else — including an artifact id for a
-   * change it has since decided needs no comparison (ADR 0040).
+   * change it has since decided needs no comparison (ADR 0063).
    */
   reviewArtifactId,
   /**

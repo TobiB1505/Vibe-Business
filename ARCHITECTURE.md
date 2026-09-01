@@ -141,13 +141,17 @@ Each stage below is described as a logical layer/responsibility inside the modul
 
 **[Confirmed — ADR 0017]** A preview is not a review. A **visual review artifact** captures a controlled before/after comparison at identical dimensions — a database CHECK refuses a `ready` artifact that has one side or mismatched sizes, because two images of different widths are not a comparison. It carries no score and no verdict, and the whole review path makes zero AI calls.
 
+**[Confirmed — ADR 0063]** It is also not always the right instrument. `review/classification.ts` decides deterministically — from verified changed paths, the analyzer's route table and a structural render-impact proof, with no model call — whether a change deserves a visual review, a code diff, or both. A change that alters no rendered page is no longer asked for a comparison at all, because photographing it produces two identical images.
+
 **[Open decision]** Previewing a repository whose validated artifact cannot be started by a single detected dev/start command.
 
 ### 3.10 Approval Layer
 
 **[Confirmed principle]** Enforces the permission boundary defined in [PRODUCT.md §9](PRODUCT.md#9-approval-model). Merge to the default branch is only ever triggered by an explicit, attributable user approval action recorded in the Audit Log — never inferred, defaulted, or timed out into approval.
 
-**[Confirmed — ADR 0018]** An approval binds to an **immutable artifact identity** — project, prepared change, commit, base, validation run, review artifact and policy version, hashed, with a partial unique index on it. There is no `approved = true` and no "latest" lookup: change any part of the artifact and the old consent no longer covers it. Repository drift *after* an approval never rewrites what a human decided; it makes the merge unsafe, which is a different question asked at a different time.
+**[Confirmed — ADR 0018, amended by ADR 0063]** An approval binds to an **immutable artifact identity** — project, prepared change, commit, base, validation run, **the evidence a person was shown**, and policy version, hashed, with a partial unique index on it. There is no `approved = true` and no "latest" lookup: change any part of the artifact and the old consent no longer covers it. Repository drift *after* an approval never rewrites what a human decided; it makes the merge unsafe, which is a different question asked at a different time.
+
+**[Confirmed — ADR 0063]** The evidence takes one of two forms, and the review classification decides which. A change that alters a rendered page names a review artifact; a change that alters none names a `code_review_digest` — a hash of the two commits, the shown paths and the diff policy version. The diff is the *stronger* binding: two immutable commits reproduce it byte for byte indefinitely, while review images expire and their "before" side is production as it was. Two database CHECKs enforce exactly one form and that it matches the classification. The merge gate reads the form off the approval row rather than re-asking the classification, because the analyzer's route table moves and a standing human decision must not become unfindable because of it.
 
 **[Confirmed — ADR 0019]** That second question is answered immediately before the write: Vibe fast-forwards the default branch to exactly the approved commit or refuses. Never a force-update, never a rewrite, never a merge or rebase to resolve drift, and the attempt is marked before it is made so an ambiguous outcome is resolved by *reading* rather than by writing again. `merged` means one sentence — the default branch points at the approved commit and Vibe read it back. Implemented in `src/modules/approvals/` and `src/modules/merge/`.
 
@@ -283,7 +287,7 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0015](docs/decisions/0015-untrusted-repository-execution-provider.md) | Vercel Sandbox as the execution provider | §3.8 |
 | [0016](docs/decisions/0016-temporary-preview-isolation.md) | Temporary preview isolation | §3.9 |
 | [0017](docs/decisions/0017-visual-review-artifacts.md) | Visual review artifacts | §3.9 |
-| [0018](docs/decisions/0018-human-approval-authority.md) | Approval binds to an immutable artifact identity | §3.10 |
+| [0018](docs/decisions/0018-human-approval-authority.md) | Approval binds to an immutable artifact identity (amended by 0063) | §3.10 |
 | [0019](docs/decisions/0019-safe-approved-change-merge.md) | Safe approved-change merge | §3.10 |
 | [0020](docs/decisions/0020-production-outcome-verification.md) | Production outcome verification | Measurement |
 | [0021](docs/decisions/0021-business-outcome-measurement.md) | Business outcome measurement | Measurement |
@@ -328,6 +332,7 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0060](docs/decisions/0060-sign-in-throttle-authority.md) | The sign-in throttle's authority is who may call it (Accepted; `record_auth_attempt` unreachable through the Data API, one reviewed service-role site) | Sign-in, `auth_attempt_windows`, rule 53 |
 | [0061](docs/decisions/0061-launch-v1-operation-rate-card.md) | What a Credit buys, and what each number is worth trusting (Accepted; rate table amended by 0062. `launch-v1` prices every customer-facing operation, each with a `PriceBasis`) | Credits, retail prices, execution budgets, §3.11 |
 | [0062](docs/decisions/0062-sonnet-5-price-rise-cancelled.md) | A cancelled provider price is deleted, not held (Accepted; amends 0061. The Sonnet 5 rise to $3/$15 was withdrawn, so the row is gone and a permanent regression test keeps it gone; `launch-v1` re-derived to 35 / 20 / 20) | `ai/pricing.ts`, margin guard, §3.11 |
+| [0063](docs/decisions/0063-review-classification-as-a-gate.md) | The review classification becomes a gate, and a diff becomes approval evidence (Accepted; supersedes 0037 §2's "advisory", amends 0018. A change altering no rendered page is approved on a reproducible diff instead of two identical screenshots) | Review, approvals, `change_approvals`, prepared-change card |
 
 ### Layers with no section above
 

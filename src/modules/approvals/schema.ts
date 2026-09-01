@@ -163,7 +163,7 @@ export type ChangeApproval = {
    */
   codeReviewDigest: string | null;
 
-  /** Which review this change deserved, as decided at approval time (ADR 0040). */
+  /** Which review this change deserved, as decided at approval time (ADR 0063). */
   reviewClassification: ReviewClassification | null;
   reviewClassificationPolicyVersion: string | null;
 

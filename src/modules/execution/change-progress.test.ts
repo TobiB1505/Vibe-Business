@@ -411,7 +411,7 @@ describe("headline", () => {
 
 /**
  * The visual gates only apply to a change that has something visual about it
- * (Sprint 0055, ADR 0040).
+ * (Sprint 0055, ADR 0063).
  */
 describe("the review gate a change actually has", () => {
   function classification(kind: string, overrides: Record<string, unknown> = {}) {

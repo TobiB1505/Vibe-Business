@@ -132,7 +132,7 @@ function reviewGate(
   classification: ReviewClassificationResult | null,
 ): "reviewing" | "review_required" | "review_unavailable" | null {
   /*
-   * A change that alters no rendered page has no visual gate to pass (ADR 0040).
+   * A change that alters no rendered page has no visual gate to pass (ADR 0063).
    *
    * Not "the gate passes" — there is no gate. Photographing a backend change
    * produces two identical images, so requiring one before a person may decide
@@ -219,7 +219,7 @@ export type ChangeProgressInput = {
   outcome: OutcomeCard;
   businessImpact: BusinessImpactCard;
   /**
-   * Which review this change deserves (ADR 0040).
+   * Which review this change deserves (ADR 0063).
    *
    * Null when it could not be determined, which reads as the stricter answer
    * everywhere it is consulted.

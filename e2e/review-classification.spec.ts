@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 /**
- * Which review a change actually gets, in a real browser (Sprint 0055, ADR 0040).
+ * Which review a change actually gets, in a real browser (Sprint 0055, ADR 0063).
  *
  * ## Why this suite exists
  *

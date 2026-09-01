@@ -71,7 +71,7 @@ export type ApproveChangeParams = {
    */
   reviewArtifactId: string | null;
   /**
-   * Which review this change deserves, resolved by the caller (ADR 0040).
+   * Which review this change deserves, resolved by the caller (ADR 0063).
    *
    * The action layer computes it once and hands it down, for the reason
    * `ApprovalClassification` documents: three call sites must agree, and the
@@ -274,7 +274,7 @@ async function resolveApprovalTarget(
   if (!premises.ok) return premises;
 
   /*
-   * Which evidence this change is entitled to be approved on (ADR 0040).
+   * Which evidence this change is entitled to be approved on (ADR 0063).
    *
    * The classification decides, and it is Vibe's own deterministic answer from
    * verified changed paths and the analyzer's route table — never a model, and
@@ -692,7 +692,7 @@ export async function getApprovalCard(
  * preflight asking a question must not have the side effect of changing an
  * approval's state.
  *
- * ## Why this does not consult the review classification (ADR 0040)
+ * ## Why this does not consult the review classification (ADR 0063)
  *
  * Because the classification answers *what would a new approval need?*, and
  * this is asking about one that already exists.

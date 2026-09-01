@@ -79,7 +79,7 @@ function identityFor(
  * The classification a test runs under.
  *
  * `null` by default, which is the stricter path and exactly what every test
- * written before ADR 0040 assumed: a visual comparison is required. The
+ * written before ADR 0063 assumed: a visual comparison is required. The
  * code-diff tests opt in explicitly.
  */
 function classificationOf(
@@ -666,7 +666,7 @@ describe("no side effects", () => {
 });
 
 /**
- * Which evidence a change may be approved on (Sprint 0055, ADR 0040).
+ * Which evidence a change may be approved on (Sprint 0055, ADR 0063).
  *
  * The defect this closes is concrete: before it, `approval_review_required`
  * blocked every change until a before/after comparison existed — including a
@@ -676,7 +676,7 @@ describe("no side effects", () => {
  * The properties that matter are symmetric. A code-only change must be
  * approvable without one; everything else must still be refused without one.
  */
-describe("evidence form (ADR 0040)", () => {
+describe("evidence form (ADR 0063)", () => {
   const CODE = () => classificationOf("code");
   const VISUAL = () => classificationOf("visual", { visualPaths: ["src/app/page.tsx"] });
   const BOTH = () =>
@@ -716,7 +716,7 @@ describe("evidence form (ADR 0040)", () => {
 
   it("falls back to requiring a comparison when the classification is unknown", async () => {
     // Missing evidence is never a good result (rule 44). An undeterminable
-    // classification leaves exactly the behaviour that existed before ADR 0040.
+    // classification leaves exactly the behaviour that existed before ADR 0063.
     seed({ withReview: false });
 
     expect(await approve({ reviewArtifactId: null, classification: null })).toEqual({

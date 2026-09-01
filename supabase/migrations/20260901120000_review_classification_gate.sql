@@ -7,7 +7,7 @@
 -- sandbox and a browser session to produce two identical screenshots.
 --
 -- This migration gives an approval a second, equally strong evidence form. See
--- ADR 0040.
+-- ADR 0063.
 
 alter table public.change_approvals
   -- Still required for a visual review, and still `on delete restrict` — an
