@@ -112,6 +112,8 @@
 
 ## Async and resilience
 
+- Every signed-in route paints a first frame before its reads finish, and that frame describes the screen it stands in for rather than a different one (`loading-coverage.test.ts` holds the rule; the two operator-only dogfood routes are the named exceptions). A workspace section's heading is the same before and after the wait, because both come from `WORKSPACE_SECTION_HEADINGS` rather than from a string each file passes.
+- A Client Component never reads a clock or a locale while rendering. Times and dates come from `src/lib/utils/format-datetime.ts` in UTC, and a wall clock from `useBrowserClock`, which answers nothing until a browser is the one being asked — so the server's markup and the browser's first render always agree.
 - Index reads are server-owned. Failures reach the account route error boundary; the UI does not imply an empty dataset.
 - Search and sorting are local over the loaded account inventory, so no stale request or spinner exists.
 - GitHub live status is not fetched on the index. Stored connection metadata is labeled honestly and revalidation stays at the consequential workflow that needs it.
