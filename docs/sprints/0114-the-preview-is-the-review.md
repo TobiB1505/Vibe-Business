@@ -72,6 +72,20 @@ The new suite runs its inserts as `authenticated`, and the first assertion in it
 
 **One environment note, unchanged from last sprint.** `pnpm test:e2e` cannot launch in this container: Playwright expects `chromium_headless_shell-1234` and the image carries `-1194`. The suite passes in full when pointed at the browser that is present.
 
+## Deployment
+
+Both migrations are **applied** to the Vibe-Business project (`dcbwlctscooefwnivxzv`, confirmed by name before anything was touched — rule 33), together with Sprint 0113's `20260901120000`, which had never been deployed either. The remote was otherwise in sync at `20260828171037`.
+
+Checked before, not assumed (rule 30): `review_artifact_id` was still `not null` and `code_review_digest` absent, so none of the three had been applied by hand; all 3 `preview_sessions` rows could be backfilled with the commit their validation run recorded, so the `not null` would hold; and every one of the 16 `operation_runs.stage` values in use is in the restated CHECK list.
+
+**Not by the CLI, and the reason is worth recording.** `supabase link` needs a personal access token, which this environment does not carry and which does not belong in one — so the linked workflow of [Sprint 0002a](0002a-supabase-cli-workflow.md) was genuinely unavailable. The Supabase MCP server's `apply_migration` was used instead: it is not SQL Editor copy/paste (rule 29's emergency fallback), it runs the file's own SQL and it writes `supabase_migrations.schema_migrations`, which is the property the rule is protecting.
+
+**One thing it gets wrong, and the repair.** `apply_migration` stamps a version from the wall clock rather than from the filename, so history recorded `20260901144748`, `20260901144818` and `20260901144849`. Left alone, the next `pnpm db:push` would find all three local files pending and re-run them into `constraint already exists`. The three rows were corrected to the filenames' versions — the same reconciliation `supabase migration repair --status applied` performs — and read back. `supabase/migrations/` remains the source of truth (rule 34).
+
+Verified by reading the schema back rather than from the call's own success: the three CHECKs with their exact definitions, the `on delete restrict` foreign key, the partial index, `prepared_commit_sha not null` with all three rows backfilled, `validation_run_id` and `artifact_snapshot_id` now nullable, `nextjs_dev_preview_v1` in the profile CHECK, `starting_dev_server` in the stage CHECK, and the insert policy carrying all three of: the preview clause, the guarded artifact clause and `(select auth.uid())`. Advisors after the change: **no new security lint** (the four `rls_enabled_no_policy` INFOs are the deliberate insert-only ledgers, and the leaked-password WARN is the standing ROADMAP item), **zero performance WARN** and no unindexed foreign key.
+
+The application code that uses these columns is on this branch and not deployed. Nothing on `main` writes them, and every constraint is satisfied by the rows that already exist — the one stored approval names a review artifact, which is still a valid shape.
+
 ## What this deliberately did not do
 
 - **No second sandbox on `baseSha`.** "Before" is the live production site, linked and labelled *now*. A base preview would be the more honest comparison and a second clone-plus-install per change; it stays a separate slice if the link proves insufficient.
