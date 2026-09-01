@@ -153,6 +153,13 @@ export function describeFounderIntent(intent: FounderIntent): Array<{ id: string
  * Mostly scanner and internal artefacts: a founder has no idea what a "product
  * surface" or an "evidence pack" is, and a conclusion built on one tells them
  * nothing. These still reject the audit.
+ *
+ * A term earns this tier only if the model is never shown it. Rejecting a
+ * billed audit for a word we put in its own instructions is not a boundary,
+ * it is a trap — and it is the trap that discarded three real runs before
+ * `model-input-language.test.ts` made the input half of this contract
+ * enforceable: no term below may appear in the system prompt, the rubric or
+ * any rendered evidence line.
  */
 export const BLOCKING_VOCABULARY = [
   "pricing surface",
@@ -170,7 +177,6 @@ export const BLOCKING_VOCABULARY = [
   "assessment status",
   "product profile",
   "founder intent",
-  "deep scan",
   "customer journey stage",
   "journey stage",
 ] as const;
@@ -183,6 +189,23 @@ export const BLOCKING_VOCABULARY = [
  * well enough and that is visible rather than silent.
  */
 export const DISCOURAGED_VOCABULARY = [
+  /*
+   * Vibe's own feature, named on a button the founder has already clicked.
+   *
+   * It sat in the blocking tier until a real run on 2026-09-01 was discarded
+   * for writing it — and it failed that tier's own test twice over. A founder
+   * is not outside this codebase when it comes to Deep Scan: the panel, the
+   * evidence notice and the start control all say the words. And "deep scan"
+   * is ordinary English besides, so a sentence nobody primed can land on it.
+   *
+   * The asymmetry decides the tier. Accepting it costs one comprehensible
+   * sentence about what Vibe has and has not looked at; rejecting it costs a
+   * billed audit and leaves the founder with an error where their business was
+   * meant to be. It is still not what a conclusion should be about — the audit
+   * describes the business, not Vibe's tooling — so it is recorded as a note,
+   * and the input boundary below is what keeps it rare.
+   */
+  "deep scan",
   "monetization model",
   "monetisation model",
   "conversion path",
