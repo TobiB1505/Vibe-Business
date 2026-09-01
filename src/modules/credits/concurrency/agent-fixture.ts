@@ -192,7 +192,22 @@ export async function createAgentScaffolding(
     repository_connection_id: connectionId,
     base_sha: BASE_SHA,
     repository_snapshot_id: repositorySnapshotId,
-    spec: { e2b: true },
+    /*
+     * `pricingClass` is load-bearing, not decoration.
+     *
+     * `startAgentExecution` reads it off the stored spec and refuses with
+     * `agentic_execution_not_authorized` when it is absent — the class the
+     * customer was quoted decides both the retail price and the budget
+     * ceiling, and guessing one is unsafe in both directions (ADR 0061).
+     * This blob predates that and said only `{ e2b: true }`, so every start
+     * in this suite refused before reaching the branch it exists to prove.
+     *
+     * `standard` keeps the arithmetic exact: this project is on the dogfood
+     * allowlist, `CORE4_DOGFOOD_BUDGET_POLICY` is uniform across all three
+     * classes, and `HOLD` is derived from the same internal price — so the
+     * hold stays 100 Credits whichever class is named.
+     */
+    spec: { e2b: true, pricingClass: "standard", pricingClassReason: "single_surface" },
     schema_version: "e2b",
     resolver_version: "e2b",
     policy_version: "e2b",
@@ -237,7 +252,9 @@ export async function createIterationExecutionSpec(
     repository_connection_id: scaffolding.repositoryConnectionId,
     base_sha: BASE_SHA,
     repository_snapshot_id: scaffolding.repositorySnapshotId,
-    spec: { e2b: true },
+    // Same reason as `createAgentScaffolding`'s spec above: without a
+    // pricing class `startAgentExecution` refuses before it can be tested.
+    spec: { e2b: true, pricingClass: "standard", pricingClassReason: "single_surface" },
     schema_version: "e2b",
     resolver_version: "e2b",
     policy_version: "e2b",

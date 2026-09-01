@@ -27,4 +27,10 @@ would be a list of intentions pretending to be documentation.
 - [CREDIT_PRICING_V1.md](CREDIT_PRICING_V1.md) — the sellable Product Unit, the
   execution-class model, and rate-card simulations. Design and simulation only;
   no rate card is activated by it.
+- [CREDIT_RATE_CARD_LAUNCH_V1.md](CREDIT_RATE_CARD_LAUNCH_V1.md) — **the rate
+  card that is live.** The full derivation of `launch-v1` from production usage
+  data, the two stated assumptions behind it, the reservation maxima, what it
+  deliberately did not change, and the six things it is not confident about.
+  Unlike the three above, this one is activated: see
+  [ADR 0061](../decisions/0061-launch-v1-operation-rate-card.md).
 

@@ -59,31 +59,44 @@ describe("provider rates are resolved, never restated", () => {
 
 /**
  * PART P #6 — a provider price change must move future predictions and leave
- * past ones alone. This uses the real step already in `MODEL_PRICING`
- * (claude-sonnet-5, 2000 -> 3000 nanoUSD per input token on 2026-09-01) rather
- * than a fabricated one.
+ * past ones alone.
+ *
+ * This block used to demonstrate that against the real step in `MODEL_PRICING`:
+ * claude-sonnet-5, 2000 -> 3000 nanoUSD per input token on 2026-09-01. **That
+ * step was cancelled** (ADR 0062), so the same instant is now demonstrated the
+ * other way round — as continuity — and the *mechanism* is demonstrated
+ * against a supplied price book instead, which is the shape that survives any
+ * future correction.
  */
-describe("a provider price change moves future estimates", () => {
+describe("provider rates follow the price book, at the instant asked", () => {
   const before = anthropicRates("claude-sonnet-5", new Date("2026-08-20T00:00:00Z"));
   const after = anthropicRates("claude-sonnet-5", new Date("2026-10-01T00:00:00Z"));
 
-  it("resolves a different pricing version on each side of the step", () => {
+  it("spans the cancelled 2026-09-01 instant with one version and one rate", () => {
     expect(before?.pricingVersion).toBe("claude-sonnet-5-introductory-2026");
-    expect(after?.pricingVersion).toBe("claude-sonnet-5-standard-2026-09");
+    expect(after?.pricingVersion).toBe(before?.pricingVersion);
+    expect(after?.inputNanoUsdPerToken).toBe(before?.inputNanoUsdPerToken);
   });
 
-  it("costs the same work more after the step", () => {
+  it("costs the same work the same on both sides of it", () => {
     const spendBefore = estimateModelSpend(before, TOKENS);
     const spendAfter = estimateModelSpend(after, TOKENS);
 
-    if (!spendBefore.known || !spendAfter.known) throw new Error("both sides of the step must be priced");
-    expect(spendAfter.nanoUsd).toBeGreaterThan(spendBefore.nanoUsd);
+    if (!spendBefore.known || !spendAfter.known) throw new Error("both sides must be priced");
+    expect(spendAfter.nanoUsd).toBe(spendBefore.nanoUsd);
   });
 
-  it("uses the half-open boundary, so the step's own instant is the new price", () => {
-    const atBoundary = anthropicRates("claude-sonnet-5", new Date("2026-09-01T00:00:00Z"));
+  it("uses the half-open boundary, so a step's own instant is the new price", () => {
+    // The property itself, shown on the one window boundary the book still
+    // has: Haiku 4.5 opening on 2025-10-01.
+    const atBoundary = anthropicRates("claude-haiku-4-5-20251001", new Date("2025-10-01T00:00:00Z"));
+    const justBefore = anthropicRates(
+      "claude-haiku-4-5-20251001",
+      new Date("2025-09-30T23:59:59.999Z"),
+    );
 
-    expect(atBoundary?.pricingVersion).toBe("claude-sonnet-5-standard-2026-09");
+    expect(atBoundary?.pricingVersion).toBe("claude-haiku-4-5-2025-10");
+    expect(justBefore).toBeNull();
   });
 });
 

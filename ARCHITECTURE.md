@@ -165,7 +165,7 @@ The one thing deliberately absent: **no consumption rate card is active.** `CRED
 
 **[Confirmed principle — no secrets in the ledger]** Usage events never contain prompt text, model responses, reasoning, or API keys.
 
-**[Open decision — narrowed]** The **consumption** rate card is not decided: what a Credit buys per operation, and at what margin. Retail purchase pricing *is* decided (`src/modules/billing/catalog.ts`), and candidate consumption models are simulated against real runs in [docs/business/CREDIT_PRICING_V1.md](docs/business/CREDIT_PRICING_V1.md), whose own verdict is that the evidence is not yet sufficient to activate one.
+**[Confirmed — ADR 0061, re-derived by ADR 0062]** What a Credit buys per operation *is* decided: `launch-v1` in `src/modules/credits/retail.ts` prices Business Audit at 35, Next Moves and Action Plan at 20, an additional Deep Scan at 25, and an agent improvement at 150 / 200 / 350 by execution pricing class, effective `2026-09-01T00:00:00.000Z`. `src/modules/credits/margin-guard.ts` recomputes every price's contribution margin from the provider rates in force at the instant it is asked, applied to frozen production quantities, and fails below 70% — which is how the card came to be re-derived: it was first priced against a scheduled Sonnet 5 rise to $3/$15 that Anthropic then withdrew, and the guard showed those prices to be ~57% too high. Prices carry a `PriceBasis`: three are `measured`, the Agent is `modelled` (its `complex` tier has zero cost observations), and Deep Scan is `policy` — no browser-provider rate exists to check it against.
 
 ### 3.12 Audit Log
 
@@ -239,7 +239,7 @@ This is the register of genuinely **undecided** questions, and nothing else. Wor
 
 **Still open:**
 
-1. **Credit consumption rate card** — what a Credit buys per operation, and at what margin. Narrowed rather than resolved: the ledger, the retail purchase price and the simulation exist ([§3.11](#311-usagecredit-layer)); the activation decision does not, and [docs/business/CREDIT_PRICING_V1.md](docs/business/CREDIT_PRICING_V1.md) argues the evidence is not yet sufficient to make it.
+1. **The per-SKU consumption rate card** — `CREDIT_RATE_CARDS` in `src/modules/credits/rating.ts`, which rates measured provider usage into Credits for Vibe's own cost telemetry. Not the same question as what a customer pays: [ADR 0061](docs/decisions/0061-launch-v1-operation-rate-card.md) decided that and left this alone, because `economy/` already answers "what did this cost" in nanodollars and a card here would have to price cache tokens — 55–70% of agentic provider cost — to avoid returning `sku_not_priced`. It ships empty ([§3.11](#311-usagecredit-layer)).
 2. **Analytics provider for the customer's product** — the metric-source port is vendor-neutral by design ([ADR 0021](docs/decisions/0021-business-outcome-measurement.md)) and no adapter is written, so every project resolves to `waiting_for_source`. Vibe's own product analytics is separate and already answered (`@vercel/analytics`), as is Vibe's own ad attribution ([ADR 0041](docs/decisions/0041-marketing-attribution-pixel.md)).
 3. **Previewing a repository whose validated artifact cannot be started** by a single detected dev/start command ([§3.9](#39-preview-layer)).
 4. **Production hosting migration as a possible future product feature** — not scoped, not committed to.
@@ -326,6 +326,8 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0058](docs/decisions/0058-move-focus-url-contract.md) | Move focus is a shared URL contract, never authority: one parameter names which Move a surface is about, resolved against stored Moves and never permitting work (Accepted; Action Plan, Agent and both next-move cards implemented) | Action Plan, Agent, project shell |
 | [0059](docs/decisions/0059-security-response-headers.md) | Security response headers, and a CSP that starts by watching rather than enforcing (Accepted; six headers live, CSP report-only — it protects nothing until enforced) | HTTP responses, `next.config.ts`, CSP |
 | [0060](docs/decisions/0060-sign-in-throttle-authority.md) | The sign-in throttle's authority is who may call it (Accepted; `record_auth_attempt` unreachable through the Data API, one reviewed service-role site) | Sign-in, `auth_attempt_windows`, rule 53 |
+| [0061](docs/decisions/0061-launch-v1-operation-rate-card.md) | What a Credit buys, and what each number is worth trusting (Accepted; rate table amended by 0062. `launch-v1` prices every customer-facing operation, each with a `PriceBasis`) | Credits, retail prices, execution budgets, §3.11 |
+| [0062](docs/decisions/0062-sonnet-5-price-rise-cancelled.md) | A cancelled provider price is deleted, not held (Accepted; amends 0061. The Sonnet 5 rise to $3/$15 was withdrawn, so the row is gone and a permanent regression test keeps it gone; `launch-v1` re-derived to 35 / 20 / 20) | `ai/pricing.ts`, margin guard, §3.11 |
 
 ### Layers with no section above
 

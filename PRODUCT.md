@@ -315,7 +315,11 @@ The invariant, enforced by derivation rather than a flag: a completed snapshot m
 
 **Cost is separate from AI cost.** A Deep Scan bills browser wall-clock seconds, not tokens, so provider usage is recorded in its own place and never merged into the token ledger above. Provider cost is left null rather than derived from an assumed rate.
 
-Vibe Credits now exist ([ADR 0024](docs/decisions/0024-vibe-credits-economic-layer.md)), but Deep Scan is not wired to them: a request for an additional Deep Scan returns a typed `credits_required` refusal and the UI explains that additional scans are coming with Credits. No price is shown, no balance is invented, and the user is never sent into a checkout that does not exist. Pricing a Deep Scan means pricing browser seconds, and no measured basis for that exists yet.
+Since `launch-v1` an additional Deep Scan costs **25 Credits** and is purchasable ([ADR 0061](docs/decisions/0061-launch-v1-operation-rate-card.md)). The hold is taken before Vibe asks Browserbase for a browser, and it is settled only by a persisted snapshot — so every one of the six outcomes above releases it, and a failed, cancelled or expired scan costs a paying customer exactly what it costs a free one.
+
+**That price has no measured cost behind it, and the code says so.** Pricing a Deep Scan means pricing browser seconds; `provider_cost_usd` is null for every row of `deep_scan_provider_usage`, and no browser-provider rate exists anywhere in this repository. 25 Credits is a commercial judgment sized to sit below the audit it feeds, carried as `basis: "policy"` in `src/modules/credits/retail.ts` rather than as a comment, and named by `margin-guard.test.ts` as a price whose margin cannot be checked. It is the only one in the card.
+
+The old `credits_required` refusal is still reachable and now means exactly what it says: no policy prices an additional scan. A wallet that cannot cover one is `insufficient_credits` — a different sentence, and the one with a checkout behind it.
 
 ---
 

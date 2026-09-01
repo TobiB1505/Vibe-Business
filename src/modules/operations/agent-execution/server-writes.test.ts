@@ -181,12 +181,45 @@ describe("holdAgentExecutionCredits", () => {
       projectId: PROJECT,
       userId: USER,
       operationRunId: "operation_1",
+      pricingClass: "standard",
+      nonProduction: true,
     });
 
     expect(held.ok).toBe(true);
     expect(
       db.rows("billing_credit_reservations").filter((row) => row.status === "active"),
     ).toHaveLength(1);
+  });
+
+  it("charges the retail class price for a production run, not the dogfood ceiling", async () => {
+    // The two books, kept apart at the one call site that can reach both.
+    // `nonProduction` comes from the resolved economics; deciding it here would
+    // be a second answer to a question that already has one, and getting it
+    // wrong charges a customer out of the internal ceiling or bills a dogfood
+    // run at retail.
+    await fund(500);
+    db.seed("operation_runs", {
+      id: "operation_1",
+      project_id: PROJECT,
+      user_id: USER,
+      operation_type: "agent_execution",
+      status: "queued",
+      stage: "preparing",
+      input_identity: "a".repeat(64),
+      created_at: "2026-09-01T00:00:00.000Z",
+    });
+
+    const held = await holdAgentExecutionCredits({
+      projectId: PROJECT,
+      userId: USER,
+      operationRunId: "operation_1",
+      pricingClass: "complex",
+      nonProduction: false,
+      now: new Date("2026-09-01T00:00:00.000Z"),
+    });
+
+    expect(held).toMatchObject({ ok: true, billable: true, policyVersion: "launch-v1" });
+    expect(held.ok && held.billable && held.requiredCredits).toBe(creditsToUnits(350));
   });
 
   it("refuses a project the session does not own, before holding anything", async () => {
@@ -196,6 +229,8 @@ describe("holdAgentExecutionCredits", () => {
       projectId: PROJECT,
       userId: OTHER_USER,
       operationRunId: "operation_1",
+      pricingClass: "standard",
+      nonProduction: true,
     });
 
     expect(held.ok).toBe(false);

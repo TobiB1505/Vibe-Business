@@ -182,7 +182,7 @@ describe("§54 — a client cannot expand a tool policy or raise its own budget"
     const resolution = resolveStepExecution(
       fakeResolveInput({ step, plan: fakePlanContext([step]) }),
     );
-    const budget = resolveExecutionBudget(new Date("2026-08-18T00:00:00.000Z"), [
+    const budget = resolveExecutionBudget("standard", new Date("2026-08-18T00:00:00.000Z"), [
       fakeBudgetPolicy(),
     ])!;
 
@@ -210,7 +210,7 @@ describe("§54 — a client cannot expand a tool policy or raise its own budget"
     const resolution = resolveStepExecution(
       fakeResolveInput({ step, plan: fakePlanContext([step]) }),
     );
-    const budget = resolveExecutionBudget(new Date("2026-08-18T00:00:00.000Z"), [
+    const budget = resolveExecutionBudget("standard", new Date("2026-08-18T00:00:00.000Z"), [
       fakeBudgetPolicy(),
     ])!;
 

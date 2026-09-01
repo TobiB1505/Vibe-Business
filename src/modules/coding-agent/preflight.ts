@@ -1,3 +1,4 @@
+import type { CreditUnits } from "@/modules/credits/units";
 import type { ExecutionResolution } from "@/modules/execution-contract/schema";
 import type { ExecutionSpec } from "@/modules/execution-contract/spec";
 import { deriveAgentLimits, type AgentRuntimeLimits } from "./budget";
@@ -92,6 +93,21 @@ export type AgentPreflight = {
     authorized: boolean;
     nonProduction: boolean;
     budgetPolicyVersion: string | null;
+    /**
+     * The Credit ceiling this run is authorized against (§17).
+     *
+     * Projected here because it is the figure a person reads before approving
+     * a paid run, and it was the one number the preflight could not report:
+     * the screen that shows this had a field labelled "max Credits" rendering
+     * `budgetPolicyVersion`, so it printed `launch-v1-budget` where a customer
+     * amount belonged.
+     *
+     * Distinct from `AgentRuntimeLimits.maxProviderSpendUsd`, which is what
+     * Vibe will pay a provider. Two different currencies answering two
+     * different questions, and `execution-contract/budget.ts` keeps them apart
+     * deliberately.
+     */
+    maxCredits: CreditUnits | null;
     disclosure: string | null;
   };
 
@@ -174,6 +190,7 @@ export function runAgentPreflight(input: {
       authorized: economics !== null,
       nonProduction: economics?.nonProduction ?? false,
       budgetPolicyVersion: economics?.budget.budgetPolicyVersion ?? null,
+      maxCredits: economics?.budget.maxCredits ?? null,
       disclosure: economics?.disclosure ?? null,
     },
 

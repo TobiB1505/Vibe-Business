@@ -75,7 +75,7 @@ describe("EXECUTION CORE-4 — agent preflight against a real project", () => {
     expect(plan, "The project has no completed Action Plan to execute from.").toBeTruthy();
     expect(snapshot?.result, "The project has no successful repository snapshot.").toBeTruthy();
 
-    const economics = resolveAgentEconomics({ projectId: PROJECT_ID! });
+    const economics = resolveAgentEconomics({ projectId: PROJECT_ID!, pricingClass: "standard" });
 
     console.log("");
     console.log("EXECUTION CORE-4 — DOGFOOD PREFLIGHT");

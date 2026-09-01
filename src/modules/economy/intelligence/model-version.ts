@@ -9,9 +9,10 @@ import type { ConfidenceLevel } from "./confidence";
  * `const STANDARD_PRICE = 300` is the shape this file exists to prevent. Every
  * number below is an *assumption about a market* — what a provider charges,
  * what margin Vibe targets, how much a larger repository costs to reason about.
- * Markets move: Anthropic's own price book already contains a step on
- * 2026-09-01, and `ai/pricing.ts` carries both sides of it because a price
- * change must never rewrite what past usage cost.
+ * Markets move, and they move in both directions: Anthropic's price book
+ * carried a Sonnet 5 step on 2026-09-01 for weeks and then withdrew it
+ * (ADR 0062). `ai/pricing.ts` resolves rates by the instant asked precisely so
+ * that neither a change nor its cancellation rewrites what past usage cost.
  *
  * The same rule has to hold one level up. An estimate produced in August under
  * August's assumptions must stay reproducible in December, or "why did Vibe
@@ -107,8 +108,14 @@ export type EconomyModelVersion = {
  * Every version ever issued, oldest first. Append only.
  *
  * Editing an entry in place would silently reinterpret every estimate already
- * made under it, which is the exact failure `ai/pricing.ts` avoids by keeping
- * the superseded Sonnet row rather than overwriting it.
+ * made under it, which is the exact failure `ai/pricing.ts` avoids by giving
+ * every rate a validity window instead of a current value.
+ *
+ * `economy-model.v1` below therefore still names `claude-sonnet-5-standard-2026-09`
+ * among its `providerPricingVersions`, even though that row no longer exists in
+ * `ai/pricing.ts` (ADR 0062). That is not a dangling reference to repair: it
+ * records the pricing v1 was *issued under the expectation of*, which stays
+ * historically true, and nothing resolves these strings against the price book.
  */
 export const ECONOMY_MODEL_VERSIONS: readonly EconomyModelVersion[] = [
   {

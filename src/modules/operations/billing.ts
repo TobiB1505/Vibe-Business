@@ -8,9 +8,11 @@ import {
   findOperationReservation,
   releaseOperationCredits,
   settleOperationCredits,
+  type OperationCreditRefusal,
 } from "@/modules/credits/operation-billing";
 import { resolveBillingOwner } from "@/modules/credits/service";
 import { retailChargeFor, type RetailOperationKind } from "@/modules/credits/retail";
+import type { ExecutionPricingClass } from "@/modules/economy/execution-class";
 import { findCreditAccountByUser } from "@/modules/credits/store";
 import { ZERO_CREDITS, type CreditUnits } from "@/modules/credits/units";
 
@@ -43,7 +45,15 @@ import { ZERO_CREDITS, type CreditUnits } from "@/modules/credits/units";
  */
 
 export type OperationBillingRefusal = {
-  refusal: "insufficient_credits";
+  /**
+   * Why the hold was not taken.
+   *
+   * Widened past `insufficient_credits` when `launch-v1` made `not_priced` a
+   * reachable state. Callers that only need "did this fail" still test
+   * `"refusal" in result`; a caller that wants to tell a customer *why* now
+   * can, instead of being handed "you need 0 Credits and you have 0".
+   */
+  refusal: OperationCreditRefusal;
   requiredCredits: CreditUnits;
   availableCredits: CreditUnits;
 };
@@ -76,11 +86,23 @@ export type OperationCreditCost = {
  */
 export async function resolveOperationCreditCost(
   supabase: SupabaseClient,
-  params: { projectId: string; operation: RetailOperationKind; now?: Date },
+  params: {
+    projectId: string;
+    operation: RetailOperationKind;
+    /** Required exactly when the operation is priced per execution class. */
+    pricingClass?: ExecutionPricingClass | null;
+    now?: Date;
+  },
 ): Promise<OperationCreditCost | null> {
   const now = params.now ?? new Date();
-  const price = retailChargeFor(params.operation, now);
-  if (!price) return null;
+  const price = retailChargeFor(params.operation, now, { pricingClass: params.pricingClass });
+
+  // Null for both of the non-charging cases, which is right *here* and only
+  // here: this function answers "what does the screen show next to the button",
+  // and neither a free operation nor an unpriced one has a price to show. The
+  // difference between them decides whether the operation may run, and that
+  // decision belongs to the reservation — see `authorizeOperationCredits`.
+  if (price.kind !== "charge") return null;
 
   const owner = await resolveBillingOwner(supabase, params.projectId);
   const account = owner ? await findCreditAccountByUser(supabase, owner.userId) : null;
@@ -105,7 +127,12 @@ export async function resolveOperationCreditCost(
  */
 export async function checkOperationAffordability(
   supabase: SupabaseClient,
-  params: { projectId: string; operation: RetailOperationKind; now?: Date },
+  params: {
+    projectId: string;
+    operation: RetailOperationKind;
+    pricingClass?: ExecutionPricingClass | null;
+    now?: Date;
+  },
 ): Promise<{ ok: true } | OperationBillingRefusal> {
   const cost = await resolveOperationCreditCost(supabase, params);
   if (!cost || cost.affordable) return { ok: true };
@@ -138,6 +165,8 @@ export async function holdOperationCredits(
     projectId: string;
     operationRunId: string;
     operation: RetailOperationKind;
+    /** Required exactly when the operation is priced per execution class. */
+    pricingClass?: ExecutionPricingClass | null;
     now?: Date;
     idempotencyKey?: string;
   },
@@ -145,6 +174,7 @@ export async function holdOperationCredits(
   const authorized = await authorizeOperationCredits(supabase, {
     projectId: params.projectId,
     operation: params.operation,
+    pricingClass: params.pricingClass ?? null,
     idempotencyKey: params.idempotencyKey ?? `operation:${params.operationRunId}`,
     operationRunId: params.operationRunId,
     now: params.now,
@@ -153,7 +183,10 @@ export async function holdOperationCredits(
   if (!authorized.ok) {
     return {
       ok: false,
-      refusal: "insufficient_credits",
+      // Reported as it happened rather than collapsed. An operation the policy
+      // does not sell is not a customer who is short of Credits, and telling
+      // them it is would send them to a checkout that cannot help.
+      refusal: authorized.refusal,
       requiredCredits: authorized.requiredCredits,
       availableCredits: authorized.availableCredits,
     };

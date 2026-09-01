@@ -459,6 +459,32 @@ export async function getReservation(
   return data ? mapReservation(data as ReservationRow) : null;
 }
 
+/**
+ * Reservations by id, in one read.
+ *
+ * Mirrors `operations/store.ts`'s `listOperationRunsByIds`, and exists for the
+ * same reason: the billing page needs a handful of reservations to *name* the
+ * charges it is already displaying, and a per-row read would put a query count
+ * on the size of the history.
+ *
+ * Ordinary RLS applies — this is a plain select, so it can only return
+ * reservations the caller's session may already see.
+ */
+export async function listReservationsByIds(
+  supabase: SupabaseClient,
+  reservationIds: readonly string[],
+): Promise<CreditReservation[]> {
+  if (reservationIds.length === 0) return [];
+
+  const { data, error } = await supabase
+    .from("billing_credit_reservations")
+    .select(RESERVATION_COLUMNS)
+    .in("id", reservationIds);
+
+  if (error) throw error;
+  return ((data ?? []) as ReservationRow[]).map(mapReservation);
+}
+
 export async function listActiveReservations(
   supabase: SupabaseClient,
   creditAccountId: string,

@@ -32,6 +32,7 @@ import {
 import { AgentPanel } from "@/app/app/projects/[projectId]/agent-panel";
 import { HomeStatus } from "@/app/app/projects/[projectId]/home-status";
 import { AppErrorPreview } from "../app-error-preview";
+import BillingLoading from "@/app/app/(account)/billing/loading";
 import {
   E2E_AUDIT_CREDIT_SCENARIOS,
   isE2eAuditCreditScenario,
@@ -89,6 +90,8 @@ import type { ActionPlanReadiness } from "@/modules/action-plans/service";
 import { ProductLogo } from "@/components/brand/product-logo";
 import { BillingView } from "@/app/app/(account)/billing/billing-view";
 import { E2E_BILLING_SCENARIOS, isE2eBillingScenario } from "../billing-scenarios";
+import { DeepScanPanel } from "@/app/app/projects/[projectId]/deep-scan-panel";
+import { E2E_DEEP_SCAN_SCENARIOS, isE2eDeepScanScenario } from "../deep-scan-scenarios";
 import { E2E_MOVES_SCENARIOS, isE2eMovesScenario } from "../moves-scenarios";
 import {
   E2E_ONBOARDING_SCENARIOS,
@@ -225,6 +228,7 @@ export default async function E2eScenarioPage({
           overview={fixture.overview}
           stripeReady={fixture.stripeReady}
           checkoutState={"checkoutState" in fixture ? fixture.checkoutState : undefined}
+          at={"at" in fixture ? new Date(fixture.at) : undefined}
         />
       </main>
     );
@@ -589,6 +593,26 @@ export default async function E2eScenarioPage({
   }
 
   /*
+   * The billing skeleton, so "unknown is not zero" is checkable rather than
+   * merely intended.
+   *
+   * `loading.tsx` is a route convention, which means nothing in the browser
+   * suite could ever see it — and the failure it guards against is a *visual*
+   * one: a placeholder shaped like a figure reads as a balance, and a customer
+   * who glances at a loading billing page and sees "0" has been told something
+   * false about their money. Rendering the real component here lets the suite
+   * assert what a person would actually see.
+   */
+  if (scenario === "billing-loading") {
+    return (
+      <main className="mx-auto max-w-5xl p-8">
+        {label}
+        <BillingLoading />
+      </main>
+    );
+  }
+
+  /*
    * The Command Center's two new surfaces (CORE-5).
    *
    * Both render the real component over a view model the real builder
@@ -837,6 +861,21 @@ export default async function E2eScenarioPage({
           auditHref="/app/projects/project_e2e#business-audit"
           understandingHref="/app/projects/project_e2e/product"
         />
+      </main>
+    );
+  }
+
+  /*
+   * The Deep Scan panel (`launch-v1`). The same component the project page
+   * renders, given a complete `DeepScanViewModel` written by hand from the read
+   * model's own types. No browser provider, no session, no Credit hold — the
+   * panel's start action is a Server Action these fixtures never reach.
+   */
+  if (isE2eDeepScanScenario(scenario)) {
+    return (
+      <main className="mx-auto max-w-3xl p-8">
+        {label}
+        <DeepScanPanel projectId="project_e2e" model={E2E_DEEP_SCAN_SCENARIOS[scenario]} />
       </main>
     );
   }

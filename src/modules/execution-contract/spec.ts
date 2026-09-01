@@ -2,6 +2,8 @@ import type { ActionPlanStep } from "@/modules/action-plans/schema";
 import type { ExecutionCapability } from "@/modules/execution/schema";
 import type { ExecutionBudget, ExecutionCreditBinding } from "./budget";
 import { computeBusinessContextHash, computeExecutionSpecIdentity } from "./identity";
+import { resolveStepPricingClass } from "./pricing-class";
+import type { ExecutionPricingClass, ExecutionPricingClassReason } from "@/modules/economy/execution-class";
 import { compileExecutionPolicy, type ExecutionPolicy, type ExecutionWriteScope } from "./policy";
 import { assertNoSecretMaterial } from "./secrets";
 import {
@@ -201,6 +203,27 @@ export type ExecutionSpec = {
   mode: ExecutionMode;
   executionClass: ExecutionClass | null;
   riskClass: ExecutionRiskClass;
+  /**
+   * What this step is priced at, and why (`launch-v1`).
+   *
+   * Null for anything that is not mutating agent work, which is what
+   * `classifyExecutionPricingClass` returns for a non-mutating step — such a
+   * step never reaches agentic execution, so it has no class rather than a
+   * cheap one.
+   *
+   * Carried on the document, not recomputed at start time, because the price a
+   * customer was shown and the budget a run is bounded by must be the same
+   * decision. Re-deriving it later would let a change to the evidence
+   * vocabulary silently re-tier work somebody already authorized.
+   *
+   * Deliberately **not** in the spec identity. It is a function of `stepKey`
+   * and `riskClass`, both of which already are — so a step whose class could
+   * change has a different identity anyway, and hashing a derived field would
+   * only add a second way to invalidate the same spec. This is the same
+   * reasoning `identity.ts` gives for excluding the budget and the reservation.
+   */
+  pricingClass: ExecutionPricingClass | null;
+  pricingClassReason: ExecutionPricingClassReason;
   capability: ExecutionCapability | null;
   capabilityVersion: string | null;
   policy: ExecutionPolicy;
@@ -384,6 +407,8 @@ export function buildExecutionSpec(input: BuildExecutionSpecInput): ExecutionSpe
     riskPolicyVersion: EXECUTION_RISK_POLICY_VERSION,
   });
 
+  const pricing = resolveStepPricingClass({ step, riskClass: resolution.riskClass });
+
   return {
     schemaVersion: EXECUTION_SPEC_SCHEMA_VERSION,
 
@@ -409,6 +434,8 @@ export function buildExecutionSpec(input: BuildExecutionSpecInput): ExecutionSpe
     mode: resolution.mode,
     executionClass: resolution.executionClass,
     riskClass: resolution.riskClass,
+    pricingClass: pricing.pricingClass,
+    pricingClassReason: pricing.reason,
     capability: resolution.capability,
     capabilityVersion: resolution.capabilityVersion,
     policy,

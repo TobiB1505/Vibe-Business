@@ -7,7 +7,7 @@ import { isAgentReady } from "./schema";
 import { buildExecutionSpec } from "./spec";
 import {
   FIXTURE_PLAN,
-  fakeBudgetPolicy,
+  fakeBudget,
   fakePlanContext,
   fakePlanStep,
   fakeRepositoryBinding,
@@ -428,7 +428,7 @@ describe("§33 — absorbed preparation grants no authority", () => {
     repository: fakeRepositoryBinding(),
     approvedDecisions: [],
     validation: resolveExecutionValidation(fakeSnapshot()),
-    budget: { budgetPolicyVersion: "execution-budget-fixture-v1", ...fakeBudgetPolicy().budget },
+    budget: { budgetPolicyVersion: "execution-budget-fixture-v1", ...fakeBudget() },
     credit: { quoteId: null, maxAuthorizedCredits: null },
     writeScope: fakeWriteScope(),
     preparationSteps: [STEPS[0]],
@@ -458,7 +458,7 @@ describe("§33 — absorbed preparation grants no authority", () => {
       repository: fakeRepositoryBinding(),
       approvedDecisions: [],
       validation: resolveExecutionValidation(fakeSnapshot()),
-      budget: { budgetPolicyVersion: "execution-budget-fixture-v1", ...fakeBudgetPolicy().budget },
+      budget: { budgetPolicyVersion: "execution-budget-fixture-v1", ...fakeBudget() },
       credit: { quoteId: null, maxAuthorizedCredits: null },
       writeScope: fakeWriteScope(),
       createdAt: "2026-08-18T12:00:00.000Z",
