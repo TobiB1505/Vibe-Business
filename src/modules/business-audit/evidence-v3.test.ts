@@ -90,7 +90,12 @@ describe("the Product Profile is first-class audit context", () => {
 
     const without = buildEvidencePackV3(input());
     expect(without.hasAuthenticatedEvidence).toBe(false);
-    expect(without.absentSources.join(" ")).toContain("No Deep Scan has been run");
+    // Stated as a gap in what was inspected, never as Vibe's feature name: the
+    // model echoed that name into a founder-facing conclusion and the audit
+    // was discarded for it (see `model-input-language.test.ts`).
+    expect(without.absentSources.join(" ")).toContain(
+      "Nothing behind the product's login has been inspected",
+    );
   });
 
   it("produces stable ids and a deterministic order, so audit reuse is sound", () => {
