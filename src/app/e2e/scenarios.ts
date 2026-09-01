@@ -375,6 +375,112 @@ export const E2E_SCENARIOS = {
     }),
 
   /**
+   * **A preview offered before the check has finished** (Sprint 0114, ADR 0064).
+   *
+   * The waiting this sprint exists to remove. Validation is running — install,
+   * typecheck, test and build, roughly five minutes — and under the old rules
+   * the preview button was disabled for all of it, because a preview booted the
+   * snapshot the build produced. The code was finished the whole time.
+   *
+   * Three things it proves, and each was impossible before: **Start temporary
+   * preview** is offered while validation runs; the card does not claim the
+   * change is checked; and the live site is linked beside it, so a person can
+   * hold the two next to each other in two tabs.
+   */
+  preview_before_validation: (): PreparedChangeCard =>
+    withProgress({
+      ...baseChange(),
+      outcome: outcomeCard(),
+      businessImpact: businessImpactCard(),
+      validation: {
+        status: "running",
+        phases: [],
+        failureMessage: null,
+        sandboxDurationMs: null,
+        depth: {
+          depth: "standard",
+          label: "Standard",
+          reason: "Change not classified; validated in full",
+          notRun: [],
+        },
+        underCurrentPolicy: true,
+      },
+      preview: { ...baseChange().preview, state: "ready_to_start" },
+      review: { ...baseChange().review, state: "not_generated", reviewArtifactId: null },
+      reviewImages: null,
+      approval: {
+        state: "not_eligible",
+        approvalId: null,
+        approvedAt: null,
+        revokedAt: null,
+        approvedCommitSha: null,
+        invalidationReason: null,
+        // The gate that has not moved: a preview lets somebody look earlier,
+        // never decide earlier (ADR 0064).
+        blockReason: "approval_validation_required",
+        blockMessage: APPROVAL_BLOCK_MESSAGES.approval_validation_required,
+        canApprove: false,
+        currentCommitSha: APPROVED_COMMIT,
+      },
+      merge: mergeCard({
+        state: "not_eligible",
+        failureCode: "merge_approval_required",
+        failureMessage: MERGE_FAILURE_MESSAGES.merge_approval_required,
+        canMerge: false,
+      }),
+    }),
+
+  /**
+   * **A visual change approved on the preview itself** (Sprint 0114, ADR 0065).
+   *
+   * The state that replaces two screenshots. A preview of this exact commit ran
+   * and became reachable, the check has passed, and the person may decide — with
+   * no browser session having been paid for and no comparison ever captured.
+   *
+   * `review.state` is `not_generated` on purpose: this change has no comparison
+   * and never will, so the comparison panel must be absent rather than empty.
+   */
+  change_visual_preview_ready: (): PreparedChangeCard =>
+    withProgress({
+      ...baseChange(),
+      outcome: outcomeCard(),
+      businessImpact: businessImpactCard(),
+      // Running, because the two halves of a before/after are offered
+      // together: the preview in one tab and the live site in the other. The
+      // approval is available while it runs — the preview is not a step to get
+      // past, it is the thing being looked at.
+      preview: {
+        ...baseChange().preview,
+        state: "running",
+        previewSessionId: "preview_e2e",
+        readyAt: "2026-08-13T23:40:00.000Z",
+        expiresAt: "2026-08-13T23:55:00.000Z",
+      },
+      previewSessionId: "preview_e2e",
+      previewOrigin: "https://preview-e2e.example",
+      review: { ...baseChange().review, state: "not_generated", reviewArtifactId: null },
+      reviewImages: null,
+      approval: {
+        state: "not_approved",
+        approvalId: null,
+        approvedAt: null,
+        revokedAt: null,
+        approvedCommitSha: null,
+        invalidationReason: null,
+        blockReason: null,
+        blockMessage: null,
+        canApprove: true,
+        currentCommitSha: APPROVED_COMMIT,
+      },
+      merge: mergeCard({
+        state: "not_eligible",
+        failureCode: "merge_approval_required",
+        failureMessage: MERGE_FAILURE_MESSAGES.merge_approval_required,
+        canMerge: false,
+      }),
+    }),
+
+  /**
    * **A change with nothing to look at** (Sprint 0055, ADR 0063).
    *
    * The state that was unreachable before this sprint. Validation passed, no
@@ -494,8 +600,11 @@ export const E2E_SCENARIOS = {
         revokedAt: null,
         approvedCommitSha: null,
         invalidationReason: null,
-        blockReason: "approval_review_required",
-        blockMessage: APPROVAL_BLOCK_MESSAGES.approval_review_required,
+        // A visual change nobody has previewed. Before Sprint 0114 this read
+        // `approval_review_required` and asked for a comparison — of a preview
+        // that had never been started.
+        blockReason: "approval_preview_required",
+        blockMessage: APPROVAL_BLOCK_MESSAGES.approval_preview_required,
         canApprove: false,
         currentCommitSha: "94c3165",
       },

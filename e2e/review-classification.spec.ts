@@ -60,7 +60,7 @@ test.describe("a change with nothing to look at", () => {
 
     // The false-status-line class of defect UI-5 exists to remove. This change
     // was never previewed and never photographed.
-    await expect(card(page)).not.toContainText("Checked, previewed, reviewed and approved");
+    await expect(card(page)).not.toContainText("Checked, previewed and approved");
   });
 
   test("never offers to start a preview or a comparison", async ({ page }) => {
@@ -73,14 +73,17 @@ test.describe("a change with nothing to look at", () => {
 });
 
 test.describe("a change that alters a page", () => {
-  test("still asks for a preview and a comparison", async ({ page }) => {
+  test("still asks to be looked at", async ({ page }) => {
     // The other half of the property. Removing one gate must not remove both,
     // and `visual_and_code` deliberately keeps the visual one: half a change
     // being visible is a whole reason to look at it.
+    //
+    // What it asks for is the preview itself since Sprint 0114. The comparison
+    // panel renders only for a change that has a historical artifact, which
+    // this fixture still does — nothing creates a new one (ADR 0065).
     await page.goto("/e2e/change_awaiting_approval");
 
     await expect(panel(page, "Preview")).toBeVisible();
-    await expect(panel(page, "Review")).toBeVisible();
-    await expect(panel(page, "What changed")).toContainText("Visual preview and code diff");
+    await expect(panel(page, "What changed")).toContainText("Preview and code diff");
   });
 });
