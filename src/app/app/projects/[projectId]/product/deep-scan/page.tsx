@@ -41,7 +41,11 @@ export default async function ProjectDeepScanPage({
 
   const [deepScanAccess, latestSnapshot, latestLiveSnapshot, latestDeepScanSnapshot, latestSession] =
     await Promise.all([
-      getDeepScanAccessStatus(supabase, { projectId, userId }),
+      getDeepScanAccessStatus(supabase, {
+        projectId,
+        userId,
+        owned: { productionUrl: project.productionUrl },
+      }),
       getLatestSuccessfulSnapshot(supabase, projectId),
       getLatestSuccessfulLiveSnapshot(supabase, projectId),
       getLatestSuccessfulAuthenticatedSnapshot(supabase, projectId),

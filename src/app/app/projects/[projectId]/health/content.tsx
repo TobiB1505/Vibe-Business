@@ -116,7 +116,11 @@ export async function ProjectBusinessHealth({ access }: { access: ProjectAccess 
     getActiveBusinessAuditOperation(supabase, projectId),
     getAuditReadiness(supabase, projectId, evidence),
     getAuditAccessStatus(supabase, { projectId, userId }, evidence),
-    getDeepScanAccessStatus(supabase, { projectId, userId }),
+    getDeepScanAccessStatus(supabase, {
+      projectId,
+      userId,
+      owned: { productionUrl: project.productionUrl },
+    }),
     getLatestSuccessfulAuthenticatedSnapshot(supabase, projectId),
     getLatestSession(supabase, projectId),
     // CORE-2 §18: "Where I'd start" links to the existing Opportunity Engine's
