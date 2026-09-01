@@ -1047,9 +1047,27 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: QueryError }> {
     if (this.orderColumn) {
       const column = this.orderColumn;
       rows = [...rows].sort((a, b) => {
-        const left = String(a[column] ?? "");
-        const right = String(b[column] ?? "");
-        return this.orderAscending ? left.localeCompare(right) : right.localeCompare(left);
+        const direction = this.orderAscending ? 1 : -1;
+        const left = a[column];
+        const right = b[column];
+
+        /*
+         * Numbers compare as numbers.
+         *
+         * Everything used to be stringified before comparison, which sorts an
+         * integer column as text: `sequence` came back 1, 10, 11, … 2, 20. Every
+         * ordered read in the product that is keyed on a counter rather than a
+         * timestamp was therefore modelled wrongly — the Product Scan timeline,
+         * the agent execution events, the agent activity feed, all of which order
+         * by `sequence` and several of which then cap the result, so the fake
+         * would hand back a different *set* of rows than Postgres would, not just
+         * a different order.
+         */
+        if (typeof left === "number" && typeof right === "number") {
+          return (left - right) * direction;
+        }
+
+        return String(left ?? "").localeCompare(String(right ?? "")) * direction;
       });
     }
 
