@@ -1495,6 +1495,27 @@ const FAKE_RPC_HANDLERS: Record<string, (db: FakeDatabase, params: Record<string
       .filter((row) => row.credit_account_id === params.p_credit_account_id)
       .reduce((total, row) => total + Number(row.credit_delta ?? 0), 0),
   }),
+
+  /**
+   * `sum_agent_run_usage` (PERF-002).
+   *
+   * Modelled as the migration defines it, including the two things the
+   * gateway's ceiling depends on: every row the run wrote counts, whatever its
+   * status (VB-016), and a run with no rows answers zero rather than nothing.
+   * Shaped as `returns table(...)` reaches PostgREST — an array of one row —
+   * so the caller's unwrapping is exercised here too.
+   */
+  sum_agent_run_usage: (db, params) => {
+    const rows = db.rows("ai_usage_events").filter((row) => row.job_id === params.p_run_id);
+    return {
+      data: [
+        {
+          spent_output_tokens: rows.reduce((total, row) => total + Number(row.output_tokens ?? 0), 0),
+          forwarded_requests: rows.length,
+        },
+      ],
+    };
+  },
 };
 
 /**

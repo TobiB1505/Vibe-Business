@@ -169,3 +169,100 @@ describe("who may claim", () => {
     ).toBe('search_path=""');
   });
 });
+
+/* ---------------------------------------------------------------------------
+ * The spend the ceiling is measured against (PERF-002)
+ * ------------------------------------------------------------------------ */
+
+/**
+ * `sum_agent_run_usage` replaced a read that transferred every usage row the
+ * run had written, on every forwarded request. Two things about it are
+ * load-bearing and neither is the aggregation itself:
+ *
+ *  - **A failed call still counts.** A stream that dies after the provider has
+ *    emitted tokens was billed for them (VB-016), and a ceiling that ignored
+ *    those rows would let a loop of late failures spend real money unnoticed.
+ *  - **A run with no rows answers zero**, not nothing. The caller reads the
+ *    first row of the result; a function that returned none would leave both
+ *    numbers undefined and hand the run its whole budget back.
+ */
+function usageRow(runId: string, status: string, outputTokens: number | null): void {
+  db.sql(
+    `insert into public.ai_usage_events (operation, provider, model, status, job_id, output_tokens)` +
+      ` values ('agentic_execution', 'anthropic', 'test-model', '${status}', '${runId}',` +
+      ` ${outputTokens === null ? "null" : outputTokens});`,
+  );
+}
+
+/** Both numbers, as the gateway reads them. */
+function usageOf(runId: string): string {
+  return db
+    .sqlLast(
+      `begin; set local role service_role;` +
+        ` select spent_output_tokens || '|' || forwarded_requests` +
+        ` from public.sum_agent_run_usage('${runId}'); commit;`,
+    )
+    .trim();
+}
+
+describe("summing one run's gateway spend", () => {
+  it("answers zero for a run that has forwarded nothing", () => {
+    expect(usageOf(agentRun())).toBe("0|0");
+  });
+
+  it("adds up the tokens and counts the calls", () => {
+    const run = agentRun();
+    usageRow(run, "succeeded", 1_000);
+    usageRow(run, "succeeded", 250);
+
+    expect(usageOf(run)).toBe("1250|2");
+  });
+
+  it("counts a failed call's tokens, because the provider still billed them", () => {
+    const run = agentRun();
+    usageRow(run, "succeeded", 1_000);
+    usageRow(run, "failed", 4_000);
+
+    expect(usageOf(run)).toBe("5000|2");
+  });
+
+  it("counts a call that reported no tokens as a request, not as spend", () => {
+    const run = agentRun();
+    usageRow(run, "failed", null);
+
+    expect(usageOf(run)).toBe("0|1");
+  });
+
+  it("sums one run without seeing another's", () => {
+    const mine = agentRun();
+    const theirs = agentRun();
+    usageRow(mine, "succeeded", 100);
+    usageRow(theirs, "succeeded", 9_000);
+
+    expect(usageOf(mine)).toBe("100|1");
+  });
+});
+
+describe("who may read that spend", () => {
+  it("is the privileged caller and nobody else", () => {
+    const acl = db.sql(
+      `select coalesce(has_function_privilege('anon', p.oid, 'execute')::text, '?') || '|' ||` +
+        ` has_function_privilege('authenticated', p.oid, 'execute')::text || '|' ||` +
+        ` has_function_privilege('service_role', p.oid, 'execute')::text` +
+        ` from pg_proc p join pg_namespace n on n.oid = p.pronamespace` +
+        ` where n.nspname = 'public' and p.proname = 'sum_agent_run_usage';`,
+    );
+
+    expect(acl.trim()).toBe("false|false|true");
+  });
+
+  it("runs as its caller, and pins its search path", () => {
+    expect(
+      db.sql(
+        `select prosecdef::text || '|' || array_to_string(proconfig, ',') from pg_proc p` +
+          ` join pg_namespace n on n.oid = p.pronamespace` +
+          ` where n.nspname = 'public' and p.proname = 'sum_agent_run_usage';`,
+      ).trim(),
+    ).toBe('false|search_path=""');
+  });
+});
