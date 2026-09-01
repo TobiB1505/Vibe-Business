@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FakeDatabase, fakeSupabase } from "@/modules/operations/test-support";
 import {
   getBillingBalance,
@@ -41,6 +41,22 @@ import { creditsToUnits, ZERO_CREDITS } from "./units";
  */
 
 const db = { current: new FakeDatabase() };
+
+/**
+ * The repair primitives run under a service-role client in production
+ * (PERF-011): the tables they write carry a select policy and no write policy,
+ * so the caller's own client is refused. `FakeDatabase` has no RLS to bypass,
+ * so both clients are the same fake here — which is what keeps these tests
+ * about the repair's arithmetic rather than about who is allowed to run it.
+ * Who is allowed is asserted by `service-boundary.test.ts` and by the grants
+ * in the migration.
+ */
+const serviceClient: { override: ReturnType<typeof fakeSupabase> | null } = { override: null };
+
+vi.mock("@/lib/supabase/service", () => ({
+  createServiceClient: () => serviceClient.override ?? fakeSupabase(db.current),
+}));
+
 const supabase = () => fakeSupabase(db.current);
 
 const USER = "11111111-1111-1111-1111-111111111111";
@@ -48,6 +64,7 @@ const PROJECT = "22222222-2222-2222-2222-222222222222";
 
 beforeEach(() => {
   db.current = new FakeDatabase();
+  serviceClient.override = null;
 });
 
 async function fundedAccount(credits: number): Promise<CreditAccount> {
@@ -465,7 +482,12 @@ describe("reconcileAndRepairBalance (ADR 0042 §P3)", () => {
     process.env.BILLING_REPAIR_ENABLED = "true";
     const { account, postedFromLedger, reservations } = await driftedAccount(1000);
 
-    const result = await reconcileAndRepairBalance(rpcAlwaysErrors(), {
+    // The repair runs under the service-role client (PERF-011), so that is the
+    // one that has to fail. The caller's client stays healthy, which is also
+    // the truthful arrangement: the audit rows it writes still land.
+    serviceClient.override = rpcAlwaysErrors();
+
+    const result = await reconcileAndRepairBalance(supabase(), {
       account,
       postedFromLedger,
       reservations,

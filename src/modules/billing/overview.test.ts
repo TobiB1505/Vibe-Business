@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FakeDatabase, fakeSupabase } from "@/modules/operations/test-support";
 import { grantCreditLot } from "@/modules/credits/grants";
 import {
@@ -33,6 +33,20 @@ import { getBillingOverview, getHeaderCreditBalance } from "./overview";
  */
 
 const db = { current: new FakeDatabase() };
+
+/**
+ * The repair primitives run under a service-role client in production
+ * (PERF-011): the tables they write carry a select policy and no write policy,
+ * so the caller's own client is refused. `FakeDatabase` has no RLS to bypass,
+ * so both clients are the same fake here — which is what keeps these tests
+ * about the repair's arithmetic rather than about who is allowed to run it.
+ * Who is allowed is asserted by `service-boundary.test.ts` and by the grants
+ * in the migration.
+ */
+vi.mock("@/lib/supabase/service", () => ({
+  createServiceClient: () => fakeSupabase(db.current),
+}));
+
 const supabase = () => fakeSupabase(db.current);
 
 const USER = "11111111-1111-1111-1111-111111111111";
