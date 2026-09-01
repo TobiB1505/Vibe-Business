@@ -534,3 +534,52 @@ test.describe("failed", () => {
     expect(body.toLowerCase()).not.toMatch(/anthropic|claude|api key|stack trace/);
   });
 });
+
+/**
+ * What the plan screen believes about "can Vibe do this".
+ *
+ * The stored classification knows only the deterministic capability registry —
+ * one entry — so a step the coding agent could build read "Not automated yet"
+ * here while the Agent workspace offered to run it. Both sentences were true of
+ * the same step at the same time.
+ */
+test.describe("a step the agent could build says so", () => {
+  test("reads as buildable, not as unautomated", async ({ page }) => {
+    await page.goto("/e2e/action_plan_agentic_step");
+    await openFullPlannedWork(page);
+    await expandEverything(page);
+
+    const step = plannedStep(page, "Build a dedicated pricing page");
+    await expect(step.getByText("Vibe could build this")).toBeVisible();
+    await expect(step.getByText("Not automated yet")).toHaveCount(0);
+  });
+
+  test("promises nothing is already running, and offers no control", async ({ page }) => {
+    await page.goto("/e2e/action_plan_agentic_step");
+    await openFullPlannedWork(page);
+    await expandEverything(page);
+
+    // Scoped to the step's own responsibility line: the fixture's *purpose*
+    // prose legitimately says "Vibe cannot yet write and ship a new page like
+    // this automatically", and that sentence is not what changed here.
+    const step = plannedStep(page, "Build a dedicated pricing page");
+    await expect(step.getByText("Vibe could build this")).toBeVisible();
+    await expect(step.getByText("is happening")).toHaveCount(0);
+    await expect(step.getByText("Vibe is building")).toHaveCount(0);
+
+    // The copy changed; the affordance did not. This is the assertion that
+    // proves it did not become a fake button.
+    for (const label of FORBIDDEN_ACTION_LABELS) {
+      await expect(page.getByRole("button", { name: label, exact: true })).toHaveCount(0);
+    }
+  });
+
+  test("leaves a founder-owned step exactly as it was", async ({ page }) => {
+    await page.goto("/e2e/action_plan_agentic_step");
+    await openFullPlannedWork(page);
+    await expandEverything(page);
+
+    const step = plannedStep(page, "Decide which segment to target first");
+    await expect(step.getByText("Needs your decision")).toBeVisible();
+  });
+});

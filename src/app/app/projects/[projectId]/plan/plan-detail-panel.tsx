@@ -34,8 +34,8 @@ import type {
 import {
   PLAN_PROGRESS_LABELS,
   PLAN_STALENESS_LABELS,
-  RESPONSIBILITY_HEADLINES,
-  RESPONSIBILITY_SUBLABELS,
+  stepResponsibility,
+  type StepResponsibility,
   buildActionPlanBlockNotice,
   planEvidenceSummary,
   planExpectedChange,
@@ -131,17 +131,18 @@ function PlanStepRow({
   display,
   index,
   done,
+  responsibility,
 }: {
   step: ActionPlanStep;
   allSteps: ActionPlanStep[];
   display: StepDisplayState;
   index: number;
   done: boolean;
+  responsibility: StepResponsibility;
 }) {
   const sequence = stepSequenceStatus(step, allSteps, display);
   const dependencyTitles = stepDependencyTitles(step, allSteps);
   const isCurrent = display === "start_here";
-  const sublabel = RESPONSIBILITY_SUBLABELS[step.executionSupport];
   const compactState = isCurrent
     ? "Start here"
     : sequence.state === "waiting"
@@ -209,9 +210,11 @@ function PlanStepRow({
 
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <span className="text-fg-secondary text-xs font-medium">
-              {RESPONSIBILITY_HEADLINES[step.executionSupport]}
+              {responsibility.headline}
             </span>
-            {sublabel && <span className="text-fg-muted text-xs">{sublabel}</span>}
+            {responsibility.sublabel && (
+              <span className="text-fg-muted text-xs">{responsibility.sublabel}</span>
+            )}
           </div>
 
           <span
@@ -258,6 +261,7 @@ function PlanBody({
   moveTitle,
   moveRank,
   moveLens,
+  responsibilityByStepKey,
   onFounderResolved,
 }: {
   projectId: string;
@@ -265,6 +269,7 @@ function PlanBody({
   moveTitle: string | null;
   moveRank: number | null;
   moveLens: string | null;
+  responsibilityByStepKey: Record<string, StepResponsibility>;
   onFounderResolved: () => void;
 }) {
   const reduceMotion = useReducedMotion();
@@ -295,6 +300,10 @@ function PlanBody({
           index={index}
           display={stepDisplayState(step, firstActionableStep?.order ?? null, completed)}
           done={completed.has(step.order)}
+          /* Resolved by the route. Falling back to the stored answer keeps a
+             step the route did not resolve reading exactly as it did before,
+             rather than blank. */
+          responsibility={responsibilityByStepKey[step.id] ?? stepResponsibility(step, null)}
         />
       ))}
     </ol>
@@ -569,6 +578,7 @@ export function PlanDetailPanel({
   lineageHeadline = null,
   defaultMoveTitle,
   readiness,
+  responsibilityByStepKey,
   planView,
   activeOperation,
   execution = null,
@@ -593,6 +603,8 @@ export function PlanDetailPanel({
   lineageHeadline?: string | null;
   defaultMoveTitle: string | null;
   readiness: ActionPlanReadiness;
+  /** What each step's responsibility line says, resolved by the route. */
+  responsibilityByStepKey: Record<string, StepResponsibility>;
   planView: ActionPlanView | null;
   activeOperation: OperationView | null;
   execution?: OpportunityActionState | null;
@@ -760,6 +772,7 @@ export function PlanDetailPanel({
               moveTitle={moveTitle}
               moveRank={moveRank}
               moveLens={moveLens}
+              responsibilityByStepKey={responsibilityByStepKey}
               onFounderResolved={() => router.refresh()}
             />
           ) : blockNotice !== null ? (

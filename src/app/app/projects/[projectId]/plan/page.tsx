@@ -27,6 +27,8 @@ import {
   resolveRequestedOpportunity,
   sanitizeRequestedOpportunityId,
 } from "@/modules/action-plans/source";
+import { resolvePlanExecutionRoutes } from "@/modules/coding-agent/website-preflight";
+import { stepResponsibility, type StepResponsibility } from "@/modules/action-plans/view";
 import { ActionPlanWorkspace } from "./action-plan-workspace";
 import { MovesRefreshBar } from "./moves-refresh-bar";
 
@@ -61,7 +63,7 @@ export default async function ProjectMovesPage({
   searchParams: Promise<{ [MOVES_CONTEXT_PARAM]?: string; [PLAN_OPPORTUNITY_PARAM]?: string }>;
 }) {
   const { projectId } = await params;
-  const { supabase, project } = await requireProjectAccess(projectId);
+  const { supabase, userId, project } = await requireProjectAccess(projectId);
   const resolvedSearchParams = await searchParams;
 
   // A founder's explicit choice of which Move to plan (§83). Absent, this is
@@ -118,6 +120,42 @@ export default async function ProjectMovesPage({
           ] as const),
         )
       : [],
+  );
+
+  /*
+   * What each planned step's responsibility line says (ADR 0067).
+   *
+   * The stored `executionSupport` knows only the deterministic registry, so a
+   * step the coding agent could build reads "Not automated yet" on this screen
+   * while the Agent workspace offers to run it. The resolver is the layer that
+   * knows, so it is asked here — with the project's own context and **no
+   * allowlist**, because "what could Vibe build?" is a different question from
+   * "may you start it right now?" and every founder is owed the first.
+   *
+   * State only, no network: `resolvePlanExecutionRoutes` reads no live HEAD and
+   * crawls no site, so this classifies a whole plan and spends nothing.
+   */
+  const planSteps = actionPlanView?.plan.steps ?? [];
+  const stepResolutions =
+    actionPlanView !== null
+      ? await resolvePlanExecutionRoutes(supabase, {
+          projectId,
+          userId,
+          plan: {
+            ...actionPlanView.plan,
+            steps: planSteps,
+          } as Parameters<typeof resolvePlanExecutionRoutes>[1]["plan"],
+        })
+      : [];
+
+  const responsibilityByStepKey: Record<string, StepResponsibility> = Object.fromEntries(
+    planSteps.map((step) => [
+      step.id,
+      stepResponsibility(
+        step,
+        stepResolutions.find((resolution) => resolution.stepOrder === step.order) ?? null,
+      ),
+    ]),
   );
 
   /*
@@ -240,6 +278,7 @@ export default async function ProjectMovesPage({
         selectedOpportunityId={plannedMove?.id ?? null}
         defaultMoveTitle={defaultMove?.title ?? null}
         planReadinessByOpportunity={planReadinessByOpportunity}
+        responsibilityByStepKey={responsibilityByStepKey}
         planView={actionPlanView}
         // Project-wide, not scoped to `plannedMove` — `action_planning`
         // operations are keyed by input identity (which does include the

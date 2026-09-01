@@ -307,6 +307,7 @@ export default async function E2eScenarioPage({
           selectedOpportunityId={fixture.opportunities[0]?.id ?? null}
           defaultMoveTitle={fixture.opportunities[0]?.title ?? null}
           planReadinessByOpportunity={planReadinessByOpportunity}
+          responsibilityByStepKey={{}}
           planView={null}
           planOperation={null}
           planOperationOpportunityId={null}
@@ -974,7 +975,8 @@ export default async function E2eScenarioPage({
           moveRank={fixture.opportunityId ? 1 : null}
           moveLens={fixture.opportunityId ? "Acquisition" : null}
           defaultMoveTitle={fixture.defaultMoveTitle}
-          readiness={fixture.readiness}
+          responsibilityByStepKey={fixture.responsibilityByStepKey ?? {}}
+            readiness={fixture.readiness}
           planView={fixture.planView}
           activeOperation={fixture.activeOperation}
           auditHref="/app/projects/project_e2e#business-audit"

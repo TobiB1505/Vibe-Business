@@ -231,28 +231,39 @@ export function resolveRouteAgentEconomics(params: {
   });
 }
 
-export async function resolveDogfoodPlanRoutes(
+/**
+ * How each step of one plan would route, with no allowlist in front of it.
+ *
+ * Split out because *"what could Vibe build?"* and *"may you start it right
+ * now?"* are different questions and the screens that ask them are different
+ * screens. The Action Plan asks the first for every founder; the Agent
+ * workspace asks the second behind the allowlist. Sharing this body is what
+ * stops the two ever disagreeing about a step's route.
+ *
+ * Reads state, never the network: no live HEAD, no site crawl. That is the same
+ * decision `resolveDogfoodPlanRoutes` already made and for the same reason — a
+ * report-shaped caller classifies every step in a plan and must spend nothing.
+ * `admission` on the results is therefore about stored state alone, and a
+ * screen rendering these must not present it as permission.
+ */
+export async function resolvePlanExecutionRoutes(
   supabase: SupabaseClient,
-  params: { projectId: string; userId: string; env?: Record<string, string | undefined> },
-): Promise<DogfoodPlanRoutes> {
-  // The allowlist gate first, before anything is read (§26, §27).
-  if (!isDogfoodEligibleProject(params.projectId, params.env)) {
-    return { available: false, reason: "not_dogfood_eligible" };
-  }
-
-  const plan = await getLatestCompletedActionPlan(supabase, params.projectId);
-  if (!plan) return { available: false, reason: "no_action_plan" };
+  params: {
+    projectId: string;
+    userId: string;
+    plan: NonNullable<Awaited<ReturnType<typeof getLatestCompletedActionPlan>>>;
+    env?: Record<string, string | undefined>;
+  },
+): Promise<readonly ExecutionResolution[]> {
+  const { projectId, userId, plan } = params;
 
   // All three may legitimately be absent, and the resolver says so per step
   // with its own reasons. What it must not do is invent repository state or
   // treat a founder-owned prerequisite as completed without its resolution.
   const [connection, snapshot, founderResolutions] = await Promise.all([
-    loadOwnedRepositoryConnection(supabase, {
-      projectId: params.projectId,
-      userId: params.userId,
-    }),
-    getLatestSuccessfulSnapshot(supabase, params.projectId),
-    listActiveFounderResolutions(supabase, params.projectId),
+    loadOwnedRepositoryConnection(supabase, { projectId, userId }),
+    getLatestSuccessfulSnapshot(supabase, projectId),
+    listActiveFounderResolutions(supabase, projectId),
   ]);
   const completedSteps = completedStepsFromFounderResolutions(plan.steps, founderResolutions);
 
@@ -269,17 +280,32 @@ export async function resolveDogfoodPlanRoutes(
     liveHead: null,
   };
 
+  return resolvePlanExecution({
+    plan: { steps: plan.steps, completedSteps, isCurrent: true },
+    repository,
+    agenticBudgetAuthorized: isAgenticExecutionAuthorized({
+      projectId,
+      env: params.env,
+    }),
+  });
+}
+
+export async function resolveDogfoodPlanRoutes(
+  supabase: SupabaseClient,
+  params: { projectId: string; userId: string; env?: Record<string, string | undefined> },
+): Promise<DogfoodPlanRoutes> {
+  // The allowlist gate first, before anything is read (§26, §27).
+  if (!isDogfoodEligibleProject(params.projectId, params.env)) {
+    return { available: false, reason: "not_dogfood_eligible" };
+  }
+
+  const plan = await getLatestCompletedActionPlan(supabase, params.projectId);
+  if (!plan) return { available: false, reason: "no_action_plan" };
+
   return {
     available: true,
     plan,
-    resolutions: resolvePlanExecution({
-      plan: { steps: plan.steps, completedSteps, isCurrent: true },
-      repository,
-      agenticBudgetAuthorized: isAgenticExecutionAuthorized({
-        projectId: params.projectId,
-        env: params.env,
-      }),
-    }),
+    resolutions: await resolvePlanExecutionRoutes(supabase, { ...params, plan }),
   };
 }
 

@@ -72,6 +72,16 @@ Only server capability reconciliation establishes `vibe_executes_now`. Ask
 `isExecutableByVibe(step)` — it requires both the support value *and* a real capability,
 and the database enforces the same pairing.
 
+**`executionSupport` is not the whole of what the screen says** (ADR 0067). It is derived
+from the deterministic capability registry alone, which has one entry, so a `vibe` +
+`product_change` step with no registry match is stored `not_yet_supported` — while
+`execution-contract/resolver.ts` classifies that same shape `agentic` and the Agent
+workspace offers to run it. The stored value is unchanged and is still the only input to
+`isExecutableByVibe`; for that one value the plan screen additionally renders the
+resolver's live route, through `stepResponsibility` in `view.ts`. Two questions, kept
+apart: what Vibe *could* build is resolved fresh from repository state, and whether a
+deterministic executor exists is what this column has always meant.
+
 ## Founder-owned information and completion
 
 `founder_decision` and `founder_input` steps carry a validated dynamic

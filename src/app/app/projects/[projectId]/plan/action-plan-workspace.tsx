@@ -20,6 +20,7 @@ import { buildOpportunityBlockNotice, moveLensLabel } from "@/modules/opportunit
 import type { BusinessOpportunity } from "@/modules/opportunities/schema";
 import type { MoveLineageMap, MovesContext } from "@/modules/opportunities/lineage";
 import { PLAN_OPPORTUNITY_PARAM } from "@/modules/action-plans/source";
+import type { StepResponsibility } from "@/modules/action-plans/view";
 import type { ActionPlanReadiness, ActionPlanView } from "@/modules/action-plans/service";
 import type {
   BlockedActionDestinations,
@@ -60,6 +61,7 @@ export function ActionPlanWorkspace({
   selectedOpportunityId,
   defaultMoveTitle,
   planReadinessByOpportunity,
+  responsibilityByStepKey,
   planView,
   planOperation,
   planOperationOpportunityId,
@@ -82,6 +84,14 @@ export function ActionPlanWorkspace({
   defaultMoveTitle: string | null;
   /** Existing readiness semantics, resolved once per persisted Move. */
   planReadinessByOpportunity: Record<string, ActionPlanReadiness>;
+  /**
+   * What each step's responsibility line says, resolved by the route.
+   *
+   * Two plain strings per step rather than the resolution itself: an
+   * `ExecutionResolution` carries capability ids and version strings, and §5 of
+   * the execution contract keeps those out of a component.
+   */
+  responsibilityByStepKey: Record<string, StepResponsibility>;
   /** The project-wide latest plan. It is shown only for its own Move. */
   planView: ActionPlanView | null;
   planOperation: OperationView | null;
@@ -316,6 +326,7 @@ export function ActionPlanWorkspace({
                     lineageHeadline={lineage[activeOpportunity.id]?.headline ?? null}
                     defaultMoveTitle={defaultMoveTitle}
                     readiness={planReadinessByOpportunity[activeOpportunity.id]}
+                    responsibilityByStepKey={responsibilityByStepKey}
                     planView={
                       planView?.plan.opportunityId === activeOpportunity.id ? planView : null
                     }
