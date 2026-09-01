@@ -633,3 +633,69 @@ describe("max_tokens is lowered to the remaining budget (VB-016)", () => {
     expect(body.messages).toEqual([{ role: "user", content: "hello" }]);
   });
 });
+
+/* ---------------------------------------------------------------------------
+ * The deadline on the upstream call (PERF-009)
+ * ------------------------------------------------------------------------ */
+
+/**
+ * `fetch` has no default timeout, so a socket that was accepted and then went
+ * quiet used to be held until the platform killed the function at
+ * `maxDuration` — and a killed function writes no usage row, which is the one
+ * outcome this route is built to prevent. The deadline bounds the *answer*;
+ * the stream that follows it must stay unbounded.
+ */
+describe("a provider that accepts the connection and never answers", () => {
+  /** Mirrors `UPSTREAM_HEADERS_TIMEOUT_MS` in the route. */
+  const HEADERS_DEADLINE_MS = 240_000;
+
+  it("ends the attempt itself, records the failure and answers 502", async () => {
+    vi.useFakeTimers();
+    try {
+      let seen: AbortSignal | undefined;
+      fetchMock.mockImplementation(
+        (_url: string, init: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            seen = init.signal ?? undefined;
+            seen?.addEventListener("abort", () =>
+              reject(new DOMException("The operation was aborted.", "AbortError")),
+            );
+          }),
+      );
+
+      const pending = POST(samplingRequest());
+      await vi.advanceTimersByTimeAsync(HEADERS_DEADLINE_MS);
+      const response = await pending;
+
+      expect(seen?.aborted, "the route aborted rather than waiting to be killed").toBe(true);
+      expect(response.status).toBe(502);
+      expect(recordGatewayUsage).toHaveBeenCalledWith(
+        expect.objectContaining({ status: "failed", failureCode: "provider_unreachable" }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("disarms the deadline once the answer arrives, so a long turn is never severed", async () => {
+    vi.useFakeTimers();
+    try {
+      let seen: AbortSignal | undefined;
+      fetchMock.mockImplementation(async (_url: string, init: RequestInit) => {
+        seen = init.signal ?? undefined;
+        return anthropicOk();
+      });
+
+      const response = await POST(samplingRequest());
+      expect(response.status).toBe(200);
+
+      // Far past the deadline: a timer left armed would abort here, and on a
+      // streamed turn that is a healthy generation cut off mid-sentence.
+      await vi.advanceTimersByTimeAsync(HEADERS_DEADLINE_MS * 3);
+
+      expect(seen?.aborted, "the timer must not outlive the attempt it bounded").toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});

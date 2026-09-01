@@ -88,6 +88,36 @@ const ROUTE = "/v1/messages";
 /** The API version the SDK negotiates. Forwarded verbatim when present. */
 const FORWARDED_REQUEST_HEADERS = ["anthropic-version", "anthropic-beta", "content-type"];
 
+/**
+ * How long the upstream may take to *answer at all* (PERF-009).
+ *
+ * This is the one outbound call in the repository that was not bounded.
+ * `fetch` has no default timeout, so a socket that is accepted and then goes
+ * quiet was held until the 300s platform ceiling killed the function — and a
+ * killed function records nothing, which is precisely the accounting hole the
+ * streaming rewrite below exists to close. Reaching this deadline instead ends
+ * the attempt deliberately: the usage row is written, the sandbox gets a 502
+ * it can act on, and the run fails as a run rather than vanishing.
+ *
+ * ## Why it bounds the headers and not the body
+ *
+ * Because the body is the turn. `AbortSignal.timeout` — the shape
+ * `withBoundedFetch` uses for Supabase and GitHub — stays armed for the whole
+ * response, which on a streamed turn would sever a healthy generation
+ * mid-sentence. So the deadline is cleared the moment `fetch` resolves, which
+ * is when upstream's headers arrive; from there the stream runs unbounded and
+ * `maxDuration` remains its only ceiling.
+ *
+ * ## Why 240s rather than something tight
+ *
+ * A non-streamed request is served here too, and Anthropic withholds its
+ * headers until that message is composed — so a short bound would refuse
+ * healthy calls. 240s matches the longest per-operation timeout in
+ * `ai/operations.ts` and still leaves the function a minute to record the
+ * failure and answer. It is a bound on a hang, not a latency target.
+ */
+const UPSTREAM_HEADERS_TIMEOUT_MS = 240_000;
+
 function refuse(refusal: AgentGatewayRefusal, status: number, context: Record<string, unknown>) {
   // Server-side, the precise reason. The caller gets none of it: a refusal that
   // named the failing binding would be a probing oracle for a caller that can
@@ -223,12 +253,21 @@ export async function POST(request: NextRequest) {
     if (value) headers.set(name, value);
   }
 
+  /*
+   * Armed for the answer, disarmed for the stream — see
+   * `UPSTREAM_HEADERS_TIMEOUT_MS`. The timer is cleared in `finally`, so it
+   * cannot outlive the attempt whether that ends in a response or a throw.
+   */
+  const upstreamDeadline = new AbortController();
+  const upstreamTimer = setTimeout(() => upstreamDeadline.abort(), UPSTREAM_HEADERS_TIMEOUT_MS);
+
   let upstream: Response;
   try {
     upstream = await fetch(`${ANTHROPIC_ORIGIN}${ROUTE}`, {
       method: "POST",
       headers,
       body: JSON.stringify(forwardedBody),
+      signal: upstreamDeadline.signal,
     });
   } catch (error) {
     await recordGatewayUsage({
@@ -242,9 +281,12 @@ export async function POST(request: NextRequest) {
     });
     console.error("[agent-gateway] upstream unreachable", {
       runId: claims.runId,
+      timedOut: upstreamDeadline.signal.aborted,
       detail: error instanceof Error ? error.message : "unknown",
     });
     return NextResponse.json(gatewayRefusalBody(), { status: 502 });
+  } finally {
+    clearTimeout(upstreamTimer);
   }
 
   /*
