@@ -1,9 +1,11 @@
 import {
   EXECUTION_ADMISSION_LABELS,
+  EXECUTION_REASON_LABELS,
 } from "@/modules/execution-contract/view";
 import type { ExecutionAdmission } from "@/modules/execution-contract/schema";
 import type { AgentStartRefusal } from "./service";
 import type { PreflightRefusal } from "./preflight";
+import type { AgentStartRefusalDetail, DogfoodStepReason } from "./start-refusal";
 
 /**
  * Customer-safe copy for the coding-agent runtime (EXECUTION CORE-4 website gate, §5).
@@ -51,10 +53,108 @@ export const AGENT_START_REFUSAL_LABELS: Record<AgentStartRefusal, string> = {
  * opposite in the sentence above it.
  */
 export const DOGFOOD_START_REFUSAL_LABELS = {
-  not_eligible: "This step is no longer eligible — the page will show why above.",
   spec_not_persisted: "Vibe couldn't record what this run would do, so it didn't start one.",
   project_not_found: "That project couldn't be found.",
 } as const;
+
+/**
+ * Why the chain stopped before a run could be described at all.
+ *
+ * These are the coarsest answers — the ones reached before there is a
+ * resolution or a preflight to be more specific with. `not_agentic` and
+ * `preflight_refused` have their own, better sentences below and only fall back
+ * here when the finer answer was not established.
+ */
+export const DOGFOOD_STEP_REASON_LABELS: Record<DogfoodStepReason, string> = {
+  not_dogfood_eligible: "The coding agent isn't turned on for this project.",
+  no_action_plan: "There's no finished plan for Vibe to work from yet.",
+  step_not_found: "That step isn't in your current plan any more.",
+  repository_not_connected: "No code repository is connected to this project.",
+  repository_snapshot_missing: "Vibe hasn't read your code yet.",
+  plan_incomplete: "This plan is missing something Vibe needs before it can start work.",
+  not_agentic: "This step isn't the kind of change Vibe's coding agent can attempt.",
+  preflight_refused: "Vibe's own checks refused this run before it started.",
+};
+
+/**
+ * The sentence for a refused start, at the finest grain that was established.
+ *
+ * The order is most-specific-first, and each stage is skipped when the chain
+ * never reached it:
+ *
+ *  1. **Admission** — a moved default branch, a stale read, a superseded plan.
+ *     These are what a founder can actually act on, and they are the reason
+ *     this function exists: the run the founder pressed was refused because
+ *     their repository had moved since Vibe last read it, and the screen said
+ *     "no longer eligible".
+ *  2. **Preflight** — Vibe's own gates on a step that classified fine.
+ *  3. **Classification** — why the step is not agentic in the first place.
+ *  4. **The stage that stopped** — coarse, and only when nothing finer exists.
+ *
+ * Admission comes before preflight deliberately: `not_admissible` is one
+ * preflight refusal standing in for eleven admission answers, and rendering the
+ * generic one tells a founder their code changed when the truth might be that
+ * no Agent price exists.
+ */
+export function startRefusalLabel(detail: AgentStartRefusalDetail): string {
+  // `preflightRefusalLabel` already prefers the admission sentence for
+  // `not_admissible` and keeps its own for every other refusal, which is the
+  // distinction this would otherwise have to re-make and could get wrong.
+  if (detail.preflight) {
+    return detail.admission
+      ? preflightRefusalLabel(detail.preflight, detail.admission)
+      : PREFLIGHT_REFUSAL_LABELS[detail.preflight];
+  }
+
+  if (detail.admission && !detail.admission.admissible) {
+    return EXECUTION_ADMISSION_LABELS[detail.admission.refusal];
+  }
+
+  if (detail.reason === "not_agentic" && detail.resolutionReason) {
+    return EXECUTION_REASON_LABELS[detail.resolutionReason];
+  }
+
+  return DOGFOOD_STEP_REASON_LABELS[detail.reason];
+}
+
+/** The one way forward a refused start can offer, when there is one. */
+export type StartRefusalRecovery = {
+  kind: "repository_read";
+  label: string;
+  /** Why the founder is the one pressing it. */
+  note: string;
+};
+
+/**
+ * The way forward, when a fresh read of the founder's code is it.
+ *
+ * Offered, never taken: a scan costs Credits, and Rule 60 is explicit that
+ * blocked work explains what needs refreshing rather than spending on the
+ * founder's behalf. So this returns copy and a kind — no URL, because a view
+ * module has no business knowing what a route segment is called.
+ *
+ * Only for the refusals a re-read actually clears. A permanent refusal — this
+ * step touches payments, the agent is not on for this project — gets nothing,
+ * because offering a paid scan against a wall is worse than offering nothing.
+ */
+export function startRefusalRecovery(
+  detail: AgentStartRefusalDetail,
+): StartRefusalRecovery | null {
+  const stale =
+    detail.reason === "repository_snapshot_missing" ||
+    (detail.admission !== undefined &&
+      !detail.admission.admissible &&
+      (detail.admission.refusal === "repository_head_moved" ||
+        detail.admission.refusal === "repository_snapshot_stale"));
+
+  if (!stale) return null;
+
+  return {
+    kind: "repository_read",
+    label: "Re-read my code",
+    note: "You start this — Vibe never re-reads your code on its own.",
+  };
+}
 
 /**
  * The refusal, said accurately.

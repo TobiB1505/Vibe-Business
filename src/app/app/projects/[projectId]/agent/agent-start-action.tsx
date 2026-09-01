@@ -12,6 +12,7 @@ import {
   startDogfoodRunAction,
   type StartDogfoodRunState,
 } from "../agent-dogfood/[stepKey]/actions";
+import { AgentStartRefusalNotice } from "./agent-start-refusal-notice";
 
 const initialState: StartDogfoodRunState = null;
 
@@ -26,16 +27,28 @@ const initialState: StartDogfoodRunState = null;
 export function AgentStartAction({
   projectId,
   stepKey,
+  repositoryReadHref,
 }: {
   projectId: string;
   stepKey: string;
+  /**
+   * Where the founder re-reads their own code, for the refusals a stale read
+   * causes. Built by the route — this component does not know the segment name.
+   */
+  repositoryReadHref: string;
 }) {
   const action = startDogfoodRunAction.bind(null, projectId, stepKey);
   const [state, formAction, pending] = useActionState(action, initialState);
 
   return (
     <form action={formAction} className="flex w-full flex-col gap-3">
-      {state && !state.ok && (
+      {state && !state.ok && state.error === "not_eligible" && (
+        <AgentStartRefusalNotice
+          detail={state.detail}
+          repositoryReadHref={repositoryReadHref}
+        />
+      )}
+      {state && !state.ok && state.error !== "not_eligible" && (
         <Notice tone="problem" label="couldn't start">
           {state.error in DOGFOOD_START_REFUSAL_LABELS
             ? DOGFOOD_START_REFUSAL_LABELS[

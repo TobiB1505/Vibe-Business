@@ -97,6 +97,7 @@ import {
 } from "@/app/app/onboarding/[projectId]/operation-states";
 import { RetryProductScan } from "@/app/app/onboarding/[projectId]/phase-actions";
 import { UnderstandingStatus } from "@/app/app/onboarding/[projectId]/understanding-status";
+import { AgentStartRefusalNotice } from "@/app/app/projects/[projectId]/agent/agent-start-refusal-notice";
 import { ActionPlanWorkspace } from "@/app/app/projects/[projectId]/plan/action-plan-workspace";
 import { MovesRefreshBar } from "@/app/app/projects/[projectId]/plan/moves-refresh-bar";
 import type { ActionPlanReadiness } from "@/modules/action-plans/service";
@@ -593,6 +594,7 @@ export default async function E2eScenarioPage({
       previewImages,
       mergeFiles,
       mergeSummary,
+      startRefusal,
     } = E2E_AGENT_STAGE_SCENARIOS[scenario]();
     /* The orb turns for a live run and for nothing else. */
     const live = core === "working" || core === "waiting";
@@ -615,9 +617,17 @@ export default async function E2eScenarioPage({
                 caption={caption}
                 creditEstimate="100"
                 startAction={
-                  <button type="button" className="w-full rounded-full px-5 py-3">
-                    Run with Vibe
-                  </button>
+                  <div className="flex w-full flex-col gap-3">
+                    {startRefusal && (
+                      <AgentStartRefusalNotice
+                        detail={startRefusal}
+                        repositoryReadHref="/app/projects/project_e2e/product"
+                      />
+                    )}
+                    <button type="button" className="w-full rounded-full px-5 py-3">
+                      Run with Vibe
+                    </button>
+                  </div>
                 }
               />
             ),

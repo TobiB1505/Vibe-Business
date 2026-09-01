@@ -83,6 +83,7 @@ function progress(stage: ChangeStage) {
 }
 
 import type { AgentTask } from "@/app/app/projects/[projectId]/agent/agent-task-panel";
+import type { AgentStartRefusalDetail } from "@/modules/coding-agent/start-refusal";
 
 /** The Move the reference set works on, in the shape the panel takes. */
 const TASK: AgentTask = {
@@ -203,6 +204,15 @@ type Fixture = {
   mergeSummary: MergeSummary;
   previewImages: PreviewImages | null;
   fileEvents: StoredExecutionEvent[];
+  /**
+   * A start the founder asked for and did not get.
+   *
+   * Null for every scenario that is about a run in flight. These states exist
+   * because a refusal nobody can render is how the previous one survived:
+   * `AgentStartAction` binds a real server action and cannot be mounted here,
+   * so the notice is what the browser suite sees.
+   */
+  startRefusal: AgentStartRefusalDetail | null;
 };
 
 function build(input: Parameters<typeof agentStageSteps>[0]): Fixture {
@@ -219,6 +229,7 @@ function build(input: Parameters<typeof agentStageSteps>[0]): Fixture {
     mergeSummary: MERGE_SUMMARY,
     previewImages: PREVIEW_IMAGES,
     fileEvents: FILE_EVENTS,
+    startRefusal: null,
   };
 }
 
@@ -316,6 +327,28 @@ export const E2E_AGENT_STAGE_SCENARIOS = {
       filesInspected: 12,
       filesChanged: 3,
     }),
+
+  /**
+   * The production incident, on screen: the founder pressed Run, and the
+   * default branch had moved since Vibe last read the repository.
+   */
+  "agent-start-refused-head-moved": () => ({
+    ...build({ timeline: null, runStatus: null, changeProgress: null }),
+    startRefusal: {
+      reason: "preflight_refused",
+      preflight: "not_admissible",
+      admission: { admissible: false, refusal: "repository_head_moved" },
+    } satisfies AgentStartRefusalDetail,
+  }),
+
+  /** A permanent refusal: nothing a paid re-read would change. */
+  "agent-start-refused-payments": () => ({
+    ...build({ timeline: null, runStatus: null, changeProgress: null }),
+    startRefusal: {
+      reason: "not_agentic",
+      resolutionReason: "risk_class_prohibited",
+    } satisfies AgentStartRefusalDetail,
+  }),
 } as const;
 
 export type E2eAgentStageScenario = keyof typeof E2E_AGENT_STAGE_SCENARIOS;

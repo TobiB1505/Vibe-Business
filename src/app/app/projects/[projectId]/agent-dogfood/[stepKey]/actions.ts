@@ -26,6 +26,8 @@ import {
 } from "@/modules/coding-agent/service";
 import type { AgentStartRefusal } from "@/modules/coding-agent/service";
 import { previewDogfoodStep } from "@/modules/coding-agent/website-preflight";
+import type { AgentStartRefusalDetail } from "@/modules/coding-agent/start-refusal";
+import { startRefusalLabel } from "@/modules/coding-agent/view";
 import { persistAgentExecutionSpec } from "@/modules/operations/agent-execution/server-writes";
 import { VercelWorkflowExecutor } from "@/modules/operations/vercel/executor";
 import type { FounderInputRequest, FounderInputResponse } from "@/modules/founder-input/schema";
@@ -48,8 +50,38 @@ import { readAgentRunForLiveView } from "@/modules/coding-agent/observability/ru
  */
 
 export type StartDogfoodRunState =
-  | { ok: false; error: AgentStartRefusal | "not_eligible" | "spec_not_persisted" }
+  | { ok: false; error: AgentStartRefusal | "spec_not_persisted" }
+  /**
+   * The chain refused before a run could be described, and says which gate.
+   *
+   * It used to answer `"not_eligible"` and nothing else, rendered as "the page
+   * will show why above" — a promise the page cannot keep, because its own
+   * render is what put the button there. The detail is closed enums only, so
+   * nothing model-authored crosses back to the browser (Rules 42, 57).
+   */
+  | { ok: false; error: "not_eligible"; detail: AgentStartRefusalDetail }
   | null;
+
+/**
+ * The refusal, at the finest grain the chain actually established.
+ *
+ * `resolution` and `preflight` are present on the preview only once the step
+ * got far enough to have them, so an absent field here means "never decided"
+ * rather than "passed".
+ */
+function refusalDetail(
+  preview: Extract<Awaited<ReturnType<typeof previewDogfoodStep>>, { eligible: false }>,
+): AgentStartRefusalDetail {
+  return {
+    reason: preview.reason,
+    ...(preview.resolution
+      ? { resolutionReason: preview.resolution.reason, admission: preview.resolution.admission }
+      : {}),
+    ...(preview.preflight && preview.preflight.refusals.length > 0
+      ? { preflight: preview.preflight.refusals[0] }
+      : {}),
+  };
+}
 
 /**
  * The one explicit user action that may start a paid run (§12).
@@ -79,7 +111,9 @@ export async function startDogfoodRunAction(
     stepKey,
   });
 
-  if (!preview.eligible) return { ok: false, error: "not_eligible" };
+  if (!preview.eligible) {
+    return { ok: false, error: "not_eligible", detail: refusalDetail(preview) };
+  }
 
   /*
    * The write happens here, on the click, and nowhere else.
@@ -309,9 +343,11 @@ export async function resolveDogfoodFounderInputAction(
     stepKey: oldSpec.step_key,
   });
   if (!preview.eligible) {
+    // The answer is safe; the run is not starting, and the founder is told
+    // which gate stopped it rather than only that one did.
     return {
       ok: false,
-      message: "Your answer was saved, but this step is no longer executable. Return to Action Plan to review its current state.",
+      message: `Your answer was saved, but the run didn't start. ${startRefusalLabel(refusalDetail(preview))}`,
     };
   }
 

@@ -31,6 +31,7 @@ import {
 } from "./authorization";
 import { CORE4_DOGFOOD_DISCOVERY } from "./budget";
 import { runAgentPreflight, type AgentPreflight } from "./preflight";
+import type { DogfoodStepReason } from "./start-refusal";
 import { completedStepsFromFounderResolutions } from "@/modules/founder-input/completion";
 import { listActiveFounderResolutions } from "@/modules/founder-input/store";
 
@@ -66,25 +67,15 @@ import { liveConnections } from "@/modules/projects/repository-connection";
  * the two automatically visible as a different resolution.
  */
 
-export const DOGFOOD_STEP_REASONS = [
-  /** The project is not on the operator-managed allowlist. Checked first (§26, §27). */
-  "not_dogfood_eligible",
-  /** No completed Action Plan exists for this project yet — a founder action. */
-  "no_action_plan",
-  /** The step key does not name a step in the project's current plan. */
-  "step_not_found",
-  /** No repository is connected to this project. */
-  "repository_not_connected",
-  /** Vibe has never successfully read this repository. */
-  "repository_snapshot_missing",
-  /** The plan is missing a field a spec cannot be built without. */
-  "plan_incomplete",
-  /** The step did not resolve to an executable route Vibe controls (see `resolution`). */
-  "not_agentic",
-  /** Resolved agentic, but the preflight itself refused (see `preflight`). */
-  "preflight_refused",
-] as const;
-export type DogfoodStepReason = (typeof DOGFOOD_STEP_REASONS)[number];
+/*
+ * The refusal vocabulary lives in `start-refusal.ts` and is re-exported here.
+ *
+ * This module is `server-only`; the component that has to say the refusal out
+ * loud is not. Moving the words rather than the whole chain is what lets the
+ * browser render a reason without pulling a Supabase client behind it.
+ */
+export { DOGFOOD_STEP_REASONS } from "./start-refusal";
+export type { AgentStartRefusalDetail, DogfoodStepReason } from "./start-refusal";
 
 export type DogfoodStepPreview =
   | {

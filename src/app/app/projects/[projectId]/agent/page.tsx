@@ -435,7 +435,14 @@ async function AgentWorkspaceBody({
                 liveUrl={project.productionUrl ?? null}
                 startAction={
                   agenticStep ? (
-                    <AgentStartAction projectId={project.id} stepKey={agenticStep.id} />
+                    <AgentStartAction
+                      projectId={project.id}
+                      stepKey={agenticStep.id}
+                      /* Where a stale-code refusal sends the founder. Built here,
+                         never in the panel — the panel does not know what the
+                         workspace's segments are called. */
+                      repositoryReadHref={projectSectionHref(project.id, "my-product")}
+                    />
                   ) : undefined
                 }
                 creditEstimate={creditEstimate}
