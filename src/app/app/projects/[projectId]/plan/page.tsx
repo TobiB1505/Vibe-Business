@@ -10,17 +10,17 @@ import {
   MOVES_CONTEXT_PARAM,
   resolveMovesContext,
 } from "@/modules/opportunities/lineage";
-import {
-  getLatestOpportunities,
-  getMoveLineage,
-  getOpportunityReadiness,
-} from "@/modules/opportunities/service";
+import { getMoveLineage, opportunityReadinessFrom } from "@/modules/opportunities/service";
 import {
   getActiveActionPlanOperation,
   getActiveOpportunityOperation,
 } from "@/modules/operations/service";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
-import { getActionPlanReadiness, getLatestActionPlan } from "@/modules/action-plans/service";
+import {
+  actionPlanReadinessFrom,
+  getLatestActionPlan,
+  readActionPlanReadinessInputs,
+} from "@/modules/action-plans/service";
 import {
   defaultPlannedOpportunity,
   PLAN_OPPORTUNITY_PARAM,
@@ -71,21 +71,31 @@ export default async function ProjectMovesPage({
     resolvedSearchParams[PLAN_OPPORTUNITY_PARAM],
   );
 
+  /*
+   * One read of the inputs both readiness answers rest on (PERF-005).
+   *
+   * The audit, whether it is still current, the Move set and the product
+   * profile do not vary with which Move is being asked about — so they are
+   * read once here and every answer below is derived from them. This screen
+   * used to ask for them once for the prioritization gate and then again for
+   * every Move it rendered.
+   */
   const [
-    opportunities,
-    opportunityReadiness,
+    readinessInputs,
     activeOpportunityOperation,
     executionSummaries,
     actionPlanView,
     activeActionPlanOperation,
   ] = await Promise.all([
-    getLatestOpportunities(supabase, projectId),
-    getOpportunityReadiness(supabase, projectId),
+    readActionPlanReadinessInputs(supabase, projectId),
     getActiveOpportunityOperation(supabase, projectId),
     getOpportunityExecutionSummaries(supabase, projectId),
     getLatestActionPlan(supabase, projectId),
     getActiveActionPlanOperation(supabase, projectId),
   ]);
+
+  const opportunities = readinessInputs.opportunities;
+  const opportunityReadiness = opportunityReadinessFrom(readinessInputs);
 
   /*
    * Which Move the Action Plan section is about (§6, §83).
@@ -110,14 +120,10 @@ export default async function ProjectMovesPage({
    * browser from guessing when the founder moves from step 1 to step 2.
    */
   const planReadinessByOpportunity = Object.fromEntries(
-    opportunities
-      ? await Promise.all(
-          opportunities.set.opportunities.map(async (opportunity) => [
-            opportunity.id,
-            await getActionPlanReadiness(supabase, projectId, opportunity.id),
-          ] as const),
-        )
-      : [],
+    (opportunities?.set.opportunities ?? []).map(
+      (opportunity) =>
+        [opportunity.id, actionPlanReadinessFrom(readinessInputs, opportunity.id)] as const,
+    ),
   );
 
   /*

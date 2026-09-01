@@ -196,15 +196,25 @@ export async function getAuditReadiness(
 export async function getAuditEntitlementFacts(
   supabase: SupabaseClient,
   params: { projectId: string; userId: string },
+  /** Already read by the caller, when it is reading it anyway (VB-022). */
+  prefetched?: AuditEvidence,
 ): Promise<AuditEntitlementFacts> {
   const [readiness, completedIncluded, running, recentStarts, repositoryId, latestAudit] =
     await Promise.all([
-      getAuditReadiness(supabase, params.projectId),
+      getAuditReadiness(supabase, params.projectId, prefetched),
       hasCompletedIncludedAudit(supabase, params.projectId),
       hasRunningAudit(supabase, params.projectId),
       countRecentAuditStarts(supabase, params.projectId),
       getConnectedRepositoryId(supabase, params.projectId),
-      getLatestSuccessfulAudit(supabase, params.projectId),
+      /*
+       * The pack already carries it, and it is the audit document — the
+       * largest single thing this route transfers.
+       *
+       * Branching on whether the pack was *given*, not on whether its audit is
+       * non-null: `null` is the real answer for a project that has never
+       * completed one, and `??` would read the table again to rediscover it.
+       */
+      prefetched ? prefetched.latestAudit : getLatestSuccessfulAudit(supabase, params.projectId),
     ]);
 
   const grant =
@@ -259,8 +269,21 @@ export async function getConnectedRepositoryId(
 export async function getAuditAccessStatus(
   supabase: SupabaseClient,
   params: { projectId: string; userId: string },
+  /**
+   * Already read by the caller (VB-022).
+   *
+   * Without it this re-read the whole evidence pack — five snapshot documents
+   * and the audit — that Business Health had gathered one line earlier and was
+   * already passing to the two read models beside this one. The prefetch
+   * parameter existed on those; this call site was the one that did not take
+   * it, so the duplication the pattern exists to remove came back on the
+   * product's most-visited route.
+   */
+  prefetched?: AuditEvidence,
 ): Promise<AuditAccessStatus> {
-  const status = toAuditAccessStatus(await getAuditEntitlementFacts(supabase, params));
+  const status = toAuditAccessStatus(
+    await getAuditEntitlementFacts(supabase, params, prefetched),
+  );
   if (status.blockedReason !== "credits_required") return status;
 
   const cost = await resolveOperationCreditCost(supabase, {

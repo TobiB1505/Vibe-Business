@@ -115,7 +115,7 @@ export async function ProjectBusinessHealth({ access }: { access: ProjectAccess 
     // than an inviting button (Sprint 7 §19).
     getActiveBusinessAuditOperation(supabase, projectId),
     getAuditReadiness(supabase, projectId, evidence),
-    getAuditAccessStatus(supabase, { projectId, userId }),
+    getAuditAccessStatus(supabase, { projectId, userId }, evidence),
     getDeepScanAccessStatus(supabase, { projectId, userId }),
     getLatestSuccessfulAuthenticatedSnapshot(supabase, projectId),
     getLatestSession(supabase, projectId),
