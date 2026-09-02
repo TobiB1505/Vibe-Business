@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ProductLogo } from "@/components/brand/product-logo";
 import {
   ArrowRightIcon,
   BranchIcon,
@@ -12,7 +13,7 @@ import { StatusPill, statusToneText, type StatusTone } from "@/components/ui/sta
 import { formatDate } from "@/lib/utils/format-datetime";
 import { cn } from "@/lib/utils/cn";
 import { initialsFrom } from "@/modules/auth/initials";
-import type { ProductOverviewItem } from "@/modules/projects/product-summary";
+import { productDisplayName, type ProductOverviewItem } from "@/modules/projects/product-summary";
 import { buildScoreSeries } from "@/modules/projects/score-series";
 import { productListStatus } from "./product-list-state";
 
@@ -47,6 +48,18 @@ function ProfileFact({ label, value }: { label: string; value: string | null }) 
 }
 
 export function ProductListCard({ product }: { product: ProductOverviewItem }) {
+  /*
+   * The name the product goes by, falling back to the label the founder typed.
+   *
+   * `product.name` is the *project* name — usually a repository slug chosen at
+   * connection time. `productName` is what Vibe read the product calling
+   * itself. The card leads with the latter and keeps the former visible below
+   * when they differ, because a founder who typed "invoicing-app" still has to
+   * recognise their own row.
+   */
+  const displayName = productDisplayName(product);
+  const projectLabelDiffers = displayName !== product.name;
+
   const display = scoreDisplay(product.score);
   const status = productListStatus(product);
   const series = buildScoreSeries(product.scoreHistory);
@@ -63,7 +76,7 @@ export function ProductListCard({ product }: { product: ProductOverviewItem }) {
     <li data-testid="product-list-card">
       <Link
         href={`/app/projects/${product.id}`}
-        aria-label={`Open ${product.name}`}
+        aria-label={`Open ${displayName}`}
         className="group rounded-panel block"
       >
         <article
@@ -85,13 +98,32 @@ export function ProductListCard({ product }: { product: ProductOverviewItem }) {
                     TILE_TONE[display.tone],
                   )}
                 >
-                  {initialsFrom(product.name)}
+                  {/*
+                   * The logo sits inside the tile rather than replacing it, so
+                   * the row is the same height and the score tone still rings
+                   * the mark whether or not a logo loaded.
+                   *
+                   * The fallback is the initials rather than ProductLogo's
+                   * default Vibe mark: on a list of the customer's own
+                   * products, Vibe's mark would read as a claim about whose
+                   * product this is.
+                   */}
+                  {product.logoUrl ? (
+                    <ProductLogo
+                      src={product.logoUrl}
+                      alt=""
+                      className="size-9 object-contain sm:size-10"
+                      fallback={initialsFrom(displayName)}
+                    />
+                  ) : (
+                    initialsFrom(displayName)
+                  )}
                 </span>
 
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2.5">
-                    <h2 className="text-fg truncate text-base font-bold" title={product.name}>
-                      {product.name}
+                    <h2 className="text-fg truncate text-base font-bold" title={displayName}>
+                      {displayName}
                     </h2>
                     <StatusPill
                       tone={status.tone}
@@ -100,6 +132,9 @@ export function ProductListCard({ product }: { product: ProductOverviewItem }) {
                       {status.label}
                     </StatusPill>
                   </div>
+                  {projectLabelDiffers ? (
+                    <p className="text-fg-meta mt-1 truncate text-xs">Project: {product.name}</p>
+                  ) : null}
                   <p className="text-fg-muted mt-2 line-clamp-2 max-w-[56ch] text-sm leading-6">
                     {product.shortDescription ?? "No product summary is available yet."}
                   </p>
@@ -168,9 +203,7 @@ export function ProductListCard({ product }: { product: ProductOverviewItem }) {
               </div>
 
               <div className="w-28 xl:mt-2 xl:w-full">
-                {series.readingCount > 0 && (
-                  <Sparkline segments={series.segments} tone={tone} />
-                )}
+                {series.readingCount > 0 && <Sparkline segments={series.segments} tone={tone} />}
               </div>
 
               <p className="text-fg-meta mt-2 hidden text-[0.6875rem] xl:block">

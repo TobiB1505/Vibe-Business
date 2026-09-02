@@ -1,5 +1,5 @@
 import type { StatusTone } from "@/components/ui/status-pill";
-import type { ProductOverviewItem } from "@/modules/projects/product-summary";
+import { productDisplayName, type ProductOverviewItem } from "@/modules/projects/product-summary";
 
 export type ProductFilter = "all" | "attention" | "analysed" | "setup";
 export type ProductSort = "priority" | "recent" | "signal" | "name";
@@ -44,6 +44,9 @@ function productIsSetup(product: ProductOverviewItem): boolean {
 function searchableText(product: ProductOverviewItem): string {
   return [
     product.name,
+    // The name on the card. Searching for what you can read is the whole
+    // point of a search box.
+    product.productName,
     product.repositoryFullName,
     product.shortDescription,
     product.mainPurpose,
@@ -72,15 +75,19 @@ export function filterAndSortProducts(
       return true;
     })
     .sort((a, b) => {
-      if (options.sort === "name") return a.name.localeCompare(b.name);
+      if (options.sort === "name") {
+        return productDisplayName(a).localeCompare(productDisplayName(b));
+      }
       if (options.sort === "signal") {
         return (b.score ?? Number.NEGATIVE_INFINITY) - (a.score ?? Number.NEGATIVE_INFINITY);
       }
       if (options.sort === "recent") {
-        return (Date.parse(b.lastAnalysedAt ?? "") || 0) - (Date.parse(a.lastAnalysedAt ?? "") || 0);
+        return (
+          (Date.parse(b.lastAnalysedAt ?? "") || 0) - (Date.parse(a.lastAnalysedAt ?? "") || 0)
+        );
       }
 
       const priority = productListStatus(a).priority - productListStatus(b).priority;
-      return priority !== 0 ? priority : a.name.localeCompare(b.name);
+      return priority !== 0 ? priority : productDisplayName(a).localeCompare(productDisplayName(b));
     });
 }

@@ -45,7 +45,9 @@ function reading(score: number | null, recordedAt: string, rubric?: string): Aud
   };
 }
 
-function project(overrides: Partial<DashboardProject> & { id: string; name: string }): DashboardProject {
+function project(
+  overrides: Partial<DashboardProject> & { id: string; name: string },
+): DashboardProject {
   return {
     repositoryFullName: "founder/product",
     defaultBranch: "main",
@@ -69,10 +71,7 @@ const THREE_PRODUCTS: DashboardProject[] = [
     score: 71,
     scoreState: "scored",
     lastAnalysedAt: "2026-08-20T09:00:00Z",
-    scoreHistory: [
-      reading(71, "2026-08-20T09:00:00Z"),
-      reading(64, "2026-08-10T09:00:00Z"),
-    ],
+    scoreHistory: [reading(71, "2026-08-20T09:00:00Z"), reading(64, "2026-08-10T09:00:00Z")],
     nextMovesCount: 0,
   }),
   project({
@@ -139,6 +138,10 @@ export function isE2eAccountScenario(value: string): value is E2eAccountScenario
 
 const PRODUCT_CONTEXT = [
   {
+    // Same name, with a logo: the tile shows an image and no project line.
+    // The asset is served by this app so the fixture reaches no network.
+    productName: "Quietly Fine",
+    logoUrl: "/brand/vibe-mark.svg",
     shortDescription: "A calm command center for turning product evidence into business action.",
     mainPurpose: "Turns product evidence into a ranked growth plan.",
     primaryAudience: "Independent founders and small product teams",
@@ -146,6 +149,11 @@ const PRODUCT_CONTEXT = [
     category: "SaaS application",
   },
   {
+    // A product whose name is not the label the founder typed — the case the
+    // whole change exists for, and the one that makes search and sorting
+    // disagree with the screen if they are left on the project name.
+    productName: "Payflow",
+    logoUrl: null,
     shortDescription: "A focused workspace for validating and shipping the next business move.",
     mainPurpose: "Finds the most important business gap and prepares the work around it.",
     primaryAudience: "Founders with a product already in market",
@@ -153,6 +161,9 @@ const PRODUCT_CONTEXT = [
     category: "Web app",
   },
   {
+    // No profile at all: initials over the project name, as before.
+    productName: null,
+    logoUrl: null,
     shortDescription: null,
     mainPurpose: null,
     primaryAudience: null,
