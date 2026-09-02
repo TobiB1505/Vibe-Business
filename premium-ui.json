@@ -5,6 +5,7 @@
     "src/app/app/projects/[projectId]/business-brain",
     "src/app/app/projects/[projectId]/product",
     "src/app/app/(account)/billing",
+    "src/app/app/(account)/profile",
     "src/app/app/onboarding/[projectId]",
     "src/components/product-scan"
   ],
@@ -18,8 +19,8 @@
   "requiredCommands": ["unit", "e2e", "accessibility", "premium"],
   "commands": {
     "unit": "pnpm test",
-    "e2e": "pnpm exec playwright test e2e/account-repositories.spec.ts e2e/business-audit.spec.ts e2e/action-plan-ui.spec.ts e2e/billing.spec.ts",
-    "accessibility": "pnpm exec playwright test e2e/account-repositories.spec.ts e2e/business-audit.spec.ts e2e/action-plan-ui.spec.ts e2e/billing.spec.ts",
+    "e2e": "pnpm exec playwright test e2e/account-repositories.spec.ts e2e/business-audit.spec.ts e2e/action-plan-ui.spec.ts e2e/billing.spec.ts e2e/profile.spec.ts",
+    "accessibility": "pnpm exec playwright test e2e/account-repositories.spec.ts e2e/business-audit.spec.ts e2e/action-plan-ui.spec.ts e2e/billing.spec.ts e2e/profile.spec.ts",
     "premium": "python3 <skill-dir>/scripts/audit_project.py . --mode strict --no-write"
   },
   "evidence": {
@@ -28,6 +29,7 @@
     "businessHealthStates": "e2e/business-audit.spec.ts",
     "businessAuditRecovery": "e2e/action-plan-ui.spec.ts",
     "productScanStates": "e2e/product-scan.spec.ts",
-    "billingStates": "e2e/billing.spec.ts"
+    "billingStates": "e2e/billing.spec.ts",
+    "profileStates": "e2e/profile.spec.ts"
   }
 }

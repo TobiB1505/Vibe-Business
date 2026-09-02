@@ -55,6 +55,24 @@ export function liveConnections(supabase: SupabaseClient, columns: string) {
 }
 
 /**
+ * The account-wide number of repositories Vibe is connected to right now.
+ *
+ * The profile only needs the number. Returning every connection and counting
+ * it in memory would make a compact account summary grow with the account,
+ * while Postgres can answer the same question without transferring a row.
+ * RLS still limits the count to the signed-in owner.
+ */
+export async function countLiveConnections(supabase: SupabaseClient): Promise<number | null> {
+  const { count, error } = await supabase
+    .from(TABLE)
+    .select("id", { count: "exact", head: true })
+    .is("detached_at", null);
+
+  if (error) return null;
+  return count ?? null;
+}
+
+/**
  * Every connection a project has ever had, detached ones included.
  *
  * For reading history — an old merge's provenance, an audit trail — never for

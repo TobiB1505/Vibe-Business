@@ -19,12 +19,17 @@ export default function Loading() {
     <div className="flex flex-col gap-8">
       <SectionHeader
         level={1}
-        title="Profile"
-        description="What Vibe knows about you — which is deliberately very little."
+        title="Account Profile"
+        description="Your identity, connected account and workspace at a glance."
       />
-      <div role="status" aria-label="Loading your profile" className="flex flex-col gap-8">
-        <SkeletonBlock className="h-52 w-full" />
-        <SkeletonBlock className="h-40 w-full" />
+      <div role="status" aria-label="Loading your profile" className="flex flex-col gap-5 sm:gap-6">
+        <SkeletonBlock className="h-44 w-full sm:h-40" />
+        <SkeletonBlock className="h-72 w-full" />
+        <div className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
+          <SkeletonBlock className="h-52 w-full" />
+          <SkeletonBlock className="h-52 w-full" />
+        </div>
+        <SkeletonBlock className="h-36 w-full" />
       </div>
     </div>
   );

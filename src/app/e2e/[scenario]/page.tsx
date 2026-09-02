@@ -103,6 +103,7 @@ import { MovesRefreshBar } from "@/app/app/projects/[projectId]/plan/moves-refre
 import type { ActionPlanReadiness } from "@/modules/action-plans/service";
 import { ProductLogo } from "@/components/brand/product-logo";
 import { BillingView } from "@/app/app/(account)/billing/billing-view";
+import { ProfileView } from "@/app/app/(account)/profile/profile-view";
 import { E2E_BILLING_SCENARIOS, isE2eBillingScenario } from "../billing-scenarios";
 import { DeepScanPanel } from "@/app/app/projects/[projectId]/deep-scan-panel";
 import { E2E_DEEP_SCAN_SCENARIOS, isE2eDeepScanScenario } from "../deep-scan-scenarios";
@@ -745,6 +746,47 @@ export default async function E2eScenarioPage({
         {label}
         <BillingLoading />
       </main>
+    );
+  }
+
+  /*
+   * The account profile, rendered with the same complete composition as the
+   * signed-in route. Its fixture deliberately contains only data the product
+   * can really know: email, GitHub identity, and bounded workspace counts.
+   */
+  if (scenario === "account-profile") {
+    return (
+      <AccountShell
+        sidebar={
+          <AccountSidebar
+            credits="2,480"
+            footer={
+              <AccountMenu
+                identity={{
+                  displayName: "TobiB1505",
+                  initials: "TB",
+                  avatarUrl: null,
+                  fromGithub: true,
+                }}
+              />
+            }
+          />
+        }
+      >
+        <div className="sr-only">{label}</div>
+        <ProfileView
+          identity={{
+            displayName: "TobiB1505",
+            initials: "TB",
+            avatarUrl: null,
+            fromGithub: true,
+          }}
+          email="tobi.bayer@outlook.de"
+          githubLogin="TobiB1505"
+          productCount={5}
+          repositoryCount={8}
+        />
+      </AccountShell>
     );
   }
 
