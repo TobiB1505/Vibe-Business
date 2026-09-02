@@ -62,13 +62,43 @@
 --
 -- ## Security model
 --
--- `SECURITY INVOKER`, and `EXECUTE` revoked from every Data API role.
+-- `SECURITY INVOKER`, and `EXECUTE` revoked from every Data API role — which
+-- `20260823220000_data_api_default_privileges.sql` has already done for every
+-- function `postgres` creates in `public`. The explicit revokes below are
+-- therefore **redundant, and deliberately kept**: they are one line each, and
+-- they mean this function's privileges do not depend on a default that a later
+-- migration could change for reasons having nothing to do with retention.
+-- Measured, not assumed: removing one of them leaves the denial intact, so the
+-- guard that matters is `retention-sweep.migration.ts` asserting the effective
+-- privilege rather than the statement.
 -- `pg_cron` runs the job as the database owner, which is the only caller.
 -- `SECURITY DEFINER` was considered and rejected: it would add nothing, since
 -- cron is already privileged, while creating a function that deletes data and
 -- can be invoked by whoever reaches it (CLAUDE.md rule 11).
 
-create extension if not exists pg_cron;
+-- ## Why the extension and the schedule are guarded and the function is not
+--
+-- `supabase/tests/harness.ts` provisions a bare PostgreSQL cluster and applies
+-- every migration in this directory to prove schema authority. `pg_cron` is a
+-- Supabase platform extension and is not installed there, so an unguarded
+-- `create extension` fails the whole harness at startup — which is exactly what
+-- the first version of this file did, breaking all fifteen migration tests.
+--
+-- The split is deliberate rather than defensive. **The function is portable and
+-- is always created**, so the harness gets the thing whose behaviour is worth
+-- testing. Only the two statements that genuinely require the platform — the
+-- extension and the job that depends on it — are conditional, and skipping them
+-- says so out loud rather than passing quietly.
+
+do $$
+begin
+  if exists (select 1 from pg_available_extensions where name = 'pg_cron') then
+    create extension if not exists pg_cron;
+  else
+    raise notice 'pg_cron unavailable: retention_sweep() is created but NOT scheduled';
+  end if;
+end
+$$;
 
 create or replace function public.retention_sweep()
 returns table (swept_table text, rows_deleted bigint)
@@ -110,14 +140,24 @@ revoke all on function public.retention_sweep() from anon;
 revoke all on function public.retention_sweep() from authenticated;
 revoke all on function public.retention_sweep() from service_role;
 
+
 -- Scheduled from the migration rather than the dashboard, so the repository
 -- states the schedule and a job unscheduled out of band is a divergence that
 -- can be looked for (rule 34). Daily at 03:17 UTC — off the hour deliberately,
 -- because hourly boundaries are when every other scheduled thing runs.
---
--- `unschedule` first so re-applying this migration converges rather than
--- raising on the duplicate job name.
-select cron.unschedule('retention_sweep')
-where exists (select 1 from cron.job where jobname = 'retention_sweep');
+do $$
+begin
+  if to_regproc('cron.schedule(text,text,text)') is null then
+    raise notice 'pg_cron unavailable: retention_sweep() is created but NOT scheduled';
+    return;
+  end if;
 
-select cron.schedule('retention_sweep', '17 3 * * *', 'select public.retention_sweep()');
+  -- `unschedule` first so re-applying this migration converges rather than
+  -- raising on the duplicate job name.
+  if exists (select 1 from cron.job where jobname = 'retention_sweep') then
+    perform cron.unschedule('retention_sweep');
+  end if;
+
+  perform cron.schedule('retention_sweep', '17 3 * * *', 'select public.retention_sweep()');
+end
+$$;

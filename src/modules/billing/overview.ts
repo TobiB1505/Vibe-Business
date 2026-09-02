@@ -4,7 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { findNextExpiry } from "@/modules/credits/grants";
 import {
   listActiveLots,
-  listAllocationsForGrants,
+  sumLotAllocationCapacity,
   reconcileAndRepairLotAllocations,
 } from "@/modules/credits/lot-store";
 import { remainingCapacity, spendableCapacity, spendableLots, type CreditLot } from "@/modules/credits/lots";
@@ -315,10 +315,10 @@ export async function getBillingOverview(
    * audit trail, the underlying row) rather than something this page's own
    * return value needs.
    */
-  const allocationsByGrant = await listAllocationsForGrants(supabase, lots.map((lot) => lot.id));
+  const occupiedByGrant = await sumLotAllocationCapacity(supabase, lots.map((lot) => lot.id));
 
   const [lotReconciliation] = await Promise.all([
-    reconcileAndRepairLotAllocations(supabase, { lots, allocationsByGrant, userId: params.userId }),
+    reconcileAndRepairLotAllocations(supabase, { lots, occupiedByGrant, userId: params.userId }),
     reconcileAndRepairBalance(supabase, {
       account,
       postedFromLedger,

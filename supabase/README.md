@@ -17,6 +17,19 @@ Sprint 0 introduced no business tables ([ARCHITECTURE.md §7](../ARCHITECTURE.md
 - Create one with the Supabase CLI (`pnpm supabase migration new <description>`), or add a correctly named file by hand — either way, one migration per meaningful schema change, committed to this repo.
 - Row Level Security is enabled and policies are added in the same migration that creates a user-/project-scoped table, per ADR 0002 — never retrofitted later.
 - Migration files are the source of truth for schema. The remote database must converge to match them, never the other way around.
+- **A policy that reads the session wraps the call in a `select`.** `user_id = (select auth.uid())`, never `user_id = auth.uid()`. `auth.uid()` is `STABLE` rather than `IMMUTABLE`, so PostgreSQL will not hoist it out of a per-row filter by itself: written bare it runs once per row examined, wrapped it becomes an InitPlan computed once per query. `20260827202440_wave2_database_hygiene.sql` rewrote all of them; `supabase/tests/policy-form.migration.ts` is what stops the next one being written bare, and names the offending policy when it fails. The rewrite was catalog-based, so the wrapped form appears in **no** migration file — grepping the migrations for it will find nothing and mean nothing.
+- **Re-adding a `CHECK` constraint uses `NOT VALID`, then validates separately.** `add constraint … check (…)` scans the whole table under an `ACCESS EXCLUSIVE` lock before it returns, which blocks every read and write on that table for the duration of the scan:
+
+  ```sql
+  alter table public.operation_runs
+    add constraint operation_runs_operation_type_check check (…) not valid;
+  alter table public.operation_runs
+    validate constraint operation_runs_operation_type_check;
+  ```
+
+  `NOT VALID` takes the lock only long enough to record the constraint; `VALIDATE` scans under a `SHARE UPDATE EXCLUSIVE` lock, which readers and writers pass. New rows are checked from the first statement onward either way — `NOT VALID` means "existing rows are not re-checked", not "the constraint is off".
+
+  Thirteen migrations between `20260812030000` and `20260827070000` drop and re-add the `operation_runs` `operation_type` CHECK without this (PERF-019). **That was free and still is**: `operation_runs` holds 166 rows, so the scan is sub-millisecond. This is written down for the deploy where it is not, which is the only kind of deploy where anyone will look it up.
 
 ## Deployment: the Supabase CLI workflow
 

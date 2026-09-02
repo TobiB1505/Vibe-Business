@@ -429,15 +429,25 @@ describe("expiry (§17, §73)", () => {
 });
 
 describe("lot reconciliation (§14)", () => {
-  it("agrees when the materialized figure matches the allocation rows", () => {
+  /**
+   * What is left here after PERF-018, and where the rest went.
+   *
+   * This used to take the allocation rows and apply the occupancy rule — held
+   * occupies its full amount, consumed only what it charged, released nothing.
+   * That rule now lives in `sum_lot_allocation_capacity`, because summing it
+   * here meant transferring every allocation row an account has ever had and
+   * getting a **fabricated drift** when `max_rows` truncated the read.
+   *
+   * So the rule's test moved with the rule, to
+   * `supabase/tests/lot-capacity.migration.ts`, where it is proved against a
+   * real cluster rather than against a hand-summed array. What stays here is
+   * the comparison, which is the only thing this function still decides.
+   */
+  it("agrees when the materialized figure matches what the allocations occupy", () => {
     const subject = lot({ id: "a", sourceKind: "welcome", credits: 100 });
     subject.allocatedCreditUnits = creditsToUnits(50);
 
-    const result = reconcileLotAllocation(subject, [
-      { status: "held", creditUnits: creditsToUnits(20), consumedUnits: null },
-      { status: "consumed", creditUnits: creditsToUnits(40), consumedUnits: creditsToUnits(30) },
-      { status: "released", creditUnits: creditsToUnits(10), consumedUnits: null },
-    ]);
+    const result = reconcileLotAllocation(subject, creditsToUnits(50));
 
     expect(result.consistent).toBe(true);
     expect(result.expected).toBe(creditsToUnits(50));
@@ -447,11 +457,19 @@ describe("lot reconciliation (§14)", () => {
     const subject = lot({ id: "a", sourceKind: "welcome", credits: 100 });
     subject.allocatedCreditUnits = creditsToUnits(80);
 
-    const result = reconcileLotAllocation(subject, [
-      { status: "held", creditUnits: creditsToUnits(20), consumedUnits: null },
-    ]);
+    const result = reconcileLotAllocation(subject, creditsToUnits(20));
 
     expect(result.consistent).toBe(false);
     expect(result.drift).toBe(creditUnits(creditsToUnits(60)));
+  });
+
+  it("treats a lot nothing has allocated against as occupying nothing", () => {
+    // The absent-versus-zero case the aggregate creates: `group by` emits no
+    // row for such a lot, so the caller supplies ZERO_CREDITS and a lot whose
+    // materialized figure is also zero must reconcile rather than drift.
+    const subject = lot({ id: "a", sourceKind: "welcome", credits: 100 });
+    subject.allocatedCreditUnits = creditsToUnits(0);
+
+    expect(reconcileLotAllocation(subject, creditsToUnits(0)).consistent).toBe(true);
   });
 });

@@ -4,7 +4,7 @@ import { grantCreditLot } from "./grants";
 import {
   allocateReservation,
   listActiveLots,
-  listAllocationsForGrants,
+  sumLotAllocationCapacity,
   listReservationAllocations,
   reconcileAndRepairLotAllocations,
   releaseReservationAllocations,
@@ -302,7 +302,7 @@ describe("an unrecognized capacity-return failure is never swallowed", () => {
   });
 });
 
-describe("listAllocationsForGrants (ADR 0042 §P3)", () => {
+describe("sumLotAllocationCapacity (ADR 0042 §P3, PERF-018)", () => {
   it("groups allocation rows by the lot they belong to", async () => {
     const { accountId, lotId: lotId1 } = await heldAgainstLot(300);
     // `accountWithLot`'s own `lotId` is unreliable once an account already
@@ -331,24 +331,54 @@ describe("listAllocationsForGrants (ADR 0042 §P3)", () => {
     });
     if (!allocated.ok) throw new Error("fixture could not allocate against the second lot");
 
-    const byGrant = await listAllocationsForGrants(supabase(), [lotId1, lotId2]);
+    const byGrant = await sumLotAllocationCapacity(supabase(), [lotId1, lotId2]);
 
-    expect(byGrant.get(lotId1)).toHaveLength(1);
-    expect(byGrant.get(lotId1)?.[0]).toMatchObject({ status: "held", creditUnits: creditsToUnits(300) });
-    expect(byGrant.get(lotId2)).toHaveLength(1);
-    expect(byGrant.get(lotId2)?.[0]).toMatchObject({ status: "held", creditUnits: creditsToUnits(50) });
+    // Two lots, two sums, neither leaking into the other. A `group by` that
+    // grouped wrongly would show 350 against one of them and nothing against
+    // the other, which is the failure this asserts against rather than the
+    // arithmetic itself.
+    expect(byGrant.get(lotId1)).toBe(creditsToUnits(300));
+    expect(byGrant.get(lotId2)).toBe(creditsToUnits(50));
   });
 
-  it("omits a lot with no allocations rather than returning an empty array for it", async () => {
+  it("counts a settled allocation at what it charged, not at what it held", async () => {
+    /*
+     * The fake's own guard against drifting from the migration.
+     *
+     * Every other test here works on `held` allocations, where `credit_units`
+     * and the occupancy are the same number — so the handler could model
+     * `consumed` as the held amount and every one of them would still pass.
+     * Measured: that exact change was planted and nothing went red.
+     *
+     * This is the case where the two numbers differ, and it is the one that
+     * costs money if it is wrong: an operation that reserved 300 and spent 120
+     * must give the other 180 back to the lot's capacity. The same arithmetic
+     * is proved against real PostgreSQL in
+     * `supabase/tests/lot-capacity.migration.ts`; this is what keeps the double
+     * honest to it.
+     */
+    const { accountId, lotId, reservationId } = await heldAgainstLot(300);
+    await settleReservationAllocations(supabase(), {
+      reservationId,
+      actualCredits: creditsToUnits(120),
+    });
+
+    const byGrant = await sumLotAllocationCapacity(supabase(), [lotId]);
+
+    expect(byGrant.get(lotId)).toBe(creditsToUnits(120));
+    expect(accountId).toBeTruthy();
+  });
+
+  it("omits a lot with no allocations rather than reporting zero for it", async () => {
     const { lotId } = await accountWithLot(100);
 
-    const byGrant = await listAllocationsForGrants(supabase(), [lotId]);
+    const byGrant = await sumLotAllocationCapacity(supabase(), [lotId]);
 
     expect(byGrant.has(lotId)).toBe(false);
   });
 
   it("is a no-op for an empty grant list", async () => {
-    const byGrant = await listAllocationsForGrants(supabase(), []);
+    const byGrant = await sumLotAllocationCapacity(supabase(), []);
     expect(byGrant.size).toBe(0);
   });
 });
@@ -417,18 +447,18 @@ describe("reconcileAndRepairLotAllocations (ADR 0042 §P3)", () => {
     driftLot(allocation.id);
 
     const lots = await listActiveLots(supabase(), accountId);
-    const allocationsByGrant = await listAllocationsForGrants(supabase(), [lotId]);
-    return { lotId, lots, allocationsByGrant };
+    const occupiedByGrant = await sumLotAllocationCapacity(supabase(), [lotId]);
+    return { lotId, lots, occupiedByGrant };
   }
 
   it("is a no-op when every lot's allocated figure already agrees with its rows", async () => {
     const { accountId, lotId } = await heldAgainstLot(100);
     const lots = await listActiveLots(supabase(), accountId);
-    const allocationsByGrant = await listAllocationsForGrants(supabase(), [lotId]);
+    const occupiedByGrant = await sumLotAllocationCapacity(supabase(), [lotId]);
 
     const result = await reconcileAndRepairLotAllocations(supabase(), {
       lots,
-      allocationsByGrant,
+      occupiedByGrant,
       userId: USER,
     });
 
@@ -437,11 +467,11 @@ describe("reconcileAndRepairLotAllocations (ADR 0042 §P3)", () => {
   });
 
   it("detects and audits drift without repairing while the flag is unset", async () => {
-    const { lotId, lots, allocationsByGrant } = await driftedFixture(100);
+    const { lotId, lots, occupiedByGrant } = await driftedFixture(100);
 
     const result = await reconcileAndRepairLotAllocations(supabase(), {
       lots,
-      allocationsByGrant,
+      occupiedByGrant,
       userId: USER,
     });
 
@@ -460,11 +490,11 @@ describe("reconcileAndRepairLotAllocations (ADR 0042 §P3)", () => {
 
   it("repairs and audits when the flag is set", async () => {
     process.env.BILLING_REPAIR_ENABLED = "true";
-    const { lotId, lots, allocationsByGrant } = await driftedFixture(100);
+    const { lotId, lots, occupiedByGrant } = await driftedFixture(100);
 
     const result = await reconcileAndRepairLotAllocations(supabase(), {
       lots,
-      allocationsByGrant,
+      occupiedByGrant,
       userId: USER,
     });
 
@@ -484,7 +514,7 @@ describe("reconcileAndRepairLotAllocations (ADR 0042 §P3)", () => {
 
   it("audits repair_failed and keeps the unrepaired figure when the repair RPC throws", async () => {
     process.env.BILLING_REPAIR_ENABLED = "true";
-    const { lotId, lots, allocationsByGrant } = await driftedFixture(100);
+    const { lotId, lots, occupiedByGrant } = await driftedFixture(100);
 
     // The repair runs under the service-role client (PERF-011), so that is the
     // one that has to fail; the caller's client stays healthy and still writes
@@ -493,7 +523,7 @@ describe("reconcileAndRepairLotAllocations (ADR 0042 §P3)", () => {
 
     const result = await reconcileAndRepairLotAllocations(supabase(), {
       lots,
-      allocationsByGrant,
+      occupiedByGrant,
       userId: USER,
     });
 
@@ -523,11 +553,11 @@ describe("reconcileAndRepairLotAllocations (ADR 0042 §P3)", () => {
       .find((id) => id !== driftedLotId)!;
 
     const lots = await listActiveLots(supabase(), accountId);
-    const allocationsByGrant = await listAllocationsForGrants(supabase(), [driftedLotId, cleanLotId]);
+    const occupiedByGrant = await sumLotAllocationCapacity(supabase(), [driftedLotId, cleanLotId]);
 
     const result = await reconcileAndRepairLotAllocations(supabase(), {
       lots,
-      allocationsByGrant,
+      occupiedByGrant,
       userId: USER,
     });
 
