@@ -7,6 +7,12 @@ import { createClient } from "@/lib/supabase/server";
 import { requireSession } from "@/modules/auth/session";
 import { getOnboardingRouting } from "@/modules/onboarding/store";
 import { OnboardingShell } from "./onboarding-shell";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Set up your product",
+  description: "Connect a repository so Vibe can read it.",
+};
 
 export default async function NewProjectOnboardingPage() {
   const session = await requireSession();

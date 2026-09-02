@@ -1,5 +1,11 @@
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
 import { ProjectBusinessHealth } from "./content";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Business health",
+  description: "How business-ready this product is, across nine areas.",
+};
 
 /**
  * Compatibility route for saved Business Health links.
