@@ -161,3 +161,43 @@ describe("the directory a run records", () => {
     ).toThrow(/null value in column "workspace_root"/);
   });
 });
+
+describe("the preview profile a session records", () => {
+  /**
+   * One row per development server, instead of one per validation profile.
+   *
+   * The two `*_v1` names have to stay legal: no new session reaches either, and
+   * sessions that ran under them are history whose rows still say so (rule 83).
+   * A widened CHECK that dropped them would not fail a TypeScript test — it
+   * would fail the first time anything touched one of those rows.
+   */
+  function insertSession(profile: string): string {
+    return `
+      insert into public.preview_sessions
+        (project_id, user_id, prepared_change_id, operation_run_id, preview_profile,
+         preview_profile_version, preview_policy_version, provider, port, status,
+         prepared_commit_sha, preview_identity, expires_at)
+      values ('${projectId}', '${userId}', '${preparedChangeId}', '${operationRunId}', '${profile}',
+              'v1', 'v1', 'vercel_sandbox', 3000, 'starting', '${SHA}',
+              md5(random()::text) || md5(random()::text), now() + interval '15 minutes');
+    `;
+  }
+
+  it.each([
+    "nextjs_preview_v1",
+    "nextjs_dev_preview_v1",
+    "next_dev_v1",
+    "nuxt_dev_v1",
+    "astro_dev_v1",
+  ])("accepts %s", (profile) => {
+    expect(() => db.sql(insertSession(profile))).not.toThrow();
+  });
+
+  it("refuses a server Vibe has no row for", () => {
+    // `vite_dev_v1` specifically: it is the row this stage deliberately did not
+    // ship, and the database should refuse it until it exists in code.
+    expect(() => db.sql(insertSession("vite_dev_v1"))).toThrow(
+      /preview_sessions_preview_profile_check/,
+    );
+  });
+});

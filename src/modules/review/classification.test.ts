@@ -317,3 +317,83 @@ describe("the historical runs", () => {
     expect(result.routes).toEqual(["/"]);
   });
 });
+
+/**
+ * An application that does not live at the repository root.
+ *
+ * Every pattern here is anchored, and until Stufe 4 it was anchored at the
+ * repository — the same place, while every validatable repository had its app
+ * there. It is not any more, and the failure this describes is the quiet kind:
+ * nothing throws, every change classifies as `code`, no preview is ever
+ * recommended, `render-impact.ts` never runs, and the suite stays green.
+ */
+describe("the patterns are anchored at the application, not at the repository", () => {
+  const PATHS = [
+    "frontend/src/app/page.tsx",
+    "frontend/src/components/hero.tsx",
+    "frontend/src/app/globals.css",
+  ];
+
+  it("reads a page under frontend/ as visual", () => {
+    const result = classifyReview(
+      input({ changedPaths: PATHS, surface: null, workspaceRoot: "frontend" }),
+    );
+
+    expect(result.classification).toBe("visual");
+    expect(result.visualPaths).toEqual([...PATHS].sort());
+  });
+
+  it("reads the same paths as code when the application is at the root", () => {
+    // The defect, stated as the answer the old code gave for every one of them.
+    const result = classifyReview(input({ changedPaths: PATHS, surface: null }));
+
+    expect(result.classification).toBe("visual_and_code");
+    // Only the stylesheet survives, because its pattern is extension-based and
+    // never had a directory to be wrong about.
+    expect(result.visualPaths).toEqual(["frontend/src/app/globals.css"]);
+  });
+
+  it("does not treat a sibling directory as part of the application", () => {
+    // A prefix that never matched must not be trimmed off anyway: `docs/app/`
+    // is prose about a page rather than a page, and a rule loose enough to
+    // accept any leading directory would call it renderable.
+    const result = classifyReview(
+      input({
+        changedPaths: ["docs/app/page.tsx", "backend/app/main.py"],
+        surface: null,
+        workspaceRoot: "frontend",
+      }),
+    );
+
+    expect(result.classification).toBe("code");
+    expect(result.visualPaths).toEqual([]);
+  });
+
+  it("still consults the route table on the repository-relative path", () => {
+    // The analyzer's route table and `changedPaths` are both repository-
+    // relative, so that comparison must not be stripped — a route source is a
+    // route source wherever the application sits.
+    const result = classifyReview(
+      input({
+        changedPaths: ["src/app/app/(account)/page.tsx"],
+        workspaceRoot: "frontend",
+      }),
+    );
+
+    expect(result.classification).toBe("visual");
+  });
+
+  it("reads a Vite application's routed views as visual", () => {
+    // Vite and its family have no `app/` directory to be recognised by; routed
+    // views live under `src/pages/` or `src/routes/`.
+    const result = classifyReview(
+      input({
+        changedPaths: ["src/pages/Pricing.tsx", "src/routes/checkout.jsx"],
+        surface: null,
+      }),
+    );
+
+    expect(result.classification).toBe("visual");
+    expect(result.visualPaths).toHaveLength(2);
+  });
+});

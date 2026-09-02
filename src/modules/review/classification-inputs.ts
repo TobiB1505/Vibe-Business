@@ -12,6 +12,7 @@ import { findExecutionSpecByIdentity } from "@/modules/execution-contract/store"
 import { getPreparedChange } from "@/modules/execution/store";
 import { getLatestSuccessfulSnapshot } from "@/modules/repository-intelligence/store";
 import { classifyReview, type ReviewClassificationResult } from "./classification";
+import { resolveValidationProfile } from "@/modules/validation/profile";
 import { isRenderImpactCandidate } from "./route-segment";
 
 /**
@@ -110,6 +111,14 @@ export type ReviewClassificationInput = {
    * is exactly that caller.
    */
   requirement?: ExecutionSurfaceRequirement | null;
+  /**
+   * Where the application lives, or absent to resolve it.
+   *
+   * A project-level fact, so a caller rendering many cards can resolve it once
+   * — though `getLatestSuccessfulSnapshot` is request-cached, which makes the
+   * lookup free either way.
+   */
+  workspaceRoot?: string;
 };
 
 /** The two fields of a prepared change this needs, and nothing more. */
@@ -131,15 +140,18 @@ export async function classifyReviewForPreparedChange(
     }));
   if (!prepared) return null;
 
-  const [surface, requirement] = await Promise.all([
+  const [surface, requirement, workspaceRoot] = await Promise.all([
     input.surface !== undefined ? Promise.resolve(input.surface) : loadSurface(input),
     input.requirement !== undefined
       ? Promise.resolve(input.requirement)
       : loadRequirement(input, prepared.operationRunId),
+    input.workspaceRoot !== undefined
+      ? Promise.resolve(input.workspaceRoot)
+      : loadWorkspaceRoot(input),
   ]);
 
   const changedPaths = prepared.files.map((file) => file.path);
-  const first = classifyReview({ changedPaths, surface, requirement });
+  const first = classifyReview({ changedPaths, surface, requirement, workspaceRoot });
 
   /*
    * Two passes over a pure function, rather than threading the proof into the
@@ -148,10 +160,15 @@ export async function classifyReviewForPreparedChange(
    * path rule *already* called visual, so the second answer can only be a
    * subset of the first.
    */
-  const provenNonRendering = await loadProvenNonRendering(input, prepared, first.visualPaths);
+  const provenNonRendering = await loadProvenNonRendering(
+    input,
+    prepared,
+    first.visualPaths,
+    workspaceRoot,
+  );
   if (provenNonRendering.length === 0) return first;
 
-  return classifyReview({ changedPaths, surface, requirement, provenNonRendering });
+  return classifyReview({ changedPaths, surface, requirement, workspaceRoot, provenNonRendering });
 }
 
 /**
@@ -166,6 +183,7 @@ async function loadProvenNonRendering(
   input: ReviewClassificationInput,
   prepared: { baseSha: string; commitSha: string | null },
   visualPaths: readonly string[],
+  workspaceRoot: string,
 ): Promise<readonly string[]> {
   if (!input.reader || prepared.commitSha === null) return [];
 
@@ -177,7 +195,7 @@ async function loadProvenNonRendering(
    * eagerly loading a large package on a rendered page cost this product once
    * already.
    */
-  const candidates = visualPaths.filter(isRenderImpactCandidate);
+  const candidates = visualPaths.filter((path) => isRenderImpactCandidate(path, workspaceRoot));
   if (candidates.length === 0) return [];
 
   try {
@@ -217,9 +235,36 @@ async function loadProvenNonRendering(
  * depend on which side a route falls on — both are visual. Loading a second
  * snapshot to refine a distinction nobody reads would be work for its own sake.
  */
-export async function loadSurface(
-  input: { supabase: SupabaseClient; projectId: string },
-): Promise<ResolvedExecutionSurface | null> {
+/**
+ * Where this project's application lives, for reading a changed path against.
+ *
+ * From the same snapshot and the same resolver validation uses, never a second
+ * detection of the same facts. `getLatestSuccessfulSnapshot` is request-cached,
+ * so a list rendering twenty cards pays for one read.
+ *
+ * `.` on any failure, which is what every change classified before a repository
+ * could hold its application anywhere — the answer that changes nothing rather
+ * than one that quietly reclassifies a screen.
+ */
+export async function loadWorkspaceRoot(input: {
+  supabase: SupabaseClient;
+  projectId: string;
+}): Promise<string> {
+  try {
+    const snapshot = await getLatestSuccessfulSnapshot(input.supabase, input.projectId);
+    if (!snapshot?.result) return ".";
+
+    const resolution = resolveValidationProfile(snapshot.result);
+    return resolution.supported ? resolution.workspaceRoot : ".";
+  } catch {
+    return ".";
+  }
+}
+
+export async function loadSurface(input: {
+  supabase: SupabaseClient;
+  projectId: string;
+}): Promise<ResolvedExecutionSurface | null> {
   try {
     const snapshot = await getLatestSuccessfulSnapshot(input.supabase, input.projectId);
     if (!snapshot?.result) return null;

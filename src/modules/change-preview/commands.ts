@@ -55,29 +55,15 @@ import { PREVIEW_BUDGETS } from "./budgets";
  *    sooner, and `modules/validation` remains the only thing that decides
  *    whether the change is sound.
  *
+ * Every argument above now lives in `dev-servers.ts`, one row per framework,
+ * and every sentence in this docblock applies to each of them: the table grew,
+ * the discipline did not.
+ *
  * The binary is the one the install put in `node_modules/.bin`. It is
  * repository-controlled code, and that is unavoidable and fine — running the
  * customer's application *is* the point — inside a microVM with no egress and
  * no credentials. What matters is that the *instruction* is deterministic.
  */
-
-/** Where the install put the framework binary. */
-const NEXT_BINARY = "node_modules/.bin/next";
-
-/**
- * The development server, bound so the sandbox's exposed port can reach it.
- *
- * `-H 0.0.0.0` is load-bearing. Next.js binds all interfaces by default today,
- * but a preview that silently became loopback-only on a future default would
- * fail its health check with no explanation — so the binding is stated rather
- * than inherited.
- */
-export function previewServerCommand(): SandboxCommand {
-  return {
-    command: NEXT_BINARY,
-    args: ["dev", "-H", "0.0.0.0", "-p", String(PREVIEW_BUDGETS.port)],
-  };
-}
 
 /**
  * One bounded HTTP probe of the server's root (§17).

@@ -57,7 +57,8 @@ export const OPERATION_FAILURE_MESSAGES: Record<OperationFailureCode, string> = 
   audit_stale: "Your business audit is older than the evidence Vibe now has. Update it first.",
   stale_audit: "Your business audit is older than the evidence Vibe now has. Update it first.",
 
-  audit_input_budget_exceeded: "There is too much evidence to analyze in one audit. This is a bug — please report it.",
+  audit_input_budget_exceeded:
+    "There is too much evidence to analyze in one audit. This is a bug — please report it.",
   opportunity_input_budget_exceeded:
     "There is too much evidence to prioritize in one pass. This is a bug — please report it.",
   understanding_input_budget_exceeded:
@@ -65,7 +66,8 @@ export const OPERATION_FAILURE_MESSAGES: Record<OperationFailureCode, string> = 
   // Reached only when nothing at all could be produced. A model failure alone
   // never surfaces here: it leaves a deterministic profile and a note on the
   // screen instead (CORE-1 §43).
-  understanding_failed: "Vibe could not finish getting to know your product. Try again in a moment.",
+  understanding_failed:
+    "Vibe could not finish getting to know your product. Try again in a moment.",
   // Shared by every AI operation — the audit, next moves and product
   // understanding all reach it. It used to read "This could not be prepared",
   // which is Change Preparation's vocabulary and simply wrong on the other
@@ -79,12 +81,14 @@ export const OPERATION_FAILURE_MESSAGES: Record<OperationFailureCode, string> = 
     "Vibe could not start this, so nothing ran and nothing was charged. Try again in a moment.",
   provider_rate_limited: "The AI provider is rate limiting requests. Try again in a few minutes.",
   provider_auth_error: "Vibe Business is not correctly configured to reach the AI provider.",
-  provider_billing_error: "The AI provider account has no available usage credit or has a billing issue.",
+  provider_billing_error:
+    "The AI provider account has no available usage credit or has a billing issue.",
   provider_timeout: "This took too long to complete. Try again.",
   provider_unavailable: "The AI provider could not be reached. Try again in a moment.",
   provider_overloaded: "The AI provider is overloaded right now. Try again in a few minutes.",
   provider_refusal: "The AI provider declined to analyze this input. Nothing was saved.",
-  provider_request_rejected: "The AI provider rejected the request. The integration needs adjustment.",
+  provider_request_rejected:
+    "The AI provider rejected the request. The integration needs adjustment.",
   structured_output_empty: "The AI provider returned no usable output.",
   structured_output_json_invalid: "The AI provider returned an invalid format.",
   structured_output_schema_invalid: "The response did not pass Vibe's validation.",
@@ -110,20 +114,24 @@ export const OPERATION_FAILURE_MESSAGES: Record<OperationFailureCode, string> = 
   // Change preparation (Sprint 9B §21). Each says what happened and, where it
   // is true, what the user can do about it.
   stale_opportunity: "This opportunity is no longer current. Refresh your opportunities first.",
-  stale_repository_intelligence: "Vibe's view of your code is out of date. Refresh repository intelligence first.",
+  stale_repository_intelligence:
+    "Vibe's view of your code is out of date. Refresh repository intelligence first.",
   repository_changed:
     "Your code changed since Vibe analyzed it. Refresh product intelligence before preparing this change.",
   premise_no_longer_true: "This opportunity is no longer current — your product already has this.",
   unsupported_framework: "Vibe can't prepare this kind of change for your framework yet.",
-  unsupported_repository_layout: "Vibe can't safely determine where this change belongs in your repository.",
-  missing_required_context: "Vibe needs a verified production URL before it can prepare this change.",
+  unsupported_repository_layout:
+    "Vibe can't safely determine where this change belongs in your repository.",
+  missing_required_context:
+    "Vibe needs a verified production URL before it can prepare this change.",
   github_write_permission_required:
     "Vibe needs permission to create an isolated branch before it can prepare this change.",
   conflicting_files_exist: "Those files already exist in your repository, so Vibe left them alone.",
   unsupported_opportunity: "Vibe can't prepare this opportunity automatically yet.",
   execution_not_available: "Preparing changes isn't available for this project yet.",
   branch_conflict: "Vibe could not safely create the change branch.",
-  write_verification_failed: "Vibe prepared the change but could not verify it, so nothing was recorded.",
+  write_verification_failed:
+    "Vibe prepared the change but could not verify it, so nothing was recorded.",
   github_unavailable: "GitHub could not be reached. Try again in a moment.",
   change_preparation_failed: "Vibe could not prepare this change.",
 
@@ -140,8 +148,10 @@ export const OPERATION_FAILURE_MESSAGES: Record<OperationFailureCode, string> = 
   prepared_change_not_ready: "This change is not ready to validate.",
   // Historical: rows recorded this when a monorepo was refused outright,
   // before Vibe asked which app to work on instead.
-  ambiguous_workspace: "Vibe could not tell which app to validate. Workspaces and monorepos are not supported yet.",
-  lockfile_missing: "No lockfile was found, so dependencies cannot be installed exactly as committed.",
+  ambiguous_workspace:
+    "Vibe could not tell which app to validate. Workspaces and monorepos are not supported yet.",
+  lockfile_missing:
+    "No lockfile was found, so dependencies cannot be installed exactly as committed.",
   not_a_node_project:
     "Vibe checks a change by running the project's own build, and this project has no package.json — so there is nothing to check a change against, and Vibe will not make one.",
   no_build_script:
@@ -150,8 +160,10 @@ export const OPERATION_FAILURE_MESSAGES: Record<OperationFailureCode, string> = 
     "This repository holds more than one application. Tell Vibe which one to work on.",
   repository_analysis_outdated:
     "Vibe's read of this repository predates this check. Re-analyse it and Vibe will know what it can do here.",
-  repository_connection_invalid: "Vibe could not reach this repository. Check the GitHub connection.",
-  source_integrity_failed: "The code in the isolated environment did not match the prepared change, so nothing was run.",
+  repository_connection_invalid:
+    "Vibe could not reach this repository. Check the GitHub connection.",
+  source_integrity_failed:
+    "The code in the isolated environment did not match the prepared change, so nothing was run.",
   sandbox_unavailable: "The isolated environment could not be started. Nothing was run.",
   sandbox_timeout: "Validation ran out of time and was stopped.",
   // Says what was lost, not just that something was. "The environment
@@ -160,19 +172,27 @@ export const OPERATION_FAILURE_MESSAGES: Record<OperationFailureCode, string> = 
   // machine would be answering a different question.
   sandbox_lost:
     "The isolated environment stopped being available part-way through, taking its installed dependencies with it. Vibe stopped rather than finishing on a different machine. Validating again starts a fresh environment.",
-  credential_scrub_failed: "Vibe could not confirm the environment was safe to run code in, so it stopped.",
+  credential_scrub_failed:
+    "Vibe could not confirm the environment was safe to run code in, so it stopped.",
   validation_checks_failed: "Validation failed. See which step failed below.",
-  build_failed_missing_environment: "The build needs environment variables that Vibe does not have. Validation cannot supply them yet.",
+  build_failed_missing_environment:
+    "The build needs environment variables that Vibe does not have. Validation cannot supply them yet.",
   validation_run_failed: "Validation could not be completed.",
 
   // Temporary preview (Sprint 10B-2 §26). Every one of these says what happened
   // and, where it is true, what the user can do about it. None of them implies
   // a preview means the change is approved, correct or safe.
-  preview_change_not_prepared: "There is nothing to preview yet — Vibe has not written a commit for this change.",
-  preview_not_supported: "Vibe cannot preview this project yet. Previews currently support single-app Next.js repositories.",
+  preview_change_not_prepared:
+    "There is nothing to preview yet — Vibe has not written a commit for this change.",
+  // Says what still works, because it is most of it. A preview is the layer
+  // that shows a change; checking it and merging it are separate, and a founder
+  // told only "cannot preview" would reasonably assume they had lost both.
+  preview_not_supported:
+    "Vibe does not know how to start a development server for this project's framework yet, so there is nothing to look at. Checking a change and merging it still work.",
   // The confirmation is a server-side requirement, not a UI courtesy, so this
   // is reachable and has to read as a sentence rather than an internal state.
-  preview_exposure_not_confirmed: "A preview publishes an unlisted public URL, so Vibe needs you to confirm before starting one.",
+  preview_exposure_not_confirmed:
+    "A preview publishes an unlisted public URL, so Vibe needs you to confirm before starting one.",
   // Says what was wrong with the code Vibe fetched, not that the user did
   // something. A preview of the wrong bytes on a public URL is worse than none.
   preview_source_unavailable:
@@ -190,7 +210,8 @@ export const OPERATION_FAILURE_MESSAGES: Record<OperationFailureCode, string> = 
   preview_start_failed: "The preview server could not be started.",
   preview_process_exited: "The application started and then stopped. See the output below.",
   preview_health_check_failed: "The preview started but never answered, so Vibe stopped it.",
-  preview_provider_unavailable: "The preview environment could not be reached. Try again in a moment.",
+  preview_provider_unavailable:
+    "The preview environment could not be reached. Try again in a moment.",
   preview_cleanup_failed: "Vibe could not confirm the preview environment was fully cleaned up.",
   preview_failed: "The preview could not be started.",
 
@@ -199,11 +220,12 @@ export const OPERATION_FAILURE_MESSAGES: Record<OperationFailureCode, string> = 
   review_preview_required:
     "Start a temporary preview first — a comparison photographs the running preview.",
   review_before_unavailable:
-    "Vibe needs a verified production URL before it can capture a \"before\" image.",
+    'Vibe needs a verified production URL before it can capture a "before" image.',
   review_not_supported: "This change cannot be compared visually yet.",
   review_auth_required_not_supported:
     "This page needs a sign-in. Vibe only compares public pages for now, and it will not move your login between environments.",
-  review_browser_unavailable: "The browser environment could not be reached. Try again in a moment.",
+  review_browser_unavailable:
+    "The browser environment could not be reached. Try again in a moment.",
   review_before_capture_failed: "Vibe could not capture your current live page.",
   review_after_capture_failed: "Vibe could not capture the preview page.",
   review_storage_failed: "The comparison images could not be saved.",

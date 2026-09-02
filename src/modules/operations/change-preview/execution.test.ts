@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { PREVIEW_BUDGETS } from "@/modules/change-preview/budgets";
 import {
-  CURRENT_PREVIEW_PROFILE,
 } from "@/modules/change-preview/schema";
 import { clonedSandboxFiles } from "@/modules/change-preview/test-support";
 import { FakeDatabase, fakeSupabase } from "@/modules/operations/test-support";
@@ -98,7 +97,7 @@ function seed(options: { sessionOverrides?: Record<string, unknown> } = {}) {
     prepared_change_id: PREPARED,
     prepared_commit_sha: FIXTURE_COMMIT_SHA,
     operation_run_id: OPERATION,
-    preview_profile: CURRENT_PREVIEW_PROFILE,
+    preview_profile: "next_dev_v1",
     preview_identity: "p".repeat(64),
     status: "starting",
     stage: "preflight",

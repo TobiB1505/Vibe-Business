@@ -205,6 +205,8 @@ async function resolveContext(
       packageManager: profile.packageManager,
       sourceRoot: repository.sourceRoot,
       workspaceRoot: profile.workspaceRoot,
+      // The chosen application's own frameworks decide which server starts.
+      frameworks: profile.frameworks,
     },
   };
 }

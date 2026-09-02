@@ -3,11 +3,7 @@ import { FakeDatabase, FakeExecutor, fakeSupabase } from "@/modules/operations/t
 import { fakeSandboxProvider } from "@/modules/validation/test-support";
 import { PREVIEW_BUDGETS } from "./budgets";
 import { computePreviewIdentity } from "./identity";
-import {
-  CURRENT_PREVIEW_PROFILE,
-  PREVIEW_POLICY_VERSION,
-  previewProfileVersionFor,
-} from "./schema";
+import { PREVIEW_POLICY_VERSION, previewProfileVersionFor } from "./schema";
 import { getPreviewCard, getPreviewStatus, startChangePreview, stopChangePreview } from "./service";
 import { FIXTURE_COMMIT_SHA } from "./test-support";
 
@@ -44,8 +40,8 @@ function identityFor(overrides: { commitSha?: string; policyVersion?: string } =
     projectId: PROJECT,
     preparedChangeId: PREPARED,
     preparedCommitSha: overrides.commitSha ?? FIXTURE_COMMIT_SHA,
-    previewProfile: CURRENT_PREVIEW_PROFILE,
-    previewProfileVersion: previewProfileVersionFor(CURRENT_PREVIEW_PROFILE),
+    previewProfile: "next_dev_v1",
+    previewProfileVersion: previewProfileVersionFor("next_dev_v1"),
     previewPolicyVersion: overrides.policyVersion ?? PREVIEW_POLICY_VERSION,
   });
 }
@@ -227,7 +223,7 @@ describe("authority", () => {
     // `StartPreviewParams` is the real guarantee — these assertions record what
     // that type produces, so a widened parameter surface shows up here.
     expect(session.port).toBe(PREVIEW_BUDGETS.port);
-    expect(session.preview_profile).toBe(CURRENT_PREVIEW_PROFILE);
+    expect(session.preview_profile).toBe("next_dev_v1");
     expect(session.preview_policy_version).toBe(PREVIEW_POLICY_VERSION);
     expect(session.provider).toBe("vercel_sandbox");
     expect(session.prepared_commit_sha).toBe(FIXTURE_COMMIT_SHA);
@@ -299,7 +295,7 @@ describe("idempotency", () => {
       validation_run_id: VALIDATION,
       operation_run_id: "operation_old",
       prepared_commit_sha: FIXTURE_COMMIT_SHA,
-      preview_profile: CURRENT_PREVIEW_PROFILE,
+      preview_profile: "next_dev_v1",
       preview_identity: identityFor(),
       status: "running",
       port: PREVIEW_BUDGETS.port,
@@ -323,7 +319,7 @@ describe("idempotency", () => {
       validation_run_id: VALIDATION,
       operation_run_id: "operation_old",
       prepared_commit_sha: FIXTURE_COMMIT_SHA,
-      preview_profile: CURRENT_PREVIEW_PROFILE,
+      preview_profile: "next_dev_v1",
       preview_identity: identityFor(),
       status: "running",
       port: PREVIEW_BUDGETS.port,
@@ -345,7 +341,7 @@ describe("idempotency", () => {
       validation_run_id: VALIDATION,
       operation_run_id: "operation_old",
       prepared_commit_sha: FIXTURE_COMMIT_SHA,
-      preview_profile: CURRENT_PREVIEW_PROFILE,
+      preview_profile: "next_dev_v1",
       preview_identity: identityFor({ policyVersion: "preview-policy-v0" }),
       status: "running",
       port: PREVIEW_BUDGETS.port,
@@ -396,7 +392,7 @@ describe("reading a preview", () => {
       validation_run_id: VALIDATION,
       operation_run_id: "operation_1",
       prepared_commit_sha: FIXTURE_COMMIT_SHA,
-      preview_profile: CURRENT_PREVIEW_PROFILE,
+      preview_profile: "next_dev_v1",
       preview_identity: identityFor(),
       status: "running",
       stage: "completed",
@@ -538,7 +534,7 @@ describe("stopping a preview", () => {
       validation_run_id: VALIDATION,
       operation_run_id: "operation_1",
       prepared_commit_sha: FIXTURE_COMMIT_SHA,
-      preview_profile: CURRENT_PREVIEW_PROFILE,
+      preview_profile: "next_dev_v1",
       preview_identity: identityFor(),
       status: "running",
       stage: "completed",
@@ -676,7 +672,7 @@ describe("the preview card, and what reading it must never cost", () => {
       validation_run_id: VALIDATION,
       operation_run_id: "operation_old",
       prepared_commit_sha: FIXTURE_COMMIT_SHA,
-      preview_profile: CURRENT_PREVIEW_PROFILE,
+      preview_profile: "next_dev_v1",
       preview_identity: identityFor(),
       status: "failed",
       failure_code: "preview_health_check_failed",
@@ -708,7 +704,7 @@ describe("the preview card, and what reading it must never cost", () => {
       validation_run_id: VALIDATION,
       operation_run_id: "operation_old",
       prepared_commit_sha: FIXTURE_COMMIT_SHA,
-      preview_profile: CURRENT_PREVIEW_PROFILE,
+      preview_profile: "next_dev_v1",
       preview_identity: identityFor(),
       status: "running",
       stage: "completed",
@@ -732,7 +728,7 @@ describe("the preview card, and what reading it must never cost", () => {
       validation_run_id: VALIDATION,
       operation_run_id: "operation_other",
       artifact_snapshot_id: "snap_someone_else",
-      preview_profile: CURRENT_PREVIEW_PROFILE,
+      preview_profile: "next_dev_v1",
       preview_identity: identityFor(),
       status: "running",
       stage: "completed",

@@ -9,7 +9,6 @@ import {
   PREVIEW_PROFILES,
   PREVIEW_STATUSES,
   isPreviewExpired,
-  CURRENT_PREVIEW_PROFILE,
   previewProfileFor,
   previewProfileVersionFor,
 } from "./schema";
@@ -157,22 +156,19 @@ describe("preview identity", () => {
 });
 
 describe("preview policy", () => {
-  it("supports a Next.js application and nothing else", () => {
-    expect(previewProfileFor("nextjs_node_v1", ["nextjs"])).toBe(CURRENT_PREVIEW_PROFILE);
-    expect(previewProfileFor("node_build_v1", ["nextjs", "react"])).toBe(CURRENT_PREVIEW_PROFILE);
-    // Refusing is the feature: a guessed start command produces a public URL
-    // nobody should trust (§3).
-    expect(
-      previewProfileFor("some_future_framework_v1" as Parameters<typeof previewProfileFor>[0], [
-        "nextjs",
-      ]),
-    ).toBeNull();
+  it("resolves the server from the application, not from how it was checked", () => {
+    // Both validation profiles admit the same application, and the same server
+    // starts it. What decides is the framework — which is the whole change: a
+    // validation profile says how a change is *checked*, and every framework is
+    // checked by the same locked install and the repository's own scripts.
+    expect(previewProfileFor("nextjs_node_v1", ["nextjs"])).toBe("next_dev_v1");
+    expect(previewProfileFor("node_build_v1", ["nextjs", "react"])).toBe("next_dev_v1");
   });
 
-  it("refuses an application the one server command cannot start", () => {
-    // The contract profile admits any Node repository with a build script; the
-    // only start command that exists is `next dev`. A Vite app is validated and
-    // merged, and has nothing to look at until the dev-server table lands.
+  it("refuses an application no server command can start", () => {
+    // Refusing is the feature: a guessed start command produces a public URL
+    // nobody should trust (§3). Vite is validated and merged like anything
+    // else — it simply has nothing to look at until its row is proven.
     expect(previewProfileFor("node_build_v1", ["vite", "react"])).toBeNull();
     expect(previewProfileFor("node_build_v1", [])).toBeNull();
   });

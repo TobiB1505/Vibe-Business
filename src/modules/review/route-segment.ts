@@ -32,6 +32,16 @@
  */
 const ROUTE_SEGMENT_PATTERN = /^(?:src\/)?app\/(?!api\/)(?:.*\/)?(?:page|layout)\.tsx$/i;
 
-export function isRenderImpactCandidate(path: string): boolean {
-  return ROUTE_SEGMENT_PATTERN.test(path);
+/**
+ * @param workspaceRoot where the application lives, `"."` for the repository
+ * root. The pattern is anchored at the application: `frontend/src/app/page.tsx`
+ * is a route segment of an application in `frontend/`, and matches nothing at
+ * all against a root-anchored pattern. Defaulted so every existing caller keeps
+ * the answer it had.
+ */
+export function isRenderImpactCandidate(path: string, workspaceRoot = "."): boolean {
+  if (workspaceRoot === "." || workspaceRoot === "") return ROUTE_SEGMENT_PATTERN.test(path);
+
+  const prefix = `${workspaceRoot}/`;
+  return path.startsWith(prefix) && ROUTE_SEGMENT_PATTERN.test(path.slice(prefix.length));
 }
