@@ -97,6 +97,21 @@ describe("the landing page sends people the right way", () => {
     if (firstSignIn > -1) expect(firstCta).toBeLessThan(firstSignIn);
   });
 
+  /**
+   * A paid plan's button says where it was going.
+   *
+   * Every plan card pointed at `/signup` and stopped there, so a visitor who
+   * had just chosen Builder landed signed in with no mention of paying and no
+   * route to it — the one real gap on a pricing section that was otherwise
+   * complete. Asserted here rather than in a component test because it is a
+   * claim about the page a stranger sees.
+   */
+  it("carries a chosen paid plan through signup to the billing surface", () => {
+    expect(LANDING).toContain('/signup?next=${encodeURIComponent("/app/billing")}');
+    // The free plan has nothing to pay for, so it keeps the plain destination.
+    expect(LANDING).toContain('plan.key === "free"');
+  });
+
   it("still offers signing in, on every public page", () => {
     // In the shell rather than in the hero since UI-19. An existing customer
     // must always find the way back in; where it sits is a design decision,

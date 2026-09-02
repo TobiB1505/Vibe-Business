@@ -13,8 +13,10 @@ import { buttonClasses } from "@/components/ui/button";
  * The nav carries the two ways in. The footer carries the legal surfaces, which
  * exist as real routes as of UI-S1 — a product that asks for access to
  * someone's repository has to say what it does with it somewhere reachable.
- * Nothing here links to a route that does not exist; pricing and the trust page
- * are still mockup-only and still absent.
+ * Nothing here links to a route that does not exist. The trust page is still
+ * absent. Pricing is a section of the landing page rather than a route, which
+ * is why this links `/#pricing` — and why Vibe's own live analysis reported no
+ * pricing surface on a page that was showing three prices.
  */
 export function MarketingShell({ children }: { children: ReactNode }) {
   return (
