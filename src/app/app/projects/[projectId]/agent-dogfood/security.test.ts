@@ -78,12 +78,29 @@ describe("no brittle identity check (§26)", () => {
 });
 
 describe("the client cannot supply its own authority (§7, §8)", () => {
-  it("gives startAgentRunAction no parameter beyond project and step identity", () => {
+  it("gives startAgentRunAction identity plus one boolean of intent, and nothing else", () => {
     const source = read("[stepKey]/actions.ts");
-    const signature = source.match(/export async function startAgentRunAction\(([^)]*)\)/)?.[1] ?? "";
+    /* Comments stripped: this guard is about the parameters a client can fill,
+       and prose explaining why is not one of them. */
+    const signature = (
+      source.match(/export async function startAgentRunAction\(([^)]*)\)/)?.[1] ?? ""
+    ).replace(/\/\*[\s\S]*?\*\//g, "");
 
     expect(signature).toContain("projectId: string");
     expect(signature).toContain("stepKey: string");
+
+    /*
+     * `chain: boolean` is intent, not authority, and the difference is the
+     * whole point of the type. A boolean says "I pressed the other button"; the
+     * server then derives which steps that means from the stored plan, inside
+     * the same fresh preflight. A `chainStepKeys: string[]` would be the client
+     * deciding what gets built and charged for — so the shape is asserted here
+     * rather than left to review.
+     */
+    expect(signature).toContain("chain: boolean");
+    expect(signature).not.toMatch(/chain\s*:\s*(readonly\s*)?string\[\]/);
+    expect(signature).not.toContain("steps");
+
     // No client-suppliable mode, risk, repository, SHA, model, policy or budget.
     for (const forbidden of ["mode", "risk", "repository", "baseSha", "model", "policy", "budget", "spec"]) {
       expect(signature.toLowerCase()).not.toContain(forbidden.toLowerCase());

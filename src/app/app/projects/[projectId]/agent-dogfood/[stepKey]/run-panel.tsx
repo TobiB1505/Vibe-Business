@@ -23,7 +23,9 @@ const initialState: StartAgentRunState = null;
  * check makes the rare race harmless even so.
  */
 export function RunPanel({ projectId, stepKey }: { projectId: string; stepKey: string }) {
-  const action = startAgentRunAction.bind(null, projectId, stepKey);
+  // The dogfood panel starts one step. Chains are offered on the Agent
+  // workspace, which is the screen a founder actually uses.
+  const action = startAgentRunAction.bind(null, projectId, stepKey, false);
   const [state, formAction, pending] = useActionState(action, initialState);
 
   return (

@@ -148,7 +148,7 @@ export default async function ProjectMovesPage({
    * crawls no site, so this classifies a whole plan and spends nothing.
    */
   const planSteps = actionPlanView?.plan.steps ?? [];
-  const stepResolutions =
+  const stepRoutes =
     actionPlanView !== null
       ? await resolvePlanExecutionRoutes(supabase, {
           projectId,
@@ -158,7 +158,8 @@ export default async function ProjectMovesPage({
             steps: planSteps,
           } as Parameters<typeof resolvePlanExecutionRoutes>[1]["plan"],
         })
-      : [];
+      : null;
+  const stepResolutions = stepRoutes?.resolutions ?? [];
 
   const responsibilityByStepKey: Record<string, StepResponsibility> = Object.fromEntries(
     planSteps.map((step) => [

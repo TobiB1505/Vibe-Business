@@ -35,6 +35,7 @@ compiled policy with a default-deny predicate is a fact.
 | --- | --- |
 | `schema.ts` | modes, risk classes, stop reasons, interrupt types, activity events, versions |
 | `resolver.ts` | *what kind of route does this step need, and may it start now?* |
+| `chain.ts` | *which of the following steps could this same run also deliver?* — forwards, structural, no prose |
 | `risk.ts` | *how much could go wrong?* — from structured facts, never prose |
 | `dependencies.ts` | *does this prerequisite block, or does the run absorb it?* |
 | `policy.ts` | *what may an execution do?* — default deny, globally forbidden set |
@@ -55,10 +56,18 @@ compiled policy with a default-deny predicate is a fact.
 **It does not treat every Planner prerequisite as a runtime wall.** A plan
 describes what work is needed; it does not define one execution boundary per
 step. `dependencies.ts` separates prerequisites that must already *exist* — a
-founder decision, real-world work, an external party, a product change — from
-Vibe's own technical preparation, which an agentic run performs itself and
-records as absorbed. One hard prerequisite still blocks everything, and nothing
-is ever marked complete on the founder's behalf.
+founder decision, real-world work, an external party — from Vibe's own
+technical preparation, which an agentic run performs itself and records as
+absorbed. One hard prerequisite still blocks everything, and nothing is ever
+marked complete on the founder's behalf.
+
+An earlier build step used to be in that first list. It still blocks a run that
+does not deliver it — a product change is never absorbable preparation — but
+since [ADR 0077](../../../docs/decisions/0077-build-chains.md) a run may carry
+its contiguous successors as further *deliveries*. `chain.ts` answers that,
+forwards, and it is deliberately a separate walk: absorption is all-or-nothing
+and never completes the Planner's step, while a chain may be shortened and must
+complete every member.
 
 
 **It does not read the Planner's `executionSupport`.** Not as a hint, not as a

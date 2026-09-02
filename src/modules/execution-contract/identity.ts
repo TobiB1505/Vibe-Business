@@ -68,14 +68,28 @@ export function computeExecutionSpecIdentity(params: {
    * the other.
    */
   absorbedPreparationKeys: readonly string[];
+  /**
+   * Every step this run delivers, head first (`build-chain-v1`).
+   *
+   * Kept apart from `absorbedPreparationKeys` on purpose: preparation is
+   * performed and never completed, a chained delivery is delivered and
+   * completed, and a field carrying both meanings would lose one of them.
+   *
+   * Omitted, or a list of one, for a run that delivers a single step — which is
+   * every run there was before build chains, and every run whose founder
+   * declined the offer.
+   */
+  chainStepKeys?: readonly string[];
   specSchemaVersion: string;
   resolverVersion: string;
   policyVersion: string;
   riskPolicyVersion: string;
+  /** The rules the chain above was resolved under (rule 65). */
+  chainPolicyVersion?: string;
 }): string {
   // Fixed order rather than object key order, so a refactor cannot silently
   // rehash every stored spec and orphan the rows it was meant to match.
-  const canonical = JSON.stringify([
+  const base = [
     params.projectId,
     params.actionPlanId,
     params.stepKey,
@@ -92,7 +106,29 @@ export function computeExecutionSpecIdentity(params: {
     params.resolverVersion,
     params.policyVersion,
     params.riskPolicyVersion,
-  ]);
+  ];
+
+  /*
+   * The chain enters only when there is one, and that is not tidiness.
+   *
+   * This identity is hashed into `computeAgentRunIdentity`, and
+   * `startAgentExecution` returns a *succeeded* run by that identity as
+   * `kind: "reused"`. Appending an empty list to every canonical form would
+   * give every already-stored spec a different identity than the same
+   * resolution produces today — so a re-resolution of already-delivered work
+   * would stop finding the run that delivered it and take a second
+   * reservation. The same reasoning `coding-agent/identity.ts` records for the
+   * deletion set, with the same consequence.
+   *
+   * A single-member chain is the same case: it *is* the head, so it says
+   * nothing the `stepKey` above has not already said.
+   */
+  const chain = params.chainStepKeys ?? [];
+  const canonical = JSON.stringify(
+    chain.length > 1
+      ? [...base, [params.chainPolicyVersion ?? null, chain]]
+      : base,
+  );
 
   return createHash("sha256").update(canonical).digest("hex");
 }
