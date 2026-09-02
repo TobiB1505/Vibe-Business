@@ -64,8 +64,26 @@ describe("the merge panel offers merging and nothing more (§15, §25)", () => {
   });
 
   it("never renders a merge as a deployment (§25)", () => {
-    expect(src).toContain("Not deployed by Vibe");
-    expect(src).toMatch(/no deployment has been\s*\n?\s*verified/i);
+    /*
+     * The claim, not the sentence (UX audit F-4).
+     *
+     * This used to pin the exact words "Not deployed by Vibe" and "no
+     * deployment has been verified". The second borrowed "verified" from the
+     * outcome check, which verifies something else entirely, so a founder read
+     * one word about two objects on one screen. The copy changed; what must
+     * not change is that this panel says Vibe does not deploy, and says what
+     * the merge actually did.
+     */
+    expect(src).toMatch(/Vibe never deploys/i);
+    expect(src).toMatch(/moved your default branch/i);
+
+    // Rule 74's other half: moving a default branch can start the customer's
+    // own pipeline, and they have to be told before the click.
+    expect(src).toMatch(/builds and releases on its own/i);
+
+    // And it still must not borrow the outcome check's word.
+    const disclaimer = src.slice(src.indexOf("function NotDeployed()"));
+    expect(disclaimer.slice(0, disclaimer.indexOf("}"))).not.toMatch(/\bverified\b/i);
   });
 
   it("states the deployment boundary wherever a merge outcome is shown", () => {

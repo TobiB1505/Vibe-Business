@@ -177,8 +177,9 @@ function OutcomeLadder({
 function NotDeployed() {
   return (
     <p className="text-xs text-fg-muted">
-      This verifies the intended public product behavior. It does not measure business impact, and
-      Vibe has not verified a deployment.
+      This checks the intended public product behavior. It does not measure business impact, and
+      Vibe never deploys — whether a new build has reached your users is your host&apos;s answer,
+      not Vibe&apos;s.
     </p>
   );
 }
