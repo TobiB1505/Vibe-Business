@@ -23,23 +23,6 @@ function ArrowIcon({ direction = "right" }: { direction?: "right" | "up" | "down
   return <span aria-hidden="true">{glyph}</span>;
 }
 
-function BrainIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden="true"
-    >
-      <path d="M9.5 4.5A3.5 3.5 0 0 0 6 8v1a3 3 0 0 0-1 5.8V16a3.5 3.5 0 0 0 4.5 3.3V4.5ZM14.5 4.5A3.5 3.5 0 0 1 18 8v1a3 3 0 0 1 1 5.8V16a3.5 3.5 0 0 1-4.5 3.3V4.5ZM9.5 9H7.7M14.5 9h1.8M9.5 14H7M14.5 14H17" />
-    </svg>
-  );
-}
-
 function DetailInsightIcon({ kind }: { kind: "found" | "matter" | "connected" | "move" }) {
   return (
     <span
@@ -221,25 +204,6 @@ function RecentChanges({ view }: { view: BusinessBrainView }) {
   );
 }
 
-function ScoringContext({ view }: { view: BusinessBrainView }) {
-  return (
-    <section className="business-brain-side-card flex gap-4 p-5">
-      <span aria-hidden="true" className="border-mint/20 bg-mint/5 text-mint flex size-11 shrink-0 items-center justify-center rounded-full border">
-        <BrainIcon className="size-6" />
-      </span>
-      <div className="flex min-w-0 flex-col gap-2">
-        <h3 className="text-fg text-sm font-semibold">How we score your business</h3>
-        <p className="text-fg-muted text-xs leading-relaxed">
-          Vibe evaluates evidence from your codebase, website, product signals and your own inputs. Missing or inconclusive evidence stays unscored.
-        </p>
-        <p className="text-fg-meta text-xs">
-          {view.overall.scoredLenses} of {view.overall.eligibleLenses} scored areas · {view.signalCount} signals · {view.sourceCount} {view.sourceCount === 1 ? "source" : "sources"}
-        </p>
-      </div>
-    </section>
-  );
-}
-
 function DefaultPanel({
   view,
   movesHref,
@@ -288,7 +252,6 @@ function DefaultPanel({
         )}
       </section>
       <RecentChanges view={view} />
-      <ScoringContext view={view} />
     </motion.div>
   );
 }
@@ -319,11 +282,13 @@ function SelectedPanel({
   for (const item of node.problem?.evidence ?? []) {
     if (!evidence.some((existing) => existing.id === item.id)) evidence.push(item);
   }
-  const sourceSignals = Array.from(
-    evidence.reduce((counts, item) => {
-      counts.set(item.source, (counts.get(item.source) ?? 0) + 1);
-      return counts;
-    }, new Map<string, number>()),
+  const signalsBySource = Array.from(
+    evidence.reduce((groups, item) => {
+      const signals = groups.get(item.source) ?? [];
+      signals.push(item);
+      groups.set(item.source, signals);
+      return groups;
+    }, new Map<string, typeof evidence>()),
   );
   const stateLabel =
     node.health === "weak"
@@ -333,6 +298,22 @@ function SelectedPanel({
         : node.health === "adequate"
           ? "Adequate"
           : "Not assessed";
+  const scoreTone =
+    node.health === "weak"
+      ? "text-coral"
+      : node.health === "adequate"
+        ? "text-amber"
+        : node.health === "strong"
+          ? "text-mint"
+          : "text-fg-muted";
+  const scoreBar =
+    node.health === "weak"
+      ? "bg-coral"
+      : node.health === "adequate"
+        ? "bg-amber"
+        : node.health === "strong"
+          ? "bg-mint"
+          : "bg-fg-disabled";
 
   function onTabKeyDown(event: KeyboardEvent<HTMLButtonElement>, current: DetailTab) {
     if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
@@ -527,19 +508,53 @@ function SelectedPanel({
           )}
 
           {activeTab === "signals" && (
-            sourceSignals.length > 0 ? (
-              <div className="flex flex-col gap-3">
-                <p className="text-fg-muted text-sm leading-relaxed">Signals are grouped by their recorded source. Counts describe evidence coverage, not business performance.</p>
-                {sourceSignals.map(([source, count]) => (
-                  <div key={source} className="business-brain-insight-card flex items-center justify-between gap-4 p-4">
-                    <span className="text-fg-secondary text-sm">{source}</span>
-                    <span className="text-mint text-sm font-semibold tabular-nums">{count}</span>
+            <div className="flex flex-col gap-4">
+              <section className="business-brain-insight-card overflow-hidden p-5" aria-labelledby={`${tabId}-score-heading`}>
+                <div className="flex items-start justify-between gap-5">
+                  <div className="min-w-0">
+                    <span className="text-fg-meta text-[0.68rem] font-medium tracking-[0.1em] uppercase">Current lens score</span>
+                    <h3 id={`${tabId}-score-heading`} className="text-fg mt-1 text-base font-semibold">{node.label}</h3>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <HonestTabEmpty title="No signals available" body="This area has no evidence-grounded signals in the current audit." />
-            )
+                  <p className={cn("shrink-0 text-3xl leading-none font-semibold tracking-[-0.04em] tabular-nums", scoreTone)}>
+                    {node.score ?? "—"}<span className="text-fg-meta ml-1 text-xs font-normal tracking-normal">/100</span>
+                  </p>
+                </div>
+                <div className="bg-surface-1 mt-4 h-1.5 overflow-hidden rounded-full" aria-hidden="true">
+                  <span className={cn("block h-full rounded-full", scoreBar)} style={{ width: `${node.score ?? 0}%` }} />
+                </div>
+                <p className="text-fg-muted mt-4 text-xs leading-relaxed">
+                  Vibe judged the recorded signals below together at lens level. Individual signals do not carry invented point values.
+                </p>
+              </section>
+
+              {signalsBySource.length > 0 ? (
+                <section aria-labelledby={`${tabId}-signals-heading`}>
+                  <div className="mb-3 flex items-end justify-between gap-3">
+                    <div>
+                      <h3 id={`${tabId}-signals-heading`} className="text-fg text-sm font-semibold">Signals behind this score</h3>
+                      <p className="text-fg-muted mt-1 text-xs">{evidence.length} recorded across {signalsBySource.length} {signalsBySource.length === 1 ? "source" : "sources"}</p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-3">
+                    {signalsBySource.map(([source, signals]) => (
+                      <div key={source} className="business-brain-insight-card overflow-hidden">
+                        <div className="border-line-1 flex items-center justify-between gap-4 border-b px-4 py-3">
+                          <span className="text-fg-secondary text-xs font-medium">{source}</span>
+                          <span className="text-fg-meta text-xs tabular-nums">{signals.length}</span>
+                        </div>
+                        <ul className="divide-y divide-[var(--color-line-1)]">
+                          {signals.map((signal) => (
+                            <li key={signal.id} className="text-fg-secondary px-4 py-3 text-xs leading-relaxed">{signal.detail}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              ) : (
+                <HonestTabEmpty title="No signals available" body="This area has no evidence-grounded signals in the current audit, so it remains unscored." />
+              )}
+            </div>
           )}
 
           {activeTab === "history" && (
@@ -548,9 +563,6 @@ function SelectedPanel({
         </motion.div>
       </AnimatePresence>
 
-      <div className="border-line-1 border-t px-4 pb-4 sm:px-5 sm:pb-5">
-        <SelectedScoringDisclosure node={node} overallScore={view.overall.score} />
-      </div>
     </motion.section>
   );
 }
@@ -562,106 +574,6 @@ function HonestTabEmpty({ title, body }: { title: string; body: string }) {
       <h3 className="text-fg mt-4 text-base font-semibold">{title}</h3>
       <p className="text-fg-muted mt-2 max-w-[42ch] text-sm leading-relaxed">{body}</p>
     </div>
-  );
-}
-
-function SelectedScoringDisclosure({
-  node,
-  overallScore,
-}: {
-  node: BusinessBrainNode;
-  overallScore: number | null;
-}) {
-  const score = node.score;
-  const scoreTone =
-    node.health === "weak"
-      ? "text-coral"
-      : node.health === "adequate"
-        ? "text-amber"
-        : node.health === "strong"
-          ? "text-mint"
-          : "text-fg-muted";
-  const scoreBar =
-    node.health === "weak"
-      ? "bg-coral"
-      : node.health === "adequate"
-        ? "bg-amber"
-        : node.health === "strong"
-          ? "bg-mint"
-          : "bg-fg-disabled";
-  const overallTone =
-    overallScore === null
-      ? "text-fg-muted"
-      : overallScore >= 70
-        ? "text-mint"
-        : overallScore >= 50
-          ? "text-amber"
-          : "text-coral";
-  const overallBar =
-    overallScore === null
-      ? "bg-fg-disabled"
-      : overallScore >= 70
-        ? "bg-mint"
-        : overallScore >= 50
-          ? "bg-amber"
-          : "bg-coral";
-
-  return (
-    <details
-      className="group mt-4 rounded-xl border border-line-1 bg-surface-2/45"
-      data-testid="selected-scoring-context"
-    >
-      <summary className="flex min-h-14 cursor-pointer list-none items-center gap-3 px-4 py-3 focus-visible:ring-2 focus-visible:ring-mint">
-        <span
-          aria-hidden="true"
-          className="border-mint/20 bg-mint/[0.06] text-mint flex size-9 shrink-0 items-center justify-center rounded-full border"
-        >
-          <BrainIcon className="size-5" />
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="text-fg block text-sm font-semibold">How we scored this</span>
-          <span className="text-fg-meta mt-0.5 block text-xs">
-            Lens score {score ?? "—"} · Business Health {overallScore ?? "—"}
-          </span>
-        </span>
-        <span aria-hidden="true" className="text-fg-muted transition-transform group-open:rotate-180">⌄</span>
-      </summary>
-
-      <aside
-        aria-label={`How ${node.label} was scored`}
-        className="border-line-1 border-t px-4 py-4"
-      >
-        <dl className="grid gap-3 sm:grid-cols-2">
-          <div className="border-line-1 bg-surface-3 rounded-xl border p-4">
-            <dt className="text-fg-meta text-[0.68rem] font-medium tracking-[0.08em] uppercase">Lens score</dt>
-            <dd className="mt-2 flex items-end justify-between gap-3">
-              <span className={cn("text-3xl leading-none font-semibold tracking-[-0.04em] tabular-nums", scoreTone)}>
-                {score ?? "—"}<span className="text-fg-meta ml-1 text-xs font-normal tracking-normal">/100</span>
-              </span>
-              <span className="text-fg-secondary truncate text-xs">{node.label}</span>
-            </dd>
-            <div className="bg-surface-1 mt-3 h-1.5 overflow-hidden rounded-full" aria-hidden="true">
-              <span className={cn("block h-full rounded-full", scoreBar)} style={{ width: `${score ?? 0}%` }} />
-            </div>
-          </div>
-          <div className="border-line-1 bg-surface-3 rounded-xl border p-4">
-            <dt className="text-fg-meta text-[0.68rem] font-medium tracking-[0.08em] uppercase">Business Health</dt>
-            <dd className="mt-2 flex items-end justify-between gap-3">
-              <span className={cn("text-3xl leading-none font-semibold tracking-[-0.04em] tabular-nums", overallTone)}>
-                {overallScore ?? "—"}<span className="text-fg-meta ml-1 text-xs font-normal tracking-normal">/100</span>
-              </span>
-              <span className="text-fg-secondary text-xs">Overall</span>
-            </dd>
-            <div className="bg-surface-1 mt-3 h-1.5 overflow-hidden rounded-full" aria-hidden="true">
-              <span className={cn("block h-full rounded-full", overallBar)} style={{ width: `${overallScore ?? 0}%` }} />
-            </div>
-          </div>
-        </dl>
-        <p className="text-fg-muted mt-3 text-xs leading-relaxed">
-          The lens score is diagnostic and remains separate from Business Health. Missing or inconclusive evidence stays unscored and never becomes zero.
-        </p>
-      </aside>
-    </details>
   );
 }
 

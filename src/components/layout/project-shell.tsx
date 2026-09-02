@@ -321,25 +321,56 @@ export function WorkspaceSection({
   title,
   description,
   actions,
+  eyebrow,
+  variant = "default",
   children,
 }: {
   id: WorkspaceSectionId;
   title: string;
   description?: ReactNode;
   actions?: ReactNode;
+  eyebrow?: ReactNode;
+  variant?: "default" | "intelligence";
   children: ReactNode;
 }) {
+  const intelligence = variant === "intelligence";
+
   return (
     <section id={id} aria-labelledby={`${id}-heading`} className="scroll-mt-6">
-      <div className="flex flex-col gap-7">
-        <div className="flex flex-wrap items-end justify-between gap-5">
-          <div className="flex min-w-0 flex-col gap-2">
-            <h1 id={`${id}-heading`} className="text-fg text-headline sm:text-display font-bold">
+      <div className={cn("flex flex-col", intelligence ? "gap-4" : "gap-7")}>
+        <div
+          className={cn(
+            "flex flex-wrap items-end justify-between gap-5",
+            intelligence &&
+              "business-brain-stage relative items-center overflow-hidden rounded-[1.25rem] border border-line-2 px-5 py-5 sm:px-6 sm:py-6",
+          )}
+          data-workspace-header={variant}
+        >
+          {intelligence && (
+            <span aria-hidden="true" className="business-brain-grid pointer-events-none absolute inset-0" />
+          )}
+          <div className="relative z-10 flex min-w-0 flex-col gap-2">
+            {eyebrow && (
+              <span className="text-mint text-[0.68rem] font-semibold tracking-[0.15em] uppercase">
+                {eyebrow}
+              </span>
+            )}
+            <h1
+              id={`${id}-heading`}
+              className={cn(
+                "text-fg font-bold",
+                intelligence ? "text-headline sm:text-[2rem]" : "text-headline sm:text-display",
+              )}
+            >
               {title}
             </h1>
-            {description && <p className="text-fg-muted max-w-[70ch] text-[0.9375rem]">{description}</p>}
+            {description && (
+              <p className={cn("max-w-[70ch] text-[0.9375rem]", intelligence ? "text-fg-secondary" : "text-fg-muted")}>
+                {description}
+              </p>
+            )}
           </div>
-          {actions && <div className="flex shrink-0 flex-wrap items-center gap-3">{actions}</div>}
+          {actions && <div className="relative z-10 flex shrink-0 flex-wrap items-center gap-3">{actions}</div>}
         </div>
         {children}
       </div>

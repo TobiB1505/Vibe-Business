@@ -273,6 +273,8 @@ export async function ProjectBusinessHealth({ access }: { access: ProjectAccess 
     <WorkspaceSection
       id="business-audit"
       title="Business Health"
+      eyebrow="Business intelligence"
+      variant="intelligence"
       description="Your whole business in one connected view — what is working, what matters and where to move next."
       actions={
         <RunAuditButton

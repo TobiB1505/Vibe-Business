@@ -944,15 +944,23 @@ export default async function E2eScenarioPage({
     return (
       <main className="mx-auto max-w-[90rem] p-8">
         {label}
-        {view ? (
-          <AuditOverview
-            view={view}
-            movesHref="/app/projects/project_e2e/plan"
-            hasMoves={hasMoves}
-          />
-        ) : (
-          <p>This fixture predates the Business Brain.</p>
-        )}
+        <WorkspaceSection
+          id="business-audit"
+          title="Business Health"
+          eyebrow="Business intelligence"
+          variant="intelligence"
+          description="Your whole business in one connected view — what is working, what matters and where to move next."
+        >
+          {view ? (
+            <AuditOverview
+              view={view}
+              movesHref="/app/projects/project_e2e/plan"
+              hasMoves={hasMoves}
+            />
+          ) : (
+            <p>This fixture predates the Business Brain.</p>
+          )}
+        </WorkspaceSection>
       </main>
     );
   }

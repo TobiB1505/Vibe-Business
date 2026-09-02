@@ -20,6 +20,9 @@ test.describe("signature Business Brain", () => {
     const panel = page.getByRole("heading", { name: /what matters now/i });
     await expect(map).toBeVisible();
     await expect(panel).toBeVisible();
+    await expect(page.getByText(/^business intelligence$/i)).toBeVisible();
+    await expect(page.locator('[data-workspace-header="intelligence"]')).toBeVisible();
+    await expect(page.getByText(/how we score your business/i)).toHaveCount(0);
 
     const mapBox = await map.boundingBox();
     const panelBox = await panel.boundingBox();
@@ -91,22 +94,15 @@ test.describe("signature Business Brain", () => {
     const mapBox = await page.getByTestId("audit-map-panel").boundingBox();
     const detailBox = await detail.boundingBox();
     expect(Math.abs(mapBox!.width - mapBefore!.width)).toBeLessThanOrEqual(2);
-    const scoring = page.getByRole("complementary", {
-      name: /how revenue & economics was scored/i,
-    });
     expect(detailBox!.x).toBeGreaterThan(mapBox!.x + mapBox!.width);
-    await expect(scoring).not.toBeVisible();
-    await page.getByText(/how we scored this/i).click();
-    await expect(scoring).toBeVisible();
-    await expect(scoring).toContainText(/lens score/i);
-    await expect(scoring).toContainText(/business health/i);
-    await expect(scoring).not.toContainText(/signals|sources/i);
-    const scoringBox = await scoring.boundingBox();
-    expect(scoringBox!.x).toBeGreaterThanOrEqual(detailBox!.x);
-    expect(scoringBox!.x + scoringBox!.width).toBeLessThanOrEqual(
-      detailBox!.x + detailBox!.width + 1,
-    );
     await expect(detail.getByText(/connected areas/i)).toBeVisible();
+    await expect(page.getByTestId("selected-scoring-context")).toHaveCount(0);
+    await detail.getByRole("tab", { name: /^signals$/i }).click();
+    const signalsPanel = detail.getByRole("tabpanel");
+    await expect(signalsPanel).toContainText(/current lens score/i);
+    await expect(signalsPanel).toContainText(/38\s*\/100/i);
+    await expect(signalsPanel).toContainText(/signals behind this score/i);
+    await expect(signalsPanel).toContainText(/individual signals do not carry invented point values/i);
     await expect(detail.getByRole("tab")).toHaveCount(4);
     await expect(page.getByTestId("business-map-radial")).toBeVisible();
   });
@@ -136,26 +132,28 @@ test.describe("signature Business Brain", () => {
     expect(Math.abs(offerBox!.height - scalabilityBox!.height)).toBeLessThanOrEqual(1);
   });
 
-  test("keeps the dense right-side planet orbit visibly separated", async ({ page }) => {
+  test("keeps every planet evenly spaced around the orbit", async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto(SYNTHESIS);
 
-    const rightOrbit = await Promise.all(
-      ["Audience", "Acquisition", "Conversion", "Revenue & Economics", "Business Readiness"].map(
+    const orbit = await Promise.all(
+      ["Offer", "Audience", "Acquisition", "Conversion", "Revenue & Economics", "Business Readiness", "Retention", "Measurement", "Scalability"].map(
         async (name) => (await lens(page, new RegExp(`^${name},`, "i")).boundingBox())!,
       ),
     );
 
-    for (let index = 0; index < rightOrbit.length - 1; index += 1) {
-      const current = rightOrbit[index];
-      const next = rightOrbit[index + 1];
+    const distances = orbit.map((current, index) => {
+      const next = orbit[(index + 1) % orbit.length];
       const centerDistance = Math.hypot(
         current.x + current.width / 2 - (next.x + next.width / 2),
         current.y + current.height / 2 - (next.y + next.height / 2),
       );
       const visibleGap = centerDistance - (current.width + next.width) / 2;
       expect(visibleGap).toBeGreaterThan(24);
-    }
+      return centerDistance;
+    });
+
+    expect(Math.max(...distances) - Math.min(...distances)).toBeLessThanOrEqual(3);
   });
 
   test("keeps unsupported per-lens history honest in the selected focus view", async ({
