@@ -14,7 +14,8 @@ import {
   type CreditSourceKind,
   type HeldAllocation,
 } from "./lots";
-import { CONTENTION_ATTEMPTS, retryDelayMs, sleep } from "./contention";
+import { sleep } from "@/lib/async/sleep";
+import { CONTENTION_ATTEMPTS, retryDelayMs } from "./contention";
 import { creditUnits, type CreditUnits } from "./units";
 
 /**

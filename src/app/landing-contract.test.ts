@@ -43,9 +43,9 @@ const SHELL = read("src/components/layout/marketing-shell.tsx");
 /*
  * The proof section the landing page actually renders (UI-19).
  *
- * It was `business-map-preview.tsx` until the redesign; nothing imports that
- * file any more, and a contract pointed at an unrendered component guards
- * nothing. This is the component a visitor meets.
+ * A contract pointed at an unrendered component guards nothing, so this is the
+ * component a visitor meets. Its predecessor survived the redesign as an
+ * unimported file for a while and has since been deleted.
  */
 const PROOF = read("src/components/marketing/landing-business-brain.tsx");
 const SIGNUP = read("src/app/signup/page.tsx");

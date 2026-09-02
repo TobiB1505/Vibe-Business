@@ -64,7 +64,3 @@ export const CONTENTION_ATTEMPTS = 10;
 export function retryDelayMs(attempt: number): number {
   return Math.round(Math.random() * 15 * (attempt + 1));
 }
-
-export function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}

@@ -145,31 +145,13 @@ export function StatusPill({
 }
 
 /**
- * A category chip is not a status. It names a taxonomy — `seo`, `pricing`,
- * `conversion` — so it stays lowercase and never takes a status colour.
- */
-export function CategoryChip({ children, className }: { children: ReactNode; className?: string }) {
-  return (
-    <span
-      className={cn(
-        "bg-surface-hover border-line-4 text-fg-prose inline-flex items-center rounded-full border px-2.5 py-1",
-        "text-[0.65625rem] font-medium lowercase",
-        className,
-      )}
-    >
-      {children}
-    </span>
-  );
-}
-
-/**
  * A coarse rating — "High impact", "Medium effort".
  *
- * Not a `CategoryChip`, which names a taxonomy and is lowercase for that
- * reason, and not a `StatusPill`, which reports a state and takes a status
- * colour. A rating is a reading of one axis: it keeps sentence case because it
- * is a phrase rather than a term, and it stays neutral because "low" is not a
- * problem and "high" is not a success.
+ * Not a `StatusPill`, which reports a state and takes a status colour, and not
+ * a taxonomy term like `seo` or `pricing`, which would be lowercase for being
+ * a name rather than a phrase. A rating is a reading of one axis: it keeps
+ * sentence case, and it stays neutral because "low" is not a problem and
+ * "high" is not a success.
  */
 export function RatingChip({ children, className }: { children: ReactNode; className?: string }) {
   return (

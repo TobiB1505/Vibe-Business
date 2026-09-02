@@ -31,8 +31,3 @@ export function getBrowserSessionProvider(): BrowserSessionProvider {
 export function isBrowserProviderConfigured(): boolean {
   return hasBrowserbaseApiKey();
 }
-
-/** Test-only: clears the cached provider. */
-export function __resetBrowserProviderCacheForTests(): void {
-  cached = undefined;
-}

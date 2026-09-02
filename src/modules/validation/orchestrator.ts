@@ -1,3 +1,4 @@
+import { describeThrown } from "@/lib/errors/describe";
 import { createHash } from "node:crypto";
 import { SANDBOX_BUDGETS } from "./budgets";
 import { describeCommand, planValidationSteps, type SandboxCommand } from "./commands";
@@ -170,18 +171,7 @@ const MISSING_ENVIRONMENT_MARKERS: readonly RegExp[] = [
   /invalid environment variables/i,
 ];
 
-/**
- * A safe description of an unknown thrown value.
- *
- * Provider errors can carry request context, headers and occasionally
- * credentials, so the object is never stored. Its name and message are, after
- * the same sanitizer step output goes through — which is the difference
- * between "we refuse to look" and "we cannot find out".
- */
-function describeError(error: unknown): string {
-  if (error instanceof Error) return `${error.name}: ${error.message}`;
-  return "non-error value thrown";
-}
+
 
 /**
  * Reads a file only when it fits entirely within the budget.
@@ -413,7 +403,7 @@ export async function provisionSandbox(
 
     return { ok: true, sandboxId: sandbox.id, runtime: sandbox.runtime };
   } catch (error) {
-    return { ok: false, failureCode: "sandbox_unavailable", failureDetail: detail(describeError(error)) };
+    return { ok: false, failureCode: "sandbox_unavailable", failureDetail: detail(describeThrown(error)) };
   }
 }
 
@@ -597,7 +587,7 @@ export async function verifySource(
 
     return { ok: true, sourceIntegrity, runtime: sandbox.runtime };
   } catch (error) {
-    return fail("validation_run_failed", describeError(error));
+    return fail("validation_run_failed", describeThrown(error));
   }
 }
 
@@ -775,7 +765,7 @@ export async function runCheckPhase(
     return {
       ok: false,
       failureCode: "validation_run_failed",
-      failureDetail: detail(describeError(error)),
+      failureDetail: detail(describeThrown(error)),
       step: null,
     };
   }

@@ -66,8 +66,3 @@ export function hasBrowserbaseApiKey(
     BROWSERBASE_PROJECT_ID: source.BROWSERBASE_PROJECT_ID,
   }).success;
 }
-
-/** Test-only: clears the cached env so tests can exercise fresh parses. */
-export function __resetBrowserbaseEnvCacheForTests(): void {
-  cached = undefined;
-}

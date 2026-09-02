@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/database";
 import type {
   BusinessOutcomeMeasurement,
   DataQuality,
@@ -55,9 +56,34 @@ const MEASUREMENT_COLUMNS =
   "measurement_profile_version, evidence_schema_version, measurement_identity, operation_run_id, " +
   "next_observation_at, started_at, completed_at, created_at, updated_at";
 
-type Row = Record<string, unknown>;
+/**
+ * The two row shapes, from the generated schema rather than restated here.
+ *
+ * `Row` was `Record<string, unknown>` and every read cast to it through
+ * `as unknown as`, which is the pair of casts that turns off checking
+ * completely: the compiler verified neither that a column exists nor that it
+ * has the type the mapper reads it as. A renamed column would have passed
+ * `tsc` and failed at runtime, which is exactly the class of defect a
+ * migration is most likely to introduce.
+ *
+ * The narrowing casts below stay. The generated type says `status: string`
+ * because the database says `text`; that it is one of a closed set is a domain
+ * fact a CHECK constraint carries and the type system cannot. What the
+ * generated shape adds is the half that was missing — the column is there, and
+ * it is a string.
+ *
+ * One `as unknown as` survives, at the boundary where the client hands a row
+ * over, and it is not laziness. postgrest-js narrows a result by parsing the
+ * *literal* select string at the type level; these columns are a shared runtime
+ * constant, so the parser cannot resolve it and the result keeps
+ * `GenericStringError` in its union. Typing the client changes nothing about
+ * that. So the hop stays unchecked and everything after it is checked, which
+ * is the half that matters: a renamed column now fails `tsc` in the mapper.
+ */
+type PlanRow = Database["public"]["Tables"]["measurement_plans"]["Row"];
+type MeasurementRow = Database["public"]["Tables"]["business_outcome_measurements"]["Row"];
 
-function mapPlan(row: Row): MeasurementPlan {
+function mapPlan(row: PlanRow): MeasurementPlan {
   return {
     id: String(row.id),
     userId: String(row.user_id),
@@ -100,7 +126,7 @@ function dayCount(start: unknown, end: unknown): number {
   return Math.round((to - from) / (24 * 60 * 60 * 1000));
 }
 
-function mapMeasurement(row: Row): BusinessOutcomeMeasurement {
+function mapMeasurement(row: MeasurementRow): BusinessOutcomeMeasurement {
   const timezone = row.measurement_timezone;
 
   return {
@@ -218,7 +244,7 @@ export async function createMeasurementPlan(
   }
   if (!data) return { ok: false, error: "persistence_failed" };
 
-  return { ok: true, plan: mapPlan(data as unknown as Row) };
+  return { ok: true, plan: mapPlan(data as unknown as PlanRow) };
 }
 
 export async function findPlanForMerge(
@@ -233,7 +259,7 @@ export async function findPlanForMerge(
     .maybeSingle();
 
   if (error) throw error;
-  return data ? mapPlan(data as unknown as Row) : null;
+  return data ? mapPlan(data as unknown as PlanRow) : null;
 }
 
 /**
@@ -260,7 +286,7 @@ export async function findPlansForMerges(
 
   return new Map(
     (data ?? []).map((row) => {
-      const plan = mapPlan(row as unknown as Row);
+      const plan = mapPlan(row as unknown as PlanRow);
       return [plan.changeMergeId, plan];
     }),
   );
@@ -280,7 +306,7 @@ export async function findPlanForPreparedChange(
     .maybeSingle();
 
   if (error) throw error;
-  return data ? mapPlan(data as unknown as Row) : null;
+  return data ? mapPlan(data as unknown as PlanRow) : null;
 }
 
 // ---------------------------------------------------------------------
@@ -352,7 +378,7 @@ export async function createMeasurement(
   }
   if (!data) return { ok: false, error: "persistence_failed" };
 
-  return { ok: true, measurement: mapMeasurement(data as unknown as Row) };
+  return { ok: true, measurement: mapMeasurement(data as unknown as MeasurementRow) };
 }
 
 /**
@@ -383,7 +409,7 @@ export async function findMeasurementByIdentity(
     .maybeSingle();
 
   if (error) throw error;
-  return data ? mapMeasurement(data as unknown as Row) : null;
+  return data ? mapMeasurement(data as unknown as MeasurementRow) : null;
 }
 
 /** A **display** question, never an authority one. */
@@ -401,7 +427,7 @@ export async function getLatestMeasurementForPlan(
     .maybeSingle();
 
   if (error) throw error;
-  return data ? mapMeasurement(data as unknown as Row) : null;
+  return data ? mapMeasurement(data as unknown as MeasurementRow) : null;
 }
 
 /**
@@ -438,7 +464,7 @@ export async function getLatestMeasurementsForPlans(
 
   const rows = data ?? [];
   for (const row of rows) {
-    const measurement = mapMeasurement(row as unknown as Row);
+    const measurement = mapMeasurement(row as unknown as MeasurementRow);
     if (!latest.has(measurement.measurementPlanId)) {
       latest.set(measurement.measurementPlanId, measurement);
     }
@@ -469,7 +495,7 @@ export async function findMeasurementByOperation(
     .maybeSingle();
 
   if (error) throw error;
-  return data ? mapMeasurement(data as unknown as Row) : null;
+  return data ? mapMeasurement(data as unknown as MeasurementRow) : null;
 }
 
 /** Marks collection as under way. Conditional, so a replay does not restart it. */
@@ -491,7 +517,7 @@ export async function markMeasuring(
     .maybeSingle();
 
   if (error) throw error;
-  return data ? mapMeasurement(data as unknown as Row) : null;
+  return data ? mapMeasurement(data as unknown as MeasurementRow) : null;
 }
 
 /**
@@ -548,7 +574,7 @@ export async function completeMeasurement(
     .maybeSingle();
 
   if (error) throw error;
-  return data ? mapMeasurement(data as unknown as Row) : null;
+  return data ? mapMeasurement(data as unknown as MeasurementRow) : null;
 }
 
 /**
@@ -583,5 +609,5 @@ export async function failMeasurement(
     .maybeSingle();
 
   if (error) throw error;
-  return data ? mapMeasurement(data as unknown as Row) : null;
+  return data ? mapMeasurement(data as unknown as MeasurementRow) : null;
 }

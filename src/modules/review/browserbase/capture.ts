@@ -1,3 +1,4 @@
+import { describeThrown } from "@/lib/errors/describe";
 import "server-only";
 
 import type { Browser, BrowserContext, Page } from "playwright-core";
@@ -45,11 +46,7 @@ import type { BrowserCaptureProvider, CaptureOutcome, CaptureRequest } from "../
  * for the case where even that fails.
  */
 
-/** A safe description of a thrown provider value. Name and message only. */
-function describeError(error: unknown): string {
-  if (error instanceof Error) return `${error.name}: ${error.message}`;
-  return "non-error value thrown";
-}
+
 
 /** Bounded, so a page's own error text cannot become an unbounded log line. */
 function bounded(text: string, max = 300): string {
@@ -92,7 +89,7 @@ async function captureOne(browser: Browser, request: CaptureRequest): Promise<Ca
       // The page, not the provider: navigation is where a slow or unreachable
       // *target* fails, and it is a different problem from Browserbase being
       // down.
-      return { ok: false, layer: "target", detail: bounded(describeError(error)) };
+      return { ok: false, layer: "target", detail: bounded(describeThrown(error)) };
     }
 
     if (request.stabilizationCss) {
@@ -127,7 +124,7 @@ async function captureOne(browser: Browser, request: CaptureRequest): Promise<Ca
       },
     };
   } catch (error) {
-    return { ok: false, layer: "adapter", detail: bounded(describeError(error)) };
+    return { ok: false, layer: "adapter", detail: bounded(describeThrown(error)) };
   } finally {
     // The context dies with its cookies, its storage and whatever the page put
     // in them.
@@ -193,7 +190,7 @@ export function createBrowserbaseCaptureProvider(
           },
         };
       } catch (error) {
-        return failAll("adapter", bounded(describeError(error)));
+        return failAll("adapter", bounded(describeThrown(error)));
       } finally {
         // Both of these run on every path. Closing the CDP connection is ours;
         // releasing the session is the provider's, and skipping it would leave

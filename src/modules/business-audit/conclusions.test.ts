@@ -16,10 +16,10 @@ function auditWith(blockers: number, strengths: number) {
       version: "business-audit-synthesis-v7",
       lenses: [],
       overall: "…",
-      strengths: Array.from({ length: strengths }, (unused, index) =>
+      strengths: Array.from({ length: strengths }, (_unused, index) =>
         fakeConclusion({ rootProblem: `Strength ${index + 1}.`, tone: "positive" }),
       ),
-      blockers: Array.from({ length: blockers }, (unused, index) =>
+      blockers: Array.from({ length: blockers }, (_unused, index) =>
         fakeConclusion({ rootProblem: `Blocker ${index + 1}.` }),
       ),
     },

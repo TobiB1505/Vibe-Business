@@ -37,7 +37,7 @@ export function productNeedsAttention(product: ProductOverviewItem): boolean {
   return productListStatus(product).priority <= 4;
 }
 
-export function productIsSetup(product: ProductOverviewItem): boolean {
+function productIsSetup(product: ProductOverviewItem): boolean {
   return product.repositoryFullName === null || product.scoreState === "not_audited";
 }
 
