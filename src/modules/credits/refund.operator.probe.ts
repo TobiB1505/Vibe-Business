@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createServiceClient } from "@/lib/supabase/service";
 import { creditUnits, creditsToUnits, formatCreditUnits } from "./units";
+import { readRefundConfirmation, refundConfirmationRefusal } from "./refund-confirmation";
 import { refundCharge } from "./service";
 
 /**
@@ -36,6 +37,12 @@ import { refundCharge } from "./service";
  * default because the input is a UUID typed by a person at the moment they are
  * annoyed about a support ticket, and the operation moves money.
  *
+ * **A near miss fails rather than going quiet.** `VIBE_REFUND_CONFIRM=true` is
+ * not the word, and it is refused out loud instead of silently becoming a dry
+ * run — see `refund-confirmation.ts` for why that distinction is the whole
+ * point. The word is not widened to accept `true`, `1` or `y`: that would
+ * remove the confusing case by making a deliberate switch less deliberate.
+ *
  * ## Why a re-run is safe
  *
  * The idempotency key is derived from the charge and the amount, so running the
@@ -49,7 +56,7 @@ import { refundCharge } from "./service";
 const CHARGE_ID = process.env.VIBE_REFUND_CHARGE_ID ?? "";
 const CREDITS = Number(process.env.VIBE_REFUND_CREDITS ?? "0");
 const REASON = process.env.VIBE_REFUND_REASON ?? "";
-const CONFIRMED = process.env.VIBE_REFUND_CONFIRM === "yes";
+const CONFIRMATION = readRefundConfirmation(process.env.VIBE_REFUND_CONFIRM);
 
 /** Deterministic, so the same correction run twice is one refund. */
 function idempotencyKey(chargeId: string, credits: number): string {
@@ -104,7 +111,21 @@ describe.skipIf(CHARGE_ID.length === 0)("correcting one charge", () => {
       idempotencyKey: idempotencyKey(CHARGE_ID, CREDITS),
     });
 
-    if (!CONFIRMED) {
+    /*
+     * A value that is present but not the word is its own outcome, and it
+     * fails rather than falling through to the dry run.
+     *
+     * Somebody who set nothing wants the dry run. Somebody who typed `true`
+     * wanted the refund, and treating that as "no" gives them a run that looks
+     * exactly like success — output appears, the command exits cleanly, and
+     * the customer is still owed their Credits. Failing safe is right; failing
+     * safe *silently* is how a person stops trusting a tool that was working.
+     */
+    if (CONFIRMATION.kind === "not_the_word") {
+      expect.fail(refundConfirmationRefusal(CONFIRMATION.given));
+    }
+
+    if (CONFIRMATION.kind === "dry_run") {
       console.info("[refund] DRY RUN — set VIBE_REFUND_CONFIRM=yes to post it");
       return;
     }

@@ -154,6 +154,86 @@ describe("idempotency", () => {
     expect(second).toEqual({ inserted: 0, alreadyPresent: 1 });
     expect(db.current.rows("billing_usage_events")).toHaveLength(1);
   });
+
+  /**
+   * The property that makes `ignoreDuplicates` the right verb and the default
+   * upsert the wrong one.
+   *
+   * `ON CONFLICT DO UPDATE` would leave the row count identical and quietly
+   * rewrite what is in it — on a table holding what every price is derived
+   * from, and on every repair pass. Counting rows would never notice; this
+   * reads the stored figures back.
+   */
+  it("never rewrites an event it has already stored", async () => {
+    const base = {
+      sourceKind: "ai_usage_event" as const,
+      sourceId: "44444444-4444-4444-4444-444444444444",
+      operationRunId: null,
+      projectId: PROJECT,
+      userId: USER,
+      provider: "anthropic",
+      sku: "anthropic_input_tokens" as const,
+      occurredAt: "2026-08-14T18:00:00.000Z",
+      costStatus: "costed" as const,
+      providerPricingVersion: "claude-sonnet-5-introductory-2026",
+      ratingStatus: "rate_card_not_configured",
+      ratedCredits: null,
+      rateCardVersion: null,
+    };
+
+    await projectUsageEvents(supabase(), [
+      { ...base, quantity: 20_000, rawCostNanoUsd: 80_000_000 },
+    ]);
+    // The same source and SKU, arriving with different figures — which is what
+    // a changed projection or a re-rated row would produce.
+    await projectUsageEvents(supabase(), [
+      { ...base, quantity: 999_999, rawCostNanoUsd: 1 },
+    ]);
+
+    const [stored] = db.current.rows("billing_usage_events");
+    expect(db.current.rows("billing_usage_events")).toHaveLength(1);
+    expect(stored.quantity).toBe(20_000);
+    expect(stored.raw_cost_nano_usd).toBe(80_000_000);
+  });
+
+  /**
+   * The repair pass stopped fitting in its own five-minute ceiling on
+   * 2026-09-02, at 424 source rows. One round trip per row does not survive a
+   * growing ledger, and a repair tool that gets slower is one that fails when
+   * it is finally needed.
+   */
+  it("writes in bounded chunks rather than one statement per event", async () => {
+    const events = Array.from({ length: 1_200 }, (_, index) => ({
+      sourceKind: "ai_usage_event" as const,
+      sourceId: `5555${String(index).padStart(4, "0")}-4444-4444-4444-444444444444`,
+      operationRunId: null,
+      projectId: PROJECT,
+      userId: USER,
+      provider: "anthropic",
+      sku: "anthropic_input_tokens" as const,
+      quantity: 1,
+      occurredAt: "2026-08-14T18:00:00.000Z",
+      rawCostNanoUsd: 1,
+      costStatus: "costed" as const,
+      providerPricingVersion: "claude-sonnet-5-introductory-2026",
+      ratingStatus: "rate_card_not_configured",
+      ratedCredits: null,
+      rateCardVersion: null,
+    }));
+
+    const result = await projectUsageEvents(supabase(), events);
+
+    // Every one written, and the counts still exact across chunk boundaries —
+    // which is where an off-by-one in the slicing would show up.
+    expect(result).toEqual({ inserted: 1_200, alreadyPresent: 0 });
+    expect(db.current.rows("billing_usage_events")).toHaveLength(1_200);
+
+    // And a second pass over the same set still writes nothing.
+    expect(await projectUsageEvents(supabase(), events)).toEqual({
+      inserted: 0,
+      alreadyPresent: 1_200,
+    });
+  });
 });
 
 /**

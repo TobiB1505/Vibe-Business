@@ -6,6 +6,7 @@ import type { ExecutionAdmission } from "@/modules/execution-contract/schema";
 import type { AgentStartRefusal } from "./service";
 import type { PreflightRefusal } from "./preflight";
 import type { AgentStartRefusalDetail, DogfoodStepReason } from "./start-refusal";
+import type { BuildChainBoundaryReason } from "@/modules/execution-contract/chain";
 import type { RunForecast, RunForecastDriver } from "./run-forecast";
 
 /**
@@ -261,4 +262,50 @@ export function forecastEvidenceNote(forecast: RunForecast): string {
   return forecast.comparableRuns === 1
     ? "Based on 1 comparable run Vibe has completed."
     : `Based on ${forecast.comparableRuns} comparable runs Vibe has completed.`;
+}
+
+/**
+ * Why a build chain stopped where it did, in a founder's words.
+ *
+ * A chain shorter than someone expected, with nothing said about why, reads as
+ * a defect — and on the founder's own plan the very first chain stops at a
+ * Stripe step, which is the most alarming-looking correct refusal there is. So
+ * every boundary has a sentence, and `no_successor` deliberately has none: the
+ * chain reached the end of the plan, and there is nothing to explain.
+ */
+export const BUILD_CHAIN_BOUNDARY_LABELS: Record<BuildChainBoundaryReason, string | null> = {
+  no_successor: null,
+  successor_not_agentic: "The next step is yours to do, so Vibe stops here.",
+  successor_capability_matched:
+    "Vibe already knows how to make the next change exactly, so it runs on its own rather than in this build.",
+  successor_risk_ceiling:
+    "The next step is more sensitive than Vibe builds on your behalf — it stays yours.",
+  dependency_outside_chain: "The next step is also waiting on something this build does not cover.",
+  chain_length_ceiling: "Vibe builds at most three steps of a Move in one go.",
+  cycle_detected: "These steps refer back to each other, so none of them can go first.",
+};
+
+/**
+ * What one run will deliver, said before the click.
+ *
+ * Counts steps rather than naming them, because the names are already listed
+ * beside it and repeating them in a sentence makes the sentence unreadable at
+ * three members.
+ */
+export function buildChainOfferLabel(memberCount: number): string {
+  return memberCount === 1 ? "Build this step" : `Build all ${memberCount} steps`;
+}
+
+/**
+ * What a finished chained run actually produced.
+ *
+ * One change, one check, several steps — and it has to say exactly that. "3
+ * steps done" would imply three artifacts and three verdicts, where there is
+ * one of each: rule 66's standard, applied to the sentence a founder reads
+ * after paying for a chain.
+ */
+export function buildChainCompletionNote(memberCount: number): string {
+  return memberCount === 1
+    ? "One change, checked once."
+    : `One change, checked once, covering these ${memberCount} steps.`;
 }

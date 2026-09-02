@@ -7,6 +7,9 @@ type CompletionSpecRow = {
   id: string;
   step_key: string;
   step_order: number;
+  /** Every step this run delivers, head first. Empty for a run of one. */
+  chain_step_keys: string[] | null;
+  chain_step_orders: number[] | null;
 };
 
 type CompletionRunRow = {
@@ -46,13 +49,32 @@ function changedFilesWereVerified(value: unknown): boolean {
  * Missing or legacy evidence stays incomplete. That is intentionally safer
  * than reconstructing authority from prose or a terminal status.
  */
+/**
+ * The steps one spec delivered: its chain, or just its head.
+ *
+ * A row whose arrays disagree in length is refused by a CHECK constraint, and a
+ * row whose head is absent from its own chain is refused by another — so this
+ * pairs them by index without a second reconciliation. A row from before build
+ * chains has empty arrays and yields exactly the one member it always did.
+ */
+function chainMembers(spec: CompletionSpecRow): { stepKey: string; stepOrder: number }[] {
+  const keys = spec.chain_step_keys ?? [];
+  const orders = spec.chain_step_orders ?? [];
+
+  if (keys.length === 0 || keys.length !== orders.length) {
+    return [{ stepKey: spec.step_key, stepOrder: spec.step_order }];
+  }
+
+  return keys.map((stepKey, index) => ({ stepKey, stepOrder: orders[index] }));
+}
+
 export async function listAgentStepCompletionEvidence(
   supabase: SupabaseClient,
   params: { projectId: string; actionPlanId: string },
 ): Promise<AgentStepCompletionEvidence[]> {
   const { data: specData, error: specError } = await supabase
     .from("execution_specs")
-    .select("id, step_key, step_order")
+    .select("id, step_key, step_order, chain_step_keys, chain_step_orders")
     .eq("project_id", params.projectId)
     .eq("action_plan_id", params.actionPlanId);
 
@@ -126,14 +148,29 @@ export async function listAgentStepCompletionEvidence(
     const validation = validationsByPreparedChange.get(run.prepared_change_id);
     if (!spec || !validation) continue;
 
-    evidence.push({
-      executionSpecId: spec.id,
-      agentExecutionRunId: run.id,
-      preparedChangeId: run.prepared_change_id,
-      validationRunId: validation.id,
-      stepKey: spec.step_key,
-      stepOrder: spec.step_order,
-    });
+    /*
+     * One record per step the run delivered (`build-chain-v1`).
+     *
+     * The four-record requirement above is evaluated **once per run**, exactly
+     * as it always was — a chain does not weaken it, and a run whose validation
+     * did not verify the changed files still emits nothing at all. What changes
+     * is only how many steps that one verdict speaks for.
+     *
+     * The records share every id on purpose. One artifact, one validation,
+     * several steps: the data says so by repeating the ids rather than by
+     * inventing separate evidence for each member, and a reader can see the
+     * difference between a chain and three independent runs.
+     */
+    for (const member of chainMembers(spec)) {
+      evidence.push({
+        executionSpecId: spec.id,
+        agentExecutionRunId: run.id,
+        preparedChangeId: run.prepared_change_id,
+        validationRunId: validation.id,
+        stepKey: member.stepKey,
+        stepOrder: member.stepOrder,
+      });
+    }
   }
 
   return evidence;

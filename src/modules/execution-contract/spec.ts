@@ -2,7 +2,9 @@ import type { ActionPlanStep } from "@/modules/action-plans/schema";
 import type { ExecutionCapability } from "@/modules/execution/schema";
 import type { ExecutionBudget, ExecutionCreditBinding } from "./budget";
 import { computeBusinessContextHash, computeExecutionSpecIdentity } from "./identity";
-import { resolveStepPricingClass } from "./pricing-class";
+import { resolveChainPricingClass } from "./pricing-class";
+import { classifyExecutionRisk } from "./risk";
+import { BUILD_CHAIN_POLICY_VERSION } from "./chain";
 import type { ExecutionPricingClass, ExecutionPricingClassReason } from "@/modules/economy/execution-class";
 import { compileExecutionPolicy, type ExecutionPolicy, type ExecutionWriteScope } from "./policy";
 import { assertNoSecretMaterial } from "./secrets";
@@ -106,6 +108,35 @@ export type AbsorbedPreparation = {
   doneWhen: string;
 };
 
+/**
+ * A further step this same run delivers (`build-chain-v1`).
+ *
+ * Structurally identical to {@link AbsorbedPreparation} and **deliberately a
+ * separate type**, because the two mean opposite things.
+ *
+ * Preparation is work the run performs *on the way to* its objective, and the
+ * Planner's step for it is never marked done — ADR 0026 promises exactly that.
+ * A chained delivery is the objective, again: the run is expected to deliver
+ * it, and one validated execution completes it. Sharing one type would make
+ * that distinction a comment, and the first person to reuse the wrong one would
+ * break ADR 0026's guarantee inside the type that carries it.
+ *
+ * Like preparation, it grants nothing. The compiled policy is a function of
+ * mode, execution class, risk class and write scope; a chain adds deliveries,
+ * never permissions. And like preparation, it reaches the agent as fenced,
+ * untrusted-labelled prose in a user message, never as an instruction.
+ */
+export type ChainedDelivery = {
+  stepOrder: number;
+  stepKey: string;
+  /** The step's own title, in the plan's recorded words. */
+  title: string;
+  /** Why the plan wanted it. */
+  purpose: string;
+  /** What the plan says finishing it looks like. */
+  doneWhen: string;
+};
+
 export type ExecutionObjective = {
   /** The plan's business goal. */
   goal: string;
@@ -130,7 +161,59 @@ export type ExecutionObjective = {
    * business context is what the work rests on, and this is work.
    */
   preparation: readonly AbsorbedPreparation[];
+  /**
+   * Further steps this one run delivers, in plan order (`build-chain-v1`).
+   *
+   * **Excludes the head**, which is the objective above — this is the rest of
+   * the chain and nothing else, so a reader never has to work out whether the
+   * step they are looking at appears twice. Empty for every run that delivers
+   * one step, which is every run stored before build chains existed, and the
+   * accessor {@link chainedDeliveriesOf} returns `[]` for a spec that predates
+   * the field entirely.
+   */
+  chain?: readonly ChainedDelivery[];
 };
+
+/**
+ * The chained deliveries of a spec, or none.
+ *
+ * One accessor rather than `spec.objective.chain ?? []` at each call site, so a
+ * document stored before this field existed cannot reach a reader as
+ * `undefined`. That absence is what lets `EXECUTION_SPEC_SCHEMA_VERSION` stay
+ * at v1: a v1 document read by chain-aware code yields no chain, which is
+ * exactly what that run was — there is nothing to reinterpret.
+ */
+export function chainedDeliveriesOf(spec: {
+  objective: Pick<ExecutionObjective, "chain">;
+}): readonly ChainedDelivery[] {
+  return spec.objective.chain ?? [];
+}
+
+/**
+ * Every step key this run delivers, head first — or nothing.
+ *
+ * Two things this deliberately is not. It is not the objective's `chain`, which
+ * excludes the head; and it is **empty rather than `[stepKey]`** for a run that
+ * delivers one step, because that is what the identity hashes, what the column
+ * stores, and what every row written before build chains means. A single-member
+ * list would say nothing `stepKey` has not already said, in two more places.
+ */
+export function chainedStepKeysOf(spec: {
+  stepKey: string;
+  objective: Pick<ExecutionObjective, "chain">;
+}): readonly string[] {
+  const members = chainedDeliveriesOf(spec);
+  return members.length === 0 ? [] : [spec.stepKey, ...members.map((member) => member.stepKey)];
+}
+
+/** The orders matching {@link chainedStepKeysOf}, in the same order. */
+export function chainedStepOrdersOf(spec: {
+  stepOrder: number;
+  objective: Pick<ExecutionObjective, "chain">;
+}): readonly number[] {
+  const members = chainedDeliveriesOf(spec);
+  return members.length === 0 ? [] : [spec.stepOrder, ...members.map((member) => member.stepOrder)];
+}
 
 export type ExecutionRepositoryBinding = {
   repositoryConnectionId: string;
@@ -279,6 +362,18 @@ export type BuildExecutionSpecInput = {
    * build refuses.
    */
   preparationSteps?: readonly ActionPlanStep[];
+  /**
+   * The chain this run carries, head first, from `resolveBuildChain`.
+   *
+   * Passed in whole rather than as the successors alone, because the resolver's
+   * answer is "these members" and splitting it here would create a second place
+   * that decides which one is the head. Absent or one member means a run that
+   * delivers one step — the shape of every spec built before build chains.
+   *
+   * Refused unless its head *is* this step: a chain whose head is somewhere else
+   * describes a run nothing resolved.
+   */
+  chainSteps?: readonly ActionPlanStep[];
   operationRunId?: string | null;
   createdAt: string;
 };
@@ -300,6 +395,27 @@ export class ExecutionSpecPreparationMismatch extends Error {
         `but [${received.join(", ")}] were supplied. Re-resolve the step rather than reconciling these.`,
     );
     this.name = "ExecutionSpecPreparationMismatch";
+  }
+}
+
+/**
+ * The chain handed to the builder is not a chain of this step.
+ *
+ * Loud, for the same reason {@link ExecutionSpecPreparationMismatch} is loud: a
+ * spec whose head is not the step being built would price, identify and
+ * complete work nobody resolved, and picking a side quietly would hide which
+ * half was wrong.
+ */
+export class ExecutionSpecChainMismatch extends Error {
+  constructor(
+    readonly stepKey: string,
+    readonly received: readonly string[],
+  ) {
+    super(
+      `A build chain must begin at the step being built ("${stepKey}"), ` +
+        `but [${received.join(", ")}] were supplied. Re-resolve the step rather than reconciling these.`,
+    );
+    this.name = "ExecutionSpecChainMismatch";
   }
 }
 
@@ -344,6 +460,18 @@ export function buildExecutionSpec(input: BuildExecutionSpecInput): ExecutionSpe
     throw new ExecutionSpecPreparationMismatch(absorbed, supplied);
   }
 
+  /*
+   * The chain, validated before anything reads it.
+   *
+   * Head-first and beginning at this step, or the build refuses. That property
+   * is also a CHECK constraint on `execution_specs`, so the same sentence is
+   * true in the application and in the database.
+   */
+  const chainSteps = [...(input.chainSteps ?? [step])];
+  if (chainSteps[0]?.id !== step.id) {
+    throw new ExecutionSpecChainMismatch(step.id, chainSteps.map((member) => member.id));
+  }
+
   const objective: ExecutionObjective = {
     goal: plan.goal,
     stepTitle: step.title,
@@ -357,6 +485,20 @@ export function buildExecutionSpec(input: BuildExecutionSpecInput): ExecutionSpe
       purpose: preparation.purpose,
       doneWhen: preparation.completionCriteria,
     })),
+    // The head is the objective above, so only the rest of the chain is carried
+    // here — and a run of one omits the field entirely, keeping a solo spec
+    // byte-identical to what it was before chains existed.
+    ...(chainSteps.length > 1
+      ? {
+          chain: chainSteps.slice(1).map((member) => ({
+            stepOrder: member.order,
+            stepKey: member.id,
+            title: member.title,
+            purpose: member.purpose,
+            doneWhen: member.completionCriteria,
+          })),
+        }
+      : {}),
   };
 
   assertNoSecretMaterial("objective.goal", objective.goal);
@@ -370,6 +512,13 @@ export function buildExecutionSpec(input: BuildExecutionSpecInput): ExecutionSpe
     assertNoSecretMaterial(`objective.preparation[${preparation.stepKey}].title`, preparation.title);
     assertNoSecretMaterial(`objective.preparation[${preparation.stepKey}].purpose`, preparation.purpose);
     assertNoSecretMaterial(`objective.preparation[${preparation.stepKey}].doneWhen`, preparation.doneWhen);
+  }
+  // A chained delivery is Planner prose reaching the agent's user message, like
+  // preparation and like the objective. Same guard, no exception.
+  for (const member of chainedDeliveriesOf({ objective })) {
+    assertNoSecretMaterial(`objective.chain[${member.stepKey}].title`, member.title);
+    assertNoSecretMaterial(`objective.chain[${member.stepKey}].purpose`, member.purpose);
+    assertNoSecretMaterial(`objective.chain[${member.stepKey}].doneWhen`, member.doneWhen);
   }
   for (const decision of input.approvedDecisions) {
     assertNoSecretMaterial(`businessContext.approvedDecisions[${decision.key}]`, decision.decision);
@@ -401,13 +550,31 @@ export function buildExecutionSpec(input: BuildExecutionSpecInput): ExecutionSpe
     // Two runs that deliver the same step but carry different preparation are
     // different execution boundaries, so they are different specs (§13).
     absorbedPreparationKeys: objective.preparation.map((preparation) => preparation.stepKey),
+    // Every step this run delivers, head included. Two runs delivering the same
+    // head but different chains are different instructions, and rule 67 needs
+    // them to be different artifacts — see `identity.ts` for what goes wrong
+    // otherwise.
+    chainStepKeys: chainSteps.map((member) => member.id),
+    chainPolicyVersion: BUILD_CHAIN_POLICY_VERSION,
     specSchemaVersion: EXECUTION_SPEC_SCHEMA_VERSION,
     resolverVersion: EXECUTION_RESOLVER_VERSION,
     policyVersion: EXECUTION_POLICY_VERSION,
     riskPolicyVersion: EXECUTION_RISK_POLICY_VERSION,
   });
 
-  const pricing = resolveStepPricingClass({ step, riskClass: resolution.riskClass });
+  /*
+   * Priced over the whole chain, once, here.
+   *
+   * The head's own risk class comes from the resolver, which already decided
+   * it; a member's is classified the same way the resolver would, from its own
+   * structured fields. `resolveChainPricingClass` takes the maximum.
+   */
+  const pricing = resolveChainPricingClass({
+    members: chainSteps,
+    riskClasses: chainSteps.map((member, index) =>
+      index === 0 ? resolution.riskClass : classifyExecutionRisk(member),
+    ),
+  });
 
   return {
     schemaVersion: EXECUTION_SPEC_SCHEMA_VERSION,

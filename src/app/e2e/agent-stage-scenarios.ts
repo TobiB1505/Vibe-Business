@@ -95,15 +95,16 @@ const TASK: AgentTask = {
   lens: "revenue_economics",
   step: { order: 2, title: "Add a clear pricing section to your website" },
   steps: [
-    "Add a clear pricing section to your website",
-    "Connect your existing checkout flow",
-    "Make the paid path obvious for visitors",
-    "Ensure everything works for signed-in users",
+    { title: "Add a clear pricing section to your website", kind: "delivery" },
+    { title: "Connect your existing checkout flow", kind: "delivery" },
+    { title: "Make the paid path obvious for visitors", kind: "preparation" },
+    { title: "Ensure everything works for signed-in users", kind: "preparation" },
   ],
 };
 
 import type { ValidationCheck } from "@/app/app/projects/[projectId]/agent/agent-validation-checks";
 import type { StoredExecutionEvent } from "@/modules/coding-agent/observability/events";
+import { BUILD_CHAIN_BOUNDARY_LABELS } from "@/modules/coding-agent/view";
 
 /** The four checks the sandbox actually runs, mid-flight. */
 const CHECKS: ValidationCheck[] = [
@@ -216,6 +217,16 @@ type Fixture = {
    * so the notice is what the browser suite sees.
    */
   startRefusal: AgentStartRefusalDetail | null;
+  /**
+   * The chain offer, when there is one.
+   *
+   * A fixture rather than a live resolution, like everything else here — what
+   * this proves is that a screen offered two prices, named both, and left the
+   * single step reachable. Whether `resolveBuildChain` picks the right members
+   * is `chain.test.ts`'s question and is answered against the founder's real
+   * plan there.
+   */
+  chainOffer: { memberCount: number; chainCredits: string; stepCredits: string; boundary: string } | null;
 };
 
 function build(input: Parameters<typeof agentStageSteps>[0]): Fixture {
@@ -233,6 +244,7 @@ function build(input: Parameters<typeof agentStageSteps>[0]): Fixture {
     previewImages: PREVIEW_IMAGES,
     fileEvents: FILE_EVENTS,
     startRefusal: null,
+    chainOffer: null,
   };
 }
 
@@ -243,7 +255,46 @@ const running = (status: OperationStatus = "running") => ({
   filesInspected: 6,
 });
 
+/**
+ * A run that would carry two steps, and the founder's two ways out of it.
+ *
+ * The failure this catches is a screen showing one price for two options — or
+ * offering a chain with no way to decline it, which turns "offered, never
+ * imposed" into a sentence nobody can act on.
+ */
+const CHAIN_OFFER = {
+  memberCount: 2,
+  chainCredits: "350",
+  stepCredits: "200",
+  boundary: BUILD_CHAIN_BOUNDARY_LABELS.successor_risk_ceiling!,
+};
+
 export const E2E_AGENT_STAGE_SCENARIOS = {
+  /** The chain, offered. Two controls, two figures, and the reason it stops. */
+  "agent-stages-chain-offered": () => ({
+    ...build({ timeline: null, runStatus: null, changeProgress: null }),
+    task: {
+      ...TASK,
+      steps: [
+        { title: "Add a clear pricing section to your website", kind: "delivery" as const },
+        { title: "Make the pricing page reachable", kind: "delivery" as const },
+      ],
+    },
+    chainOffer: CHAIN_OFFER,
+  }),
+
+  /** The same plan, one step. The screen exactly as it was before chains. */
+  "agent-stages-chain-declined": () => ({
+    ...build({ timeline: null, runStatus: null, changeProgress: null }),
+    task: {
+      ...TASK,
+      steps: [
+        { title: "Add a clear pricing section to your website", kind: "delivery" as const },
+      ],
+    },
+    chainOffer: null,
+  }),
+
   /** Nothing has ever run. Five pending stages and an idle core. */
   "agent-stages-idle": () =>
     build({ timeline: null, runStatus: null, changeProgress: null }),

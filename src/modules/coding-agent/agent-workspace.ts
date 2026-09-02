@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getExecutionSpecById } from "@/modules/execution-contract/store";
+import { chainedDeliveriesOf } from "@/modules/execution-contract/spec";
 import {
   getPreparedChangeWorkspaceItem,
   type PreparedChangeWorkspaceItem,
@@ -429,8 +430,17 @@ async function resolveTask(
     ...objective.preparation.map((entry) => ({
       order: entry.stepOrder,
       title: entry.title,
+      kind: "preparation" as const,
     })),
-    { order: spec.stepOrder, title: objective.stepTitle },
+    { order: spec.stepOrder, title: objective.stepTitle, kind: "delivery" as const },
+    /* The rest of the chain, if this run carried one. Read off the spec's own
+       fields rather than recomposed, so preparation and delivery cannot drift
+       apart on a screen the way they could if one list carried both. */
+    ...chainedDeliveriesOf(spec.spec).map((entry) => ({
+      order: entry.stepOrder,
+      title: entry.title,
+      kind: "delivery" as const,
+    })),
   ].sort((a, b) => a.order - b.order);
 
   return {
@@ -443,7 +453,7 @@ async function resolveTask(
       effort: chip(move.effort),
       lens: move.primaryLens,
       step: { order: spec.stepOrder, title: objective.stepTitle },
-      steps: planned.map((entry) => entry.title),
+      steps: planned.map((entry) => ({ title: entry.title, kind: entry.kind })),
     },
   };
 }

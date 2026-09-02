@@ -52,6 +52,8 @@ import { AgentReadyStage } from "./agent-ready-stage";
 import { AgentRunTaskHeader } from "./agent-run-task-header";
 import { AgentPreviewActions, AgentReviewDecision } from "./agent-stage-actions";
 import { AgentStartAction } from "./agent-start-action";
+import { resolveBuildChain } from "@/modules/execution-contract/chain";
+import { BUILD_CHAIN_BOUNDARY_LABELS, buildChainOfferLabel } from "@/modules/coding-agent/view";
 import { formatCreditsForDisplay } from "@/modules/credits/units";
 import { forecastRun } from "@/modules/coding-agent/run-forecast";
 import { forecastDriverNotes, forecastEvidenceNote } from "@/modules/coding-agent/view";
@@ -340,20 +342,53 @@ async function AgentWorkspaceBody({
         ) ?? null)
       : null;
   /*
-   * The ceiling for the step that would actually run (launch-v1).
+   * The chain this step's run could carry, resolved once and used for both
+   * prices below.
+   *
+   * The screen never submits these members — the start action takes a boolean
+   * and the server re-derives them inside a fresh preflight. This resolution
+   * exists so the offer *says* what that run would contain, and so the two
+   * prices come from the same answer rather than from two.
+   */
+  const buildChain =
+    agentRoutes?.available && agenticStep
+      ? resolveBuildChain({
+          head: agenticStep,
+          steps: agentRoutes.plan.steps,
+          completed: agentRoutes.completedSteps,
+          capabilityContext: { repository: agentRoutes.snapshot },
+        })
+      : null;
+
+  /*
+   * The ceiling for the run that would actually start (launch-v1).
    *
    * Resolved here rather than carried on the route set, because the Agent price
-   * is per execution pricing class and the class is a property of this step —
-   * see `resolveRouteAgentEconomics`.
+   * is per execution pricing class and the class is a property of the steps the
+   * run delivers — see `resolveRouteAgentEconomics`.
+   *
+   * Two figures, from one function with different member sets, so a screen
+   * offering two buttons cannot show a price the spec would not build.
    */
   const routeEconomics =
     agenticStep && agenticResolution
       ? resolveRouteAgentEconomics({
           projectId,
-          step: agenticStep,
-          riskClass: agenticResolution.riskClass,
+          members: [agenticStep],
+          headRiskClass: agenticResolution.riskClass,
         })
       : null;
+  const chainEconomics =
+    buildChain && agenticResolution && buildChain.members.length > 1
+      ? resolveRouteAgentEconomics({
+          projectId,
+          members: buildChain.members,
+          headRiskClass: agenticResolution.riskClass,
+        })
+      : null;
+  /* The sentence beside the offer. Null when the chain simply ran out of plan. */
+  const chainBoundaryNote = buildChain ? BUILD_CHAIN_BOUNDARY_LABELS[buildChain.boundary] : null;
+
   /*
    * The ready hero names the step the button would start, not just the Move.
    *
@@ -370,11 +405,18 @@ async function AgentWorkspaceBody({
           steps: [
             ...(agentRoutes?.available ? agentRoutes.plan.steps : [])
               .filter((step) => agenticResolution.absorbedPreparation.includes(step.order))
-              .map((step) => ({ order: step.order, title: step.title })),
-            { order: agenticStep.order, title: agenticStep.title },
+              .map((step) => ({ order: step.order, title: step.title, kind: "preparation" as const })),
+            // Every step the offered run delivers, which is the head alone
+            // unless a chain resolved. The kinds are what let a founder read
+            // three bullets and know which are deliveries.
+            ...(buildChain?.members ?? [agenticStep]).map((step) => ({
+              order: step.order,
+              title: step.title,
+              kind: "delivery" as const,
+            })),
           ]
             .sort((a, b) => a.order - b.order)
-            .map((entry) => entry.title),
+            .map((entry) => ({ title: entry.title, kind: entry.kind })),
         }
       : readyTask;
 
@@ -485,14 +527,49 @@ async function AgentWorkspaceBody({
                 liveUrl={project.productionUrl ?? null}
                 startAction={
                   agenticStep ? (
-                    <AgentStartAction
-                      projectId={project.id}
-                      stepKey={agenticStep.id}
-                      /* Where a stale-code refusal sends the founder. Built here,
-                         never in the panel — the panel does not know what the
-                         workspace's segments are called. */
-                      repositoryReadHref={projectSectionHref(project.id, "my-product")}
-                    />
+                    <div className="flex w-full flex-col gap-2">
+                      {/*
+                        The chain is offered, never imposed. Two controls rather
+                        than a checkbox: a founder who wanted to stop after this
+                        step must be able to, and both figures come from one
+                        pricing function with different member sets, so the
+                        number on a button is the number that gets charged.
+
+                        When no chain resolved there is one control and this is
+                        the screen exactly as it was.
+                      */}
+                      {chainEconomics && buildChain && (
+                        <AgentStartAction
+                          projectId={project.id}
+                          stepKey={agenticStep.id}
+                          chain
+                          label={`${buildChainOfferLabel(buildChain.members.length)} — ${formatCreditsForDisplay(chainEconomics.budget.maxCredits)}`}
+                          repositoryReadHref={projectSectionHref(project.id, "my-product")}
+                        />
+                      )}
+                      <AgentStartAction
+                        projectId={project.id}
+                        stepKey={agenticStep.id}
+                        variant={chainEconomics ? "secondary" : "primary"}
+                        label={
+                          chainEconomics && creditEstimate
+                            ? `Build just this step — ${creditEstimate}`
+                            : undefined
+                        }
+                        /* Where a stale-code refusal sends the founder. Built here,
+                           never in the panel — the panel does not know what the
+                           workspace's segments are called. */
+                        repositoryReadHref={projectSectionHref(project.id, "my-product")}
+                      />
+                      {chainEconomics && buildChain && chainBoundaryNote && (
+                        /* Why the chain stops where it does. Without it, a chain
+                           that ends at a Stripe step looks like a bug rather
+                           than the refusal it is. */
+                        <p className="text-fg-meta text-xs" data-testid="agent-chain-boundary">
+                          {chainBoundaryNote}
+                        </p>
+                      )}
+                    </div>
                   ) : undefined
                 }
                 creditEstimate={creditEstimate}

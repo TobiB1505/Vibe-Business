@@ -174,9 +174,10 @@ const REAL_COMMIT = "61618ac8045263a5762021240316a4d54996115a";
 
 function resolveRealPlan(options: { budgetAuthorized?: boolean } = {}) {
   return resolvePlanExecution({
-    // Nothing in the product completes a step yet, so an empty set is the
-    // truthful state rather than a simplification — and it is the state the
-    // defect appeared in.
+    // Deliberately empty: this suite pins how a real plan resolves with no
+    // progress recorded, which is the state the defect appeared in. Completion
+    // does reach the router now — `dependencies.test.ts` is where that is
+    // asserted.
     plan: fakePlanContext(REAL_STEPS),
     repository: {
       connection: { id: "conn-vibe", fullName: "TobiB1505/Vibe-Business", defaultBranch: "main" },
