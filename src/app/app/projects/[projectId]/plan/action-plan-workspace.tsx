@@ -296,6 +296,14 @@ export function ActionPlanWorkspace({
                 <MoveCard
                   opportunity={activeOpportunity}
                   execution={executionStates[activeOpportunity.id] ?? null}
+                  // Exactly the condition the detail panel below renders the
+                  // question under: this Move's own plan, carrying an open
+                  // request. Anything looser would let the card promise a
+                  // question that is not there (UX audit F-3).
+                  questionIsBelow={
+                    planView?.plan.opportunityId === activeOpportunity.id &&
+                    planView.founderInputRequest !== null
+                  }
                 />
               </motion.div>
             </AnimatePresence>
