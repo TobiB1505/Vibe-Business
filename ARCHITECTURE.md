@@ -347,6 +347,7 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0073](docs/decisions/0073-the-charge-lands-on-what-was-sold.md) | Settlement waits for validation; the usage ledger fills itself | §3.11 |
 | [0074](docs/decisions/0074-removing-a-file.md) | A prepared change may remove a file; the observation decides which | §3.6 |
 | [0075](docs/decisions/0075-the-photograph-nobody-took.md) | The visual review capture path is deleted (completes 0065; the read path stays for one historical approval) | §3.9 |
+| [0076](docs/decisions/0076-build-chains.md) | One run may deliver the contiguous build steps of a Move | §3.6 |
 
 ### Layers with no section above
 

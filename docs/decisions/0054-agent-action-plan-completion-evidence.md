@@ -1,6 +1,6 @@
 # 0054 - Agent Action Plan completion comes from verified execution evidence
 
-Status: Accepted; amended 2026-09-02 — the projection could not complete the route it was written for, and the execution router did not read it
+Status: Accepted; amended 2026-09-02 — the projection could not complete the route it was written for, and the execution router did not read it; amended by [0076](0076-build-chains.md) — one execution may complete several steps
 Date: 2026-08-26
 
 ## Context
