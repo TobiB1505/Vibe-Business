@@ -228,6 +228,54 @@ describe("the baseline listing", () => {
   });
 });
 
+/**
+ * The two failure branches that could not be staged before.
+ *
+ * `captureWorkspaceBaseline` and `plantChangeMarker` each report *which*
+ * observation broke and what the command said, and until now only the listing
+ * half of that could be tested: the fake performed `touch` and the
+ * here-document write itself and answered `exitCode: 0` before it ever read the
+ * configured result, so `results` and `defaultExitCode` were silently overruled
+ * for exactly these two commands. A diagnosis nobody can provoke is a
+ * diagnosis nobody has checked.
+ */
+describe("an observation that fails after the listing worked", () => {
+  it("names the write when the baseline could not be put down", async () => {
+    const baselinePath = "/vercel/sandbox/.vibe-agent/baseline";
+    // The exact command `writeSandboxTextFile` builds: the sorted listing,
+    // NUL-delimited, base64'd into a quoted here-document. Spelled out rather
+    // than matched loosely, so this test also pins what gets written.
+    const content = ["app/page.tsx", "app/robots.ts"].map((path) => `${path}\0`).join("");
+    const encoded = Buffer.from(content, "utf8").toString("base64");
+    const script = [`base64 -d > '${baselinePath}' <<'VIBE_EOF'`, encoded, "VIBE_EOF"].join("\n");
+
+    const { sandbox } = await handle({
+      files: { "repo/app/page.tsx": "x", "repo/app/robots.ts": "y" },
+      results: { [`sh -c ${script}`]: { exitCode: 1, output: "sh: cannot create: read-only" } },
+    });
+
+    const captured = await captureWorkspaceBaseline({ sandbox, cwd: "repo", baselinePath });
+
+    expect(captured.ok).toBe(false);
+    // `listing` would be the wrong answer: the walk worked, the write did not,
+    // and those are different bugs reached through the same return.
+    expect(captured.ok === false && captured.observation).toBe("baseline_write");
+    expect(captured.ok === false && captured.detail).toContain("read-only");
+  });
+
+  it("names the marker when it could not be planted", async () => {
+    const { sandbox } = await handle({
+      results: { [`touch -- ${MARKER}`]: { exitCode: 1, output: "touch: permission denied" } },
+    });
+
+    const planted = await plantChangeMarker({ sandbox, markerPath: MARKER });
+
+    expect(planted.ok).toBe(false);
+    expect(planted.ok === false && planted.observation).toBe("marker");
+    expect(planted.ok === false && planted.detail).toContain("permission denied");
+  });
+});
+
 describe("the marker", () => {
   it("is planted outside the repository, so it is never itself a change", async () => {
     const { provider, sandbox } = await handle();
