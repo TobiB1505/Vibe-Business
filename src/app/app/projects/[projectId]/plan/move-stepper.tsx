@@ -142,7 +142,27 @@ export function MoveStepper({
                   >
                     {MOVE_BAND_LABELS[band]}
                   </span>
-                  <span className={cn("line-clamp-1 max-w-36 text-xs", active ? "text-fg-body" : "text-fg-muted")}>
+                  {/*
+                    * Two lines, not one (UX audit F-5).
+                    *
+                    * At `line-clamp-1 max-w-36` every step but the active one
+                    * was cut mid-word — "Decide how customer…", "Say who the
+                    * product i…" — so the stepper, which is the product's
+                    * answer to "what is the plan", elided three quarters of it.
+                    *
+                    * The string was never lost to assistive technology:
+                    * `line-clamp` is CSS, so the button's accessible name has
+                    * always carried the full title. This is a fix for the
+                    * sighted reader, and `title` gives them the rest on hover
+                    * for the rare Move that still does not fit.
+                    */}
+                  <span
+                    title={opportunity.title}
+                    className={cn(
+                      "line-clamp-2 max-w-44 text-xs text-balance",
+                      active ? "text-fg-body" : "text-fg-muted",
+                    )}
+                  >
                     {opportunity.title}
                   </span>
                 </button>
