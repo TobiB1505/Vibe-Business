@@ -3,10 +3,14 @@ import type { AuthenticatedAnalysisFailure } from "./errors";
 /**
  * The browser-session boundary (Sprint 5 §5, ADR 0012).
  *
- * Browserbase is adapter #1 and must not become domain logic: nothing outside
- * `./browserbase/` may import its SDK, name its fields, or see its errors.
- * The interface is deliberately narrow — four verbs — because a remote browser
- * is infrastructure, not a feature.
+ * The provider is Vibe's own sandbox (ADR 0076), and it must not become domain
+ * logic: nothing outside `./sandbox-browser/` may name its ports, its tokens or
+ * its guard. The interface is deliberately narrow — four verbs — because a
+ * remote browser is infrastructure, not a feature.
+ *
+ * It was Browserbase first, and the port did not change when the provider did.
+ * That is the evidence the boundary was drawn in the right place, and it is the
+ * reason this comment says so rather than being rewritten to look inevitable.
  *
  * Two fields never appear on a persisted or client-visible object, and the
  * types enforce it by keeping them inside short-lived return values only:

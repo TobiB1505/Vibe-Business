@@ -10,7 +10,7 @@ import type {
 /**
  * In-memory doubles for the Deep Scan store and service (Sprint 5 §33).
  *
- * No test may reach Browserbase, Supabase, or a real browser. The database
+ * No test may reach a browser provider, Supabase, or a real browser. The database
  * double is deliberately more than a stub: it models the three partial unique
  * indexes the migration relies on, because those indexes *are* the safety
  * argument for "a double click cannot start two browsers" and "the included
@@ -263,7 +263,7 @@ export type FakeProviderBehaviour = {
 };
 
 export class FakeBrowserProvider implements BrowserSessionProvider {
-  readonly name = "browserbase";
+  readonly name = "vercel_sandbox_browser";
   readonly calls: { method: string; arg?: string }[] = [];
 
   constructor(private readonly behaviour: FakeProviderBehaviour = {}) {}

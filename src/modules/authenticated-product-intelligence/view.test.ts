@@ -347,9 +347,10 @@ describe("buildDeepScanViewModel — safety of the DTO", () => {
  * that is indistinguishable from a broken page — the user reported "Deep Scan
  * isn't clickable, it's just text".
  *
- * The cause was a silent gate: `hasBrowserbaseApiKey()` required a `bb_`
+ * The cause was a silent gate: the provider check of the day required a `bb_`
  * prefix, so a key in any other shape removed the button with no message
- * anywhere. Both halves are covered here — the state must be reported, and the
+ * anywhere. That function and its provider are gone (ADR 0076) and the lesson
+ * is not: both halves are covered here — the state must be reported, and the
  * reason must travel with it.
  */
 describe("buildDeepScanViewModel — unavailability is always explained", () => {

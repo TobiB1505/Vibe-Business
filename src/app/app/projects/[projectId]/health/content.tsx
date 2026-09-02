@@ -17,7 +17,7 @@ import {
 } from "@/modules/business-audit/store";
 import { buildAuditEvidenceNotice } from "@/modules/business-audit/evidence-notice";
 import { getDeepScanAccessStatus } from "@/modules/authenticated-product-intelligence/service";
-import { isBrowserProviderConfigured } from "@/modules/authenticated-product-intelligence/browserbase/client";
+import { isBrowserProviderConfigured } from "@/modules/authenticated-product-intelligence/sandbox-browser/client";
 import {
   getLatestSession,
   getLatestSuccessfulAuthenticatedSnapshot,

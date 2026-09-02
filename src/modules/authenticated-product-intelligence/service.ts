@@ -195,7 +195,7 @@ export async function startDeepScan(
 
   // Money before the browser (§18). An additional scan is Credit-priced under
   // `launch-v1`; the included scan resolves free and never reaches a
-  // reservation. Discovering an empty wallet after paying Browserbase would be
+  // reservation. Discovering an empty wallet after paying for a browser would be
   // both a cost leak and an insult.
   const held = await holdDeepScanCredits({ projectId: params.projectId, sessionId, accessMode });
   if (!held.ok) {
@@ -241,7 +241,7 @@ export async function startDeepScan(
     await provider.terminateSession(handle.providerSessionId).catch(() => undefined);
     // Our own persistence failing is explicitly one of the six outcomes that
     // must not cost the user anything (PRODUCT.md §12.1). Vibe still paid
-    // Browserbase, which is what `abandoned_with_usage` records.
+    // the provider, which is what `abandoned_with_usage` records.
     await releaseHold("abandoned_with_usage");
     return record.error === "scan_already_running"
       ? { ok: false, error: "scan_already_running" }

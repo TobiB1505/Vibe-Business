@@ -19,10 +19,12 @@ import { z } from "zod";
  *
  * ## Why the minimum is 32 characters
  *
- * Not a format guess — see `browserbase.ts` for what a format guess cost this
- * repository. It is a length floor on a value whose only job is to be
- * unguessable, and a short one is the single way this scheme fails quietly:
- * every token stays well-formed and the whole set becomes searchable.
+ * Not a format guess. The deleted `browserbase.ts` recorded what one cost this
+ * repository — a `bb_` prefix check that silently removed the Deep Scan button
+ * for a key in any other shape — and `anthropic.ts` still carries the lesson.
+ * This is a length floor on a value whose only job is to be unguessable, and a
+ * short one is the single way this scheme fails quietly: every token stays
+ * well-formed and the whole set becomes searchable.
  */
 const browserSandboxEnvSchema = z.object({
   VIBE_BROWSER_SESSION_SECRET: z

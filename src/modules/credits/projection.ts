@@ -236,16 +236,32 @@ export type DeepScanUsageRow = {
   project_id: string;
   duration_ms: number;
   created_at: string;
+  /**
+   * Which browser produced the measurement.
+   *
+   * Read from the row rather than assumed. It was assumed — a literal
+   * `"browserbase"` — and after ADR 0076 that would have filed every scan run
+   * in Vibe's own sandbox under a provider Vibe no longer uses, in the ledger
+   * every price is derived from.
+   */
+  provider: string;
 };
 
 /**
  * Projects Deep Scan browser time (§41).
  *
- * The cost is **always** unknown, and that is not a gap in this function — it
- * is the state of the world. Browserbase does not return a price with a
- * session, and `buildDeepScanUsage` pins `providerCostUsd: null` as a literal
- * type so no code path can invent one. Billing records the measured
- * milliseconds and says the cost is unknown.
+ * The cost is unknown, and until ADR 0076 that was the state of the world
+ * rather than a gap: Browserbase did not return a price with a session, and
+ * `buildDeepScanUsage` pins `providerCostUsd: null` as a literal type so no
+ * code path can invent one.
+ *
+ * It is now a gap, and a nameable one. A Deep Scan runs in a Vercel sandbox,
+ * `VERCEL_SANDBOX_RATES` has been founder-attested since 2026-08-20, and
+ * `estimateSandboxCost` already derives a figure for the agent's sandboxes from
+ * exactly that. What is missing is the measurement: `terminateSession` receives
+ * a `SandboxUsage` from `stop()` and does not record it. Until it does, this
+ * still says the cost is unknown — which is true, and better than an estimate
+ * derived from a duration nobody measured against the right meter.
  */
 export function projectDeepScanUsage(
   row: DeepScanUsageRow,
@@ -258,7 +274,7 @@ export function projectDeepScanUsage(
       operationRunId: null,
       projectId: row.project_id,
       userId: owner.userId,
-      provider: "browserbase",
+      provider: row.provider,
       sku: "browser_duration_ms",
       quantity: row.duration_ms,
       occurredAt: row.created_at,

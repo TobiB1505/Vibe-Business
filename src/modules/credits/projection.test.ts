@@ -314,7 +314,13 @@ describe("stored cost parsing", () => {
 describe("browser usage", () => {
   it("records Deep Scan duration with an unknown cost, never zero", () => {
     const events = projectDeepScanUsage(
-      { id: "scan-1", project_id: "project-1", duration_ms: 42_000, created_at: "2026-08-14T00:00:00Z" },
+      {
+        id: "scan-1",
+        project_id: "project-1",
+        duration_ms: 42_000,
+        created_at: "2026-08-14T00:00:00Z",
+        provider: "browserbase",
+      },
       { userId: "user-1" },
     );
 
@@ -322,6 +328,41 @@ describe("browser usage", () => {
     expect(events[0].quantity).toBe(42_000);
     expect(events[0].costStatus).toBe("cost_unknown");
     expect(events[0].rawCostNanoUsd).toBeNull();
+  });
+
+  it("files a scan under the browser that produced it", () => {
+    const events = projectDeepScanUsage(
+      {
+        id: "scan-2",
+        project_id: "project-1",
+        duration_ms: 30_000,
+        created_at: "2026-09-02T00:00:00Z",
+        provider: "vercel_sandbox_browser",
+      },
+      { userId: "user-1" },
+    );
+
+    // This was a literal `"browserbase"`, so after ADR 0076 every scan run in
+    // Vibe's own sandbox would have been filed under a provider Vibe no longer
+    // uses — in the ledger every price is derived from.
+    expect(events[0].provider).toBe("vercel_sandbox_browser");
+  });
+
+  it("keeps a historical Browserbase row filed under Browserbase", () => {
+    const events = projectDeepScanUsage(
+      {
+        id: "scan-3",
+        project_id: "project-1",
+        duration_ms: 30_000,
+        created_at: "2026-08-14T00:00:00Z",
+        provider: "browserbase",
+      },
+      { userId: "user-1" },
+    );
+
+    // A cost figure belongs to the provider that produced it, and the seven
+    // rows written before the swap are not relabelled.
+    expect(events[0].provider).toBe("browserbase");
   });
 
   it("records visual-review browser duration the same way", () => {
@@ -436,7 +477,13 @@ describe("cost summary", () => {
     const usage = [
       ...projectAiUsage(aiRow()),
       ...projectDeepScanUsage(
-        { id: "scan-1", project_id: "project-1", duration_ms: 42_000, created_at: "2026-08-14T00:00:00Z" },
+        {
+          id: "scan-1",
+          project_id: "project-1",
+          duration_ms: 42_000,
+          created_at: "2026-08-14T00:00:00Z",
+          provider: "browserbase",
+        },
         { userId: "user-1" },
       ),
     ];

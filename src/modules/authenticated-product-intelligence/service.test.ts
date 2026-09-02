@@ -5,7 +5,7 @@ import type { AuthenticatedProductIntelligenceSnapshot } from "./schema";
  * Deep Scan lifecycle tests (Sprint 5 §33).
  *
  * The browser and the analyzer are mocked at the module boundary, so nothing
- * here opens a socket, reaches Browserbase, or drives a real page. What is
+ * here opens a socket, reaches a browser provider, or drives a real page. What is
  * *not* mocked is the database double — it enforces the same partial unique
  * indexes as the migration, so the entitlement and concurrency guarantees are
  * actually exercised rather than assumed.

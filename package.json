@@ -38,7 +38,6 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "0.115.0",
-    "@browserbasehq/sdk": "2.16.0",
     "@octokit/auth-app": "8.3.0",
     "@octokit/oauth-methods": "6.0.2",
     "@sentry/nextjs": "10.70.0",

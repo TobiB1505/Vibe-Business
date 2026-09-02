@@ -48,7 +48,7 @@ const ABANDONED_STATUSES: DeepScanSessionStatus[] = ["cancelled", "expired"];
  * Failures caused by the browser provider rather than by the user.
  *
  * `START_ATTEMPT_LIMITS.providerFailuresCountTowardLimit` is `false`, so these
- * are excluded when counting attempts: a Browserbase outage is our problem and
+ * are excluded when counting attempts: a browser-provider outage is our problem and
  * must not burn the user's retry budget.
  */
 const PROVIDER_CAUSED_FAILURES = [

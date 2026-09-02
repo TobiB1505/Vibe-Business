@@ -14,7 +14,7 @@ import type { DeepScanAccessMode } from "./entitlement";
  *     inference: input/output tokens against effective-dated per-token prices.
  *     A browser session has no tokens and no per-token price. Forcing both into
  *     one table would make every future cost question ambiguous.
- *  2. **Cost is never fabricated.** Browserbase does not return a price with
+ *  2. **Cost is never fabricated.** The browser provider does not return a price with
  *     the session, so `providerCostUsd` stays null and duration is persisted
  *     instead. A cost computed from a rate we invented would look like
  *     measurement while being a guess — the same discipline the AI pricing

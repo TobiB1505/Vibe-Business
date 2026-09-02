@@ -1,6 +1,6 @@
 import { WorkspaceSection } from "@/components/layout/project-shell";
 import { EmptyState } from "@/components/ui/states";
-import { isBrowserProviderConfigured } from "@/modules/authenticated-product-intelligence/browserbase/client";
+import { isBrowserProviderConfigured } from "@/modules/authenticated-product-intelligence/sandbox-browser/client";
 import { getDeepScanAccessStatus } from "@/modules/authenticated-product-intelligence/service";
 import {
   getLatestSession,
