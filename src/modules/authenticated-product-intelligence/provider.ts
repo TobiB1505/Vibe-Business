@@ -3,10 +3,14 @@ import type { AuthenticatedAnalysisFailure } from "./errors";
 /**
  * The browser-session boundary (Sprint 5 §5, ADR 0012).
  *
- * Browserbase is adapter #1 and must not become domain logic: nothing outside
- * `./browserbase/` may import its SDK, name its fields, or see its errors.
- * The interface is deliberately narrow — four verbs — because a remote browser
- * is infrastructure, not a feature.
+ * The provider is Vibe's own sandbox (ADR 0076), and it must not become domain
+ * logic: nothing outside `./sandbox-browser/` may name its ports, its tokens or
+ * its guard. The interface is deliberately narrow — four verbs — because a
+ * remote browser is infrastructure, not a feature.
+ *
+ * It was Browserbase first, and the port did not change when the provider did.
+ * That is the evidence the boundary was drawn in the right place, and it is the
+ * reason this comment says so rather than being rewritten to look inevitable.
  *
  * Two fields never appear on a persisted or client-visible object, and the
  * types enforce it by keeping them inside short-lived return values only:
@@ -49,6 +53,30 @@ export type CreateBrowserSessionOptions = {
 
 export type ProviderResult<T> = { ok: true; value: T } | { ok: false; error: AuthenticatedAnalysisFailure };
 
+/**
+ * What a browser session consumed, as the provider reports it at termination.
+ *
+ * Every field is nullable because every one is genuinely absent for some
+ * provider. Null is never coerced to zero: "we did not measure this" and "this
+ * was zero" are different facts and only one is safe to sum
+ * (`economy/cost.ts`).
+ */
+export type BrowserSessionUsage = {
+  /** Wall-clock lifetime of the sandbox, which is what memory is billed for. */
+  sandboxDurationMs: number | null;
+  activeCpuMs: number | null;
+  outboundBytes: number | null;
+  /**
+   * Null unless the provider states an attributable price. Never derived —
+   * a figure computed from a rate belongs in the estimate columns, under a
+   * different `cost_status`, so an assumption is never summed as a
+   * measurement.
+   */
+  costUsd: number | null;
+  /** The allocation the session actually ran under, for the estimate to use. */
+  vcpus: number;
+};
+
 export type BrowserConnection = {
   /**
    * CDP endpoint for an existing session. **Capability URL** — fetched per use
@@ -77,6 +105,16 @@ export type BrowserSessionProvider = {
   /**
    * Best-effort termination. Called on completion, failure, cancellation and
    * expiry — so it must be safe to call on an already-dead session.
+   *
+   * Returns what the provider reported about the session's consumption, or
+   * `null` when it reports nothing. Termination is the only moment those
+   * figures exist — a running sandbox has no final wall clock — so a
+   * `Promise<void>` here was a measurement thrown away at the one point it
+   * could be taken. Deep Scan was the last priced operation with no measured
+   * cost behind it, and this is why (ADR 0076).
+   *
+   * A session already gone reports `null` rather than failing: there is nothing
+   * to measure, and a terminal path must not turn cleanup into an error.
    */
-  terminateSession(providerSessionId: string): Promise<ProviderResult<void>>;
+  terminateSession(providerSessionId: string): Promise<ProviderResult<BrowserSessionUsage | null>>;
 };

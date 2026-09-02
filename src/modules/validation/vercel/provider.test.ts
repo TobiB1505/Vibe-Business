@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { SANDBOX_BUDGETS } from "../budgets";
+import { SANDBOX_BUDGETS, SANDBOX_RESOURCES } from "../budgets";
 
 /**
  * The Vercel Sandbox adapter's creation options (Sprint 10A §2, §24, §43).
@@ -796,6 +796,26 @@ describe("capturing an artifact must not cost the ledger (Sprint 10B §5)", () =
     expect(options).not.toHaveProperty("image");
     expect(options.ports).toEqual([3000]);
     expect(options.persistent).toBe(false);
+  });
+
+  it("starts an image-only sandbox with no source and no credential", async () => {
+    const { createVercelSandboxProvider } = await import("./provider");
+    await createVercelSandboxProvider().create({
+      name: "vibe-browser-abc",
+      source: { kind: "image" },
+      networkPolicy: { mode: "deny_all" },
+      timeoutMs: 1000,
+      env: {},
+    });
+
+    const options = create.mock.calls[0][0] as Record<string, unknown>;
+    // The absence is the assertion. A `source` key of any shape here would mean
+    // something was cloned into a VM that exists precisely so nothing is.
+    expect(options).not.toHaveProperty("source");
+    expect(options.image).toBe(SANDBOX_RESOURCES.image);
+    expect(options.persistent).toBe(false);
+    // No clone means no credential to pass — and therefore none to destroy.
+    expect(JSON.stringify(options)).not.toContain("password");
   });
 });
 

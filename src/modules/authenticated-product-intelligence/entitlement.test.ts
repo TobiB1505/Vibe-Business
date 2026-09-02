@@ -61,7 +61,7 @@ describe("authorizeDeepScan — included first scan", () => {
 
   it("decides how a scan is paid for before anything could cost provider money", () => {
     // Every other gate is simultaneously open; the entitlement still decides
-    // first. This ordering is what stops us paying Browserbase and only then
+    // first. This ordering is what stops us paying for a browser and only then
     // telling the user they cannot run a scan.
     const decision = authorizeDeepScan(
       facts({
@@ -116,7 +116,7 @@ describe("authorizeDeepScan — failures do not consume the entitlement", () => 
     ["a cancelled session"],
     ["a session that expired before analysis"],
     ["an unreachable authenticated origin"],
-    ["a Browserbase outage"],
+    ["a browser-provider outage"],
     ["our own persistence failing"],
   ])("still allows the included scan after %s", () => {
     expect(authorizeDeepScan(facts({ hasSuccessfulIncludedScan: false }))).toEqual({

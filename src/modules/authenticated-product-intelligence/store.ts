@@ -48,7 +48,7 @@ const ABANDONED_STATUSES: DeepScanSessionStatus[] = ["cancelled", "expired"];
  * Failures caused by the browser provider rather than by the user.
  *
  * `START_ATTEMPT_LIMITS.providerFailuresCountTowardLimit` is `false`, so these
- * are excluded when counting attempts: a Browserbase outage is our problem and
+ * are excluded when counting attempts: a browser-provider outage is our problem and
  * must not burn the user's retry budget.
  */
 const PROVIDER_CAUSED_FAILURES = [
@@ -611,6 +611,15 @@ export async function recordDeepScanUsage(
     pages_inspected: usage.pagesInspected,
     // Stays null until a provider reports a real figure.
     provider_cost_usd: usage.providerCostUsd,
+    // The dimensions the rate applies to, and Vibe's derivation from them
+    // (ADR 0076). Deliberately not `provider_cost_usd`: that column means "the
+    // provider charged this" everywhere else, and overloading it would let an
+    // assumption be summed as a measurement.
+    active_cpu_ms: usage.activeCpuMs,
+    network_egress_bytes: usage.outboundBytes,
+    estimated_cost_nano_usd: usage.estimatedCostNanoUsd,
+    cost_pricing_version: usage.costPricingVersion,
+    vcpus: usage.vcpus,
   });
 
   if (error) {

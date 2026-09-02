@@ -17,7 +17,7 @@ import {
 } from "@/modules/business-audit/store";
 import { buildAuditEvidenceNotice } from "@/modules/business-audit/evidence-notice";
 import { getDeepScanAccessStatus } from "@/modules/authenticated-product-intelligence/service";
-import { isBrowserProviderConfigured } from "@/modules/authenticated-product-intelligence/browserbase/client";
+import { isBrowserProviderConfigured } from "@/modules/authenticated-product-intelligence/sandbox-browser/client";
 import {
   getLatestSession,
   getLatestSuccessfulAuthenticatedSnapshot,
@@ -276,6 +276,8 @@ export async function ProjectBusinessHealth({ access }: { access: ProjectAccess 
     // the only way out of that state. It now resolves on this route.
     <WorkspaceSection
       id="business-audit"
+      eyebrow="Business intelligence"
+      variant="intelligence"
       actions={
         <RunAuditButton
           projectId={project.id}
@@ -286,6 +288,11 @@ export async function ProjectBusinessHealth({ access }: { access: ProjectAccess 
           billable={!auditAccess.freeAuditAvailable && !auditAccess.systemRefreshAvailable}
           activeOperation={activeAuditOperation}
         />
+      }
+      headerStatus={
+        creditGate.kind === "not_applicable" ? undefined : (
+          <AuditCreditNotice gate={creditGate} />
+        )
       }
     >
       <div className="flex flex-col gap-4">
@@ -317,7 +324,7 @@ export async function ProjectBusinessHealth({ access }: { access: ProjectAccess 
           CORE-2 §16: the first qualified audit is free, and the entitlement is
           decided server-side. This one states the decision and nothing else —
           the price and the balance belong to the state *after* it is spent, and
-          `AuditCreditNotice` below is where they are said.
+          `AuditCreditNotice` in the command header is where they are said.
         */}
         {auditReady && !latestAudit?.result && auditAccess.freeAuditAvailable && (
           <Notice tone="info" label="Included">
@@ -331,8 +338,6 @@ export async function ProjectBusinessHealth({ access }: { access: ProjectAccess 
             Updating it is on us — it won&rsquo;t use up anything of yours.
           </Notice>
         )}
-
-        <AuditCreditNotice gate={creditGate} />
 
         {/*
           The lifecycle drawn as its own states rather than one completed map

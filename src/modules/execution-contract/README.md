@@ -63,7 +63,7 @@ marked complete on the founder's behalf.
 
 An earlier build step used to be in that first list. It still blocks a run that
 does not deliver it — a product change is never absorbable preparation — but
-since [ADR 0076](../../../docs/decisions/0076-build-chains.md) a run may carry
+since [ADR 0077](../../../docs/decisions/0077-build-chains.md) a run may carry
 its contiguous successors as further *deliveries*. `chain.ts` answers that,
 forwards, and it is deliberately a separate walk: absorption is all-or-nothing
 and never completes the Planner's step, while a chain may be shortened and must

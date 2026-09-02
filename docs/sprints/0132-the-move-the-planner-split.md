@@ -1,6 +1,6 @@
 # The Move the Planner split, and the run that puts it back together
 
-**Recorded 2026-09-02, after the work.** Four commits, one migration, one ADR ([0076](../decisions/0076-build-chains.md)). Stage 3 of the architecture audit, second half — [Sprint 0130](0130-the-successor-that-never-came-up.md) was the first, and it turned out to be a repair rather than a feature.
+**Recorded 2026-09-02, after the work.** Four commits, one migration, one ADR ([0077](../decisions/0077-build-chains.md)). Stage 3 of the architecture audit, second half — [Sprint 0131](0131-the-successor-that-never-came-up.md) was the first, and it turned out to be a repair rather than a feature.
 
 ## The measurement that decided the shape
 

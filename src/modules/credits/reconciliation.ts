@@ -288,7 +288,12 @@ async function reconcileDeepScanUsage(
 ): Promise<SourceReconciliation> {
   let query = supabase
     .from("deep_scan_provider_usage")
-    .select("id, project_id, duration_ms, created_at")
+    // `provider` is selected because the projection reads it. It used to be a
+    // literal in projection.ts, which meant this query could omit the column
+    // and nothing anywhere would notice it was missing.
+    .select(
+      "id, project_id, duration_ms, created_at, provider, estimated_cost_nano_usd, cost_pricing_version",
+    )
     .order("created_at", { ascending: true })
     .limit(scope.limit ?? DEFAULT_LIMIT);
 

@@ -1,4 +1,4 @@
-# 0076 - Build chains: one run may deliver the contiguous steps of a Move
+# 0077 - Build chains: one run may deliver the contiguous steps of a Move
 
 Status: Accepted
 Date: 2026-09-02
@@ -19,7 +19,7 @@ The founder's own plan is the shape:
 5  founder_action      Confirm a real purchase             depends on 3, 4
 ```
 
-Steps 2 and 3 are one engineering change. Executing them as two runs means run → approve → merge → re-read the repository (HEAD moved) → the plan may have been superseded → run again. [Sprint 0130](../sprints/0130-the-successor-that-never-came-up.md) had to make that sequence *work at all* before this decision could be about efficiency rather than about a defect.
+Steps 2 and 3 are one engineering change. Executing them as two runs means run → approve → merge → re-read the repository (HEAD moved) → the plan may have been superseded → run again. [Sprint 0131](../sprints/0131-the-successor-that-never-came-up.md) had to make that sequence *work at all* before this decision could be about efficiency rather than about a defect.
 
 ## Decision
 

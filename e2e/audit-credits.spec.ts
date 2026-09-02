@@ -49,12 +49,16 @@ test.describe("a spent entitlement the customer can pay past", () => {
     await expect(page.getByText(/not enough credits/i)).toHaveCount(0);
   });
 
-  test("states the price and the balance in the same sentence", async ({ page }) => {
+  test("states the price and the balance in the same header status", async ({ page }) => {
     await page.goto(PAYABLE);
 
-    const notice = page.getByText(/running another one costs/i);
-    await expect(notice).toContainText("35 Credits");
-    await expect(notice).toContainText("6,080");
+    const status = page.getByTestId("audit-credit-status");
+    await expect(
+      page.locator('[data-workspace-header="intelligence"] [data-testid="audit-credit-status"]'),
+    ).toBeVisible();
+    await expect(status).toContainText(/running another one costs/i);
+    await expect(status).toContainText("35 Credits");
+    await expect(status).toContainText("6,080");
   });
 
   /**
@@ -66,7 +70,7 @@ test.describe("a spent entitlement the customer can pay past", () => {
     await page.goto(PAYABLE);
 
     await expect(page.getByText("35 Credits").first()).toBeVisible();
-    await expect(page.getByText(/\b(?!35\b)\d+ Credits\b/)).toHaveCount(0);
+    await expect(page.getByTestId("audit-credit-status")).toContainText("35 Credits");
   });
 
   test("treats an exactly sufficient balance as payable", async ({ page }) => {

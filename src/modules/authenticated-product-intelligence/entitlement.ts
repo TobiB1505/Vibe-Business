@@ -10,7 +10,7 @@
  * their product — before Vibe was ever allowed to look at the part that
  * matters. The included scan is product activation, not a discount.
  *
- * This module is a **pure decision function**. It holds no Browserbase
+ * This module is a **pure decision function**. It holds no provider
  * knowledge, and the browser service holds no pricing knowledge (§10), so the
  * credits system can later add a mode here without touching orchestration.
  *
@@ -73,7 +73,7 @@ export type DeepScanAuthorization =
  *
  * The distinction that matters: a genuine infrastructure failure should not be
  * punished like abuse. `providerFailuresCountTowardLimit: false` is what
- * encodes that — a Browserbase outage burns neither the entitlement nor the
+ * encodes that — a provider outage burns neither the entitlement nor the
  * user's attempt budget.
  */
 export const START_ATTEMPT_LIMITS = {
@@ -118,7 +118,7 @@ export type DeepScanEntitlementFacts = {
  *
  * Ordering is load-bearing. `credits_required` is evaluated **before** any
  * provider work can begin (§18): discovering that a user cannot run a scan
- * only after paying Browserbase for a session would be both a cost leak and an
+ * only after paying for a session would be both a cost leak and an
  * insult. Cheap local checks come first for the same reason.
  */
 export function authorizeDeepScan(facts: DeepScanEntitlementFacts): DeepScanAuthorization {
@@ -182,7 +182,7 @@ export function authorizeDeepScan(facts: DeepScanEntitlementFacts): DeepScanAuth
 /**
  * The safe, derived status the application and UI may see (Sprint 5 §6).
  *
- * Contains no provider session id, no Browserbase internals, no provider cost,
+ * Contains no provider session id, no provider internals, no provider cost,
  * and no key — by construction, because there is no field for any of them.
  */
 export type DeepScanAccessStatus = {

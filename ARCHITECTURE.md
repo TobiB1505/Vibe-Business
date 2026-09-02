@@ -170,7 +170,7 @@ The one thing deliberately absent: **no consumption rate card is active.** `CRED
 
 **[Confirmed principle — no secrets in the ledger]** Usage events never contain prompt text, model responses, reasoning, or API keys.
 
-**[Confirmed — ADR 0061, re-derived by ADR 0062]** What a Credit buys per operation *is* decided: `launch-v1` in `src/modules/credits/retail.ts` prices Business Audit at 35, Next Moves and Action Plan at 20, an additional Deep Scan at 25, and an agent improvement at 150 / 200 / 350 by execution pricing class, effective `2026-09-01T00:00:00.000Z`. `src/modules/credits/margin-guard.ts` recomputes every price's contribution margin from the provider rates in force at the instant it is asked, applied to frozen production quantities, and fails below 70% — which is how the card came to be re-derived: it was first priced against a scheduled Sonnet 5 rise to $3/$15 that Anthropic then withdrew, and the guard showed those prices to be ~57% too high. Prices carry a `PriceBasis`: three are `measured`, the Agent is `modelled` (its `complex` tier has zero cost observations), and Deep Scan is `policy` — no browser-provider rate exists to check it against.
+**[Confirmed — ADR 0061, re-derived by ADR 0062]** What a Credit buys per operation *is* decided: `launch-v1` in `src/modules/credits/retail.ts` prices Business Audit at 35, Next Moves and Action Plan at 20, an additional Deep Scan at 25, and an agent improvement at 150 / 200 / 350 by execution pricing class, effective `2026-09-01T00:00:00.000Z`. `src/modules/credits/margin-guard.ts` recomputes every price's contribution margin from the provider rates in force at the instant it is asked, applied to frozen production quantities, and fails below 70% — which is how the card came to be re-derived: it was first priced against a scheduled Sonnet 5 rise to $3/$15 that Anthropic then withdrew, and the guard showed those prices to be ~57% too high. Prices carry a `PriceBasis`: three are `measured`, the Agent is `modelled` (its `complex` tier has zero cost observations), and Deep Scan is `policy` — it stays `policy` after [ADR 0076](docs/decisions/0076-the-browser-we-own.md), which built the instrument rather than taking the measurement: a scan's browser is now a Vercel sandbox whose rate is founder-attested, `terminateSession` reports the dimensions and `estimateSandboxCost` derives a figure, but no scan has yet run under it, so no row carries one. The estimate for the five recorded session shapes is $0.0007–$0.0116 against $0.441 of revenue; the basis moves when rows exist, not when the code that would fill them does.
 
 ### 3.12 Audit Log
 
@@ -283,7 +283,7 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0009](docs/decisions/0009-github-installation-ownership-verification.md) | Installation ownership verification | §3.1 |
 | [0010](docs/decisions/0010-safe-outbound-http-inspection.md) | Safe outbound HTTP: one SSRF boundary | §3.3 |
 | [0011](docs/decisions/0011-ai-inference-and-evidence-trust-boundary.md) | Inference and evidence trust boundary | §3.4 |
-| [0012](docs/decisions/0012-authenticated-browser-analysis.md) | Authenticated browser analysis (Deep Scan) | §3.3 |
+| [0012](docs/decisions/0012-authenticated-browser-analysis.md) | Authenticated browser analysis (Deep Scan; provider superseded by 0076, design unchanged) | §3.3 |
 | [0013](docs/decisions/0013-durable-operation-execution.md) | Durable operation execution | §4 |
 | [0014](docs/decisions/0014-first-execution-safety.md) | First execution safety: model opinion authorizes nothing | §3.6, §3.7 |
 | [0015](docs/decisions/0015-untrusted-repository-execution-provider.md) | Vercel Sandbox as the execution provider | §3.8 |
@@ -347,7 +347,8 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0073](docs/decisions/0073-the-charge-lands-on-what-was-sold.md) | Settlement waits for validation; the usage ledger fills itself | §3.11 |
 | [0074](docs/decisions/0074-removing-a-file.md) | A prepared change may remove a file; the observation decides which | §3.6 |
 | [0075](docs/decisions/0075-the-photograph-nobody-took.md) | The visual review capture path is deleted (completes 0065; the read path stays for one historical approval) | §3.9 |
-| [0076](docs/decisions/0076-build-chains.md) | One run may deliver the contiguous build steps of a Move | §3.6 |
+| [0076](docs/decisions/0076-the-browser-we-own.md) | The Deep Scan browser is a sandbox Vibe owns (supersedes 0012's provider only) | §3.3 |
+| [0077](docs/decisions/0077-build-chains.md) | One run may deliver the contiguous build steps of a Move | §3.6 |
 
 ### Layers with no section above
 
@@ -356,7 +357,7 @@ These exist, are governed by the ADRs named, and are described in depth by their
 - **Onboarding** — `src/modules/onboarding/` · ADR 0023. Project-scoped, and reconciled from canonical records on read rather than trusted as stored state, so a run that finishes while the founder is away cannot strand the journey.
 - **Product Understanding** — `src/modules/product-understanding/` · answers "what is this product?" between the scanners and the audit. Deterministic derivation plus one cheap model call; a person's correction outranks everything and survives every re-scan.
 - **Product Scan** — `src/modules/product-scan/` and `src/modules/operations/product-scan/` · one durable refresh of repository, public-product and Product Understanding sources. Its append-only discovery feed is bounded to 24 Vibe-authored derived events and contains no raw source or model output (ADR 0052).
-- **Deep Scan** — `src/modules/authenticated-product-intelligence/` · ADR 0012. A temporary browser the founder signs into themselves; strictly read-only, no persisted session, no screenshots, one included scan per project.
+- **Deep Scan** — `src/modules/authenticated-product-intelligence/` · ADR 0012, ADR 0076. A temporary browser the founder signs into themselves; strictly read-only, no persisted session, no screenshots, one included scan per project. Since ADR 0076 that browser is a Vercel sandbox Vibe creates — Chromium and a guard, no customer code — reached through one public port behind two separate capability tokens. The port did not change when the provider did.
 - **Action Plans** — `src/modules/action-plans/` · ADRs 0028, 0054, 0055. Turns a selected opportunity into steps. The model names the actor and the kind of change; the server alone decides what Vibe may execute. Completion is projected from the authority appropriate to each integrated step type: resolved founder context, explicit founder-action attestation, or verified canonical Agent execution evidence.
 - **Founder Input Resolution** — `src/modules/founder-input/` · ADR 0053. Turns a bounded dynamic request into versioned, reusable project context and projects authoritative completion for founder-owned Action Plan steps.
 - **Execution Contract / Context** — `src/modules/execution-contract/`, `src/modules/execution-context/` · ADRs 0026, 0031, 0034. The immutable spec and compiled policy an execution runs under, and the bounded brief it starts from.

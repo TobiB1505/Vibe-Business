@@ -20,6 +20,11 @@ test.describe("signature Business Brain", () => {
     const panel = page.getByRole("heading", { name: /what matters now/i });
     await expect(map).toBeVisible();
     await expect(panel).toBeVisible();
+    await expect(map.getByRole("heading", { name: /^business map$/i })).toBeVisible();
+    await expect(map.getByText(/^your business brain$/i)).toHaveCount(0);
+    await expect(page.getByText(/^business intelligence$/i)).toBeVisible();
+    await expect(page.locator('[data-workspace-header="intelligence"]')).toBeVisible();
+    await expect(page.getByText(/how we score your business/i)).toHaveCount(0);
 
     const mapBox = await map.boundingBox();
     const panelBox = await panel.boundingBox();
@@ -73,13 +78,14 @@ test.describe("signature Business Brain", () => {
     await expect(page.getByTestId("primary-priority")).toContainText(/medium effort/i);
   });
 
-  test("transitions the right panel into selected-area detail without navigation or a report below", async ({
+  test("opens selected-area detail in a stable two-column layout", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await page.goto(SYNTHESIS);
     const before = page.url();
 
+    const mapBefore = await page.getByTestId("audit-map-panel").boundingBox();
     await lens(page, /revenue & economics/i).click();
 
     const detail = page.getByTestId("selected-lens-detail");
@@ -89,17 +95,67 @@ test.describe("signature Business Brain", () => {
 
     const mapBox = await page.getByTestId("audit-map-panel").boundingBox();
     const detailBox = await detail.boundingBox();
-    const scoring = page.getByRole("complementary", {
-      name: /how revenue & economics was scored/i,
-    });
-    const scoringBox = await scoring.boundingBox();
+    expect(Math.abs(mapBox!.width - mapBefore!.width)).toBeLessThanOrEqual(2);
     expect(detailBox!.x).toBeGreaterThan(mapBox!.x + mapBox!.width);
-    expect(scoringBox!.x).toBeGreaterThan(detailBox!.x + detailBox!.width);
-    expect(Math.abs(scoringBox!.y - detailBox!.y)).toBeLessThan(12);
     await expect(detail.getByText(/connected areas/i)).toBeVisible();
+    await expect(page.getByTestId("selected-scoring-context")).toHaveCount(0);
+    await detail.getByRole("tab", { name: /^signals$/i }).click();
+    const signalsPanel = detail.getByRole("tabpanel");
+    await expect(signalsPanel).toContainText(/current lens score/i);
+    await expect(signalsPanel).toContainText(/38\s*\/100/i);
+    await expect(signalsPanel).toContainText(/signals behind this score/i);
+    await expect(signalsPanel).toContainText(/individual signals do not carry invented point values/i);
     await expect(detail.getByRole("tab")).toHaveCount(4);
-    await expect(page.getByRole("heading", { name: /how we scored this/i })).toBeVisible();
     await expect(page.getByTestId("business-map-radial")).toBeVisible();
+  });
+
+  test("closes selected detail without collapsing or overlapping the overview", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto(SYNTHESIS);
+    await lens(page, /acquisition/i).click();
+
+    await page.getByRole("button", { name: /back to business health overview/i }).click();
+
+    const intelligence = page.getByTestId("audit-intelligence");
+    await expect(intelligence).toHaveAttribute("data-view", "overview");
+    const mapBox = await page.getByTestId("audit-map-panel").boundingBox();
+    const prioritiesBox = await page.getByTestId("current-priorities").boundingBox();
+    expect(prioritiesBox!.x).toBeGreaterThan(mapBox!.x + mapBox!.width);
+    expect(prioritiesBox!.width).toBeGreaterThan(400);
+  });
+
+  test("keeps every desktop planet on one consistent footprint", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto(SYNTHESIS);
+
+    const offerBox = await lens(page, /^offer,/i).boundingBox();
+    const scalabilityBox = await lens(page, /^scalability,/i).boundingBox();
+    expect(Math.abs(offerBox!.width - scalabilityBox!.width)).toBeLessThanOrEqual(1);
+    expect(Math.abs(offerBox!.height - scalabilityBox!.height)).toBeLessThanOrEqual(1);
+  });
+
+  test("keeps every planet evenly spaced around the orbit", async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await page.goto(SYNTHESIS);
+
+    const orbit = await Promise.all(
+      ["Offer", "Audience", "Acquisition", "Conversion", "Revenue & Economics", "Business Readiness", "Retention", "Measurement", "Scalability"].map(
+        async (name) => (await lens(page, new RegExp(`^${name},`, "i")).boundingBox())!,
+      ),
+    );
+
+    const distances = orbit.map((current, index) => {
+      const next = orbit[(index + 1) % orbit.length];
+      const centerDistance = Math.hypot(
+        current.x + current.width / 2 - (next.x + next.width / 2),
+        current.y + current.height / 2 - (next.y + next.height / 2),
+      );
+      const visibleGap = centerDistance - (current.width + next.width) / 2;
+      expect(visibleGap).toBeGreaterThan(34);
+      return centerDistance;
+    });
+
+    expect(Math.max(...distances) - Math.min(...distances)).toBeLessThanOrEqual(3);
   });
 
   test("keeps unsupported per-lens history honest in the selected focus view", async ({

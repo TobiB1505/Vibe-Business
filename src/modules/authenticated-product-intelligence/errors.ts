@@ -2,13 +2,13 @@
  * Typed failures for authenticated product analysis (Sprint 5 §28).
  *
  * Every failure a caller can observe is one of these codes. A raw provider
- * error — Browserbase SDK exception, CDP transport error, Playwright timeout
- * — never escapes the adapter, so nothing provider-shaped reaches a log line,
+ * error — a sandbox provider exception, a CDP transport error, a Playwright
+ * timeout — never escapes the adapter, so nothing provider-shaped reaches a log line,
  * an audit event, a database column, or a browser (same discipline as
  * ADR 0010 and ADR 0011).
  */
 export type AuthenticatedAnalysisFailure =
-  /** No Browserbase credentials configured — the feature is simply unavailable. */
+  /** No browser-sandbox secret configured — the feature is simply unavailable. */
   | "browser_provider_not_configured"
   | "browser_session_create_failed"
   | "browser_session_expired"

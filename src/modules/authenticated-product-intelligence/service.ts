@@ -21,7 +21,7 @@ import {
   type DeepScanDenialReason,
 } from "./entitlement";
 import type { AuthenticatedAnalysisFailure } from "./errors";
-import type { BrowserSessionProvider } from "./provider";
+import type { BrowserSessionProvider, BrowserSessionUsage } from "./provider";
 import { buildDeepScanUsage, type DeepScanUsageStatus } from "./provider-usage";
 import {
   AUTHENTICATED_PRODUCT_ANALYZER_VERSION,
@@ -129,16 +129,29 @@ async function terminate(
   provider: BrowserSessionProvider,
   providerSessionId: string,
   sessionId: string,
-): Promise<void> {
+): Promise<BrowserSessionUsage | null> {
+  let usage: BrowserSessionUsage | null = null;
   try {
-    await provider.terminateSession(providerSessionId);
+    const stopped = await provider.terminateSession(providerSessionId);
+    // Only a successful stop carries a measurement. A refused one measured
+    // nothing, and `null` says so rather than a zero that would be summed.
+    if (stopped.ok) usage = stopped.value;
   } catch {
     // A provider that cannot be told to stop will still hit its own timeout.
   }
   await markSessionTerminated(supabase, sessionId);
+  return usage;
 }
 
-/** Writes the browser-provider usage record for a finished run. */
+/**
+ * Writes the browser-provider usage record for a finished run.
+ *
+ * `usage` is what termination reported, and it is threaded through rather than
+ * fetched here because termination is the only moment it exists: a running
+ * sandbox has no final wall clock. Every call site stops the browser
+ * immediately before this, which is why the argument is always available and
+ * never has to be looked up again.
+ */
 async function recordUsage(
   supabase: SupabaseClient,
   params: {
@@ -147,6 +160,7 @@ async function recordUsage(
     session: Pick<StoredDeepScanSession, "id" | "accessMode" | "createdAt">;
     status: DeepScanUsageStatus;
     pagesInspected?: number | null;
+    usage?: BrowserSessionUsage | null;
   },
 ): Promise<void> {
   await recordDeepScanUsage(
@@ -160,6 +174,7 @@ async function recordUsage(
       endedAt: new Date(),
       status: params.status,
       pagesInspected: params.pagesInspected ?? null,
+      usage: params.usage ?? null,
     }),
   );
 }
@@ -195,7 +210,7 @@ export async function startDeepScan(
 
   // Money before the browser (§18). An additional scan is Credit-priced under
   // `launch-v1`; the included scan resolves free and never reaches a
-  // reservation. Discovering an empty wallet after paying Browserbase would be
+  // reservation. Discovering an empty wallet after paying for a browser would be
   // both a cost leak and an insult.
   const held = await holdDeepScanCredits({ projectId: params.projectId, sessionId, accessMode });
   if (!held.ok) {
@@ -241,7 +256,7 @@ export async function startDeepScan(
     await provider.terminateSession(handle.providerSessionId).catch(() => undefined);
     // Our own persistence failing is explicitly one of the six outcomes that
     // must not cost the user anything (PRODUCT.md §12.1). Vibe still paid
-    // Browserbase, which is what `abandoned_with_usage` records.
+    // the provider, which is what `abandoned_with_usage` records.
     await releaseHold("abandoned_with_usage");
     return record.error === "scan_already_running"
       ? { ok: false, error: "scan_already_running" }
@@ -268,8 +283,9 @@ export async function startDeepScan(
   const liveView = await provider.getLiveView(handle.providerSessionId);
   if (!liveView.ok) {
     await updateSessionStatus(supabase, session.id, "failed", "browser_session_create_failed");
-    await terminate(supabase, provider, handle.providerSessionId, session.id);
+    const usage = await terminate(supabase, provider, handle.providerSessionId, session.id);
     await recordUsage(supabase, {
+      usage,
       provider: provider.name,
       projectId: params.projectId,
       session,
@@ -347,8 +363,9 @@ export async function analyzeDeepScan(
 
   if (isExpired(session)) {
     await updateSessionStatus(supabase, session.id, "expired");
-    await terminate(supabase, provider, session.providerSessionId, session.id);
+    const usage = await terminate(supabase, provider, session.providerSessionId, session.id);
     await recordUsage(supabase, {
+      usage,
       provider: provider.name,
       projectId: session.projectId,
       session,
@@ -370,8 +387,9 @@ export async function analyzeDeepScan(
   ): Promise<AnalyzeDeepScanResult> => {
     if (snapshotId) await failSnapshotRun(supabase, snapshotId, code);
     await updateSessionStatus(supabase, session.id, "failed", code);
-    await terminate(supabase, provider, session.providerSessionId, session.id);
+    const usage = await terminate(supabase, provider, session.providerSessionId, session.id);
     await recordUsage(supabase, {
+      usage,
       provider: provider.name,
       projectId: session.projectId,
       session,
@@ -471,8 +489,9 @@ export async function analyzeDeepScan(
     // else — the user must not lose their included scan to our storage failing.
     await failSnapshotRun(supabase, run.snapshotId, "analysis_failed");
     await updateSessionStatus(supabase, session.id, "failed", "analysis_failed");
-    await terminate(supabase, provider, session.providerSessionId, session.id);
+    const usage = await terminate(supabase, provider, session.providerSessionId, session.id);
     await recordUsage(supabase, {
+      usage,
       provider: provider.name,
       projectId: session.projectId,
       session,
@@ -496,8 +515,9 @@ export async function analyzeDeepScan(
   await settleDeepScanCredits({ projectId: session.projectId, sessionId: session.id });
 
   await updateSessionStatus(supabase, session.id, "completed");
-  await terminate(supabase, provider, session.providerSessionId, session.id);
+  const usage = await terminate(supabase, provider, session.providerSessionId, session.id);
   await recordUsage(supabase, {
+    usage,
     provider: provider.name,
     projectId: session.projectId,
     session,
@@ -536,8 +556,9 @@ export async function cancelDeepScan(
   if (!project) return { ok: false, error: "project_not_found" };
 
   await updateSessionStatus(supabase, session.id, "cancelled");
-  await terminate(supabase, provider, session.providerSessionId, session.id);
+  const usage = await terminate(supabase, provider, session.providerSessionId, session.id);
   await recordUsage(supabase, {
+    usage,
     provider: provider.name,
     projectId: session.projectId,
     session,

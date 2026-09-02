@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireSession } from "@/modules/auth/session";
 import { createClient } from "@/lib/supabase/server";
-import { getBrowserSessionProvider } from "@/modules/authenticated-product-intelligence/browserbase/client";
+import { getBrowserSessionProvider } from "@/modules/authenticated-product-intelligence/sandbox-browser/client";
 import {
   analyzeDeepScan,
   cancelDeepScan,
@@ -45,7 +45,7 @@ export type AnalyzeDeepScanActionState =
 
 /**
  * The provider is constructed lazily and only inside an action, so a missing
- * `BROWSERBASE_API_KEY` surfaces as a typed, explainable state rather than an
+ * `VIBE_BROWSER_SESSION_SECRET` surfaces as a typed, explainable state rather than an
  * exception during page render.
  */
 function provider() {

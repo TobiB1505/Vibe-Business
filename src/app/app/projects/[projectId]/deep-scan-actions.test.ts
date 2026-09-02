@@ -26,7 +26,7 @@ vi.mock("@/lib/supabase/server", () => ({
 
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
-vi.mock("@/modules/authenticated-product-intelligence/browserbase/client", () => ({
+vi.mock("@/modules/authenticated-product-intelligence/sandbox-browser/client", () => ({
   getBrowserSessionProvider: () => getProviderMock(),
 }));
 
@@ -49,7 +49,7 @@ const SERVER_USER = "user_from_session";
 beforeEach(() => {
   vi.clearAllMocks();
   requireSessionMock.mockResolvedValue({ userId: SERVER_USER });
-  getProviderMock.mockReturnValue({ name: "browserbase" });
+  getProviderMock.mockReturnValue({ name: "vercel_sandbox_browser" });
   startDeepScanMock.mockResolvedValue({
     ok: true,
     sessionId: "sess_1",
@@ -158,19 +158,21 @@ describe("safe failure mapping", () => {
 
   it("maps a thrown provider construction failure to a typed configuration state", async () => {
     getProviderMock.mockImplementation(() => {
-      throw new Error("Invalid or missing Browserbase configuration: BROWSERBASE_API_KEY is required.");
+      throw new Error(
+        "Invalid or missing browser sandbox configuration: VIBE_BROWSER_SESSION_SECRET is required.",
+      );
     });
 
     const result = await startDeepScanAction("p1");
 
     expect(result).toEqual({ ok: false, error: "browser_provider_not_configured" });
     // The env error names the variable; it must not travel to the browser.
-    expect(JSON.stringify(result)).not.toContain("BROWSERBASE_API_KEY");
+    expect(JSON.stringify(result)).not.toContain("VIBE_BROWSER_SESSION_SECRET");
   });
 
   it("never lets a raw provider exception reach the caller", async () => {
     analyzeDeepScanMock.mockRejectedValue(
-      new Error("Browserbase 500 {\"connectUrl\":\"wss://connect/x?signingKey=LEAKED\"}"),
+      new Error("provider 500 {\"connectUrl\":\"wss://sandbox/control?token=LEAKED\"}"),
     );
 
     const result = await analyzeDeepScanAction("p1", "sess_1");
@@ -179,6 +181,10 @@ describe("safe failure mapping", () => {
     const serialized = JSON.stringify(result);
     expect(serialized).not.toContain("LEAKED");
     expect(serialized).not.toContain("wss://");
+    // The provider's capability now travels as `?token=`, where Browserbase's
+    // travelled as `?signingKey=`. Both are named: the old shape may still
+    // appear in a stored row, and the assertion is about what may leave.
+    expect(serialized).not.toContain("token=");
     expect(serialized).not.toContain("signingKey");
   });
 
@@ -199,14 +205,15 @@ describe("no provider internals cross the boundary", () => {
       sessionId: "sess_1",
       expiresAt: "2026-08-11T21:00:00.000Z",
       liveViewUrl: "https://live.example/x",
-      providerSessionId: "bb_should_never_appear",
-      connectUrl: "wss://connect/x?signingKey=SECRET",
+      providerSessionId: "vibe-browser-should-never-appear",
+      connectUrl: "wss://sandbox/control?token=SECRET",
     });
 
     const result = await startDeepScanAction("p1");
     const serialized = JSON.stringify(result);
 
-    expect(serialized).not.toContain("bb_should_never_appear");
+    expect(serialized).not.toContain("vibe-browser-should-never-appear");
+    expect(serialized).not.toContain("token=");
     expect(serialized).not.toContain("signingKey");
     expect(serialized).not.toContain("wss://");
     expect(serialized).not.toContain("live.example");

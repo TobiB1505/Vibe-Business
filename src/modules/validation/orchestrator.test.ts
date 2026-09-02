@@ -119,7 +119,7 @@ describe("network policy transitions (§10, §32)", () => {
     await runValidationPhases(provider, noManifest, fakeValidationTarget());
 
     const modes = provider.policies().map((policy) =>
-      policy.mode === "deny_all" ? "deny_all" : policy.domains.join(","),
+      policy.mode === "allow_domains" ? policy.domains.join(",") : policy.mode,
     );
 
     expect(modes[0]).toContain("github.com");
