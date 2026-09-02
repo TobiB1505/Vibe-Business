@@ -69,6 +69,21 @@ describe("what the sandbox exposes", () => {
     expect(chromium).toContain("--remote-debugging-address=127.0.0.1");
   });
 
+  it("never starts Chromium in incognito", async () => {
+    const fake = sandboxes();
+
+    await provider(fake).createSession({ timeoutSeconds: 600 });
+
+    // The person's login would land in an incognito context while
+    // `connectReadOnly` reads `browser.contexts()[0]` — the default one. The
+    // analysis would then run against a profile that never signed in and
+    // report a signed-out product with complete confidence.
+    const chromium = fake.backgroundCommands().find((command) => command.includes("chromium"));
+    expect(chromium).not.toContain("--incognito");
+    // What actually keeps nothing between sessions: the VM is destroyed.
+    expect(chromium).toContain("--user-data-dir=");
+  });
+
   it("starts Chromium before the guard", async () => {
     const fake = sandboxes();
 

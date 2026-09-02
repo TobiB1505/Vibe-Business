@@ -70,9 +70,22 @@ export function chromiumCommand(): SandboxCommand {
       "--disable-dev-shm-usage",
       // Nothing survives this session. The profile is a directory in a VM that
       // is destroyed with it, and ADR 0012's promise — the browser is thrown
-      // away, nothing about the login is kept — is what these enforce.
+      // away, nothing about the login is kept — is what this enforces.
       `--user-data-dir=${BROWSER_SANDBOX.root}/profile`,
-      "--incognito",
+      /*
+       * `--incognito` is deliberately absent, and its absence is load-bearing.
+       *
+       * It would have put the person's login in an incognito browser context
+       * while `connectReadOnly` reads `browser.contexts()[0]` — which, over
+       * CDP, is the default context. The analysis would then have run against
+       * a profile that never signed in, and reported a signed-out product with
+       * complete confidence. `connector.ts` already carries a comment about
+       * exactly this mistake in its other form.
+       *
+       * It also buys nothing here. Incognito exists so a browser does not keep
+       * things between sessions; this profile is a directory in a microVM that
+       * is destroyed with the session, so there is no "between".
+       */
       "--disable-background-networking",
       // No telemetry, no crash upload: a crash report from a browser someone is
       // logged into is a screenshot of their product going to a third party.
