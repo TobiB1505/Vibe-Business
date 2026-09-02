@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { SandboxHandle } from "@/modules/validation/sandbox-port";
-import { writeSandboxTextFile } from "./files";
+import { writeSandboxTextFile } from "@/modules/validation/sandbox-files";
 
 /**
  * What the run changed, established by Vibe looking (Rule 77).

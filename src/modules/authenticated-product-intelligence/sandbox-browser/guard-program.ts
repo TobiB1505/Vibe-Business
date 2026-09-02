@@ -46,6 +46,17 @@
  * An unrecognised message is dropped in silence. There is no error reply,
  * because a reply that distinguishes "unknown verb" from "bad argument" is an
  * oracle, and this channel has nothing to tell its caller.
+ *
+ * ## One note about the `ws` import, which belongs here rather than in the
+ * program
+ *
+ * The package exports the WebSocket class as its module object with the server
+ * constructor attached, so a named import of both relies on CJS interop
+ * detecting a shape it does not always detect. Taking the default and
+ * destructuring works under Node's ESM loader either way. The explanation is
+ * out here because a backtick inside the program would end it — which is what
+ * happened when this was written as a comment in there, and what the
+ * no-backtick test exists to catch.
  */
 
 /** Bumped whenever the guard's behaviour changes in a way a stored session could notice. */
@@ -72,7 +83,8 @@ export const BROWSER_GUARD_PROGRAM = `
 import { createServer } from "node:http";
 import { writeFileSync } from "node:fs";
 import { timingSafeEqual } from "node:crypto";
-import { WebSocketServer, WebSocket } from "ws";
+import WebSocket from "ws";
+const { WebSocketServer } = WebSocket;
 
 const controlToken = process.env.VIBE_CONTROL_TOKEN;
 const viewToken = process.env.VIBE_VIEW_TOKEN;

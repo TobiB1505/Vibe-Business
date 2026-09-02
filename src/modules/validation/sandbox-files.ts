@@ -1,6 +1,6 @@
 import "server-only";
 
-import type { SandboxHandle } from "@/modules/validation/sandbox-port";
+import type { SandboxHandle } from "./sandbox-port";
 
 /**
  * Writing a Vibe-authored file into a sandbox, without a command line.
@@ -13,7 +13,13 @@ import type { SandboxHandle } from "@/modules/validation/sandbox-port";
  * ## Why this is shared rather than duplicated
  *
  * Because the alternative was writing a second way to get bytes into a sandbox,
- * and the second way is where the mistake happened. The baseline listing was
+ * and the second way is where the mistake happened.
+ *
+ * It lives beside the sandbox port rather than inside the agent runtime, which
+ * is where it was written. The Deep Scan browser is the second caller
+ * (ADR 0076) and it has nothing to do with the coding agent — a sandbox
+ * utility reached through `coding-agent/` would have read as a dependency on
+ * the agent rather than on the port it actually operates on. The baseline listing was
  * captured with `find … > 'path'` as a shell line, built by joining tokens that
  * `pruneExpression` produces for an *argument array* — so `(` and `)` arrived at
  * `sh -c` unquoted, and the first real run died six seconds in with a shell
