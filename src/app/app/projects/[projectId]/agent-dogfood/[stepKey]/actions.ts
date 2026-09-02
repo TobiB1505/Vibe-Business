@@ -48,7 +48,7 @@ import { readAgentRunForLiveView } from "@/modules/coding-agent/observability/ru
  * answer shaped to a schema Vibe already stored (§7, §8).
  */
 
-export type StartDogfoodRunState =
+export type StartAgentRunState =
   | { ok: false; error: AgentStartRefusal | "spec_not_persisted" }
   /**
    * The chain refused before a run could be described, and says which gate.
@@ -95,11 +95,11 @@ function refusalDetail(
  * durable pointer a reload recovers from (§18) — there is no in-memory step
  * between "admitted" and "the status page is showing it".
  */
-export async function startDogfoodRunAction(
+export async function startAgentRunAction(
   projectId: string,
   stepKey: string,
-  previousState: StartDogfoodRunState,
-): Promise<StartDogfoodRunState> {
+  previousState: StartAgentRunState,
+): Promise<StartAgentRunState> {
   void previousState;
   const session = await requireSession();
   const supabase = await createClient();
@@ -162,7 +162,7 @@ export async function startDogfoodRunAction(
   redirect(agentHref);
 }
 
-export type DogfoodRunStatus = {
+export type AgentRunStatus = {
   /**
    * Everything the reusable live view renders.
    *
@@ -186,10 +186,10 @@ export type DogfoodRunStatus = {
 };
 
 /** Durable status, re-read from the database on every call (§16, §18, §20). */
-export async function getDogfoodRunStatusAction(
+export async function getAgentRunStatusAction(
   projectId: string,
   operationId: string,
-): Promise<DogfoodRunStatus | null> {
+): Promise<AgentRunStatus | null> {
   const session = await requireSession();
   const supabase = await createClient();
 
@@ -263,7 +263,7 @@ export type ResolveRuntimeFounderInputState =
   | null;
 
 /** Resolves a runtime blocker, then performs a wholly fresh admission. */
-export async function resolveDogfoodFounderInputAction(
+export async function resolveAgentFounderInputAction(
   projectId: string,
   requestId: string,
   contextHash: string,
