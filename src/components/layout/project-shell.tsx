@@ -51,7 +51,7 @@ import { cn } from "@/lib/utils/cn";
  *   settings     — production URL, founder intent, the repository connection
  */
 export const PROJECT_SECTIONS = [
-  { id: "home", label: "Home", icon: "home", segment: "" },
+  { id: "home", label: "Business Health", icon: "business-health", segment: "" },
   {
     // Second, immediately after Home, because every section below reasons
     // *from* this one: the audit, the plan and everything downstream all start

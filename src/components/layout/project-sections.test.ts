@@ -48,6 +48,14 @@ describe("project workspace sections", () => {
     }
   });
 
+  it("names the project index for its business job rather than as generic Home", () => {
+    expect(PROJECT_SECTIONS.find((section) => section.id === "home")).toMatchObject({
+      label: "Business Health",
+      icon: "business-health",
+      segment: "",
+    });
+  });
+
   it("keeps project configuration distinct from account settings", () => {
     expect(PROJECT_SECTIONS.find((section) => section.id === "settings")?.label).toBe(
       "Project Settings",

@@ -608,7 +608,7 @@ export function AuditIntelligence({
           <header className="relative z-10 flex min-h-[3.75rem] flex-wrap items-start justify-between gap-4">
             {node ? (
               <div className="flex flex-col gap-2">
-                <h2 className="sr-only">Your Business Brain — {node.label}</h2>
+                <h2 className="sr-only">Business Map — {node.label}</h2>
                 <button type="button" onClick={() => setSelected(null)} className="border-line-2 bg-surface-2 text-fg-secondary hover:border-mint/35 hover:text-fg flex min-h-10 w-fit cursor-pointer items-center gap-2 rounded-xl border px-3.5 text-sm font-medium transition-interactive focus-visible:ring-2 focus-visible:ring-mint">
                   <span aria-hidden="true">←</span>
                   Back to overview
@@ -617,7 +617,7 @@ export function AuditIntelligence({
               </div>
             ) : (
               <div className="flex flex-col gap-1.5">
-                <h2 className="text-fg text-xl font-semibold tracking-[-0.03em]">Your Business Brain</h2>
+                <h2 className="text-fg text-xl font-semibold tracking-[-0.03em]">Business Map</h2>
                 <p className="text-fg-muted text-sm">Select any area to explore how the pieces connect.</p>
               </div>
             )}

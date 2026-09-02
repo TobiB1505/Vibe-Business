@@ -20,6 +20,8 @@ test.describe("signature Business Brain", () => {
     const panel = page.getByRole("heading", { name: /what matters now/i });
     await expect(map).toBeVisible();
     await expect(panel).toBeVisible();
+    await expect(map.getByRole("heading", { name: /^business map$/i })).toBeVisible();
+    await expect(map.getByText(/^your business brain$/i)).toHaveCount(0);
     await expect(page.getByText(/^business intelligence$/i)).toBeVisible();
     await expect(page.locator('[data-workspace-header="intelligence"]')).toBeVisible();
     await expect(page.getByText(/how we score your business/i)).toHaveCount(0);
