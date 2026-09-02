@@ -94,10 +94,18 @@ export type SandboxProcess = {
 /**
  * Where a sandbox's filesystem comes from.
  *
- * Two shapes, and the difference is a trust boundary. `git` acquires source
+ * Three shapes, and the differences are trust boundaries. `git` acquires source
  * from GitHub with a credential; `snapshot` restores a filesystem Vibe already
  * validated, needing no credential at all — which is why preview never touches
- * GitHub (Sprint 10B §30).
+ * GitHub (Sprint 10B §30). `image` brings **no source at all**: the VM holds
+ * the base image and whatever Vibe puts there afterwards, and no customer byte
+ * ever enters it.
+ *
+ * That third shape is what lets a sandbox exist for a reason other than running
+ * a customer's repository. The rules that govern the other two — clone the
+ * pinned commit, destroy the credential, deny the network before repository
+ * code runs — describe a hazard `image` does not have, because there is no
+ * repository code in it to run.
  */
 export type SandboxSource =
   | {
@@ -111,6 +119,17 @@ export type SandboxSource =
       kind: "snapshot";
       /** A provider snapshot id Vibe created and stored. Never client-supplied. */
       snapshotId: string;
+    }
+  | {
+      /**
+       * The base image and nothing else.
+       *
+       * No clone, no credential, no customer filesystem. Everything the VM
+       * runs afterwards is a command Vibe constructed, which is why this shape
+       * carries no fields: there is nothing about it for a caller to choose,
+       * and a field here would be the first thing to point somewhere else.
+       */
+      kind: "image";
     };
 
 /**

@@ -548,13 +548,20 @@ export function createVercelSandboxProvider(): SandboxProvider {
       // A snapshot carries its own image, and the SDK's types refuse the
       // combination — restoring a validated artifact must not re-image it,
       // because then it would not be the validated artifact.
+      //
+      // `image` omits `source` entirely, which the SDK documents as starting a
+      // sandbox without one. It is not "a git source that happens to be empty":
+      // there is no clone step, so there is no credential to pass and none to
+      // destroy afterwards.
       const sandbox =
         input.source.kind === "snapshot"
           ? await Sandbox.create({
               ...common,
               source: { type: "snapshot", snapshotId: input.source.snapshotId },
             })
-          : await Sandbox.create({
+          : input.source.kind === "image"
+            ? await Sandbox.create({ ...common, image: SANDBOX_RESOURCES.image })
+            : await Sandbox.create({
               ...common,
               image: SANDBOX_RESOURCES.image,
               source: {
