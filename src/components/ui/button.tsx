@@ -96,7 +96,7 @@ const TEXT_ACTION_BASE =
   "transition-interactive " +
   "disabled:pointer-events-none disabled:text-fg-disabled disabled:no-underline";
 
-export function textActionClasses(tone: TextActionTone = "muted"): string {
+function textActionClasses(tone: TextActionTone = "muted"): string {
   return cn(TEXT_ACTION_BASE, TEXT_ACTION_TONES[tone]);
 }
 
