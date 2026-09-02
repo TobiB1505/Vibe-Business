@@ -24,6 +24,12 @@ import {
 } from "@/modules/repository-intelligence/store";
 import { UnderstandingConfirm } from "../understanding-confirm";
 import { UnderstandingPanel, type UnderstandingSource } from "../understanding-panel";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "My product",
+  description: "What Vibe understands your product to be.",
+};
 
 /**
  * My Product — "what Vibe knows" (CORE-1 §26, §33; CORE-5; Stage D).

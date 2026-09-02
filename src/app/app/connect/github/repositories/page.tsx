@@ -14,6 +14,12 @@ import {
 import { hasCompletedAnyOnboarding } from "@/modules/onboarding/store";
 import { RepositoryPicker } from "./repository-picker";
 import { OnboardingShell } from "../../../onboarding/onboarding-shell";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Choose a repository",
+  description: "Pick the repository Vibe should read.",
+};
 
 /**
  * Repository selection. Reached either straight from "Connect a project"

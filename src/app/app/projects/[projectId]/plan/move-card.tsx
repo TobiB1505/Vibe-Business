@@ -21,9 +21,23 @@ const HEADLINE_TONE: Record<MoveHeadlineKind, StatusTone> = {
 
 type Responsibility = { icon: "bolt" | "user" | "alert" | "target"; headline: string; detail: string };
 
+/**
+ * What this Move is waiting on, and who owns it.
+ *
+ * `questionIsBelow` is the one piece that cannot be derived from the execution
+ * state (UX audit F-3). Two branches here report `needs_user_input`, and one of
+ * them used to say "Answer the question below" unconditionally — while the
+ * question itself renders in `plan-detail-panel.tsx` under a **different**
+ * condition: whether this Move's plan carries an open founder-input request.
+ *
+ * Nothing derived one from the other, so a founder could be told to answer a
+ * question, scroll for it, and reach the end of the page. The caller knows
+ * both, so it passes the answer in and the sentence is true either way.
+ */
 function responsibilityOf(
   execution: OpportunityActionState | null,
   opportunity: BusinessOpportunity,
+  questionIsBelow: boolean,
 ): Responsibility {
   if (execution === null) {
     return opportunity.executionReadiness === "needs_user_input"
@@ -51,7 +65,13 @@ function responsibilityOf(
     case "blocked":
       return { icon: "alert", headline: "Something needs to change first", detail: "The detail below explains the blocker." };
     case "needs_user_input":
-      return { icon: "user", headline: "Needs your input", detail: "Answer the question below so Vibe can continue." };
+      return {
+        icon: "user",
+        headline: "Needs your input",
+        detail: questionIsBelow
+          ? "Answer the question below so Vibe can continue."
+          : "Vibe needs a decision from you before this can move.",
+      };
     case "not_automated":
       return { icon: "target", headline: "Not automated yet", detail: "Vibe can still guide the work step by step." };
   }
@@ -75,13 +95,16 @@ const RESPONSIBILITY_ICON_TONE: Record<Responsibility["icon"], string> = {
 export function MoveCard({
   opportunity,
   execution,
+  questionIsBelow = false,
 }: {
   opportunity: BusinessOpportunity;
   execution: OpportunityActionState | null;
+  /** Whether this Move's own open question renders under this card. */
+  questionIsBelow?: boolean;
 }) {
   const headline = moveHeadline(opportunity);
   const lens = moveLensLabel(opportunity);
-  const responsibility = responsibilityOf(execution, opportunity);
+  const responsibility = responsibilityOf(execution, opportunity, questionIsBelow);
   const ResponsibilityIcon = RESPONSIBILITY_ICONS[responsibility.icon];
 
   return (

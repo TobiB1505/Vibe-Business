@@ -2,6 +2,12 @@ import Link from "next/link";
 import { AuthShell } from "@/components/layout/auth-shell";
 import { authFailureMessage, parseFailureParam } from "@/modules/auth/errors";
 import { ForgotPasswordForm } from "./forgot-password-form";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Reset your password",
+  description: "Send yourself a password reset link.",
+};
 
 /**
  * Where a dead reset link sends people, as well as where a forgotten password

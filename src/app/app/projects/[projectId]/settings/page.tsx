@@ -9,6 +9,12 @@ import { DisconnectButton } from "../disconnect-button";
 import { DeleteProjectButton } from "../delete-project-button";
 import { FounderIntentForm } from "../founder-intent-form";
 import { ProductionUrlForm } from "../production-url-form";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Project settings",
+  description: "The repository this product is connected to.",
+};
 
 /**
  * Settings (CORE-5).

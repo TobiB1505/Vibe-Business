@@ -156,8 +156,16 @@ test.describe("merged state", () => {
     await expect(merge.getByText("2f05958")).toBeVisible();
     await expect(merge).toContainText("read back from GitHub after the update.");
 
-    // A merge is not a deployment, and the panel has to keep saying so.
-    await expect(merge).toContainText(/not deployed/i);
+    // A merge is not a deployment, and the panel has to keep saying so. The
+    // claim, not the sentence: this pinned "not deployed" until the wording
+    // changed to stop borrowing "verified" from the outcome check, which
+    // verifies something else entirely (UX audit F-4).
+    await expect(merge).toContainText(/never deploys/i);
+
+    // Rule 74's other half, which the older wording did not state: moving a
+    // default branch can start the customer's own pipeline, and they have to
+    // be told before the click.
+    await expect(merge).toContainText(/builds and releases on its own/i);
 
     // Nothing left to press.
     await expect(page.getByRole("button", { name: "Merge approved change" })).toHaveCount(0);

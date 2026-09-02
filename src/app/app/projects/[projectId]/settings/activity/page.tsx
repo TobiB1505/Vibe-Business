@@ -3,6 +3,12 @@ import { listAuditEventsForProject } from "@/modules/audit-log/queries";
 import { buildActivityFeed } from "@/modules/audit-log/view";
 import { requireProjectAccess } from "@/modules/projects/workspace-context";
 import { ActivityFeed } from "../../activity-feed";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Activity",
+  description: "What happened on this product, and when.",
+};
 
 /**
  * Activity (Sprint UI-2 Part 2).

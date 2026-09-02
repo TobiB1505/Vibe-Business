@@ -57,6 +57,12 @@ import { BUILD_CHAIN_BOUNDARY_LABELS, buildChainOfferLabel } from "@/modules/cod
 import { formatCreditsForDisplay } from "@/modules/credits/units";
 import { forecastRun } from "@/modules/coding-agent/run-forecast";
 import { forecastDriverNotes, forecastEvidenceNote } from "@/modules/coding-agent/view";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Agent",
+  description: "Watch Vibe prepare a change on its own branch.",
+};
 
 /**
  * The customer-facing Agent workspace.

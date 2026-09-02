@@ -5,6 +5,12 @@ import { requireSession } from "@/modules/auth/session";
 import { listVerifiedInstallations } from "@/modules/github/connections";
 import { hasCompletedAnyOnboarding } from "@/modules/onboarding/store";
 import { OnboardingShell } from "../../../onboarding/onboarding-shell";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Choose a GitHub account",
+  description: "Pick the account whose repository Vibe should read.",
+};
 
 /**
  * Shown only when a user has more than one verified installation — for

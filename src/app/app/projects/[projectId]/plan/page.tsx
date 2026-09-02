@@ -31,6 +31,12 @@ import { resolvePlanExecutionRoutes } from "@/modules/coding-agent/website-prefl
 import { stepResponsibility, type StepResponsibility } from "@/modules/action-plans/view";
 import { ActionPlanWorkspace } from "./action-plan-workspace";
 import { MovesRefreshBar } from "./moves-refresh-bar";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Action plan",
+  description: "What to do next, in the order that matters.",
+};
 
 /**
  * The Action Plan (Sprint UI-2 Part 2; rebuilt as a workspace in ACTION PLAN UI-2).

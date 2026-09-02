@@ -3,6 +3,12 @@ import { redirect } from "next/navigation";
 import { AuthShell } from "@/components/layout/auth-shell";
 import { getSession } from "@/modules/auth/session";
 import { ResetPasswordForm } from "./reset-password-form";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = {
+  title: "Choose a new password",
+  description: "Set a new password for your account.",
+};
 
 /**
  * The final step of password recovery.
