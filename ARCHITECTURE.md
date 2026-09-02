@@ -344,6 +344,7 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0070](docs/decisions/0070-the-sandbox-is-the-boundary.md) | The sandbox is the boundary; the tool gateway is retired | §3.6 |
 | [0071](docs/decisions/0071-agentic-outcome-verification.md) | Outcome verification for agentic changes: routes Vibe observed | Measurement |
 | [0072](docs/decisions/0072-the-evidence-behind-the-ceiling.md) | The estimator informs the Run button; it does not price it | §3.11 |
+| [0073](docs/decisions/0073-removing-a-file.md) | A prepared change may remove a file; the observation decides which | §3.6 |
 
 ### Layers with no section above
 
