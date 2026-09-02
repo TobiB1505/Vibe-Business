@@ -1,6 +1,6 @@
 # ADR 0065 — The preview is the review
 
-**Status:** Accepted — 2026-09-01
+**Status:** Accepted — 2026-09-01; its deferred deletion was carried out by [ADR 0075](0075-the-photograph-nobody-took.md) on 2026-09-02
 **Supersedes:** [ADR 0017](0017-visual-review-artifacts.md) in its role as a gate. The artifacts themselves, their retention, their storage policy and their signed-URL rules all stand for the rows that exist; nothing new is created.
 **Amends:** [ADR 0063](0063-review-classification-as-a-gate.md) — the classification still decides, and what `visual` calls for is now a preview rather than a comparison. [ADR 0018](0018-human-approval-authority.md) gains a third evidence form.
 **Related:** [ADR 0064](0064-preview-before-validation.md), [Sprint 0114](../sprints/0114-the-preview-is-the-review.md)
