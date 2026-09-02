@@ -478,7 +478,11 @@ export default function HomePage() {
                   ))}
                 </ul>
                 <Link
-                  href="/signup"
+                  href={
+                    plan.key === "free"
+                      ? "/signup"
+                      : `/signup?next=${encodeURIComponent("/app/billing")}`
+                  }
                   className={`${buttonClasses({
                     variant: featured ? "primary" : "secondary",
                   })} mt-auto w-full`}
