@@ -20,11 +20,20 @@ import type { SandboxHandle } from "@/modules/validation/sandbox-port";
  * syntax error reported as `agent_workspace_unavailable`.
  *
  * One writer, already exercised by every agent run that has ever started.
+ *
+ * ## Why it returns the output rather than a boolean
+ *
+ * Because "the write failed" is not a finding. Every caller of this turns a
+ * `false` into a sentence of its own — "the agent runtime program could not be
+ * written", `sandbox_lost` — and the one fact that would end the investigation,
+ * what the command actually said, was thrown away one line above the sentence
+ * that replaced it. The provider already refuses to substitute a placeholder
+ * for a real message; this is the same rule one layer up.
  */
 export async function writeSandboxTextFile(
   sandbox: SandboxHandle,
   input: { path: string; content: string },
-): Promise<boolean> {
+): Promise<{ ok: boolean; output: string }> {
   const encoded = Buffer.from(input.content, "utf8").toString("base64");
   const script = [
     `base64 -d > '${input.path.replace(/'/g, "'\\''")}' <<'VIBE_EOF'`,
@@ -38,5 +47,5 @@ export async function writeSandboxTextFile(
     timeoutMs: 30_000,
   });
 
-  return written.exitCode === 0;
+  return { ok: written.exitCode === 0, output: written.output };
 }

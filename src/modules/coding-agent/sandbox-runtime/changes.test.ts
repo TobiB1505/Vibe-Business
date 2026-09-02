@@ -51,7 +51,7 @@ async function changes(after: string[], touched: string[], before: string[]) {
   return discoverWorkspaceChanges({
     sandbox,
     cwd: "repo",
-    before: { paths: new Set(before), truncated: false },
+    before: { paths: new Set(before), truncated: false, failure: null },
     markerPath: MARKER,
   });
 }
@@ -129,7 +129,11 @@ describe("an observation that might be incomplete", () => {
 
     const listing = await listWorkspaceFiles({ sandbox, cwd: "repo" });
 
-    expect(listing).toEqual({ paths: new Set(), truncated: true });
+    expect(listing.paths).toEqual(new Set());
+    expect(listing.truncated).toBe(true);
+    // The command's own output, carried rather than dropped. A `sandbox_lost`
+    // with no reason is what four days of dead runs looked like.
+    expect(listing.failure).not.toBeNull();
   });
 
   it("carries a truncated baseline forward", async () => {
@@ -138,7 +142,7 @@ describe("an observation that might be incomplete", () => {
     const result = await discoverWorkspaceChanges({
       sandbox,
       cwd: "repo",
-      before: { paths: new Set(["a.ts"]), truncated: true },
+      before: { paths: new Set(["a.ts"]), truncated: true, failure: null },
       markerPath: MARKER,
     });
 
@@ -170,7 +174,7 @@ describe("the baseline listing", () => {
       cwd: "repo",
       baselinePath: "/vercel/sandbox/.vibe-agent/baseline",
     });
-    expect(captured).toBe(true);
+    expect(captured).toEqual({ ok: true });
 
     const read = await readWorkspaceBaseline({
       sandbox,
@@ -216,7 +220,11 @@ describe("the baseline listing", () => {
       baselinePath: "/vercel/sandbox/.vibe-agent/baseline",
     });
 
-    expect(captured).toBe(false);
+    // Which observation failed, and what it said — the two facts a
+    // `sandbox_lost` used to withhold.
+    expect(captured.ok).toBe(false);
+    expect(captured.ok === false && captured.observation).toBe("listing");
+    expect(captured.ok === false && captured.detail).not.toBeNull();
   });
 });
 
@@ -224,7 +232,7 @@ describe("the marker", () => {
   it("is planted outside the repository, so it is never itself a change", async () => {
     const { provider, sandbox } = await handle();
 
-    expect(await plantChangeMarker({ sandbox, markerPath: MARKER })).toBe(true);
+    expect(await plantChangeMarker({ sandbox, markerPath: MARKER })).toEqual({ ok: true });
     expect(provider.commands()).toContain(`touch -- ${MARKER}`);
 
     const planted = provider.events.find(

@@ -21,6 +21,7 @@ import {
   discoverWorkspaceChanges,
   plantChangeMarker,
   readWorkspaceBaseline,
+  type WorkspaceObservation,
 } from "@/modules/coding-agent/sandbox-runtime/changes";
 import {
   AGENT_RUNTIME_DIRNAME,
@@ -115,6 +116,7 @@ import {
   type SandboxHandle,
   type SandboxProvider,
 } from "@/modules/validation/sandbox-port";
+import { sanitizeCommandOutput } from "@/modules/validation/logs";
 import { SANDBOX_ENVIRONMENT } from "@/modules/validation/orchestrator";
 import type { OperationFailureCode } from "../failures";
 import {
@@ -258,6 +260,68 @@ async function recordLifecycle(
   });
 
   await record(type, summary, metadata);
+}
+
+/**
+ * Why the workspace was lost, recorded where a person will find it.
+ *
+ * ## What this is repairing
+ *
+ * `sandbox_lost` is the failure code with no detail field — `StepOutcome` has
+ * none on its error branch — and for four days that is all any agent run
+ * produced. The cause was two characters in a `find` argument, and the sentence
+ * naming it existed at every layer except the one anybody reads: the provider
+ * built it, `run()` carried it, and the observation functions returned `false`.
+ *
+ * Two things were already built and unused, and this is what wires them:
+ *
+ * - `workspace_failed` had an event type, a milestone slot, a phase and an
+ *   audience, and no producer anywhere in the codebase.
+ * - `SandboxProvider.inspect()` had an implementation, a test and zero
+ *   production callers. Its docblock describes exactly this blind spot and ends
+ *   "recorded on the audit event an operator reads" — an intention that was
+ *   never connected to one.
+ *
+ * ## Why `inspect` is called here and nowhere else
+ *
+ * Because its docblock insists on it: it is asked **only on a path that has
+ * already failed**, so it costs one provider call when something is already
+ * wrong and nothing at all when things work. "Stopped at a 300000 ms timeout"
+ * and "the sandbox is running fine and the command is malformed" are different
+ * bugs, and the first observation cannot tell them apart on its own.
+ *
+ * Its own failure is swallowed into the detail rather than raised: this runs on
+ * a path that is already returning a failure, and turning telemetry into a
+ * second exception would lose the first one.
+ *
+ * ## What it costs
+ *
+ * Nothing on a healthy run — nothing calls it. On a failed one, one provider
+ * call and one row. It changes no control flow: every caller returns exactly
+ * the `sandbox_lost` it returned before.
+ */
+async function recordWorkspaceFailure(
+  deps: AgentExecutionDeps,
+  run: StoredAgentExecutionRun,
+  failure: { observation: WorkspaceObservation; detail: string | null },
+): Promise<void> {
+  let sandboxState: string | null = null;
+  try {
+    sandboxState = await deps.sandboxProvider.inspect({ name: agentSandboxNameFor(run.id) });
+  } catch (error) {
+    sandboxState = error instanceof Error ? `${error.name}: ${error.message}` : null;
+  }
+
+  await recordLifecycle(deps, run, "workspace_failed", "Project could not be prepared", {
+    observation: failure.observation,
+    // Sanitized like any other command output — this is a sandbox running a
+    // customer's repository, so it is untrusted text (Rule 18). `boundEvent`
+    // redacts again and cuts to 240 characters from the *front*, which is where
+    // this failure class puts the useful part: `TypeError: The argument
+    // 'args[31]' must be a string without null bytes` is the whole finding.
+    detail: failure.detail === null ? null : sanitizeCommandOutput(failure.detail).text,
+    sandboxState,
+  });
 }
 
 async function loadRun(
@@ -557,7 +621,7 @@ function workspaceCwdFor(sourceRoot: string, workspaceRoot: string): string {
 async function resolveSandboxPaths(
   sandbox: SandboxHandle,
   target: { sourceRoot: string; workspaceRoot: string },
-): Promise<SandboxPaths | null> {
+): Promise<{ ok: true; paths: SandboxPaths } | { ok: false; detail: string }> {
   const home = await sandbox.run({
     command: { command: "pwd", args: [] },
     cwd: ".",
@@ -565,17 +629,26 @@ async function resolveSandboxPaths(
   });
 
   const sandboxHome = home.exitCode === 0 ? home.output.trim() : "";
-  if (sandboxHome.length === 0 || !sandboxHome.startsWith("/")) return null;
+  if (sandboxHome.length === 0 || !sandboxHome.startsWith("/")) {
+    // The output, not a restatement. "`pwd` answered nothing" and "`pwd` printed
+    // a relative path" reach here identically and are different failures, and
+    // this is the first command any step runs — so when it is the one that
+    // broke, nothing later in the run will explain it.
+    return { ok: false, detail: home.output };
+  }
 
   const runtimeDir = `${sandboxHome}/${AGENT_RUNTIME_DIRNAME}`;
   const workspaceCwd = workspaceCwdFor(target.sourceRoot, target.workspaceRoot);
 
   return {
-    runtimeDir,
-    markerPath: `${runtimeDir}/marker`,
-    baselinePath: `${runtimeDir}/baseline.txt`,
-    workspaceDir: workspaceCwd === "." ? sandboxHome : `${sandboxHome}/${workspaceCwd}`,
-    workspaceCwd,
+    ok: true,
+    paths: {
+      runtimeDir,
+      markerPath: `${runtimeDir}/marker`,
+      baselinePath: `${runtimeDir}/baseline.txt`,
+      workspaceDir: workspaceCwd === "." ? sandboxHome : `${sandboxHome}/${workspaceCwd}`,
+      workspaceCwd,
+    },
   };
 }
 
@@ -675,11 +748,24 @@ async function loadAgentRunContext(
 
   const sandbox = await deps.sandboxProvider.reconnect({ name: agentSandboxNameFor(run.id) });
   if (!sandbox || sandbox.liveness !== "running") {
+    await recordWorkspaceFailure(deps, run, {
+      observation: "reconnect",
+      // `reconnect` collapses every reason to `null` on purpose, so it has
+      // nothing to say here. `inspect`, asked inside the recorder, does.
+      detail: sandbox ? `the sandbox answered but is ${sandbox.liveness}` : null,
+    });
     return { ok: false, failureCode: "sandbox_lost" };
   }
 
-  const paths = await resolveSandboxPaths(sandbox, target);
-  if (!paths) return { ok: false, failureCode: "sandbox_lost" };
+  const resolvedPaths = await resolveSandboxPaths(sandbox, target);
+  if (!resolvedPaths.ok) {
+    await recordWorkspaceFailure(deps, run, {
+      observation: "sandbox_home",
+      detail: resolvedPaths.detail,
+    });
+    return { ok: false, failureCode: "sandbox_lost" };
+  }
+  const paths = resolvedPaths.paths;
 
   const gateway = readAgentGatewayConfig();
   if (!gateway) return { ok: false, failureCode: "missing_required_context" };
@@ -805,18 +891,22 @@ export async function startAgentStep(
     maxSdkIterations: context.limits.maxTurns,
   });
 
-  if (!(await captureWorkspaceBaseline({
+  const baseline = await captureWorkspaceBaseline({
     sandbox: context.sandbox,
     cwd: context.paths.workspaceCwd,
     baselinePath: context.paths.baselinePath,
-  }))) {
+  });
+  if (!baseline.ok) {
+    await recordWorkspaceFailure(deps, context.run, baseline);
     return { ok: false, failureCode: "sandbox_lost" };
   }
 
-  if (!(await plantChangeMarker({
+  const marker = await plantChangeMarker({
     sandbox: context.sandbox,
     markerPath: context.paths.markerPath,
-  }))) {
+  });
+  if (!marker.ok) {
+    await recordWorkspaceFailure(deps, context.run, marker);
     return { ok: false, failureCode: "sandbox_lost" };
   }
 
