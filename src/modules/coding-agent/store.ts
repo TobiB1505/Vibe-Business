@@ -155,7 +155,17 @@ export type StoredAgentExecutionRun = {
   completedAt: string | null;
 };
 
-type RunRow = {
+/**
+ * Written out rather than derived from the generated schema, and checked
+ * against it by `store-schema.test.ts`.
+ *
+ * The database says `status: text`, because what narrows it to a closed set is
+ * a CHECK constraint and a type generator cannot see one. Declaring the domain
+ * union here makes a status nobody defined a compile error; deriving the row
+ * would make it a string. The test holds the two in agreement so the choice
+ * costs no drift.
+ */
+export type AgentExecutionRunRow = {
   id: string;
   project_id: string;
   user_id: string;
@@ -249,7 +259,7 @@ const RUN_COLUMNS =
   "execution_origin, dogfood_fixture_id, " +
   "prepared_change_id, created_at, started_at, completed_at";
 
-function mapRun(row: RunRow): StoredAgentExecutionRun {
+function mapRun(row: AgentExecutionRunRow): StoredAgentExecutionRun {
   return {
     id: row.id,
     projectId: row.project_id,
@@ -402,7 +412,7 @@ export async function claimAgentExecutionRun(
     return { ok: false, error: "unknown", message: error.message };
   }
 
-  return { ok: true, run: mapRun(data as unknown as RunRow), alreadyExisted: false };
+  return { ok: true, run: mapRun(data as unknown as AgentExecutionRunRow), alreadyExisted: false };
 }
 
 export async function findAgentRunByOperation(
@@ -418,7 +428,7 @@ export async function findAgentRunByOperation(
     .maybeSingle();
 
   if (error) throw error;
-  return data ? mapRun(data as unknown as RunRow) : null;
+  return data ? mapRun(data as unknown as AgentExecutionRunRow) : null;
 }
 
 export async function findActiveAgentRunByIdentity(
@@ -436,7 +446,7 @@ export async function findActiveAgentRunByIdentity(
     .maybeSingle();
 
   if (error) throw error;
-  return data ? mapRun(data as unknown as RunRow) : null;
+  return data ? mapRun(data as unknown as AgentExecutionRunRow) : null;
 }
 
 /**
@@ -880,7 +890,8 @@ export type StoredExecutionInterrupt = {
   answeredAt: string | null;
 };
 
-type InterruptRow = {
+/** Written out for the same reason as `AgentExecutionRunRow`, and checked the same way. */
+export type ExecutionInterruptRow = {
   id: string;
   project_id: string;
   user_id: string;
@@ -899,7 +910,7 @@ const INTERRUPT_COLUMNS =
   "id, project_id, user_id, execution_spec_id, agent_execution_run_id, interrupt_type, question, " +
   "response_schema, status, answer, created_at, answered_at";
 
-function mapInterrupt(row: InterruptRow): StoredExecutionInterrupt {
+function mapInterrupt(row: ExecutionInterruptRow): StoredExecutionInterrupt {
   return {
     id: row.id,
     projectId: row.project_id,
@@ -970,7 +981,7 @@ export async function findOpenInterruptForRun(
     .maybeSingle();
 
   if (error) throw error;
-  return data ? mapInterrupt(data as unknown as InterruptRow) : null;
+  return data ? mapInterrupt(data as unknown as ExecutionInterruptRow) : null;
 }
 
 export type AnswerInterruptResult =
@@ -1015,7 +1026,7 @@ export async function answerExecutionInterrupt(
   if (readError) throw readError;
   if (!existing) return { ok: false, reason: "not_found" };
 
-  const interrupt = mapInterrupt(existing as unknown as InterruptRow);
+  const interrupt = mapInterrupt(existing as unknown as ExecutionInterruptRow);
   if (interrupt.status === "answered") {
     return { ok: true, interrupt, alreadyAnswered: true };
   }
@@ -1043,7 +1054,7 @@ export async function answerExecutionInterrupt(
     return { ok: true, interrupt, alreadyAnswered: true };
   }
 
-  return { ok: true, interrupt: mapInterrupt(data as unknown as InterruptRow), alreadyAnswered: false };
+  return { ok: true, interrupt: mapInterrupt(data as unknown as ExecutionInterruptRow), alreadyAnswered: false };
 }
 
 /** Closes a question nothing is waiting on any more. */
