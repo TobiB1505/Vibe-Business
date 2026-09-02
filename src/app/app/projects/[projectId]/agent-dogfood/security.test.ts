@@ -78,9 +78,9 @@ describe("no brittle identity check (§26)", () => {
 });
 
 describe("the client cannot supply its own authority (§7, §8)", () => {
-  it("gives startDogfoodRunAction no parameter beyond project and step identity", () => {
+  it("gives startAgentRunAction no parameter beyond project and step identity", () => {
     const source = read("[stepKey]/actions.ts");
-    const signature = source.match(/export async function startDogfoodRunAction\(([^)]*)\)/)?.[1] ?? "";
+    const signature = source.match(/export async function startAgentRunAction\(([^)]*)\)/)?.[1] ?? "";
 
     expect(signature).toContain("projectId: string");
     expect(signature).toContain("stepKey: string");

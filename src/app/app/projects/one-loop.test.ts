@@ -485,7 +485,7 @@ describe("the plan hands off to the agent, and the agent points back", () => {
   it("starts only through the existing freshly admitted server action", () => {
     expect(AGENT_PAGE).toContain("resolveDogfoodPlanRoutes");
     expect(AGENT_READY).toContain("startAction");
-    expect(AGENT_START).toContain("startDogfoodRunAction");
+    expect(AGENT_START).toContain("startAgentRunAction");
     expect(DOGFOOD_ACTIONS).toContain("previewDogfoodStep");
     expect(DOGFOOD_ACTIONS).toContain("startAgentExecution");
     expect(copyOf(AGENT_START)).not.toContain("startAgentExecution(");

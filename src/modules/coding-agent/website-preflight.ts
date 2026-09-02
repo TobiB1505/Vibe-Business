@@ -662,7 +662,7 @@ export async function resolveExecutableStep(
    * caller's cookie-scoped client was silently refused and this function
    * reported `not_agentic` for a step it had just resolved as agentic.
    *
-   * `startDogfoodRunAction` persists it, once, through
+   * `startAgentRunAction` persists it, once, through
    * `operations/agent-execution/spec.ts`, which holds the only client that may.
    */
   const spec = buildExecutionSpec({

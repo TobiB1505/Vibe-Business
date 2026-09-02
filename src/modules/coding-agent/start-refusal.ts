@@ -18,7 +18,7 @@ import type { PreflightRefusal } from "./preflight";
  *
  * ## Why the detail exists at all
  *
- * `startDogfoodRunAction` used to answer every one of these with the single
+ * `startAgentRunAction` used to answer every one of these with the single
  * string `not_eligible`, rendered as *"This step is no longer eligible — the
  * page will show why above."* The page could not: its own render had resolved
  * fine, which is why the button was there to press. The fresh chain inside the
