@@ -56,19 +56,33 @@ export function computeAgentRunIdentity(params: {
 }
 
 /**
- * A digest of exactly the bytes a candidate would write.
+ * A digest of exactly the change a candidate would write.
  *
- * Path plus content hash per file, in sorted order. Content hashes rather than
- * content, so this function never holds a whole change in one string and never
- * becomes a place source could be persisted.
+ * Path plus content hash per file, in sorted order, and since ADR 0073 the
+ * removed paths beside them. Content hashes rather than content, so this
+ * function never holds a whole change in one string and never becomes a place
+ * source could be persisted.
+ *
+ * ## Why a change with no deletions digests as it always did
+ *
+ * The digest is not only compared against itself. It feeds
+ * `computeAgentChangeIdentity`, which is stored on `prepared_changes` and is
+ * the immutable identity a human approval binds to (rule 67). Appending an
+ * empty list to the canonical form would give every already-stored change a
+ * different identity than the same bytes produce today — quietly reinterpreting
+ * rows nobody touched. So the deletion set enters the canonical form only when
+ * there is one, and the old shape keeps meaning what it meant.
  */
 export function computeCandidateDigest(
   files: readonly { path: string; contentHash: string }[],
+  deletions: readonly string[] = [],
 ): string {
+  const writes = [...files]
+    .map((file) => [file.path, file.contentHash])
+    .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+
   const canonical = JSON.stringify(
-    [...files]
-      .map((file) => [file.path, file.contentHash])
-      .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)),
+    deletions.length === 0 ? writes : [writes, [...deletions].sort()],
   );
   return createHash("sha256").update(canonical).digest("hex");
 }

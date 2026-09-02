@@ -71,6 +71,14 @@ export function createGithubGitWritePort(target: RepositoryTarget): GitWritePort
           // Normal file. Never a mode that could make something executable.
           mode: "100644" as const,
           type: "blob" as const,
+          /*
+           * `null` removes the path from the new tree (ADR 0073).
+           *
+           * Octokit types `sha` as `string | null` for exactly this, and the
+           * REST API documents the null as the deletion. Sent as `null` rather
+           * than omitted: an absent `sha` with a `path` is a different request,
+           * and this one has to say what it means.
+           */
           sha: file.blobSha,
         })),
       });

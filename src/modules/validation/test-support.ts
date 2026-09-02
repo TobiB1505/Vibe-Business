@@ -181,6 +181,15 @@ export type FakeSandboxProvider = SandboxProvider & {
    * "what a run changed" was passing for a reason production does not have.
    */
   writeFile(path: string, content: string): void;
+  /**
+   * Removes bytes from the workspace the way the harness does — from inside.
+   *
+   * The counterpart of `writeFile`, and needed for the same reason: since
+   * ADR 0073 a run may remove a file, and Vibe learns that by walking the
+   * filesystem and finding a path that is no longer there. A test that stubbed
+   * the deletion anywhere else would be asserting about its own stub.
+   */
+  deleteFile(path: string): void;
 };
 
 export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandboxProvider {
@@ -575,6 +584,10 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
     writeFile(path: string, content: string) {
       files[path] = content;
       touch(path);
+    },
+
+    deleteFile(path: string) {
+      delete files[path];
     },
 
     async create(input) {

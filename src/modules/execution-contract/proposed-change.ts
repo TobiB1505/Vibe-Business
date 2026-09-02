@@ -82,17 +82,28 @@ export type ProposedChangeAcceptance =
 export function acceptProposedChange(
   spec: ExecutionSpec,
   files: readonly ProposedFile[],
+  /**
+   * Paths the change removes (ADR 0073).
+   *
+   * They pass the same forbidden-path check as a write and count as one
+   * changed file each against `maxChangedFiles`, because removing a file is a
+   * change to the repository of the same order as replacing one. They add
+   * nothing to `maxChangedBytes`: a deletion writes no bytes, and charging it
+   * for the size of what used to be there would make the ceiling measure the
+   * past.
+   */
+  deletions: readonly string[] = [],
 ): ProposedChangeAcceptance {
   const rejections: ProposedChangeRejection[] = [];
 
-  if (files.length === 0) {
+  if (files.length === 0 && deletions.length === 0) {
     return { accepted: false, rejections: ["no_files_produced"], violations: [] };
   }
 
-  const scope = checkWriteScope(
-    spec.policy,
-    files.map((file) => ({ path: file.path, bytes: Buffer.byteLength(file.content, "utf8") })),
-  );
+  const scope = checkWriteScope(spec.policy, [
+    ...files.map((file) => ({ path: file.path, bytes: Buffer.byteLength(file.content, "utf8") })),
+    ...deletions.map((path) => ({ path, bytes: 0 })),
+  ]);
 
   const violations = scope.ok ? [] : scope.violations;
   for (const violation of violations) {

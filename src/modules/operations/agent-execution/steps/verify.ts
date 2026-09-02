@@ -281,9 +281,14 @@ export async function extractAndVerifyStep(
     return { ok: false, failureCode: "agent_change_rejected" };
   }
 
-  if (verification.files.length === 0) {
+  // Removals count. A run whose whole change was deleting a page did produce a
+  // change, and reporting it as "the agent changed nothing" would be false as
+  // well as unhelpful (ADR 0073).
+  if (verification.files.length === 0 && verification.deletions.length === 0) {
     return { ok: false, failureCode: "agent_produced_no_change" };
   }
+
+  const changedFileCount = verification.files.length + verification.deletions.length;
 
   /*
    * The candidate count, written by the step that actually knows it.
@@ -294,7 +299,7 @@ export async function extractAndVerifyStep(
    * first under a name that promised the second.
    */
   await recordAgentRunObservations(deps.supabase, run.id, {
-    changedFileCount: verification.files.length,
+    changedFileCount,
     changedBytes: candidate.totalBytes,
   });
 
@@ -302,9 +307,9 @@ export async function extractAndVerifyStep(
     deps,
     run,
     "change_verified",
-    `${verification.files.length} ${verification.files.length === 1 ? "file" : "files"} changed`,
+    `${changedFileCount} ${changedFileCount === 1 ? "file" : "files"} changed`,
     {
-      candidateFiles: verification.files.length,
+      candidateFiles: changedFileCount,
       observedPaths: evidence.observedPathCount,
       observedIgnored: evidence.ignoredPathCount,
       totalDiffBytes: evidence.totalDiffBytes,
@@ -335,6 +340,6 @@ export async function extractAndVerifyStep(
   return {
     ok: true,
     observedPaths,
-    candidateDigest: computeCandidateDigest(verification.files),
+    candidateDigest: computeCandidateDigest(verification.files, verification.deletions),
   };
 }

@@ -252,6 +252,49 @@ describe("every degradation leaves the path answer standing", () => {
     expect(result?.classification).toBe("visual");
   });
 
+  /**
+   * A removed page is a visual change (ADR 0073).
+   *
+   * Removing `src/app/pricing/page.tsx` takes a page off the site, which is
+   * about as visual as a change gets. It reaches the classifier because a
+   * deletion is one of the entries in `prepared_changes.files` — the same list
+   * every changed path has always come from — and the render-impact probe
+   * cannot clear it, because there is no head version to prove anything about.
+   */
+  it("classifies a removed page as visual", async () => {
+    const db = new FakeDatabase();
+    db.seed("prepared_changes", {
+      id: PREPARED_ID,
+      project_id: PROJECT_ID,
+      user_id: USER_ID,
+      operation_run_id: "44444444-4444-4444-8444-444444444444",
+      opportunity_set_id: null,
+      opportunity_id: null,
+      execution_capability: "agentic_execution_v2",
+      execution_version: "agentic-execution-v2",
+      repository_snapshot_id: null,
+      base_branch: "main",
+      base_sha: BASE_SHA,
+      branch_name: "vibe/agent-x",
+      commit_sha: COMMIT_SHA,
+      files: [{ path: "src/app/pricing/page.tsx", status: "deleted" }],
+      execution_identity: "identity",
+      status: "prepared",
+      failure_code: null,
+      created_at: new Date().toISOString(),
+      completed_at: null,
+    });
+
+    const result = await classifyReviewForPreparedChange({
+      supabase: fakeSupabase(db),
+      projectId: PROJECT_ID,
+      preparedChangeId: PREPARED_ID,
+      reader: fakeReader({ [`${BASE_SHA}:src/app/pricing/page.tsx`]: HEAD_LAYOUT_JSX_CHANGED }),
+    });
+
+    expect(result?.classification).toBe("visual");
+  });
+
   it("returns null for a prepared change that does not exist", async () => {
     const result = await classifyReviewForPreparedChange({
       supabase: fakeSupabase(new FakeDatabase()),

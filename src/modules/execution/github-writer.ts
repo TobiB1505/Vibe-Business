@@ -1,6 +1,7 @@
 import { sha256, type GeneratedFile } from "./generators/nextjs-seo-foundations";
 import type { GitWritePort } from "./git-port";
 import { checkWritePaths } from "./paths";
+import { isAgenticCapability } from "./schema";
 import type { ExecutionCapability, ExecutionFailureReason } from "./schema";
 
 /**
@@ -12,17 +13,24 @@ import type { ExecutionCapability, ExecutionFailureReason } from "./schema";
  * objects the host garbage-collects and **no branch at all**. A half-written
  * branch would be far worse than no branch.
  *
- * Three things this structurally cannot do, because `GitWritePort` has no
+ * Two things this structurally cannot do, because `GitWritePort` has no
  * operation for them:
  *
  *  - **move an existing ref** — only `createRef` exists, so the default branch
  *    cannot be moved from here;
- *  - **force** anything;
- *  - **delete or rename** — the tree is built additively from the base tree.
+ *  - **force** anything.
+ *
+ * It *can* remove a file since ADR 0073, and the guarantee that replaced
+ * "additive only" is narrower but still enumerable: this writer removes only
+ * the paths Vibe observed removed, inside the same path policy that governs a
+ * write, and proves each one absent on read-back. A rename is a deletion and an
+ * addition, observed and written as exactly that — there is no rename
+ * primitive, because "was this a rename" is not a question the observation can
+ * answer honestly.
  *
  * Success is not "the API returned 201". It is: the branch resolves to the
- * commit we created, and every file read back from that branch hashes to the
- * bytes we generated (§25).
+ * commit we created, every file read back from that branch hashes to the bytes
+ * we generated, **and every deleted path reads back absent** (§25, ADR 0073 §4).
  *
  * Takes its port as an argument so all of this is provable in tests without a
  * network (§27).
@@ -73,7 +81,7 @@ const AGENTIC_MESSAGE_FALLBACK = "chore: apply prepared product change";
  * and Vibe-minted identifiers, never from the coding agent's own output.
  */
 export function commitMessageFor(target: Pick<WriteTarget, "capability" | "commitMessage">): string {
-  if (target.capability !== "agentic_execution_v1") return COMMIT_MESSAGE;
+  if (!isAgenticCapability(target.capability)) return COMMIT_MESSAGE;
   return target.commitMessage && target.commitMessage.trim().length > 0
     ? target.commitMessage
     : AGENTIC_MESSAGE_FALLBACK;
@@ -99,25 +107,40 @@ export async function inspectExistingBranch(
   port: GitWritePort,
   target: WriteTarget,
   files: GeneratedFile[],
+  deletions: readonly string[] = [],
 ): Promise<BranchInspection> {
   const commitSha = await port.getRefSha(`heads/${target.branchName}`);
   if (commitSha === null) return { state: "absent" };
 
-  const matches = await filesMatch(port, target.branchName, files);
+  const matches = await branchMatches(port, target.branchName, files, deletions);
   return matches ? { state: "matches", commitSha } : { state: "conflict", commitSha };
 }
 
-/** Reads each path back from a ref and compares hashes against what we generated. */
-async function filesMatch(
+/**
+ * Reads the branch back and compares it against what this change is.
+ *
+ * Two questions, and the second is the one ADR 0073 added: every written path
+ * must hash to the bytes we produced, and every deleted path must be **absent**.
+ * A read-back that finds a deleted path still there is a write failure, not a
+ * detail — the branch would hold a change missing part of what the agent did,
+ * which is the exact situation §59's exactness requirement exists to prevent.
+ */
+async function branchMatches(
   port: GitWritePort,
   ref: string,
   files: GeneratedFile[],
+  deletions: readonly string[],
 ): Promise<boolean> {
   for (const file of files) {
     const content = await port.getFileContent(file.path, ref);
     if (content === null) return false;
     if (sha256(content) !== file.contentHash) return false;
   }
+
+  for (const path of deletions) {
+    if ((await port.getFileContent(path, ref)) !== null) return false;
+  }
+
   return true;
 }
 
@@ -125,12 +148,25 @@ export async function prepareChangeOnBranch(
   port: GitWritePort,
   target: WriteTarget,
   files: GeneratedFile[],
+  /**
+   * Paths to remove, from Vibe's own set difference (ADR 0073 §2).
+   *
+   * Never the agent's account of what it deleted: `discoverWorkspaceChanges`
+   * compares the baseline listing against the listing after the last turn, and
+   * what is missing is what is deleted. Nothing the agent says can add a path
+   * here or take one away (Rule 77).
+   */
+  deletions: readonly string[] = [],
 ): Promise<WriteResult> {
   // Independent of the generator: even though paths are composed from a
   // resolved app root and fixed basenames, they are re-checked here so a
   // future capability that forgets that discipline still cannot escape (§13).
+  //
+  // Deletions go through the same check, in the same call. A path nobody may
+  // write is a path nobody may remove: deleting `.github/workflows/ci.yml` is
+  // the same class of act as replacing it (ADR 0073 §3).
   const paths = checkWritePaths(
-    files.map((file) => file.path),
+    [...files.map((file) => file.path), ...deletions],
     target.capability,
   );
   if (!paths.ok) {
@@ -143,7 +179,7 @@ export async function prepareChangeOnBranch(
   try {
     // Recovery first, so a retry after a persistence failure adopts the branch
     // it already created instead of making a second one (§20, §21).
-    const existing = await inspectExistingBranch(port, target, files);
+    const existing = await inspectExistingBranch(port, target, files, deletions);
     if (existing.state === "matches") {
       return { ok: true, commitSha: existing.commitSha, recovered: true };
     }
@@ -155,7 +191,15 @@ export async function prepareChangeOnBranch(
       files.map(async (file) => ({ path: file.path, blobSha: await port.createBlob(file.content) })),
     );
 
-    const treeSha = await port.createTree({ baseTreeSha, files: blobs });
+    /*
+     * Writes first, then removals, both as tree entries against the base tree.
+     * A deletion is `blobSha: null` — the Git data model's own way of saying
+     * the path is not in the new tree.
+     */
+    const treeSha = await port.createTree({
+      baseTreeSha,
+      files: [...blobs, ...deletions.map((path) => ({ path, blobSha: null }))],
+    });
     const commitSha = await port.createCommit({
       message: commitMessageFor(target),
       treeSha,
@@ -168,7 +212,7 @@ export async function prepareChangeOnBranch(
     // Verification, not optimism (§25).
     const created = await port.getRefSha(`heads/${target.branchName}`);
     if (created !== commitSha) return { ok: false, reason: "write_verification_failed" };
-    if (!(await filesMatch(port, target.branchName, files))) {
+    if (!(await branchMatches(port, target.branchName, files, deletions))) {
       return { ok: false, reason: "write_verification_failed" };
     }
 
