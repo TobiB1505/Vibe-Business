@@ -283,7 +283,7 @@ export async function extractAndVerifyStep(
 
   // Removals count. A run whose whole change was deleting a page did produce a
   // change, and reporting it as "the agent changed nothing" would be false as
-  // well as unhelpful (ADR 0073).
+  // well as unhelpful (ADR 0074).
   if (verification.files.length === 0 && verification.deletions.length === 0) {
     return { ok: false, failureCode: "agent_produced_no_change" };
   }

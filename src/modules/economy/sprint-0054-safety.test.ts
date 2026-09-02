@@ -147,6 +147,19 @@ describe("the Economy Intelligence layer bills nobody", () => {
     "@/modules/economy/execution-class",
     "@/modules/economy/infrastructure-rates",
     "@/modules/economy/sandbox-cost",
+    /*
+     * ADR 0073. Composes the two above and adds nothing of its own: the
+     * founder-attested rate card, and the arithmetic that turns CPU
+     * milliseconds and wall time into nanodollars.
+     *
+     * It is on this list rather than inlined at each writer because there are
+     * three of them — validation, preview and the agent — and "what did this
+     * sandbox cost" answered three times is "what did this sandbox cost"
+     * answered differently the first time somebody edits one. It decides no
+     * amount that was not already decidable by importing its two parts
+     * directly, which is the property this list is drawn on.
+     */
+    "@/modules/economy/sandbox-usage-estimate",
   ];
 
   it("is read only by the economy module, the calibration harness and the permitted primitives", () => {

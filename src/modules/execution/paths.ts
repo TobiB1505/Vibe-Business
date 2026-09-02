@@ -123,7 +123,7 @@ export function checkWritePath(path: string, capability: ExecutionCapability): P
    */
   // Both agentic capabilities, not only the current one: a v1 change still on a
   // branch is re-checked under the same rule it was written under, and the rule
-  // did not change — ADR 0073 widened what may be *removed*, and a removal goes
+  // did not change — ADR 0074 widened what may be *removed*, and a removal goes
   // through this same call.
   if (isAgenticCapability(capability)) {
     return isForbiddenExecutionPath(path) ? { ok: false, reason: "forbidden_location" } : { ok: true };

@@ -83,7 +83,7 @@ export function acceptProposedChange(
   spec: ExecutionSpec,
   files: readonly ProposedFile[],
   /**
-   * Paths the change removes (ADR 0073).
+   * Paths the change removes (ADR 0074).
    *
    * They pass the same forbidden-path check as a write and count as one
    * changed file each against `maxChangedFiles`, because removing a file is a

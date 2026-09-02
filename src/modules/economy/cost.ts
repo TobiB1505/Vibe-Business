@@ -4,11 +4,20 @@
  * ## Why this type exists rather than `number | null`
  *
  * Because the interesting question about Vibe's unit economics is not "what did
- * this cost" but "which parts of that number are real". Today the model spend is
- * measured to the nanodollar and reconciles exactly against the provider price
- * book, while **every second of sandbox time in Vibe's entire history is
- * unpriced** — `sandbox_usage_events.provider_cost_usd` is null in all 43 rows,
- * by policy, because no price was ever supplied.
+ * this cost" but "which parts of that number are real". Model spend is measured
+ * to the nanodollar and reconciles exactly against the provider price book.
+ * Sandbox time is not, and never will be: `provider_cost_usd` is null in every
+ * row Vibe has ever written, because Vercel reports no attributable per-sandbox
+ * amount.
+ *
+ * *(2026-09-02, ADR 0073: what changed is not the provider's silence but Vibe's
+ * evidence. `VERCEL_SANDBOX_RATES` has been founder-attested and verified since
+ * 2026-08-20, so a figure is now **derived** at write time into
+ * `sandbox_usage_events.estimated_cost_nano_usd`, under its own `cost_estimated`
+ * status. The distinction this file exists for is what makes that safe: it is an
+ * `estimated`, it is stored apart from the provider's column, and a sum can
+ * still be taken over measurements alone. Sprint 0053's sentence — "no price was
+ * ever supplied" — was true when written and is not now.)*
  *
  * A `number | null` would let a caller write `cost ?? 0`, and a zero silently
  * standing in for "we do not know" is precisely how a business talks itself into

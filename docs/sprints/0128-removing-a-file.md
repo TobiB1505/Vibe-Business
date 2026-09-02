@@ -1,6 +1,6 @@
 # The commit that could only ever add
 
-**Recorded 2026-09-02, after the work.** One slice, one migration, one ADR ([0073](../decisions/0073-removing-a-file.md)). Stage 1 of the architecture audit walked through on this branch; Stage 0 shipped as [Sprint 0125](0125-the-evidence-behind-the-ceiling.md)'s neighbour and the build-artifact repair before it.
+**Recorded 2026-09-02, after the work.** One slice, one migration, one ADR ([0074](../decisions/0074-removing-a-file.md)). Stage 1 of the architecture audit walked through on this branch; Stage 0 shipped as [Sprint 0125](0125-the-evidence-behind-the-ceiling.md)'s neighbour and the build-artifact repair before it.
 
 No new dependency, no new grant, no change to how a merge is authorized.
 

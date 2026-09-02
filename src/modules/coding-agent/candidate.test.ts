@@ -372,7 +372,7 @@ describe("§28 — post-agent verification", () => {
   }
 
   /**
-   * Until ADR 0073 this was a refusal, and an honest one: the git writer built
+   * Until ADR 0074 this was a refusal, and an honest one: the git writer built
    * its tree additively and its port had no operation that removed an entry, so
    * a candidate containing a deletion could not be written faithfully. The port
    * expresses one now, so the change is accepted — and the deletion is carried

@@ -253,7 +253,7 @@ describe("every degradation leaves the path answer standing", () => {
   });
 
   /**
-   * A removed page is a visual change (ADR 0073).
+   * A removed page is a visual change (ADR 0074).
    *
    * Removing `src/app/pricing/page.tsx` takes a page off the site, which is
    * about as visual as a change gets. It reaches the classifier because a

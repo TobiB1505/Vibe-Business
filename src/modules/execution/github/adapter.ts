@@ -72,7 +72,7 @@ export function createGithubGitWritePort(target: RepositoryTarget): GitWritePort
           mode: "100644" as const,
           type: "blob" as const,
           /*
-           * `null` removes the path from the new tree (ADR 0073).
+           * `null` removes the path from the new tree (ADR 0074).
            *
            * Octokit types `sha` as `string | null` for exactly this, and the
            * REST API documents the null as the deletion. Sent as `null` rather

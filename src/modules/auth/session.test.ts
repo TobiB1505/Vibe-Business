@@ -13,12 +13,14 @@ vi.mock("next/navigation", () => ({
 }));
 
 const getClaimsMock = vi.fn();
+const createClientMock = vi.fn(async () => ({ auth: { getClaims: getClaimsMock } }));
 
 vi.mock("@/lib/supabase/server", () => ({
-  createClient: vi.fn(async () => ({ auth: { getClaims: getClaimsMock } })),
+  createClient: (...args: unknown[]) => createClientMock(...(args as [])),
 }));
 
 const { getSession, requireSession } = await import("./session");
+const { MissingEnvironmentError } = await import("@/lib/env/env");
 
 /** The shape `getClaims()` resolves to for a verified JWT. */
 function verifiedClaims(claims: Record<string, unknown>) {
@@ -114,5 +116,44 @@ describe("requireSession", () => {
     await expect(requireSession()).rejects.toSatisfy(
       (error: unknown) => error instanceof RedirectSignal && error.url === "/login",
     );
+  });
+});
+
+describe("what getSession absorbs, and what it must not (PERF-024)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    createClientMock.mockImplementation(async () => ({ auth: { getClaims: getClaimsMock } }));
+  });
+
+  it("treats a missing configuration as signed out, loudly", async () => {
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    createClientMock.mockRejectedValue(new MissingEnvironmentError("no NEXT_PUBLIC_SUPABASE_URL"));
+
+    expect(await getSession()).toBeNull();
+    expect(error).toHaveBeenCalledOnce();
+    error.mockRestore();
+  });
+
+  it("rethrows everything else, so a framework signal reaches the framework", async () => {
+    /*
+     * The reason this matters more than the log noise it removed.
+     *
+     * `createClient` awaits `cookies()` before it reads the environment, and
+     * during static generation that raises Next's `DynamicServerError` — the
+     * signal that the route is dynamic. The old catch absorbed it and answered
+     * `null`, so a caller asking "is anyone signed in" got "no" for a question
+     * the framework was trying to refuse, twenty-five times per build.
+     *
+     * A plain Error stands in for it here on purpose: recognising the real one
+     * needs `isDynamicServerError` from under `next/dist/`, and the fix is
+     * deliberately the inversion — absorb the one known case, rethrow the rest
+     * — rather than a deep import into a framework's internals.
+     */
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    createClientMock.mockRejectedValue(new Error("DYNAMIC_SERVER_USAGE"));
+
+    await expect(getSession()).rejects.toThrow("DYNAMIC_SERVER_USAGE");
+    expect(error, "a rethrown error must not also be logged as a misconfiguration").not.toHaveBeenCalled();
+    error.mockRestore();
   });
 });

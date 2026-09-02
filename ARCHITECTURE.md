@@ -332,7 +332,7 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0058](docs/decisions/0058-move-focus-url-contract.md) | Move focus is a shared URL contract, never authority: one parameter names which Move a surface is about, resolved against stored Moves and never permitting work (Accepted; Action Plan, Agent and both next-move cards implemented) | Action Plan, Agent, project shell |
 | [0059](docs/decisions/0059-security-response-headers.md) | Security response headers, and a CSP that starts by watching rather than enforcing (Accepted; six headers live, CSP report-only — it protects nothing until enforced) | HTTP responses, `next.config.ts`, CSP |
 | [0060](docs/decisions/0060-sign-in-throttle-authority.md) | The sign-in throttle's authority is who may call it (Accepted; `record_auth_attempt` unreachable through the Data API, one reviewed service-role site) | Sign-in, `auth_attempt_windows`, rule 53 |
-| [0061](docs/decisions/0061-launch-v1-operation-rate-card.md) | What a Credit buys, and what each number is worth trusting (Accepted; rate table amended by 0062. `launch-v1` prices every customer-facing operation, each with a `PriceBasis`) | Credits, retail prices, execution budgets, §3.11 |
+| [0061](docs/decisions/0061-launch-v1-operation-rate-card.md) | What a Credit buys, and what each number is worth trusting (Accepted; rate table amended by 0062, settlement timing by 0073. `launch-v1` prices every customer-facing operation, each with a `PriceBasis`) | Credits, retail prices, execution budgets, §3.11 |
 | [0062](docs/decisions/0062-sonnet-5-price-rise-cancelled.md) | A cancelled provider price is deleted, not held (Accepted; amends 0061. The Sonnet 5 rise to $3/$15 was withdrawn, so the row is gone and a permanent regression test keeps it gone; `launch-v1` re-derived to 35 / 20 / 20) | `ai/pricing.ts`, margin guard, §3.11 |
 | [0063](docs/decisions/0063-review-classification-as-a-gate.md) | The review classification becomes a gate, and a diff becomes approval evidence (Accepted; supersedes 0037 §2's "advisory", amends 0018. A change altering no rendered page is approved on a reproducible diff instead of two identical screenshots) | Review, approvals, `change_approvals`, prepared-change card |
 | [0064](docs/decisions/0064-preview-before-validation.md) | The preview comes before the check, and serves the commit (Accepted; supersedes 0016 §1, §3, §7, §11. A preview clones the prepared commit and runs a development server beside validation instead of restoring the build that validation captured — so a person looks immediately, and nothing keeps a customer's file tree at the provider) | Preview, validation, `preview_sessions`, §3.9 |
@@ -344,7 +344,8 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0070](docs/decisions/0070-the-sandbox-is-the-boundary.md) | The sandbox is the boundary; the tool gateway is retired | §3.6 |
 | [0071](docs/decisions/0071-agentic-outcome-verification.md) | Outcome verification for agentic changes: routes Vibe observed | Measurement |
 | [0072](docs/decisions/0072-the-evidence-behind-the-ceiling.md) | The estimator informs the Run button; it does not price it | §3.11 |
-| [0073](docs/decisions/0073-removing-a-file.md) | A prepared change may remove a file; the observation decides which | §3.6 |
+| [0073](docs/decisions/0073-the-charge-lands-on-what-was-sold.md) | Settlement waits for validation; the usage ledger fills itself | §3.11 |
+| [0074](docs/decisions/0074-removing-a-file.md) | A prepared change may remove a file; the observation decides which | §3.6 |
 
 ### Layers with no section above
 

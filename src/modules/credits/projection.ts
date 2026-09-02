@@ -280,6 +280,9 @@ export type SandboxUsageRow = {
   network_ingress_bytes: number | null;
   network_egress_bytes: number | null;
   provider_cost_usd: string | number | null;
+  /** Vibe's own derivation, when the dimensions allowed one (ADR 0073). */
+  estimated_cost_nano_usd?: number | null;
+  cost_pricing_version?: string | null;
   created_at: string;
 };
 
@@ -295,8 +298,22 @@ export type SandboxUsageRow = {
  * currently does not, and no rate is derived from a public price list.
  */
 export function projectSandboxUsage(row: SandboxUsageRow): BillableUsage[] {
+  /*
+   * The provider's own figure first, and Vibe's derivation only in its absence
+   * (ADR 0073).
+   *
+   * The order is the whole point rather than a fallback convenience: a price
+   * the provider stated is better evidence than one Vibe computed, so a row
+   * that ever gains a real `provider_cost_usd` stops using the estimate without
+   * anybody having to remember to. `cost_estimated` keeps the two apart in the
+   * ledger, so a sum can be taken over measurements alone.
+   */
   const stored = storedCostToNanoUsd(row.provider_cost_usd);
-  const costStatus: CostStatus = stored === null ? "cost_unknown" : "costed";
+  const estimated = stored === null ? (row.estimated_cost_nano_usd ?? null) : null;
+
+  const rawCost = stored ?? estimated;
+  const costStatus: CostStatus =
+    stored !== null ? "costed" : estimated !== null ? "cost_estimated" : "cost_unknown";
 
   const measurements: [UsageSku, number | null][] = [
     ["sandbox_duration_ms", row.sandbox_duration_ms],
@@ -319,9 +336,12 @@ export function projectSandboxUsage(row: SandboxUsageRow): BillableUsage[] {
     occurredAt: row.created_at,
     // As with AI, any known cost rides on exactly one of the row's SKUs so a
     // sum over billing usage equals the provider ledger rather than a multiple.
-    rawCostNanoUsd: index === 0 ? stored : null,
+    rawCostNanoUsd: index === 0 ? rawCost : null,
     costStatus: index === 0 ? costStatus : "not_billable",
-    providerPricingVersion: null,
+    // Names the rate card an estimate was computed under, so a later price
+    // change cannot silently restate a historical row. Null for a provider
+    // figure, which carries its own provenance by being the provider's.
+    providerPricingVersion: index === 0 ? (estimated === null ? null : (row.cost_pricing_version ?? null)) : null,
   }));
 }
 

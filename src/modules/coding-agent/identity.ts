@@ -58,7 +58,7 @@ export function computeAgentRunIdentity(params: {
 /**
  * A digest of exactly the change a candidate would write.
  *
- * Path plus content hash per file, in sorted order, and since ADR 0073 the
+ * Path plus content hash per file, in sorted order, and since ADR 0074 the
  * removed paths beside them. Content hashes rather than content, so this
  * function never holds a whole change in one string and never becomes a place
  * source could be persisted.

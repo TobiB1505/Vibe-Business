@@ -1,4 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { meterSandboxUsage } from "@/modules/credits/meter";
+import type { SandboxUsageRow } from "@/modules/credits/projection";
+import { estimateSandboxCost } from "@/modules/economy/sandbox-usage-estimate";
+import { PREVIEW_RESOURCES } from "./budgets";
 import type { Database } from "@/types/database";
 import { readLatestPerPreparedChange } from "@/lib/db/latest-per-change";
 import type { SandboxUsage } from "@/modules/validation/sandbox-port";
@@ -493,7 +497,17 @@ export async function recordPreviewSandboxUsage(
     failureCode: PreviewFailureCode | null;
   },
 ): Promise<void> {
-  const { error } = await supabase.from("sandbox_usage_events").insert({
+  const estimate = estimateSandboxCost({
+    purpose: "change_preview",
+    sandboxDurationMs: params.sandboxDurationMs,
+    activeCpuMs: params.usage?.activeCpuDurationMs ?? null,
+    outboundBytes: params.usage?.networkEgressBytes ?? null,
+    // A preview runs at half the validation allocation, and the estimate has
+    // to know which — CPU and memory both scale with it.
+    vcpus: PREVIEW_RESOURCES.vcpus,
+  });
+
+  const { data, error } = await supabase.from("sandbox_usage_events").insert({
     project_id: params.projectId,
     user_id: params.userId,
     preview_session_id: params.previewSessionId,
@@ -505,12 +519,27 @@ export async function recordPreviewSandboxUsage(
     active_cpu_ms: params.usage?.activeCpuDurationMs ?? null,
     network_ingress_bytes: params.usage?.networkIngressBytes ?? null,
     network_egress_bytes: params.usage?.networkEgressBytes ?? null,
+    // What the provider said, which for a Vercel sandbox is nothing. Left
+    // exactly as it was: the estimate beside it is a different claim and gets
+    // its own columns (ADR 0073).
     provider_cost_usd: params.usage?.costUsd ?? null,
+    estimated_cost_nano_usd: estimate.estimatedCostNanoUsd,
+    cost_pricing_version: estimate.pricingVersion,
+    vcpus: estimate.vcpus,
     cleanup_status: params.cleanupStatus,
     failure_code: params.failureCode,
     // Deliberately no detail column: a preview's diagnostics belong on the
     // session, and the ledger is for numbers.
-  });
+  }).select("id, user_id, project_id, provider, sandbox_duration_ms, active_cpu_ms, network_ingress_bytes, network_egress_bytes, provider_cost_usd, estimated_cost_nano_usd, cost_pricing_version, created_at").single();
+
+  /*
+   * Into the billing ledger immediately (ADR 0073).
+   *
+   * The measurement and its projection are the same event, so the ledger that
+   * makes margin knowable is current by construction rather than by a repair
+   * pass an operator has to remember.
+   */
+  if (data) await meterSandboxUsage(supabase, data as unknown as SandboxUsageRow);
 
   // A ledger write must never take down the preview that earned it — the
   // sandbox already ran and the spend is real either way. The unique index on

@@ -214,7 +214,7 @@ async function reconcileSandboxUsage(
   let query = supabase
     .from("sandbox_usage_events")
     .select(
-      "id, user_id, project_id, provider, sandbox_duration_ms, active_cpu_ms, network_ingress_bytes, network_egress_bytes, provider_cost_usd, created_at",
+      "id, user_id, project_id, provider, sandbox_duration_ms, active_cpu_ms, network_ingress_bytes, network_egress_bytes, provider_cost_usd, estimated_cost_nano_usd, cost_pricing_version, created_at",
     )
     .order("created_at", { ascending: true })
     .limit(scope.limit ?? DEFAULT_LIMIT);

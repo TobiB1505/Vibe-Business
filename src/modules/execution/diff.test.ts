@@ -233,7 +233,7 @@ describe("base versus head (Sprint 0055 §1)", () => {
   });
 
   /**
-   * A removed file (ADR 0073).
+   * A removed file (ADR 0074).
    *
    * The status comes from the stored row and never from a head read that came
    * back empty — `getTextFile` returns null for an absent file, a binary one

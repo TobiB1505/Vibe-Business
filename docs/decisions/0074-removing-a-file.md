@@ -1,4 +1,4 @@
-# 0073 - Removing a file: what the write path can express
+# 0074 - Removing a file: what the write path can express
 
 Status: Accepted
 Date: 2026-09-02

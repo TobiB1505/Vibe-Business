@@ -20,7 +20,7 @@ import type { ExecutionCapability, ExecutionFailureReason } from "./schema";
  *    cannot be moved from here;
  *  - **force** anything.
  *
- * It *can* remove a file since ADR 0073, and the guarantee that replaced
+ * It *can* remove a file since ADR 0074, and the guarantee that replaced
  * "additive only" is narrower but still enumerable: this writer removes only
  * the paths Vibe observed removed, inside the same path policy that governs a
  * write, and proves each one absent on read-back. A rename is a deletion and an
@@ -30,7 +30,7 @@ import type { ExecutionCapability, ExecutionFailureReason } from "./schema";
  *
  * Success is not "the API returned 201". It is: the branch resolves to the
  * commit we created, every file read back from that branch hashes to the bytes
- * we generated, **and every deleted path reads back absent** (§25, ADR 0073 §4).
+ * we generated, **and every deleted path reads back absent** (§25, ADR 0074 §4).
  *
  * Takes its port as an argument so all of this is provable in tests without a
  * network (§27).
@@ -119,7 +119,7 @@ export async function inspectExistingBranch(
 /**
  * Reads the branch back and compares it against what this change is.
  *
- * Two questions, and the second is the one ADR 0073 added: every written path
+ * Two questions, and the second is the one ADR 0074 added: every written path
  * must hash to the bytes we produced, and every deleted path must be **absent**.
  * A read-back that finds a deleted path still there is a write failure, not a
  * detail — the branch would hold a change missing part of what the agent did,
@@ -149,7 +149,7 @@ export async function prepareChangeOnBranch(
   target: WriteTarget,
   files: GeneratedFile[],
   /**
-   * Paths to remove, from Vibe's own set difference (ADR 0073 §2).
+   * Paths to remove, from Vibe's own set difference (ADR 0074 §2).
    *
    * Never the agent's account of what it deleted: `discoverWorkspaceChanges`
    * compares the baseline listing against the listing after the last turn, and
@@ -164,7 +164,7 @@ export async function prepareChangeOnBranch(
   //
   // Deletions go through the same check, in the same call. A path nobody may
   // write is a path nobody may remove: deleting `.github/workflows/ci.yml` is
-  // the same class of act as replacing it (ADR 0073 §3).
+  // the same class of act as replacing it (ADR 0074 §3).
   const paths = checkWritePaths(
     [...files.map((file) => file.path), ...deletions],
     target.capability,

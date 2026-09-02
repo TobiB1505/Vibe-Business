@@ -365,7 +365,7 @@ describe("PART H — no amendment after a commit exists", () => {
 });
 
 /**
- * Removing a file (ADR 0073).
+ * Removing a file (ADR 0074).
  *
  * The write path was additive for its whole life, and `candidate.ts` refused a
  * deletion rather than write a commit missing part of what the agent did. What
@@ -374,7 +374,7 @@ describe("PART H — no amendment after a commit exists", () => {
  * it. The fake below models a real base tree — the existing one seeds a branch
  * from `FILES` whatever the tree said, which cannot answer "is it gone?".
  */
-describe("prepareChangeOnBranch — deletions (ADR 0073)", () => {
+describe("prepareChangeOnBranch — deletions (ADR 0074)", () => {
   const AGENTIC_TARGET: WriteTarget = {
     ...TARGET,
     branchName: "vibe/agent-delete-abc123",

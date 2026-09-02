@@ -1,6 +1,7 @@
 import "server-only";
 
 import { redirect } from "next/navigation";
+import { MissingEnvironmentError } from "@/lib/env/env";
 import { createClient } from "@/lib/supabase/server";
 import { loginPathWithNext } from "@/modules/auth/redirects";
 
@@ -32,14 +33,32 @@ export async function getSession(): Promise<Session | null> {
   try {
     supabase = await createClient();
   } catch (error) {
-    // Supabase isn't configured. `/login` and `/signup` now ask about the
-    // session in order to redirect visitors who already have one, so throwing
-    // here would take down the very screens someone needs in order to notice
-    // the problem. Nobody is signed in without configuration anyway — but a
-    // deployment that reaches this line is broken, so it says so loudly
-    // rather than quietly rendering a signed-out app.
+    /*
+     * Only the configuration failure is absorbed here (PERF-024).
+     *
+     * This used to catch everything, and the thing it caught most often was
+     * not a misconfiguration at all: `createClient` awaits `cookies()` before
+     * it reads the environment, and during static generation `cookies()`
+     * raises a `DynamicServerError` — **Next's own signal that the route is
+     * dynamic**. Swallowing it printed "Supabase is not configured"
+     * twenty-five times per build and, worse than the noise, answered `null`
+     * to a caller that had asked a question Next was trying to refuse.
+     *
+     * Rethrowing lets that signal reach the framework that raised it. The
+     * error is deliberately not identified by type: `isDynamicServerError`
+     * lives under `next/dist/`, and a deep import into a framework's internals
+     * to recognise one error is a worse dependency than this inversion.
+     */
+    if (!(error instanceof MissingEnvironmentError)) throw error;
+
+    // `/login` and `/signup` ask about the session in order to redirect
+    // visitors who already have one, so throwing here would take down the very
+    // screens someone needs in order to notice the problem. Nobody is signed
+    // in without configuration anyway — but a deployment that reaches this
+    // line is broken, so it says so loudly rather than quietly rendering a
+    // signed-out app.
     console.error("[auth.session] Supabase is not configured; treating as signed out.", {
-      reason: error instanceof Error ? error.message : "unknown",
+      reason: error.message,
     });
     return null;
   }

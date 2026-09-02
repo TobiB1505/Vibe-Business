@@ -1,4 +1,8 @@
 import "server-only";
+import { estimateSandboxCost } from "@/modules/economy/sandbox-usage-estimate";
+import { meterSandboxUsage } from "@/modules/credits/meter";
+import type { SandboxUsageRow } from "@/modules/credits/projection";
+import { SANDBOX_RESOURCES } from "@/modules/validation/budgets";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { recordAIUsage } from "@/modules/ai/usage";
@@ -176,7 +180,18 @@ export async function recordAgentSandboxUsage(
     failureCode: string | null;
   },
 ): Promise<void> {
-  const { error } = await supabase.from("sandbox_usage_events").insert({
+  const estimate = estimateSandboxCost({
+    purpose: "agent_execution",
+    sandboxDurationMs: params.sandboxDurationMs,
+    activeCpuMs: params.usage?.activeCpuDurationMs ?? null,
+    outboundBytes: params.usage?.networkEgressBytes ?? null,
+    // The agent's `create` passes no resource shape, so the provider applies
+    // `SANDBOX_RESOURCES.vcpus` — the same constant, read from the same place
+    // rather than repeated as a number here.
+    vcpus: SANDBOX_RESOURCES.vcpus,
+  });
+
+  const { data, error } = await supabase.from("sandbox_usage_events").insert({
     user_id: params.userId,
     project_id: params.projectId,
     operation: "agent_execution",
@@ -189,11 +204,24 @@ export async function recordAgentSandboxUsage(
     network_ingress_bytes: params.usage?.networkIngressBytes ?? null,
     network_egress_bytes: params.usage?.networkEgressBytes ?? null,
     // Null unless the provider exposes an attributable billed amount. Vercel
-    // does not, and an estimate here would be a guess in an accounting column.
+    // does not, and an estimate here would be a guess in an accounting column —
+    // which is why the estimate has columns of its own (ADR 0073).
     provider_cost_usd: params.usage?.costUsd ?? null,
+    estimated_cost_nano_usd: estimate.estimatedCostNanoUsd,
+    cost_pricing_version: estimate.pricingVersion,
+    vcpus: estimate.vcpus,
     cleanup_status: params.cleanupStatus,
     failure_code: params.failureCode,
-  });
+  }).select("id, user_id, project_id, provider, sandbox_duration_ms, active_cpu_ms, network_ingress_bytes, network_egress_bytes, provider_cost_usd, estimated_cost_nano_usd, cost_pricing_version, created_at").single();
+
+  /*
+   * Into the billing ledger immediately (ADR 0073).
+   *
+   * The measurement and its projection are the same event, so the ledger that
+   * makes margin knowable is current by construction rather than by a repair
+   * pass an operator has to remember.
+   */
+  if (data) await meterSandboxUsage(supabase, data as unknown as SandboxUsageRow);
 
   if (error) {
     // Never throws. A ledger write failing must not fail a run whose provider

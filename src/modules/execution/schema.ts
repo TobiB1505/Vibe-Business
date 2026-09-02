@@ -55,7 +55,7 @@ export const EXECUTION_CAPABILITIES = [
    */
   "agentic_execution_v1",
   /**
-   * The same producer, with a write path that can remove a file (ADR 0073).
+   * The same producer, with a write path that can remove a file (ADR 0074).
    *
    * Exactly the bump the paragraph above describes: a wider write scope is a
    * new value, so that a `v1` row keeps meaning what it meant — additive only,
@@ -145,7 +145,7 @@ export const AGENTIC_EXECUTION_VERSION = "agentic-execution-v1" as const;
 
 /**
  * What agentic execution v2 produces: the same pipeline, writing a commit that
- * may remove a file (ADR 0073).
+ * may remove a file (ADR 0074).
  *
  * A distinct string rather than a reuse of the v1 one, because capability and
  * version both feed the execution identity — and a version that did not move
@@ -247,7 +247,7 @@ export type PreparedFile = {
   path: string;
   /**
    * What this commit did to the path. Absent means written, which is what every
-   * row stored before ADR 0073 meant and still means — a stored file is not
+   * row stored before ADR 0074 meant and still means — a stored file is not
    * reinterpreted by a later capability learning a second verb.
    */
   status?: "deleted";

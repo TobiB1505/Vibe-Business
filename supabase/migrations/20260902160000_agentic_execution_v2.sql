@@ -1,4 +1,4 @@
--- The write path can remove a file (ADR 0073).
+-- The write path can remove a file (ADR 0074).
 --
 -- `agentic_execution_v1` named a producer whose commits were additive: the
 -- GitHub writer built its tree by adding blobs to the base, and a candidate

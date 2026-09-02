@@ -8,7 +8,7 @@
  * "the default branch cannot be moved from here" a property of the *type*
  * rather than a claim about the code.
  *
- * Removing a file gave it no eighth operation (ADR 0073). A tree entry with a
+ * Removing a file gave it no eighth operation (ADR 0074). A tree entry with a
  * null blob is how the Git data model already expresses "this path is not in
  * the new tree", so deletion is a *shape* `createTree` accepts rather than a
  * capability the port grants. Everything above still holds unchanged.
@@ -31,7 +31,7 @@ export type GitWritePort = {
    * `blobSha: null` removes that path — the Git tree API's own way of saying
    * so, and the only way this port can express a deletion. Which paths those
    * are is decided by Vibe's observation of the workspace, never by anything
-   * the agent reported (Rule 77, ADR 0073).
+   * the agent reported (Rule 77, ADR 0074).
    */
   createTree(input: {
     baseTreeSha: string;

@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startCluster, type Cluster } from "./harness";
 
 /**
- * Sprint 0115 — the capability that may remove a file (ADR 0073).
+ * Sprint 0128 — the capability that may remove a file (ADR 0074).
  *
  * ## Why this runs against a real cluster
  *

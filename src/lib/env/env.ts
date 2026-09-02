@@ -26,6 +26,28 @@ const publicEnvSchema = z.object({
 
 export type PublicEnv = z.infer<typeof publicEnvSchema>;
 
+/**
+ * The one failure {@link getPublicEnv} produces, as a type rather than a
+ * message (PERF-024).
+ *
+ * It exists because a caller has to be able to tell "this deployment has no
+ * Supabase configuration" apart from every other reason reading configuration
+ * can fail — and `getSession` could not. It caught every throw and reported all
+ * of them as "not configured", which swallowed the `DynamicServerError` that
+ * `cookies()` raises during static generation: Next's own signal that a route
+ * is dynamic, turned into a log line and a `null` session, twenty-five times
+ * per build.
+ *
+ * Matching on the message would work and would break the first time somebody
+ * improved the wording.
+ */
+export class MissingEnvironmentError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "MissingEnvironmentError";
+  }
+}
+
 let cached: PublicEnv | undefined;
 
 /**
@@ -46,7 +68,7 @@ export function getPublicEnv(source: Record<string, string | undefined> = proces
     const issues = result.error.issues
       .map((issue) => `- ${issue.path.join(".")}: ${issue.message}`)
       .join("\n");
-    throw new Error(
+    throw new MissingEnvironmentError(
       `Invalid or missing environment configuration:\n${issues}\n\nSee .env.example for the required variables.`,
     );
   }

@@ -328,7 +328,7 @@ export const CANDIDATE_REJECTIONS = [
   /** The workspace was not, or is no longer, the pinned base commit (§8, §54). */
   "source_revision_unverified",
   /**
-   * Historical, and unreachable since ADR 0073.
+   * Historical, and unreachable since ADR 0074.
    *
    * Every candidate carrying a deletion was refused with this before the write
    * path could express one. A deletion is now checked as a write is, so a
@@ -386,7 +386,7 @@ export type CandidateVerification =
  * reported as three problems, because fixing one and rediscovering the next is
  * how a repair loop burns a budget.
  *
- * ## Deletions, since ADR 0073
+ * ## Deletions, since ADR 0074
  *
  * They used to be refused here, and the refusal was honest: `github-writer.ts`
  * built its tree additively and its port had no operation that removed an
@@ -412,7 +412,7 @@ export function verifyCandidateChange(input: {
   if (!input.sourceRevisionVerified) rejections.push("source_revision_unverified");
 
   /*
-   * Deletions, checked the same way writes are (ADR 0073 §3).
+   * Deletions, checked the same way writes are (ADR 0074 §3).
    *
    * `forbidden_path` rather than a deletion-specific rejection: the finding is
    * that the change touches a path the policy protects, and whether it touched

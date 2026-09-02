@@ -185,7 +185,7 @@ export type FakeSandboxProvider = SandboxProvider & {
    * Removes bytes from the workspace the way the harness does — from inside.
    *
    * The counterpart of `writeFile`, and needed for the same reason: since
-   * ADR 0073 a run may remove a file, and Vibe learns that by walking the
+   * ADR 0074 a run may remove a file, and Vibe learns that by walking the
    * filesystem and finding a path that is no longer there. A test that stubbed
    * the deletion anywhere else would be asserting about its own stub.
    */

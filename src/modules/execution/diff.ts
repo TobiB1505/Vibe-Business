@@ -83,7 +83,7 @@ export type DiffContentReader = {
 /**
  * What happened to one file.
  *
- * `deleted` exists since ADR 0073, and the caution the previous version of this
+ * `deleted` exists since ADR 0074, and the caution the previous version of this
  * comment recorded still holds: it is **never inferred from a missing head
  * side**. `getTextFile` returns `null` for an absent file, a binary one, an
  * oversized one and a directory alike, so a null head still means `unreadable`.
