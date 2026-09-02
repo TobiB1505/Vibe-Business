@@ -167,6 +167,20 @@ export type FakeSandboxProvider = SandboxProvider & {
   exposedPorts(): readonly number[];
   /** Origins handed out, for asserting the URL is never assembled by Vibe. */
   origins(): number[];
+  /**
+   * Puts bytes in the workspace the way the harness does — from inside.
+   *
+   * Under ADR 0029 an agent's writes never travel through Vibe: it edits files
+   * with its own tools inside the VM, and Vibe learns what changed by walking
+   * the filesystem afterwards. A test that wants a run to have changed
+   * something has to change the filesystem, because that is the only thing the
+   * observation can see.
+   *
+   * Before this, the fake agent provider invoked a broker and the change
+   * appeared through Vibe — the topology ADR 0029 retired — so every test about
+   * "what a run changed" was passing for a reason production does not have.
+   */
+  writeFile(path: string, content: string): void;
 };
 
 export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandboxProvider {
@@ -542,6 +556,11 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
   return {
     id: "vercel_sandbox",
     events,
+
+    writeFile(path: string, content: string) {
+      files[path] = content;
+      touch(path);
+    },
 
     async create(input) {
       events.push({ kind: "create", input });

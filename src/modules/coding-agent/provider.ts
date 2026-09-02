@@ -106,14 +106,6 @@ export type CodingAgentRequest = {
   tools: readonly AgentToolDescriptor[];
   limits: CodingAgentLimits;
   /**
-   * The single door to every effect the agent can have.
-   *
-   * Supplied by the caller, implemented by the tool gateway. A provider calls
-   * it and reports what came back; it never inspects, second-guesses or
-   * bypasses it.
-   */
-  invokeTool(name: string, input: unknown): Promise<AgentToolOutcome>;
-  /**
    * How much self-checking this task is allowed (Sprint 0042).
    *
    * A provider carries it to wherever the harness runs and never interprets it.

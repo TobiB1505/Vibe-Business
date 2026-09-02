@@ -4,13 +4,10 @@ import {
   StepOutcome,
   recordLifecycle,
   recordWorkspaceFailure,
-  AgentRunContext,
   loadAgentRunContext,
 } from "./shared";
-import { recordAuditEvent } from "@/modules/audit-log/events";
 import { checkBudgetMatchesScope } from "@/modules/coding-agent/budget";
 import { captureWorkspaceBaseline, plantChangeMarker } from "@/modules/coding-agent/sandbox-runtime/changes";
-import { ExecutionToolGateway } from "@/modules/coding-agent/gateway";
 import { agentToolDescriptors, compileAgentInstruction } from "@/modules/coding-agent/prompt";
 import type { ExecutionBrief } from "@/modules/execution-context/brief";
 import {
@@ -21,60 +18,12 @@ import {
 import { toSandboxPolicy, type AgentVerificationPlan } from "@/modules/execution-context/verification";
 import { toSandboxCompletionPolicy } from "@/modules/execution-context/completion";
 import { assertPolicyConsistency } from "@/modules/execution-context/policy";
-import { executionSpecAlreadyResolvedFounderInput } from "@/modules/founder-input/runtime";
-import { createSandboxWorkspace } from "@/modules/coding-agent/sandbox-workspace";
 import type { AgentCheckName } from "@/modules/coding-agent/schema";
 import {
-  pauseAgentRunForUser,
-  raiseExecutionInterrupt,
-  recordAgentActivity,
-  recordAgentRunObservations,
-  recordAgentToolEvents,
   markAgentRunStarted,
+  recordAgentRunObservations,
 } from "@/modules/coding-agent/store";
-import { releaseOperationCredits } from "@/modules/credits/operation-billing";
-import { SANDBOX_BUDGETS } from "@/modules/validation/budgets";
-import { planValidationSteps, type SandboxCommand } from "@/modules/validation/commands";
-import { pauseOperationForUser, setOperationStage } from "../../store";
-/**
- * The tool gateway for one run.
- *
- * Constructed even though the sandbox-hosted harness never calls it: it is what
- * `compileAgentInstruction` describes to the model, it carries the counters the
- * observation record is written from, and it is still the only door in the
- * `AgentWorkspace` sense. What changed with ADR 0029 is which side of the VM
- * boundary the writes happen on, not whether the policy exists.
- */
-function buildToolGateway(
-  deps: AgentExecutionDeps,
-  context: AgentRunContext,
-  availableChecks: readonly AgentCheckName[],
-): ExecutionToolGateway {
-  const workspace = createSandboxWorkspace({
-    sandbox: context.sandbox,
-    sourceRoot: context.target.sourceRoot,
-    workspaceRoot: context.target.workspaceRoot,
-  });
-
-  // The commands the gateway would run, constructed by `validation/commands.ts`
-  // — the one place in this codebase allowed to build a command (Sprint 10A §12).
-  const packageManager = context.spec.spec.repository.packageManager === "npm" ? "npm" : "pnpm";
-  const checkCommands: Partial<Record<AgentCheckName, SandboxCommand>> = {};
-  for (const entry of planValidationSteps({ packageManager, scripts: [...availableChecks] })) {
-    if (!entry.run || entry.step === "install") continue;
-    checkCommands[entry.step as AgentCheckName] = entry.command;
-  }
-
-  return new ExecutionToolGateway({
-    spec: context.spec.spec,
-    workspace,
-    limits: context.limits,
-    checkCommands,
-    commandTimeoutMs: SANDBOX_BUDGETS.commandTimeoutMs,
-    now: deps.now,
-  });
-}
-
+import { setOperationStage } from "../../store";
 /* ---------------------------------------------------------------------------
  * Step 2a — start the harness, and return (§37, ADR 0029 A1)
  * ------------------------------------------------------------------------ */
@@ -130,8 +79,6 @@ export async function startAgentStep(
   const claimed = await markAgentRunStarted(deps.supabase, context.run.id);
   if (!claimed) return { ok: false, failureCode: "inference_interrupted" };
 
-  const creditReservationId = context.run.creditReservationId;
-
   await setOperationStage(deps.supabase, { operationId, stage: "running_agent" });
 
   await recordLifecycle(deps, context.run, "agent_started", "Started working on the change", {
@@ -159,7 +106,6 @@ export async function startAgentStep(
     return { ok: false, failureCode: "sandbox_lost" };
   }
 
-  const gateway = buildToolGateway(deps, context, availableChecks);
 
   /*
    * What Vibe already knows that bears on this step (EXECUTION CONTEXT
@@ -389,7 +335,6 @@ export async function startAgentStep(
       maxWallClockMs: context.limits.maxWallClockMs,
       maxProviderSpendUsd: context.limits.maxProviderSpendUsd,
     },
-    invokeTool: (name: string, input: unknown) => gateway.invoke(name, input),
     // Carried into the sandbox as data. The harness is the only place a shell
     // command exists before it runs, so it is the only place this can apply.
     ...(verification ? { verification: toSandboxPolicy(verification) } : {}),
@@ -433,83 +378,39 @@ export async function startAgentStep(
    * still written, because "the gateway brokered nothing" is a fact worth
    * having recorded rather than an absence to infer.
    */
-  const counters = gateway.counters;
-  await recordAgentRunObservations(deps.supabase, context.run.id, {
-    toolCallsAllowed: counters.allowedCalls,
-    toolCallsDenied: counters.deniedCalls,
-    filesRead: counters.filesRead,
-    checkRuns: counters.checkRuns,
-    repairAttempts: gateway.repairAttempts,
-    changedBytes: counters.changedBytes,
-  });
+  /*
+   * Nothing to record from the broker any more.
+   *
+   * This wrote `tool_calls_allowed`, `tool_calls_denied`, `files_read`,
+   * `check_runs`, `repair_attempts` and `changed_bytes` from the gateway's
+   * counters, plus one row per brokered tool call and activity record. Under
+   * the sandbox topology every one of those was empty by construction — the
+   * harness edits files with its own tools inside the VM and never calls back —
+   * so each run wrote six zeros and two empty lists, and the comment here said
+   * so while doing it anyway.
+   *
+   * What the run actually did is in `agent_execution_events`, written by the
+   * harness feed, and `economy/harness-metrics.ts` already derives the real
+   * counts from there. The columns stay for now, holding their historical
+   * values from the in-process era; dropping them is a separate migration,
+   * because dropping a column the deployed code still selects is exactly the
+   * skew `docs/deployment/migrations-and-rollback.md` forbids.
+   */
 
-  await recordAgentToolEvents(deps.supabase, {
-    runId: context.run.id,
-    projectId: context.run.projectId,
-    events: gateway.toolEvents,
-  });
-  await recordAgentActivity(deps.supabase, {
-    runId: context.run.id,
-    projectId: context.run.projectId,
-    records: gateway.activityRecords,
-  });
+  /*
+   * An interrupt no longer arrives here.
+   *
+   * `gateway.interrupt` was set when the agent called `ask_founder` through the
+   * broker, in the topology where the harness ran in this process. It runs in
+   * the VM now and reports through the runtime protocol instead, so the observe
+   * step is where a raised interrupt is seen — and it does the same three
+   * things this branch did: raise it, pause the run and the operation, and
+   * release the hold as `abandoned_with_usage` because real inference already
+   * ran (see `observe.ts`). Keeping a second copy here meant two places could
+   * disagree about how a paused run is settled, and only one of them could ever
+   * execute.
+   */
 
-  const interrupt = gateway.interrupt;
-  if (interrupt) {
-    if (
-      executionSpecAlreadyResolvedFounderInput(
-        context.spec.spec.businessContext.approvedDecisions,
-        interrupt.founderInputRequirement,
-      )
-    ) {
-      return { ok: false, failureCode: "inference_interrupted" };
-    }
-
-    await raiseExecutionInterrupt(deps.supabase, {
-      projectId: context.run.projectId,
-      userId: context.run.userId,
-      executionSpecId: context.run.executionSpecId,
-      agentExecutionRunId: context.run.id,
-      interrupt,
-    });
-    const paused = await pauseAgentRunForUser(deps.supabase, context.run.id);
-    await pauseOperationForUser(deps.supabase, operationId);
-
-    /*
-     * Release-on-pause (ADR 0042 §P2).
-     *
-     * Real inference already ran to reach this interrupt — activity and tool
-     * events were already recorded above — so the release is
-     * `abandoned_with_usage`, not `cancelled_before_usage`. Guarded on
-     * `paused`, the actual winner of `pauseAgentRunForUser`'s CAS, mirroring
-     * `expireStaleAgentExecution`'s own "whoever wins the swap owns
-     * finalization" rule.
-     *
-     * The reservation belongs to this immutable attempt. It is released here
-     * and never replaced on the same run; a later attempt goes through fresh
-     * admission and receives its own reservation.
-     */
-    if (paused && creditReservationId) {
-      await releaseOperationCredits(deps.supabase, {
-        reservationId: creditReservationId,
-        reason: "abandoned_with_usage",
-      });
-    }
-
-    await recordAuditEvent(deps.supabase, {
-      userId: context.run.userId,
-      projectId: context.run.projectId,
-      eventType: "agent_execution.needs_user_input",
-      metadata: {
-        projectId: context.run.projectId,
-        operationId,
-        agentExecutionRunId: context.run.id,
-        interruptType: interrupt.type,
-      },
-    });
-
-    return { ok: true, paused: true };
-  }
 
   if (!started.ok) {
     console.error("[agent-execution] the agent harness could not be started", {

@@ -38,11 +38,10 @@ Onboarding
   → Opportunity
   → Action Plan
   → Execution Contract  (an immutable spec + a compiled policy)
-  → Agent Execution     (in an isolated sandbox, behind a tool gateway)
+  → Agent Execution     (in an isolated sandbox, with an explicitly named tool set)
   → Prepared Change     (a commit on an isolated branch)
   → Independent Validation
   → Preview
-  → Visual Review
   → Approval            (bound to one exact commit)
   → Merge               (fast-forward, verified by read-back)
   → Outcome Verification
@@ -342,6 +341,7 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0067](docs/decisions/0067-plan-screen-renders-the-resolver.md) | The plan screen renders the execution resolver | §3.6 |
 | [0068](docs/decisions/0068-retention-periods.md) | Retention periods, by what the data is for (Accepted; closes ADR 0056's deferred P-2) | §3.11, §3.12, storage |
 | [0069](docs/decisions/0069-retention-sweep-trigger.md) | What deletes the expired rows, and what it may not touch — `pg_cron` (Accepted; closes ADR 0068's deferred D-2) | §3.11, §3.12, storage |
+| [0070](docs/decisions/0070-the-sandbox-is-the-boundary.md) | The sandbox is the boundary; the tool gateway is retired | §3.6 |
 
 ### Layers with no section above
 

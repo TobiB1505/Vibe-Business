@@ -8,9 +8,9 @@ import { isAgenticWritablePath } from "@/modules/execution/paths";
 import { countChangedLines } from "@/modules/execution/line-stats";
 import type { ExecutionSpec } from "@/modules/execution-contract/spec";
 import type { AgentRuntimeLimits } from "./budget";
-import type { GatewayChange } from "./gateway";
+import type { ObservedChange } from "./schema";
 import type { CandidateIgnorePort } from "./ignored-paths";
-import type { AgentWorkspace } from "./workspace";
+import type { WorkspaceReader } from "./workspace";
 
 /**
  * The candidate change, computed by Vibe (EXECUTION CORE-4 §27, §28, §59).
@@ -151,8 +151,8 @@ export function sha256(content: string): string {
  */
 export async function extractCandidateChange(input: {
   spec: ExecutionSpec;
-  changes: readonly GatewayChange[];
-  workspace: AgentWorkspace;
+  changes: readonly ObservedChange[];
+  workspace: WorkspaceReader;
   base: BaseContentPort;
   limits: AgentRuntimeLimits;
   /**
