@@ -11,7 +11,7 @@
  *
  * The sweep runs as a `pg_cron` job inside Postgres
  * ([ADR 0069](../../../docs/decisions/0069-retention-sweep-trigger.md)), and SQL
- * cannot import TypeScript. So `20260902120000_retention_sweep.sql` carries a
+ * cannot import TypeScript. So `20260902103614_retention_sweep.sql` carries a
  * second copy of every period here, and `sweep.test.ts` reads both files as text
  * and fails when they disagree — the instrument Sprint 0118 built for the agent
  * poll interval and its cost divisor, for the same reason: two constants that

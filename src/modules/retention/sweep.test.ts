@@ -36,7 +36,7 @@ import {
  * that a future widening cannot make one reachable without a test going red.
  */
 
-const MIGRATION = join(process.cwd(), "supabase/migrations/20260902120000_retention_sweep.sql");
+const MIGRATION = join(process.cwd(), "supabase/migrations/20260902103614_retention_sweep.sql");
 
 function migration(): string {
   return readFileSync(MIGRATION, "utf8");
