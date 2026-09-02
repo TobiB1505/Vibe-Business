@@ -1020,8 +1020,8 @@ describe("§20, §35 — cleanup and settlement", () => {
 describe("the sandbox-hosted harness", () => {
   const HOME = "/vercel/sandbox";
   const LIST =
-    "find . ( -name node_modules -o -name .git -o -name .next -o -name dist -o -name build -o -name .turbo -o -name .vercel -o -name coverage ) -prune -o -type f -printf %P\\0";
-  const TOUCHED = `find . ( -name node_modules -o -name .git -o -name .next -o -name dist -o -name build -o -name .turbo -o -name .vercel -o -name coverage ) -prune -o -type f -newer ${HOME}/.vibe-agent/marker -printf %P\\0`;
+    "find . ( -name node_modules -o -name .git -o -name .next -o -name dist -o -name build -o -name .turbo -o -name .vercel -o -name coverage -o -name .swc -o -path */.well-known/workflow/* ) -prune -o -type f -printf %P\\0";
+  const TOUCHED = `find . ( -name node_modules -o -name .git -o -name .next -o -name dist -o -name build -o -name .turbo -o -name .vercel -o -name coverage -o -name .swc -o -path */.well-known/workflow/* ) -prune -o -type f -newer ${HOME}/.vibe-agent/marker -printf %P\\0`;
 
   /** The workspace as the fake sandbox reports it, before and after the run. */
   function walk(options: { before: string[]; after: string[]; touched: string[] }) {

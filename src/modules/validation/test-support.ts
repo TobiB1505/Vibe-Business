@@ -218,14 +218,27 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
    * `find`, over the fake's own filesystem.
    *
    * Only the shape the agent runtime builds is understood: prune a few
-   * directories, take regular files, print paths relative to the walk root, and
-   * optionally restrict to what is newer than a marker. Enough to make the
-   * change-discovery path real rather than stubbed, and narrow enough that a
-   * command this does not recognise falls through to the configured results.
+   * directories *by name* and a few *by path*, take regular files, print paths
+   * relative to the walk root, and optionally restrict to what is newer than a
+   * marker. Enough to make the change-discovery path real rather than stubbed,
+   * and narrow enough that a command this does not recognise falls through to
+   * the configured results.
+   *
+   * The `-path` half is not decoration: build output that lands inside the
+   * source tree cannot be pruned by directory name without taking a customer's
+   * hand-written files with it, so the runtime prunes it by path — and a fake
+   * that ignored those tokens would report a walk the real one does not do.
    */
   function runFind(command: string, cwd: string): string {
     const prefix = cwd === "." || cwd === "" ? "" : `${cwd}/`;
     const pruned = [...command.matchAll(/-name (\S+)/g)].map((match) => match[1]);
+    // `find`'s `-path` glob: `*` matches any run of characters, `/` included.
+    const prunedPaths = [...command.matchAll(/-path (\S+)/g)].map(
+      (match) =>
+        new RegExp(
+          `^${match[1].replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")}$`,
+        ),
+    );
     const newer = /-newer (\S+)/.exec(command);
     const since = newer ? (writtenAt.get(newer[1]) ?? 0) : 0;
 
@@ -234,6 +247,8 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
       .map((path) => path.slice(prefix.length))
       .filter((path) => path.length > 0 && !path.startsWith("/"))
       .filter((path) => !pruned.some((name) => path.split("/").includes(name)))
+      // `find` matches `-path` against the walked path, which starts at `./`.
+      .filter((path) => !prunedPaths.some((pattern) => pattern.test(`./${path}`)))
       .filter((path) => (writtenAt.get(`${prefix}${path}`) ?? 0) > since)
       .sort();
 
