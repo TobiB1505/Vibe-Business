@@ -24,21 +24,28 @@ export const metadata: Metadata = {
  * - "not present once you are signed in" — [ADR 0041](docs/decisions/0041-marketing-attribution-pixel.md),
  *   which renders the Meta Pixel on public paths only and on production only.
  *
- * What is deliberately absent: retention periods, deletion timelines, a legal
- * basis table, a subprocessor list with contract dates, and any certification.
- * None of those exist yet, and a privacy notice that invents them is worse than
- * one that admits the gap.
+ * The retention periods in "How long Vibe keeps things" are the constants in
+ * [`modules/retention/periods.ts`](../../modules/retention/periods.ts), and
+ * `retention-disclosure.test.ts` fails if the two disagree. That guard is the
+ * point rather than a formality: **a published period that nothing honours is a
+ * false statement, which is worse than the silence it replaced** — so the two
+ * classes a daily sweep enforces are stated as facts, and the two it does not
+ * are stated as what is kept rather than as a promise to delete.
+ *
+ * What is deliberately absent: a legal basis table, a subprocessor list with
+ * contract dates, and any certification. None of those exist yet, and a privacy
+ * notice that invents them is worse than one that admits the gap.
  */
 export default function PrivacyPage() {
   return (
     <LegalPage
       title="Privacy"
-      updated="23 August 2026"
+      updated="2 September 2026"
       summary="Vibe reads your project to work out what you built and how business-ready it is. It keeps what it concluded and where it saw the evidence — not your code, and not the pages it visited."
       pending={[
         "The name and registered address of the company operating Vibe Business",
         "A contact address for privacy questions and data requests",
-        "How long each kind of record is kept, and how to have it deleted",
+        "An automatic deletion of billing records at the end of the statutory period — today they are kept, and nothing removes them when it ends",
         "The legal basis for processing, and the transfer mechanism for data handled outside your region",
         "A reviewed list of subprocessors and the agreements covering them",
         "Consent for advertising cookies where the law requires asking first, and a way to decline",
@@ -134,6 +141,50 @@ export default function PrivacyPage() {
           reach entirely — the tag is not loaded there — so the projects you work on are never part
           of what Meta sees. It also runs only on the live product, never on development or preview
           builds.
+        </p>
+      </LegalSection>
+
+      <LegalSection heading="How long Vibe keeps things">
+        <p>
+          Different records are kept for different lengths of time, because they answer different
+          questions.
+        </p>
+        <ul>
+          <li>
+            <strong className="text-fg-body">The step-by-step log of a run</strong> — every action
+            an analysis or an agent took while it was working — is kept for{" "}
+            <strong className="text-fg-body">90 days</strong> and then deleted. A job inside Vibe&apos;s
+            database removes expired records once a day.
+          </li>
+          <li>
+            <strong className="text-fg-body">The record of what happened</strong> — which analyses
+            ran, when, and whether they succeeded — is kept for{" "}
+            <strong className="text-fg-body">18 months</strong>, so that a question asked late still
+            has a year of history behind it. Removed by the same daily job.
+          </li>
+          <li>
+            <strong className="text-fg-body">Billing and payment records</strong> are kept for as
+            long as the law requires — under German commercial and tax law that is{" "}
+            <strong className="text-fg-body">up to ten years</strong>. Vibe cannot delete these on
+            request, and does not delete them when you close your account: it removes your identity
+            from them instead, so the figures survive and your name does not.
+          </li>
+          <li>
+            <strong className="text-fg-body">What Vibe concluded about your product</strong> — your
+            audits, analyses and plans — is kept for as long as the project exists, and goes when
+            you delete the project or your account. It is not kept on a timer, because an analysis
+            that is a year old is still the most recent thing Vibe knows about a project nobody has
+            re-run.
+          </li>
+        </ul>
+        <p>
+          You can delete your account from{" "}
+          <strong className="text-fg-body">Settings</strong> inside Vibe. That removes your sign-in,
+          your projects and what Vibe concluded about them. Three things it does not do, and the
+          screen says all three before you confirm: it does not uninstall the Vibe GitHub App, which
+          you remove yourself in your GitHub settings; a subscription is cancelled immediately with
+          no refund of the time already paid for; and the billing records above stay, without your
+          name on them.
         </p>
       </LegalSection>
 

@@ -29,7 +29,7 @@ PreparedChange → ValidationRun → Review → Approval → Safe Merge     unch
 > and samples through the Agent Gateway — see
 > [ADR 0029](../../../docs/decisions/0029-agent-runtime-placement-and-credential-broker.md).
 > `ExecutionToolGateway` and `AgentWorkspace` are unchanged and still describe
-> the tool-gateway topology, which [ADR 0068](../../../docs/decisions/0068-the-sandbox-is-the-boundary.md)
+> the tool-gateway topology, which [ADR 0070](../../../docs/decisions/0070-the-sandbox-is-the-boundary.md)
 > has since deleted; the change set comes from a filesystem comparison Vibe
 > performs, and the boundary is the VM plus `verifyCandidateChange`.
 
@@ -69,7 +69,7 @@ a counter or a clock.
 come from Vibe's own comparison of the filesystem — a listing before the run, a
 marker, and a listing after — the bytes come from reading the workspace back,
 and the baseline comes from the pinned commit. There is no broker to ask: the
-harness edits files inside the VM (ADR 0068). An agent
+harness edits files inside the VM (ADR 0070). An agent
 that says "I only changed two files" has made a claim, and `candidate.ts`
 counts them.
 
@@ -78,7 +78,7 @@ deploy and database access are absent from the harness's tool set, which
 `sandbox-runtime/protocol.ts` names explicitly rather than taking from a preset
 — there is no `WebFetch`, no `WebSearch` and no MCP server, and
 `program.test.ts` asserts it. Absent, not denied: a denial is a decision
-something has to get right, and an absence is not (rule 76, ADR 0068).
+something has to get right, and an absence is not (rule 76, ADR 0070).
 
 **It does not interpolate third-party text into a system prompt.** The Planner's
 prose, the customer's decisions and the repository's own facts all go into the
@@ -116,6 +116,6 @@ instruction the agent would receive — without spending anything.
 
 See [ADR 0027](../../../docs/decisions/0027-coding-agent-provider-and-tool-gateway.md)
 for the provider boundary, [ADR 0029](../../../docs/decisions/0029-agent-runtime-placement-and-credential-broker.md)
-for where the harness runs, [ADR 0068](../../../docs/decisions/0068-the-sandbox-is-the-boundary.md)
+for where the harness runs, [ADR 0070](../../../docs/decisions/0070-the-sandbox-is-the-boundary.md)
 for why the gateway is gone, and
 [the sprint record](../../../docs/sprints/0040-execution-core4-first-coding-agent.md).

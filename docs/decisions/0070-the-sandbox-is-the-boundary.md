@@ -1,4 +1,4 @@
-# 0068 - The sandbox is the boundary; the tool gateway is retired
+# 0070 - The sandbox is the boundary; the tool gateway is retired
 
 Status: Accepted
 Date: 2026-09-02
