@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, type CSSProperties } from "react";
+import { useId, useState, type CSSProperties } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import type { BusinessLens } from "@/modules/business-audit/schema";
 import { useDocumentVisible } from "@/lib/client/use-document-visible";
@@ -14,15 +14,15 @@ const VIEWBOX = { width: 780, height: 690 };
 const CORE = { x: 390, y: 350 };
 
 const NODE_POSITIONS: Record<BusinessLens, { x: number; y: number }> = {
-  offer: { x: 390, y: 76 },
-  audience: { x: 570, y: 142 },
-  acquisition: { x: 665, y: 270 },
-  conversion: { x: 660, y: 430 },
-  revenue_economics: { x: 548, y: 560 },
-  business_readiness: { x: 370, y: 604 },
-  retention: { x: 186, y: 548 },
-  measurement: { x: 108, y: 395 },
-  scalability: { x: 174, y: 198 },
+  offer: { x: 390, y: 80 },
+  audience: { x: 564, y: 143 },
+  acquisition: { x: 656, y: 303 },
+  conversion: { x: 624, y: 485 },
+  revenue_economics: { x: 482, y: 604 },
+  business_readiness: { x: 298, y: 604 },
+  retention: { x: 156, y: 485 },
+  measurement: { x: 124, y: 303 },
+  scalability: { x: 216, y: 143 },
 };
 
 const STARS = [
@@ -49,15 +49,6 @@ function planetStyle(node: BusinessBrainNode): PlanetStyle {
     return { "--planet-rgb": "255 122 92", "--planet-accent": "var(--color-coral)" };
   }
   return { "--planet-rgb": "149 146 138", "--planet-accent": "var(--color-fg-muted)" };
-}
-
-function nodeSize(node: BusinessBrainNode): string {
-  if (node.priority === "now") return "size-[8.85rem]";
-  if (node.priority === "soon") return "size-[8rem]";
-  if (node.health === "unclear" || node.health === "blocked_by_missing_context") {
-    return "size-[7.75rem]";
-  }
-  return "size-[7.35rem]";
 }
 
 function relationPath(from: BusinessLens, to: BusinessLens): string {
@@ -164,13 +155,12 @@ function NodeButton({
       animate={{ opacity: dimmed ? 0.32 : 1, scale: 1, x: "-50%", y: "-50%" }}
       transition={{
         opacity: { duration: reducedMotion ? 0.08 : 0.24 },
-        scale: { type: "spring", stiffness: 220, damping: 23, delay: reducedMotion ? 0 : 0.44 + index * 0.065 },
-        y: { type: "spring", stiffness: 220, damping: 23, delay: reducedMotion ? 0 : 0.44 + index * 0.065 },
+        scale: { type: "spring", stiffness: 260, damping: 24, delay: reducedMotion ? 0 : 0.12 + index * 0.025 },
+        y: { type: "spring", stiffness: 260, damping: 24, delay: reducedMotion ? 0 : 0.12 + index * 0.025 },
       }}
     >
       <motion.button
         type="button"
-        layout
         aria-pressed={selected}
         aria-label={`${node.label}, ${scoreLabel(node)}, ${node.healthLabel}, priority ${node.priorityLabel}`}
         onClick={() => onSelect(node.id)}
@@ -189,7 +179,11 @@ function NodeButton({
         className={cn(
           "business-brain-planet group relative flex cursor-pointer flex-col items-center justify-center rounded-full border text-center outline-none",
           "focus-visible:ring-mint focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-app",
-          nodeSize(node),
+          // Priority still changes halo and contrast, but never the spatial
+          // footprint: every lens keeps the same orbit spacing and hit area.
+          // The equal orbit should read as nine distinct intelligence objects,
+          // not as one packed cluster once their halos are visible.
+          "size-[7.6rem]",
         )}
       >
         <BusinessLensIcon lens={node.id} className="business-brain-planet-icon size-6" />
@@ -247,18 +241,24 @@ function MobileBrain({ view, selected, onSelect }: {
 export function BusinessMap({
   view,
   selected,
-  hovered,
+  hovered: controlledHovered,
   onSelect,
   onHover,
 }: {
   view: BusinessBrainView;
   selected: BusinessLens | null;
-  hovered: BusinessLens | null;
+  hovered?: BusinessLens | null;
   onSelect: (id: BusinessLens) => void;
-  onHover: (id: BusinessLens | null) => void;
+  onHover?: (id: BusinessLens | null) => void;
 }) {
   const reducedMotion = Boolean(useReducedMotion());
   const visible = useDocumentVisible();
+  // The production Business Brain owns hover locally. Keeping these optional
+  // controlled props preserves the onboarding/marketing compositions without
+  // making every pointer move rerender the surrounding audit panels.
+  const [internalHovered, setInternalHovered] = useState<BusinessLens | null>(null);
+  const hovered = controlledHovered === undefined ? internalHovered : controlledHovered;
+  const setHovered = onHover ?? setInternalHovered;
   const gradientId = useId().replace(/:/g, "");
   const active = hovered ?? selected;
   const related = new Set<BusinessLens>();
@@ -273,16 +273,12 @@ export function BusinessMap({
   }
   const activeNode = active ? view.nodes.find((node) => node.id === active) ?? null : null;
   const activeAccent = activeNode ? planetStyle(activeNode)["--planet-accent"] : "var(--color-mint)";
-  const selectedAt = selected ? NODE_POSITIONS[selected] : null;
-  const focusOffset = selectedAt ? { x: (CORE.x - selectedAt.x) * 0.085, y: (CORE.y - selectedAt.y) * 0.065 } : { x: 0, y: 0 };
 
   return (
     <div className="min-w-0">
-      <motion.div
+      <div
         className="business-brain-canvas relative mx-auto hidden aspect-[780/690] w-full max-w-[58rem] md:block"
         data-testid="business-map-radial"
-        animate={reducedMotion ? { opacity: 1 } : { x: focusOffset.x, y: focusOffset.y, scale: selected ? 1.025 : 1 }}
-        transition={{ type: "spring", stiffness: 150, damping: 24 }}
       >
         <svg viewBox={`0 0 ${VIEWBOX.width} ${VIEWBOX.height}`} className="pointer-events-none absolute inset-0 size-full overflow-visible" aria-hidden="true">
           <defs>
@@ -297,31 +293,33 @@ export function BusinessMap({
             </filter>
           </defs>
 
-          <motion.ellipse cx={CORE.x} cy={CORE.y} rx="350" ry="300" fill={`url(#${gradientId})`} initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: reducedMotion ? 0.08 : 0.4, delay: reducedMotion ? 0 : 0.12 }} />
+          {/* Static depth does not need a JavaScript animation. Only an active,
+              evidence-grounded relationship moves below. */}
+          <ellipse cx={CORE.x} cy={CORE.y} rx="350" ry="300" fill={`url(#${gradientId})`} />
 
           {STARS.map(([cx, cy, radius], index) => (
-            <motion.circle key={`${cx}-${cy}`} cx={cx} cy={cy} r={radius} fill={index % 7 === 0 ? "var(--color-amber)" : "var(--color-mint)"} initial={{ opacity: 0 }} animate={{ opacity: index % 4 === 0 ? 0.62 : 0.24 }} transition={{ duration: reducedMotion ? 0.08 : 0.5, delay: reducedMotion ? 0 : 0.18 + index * 0.018 }} />
+            <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r={radius} fill={index % 7 === 0 ? "var(--color-amber)" : "var(--color-mint)"} opacity={index % 4 === 0 ? 0.62 : 0.24} />
           ))}
 
           {[0, 1, 2, 3].map((ring) => (
-            <motion.ellipse key={ring} cx={CORE.x} cy={CORE.y} rx={150 + ring * 64} ry={122 + ring * 57} fill="none" stroke="var(--color-mint)" strokeOpacity={0.13 - ring * 0.022} strokeWidth="1" strokeDasharray={ring > 1 ? "2 9" : undefined} initial={reducedMotion ? { opacity: 0 } : { opacity: 0, pathLength: 0 }} animate={{ opacity: 1, pathLength: 1 }} transition={{ duration: reducedMotion ? 0.08 : 0.78, delay: reducedMotion ? 0 : 0.14 + ring * 0.07 }} />
+            <ellipse key={ring} cx={CORE.x} cy={CORE.y} rx={150 + ring * 64} ry={122 + ring * 57} fill="none" stroke="var(--color-mint)" strokeOpacity={0.13 - ring * 0.022} strokeWidth="1" strokeDasharray={ring > 1 ? "2 9" : undefined} />
           ))}
 
-          {view.nodes.map((node, index) => {
+          {view.nodes.map((node) => {
             const isActive = active === node.id || related.has(node.id);
             return (
-              <motion.path key={`core-${node.id}`} d={corePath(node)} fill="none" stroke={isActive ? activeAccent : "var(--color-line-strong)"} strokeOpacity={active ? (isActive ? 0.52 : 0.045) : 0.09} strokeWidth={isActive ? 1.7 : 1} strokeDasharray={isActive ? "5 8" : "2 10"} initial={reducedMotion ? { opacity: 0 } : { opacity: 0, pathLength: 0 }} animate={{ opacity: 1, pathLength: 1 }} transition={{ duration: reducedMotion ? 0.08 : 0.62, delay: reducedMotion ? 0 : 0.68 + index * 0.035 }} />
+              <path key={`core-${node.id}`} d={corePath(node)} fill="none" stroke={isActive ? activeAccent : "var(--color-line-strong)"} strokeOpacity={active ? (isActive ? 0.52 : 0.045) : 0.09} strokeWidth={isActive ? 1.7 : 1} strokeDasharray={isActive ? "5 8" : "2 10"} className="transition-[stroke,stroke-opacity,stroke-width] duration-200" />
             );
           })}
 
-          {view.relationships.map((relationship, index) => {
+          {view.relationships.map((relationship) => {
             const isActive = active === relationship.from || active === relationship.to;
             const dimmed = active !== null && !isActive;
             const d = relationPath(relationship.from, relationship.to);
             return (
               <g key={relationship.id}>
-                <motion.path d={d} fill="none" stroke={isActive ? activeAccent : "var(--color-line-strong)"} strokeOpacity={dimmed ? 0.04 : isActive ? 0.82 : 0.2} strokeWidth={isActive ? 2.2 : 1.1} initial={reducedMotion ? { opacity: 0 } : { opacity: 0, pathLength: 0 }} animate={{ opacity: 1, pathLength: 1 }} transition={{ duration: reducedMotion ? 0.08 : 0.7, delay: reducedMotion ? 0 : 0.72 + index * 0.07 }} />
-                {!reducedMotion && visible && (isActive || (!active && index === 0)) && (
+                <path d={d} fill="none" stroke={isActive ? activeAccent : "var(--color-line-strong)"} strokeOpacity={dimmed ? 0.04 : isActive ? 0.82 : 0.2} strokeWidth={isActive ? 2.2 : 1.1} className="transition-[stroke,stroke-opacity,stroke-width] duration-200" />
+                {!reducedMotion && visible && active && isActive && (
                   <motion.path data-business-signal="true" d={d} fill="none" stroke={isActive ? activeAccent : "var(--color-mint)"} strokeWidth={isActive ? 3 : 2} strokeLinecap="round" strokeDasharray="1 32" filter={`url(#${gradientId}-glow)`} initial={{ strokeDashoffset: 0, opacity: 0 }} animate={{ strokeDashoffset: -190, opacity: isActive ? 0.9 : 0.35 }} transition={{ strokeDashoffset: { duration: isActive ? 1.8 : 8, repeat: Infinity, ease: "linear" }, opacity: { duration: 0.2 } }} />
                 )}
               </g>
@@ -329,23 +327,21 @@ export function BusinessMap({
           })}
         </svg>
 
-        <motion.div
+        <div
           className="business-brain-core pointer-events-none absolute top-1/2 left-1/2 z-10 flex size-[13.4rem] flex-col items-center justify-center rounded-full text-center"
-          initial={reducedMotion ? { opacity: 0, x: "-50%", y: "-50%" } : { opacity: 0, scale: 0.7, x: "-50%", y: "-50%" }}
-          animate={reducedMotion || !visible ? { opacity: 1, scale: 1, x: "-50%", y: "-50%" } : { opacity: 1, scale: [1, 1.014, 1], x: "-50%", y: "-50%" }}
-          transition={reducedMotion ? { duration: 0.08 } : { opacity: { duration: 0.45, delay: 0.28 }, scale: { duration: 7.2, delay: 0.28, repeat: Infinity, ease: "easeInOut" } }}
+          style={{ transform: "translate(-50%, -50%)" }}
         >
           <span className="text-fg text-[3.9rem] leading-none font-semibold tracking-[-0.065em] tabular-nums">{view.overall.score ?? "—"}</span>
           <span className="text-fg mt-2.5 text-base font-semibold">Business Health</span>
           <span className={cn("mt-2.5 rounded-full px-3 py-1 text-[0.7rem] font-medium", view.overall.state === "weak" ? "bg-amber/10 text-amber" : "bg-mint/10 text-mint")}>{view.overall.stateLabel}</span>
-        </motion.div>
+        </div>
 
         <ul className="contents" aria-label="Business dimensions">
           {view.nodes.map((node, index) => (
-            <NodeButton key={node.id} node={node} index={index} selected={selected === node.id} related={active !== null && related.has(node.id)} dimmed={active !== null && !related.has(node.id)} reducedMotion={reducedMotion} onSelect={onSelect} onHover={onHover} />
+            <NodeButton key={node.id} node={node} index={index} selected={selected === node.id} related={active !== null && related.has(node.id)} dimmed={active !== null && !related.has(node.id)} reducedMotion={reducedMotion} onSelect={onSelect} onHover={setHovered} />
           ))}
         </ul>
-      </motion.div>
+      </div>
 
       <MobileBrain view={view} selected={selected} onSelect={onSelect} />
     </div>

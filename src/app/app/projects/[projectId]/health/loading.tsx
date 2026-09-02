@@ -13,7 +13,11 @@ import { SkeletonSection } from "@/components/ui/skeleton";
  */
 export default function Loading() {
   return (
-    <WorkspaceSection id="business-audit">
+    <WorkspaceSection
+      id="business-audit"
+      eyebrow="Business intelligence"
+      variant="intelligence"
+    >
       <SkeletonSection />
     </WorkspaceSection>
   );
