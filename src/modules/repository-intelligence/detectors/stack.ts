@@ -159,6 +159,27 @@ const FRAMEWORK_RULES: FrameworkRule[] = [
 ];
 
 /**
+ * The frameworks one manifest declares, from its dependencies alone.
+ *
+ * `detectFrameworks` answers "what is this repository built with?" over every
+ * manifest at once. This answers "what is *this* directory built with?", which
+ * is a different question the union cannot express: a repository with a Next.js
+ * app in `frontend/` and a Python service in `backend/` is a Next.js repository
+ * and `backend/` is not a Next.js directory.
+ *
+ * Dependencies only — no config file, no manifest token. A config file is a
+ * fact about the tree rather than about one manifest, and the callers of this
+ * are deciding what to start in one directory.
+ */
+export function frameworksForDependencies(dependencies: readonly string[]): string[] {
+  const declared = new Set(dependencies);
+
+  return FRAMEWORK_RULES.filter((rule) =>
+    (rule.dependencies ?? []).some((dependency) => declared.has(dependency)),
+  ).map((rule) => rule.id);
+}
+
+/**
  * A dependency plus its dedicated config file is the strongest signal we
  * have; either alone is still solid but reported as medium so the UI can
  * be honest about how sure we are.

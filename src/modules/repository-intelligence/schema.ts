@@ -23,7 +23,7 @@ export const REPOSITORY_INTELLIGENCE_SCHEMA_VERSION = "repository_intelligence.v
  * always says which analyzer produced it and reuse can be invalidated.
  * Deliberately independent of the app/package version (Sprint 2 §30).
  */
-export const ANALYZER_VERSION = "repo-intelligence-v4" as const;
+export const ANALYZER_VERSION = "repo-intelligence-v5" as const;
 
 /** Deliberately coarse — see Sprint 2 §18, no fake precision. */
 export type Confidence = "high" | "medium" | "low";
@@ -223,6 +223,88 @@ export type ProjectScripts = {
   source: string | null;
 };
 
+/**
+ * The package managers a lockfile can name.
+ *
+ * Finer than {@link PackageManagerId} in one place on purpose: Yarn 1 and Yarn
+ * 3+ are the same lockfile name and two different installers. Yarn 1's
+ * `--frozen-lockfile` does not reliably fail when `package.json` has gained a
+ * dependency the lockfile lacks, which is exactly the "silently validate a
+ * dependency tree nobody committed" failure a locked install exists to
+ * prevent — so the two must be distinguishable before anything decides how to
+ * install. Berry is recognised by `.yarnrc.yml` beside the lockfile.
+ */
+export type LockfilePackageManager = "pnpm" | "npm" | "yarn_berry" | "yarn_classic" | "bun";
+
+export type BuildTargetLockfile = {
+  /** Repository-relative path. */
+  path: string;
+  packageManager: LockfilePackageManager;
+  /**
+   * Whether it sits in the target's own directory.
+   *
+   * False means the nearest one belongs to an ancestor — a workspace install,
+   * which means something different in every package manager and is not a
+   * contract Vibe can honour yet. Recorded rather than dropped, so that
+   * decision has data when someone makes it.
+   */
+  inTargetDirectory: boolean;
+};
+
+/**
+ * One directory that might hold a buildable application.
+ *
+ * ## Why this is not `ProjectScripts` again
+ *
+ * `ProjectScripts` answers *"will anything check this run's result?"* for one
+ * manifest — the repository root's — and is banned from every module that
+ * builds a command. This answers a different question: *"how many independently
+ * installable applications does this repository contain, and where?"* Nothing
+ * here sources a command either; `validation/profile.ts` reads it to decide
+ * **admission**, and the sandbox still re-reads the real manifest to decide
+ * what to run. The two can disagree — and if they do, the run fails honestly at
+ * `readPlan` rather than running something nobody predicted.
+ *
+ * ## Why the frameworks are per-manifest
+ *
+ * `RepositoryIntelligenceSnapshot.frameworks` is a union across every parsed
+ * manifest, which is why a repository with a Next.js app in `frontend/` and a
+ * Python service in `backend/` reads as "a Next.js repository". True of the
+ * repository, useless for deciding what to start in one directory.
+ */
+export type BuildTarget = {
+  /** Repository-relative directory. `"."` for the repository root. */
+  directory: string;
+  /** The manifest that made this a target. */
+  manifestPath: string;
+  /** Whether that manifest declares a `build` script. */
+  buildScript: boolean;
+  /** Framework ids from **this manifest's own** dependencies. */
+  frameworks: string[];
+  lockfile: BuildTargetLockfile | null;
+  /** A `workspaces` field here, or a `pnpm-workspace.yaml` beside it. */
+  declaresWorkspaces: boolean;
+  /**
+   * Yarn's module resolution, observed from `.pnp.cjs` rather than read.
+   *
+   * Under Plug'n'Play there is no `node_modules/.bin/`, so a framework binary
+   * cannot be invoked by path — validation still works through `yarn run`,
+   * a preview does not. Null when no Yarn lockfile applies.
+   *
+   * Deliberately derived from a file's *existence*: `.yarnrc.yml` would answer
+   * this directly and may also contain `npmAuthToken`, and rule 28 says a
+   * credential-bearing file's presence may be observed and its contents may
+   * not be read.
+   */
+  moduleLinker: "node_modules" | "pnp" | null;
+};
+
+export type BuildIntelligence = {
+  targets: BuildTarget[];
+  /** True when more targets existed than the budget allows (rule 27). */
+  truncated: boolean;
+};
+
 export type RepositoryFacts = {
   fullName: string;
   defaultBranch: string;
@@ -336,6 +418,7 @@ export type RepositoryIntelligenceSnapshot = {
   frameworks: Detection[];
   packageManager: PackageManagerId;
   scripts: ProjectScripts;
+  build: BuildIntelligence;
   runtime: Detection[];
   integrationSignals: IntegrationSignal[];
   routes: RouteIntelligence;

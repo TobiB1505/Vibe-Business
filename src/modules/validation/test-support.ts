@@ -1,4 +1,7 @@
-import type { RepositoryIntelligenceSnapshot } from "@/modules/repository-intelligence/schema";
+import type {
+  PackageManagerId,
+  RepositoryIntelligenceSnapshot,
+} from "@/modules/repository-intelligence/schema";
 import {
   buildSatisfiesProfile,
   provisionSandbox,
@@ -832,7 +835,7 @@ export async function runValidationPhases(
 export function fakeValidatableSnapshot(
   overrides: {
     frameworks?: { id: string; name: string }[];
-    packageManager?: string;
+    packageManager?: PackageManagerId;
     monorepo?: { detected?: boolean; ambiguous?: boolean };
   } = {},
 ): RepositoryIntelligenceSnapshot {
@@ -862,8 +865,28 @@ export function fakeValidatableSnapshot(
       totalTreeEntries: 160,
       topLevelDirectories: ["src"],
     },
+    scripts: { declared: ["build", "test", "typecheck"], source: "package.json" },
+    build: {
+      targets: [
+        {
+          directory: ".",
+          manifestPath: "package.json",
+          buildScript: true,
+          frameworks: frameworks.map((framework) => framework.id),
+          lockfile: {
+            path: "pnpm-lock.yaml",
+            packageManager: "pnpm",
+            inTargetDirectory: true,
+          },
+          declaresWorkspaces: false,
+          moduleLinker: null,
+        },
+      ],
+      truncated: false,
+    },
+    brand: { assets: [], colors: [], typefaces: [], tokenSources: [] },
     metrics: { durationMs: 400, bytesFetched: 1000, filesFetched: 1, candidatesSelected: 20, treeEntriesConsidered: 160 },
     completeness: { status: "complete", reasons: [] },
     warnings: [],
-  } as unknown as RepositoryIntelligenceSnapshot;
+  };
 }

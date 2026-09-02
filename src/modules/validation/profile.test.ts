@@ -43,7 +43,7 @@ describe("unsupported ecosystems (§5)", () => {
     });
   });
 
-  it.each(["yarn", "bun", "unknown"])("refuses the %s package manager", (packageManager) => {
+  it.each(["yarn", "bun", "unknown"] as const)("refuses the %s package manager", (packageManager) => {
     // Each has its own lockfile semantics and its own "locked install" flag.
     // Getting one subtly wrong would validate a dependency tree the lockfile
     // never described — a green tick for the wrong thing.

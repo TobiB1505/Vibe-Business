@@ -14,7 +14,7 @@ Turns a connected GitHub repository into a versioned, evidence-carrying snapshot
 | `candidates.ts` | High-value file *discovery* (free, from the tree) vs. *fetching*. Two families are downloaded and no others: dependency manifests, because a dependency list cannot be inferred from a filename, and a short named list of stylesheets, because a design token cannot be either. |
 | `parsers/` | Manifest parsing, strictly as data. |
 | `context.ts` | Assembles the read-only input every detector works from. |
-| `detectors/` | Pure functions: `stack`, `integrations`, `routes`, `monorepo`, `business-surfaces`, `brand`. |
+| `detectors/` | Pure functions: `stack`, `integrations`, `routes`, `monorepo`, `build-targets`, `business-surfaces`, `brand`. |
 | `scripts.test.ts` | The boundary that keeps `ProjectScripts` out of every module that builds a command. |
 | `analyzer.ts` | Orchestrates the pipeline and builds the snapshot. |
 | `schema.ts` | The versioned output contract + `ANALYZER_VERSION`. |
@@ -37,6 +37,12 @@ Turns a connected GitHub repository into a versioned, evidence-carrying snapshot
   its result. Validation and agent execution build their commands by re-reading `package.json`
   from the sandbox filesystem the command is about to run against, and must keep doing so —
   `scripts.test.ts` fails if that ever changes.
+- **A repository-wide field is not a fact about one directory.** `frameworks` and
+  `packageManager` are unions over every manifest in the tree, which is true of the repository and
+  says nothing about where an application lives. `BuildIntelligence` answers the per-directory
+  question instead: which directories hold a manifest, whether each declares a `build` script, and
+  which lockfile — if any — sits in the directory itself. It decides *admission*, never a
+  command.
 - **Repository evidence is never runtime truth.** The presentation layer may say a capability is
   *likely*; only the live product check or Deep Scan can say it works. `CapabilityStatus` has no
   `confirmed` member for that reason.

@@ -1,3 +1,4 @@
+import type { PackageManagerId } from "@/modules/repository-intelligence/schema";
 import { beforeEach, describe, expect, it } from "vitest";
 import { FakeDatabase, FakeExecutor, fakeSupabase } from "@/modules/operations/test-support";
 import { VALIDATION_DEPTH_POLICY_VERSION, type ValidationDepth } from "./depth";
@@ -44,7 +45,7 @@ function identityFor(
   });
 }
 
-function seed(options: { preparedStatus?: string; commitSha?: string | null; packageManager?: string } = {}) {
+function seed(options: { preparedStatus?: string; commitSha?: string | null; packageManager?: PackageManagerId } = {}) {
   db.seed("projects", { id: PROJECT, user_id: USER });
   db.seed("projects", { id: OTHER_PROJECT, user_id: OTHER_USER });
 
