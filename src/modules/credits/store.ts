@@ -772,7 +772,37 @@ export type StoredUsageEvent = BillableUsage & {
  * are ignored rather than treated as an error — that is precisely what
  * "safe to run twice" means, and a backfill that failed on its second run
  * would be useless for repair.
+ *
+ * ## Why this writes in chunks
+ *
+ * It used to insert one row per round trip and let the unique violation come
+ * back as an error to count. Correct, and it does not survive its own success:
+ * on 2026-09-02 the repair pass had 424 source rows producing ~1,600 events,
+ * and two passes could not finish inside the probe's five-minute ceiling. A
+ * repair tool that gets slower as the ledger grows is one that fails exactly
+ * when it is finally needed.
+ *
+ * `ON CONFLICT DO NOTHING` — which is what `ignoreDuplicates` compiles to —
+ * moves the same decision into the database, one round trip per chunk instead
+ * of per row. It is deliberately **not** the default upsert: that one *updates*
+ * the conflicting row, and here it would rewrite financial history on every
+ * repair pass rather than leave it alone.
+ *
+ * The counts stay exact rather than estimated, because `DO NOTHING` returns
+ * only the rows it actually wrote. What is not returned was already there,
+ * which is the same two numbers the per-row version reported.
  */
+
+/**
+ * Rows per statement.
+ *
+ * Small enough that one failure does not lose a large batch and that the
+ * request stays well inside PostgREST's payload limits; large enough that the
+ * round trips stop being the cost. Not tuned against a benchmark — it is a
+ * bound, and the property that matters is that it is bounded at all.
+ */
+const USAGE_INSERT_CHUNK = 500;
+
 export async function projectUsageEvents(
   supabase: SupabaseClient,
   events: readonly (BillableUsage & {
@@ -782,10 +812,9 @@ export async function projectUsageEvents(
   })[],
 ): Promise<{ inserted: number; alreadyPresent: number }> {
   let inserted = 0;
-  let alreadyPresent = 0;
 
-  for (const event of events) {
-    const { error } = await supabase.from("billing_usage_events").insert({
+  for (let start = 0; start < events.length; start += USAGE_INSERT_CHUNK) {
+    const chunk = events.slice(start, start + USAGE_INSERT_CHUNK).map((event) => ({
       source_kind: event.sourceKind,
       source_id: event.sourceId,
       project_id: event.projectId,
@@ -801,19 +830,25 @@ export async function projectUsageEvents(
       rated_credits: event.ratedCredits,
       rate_card_version: event.rateCardVersion,
       occurred_at: event.occurredAt,
-    });
+    }));
 
-    if (error) {
-      if (error.code === POSTGRES_UNIQUE_VIOLATION) {
-        alreadyPresent += 1;
-        continue;
-      }
-      throw error;
-    }
-    inserted += 1;
+    const { data, error } = await supabase
+      .from("billing_usage_events")
+      .upsert(chunk, {
+        // The unique index this table's idempotency rests on, named rather than
+        // inferred so a second index appearing later cannot quietly become the
+        // conflict target.
+        onConflict: "source_kind,source_id,sku",
+        ignoreDuplicates: true,
+      })
+      .select("id");
+
+    if (error) throw error;
+    inserted += (data ?? []).length;
   }
 
-  return { inserted, alreadyPresent };
+  // Everything projected that the database did not write was already there.
+  return { inserted, alreadyPresent: events.length - inserted };
 }
 
 /** Every projected usage row for one operation, for per-operation rating (§63). */
