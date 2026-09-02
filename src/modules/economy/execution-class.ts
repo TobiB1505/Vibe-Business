@@ -73,7 +73,7 @@ import { SENSITIVE_EVIDENCE_PREFIXES } from "@/modules/validation/depth";
  * `unclassified_default` never landing on `fast`.
  */
 
-export const EXECUTION_PRICING_CLASS_POLICY_VERSION = "execution-pricing-class.v1" as const;
+export const EXECUTION_PRICING_CLASS_POLICY_VERSION = "execution-pricing-class.v2" as const;
 
 export const EXECUTION_PRICING_CLASSES = ["small", "standard", "complex"] as const;
 export type ExecutionPricingClass = (typeof EXECUTION_PRICING_CLASSES)[number];
@@ -99,6 +99,18 @@ export const EXECUTION_PRICING_CLASS_REASONS = [
   "no_evidence_cited",
   /** Public-pages-only scope, no named surface. The narrowest real case. */
   "public_pages_only",
+  /**
+   * The run delivers more than one planned step (`build-chain-v1`).
+   *
+   * Escalates to `complex` whatever the union of the members classifies as, and
+   * the reason is the blast radius rather than the surface count. `small` and
+   * `standard` allow the same eight files and 60 KB — deliberately, per
+   * `budget.ts` — and only `complex` widens, because it is the tier defined by
+   * spanning more than one thing. A chain is by construction more than one
+   * planned delivery, and selling two of them under a single step's ceiling
+   * would strand the run at `budget_exhausted` after it had been paid for.
+   */
+  "chained_delivery",
 ] as const;
 export type ExecutionPricingClassReason = (typeof EXECUTION_PRICING_CLASS_REASONS)[number];
 
@@ -190,4 +202,5 @@ export const EXECUTION_PRICING_CLASS_REASON_LABELS: Record<ExecutionPricingClass
   single_surface: "The change targets one named business surface",
   no_evidence_cited: "No structured evidence cited; validated in full",
   public_pages_only: "A narrow, public-pages-only change",
+  chained_delivery: "The run builds more than one step of this Move",
 };
