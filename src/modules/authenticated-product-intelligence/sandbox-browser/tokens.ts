@@ -1,6 +1,8 @@
 import "server-only";
 
-import { randomBytes, timingSafeEqual } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
+import { getBrowserSandboxEnv } from "@/lib/env/browser-sandbox";
+import { BROWSER_RUNTIME_VERSION } from "./guard-program";
 
 /**
  * The two capabilities a browser sandbox hands out (ADR 0076).
@@ -17,47 +19,74 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
  *
  * Giving both the same token would give the second one the first one's power.
  * A live-view token that could speak CDP could navigate to `file://` and read
- * the VM's filesystem, and that token necessarily travels to a browser — it is
- * the one that is *meant* to leave the server. So they are separate values,
- * and the guard routes them to separate channels with separate vocabularies:
- * `control` reaches CDP, `view` reaches frames-out and a closed set of input
- * events in.
+ * the VM's filesystem — and that token necessarily travels to a browser, since
+ * it is the one that is *meant* to leave the server. So they are separate
+ * values, and the guard routes them to separate channels with separate
+ * vocabularies.
  *
- * ## Why they are random rather than signed
+ * ## Why they are derived rather than random
  *
- * A signed token would let the guard verify without holding a secret, which is
- * the right design when the verifier is untrusted. Here it is not: the guard is
- * Vibe's own program, in a VM that holds no customer code and no Vibe
- * credential, created seconds earlier for one session. There is nothing for a
- * signature to protect against that a random 256-bit value does not, and an
- * HMAC scheme would add key handling, clock skew and an expiry check — three
- * things to get wrong in place of `timingSafeEqual`.
+ * Random was the first design here and it was wrong, for a reason that is a
+ * property of the flow rather than of cryptography: **the manual-login
+ * lifecycle spans two server requests.** A session is created in the first, the
+ * person signs in by hand, and the analysis reconnects in the second — a
+ * different function invocation with no shared memory. Something has to make
+ * the token available again.
  *
- * Expiry is not this file's job either. The sandbox has a provider-side
- * lifetime, and when it ends both tokens name nothing.
+ * The two ways to do that are to store it or to recompute it. Storing it puts a
+ * bearer credential for a live browser — one already signed into a customer's
+ * production application — into a database row, which is the exact artefact
+ * ADR 0012 declined to hold. So it is recomputed: HMAC over the sandbox's own
+ * name, keyed by one server-side secret that never leaves Vibe.
  *
- * ## What is deliberately absent
+ * That leaves nothing at rest. The database holds the sandbox name, which is
+ * an identifier and not a capability (CLAUDE.md rule 52), and the tokens exist
+ * only inside the request that derives them.
  *
- * There is no `parse`, no `decode`, and no way to learn anything from a token.
- * It carries no session id, no purpose and no timestamp, because a value that
- * *tells* you what it opens is a value somebody will read out of a log and use.
- * The guard knows which token is which because Vibe handed it exactly two.
+ * ## The three things in the label, and why each is there
+ *
+ *  - **The purpose** (`control` / `view`) gives domain separation. Holding the
+ *    view token must not let its holder compute the control token, and HMAC
+ *    over distinct messages is what makes that true rather than hoped.
+ *  - **The runtime version** so a guard whose behaviour changed cannot be
+ *    reached by a token minted against the old one.
+ *  - **The sandbox name**, which is what binds a token to one VM. A token for
+ *    one session opens nothing in another.
+ *
+ * There is deliberately no timestamp and no expiry check. The sandbox has a
+ * provider-side lifetime, and when that ends both tokens name nothing — an
+ * expiry in the token would be a second clock to disagree with the first.
  */
 
-/** 32 bytes, hex. Long enough that guessing is not a threat model. */
-const TOKEN_BYTES = 32;
+export type BrowserSessionPurpose = "control" | "view";
 
 export type BrowserSessionTokens = {
-  /** Speaks CDP. Never leaves Vibe's server. */
+  /** Speaks CDP. Never leaves Vibe's server, never persisted. */
   control: string;
   /** Sees frames and sends bounded input. Travels to the owner's browser. */
   view: string;
 };
 
-export function mintBrowserSessionTokens(): BrowserSessionTokens {
+function derive(secret: string, purpose: BrowserSessionPurpose, sandboxName: string): string {
+  return createHmac("sha256", secret)
+    .update(`${BROWSER_RUNTIME_VERSION}:${purpose}:${sandboxName}`)
+    .digest("hex");
+}
+
+/**
+ * The tokens for one sandbox, recomputed from its name.
+ *
+ * Deterministic on purpose: the same name yields the same pair in the request
+ * that creates the session and in the request that reconnects to it.
+ */
+export function deriveBrowserSessionTokens(
+  sandboxName: string,
+  source?: Record<string, string | undefined>,
+): BrowserSessionTokens {
+  const { VIBE_BROWSER_SESSION_SECRET: secret } = getBrowserSandboxEnv(source);
   return {
-    control: randomBytes(TOKEN_BYTES).toString("hex"),
-    view: randomBytes(TOKEN_BYTES).toString("hex"),
+    control: derive(secret, "control", sandboxName),
+    view: derive(secret, "view", sandboxName),
   };
 }
 
