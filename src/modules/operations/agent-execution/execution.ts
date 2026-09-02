@@ -1,6 +1,8 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { alertOperator } from "@/lib/observability/alert";
+import { redactCredentials } from "@/lib/security/credential-patterns";
 import { recordAuditEvent } from "@/modules/audit-log/events";
 import { startChangeValidation } from "@/modules/validation/service";
 import type { OperationExecutor } from "../executor";
@@ -504,10 +506,26 @@ export async function provisionAgentWorkspaceStep(
   }
 
   if (!harness.ok) {
-    console.error("[agent-execution] the agent harness could not be installed", {
+    /*
+     * A sandbox that cannot be prepared is exactly what VB-012 exists for
+     * (PERF-022). This was a bare `console.error`, so it reached a Vercel log
+     * stream nobody watches and never became an issue with a count — the
+     * failure `alert.ts` was written to end.
+     *
+     * The detail is redacted before it is passed, not after. It is the tail of
+     * a command run inside the customer's own tree, which makes it untrusted
+     * repository output (rule 18) that can carry whatever their install
+     * printed. Sentry scrubs it again on the way out; the local log line is
+     * what the first pass is for, because `beforeSend` never sees that one.
+     *
+     * It is still passed, rather than reduced to an exit code: without any of
+     * it an operator cannot tell a registry timeout from a missing binary, and
+     * that distinction is the only reason to report this at all.
+     */
+    await alertOperator("[agent-execution] the agent harness could not be installed", {
       operationId,
       agentExecutionRunId: run.id,
-      detail: harness.output.slice(-2_000),
+      detail: redactCredentials(harness.output.slice(-2_000)),
     });
     return { ok: false, failureCode: "sandbox_unavailable" };
   }

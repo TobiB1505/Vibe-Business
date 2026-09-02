@@ -1,4 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+const alertOperator =
+  vi.fn<(message: string, context?: Record<string, unknown>) => Promise<void>>();
+vi.mock("@/lib/observability/alert", () => ({
+  alertOperator: (message: string, context?: Record<string, unknown>) =>
+    alertOperator(message, context),
+}));
 import { fakeAgentSpec, fakeDetachedAgentProvider } from "@/modules/coding-agent/test-support";
 import type { BaseContentPort, BaseTreePort } from "@/modules/coding-agent/candidate";
 import type { ObservedRuntimeEntry } from "@/modules/coding-agent/provider";
@@ -7,6 +14,8 @@ import { fakeSandboxProvider } from "@/modules/validation/test-support";
 import { buildAgentExecutionLiveModel } from "@/modules/coding-agent/observability/live-view";
 import { MAX_EVENTS_PER_RUN } from "@/modules/coding-agent/observability/events";
 import { listExecutionEvents } from "@/modules/coding-agent/observability/store";
+import { AGENT_SDK_VERSION } from "@/modules/coding-agent/sandbox-runtime/protocol";
+import { REDACTED } from "@/lib/security/credential-patterns";
 import { FakeDatabase, fakeSupabase } from "../test-support";
 import { buildOperationView } from "../view";
 import {
@@ -194,9 +203,17 @@ function seed() {
   };
 }
 
-function deps(overrides: { entries?: readonly ObservedRuntimeEntry[] } = {}): AgentExecutionDeps {
+function deps(
+  overrides: {
+    entries?: readonly ObservedRuntimeEntry[];
+    results?: Record<string, { exitCode?: number; output?: string }>;
+  } = {},
+): AgentExecutionDeps {
   const provider = fakeDetachedAgentProvider({ entries: overrides.entries });
-  const sandbox = fakeSandboxProvider({ files: SANDBOX_FILES, results: SANDBOX_RESULTS });
+  const sandbox = fakeSandboxProvider({
+    files: SANDBOX_FILES,
+    results: { ...SANDBOX_RESULTS, ...overrides.results },
+  });
 
   return {
     supabase: fakeSupabase(db),
@@ -217,6 +234,7 @@ const FEED: ObservedRuntimeEntry[] = [
 
 beforeEach(() => {
   db = new FakeDatabase();
+  alertOperator.mockClear();
 
   // Provisioning resolves the gateway before it installs anything, so a run
   // with no configured origin never reaches the harness at all.
@@ -607,5 +625,73 @@ describe("candidate metrics are never inflated by generated output", () => {
     expect(verified?.metadata.observedPaths).toBe(2);
     expect(verified?.metadata.candidateFiles).toBe(1);
     expect(verified?.metadata.observedIgnored).toBe(1);
+  });
+});
+
+/**
+ * A harness that will not install (PERF-022).
+ *
+ * Two things were wrong with how that was reported. It went out as a bare
+ * `console.error`, which on Vercel is a line in a stream nobody watches — the
+ * exact failure `alert.ts` was written to end, and a sandbox that cannot be
+ * prepared is squarely one of its cases. And the detail it carried is the tail
+ * of a command run inside the customer's own tree, so it is untrusted
+ * repository output that can print whatever their install printed.
+ *
+ * Sentry would have scrubbed it on the way out; the local log line is the one
+ * `beforeSend` never sees, which is why the redaction happens before the value
+ * is handed over rather than after.
+ */
+describe("a harness that could not be installed", () => {
+  const INSTALL = [
+    "npm install --no-save --no-audit --no-fund --ignore-scripts",
+    `@anthropic-ai/claude-agent-sdk@${AGENT_SDK_VERSION}`,
+  ].join(" ");
+
+  const FAILING = {
+    [INSTALL]: {
+      exitCode: 1,
+      output: "npm error 403 Forbidden\nnpm error using token sk-ant-api03-NOTAREALKEY123456\n",
+    },
+  };
+
+  it("reaches the operator instead of a log stream", async () => {
+    const { operation } = seed();
+
+    const provisioned = await provisionAgentWorkspaceStep(deps({ results: FAILING }), operation.id);
+
+    expect(provisioned).toMatchObject({ ok: false, failureCode: "sandbox_unavailable" });
+    expect(alertOperator).toHaveBeenCalledTimes(1);
+  });
+
+  it("redacts the customer's output before it is reported anywhere", async () => {
+    const { operation, run } = seed();
+
+    await provisionAgentWorkspaceStep(deps({ results: FAILING }), operation.id);
+
+    const [message, context = {}] = alertOperator.mock.calls[0];
+
+    expect(message).toContain("harness");
+    expect(context).toMatchObject({ operationId: operation.id, agentExecutionRunId: run.id });
+
+    const detail = String(context.detail);
+    // The sentence survives — it is the whole reason the detail is worth
+    // carrying — and only the credential inside it is gone.
+    expect(detail).toContain("403 Forbidden");
+    expect(detail).toContain(REDACTED);
+    expect(detail).not.toContain("sk-ant-api03-NOTAREALKEY123456");
+  });
+
+  it("bounds what one failure can report", async () => {
+    const { operation } = seed();
+    const flood = "x".repeat(50_000);
+
+    await provisionAgentWorkspaceStep(
+      deps({ results: { [INSTALL]: { exitCode: 1, output: flood } } }),
+      operation.id,
+    );
+
+    const [, context = {}] = alertOperator.mock.calls[0];
+    expect(String(context.detail).length).toBeLessThanOrEqual(2_000);
   });
 });
