@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { classifyCtaLabel, detectCtas, selectPrimaryCta } from "./cta";
 import { classifyForm } from "./forms";
-import { classifyLinkTarget, classifyPage } from "./classifier";
+import { classifyInPageAnchor, classifyLinkTarget, classifyPage } from "./classifier";
 import { parseHtml } from "./html";
 
 /**
@@ -181,5 +181,85 @@ describe("classifyLinkTarget", () => {
 
   it("returns null for an ordinary path", () => {
     expect(classifyLinkTarget("/about")).toBeNull();
+  });
+});
+
+/**
+ * A surface that is a section of this page rather than a page of its own.
+ *
+ * The shape a one-page marketing site actually has, and the one every other
+ * rule in the classifier misses: the path is `/`, `url.ts` strips the fragment
+ * before link inference sees it, and a section heading written for humans
+ * rarely contains the word a pattern is looking for.
+ */
+describe("classifyInPageAnchor", () => {
+  it("reads the fragment as though it were a path", () => {
+    expect(classifyInPageAnchor("/#pricing", "Pricing", "/")).toBe("pricing");
+    expect(classifyInPageAnchor("#preise", "Was es kostet", "/")).toBe("pricing");
+  });
+
+  it("falls back to the link's own label when the fragment says nothing", () => {
+    // `#plan-cards` is not a path pattern, but a nav item that says "Pricing"
+    // is the site telling us what is down there.
+    expect(classifyInPageAnchor("#plan-cards", "Pricing", "/")).toBe("pricing");
+  });
+
+  it("ignores a fragment on another page, which is that page's business", () => {
+    expect(classifyInPageAnchor("/docs#pricing", "Pricing", "/")).toBeNull();
+  });
+
+  it("ignores links that are not anchors, and anchors that name nothing", () => {
+    expect(classifyInPageAnchor("/pricing", "Pricing", "/")).toBeNull();
+    expect(classifyInPageAnchor("#", "Pricing", "/")).toBeNull();
+    expect(classifyInPageAnchor("#section-3", "Read more", "/")).toBeNull();
+  });
+});
+
+describe("a homepage whose prices are a section", () => {
+  /*
+   * Vibe Business's own landing page, reduced. The `h2` is the real one, and it
+   * is why the heading rule cannot help: it was written to be read, not to be
+   * matched. "Simple plans" sits in a span, as `MonoLabel` renders it.
+   */
+  const html = `<!doctype html><html lang="en"><head><title>Anchor</title></head><body>
+    <nav><a href="/#pricing">Pricing</a><a href="/login">Log in</a></nav>
+    <h1>Turn your software into a business</h1>
+    <section id="pricing"><span>Simple plans</span>
+      <h2>Start free. Add capacity when the work grows.</h2>
+      <p>€19 / month</p>
+    </section>
+  </body></html>`;
+
+  it("keeps the section apart from what the page itself is", () => {
+    const result = classifyPage({ requestedPath: "/", finalPath: "/", html: parseHtml(html) });
+
+    // The page is the homepage. It is not the pricing page — and saying so is
+    // the difference between an inference and an observation.
+    expect(result.surfaces).toContain("homepage");
+    expect(result.surfaces).not.toContain("pricing");
+    expect(result.sectionSurfaces).toContain("pricing");
+  });
+
+  it("records the nav label as the evidence a person can check", () => {
+    const result = classifyPage({ requestedPath: "/", finalPath: "/", html: parseHtml(html) });
+    const evidence = result.evidence.get("pricing") ?? [];
+
+    expect(evidence.some((item) => item.kind === "nav_label")).toBe(true);
+    expect(evidence[0]?.path).toBe("/");
+  });
+
+  it("does not weaken a page that really is the pricing page", () => {
+    // Same anchor, but on `/pricing`. The fetched-path detection already knows
+    // the strong answer, and the section must not be recorded as a second,
+    // weaker one competing with it.
+    const result = classifyPage({
+      requestedPath: "/pricing",
+      finalPath: "/pricing",
+      html: parseHtml(`<html><head><title>Pricing</title></head><body>
+        <a href="#pricing">Pricing</a></body></html>`),
+    });
+
+    expect(result.surfaces).toContain("pricing");
+    expect(result.sectionSurfaces).not.toContain("pricing");
   });
 });
