@@ -1,4 +1,27 @@
-import { defineConfig, devices } from "@playwright/test";
+import { existsSync } from "node:fs";
+
+import { chromium, defineConfig, devices } from "@playwright/test";
+
+import { resolveChromiumExecutable } from "./src/lib/test/playwright-browser";
+
+/**
+ * Thrown rather than returned is the same answer: the registry cannot say
+ * where the browser is, so the fallback decides.
+ */
+function registryChromium(): string | null {
+  try {
+    return chromium.executablePath();
+  } catch {
+    return null;
+  }
+}
+
+const chromiumExecutable = resolveChromiumExecutable({
+  registryPath: registryChromium(),
+  named: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE,
+  browsersRoot: process.env.PLAYWRIGHT_BROWSERS_PATH,
+  exists: existsSync,
+});
 
 /**
  * The browser suite (Sprint 11C.1).
@@ -25,6 +48,13 @@ import { defineConfig, devices } from "@playwright/test";
  * One in CI, and only so a flake produces a trace to read — never as evidence
  * that a test is healthy. A test that needs the retry is a defect in the test,
  * and the trace is how it gets fixed rather than tolerated.
+ *
+ * ## Why the browser is sometimes named explicitly
+ *
+ * Only when Playwright's own version-stamped path is absent and the machine
+ * carries a Chromium anyway — the case in this repository's agent container,
+ * which is why eight sprint records in a row say "no E2E run". The registry
+ * always wins when it is there; see src/lib/test/playwright-browser.ts.
  */
 export default defineConfig({
   testDir: "./e2e",
@@ -48,7 +78,15 @@ export default defineConfig({
     ...devices["Desktop Chrome"],
   },
 
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    {
+      name: "chromium",
+      use: {
+        ...devices["Desktop Chrome"],
+        ...(chromiumExecutable ? { launchOptions: { executablePath: chromiumExecutable } } : {}),
+      },
+    },
+  ],
 
   webServer: {
     // `VIBE_E2E_FIXTURES` is what makes the fixture route exist at all. It is
