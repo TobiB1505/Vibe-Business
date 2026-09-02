@@ -25,19 +25,47 @@
  */
 
 /**
- * Validation profiles (§5).
+ * Validation profiles (§5, generalized in Stufe 4).
  *
- * One profile, deliberately. A profile is a promise about which commands run
- * and in what environment, so "supports everything" would mean "promises
- * nothing". A repository that does not match a profile is `not_supported`,
- * never a guessed command sequence.
+ * A profile is a promise about which commands run and in what environment, so
+ * "supports everything" would mean "promises nothing". What changed is what the
+ * promise is *keyed on*.
+ *
+ * `nextjs_node_v1` was keyed on a framework, and that turned out to decorate
+ * rather than describe: `planValidationSteps` takes no profile, and the
+ * commands it plans — a locked install, then the repository's own `typecheck`,
+ * `test` and `build` scripts — never mentioned Next.js. Requiring `next` in the
+ * dependency list narrowed who could be checked without sharpening what the
+ * check claimed.
+ *
+ * `node_build_v1` is keyed on the contract those commands actually need: one
+ * manifest declaring a `build` script, and a lockfile in its own directory that
+ * Vibe can install from exactly. That promise is no weaker — it is the same
+ * sentence, now true for every repository that can honour it rather than for
+ * one framework's worth of them.
+ *
+ * A repository that cannot honour it is still refused, and now refused by name:
+ * no manifest, no build script, no lockfile, or more than one application and
+ * nobody has said which.
  */
-export const VALIDATION_PROFILES = ["nextjs_node_v1"] as const;
+export const VALIDATION_PROFILES = ["nextjs_node_v1", "node_build_v1"] as const;
 export type ValidationProfile = (typeof VALIDATION_PROFILES)[number];
+
+/**
+ * The profile every new run resolves.
+ *
+ * `nextjs_node_v1` stays in the union because sixteen rows carry it and a
+ * record is not rewritten to match the present (rule 83). Nothing resolves it
+ * any more, and it is deliberately **not** aliased to `node_build_v1`: reading
+ * a stored pass as though it had been checked under today's rules is exactly
+ * what the version exists to prevent (rule 65). It is retired, not renamed.
+ */
+export const CURRENT_VALIDATION_PROFILE: ValidationProfile = "node_build_v1";
 
 /** Bumped when the commands a profile runs change meaning (§22). */
 export const VALIDATION_PROFILE_VERSIONS: Record<ValidationProfile, string> = {
   nextjs_node_v1: "nextjs-node-v1",
+  node_build_v1: "node-build-v1",
 };
 
 /**
@@ -114,6 +142,21 @@ export type SandboxProviderId = (typeof SANDBOX_PROVIDERS)[number];
 export const PACKAGE_MANAGERS = ["pnpm", "npm"] as const;
 export type SupportedPackageManager = (typeof PACKAGE_MANAGERS)[number];
 
+/**
+ * Reads a stored package-manager string, or refuses.
+ *
+ * Exists because the alternative shape is a coercion, and a coercion here is a
+ * wrong install command rather than an error: `x === "npm" ? "npm" : "pnpm"`
+ * reads a yarn repository as pnpm and installs *something*, which is worse than
+ * failing because it produces a dependency tree nobody committed and a verdict
+ * about it. Refusing is the only honest answer for a value outside the set.
+ */
+export function supportedPackageManager(value: string): SupportedPackageManager | null {
+  return (PACKAGE_MANAGERS as readonly string[]).includes(value)
+    ? (value as SupportedPackageManager)
+    : null;
+}
+
 export const VALIDATION_STATUSES = ["queued", "running", "passed", "failed", "cancelled"] as const;
 export type ValidationStatus = (typeof VALIDATION_STATUSES)[number];
 
@@ -141,14 +184,36 @@ export type ValidationStage = (typeof VALIDATION_STAGES)[number];
  * nothing about the change at all.
  */
 export const VALIDATION_BLOCK_REASONS = [
-  /** No profile matches this repository. Never a guessed command sequence. */
+  /**
+   * No profile matches this repository. Never a guessed command sequence.
+   *
+   * Once the whole refusal; now the residue. A repository that fails the build
+   * contract is refused for a *named* reason below, because "not supported yet"
+   * tells a founder nothing they can act on. This still reaches them from one
+   * place the contract cannot see in advance: `orchestrator.readPlan`, when the
+   * manifest in the sandbox turns out not to be the one the snapshot described.
+   */
   "validation_not_supported",
   /** The prepared change is not in a state that can be validated. */
   "prepared_change_not_ready",
-  /** The workspace root could not be resolved unambiguously (§5). */
+  /**
+   * The workspace root could not be resolved unambiguously (§5).
+   *
+   * Historical. Rows recorded it when a detected monorepo was refused outright;
+   * the question "which app?" is now asked rather than refused, so nothing
+   * resolves this any more.
+   */
   "ambiguous_workspace",
   /** No lockfile, so a locked install is impossible. */
   "lockfile_missing",
+  /** No `package.json` anywhere, so there is no Node application to build. */
+  "not_a_node_project",
+  /** A manifest, but no `build` script — nothing for a change to be checked against. */
+  "no_build_script",
+  /** More than one independently installable application. The founder names it. */
+  "workspace_choice_required",
+  /** The stored analysis predates the facts this check reads. The founder refreshes it. */
+  "repository_analysis_outdated",
   "repository_connection_invalid",
 ] as const;
 export type ValidationBlockReason = (typeof VALIDATION_BLOCK_REASONS)[number];

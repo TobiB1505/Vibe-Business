@@ -196,7 +196,14 @@ export type PackageManagerId = "pnpm" | "npm" | "yarn" | "bun" | "unknown";
  * shown (`parsers/package-json.ts`), because a command line is an injection
  * surface and no detection needs it.
  */
-export type ProjectScriptId = "test" | "test:e2e" | "e2e" | "typecheck" | "lint" | "build" | "start";
+export type ProjectScriptId =
+  | "test"
+  | "test:e2e"
+  | "e2e"
+  | "typecheck"
+  | "lint"
+  | "build"
+  | "start";
 
 /**
  * Which of those scripts the repository root declares.
@@ -343,7 +350,12 @@ export type Warning = {
  * What role a brand asset plays. A closed set, because "some SVG in
  * /public" is not a logo and must never be presented as one (CORE-1 §11).
  */
-export type BrandAssetRole = "logo" | "logo_alternate" | "favicon" | "app_icon" | "open_graph_image";
+export type BrandAssetRole =
+  | "logo"
+  | "logo_alternate"
+  | "favicon"
+  | "app_icon"
+  | "open_graph_image";
 
 /**
  * A file that *looks like* a brand asset by name and location. Never its
@@ -418,7 +430,15 @@ export type RepositoryIntelligenceSnapshot = {
   frameworks: Detection[];
   packageManager: PackageManagerId;
   scripts: ProjectScripts;
-  build: BuildIntelligence;
+  /**
+   * Optional because a stored snapshot is a document, not a live object.
+   *
+   * Every snapshot this analyzer writes carries it. Rows written before
+   * `repo-intelligence-v5` do not, and they are still read — so a consumer has
+   * to distinguish "no buildable application" from "this analysis never looked",
+   * and a required field would have made those the same answer.
+   */
+  build?: BuildIntelligence;
   runtime: Detection[];
   integrationSignals: IntegrationSignal[];
   routes: RouteIntelligence;

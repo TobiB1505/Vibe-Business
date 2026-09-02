@@ -28,7 +28,10 @@ describe("detectLanguages", () => {
   });
 
   it("detects Python from a manifest", () => {
-    const context = contextFrom([{ path: "requirements.txt", content: "fastapi\n" }, { path: "main.py" }]);
+    const context = contextFrom([
+      { path: "requirements.txt", content: "fastapi\n" },
+      { path: "main.py" },
+    ]);
     expect(ids(detectLanguages(context))).toContain("python");
   });
 
@@ -55,7 +58,10 @@ describe("detectLanguages", () => {
 describe("detectFrameworks", () => {
   it("detects Next.js with high confidence from dependency plus config", () => {
     const context = contextFrom([
-      { path: "package.json", content: packageJson({ dependencies: { next: "16.3.0", react: "19.2.8" } }) },
+      {
+        path: "package.json",
+        content: packageJson({ dependencies: { next: "16.3.0", react: "19.2.8" } }),
+      },
       { path: "next.config.ts" },
     ]);
 
@@ -74,12 +80,17 @@ describe("detectFrameworks", () => {
       { path: "package.json", content: packageJson({ dependencies: { react: "19.2.8" } }) },
     ]);
 
-    expect(detectFrameworks(context).find((framework) => framework.id === "react")?.confidence).toBe("medium");
+    expect(
+      detectFrameworks(context).find((framework) => framework.id === "react")?.confidence,
+    ).toBe("medium");
   });
 
   it("detects Vite + React", () => {
     const context = contextFrom([
-      { path: "package.json", content: packageJson({ dependencies: { react: "18" }, devDependencies: { vite: "5" } }) },
+      {
+        path: "package.json",
+        content: packageJson({ dependencies: { react: "18" }, devDependencies: { vite: "5" } }),
+      },
       { path: "vite.config.ts" },
     ]);
 
@@ -87,7 +98,9 @@ describe("detectFrameworks", () => {
   });
 
   it("detects FastAPI from a Python manifest", () => {
-    const context = contextFrom([{ path: "requirements.txt", content: "fastapi==0.111\nuvicorn\n" }]);
+    const context = contextFrom([
+      { path: "requirements.txt", content: "fastapi==0.111\nuvicorn\n" },
+    ]);
     expect(ids(detectFrameworks(context))).toContain("fastapi");
   });
 
@@ -142,7 +155,10 @@ describe("detectPackageManager", () => {
     ["package-lock.json", "npm"],
     ["bun.lockb", "bun"],
   ])("falls back to the %s lockfile", (lockfile, expected) => {
-    const context = contextFrom([{ path: "package.json", content: packageJson({}) }, { path: lockfile }]);
+    const context = contextFrom([
+      { path: "package.json", content: packageJson({}) },
+      { path: lockfile },
+    ]);
     expect(detectPackageManager(context)).toBe(expected);
   });
 
@@ -197,7 +213,10 @@ describe("detectRuntime beyond Node and Docker", () => {
 
     for (const [path, id] of cases) {
       const runtime = detectRuntime(contextFrom([{ path }]));
-      expect(runtime.map((detection) => detection.id), `${path} should detect ${id}`).toContain(id);
+      expect(
+        runtime.map((detection) => detection.id),
+        `${path} should detect ${id}`,
+      ).toContain(id);
     }
   });
 

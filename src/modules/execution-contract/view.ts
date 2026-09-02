@@ -66,14 +66,19 @@ export const EXECUTION_RISK_LABELS: Record<ExecutionRiskClass, string> = {
 export const EXECUTION_REASON_LABELS: Record<ExecutionResolutionReason, string> = {
   deterministic_capability_matched: "Vibe already knows how to make this exact change.",
   agentic_v1_eligible: "This is the kind of change Vibe could build for you.",
-  founder_decision_required: "Only you can settle this, and the work after it depends on the answer.",
-  founder_input_required: "Only you can provide this information, and the work after it depends on the answer.",
+  founder_decision_required:
+    "Only you can settle this, and the work after it depends on the answer.",
+  founder_input_required:
+    "Only you can provide this information, and the work after it depends on the answer.",
   founder_action_required: "This is real-world work that has to be done by a person.",
   external_party_required: "This is waiting on someone outside your business.",
   dependency_unsatisfied: "An earlier step has to finish first.",
-  dependency_cycle_detected: "The steps this depends on refer back to each other, so nothing can go first.",
-  no_executor_for_vibe_work: "This is Vibe's own thinking work rather than a change to your product.",
-  change_kind_not_executable: "This isn't a change to your product, so there is nothing for Vibe to build.",
+  dependency_cycle_detected:
+    "The steps this depends on refer back to each other, so nothing can go first.",
+  no_executor_for_vibe_work:
+    "This is Vibe's own thinking work rather than a change to your product.",
+  change_kind_not_executable:
+    "This isn't a change to your product, so there is nothing for Vibe to build.",
   risk_class_not_permitted: "Vibe doesn't yet make changes this sensitive on your behalf.",
   risk_class_prohibited: "Vibe never changes anything to do with taking payments.",
   repository_not_connected: "No code repository is connected to this project.",
@@ -93,8 +98,10 @@ export const EXECUTION_ADMISSION_LABELS: Record<ExecutionAdmissionRefusal, strin
   source_revision_unverified: "Vibe couldn't confirm which version of your code is current.",
   repository_head_moved: "Your code has changed since Vibe last read it.",
   repository_snapshot_stale: "Vibe has a newer read of your code than this plan used.",
-  live_premise_no_longer_true: "This is already fixed on your live site, so there's nothing to change.",
-  live_premise_unverified: "Vibe couldn't finish checking your live site, so it won't start work it can't justify.",
+  live_premise_no_longer_true:
+    "This is already fixed on your live site, so there's nothing to change.",
+  live_premise_unverified:
+    "Vibe couldn't finish checking your live site, so it won't start work it can't justify.",
   action_plan_superseded: "This plan has been replaced by a newer one.",
   agentic_pricing_not_configured: "Vibe isn't building changes like this for anyone yet.",
   credit_reservation_required: "This needs Credits set aside before it can start.",
@@ -104,9 +111,11 @@ export const EXECUTION_ADMISSION_LABELS: Record<ExecutionAdmissionRefusal, strin
 
 /** Why a future run would stop completely. */
 export const EXECUTION_STOP_LABELS: Record<ExecutionStopReason, string> = {
-  source_revision_unverifiable: "Vibe couldn't confirm which version of your code it was working from.",
+  source_revision_unverifiable:
+    "Vibe couldn't confirm which version of your code it was working from.",
   policy_violation_required: "Finishing would have meant doing something Vibe isn't allowed to do.",
-  secret_access_required: "Finishing would have needed one of your secrets. Vibe never reads those.",
+  secret_access_required:
+    "Finishing would have needed one of your secrets. Vibe never reads those.",
   prohibited_side_effect_required: "Finishing would have changed something outside your code.",
   budget_exhausted: "This reached the Credit limit you approved.",
   repair_limit_reached: "Vibe couldn't get the change passing its checks.",

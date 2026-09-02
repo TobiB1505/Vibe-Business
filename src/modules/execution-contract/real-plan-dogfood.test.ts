@@ -61,7 +61,8 @@ const REAL_STEPS: ActionPlanStep[] = [
     purpose: "Everything downstream depends on which model is chosen.",
     actor: "founder_decision",
     changeKind: "decision",
-    completionCriteria: "One access model is explicitly chosen and recorded as the one to build against.",
+    completionCriteria:
+      "One access model is explicitly chosen and recorded as the one to build against.",
     dependsOn: [1],
     evidenceIds: [],
     executionSupport: "founder_decides",

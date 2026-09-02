@@ -229,10 +229,20 @@ async function resolveRunContext(
       preparedCommitSha: prepared.commitSha,
       repositoryUrl: repository.repositoryUrl,
       cloneCredential: repository.cloneCredential,
-      profile: profile.profile,
-      packageManager: profile.packageManager,
+      /*
+       * From the claimed run, not from the resolution above.
+       *
+       * The resolution is re-derived on every phase, and what it answers can
+       * move underneath a run in flight: a founder naming a different
+       * application, or a newer snapshot finding one. The row is what this
+       * validation *is* — its identity was computed from these three values
+       * and a stored pass claims them — so a phase that read the live answer
+       * could install in one directory and build in another (rule 67).
+       */
+      profile: run.validationProfile,
+      packageManager: run.packageManager,
       sourceRoot: repository.sourceRoot,
-      workspaceRoot: profile.workspaceRoot,
+      workspaceRoot: run.workspaceRoot,
       preparedFiles: prepared.files.map((file) => ({
         path: file.path,
         /* A deletion carries no hash and is checked as absence, not as a
@@ -331,6 +341,7 @@ export async function prepareValidationStep(
     sandboxPolicyVersion: SANDBOX_POLICY_VERSION,
     validationDepth: depth.depth,
     validationDepthPolicyVersion: depth.policyVersion,
+    workspaceRoot: profile.workspaceRoot,
   });
 
   const claim = await claimValidationRun(deps.supabase, {
@@ -346,6 +357,7 @@ export async function prepareValidationStep(
     sandboxPolicyVersion: SANDBOX_POLICY_VERSION,
     sandboxProvider: deps.provider.id,
     packageManager: profile.packageManager,
+    workspaceRoot: profile.workspaceRoot,
     preparedCommitSha: prepared.commitSha,
     validationIdentity: identity,
   });

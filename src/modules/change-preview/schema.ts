@@ -93,10 +93,36 @@ export const PREVIEW_PROFILE_VERSIONS: Record<PreviewProfile, string> = {
  */
 export const PREVIEWABLE_VALIDATION_PROFILES: Record<ValidationProfile, PreviewProfile | null> = {
   nextjs_node_v1: CURRENT_PREVIEW_PROFILE,
+  /**
+   * Interim, and narrower than the profile it belongs to.
+   *
+   * `node_build_v1` admits any repository with a build contract, but the only
+   * server command that exists is `next dev` — so a preview is offered for a
+   * Next.js application and refused for everything else. The refusal is
+   * temporary and honest in the meantime: validation and merge work, and there
+   * is nothing to look at.
+   *
+   * A framework this coarse mapping cannot express is exactly why the next
+   * slice replaces it with a dev-server table keyed on the *application's own*
+   * frameworks rather than on its validation profile.
+   */
+  node_build_v1: CURRENT_PREVIEW_PROFILE,
 };
 
-export function previewProfileFor(validationProfile: ValidationProfile): PreviewProfile | null {
-  return PREVIEWABLE_VALIDATION_PROFILES[validationProfile] ?? null;
+/**
+ * Which preview a resolved application gets, if any.
+ *
+ * Keyed on the frameworks the chosen application's own manifest declares, not
+ * on the repository-wide union: a repository holding a Next.js app in
+ * `frontend/` and a Python service in `backend/` reports `nextjs` either way,
+ * and only one of its directories can be started with `next dev`.
+ */
+export function previewProfileFor(
+  validationProfile: ValidationProfile,
+  frameworks: readonly string[],
+): PreviewProfile | null {
+  const profile = PREVIEWABLE_VALIDATION_PROFILES[validationProfile] ?? null;
+  return profile !== null && frameworks.includes("nextjs") ? profile : null;
 }
 
 /**

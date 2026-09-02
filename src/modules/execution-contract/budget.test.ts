@@ -53,9 +53,7 @@ function agenticSpec(budget = FIXTURE_BUDGET) {
 
 describe("budget policy — the production numbers and where they came from (§25)", () => {
   it("ships exactly one approved policy, and none before it took effect", () => {
-    expect(EXECUTION_BUDGET_POLICIES.map((policy) => policy.version)).toEqual([
-      "launch-v1-budget",
-    ]);
+    expect(EXECUTION_BUDGET_POLICIES.map((policy) => policy.version)).toEqual(["launch-v1-budget"]);
     // §25 forbade arbitrary production numbers, and for three sprints the
     // honest answer was an empty registry. `launch-v1-budget` is dated, so the
     // period in which no policy existed is still resolvable as exactly that.
@@ -100,11 +98,19 @@ describe("budget policy — the production numbers and where they came from (§2
 
   it("resolves a fixture policy on the same half-open interval convention", () => {
     const policies = [
-      { ...fakeBudgetPolicy(), effectiveFrom: "2026-01-01T00:00:00.000Z", effectiveTo: "2026-06-01T00:00:00.000Z" },
+      {
+        ...fakeBudgetPolicy(),
+        effectiveFrom: "2026-01-01T00:00:00.000Z",
+        effectiveTo: "2026-06-01T00:00:00.000Z",
+      },
     ];
 
-    expect(resolveExecutionBudget("standard", new Date("2026-01-01T00:00:00.000Z"), policies)).not.toBeNull();
-    expect(resolveExecutionBudget("standard", new Date("2026-06-01T00:00:00.000Z"), policies)).toBeNull();
+    expect(
+      resolveExecutionBudget("standard", new Date("2026-01-01T00:00:00.000Z"), policies),
+    ).not.toBeNull();
+    expect(
+      resolveExecutionBudget("standard", new Date("2026-06-01T00:00:00.000Z"), policies),
+    ).toBeNull();
   });
 });
 

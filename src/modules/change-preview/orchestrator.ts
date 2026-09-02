@@ -175,8 +175,6 @@ const MISSING_ENVIRONMENT_MARKERS: readonly RegExp[] = [
   /invalid environment variables/i,
 ];
 
-
-
 function detail(text: string | null): string | null {
   return text === null ? null : sanitizeCommandOutput(text).text;
 }
@@ -344,7 +342,11 @@ export async function provisionPreviewWorkspace(
 
     return { ok: true, sandboxId: sandbox.id, runtime: sandbox.runtime };
   } catch (error) {
-    return { ok: false, failureCode: "preview_failed", failureDetail: detail(describeThrown(error)) };
+    return {
+      ok: false,
+      failureCode: "preview_failed",
+      failureDetail: detail(describeThrown(error)),
+    };
   }
 }
 
@@ -353,7 +355,9 @@ async function create(
   provider: SandboxProvider,
   target: PreviewTarget,
   environment: Readonly<Record<string, string>>,
-): Promise<SandboxHandle | { ok: false; failureCode: PreviewFailureCode; failureDetail: string | null }> {
+): Promise<
+  SandboxHandle | { ok: false; failureCode: PreviewFailureCode; failureDetail: string | null }
+> {
   try {
     return await provider.create({
       name: previewSandboxNameFor(target.previewSessionId),
@@ -502,7 +506,9 @@ export async function startPreviewServer(
           // A deterministically identifiable missing-configuration failure is a
           // different thing from a crash, and the user can act on exactly one
           // of them.
-          failureCode: missingEnvironment ? "preview_missing_environment" : "preview_process_exited",
+          failureCode: missingEnvironment
+            ? "preview_missing_environment"
+            : "preview_process_exited",
           failureDetail: detail(
             `${describeCommand(previewServerCommand())} exited with code ${exitCode}\n${output.text}`,
           ),
@@ -529,7 +535,11 @@ export async function startPreviewServer(
       ),
     };
   } catch (error) {
-    return { ok: false, failureCode: "preview_failed", failureDetail: detail(describeThrown(error)) };
+    return {
+      ok: false,
+      failureCode: "preview_failed",
+      failureDetail: detail(describeThrown(error)),
+    };
   }
 }
 

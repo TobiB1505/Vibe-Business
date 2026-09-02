@@ -121,7 +121,10 @@ export const EXECUTION_MODES = [
 export type ExecutionMode = (typeof EXECUTION_MODES)[number];
 
 /** Modes that describe work Vibe could carry out itself. */
-export const VIBE_EXECUTABLE_MODES: readonly ExecutionMode[] = ["deterministic", "agentic"] as const;
+export const VIBE_EXECUTABLE_MODES: readonly ExecutionMode[] = [
+  "deterministic",
+  "agentic",
+] as const;
 
 /* ---------------------------------------------------------------------------
  * Execution classes (§8)

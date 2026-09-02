@@ -1,14 +1,11 @@
 import "server-only";
 
 import { rebuildVerifiedCandidate } from "./verify";
+import { AgentExecutionDeps, StepOutcome, recordLifecycle, loadRun, loadSpec } from "./shared";
 import {
-  AgentExecutionDeps,
-  StepOutcome,
-  recordLifecycle,
-  loadRun,
-  loadSpec,
-} from "./shared";
-import { computeAgentChangeIdentity, computeCandidateDigest } from "@/modules/coding-agent/identity";
+  computeAgentChangeIdentity,
+  computeCandidateDigest,
+} from "@/modules/coding-agent/identity";
 import { loadPlanStep } from "@/modules/execution-context/service";
 import { agentBranchNameFor } from "@/modules/execution/identity";
 import { prepareChangeOnBranch } from "@/modules/execution/github-writer";
@@ -203,7 +200,12 @@ export async function writeAgentBranchStep(
       capability: AGENTIC_EXECUTION_CAPABILITY,
       commitMessage: renderCommitMessage(compiledMessage),
     },
-    files.map((file) => ({ path: file.path, content: file.content, contentHash: file.contentHash, bytes: file.bytes })),
+    files.map((file) => ({
+      path: file.path,
+      content: file.content,
+      contentHash: file.contentHash,
+      bytes: file.bytes,
+    })),
     deletions,
   );
 

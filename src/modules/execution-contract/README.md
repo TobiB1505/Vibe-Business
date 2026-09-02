@@ -31,31 +31,31 @@ compiled policy with a default-deny predicate is a fact.
 
 ## What is here
 
-| File | What it answers |
-| --- | --- |
-| `schema.ts` | modes, risk classes, stop reasons, interrupt types, activity events, versions |
-| `resolver.ts` | *what kind of route does this step need, and may it start now?* |
-| `chain.ts` | *which of the following steps could this same run also deliver?* — forwards, structural, no prose |
-| `risk.ts` | *how much could go wrong?* — from structured facts, never prose |
-| `dependencies.ts` | *does this prerequisite block, or does the run absorb it?* |
-| `policy.ts` | *what may an execution do?* — default deny, globally forbidden set |
-| `budget.ts` | *how much may it cost?* — no approved policy exists yet |
-| `validation-requirements.ts` | *what must independently pass?* — derived from the real profile |
-| `live-premise.ts` | *is the defect this step exists to fix still there?* — re-checked against live state before a Credit is spent (rule 55) |
-| `spec.ts` | the immutable instruction package |
-| `identity.ts` | what makes two specs the same spec |
-| `secrets.ts` | why the schema, not a scanner, is the defence |
-| `interrupts.ts` | when a run must stop and ask |
-| `proposed-change.ts` | the bridge into the existing pipeline |
-| `store.ts` / `service.ts` | the one persisted concept, server-only |
-| `view.ts` | customer-safe copy for every internal enum |
-| `report.ts` / `dogfood.probe.ts` | the §38 dogfood |
+| File                             | What it answers                                                                                                         |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `schema.ts`                      | modes, risk classes, stop reasons, interrupt types, activity events, versions                                           |
+| `resolver.ts`                    | _what kind of route does this step need, and may it start now?_                                                         |
+| `chain.ts`                       | _which of the following steps could this same run also deliver?_ — forwards, structural, no prose                       |
+| `risk.ts`                        | _how much could go wrong?_ — from structured facts, never prose                                                         |
+| `dependencies.ts`                | _does this prerequisite block, or does the run absorb it?_                                                              |
+| `policy.ts`                      | _what may an execution do?_ — default deny, globally forbidden set                                                      |
+| `budget.ts`                      | _how much may it cost?_ — no approved policy exists yet                                                                 |
+| `validation-requirements.ts`     | _what must independently pass?_ — derived from the real profile                                                         |
+| `live-premise.ts`                | _is the defect this step exists to fix still there?_ — re-checked against live state before a Credit is spent (rule 55) |
+| `spec.ts`                        | the immutable instruction package                                                                                       |
+| `identity.ts`                    | what makes two specs the same spec                                                                                      |
+| `secrets.ts`                     | why the schema, not a scanner, is the defence                                                                           |
+| `interrupts.ts`                  | when a run must stop and ask                                                                                            |
+| `proposed-change.ts`             | the bridge into the existing pipeline                                                                                   |
+| `store.ts` / `service.ts`        | the one persisted concept, server-only                                                                                  |
+| `view.ts`                        | customer-safe copy for every internal enum                                                                              |
+| `report.ts` / `dogfood.probe.ts` | the §38 dogfood                                                                                                         |
 
 ## Four things this module refuses to do
 
 **It does not treat every Planner prerequisite as a runtime wall.** A plan
 describes what work is needed; it does not define one execution boundary per
-step. `dependencies.ts` separates prerequisites that must already *exist* — a
+step. `dependencies.ts` separates prerequisites that must already _exist_ — a
 founder decision, real-world work, an external party — from Vibe's own
 technical preparation, which an agentic run performs itself and records as
 absorbed. One hard prerequisite still blocks everything, and nothing is ever
@@ -64,11 +64,10 @@ marked complete on the founder's behalf.
 An earlier build step used to be in that first list. It still blocks a run that
 does not deliver it — a product change is never absorbable preparation — but
 since [ADR 0077](../../../docs/decisions/0077-build-chains.md) a run may carry
-its contiguous successors as further *deliveries*. `chain.ts` answers that,
+its contiguous successors as further _deliveries_. `chain.ts` answers that,
 forwards, and it is deliberately a separate walk: absorption is all-or-nothing
 and never completes the Planner's step, while a chain may be shortened and must
 complete every member.
-
 
 **It does not read the Planner's `executionSupport`.** Not as a hint, not as a
 cross-check. Those fields were correct when written; they are a routing signal

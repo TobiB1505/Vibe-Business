@@ -36,7 +36,12 @@ describe("selectCandidates — discovery", () => {
 
   it("never discovers sensitive files", () => {
     expect(
-      discoveredPaths([blob(".env"), blob(".env.local"), blob("credentials.json"), blob("certs/key.pem")]),
+      discoveredPaths([
+        blob(".env"),
+        blob(".env.local"),
+        blob("credentials.json"),
+        blob("certs/key.pem"),
+      ]),
     ).toEqual([]);
   });
 
@@ -64,19 +69,26 @@ describe("selectCandidates — discovery", () => {
   });
 
   it("ranks root manifests ahead of the same filename nested deeper", () => {
-    expect(discoveredPaths([blob("apps/web/package.json"), blob("package.json")])[0]).toBe("package.json");
+    expect(discoveredPaths([blob("apps/web/package.json"), blob("package.json")])[0]).toBe(
+      "package.json",
+    );
   });
 
   it("matches config files across supported extensions", () => {
-    expect(discoveredPaths([blob("vite.config.js"), blob("astro.config.mjs"), blob("svelte.config.js")])).toEqual(
-      expect.arrayContaining(["vite.config.js", "astro.config.mjs", "svelte.config.js"]),
-    );
+    expect(
+      discoveredPaths([blob("vite.config.js"), blob("astro.config.mjs"), blob("svelte.config.js")]),
+    ).toEqual(expect.arrayContaining(["vite.config.js", "astro.config.mjs", "svelte.config.js"]));
   });
 
   it("discovers ecosystem manifests beyond JavaScript", () => {
-    expect(discoveredPaths([blob("pyproject.toml"), blob("go.mod"), blob("Cargo.toml"), blob("Gemfile")])).toEqual(
-      expect.arrayContaining(["pyproject.toml", "go.mod", "Cargo.toml", "Gemfile"]),
-    );
+    expect(
+      discoveredPaths([
+        blob("pyproject.toml"),
+        blob("go.mod"),
+        blob("Cargo.toml"),
+        blob("Gemfile"),
+      ]),
+    ).toEqual(expect.arrayContaining(["pyproject.toml", "go.mod", "Cargo.toml", "Gemfile"]));
   });
 
   it("discovers known exact paths such as supabase/config.toml", () => {
@@ -98,7 +110,10 @@ describe("selectCandidates — fetch selection", () => {
   });
 
   it("does not fetch existence-only signals even though they are discovered", () => {
-    const result = selectCandidates([blob("next.config.ts"), blob("vercel.json")], DEFAULT_ANALYSIS_BUDGETS);
+    const result = selectCandidates(
+      [blob("next.config.ts"), blob("vercel.json")],
+      DEFAULT_ANALYSIS_BUDGETS,
+    );
 
     expect(result.discovered.map((candidate) => candidate.path)).toEqual(
       expect.arrayContaining(["next.config.ts", "vercel.json"]),
@@ -131,7 +146,9 @@ describe("selectCandidates — fetch selection", () => {
   });
 
   it("does not report truncation when everything fits", () => {
-    expect(selectCandidates([blob("package.json")], DEFAULT_ANALYSIS_BUDGETS).truncatedByBudget).toBe(false);
+    expect(
+      selectCandidates([blob("package.json")], DEFAULT_ANALYSIS_BUDGETS).truncatedByBudget,
+    ).toBe(false);
   });
 
   it("prefers the root manifest when the budget forces a choice", () => {

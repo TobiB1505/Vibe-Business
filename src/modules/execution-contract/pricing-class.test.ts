@@ -30,7 +30,11 @@ const MATRIX: { name: string; step: Step; risk: ExecutionRiskClass }[] = [
   },
   { name: "sensitive evidence", step: step(["repo.surface_absent.payments"]), risk: "moderate" },
   { name: "high risk", step: step(["live.conversion.primary_cta_missing"]), risk: "high" },
-  { name: "not a product change", step: step(["live.conversion.primary_cta_missing"], "analysis"), risk: "low" },
+  {
+    name: "not a product change",
+    step: step(["live.conversion.primary_cta_missing"], "analysis"),
+    risk: "low",
+  },
 ];
 
 describe("a chain of one prices exactly as the step does", () => {
@@ -61,17 +65,14 @@ describe("a chain of more than one", () => {
   });
 
   it("is never standard either, because standard's ceiling is small's ceiling", () => {
-    const members = [
-      step(["live.surface_absent.pricing"]),
-      step(["live.surface_absent.pricing"]),
-    ];
+    const members = [step(["live.surface_absent.pricing"]), step(["live.surface_absent.pricing"])];
 
     expect(resolveStepPricingClass({ step: members[0], riskClass: "low" }).pricingClass).toBe(
       "standard",
     );
-    expect(
-      resolveChainPricingClass({ members, riskClasses: ["low", "low"] }).pricingClass,
-    ).toBe("complex");
+    expect(resolveChainPricingClass({ members, riskClasses: ["low", "low"] }).pricingClass).toBe(
+      "complex",
+    );
   });
 
   it("takes the highest risk among its members, not the head's", () => {
@@ -104,7 +105,10 @@ describe("a chain of more than one", () => {
     // admits only product changes, so this is unreachable in production and is
     // asserted anyway — a guard that fails open on an impossible input is how
     // an impossible input becomes a charge.
-    const members = [step(["live.conversion.primary_cta_missing"], "analysis"), step([], "analysis")];
+    const members = [
+      step(["live.conversion.primary_cta_missing"], "analysis"),
+      step([], "analysis"),
+    ];
 
     const chain = resolveChainPricingClass({ members, riskClasses: ["low", "low"] });
     expect(chain.pricingClass).toBeNull();

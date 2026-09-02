@@ -29,7 +29,10 @@ type TableRows = {
  * actually makes, so a change in query shape surfaces as a test failure
  * rather than passing silently.
  */
-function fakeSupabase(rows: TableRows, overrides: { insertError?: { code?: string; message: string } } = {}) {
+function fakeSupabase(
+  rows: TableRows,
+  overrides: { insertError?: { code?: string; message: string } } = {},
+) {
   const inserted: unknown[] = [];
   const updated: unknown[] = [];
 
@@ -220,7 +223,11 @@ describe("inspectRepository — reuse", () => {
       },
     });
 
-    const result = await inspectRepository(client, { projectId: "project-1", userId: "user-1" }, { force: true });
+    const result = await inspectRepository(
+      client,
+      { projectId: "project-1", userId: "user-1" },
+      { force: true },
+    );
 
     expect(result.ok && result.reused).toBe(false);
     expect(getTree).toHaveBeenCalled();
@@ -259,9 +266,12 @@ describe("inspectRepository — failures", () => {
 
   it("reports already_running when the in-flight guard rejects a duplicate run", async () => {
     getHead.mockResolvedValue({ defaultBranch: "main", commitSha: COMMIT });
-    const { client } = fakeSupabase({ ...OWNED, reusable: null }, {
-      insertError: { code: "23505", message: "duplicate key value violates unique constraint" },
-    });
+    const { client } = fakeSupabase(
+      { ...OWNED, reusable: null },
+      {
+        insertError: { code: "23505", message: "duplicate key value violates unique constraint" },
+      },
+    );
 
     expect(await inspectRepository(client, { projectId: "project-1", userId: "user-1" })).toEqual({
       ok: false,
@@ -277,7 +287,9 @@ describe("inspectRepository — failures", () => {
     const result = await inspectRepository(client, { projectId: "project-1", userId: "user-1" });
 
     expect(result).toEqual({ ok: false, error: "github_rate_limited" });
-    expect(updated).toEqual([expect.objectContaining({ status: "failed", failure_code: "github_rate_limited" })]);
+    expect(updated).toEqual([
+      expect.objectContaining({ status: "failed", failure_code: "github_rate_limited" }),
+    ]);
   });
 
   it("never places a token or secret into audit metadata", async () => {

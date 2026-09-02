@@ -46,7 +46,9 @@ import { FIXTURE_COMMIT_SHA } from "./test-support";
 
 describe("operation types match the database constraint", () => {
   it("permits every declared operation type", () => {
-    expect(checkedValues("operation_runs", "operation_type").sort()).toEqual([...OPERATION_TYPES].sort());
+    expect(checkedValues("operation_runs", "operation_type").sort()).toEqual(
+      [...OPERATION_TYPES].sort(),
+    );
   });
 
   it("permits change_preview", () => {
@@ -58,7 +60,12 @@ describe("operation types match the database constraint", () => {
   it("still permits every historical operation type", () => {
     // Rows exist under all of these. A constraint that dropped one would make
     // history unreadable.
-    for (const type of ["business_audit", "opportunity_generation", "change_preparation", "change_validation"]) {
+    for (const type of [
+      "business_audit",
+      "opportunity_generation",
+      "change_preparation",
+      "change_validation",
+    ]) {
       expect(checkedValues("operation_runs", "operation_type")).toContain(type);
     }
   });
@@ -70,7 +77,12 @@ describe("operation stages match the database constraint", () => {
   });
 
   it("permits every preview stage", () => {
-    for (const stage of ["restoring_artifact", "verifying_artifact", "starting_server", "checking_preview"]) {
+    for (const stage of [
+      "restoring_artifact",
+      "verifying_artifact",
+      "starting_server",
+      "checking_preview",
+    ]) {
       expect(checkedValues("operation_runs", "stage")).toContain(stage);
     }
   });
@@ -78,7 +90,9 @@ describe("operation stages match the database constraint", () => {
 
 describe("preview session enums match the database constraints", () => {
   it("permits every declared preview status", () => {
-    expect(checkedValues("preview_sessions", "status").sort()).toEqual([...PREVIEW_STATUSES].sort());
+    expect(checkedValues("preview_sessions", "status").sort()).toEqual(
+      [...PREVIEW_STATUSES].sort(),
+    );
   });
 
   it("permits every declared preview profile", () => {
@@ -86,7 +100,9 @@ describe("preview session enums match the database constraints", () => {
   });
 
   it("permits every declared cleanup status", () => {
-    expect(checkedValues("preview_sessions", "cleanup_status").sort()).toEqual([...PREVIEW_CLEANUP_STATUSES].sort());
+    expect(checkedValues("preview_sessions", "cleanup_status").sort()).toEqual(
+      [...PREVIEW_CLEANUP_STATUSES].sort(),
+    );
   });
 
   it("stores the preview policy version rather than enumerating it", () => {
@@ -117,9 +133,9 @@ describe("preview identity", () => {
   it("changes when the policy version changes", () => {
     // The load-bearing property: tightening the preview policy invalidates
     // reuse by construction rather than by anyone remembering to (§22).
-    expect(computePreviewIdentity({ ...base, previewPolicyVersion: "preview-policy-v99" })).not.toBe(
-      computePreviewIdentity(base),
-    );
+    expect(
+      computePreviewIdentity({ ...base, previewPolicyVersion: "preview-policy-v99" }),
+    ).not.toBe(computePreviewIdentity(base));
   });
 
   it("changes when the prepared commit changes", () => {
@@ -141,13 +157,31 @@ describe("preview identity", () => {
 });
 
 describe("preview policy", () => {
-  it("supports Next.js validation and nothing else", () => {
-    expect(previewProfileFor("nextjs_node_v1")).toBe(CURRENT_PREVIEW_PROFILE);
+  it("supports a Next.js application and nothing else", () => {
+    expect(previewProfileFor("nextjs_node_v1", ["nextjs"])).toBe(CURRENT_PREVIEW_PROFILE);
+    expect(previewProfileFor("node_build_v1", ["nextjs", "react"])).toBe(CURRENT_PREVIEW_PROFILE);
     // Refusing is the feature: a guessed start command produces a public URL
     // nobody should trust (§3).
     expect(
-      previewProfileFor("some_future_framework_v1" as Parameters<typeof previewProfileFor>[0]),
+      previewProfileFor("some_future_framework_v1" as Parameters<typeof previewProfileFor>[0], [
+        "nextjs",
+      ]),
     ).toBeNull();
+  });
+
+  it("refuses an application the one server command cannot start", () => {
+    // The contract profile admits any Node repository with a build script; the
+    // only start command that exists is `next dev`. A Vite app is validated and
+    // merged, and has nothing to look at until the dev-server table lands.
+    expect(previewProfileFor("node_build_v1", ["vite", "react"])).toBeNull();
+    expect(previewProfileFor("node_build_v1", [])).toBeNull();
+  });
+
+  it("reads the application's own frameworks, not the repository's", () => {
+    // A repository with a Next.js app in `frontend/` and a Python service in
+    // `backend/` reports `nextjs` either way. Only one of its directories can
+    // be started with `next dev`, and the resolved application says which.
+    expect(previewProfileFor("node_build_v1", ["react"])).toBeNull();
   });
 
   it("bounds the preview at fifteen minutes", () => {

@@ -38,7 +38,10 @@ describe("detectBusinessSurfaces", () => {
     const surface = surfacesFor(files).find((entry) => entry.id === "pricing_page");
 
     expect(surface?.detected).toBe(true);
-    expect(surface?.evidence[0]).toMatchObject({ path: "src/app/pricing/page.tsx", detail: "/pricing" });
+    expect(surface?.evidence[0]).toMatchObject({
+      path: "src/app/pricing/page.tsx",
+      detail: "/pricing",
+    });
   });
 
   it.each([

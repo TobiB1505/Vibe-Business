@@ -137,7 +137,11 @@ describe("enqueueValidationStep", () => {
     // this step does nothing to prevent one, because it does not need to.
     const db = new FakeDatabase();
     seed(db);
-    startChangeValidation.mockResolvedValue({ kind: "reused", validationRunId: "x", status: "passed" });
+    startChangeValidation.mockResolvedValue({
+      kind: "reused",
+      validationRunId: "x",
+      status: "passed",
+    });
 
     await enqueueValidationStep(deps(db), executor, OPERATION);
 

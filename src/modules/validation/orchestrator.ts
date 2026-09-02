@@ -178,8 +178,6 @@ const MISSING_ENVIRONMENT_MARKERS: readonly RegExp[] = [
   /invalid environment variables/i,
 ];
 
-
-
 /**
  * Reads a file only when it fits entirely within the budget.
  *
@@ -410,7 +408,11 @@ export async function provisionSandbox(
 
     return { ok: true, sandboxId: sandbox.id, runtime: sandbox.runtime };
   } catch (error) {
-    return { ok: false, failureCode: "sandbox_unavailable", failureDetail: detail(describeThrown(error)) };
+    return {
+      ok: false,
+      failureCode: "sandbox_unavailable",
+      failureDetail: detail(describeThrown(error)),
+    };
   }
 }
 
@@ -627,7 +629,11 @@ async function readPlan(sandbox: SandboxHandle, target: ValidationTarget) {
     maxBytes: SANDBOX_BUDGETS.maxIntegrityFileBytes,
   });
   if (manifestRaw === null) {
-    return { ok: false as const, failureCode: "validation_not_supported" as const, failureDetail: `no package.json at ${target.workspaceRoot}` };
+    return {
+      ok: false as const,
+      failureCode: "validation_not_supported" as const,
+      failureDetail: `no package.json at ${target.workspaceRoot}`,
+    };
   }
 
   let scripts: string[] = [];
@@ -635,7 +641,11 @@ async function readPlan(sandbox: SandboxHandle, target: ValidationTarget) {
     const parsed = JSON.parse(manifestRaw) as { scripts?: Record<string, unknown> };
     scripts = Object.keys(parsed.scripts ?? {});
   } catch {
-    return { ok: false as const, failureCode: "validation_not_supported" as const, failureDetail: "package.json is not valid JSON" };
+    return {
+      ok: false as const,
+      failureCode: "validation_not_supported" as const,
+      failureDetail: "package.json is not valid JSON",
+    };
   }
 
   return {
@@ -774,7 +784,12 @@ export async function runCheckPhase(
           step: recorded,
         };
       }
-      return { ok: false, failureCode: "validation_checks_failed", failureDetail: null, step: recorded };
+      return {
+        ok: false,
+        failureCode: "validation_checks_failed",
+        failureDetail: null,
+        step: recorded,
+      };
     }
 
     return { ok: true, step: recorded };

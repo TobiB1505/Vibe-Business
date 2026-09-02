@@ -141,9 +141,7 @@ describe("execution resolver — agentic fallback (§20, §43)", () => {
   });
 
   it("refuses agentic admission while no Credit budget policy authorizes it", () => {
-    const resolution = resolveStepExecution(
-      fakeResolveInput({ agenticBudgetAuthorized: false }),
-    );
+    const resolution = resolveStepExecution(fakeResolveInput({ agenticBudgetAuthorized: false }));
 
     // Still classified agentic — the work is the shape an agent could do. It
     // simply may not start, which is a different sentence (§24).
@@ -159,7 +157,13 @@ describe("execution resolver — agentic fallback (§20, §43)", () => {
     const resolution = resolveStepExecution(
       fakeResolveInput({
         repository: fakeRepositoryContext({
-          snapshot: fakeSnapshot({ frameworks: [{ id: "fastapi", name: "FastAPI" }] }),
+          // A Python service: no `package.json`, so no build for a change to be
+          // checked against. The refusal follows from the absent contract, not
+          // from the framework's name.
+          snapshot: fakeSnapshot({
+            frameworks: [{ id: "fastapi", name: "FastAPI" }],
+            build: { targets: [], truncated: false },
+          }),
         }),
       }),
     );
@@ -228,7 +232,12 @@ describe("execution resolver — missing user input (§28, §44)", () => {
 
 describe("execution resolver — dependency block (§27, §45)", () => {
   it("blocks a step whose prerequisite is unfinished, however eligible it is", () => {
-    const first = fakePlanStep({ id: "1-decide", order: 1, actor: "founder_decision", changeKind: "decision" });
+    const first = fakePlanStep({
+      id: "1-decide",
+      order: 1,
+      actor: "founder_decision",
+      changeKind: "decision",
+    });
     const second = fakePlanStep({ id: "2-build", order: 2, dependsOn: [1] });
 
     const resolution = resolveStepExecution(
@@ -246,7 +255,12 @@ describe("execution resolver — dependency block (§27, §45)", () => {
   });
 
   it("still reports what the step would have resolved to, without admitting it", () => {
-    const first = fakePlanStep({ id: "1-decide", order: 1, actor: "founder_decision", changeKind: "decision" });
+    const first = fakePlanStep({
+      id: "1-decide",
+      order: 1,
+      actor: "founder_decision",
+      changeKind: "decision",
+    });
     const second = fakePlanStep({ id: "2-build", order: 2, dependsOn: [1] });
 
     const resolution = resolveStepExecution(
@@ -260,7 +274,12 @@ describe("execution resolver — dependency block (§27, §45)", () => {
   });
 
   it("unblocks once the prerequisite is recorded as finished", () => {
-    const first = fakePlanStep({ id: "1-decide", order: 1, actor: "founder_decision", changeKind: "decision" });
+    const first = fakePlanStep({
+      id: "1-decide",
+      order: 1,
+      actor: "founder_decision",
+      changeKind: "decision",
+    });
     const second = fakePlanStep({ id: "2-build", order: 2, dependsOn: [1] });
 
     const resolution = resolveStepExecution(
@@ -356,7 +375,10 @@ describe("execution resolver — risk (§19, §46)", () => {
   });
 
   it("treats Vibe's own analysis work as low risk and unsupported, not manual", () => {
-    const step = fakePlanStep({ changeKind: "analysis", evidenceIds: ["profile.audience.primary"] });
+    const step = fakePlanStep({
+      changeKind: "analysis",
+      evidenceIds: ["profile.audience.primary"],
+    });
     const resolution = resolveStepExecution(
       fakeResolveInput({ step, plan: fakePlanContext([step]) }),
     );

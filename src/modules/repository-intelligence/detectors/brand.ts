@@ -62,12 +62,14 @@ const ASSET_RULES: AssetRule[] = [
   },
   {
     role: "app_icon",
-    pattern: /(^|[-_.])(apple-touch-icon|android-chrome|maskable[-_]?icon|app[-_]?icon|icon)([-_.]|$)/,
+    pattern:
+      /(^|[-_.])(apple-touch-icon|android-chrome|maskable[-_]?icon|app[-_]?icon|icon)([-_.]|$)/,
     exact: /^(apple-touch-icon|icon|app-icon)$/,
   },
   {
     role: "open_graph_image",
-    pattern: /(^|[-_.])(og[-_]?image|opengraph[-_]?image|twitter[-_]?image|social[-_]?(card|preview|image))([-_.]|$)/,
+    pattern:
+      /(^|[-_.])(og[-_]?image|opengraph[-_]?image|twitter[-_]?image|social[-_]?(card|preview|image))([-_.]|$)/,
     exact: /^(og-image|opengraph-image|twitter-image)$/,
   },
   {
@@ -78,7 +80,8 @@ const ASSET_RULES: AssetRule[] = [
 ];
 
 /** Suffixes that mark a logo as a variant of the main one, not the main one. */
-const LOGO_VARIANT = /(^|[-_.])(mono|monochrome|white|black|light|dark|inverse|inverted|alt|small|square|on-light|on-dark)([-_.]|$)/;
+const LOGO_VARIANT =
+  /(^|[-_.])(mono|monochrome|white|black|light|dark|inverse|inverted|alt|small|square|on-light|on-dark)([-_.]|$)/;
 
 function withoutExtension(basename: string): string {
   const dotIndex = basename.lastIndexOf(".");
@@ -154,14 +157,22 @@ export function detectBrandAssets(context: DetectionContext): BrandAssetSignal[]
   }
 
   const rank: Record<Confidence, number> = { high: 0, medium: 1, low: 2 };
-  const roleOrder: BrandAssetRole[] = ["logo", "logo_alternate", "favicon", "app_icon", "open_graph_image"];
+  const roleOrder: BrandAssetRole[] = [
+    "logo",
+    "logo_alternate",
+    "favicon",
+    "app_icon",
+    "open_graph_image",
+  ];
 
   signals.sort((a, b) => {
     const roleDelta = roleOrder.indexOf(a.role) - roleOrder.indexOf(b.role);
     if (roleDelta !== 0) return roleDelta;
     const confidenceDelta = rank[a.confidence] - rank[b.confidence];
     if (confidenceDelta !== 0) return confidenceDelta;
-    return pathSegments(a.path).length - pathSegments(b.path).length || a.path.localeCompare(b.path);
+    return (
+      pathSegments(a.path).length - pathSegments(b.path).length || a.path.localeCompare(b.path)
+    );
   });
 
   // Capped: a design-heavy repository can hold hundreds of icon sizes, and a
@@ -283,7 +294,8 @@ const ROLE_RULES: { role: BrandColorRole; strong: RegExp; weak: RegExp }[] = [
 ];
 
 /** Token-name fragments that mark a colour as a state, not a brand. */
-const STATE_TOKEN = /(^|-)(success|warning|error|danger|destructive|info|muted|disabled|placeholder|border|ring|shadow|overlay|hover|focus|active|visited|tint|line|track|faint|meta)(-|$)/;
+const STATE_TOKEN =
+  /(^|-)(success|warning|error|danger|destructive|info|muted|disabled|placeholder|border|ring|shadow|overlay|hover|focus|active|visited|tint|line|track|faint|meta)(-|$)/;
 
 /**
  * Prefixes that make a token part of a *ramp* rather than a brand colour.
@@ -298,13 +310,12 @@ const STATE_TOKEN = /(^|-)(success|warning|error|danger|destructive|info|muted|d
  * Both are the same mistake: a compound name whose head says what family it
  * belongs to, read as though the tail were the whole name.
  */
-const RAMP_PREFIX = /^(fg|foreground|bg|background|text|surface|panel|card|well|field|border|line|ink|on)-/;
+const RAMP_PREFIX =
+  /^(fg|foreground|bg|background|text|surface|panel|card|well|field|border|line|ink|on)-/;
 
 /** Colour prefix of a token name — `--color-mint-tint` → `mint`. */
 export function colorFamily(tokenName: string): string {
-  const stripped = tokenName
-    .replace(/^--/, "")
-    .replace(/^(color|colour|theme|brand|palette)-/, "");
+  const stripped = tokenName.replace(/^--/, "").replace(/^(color|colour|theme|brand|palette)-/, "");
   const [head] = stripped.split("-");
   return head ?? stripped;
 }
@@ -462,11 +473,41 @@ export function assignColorRoles(tokens: SourcedToken[]): BrandColorSignal[] {
 
 /** Generic families a stack falls back to. Never a brand typeface. */
 const GENERIC_FAMILIES = new Set([
-  "serif", "sans-serif", "monospace", "cursive", "fantasy", "system-ui", "ui-sans-serif",
-  "ui-serif", "ui-monospace", "ui-rounded", "inherit", "initial", "unset", "revert", "-apple-system",
-  "blinkmacsystemfont", "segoe ui", "roboto", "helvetica", "helvetica neue", "arial", "sfmono-regular",
-  "menlo", "monaco", "consolas", "courier", "courier new", "apple color emoji", "segoe ui emoji",
-  "segoe ui symbol", "noto color emoji", "emoji", "math", "sans", "mono",
+  "serif",
+  "sans-serif",
+  "monospace",
+  "cursive",
+  "fantasy",
+  "system-ui",
+  "ui-sans-serif",
+  "ui-serif",
+  "ui-monospace",
+  "ui-rounded",
+  "inherit",
+  "initial",
+  "unset",
+  "revert",
+  "-apple-system",
+  "blinkmacsystemfont",
+  "segoe ui",
+  "roboto",
+  "helvetica",
+  "helvetica neue",
+  "arial",
+  "sfmono-regular",
+  "menlo",
+  "monaco",
+  "consolas",
+  "courier",
+  "courier new",
+  "apple color emoji",
+  "segoe ui emoji",
+  "segoe ui symbol",
+  "noto color emoji",
+  "emoji",
+  "math",
+  "sans",
+  "mono",
 ]);
 
 /**
@@ -481,7 +522,9 @@ export function humanizeFontToken(tokenName: string): string | null {
   if (stripped === "" || GENERIC_FAMILIES.has(stripped)) return null;
   // The role words are not families: `--font-sans: var(--font-inter)` names
   // the role on the left and the family on the right.
-  if (["sans", "serif", "mono", "monospace", "display", "body", "heading", "text"].includes(stripped)) {
+  if (
+    ["sans", "serif", "mono", "monospace", "display", "body", "heading", "text"].includes(stripped)
+  ) {
     return null;
   }
   return stripped
@@ -494,7 +537,10 @@ export function humanizeFontToken(tokenName: string): string | null {
 /** First non-generic family in a CSS font stack, unquoted. */
 export function firstConcreteFamily(stack: string): string | null {
   for (const raw of stack.split(",").slice(0, 12)) {
-    const family = raw.trim().replace(/^["']|["']$/g, "").trim();
+    const family = raw
+      .trim()
+      .replace(/^["']|["']$/g, "")
+      .trim();
     if (family === "" || family.startsWith("var(")) continue;
     if (GENERIC_FAMILIES.has(family.toLowerCase())) continue;
     if (family.length > 60) continue;
@@ -509,7 +555,10 @@ const TYPE_ROLE_RULES: { role: BrandTypefaceSignal["role"]; pattern: RegExp }[] 
   { role: "body", pattern: /(^|-)(body|sans|serif|text|base|default)(-|$)/ },
 ];
 
-export function detectTypefaces(tokens: SourcedToken[], stylesheets: { path: string; content: string }[]): BrandTypefaceSignal[] {
+export function detectTypefaces(
+  tokens: SourcedToken[],
+  stylesheets: { path: string; content: string }[],
+): BrandTypefaceSignal[] {
   const signals: BrandTypefaceSignal[] = [];
   const takenRoles = new Set<BrandTypefaceSignal["role"]>();
 

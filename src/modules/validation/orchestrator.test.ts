@@ -118,9 +118,9 @@ describe("network policy transitions (§10, §32)", () => {
     const provider = setup();
     await runValidationPhases(provider, noManifest, fakeValidationTarget());
 
-    const modes = provider.policies().map((policy) =>
-      policy.mode === "allow_domains" ? policy.domains.join(",") : policy.mode,
-    );
+    const modes = provider
+      .policies()
+      .map((policy) => (policy.mode === "allow_domains" ? policy.domains.join(",") : policy.mode));
 
     expect(modes[0]).toContain("github.com");
     expect(modes[1]).toContain("registry.npmjs.org");
@@ -174,7 +174,9 @@ describe("network policy transitions (§10, §32)", () => {
 
     const timeline = provider.events
       .filter((event) => event.kind === "policy" || event.kind === "command")
-      .map((event) => (event.kind === "policy" ? `policy:${event.policy.mode}` : `cmd:${event.command}`));
+      .map((event) =>
+        event.kind === "policy" ? `policy:${event.policy.mode}` : `cmd:${event.command}`,
+      );
 
     const denyAll = timeline.indexOf("policy:deny_all");
     const firstRepositoryCode = timeline.findIndex((entry) => entry.startsWith("cmd:pnpm run"));
@@ -200,7 +202,9 @@ describe("credential handling (§7, §37)", () => {
     await runValidationPhases(provider, noManifest, fakeValidationTarget());
 
     const created = provider.createdWith();
-    expect(created?.source.kind === "git" ? created.source.credential?.password : undefined).toBe("ghs_cloneTokenValue123456");
+    expect(created?.source.kind === "git" ? created.source.credential?.password : undefined).toBe(
+      "ghs_cloneTokenValue123456",
+    );
     // The environment is where repository code could read it. It must not be there.
     expect(JSON.stringify(created?.env)).not.toContain("ghs_cloneTokenValue123456");
   });
@@ -318,14 +322,19 @@ describe("source integrity (§6, §29)", () => {
 
   it("accepts a prepared file whose hash matches", async () => {
     const content = "export default function robots() {}\n";
-    const provider = setup({ files: healthySandboxFiles({ "product/src/app/robots.ts": content }) });
+    const provider = setup({
+      files: healthySandboxFiles({ "product/src/app/robots.ts": content }),
+    });
 
     const outcome = await runValidationPhases(
       provider,
       noManifest,
       fakeValidationTarget({
         preparedFiles: [
-          { path: "src/app/robots.ts", contentHash: createHash("sha256").update(content).digest("hex") },
+          {
+            path: "src/app/robots.ts",
+            contentHash: createHash("sha256").update(content).digest("hex"),
+          },
         ],
       }),
     );
@@ -339,7 +348,9 @@ describe("source integrity (§6, §29)", () => {
     const outcome = await runValidationPhases(
       provider,
       noManifest,
-      fakeValidationTarget({ preparedFiles: [{ path: "src/app/gone.ts", contentHash: "0".repeat(64) }] }),
+      fakeValidationTarget({
+        preparedFiles: [{ path: "src/app/gone.ts", contentHash: "0".repeat(64) }],
+      }),
     );
 
     expect(outcome.failureCode).toBe("source_integrity_failed");
@@ -357,7 +368,10 @@ describe("step semantics (§19, §33)", () => {
     const outcome = await runValidationPhases(provider, noManifest, fakeValidationTarget());
 
     expect(outcome.status).toBe("passed");
-    expect(outcome.steps.test).toMatchObject({ status: "skipped", skipReason: "script_not_present" });
+    expect(outcome.steps.test).toMatchObject({
+      status: "skipped",
+      skipReason: "script_not_present",
+    });
     expect(provider.commands()).not.toContain("pnpm run test");
   });
 
@@ -365,7 +379,9 @@ describe("step semantics (§19, §33)", () => {
     // A repository that simply never had tests must not be reported as failing
     // them, which is what `npm test` on a scriptless project would produce.
     const provider = setup({
-      files: healthySandboxFiles({ "product/package.json": JSON.stringify({ scripts: { build: "next build" } }) }),
+      files: healthySandboxFiles({
+        "product/package.json": JSON.stringify({ scripts: { build: "next build" } }),
+      }),
     });
     await runValidationPhases(provider, noManifest, fakeValidationTarget());
 
@@ -384,7 +400,9 @@ describe("step semantics (§19, §33)", () => {
   });
 
   it("fails when the build fails", async () => {
-    const provider = setup({ results: { "pnpm run build": { exitCode: 1, output: "Build error" } } });
+    const provider = setup({
+      results: { "pnpm run build": { exitCode: 1, output: "Build error" } },
+    });
 
     const outcome = await runValidationPhases(provider, noManifest, fakeValidationTarget());
 
@@ -393,7 +411,9 @@ describe("step semantics (§19, §33)", () => {
   });
 
   it("fails when the install fails", async () => {
-    const provider = setup({ results: { "pnpm install --frozen-lockfile --ignore-scripts": { exitCode: 1 } } });
+    const provider = setup({
+      results: { "pnpm install --frozen-lockfile --ignore-scripts": { exitCode: 1 } },
+    });
 
     const outcome = await runValidationPhases(provider, noManifest, fakeValidationTarget());
 
@@ -405,7 +425,9 @@ describe("step semantics (§19, §33)", () => {
     // "It builds" is the claim. A repository that cannot make it is not
     // validated — it is unsupported.
     const provider = setup({
-      files: healthySandboxFiles({ "product/package.json": JSON.stringify({ scripts: { test: "vitest" } }) }),
+      files: healthySandboxFiles({
+        "product/package.json": JSON.stringify({ scripts: { test: "vitest" } }),
+      }),
     });
 
     const outcome = await runValidationPhases(provider, noManifest, fakeValidationTarget());
@@ -416,7 +438,10 @@ describe("step semantics (§19, §33)", () => {
   it("classifies a deterministically identifiable missing-environment build failure", async () => {
     const provider = setup({
       results: {
-        "pnpm run build": { exitCode: 1, output: "Error: Missing required environment variable: DATABASE_URL" },
+        "pnpm run build": {
+          exitCode: 1,
+          output: "Error: Missing required environment variable: DATABASE_URL",
+        },
       },
     });
 
@@ -427,10 +452,17 @@ describe("step semantics (§19, §33)", () => {
 
   it("uses npm's locked install when the project uses npm", async () => {
     const provider = setup({
-      files: healthySandboxFiles({ "product/pnpm-lock.yaml": null, "product/package-lock.json": "{}" }),
+      files: healthySandboxFiles({
+        "product/pnpm-lock.yaml": null,
+        "product/package-lock.json": "{}",
+      }),
     });
 
-    await runValidationPhases(provider, noManifest, fakeValidationTarget({ packageManager: "npm" }));
+    await runValidationPhases(
+      provider,
+      noManifest,
+      fakeValidationTarget({ packageManager: "npm" }),
+    );
 
     expect(provider.commands()).toContain("npm ci --ignore-scripts");
     expect(provider.commands()).toContain("npm run build");
@@ -461,7 +493,10 @@ describe("timeouts (§14)", () => {
 describe("cleanup on every path (§23, §36)", () => {
   it.each([
     ["success", {}],
-    ["install failure", { results: { "pnpm install --frozen-lockfile --ignore-scripts": { exitCode: 1 } } }],
+    [
+      "install failure",
+      { results: { "pnpm install --frozen-lockfile --ignore-scripts": { exitCode: 1 } } },
+    ],
     ["test failure", { results: { "pnpm run test": { exitCode: 1 } } }],
     ["build failure", { results: { "pnpm run build": { exitCode: 1 } } }],
     ["timeout", { results: { "pnpm run build": { timedOut: true, exitCode: -1 } } }],
@@ -576,7 +611,9 @@ describe("failures explain themselves (post-dogfood)", () => {
     const outcome = await runValidationPhases(
       provider,
       noManifest,
-      fakeValidationTarget({ preparedFiles: [{ path: "src/app/gone.ts", contentHash: "0".repeat(64) }] }),
+      fakeValidationTarget({
+        preparedFiles: [{ path: "src/app/gone.ts", contentHash: "0".repeat(64) }],
+      }),
     );
 
     expect(outcome.failureDetail).toContain("/vercel/sandbox");
@@ -628,8 +665,16 @@ describe("a retry is not doomed by its own name (post-dogfood)", () => {
     const first = setup();
     const second = setup();
 
-    await runValidationPhases(first, noManifest, fakeValidationTarget({ validationRunId: "aaaaaaaa-1111-2222-3333-444444444444" }));
-    await runValidationPhases(second, noManifest, fakeValidationTarget({ validationRunId: "bbbbbbbb-1111-2222-3333-444444444444" }));
+    await runValidationPhases(
+      first,
+      noManifest,
+      fakeValidationTarget({ validationRunId: "aaaaaaaa-1111-2222-3333-444444444444" }),
+    );
+    await runValidationPhases(
+      second,
+      noManifest,
+      fakeValidationTarget({ validationRunId: "bbbbbbbb-1111-2222-3333-444444444444" }),
+    );
 
     expect(first.createdWith()?.name).not.toBe(second.createdWith()?.name);
   });
@@ -679,7 +724,6 @@ describe("diagnosing a missing checkout (post-dogfood)", () => {
     expect(inRepository("apps/web", "package.json")).toBe("apps/web/package.json");
     expect(inRepository(".")).toBe(".");
   });
-
 });
 
 describe("what source verification actually claims (post-dogfood, Option A)", () => {
@@ -712,7 +756,9 @@ describe("what source verification actually claims (post-dogfood, Option A)", ()
   it("still passes when the provider leaves no checkout to observe", async () => {
     // A provider that materializes a bare filesystem is not a failure: pinning
     // plus hashing carries the guarantee. Recorded as false, not fatal.
-    const provider = setup({ results: { "git rev-parse HEAD": { exitCode: 128, output: "not a git repository" } } });
+    const provider = setup({
+      results: { "git rev-parse HEAD": { exitCode: 128, output: "not a git repository" } },
+    });
 
     const outcome = await runValidationPhases(provider, noManifest, fakeValidationTarget());
 
@@ -773,7 +819,9 @@ describe("what source verification actually claims (post-dogfood, Option A)", ()
 
     // This repository has no package-lock.json and no next.config.js. Neither
     // side has them, so neither is a gap worth recording.
-    expect(outcome.sourceIntegrity?.buildIdentityFilesUnverified).not.toContain("package-lock.json");
+    expect(outcome.sourceIntegrity?.buildIdentityFilesUnverified).not.toContain(
+      "package-lock.json",
+    );
     expect(outcome.sourceIntegrity?.buildIdentityFilesUnverified).not.toContain("next.config.js");
   });
 
@@ -783,7 +831,9 @@ describe("what source verification actually claims (post-dogfood, Option A)", ()
     const outcome = await runValidationPhases(
       provider,
       noManifest,
-      fakeValidationTarget({ preparedFiles: [{ path: "src/app/robots.ts", contentHash: "0".repeat(64) }] }),
+      fakeValidationTarget({
+        preparedFiles: [{ path: "src/app/robots.ts", contentHash: "0".repeat(64) }],
+      }),
     );
 
     expect(outcome.failureCode).toBe("source_integrity_failed");
@@ -871,7 +921,11 @@ describe("gitCommitObserved reflects an observation, never an assumption", () =>
 
   it("never reports an observation when the command never ran", async () => {
     // Provisioning failed, so nothing was observed and nothing is claimed.
-    const outcome = await runValidationPhases(setup({ failCreate: true }), noManifest, fakeValidationTarget());
+    const outcome = await runValidationPhases(
+      setup({ failCreate: true }),
+      noManifest,
+      fakeValidationTarget(),
+    );
 
     expect(outcome.sourceIntegrity).toBeNull();
   });

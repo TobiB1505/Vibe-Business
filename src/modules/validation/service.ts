@@ -71,7 +71,10 @@ export type StartValidationOutcome =
   | { kind: "started"; operation: OperationView }
   | { kind: "running"; operation: OperationView }
   | { kind: "reused"; validationRunId: string; status: "passed" }
-  | { kind: "failed"; error: ValidationFailureCode | "project_not_found" | "execution_start_failed" };
+  | {
+      kind: "failed";
+      error: ValidationFailureCode | "project_not_found" | "execution_start_failed";
+    };
 
 function view(operation: StoredOperationRun): OperationView {
   return buildOperationView({
@@ -142,6 +145,7 @@ async function resolveContext(
       sandboxPolicyVersion: SANDBOX_POLICY_VERSION,
       validationDepth: depth.depth,
       validationDepthPolicyVersion: depth.policyVersion,
+      workspaceRoot: profile.workspaceRoot,
     }),
   };
 }

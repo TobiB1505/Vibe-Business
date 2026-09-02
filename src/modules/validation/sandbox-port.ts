@@ -396,4 +396,8 @@ export const DEPENDENCY_HOSTS: readonly string[] = [
 ];
 
 /** Hosts reachable while the source is cloned. GitHub only. */
-export const SOURCE_HOSTS: readonly string[] = ["github.com", "*.github.com", "codeload.github.com"];
+export const SOURCE_HOSTS: readonly string[] = [
+  "github.com",
+  "*.github.com",
+  "codeload.github.com",
+];

@@ -97,7 +97,9 @@ describe("acquiring the source", () => {
 
   it("refuses to continue when the credential store survived removal", async () => {
     const provider = fakeSandboxProvider({
-      files: clonedSandboxFiles({ "product/.git/config": "[remote]\n  url = https://x@github.com" }),
+      files: clonedSandboxFiles({
+        "product/.git/config": "[remote]\n  url = https://x@github.com",
+      }),
       // `rm -f` reports success whether or not it removed anything, which is
       // exactly why the orchestrator verifies rather than assumes.
       unremovablePaths: ["product/.git/config"],
@@ -133,7 +135,10 @@ describe("the network, at each phase", () => {
       files: clonedSandboxFiles(),
       results: {
         "git rev-parse HEAD": { exitCode: 0, output: FIXTURE_COMMIT_SHA },
-        [describeCommand(installCommand("pnpm"))]: { exitCode: 1, output: "ERR_PNPM_OUTDATED_LOCKFILE" },
+        [describeCommand(installCommand("pnpm"))]: {
+          exitCode: 1,
+          output: "ERR_PNPM_OUTDATED_LOCKFILE",
+        },
       },
     });
 

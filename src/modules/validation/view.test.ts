@@ -220,7 +220,14 @@ describe("a run that failed (§16)", () => {
       stage: "building",
       failureCode: "validation_checks_failed",
       sourceIntegrity: INTEGRITY,
-      steps: { build: step({ status: "failed", exitCode: 1, outputTail: "Type error", outputTruncated: true }) },
+      steps: {
+        build: step({
+          status: "failed",
+          exitCode: 1,
+          outputTail: "Type error",
+          outputTruncated: true,
+        }),
+      },
     });
 
     const build = phases.find((phase) => phase.phase === "build");

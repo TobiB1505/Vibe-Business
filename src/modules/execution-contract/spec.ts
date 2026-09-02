@@ -5,7 +5,10 @@ import { computeBusinessContextHash, computeExecutionSpecIdentity } from "./iden
 import { resolveChainPricingClass } from "./pricing-class";
 import { classifyExecutionRisk } from "./risk";
 import { BUILD_CHAIN_POLICY_VERSION } from "./chain";
-import type { ExecutionPricingClass, ExecutionPricingClassReason } from "@/modules/economy/execution-class";
+import type {
+  ExecutionPricingClass,
+  ExecutionPricingClassReason,
+} from "@/modules/economy/execution-class";
 import { compileExecutionPolicy, type ExecutionPolicy, type ExecutionWriteScope } from "./policy";
 import { assertNoSecretMaterial } from "./secrets";
 import {
@@ -231,6 +234,19 @@ export type ExecutionRepositoryBinding = {
   /** Deterministic framework/package-manager facts already established. */
   frameworks: readonly string[];
   packageManager: string;
+  /**
+   * The directory the application lives in. `"."` for a single-app repository.
+   *
+   * Optional because a spec is a document: rows written before a repository
+   * could hold its application anywhere do not carry it, and reading absent as
+   * the root is what those runs did. New specs always set it.
+   *
+   * Read from here rather than re-resolved at execution time, for the same
+   * reason every other premise on this document is: a founder naming a
+   * different application must not move a running run's working directory
+   * (rule 67).
+   */
+  workspaceRoot?: string;
 };
 
 /**
@@ -456,7 +472,10 @@ export function buildExecutionSpec(input: BuildExecutionSpecInput): ExecutionSpe
   const preparationSteps = [...(input.preparationSteps ?? [])].sort((a, b) => a.order - b.order);
   const absorbed = [...resolution.absorbedPreparation].sort((a, b) => a - b);
   const supplied = preparationSteps.map((preparation) => preparation.order);
-  if (absorbed.length !== supplied.length || absorbed.some((order, index) => order !== supplied[index])) {
+  if (
+    absorbed.length !== supplied.length ||
+    absorbed.some((order, index) => order !== supplied[index])
+  ) {
     throw new ExecutionSpecPreparationMismatch(absorbed, supplied);
   }
 
@@ -469,7 +488,10 @@ export function buildExecutionSpec(input: BuildExecutionSpecInput): ExecutionSpe
    */
   const chainSteps = [...(input.chainSteps ?? [step])];
   if (chainSteps[0]?.id !== step.id) {
-    throw new ExecutionSpecChainMismatch(step.id, chainSteps.map((member) => member.id));
+    throw new ExecutionSpecChainMismatch(
+      step.id,
+      chainSteps.map((member) => member.id),
+    );
   }
 
   const objective: ExecutionObjective = {
@@ -509,9 +531,18 @@ export function buildExecutionSpec(input: BuildExecutionSpecInput): ExecutionSpe
   // Preparation is Planner prose like the rest of the objective, and reaches the
   // agent's user message the same way. It gets the same guard.
   for (const preparation of objective.preparation) {
-    assertNoSecretMaterial(`objective.preparation[${preparation.stepKey}].title`, preparation.title);
-    assertNoSecretMaterial(`objective.preparation[${preparation.stepKey}].purpose`, preparation.purpose);
-    assertNoSecretMaterial(`objective.preparation[${preparation.stepKey}].doneWhen`, preparation.doneWhen);
+    assertNoSecretMaterial(
+      `objective.preparation[${preparation.stepKey}].title`,
+      preparation.title,
+    );
+    assertNoSecretMaterial(
+      `objective.preparation[${preparation.stepKey}].purpose`,
+      preparation.purpose,
+    );
+    assertNoSecretMaterial(
+      `objective.preparation[${preparation.stepKey}].doneWhen`,
+      preparation.doneWhen,
+    );
   }
   // A chained delivery is Planner prose reaching the agent's user message, like
   // preparation and like the objective. Same guard, no exception.

@@ -43,16 +43,21 @@ const MIGRATIONS = join(process.cwd(), "supabase", "migrations");
  * one in force, exactly as it is on the remote database.
  */
 function currentStageConstraint(): string {
-  const files = readdirSync(MIGRATIONS).filter((file) => file.endsWith(".sql")).sort();
+  const files = readdirSync(MIGRATIONS)
+    .filter((file) => file.endsWith(".sql"))
+    .sort();
 
   let constraint: string | null = null;
   for (const file of files) {
     const sql = readFileSync(join(MIGRATIONS, file), "utf8");
-    const matches = [...sql.matchAll(/operation_runs_stage_check\s*\n?\s*check \(stage in \(([\s\S]*?)\)\)/g)];
+    const matches = [
+      ...sql.matchAll(/operation_runs_stage_check\s*\n?\s*check \(stage in \(([\s\S]*?)\)\)/g),
+    ];
     if (matches.length > 0) constraint = matches[matches.length - 1][1];
   }
 
-  if (constraint === null) throw new Error("no operation_runs stage constraint found in migrations");
+  if (constraint === null)
+    throw new Error("no operation_runs stage constraint found in migrations");
   return constraint;
 }
 
@@ -76,7 +81,18 @@ describe("stage vocabulary against the database (§26)", () => {
     // Named explicitly rather than left to the loop above: these are the ones
     // whose *writers* changed in this refactor, and a future edit that drops
     // one from the union should not quietly drop it from this test too.
-    for (const stage of ["provisioning", "verifying_source", "securing_sandbox", "installing", "typechecking", "testing", "building", "collecting_results", "cleaning_up", "completed"]) {
+    for (const stage of [
+      "provisioning",
+      "verifying_source",
+      "securing_sandbox",
+      "installing",
+      "typechecking",
+      "testing",
+      "building",
+      "collecting_results",
+      "cleaning_up",
+      "completed",
+    ]) {
       expect(permitted.has(stage)).toBe(true);
     }
   });
@@ -117,7 +133,9 @@ describe("columns the refactor writes without a migration (§26)", () => {
     // CHECK listing permitted versions would turn every bump into a migration —
     // and, on the evidence of Sprint 9, into a production incident. The live
     // constraint is a non-empty check, and this asserts it stays that way.
-    expect(sql).toContain("sandbox_policy_version text not null check (char_length(btrim(sandbox_policy_version)) > 0)");
+    expect(sql).toContain(
+      "sandbox_policy_version text not null check (char_length(btrim(sandbox_policy_version)) > 0)",
+    );
     expect(constrainedToASet(sql, "sandbox_policy_version")).toBe(false);
   });
 
@@ -134,7 +152,9 @@ describe("columns the refactor writes without a migration (§26)", () => {
 
 describe("validation retry index after artifact capture failure", () => {
   function currentActiveStatuses(): string[] {
-    const files = readdirSync(MIGRATIONS).filter((file) => file.endsWith(".sql")).sort();
+    const files = readdirSync(MIGRATIONS)
+      .filter((file) => file.endsWith(".sql"))
+      .sort();
     let statuses: string[] | null = null;
 
     for (const file of files) {
@@ -148,7 +168,8 @@ describe("validation retry index after artifact capture failure", () => {
       if (latest) statuses = [...latest[1].matchAll(/'([^']+)'/g)].map((match) => match[1]);
     }
 
-    if (statuses === null) throw new Error("no validation_runs_single_active_idx found in migrations");
+    if (statuses === null)
+      throw new Error("no validation_runs_single_active_idx found in migrations");
     return statuses;
   }
 
@@ -236,11 +257,12 @@ describe("the sandbox policy version tracks what it claims to (§9)", () => {
       validationProfileVersion: "nextjs-node-v1",
       validationDepth: "standard" as const,
       validationDepthPolicyVersion: VALIDATION_DEPTH_POLICY_VERSION,
+      workspaceRoot: ".",
     };
 
-    expect(computeValidationIdentity({ ...base, sandboxPolicyVersion: "sandbox-policy-v2" })).not.toBe(
-      computeValidationIdentity({ ...base, sandboxPolicyVersion: "sandbox-policy-v3" }),
-    );
+    expect(
+      computeValidationIdentity({ ...base, sandboxPolicyVersion: "sandbox-policy-v2" }),
+    ).not.toBe(computeValidationIdentity({ ...base, sandboxPolicyVersion: "sandbox-policy-v3" }));
   });
 
   it("changes the validation identity when the depth changes", () => {
@@ -254,6 +276,7 @@ describe("the sandbox policy version tracks what it claims to (§9)", () => {
       validationProfileVersion: "nextjs-node-v1",
       sandboxPolicyVersion: SANDBOX_POLICY_VERSION,
       validationDepthPolicyVersion: VALIDATION_DEPTH_POLICY_VERSION,
+      workspaceRoot: ".",
     };
 
     const fast = computeValidationIdentity({ ...base, validationDepth: "fast" });
@@ -271,6 +294,7 @@ describe("the sandbox policy version tracks what it claims to (§9)", () => {
       validationProfileVersion: "nextjs-node-v1",
       sandboxPolicyVersion: SANDBOX_POLICY_VERSION,
       validationDepth: "fast" as const,
+      workspaceRoot: ".",
     };
 
     expect(

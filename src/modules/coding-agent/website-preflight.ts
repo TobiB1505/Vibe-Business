@@ -869,6 +869,9 @@ export async function resolveExecutableStep(
       repositorySnapshotId: snapshot.id,
       frameworks: snapshot.result.frameworks.map((framework) => framework.id),
       packageManager: snapshot.result.packageManager ?? "unknown",
+      // The directory the resolved application lives in, pinned onto the spec
+      // so the run's working directory cannot move underneath it (rule 67).
+      workspaceRoot: validation.supported ? validation.workspaceRoot : ".",
     },
     approvedDecisions: founderResolutions
       .map((founderResolution) => {

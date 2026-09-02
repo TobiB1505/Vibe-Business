@@ -78,6 +78,8 @@ export type ExecutionValidationRequirement =
       sandboxPolicyVersion: typeof SANDBOX_POLICY_VERSION;
       /** The profile's own steps. Reused, not redefined (§30). */
       sandboxSteps: readonly ValidationStepName[];
+      /** Where those steps would run. `"."` for a single-application repository. */
+      workspaceRoot: string;
     }
   | {
       supported: false;
@@ -87,7 +89,7 @@ export type ExecutionValidationRequirement =
     };
 
 /**
- * The steps the one existing profile runs.
+ * The steps both existing profiles run.
  *
  * Listed rather than imported from `VALIDATION_STEPS` so that the spec records
  * what was *required*, not what the constant happens to contain later. A stored
@@ -102,6 +104,10 @@ const NEXTJS_NODE_V1_STEPS: readonly ValidationStepName[] = [
 
 const PROFILE_STEPS: Record<ValidationProfile, readonly ValidationStepName[]> = {
   nextjs_node_v1: NEXTJS_NODE_V1_STEPS,
+  // The same four. The contract profile changed which repositories are
+  // admitted, not what is run once one is — `planValidationSteps` never took a
+  // profile, and these are the steps it plans.
+  node_build_v1: NEXTJS_NODE_V1_STEPS,
 };
 
 /**
@@ -134,5 +140,6 @@ export function resolveExecutionValidation(
     profileVersion: validationProfileVersionFor(resolution.profile),
     sandboxPolicyVersion: SANDBOX_POLICY_VERSION,
     sandboxSteps: PROFILE_STEPS[resolution.profile],
+    workspaceRoot: resolution.workspaceRoot,
   };
 }

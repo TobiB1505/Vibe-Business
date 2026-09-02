@@ -3,7 +3,11 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { FakeDatabase, FakeExecutor, fakeSupabase } from "@/modules/operations/test-support";
 import { VALIDATION_DEPTH_POLICY_VERSION, type ValidationDepth } from "./depth";
 import { computeValidationIdentity } from "./identity";
-import { SANDBOX_POLICY_VERSION, validationProfileVersionFor } from "./schema";
+import {
+  CURRENT_VALIDATION_PROFILE,
+  SANDBOX_POLICY_VERSION,
+  validationProfileVersionFor,
+} from "./schema";
 import { startChangeValidation } from "./service";
 import { FIXTURE_COMMIT_SHA, fakeValidatableSnapshot } from "./test-support";
 
@@ -35,17 +39,25 @@ function identityFor(
   return computeValidationIdentity({
     preparedChangeId: PREPARED,
     preparedCommitSha: overrides.commitSha ?? FIXTURE_COMMIT_SHA,
-    validationProfile: "nextjs_node_v1",
-    validationProfileVersion: overrides.profileVersion ?? validationProfileVersionFor("nextjs_node_v1"),
+    validationProfile: CURRENT_VALIDATION_PROFILE,
+    validationProfileVersion:
+      overrides.profileVersion ?? validationProfileVersionFor(CURRENT_VALIDATION_PROFILE),
     sandboxPolicyVersion: overrides.policyVersion ?? SANDBOX_POLICY_VERSION,
     // The fixture prepared change has no agent run behind it, so every trusted
     // lookup returns nothing and the resolver lands on its safe default.
     validationDepth: overrides.depth ?? "standard",
     validationDepthPolicyVersion: VALIDATION_DEPTH_POLICY_VERSION,
+    workspaceRoot: ".",
   });
 }
 
-function seed(options: { preparedStatus?: string; commitSha?: string | null; packageManager?: PackageManagerId } = {}) {
+function seed(
+  options: {
+    preparedStatus?: string;
+    commitSha?: string | null;
+    packageManager?: PackageManagerId;
+  } = {},
+) {
   db.seed("projects", { id: PROJECT, user_id: USER });
   db.seed("projects", { id: OTHER_PROJECT, user_id: OTHER_USER });
 
@@ -161,7 +173,10 @@ describe("authority (§34)", () => {
 
     const outcome = await start();
 
-    expect(outcome).toEqual({ kind: "failed", error: "validation_not_supported" });
+    // Named, not generic: a bun lockfile is a locked install Vibe has not
+    // designed yet, which is a different thing from "this project is not
+    // supported" and a different thing for the founder to do about it.
+    expect(outcome).toEqual({ kind: "failed", error: "lockfile_missing" });
     // The important half: no operation, so no workflow, so no sandbox.
     expect(executor.starts).toHaveLength(0);
     expect(db.rows("operation_runs")).toHaveLength(0);
@@ -219,8 +234,8 @@ describe("idempotency (§21, §35)", () => {
       status: "passed",
       stage: "completed",
       steps: {},
-      validation_profile: "nextjs_node_v1",
-      validation_profile_version: validationProfileVersionFor("nextjs_node_v1"),
+      validation_profile: CURRENT_VALIDATION_PROFILE,
+      validation_profile_version: validationProfileVersionFor(CURRENT_VALIDATION_PROFILE),
       sandbox_policy_version: SANDBOX_POLICY_VERSION,
       sandbox_provider: "vercel_sandbox",
       package_manager: "pnpm",
@@ -248,8 +263,8 @@ describe("idempotency (§21, §35)", () => {
       status: "passed",
       stage: "completed",
       steps: {},
-      validation_profile: "nextjs_node_v1",
-      validation_profile_version: validationProfileVersionFor("nextjs_node_v1"),
+      validation_profile: CURRENT_VALIDATION_PROFILE,
+      validation_profile_version: validationProfileVersionFor(CURRENT_VALIDATION_PROFILE),
       sandbox_policy_version: SANDBOX_POLICY_VERSION,
       sandbox_provider: "vercel_sandbox",
       package_manager: "pnpm",
@@ -293,8 +308,8 @@ describe("idempotency (§21, §35)", () => {
       status: "passed",
       stage: "completed",
       steps: {},
-      validation_profile: "nextjs_node_v1",
-      validation_profile_version: validationProfileVersionFor("nextjs_node_v1"),
+      validation_profile: CURRENT_VALIDATION_PROFILE,
+      validation_profile_version: validationProfileVersionFor(CURRENT_VALIDATION_PROFILE),
       sandbox_policy_version: SANDBOX_POLICY_VERSION,
       sandbox_provider: "vercel_sandbox",
       package_manager: "pnpm",
@@ -311,7 +326,6 @@ describe("idempotency (§21, §35)", () => {
     expect(executor.starts).toHaveLength(0);
   });
 
-
   it("does not reuse a previous failure", async () => {
     // A failed build is not a durable fact about the artifact — the registry
     // may have blipped. Refusing to re-run would strand the user.
@@ -326,8 +340,8 @@ describe("idempotency (§21, §35)", () => {
       status: "failed",
       stage: "building",
       steps: {},
-      validation_profile: "nextjs_node_v1",
-      validation_profile_version: validationProfileVersionFor("nextjs_node_v1"),
+      validation_profile: CURRENT_VALIDATION_PROFILE,
+      validation_profile_version: validationProfileVersionFor(CURRENT_VALIDATION_PROFILE),
       sandbox_policy_version: SANDBOX_POLICY_VERSION,
       sandbox_provider: "vercel_sandbox",
       package_manager: "pnpm",
@@ -398,8 +412,8 @@ describe("validation identity (§21, §22, §35)", () => {
       status: "passed",
       stage: "completed",
       steps: {},
-      validation_profile: "nextjs_node_v1",
-      validation_profile_version: validationProfileVersionFor("nextjs_node_v1"),
+      validation_profile: CURRENT_VALIDATION_PROFILE,
+      validation_profile_version: validationProfileVersionFor(CURRENT_VALIDATION_PROFILE),
       sandbox_policy_version: "sandbox-policy-v0",
       sandbox_provider: "vercel_sandbox",
       package_manager: "pnpm",
@@ -438,11 +452,12 @@ describe("integrity policy versioning (post-dogfood v1 → v2)", () => {
     const underV1 = computeValidationIdentity({
       preparedChangeId: PREPARED,
       preparedCommitSha: FIXTURE_COMMIT_SHA,
-      validationProfile: "nextjs_node_v1",
-      validationProfileVersion: validationProfileVersionFor("nextjs_node_v1"),
+      validationProfile: CURRENT_VALIDATION_PROFILE,
+      validationProfileVersion: validationProfileVersionFor(CURRENT_VALIDATION_PROFILE),
       sandboxPolicyVersion: "sandbox-policy-v1",
       validationDepth: "standard",
       validationDepthPolicyVersion: VALIDATION_DEPTH_POLICY_VERSION,
+      workspaceRoot: ".",
     });
 
     expect(identityFor()).not.toBe(underV1);
@@ -462,17 +477,18 @@ describe("integrity policy versioning (post-dogfood v1 → v2)", () => {
       validation_identity: computeValidationIdentity({
         preparedChangeId: PREPARED,
         preparedCommitSha: FIXTURE_COMMIT_SHA,
-        validationProfile: "nextjs_node_v1",
-        validationProfileVersion: validationProfileVersionFor("nextjs_node_v1"),
+        validationProfile: CURRENT_VALIDATION_PROFILE,
+        validationProfileVersion: validationProfileVersionFor(CURRENT_VALIDATION_PROFILE),
         sandboxPolicyVersion: "sandbox-policy-v1",
         validationDepth: "standard",
         validationDepthPolicyVersion: VALIDATION_DEPTH_POLICY_VERSION,
+        workspaceRoot: ".",
       }),
       status: "passed",
       stage: "completed",
       steps: {},
-      validation_profile: "nextjs_node_v1",
-      validation_profile_version: validationProfileVersionFor("nextjs_node_v1"),
+      validation_profile: CURRENT_VALIDATION_PROFILE,
+      validation_profile_version: validationProfileVersionFor(CURRENT_VALIDATION_PROFILE),
       sandbox_policy_version: "sandbox-policy-v1",
       sandbox_provider: "vercel_sandbox",
       package_manager: "pnpm",
@@ -496,8 +512,8 @@ describe("integrity policy versioning (post-dogfood v1 → v2)", () => {
       status: "passed",
       stage: "completed",
       steps: {},
-      validation_profile: "nextjs_node_v1",
-      validation_profile_version: validationProfileVersionFor("nextjs_node_v1"),
+      validation_profile: CURRENT_VALIDATION_PROFILE,
+      validation_profile_version: validationProfileVersionFor(CURRENT_VALIDATION_PROFILE),
       sandbox_policy_version: "sandbox-policy-v1",
       sandbox_provider: "vercel_sandbox",
       package_manager: "pnpm",
@@ -526,8 +542,8 @@ describe("integrity policy versioning (post-dogfood v1 → v2)", () => {
       status: "passed",
       stage: "completed",
       steps: {},
-      validation_profile: "nextjs_node_v1",
-      validation_profile_version: validationProfileVersionFor("nextjs_node_v1"),
+      validation_profile: CURRENT_VALIDATION_PROFILE,
+      validation_profile_version: validationProfileVersionFor(CURRENT_VALIDATION_PROFILE),
       sandbox_policy_version: SANDBOX_POLICY_VERSION,
       sandbox_provider: "vercel_sandbox",
       package_manager: "pnpm",

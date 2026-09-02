@@ -131,10 +131,25 @@ export const OPERATION_FAILURE_MESSAGES: Record<OperationFailureCode, string> = 
   // Vibe's coverage, never about the customer's repository being wrong — the
   // copy says so, because a tool telling you your project is unsupported
   // should not also imply it is bad.
-  validation_not_supported: "Vibe cannot validate this project yet. Validation currently supports single-app Next.js repositories using npm or pnpm.",
+  //
+  // Stufe 4 made each of these name the missing thing. "Not supported yet" is
+  // true and leaves a founder with nothing to do; "there is no build script"
+  // is something they can act on, and often in a minute.
+  validation_not_supported:
+    "Vibe could not read this project's package.json in the isolated environment, so nothing was run.",
   prepared_change_not_ready: "This change is not ready to validate.",
+  // Historical: rows recorded this when a monorepo was refused outright,
+  // before Vibe asked which app to work on instead.
   ambiguous_workspace: "Vibe could not tell which app to validate. Workspaces and monorepos are not supported yet.",
   lockfile_missing: "No lockfile was found, so dependencies cannot be installed exactly as committed.",
+  not_a_node_project:
+    "Vibe checks a change by running the project's own build, and this project has no package.json — so there is nothing to check a change against, and Vibe will not make one.",
+  no_build_script:
+    "This project's package.json has no build script, so Vibe has no way to tell whether a change still works.",
+  workspace_choice_required:
+    "This repository holds more than one application. Tell Vibe which one to work on.",
+  repository_analysis_outdated:
+    "Vibe's read of this repository predates this check. Re-analyse it and Vibe will know what it can do here.",
   repository_connection_invalid: "Vibe could not reach this repository. Check the GitHub connection.",
   source_integrity_failed: "The code in the isolated environment did not match the prepared change, so nothing was run.",
   sandbox_unavailable: "The isolated environment could not be started. Nothing was run.",

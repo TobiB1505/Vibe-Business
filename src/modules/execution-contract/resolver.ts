@@ -381,10 +381,7 @@ function classifyIntrinsic(input: ResolveExecutionInput): Classification {
  * not "inadmissible" — the concept does not apply to it — so admission is
  * refused with `not_executable_mode` and no live state is consulted at all.
  */
-function evaluateAdmission(
-  input: ResolveExecutionInput,
-  mode: ExecutionMode,
-): ExecutionAdmission {
+function evaluateAdmission(input: ResolveExecutionInput, mode: ExecutionMode): ExecutionAdmission {
   if (mode !== "agentic" && mode !== "deterministic") {
     return { admissible: false, refusal: "not_executable_mode" };
   }

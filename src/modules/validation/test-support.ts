@@ -1,4 +1,6 @@
+import { fakeBuildIntelligence } from "@/modules/repository-intelligence/test-support";
 import type {
+  BuildIntelligence,
   PackageManagerId,
   RepositoryIntelligenceSnapshot,
 } from "@/modules/repository-intelligence/schema";
@@ -247,9 +249,7 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
     // `find`'s `-path` glob: `*` matches any run of characters, `/` included.
     const prunedPaths = [...command.matchAll(/-path (\S+)/g)].map(
       (match) =>
-        new RegExp(
-          `^${match[1].replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")}$`,
-        ),
+        new RegExp(`^${match[1].replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*")}$`),
     );
     const newer = /-newer (\S+)/.exec(command);
     const since = newer ? (writtenAt.get(newer[1]) ?? 0) : 0;
@@ -478,9 +478,10 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
 
       const argument = input.command.args.at(-1) ?? "";
       if (input.command.command === "rm" && argument.endsWith(".git")) {
-        const removed = argument.startsWith("/") || input.cwd === "." || input.cwd === ""
-          ? argument
-          : `${input.cwd}/${argument}`;
+        const removed =
+          argument.startsWith("/") || input.cwd === "." || input.cwd === ""
+            ? argument
+            : `${input.cwd}/${argument}`;
 
         for (const path of Object.keys(files)) {
           if (path !== removed && !path.startsWith(`${removed}/`)) continue;
@@ -650,7 +651,9 @@ export function fakeSandboxProvider(options: FakeSandboxOptions = {}): FakeSandb
 
     policies() {
       const created = events.find((event) => event.kind === "create");
-      const applied = events.filter((event) => event.kind === "policy").map((event) => event.policy);
+      const applied = events
+        .filter((event) => event.kind === "policy")
+        .map((event) => event.policy);
       return created ? [created.input.networkPolicy, ...applied] : applied;
     },
 
@@ -713,7 +716,8 @@ export function healthySandboxFiles(
       scripts: { build: "next build", test: "vitest run", typecheck: "tsc --noEmit" },
     }),
     "product/pnpm-lock.yaml": "lockfileVersion: '9.0'\n",
-    "product/.git/config": "[remote \"origin\"]\n\turl = https://x-access-token:ghs_secret@github.com/acme/product.git\n",
+    "product/.git/config":
+      '[remote "origin"]\n\turl = https://x-access-token:ghs_secret@github.com/acme/product.git\n',
   };
 
   for (const [path, content] of Object.entries(overrides)) {
@@ -837,17 +841,34 @@ export function fakeValidatableSnapshot(
     frameworks?: { id: string; name: string }[];
     packageManager?: PackageManagerId;
     monorepo?: { detected?: boolean; ambiguous?: boolean };
+    /**
+     * The build targets, when a test is about them.
+     *
+     * `null` models a snapshot written before the analyzer detected them —
+     * which is a different thing from a repository with no application, and
+     * the resolver has to say so.
+     */
+    build?: BuildIntelligence | null;
   } = {},
 ): RepositoryIntelligenceSnapshot {
   const frameworks = overrides.frameworks ?? [{ id: "nextjs", name: "Next.js" }];
 
   return {
     schemaVersion: "repository_intelligence.v1",
-    source: { branch: "main", commitSha: FIXTURE_COMMIT_SHA, treeComplete: true, analyzerVersion: "repo-intelligence-v2" },
+    source: {
+      branch: "main",
+      commitSha: FIXTURE_COMMIT_SHA,
+      treeComplete: true,
+      analyzerVersion: "repo-intelligence-v2",
+    },
     repository: { private: false, fullName: "acme/product", defaultBranch: "main" },
     packageManager: overrides.packageManager ?? "pnpm",
     languages: [],
-    frameworks: frameworks.map((framework) => ({ ...framework, evidence: [], confidence: "high" as const })),
+    frameworks: frameworks.map((framework) => ({
+      ...framework,
+      evidence: [],
+      confidence: "high" as const,
+    })),
     runtime: [],
     integrationSignals: [],
     businessSurfaces: [],
@@ -866,26 +887,24 @@ export function fakeValidatableSnapshot(
       topLevelDirectories: ["src"],
     },
     scripts: { declared: ["build", "test", "typecheck"], source: "package.json" },
-    build: {
-      targets: [
-        {
-          directory: ".",
-          manifestPath: "package.json",
-          buildScript: true,
-          frameworks: frameworks.map((framework) => framework.id),
-          lockfile: {
-            path: "pnpm-lock.yaml",
-            packageManager: "pnpm",
-            inTargetDirectory: true,
-          },
-          declaresWorkspaces: false,
-          moduleLinker: null,
-        },
-      ],
-      truncated: false,
-    },
+    ...(overrides.build === null
+      ? {}
+      : {
+          build:
+            overrides.build ??
+            fakeBuildIntelligence({
+              packageManager: overrides.packageManager,
+              frameworks: frameworks.map((framework) => framework.id),
+            }),
+        }),
     brand: { assets: [], colors: [], typefaces: [], tokenSources: [] },
-    metrics: { durationMs: 400, bytesFetched: 1000, filesFetched: 1, candidatesSelected: 20, treeEntriesConsidered: 160 },
+    metrics: {
+      durationMs: 400,
+      bytesFetched: 1000,
+      filesFetched: 1,
+      candidatesSelected: 20,
+      treeEntriesConsidered: 160,
+    },
     completeness: { status: "complete", reasons: [] },
     warnings: [],
   };

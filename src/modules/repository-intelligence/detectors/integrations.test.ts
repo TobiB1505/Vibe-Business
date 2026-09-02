@@ -11,7 +11,9 @@ describe("detectIntegrationSignals", () => {
     const context = contextFrom([
       {
         path: "package.json",
-        content: packageJson({ dependencies: { "@supabase/supabase-js": "2", "@supabase/ssr": "0.12" } }),
+        content: packageJson({
+          dependencies: { "@supabase/supabase-js": "2", "@supabase/ssr": "0.12" },
+        }),
       },
       { path: "supabase/config.toml" },
     ]);
@@ -67,7 +69,9 @@ describe("detectIntegrationSignals", () => {
     const context = contextFrom([
       {
         path: "package.json",
-        content: packageJson({ dependencies: { "@supabase/ssr": "0.12.4", "@supabase/supabase-js": "2" } }),
+        content: packageJson({
+          dependencies: { "@supabase/ssr": "0.12.4", "@supabase/supabase-js": "2" },
+        }),
       },
     ]);
 
@@ -106,15 +110,21 @@ describe("detectIntegrationSignals", () => {
   });
 
   it("detects Python-side integrations from a requirements manifest", () => {
-    const context = contextFrom([{ path: "requirements.txt", content: "stripe==10.0\nsentry-sdk\n" }]);
-    expect(ids(detectIntegrationSignals(context))).toEqual(expect.arrayContaining(["stripe", "sentry"]));
+    const context = contextFrom([
+      { path: "requirements.txt", content: "stripe==10.0\nsentry-sdk\n" },
+    ]);
+    expect(ids(detectIntegrationSignals(context))).toEqual(
+      expect.arrayContaining(["stripe", "sentry"]),
+    );
   });
 
   it("attaches every signal to a category", () => {
     const context = contextFrom([
       {
         path: "package.json",
-        content: packageJson({ dependencies: { stripe: "16", "@supabase/supabase-js": "2", "posthog-js": "1" } }),
+        content: packageJson({
+          dependencies: { stripe: "16", "@supabase/supabase-js": "2", "posthog-js": "1" },
+        }),
       },
     ]);
 
@@ -156,7 +166,9 @@ describe("test tooling", () => {
       { path: "package.json", content: packageJson({ dependencies: { next: "16" } }) },
     ]);
 
-    const testing = detectIntegrationSignals(context).filter((signal) => signal.category === "testing");
+    const testing = detectIntegrationSignals(context).filter(
+      (signal) => signal.category === "testing",
+    );
     expect(testing).toEqual([]);
   });
 });
@@ -168,7 +180,9 @@ describe("continuous integration", () => {
       { path: ".github/workflows/release.yaml" },
     ]);
 
-    const actions = detectIntegrationSignals(context).find((signal) => signal.id === "github_actions");
+    const actions = detectIntegrationSignals(context).find(
+      (signal) => signal.id === "github_actions",
+    );
     expect(actions?.category).toBe("ci");
     expect(actions?.evidence.map((entry) => entry.path)).toEqual([
       ".github/workflows/ci.yml",

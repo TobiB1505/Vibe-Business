@@ -167,7 +167,9 @@ export async function startChangePreview(
    */
   const snapshot = await getLatestSuccessfulSnapshot(supabase, params.projectId);
   const resolution = snapshot?.result ? resolveValidationProfile(snapshot.result) : null;
-  const previewProfile = resolution?.supported ? previewProfileFor(resolution.profile) : null;
+  const previewProfile = resolution?.supported
+    ? previewProfileFor(resolution.profile, resolution.frameworks)
+    : null;
   if (!previewProfile) return { kind: "failed", error: "preview_not_supported" };
 
   const identity = computePreviewIdentity({
@@ -431,9 +433,7 @@ export async function getPreviewCard(
   return buildPreviewCard({
     prepared: params.prepared,
     session,
-    failureMessage: session?.failureCode
-      ? params.resolveFailureMessage(session.failureCode)
-      : null,
+    failureMessage: session?.failureCode ? params.resolveFailureMessage(session.failureCode) : null,
   });
 }
 
@@ -554,4 +554,3 @@ async function requestTeardown(
 
   return { kind: "stopping", previewSessionId: session.id, operation: view(created.operation) };
 }
-
