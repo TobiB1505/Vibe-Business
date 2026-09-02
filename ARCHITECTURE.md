@@ -38,11 +38,10 @@ Onboarding
   → Opportunity
   → Action Plan
   → Execution Contract  (an immutable spec + a compiled policy)
-  → Agent Execution     (in an isolated sandbox, behind a tool gateway)
+  → Agent Execution     (in an isolated sandbox, with an explicitly named tool set)
   → Prepared Change     (a commit on an isolated branch)
   → Independent Validation
   → Preview
-  → Visual Review
   → Approval            (bound to one exact commit)
   → Merge               (fast-forward, verified by read-back)
   → Outcome Verification
@@ -339,6 +338,7 @@ Every ADR, with the layer it governs. The ADR is the source of truth for its own
 | [0065](docs/decisions/0065-the-preview-is-the-review.md) | The preview is the review (Accepted; supersedes 0017 as a gate, amends 0063 and 0018. A visual approval binds to the preview session of the same commit plus the code diff, and no browser session is paid to photograph one route of it) | Review, approvals, `change_approvals`, §3.9, §3.10 |
 | [0066](docs/decisions/0066-payment-meaning-across-evidence-families.md) | Payment meaning is read from every evidence family that can carry it | §3.6 |
 | [0067](docs/decisions/0067-plan-screen-renders-the-resolver.md) | The plan screen renders the execution resolver | §3.6 |
+| [0068](docs/decisions/0068-the-sandbox-is-the-boundary.md) | The sandbox is the boundary; the tool gateway is retired | §3.6 |
 
 ### Layers with no section above
 

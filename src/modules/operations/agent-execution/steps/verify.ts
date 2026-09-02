@@ -16,7 +16,7 @@ import {
 } from "@/modules/coding-agent/change-evidence";
 import { createBaseIgnorePort } from "@/modules/coding-agent/ignored-paths";
 import { agentSandboxNameFor, computeCandidateDigest } from "@/modules/coding-agent/identity";
-import { createSandboxWorkspace } from "@/modules/coding-agent/sandbox-workspace";
+import { createSandboxWorkspaceReader } from "@/modules/coding-agent/sandbox-workspace";
 import { recordAgentRunObservations, type StoredAgentExecutionRun } from "@/modules/coding-agent/store";
 import type { OperationFailureCode } from "../../failures";
 import { setOperationStage } from "../../store";
@@ -51,28 +51,6 @@ type RebuiltCandidate =
     }
   | { ok: false; failureCode: OperationFailureCode };
 
-/** The writes the tool gateway brokered, under the `gateway_tools` topology. */
-async function readBrokeredWritePaths(
-  deps: AgentExecutionDeps,
-  runId: string,
-): Promise<string[]> {
-  const { data, error } = await deps.supabase
-    .from("agent_tool_events")
-    .select("path, decision, capability")
-    .eq("agent_execution_run_id", runId)
-    .eq("decision", "allowed")
-    .in("capability", ["workspace_write_file", "workspace_delete_file"]);
-
-  if (error) throw error;
-
-  return [
-    ...new Set(
-      ((data ?? []) as { path: string | null }[])
-        .map((event) => event.path)
-        .filter((path): path is string => path !== null),
-    ),
-  ];
-}
 
 /**
  * Reads the workspace and produces the verified candidate (VB-017).
@@ -109,7 +87,7 @@ export async function rebuildVerifiedCandidate(
   }
 
   const limits = deriveAgentLimits({ budget: spec.spec.budget, policy: spec.spec.policy });
-  const workspace = createSandboxWorkspace({
+  const workspace = createSandboxWorkspaceReader({
     sandbox,
     sourceRoot: target.sourceRoot,
     workspaceRoot: target.workspaceRoot,
@@ -124,9 +102,24 @@ export async function rebuildVerifiedCandidate(
    * filesystem comparison the agent step performed while the sandbox was still
    * alive. The bytes come from the filesystem either way.
    */
-  const changedPaths = params.observedPaths
-    ? [...new Set(params.observedPaths)]
-    : await readBrokeredWritePaths(deps, run.id);
+  /*
+   * Vibe's own observation, and there is no longer a second source.
+   *
+   * This fell back to the tool gateway's record of brokered writes when
+   * `observedPaths` was null. Nothing has written that record since ADR 0029 —
+   * the harness edits files inside the VM and never calls back — so the
+   * fallback read an empty table and turned a real change into
+   * `agent_produced_no_change`. The filesystem comparison the agent step
+   * performed while the sandbox was still alive is the only answer, which is
+   * what Rule 77 has said all along.
+   */
+  if (params.observedPaths === null) {
+    // The same code the reconnect failure above uses, and for the same reason:
+    // Vibe could not see the workspace. Which observation broke and what it
+    // said is on the run's `workspace_failed` event.
+    return { ok: false, failureCode: "sandbox_lost" };
+  }
+  const changedPaths = [...new Set(params.observedPaths)];
 
   if (changedPaths.length === 0) {
     return { ok: false, failureCode: "agent_produced_no_change" };
@@ -200,8 +193,15 @@ export async function rebuildVerifiedCandidate(
 export async function extractAndVerifyStep(
   deps: AgentExecutionDeps,
   operationId: string,
-  /** What the agent step observed, when the harness ran in the sandbox. */
-  observedPaths: readonly string[] | null = null,
+  /**
+   * What the agent step observed by walking the workspace (Rule 77).
+   *
+   * `null` means the observation itself did not complete — the baseline could
+   * not be read back, or the listing was truncated. That is refused below
+   * rather than treated as "nothing changed": an observation that might be
+   * incomplete fails the run, it never becomes a partial diff.
+   */
+  observedPaths: readonly string[] | null,
 ): Promise<ExtractOutcome> {
   const loaded = await loadRun(deps, operationId);
   if (!loaded.ok) return loaded;

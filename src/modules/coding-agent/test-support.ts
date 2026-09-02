@@ -27,12 +27,9 @@ import type {
   ObservedRuntimeEntry,
 } from "./provider";
 import type {
-  AgentWorkspace,
   WorkspaceCommandResult,
-  WorkspaceEntry,
-  WorkspaceMatch,
   WorkspaceReadResult,
-  WorkspaceWriteResult,
+  WorkspaceReader,
 } from "./workspace";
 
 /**
@@ -132,7 +129,7 @@ export type FakeWorkspaceOptions = {
   commandResults?: WorkspaceCommandResult[];
 };
 
-export type FakeWorkspace = AgentWorkspace & {
+export type FakeWorkspace = WorkspaceReader & {
   readonly files: Map<string, string>;
   readonly commandsRun: SandboxCommand[];
   /**
@@ -157,50 +154,13 @@ export function fakeWorkspace(options: FakeWorkspaceOptions = {}): FakeWorkspace
   const files = new Map(Object.entries({ ...DEFAULT_FILES, ...options.files }));
   const commandsRun: SandboxCommand[] = [];
   const readPaths: string[] = [];
-  const results = [...(options.commandResults ?? [])];
 
   return {
     files,
     commandsRun,
     readPaths,
 
-    async list(input: { path: string; maxEntries: number }): Promise<readonly WorkspaceEntry[]> {
-      const prefix = input.path.length === 0 ? "" : `${input.path.replace(/\/+$/, "")}/`;
-      const entries = new Map<string, WorkspaceEntry>();
 
-      for (const path of files.keys()) {
-        if (!path.startsWith(prefix)) continue;
-        const rest = path.slice(prefix.length);
-        if (rest.length === 0) continue;
-        const separator = rest.indexOf("/");
-        const name = separator === -1 ? rest : rest.slice(0, separator);
-        entries.set(`${prefix}${name}`, {
-          path: `${prefix}${name}`,
-          kind: separator === -1 ? "file" : "directory",
-        });
-      }
-
-      return [...entries.values()].slice(0, input.maxEntries);
-    },
-
-    async search(input: {
-      query: string;
-      path: string;
-      maxResults: number;
-    }): Promise<readonly WorkspaceMatch[]> {
-      const matches: WorkspaceMatch[] = [];
-      const prefix = input.path.length === 0 ? "" : `${input.path.replace(/\/+$/, "")}/`;
-
-      for (const [path, content] of files) {
-        if (!path.startsWith(prefix)) continue;
-        content.split("\n").forEach((text, index) => {
-          if (matches.length >= input.maxResults) return;
-          if (text.includes(input.query)) matches.push({ path, line: index + 1, text });
-        });
-      }
-
-      return matches;
-    },
 
     async read(input: { path: string; maxBytes: number }): Promise<WorkspaceReadResult> {
       readPaths.push(input.path);
@@ -210,27 +170,8 @@ export function fakeWorkspace(options: FakeWorkspaceOptions = {}): FakeWorkspace
       return { kind: "content", content };
     },
 
-    async write(input: { path: string; content: string }): Promise<WorkspaceWriteResult> {
-      files.set(input.path, input.content);
-      return { ok: true };
-    },
 
-    async remove(input: { path: string }): Promise<WorkspaceWriteResult> {
-      files.delete(input.path);
-      return { ok: true };
-    },
 
-    async run(input: { command: SandboxCommand; timeoutMs: number }) {
-      commandsRun.push(input.command);
-      return (
-        results.shift() ?? {
-          exitCode: 0,
-          durationMs: 10,
-          output: "ok",
-          timedOut: false,
-        }
-      );
-    },
   };
 }
 
@@ -251,7 +192,19 @@ export type ScriptedToolCall = { tool: string; input: unknown };
 
 export type FakeProviderOptions = {
   /** Tool calls the fake agent makes, in order. */
+  /**
+   * Turn counts to report. Named `calls` for continuity with the tests that
+   * still describe what the agent did; nothing is invoked through Vibe.
+   */
   calls?: readonly ScriptedToolCall[];
+  /**
+   * What the harness does inside the VM while it runs.
+   *
+   * A test that wants a run to have changed something writes into the sandbox
+   * here — `fakeSandboxProvider.writeFile` — because Vibe learns what changed
+   * by walking the filesystem afterwards, never from the agent.
+   */
+  onStart?: () => void | Promise<void>;
   outcome?: CodingAgentResult["outcome"];
   runtimeFounderInput?: CodingAgentResult["runtimeFounderInput"];
   usage?: readonly AgentModelUsage[];
@@ -310,13 +263,26 @@ export function fakeCodingAgentProvider(
       if (options.throws) throw options.throws;
 
       let turns = 0;
-      for (const call of options.calls ?? []) {
-        if (request.signal.aborted) break;
-        turns += 1;
-        const outcome = await request.invokeTool(call.tool, call.input);
-        attempted.push({ tool: call.tool, outcomeKind: outcome.kind });
-        if (outcome.kind === "halt") break;
-      }
+      // What the harness does inside the VM: it writes files. The test supplies
+      // the writes, because Vibe never sees them happen — it walks the
+      // filesystem afterwards.
+      await options.onStart?.();
+
+      /*
+       * No tool calls come back through Vibe.
+       *
+       * This looped `options.calls` and invoked each one through the request's
+       * `invokeTool`, which is what the in-process topology did. The harness
+       * runs in the VM now and edits files with its own tools, so the real
+       * detached provider never calls back — and a fake that did was the reason
+       * the suite's picture of a run was the old topology: nine test sites
+       * asserted a brokered tool trail that production has not written since
+       * ADR 0029.
+       *
+       * `turns` still advances, because the harness does report its own turn
+       * count through the protocol, which is a different claim.
+       */
+      turns += (options.calls ?? []).length;
 
       return {
         outcome: options.outcome ?? "completed",
@@ -410,13 +376,26 @@ export function fakeDetachedAgentProvider(
         return { ok: false as const, failureDetail: "fake provider refused to start" };
       }
 
-      for (const call of options.calls ?? []) {
-        if (request.signal.aborted) break;
-        turns += 1;
-        const outcome = await request.invokeTool(call.tool, call.input);
-        attempted.push({ tool: call.tool, outcomeKind: outcome.kind });
-        if (outcome.kind === "halt") break;
-      }
+      // What the harness does inside the VM: it writes files. The test supplies
+      // the writes, because Vibe never sees them happen — it walks the
+      // filesystem afterwards.
+      await options.onStart?.();
+
+      /*
+       * No tool calls come back through Vibe.
+       *
+       * This looped `options.calls` and invoked each one through the request's
+       * `invokeTool`, which is what the in-process topology did. The harness
+       * runs in the VM now and edits files with its own tools, so the real
+       * detached provider never calls back — and a fake that did was the reason
+       * the suite's picture of a run was the old topology: nine test sites
+       * asserted a brokered tool trail that production has not written since
+       * ADR 0029.
+       *
+       * `turns` still advances, because the harness does report its own turn
+       * count through the protocol, which is a different claim.
+       */
+      turns += (options.calls ?? []).length;
 
       return { ok: true as const };
     },

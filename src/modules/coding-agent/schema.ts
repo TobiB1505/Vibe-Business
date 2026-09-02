@@ -1,4 +1,9 @@
 import type { ExecutionToolCapability } from "@/modules/execution-contract/policy";
+import type {
+  ExecutionInterruptResponseSchema,
+  ExecutionInterruptType,
+} from "@/modules/execution-contract/schema";
+import type { FounderInputRequirement } from "@/modules/founder-input/schema";
 
 /**
  * The coding-agent runtime vocabulary (EXECUTION CORE-4 §5, §10, §17, §34).
@@ -216,6 +221,42 @@ export type AgentRunStatus = (typeof AGENT_RUN_STATUSES)[number];
  * the same property Core-3 required of its stop reasons. There is deliberately
  * no `agent_gave_up` and no free-text field.
  */
+/**
+ * A question that stops a run until the founder answers.
+ *
+ * Every field is Vibe's own: the type and `whyBlocked` come from the closed
+ * interrupt vocabulary, the question is Vibe-authored, and the requirement is
+ * compiled by `founder-input/runtime.ts` from the harness's structured draft.
+ * The model's sentence never reaches a person.
+ *
+ * Lived in `gateway.ts` while the agent asked through the broker. It now
+ * reports through the runtime protocol and `observe.ts` raises it, so the type
+ * belongs with the rest of the run vocabulary rather than with a door that no
+ * longer exists.
+ */
+export type RaisedInterrupt = {
+  type: ExecutionInterruptType;
+  /** Vibe-authored, from the closed vocabulary. Never the model's sentence. */
+  question: string;
+  responseSchema: ExecutionInterruptResponseSchema;
+  whyBlocked: ExecutionInterruptType;
+  founderInputRequirement: FounderInputRequirement;
+};
+
+/**
+ * One path Vibe observed changing, and optionally the bytes it already holds.
+ *
+ * Was `GatewayChange`, when the tool gateway's record of brokered writes was
+ * the source. Under ADR 0029 it is Vibe's own filesystem comparison, so the
+ * name no longer describes where it comes from — and where it comes from is the
+ * entire point of Rule 77.
+ */
+export type ObservedChange = {
+  path: string;
+  /** Null when the bytes still have to be read back from the workspace. */
+  content: string | null;
+};
+
 export const AGENT_FAILURE_CODES = [
   /** The authorized ceiling — Credits, turns, time or provider cost — was reached. */
   "agent_budget_exhausted",

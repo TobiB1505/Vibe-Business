@@ -10,7 +10,7 @@ import type {
   ExecutionInterruptType,
 } from "@/modules/execution-contract/schema";
 import { isValidInterruptAnswer } from "@/modules/execution-contract/interrupts";
-import type { AgentToolEvent, RaisedInterrupt } from "./gateway";
+import type { RaisedInterrupt } from "./schema";
 import type { AgentFailureCode, AgentRunStatus } from "./schema";
 import type { FreshnessState } from "@/modules/execution-context/brief";
 import type { VerificationMode } from "@/modules/execution-context/verification";
@@ -756,43 +756,6 @@ export async function cancelAgentRun(supabase: SupabaseClient, runId: string): P
 /* ---------------------------------------------------------------------------
  * agent_tool_events / agent_activity_events (§23, §24)
  * ------------------------------------------------------------------------ */
-
-/**
- * Writes the tool trail, idempotently.
- *
- * `upsert` on `(run, sequence)` rather than `insert`, because this runs at the
- * end of a durable step that can be re-entered: a replay must not double every
- * row, and the sequence number already identifies each event uniquely within
- * its run.
- */
-export async function recordAgentToolEvents(
-  supabase: SupabaseClient,
-  params: { runId: string; projectId: string; events: readonly AgentToolEvent[] },
-): Promise<void> {
-  if (params.events.length === 0) return;
-
-  const { error } = await supabase.from("agent_tool_events").upsert(
-    params.events.map((event) => ({
-      agent_execution_run_id: params.runId,
-      project_id: params.projectId,
-      sequence: event.sequence,
-      tool: event.tool,
-      capability: event.capability,
-      decision: event.decision,
-      denial_reason: event.denialReason,
-      path: event.path,
-      command: event.command,
-      started_at: event.startedAt,
-      duration_ms: event.durationMs,
-      success: event.success,
-      exit_code: event.exitCode,
-      bytes: event.bytes,
-    })),
-    { onConflict: "agent_execution_run_id,sequence" },
-  );
-
-  if (error) throw error;
-}
 
 export async function recordAgentActivity(
   supabase: SupabaseClient,
