@@ -149,7 +149,7 @@ test.describe("signature Business Brain", () => {
         current.y + current.height / 2 - (next.y + next.height / 2),
       );
       const visibleGap = centerDistance - (current.width + next.width) / 2;
-      expect(visibleGap).toBeGreaterThan(24);
+      expect(visibleGap).toBeGreaterThan(34);
       return centerDistance;
     });
 

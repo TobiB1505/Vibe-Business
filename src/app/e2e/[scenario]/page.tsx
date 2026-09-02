@@ -684,18 +684,29 @@ export default async function E2eScenarioPage({
   if (isE2eAuditCreditScenario(scenario)) {
     const { gate } = E2E_AUDIT_CREDIT_SCENARIOS[scenario];
     return (
-      <main className="mx-auto max-w-3xl space-y-4 p-8">
+      <main className="mx-auto max-w-[90rem] p-8">
         {label}
-        <RunAuditButton
-          projectId="project_e2e"
-          hasAudit
-          disabled={auditBlockedByCredits(gate)}
-          // The included audit is spent in every scenario here, so the price is
-          // always shown — which is precisely what made the old copy a lie.
-          billable
-          activeOperation={null}
-        />
-        <AuditCreditNotice gate={gate} />
+        <WorkspaceSection
+          id="business-audit"
+          title="Business Health"
+          eyebrow="Business intelligence"
+          variant="intelligence"
+          description="Your whole business in one connected view — what is working, what matters and where to move next."
+          actions={
+            <RunAuditButton
+              projectId="project_e2e"
+              hasAudit
+              disabled={auditBlockedByCredits(gate)}
+              // The included audit is spent in every scenario here, so the price is
+              // always shown — which is precisely what made the old copy a lie.
+              billable
+              activeOperation={null}
+            />
+          }
+          headerStatus={<AuditCreditNotice gate={gate} />}
+        >
+          <div />
+        </WorkspaceSection>
       </main>
     );
   }

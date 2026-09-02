@@ -287,6 +287,11 @@ export async function ProjectBusinessHealth({ access }: { access: ProjectAccess 
           activeOperation={activeAuditOperation}
         />
       }
+      headerStatus={
+        creditGate.kind === "not_applicable" ? undefined : (
+          <AuditCreditNotice gate={creditGate} />
+        )
+      }
     >
       <div className="flex flex-col gap-4">
         {/*
@@ -317,7 +322,7 @@ export async function ProjectBusinessHealth({ access }: { access: ProjectAccess 
           CORE-2 §16: the first qualified audit is free, and the entitlement is
           decided server-side. This one states the decision and nothing else —
           the price and the balance belong to the state *after* it is spent, and
-          `AuditCreditNotice` below is where they are said.
+          `AuditCreditNotice` in the command header is where they are said.
         */}
         {auditReady && !latestAudit?.result && auditAccess.freeAuditAvailable && (
           <Notice tone="info" label="Included">
@@ -331,8 +336,6 @@ export async function ProjectBusinessHealth({ access }: { access: ProjectAccess 
             Updating it is on us — it won&rsquo;t use up anything of yours.
           </Notice>
         )}
-
-        <AuditCreditNotice gate={creditGate} />
 
         {/*
           The lifecycle drawn as its own states rather than one completed map

@@ -321,6 +321,7 @@ export function WorkspaceSection({
   title,
   description,
   actions,
+  headerStatus,
   eyebrow,
   variant = "default",
   children,
@@ -329,6 +330,8 @@ export function WorkspaceSection({
   title: string;
   description?: ReactNode;
   actions?: ReactNode;
+  /** A compact state that belongs to the intelligence command surface. */
+  headerStatus?: ReactNode;
   eyebrow?: ReactNode;
   variant?: "default" | "intelligence";
   children: ReactNode;
@@ -370,7 +373,16 @@ export function WorkspaceSection({
               </p>
             )}
           </div>
-          {actions && <div className="relative z-10 flex shrink-0 flex-wrap items-center gap-3">{actions}</div>}
+          {actions && (
+            <div className="relative z-10 flex shrink-0 flex-wrap items-center gap-3">
+              {actions}
+            </div>
+          )}
+          {intelligence && headerStatus ? (
+            <div className="border-line-1 relative z-10 w-full border-t pt-4">
+              {headerStatus}
+            </div>
+          ) : null}
         </div>
         {children}
       </div>

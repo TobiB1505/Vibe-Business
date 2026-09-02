@@ -181,7 +181,9 @@ function NodeButton({
           "focus-visible:ring-mint focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-app",
           // Priority still changes halo and contrast, but never the spatial
           // footprint: every lens keeps the same orbit spacing and hit area.
-          "size-[8.15rem]",
+          // The equal orbit should read as nine distinct intelligence objects,
+          // not as one packed cluster once their halos are visible.
+          "size-[7.6rem]",
         )}
       >
         <BusinessLensIcon lens={node.id} className="business-brain-planet-icon size-6" />
