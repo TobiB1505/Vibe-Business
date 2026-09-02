@@ -566,8 +566,8 @@ describe("resolveDogfoodPlanRoutes — the list routes against real repository s
      */
     const economics = resolveRouteAgentEconomics({
       projectId: PROJECT,
-      step: routes.plan.steps[1],
-      riskClass: implementation.riskClass,
+      members: [routes.plan.steps[1]],
+      headRiskClass: implementation.riskClass,
       env: ALLOWLIST,
     });
     expect(economics?.budget.maxCredits).toBeGreaterThan(0);

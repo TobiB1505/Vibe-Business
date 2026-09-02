@@ -98,6 +98,18 @@ function refusalDetail(
 export async function startAgentRunAction(
   projectId: string,
   stepKey: string,
+  /**
+   * Whether the founder pressed "build all N steps" or "build this step".
+   *
+   * One boolean of intent, bound by the server component. Deliberately not a
+   * list of step keys: that would be caller-controlled input deciding what gets
+   * built and charged for, and this action's whole contract is that it re-runs
+   * the entire preflight fresh rather than trusting what the page rendered.
+   * The server derives the members from the stored plan, so a world that moved
+   * between render and click yields a shorter chain and a smaller charge —
+   * never a chain the founder was quoted for that no longer resolves.
+   */
+  chain: boolean,
   previousState: StartAgentRunState,
 ): Promise<StartAgentRunState> {
   void previousState;
@@ -108,6 +120,7 @@ export async function startAgentRunAction(
     projectId,
     userId: session.userId,
     stepKey,
+    chain,
   });
 
   if (!preview.eligible) {

@@ -5,7 +5,6 @@ import { getLatestCompletedActionPlan } from "@/modules/action-plans/store";
 import type { ActionPlanStep } from "@/modules/action-plans/schema";
 import { benchmarkStep, fixtureForStepKey } from "./dogfood/fixtures";
 import { buildExecutionSpec, type ExecutionSpec } from "@/modules/execution-contract/spec";
-import { stepPricingClass } from "@/modules/execution-contract/pricing-class";
 import {
   resolvePlanExecution,
   resolveStepExecution,
@@ -18,7 +17,7 @@ import {
 } from "@/modules/execution-contract/live-premise";
 import { inspectLiveProduct } from "@/modules/live-product-intelligence/service";
 import { getLatestSuccessfulLiveSnapshot } from "@/modules/live-product-intelligence/store";
-import type { ExecutionResolution } from "@/modules/execution-contract/schema";
+import type { ExecutionResolution, ExecutionRiskClass } from "@/modules/execution-contract/schema";
 import { resolveExecutionValidation } from "@/modules/execution-contract/validation-requirements";
 import { createGithubRepositoryReader } from "@/modules/github/repository-reader";
 import { GithubDomainError } from "@/modules/github/errors";
@@ -33,6 +32,14 @@ import {
 import { CORE4_DOGFOOD_DISCOVERY } from "./budget";
 import { runAgentPreflight, type AgentPreflight } from "./preflight";
 import type { DogfoodStepReason } from "./start-refusal";
+import {
+  BUILD_CHAIN_POLICY_VERSION,
+  resolveBuildChain,
+  type BuildChainResolution,
+} from "@/modules/execution-contract/chain";
+import { resolveChainPricingClass } from "@/modules/execution-contract/pricing-class";
+import type { ExecutionPricingClass } from "@/modules/economy/execution-class";
+import { classifyExecutionRisk } from "@/modules/execution-contract/risk";
 import { completedStepsForExecutionRouting } from "@/modules/action-plans/completion";
 import { listAgentStepCompletionEvidence } from "@/modules/action-plans/completion-store";
 import { listFounderActionCompletionEvidence } from "@/modules/action-plans/founder-action-store";
@@ -98,6 +105,14 @@ export type DogfoodStepPreview =
       resolution: ExecutionResolution;
       preflight: AgentPreflight;
       economics: AgentEconomicPolicy;
+      /**
+       * The chain this run carries, and why it stopped where it did.
+       *
+       * Always present and always at least one member — the head. A caller that
+       * asked for a chain and gets one member back is being told the world
+       * moved, not handed a special case.
+       */
+      chain: BuildChainResolution;
       /**
        * Whether the repository's live HEAD was read and matched.
        *
@@ -216,6 +231,19 @@ export type DogfoodPlanRoutes =
        * cost is one indexed lookup on this page.
        */
       snapshot: RepositoryIntelligenceSnapshot | null;
+      /**
+       * Step orders a successor may be routed on top of.
+       *
+       * The resolver computed this to answer its own dependency question, and
+       * the Agent screen needs the same set to say what a chain would contain.
+       * Handed out rather than recomputed, because two derivations of "what is
+       * already there to build on" could disagree — and this page's answer must
+       * be the one the start action will reach.
+       *
+       * A render is still never admission: the action re-runs the whole
+       * preflight, including this, before anything is written.
+       */
+      completedSteps: ReadonlySet<number>;
     };
 
 /**
@@ -234,11 +262,20 @@ export type DogfoodPlanRoutes =
  */
 export function resolveRouteAgentEconomics(params: {
   projectId: string;
-  step: Parameters<typeof stepPricingClass>[0]["step"];
-  riskClass: Parameters<typeof stepPricingClass>[0]["riskClass"];
+  /**
+   * Every step the run would deliver, head first.
+   *
+   * A list rather than one step, because a screen offering "build this step"
+   * and "build all three" has to show two figures — and both have to come from
+   * the same function the spec builder prices with, or the number on the button
+   * is not the number that gets charged.
+   */
+  members: readonly ActionPlanStep[];
+  /** The head's risk class, already decided by the resolver. */
+  headRiskClass: ExecutionRiskClass;
   env?: Record<string, string | undefined>;
 }): AgentEconomicPolicy | null {
-  const pricingClass = stepPricingClass({ step: params.step, riskClass: params.riskClass });
+  const pricingClass = chainPricingClass(params.members, params.headRiskClass);
   if (!pricingClass) return null;
 
   return resolveAgentEconomics({
@@ -246,6 +283,35 @@ export function resolveRouteAgentEconomics(params: {
     pricingClass,
     env: params.env,
   });
+}
+
+/** A chain of exactly this step. What a founder gets when they decline one. */
+function soloChain(step: ActionPlanStep): BuildChainResolution {
+  return {
+    members: [step],
+    boundary: "no_successor",
+    policyVersion: BUILD_CHAIN_POLICY_VERSION,
+  };
+}
+
+/**
+ * The class a run of these members is priced at.
+ *
+ * The head's risk comes from the resolver, which already decided it; a member's
+ * is classified from its own structured fields, exactly as the resolver would.
+ * One call site, so the quote, the reservation and the settle cannot disagree
+ * about the same chain.
+ */
+function chainPricingClass(
+  members: readonly ActionPlanStep[],
+  headRisk: ExecutionRiskClass,
+): ExecutionPricingClass | null {
+  return resolveChainPricingClass({
+    members,
+    riskClasses: members.map((member, index) =>
+      index === 0 ? headRisk : classifyExecutionRisk(member),
+    ),
+  }).pricingClass;
 }
 
 /**
@@ -328,7 +394,11 @@ export async function resolvePlanExecutionRoutes(
     plan: NonNullable<Awaited<ReturnType<typeof getLatestCompletedActionPlan>>>;
     env?: Record<string, string | undefined>;
   },
-): Promise<readonly ExecutionResolution[]> {
+): Promise<{
+  resolutions: readonly ExecutionResolution[];
+  /** What the dependency answers above were computed against. */
+  completedSteps: ReadonlySet<number>;
+}> {
   const { projectId, userId, plan } = params;
 
   // All three may legitimately be absent, and the resolver says so per step
@@ -358,14 +428,17 @@ export async function resolvePlanExecutionRoutes(
     liveHead: null,
   };
 
-  return resolvePlanExecution({
-    plan: { steps: plan.steps, completedSteps, isCurrent: true },
-    repository,
-    agenticBudgetAuthorized: isAgenticExecutionAuthorized({
-      projectId,
-      env: params.env,
+  return {
+    resolutions: resolvePlanExecution({
+      plan: { steps: plan.steps, completedSteps, isCurrent: true },
+      repository,
+      agenticBudgetAuthorized: isAgenticExecutionAuthorized({
+        projectId,
+        env: params.env,
+      }),
     }),
-  });
+    completedSteps,
+  };
 }
 
 export async function resolveDogfoodPlanRoutes(
@@ -380,12 +453,18 @@ export async function resolveDogfoodPlanRoutes(
   const plan = await getLatestCompletedActionPlan(supabase, params.projectId);
   if (!plan) return { available: false, reason: "no_action_plan" };
 
-  const [resolutions, snapshot] = await Promise.all([
+  const [routes, snapshot] = await Promise.all([
     resolvePlanExecutionRoutes(supabase, { ...params, plan }),
     getLatestSuccessfulSnapshot(supabase, params.projectId),
   ]);
 
-  return { available: true, plan, resolutions, snapshot: snapshot?.result ?? null };
+  return {
+    available: true,
+    plan,
+    resolutions: routes.resolutions,
+    completedSteps: routes.completedSteps,
+    snapshot: snapshot?.result ?? null,
+  };
 }
 
 export async function previewDogfoodStep(
@@ -394,6 +473,8 @@ export async function previewDogfoodStep(
     projectId: string;
     userId: string;
     stepKey: string;
+    /** Whether the founder asked for this step's whole build chain. */
+    chain?: boolean;
     env?: Record<string, string | undefined>;
   },
 ): Promise<DogfoodStepPreview> {
@@ -435,6 +516,10 @@ export async function previewDogfoodStep(
         opportunityId: plan.opportunityId,
         businessAuditId: plan.businessAuditId,
       },
+      // A benchmark step is its own one-step plan, so there is no successor to
+      // carry. Passed explicitly rather than left to a default, so a future
+      // benchmark with several steps has to decide rather than inherit.
+      chain: false,
       planGeneratedAt: plan.createdAt,
     });
   }
@@ -463,6 +548,7 @@ export async function previewDogfoodStep(
       opportunityId: plan.opportunityId,
       businessAuditId: plan.businessAuditId,
     },
+    chain: params.chain,
     planGeneratedAt: plan.createdAt,
   });
 }
@@ -586,6 +672,14 @@ export async function resolveExecutableStep(
     planSteps: readonly ActionPlanStep[];
     lineage: ExecutableStepLineage;
     /**
+     * Whether the founder asked for the whole chain or only this step.
+     *
+     * One boolean of intent, never a list of keys. The server derives the
+     * members itself; see the comment beside `resolveBuildChain` below for why
+     * a submitted list would be the wrong shape.
+     */
+    chain?: boolean;
+    /**
      * When the plan was generated, so the live premise can tell an observation
      * that postdates the plan from one that cannot speak to it. Null where a
      * caller genuinely cannot say, which forces a fresh crawl rather than an
@@ -692,11 +786,33 @@ export async function resolveExecutableStep(
     return { eligible: false, reason: "not_agentic", resolution };
   }
 
+  /*
+   * The chain, resolved on the server from the stored plan — never from what
+   * the caller submitted.
+   *
+   * `params.chain` is one boolean of *intent*. A caller cannot name the steps:
+   * a submitted list would be caller-controlled input deciding what gets built
+   * and charged for, and this function's whole contract (per its callers in
+   * `actions.ts`) is that a start re-runs the entire preflight fresh rather
+   * than trusting what a page rendered a moment ago. If the world moved
+   * between render and click, the founder gets a shorter chain and a smaller
+   * charge — never one they were quoted for that no longer resolves.
+   */
+  const chain =
+    params.chain === true
+      ? resolveBuildChain({
+          head: step,
+          steps: planSteps,
+          completed: completedSteps,
+          capabilityContext: { repository: snapshot.result },
+        })
+      : soloChain(step);
+
   // The class is resolvable only now: it reads the resolution's own risk class,
   // which does not exist before the step resolves. The gate above is class-free
   // for exactly that reason — it answers "could an agent run at all", which is
   // a question with no tier in it.
-  const pricingClass = stepPricingClass({ step, riskClass: resolution.riskClass });
+  const pricingClass = chainPricingClass(chain.members, resolution.riskClass);
   const economics = pricingClass
     ? resolveAgentEconomics({ projectId: params.projectId, pricingClass, env: params.env })
     : null;
@@ -735,6 +851,7 @@ export async function resolveExecutableStep(
   const spec = buildExecutionSpec({
     resolution,
     step,
+    chainSteps: chain.members,
     plan: {
       id: plan.id,
       goal: plan.goal,
@@ -806,6 +923,7 @@ export async function resolveExecutableStep(
     resolution,
     preflight,
     economics,
+    chain,
     revisionVerified,
   };
 }

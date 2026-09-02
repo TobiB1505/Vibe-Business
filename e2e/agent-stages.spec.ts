@@ -549,3 +549,68 @@ test.describe("the run's subject is the step, with the Move as its context", () 
     await expect(headline).toHaveText("Add a clear pricing section to your website");
   });
 });
+
+/**
+ * The build chain, offered (`build-chain-v1`).
+ *
+ * What these catch is a screen that cannot be read: one price over two options,
+ * a chain with no way out of it, or a short chain that says nothing about why.
+ * The chain rules themselves are structural and are proved against the
+ * founder's real plan in `chain.test.ts` — this is the layer that decides
+ * whether a founder can tell what they are about to buy.
+ */
+test.describe("a run that would carry two steps", () => {
+  test("offers both, at two different prices", async ({ page }) => {
+    await page.goto("/e2e/agent-stages-chain-offered");
+
+    const chain = page.getByRole("button", { name: /Build all 2 steps/ });
+    const single = page.getByRole("button", { name: /Build just this step/ });
+
+    await expect(chain).toBeVisible();
+    await expect(single).toBeVisible();
+
+    // One price over two options is the defect this exists for.
+    const chainLabel = (await chain.textContent()) ?? "";
+    const singleLabel = (await single.textContent()) ?? "";
+    expect(chainLabel).not.toBe(singleLabel);
+  });
+
+  test("says why the chain stops where it does", async ({ page }) => {
+    // Without this, a chain that ends at a Stripe step looks like a bug rather
+    // than the refusal it is.
+    await page.goto("/e2e/agent-stages-chain-offered");
+
+    await expect(page.getByTestId("agent-chain-boundary")).toContainText(
+      "more sensitive than Vibe builds on your behalf",
+    );
+  });
+
+  test("names both steps, as deliveries rather than groundwork", async ({ page }) => {
+    await page.goto("/e2e/agent-stages-chain-offered");
+
+    await expect(page.getByTestId("agent-task-step-delivery")).toHaveCount(2);
+    await expect(page.getByTestId("agent-task-step-preparation")).toHaveCount(0);
+  });
+
+  test("never claims more changes or checks than it made", async ({ page }) => {
+    // "2 steps done" would imply two artifacts and two verdicts. There is one
+    // of each, and the sentence has to say so (rule 66).
+    await page.goto("/e2e/agent-stages-chain-offered");
+
+    await expect(page.getByTestId("agent-task-chain-note")).toContainText(
+      "One change, checked once, covering these 2 steps",
+    );
+  });
+});
+
+test.describe("a founder who declines the chain", () => {
+  test("gets the screen exactly as it was, with one control", async ({ page }) => {
+    await page.goto("/e2e/agent-stages-chain-declined");
+
+    await expect(page.getByRole("button", { name: "Run with Vibe" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Build all/ })).toHaveCount(0);
+    await expect(page.getByTestId("agent-chain-boundary")).toHaveCount(0);
+    // And no sentence about a chain, because there is not one.
+    await expect(page.getByTestId("agent-task-chain-note")).toHaveCount(0);
+  });
+});

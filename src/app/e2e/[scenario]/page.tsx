@@ -595,6 +595,7 @@ export default async function E2eScenarioPage({
       mergeFiles,
       mergeSummary,
       startRefusal,
+      chainOffer,
     } = E2E_AGENT_STAGE_SCENARIOS[scenario]();
     /* The orb turns for a live run and for nothing else. */
     const live = core === "working" || core === "waiting";
@@ -632,9 +633,27 @@ export default async function E2eScenarioPage({
                         repositoryReadHref="/app/projects/project_e2e/product"
                       />
                     )}
+                    {/*
+                      Stand-in buttons, deliberately: the real control binds a
+                      server action, and what these scenarios exist to show is
+                      what a founder is offered — two prices, both named, and
+                      the single step still reachable.
+                    */}
+                    {chainOffer && (
+                      <button type="button" className="w-full rounded-full px-5 py-3">
+                        {`Build all ${chainOffer.memberCount} steps — ${chainOffer.chainCredits}`}
+                      </button>
+                    )}
                     <button type="button" className="w-full rounded-full px-5 py-3">
-                      Run with Vibe
+                      {chainOffer
+                        ? `Build just this step — ${chainOffer.stepCredits}`
+                        : "Run with Vibe"}
                     </button>
+                    {chainOffer && (
+                      <p className="text-fg-meta text-xs" data-testid="agent-chain-boundary">
+                        {chainOffer.boundary}
+                      </p>
+                    )}
                   </div>
                 }
               />
