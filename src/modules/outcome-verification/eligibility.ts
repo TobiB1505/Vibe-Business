@@ -182,7 +182,13 @@ export async function evaluateOutcomeEligibility(
     // Vibe's own observation of the commit, not the agent's account of it
     // (rule 77). The SEO contract ignores it; the agentic one is derived from
     // it, which is what makes that contract about *this* change.
-    changedPaths: prepared.files.map((file) => file.path),
+    //
+    // Removed paths are held out. The agentic contract asks whether the routes
+    // this change touched still answer, and a route the change deleted is
+    // supposed to be gone — expecting a 200 from it would fail a correct
+    // change. A change that only removes files therefore supports no outcome
+    // contract, which is reported as exactly that rather than as a failure.
+    changedPaths: prepared.files.filter((file) => file.status !== "deleted").map((file) => file.path),
   });
 
   if (!contract.supported) return { eligible: false, reason: contract.reason };

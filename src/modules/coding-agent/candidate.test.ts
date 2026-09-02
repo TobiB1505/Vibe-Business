@@ -359,26 +359,59 @@ describe("§28 — post-agent verification", () => {
     }
   });
 
+  /** One removed path, in the shape the extractor produces for one. */
+  function deletionOf(path: string) {
+    return {
+      path,
+      content: null,
+      baseContent: "was here",
+      status: "deleted" as const,
+      bytes: 0,
+      contentHash: null,
+    };
+  }
+
   /**
-   * A real, recorded limitation rather than an oversight. The git writer builds
-   * a tree additively and its port has no operation that removes an entry, so a
-   * candidate containing a deletion cannot be written faithfully — and writing
-   * a change that is missing part of what the agent did would break §59.
+   * Until ADR 0074 this was a refusal, and an honest one: the git writer built
+   * its tree additively and its port had no operation that removed an entry, so
+   * a candidate containing a deletion could not be written faithfully. The port
+   * expresses one now, so the change is accepted — and the deletion is carried
+   * out separately from the writes, because they are written differently.
    */
-  it("refuses a deletion, because the write path cannot express one", () => {
+  it("accepts a deletion and carries it beside the writes", () => {
     const verification = verifyCandidateChange({
       spec,
       candidate: {
-        files: [
-          {
-            path: "src/old.ts",
-            content: null,
-            baseContent: "was here",
-            status: "deleted",
-            bytes: 0,
-            contentHash: null,
-          },
-        ],
+        files: [deletionOf("src/old.ts")],
+        totalBytes: 0,
+        unchangedPaths: [],
+        ignoredPaths: [],
+        unreadablePaths: [],
+        forbiddenPaths: [],
+      },
+      sourceRevisionVerified: true,
+    });
+
+    expect(verification.accepted).toBe(true);
+    if (verification.accepted) {
+      expect(verification.deletions).toEqual(["src/old.ts"]);
+      // Never as a write. A removed path has no content and no hash, and a
+      // reader that took it for a file would look for bytes that do not exist.
+      expect(verification.files).toEqual([]);
+    }
+  });
+
+  /**
+   * The narrowing that replaced the blanket refusal. A path nobody may write is
+   * a path nobody may remove — and `forbidden_path` rather than a
+   * deletion-specific rejection, because the finding is that the change touched
+   * a protected path at all.
+   */
+  it("refuses a deletion of a path the policy protects", () => {
+    const verification = verifyCandidateChange({
+      spec,
+      candidate: {
+        files: [deletionOf(".github/workflows/deploy.yml")],
         totalBytes: 0,
         unchangedPaths: [],
         ignoredPaths: [],
@@ -390,7 +423,35 @@ describe("§28 — post-agent verification", () => {
 
     expect(verification.accepted).toBe(false);
     if (!verification.accepted) {
-      expect(verification.rejections).toContain("deletion_not_permitted");
+      expect(verification.rejections).toContain("forbidden_path");
+    }
+  });
+
+  /**
+   * A deletion is one file against the blast-radius ceiling, exactly as a write
+   * is. Removing forty files is not a smaller change than writing forty.
+   */
+  it("counts a deletion against the changed-file ceiling", () => {
+    // The same 40 the write ceiling test uses, comfortably past every profile's
+    // `maxChangedFiles`.
+    const deletions = Array.from({ length: 40 }, (_, index) => deletionOf(`src/old-${index}.ts`));
+
+    const verification = verifyCandidateChange({
+      spec,
+      candidate: {
+        files: deletions,
+        totalBytes: 0,
+        unchangedPaths: [],
+        ignoredPaths: [],
+        unreadablePaths: [],
+        forbiddenPaths: [],
+      },
+      sourceRevisionVerified: true,
+    });
+
+    expect(verification.accepted).toBe(false);
+    if (!verification.accepted) {
+      expect(verification.rejections).toContain("too_many_files");
     }
   });
 

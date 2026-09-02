@@ -19,6 +19,8 @@ Deterministic change preparation: turns an approved Action Step into a commit on
 
 This module **writes** to a customer's repository: it creates a blob, a tree, a commit and a branch ref (`github/adapter.ts`). It requires `Contents: read and write` and checks the permission the installation actually carries before it tries.
 
+Since [ADR 0074](../../../docs/decisions/0074-removing-a-file.md) a tree entry may also *remove* a path — `{ path, blobSha: null }`, the Git data model's own shape. That is the only new verb: the port still has no operation that amends a commit, moves a ref, force-updates or deletes a branch, and a removed path is checked against the same write policy as a written one and read back afterwards to confirm it is gone.
+
 What it does **not** do is execute anything. [ADR 0006](../../../docs/decisions/0006-untrusted-repository-execution.md) and rule 61 are respected here in the strict sense: no clone, no install, no build, no test, no repository-provided script runs in this module or anywhere else in the Vibe application runtime. Repository code executes only inside the microVM that `modules/validation` provisions ([ADR 0015](../../../docs/decisions/0015-untrusted-repository-execution-provider.md)), which clones the pinned commit itself.
 
 The other invariants worth knowing before changing anything here:

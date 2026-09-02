@@ -135,6 +135,9 @@ const CAPABILITY_MEASUREMENT_PROFILES: Record<ExecutionCapability, MeasurementPr
    * plan steps is real work with its own contract, and it is not this sprint's.
    */
   agentic_execution_v1: null,
+  // ADR 0074 changed what the writer may do, not what a measurement
+  // profile could say about it. Same answer, for the same reason.
+  agentic_execution_v2: null,
 };
 
 /**

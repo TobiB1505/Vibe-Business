@@ -55,7 +55,25 @@ const PRUNED_DIRECTORIES: readonly string[] = [
   ".turbo",
   ".vercel",
   "coverage",
+  // SWC's plugin cache. Measured, not guessed: one `.wasmer-v7` blob in it was
+  // 421 KB of the 1,012,096 bytes that made a real run exceed `diff_too_large`.
+  ".swc",
 ];
+
+/**
+ * Build output that lands *inside* the source tree, pruned by path.
+ *
+ * `.well-known/workflow/` is where the Vercel Workflow build writes its
+ * compiled routes — `flow/route.js` and `step/route.js` were 262 KB each in the
+ * same measured run, and both were counted as `source`, because they end in
+ * `.js` and sit under `src/app/`.
+ *
+ * By path rather than by name, deliberately. `-name workflow` would prune any
+ * directory a customer happens to call that, anywhere in their repository, and
+ * `.well-known` itself is a legitimate route directory — `security.txt` and
+ * `apple-app-site-association` live there and are hand-written.
+ */
+const PRUNED_PATHS: readonly string[] = ["*/.well-known/workflow/*"];
 
 /**
  * The most paths a workspace listing may carry.
@@ -137,14 +155,19 @@ export type WorkspaceChanges = {
 };
 
 function pruneExpression(): string[] {
-  // `\( -name a -o -name b \) -prune -o …` — the standard prune idiom, written
-  // as an argument array so there is no shell to parse it.
-  const names: string[] = [];
+  // `\( -name a -o -name b -o -path p \) -prune -o …` — the standard prune
+  // idiom, written as an argument array so there is no shell to parse it, and
+  // so a `*` in a path pattern reaches `find` rather than a glob expander.
+  const tests: string[] = [];
   for (const directory of PRUNED_DIRECTORIES) {
-    if (names.length > 0) names.push("-o");
-    names.push("-name", directory);
+    if (tests.length > 0) tests.push("-o");
+    tests.push("-name", directory);
   }
-  return ["(", ...names, ")", "-prune", "-o"];
+  for (const path of PRUNED_PATHS) {
+    if (tests.length > 0) tests.push("-o");
+    tests.push("-path", path);
+  }
+  return ["(", ...tests, ")", "-prune", "-o"];
 }
 
 /**
