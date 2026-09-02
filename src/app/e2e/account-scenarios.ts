@@ -45,9 +45,13 @@ function reading(score: number | null, recordedAt: string, rubric?: string): Aud
   };
 }
 
-function project(overrides: Partial<DashboardProject> & { id: string; name: string }): DashboardProject {
+function project(
+  overrides: Partial<DashboardProject> & { id: string; name: string },
+): DashboardProject {
   return {
     repositoryFullName: "founder/product",
+    productName: null,
+    logoUrl: null,
     defaultBranch: "main",
     score: null,
     scoreState: "not_audited",
@@ -66,18 +70,23 @@ const THREE_PRODUCTS: DashboardProject[] = [
   project({
     id: "project_e2e_settled",
     name: "Quietly Fine",
+    // Same name, with a logo: the tile shows an image and no project line.
+    // The asset is served by this app, so the fixture reaches no network.
+    productName: "Quietly Fine",
+    logoUrl: "/brand/vibe-mark.svg",
     score: 71,
     scoreState: "scored",
     lastAnalysedAt: "2026-08-20T09:00:00Z",
-    scoreHistory: [
-      reading(71, "2026-08-20T09:00:00Z"),
-      reading(64, "2026-08-10T09:00:00Z"),
-    ],
+    scoreHistory: [reading(71, "2026-08-20T09:00:00Z"), reading(64, "2026-08-10T09:00:00Z")],
     nextMovesCount: 0,
   }),
   project({
     id: "project_e2e_blocked",
     name: "Needs You Now",
+    // A product whose name is not the label the founder typed — the case the
+    // change exists for, and the one that makes a search box and a name sort
+    // disagree with the screen if they are left on the project label.
+    productName: "Payflow",
     score: 46,
     scoreState: "scored",
     lastAnalysedAt: "2026-08-22T09:00:00Z",

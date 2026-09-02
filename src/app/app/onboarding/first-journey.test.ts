@@ -207,7 +207,9 @@ describe("leaving and arriving are coherent", () => {
 
   /** Regression 8: a completed onboarding redirected back into onboarding. */
   it("sends a completed project to its workspace", () => {
-    expect(PAGE).toContain('onboarding.state === "complete") redirect(`/app/projects/${projectId}`)');
+    expect(PAGE).toContain(
+      'onboarding.state === "complete") redirect(`/app/projects/${projectId}`)',
+    );
   });
 
   it("names the final control after where it actually goes", () => {
@@ -221,7 +223,27 @@ describe("the reveal does not depend on a remote image", () => {
   it("falls back to the Vibe mark when the browser cannot load it", () => {
     expect(LOGO).toContain("onError");
     expect(LOGO).toContain("setFailed(true)");
-    expect(LOGO).toContain("if (failed) return <VibeMark");
+
+    // The claim, not the sentence: a failed load must leave the img behind,
+    // and with nothing else asked for it must be the Vibe mark. This pinned
+    // the exact line `if (failed) return <VibeMark` until the fallback became
+    // overridable for the product list, where Vibe's own mark would read as a
+    // claim about whose product a row is.
+    expect(LOGO).toContain("if (failed) return");
+    expect(LOGO).toContain("<VibeMark size={size} />");
+  });
+
+  it("is not what the reveal surfaces ask for — they take the default", () => {
+    // Which is what keeps the assertion above true *of the reveal*. A surface
+    // that passed its own fallback would leave this describing somewhere else.
+    for (const [name, source] of [
+      ["onboarding", PAGE],
+      ["understanding-panel", read("src/app/app/projects/[projectId]/understanding-panel.tsx")],
+    ] as const) {
+      const elements = source.match(/<ProductLogo[\s\S]*?\/>/g) ?? [];
+      expect(elements.length, name).toBeGreaterThan(0);
+      for (const element of elements) expect(element, name).not.toContain("fallback");
+    }
   });
 
   it("is what both reveal surfaces render", () => {
@@ -274,9 +296,7 @@ describe("the first journey speaks to a founder", () => {
       ["onboarding entry", read("src/app/app/onboarding/page.tsx")],
       ["project onboarding", PAGE],
     ] as const) {
-      expect(proseOf(source), name).toContain(
-        "GitHub will ask which repositories Vibe may access",
-      );
+      expect(proseOf(source), name).toContain("GitHub will ask which repositories Vibe may access");
     }
   });
 });

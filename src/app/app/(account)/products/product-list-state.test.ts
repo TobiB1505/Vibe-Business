@@ -22,6 +22,8 @@ function product(overrides: Partial<ProductOverviewItem> = {}): ProductOverviewI
     scoreHistory: [],
     preparedCount: 0,
     failedValidationCount: 0,
+    productName: null,
+    logoUrl: null,
     shortDescription: "A product for independent founders.",
     mainPurpose: "Turn product evidence into a growth plan.",
     primaryAudience: "Independent founders",
@@ -30,6 +32,61 @@ function product(overrides: Partial<ProductOverviewItem> = {}): ProductOverviewI
     ...overrides,
   };
 }
+
+describe("the controls agree with the name on the card", () => {
+  /*
+   * The card leads with the product's own name when there is one. A search box
+   * that does not index it, or a sort that orders by the project label
+   * instead, describes a different list than the one on screen — and the
+   * founder is the one who has to reconcile them.
+   */
+  it("finds a product by the name the card shows", () => {
+    const products = [
+      product(),
+      product({ id: "p2", name: "invoicing-app", productName: "Payflow" }),
+    ];
+
+    const result = filterAndSortProducts(products, {
+      query: "payflow",
+      filter: "all",
+      sort: "priority",
+    });
+
+    expect(result.map((item) => item.id)).toEqual(["p2"]);
+  });
+
+  it("still finds it by the project label the founder typed", () => {
+    const products = [
+      product(),
+      product({ id: "p2", name: "invoicing-app", productName: "Payflow" }),
+    ];
+
+    const result = filterAndSortProducts(products, {
+      query: "invoicing-app",
+      filter: "all",
+      sort: "priority",
+    });
+
+    expect(result.map((item) => item.id)).toEqual(["p2"]);
+  });
+
+  it("sorts by the displayed name, not the project label", () => {
+    // Project labels sort z, a; displayed names sort a, z. Ordering by the
+    // labels would put the rows on screen in a visibly wrong order.
+    const products = [
+      product({ id: "zebra-project", name: "zebra", productName: "Alpha Product" }),
+      product({ id: "alpha-project", name: "alpha", productName: "Zebra Product" }),
+    ];
+
+    const result = filterAndSortProducts(products, {
+      query: "",
+      filter: "all",
+      sort: "name",
+    });
+
+    expect(result.map((item) => item.id)).toEqual(["zebra-project", "alpha-project"]);
+  });
+});
 
 describe("the My Products controls", () => {
   it("searches real profile context as well as the name", () => {

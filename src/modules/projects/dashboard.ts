@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { mapWithConcurrency, PER_CHANGE_CONCURRENCY } from "@/lib/async/concurrency";
 import { readLatestPerGroup } from "@/lib/db/latest-per-change";
+import { sanitizeCorrections } from "@/modules/product-understanding/store";
 
 import type { AuditReading } from "./score-series";
 
@@ -92,6 +93,17 @@ export type DashboardProject = {
   repositoryPrivate?: boolean | null;
   /** Exact Product Profile used by the latest completed audit, when recorded. */
   productProfileId?: string | null;
+  /**
+   * What the product calls itself, when Vibe read a name for it.
+   *
+   * Distinct from `name` above, which is the label the founder typed at
+   * connection time — often a repository slug. Both surfaces that list
+   * products take this from here rather than deriving it themselves, so the
+   * heading, the search box and the name sort cannot describe different lists.
+   */
+  productName: string | null;
+  /** A logo Vibe checked it can display, or null. Always https. */
+  logoUrl: string | null;
   /** Null unless a completed audit produced one. Never zero as a stand-in. */
   score: number | null;
   scoreState: ProjectScoreState;
@@ -176,6 +188,12 @@ type AuditRow = {
   model: string;
 };
 type SetRow = { id: string; project_id: string; created_at: string };
+type ProductIdentityRow = {
+  project_id: string;
+  product_name: string | null;
+  product_logo_url: string | null;
+};
+type CorrectionsRow = { project_id: string; corrections: unknown };
 type OpportunityRow = {
   id: string;
   opportunity_set_id: string;
@@ -354,8 +372,10 @@ export async function getDashboardOverview(
   // Four `.in(...)` queries, run together, then two dependent ones below.
   // None of them scales with the number of projects — that is the design.
   const [repos, audits, sets, prepared] = await Promise.all([
-    liveConnections(supabase, "project_id, full_name, default_branch, private")
-      .in("project_id", projectIds),
+    liveConnections(supabase, "project_id, full_name, default_branch, private").in(
+      "project_id",
+      projectIds,
+    ),
     supabase
       // `overall_score` is a column. The audit's JSONB document is never read
       // here: a dashboard does not need dimensions, evidence or findings.
@@ -403,11 +423,14 @@ export async function getDashboardOverview(
   const preparedRows = (prepared.data ?? []) as PreparedRow[];
   const preparedByProject = countPerKey(preparedRows, (row) => row.project_id);
 
-  // Two dependent queries, each still a single round trip for all projects.
+  // Four dependent queries, each still a single round trip for all projects.
   const setIds = [...latestSetByProject.values()].map((set) => set.id);
   const preparedIds = preparedRows.map((row) => row.id);
+  const profileIds = [...latestAuditByProject.values()].flatMap((audit) =>
+    audit?.product_profile_id ? [audit.product_profile_id] : [],
+  );
 
-  const [opportunities, validations] = await Promise.all([
+  const [opportunities, validations, identities, corrections] = await Promise.all([
     setIds.length > 0
       ? supabase
           .from("business_opportunities")
@@ -427,10 +450,49 @@ export async function getDashboardOverview(
           .order("created_at", { ascending: false })
           .limit(preparedIds.length * VALIDATION_ROWS_PER_CHANGE)
       : Promise.resolve({ data: [], error: null }),
+    /*
+     * Columns, never the document.
+     *
+     * `result` is a full product-profile.v1 with evidence arrays on every
+     * field, and one per project is exactly what a dashboard must not ship.
+     * These two are denormalised beside it for this read — the same trade
+     * `overall_score` already makes against the audit document.
+     */
+    profileIds.length > 0
+      ? supabase
+          .from("product_profiles")
+          .select("project_id, product_name, product_logo_url")
+          .in("id", profileIds)
+      : Promise.resolve({ data: [], error: null }),
+    /*
+     * A founder's correction to the name outranks the derived one, here as
+     * everywhere else. It is not baked into the column on purpose: corrections
+     * survive a re-scan and the derived half does not, so the authority has to
+     * be resolved on read or the next derivation silently wins.
+     *
+     * Small and bounded — seven fields, each capped at MAX_CORRECTION_LENGTH —
+     * which is why this document is fine to read here and `result` is not.
+     */
+    supabase
+      .from("product_profile_corrections")
+      .select("project_id, corrections")
+      .in("project_id", projectIds),
   ]);
 
   if (opportunities.error) throw opportunities.error;
   if (validations.error) throw validations.error;
+  if (identities.error) throw identities.error;
+  if (corrections.error) throw corrections.error;
+
+  const identityByProject = new Map(
+    ((identities.data ?? []) as ProductIdentityRow[]).map((row) => [row.project_id, row] as const),
+  );
+  const correctedNameByProject = new Map(
+    ((corrections.data ?? []) as CorrectionsRow[]).flatMap((row) => {
+      const name = sanitizeCorrections(row.corrections).name;
+      return name ? [[row.project_id, name] as const] : [];
+    }),
+  );
 
   const opportunityRows = (opportunities.data ?? []) as OpportunityRow[];
   const opportunityCountBySet = countPerKey(opportunityRows, (row) => row.opportunity_set_id);
@@ -474,6 +536,11 @@ export async function getDashboardOverview(
       defaultBranch: repo?.default_branch ?? null,
       repositoryPrivate: repo?.private ?? null,
       productProfileId: audit?.product_profile_id ?? null,
+      productName:
+        correctedNameByProject.get(project.id) ??
+        identityByProject.get(project.id)?.product_name ??
+        null,
+      logoUrl: identityByProject.get(project.id)?.product_logo_url ?? null,
       score: audit?.overall_score ?? null,
       scoreState,
       topMove: (set && dashboardMove(topMoveBySet.get(set.id))) || null,

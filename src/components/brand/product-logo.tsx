@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { VibeMark } from "@/components/brand/vibe-mark";
 
 /**
@@ -31,6 +31,14 @@ import { VibeMark } from "@/components/brand/vibe-mark";
  * about the reveal — headline, understanding, facts, confirmation — depends on
  * this succeeding.
  *
+ * ## Why the fallback is overridable
+ *
+ * Because the Vibe mark is right for the reveal and wrong for a list. On a page
+ * of the customer's own products, drawing Vibe's mark where their logo failed
+ * says "this one is Vibe's", which is a claim about whose product it is. A list
+ * already has a neutral mark of its own — the initials tile — so it passes that
+ * instead. The default is unchanged, so no existing caller moves.
+ *
  * ## Why `onError` alone is not enough
  *
  * This element is server-rendered, so the browser starts fetching it long
@@ -50,12 +58,15 @@ export function ProductLogo({
   alt,
   size = 44,
   className = "h-12 max-w-[220px] object-contain",
+  fallback,
 }: {
   src: string;
   alt: string;
   /** The fallback mark's size, matched to the logo's rendered height. */
   size?: number;
   className?: string;
+  /** What to draw when the image cannot load. Defaults to the Vibe mark. */
+  fallback?: ReactNode;
 }) {
   const [failed, setFailed] = useState(false);
 
@@ -63,7 +74,7 @@ export function ProductLogo({
     if (node && node.complete && node.naturalWidth === 0) setFailed(true);
   }, []);
 
-  if (failed) return <VibeMark size={size} />;
+  if (failed) return <>{fallback ?? <VibeMark size={size} />}</>;
 
   return (
     // `next/image` is deliberately not used: the host is the customer's own
