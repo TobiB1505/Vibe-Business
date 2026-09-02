@@ -132,15 +132,30 @@ describe("the sweep cannot reach what must not be swept (ADR 0069 §5)", () => {
 
 describe("the schedule is stated by the repository, not the dashboard (ADR 0069 §2)", () => {
   it("schedules the job the constants name, on the cadence they give", () => {
+    // `perform` rather than `select`: the call sits inside a PL/pgSQL block
+    // that skips it where pg_cron is unavailable, so a bare PostgreSQL cluster
+    // still gets the function. The first version of this migration used a
+    // top-level `create extension` and broke all fifteen migration tests.
     expect(migration()).toContain(
-      `select cron.schedule('${RETENTION_SWEEP_JOB_NAME}', '${RETENTION_SWEEP_SCHEDULE}', 'select public.retention_sweep()')`,
+      `perform cron.schedule('${RETENTION_SWEEP_JOB_NAME}', '${RETENTION_SWEEP_SCHEDULE}', 'select public.retention_sweep()')`,
     );
+  });
+
+  it("creates the function unconditionally, and only guards what needs the platform", () => {
+    const source = migration();
+    // The guard must never reach the function: a cluster without pg_cron has
+    // to end up with retention_sweep() so its behaviour stays testable.
+    const guard = source.indexOf("pg_available_extensions");
+    const fn = source.indexOf("create or replace function public.retention_sweep()");
+    expect(guard).toBeGreaterThan(-1);
+    expect(fn).toBeGreaterThan(guard);
+    expect(source).toMatch(/raise notice '[^']*NOT scheduled'/);
   });
 
   it("unschedules before scheduling, so re-applying converges to one job", () => {
     const source = migration();
-    const unschedule = source.indexOf(`cron.unschedule('${RETENTION_SWEEP_JOB_NAME}')`);
-    const schedule = source.indexOf(`cron.schedule('${RETENTION_SWEEP_JOB_NAME}'`);
+    const unschedule = source.indexOf(`perform cron.unschedule('${RETENTION_SWEEP_JOB_NAME}')`);
+    const schedule = source.indexOf(`perform cron.schedule('${RETENTION_SWEEP_JOB_NAME}'`);
     expect(unschedule).toBeGreaterThan(-1);
     expect(unschedule).toBeLessThan(schedule);
   });
@@ -158,6 +173,10 @@ describe("only cron can call it (ADR 0069 §4, rule 11)", () => {
   });
 
   it("revokes execute from every Data API role and from public", () => {
+    // Textual, and deliberately so: these revokes are redundant with the
+    // `alter default privileges` in 20260823220000, so removing one does not
+    // change the effective privilege. `retention-sweep.migration.ts` asserts
+    // the answer against a real cluster; this asserts the belt stays on.
     for (const role of ["public", "anon", "authenticated", "service_role"]) {
       expect(migration()).toContain(
         `revoke all on function public.retention_sweep() from ${role};`,
