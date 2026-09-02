@@ -246,6 +246,7 @@ function outcomeCard(overrides: Partial<OutcomeCard> = {}): OutcomeCard {
     publicOrigin: null,
     mergedCommitSha: null,
     checks: [],
+    profileNote: null,
     observedAt: null,
     windowEndsAt: null,
     attemptCount: 0,

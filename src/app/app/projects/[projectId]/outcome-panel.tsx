@@ -122,6 +122,21 @@ function CheckList({ checks }: { checks: OutcomeCheckLine[] }) {
  * because the row a user most needs on a `partial` is the same row they need on
  * a `verified`: the one saying nobody has measured whether this helped.
  */
+/**
+ * What this profile's outcome means, from the domain rather than from here.
+ *
+ * The state headings above — "Production outcome verified", "Partially
+ * observed" — read identically whichever profile produced them, and the two
+ * profiles verify genuinely different things. The sentence that separates them
+ * is `OUTCOME_PROFILE_SCOPE_NOTES`, and rendering it in every state is what
+ * keeps "these pages answer" from being read as a claim about which build is
+ * serving them (ADR 0071).
+ */
+function ScopeNote({ note }: { note: string | null }) {
+  if (note === null) return null;
+  return <p className="text-xs text-fg-muted">{note}</p>;
+}
+
 function OutcomeLadder({
   productOutcome,
   businessImpact,
@@ -265,7 +280,7 @@ export function OutcomePanel({
           <p className="text-sm text-fg-prose">Merged</p>
           <p className="text-sm text-fg-secondary">Not yet verified in production</p>
           <p className="text-xs text-fg-muted">
-            Vibe can check whether the intended change appears on your public product
+            Vibe can check your public product
             {current.publicOrigin ? (
               <>
                 {" at "}
@@ -274,6 +289,7 @@ export function OutcomePanel({
             ) : null}
             . This reads public pages only, and changes nothing.
           </p>
+          <ScopeNote note={current.profileNote} />
           <Button
             type="button"
             variant="primary"
@@ -287,9 +303,7 @@ export function OutcomePanel({
       ) : current.state === "observing" ? (
         <div className="space-y-2">
           <p className="text-sm text-fg-prose">Checking production…</p>
-          <p className="text-sm text-fg-secondary">
-            Vibe is checking whether the intended change appears on your public product.
-          </p>
+          <ScopeNote note={current.profileNote} />
           {/* No percentage. Nobody knows how long somebody else's deployment
               takes, and a bar sitting at 60% would teach people to distrust it. */}
           <p className="text-xs text-fg-muted">
@@ -302,6 +316,7 @@ export function OutcomePanel({
       ) : current.state === "verified" ? (
         <div className="space-y-2">
           <p className="text-sm text-mint">Production outcome verified</p>
+          <ScopeNote note={current.profileNote} />
           <CheckList checks={current.checks} />
           {current.observedAt && (
             <p className="text-xs text-fg-muted">Observed at {localTime(current.observedAt)}</p>
@@ -312,6 +327,7 @@ export function OutcomePanel({
       ) : current.state === "partial" ? (
         <div className="space-y-2">
           <p className="text-sm text-amber">Partially observed</p>
+          <ScopeNote note={current.profileNote} />
           {/* Every check, passing and not. Hiding the failures is how a partial
               outcome quietly becomes a verified one (§31). */}
           <CheckList checks={current.checks} />
@@ -327,6 +343,7 @@ export function OutcomePanel({
           <p className="text-sm text-fg-secondary">
             Vibe did not observe the expected production behavior within 15 minutes.
           </p>
+          <ScopeNote note={current.profileNote} />
           <CheckList checks={current.checks} />
           {/* Deliberately does not say "deployment failed": Vibe reads no
               deployment API and does not know why (§22, §32). And it offers no

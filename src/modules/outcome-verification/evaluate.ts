@@ -1,5 +1,11 @@
 import { canonicalPath, isUnderPrefix, matchesPath } from "./canonical";
-import type { Observation, ResourceObservation, SitemapFacts, RobotsFacts } from "./observe";
+import type {
+  Observation,
+  ResourceObservation,
+  RouteFacts,
+  SitemapFacts,
+  RobotsFacts,
+} from "./observe";
 import {
   outcomeCheckId,
   type ExpectedOutcome,
@@ -67,7 +73,59 @@ function transportEvidence(observation: ResourceObservation): OutcomeObservedVal
  * there would let a completely undeployed product accumulate green checks (§21).
  */
 function unreadable(observation: Extract<ResourceObservation, { reachable: false }>): OutcomeCheckStatus {
-  return observation.kind === "absent" ? "not_observed" : "error";
+  if (observation.kind === "absent") return "not_observed";
+  // The origin answered, and its answer contradicts the expectation — a 5xx
+  // from a page the change touched, or a page route serving something that is
+  // not a page. Only a route probe ever produces this; the two document probes
+  // classify every unreadable answer as an absence or as our own failure.
+  if (observation.kind === "contradicted") return "failed";
+  return "error";
+}
+
+/**
+ * One page probe, judged (ADR 0071).
+ *
+ * ```
+ * 2xx HTML at the path we asked for   → passed
+ * 2xx HTML somewhere else             → not_observed   we saw a different page
+ * 404 / 410                           → not_observed   the page is not published
+ * 5xx, or served as not-a-page        → failed         the origin contradicts us
+ * 401 / 403 / 429 / transport         → error          we could not look
+ * ```
+ *
+ * `passed` here carries one sentence and no more: *this path answered as a
+ * page.* It is not evidence that the merged build is the one serving it — Vibe
+ * reads no deployment API (§3) and holds no pre-merge copy of the page to
+ * compare against. The card says so, and `OUTCOME_PROFILE_SCOPE_NOTES` is where
+ * that sentence is written down once.
+ *
+ * The redirect case is `not_observed` rather than `failed` on purpose. A
+ * `/pricing` that now redirects to `/plans` is a site that was reorganised, not
+ * a site that is broken, and the honest report is that Vibe did not see the
+ * page it asked about.
+ */
+function evaluateRouteCheck(
+  check: OutcomeCheck,
+  observation: Observation,
+): { status: OutcomeCheckStatus; observedValue: OutcomeObservedValue } {
+  const probe =
+    check.target === null ? undefined : observation.byRoute.get(canonicalPath(check.target));
+
+  if (probe === undefined) {
+    // The contract names a page the observation never attempted. A Vibe defect,
+    // reported as one rather than as a product fact.
+    return { status: "error", observedValue: { transportError: "request_failed" } };
+  }
+
+  const evidence = transportEvidence(probe);
+  if (!probe.reachable) return { status: unreadable(probe), observedValue: evidence };
+
+  const { pathPreserved } = probe.facts as RouteFacts;
+
+  return {
+    status: pathPreserved ? "passed" : "not_observed",
+    observedValue: { ...evidence, pathPreserved },
+  };
 }
 
 function evaluateCheck(
@@ -75,6 +133,8 @@ function evaluateCheck(
   observation: Observation,
   origins: string[],
 ): { status: OutcomeCheckStatus; observedValue: OutcomeObservedValue } {
+  if (check.kind === "public_route_serves_page") return evaluateRouteCheck(check, observation);
+
   const resource = observation.byResource.get(check.resource);
 
   if (resource === undefined) {
@@ -89,6 +149,10 @@ function evaluateCheck(
     return { status: unreadable(resource), observedValue: evidence };
   }
 
+  // `public_route_serves_page` is already gone from `check.kind` here, narrowed
+  // out by the early return above — so this switch stays exhaustive without a
+  // case for it, and adding a check kind that reaches this far is still a type
+  // error rather than a silent fall-through.
   switch (check.kind) {
     case "robots_reachable":
     case "sitemap_reachable":
